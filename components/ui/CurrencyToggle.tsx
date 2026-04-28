@@ -23,7 +23,7 @@ export function setCurrency(c: Currency) {
   window.dispatchEvent(new CustomEvent('currency-changed', { detail: c }));
 }
 
-export function useCcy(): Currency {
+export function useCcy(): { ccy: Currency } {
     const [c, setC] = useState<Currency>(getCurrency());
     useEffect(() => {
           setC(getCurrency());
@@ -31,7 +31,7 @@ export function useCcy(): Currency {
           window.addEventListener('currency-changed', h);
           return () => window.removeEventListener('currency-changed', h);
     }, []);
-    return c;
+        return { ccy: c };
 }
 export default function CurrencyToggle() {
   const [c, setC] = useState<Currency>('USD');
