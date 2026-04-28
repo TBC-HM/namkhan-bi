@@ -2,7 +2,7 @@
 // Server-side fetchers for the marketing schema.
 // Uses anon Supabase client (already configured in lib/supabase.ts).
 
-import { supabase } from './supabase';
+import { supabase } from '@/lib/supabase';
 
 // ----- Types -----
 export interface Review {
