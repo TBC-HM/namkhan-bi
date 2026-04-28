@@ -17,6 +17,7 @@ export const metadata: Metadata = {
   title: 'The Namkhan · BI',
   description: 'Operator intelligence dashboard for The Namkhan, Luang Prabang.',
 };
+export const dynamic = 'force-dynamic';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
