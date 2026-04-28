@@ -6,7 +6,7 @@
 // If your deployed version has additional functions not listed here, copy
 // them over and update their signatures to take `period: ResolvedPeriod`.
 
-import { supabase } from '@/lib/supabase';
+import { supabase } from './supabase';
 import type { ResolvedPeriod, Segment } from './period';
 import { segmentFilter } from './period';
 

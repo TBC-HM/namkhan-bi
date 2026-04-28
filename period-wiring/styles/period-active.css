@@ -1,0 +1,86 @@
+/* styles/period-active.css
+ * Append to bottom of styles/globals.css.
+ * Styles the active-period readout that appears below the dropdown bar.
+ */
+
+.active-period-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: rgba(31, 58, 46, 0.04);
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  flex-wrap: wrap;
+}
+
+.active-period-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.active-period-label {
+  font-size: 9px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+}
+
+.active-period-value {
+  font-family: var(--serif);
+  font-size: 14px;
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.active-period-range {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.active-period-reset {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 4px 10px;
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.active-period-reset:hover {
+  border-color: var(--terracotta);
+  color: var(--terracotta);
+}
+
+.as-of-inline {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.as-of-inline .as-of-label {
+  font-size: 9px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+}
+.as-of-inline .as-of-date {
+  font-family: var(--serif);
+  font-size: 13px;
+  color: var(--text);
+}
+.as-of-inline .as-of-time {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+/* Hide the old as-of-row standalone block (now inline) */
+.as-of-row { display: none; }
