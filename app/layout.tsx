@@ -1,27 +1,35 @@
-import '../styles/globals.css';
+// app/layout.tsx
+// Root layout for Namkhan BI dashboard.
+// Structure (mockup-faithful):
+//   <header>     Brand name + As-of timestamp + Currency toggle
+//   <TopNav>     Overview / Today / Action Plans / Revenue / Departments / Finance
+//   <PeriodBar>  Look Back / Forward / Segment / Compare dropdowns
+//   <main>       Page content (with optional sub-nav inside)
+
 import type { Metadata } from 'next';
-import { TopNav } from '@/components/nav/TopNav';
-import { CurrencyProvider } from '@/components/ui/CurrencyToggle';
-import { Brand } from '@/components/nav/Brand';
+import './../styles/globals.css';
+import Brand from '@/components/nav/Brand';
+import TopNav from '@/components/nav/TopNav';
+import PeriodBar from '@/components/nav/PeriodBar';
+import { Suspense } from 'react';
 
 export const metadata: Metadata = {
   title: 'The Namkhan · BI',
-  description: 'Owner intelligence dashboard'
+  description: 'Operator intelligence dashboard for The Namkhan, Luang Prabang.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body>
-        <CurrencyProvider>
+        <header className="header">
           <Brand />
-          <TopNav />
-          <main className="max-w-[1500px] mx-auto px-8 pb-20">{children}</main>
-          <footer className="max-w-[1500px] mx-auto px-8 pt-10 pb-12 border-t border-line text-muted text-[10px] tracking-wide3 uppercase flex justify-between">
-            <span>The Namkhan · Luang Prabang · LAK base</span>
-            <span>v0.1 · Phase 1</span>
-          </footer>
-        </CurrencyProvider>
+        </header>
+        <TopNav />
+        <Suspense fallback={<div className="period-wrap" style={{ minHeight: 110 }} />}>
+          <PeriodBar />
+        </Suspense>
+        <main className="container">{children}</main>
       </body>
     </html>
   );

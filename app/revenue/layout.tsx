@@ -1,22 +1,24 @@
-import { SubNav } from '@/components/nav/SubNav';
-import { ReactNode } from 'react';
+// app/revenue/layout.tsx
+// Revenue section layout — adds horizontal sub-navigation per mockup.
 
-const items = [
-  { href: '/revenue/pulse', label: 'Pulse' },
-  { href: '/revenue/demand', label: 'Demand' },
-  { href: '/revenue/channels', label: 'Channels' },
-  { href: '/revenue/rates', label: 'Rates' },
-  { href: '/revenue/rateplans', label: 'Rate Plans' },
-  { href: '/revenue/inventory', label: 'Inventory' },
-  { href: '/revenue/compset', label: 'Comp Set', live: false },
-  { href: '/revenue/promotions', label: 'Promotions', live: false }
-];
+import SubNav from '@/components/nav/SubNav';
 
-export default function RevenueLayout({ children }: { children: ReactNode }) {
+export default function RevenueLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="pt-6">
-      <SubNav items={items} />
+    <>
+      <SubNav
+        items={[
+          { label: 'Pulse', href: '/revenue/pulse' },
+          { label: 'Demand', href: '/revenue/demand' },
+          { label: 'Channels', href: '/revenue/channels' },
+          { label: 'Rates', href: '/revenue/rates' },
+          { label: 'Rate Plans', href: '/revenue/rateplans' },
+          { label: 'Comp Set', href: '/revenue/compset', coming: true },
+          { label: 'Promotions', href: '/revenue/promotions', coming: true },
+          { label: 'Inventory', href: '/revenue/inventory' },
+        ]}
+      />
       {children}
-    </div>
+    </>
   );
 }

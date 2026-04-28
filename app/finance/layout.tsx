@@ -1,10 +1,18 @@
-import { SubNav } from '@/components/nav/SubNav';
-import { ReactNode } from 'react';
-const items = [
-  { href: '/finance/pnl', label: 'P&L' },
-  { href: '/finance/budget', label: 'Budget', live: false },
-  { href: '/finance/ledger', label: 'Guest Ledger & Deposits' }
-];
-export default function L({ children }: { children: ReactNode }) {
-  return (<div className="pt-6"><SubNav items={items} />{children}</div>);
+// app/finance/layout.tsx
+
+import SubNav from '@/components/nav/SubNav';
+
+export default function FinanceLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      <SubNav
+        items={[
+          { label: 'P&L', href: '/finance/pnl' },
+          { label: 'Budget', href: '/finance/budget', coming: true },
+          { label: 'Guest Ledger & Deposits', href: '/finance/ledger' },
+        ]}
+      />
+      {children}
+    </>
+  );
 }

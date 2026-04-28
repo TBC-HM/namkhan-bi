@@ -1,11 +1,29 @@
-import { Section } from '@/components/sections/Section';
+// app/revenue/promotions/page.tsx
+import GreyOut from '@/components/ui/GreyOut';
 
-export default function Promotions() {
+export default function PromotionsPage() {
   return (
-    <Section title="Promotions" tag="Phase 2" greyed greyedReason="Cloudbeds getPromotions endpoint not yet synced">
-      <div className="text-muted text-sm">
-        Active promo tracking · wash rate · ADR uplift. Pending Cloudbeds promo endpoint integration.
+    <GreyOut reason="Promotion performance tracking pending — Phase 2">
+      <div className="section">
+        <div className="section-head">
+          <div className="section-title">Active Promotions</div>
+          <div className="section-tag">Effectiveness vs uplift cost</div>
+        </div>
+        <div className="kpi-strip cols-3">
+          <div className="kpi-tile">
+            <div className="kpi-label">Active Promos</div>
+            <div className="kpi-value">—</div>
+          </div>
+          <div className="kpi-tile">
+            <div className="kpi-label">Bookings 30d</div>
+            <div className="kpi-value">—</div>
+          </div>
+          <div className="kpi-tile">
+            <div className="kpi-label">Revenue Lift</div>
+            <div className="kpi-value">—</div>
+          </div>
+        </div>
       </div>
-    </Section>
+    </GreyOut>
   );
 }

@@ -1,21 +1,37 @@
-import { Section, GreyPlaceholder } from '@/components/sections/Section';
-import { Kpi } from '@/components/kpi/Kpi';
+// app/actions/page.tsx
+import GreyOut from '@/components/ui/GreyOut';
 
 export default function ActionsPage() {
   return (
-    <div className="pt-6">
-      <Section title="Action Plans" tag="Recommendations engine in development" greyed greyedReason="Vertex AI engine — Module 4 of project. Not yet built.">
-        <div className="grid grid-cols-5 gap-3 mb-4">
-          <Kpi label="Critical" value={null} greyed status="bad" />
-          <Kpi label="High Priority" value={null} greyed status="warn" />
-          <Kpi label="Opportunities" value={null} greyed />
-          <Kpi label="Total Impact" value={null} kind="money" greyed />
-          <Kpi label="Resolved 30d" value={null} greyed status="good" />
+    <GreyOut reason="Recommendations engine in development — Phase 4 (Vertex AI)">
+      <div className="section">
+        <div className="section-head">
+          <div className="section-title">Action Plans</div>
+          <div className="section-tag">Sorted: critical → opportunity</div>
         </div>
-        <div className="text-muted text-sm py-12 text-center">
-          Recommendations engine will rank actions by ROI across Revenue, F&B, Spa, Front Office, and Ops/DQ.
+        <div className="kpi-strip cols-4">
+          <div className="kpi-tile alert">
+            <div className="kpi-label">Critical</div>
+            <div className="kpi-value">—</div>
+            <div className="kpi-deltas">immediate action</div>
+          </div>
+          <div className="kpi-tile warn">
+            <div className="kpi-label">High</div>
+            <div className="kpi-value">—</div>
+            <div className="kpi-deltas">this week</div>
+          </div>
+          <div className="kpi-tile">
+            <div className="kpi-label">Opportunities</div>
+            <div className="kpi-value">—</div>
+            <div className="kpi-deltas">revenue upside</div>
+          </div>
+          <div className="kpi-tile good">
+            <div className="kpi-label">Resolved 30d</div>
+            <div className="kpi-value">—</div>
+            <div className="kpi-deltas">closed actions</div>
+          </div>
         </div>
-      </Section>
-    </div>
+      </div>
+    </GreyOut>
   );
 }

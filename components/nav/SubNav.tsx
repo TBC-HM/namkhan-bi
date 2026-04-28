@@ -1,18 +1,37 @@
 'use client';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 
-export function SubNav({ items }: { items: { href: string; label: string; live?: boolean }[] }) {
+// components/nav/SubNav.tsx
+// Horizontal pill-style sub-navigation with active state matching mockup.
+// Active state: bottom border in --sand color, text in --text.
+// Items can be marked `coming` to dim them and append "· soon".
+
+import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
+
+export interface SubNavItem {
+  label: string;
+  href: string;
+  coming?: boolean;
+}
+
+export default function SubNav({ items }: { items: SubNavItem[] }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const qs = searchParams.toString();
+
   return (
-    <div className="flex gap-1 mb-6 border-b border-line">
-      {items.map(it => {
-        const active = pathname === it.href;
-        const live = it.live !== false;
+    <div className="subnav">
+      {items.map((it) => {
+        const active = pathname === it.href || pathname.startsWith(it.href + '/');
+        const href = qs ? `${it.href}?${qs}` : it.href;
         return (
-          <Link key={it.href} href={it.href}
-            className={`px-4 py-2 text-[10px] tracking-wide3 uppercase border-b-2 ${active ? 'border-sand text-text' : 'border-transparent text-muted hover:text-text'} ${!live ? 'opacity-50' : ''}`}>
-            {it.label}{!live && ' · soon'}
+          <Link
+            key={it.href}
+            href={href}
+            className={`subnav-btn${active ? ' active' : ''}${it.coming ? ' coming' : ''}`}
+          >
+            {it.label}
+            {it.coming ? <span className="coming-suffix"> · soon</span> : null}
           </Link>
         );
       })}

@@ -1,2 +1,6 @@
+// app/finance/page.tsx
 import { redirect } from 'next/navigation';
-export default function F() { redirect('/finance/pnl'); }
+
+export default function FinanceIndex() {
+  redirect('/finance/pnl');
+}

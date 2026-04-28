@@ -1,19 +1,33 @@
-import { Section } from '@/components/sections/Section';
-import { Kpi } from '@/components/kpi/Kpi';
+// app/finance/budget/page.tsx
+import GreyOut from '@/components/ui/GreyOut';
 
 export default function BudgetPage() {
   return (
-    <Section title="Budget" tag="Awaiting upload schema" greyed greyedReason="Budget tables not yet built. Upload pipeline pending.">
-      <div className="grid grid-cols-4 gap-3">
-        <Kpi label="Annual Revenue Target" value={null} kind="money" greyed />
-        <Kpi label="YTD Actual vs Budget" value={null} kind="money" greyed />
-        <Kpi label="Forecast EOY" value={null} kind="money" greyed />
-        <Kpi label="Target EBITDA Margin" value={null} kind="pct" greyed />
+    <GreyOut reason="Budget upload schema pending — owner to provide annual budget">
+      <div className="section">
+        <div className="section-head">
+          <div className="section-title">Budget vs Actual</div>
+          <div className="section-tag">Monthly · YTD</div>
+        </div>
+        <div className="kpi-strip cols-4">
+          <div className="kpi-tile">
+            <div className="kpi-label">Annual Target</div>
+            <div className="kpi-value">—</div>
+          </div>
+          <div className="kpi-tile">
+            <div className="kpi-label">YTD Actual</div>
+            <div className="kpi-value">—</div>
+          </div>
+          <div className="kpi-tile">
+            <div className="kpi-label">Variance</div>
+            <div className="kpi-value">—</div>
+          </div>
+          <div className="kpi-tile">
+            <div className="kpi-label">Pace to Target</div>
+            <div className="kpi-value">—</div>
+          </div>
+        </div>
       </div>
-      <div className="text-muted text-sm mt-6">
-        Monthly budget · v1.x · variance vs actual · forecast vs budget · version history.
-        Requires a `budgets` table + monthly upload schema (1-day build).
-      </div>
-    </Section>
+    </GreyOut>
   );
 }
