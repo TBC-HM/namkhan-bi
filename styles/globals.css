@@ -1,0 +1,147 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg: #0e0e0e;
+  --panel: #161616;
+  --panel2: #1c1c1c;
+  --line: #2a2a2a;
+  --text: #e8e4dc;
+  --muted: #7a7670;
+  --sand: #bfa980;
+  --sandlight: #d4c5a0;
+  --red: #c25450;
+  --green: #7a9b6a;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-feature-settings: 'cv11', 'ss01';
+  -webkit-font-smoothing: antialiased;
+  margin: 0;
+  padding: 0;
+}
+
+.serif { font-family: 'Playfair Display', Georgia, serif; }
+.mono { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+.tabular { font-variant-numeric: tabular-nums; }
+
+/* Section wrappers */
+.section {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+.section-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 18px; padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.section-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 20px; font-weight: 500;
+}
+.section-tag {
+  font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* KPI cards */
+.kpi {
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 16px;
+}
+.kpi-label {
+  font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 8px;
+}
+.kpi-value {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 28px; font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.kpi-value-secondary {
+  font-size: 11px; color: var(--muted); margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.kpi.good .kpi-value { color: var(--green); }
+.kpi.bad .kpi-value { color: var(--red); }
+
+/* Greyed-out (not-yet-fed) sections */
+.greyed-out {
+  position: relative;
+  pointer-events: none;
+  opacity: 0.35;
+  filter: grayscale(0.5);
+}
+.greyed-out-overlay {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(14,14,14,0.55);
+  border-radius: 4px;
+  z-index: 5;
+}
+.greyed-out-overlay-content {
+  text-align: center;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  color: var(--sand);
+}
+.greyed-out-overlay-content small {
+  display: block; font-family: 'Inter', sans-serif;
+  font-size: 10px; color: var(--muted);
+  margin-top: 6px; letter-spacing: 0.1em; text-transform: uppercase;
+}
+
+/* Tables */
+table {
+  width: 100%; border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}
+th {
+  text-align: left; font-weight: 500;
+  font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--muted); padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+td {
+  padding: 12px; border-bottom: 1px solid rgba(42,42,42,0.5);
+}
+tr:hover { background: rgba(42,42,42,0.3); }
+
+/* Status pills */
+.pill {
+  display: inline-block; padding: 2px 8px;
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  border-radius: 2px;
+}
+.pill.good { background: rgba(122,155,106,0.15); color: var(--green); }
+.pill.bad  { background: rgba(194,84,80,0.15); color: var(--red); }
+.pill.warn { background: rgba(212,169,106,0.15); color: var(--amber); }
+.pill.muted { background: rgba(122,118,112,0.15); color: var(--muted); }
+
+/* Skeleton loader */
+.skeleton {
+  background: linear-gradient(90deg,#161616 25%, #222 50%, #161616 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 3px;
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
