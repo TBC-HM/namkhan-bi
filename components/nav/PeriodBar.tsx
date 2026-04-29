@@ -79,71 +79,63 @@ export default function PeriodBar() {
           const id = setInterval(() => setNow(new Date()), 60_000);
           return () => clearInterval(id);
     }, []);
-    const dateStr = now.toLocaleDateString('en-GB', {
-          weekday: 'long',
-          day: '2-digit',
-          month: 'long',
-          year: 'numeric',
-    });
     const timeStr = now.toLocaleTimeString('en-GB', { hour12: false });
 
   return (
         <div className="period-wrap">
               <div className="period-bar">
                       <div className="period-group">
-                                <span className="period-label">Period</span>span>
+                                <span className="period-label">Period</span>
                                 <select
                                               className="period-select"
                                               value={currentWindow}
                                               onChange={(e) => handleWindowChange(e.target.value)}
                                             >
                                   {PERIOD_WINDOW_OPTIONS.map((opt) => (
-                                                            <option key={opt.value} value={opt.value}>{opt.label}</option>option>
+                                                            <option key={opt.value} value={opt.value}>{opt.label}</option>
                                                           ))}
-                                </select>select>
-                      </div>div>
+                                </select>
+                      </div>
               
                       <div className="period-divider" />
               
                       <div className="period-group">
-                                <span className="period-label">Segment</span>span>
+                                <span className="period-label">Segment</span>
                                 <select
                                               className="period-select"
                                               value={seg}
                                               onChange={(e) => update({ seg: e.target.value })}
                                             >
                                   {Object.entries(SEGMENT_LABELS).map(([v, l]) => (
-                                                            <option key={v} value={v}>{l}</option>option>
+                                                            <option key={v} value={v}>{l}</option>
                                                           ))}
-                                </select>select>
-                      </div>div>
+                                </select>
+                      </div>
               
                       <div className="period-divider" />
               
                       <div className="period-group">
-                                <span className="period-label">Compare</span>span>
+                                <span className="period-label">Compare</span>
                                 <select
                                               className="period-select"
                                               value={cmp}
                                               onChange={(e) => update({ cmp: e.target.value })}
                                             >
-                                            <option value="">No comparison</option>option>
-                                            <option value="stly">vs STLY</option>option>
-                                            <option value="prior">vs Prior Period</option>option>
-                                            <option value="budget">vs Budget</option>option>
-                                </select>select>
-                      </div>div>
-              
+                                            <option value="">No comparison</option>
+                                            <option value="stly">vs STLY</option>
+                                            <option value="prior">vs Prior Period</option>
+                                            <option value="budget">vs Budget</option>
+                                </select>
+                      </div>
+
+              </div>
                       <div className="period-active">
                                 <CurrencyToggle />
-                      </div>div>
-              </div>div>
-        
-              <div className="as-of-row">
-                      <div className="as-of-label">As of</div>div>
-                      <div className="as-of-date">{dateStr}</div>div>
-                      <div className="as-of-time">data: {timeStr}</div>div>
-              </div>div>
-        </div>div>
-      );
-}</div>
+                                          <span className="period-timestamp">
+                                                              As of {timeStr}
+                                          </span>
+                      </div>
+              </div>
+
+                );
+            }
