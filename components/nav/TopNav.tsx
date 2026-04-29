@@ -1,49 +1,48 @@
 'use client';
 
 // components/nav/TopNav.tsx
-// Main horizontal navigation: 9 top-level tabs.
+// Main horizontal navigation: 8 top-level tabs.
 // Active state determined by pathname prefix.
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 
 interface TopNavItem {
-  href: string;
-  title: string;
-  sub: string;
+    href: string;
+    title: string;
+    sub: string;
 }
 
 const ITEMS: TopNavItem[] = [
-  { href: '/overview',      title: 'Overview',          sub: 'Owner' },
-  { href: '/today',         title: "Today's Snapshot",  sub: 'Operations' },
-  { href: '/actions',       title: 'Action Plans',      sub: 'Recommendations' },
-  { href: '/revenue',       title: 'Revenue',           sub: 'Management' },
-  { href: '/departments',   title: 'Departments',       sub: 'F&B · Spa · Activities' },
-  { href: '/finance',       title: 'Finance',           sub: 'P&L · Budget · Ledger' },
-  { href: '/marketing',     title: 'Marketing',         sub: 'Channels · Reviews' },
-  { href: '/agents',        title: 'Agents',            sub: 'AI · Automation' },
-  { href: '/period-wiring', title: 'Period Wiring',     sub: 'Config' },
-];
+  { href: '/overview',    title: 'Overview',          sub: 'Owner' },
+  { href: '/today',       title: "Today's Snapshot",  sub: 'Operations' },
+  { href: '/actions',     title: 'Action Plans',      sub: 'Recommendations' },
+  { href: '/revenue',     title: 'Revenue',           sub: 'Management' },
+  { href: '/departments', title: 'Departments',       sub: 'F&B · Spa · Activities' },
+  { href: '/finance',     title: 'Finance',           sub: 'P&L · Budget · Ledger' },
+  { href: '/marketing',   title: 'Marketing',         sub: 'Channels · Reviews' },
+  { href: '/agents',      title: 'Agents',            sub: 'AI · Automation' },
+  ];
 
 export default function TopNav() {
-  const pathname = usePathname();
-  const sp = useSearchParams();
-  const qs = sp.toString();
+    const pathname = usePathname();
+    const sp = useSearchParams();
+    const qs = sp.toString();
 
   return (
-    <div className="nav-wrap">
-      <nav className="nav">
-        {ITEMS.map((it) => {
-          const active = pathname.startsWith(it.href);
-          const href = qs ? `${it.href}?${qs}` : it.href;
-          return (
-            <Link key={it.href} href={href} className={active ? 'active' : ''}>
-              <span className="nav-title">{it.title}</span>
-              <span className="nav-sub">{it.sub}</span>
-            </Link>
-          );
+        <div className="nav-wrap">
+              <nav className="nav">
+                {ITEMS.map((it) => {
+                    const active = pathname.startsWith(it.href);
+                    const href = qs ? `${it.href}?${qs}` : it.href;
+                    return (
+                                  <Link key={it.href} href={href} className={active ? 'active' : ''}>
+                                                <span className="nav-title">{it.title}</span>span>
+                                                <span className="nav-sub">{it.sub}</span>span>
+                                  </Link>Link>
+                                );
         })}
-      </nav>
-    </div>
-  );
-}
+              </nav>nav>
+        </div>div>
+      );
+}</div>
