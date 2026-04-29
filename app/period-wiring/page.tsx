@@ -65,7 +65,7 @@ export default function PeriodWiringPage() {
   return (
     <div className="pt-6">
       <div style={{ marginBottom: '2rem' }}>
-        <h2 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.08em', fontSize: '0.75rem' }}>
+        <h2 style={{ fontSize: '0.75rem', fontWeight: 600, marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
           Period Window
         </h2>
         <p style={{ fontSize: '0.8rem', color: '#888', marginBottom: '1rem' }}>
