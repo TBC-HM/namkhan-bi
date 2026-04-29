@@ -14,15 +14,15 @@ interface TopNavItem {
 }
 
 const ITEMS: TopNavItem[] = [
-  { href: '/overview',      title: 'Overview',        sub: 'Owner' },
-  { href: '/today',         title: "Today's Snapshot", sub: 'Operations' },
-  { href: '/actions',       title: 'Action Plans',    sub: 'Recommendations' },
-  { href: '/revenue',       title: 'Revenue',         sub: 'Management' },
-  { href: '/departments',   title: 'Departments',     sub: 'F&B · Spa · Activities' },
-  { href: '/finance',       title: 'Finance',         sub: 'P&L · Budget · Ledger' },
-  { href: '/marketing',     title: 'Marketing',       sub: 'Channels · Reviews' },
-  { href: '/agents',        title: 'Agents',          sub: 'AI · Automation' },
-  { href: '/period-wiring', title: 'Period Wiring',   sub: 'Config' },
+  { href: '/overview',      title: 'Overview',          sub: 'Owner' },
+  { href: '/today',         title: "Today's Snapshot",  sub: 'Operations' },
+  { href: '/actions',       title: 'Action Plans',      sub: 'Recommendations' },
+  { href: '/revenue',       title: 'Revenue',           sub: 'Management' },
+  { href: '/departments',   title: 'Departments',       sub: 'F&B · Spa · Activities' },
+  { href: '/finance',       title: 'Finance',           sub: 'P&L · Budget · Ledger' },
+  { href: '/marketing',     title: 'Marketing',         sub: 'Channels · Reviews' },
+  { href: '/agents',        title: 'Agents',            sub: 'AI · Automation' },
+  { href: '/period-wiring', title: 'Period Wiring',     sub: 'Config' },
 ];
 
 export default function TopNav() {
@@ -31,17 +31,19 @@ export default function TopNav() {
   const qs = sp.toString();
 
   return (
-    <nav className="top-nav">
-      {ITEMS.map((item) => {
-        const active = pathname.startsWith(item.href);
-        const href = qs ? `${item.href}?${qs}` : item.href;
-        return (
-          <Link key={item.href} href={href} className={`top-nav__item${active ? ' top-nav__item--active' : ''}`}>
-            <span className="top-nav__title">{item.title}</span>
-            <span className="top-nav__sub">{item.sub}</span>
-          </Link>
-        );
-      })}
-    </nav>
+    <div className="nav-wrap">
+      <nav className="nav">
+        {ITEMS.map((it) => {
+          const active = pathname.startsWith(it.href);
+          const href = qs ? `${it.href}?${qs}` : it.href;
+          return (
+            <Link key={it.href} href={href} className={active ? 'active' : ''}>
+              <span className="nav-title">{it.title}</span>
+              <span className="nav-sub">{it.sub}</span>
+            </Link>
+          );
+        })}
+      </nav>
+    </div>
   );
 }
