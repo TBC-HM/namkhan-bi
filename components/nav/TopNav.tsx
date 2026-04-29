@@ -37,12 +37,12 @@ export default function TopNav() {
                     const href = qs ? `${it.href}?${qs}` : it.href;
                     return (
                                   <Link key={it.href} href={href} className={active ? 'active' : ''}>
-                                                <span className="nav-title">{it.title}</span>span>
-                                                <span className="nav-sub">{it.sub}</span>span>
-                                  </Link>Link>
+                                                <span className="nav-title">{it.title}</span>
+                                                <span className="nav-sub">{it.sub}</span>
+                                  </Link>
                                 );
         })}
-              </nav>nav>
-        </div>div>
+              </nav>
+        </div>
       );
-}</div>
+}
