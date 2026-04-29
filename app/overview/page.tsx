@@ -2,27 +2,36 @@ import { Section } from '@/components/sections/Section';
 import { Kpi } from '@/components/kpi/Kpi';
 import { DailyRevenueChart } from '@/components/charts/DailyRevenueChart';
 import {
-  getKpiToday, getKpiDaily, getCaptureRates, defaultDailyRange,
-  aggregateDaily, getDqIssues
+  getKpiToday, getKpiDaily, getCaptureRates,
+  aggregateDaily, getDqIssues, getChannelPerf
 } from '@/lib/data';
+import { resolvePeriod } from '@/lib/period';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
 
-export default async function OverviewPage() {
+interface Props {
+  searchParams: Record<string, string | string[] | undefined>;
+}
+
+export default async function OverviewPage({ searchParams }: Props) {
+  const period = resolvePeriod(searchParams);
+
   const today = await getKpiToday().catch(() => null);
-  const range = defaultDailyRange(30);
-  const daily30 = await getKpiDaily(range.from, range.to).catch(() => []);
+  const daily = await getKpiDaily(period).catch(() => []);
   const capture = await getCaptureRates().catch(() => null);
   const dq = await getDqIssues().catch(() => []);
-  const agg30 = aggregateDaily(daily30);
-  // 90d for chart
-  const range90 = defaultDailyRange(90);
-  const daily90 = await getKpiDaily(range90.from, range90.to).catch(() => []);
+  const agg = aggregateDaily(daily);
+
+  // 90d for chart — independent of selected period so the chart context is stable
+  const chartTo = new Date();
+  const chartFrom = new Date(chartTo.getTime() - 90 * 86_400_000);
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  const daily90 = await getKpiDaily(fmt(chartFrom), fmt(chartTo)).catch(() => []);
 
   return (
     <div className="pt-6">
-      <Section title="Overview" tag="Right Now · Last 30d">
+      <Section title="Overview" tag={`Right Now · ${period.label}`}>
         <div className="grid grid-cols-4 gap-3 mb-3">
           <Kpi label="In-House" value={today?.in_house ?? 0} />
           <Kpi label="Arriving Today" value={today?.arrivals_today ?? 0} />
@@ -30,10 +39,10 @@ export default async function OverviewPage() {
           <Kpi label="OTB Next 90d" value={today?.otb_next_90d ?? 0} />
         </div>
         <div className="grid grid-cols-5 gap-3 mb-3">
-          <Kpi label="Occupancy (30d)" value={agg30?.occupancy_pct ?? 0} kind="pct" />
-          <Kpi label="ADR (30d)" value={agg30?.adr ?? 0} kind="money" />
-          <Kpi label="RevPAR (30d)" value={agg30?.revpar ?? 0} kind="money" />
-          <Kpi label="TRevPAR (30d)" value={agg30?.trevpar ?? 0} kind="money" />
+          <Kpi label={`Occupancy (${period.days}d)`} value={agg?.occupancy_pct ?? 0} kind="pct" />
+          <Kpi label={`ADR (${period.days}d)`} value={agg?.adr ?? 0} kind="money" />
+          <Kpi label={`RevPAR (${period.days}d)`} value={agg?.revpar ?? 0} kind="money" />
+          <Kpi label={`TRevPAR (${period.days}d)`} value={agg?.trevpar ?? 0} kind="money" />
           <Kpi label="GOPPAR" value={null} greyed hint="Cost data needed" />
         </div>
         <div className="grid grid-cols-6 gap-3">
@@ -43,6 +52,9 @@ export default async function OverviewPage() {
           <Kpi label="Spa / Occ Rn" value={Number(capture?.spa_per_occ_room ?? 0)} kind="money" />
           <Kpi label="Activity / Occ Rn" value={Number(capture?.activity_per_occ_room ?? 0)} kind="money" />
           <Kpi label="Open DQ Issues" value={dq.length} status={dq.length > 0 ? 'warn' : 'good'} />
+        </div>
+        <div className="text-muted text-xs mt-3 tabular">
+          Active filter: <strong>{period.label}</strong> · {period.rangeLabel}
         </div>
       </Section>
 
@@ -70,7 +82,6 @@ export default async function OverviewPage() {
 }
 
 async function ChannelTeaser() {
-  const { getChannelPerf } = await import('@/lib/data');
   const ch = await getChannelPerf().catch(() => []);
   const top = ch.slice(0, 6);
   const total30 = top.reduce((s, c) => s + Number(c.revenue_30d || 0), 0);

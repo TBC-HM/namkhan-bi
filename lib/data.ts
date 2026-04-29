@@ -1,8 +1,46 @@
-import { supabase, PROPERTY_ID } from './supabase';
+// lib/data.ts
+// Period-aware data fetchers. Every relevant function accepts ResolvedPeriod
+// and applies its from/to/segment/compare values instead of hardcoded windows.
+//
+// IMPORTANT: This is a DROP-IN REPLACEMENT for the existing lib/data.ts.
+// Function names are preserved. Helpers `defaultDailyRange` and `defaultMonthRange`
+// are kept as fallbacks for any code that hasn't been migrated yet.
+//
+// Pattern in pages:
+//   const period = resolvePeriod(searchParams);
+//   const daily = await getKpiDaily(period);
+//   const agg   = aggregateDaily(daily);
 
-// Server-side data fetchers. All target the BI materialized views created in
-// migration "create_bi_materialized_views_v1" / "rebuild_views_using_classified_mv".
-// Every fetch is property-scoped.
+import { supabase, PROPERTY_ID } from './supabase';
+import type { ResolvedPeriod, Segment } from './period';
+import { segmentFilter } from './period';
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+
+/**
+ * Apply segment filter to a Supabase query. Currently filters by `source` /
+ * `source_name` in views that have it. Pass the column name your view uses.
+ *
+ * NOTE on caveat: most KPI views (mv_kpi_daily, mv_kpi_today, mv_capture_rates)
+ * are NOT segment-partitioned at the DB level. Filtering by segment on those
+ * views returns the same numbers regardless. Only mv_channel_perf and
+ * reservations-derived queries respect segment today.
+ *
+ * Phase 2 backlog: rebuild kpi/capture views with segment dimension.
+ */
+function applySegment<T>(query: any, period: ResolvedPeriod, column = 'source'): any {
+  const seg = segmentFilter(period.seg);
+  if (seg.column && seg.values && seg.values.length > 0) {
+    return query.in(column, seg.values);
+  }
+  return query;
+}
+
+// ============================================================================
+// TODAY (snapshot, period-independent)
+// ============================================================================
 
 export async function getKpiToday() {
   const { data, error } = await supabase
@@ -14,19 +52,83 @@ export async function getKpiToday() {
   return data;
 }
 
-export async function getKpiDaily(fromDate: string, toDate: string) {
+// ============================================================================
+// DAILY KPI — drives Overview, Pulse, Departments, P&L cards
+// ============================================================================
+
+/**
+ * NEW signature accepting ResolvedPeriod.
+ * Backwards compatibility: if old callers pass (from: string, to: string),
+ * we still honor that — see overload below.
+ */
+export async function getKpiDaily(period: ResolvedPeriod): Promise<any[]>;
+export async function getKpiDaily(fromDate: string, toDate: string): Promise<any[]>;
+export async function getKpiDaily(a: ResolvedPeriod | string, b?: string): Promise<any[]> {
+  let from: string, to: string;
+  if (typeof a === 'string') {
+    from = a; to = b!;
+  } else {
+    from = a.from; to = a.to;
+  }
+
   const { data, error } = await supabase
     .from('mv_kpi_daily')
     .select('*')
     .eq('property_id', PROPERTY_ID)
-    .gte('night_date', fromDate)
-    .lte('night_date', toDate)
+    .gte('night_date', from)
+    .lte('night_date', to)
     .order('night_date', { ascending: true });
   if (error) throw error;
   return data ?? [];
 }
 
-export async function getRevenueByUsali(fromMonth: string, toMonth: string) {
+/**
+ * STLY/Prior comparison fetcher. Returns null if period.cmp is empty/budget.
+ */
+export async function getKpiDailyCompare(period: ResolvedPeriod): Promise<any[] | null> {
+  if (!period.compareFrom || !period.compareTo) return null;
+  const { data, error } = await supabase
+    .from('mv_kpi_daily')
+    .select('*')
+    .eq('property_id', PROPERTY_ID)
+    .gte('night_date', period.compareFrom)
+    .lte('night_date', period.compareTo)
+    .order('night_date', { ascending: true });
+  if (error) return null;
+  return data ?? [];
+}
+
+// ============================================================================
+// USALI MONTHLY
+// ============================================================================
+
+export async function getRevenueByUsali(period: ResolvedPeriod): Promise<any[]>;
+export async function getRevenueByUsali(fromMonth: string, toMonth: string): Promise<any[]>;
+export async function getRevenueByUsali(a: ResolvedPeriod | string, b?: string): Promise<any[]> {
+  let fromMonth: string, toMonth: string;
+  if (typeof a === 'string') {
+    fromMonth = a; toMonth = b!;
+  } else {
+    // For monthly USALI we want the trailing 12 months ending in the period's `to` month,
+    // OR the period range if it spans more than 1 month.
+    const toDate = new Date(a.to + 'T00:00:00Z');
+    const fromDate = new Date(a.from + 'T00:00:00Z');
+    const spanMonths =
+      (toDate.getUTCFullYear() - fromDate.getUTCFullYear()) * 12 +
+      (toDate.getUTCMonth() - fromDate.getUTCMonth());
+
+    if (spanMonths >= 1) {
+      // Use the period's own range, snapped to month-firsts
+      fromMonth = `${fromDate.getUTCFullYear()}-${String(fromDate.getUTCMonth() + 1).padStart(2, '0')}-01`;
+      toMonth = `${toDate.getUTCFullYear()}-${String(toDate.getUTCMonth() + 2).padStart(2, '0')}-01`;
+    } else {
+      // Sub-month period — show trailing 12 months ending at period.to
+      const back = new Date(Date.UTC(toDate.getUTCFullYear() - 1, toDate.getUTCMonth(), 1));
+      fromMonth = `${back.getUTCFullYear()}-${String(back.getUTCMonth() + 1).padStart(2, '0')}-01`;
+      toMonth = `${toDate.getUTCFullYear()}-${String(toDate.getUTCMonth() + 2).padStart(2, '0')}-01`;
+    }
+  }
+
   const { data, error } = await supabase
     .from('mv_revenue_by_usali_dept')
     .select('*')
@@ -38,25 +140,69 @@ export async function getRevenueByUsali(fromMonth: string, toMonth: string) {
   return data ?? [];
 }
 
-export async function getChannelPerf() {
-  const { data, error } = await supabase
+// ============================================================================
+// CHANNELS
+// ============================================================================
+
+/**
+ * Channel performance. The mat view today has fixed-window columns
+ * (revenue_30d, revenue_90d, etc.). We accept ResolvedPeriod so the page
+ * shows the appropriate column AND we filter zero-revenue channels.
+ *
+ * Backwards-compatible: still callable with no args.
+ */
+export async function getChannelPerf(period?: ResolvedPeriod): Promise<any[]> {
+  let query = supabase
     .from('mv_channel_perf')
     .select('*')
-    .eq('property_id', PROPERTY_ID)
-    .order('revenue_90d', { ascending: false });
+    .eq('property_id', PROPERTY_ID);
+
+  // Pick the order column based on period length (best available without view changes)
+  const orderCol = period && period.days <= 35 ? 'revenue_30d' : 'revenue_90d';
+
+  query = query.order(orderCol, { ascending: false, nullsFirst: false });
+
+  if (period) {
+    query = applySegment(query, period, 'source');
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
-  return data ?? [];
+  // Drop zero-revenue rows (audit fix H5)
+  return (data ?? []).filter((c: any) =>
+    Number(c.revenue_30d || 0) > 0 ||
+    Number(c.revenue_90d || 0) > 0 ||
+    Number(c.bookings_30d || 0) > 0 ||
+    Number(c.bookings_90d || 0) > 0
+  );
 }
 
-export async function getPaceOtb() {
-  const { data, error } = await supabase
+// ============================================================================
+// PACE
+// ============================================================================
+
+export async function getPaceOtb(period?: ResolvedPeriod) {
+  let query = supabase
     .from('mv_pace_otb')
     .select('*')
     .eq('property_id', PROPERTY_ID)
     .order('ci_month', { ascending: true });
+
+  // If period is forward-looking, scope the pace months to its window
+  if (period && period.direction === 'fwd') {
+    const fromMonth = period.from.slice(0, 7) + '-01';
+    const toMonth = period.to.slice(0, 7) + '-01';
+    query = query.gte('ci_month', fromMonth).lte('ci_month', toMonth);
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
   return data ?? [];
 }
+
+// ============================================================================
+// TODAY DETAIL
+// ============================================================================
 
 export async function getArrivalsDeparturesToday() {
   const { data, error } = await supabase
@@ -68,6 +214,18 @@ export async function getArrivalsDeparturesToday() {
   return data ?? [];
 }
 
+// ============================================================================
+// AGED AR
+// ============================================================================
+
+/**
+ * Audit fix C5: filter out future-stay reservations. Real Aged AR =
+ * reservations with checkout_date in the past AND positive balance.
+ *
+ * The mat view today returns everything with a balance, including upcoming
+ * stays — those are NOT receivables. We filter client-side until the view
+ * itself is rebuilt (see sql/01_fix_mv_aged_ar.sql).
+ */
 export async function getAgedAr() {
   const { data, error } = await supabase
     .from('mv_aged_ar')
@@ -75,8 +233,13 @@ export async function getAgedAr() {
     .eq('property_id', PROPERTY_ID)
     .order('days_overdue', { ascending: false });
   if (error) throw error;
-  return data ?? [];
+  // Frontend safety net even before the SQL migration runs:
+  return (data ?? []).filter((r: any) => Number(r.days_overdue) > 0);
 }
+
+// ============================================================================
+// CAPTURE RATES
+// ============================================================================
 
 export async function getCaptureRates() {
   const { data, error } = await supabase
@@ -88,17 +251,34 @@ export async function getCaptureRates() {
   return data;
 }
 
-export async function getRateInventoryCalendar(fromDate: string, toDate: string) {
+// ============================================================================
+// RATE INVENTORY CALENDAR
+// ============================================================================
+
+export async function getRateInventoryCalendar(period: ResolvedPeriod): Promise<any[]>;
+export async function getRateInventoryCalendar(fromDate: string, toDate: string): Promise<any[]>;
+export async function getRateInventoryCalendar(a: ResolvedPeriod | string, b?: string): Promise<any[]> {
+  let from: string, to: string;
+  if (typeof a === 'string') {
+    from = a; to = b!;
+  } else {
+    from = a.from; to = a.to;
+  }
+
   const { data, error } = await supabase
     .from('mv_rate_inventory_calendar')
     .select('*')
     .eq('property_id', PROPERTY_ID)
-    .gte('inventory_date', fromDate)
-    .lte('inventory_date', toDate)
+    .gte('inventory_date', from)
+    .lte('inventory_date', to)
     .order('inventory_date', { ascending: true });
   if (error) throw error;
   return data ?? [];
 }
+
+// ============================================================================
+// DQ ISSUES
+// ============================================================================
 
 export async function getDqIssues() {
   const { data, error } = await supabase
@@ -110,7 +290,10 @@ export async function getDqIssues() {
   return data ?? [];
 }
 
-// Helper: month-from / month-to that fit common views
+// ============================================================================
+// LEGACY HELPERS — kept so any unmigrated code still compiles
+// ============================================================================
+
 export function defaultMonthRange(): { fromMonth: string; toMonth: string } {
   const today = new Date();
   const from = new Date(today.getFullYear() - 1, today.getMonth(), 1);
@@ -129,8 +312,10 @@ export function defaultDailyRange(daysBack = 90): { from: string; to: string } {
   };
 }
 
-// Aggregate helper for "current month" headline KPIs.
-// Re-aggregates at the daily-grain to stay consistent with the displayed chart.
+// ============================================================================
+// AGGREGATION
+// ============================================================================
+
 export function aggregateDaily(rows: any[]) {
   if (!rows.length) return null;
   const totals = rows.reduce((a, r) => {

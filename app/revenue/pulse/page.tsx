@@ -1,33 +1,66 @@
 import { Section } from '@/components/sections/Section';
 import { Kpi } from '@/components/kpi/Kpi';
 import { DailyRevenueChart } from '@/components/charts/DailyRevenueChart';
-import { getKpiDaily, defaultDailyRange, aggregateDaily } from '@/lib/data';
+import { getKpiDaily, aggregateDaily, getKpiDailyCompare } from '@/lib/data';
+import { resolvePeriod } from '@/lib/period';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
 
-export default async function PulsePage() {
-  const r30 = defaultDailyRange(30);
-  const r90 = defaultDailyRange(90);
-  const d30 = await getKpiDaily(r30.from, r30.to).catch(() => []);
-  const d90 = await getKpiDaily(r90.from, r90.to).catch(() => []);
-  const a30 = aggregateDaily(d30);
-  const a90 = aggregateDaily(d90);
+interface Props {
+  searchParams: Record<string, string | string[] | undefined>;
+}
+
+export default async function PulsePage({ searchParams }: Props) {
+  const period = resolvePeriod(searchParams);
+
+  const dailyPeriod = await getKpiDaily(period).catch(() => []);
+  const aggPeriod = aggregateDaily(dailyPeriod);
+
+  // Compare data when user picked vs STLY / Prior Period
+  const dailyCompare = await getKpiDailyCompare(period).catch(() => null);
+  const aggCompare = dailyCompare ? aggregateDaily(dailyCompare) : null;
+
+  // Stable 90d chart context regardless of period selection
+  const chartTo = new Date();
+  const chartFrom = new Date(chartTo.getTime() - 90 * 86_400_000);
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  const d90 = await getKpiDaily(fmt(chartFrom), fmt(chartTo)).catch(() => []);
+
+  const dlabel = `${period.days}d`;
+
+  // Helper for delta rendering
+  const delta = (cur: number, prev: number | undefined): string | undefined => {
+    if (prev == null || prev === 0) return undefined;
+    const d = ((cur - prev) / prev) * 100;
+    const sign = d >= 0 ? '+' : '';
+    return `${sign}${d.toFixed(1)}% vs ${period.cmp === 'stly' ? 'STLY' : 'PP'}`;
+  };
 
   return (
     <>
-      <Section title="Pulse" tag="Last 30 / 90 days">
+      <Section title="Pulse" tag={period.label}>
         <div className="grid grid-cols-4 gap-3 mb-3">
-          <Kpi label="Occupancy 30d" value={a30?.occupancy_pct ?? 0} kind="pct" />
-          <Kpi label="ADR 30d" value={a30?.adr ?? 0} kind="money" />
-          <Kpi label="RevPAR 30d" value={a30?.revpar ?? 0} kind="money" />
-          <Kpi label="TRevPAR 30d" value={a30?.trevpar ?? 0} kind="money" />
+          <Kpi label={`Occupancy ${dlabel}`} value={aggPeriod?.occupancy_pct ?? 0} kind="pct"
+               hint={delta(aggPeriod?.occupancy_pct ?? 0, aggCompare?.occupancy_pct)} />
+          <Kpi label={`ADR ${dlabel}`} value={aggPeriod?.adr ?? 0} kind="money"
+               hint={delta(aggPeriod?.adr ?? 0, aggCompare?.adr)} />
+          <Kpi label={`RevPAR ${dlabel}`} value={aggPeriod?.revpar ?? 0} kind="money"
+               hint={delta(aggPeriod?.revpar ?? 0, aggCompare?.revpar)} />
+          <Kpi label={`TRevPAR ${dlabel}`} value={aggPeriod?.trevpar ?? 0} kind="money"
+               hint={delta(aggPeriod?.trevpar ?? 0, aggCompare?.trevpar)} />
         </div>
         <div className="grid grid-cols-4 gap-3">
-          <Kpi label="Total Rev 30d" value={(a30?.rooms_revenue ?? 0) + (a30?.total_ancillary_revenue ?? 0)} kind="money" />
-          <Kpi label="Rooms Rev 30d" value={a30?.rooms_revenue ?? 0} kind="money" />
-          <Kpi label="Ancillary Rev 30d" value={a30?.total_ancillary_revenue ?? 0} kind="money" />
+          <Kpi label={`Total Rev ${dlabel}`}
+               value={(aggPeriod?.rooms_revenue ?? 0) + (aggPeriod?.total_ancillary_revenue ?? 0)}
+               kind="money" />
+          <Kpi label={`Rooms Rev ${dlabel}`} value={aggPeriod?.rooms_revenue ?? 0} kind="money" />
+          <Kpi label={`Ancillary Rev ${dlabel}`} value={aggPeriod?.total_ancillary_revenue ?? 0} kind="money" />
           <Kpi label="Pace vs Forecast" value={null} greyed hint="Forecast pending" />
+        </div>
+        <div className="text-muted text-xs mt-3 tabular">
+          Active filter: <strong>{period.label}</strong> · {period.rangeLabel}
+          {aggCompare && ` · compare ${period.compareFrom} → ${period.compareTo}`}
         </div>
       </Section>
 
