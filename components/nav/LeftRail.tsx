@@ -1,10 +1,11 @@
 'use client';
 
 // components/nav/LeftRail.tsx
-// 4-pillar architecture per Beyond Circle v9:
-//   01 Revenue · 02 Operations · 03 Guest · 04 Finance
+// 6-pillar architecture (v10 + Marketing restore 2026-04-30):
+//   01 Revenue · 02 Sales · 03 Marketing · 04 Operations · 05 Guest · 06 Finance
 // Bottom utility section: Knowledge · Settings.
 // Click N at top → Home (overview lives at /).
+// Note: Sales glyph is '$' to avoid collision with Settings 'S'.
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -24,6 +25,19 @@ const PILLARS: RailItem[] = [
     matches: ['/revenue'],
   },
   {
+    href: '/sales/inquiries',
+    glyph: '$',
+    label: 'Sales',
+    matches: ['/sales'],
+  },
+  {
+    href: '/marketing',
+    glyph: 'M',
+    label: 'Marketing',
+    // marketing owns reviews/social/influencers/media as sub-tabs
+    matches: ['/marketing'],
+  },
+  {
     href: '/operations',
     glyph: 'O',
     label: 'Ops',
@@ -34,8 +48,7 @@ const PILLARS: RailItem[] = [
     href: '/guest',
     glyph: 'G',
     label: 'Guest',
-    // guest folds in: marketing reviews/social/influencers/media
-    matches: ['/guest', '/marketing'],
+    matches: ['/guest'],
   },
   {
     href: '/finance',

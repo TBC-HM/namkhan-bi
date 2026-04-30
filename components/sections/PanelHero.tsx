@@ -9,7 +9,7 @@ interface Props {
   title: string;
   emphasis?: string;
   sub?: string;
-  kpis: ReactNode;     // pass <KpiCard /> children (4 of them)
+  kpis?: ReactNode;    // optional — pass <KpiCard /> children (typically 4)
 }
 
 export default function PanelHero({ eyebrow, title, emphasis, sub, kpis }: Props) {

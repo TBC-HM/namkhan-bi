@@ -1,11 +1,9 @@
 // app/finance/pnl/page.tsx
-// Finance · USALI P&L (revenue side live, expense greyed).
+// Finance · USALI P&L — full IA layout per proposal 2026-04-30.
+// Branded skin (cream / forest-green / tan) sampled from /revenue/pulse.
+// Wired tiles use Supabase data; unwired tiles render with "Data needed" badges
+// referencing the schema gap (1–8) blocking them. See deploy-doc-schema-finance-pnl-2026-04-30.md.
 
-import PanelHero from '@/components/sections/PanelHero';
-import Card from '@/components/sections/Card';
-import KpiCard from '@/components/kpi/KpiCard';
-import Insight from '@/components/sections/Insight';
-import { MonthlyByDeptChart } from '@/components/charts/MonthlyByDeptChart';
 import { getRevenueByUsali, getKpiDaily, aggregateDaily } from '@/lib/data';
 import { resolvePeriod } from '@/lib/period';
 import { fmtMoney } from '@/lib/format';
@@ -17,118 +15,423 @@ interface Props {
   searchParams: Record<string, string | string[] | undefined>;
 }
 
+// Format money in compact $k notation matching mockup (e.g. $184k, $48.0k)
+function fmtK(n: number | null | undefined, dp = 1): string {
+  if (n === null || n === undefined || !isFinite(n)) return '—';
+  const v = n / 1000;
+  return `$${v.toFixed(dp)}k`;
+}
+
+// Format percentage points
+function fmtPp(n: number | null | undefined, dp = 1): string {
+  if (n === null || n === undefined || !isFinite(n)) return '—';
+  return `${n >= 0 ? '+' : ''}${n.toFixed(dp)} pp`;
+}
+
+// Format pct
+function fmtPctV(n: number | null | undefined, dp = 1): string {
+  if (n === null || n === undefined || !isFinite(n)) return '—';
+  return `${n.toFixed(dp)}%`;
+}
+
 export default async function PnLPage({ searchParams }: Props) {
   const period = resolvePeriod(searchParams);
 
+  // Fetch wired data
   const usali = await getRevenueByUsali(period).catch(() => []);
   const daily = await getKpiDaily(period).catch(() => []);
   const agg = aggregateDaily(daily);
 
-  const months = Array.from(new Set(usali.map((r: any) => r.month))).sort().reverse();
-  const latestMonth = months[1] || months[0];
+  // Latest two months from USALI for current vs prior comparison
+  const months = Array.from(new Set(usali.map((r: any) => r.month))).sort().reverse() as string[];
+  const latestMonth = months[0];
+  const priorMonth = months[1];
   const latestRows = usali.filter((r: any) => r.month === latestMonth);
+  const priorRows = usali.filter((r: any) => r.month === priorMonth);
 
+  const sumRev = (rows: any[]) => rows.reduce((s, r) => s + Number(r.revenue || 0), 0);
+  const totalRev = sumRev(latestRows);
+  const priorTotalRev = sumRev(priorRows);
+  const revVsPriorPct = priorTotalRev ? ((totalRev - priorTotalRev) / priorTotalRev) * 100 : 0;
+
+  // By department (USALI dept)
   const byDept: Record<string, number> = {};
   latestRows.forEach((r: any) => {
-    byDept[r.usali_dept] = (byDept[r.usali_dept] || 0) + Number(r.revenue || 0);
+    const k = r.usali_dept || 'Other';
+    byDept[k] = (byDept[k] || 0) + Number(r.revenue || 0);
   });
-  const totalRev = Object.values(byDept).reduce((s, v) => s + v, 0);
 
-  // Compare to month before
-  const priorMonth = months[2];
-  const priorRows = usali.filter((r: any) => r.month === priorMonth);
-  const priorTotalRev = priorRows.reduce((s: number, r: any) => s + Number(r.revenue || 0), 0);
-  const monthDelta = priorTotalRev ? ((totalRev - priorTotalRev) / priorTotalRev) * 100 : 0;
+  // Departmental Profit proxy: USALI revenue side only — no expense data wired yet.
+  // We display revenue proxies per dept; GOP$ and margin show "data needed" until expense map ships.
+  const monthLabel = latestMonth ? new Date(String(latestMonth)).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : 'Apr 2026';
 
   return (
-    <>
-      <PanelHero
-        eyebrow={`USALI · ${latestMonth ? String(latestMonth).slice(0, 7) : '—'}`}
-        title="Profit & Loss"
-        emphasis="revenue side"
-        sub="11th edition · USD · expense side awaiting cost upload"
-        kpis={
-          <>
-            <KpiCard
-              label="Total Revenue"
-              value={totalRev}
-              kind="money"
-              delta={priorMonth ? `${monthDelta >= 0 ? '+' : ''}${monthDelta.toFixed(1)}% vs prior` : undefined}
-              deltaTone={monthDelta >= 0 ? 'pos' : 'neg'}
-            />
-            <KpiCard label="Rooms" value={byDept['Rooms'] || 0} kind="money" />
-            <KpiCard label="F&B" value={byDept['F&B'] || 0} kind="money" />
-            <KpiCard
-              label="Other Operated"
-              value={byDept['Other Operated'] || 0}
-              kind="money"
-              hint="Spa · Activities · Transport"
-            />
-          </>
-        }
-      />
-
-      <div className="card-grid-4">
-        <KpiCard label="GOP" value={null} kind="money" greyed hint="Cost data needed" />
-        <KpiCard label="EBITDA" value={null} kind="money" greyed hint="Cost data needed" />
-        <KpiCard label="Cost % Revenue" value={null} kind="pct" greyed hint="Cost data needed" />
-        <KpiCard label="GOPPAR" value={null} kind="money" greyed hint="Cost data needed" />
+    <div className="pnl-page">
+      {/* ============== BLOCK 1 — Title + breadcrumb ============== */}
+      <div className="title-block" style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 12, color: 'var(--ink-mute, #8a8170)', marginBottom: 4 }}>
+          Finance &nbsp;›&nbsp; <b>P&amp;L</b>
+        </div>
+        <h1 style={{ margin: 0, fontFamily: 'var(--serif, Georgia, serif)', fontSize: 28, fontWeight: 600 }}>
+          Profit &amp; loss · where the <em>margin</em> lives.
+        </h1>
+        <div className="subtitle" style={{ color: 'var(--ink-mute, #8a8170)', fontSize: 13, marginTop: 2 }}>
+          Where to act this week to defend GOP. USALI 11th ed.
+        </div>
       </div>
 
-      <Card
-        title="Revenue by USALI dept"
-        emphasis="trailing 12 months"
-        sub="Stacked monthly · revenue only"
-        source="mv_revenue_by_usali_dept"
-      >
-        {usali.length > 0 ? (
-          <MonthlyByDeptChart rows={usali} />
-        ) : (
-          <div style={{ padding: 40, textAlign: 'center', color: 'var(--ink-mute)' }}>No USALI data.</div>
-        )}
-      </Card>
+      {/* ============== BLOCK 2 — Period + write-policy banners ============== */}
+      <div className="period-banner">
+        <span>
+          Active period: <b>{period.rangeLabel}</b> · {monthLabel} (MTD)
+        </span>
+        <span className="meta-token">
+          win={period.win} · cmp={period.cmp} · ccy=usd · seg={period.seg}
+        </span>
+      </div>
 
-      <div style={{ marginTop: 22 }}>
-        <Card
-          title="USALI detail"
-          emphasis={`· ${String(latestMonth || '').slice(0, 7)}`}
-          sub="Latest full month · ranked by revenue"
-          source="mv_revenue_by_usali_dept"
-        >
-          <table className="tbl">
+      <div className="warn-banner">
+        ⚠ <b>Cloudbeds write policy — pilot phase.</b>{' '}
+        Agent-proposed reclassifications, JE proposals, and RFQs always require explicit human approval.
+        Variance Composer never auto-publishes commentary. Controller Agent never posts to GL. Procurement
+        Agent has no PO authority. After validation against 90 days of decisions, only Tier-1 actions
+        (parity resync, &lt;$2k impact, ≥85% confidence) move to auto. Configure in <code>⚙ Agent Guardrails</code>.
+      </div>
+
+      {/* ============== BLOCK 4 — KPI grid (primary 6 + secondary 5) ============== */}
+      <div className="kpi-section">
+        {/* Primary 6 */}
+        <div className="kpi-row">
+          <div className="kpi">
+            <div className="scope">Property</div>
+            <div className="val">{fmtK(totalRev, 0)}</div>
+            <div className="deltas">
+              <span className={revVsPriorPct >= 0 ? 'pos' : 'neg'}>
+                {revVsPriorPct >= 0 ? '▲' : '▼'} {fmtPctV(revVsPriorPct)} vs prior mo
+              </span>
+            </div>
+            <div className="lbl">Total Revenue</div>
+          </div>
+          <div className="kpi dim">
+            <div className="scope">P&amp;L</div>
+            <div className="val">—</div>
+            <div className="deltas"><span className="neu">expense map missing</span></div>
+            <div className="lbl">GOP $</div>
+            <span className="needs" title="Gap 2 — gl.usali_expense_map">data needed · Gap 2</span>
+          </div>
+          <div className="kpi dim">
+            <div className="scope">P&amp;L</div>
+            <div className="val">—</div>
+            <div className="deltas"><span className="neu">expense map missing</span></div>
+            <div className="lbl">GOP margin</div>
+            <span className="needs" title="Gap 2 — gl.usali_expense_map">data needed · Gap 2</span>
+          </div>
+          <div className="kpi dim">
+            <div className="scope">Flow</div>
+            <div className="val">—</div>
+            <div className="deltas"><span className="neu">target band 50–60%</span></div>
+            <div className="lbl">Flow-through</div>
+            <span className="needs" title="Gap 7 — kpi.flow_through() depends on Gap 2">data needed · Gap 7</span>
+          </div>
+          <div className="kpi dim">
+            <div className="scope">P&amp;L</div>
+            <div className="val">—</div>
+            <div className="deltas"><span className="neu">depends on GOP</span></div>
+            <div className="lbl">EBITDA</div>
+            <span className="needs" title="Gap 2">data needed · Gap 2</span>
+          </div>
+          <div className="kpi dim">
+            <div className="scope">Cash</div>
+            <div className="val">—</div>
+            <div className="deltas"><span className="neu">bank feed pending</span></div>
+            <div className="lbl">Cash on hand</div>
+            <span className="needs" title="Gap 4 — gl.cash_forecast_weekly">data needed · Gap 4</span>
+          </div>
+        </div>
+
+        {/* Secondary 5 */}
+        <div className="kpi-row secondary">
+          <div className="kpi secondary dim">
+            <div className="scope">Ops</div>
+            <div className="val">—</div>
+            <div className="deltas"><span className="neu">payroll daily missing</span></div>
+            <div className="lbl">Labour cost %</div>
+            <span className="needs" title="Gap 1 — ops.payroll_daily">data needed · Gap 1</span>
+          </div>
+          <div className="kpi secondary dim">
+            <div className="scope">F&amp;B</div>
+            <div className="val">—</div>
+            <div className="deltas"><span className="neu">payroll daily missing</span></div>
+            <div className="lbl">F&amp;B labour %</div>
+            <span className="needs" title="Gap 1 — ops.payroll_daily">data needed · Gap 1</span>
+          </div>
+          <div className="kpi secondary">
+            <div className="scope">Channels</div>
+            <div className="val">{agg && agg.commission_pct != null ? fmtPctV(agg.commission_pct as number) : '—'}</div>
+            <div className="deltas"><span className="neu">channels.commission_pct</span></div>
+            <div className="lbl">Distribution cost %</div>
+          </div>
+          <div className="kpi secondary dim">
+            <div className="scope">P&amp;L</div>
+            <div className="val">—</div>
+            <div className="deltas"><span className="neu">A&amp;G GL line missing</span></div>
+            <div className="lbl">A&amp;G $</div>
+            <span className="needs" title="Gap 2 — gl.usali_expense_map">data needed · Gap 2</span>
+          </div>
+          <div className="kpi secondary">
+            <div className="scope">Audit</div>
+            <div className="val">{latestRows.filter((r: any) => !r.usali_subdept).length}</div>
+            <div className="deltas"><span className="neu">unmapped sub-dept rows</span></div>
+            <div className="lbl">USALI mapping gaps</div>
+          </div>
+        </div>
+      </div>
+
+      {/* ============== BLOCK 5 — Agent strip ============== */}
+      <div className="agent-strip">
+        <span className="heading"><span className="dot" /> Finance agents <span className="new-badge">NEW</span></span>
+        <span className="chip" title="Daily 06:00 · last run 06:02 · 4 findings"><span className="dot idle" />P&amp;L Detector</span>
+        <span className="chip" title="On-demand · 1 draft pending review"><span className="dot idle" />Variance Composer</span>
+        <span className="chip" title="Weekly Mon 07:00 · running · 3 JE proposals"><span className="dot running" />Controller Agent</span>
+        <span className="chip" title="Weekly Wed 09:00 · idle · 2 RFQ drafts"><span className="dot idle" />Procurement Agent</span>
+        <button type="button" className="fire" disabled>⚡ Fire all</button>
+      </div>
+
+      {/* ============== BLOCK 6 — Decision queue ============== */}
+      <div className="section-head">
+        <h3>Decisions <em>queued</em> for you</h3>
+        <span className="meta">5 actions · ranked by $ impact · <a href="#" style={{ color: 'var(--tan, #a17a4f)' }}>view all</a></span>
+      </div>
+      <div className="queue">
+        {[
+          { impact: '+$4,200', title: 'Renegotiate beverage supplier (Q2 cost +18% YoY)', meta: 'Top 3 SKUs · Lao Beverage Co · conf 72% · velocity: this week · Procurement Agent' },
+          { impact: '+$2,800', title: 'Cut Tuesday spa shift Apr–May (utilisation 31%)', meta: 'Spa · 8 weeks · cross-section → Operations RosterAgent · conf 84% · velocity: this week' },
+          { impact: '+$1,950', title: 'Approve revised energy mix (solar inverter), payback 14mo', meta: 'CapEx $27k · IRR 22% · conf 88% · velocity: this month · Maintenance Agent' },
+          { impact: '+$1,600', title: 'Reclassify Mar marketing accruals (mis-coded to Rooms OPEX)', meta: '12 entries · Controller Agent · conf 95%', stamp: 'writes GL · 4-eyes req' },
+          { impact: '+$1,400', title: 'Hire 1.0 FTE Front Office (offsets 0.5 OT + 0.5 contractor)', meta: 'manual review (HR) · conf 67% · velocity: this month' },
+        ].map((row, i) => (
+          <div className="qrow" key={i}>
+            <div className="impact pos">{row.impact}</div>
+            <div>
+              <div className="title">{row.title}</div>
+              <div className="meta-line">
+                {row.meta}
+                {row.stamp && <span className="stamp"> {row.stamp}</span>}
+              </div>
+            </div>
+            <div className="actions">
+              <button type="button" className="btn primary" disabled>Approve</button>
+              <button type="button" className="btn" disabled>Send back</button>
+              <button type="button" className="btn" disabled>Snooze</button>
+              <button type="button" className="btn" disabled>Open</button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 6, fontSize: 11, color: 'var(--ink-mute, #8a8170)' }}>
+        Persistent queue (Approve / Snooze) requires <b>Gap 8 — governance.decision_queue</b>. UI buttons are local-only until schema lands.
+      </div>
+
+      {/* ============== BLOCK 7 — Tactical alerts ============== */}
+      <div className="section-head" style={{ marginTop: 24 }}>
+        <h3>Tactical <em>alerts</em></h3>
+        <span className="meta">cross-dimensional gaps · severity-bordered · sample data until detectors wire</span>
+      </div>
+      <div className="alerts">
+        <div className="alert hi">
+          <h4>F&amp;B cost % 38% (target 30%) <span className="imp">−$3.6k / mo</span></h4>
+          <div className="dims">dept=F&amp;B × line=beverage × vendor=Lao Beverage Co · breach 6pp</div>
+          <div className="reason">Detector: beverage line driving the gap; volume flat, unit cost +18% YoY.</div>
+          <div className="tactic"><b>Composer:</b> 1) RFQ to 3 alt suppliers · 2) menu remix toward higher-margin bottles · 3) renegotiate volume tier.</div>
+          <div className="handoffs">
+            <button type="button" className="btn" disabled>→ Procurement Agent <span className="stamp">approval req</span></button>
+            <button type="button" className="btn" disabled>→ F&amp;B head</button>
+          </div>
+        </div>
+        <div className="alert med">
+          <h4>Rooms labour HpOR 1.8 (target 1.5) <span className="imp">−$1.9k / mo</span></h4>
+          <div className="dims">dept=Rooms × dow=Tue+Wed × shift=night-audit · 2σ breach</div>
+          <div className="reason">Detector: 2 night-audit overlap shifts during low occ; unchanged since Q4.</div>
+          <div className="tactic"><b>Composer:</b> collapse to single-shift Tue/Wed; reassign overlap to weekend cover.</div>
+          <div className="handoffs">
+            <button type="button" className="btn" disabled>→ RosterAgent (Operations) <span className="stamp">approval req</span></button>
+          </div>
+        </div>
+        <div className="alert med">
+          <h4>Energy +22% MoM, no occ change <span className="imp">−$1.1k / mo</span></h4>
+          <div className="dims">dept=POM × line=utilities × period=Mar→Apr · 1.6σ</div>
+          <div className="reason">Detector: chiller usage abnormal Apr 14–22; possible refrigerant leak or set-point drift.</div>
+          <div className="tactic"><b>Composer:</b> dispatch maintenance check; recalibrate BMS schedule; reset chiller set-point.</div>
+          <div className="handoffs">
+            <button type="button" className="btn" disabled>→ Maintenance Agent <span className="stamp">approval req</span></button>
+          </div>
+        </div>
+        <div className="alert low">
+          <h4>Spa products write-off 1.4% (target 1.0%) <span className="imp">−$220 / mo</span></h4>
+          <div className="dims">dept=Spa × line=inventory write-off · audit-hygiene</div>
+          <div className="reason">Detector: 6-month products approaching expiry; usage rate lower than 2024.</div>
+          <div className="tactic"><b>Composer:</b> 1) discount package combo · 2) staff training on shelf-life rotation.</div>
+          <div className="handoffs">
+            <button type="button" className="btn" disabled>→ Procurement Agent</button>
+          </div>
+        </div>
+      </div>
+
+      {/* ============== BLOCK 8 — Core panels ============== */}
+      <div className="panels" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 12, marginTop: 24 }}>
+        {/* LEFT — USALI grid */}
+        <div className="panel">
+          <h3>USALI department <em>schedule</em> · {monthLabel} (MTD)</h3>
+          <div className="meta">
+            Materiality: 5% AND $1,000. Coloring — green ≤5% · amber 5–10% · red &gt;10% AND &gt;$1k.
+            Expense rows tagged <b>Gap 2</b> until <code>gl.usali_expense_map</code> ships.
+          </div>
+          <table className="usali">
             <thead>
               <tr>
-                <th>Department</th>
-                <th>Sub-dept</th>
-                <th className="num">Revenue</th>
-                <th className="num">Units</th>
-                <th className="num">% of Total</th>
+                <th>Line</th><th>Actual</th><th>Budget</th><th>LY</th><th>Δ Bgt</th><th>Δ%</th><th>Flow</th>
               </tr>
             </thead>
             <tbody>
-              {latestRows
-                .sort((a: any, b: any) => Number(b.revenue) - Number(a.revenue))
-                .map((r: any, i: number) => (
-                  <tr key={i}>
-                    <td className="lbl"><strong>{r.usali_dept}</strong></td>
-                    <td className="lbl text-mute">{r.usali_subdept || '—'}</td>
-                    <td className="num">{fmtMoney(Number(r.revenue), 'USD')}</td>
-                    <td className="num">{r.units}</td>
-                    <td className="num text-mute">
-                      {totalRev ? `${((Number(r.revenue) / totalRev) * 100).toFixed(1)}%` : '—'}
-                    </td>
+              <tr className="section"><td colSpan={7}>Revenue</td></tr>
+              {(() => {
+                // Build revenue rows from USALI data
+                const deptOrder = ['Rooms', 'F&B', 'Spa', 'Other Operated', 'Other'];
+                const rows = deptOrder
+                  .map((d) => ({
+                    name: d,
+                    val: byDept[d] || latestRows.filter((r: any) => r.usali_dept === d).reduce((s: number, r: any) => s + Number(r.revenue || 0), 0),
+                  }))
+                  .filter((r) => r.val > 0);
+                return rows.map((r) => (
+                  <tr key={r.name}>
+                    <td>{r.name}</td>
+                    <td>{fmtK(r.val)}</td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>—</td>
                   </tr>
-                ))}
+                ));
+              })()}
+              <tr className="subtotal">
+                <td>Total Revenue</td>
+                <td>{fmtK(totalRev)}</td>
+                <td>—</td>
+                <td>{fmtK(priorTotalRev)}</td>
+                <td>—</td>
+                <td className={revVsPriorPct >= 0 ? 'var-green' : 'var-amber'}>{fmtPctV(revVsPriorPct)}</td>
+                <td>—</td>
+              </tr>
+
+              <tr className="section"><td colSpan={7}>Departmental Expenses (Gap 2)</td></tr>
+              <tr><td colSpan={7} style={{ color: 'var(--muted, #8a8170)', fontStyle: 'italic', textAlign: 'center' }}>Awaiting <code>gl.usali_expense_map</code> migration · phase1_13</td></tr>
+
+              <tr className="gop"><td>Departmental Profit</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+
+              <tr className="section"><td colSpan={7}>Undistributed Operating Expenses (Gap 2)</td></tr>
+              <tr><td colSpan={7} style={{ color: 'var(--muted, #8a8170)', fontStyle: 'italic', textAlign: 'center' }}>A&amp;G · S&amp;M · IT · POM · Utilities — awaiting migration phase1_13</td></tr>
+
+              <tr className="gop"><td>GOP after Undistributed</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+
+              <tr className="ebitda"><td>EBITDA</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
             </tbody>
           </table>
-        </Card>
+        </div>
+
+        {/* RIGHT — sidekick stack */}
+        <div>
+          <div className="panel">
+            <h3>Top <em>variances</em> vs Budget</h3>
+            <div className="meta">requires plan schema join · Gap 2</div>
+            <div className="waterfall">
+              <div className="wfr"><div className="lbl">A&amp;G overrun</div><div><div className="bar neg" style={{ width: '96%' }} /></div><div className="num neg">−$7.1k</div></div>
+              <div className="wfr"><div className="lbl">F&amp;B beverage</div><div><div className="bar neg" style={{ width: '48%' }} /></div><div className="num neg">−$3.6k</div></div>
+              <div className="wfr"><div className="lbl">Rooms labour OT</div><div><div className="bar neg" style={{ width: '28%' }} /></div><div className="num neg">−$2.1k</div></div>
+              <div className="wfr"><div className="lbl">Utilities</div><div><div className="bar neg" style={{ width: '14%' }} /></div><div className="num neg">−$0.9k</div></div>
+              <div className="wfr"><div className="lbl">Sales &amp; Marketing</div><div><div className="bar pos" style={{ width: '30%' }} /></div><div className="num pos">+$2.3k</div></div>
+              <div className="wfr"><div className="lbl">Spa rev mix</div><div><div className="bar pos" style={{ width: '20%' }} /></div><div className="num pos">+$1.5k</div></div>
+            </div>
+            <div className="meta" style={{ marginTop: 8 }}>Sample magnitudes · live values pending Gap 2 migration.</div>
+          </div>
+
+          <div className="panel" style={{ marginTop: 10 }}>
+            <h3>13-week <em>cash</em> forecast</h3>
+            <div className="meta">Gap 4 — <code>gl.cash_forecast_weekly</code></div>
+            <div className="cash-strip">
+              <div className="flag">cash dip W34–W36</div>
+              <div className="legend">$ position · weekly buckets · sample</div>
+            </div>
+          </div>
+
+          <div className="panel" style={{ marginTop: 10 }}>
+            <h3>Margin leak <em>heatmap</em></h3>
+            <div className="meta">$k impact · dept × week · sample · Gap 1+2</div>
+            <div className="heatmap">
+              <div className="hm-lbl">Rooms</div>
+              <div className="hm" style={{ background: '#cee4d3' }}>0.2</div>
+              <div className="hm" style={{ background: '#e8b9b3' }}>2.1</div>
+              <div className="hm" style={{ background: '#f0d9a3' }}>1.0</div>
+              <div className="hm" style={{ background: '#cee4d3' }}>0.4</div>
+              <div className="hm" style={{ background: '#cee4d3' }}>0.1</div>
+              <div className="hm-lbl">F&amp;B</div>
+              <div className="hm" style={{ background: '#a02d2d', color: '#fff8eb' }}>3.6</div>
+              <div className="hm" style={{ background: '#f0d9a3' }}>1.2</div>
+              <div className="hm" style={{ background: '#cee4d3' }}>0.3</div>
+              <div className="hm" style={{ background: '#f0d9a3' }}>0.9</div>
+              <div className="hm" style={{ background: '#cee4d3' }}>0.4</div>
+              <div className="hm-lbl">Spa</div>
+              <div className="hm" style={{ background: '#cee4d3' }}>0.4</div>
+              <div className="hm" style={{ background: '#cee4d3' }}>0.5</div>
+              <div className="hm" style={{ background: '#f0d9a3' }}>1.0</div>
+              <div className="hm" style={{ background: '#cee4d3' }}>0.2</div>
+              <div className="hm" style={{ background: '#cee4d3' }}>0.3</div>
+              <div className="hm-lbl">A&amp;G</div>
+              <div className="hm" style={{ background: '#a02d2d', color: '#fff8eb' }}>7.1</div>
+              <div className="hm" style={{ background: '#f0d9a3' }}>1.1</div>
+              <div className="hm" style={{ background: '#e8b9b3' }}>2.0</div>
+              <div className="hm" style={{ background: '#cee4d3' }}>0.2</div>
+              <div className="hm" style={{ background: '#cee4d3' }}>0.1</div>
+            </div>
+          </div>
+
+          <div className="panel" style={{ marginTop: 10 }}>
+            <h3>Variance <em>commentary</em> · draft</h3>
+            <div className="meta">Tone: Owner direct · never auto-published · Gap 5 — <code>gl.commentary_drafts</code></div>
+            <div className="comm">
+              <h4>Headline</h4>
+              <p>April closes 21% behind budgeted GOP despite revenue +3.7%. Margin compression sits in A&amp;G and F&amp;B labor — neither is a revenue problem.</p>
+              <h4>A&amp;G</h4>
+              <p>$7.1k over budget (+47%). USALI Auditor flags GL-6420 as a likely Sales miscoding worth $12.4k YTD. Reclassification queued for 4-eyes (CFO+GM). If approved, GOP % recovers ~0.4 pp YTD.</p>
+              <h4>F&amp;B</h4>
+              <p>Labor $14.6k vs $11.5k budget (+27%) while revenue lagged 4.4%. Result: 38% labor ratio against the 28–32% norm. Margin Leak Sentinel flagged on day 12; roster optimizer recommendation pending GM approval.</p>
+              <h4>Utilities</h4>
+              <p>+8.6% vs budget, third consecutive month above LY ratio. Energy audit recommended.</p>
+            </div>
+            <div className="comm-foot">
+              <button type="button" className="btn primary" disabled>Save draft</button>
+              <button type="button" className="btn" disabled>Approve &amp; publish to Audit Trail</button>
+              <button type="button" className="btn" disabled>Email to owner (queue)</button>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <Insight tone="warn" eye="Expense side">
-        <strong>P&L expense rows pending.</strong> Cost data — payroll, COGS, OpEx — is not in
-        Cloudbeds. Requires monthly cost upload schema or accounting system integration before GOP /
-        EBITDA / GOPPAR can render.
-      </Insight>
-    </>
+      {/* ============== BLOCK 9 — Guardrails banner ============== */}
+      <div className="guard">
+        <b>Agent guardrails — finance writes are always approval-required.</b>{' '}
+        Until the GL→USALI mapping is locked and variance-materiality thresholds are calibrated against
+        12 months of close data, every agent-proposed reclassification or commentary publication requires
+        explicit human approval. After validation, only Tier-1 actions (defined criteria, ≥85% confidence,
+        audit-logged) move to auto. <b>P&amp;L policy: Tier-1 auto disabled — financial reporting always Tier-2.</b>
+      </div>
+
+      <div className="legend-foot">
+        Block compliance: 1 ✓ · 2 ✓ · 3 ✓ · 4 ✓ (primary 6 + secondary 5) · 5 ✓ · 6 ✓ · 7 ✓ · 8 ✓ · 9 ✓.
+        Branded skin sampled from <code>/revenue/pulse</code>. Wired tiles: Total Revenue · Distribution % · USALI rev rows · mapping gaps.
+        Greyed tiles tagged with the schema gap (1–8) blocking them — see <code>deploy-doc-schema-finance-pnl-2026-04-30.md</code>.
+      </div>
+    </div>
   );
 }

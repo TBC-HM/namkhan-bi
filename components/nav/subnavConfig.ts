@@ -38,7 +38,30 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/revenue/agents',      label: 'Agents' },
   ],
 
-  // ===== 02 Operations =====
+  // ===== 02 Sales (added 2026-04-30) =====
+  // First sub-tab Inquiries lands the inbound funnel; remaining tabs are placeholders
+  // until each section's IA proposal is approved + shipped.
+  sales: [
+    { href: '/sales/inquiries',  label: 'Inquiries', isNew: true },
+    { href: '/sales/groups',     label: 'Groups',    coming: true },
+    { href: '/sales/fit',        label: 'FIT',       coming: true },
+    { href: '/sales/packages',   label: 'Packages',  coming: true },
+    { href: '/sales/b2b',        label: 'B2B / DMC', coming: true },
+    { href: '/sales/pipeline',   label: 'Pipeline',  coming: true },
+    { href: '/sales/roster',     label: 'Roster',    coming: true },
+  ],
+
+  // ===== 03 Marketing (restored 2026-04-30) =====
+  // Marketing pillar owns reviews/social/influencers/media (existing /marketing/* routes).
+  marketing: [
+    { href: '/marketing',              label: 'Snapshot' },
+    { href: '/marketing/reviews',      label: 'Reviews' },
+    { href: '/marketing/social',       label: 'Social' },
+    { href: '/marketing/influencers',  label: 'Influencers' },
+    { href: '/marketing/media',        label: 'Media' },
+  ],
+
+  // ===== 04 Operations =====
   operations: [
     { href: '/operations',                  label: 'Snapshot' },
     { href: '/operations/today',            label: 'Today' },
@@ -50,16 +73,13 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/operations/maintenance',      label: 'Maintenance',   isNew: true },
   ],
 
-  // ===== 03 Guest =====
+  // ===== 05 Guest =====
+  // Reviews/Social/Influencers/Media moved to Marketing pillar.
   guest: [
     { href: '/guest',                  label: 'Snapshot' },
-    { href: '/guest/reviews',          label: 'Reviews' },
     { href: '/guest/reputation',       label: 'Reputation',  coming: true },
     { href: '/guest/journey',          label: 'Journey',     coming: true },
     { href: '/guest/loyalty',          label: 'Loyalty',     coming: true },
-    { href: '/guest/social',           label: 'Social' },
-    { href: '/guest/influencers',      label: 'Influencers' },
-    { href: '/guest/media',            label: 'Media' },
   ],
 
   // ===== 04 Finance =====
@@ -102,9 +122,11 @@ export const PILLAR_HEADER: Record<
 > = {
   overview:    { eyebrow: 'Home',                       title: 'The',          emphasis: 'Namkhan',         sub: 'Right-now operator intelligence' },
   revenue:     { eyebrow: 'Pillar 01 · Revenue',        title: 'Revenue',      emphasis: 'management',      sub: 'Pricing · pace · channels · yield' },
-  operations:  { eyebrow: 'Pillar 02 · Operations',     title: 'Operations',   emphasis: 'live',            sub: 'Today · F&B · spa · activities · property' },
-  guest:       { eyebrow: 'Pillar 03 · Guest',          title: 'Guest',        emphasis: 'voice',           sub: 'Reviews · reputation · journey · loyalty · social' },
-  finance:     { eyebrow: 'Pillar 04 · Finance',        title: 'USALI',        emphasis: 'ledger',          sub: 'P&L · ledger · budget · variance' },
+  sales:       { eyebrow: 'Pillar 02 · Sales',          title: 'Inbound',      emphasis: 'funnel',          sub: 'Inquiries · groups · FIT · packages · B2B/DMC · pipeline' },
+  marketing:   { eyebrow: 'Pillar 03 · Marketing',      title: 'Brand',        emphasis: 'reach',           sub: 'Reviews · social · influencers · media' },
+  operations:  { eyebrow: 'Pillar 04 · Operations',     title: 'Operations',   emphasis: 'live',            sub: 'Today · F&B · spa · activities · property' },
+  guest:       { eyebrow: 'Pillar 05 · Guest',          title: 'Guest',        emphasis: 'voice',           sub: 'Reputation · journey · loyalty' },
+  finance:     { eyebrow: 'Pillar 06 · Finance',        title: 'USALI',        emphasis: 'ledger',          sub: 'P&L · ledger · budget · variance' },
   knowledge:   { eyebrow: 'Knowledge',                  title: 'Repos',        emphasis: '& agents',        sub: 'SOPs · brand · automation' },
   settings:    { eyebrow: 'Settings',                   title: 'Property',     emphasis: 'configuration',   sub: 'Preferences · users · API keys' },
 };

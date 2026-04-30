@@ -2,10 +2,11 @@
 // Settings utility — property config + API keys + users.
 
 import Banner from '@/components/nav/Banner';
+import SubNav from '@/components/nav/SubNav';
 import PanelHero from '@/components/sections/PanelHero';
 import Card from '@/components/sections/Card';
 import KpiCard from '@/components/kpi/KpiCard';
-import { PILLAR_HEADER } from '@/components/nav/subnavConfig';
+import { PILLAR_HEADER, RAIL_SUBNAV } from '@/components/nav/subnavConfig';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +20,7 @@ export default function SettingsPage() {
         titleEmphasis={h.emphasis}
         meta={<><strong>Configuration</strong></>}
       />
+      <SubNav items={RAIL_SUBNAV.settings} />
       <div className="panel">
         <PanelHero
           eyebrow="Settings"
