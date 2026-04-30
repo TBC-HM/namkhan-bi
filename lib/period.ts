@@ -153,3 +153,25 @@ export function resolvePeriod(
 export const WINDOWS = WIN_VALUES;
 export const COMPARES = CMP_VALUES;
 export const SEGMENTS = SEG_VALUES;
+
+// ---------- Backwards-compat shims (v1.2 repair) ----------
+// lib/data.ts and any other pre-v1.2 consumers import Segment + segmentFilter.
+// v1.2 renamed Segment -> SegmentKey and removed segmentFilter.
+
+/** Alias for SegmentKey. Kept for pre-v1.2 callers. */
+export type Segment = SegmentKey;
+
+/**
+ * v1.2 changed segment taxonomy from channel-based (ota/direct/walkin)
+ * to guest-type (leisure/group/wholesale/corporate/honeymoon).
+ * Source mapping not yet defined — returns no-op so segment dropdown is
+ * cosmetic until business defines what each segment means in source data.
+ * TODO: map each v1.2 segment to Cloudbeds source values when defined.
+ */
+export function segmentFilter(_seg: SegmentKey): {
+  column: string | null;
+  values: string[] | null;
+  ilike: string | null;
+} {
+  return { column: null, values: null, ilike: null };
+}

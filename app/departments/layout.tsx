@@ -12,7 +12,7 @@ export default function DepartmentsLayout({ children }: { children: React.ReactN
       <Banner eyebrow={h.eyebrow} title={h.title} titleEmphasis={h.emphasis}
         meta={<><strong>F&B · Spa · Activities</strong><br />Refreshed {t} ICT</>} />
       <SubNav items={RAIL_SUBNAV.departments} />
-      <FilterStrip baseHref="/departments" liveSource="Cloudbeds · live" />
+      <FilterStrip liveSource="Cloudbeds · live" />
       <div className="panel">{children}</div>
     </>
   );

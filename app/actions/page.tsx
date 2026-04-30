@@ -38,7 +38,7 @@ export default async function ActionsPage() {
         }
       />
 
-      <FilterStrip baseHref="/actions" liveSource="DQ engine · live · Vertex pending" currentWin="today" />
+      <FilterStrip liveSource="DQ engine · live · Vertex pending" />
 
       <div className="panel">
         <PanelHero

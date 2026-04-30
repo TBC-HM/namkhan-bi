@@ -46,7 +46,7 @@ export default async function TodayPage() {
         }
       />
 
-      <FilterStrip baseHref="/today" liveSource="Cloudbeds · live" rangeLabel={new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} currentWin="today" />
+      <FilterStrip liveSource="Cloudbeds · live" />
 
       <div className="panel">
         <PanelHero

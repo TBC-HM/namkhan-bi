@@ -12,7 +12,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
       <Banner eyebrow={h.eyebrow} title={h.title} titleEmphasis={h.emphasis}
         meta={<><strong>Reputation & Channels</strong><br />Refreshed {t} ICT</>} />
       <SubNav items={RAIL_SUBNAV.marketing} />
-      <FilterStrip baseHref="/marketing" liveSource="Cloudbeds · GA4 · live" />
+      <FilterStrip liveSource="Cloudbeds · GA4 · live" />
       <div className="panel">{children}</div>
     </>
   );

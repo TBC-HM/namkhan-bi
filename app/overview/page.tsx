@@ -62,12 +62,7 @@ export default async function OverviewPage({ searchParams }: Props) {
         }
       />
 
-      <FilterStrip
-        baseHref="/overview"
-        currentWin={String(searchParams.win || '30d')}
-        rangeLabel={`${period.from.slice(8, 10)} ${monthShort(period.from)} → ${period.to.slice(8, 10)} ${monthShort(period.to)} ${period.to.slice(0, 4)}`}
-        liveSource="Cloudbeds · Supabase · live"
-      />
+      <FilterStrip liveSource="Cloudbeds · Supabase · live" />
 
       <div className="panel">
         {/* Hero strip — headline + 4 today KPIs */}
