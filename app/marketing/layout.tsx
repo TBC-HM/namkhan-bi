@@ -1,20 +1,19 @@
 // app/marketing/layout.tsx
-// Marketing section layout — adds horizontal sub-navigation.
-
+import Banner from '@/components/nav/Banner';
 import SubNav from '@/components/nav/SubNav';
+import FilterStrip from '@/components/nav/FilterStrip';
+import { RAIL_SUBNAV, PILLAR_HEADER } from '@/components/nav/subnavConfig';
 
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
+  const h = PILLAR_HEADER.marketing;
+  const t = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Vientiane' });
   return (
     <>
-      <SubNav
-        items={[
-          { label: 'Reviews',     href: '/marketing/reviews' },
-          { label: 'Social',      href: '/marketing/social' },
-          { label: 'Influencers', href: '/marketing/influencers' },
-          { label: 'Media',       href: '/marketing/media' },
-        ]}
-      />
-      {children}
+      <Banner eyebrow={h.eyebrow} title={h.title} titleEmphasis={h.emphasis}
+        meta={<><strong>Reputation & Channels</strong><br />Refreshed {t} ICT</>} />
+      <SubNav items={RAIL_SUBNAV.marketing} />
+      <FilterStrip baseHref="/marketing" liveSource="Cloudbeds · GA4 · live" />
+      <div className="panel">{children}</div>
     </>
   );
 }

@@ -1,5 +1,11 @@
-import { Section } from '@/components/sections/Section';
+// app/revenue/rateplans/page.tsx
+// Revenue · Rate Plans — 90d performance ranked by revenue.
+
+import PanelHero from '@/components/sections/PanelHero';
+import Card from '@/components/sections/Card';
+import KpiCard from '@/components/kpi/KpiCard';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
+import { fmtMoney } from '@/lib/format';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -11,7 +17,6 @@ export default async function RatePlansPage() {
     .eq('property_id', PROPERTY_ID)
     .order('rate_name');
 
-  // Pick reservations grouped by rate_plan
   const { data: usage } = await supabase
     .from('reservations')
     .select('rate_plan, total_amount, nights, status')
@@ -27,33 +32,63 @@ export default async function RatePlansPage() {
     usageMap[r.rate_plan].nights += Number(r.nights || 0);
   });
 
-  // Sort plans by 90-day revenue descending
   const ranked = Object.entries(usageMap)
     .map(([name, u]) => ({ name, ...u, adr: u.nights ? u.revenue / u.nights : 0 }))
     .sort((a, b) => b.revenue - a.revenue);
 
+  const totalRev = ranked.reduce((s, r) => s + r.revenue, 0);
+  const totalBookings = ranked.reduce((s, r) => s + r.bookings, 0);
+  const activePlans = (plans ?? []).filter((p: any) => p.is_active).length;
+
   return (
     <>
-      <Section title="Rate Plans · 90 Day Performance" tag={`${plans?.length ?? 0} plans configured`}>
+      <PanelHero
+        eyebrow="Rate plans · 90d"
+        title="Rate plan"
+        emphasis="performance"
+        sub="By revenue · ADR · roomnight contribution"
+        kpis={
+          <>
+            <KpiCard label="Configured Plans" value={plans?.length ?? 0} />
+            <KpiCard label="Active Plans" value={activePlans} />
+            <KpiCard label="Bookings 90d" value={totalBookings} />
+            <KpiCard label="Revenue 90d" value={totalRev} kind="money" />
+          </>
+        }
+      />
+
+      <Card title="Plans" emphasis="ranked" sub="90 day performance · sorted by revenue" source="reservations">
         {ranked.length === 0 ? (
-          <div className="text-muted text-sm py-6 text-center">No rate plan usage in last 90 days.</div>
+          <div style={{ padding: 24, color: 'var(--ink-mute)', fontStyle: 'italic' }}>
+            No rate plan usage in last 90 days.
+          </div>
         ) : (
-          <table>
-            <thead><tr><th>Rate Plan</th><th className="text-right">Bookings</th><th className="text-right">Roomnights</th><th className="text-right">Revenue</th><th className="text-right">ADR</th></tr></thead>
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Rate Plan</th>
+                <th className="num">Bookings</th>
+                <th className="num">Roomnights</th>
+                <th className="num">Revenue</th>
+                <th className="num">ADR</th>
+                <th className="num">% Mix</th>
+              </tr>
+            </thead>
             <tbody>
               {ranked.slice(0, 30).map((r) => (
                 <tr key={r.name}>
-                  <td>{r.name}</td>
-                  <td className="text-right tabular">{r.bookings}</td>
-                  <td className="text-right tabular">{r.nights}</td>
-                  <td className="text-right tabular">${r.revenue.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
-                  <td className="text-right tabular">${r.adr.toFixed(0)}</td>
+                  <td className="lbl"><strong>{r.name}</strong></td>
+                  <td className="num">{r.bookings}</td>
+                  <td className="num">{r.nights}</td>
+                  <td className="num">{fmtMoney(r.revenue, 'USD')}</td>
+                  <td className="num">${r.adr.toFixed(0)}</td>
+                  <td className="num text-mute">{totalRev ? `${((r.revenue / totalRev) * 100).toFixed(0)}%` : '—'}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
-      </Section>
+      </Card>
     </>
   );
 }

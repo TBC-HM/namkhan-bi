@@ -1,29 +1,42 @@
 // app/revenue/promotions/page.tsx
-import GreyOut from '@/components/ui/GreyOut';
+// Promotions — stub.
+
+import PanelHero from '@/components/sections/PanelHero';
+import Card from '@/components/sections/Card';
+import KpiCard from '@/components/kpi/KpiCard';
+
+export const dynamic = 'force-dynamic';
 
 export default function PromotionsPage() {
   return (
-    <GreyOut reason="Promotion performance tracking pending — Phase 2">
-      <div className="section">
-        <div className="section-head">
-          <div className="section-title">Active Promotions</div>
-          <div className="section-tag">Effectiveness vs uplift cost</div>
+    <>
+      <PanelHero
+        eyebrow="Promotions"
+        title="Active"
+        emphasis="promotions"
+        sub="Phase 2 — effectiveness tracking"
+        kpis={
+          <>
+            <KpiCard label="Active Promos" value={null} greyed />
+            <KpiCard label="Bookings 30d" value={null} greyed />
+            <KpiCard label="Revenue Lift" value={null} greyed kind="money" />
+            <KpiCard label="Cost / Booking" value={null} greyed kind="money" />
+          </>
+        }
+      />
+
+      <Card title="Promotions" emphasis="performance" sub="Promotion performance tracking pending — Phase 2">
+        <div className="stub">
+          <h3>Coming soon</h3>
+          <p>
+            Active promo inventory · effectiveness vs uplift cost · auto-stop rules.
+            Requires Cloudbeds promotion endpoint integration and a baseline definition.
+          </p>
+          <div className="stub-list">
+            Active list · Uplift attribution · Cost ratio · Auto-pause rules
+          </div>
         </div>
-        <div className="kpi-strip cols-3">
-          <div className="kpi-tile">
-            <div className="kpi-label">Active Promos</div>
-            <div className="kpi-value">—</div>
-          </div>
-          <div className="kpi-tile">
-            <div className="kpi-label">Bookings 30d</div>
-            <div className="kpi-value">—</div>
-          </div>
-          <div className="kpi-tile">
-            <div className="kpi-label">Revenue Lift</div>
-            <div className="kpi-value">—</div>
-          </div>
-        </div>
-      </div>
-    </GreyOut>
+      </Card>
+    </>
   );
 }

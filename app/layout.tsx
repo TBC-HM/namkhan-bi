@@ -1,17 +1,10 @@
 // app/layout.tsx
-// Root layout for Namkhan BI dashboard.
-// Structure (mockup-faithful):
-//   <header>     Brand name + As-of timestamp + Currency toggle
-//   <TopNav>     Overview / Today / Action Plans / Revenue / Departments / Finance
-//   <PeriodBar>  Look Back / Forward / Segment / Compare dropdowns
-//   <main>       Page content (with optional sub-nav inside)
+// Beyond Circle shell: left rail + main column.
+// Each page renders its own <Banner>, <SubNav>, <FilterStrip>, <main className="panel">.
 
 import type { Metadata } from 'next';
 import './../styles/globals.css';
-import Brand from '@/components/nav/Brand';
-import TopNav from '@/components/nav/TopNav';
-import PeriodBar from '@/components/nav/PeriodBar';
-import { Suspense } from 'react';
+import LeftRail from '@/components/nav/LeftRail';
 
 export const metadata: Metadata = {
   title: 'The Namkhan · BI',
@@ -23,14 +16,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        <header className="header">
-          <Brand />
-        </header>
-        <TopNav />
-        <Suspense fallback={<div className="period-wrap" style={{ minHeight: 110 }} />}>
-          <PeriodBar />
-        </Suspense>
-        <main className="container">{children}</main>
+        <div className="shell">
+          <LeftRail />
+          <div className="main">{children}</div>
+        </div>
       </body>
     </html>
   );

@@ -1,5 +1,11 @@
-import { Section } from '@/components/sections/Section';
+// app/revenue/inventory/page.tsx
+// Revenue · Inventory — availability & rate spread per date · next 60 days.
+
+import PanelHero from '@/components/sections/PanelHero';
+import Card from '@/components/sections/Card';
+import KpiCard from '@/components/kpi/KpiCard';
 import { getRateInventoryCalendar } from '@/lib/data';
+import { fmtMoney } from '@/lib/format';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -12,7 +18,6 @@ export default async function InventoryPage() {
     to.toISOString().slice(0, 10)
   ).catch(() => []);
 
-  // Group by date
   const byDate: Record<string, { date: string; total_avail: number; min_rate: number; max_rate: number }> = {};
   cal.forEach((r: any) => {
     const d = String(r.inventory_date);
@@ -26,36 +31,67 @@ export default async function InventoryPage() {
 
   const days = Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
 
+  const tightDays = days.filter((d) => d.total_avail <= 3).length;
+  const avgAvail = days.length ? days.reduce((s, d) => s + d.total_avail, 0) / days.length : 0;
+  const sellouts = days.filter((d) => d.total_avail === 0).length;
+
   return (
-    <Section title="Inventory & Rate Spread · Next 60 days" tag="Per date">
-      <div className="overflow-x-auto">
-        <table>
+    <>
+      <PanelHero
+        eyebrow="Inventory · next 60d"
+        title="Availability"
+        emphasis="& rate spread"
+        sub="Per date · room-type aggregated"
+        kpis={
+          <>
+            <KpiCard label="Days in window" value={days.length} />
+            <KpiCard label="Avg available" value={avgAvail.toFixed(1)} kind="text" />
+            <KpiCard
+              label="Tight days (≤3)"
+              value={tightDays}
+              tone={tightDays > 5 ? 'warn' : 'neutral'}
+              hint="Push rate"
+            />
+            <KpiCard
+              label="Sellouts"
+              value={sellouts}
+              tone={sellouts > 0 ? 'pos' : 'neutral'}
+            />
+          </>
+        }
+      />
+
+      <Card title="Inventory" emphasis="per date" sub="Next 60 days · sellable inventory + rate spread" source="mv_rate_inventory_calendar">
+        <table className="tbl">
           <thead>
             <tr>
               <th>Date</th>
-              <th className="text-right">Available</th>
-              <th className="text-right">Min Rate</th>
-              <th className="text-right">Max Rate</th>
-              <th className="text-right">Spread</th>
+              <th className="num">Available</th>
+              <th className="num">Min Rate</th>
+              <th className="num">Max Rate</th>
+              <th className="num">Spread</th>
             </tr>
           </thead>
           <tbody>
-            {days.slice(0, 60).map(d => (
-              <tr key={d.date}>
-                <td>{d.date}</td>
-                <td className="text-right tabular">{d.total_avail}</td>
-                <td className="text-right tabular">{d.min_rate !== Infinity ? `$${d.min_rate.toFixed(0)}` : '—'}</td>
-                <td className="text-right tabular">{d.max_rate !== -Infinity ? `$${d.max_rate.toFixed(0)}` : '—'}</td>
-                <td className="text-right tabular text-muted">
-                  {d.min_rate !== Infinity && d.max_rate !== -Infinity
-                    ? `$${(d.max_rate - d.min_rate).toFixed(0)}`
-                    : '—'}
-                </td>
-              </tr>
-            ))}
+            {days.slice(0, 60).map((d) => {
+              const tone = d.total_avail === 0 ? 'text-bad' : d.total_avail <= 3 ? 'text-warn' : '';
+              return (
+                <tr key={d.date}>
+                  <td className="lbl"><strong>{d.date}</strong></td>
+                  <td className={`num ${tone}`}>{d.total_avail}</td>
+                  <td className="num">{d.min_rate !== Infinity ? fmtMoney(d.min_rate, 'USD') : '—'}</td>
+                  <td className="num">{d.max_rate !== -Infinity ? fmtMoney(d.max_rate, 'USD') : '—'}</td>
+                  <td className="num text-mute">
+                    {d.min_rate !== Infinity && d.max_rate !== -Infinity
+                      ? fmtMoney(d.max_rate - d.min_rate, 'USD')
+                      : '—'}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
-      </div>
-    </Section>
+      </Card>
+    </>
   );
 }
