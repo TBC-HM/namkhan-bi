@@ -47,6 +47,22 @@ export default function SubNav({ items }: { items: SubNavTab[] }) {
               {String(i + 1).padStart(2, '0')}
             </span>
             {it.label}
+            {it.isNew ? (
+              <span
+                style={{
+                  fontSize: 9,
+                  background: 'var(--tan, #a17a4f)',
+                  color: '#fff8eb',
+                  padding: '1px 5px',
+                  borderRadius: 3,
+                  marginLeft: 6,
+                  letterSpacing: '0.04em',
+                  fontWeight: 600,
+                }}
+              >
+                NEW
+              </span>
+            ) : null}
             {it.badge && it.badge > 0 ? <span className="badge">{it.badge}</span> : null}
           </Link>
         );

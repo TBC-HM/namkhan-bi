@@ -21,6 +21,7 @@ export interface SubNavTab {
   label: string;
   coming?: boolean;
   badge?: number;
+  isNew?: boolean;
 }
 
 export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
@@ -45,8 +46,8 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/operations/spa',              label: 'Spa' },
     { href: '/operations/activities',       label: 'Activities' },
     { href: '/operations/frontoffice',      label: 'Front Office',  coming: true },
-    { href: '/operations/housekeeping',     label: 'Housekeeping',  coming: true },
-    { href: '/operations/maintenance',      label: 'Maintenance',   coming: true },
+    { href: '/operations/housekeeping',     label: 'Housekeeping',  isNew: true },
+    { href: '/operations/maintenance',      label: 'Maintenance',   isNew: true },
   ],
 
   // ===== 03 Guest =====
@@ -79,6 +80,18 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/agents/run',         label: 'Agents · Run' },
     { href: '/agents/history',     label: 'Agents · History' },
     { href: '/agents/settings',    label: 'Agents · Settings' },
+  ],
+
+  // ===== Settings (utility) — v1.3 =====
+  settings: [
+    { href: '/settings',                label: 'Snapshot' },
+    { href: '/settings/property',       label: 'Property' },
+    { href: '/settings/users',          label: 'Users & roles' },
+    { href: '/settings/budget',         label: 'Budget' },
+    { href: '/settings/integrations',   label: 'Integrations' },
+    { href: '/settings/notifications',  label: 'Notifications' },
+    { href: '/settings/reports',        label: 'Reports' },
+    { href: '/settings/dq',             label: 'DQ engine' },
   ],
 };
 
