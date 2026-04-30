@@ -1,22 +1,38 @@
 // app/revenue/_redesign/render.tsx
-// Server-side helper: read a tab HTML chunk extracted from Federico's mockup,
-// inject `active` class so it actually shows (mockup CSS hides .tab-content without it),
-// and render via dangerouslySetInnerHTML.
+// Server component that renders Federico's mockup tab content for a given slug.
+// HTML chunks are imported as TS string-default modules so they get bundled (Vercel serverless functions
+// don't have access to arbitrary fs paths at runtime).
 // All `_redesign` files are colocated; the leading underscore keeps Next.js from routing them.
 
-import fs from 'node:fs';
-import path from 'node:path';
+import tabPulse from './tabPulse';
+import tabPace from './tabPace';
+import tabChannels from './tabChannels';
+import tabRateplans from './tabRateplans';
+import tabPricing from './tabPricing';
+import tabCompset from './tabCompset';
+import tabAgentsettings from './tabAgentsettings';
 
-const DIR = path.join(process.cwd(), 'app/revenue/_redesign');
+export type MockupSlug =
+  | 'pulse'
+  | 'pace'
+  | 'channels'
+  | 'rateplans'
+  | 'pricing'
+  | 'compset'
+  | 'agentsettings';
 
-export function MockupTab({ slug }: { slug: 'pulse' | 'pace' | 'channels' | 'rateplans' | 'pricing' | 'compset' | 'agentsettings' }) {
-  let html = '';
-  try {
-    html = fs.readFileSync(path.join(DIR, `tab-${slug}.html`), 'utf8');
-  } catch (e) {
-    html = `<div style="padding:24px;color:#dc2626">Mockup section <code>tab-${slug}.html</code> not found.</div>`;
-  }
+const TABS: Record<MockupSlug, string> = {
+  pulse: tabPulse,
+  pace: tabPace,
+  channels: tabChannels,
+  rateplans: tabRateplans,
+  pricing: tabPricing,
+  compset: tabCompset,
+  agentsettings: tabAgentsettings,
+};
+
+export function MockupTab({ slug }: { slug: MockupSlug }) {
   // Mockup CSS hides .tab-content unless .active is present. Force-show this slug.
-  html = html.replace(/class="tab-content"/, 'class="tab-content active"');
+  const html = (TABS[slug] || '').replace(/class="tab-content"/, 'class="tab-content active"');
   return <div dangerouslySetInnerHTML={{ __html: html }} />;
 }

@@ -1,0 +1,2 @@
+// auto-generated from global-modal-overlay.html
+export default "<div class=\"modal-overlay\" id=\"modal-overlay\">\n  <div class=\"modal\">\n    <div class=\"modal-header\">\n      <div>\n        <div class=\"modal-title\" id=\"modal-title\">Chart</div>\n        <div class=\"modal-meta\" id=\"modal-meta\"></div>\n      </div>\n      <button class=\"modal-close\" onclick=\"closeModal()\">\u00d7</button>\n    </div>\n    <div class=\"modal-body\" id=\"modal-body\"></div>\n  </div>\n</div>";
