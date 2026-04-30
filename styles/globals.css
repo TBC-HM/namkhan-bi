@@ -987,3 +987,130 @@ td.num   { text-align: right; font-family: var(--mono); font-size: 11px; color: 
   --oxblood-soft: #c89a9a;
   --moss-glow: #4a6a55;
 }
+
+/* ===== v1.2 filter-strip styles (appended $(date -u +%Y-%m-%d)) ===== */
+/* ============================================================================
+   v1.2 · FilterStrip controls
+   APPEND this block to styles/globals.css (do not replace the existing CSS).
+   ============================================================================ */
+
+.filter-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 24px;
+  background: var(--paper-warm);
+  border-bottom: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.filter-strip .filter-label {
+  color: var(--ink-mute);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.filter-strip .filter-group {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.filter-strip .filter-btn {
+  padding: 7px 12px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--ink-soft);
+  background: var(--paper);
+  border-right: 1px solid var(--line);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+.filter-strip .filter-btn:last-child { border-right: none; }
+.filter-strip .filter-btn:hover { background: var(--paper-warm); color: var(--ink); }
+.filter-strip .filter-btn.active {
+  background: var(--ink);
+  color: var(--paper);
+}
+/* Forward tabs (next 7/30/90) get a brass left-mark to differentiate from back tabs */
+.filter-strip .filter-btn.fwd {
+  border-left: 2px solid var(--brass);
+}
+.filter-strip .filter-btn.fwd:first-of-type { border-left: 2px solid var(--brass); }
+
+.filter-strip .filter-divider {
+  width: 1px;
+  height: 22px;
+  background: var(--line);
+}
+
+.filter-strip .filter-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  padding: 7px 28px 7px 12px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: var(--ink);
+  cursor: pointer;
+  min-width: 160px;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3e%3cpath d='M1 1l4 4 4-4' stroke='%237d7565' stroke-width='1.5' fill='none' stroke-linecap='round'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  transition: border-color 0.12s, background-color 0.12s;
+}
+.filter-strip .filter-select:hover { border-color: var(--brass); }
+.filter-strip .filter-select:focus { outline: none; border-color: var(--moss); }
+.filter-strip .filter-select.active {
+  border-color: var(--moss);
+  background-color: rgba(26, 46, 33, 0.04);
+}
+
+.filter-strip .filter-live {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink-mute);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: 10px;
+  font-weight: 500;
+}
+.filter-strip .filter-live .live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--moss);
+  animation: live-pulse 2s ease-in-out infinite;
+}
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+
+/* Mobile: stack the strip */
+@media (max-width: 880px) {
+  .filter-strip {
+    padding: 12px 16px;
+    gap: 8px;
+  }
+  .filter-strip .filter-live {
+    margin-left: 0;
+    width: 100%;
+    margin-top: 4px;
+  }
+  .filter-strip .filter-select { min-width: 140px; flex: 1; }
+}

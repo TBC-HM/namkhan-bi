@@ -18,7 +18,8 @@ export default function OperationsLayout({ children }: { children: React.ReactNo
         meta={<><strong>Live operations</strong><br />Refreshed {t} ICT</>}
       />
       <SubNav items={RAIL_SUBNAV.operations} />
-      <FilterStrip baseHref="/operations" liveSource="Cloudbeds · live" />
+      {/* Operations can hide forward windows — most ops queries are about the past or now */}
+      <FilterStrip showForward={false} showCompare showSegment liveSource="Cloudbeds · live" />
       <div className="panel">{children}</div>
     </>
   );

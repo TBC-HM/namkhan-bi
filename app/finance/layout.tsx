@@ -6,13 +6,20 @@ import { RAIL_SUBNAV, PILLAR_HEADER } from '@/components/nav/subnavConfig';
 
 export default function FinanceLayout({ children }: { children: React.ReactNode }) {
   const h = PILLAR_HEADER.finance;
-  const t = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Vientiane' });
+  const t = new Date().toLocaleTimeString('en-GB', {
+    hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Vientiane',
+  });
   return (
     <>
-      <Banner eyebrow={h.eyebrow} title={h.title} titleEmphasis={h.emphasis}
-        meta={<><strong>USALI 11th edition</strong><br />Refreshed {t} ICT</>} />
+      <Banner
+        eyebrow={h.eyebrow}
+        title={h.title}
+        titleEmphasis={h.emphasis}
+        meta={<><strong>USALI ledger</strong><br />Refreshed {t} ICT</>}
+      />
       <SubNav items={RAIL_SUBNAV.finance} />
-      <FilterStrip baseHref="/finance" liveSource="Cloudbeds · live" />
+      {/* Finance: back-only windows, compare is critical, segment less so but available */}
+      <FilterStrip showForward={false} showCompare showSegment liveSource="Cloudbeds + ledger · live" />
       <div className="panel">{children}</div>
     </>
   );

@@ -1,263 +1,155 @@
 // lib/period.ts
-// Single source of truth for period state across the dashboard.
+// Single source of truth for resolving URL searchParams into a usable period.
+// Read by every Snapshot/Pulse/Demand page so the URL drives the data, not the other way around.
 //
-// Server components call resolvePeriod(searchParams) → ResolvedPeriod
-// Client PeriodBar pushes to URL. That's the contract.
+// Query params:
+//   ?win=today | 7d | 30d | 90d | ytd | l12m | next7 | next30 | next90 | next180 | next365   (default: 30d)
+//   ?cmp=none | pp | stly                                                                      (default: none)
+//   ?seg=all | leisure | group | wholesale | corporate | honeymoon                             (default: all)
 //
-// Every data fetcher in lib/data.ts MUST accept ResolvedPeriod (or its
-// {from, to, segment} subset) instead of hardcoded windows.
+// Two important behaviors:
+//   1. UNKNOWN VALUES ARE COERCED TO DEFAULTS. Never throw.
+//   2. ResolvedPeriod always returns ISO yyyy-mm-dd date strings the data layer can pass straight to Supabase.
 
-// ============================================================================
-// TYPES
-// ============================================================================
+import { format } from 'date-fns';
 
-export type LookBack =
-  | 'last_7' | 'last_30' | 'last_90'
-  | 'ytd' | 'last_365' | 'last_year';
+export type WindowKey =
+  | 'today' | '7d' | '30d' | '90d' | 'ytd' | 'l12m'
+  | 'next7' | 'next30' | 'next90' | 'next180' | 'next365';
 
-export type Forward =
-  | '' | 'next_7' | 'next_30' | 'next_90'
-  | 'next_180' | 'next_365' | 'next_year';
+export type CompareKey = 'none' | 'pp' | 'stly';
+export type SegmentKey = 'all' | 'leisure' | 'group' | 'wholesale' | 'corporate' | 'honeymoon';
 
-export type Segment =
-  | 'all' | 'ota' | 'direct' | 'wholesale'
-  | 'corporate' | 'group' | 'walkin';
-
-export type Compare = '' | 'stly' | 'prior' | 'budget';
-
-export interface PeriodState {
-  back: LookBack;
-  fwd: Forward;
-  seg: Segment;
-  cmp: Compare;
-}
-
-export interface ResolvedPeriod extends PeriodState {
-  /** Active range from→to (always populated, comes from back or fwd) */
-  from: string;        // YYYY-MM-DD inclusive
-  to: string;          // YYYY-MM-DD inclusive
-  /** Direction: which dropdown is driving the range */
+export interface ResolvedPeriod {
+  win: WindowKey;
+  cmp: CompareKey;
+  seg: SegmentKey;
+  // Direction: 'back' (looks at past), 'fwd' (looks at future). Today = 'back'.
   direction: 'back' | 'fwd';
-  /** Comparison range if cmp != '' (STLY = same range last year, prior = preceding range of equal length) */
+  // Primary range
+  from: string;     // yyyy-mm-dd inclusive
+  to: string;       // yyyy-mm-dd inclusive
+  days: number;     // length in days
+  // Comparison range (only meaningful when cmp !== 'none')
   compareFrom: string | null;
   compareTo: string | null;
-  /** Number of days in the active range */
-  days: number;
-  /** Display labels */
-  label: string;            // "Last Year · OTA · vs STLY"
-  rangeLabel: string;       // "29 Apr 2025 → 28 Apr 2026"
+  // Pretty labels for UI
+  label: string;        // "30 days back", "Next 90 days"
+  rangeLabel: string;   // "31 Mar 2026 → 30 Apr 2026"
+  cmpLabel: string;     // "Prior period", "Same time last year", ""
+  segLabel: string;     // "All segments", "Leisure"
 }
 
-// ============================================================================
-// LABELS
-// ============================================================================
+// ---------- Allowed values, defaults ----------
+const WIN_VALUES: WindowKey[] = ['today','7d','30d','90d','ytd','l12m','next7','next30','next90','next180','next365'];
+const CMP_VALUES: CompareKey[] = ['none','pp','stly'];
+const SEG_VALUES: SegmentKey[] = ['all','leisure','group','wholesale','corporate','honeymoon'];
 
-export const LOOK_BACK_LABELS: Record<LookBack, string> = {
-  last_7: 'Last Week',
-  last_30: 'Last Month',
-  last_90: 'Last Quarter',
-  ytd: 'Year to Date',
-  last_365: 'Last 12 Months',
-  last_year: 'Last Year',
+const DEFAULT_WIN: WindowKey = '30d';
+const DEFAULT_CMP: CompareKey = 'none';
+const DEFAULT_SEG: SegmentKey = 'all';
+
+// ---------- Helpers ----------
+function clamp<T extends string>(input: unknown, allowed: readonly T[], fallback: T): T {
+  const v = String(Array.isArray(input) ? input[0] : input ?? '').toLowerCase();
+  return (allowed as readonly string[]).includes(v) ? (v as T) : fallback;
+}
+
+function iso(d: Date): string {
+  return format(d, 'yyyy-MM-dd');
+}
+function pretty(d: Date): string {
+  return format(d, 'd MMM yyyy');
+}
+function addDays(d: Date, n: number): Date {
+  const r = new Date(d);
+  r.setDate(r.getDate() + n);
+  return r;
+}
+function addYears(d: Date, n: number): Date {
+  const r = new Date(d);
+  r.setFullYear(r.getFullYear() + n);
+  return r;
+}
+
+// ---------- Window range computation ----------
+function windowRange(win: WindowKey, today = new Date()):
+  { from: Date; to: Date; direction: 'back' | 'fwd'; days: number; label: string } {
+  switch (win) {
+    case 'today':   return { from: today, to: today, direction: 'back', days: 1, label: 'Today' };
+    case '7d':      return { from: addDays(today, -6),  to: today, direction: 'back', days: 7, label: 'Last 7 days' };
+    case '30d':     return { from: addDays(today, -29), to: today, direction: 'back', days: 30, label: 'Last 30 days' };
+    case '90d':     return { from: addDays(today, -89), to: today, direction: 'back', days: 90, label: 'Last 90 days' };
+    case 'ytd': {
+      const jan1 = new Date(today.getFullYear(), 0, 1);
+      const days = Math.round((today.getTime() - jan1.getTime()) / 86_400_000) + 1;
+      return { from: jan1, to: today, direction: 'back', days, label: 'Year to date' };
+    }
+    case 'l12m':    return { from: addYears(today, -1), to: today, direction: 'back', days: 365, label: 'Last 12 months' };
+    case 'next7':   return { from: today, to: addDays(today, 6),   direction: 'fwd', days: 7, label: 'Next 7 days' };
+    case 'next30':  return { from: today, to: addDays(today, 29),  direction: 'fwd', days: 30, label: 'Next 30 days' };
+    case 'next90':  return { from: today, to: addDays(today, 89),  direction: 'fwd', days: 90, label: 'Next 90 days' };
+    case 'next180': return { from: today, to: addDays(today, 179), direction: 'fwd', days: 180, label: 'Next 6 months' };
+    case 'next365': return { from: today, to: addDays(today, 364), direction: 'fwd', days: 365, label: 'Next 12 months' };
+  }
+}
+
+// ---------- Compare range computation ----------
+function compareRange(cmp: CompareKey, from: Date, to: Date, days: number): { from: Date; to: Date } | null {
+  if (cmp === 'none') return null;
+  if (cmp === 'pp') {
+    // Prior period: shift back by `days` days
+    return { from: addDays(from, -days), to: addDays(to, -days) };
+  }
+  if (cmp === 'stly') {
+    // Same time last year: shift back by 1 calendar year
+    return { from: addYears(from, -1), to: addYears(to, -1) };
+  }
+  return null;
+}
+
+// ---------- Compare/segment labels ----------
+const CMP_LABELS: Record<CompareKey, string> = {
+  none: '',
+  pp: 'vs Prior period',
+  stly: 'vs Same time last year',
 };
-
-export const FORWARD_LABELS: Record<Exclude<Forward, ''>, string> = {
-  next_7: 'Next Week',
-  next_30: 'Next Month',
-  next_90: 'Next Quarter',
-  next_180: 'Next 6 Months',
-  next_365: 'Next 12 Months',
-  next_year: 'Next Year',
-};
-
-export const SEGMENT_LABELS: Record<Segment, string> = {
-  all: 'All Segments',
-  ota: 'OTA',
-  direct: 'Direct',
+const SEG_LABELS: Record<SegmentKey, string> = {
+  all: 'All segments',
+  leisure: 'Leisure',
+  group: 'Group / MICE',
   wholesale: 'Wholesale',
   corporate: 'Corporate',
-  group: 'Group',
-  walkin: 'Walk-In',
+  honeymoon: 'Honeymoon',
 };
 
-export const COMPARE_LABELS: Record<Compare, string> = {
-  '': 'No comparison',
-  stly: 'vs STLY',
-  prior: 'vs Prior Period',
-  budget: 'vs Budget',
-};
-
-export const DEFAULT_PERIOD: PeriodState = {
-  back: 'last_30',
-  fwd: '',
-  seg: 'all',
-  cmp: '',
-};
-
-// ============================================================================
-// RANGE RESOLUTION
-// ============================================================================
-
-const fmt = (d: Date) => d.toISOString().slice(0, 10);
-
-function startOfDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
-
-function addDays(d: Date, n: number): Date {
-  const x = new Date(d);
-  x.setDate(x.getDate() + n);
-  return x;
-}
-
-function resolveRange(
-  code: LookBack | Exclude<Forward, ''>,
-  today = new Date()
-): { from: string; to: string } {
-  const t = startOfDay(today);
-
-  switch (code) {
-    case 'last_7':    return { from: fmt(addDays(t, -7)),   to: fmt(t) };
-    case 'last_30':   return { from: fmt(addDays(t, -30)),  to: fmt(t) };
-    case 'last_90':   return { from: fmt(addDays(t, -90)),  to: fmt(t) };
-    case 'ytd':       return { from: fmt(new Date(t.getFullYear(), 0, 1)), to: fmt(t) };
-    case 'last_365':  return { from: fmt(addDays(t, -365)), to: fmt(t) };
-    case 'last_year': return { from: `${t.getFullYear()-1}-01-01`, to: `${t.getFullYear()-1}-12-31` };
-
-    case 'next_7':    return { from: fmt(t),                to: fmt(addDays(t, 7)) };
-    case 'next_30':   return { from: fmt(t),                to: fmt(addDays(t, 30)) };
-    case 'next_90':   return { from: fmt(t),                to: fmt(addDays(t, 90)) };
-    case 'next_180':  return { from: fmt(t),                to: fmt(addDays(t, 180)) };
-    case 'next_365':  return { from: fmt(t),                to: fmt(addDays(t, 365)) };
-    case 'next_year': return { from: `${t.getFullYear()+1}-01-01`, to: `${t.getFullYear()+1}-12-31` };
-  }
-}
-
-function resolveCompareRange(
-  from: string,
-  to: string,
-  cmp: Compare
-): { compareFrom: string | null; compareTo: string | null } {
-  if (!cmp || cmp === 'budget') return { compareFrom: null, compareTo: null };
-
-  const fromDate = new Date(from + 'T00:00:00Z');
-  const toDate = new Date(to + 'T00:00:00Z');
-  const days = Math.round((toDate.getTime() - fromDate.getTime()) / 86_400_000);
-
-  if (cmp === 'stly') {
-    const cf = new Date(fromDate); cf.setUTCFullYear(cf.getUTCFullYear() - 1);
-    const ct = new Date(toDate);   ct.setUTCFullYear(ct.getUTCFullYear() - 1);
-    return { compareFrom: fmt(cf), compareTo: fmt(ct) };
-  }
-
-  if (cmp === 'prior') {
-    const ct = new Date(fromDate); ct.setUTCDate(ct.getUTCDate() - 1);
-    const cf = new Date(ct);       cf.setUTCDate(cf.getUTCDate() - days);
-    return { compareFrom: fmt(cf), compareTo: fmt(ct) };
-  }
-
-  return { compareFrom: null, compareTo: null };
-}
-
-function fmtDateNice(iso: string): string {
-  const d = new Date(iso + 'T00:00:00Z');
-  return d.toLocaleDateString('en-GB', {
-    day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC',
-  });
-}
-
-// ============================================================================
-// PARSE FROM searchParams
-// ============================================================================
-
-function get(sp: Record<string, string | string[] | undefined> | undefined, k: string): string | undefined {
-  const v = sp?.[k];
-  if (Array.isArray(v)) return v[0];
-  return v;
-}
-
-export function parsePeriod(
-  searchParams: Record<string, string | string[] | undefined> | undefined
-): PeriodState {
-  const back = get(searchParams, 'back') as LookBack | undefined;
-  const fwd  = get(searchParams, 'fwd')  as Forward  | undefined;
-  const seg  = get(searchParams, 'seg')  as Segment  | undefined;
-  const cmp  = get(searchParams, 'cmp')  as Compare  | undefined;
-
-  return {
-    back: back && back in LOOK_BACK_LABELS ? back : DEFAULT_PERIOD.back,
-    fwd:  fwd === '' || fwd === undefined ? DEFAULT_PERIOD.fwd
-         : (fwd in FORWARD_LABELS ? fwd : DEFAULT_PERIOD.fwd),
-    seg:  seg && seg in SEGMENT_LABELS ? seg : DEFAULT_PERIOD.seg,
-    cmp:  !cmp ? '' : (cmp in COMPARE_LABELS ? cmp : ''),
-  };
-}
-
-// ============================================================================
-// MAIN RESOLVER — call this in every server page
-// ============================================================================
-
+// ---------- Main resolver ----------
 export function resolvePeriod(
-  searchParams: Record<string, string | string[] | undefined> | undefined,
-  today = new Date()
+  searchParams: Record<string, string | string[] | undefined> | undefined
 ): ResolvedPeriod {
-  const state = parsePeriod(searchParams);
+  const sp = searchParams ?? {};
+  const win = clamp(sp.win, WIN_VALUES, DEFAULT_WIN);
+  const cmp = clamp(sp.cmp, CMP_VALUES, DEFAULT_CMP);
+  const seg = clamp(sp.seg, SEG_VALUES, DEFAULT_SEG);
 
-  // Forward wins if set, otherwise back
-  const direction: 'back' | 'fwd' = state.fwd ? 'fwd' : 'back';
-  const code = direction === 'fwd' ? state.fwd : state.back;
-  const { from, to } = resolveRange(code as any, today);
-  const { compareFrom, compareTo } = resolveCompareRange(from, to, state.cmp);
-
-  const days = Math.round(
-    (new Date(to + 'T00:00:00Z').getTime() - new Date(from + 'T00:00:00Z').getTime()) / 86_400_000
-  );
-
-  const periodLabel = direction === 'fwd'
-    ? FORWARD_LABELS[state.fwd as Exclude<Forward,''>]
-    : LOOK_BACK_LABELS[state.back];
-  const segLabel = state.seg !== 'all' ? ` · ${SEGMENT_LABELS[state.seg]}` : '';
-  const cmpLabel = state.cmp ? ` · ${COMPARE_LABELS[state.cmp]}` : '';
-  const label = `${periodLabel}${segLabel}${cmpLabel}`;
-  const rangeLabel = `${fmtDateNice(from)} → ${fmtDateNice(to)}`;
+  const today = new Date();
+  const { from, to, direction, days, label } = windowRange(win, today);
+  const cmpRange = compareRange(cmp, from, to, days);
 
   return {
-    ...state,
-    from, to, direction,
-    compareFrom, compareTo,
-    days,
-    label, rangeLabel,
+    win, cmp, seg, direction, days,
+    from: iso(from),
+    to: iso(to),
+    compareFrom: cmpRange ? iso(cmpRange.from) : null,
+    compareTo: cmpRange ? iso(cmpRange.to) : null,
+    label,
+    rangeLabel: `${pretty(from)} → ${pretty(to)}`,
+    cmpLabel: CMP_LABELS[cmp],
+    segLabel: SEG_LABELS[seg],
   };
 }
 
-// ============================================================================
-// SQL HELPERS — for use inside lib/data.ts
-// ============================================================================
-
-/**
- * Returns a SQL fragment that filters the `source` (channel) column
- * by the chosen segment. Returns empty string for 'all'.
- *
- * Usage in PostgREST .or() / .ilike() chains:
- *   const seg = segmentFilter(period.seg);
- *   if (seg.column) query = query.in(seg.column, seg.values);
- */
-export function segmentFilter(seg: Segment): {
-  column: string | null;
-  values: string[] | null;
-  ilike: string | null;
-} {
-  if (seg === 'all') return { column: null, values: null, ilike: null };
-
-  // Map your Cloudbeds source values to segments. Edit if your data uses different labels.
-  const map: Record<Exclude<Segment, 'all'>, string[]> = {
-    ota:        ['Booking.com', 'Expedia', 'Agoda', 'CTrip / Trip.com', 'Hotels.com'],
-    direct:     ['Website/Booking Engine', 'Direct', 'Walk-In Direct', 'Email', 'Phone'],
-    wholesale:  ['Retreat Reseller (f.eVigeosport)', 'Wholesaler', 'Tour Operator'],
-    corporate:  ['Corporate'],
-    group:      ['Group'],
-    walkin:     ['Walk-In'],
-  };
-
-  return { column: 'source', values: map[seg] ?? [], ilike: null };
-}
+// Helpers exported for non-React callers (rate plans, etc.)
+export const WINDOWS = WIN_VALUES;
+export const COMPARES = CMP_VALUES;
+export const SEGMENTS = SEG_VALUES;

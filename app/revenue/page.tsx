@@ -1,30 +1,41 @@
 // app/revenue/page.tsx
-// Revenue · Snapshot — performance summary + inline ActionCards.
+// Revenue · Snapshot — period-aware (?win=, ?cmp=, ?seg=).
 
 import PanelHero from '@/components/sections/PanelHero';
 import KpiCard from '@/components/kpi/KpiCard';
 import ActionCard, { ActionStack } from '@/components/sections/ActionCard';
 import {
-  getKpiDaily, defaultDailyRange, aggregateDaily,
+  getKpiDaily, aggregateDaily,
   getChannelPerf, getPaceOtb,
 } from '@/lib/data';
+import { resolvePeriod } from '@/lib/period';
 import { fmtMoney } from '@/lib/format';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
 
-export default async function RevenueSnapshotPage() {
-  const r30 = defaultDailyRange(30);
+interface Props {
+  searchParams: Record<string, string | string[] | undefined>;
+}
+
+export default async function RevenueSnapshotPage({ searchParams }: Props) {
+  const period = resolvePeriod(searchParams);
+
+  // Primary period
   const [daily, channels, pace] = await Promise.all([
-    getKpiDaily(r30.from, r30.to).catch(() => []),
+    getKpiDaily(period.from, period.to).catch(() => []),
     getChannelPerf().catch(() => []),
     getPaceOtb().catch(() => []),
   ]);
-
   const agg = aggregateDaily(daily);
-  const validChannels = channels.filter((c: any) => Number(c.bookings_90d) > 0 || Number(c.revenue_90d) > 0);
 
-  // Channel mix
+  // Compare period (if requested)
+  const dailyCmp = period.compareFrom && period.compareTo
+    ? await getKpiDaily(period.compareFrom, period.compareTo).catch(() => [])
+    : [];
+  const aggCmp = dailyCmp.length ? aggregateDaily(dailyCmp) : null;
+
+  const validChannels = channels.filter((c: any) => Number(c.bookings_90d) > 0 || Number(c.revenue_90d) > 0);
   const totalRev90 = validChannels.reduce((s: number, c: any) => s + Number(c.revenue_90d || 0), 0);
   const ota = validChannels.filter((c: any) =>
     /booking\.com|expedia|agoda|airbnb|ctrip|trip\.com|hotels\.com/i.test(String(c.source_name || ''))
@@ -36,29 +47,32 @@ export default async function RevenueSnapshotPage() {
   );
   const directMix = totalRev90 && direct ? (Number(direct.revenue_90d) / totalRev90) * 100 : 0;
 
-  // Pace summary
   const totalOtb = pace.reduce((s: number, r: any) => s + Number(r.otb_roomnights || 0), 0);
   const totalStly = pace.reduce((s: number, r: any) => s + Number(r.stly_roomnights || 0), 0);
   const paceΔ = totalOtb - totalStly;
 
-  // Action cards
+  // Delta builder for cmp display
+  const delta = (cur: number, prev: number | undefined | null) => {
+    if (prev == null || prev === 0) return {};
+    const d = ((cur - prev) / prev) * 100;
+    const sign = d >= 0 ? '+' : '';
+    return {
+      text: `${sign}${d.toFixed(1)}% ${period.cmp === 'stly' ? 'STLY' : 'PP'}`,
+      tone: (d >= 0 ? 'pos' : 'neg') as 'pos' | 'neg',
+    };
+  };
+  const occD = delta(agg?.occupancy_pct ?? 0, aggCmp?.occupancy_pct);
+  const adrD = delta(agg?.adr ?? 0, aggCmp?.adr);
+  const rpD  = delta(agg?.revpar ?? 0, aggCmp?.revpar);
+  const trpD = delta(agg?.trevpar ?? 0, aggCmp?.trevpar);
+
+  // Action cards (data-driven)
   const cards: any[] = [];
+  const adr = Number(agg?.adr ?? 0);
 
-  // ADR for sizing pace impact (USD)
-  const adr30d = Number(agg?.adr ?? 0);
-
-  // Card 1: OTA mix too high?
   if (otaMix > 70) {
-    // Real impact math: shifting 10pp from OTA→Direct saves OTA commission delta
-    // OTA commission ~15%, direct cost ~3% (payment processing + email tools)
-    // Net save = 10% of total revenue × 12% commission delta
-    // 90d revenue → annualize × 4
     const annualRev = totalRev90 * 4;
-    const shiftPct = 10; // conservative 10pp shift
-    const commissionDelta = 0.12; // 15% OTA - 3% direct
-    const annualSavings = Math.round(annualRev * (shiftPct / 100) * commissionDelta);
-    const monthlySavings = Math.round(annualSavings / 12);
-
+    const monthlySavings = Math.round(annualRev * 0.10 * 0.12 / 12);
     cards.push({
       pillar: 'rev' as const,
       pillarLabel: 'Revenue · Channels',
@@ -67,11 +81,9 @@ export default async function RevenueSnapshotPage() {
       priorityLabel: 'Medium · margin risk',
       headline: <>OTA share at <em>{otaMix.toFixed(0)}%</em>.<br />Direct share at {directMix.toFixed(0)}%.</>,
       conclusion: <>
-        Heavy OTA dependence drags <strong>~12% commission delta</strong> on rooms revenue
-        (~15% OTA vs ~3% direct cost). Shifting 10pp from OTA to direct on{' '}
-        <strong>${(annualRev/1000).toFixed(0)}k annualized revenue</strong> saves an estimated{' '}
-        <strong>${monthlySavings.toLocaleString()}/mo</strong> (~${(annualSavings/1000).toFixed(0)}k annual).
-        Action: rate parity audit, BAR + perk on website, email loyalty list activation.
+        Heavy OTA dependence drags ~12% commission delta. Shifting 10pp to direct on{' '}
+        <strong>${(annualRev/1000).toFixed(0)}k annualized</strong> saves{' '}
+        <strong>${monthlySavings.toLocaleString()}/mo</strong>. Action: rate parity audit + direct push.
       </>,
       verdict: [
         { label: `OTA · ${otaMix.toFixed(0)}%`, tone: 'warn' as const },
@@ -86,13 +98,9 @@ export default async function RevenueSnapshotPage() {
     });
   }
 
-  // Card 2: Pace ahead/behind STLY
   if (Math.abs(paceΔ) >= 30) {
     const ahead = paceΔ > 0;
-    // Real $: paceΔ in roomnights × ADR
-    const paceImpact = Math.round(paceΔ * adr30d);
-    const monthlyImpact = Math.round(paceImpact / 12); // pace is forward 12mo
-
+    const monthlyImpact = Math.round((paceΔ * adr) / 12);
     cards.push({
       pillar: 'rev' as const,
       pillarLabel: 'Revenue · Pace',
@@ -101,17 +109,13 @@ export default async function RevenueSnapshotPage() {
       priorityLabel: ahead ? 'Medium · upside' : 'High · pace gap',
       headline: ahead
         ? <>Forward pace <em>{paceΔ} roomnights ahead</em><br />of STLY. Yield window open.</>
-        : <>Forward pace <em>{Math.abs(paceΔ)} roomnights behind</em><br />STLY. Investigate causes.</>,
+        : <>Forward pace <em>{Math.abs(paceΔ)} roomnights behind</em><br />STLY. Investigate.</>,
       conclusion: ahead ? <>
-        On-the-books exceeds same-time-last-year by <strong>{paceΔ} roomnights</strong>{' '}
-        × ${adr30d.toFixed(0)} ADR = <strong>${(paceImpact/1000).toFixed(1)}k</strong> incremental
-        rooms revenue across forward 12 months. Tighten rates on peak demand dates and consider
-        min-stay restrictions. Check Demand tab for biggest single-month gap.
+        OTB exceeds STLY by <strong>{paceΔ} rn</strong> × ${adr.toFixed(0)} ADR ={' '}
+        <strong>${((paceΔ * adr)/1000).toFixed(1)}k</strong> incremental over forward 12mo.
       </> : <>
-        On-the-books trails STLY by <strong>{Math.abs(paceΔ)} roomnights</strong> at{' '}
-        ${adr30d.toFixed(0)} ADR = <strong>−${Math.abs(paceImpact/1000).toFixed(1)}k</strong> rooms revenue
-        risk forward 12 months. Investigate channel mix, rate competitiveness, and event calendar.
-        Consider promo loosening for the weakest month.
+        OTB trails STLY by <strong>{Math.abs(paceΔ)} rn</strong> at ${adr.toFixed(0)} ADR ={' '}
+        <strong>−${Math.abs(paceΔ * adr / 1000).toFixed(1)}k</strong> rooms revenue risk.
       </>,
       verdict: [
         { label: `Δ · ${ahead ? '+' : ''}${paceΔ}rn`, tone: ahead ? 'good' as const : 'bad' as const },
@@ -129,42 +133,60 @@ export default async function RevenueSnapshotPage() {
   return (
     <>
       <PanelHero
-        eyebrow="Revenue · Snapshot · 30d"
+        eyebrow={`Revenue · Snapshot · ${period.label}${period.seg !== 'all' ? ` · ${period.segLabel}` : ''}`}
         title="Revenue"
         emphasis="performance"
-        sub={`${r30.from} → ${r30.to} · live from Cloudbeds`}
+        sub={`${period.rangeLabel}${period.cmp !== 'none' ? ` · ${period.cmpLabel}` : ''} · live from Cloudbeds`}
         kpis={
           <>
-            <KpiCard label="Occupancy 30d" value={agg?.occupancy_pct ?? 0} kind="pct" />
-            <KpiCard label="ADR 30d" value={agg?.adr ?? 0} kind="money" />
-            <KpiCard label="RevPAR 30d" value={agg?.revpar ?? 0} kind="money" />
-            <KpiCard label="TRevPAR 30d" value={agg?.trevpar ?? 0} kind="money" />
+            <KpiCard
+              label={`Occupancy ${period.label}`}
+              value={agg?.occupancy_pct ?? 0}
+              kind="pct"
+              delta={occD.text}
+              deltaTone={occD.tone}
+            />
+            <KpiCard
+              label={`ADR ${period.label}`}
+              value={agg?.adr ?? 0}
+              kind="money"
+              delta={adrD.text}
+              deltaTone={adrD.tone}
+            />
+            <KpiCard
+              label={`RevPAR ${period.label}`}
+              value={agg?.revpar ?? 0}
+              kind="money"
+              delta={rpD.text}
+              deltaTone={rpD.tone}
+            />
+            <KpiCard
+              label={`TRevPAR ${period.label}`}
+              value={agg?.trevpar ?? 0}
+              kind="money"
+              delta={trpD.text}
+              deltaTone={trpD.tone}
+            />
           </>
         }
       />
 
       <div className="card-grid-4">
-        <KpiCard
-          label="Rooms Rev 30d"
-          value={agg?.rooms_revenue ?? 0}
-          kind="money"
-        />
-        <KpiCard
-          label="Ancillary Rev 30d"
-          value={agg?.total_ancillary_revenue ?? 0}
-          kind="money"
-        />
+        <KpiCard label="Rooms Rev" value={agg?.rooms_revenue ?? 0} kind="money" />
+        <KpiCard label="Ancillary Rev" value={agg?.total_ancillary_revenue ?? 0} kind="money" />
         <KpiCard
           label="OTA Mix"
           value={otaMix}
           kind="pct"
           tone={otaMix > 70 ? 'warn' : 'neutral'}
+          hint="last 90d"
         />
         <KpiCard
           label="Direct Mix"
           value={directMix}
           kind="pct"
           tone={directMix < 15 ? 'warn' : 'pos'}
+          hint="last 90d"
         />
       </div>
 
@@ -174,9 +196,7 @@ export default async function RevenueSnapshotPage() {
           count={cards.length}
           meta={`${cards.length} awaiting · revenue pillar`}
         >
-          {cards.map((c, i) => (
-            <ActionCard key={i} num={i + 1} {...c} />
-          ))}
+          {cards.map((c, i) => <ActionCard key={i} num={i + 1} {...c} />)}
         </ActionStack>
       )}
     </>

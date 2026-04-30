@@ -1,5 +1,6 @@
 // app/guest/page.tsx
-// Guest · Snapshot — reviews + reputation + inline ActionCards.
+// Guest · Snapshot — period-aware (?win=, ?cmp=, ?seg=).
+// Window controls the review summary lookback period.
 
 import PanelHero from '@/components/sections/PanelHero';
 import KpiCard from '@/components/kpi/KpiCard';
@@ -7,14 +8,21 @@ import ActionCard, { ActionStack } from '@/components/sections/ActionCard';
 import {
   getReviewSummary, getReviewStatsBySource, getSocialAccounts,
 } from '@/lib/marketing';
+import { resolvePeriod } from '@/lib/period';
 
 export const revalidate = 300;
 export const dynamic = 'force-dynamic';
 
-export default async function GuestSnapshotPage() {
+interface Props {
+  searchParams: Record<string, string | string[] | undefined>;
+}
+
+export default async function GuestSnapshotPage({ searchParams }: Props) {
+  const period = resolvePeriod(searchParams);
+
   const [summary, stats, socials] = await Promise.all([
-    getReviewSummary(30),
-    getReviewStatsBySource(90),
+    getReviewSummary(period.days),
+    getReviewStatsBySource(Math.max(period.days, 90)),
     getSocialAccounts(),
   ]);
 
@@ -23,10 +31,8 @@ export default async function GuestSnapshotPage() {
   const responseRate = summary.response_rate ?? 0;
   const avgRating = Number(summary.avg_rating ?? 0);
 
-  // Action cards
   const cards: any[] = [];
 
-  // Card 1: Unanswered reviews (priority depends on count)
   if (unanswered > 0) {
     cards.push({
       pillar: 'guest' as const,
@@ -37,9 +43,8 @@ export default async function GuestSnapshotPage() {
       headline: <>{unanswered} {unanswered === 1 ? 'review' : 'reviews'} <em>awaiting reply</em>.<br />Response rate at {(responseRate * 100).toFixed(0)}%.</>,
       conclusion: <>
         SLH standard is <strong>90% response within 48h</strong>. Currently at{' '}
-        <strong>{(responseRate * 100).toFixed(0)}%</strong>. Manual reply required until
-        Vertex draft agent ships in Phase 4. Owner should respond personally to any review
-        below 4.0.
+        <strong>{(responseRate * 100).toFixed(0)}%</strong>. Manual reply required until Vertex
+        draft agent ships in Phase 4.
       </>,
       verdict: [
         { label: `Avg · ${avgRating.toFixed(2)}`, tone: avgRating >= 4.5 ? 'good' as const : 'warn' as const },
@@ -54,7 +59,6 @@ export default async function GuestSnapshotPage() {
     });
   }
 
-  // Card 2: Booking.com low rating?
   const bookingStat = stats.find((s: any) => s.source === 'booking');
   if (bookingStat && bookingStat.avg_rating && Number(bookingStat.avg_rating) < 8.5) {
     cards.push({
@@ -65,9 +69,8 @@ export default async function GuestSnapshotPage() {
       priorityLabel: 'Medium · trend down',
       headline: <>Booking.com score at <em>{Number(bookingStat.avg_rating).toFixed(1)}</em>.<br />Below 8.5 visibility threshold.</>,
       conclusion: <>
-        Properties below 8.5 on Booking.com lose preferred-listing placement. Investigate
-        recent low scorers, identify recurring complaint themes (room cleanliness? wifi?
-        breakfast?), and brief the team. Consider a 30-day reputation push.
+        Properties below 8.5 lose preferred-listing placement. Investigate recent low scorers,
+        identify recurring complaint themes, brief the team.
       </>,
       verdict: [
         { label: `Score · ${Number(bookingStat.avg_rating).toFixed(1)}`, tone: 'warn' as const },
@@ -85,13 +88,13 @@ export default async function GuestSnapshotPage() {
   return (
     <>
       <PanelHero
-        eyebrow="Guest · Snapshot"
+        eyebrow={`Guest · Snapshot · ${period.label}${period.seg !== 'all' ? ` · ${period.segLabel}` : ''}`}
         title="The voice"
         emphasis="of the house"
-        sub="Reviews · reputation · social presence"
+        sub={`${period.rangeLabel} · reviews · reputation · social${period.cmp !== 'none' ? ` · ${period.cmpLabel}` : ''}`}
         kpis={
           <>
-            <KpiCard label="Reviews 30d" value={summary.total ?? 0} hint={`${unanswered} unanswered`} />
+            <KpiCard label={`Reviews ${period.label}`} value={summary.total ?? 0} hint={`${unanswered} unanswered`} />
             <KpiCard
               label="Avg Rating"
               value={avgRating ? avgRating.toFixed(2) : '—'}
@@ -103,7 +106,7 @@ export default async function GuestSnapshotPage() {
               value={responseRate * 100}
               kind="pct"
               tone={responseRate >= 0.9 ? 'pos' : responseRate >= 0.7 ? 'warn' : 'neg'}
-              hint="last 30d · SLH 90%"
+              hint="SLH 90% target"
             />
             <KpiCard label="Social Followers" value={totalFollowers} hint={`${socials.length} channels`} />
           </>
@@ -116,9 +119,7 @@ export default async function GuestSnapshotPage() {
           count={cards.length}
           meta={`${cards.length} awaiting · guest pillar`}
         >
-          {cards.map((c, i) => (
-            <ActionCard key={i} num={i + 1} {...c} />
-          ))}
+          {cards.map((c, i) => <ActionCard key={i} num={i + 1} {...c} />)}
         </ActionStack>
       )}
     </>

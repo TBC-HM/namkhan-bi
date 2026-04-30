@@ -18,7 +18,8 @@ export default function GuestLayout({ children }: { children: React.ReactNode })
         meta={<><strong>Voice of the house</strong><br />Refreshed {t} ICT</>}
       />
       <SubNav items={RAIL_SUBNAV.guest} />
-      <FilterStrip baseHref="/guest" liveSource="Reviews + social · live" />
+      {/* Guest pages use back-only windows; segment is highly relevant */}
+      <FilterStrip showForward={false} showCompare showSegment liveSource="Reviews + social · live" />
       <div className="panel">{children}</div>
     </>
   );
