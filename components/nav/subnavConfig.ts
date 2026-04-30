@@ -25,16 +25,16 @@ export interface SubNavTab {
 
 export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
   // ===== 01 Revenue =====
+  // Redesign v2 (Federico, 30 Apr 2026): 7 tabs — Pulse, Pace, Channels, Rate Plans, Pricing, Comp Set, Agents.
+  // Old routes (Snapshot, Demand, Rates, Inventory, Promotions) kept reachable during migration; cleanup deploy will remove.
   revenue: [
-    { href: '/revenue',             label: 'Snapshot' },
     { href: '/revenue/pulse',       label: 'Pulse' },
-    { href: '/revenue/demand',      label: 'Demand' },
+    { href: '/revenue/pace',        label: 'Pace' },
     { href: '/revenue/channels',    label: 'Channels' },
-    { href: '/revenue/rates',       label: 'Rates' },
     { href: '/revenue/rateplans',   label: 'Rate Plans' },
-    { href: '/revenue/inventory',   label: 'Inventory' },
-    { href: '/revenue/compset',     label: 'Comp Set',     coming: true },
-    { href: '/revenue/promotions',  label: 'Promotions',   coming: true },
+    { href: '/revenue/pricing',     label: 'Pricing' },
+    { href: '/revenue/compset',     label: 'Comp Set' },
+    { href: '/revenue/agents',      label: 'Agents' },
   ],
 
   // ===== 02 Operations =====

@@ -9,3 +9,9 @@ out
 .vercel
 .env*.local
 .backup-batch1/
+
+# Redesign v2 hygiene (added 2026-04-30)
+Archive/
+namkhan-bi-tarballs/
+revfiles.zip
+*.tar.gz

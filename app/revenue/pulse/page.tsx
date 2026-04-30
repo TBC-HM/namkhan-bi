@@ -1,6 +1,7 @@
 // app/revenue/pulse/page.tsx
-// Revenue · Pulse — period-aware perf KPIs + 90d chart.
-// Layout: layout.tsx already provides Banner / SubNav / FilterStrip. We render hero + grid + chart only.
+// Revenue · Pulse — redesign v2 (Federico, 30 Apr 2026).
+// 12-KPI grid (4 wired + 8 "data needed"), decisions queue placeholder, tactical alerts placeholder, 90d chart.
+// Layout: layout.tsx already provides Banner / SubNav / FilterStrip. We render hero + grid + sections only.
 
 import PanelHero from '@/components/sections/PanelHero';
 import Card from '@/components/sections/Card';
@@ -49,8 +50,6 @@ export default async function PulsePage({ searchParams }: Props) {
   const rpD = delta(aggPeriod?.revpar ?? 0, aggCompare?.revpar);
   const trpD = delta(aggPeriod?.trevpar ?? 0, aggCompare?.trevpar);
 
-  const totalRev = (aggPeriod?.rooms_revenue ?? 0) + (aggPeriod?.total_ancillary_revenue ?? 0);
-
   return (
     <>
       <PanelHero
@@ -92,14 +91,80 @@ export default async function PulsePage({ searchParams }: Props) {
         }
       />
 
-      <div className="card-grid-4">
-        <KpiCard label={`Total Rev ${dlabel}`} value={totalRev} kind="money" />
-        <KpiCard label={`Rooms Rev ${dlabel}`} value={aggPeriod?.rooms_revenue ?? 0} kind="money" />
-        <KpiCard label={`Ancillary Rev ${dlabel}`} value={aggPeriod?.total_ancillary_revenue ?? 0} kind="money" />
-        <KpiCard label="Pace vs Forecast" value={null} greyed hint="Forecast pending" />
+      {/* Pilot banner — Cloudbeds writes require human approval (90d). */}
+      <div
+        className="card"
+        style={{
+          background: 'rgba(196, 100, 38, 0.08)',
+          borderColor: 'rgba(196, 100, 38, 0.45)',
+          marginBottom: 16,
+        }}
+      >
+        <div style={{ padding: 14, fontSize: 13, lineHeight: 1.5 }}>
+          <strong>Pilot mode · 90 days.</strong>{' '}
+          Every rate, restriction, and rate-plan retire goes through human approval before it
+          touches Cloudbeds. Agents propose; you decide.
+        </div>
       </div>
 
-      <Card title="Daily Revenue" emphasis="last 90d" sub="Stacked: Rooms · F&B · Spa · Activity" source="mv_kpi_daily">
+      {/* Row 2 — 8 new KPIs from redesign spec, all "data needed" until source is wired. */}
+      <Card
+        title="Performance KPIs"
+        emphasis="extended"
+        sub="Six new tiles per redesign · sources wiring in next deploys"
+      >
+        <div className="card-grid-4">
+          <KpiCard label="Net ADR" value={null} kind="money" greyed hint="data needed · OTA commissions" />
+          <KpiCard label="GOPPAR" value={null} kind="money" greyed hint="data needed · monthly P&L" />
+          <KpiCard label="Cancel %" value={null} kind="pct" greyed hint="data needed · reservations" />
+          <KpiCard label="No-Show %" value={null} kind="pct" greyed hint="data needed · reservations" />
+          <KpiCard label="Lead Time" value={null} greyed hint="data needed · booking date" />
+          <KpiCard label="ALOS" value={null} greyed hint="data needed · stay nights" />
+          <KpiCard label="Commission $" value={null} kind="money" greyed hint="data needed · channel cost" />
+          <KpiCard label="Forecast +30d" value={null} kind="money" greyed hint="paused · needs 90d history" />
+        </div>
+      </Card>
+
+      <Card
+        title="Decisions queued for you"
+        emphasis="ranked by $ impact"
+        sub="Tactical Detector · 12-action queue · enabled when cube ships (P2)"
+      >
+        <div className="stub">
+          <h3>Coming in Deploy 2 (Pace/Channels) and Deploy 3 (Tactical wired)</h3>
+          <p>
+            5–15 ranked decision cards with severity, $ impact, recommended actions, and an Apply
+            button gated by human approval. Replaces the current single-card snapshot.
+          </p>
+          <div className="stub-list">
+            Severity scoring · multi-channel response plans · approval queue
+          </div>
+        </div>
+      </Card>
+
+      <Card
+        title="Tactical alerts"
+        emphasis="cross-dimensional gaps"
+        sub="Cube-driven · multi-dim slicing · read-only in P1"
+      >
+        <div className="stub">
+          <h3>Coming with the cube (P1 sprint 2 backend)</h3>
+          <p>
+            Multi-dimensional gap detection across Room × Country × Window × LOS × Channel ×
+            Segment × Stay-month. Surfaces correlated cells with confidence + window-closure.
+          </p>
+          <div className="stub-list">
+            EU × Suite × 30-60d gap · DE pickup spike · Direct mix erosion
+          </div>
+        </div>
+      </Card>
+
+      <Card
+        title="Daily revenue"
+        emphasis="last 90d"
+        sub="Stacked: Rooms · F&B · Spa · Activity"
+        source="mv_kpi_daily"
+      >
         {d90.length > 0 ? (
           <DailyRevenueChart data={d90} />
         ) : (
