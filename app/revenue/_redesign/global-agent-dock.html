@@ -1,0 +1,82 @@
+<div class="agent-dock" id="agent-dock">
+  <div class="agent-dock-header" onclick="toggleDock()">
+    <div class="agent-dock-title">
+      <span class="ai-pulse"></span>
+      AI Agents · 6 active
+    </div>
+    <button class="agent-dock-toggle" id="dock-toggle">−</button>
+  </div>
+  <div class="agent-dock-body" id="agent-dock-body">
+    <div class="agent-dock-row">
+      <div class="info">
+        <div class="name">Pace &amp; Pickup <span class="agent-status-dot" style="background:#16a34a;display:inline-block;margin-left:4px;animation:pulse-green 1.5s infinite;"></span></div>
+        <div class="meta">last run 3 min ago · 3 findings</div>
+      </div>
+      <div class="controls">
+        <button class="icon-btn" title="Fire now" onclick="fireAgent('pace')">⚡</button>
+        <button class="icon-btn" title="Pause" onclick="pauseAgent(this)">⏸</button>
+        <button class="icon-btn" title="Configure" onclick="openAgent('pace-agent')">⚙</button>
+      </div>
+    </div>
+    <div class="agent-dock-row">
+      <div class="info">
+        <div class="name">Parity Watchdog <span class="agent-status-dot" style="background:#16a34a;display:inline-block;margin-left:4px;animation:pulse-green 1.5s infinite;"></span></div>
+        <div class="meta">last run 1 min ago · 2 breaches</div>
+      </div>
+      <div class="controls">
+        <button class="icon-btn" title="Fire now" onclick="fireAgent('parity')">⚡</button>
+        <button class="icon-btn" title="Pause" onclick="pauseAgent(this)">⏸</button>
+        <button class="icon-btn" title="Configure" onclick="openAgent('parity-agent')">⚙</button>
+      </div>
+    </div>
+    <div class="agent-dock-row">
+      <div class="info">
+        <div class="name">Comp Set Scanner <span class="agent-status-dot" style="background:#16a34a;display:inline-block;margin-left:4px;animation:pulse-green 1.5s infinite;"></span></div>
+        <div class="meta">last run 12 min ago · 7/7 properties</div>
+      </div>
+      <div class="controls">
+        <button class="icon-btn" title="Fire now" onclick="fireAgent('compset')">⚡</button>
+        <button class="icon-btn" title="Pause" onclick="pauseAgent(this)">⏸</button>
+        <button class="icon-btn" title="Configure" onclick="openAgent('compset-agent')">⚙</button>
+      </div>
+    </div>
+    <div class="agent-dock-row">
+      <div class="info">
+        <div class="name">Rate Plan Cleanup <span class="agent-status-dot" style="background:#9ca3af;display:inline-block;margin-left:4px;"></span></div>
+        <div class="meta">idle · 41 retire candidates</div>
+      </div>
+      <div class="controls">
+        <button class="icon-btn" title="Fire now" onclick="fireAgent('plans')">⚡</button>
+        <button class="icon-btn" title="Pause" onclick="pauseAgent(this)">⏸</button>
+        <button class="icon-btn" title="Configure" onclick="openAgent('plan-agent')">⚙</button>
+      </div>
+    </div>
+    <div class="agent-dock-row">
+      <div class="info">
+        <div class="name">Forecast Engine <span class="agent-status-dot" style="background:#d97706;display:inline-block;margin-left:4px;"></span></div>
+        <div class="meta">paused · needs 90d data</div>
+      </div>
+      <div class="controls">
+        <button class="icon-btn" title="Cannot fire" disabled style="opacity:0.5;">⚡</button>
+        <button class="icon-btn" title="Resume" onclick="pauseAgent(this)">▶</button>
+        <button class="icon-btn" title="Configure" onclick="openAgent('forecast-agent')">⚙</button>
+      </div>
+    </div>
+    <div class="agent-dock-row">
+      <div class="info">
+        <div class="name">Cancellation Risk <span class="agent-status-dot" style="background:#9ca3af;display:inline-block;margin-left:4px;"></span></div>
+        <div class="meta">idle · 7 high-risk bookings</div>
+      </div>
+      <div class="controls">
+        <button class="icon-btn" title="Fire now" onclick="fireAgent('cancel')">⚡</button>
+        <button class="icon-btn" title="Pause" onclick="pauseAgent(this)">⏸</button>
+        <button class="icon-btn" title="Configure" onclick="openAgent('cancel-agent')">⚙</button>
+      </div>
+    </div>
+    <div class="agent-log" id="agent-log">
+      <div><span class="log-time">16:49:12</span> <span class="log-success">✓</span> Pace agent · 3 findings</div>
+      <div><span class="log-time">16:48:33</span> <span class="log-warn">⚠</span> Parity · Booking.com -12% on May 4</div>
+      <div><span class="log-time">16:37:01</span> <span class="log-success">✓</span> Comp Set · 7/7 scraped</div>
+    </div>
+  </div>
+</div>

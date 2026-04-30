@@ -1,0 +1,467 @@
+<div class="tab-content" id="tab-channels">
+
+      <div class="design-note">
+        <strong>What changed:</strong> Channels is now its own tab focused on OTA economics. Adds <strong>per-OTA × room-type matrix</strong>, booking pace by OTA, wholesaler waterfall, and OTA visibility/ranking. Rate Plans moved to its own tab (04).
+      </div>
+
+      <!-- TOP KPIs -->
+      <div class="kpi-row" style="grid-template-columns:repeat(6,1fr);">
+        <div class="kpi data-pending">
+          <div class="kpi-label">Total commissions paid 90d <span class="data-needed" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Data needed&lt;/div&gt;&lt;div style=&quot;font-size:11px;line-height:1.6;color:#fff;margin-top:4px;&quot;&gt;Per-channel commission %. Cloudbeds shows source but not commission rate.&lt;/div&gt;'>data needed</span></div>
+          <div class="kpi-value">$24.8k</div>
+          <div class="kpi-sub"><span class="kpi-delta-neg">10.4% of OTA rev</span></div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Direct mix</div>
+          <div class="kpi-value">26%</div>
+          <div class="kpi-sub"><span class="kpi-delta-pos">Target: 35%</span></div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">OTA mix</div>
+          <div class="kpi-value">53%</div>
+          <div class="kpi-sub"><span class="kpi-delta-neutral">stable</span></div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Wholesale mix</div>
+          <div class="kpi-value">14%</div>
+          <div class="kpi-sub"><span class="kpi-delta-neg">Risk: leakage to OTA</span></div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Avg lead time</div>
+          <div class="kpi-value">42d</div>
+          <div class="kpi-sub"><span class="kpi-delta-neutral">OTA: 32d · Direct: 56d</span></div>
+        </div>
+        <div class="kpi data-pending">
+          <div class="kpi-label">Channel cost / occ rn <span class="data-needed" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Data needed&lt;/div&gt;&lt;div style=&quot;font-size:11px;line-height:1.6;color:#fff;margin-top:4px;&quot;&gt;Commission table + ad spend feed (Google Ads + Meta + Expedia + BDC).&lt;/div&gt;'>data needed</span></div>
+          <div class="kpi-value">$28</div>
+          <div class="kpi-sub"><span class="kpi-delta-neg">Avg "tax" per booking</span></div>
+        </div>
+      </div>
+
+      <!-- CHANNEL TABLE -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">Channel performance · 90d · all active</div>
+          <div class="section-meta">
+            23 active · 27 dormant
+            <button class="expand-btn" onclick="openChart('channel-deep')" title="Expand for full per-room-type breakdown">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+            </button>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Source</th>
+              <th>Type</th>
+              <th class="num">Bkg</th>
+              <th class="num">Rev</th>
+              <th class="num">ADR</th>
+              <th class="num">Comm%</th>
+              <th class="num">Net ADR</th>
+              <th class="num">Cancel%</th>
+              <th class="num">Lead</th>
+              <th class="num">LOS</th>
+              <th>Health</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Booking.com</td>
+              <td><span class="pill" style="border-color:var(--red);color:var(--red)">OTA</span></td>
+              <td class="num">164</td>
+              <td class="num">$96.6k</td>
+              <td class="num">$315</td>
+              <td class="num warn">15%</td>
+              <td class="num">$268</td>
+              <td class="num warn">25.0%</td>
+              <td class="num">30d</td>
+              <td class="num">2.8</td>
+              <td><span class="pill amber">parity ⚠</span></td>
+            </tr>
+            <tr style="background:#f0fdf4;">
+              <td><strong>Website (Direct)</strong></td>
+              <td><span class="pill green">Direct</span></td>
+              <td class="num">50</td>
+              <td class="num">$50.9k</td>
+              <td class="num">$380</td>
+              <td class="num pos">0%</td>
+              <td class="num pos">$380</td>
+              <td class="num pos">0.0%</td>
+              <td class="num">56d</td>
+              <td class="num">2.8</td>
+              <td><span class="pill green">★ best margin</span></td>
+            </tr>
+            <tr>
+              <td>Retreat Reseller</td>
+              <td><span class="pill" style="border-color:var(--amber);color:var(--amber)">Niche</span></td>
+              <td class="num">1</td>
+              <td class="num">$23.6k</td>
+              <td class="num">$1,970</td>
+              <td class="num">10%</td>
+              <td class="num">$1,773</td>
+              <td class="num">0.0%</td>
+              <td class="num">58d</td>
+              <td class="num">12.0</td>
+              <td><span class="pill amber">anomaly · review</span></td>
+            </tr>
+            <tr>
+              <td>Expedia</td>
+              <td><span class="pill" style="border-color:var(--red);color:var(--red)">OTA</span></td>
+              <td class="num">47</td>
+              <td class="num">$22.5k</td>
+              <td class="num">$272</td>
+              <td class="num warn">18%</td>
+              <td class="num">$223</td>
+              <td class="num warn">27.3%</td>
+              <td class="num">39d</td>
+              <td class="num">2.9</td>
+              <td><span class="pill amber">monitor</span></td>
+            </tr>
+            <tr style="background:#f0fdf4;">
+              <td>Email (Direct)</td>
+              <td><span class="pill green">Direct</span></td>
+              <td class="num">13</td>
+              <td class="num">$16.3k</td>
+              <td class="num">$397</td>
+              <td class="num pos">0%</td>
+              <td class="num pos">$397</td>
+              <td class="num pos">0.0%</td>
+              <td class="num">26d</td>
+              <td class="num">3.2</td>
+              <td><span class="pill green">healthy</span></td>
+            </tr>
+            <tr>
+              <td>CTrip / Trip.com</td>
+              <td><span class="pill" style="border-color:var(--red);color:var(--red)">OTA</span></td>
+              <td class="num">19</td>
+              <td class="num">$7.7k</td>
+              <td class="num">$277</td>
+              <td class="num warn">15%</td>
+              <td class="num">$235</td>
+              <td class="num neg">50.0%</td>
+              <td class="num">29d</td>
+              <td class="num">2.0</td>
+              <td><span class="pill red">cancel ⚠</span></td>
+            </tr>
+            <tr style="background:#fef2f2;">
+              <td><strong>Hospitality Solutions</strong></td>
+              <td><span class="pill" style="border-color:var(--blue);color:var(--blue)">Wholesale</span></td>
+              <td class="num">30</td>
+              <td class="num">$6.6k</td>
+              <td class="num">$165</td>
+              <td class="num">12%</td>
+              <td class="num neg">$41</td>
+              <td class="num neg"><strong>75.0%</strong></td>
+              <td class="num">40d</td>
+              <td class="num">2.5</td>
+              <td><span class="pill red">🚨 restrict</span></td>
+            </tr>
+            <tr>
+              <td>Walk-In</td>
+              <td><span class="pill green">Direct</span></td>
+              <td class="num">12</td>
+              <td class="num">$3.5k</td>
+              <td class="num">$252</td>
+              <td class="num pos">0%</td>
+              <td class="num">$108</td>
+              <td class="num neg">57.1%</td>
+              <td class="num">1d</td>
+              <td class="num">1.8</td>
+              <td><span class="pill amber">low quality</span></td>
+            </tr>
+            <tr style="background:#fef2f2;">
+              <td>Traveloka</td>
+              <td><span class="pill" style="border-color:var(--red);color:var(--red)">OTA</span></td>
+              <td class="num">5</td>
+              <td class="num">$2.0k</td>
+              <td class="num">$246</td>
+              <td class="num">15%</td>
+              <td class="num neg">$0</td>
+              <td class="num neg"><strong>100.0%</strong></td>
+              <td class="num">41d</td>
+              <td class="num">4.0</td>
+              <td><span class="pill red">🚨 disable</span></td>
+            </tr>
+            <tr style="color:var(--text-faint);">
+              <td>+ 14 active channels · &lt; $2k each</td>
+              <td colspan="9"><a class="clickable">expand</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- OTA × ROOM TYPE MATRIX -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">OTA × Room Type matrix · 90d revenue</div>
+          <div class="section-meta">
+            Where each OTA performs · which rooms convert
+            <button class="expand-btn" onclick="openChart('ota-roomtype-matrix')" title="Expand">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+            </button>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Room Type</th>
+              <th class="num">Booking.com</th>
+              <th class="num">Expedia</th>
+              <th class="num">CTrip</th>
+              <th class="num">Direct Web</th>
+              <th class="num">Email</th>
+              <th class="num">Wholesale</th>
+              <th class="num">Total</th>
+              <th>Strongest channel</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Riverview Suite</td>
+              <td class="num" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Riverview Suite · Booking.com&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Revenue 90d&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;$22.4k&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Bookings&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;48&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;ADR&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;$295&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Cancel%&lt;/span&gt;&lt;span class=&quot;val tt-neg&quot;&gt;28%&lt;/span&gt;&lt;/div&gt;'>$22.4k</td>
+              <td class="num">$5.2k</td>
+              <td class="num">$1.8k</td>
+              <td class="num pos">$14.8k</td>
+              <td class="num pos">$3.6k</td>
+              <td class="num">$1.1k</td>
+              <td class="num"><strong>$48.9k</strong></td>
+              <td><span class="pill green">Booking.com 46%</span></td>
+            </tr>
+            <tr>
+              <td>Riverfront Suite</td>
+              <td class="num">$18.6k</td>
+              <td class="num">$4.4k</td>
+              <td class="num">$1.2k</td>
+              <td class="num pos">$8.2k</td>
+              <td class="num pos">$2.8k</td>
+              <td class="num">$0.7k</td>
+              <td class="num"><strong>$35.9k</strong></td>
+              <td><span class="pill green">Booking.com 52%</span></td>
+            </tr>
+            <tr>
+              <td>Riverfront Glamping</td>
+              <td class="num pos">$24.8k</td>
+              <td class="num">$6.1k</td>
+              <td class="num">$2.1k</td>
+              <td class="num">$11.4k</td>
+              <td class="num">$3.1k</td>
+              <td class="num">$1.8k</td>
+              <td class="num"><strong>$49.3k</strong></td>
+              <td><span class="pill green">Booking.com 50%</span></td>
+            </tr>
+            <tr>
+              <td>Explorer Glamping</td>
+              <td class="num">$11.2k</td>
+              <td class="num">$2.9k</td>
+              <td class="num">$1.5k</td>
+              <td class="num">$5.8k</td>
+              <td class="num">$1.6k</td>
+              <td class="num">$2.1k</td>
+              <td class="num"><strong>$25.1k</strong></td>
+              <td><span class="pill amber">Booking 45% · spread</span></td>
+            </tr>
+            <tr>
+              <td>Art Deluxe Room</td>
+              <td class="num">$8.4k</td>
+              <td class="num">$1.9k</td>
+              <td class="num pos">$1.0k</td>
+              <td class="num">$3.2k</td>
+              <td class="num">$1.1k</td>
+              <td class="num">$0.9k</td>
+              <td class="num"><strong>$16.5k</strong></td>
+              <td><span class="pill amber">Booking 51%</span></td>
+            </tr>
+            <tr>
+              <td>Art Deluxe Suite</td>
+              <td class="num">$6.1k</td>
+              <td class="num">$1.4k</td>
+              <td class="num">$0.4k</td>
+              <td class="num">$2.8k</td>
+              <td class="num">$1.4k</td>
+              <td class="num">$0.5k</td>
+              <td class="num"><strong>$12.6k</strong></td>
+              <td><span class="pill green">Booking.com 48%</span></td>
+            </tr>
+            <tr style="background:#fef2f2;">
+              <td><strong>Art Deluxe Family</strong></td>
+              <td class="num">$2.1k</td>
+              <td class="num">$0.4k</td>
+              <td class="num">$0.1k</td>
+              <td class="num neg">$0.6k</td>
+              <td class="num">$0.3k</td>
+              <td class="num">$0.0k</td>
+              <td class="num neg"><strong>$3.5k</strong></td>
+              <td><span class="pill red">⚠ all channels weak</span></td>
+            </tr>
+            <tr>
+              <td>Sunset Namkhan Villa</td>
+              <td class="num">$2.4k</td>
+              <td class="num">$0.0k</td>
+              <td class="num">$0.0k</td>
+              <td class="num pos">$8.6k</td>
+              <td class="num pos">$3.8k</td>
+              <td class="num">$0.0k</td>
+              <td class="num"><strong>$14.8k</strong></td>
+              <td><span class="pill green">Direct 84%</span></td>
+            </tr>
+            <tr>
+              <td>Sunset LP Villa</td>
+              <td class="num">$1.8k</td>
+              <td class="num">$0.0k</td>
+              <td class="num">$0.0k</td>
+              <td class="num pos">$7.4k</td>
+              <td class="num pos">$3.2k</td>
+              <td class="num">$0.0k</td>
+              <td class="num"><strong>$12.4k</strong></td>
+              <td><span class="pill green">Direct 86%</span></td>
+            </tr>
+            <tr style="font-weight:600;background:#f7f8fa;">
+              <td>Total</td>
+              <td class="num">$96.6k</td>
+              <td class="num">$22.5k</td>
+              <td class="num">$7.7k</td>
+              <td class="num">$50.9k</td>
+              <td class="num">$16.3k</td>
+              <td class="num">$6.6k</td>
+              <td class="num">$219.0k</td>
+              <td>—</td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="margin-top:10px;font-size:11px;color:var(--text-dim);line-height:1.6;">
+          <strong style="color:var(--text)">Insights:</strong>
+          Sunset Villas convert almost exclusively direct (84-86%) — wholesalers and OTAs don't move the high-end villa product.
+          Glamping (Riverfront + Explorer) is OTA-dependent — 50% via Booking.com.
+          <strong style="color:var(--red)">Art Deluxe Family is weak across every channel</strong> — product or pricing problem, not a distribution problem.
+        </div>
+      </div>
+
+      <!-- OTA-SPECIFIC DRILLDOWNS -->
+      <div class="grid-2">
+        <div class="section">
+          <div class="section-header">
+            <div class="section-title">Booking.com deep dive <span class="data-needed" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Data needed&lt;/div&gt;&lt;div style=&quot;font-size:11px;line-height:1.6;color:#fff;margin-top:4px;&quot;&gt;BDC Partner API (Genius bookings, Visibility Booster status, Preferred Partner, mobile share, ranking score). Property must be on Booking.com Connectivity Programme.&lt;/div&gt;'>data needed</span></div>
+            <div class="section-meta">
+              Genius / Mobile / Visibility
+              <button class="expand-btn" onclick="openChart('bdc-deepdive')" title="Expand">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+              </button>
+            </div>
+          </div>
+          <table>
+            <tbody>
+              <tr><td>Property rank (LP listing)</td><td class="num"><strong>#3 of 47</strong></td></tr>
+              <tr><td>Search ranking score</td><td class="num">9.2</td></tr>
+              <tr><td>Genius bookings %</td><td class="num">38%</td></tr>
+              <tr><td>Mobile bookings %</td><td class="num">62%</td></tr>
+              <tr><td>Genius rate impact</td><td class="num neg">-10% ADR / +28% conv</td></tr>
+              <tr><td>Visibility booster</td><td><span class="pill green">enabled · +15% conv</span></td></tr>
+              <tr><td>Preferred Partner</td><td><span class="pill green">enabled · +14% commission</span></td></tr>
+              <tr><td>Cancel-paid bookings</td><td class="num warn">25% (vs 18% LP avg)</td></tr>
+              <tr><td>Avg time-to-pay</td><td class="num">8d before stay</td></tr>
+              <tr style="background:#fdf8f1;"><td><strong>Net contribution after Genius+PP</strong></td><td class="num"><strong>$96.6k → $76.4k</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="section">
+          <div class="section-header">
+            <div class="section-title">Wholesaler waterfall <span class="data-needed" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Data needed&lt;/div&gt;&lt;div style=&quot;font-size:11px;line-height:1.6;color:#fff;margin-top:4px;&quot;&gt;Cloudbeds shows source channel but not downstream resale. Leakage tracking needs: manual supplier audit OR external monitoring (Lighthouse, OTA Insight) OR scraping where allowed.&lt;/div&gt;'>data needed</span></div>
+            <div class="section-meta">
+              Which wholesalers feed which OTAs
+              <button class="expand-btn" onclick="openChart('wholesaler-waterfall')" title="Expand">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+              </button>
+            </div>
+          </div>
+          <svg viewBox="0 0 520 260" style="width:100%;height:260px;">
+            <!-- Sankey-style flow -->
+            <rect x="20" y="40" width="120" height="40" fill="#b8854a" rx="3" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Hotelbeds&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Net rate sold&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;$165 ADR&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Volume 90d&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;30 bkg&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Cancel%&lt;/span&gt;&lt;span class=&quot;val tt-neg&quot;&gt;75%&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-note&quot;&gt;Confirmed leakage to Trip.com and Expedia EPS&lt;/div&gt;'/>
+            <text x="80" y="65" text-anchor="middle" font-size="11" fill="#fff" font-weight="600">Hotelbeds</text>
+            <text x="80" y="92" text-anchor="middle" font-size="9" fill="#374151">$6.6k · 30 bkg</text>
+
+            <rect x="20" y="120" width="120" height="40" fill="#b8854a" rx="3" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Bonotel / EXO&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Volume 90d&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;13 bkg&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;ADR&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;$684&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-note&quot;&gt;Premium leisure partnerships · low risk&lt;/div&gt;'/>
+            <text x="80" y="145" text-anchor="middle" font-size="11" fill="#fff" font-weight="600">Bonotel / EXO</text>
+            <text x="80" y="172" text-anchor="middle" font-size="9" fill="#374151">$19.8k · 13 bkg</text>
+
+            <rect x="20" y="200" width="120" height="40" fill="#b8854a" rx="3" />
+            <text x="80" y="225" text-anchor="middle" font-size="11" fill="#fff" font-weight="600">DTH / Asian Trails</text>
+            <text x="80" y="252" text-anchor="middle" font-size="9" fill="#374151">$0.5k · 2 bkg</text>
+
+            <!-- arrows -->
+            <line x1="140" y1="60" x2="280" y2="50" stroke="#dc2626" stroke-width="3" stroke-dasharray="4,3" data-tip='&lt;div class=&quot;tt-title&quot;&gt;⚠ Leakage path&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Hotelbeds&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;→ Trip.com&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-note&quot;&gt;Inventory resold via Trip.com at $277 ADR · undercutting your direct&lt;/div&gt;'/>
+            <line x1="140" y1="65" x2="280" y2="100" stroke="#dc2626" stroke-width="2" stroke-dasharray="4,3"/>
+            <line x1="140" y1="140" x2="280" y2="150" stroke="#16a34a" stroke-width="2"/>
+            <line x1="140" y1="220" x2="280" y2="200" stroke="#9ca3af" stroke-width="1.5"/>
+
+            <!-- end states -->
+            <rect x="280" y="30" width="140" height="40" fill="#fef2f2" stroke="#dc2626" rx="3"/>
+            <text x="350" y="55" text-anchor="middle" font-size="11" fill="#dc2626" font-weight="600">Trip.com (resold)</text>
+            <rect x="280" y="80" width="140" height="40" fill="#fef2f2" stroke="#dc2626" rx="3"/>
+            <text x="350" y="105" text-anchor="middle" font-size="11" fill="#dc2626" font-weight="600">Expedia EPS</text>
+            <rect x="280" y="130" width="140" height="40" fill="#f0fdf4" stroke="#16a34a" rx="3"/>
+            <text x="350" y="155" text-anchor="middle" font-size="11" fill="#16a34a" font-weight="600">End consumer</text>
+            <rect x="280" y="180" width="140" height="40" fill="#f7f8fa" stroke="#9ca3af" rx="3"/>
+            <text x="350" y="205" text-anchor="middle" font-size="11" fill="#374151">DMC packages</text>
+
+            <text x="490" y="50" font-size="11" fill="#dc2626" font-weight="600">$2.1k</text>
+            <text x="490" y="100" font-size="11" fill="#dc2626" font-weight="600">$3.4k</text>
+            <text x="490" y="150" font-size="11" fill="#16a34a" font-weight="600">$19.8k</text>
+            <text x="490" y="205" font-size="11" fill="#374151">$1.6k</text>
+          </svg>
+          <div style="margin-top:8px;font-size:11px;color:var(--red);">
+            ⚠ Hotelbeds inventory likely being resold on Trip.com at $277 ADR — undercutting your direct ($380). Audit and consider rate parity clauses or supplier removal.
+          </div>
+        </div>
+      </div>
+
+      <!-- BOOKING PACE BY OTA -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">Booking pace by OTA · 90 days</div>
+          <div class="section-meta">
+            Daily new bookings · which OTAs are accelerating vs decelerating
+            <button class="expand-btn" onclick="openChart('ota-pace')" title="Expand">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+            </button>
+          </div>
+        </div>
+        <svg viewBox="0 0 1100 240" style="width:100%;height:240px;">
+          <line x1="60" y1="20" x2="1080" y2="20" stroke="#e5e7eb"/>
+          <line x1="60" y1="80" x2="1080" y2="80" stroke="#e5e7eb"/>
+          <line x1="60" y1="140" x2="1080" y2="140" stroke="#e5e7eb"/>
+          <line x1="60" y1="200" x2="1080" y2="200" stroke="#9ca3af"/>
+          <text x="55" y="24" text-anchor="end" font-size="9" fill="#9ca3af">12</text>
+          <text x="55" y="84" text-anchor="end" font-size="9" fill="#9ca3af">8</text>
+          <text x="55" y="144" text-anchor="end" font-size="9" fill="#9ca3af">4</text>
+          <text x="55" y="204" text-anchor="end" font-size="9" fill="#9ca3af">0</text>
+
+          <text x="60" y="225" font-size="9" fill="#9ca3af">90d ago</text>
+          <text x="540" y="225" font-size="9" fill="#9ca3af">45d ago</text>
+          <text x="1050" y="225" font-size="9" fill="#9ca3af">today</text>
+
+          <!-- Booking.com - upward trending -->
+          <polyline points="60,180 130,170 200,160 270,150 340,140 410,130 480,120 550,110 620,100 690,90 760,82 830,75 900,68 970,62 1040,55"
+            fill="none" stroke="#dc2626" stroke-width="2.5" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Booking.com pace&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Direction&lt;/span&gt;&lt;span class=&quot;val tt-pos&quot;&gt;accelerating&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;90d total&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;164 bkg&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Last 7d avg&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;3.2/day&lt;/span&gt;&lt;/div&gt;'/>
+
+          <!-- Direct - steady growth -->
+          <polyline points="60,190 130,188 200,184 270,182 340,178 410,170 480,164 550,158 620,150 690,142 760,135 830,128 900,120 970,115 1040,108"
+            fill="none" stroke="#16a34a" stroke-width="2.5" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Direct pace&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Direction&lt;/span&gt;&lt;span class=&quot;val tt-pos&quot;&gt;steady growth&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;90d total&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;63 bkg&lt;/span&gt;&lt;/div&gt;'/>
+
+          <!-- Expedia - flat -->
+          <polyline points="60,185 130,184 200,183 270,184 340,182 410,180 480,180 550,178 620,178 690,176 760,175 830,174 900,172 970,170 1040,168"
+            fill="none" stroke="#d97706" stroke-width="2" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Expedia pace&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Direction&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;flat&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;90d total&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;47 bkg&lt;/span&gt;&lt;/div&gt;'/>
+
+          <!-- CTrip - declining -->
+          <polyline points="60,170 130,172 200,175 270,178 340,180 410,182 480,184 550,186 620,188 690,189 760,191 830,192 900,193 970,194 1040,195"
+            fill="none" stroke="#9ca3af" stroke-width="2" data-tip='&lt;div class=&quot;tt-title&quot;&gt;CTrip pace&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Direction&lt;/span&gt;&lt;span class=&quot;val tt-neg&quot;&gt;declining&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;90d total&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;19 bkg&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-note&quot;&gt;Cancel rate spike to 50% may have triggered ranking penalty&lt;/div&gt;'/>
+
+          <text x="1045" y="58" font-size="11" fill="#dc2626" font-weight="600">Booking ▲</text>
+          <text x="1045" y="111" font-size="11" fill="#16a34a" font-weight="600">Direct ▲</text>
+          <text x="1045" y="171" font-size="11" fill="#d97706" font-weight="600">Expedia →</text>
+          <text x="1045" y="198" font-size="11" fill="#9ca3af" font-weight="600">CTrip ▼</text>
+        </svg>
+      </div>
+
+    </div>

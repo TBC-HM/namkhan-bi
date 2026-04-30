@@ -1,0 +1,223 @@
+<div class="tab-content" id="tab-rateplans">
+
+      <div class="design-note">
+        <strong>What changed:</strong> Rate Plans restored as its own tab. With <strong>100 plans configured</strong>, this is its own discipline. Adds plan health scoring, channel mapping matrix, lifecycle states, and bulk retirement workflow.
+      </div>
+
+      <!-- HEADER STATS -->
+      <div class="kpi-row" style="grid-template-columns:repeat(6,1fr);">
+        <div class="kpi" style="border-color:var(--red);">
+          <div class="kpi-label">Plans configured <span style="color:var(--red)">⚠</span></div>
+          <div class="kpi-value">100</div>
+          <div class="kpi-sub"><span class="kpi-delta-neg">distribution mess</span></div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Active 90d</div>
+          <div class="kpi-value">23</div>
+          <div class="kpi-sub"><span class="kpi-delta-neutral">≥ 1 booking</span></div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Dormant</div>
+          <div class="kpi-value">36</div>
+          <div class="kpi-sub"><span class="kpi-delta-neutral">0-3 bookings 90d</span></div>
+        </div>
+        <div class="kpi" style="border-color:var(--red);">
+          <div class="kpi-label">Retire candidates</div>
+          <div class="kpi-value" style="color:var(--red)">41</div>
+          <div class="kpi-sub"><span class="kpi-delta-neg">0 bookings 180d</span></div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Avg ADR (active)</div>
+          <div class="kpi-value">$316</div>
+          <div class="kpi-sub"><span class="kpi-delta-neutral">range $155-$1,857</span></div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Top 5 plans = revenue</div>
+          <div class="kpi-value">62%</div>
+          <div class="kpi-sub"><span class="kpi-delta-pos">concentration good</span></div>
+        </div>
+      </div>
+
+      <!-- HEALTH BAR -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">Rate plan health · lifecycle</div>
+          <div class="section-meta">
+            <button class="expand-btn" onclick="openChart('rateplan-health')" title="Expand for full lifecycle view">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+            </button>
+          </div>
+        </div>
+        <div style="margin:8px 0 6px;height:24px;background:var(--panel-2);border-radius:4px;overflow:hidden;display:flex;border:1px solid var(--border);">
+          <div style="width:23%;background:var(--green);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:600;" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Active plans · 23&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Definition&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;≥ 1 bkg in 90d&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Revenue 90d&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;$233k · 97%&lt;/span&gt;&lt;/div&gt;'>23 active</div>
+          <div style="width:36%;background:var(--amber);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:600;" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Dormant plans · 36&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Definition&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;0-3 bkg in 90d&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Action&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;review · merge · retire&lt;/span&gt;&lt;/div&gt;'>36 dormant · review</div>
+          <div style="width:41%;background:var(--red);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:600;" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Retire candidates · 41&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Definition&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;0 bkg in 180d&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Bulk action&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;archive in Cloudbeds&lt;/span&gt;&lt;/div&gt;'>41 retire candidates</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim);margin-top:6px;">
+          <span>Health threshold definitions configurable via Plans Cleanup agent →</span>
+          <button class="btn btn-primary" style="padding:3px 10px;font-size:11px;">Open kill list (41)</button>
+        </div>
+      </div>
+
+      <!-- TOP / BOTTOM PERFORMERS -->
+      <div class="grid-2">
+        <div class="section">
+          <div class="section-header">
+            <div class="section-title">Top 10 performing rate plans · 90d</div>
+            <div class="section-meta">62% of total revenue</div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Rate Plan</th>
+                <th class="num">Bkg</th>
+                <th class="num">Rn</th>
+                <th class="num">Revenue</th>
+                <th class="num">ADR</th>
+                <th>Type</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Flex Rate (OTA only)</td><td class="num">89</td><td class="num">223</td><td class="num">$56.3k</td><td class="num">$253</td><td><span class="pill" style="border-color:var(--red);color:var(--red)">OTA</span></td></tr>
+              <tr style="background:#fef2f2"><td>Group Rate <span style="color:var(--amber)">⚠</span></td><td class="num">3</td><td class="num">24</td><td class="num">$44.6k</td><td class="num">$1,857</td><td><span class="pill amber">verify</span></td></tr>
+              <tr><td>Advance Purchase</td><td class="num">23</td><td class="num">73</td><td class="num">$24.3k</td><td class="num">$332</td><td><span class="pill green">Direct/OTA</span></td></tr>
+              <tr><td>Leisure Partnership</td><td class="num">13</td><td class="num">29</td><td class="num">$19.8k</td><td class="num">$684</td><td><span class="pill" style="border-color:var(--blue);color:var(--blue)">B2B</span></td></tr>
+              <tr><td>NKMembers Non-Ref</td><td class="num">15</td><td class="num">44</td><td class="num">$15.1k</td><td class="num">$343</td><td><span class="pill green">Direct</span></td></tr>
+              <tr><td>UWC Thailand</td><td class="num">10</td><td class="num">30</td><td class="num">$12.1k</td><td class="num">$405</td><td><span class="pill" style="border-color:var(--blue);color:var(--blue)">Corporate</span></td></tr>
+              <tr><td>NKMembers Semi Flex</td><td class="num">8</td><td class="num">26</td><td class="num">$12.0k</td><td class="num">$461</td><td><span class="pill green">Direct</span></td></tr>
+              <tr><td>Semi-Flex Rate</td><td class="num">13</td><td class="num">39</td><td class="num">$11.5k</td><td class="num">$295</td><td><span class="pill" style="border-color:var(--red);color:var(--red)">OTA</span></td></tr>
+              <tr><td>NKMembers Adv. Purchase</td><td class="num">11</td><td class="num">31</td><td class="num">$11.4k</td><td class="num">$368</td><td><span class="pill green">Direct</span></td></tr>
+              <tr><td>Non Refundable</td><td class="num">14</td><td class="num">32</td><td class="num">$10.4k</td><td class="num">$324</td><td><span class="pill" style="border-color:var(--red);color:var(--red)">OTA</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="section">
+          <div class="section-header">
+            <div class="section-title">Retire candidates · zero bookings 180d</div>
+            <div class="section-meta">Top 10 of 41 · sorted by stale-time</div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Rate Plan</th>
+                <th class="num">Last bkg</th>
+                <th>Channel mapping</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Riverview Suite 11. HILTON BB</td><td class="num">320d</td><td><span class="pill amber">Hilton CR</span></td><td><span class="pill amber">archive</span></td></tr>
+              <tr><td>Art Deluxe Family Suite Std Rate</td><td class="num">295d</td><td><span class="pill green">none</span></td><td><span class="pill red">retire</span></td></tr>
+              <tr><td>Sunset LP Villa GDS Adv Purchase</td><td class="num">260d</td><td>SynXis</td><td><span class="pill red">retire</span></td></tr>
+              <tr><td>Easia Travel Net Rate</td><td class="num">240d</td><td>Easia</td><td><span class="pill red">retire</span></td></tr>
+              <tr><td>Asian Trails Net Rate</td><td class="num">220d</td><td>Asian Trails</td><td><span class="pill red">retire</span></td></tr>
+              <tr><td>Tablet Hotels Special</td><td class="num">210d</td><td>Tablet Hotels</td><td><span class="pill red">retire</span></td></tr>
+              <tr><td>Lao Mood Travel Net Rate</td><td class="num">198d</td><td>Lao Mood</td><td><span class="pill red">retire</span></td></tr>
+              <tr><td>Khiri Travel Lao Net</td><td class="num">192d</td><td>Khiri</td><td><span class="pill red">retire</span></td></tr>
+              <tr><td>FOC / Comp Invitations</td><td class="num">189d</td><td><span class="pill green">internal</span></td><td><span class="pill amber">keep · low use</span></td></tr>
+              <tr><td>Social Media (Insta)</td><td class="num">185d</td><td><span class="pill green">none</span></td><td><span class="pill red">retire</span></td></tr>
+            </tbody>
+          </table>
+          <button class="btn btn-primary" style="margin-top:10px;width:100%;">Bulk retire 41 plans → push to Cloudbeds</button>
+          <div style="margin-top:6px;text-align:center;"><span class="write-stamp">writes Cloudbeds · final approval at next step</span></div>
+        </div>
+      </div>
+
+      <!-- PLAN × CHANNEL MAPPING -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">Plan → Channel mapping matrix</div>
+          <div class="section-meta">
+            Which plans are exposed to which channels · top 10 plans
+            <button class="expand-btn" onclick="openChart('plan-channel-matrix')" title="Expand">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+            </button>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Rate Plan</th>
+              <th style="text-align:center">BDC</th>
+              <th style="text-align:center">Expedia</th>
+              <th style="text-align:center">CTrip</th>
+              <th style="text-align:center">Direct</th>
+              <th style="text-align:center">Email</th>
+              <th style="text-align:center">Wholesalers</th>
+              <th style="text-align:center">GDS</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Flex Rate (OTA only)</td>
+              <td style="text-align:center;color:var(--green)">●</td>
+              <td style="text-align:center;color:var(--green)">●</td>
+              <td style="text-align:center;color:var(--green)">●</td>
+              <td style="text-align:center;color:var(--text-faint)">—</td>
+              <td style="text-align:center;color:var(--text-faint)">—</td>
+              <td style="text-align:center;color:var(--text-faint)">—</td>
+              <td style="text-align:center;color:var(--text-faint)">—</td>
+              <td style="font-size:10px;color:var(--text-dim)">OTA-only · correct</td>
+            </tr>
+            <tr>
+              <td>Advance Purchase</td>
+              <td style="text-align:center;color:var(--green)">●</td>
+              <td style="text-align:center;color:var(--green)">●</td>
+              <td style="text-align:center;color:var(--green)">●</td>
+              <td style="text-align:center;color:var(--green)">●</td>
+              <td style="text-align:center;color:var(--green)">●</td>
+              <td style="text-align:center;color:var(--text-faint)">—</td>
+              <td style="text-align:center;color:var(--green)">●</td>
+              <td style="font-size:10px;color:var(--text-dim)">all channels</td>
+            </tr>
+            <tr>
+              <td>NKMembers Non-Ref</td>
+              <td style="text-align:center;color:var(--text-faint)">—</td>
+              <td style="text-align:center;color:var(--text-faint)">—</td>
+              <td style="text-align:center;color:var(--text-faint)">—</td>
+              <td style="text-align:center;color:var(--green)">●</td>
+              <td style="text-align:center;color:var(--green)">●</td>
+              <td style="text-align:center;color:var(--text-faint)">—</td>
+              <td style="text-align:center;color:var(--text-faint)">—</td>
+              <td style="font-size:10px;color:var(--text-dim)">members only</td>
+            </tr>
+            <tr style="background:#fef2f2">
+              <td>Group Rate ⚠</td>
+              <td style="text-align:center;color:var(--green)">●</td>
+              <td style="text-align:center;color:var(--text-faint)">—</td>
+              <td style="text-align:center;color:var(--text-faint)">—</td>
+              <td style="text-align:center;color:var(--green)">●</td>
+              <td style="text-align:center;color:var(--green)">●</td>
+              <td style="text-align:center;color:var(--green)">●</td>
+              <td style="text-align:center;color:var(--text-faint)">—</td>
+              <td style="font-size:10px;color:var(--red)">⚠ exposed to BDC — review</td>
+            </tr>
+            <tr>
+              <td>Leisure Partnership</td>
+              <td style="text-align:center;color:var(--text-faint)">—</td>
+              <td style="text-align:center;color:var(--text-faint)">—</td>
+              <td style="text-align:center;color:var(--text-faint)">—</td>
+              <td style="text-align:center;color:var(--text-faint)">—</td>
+              <td style="text-align:center;color:var(--text-faint)">—</td>
+              <td style="text-align:center;color:var(--green)">●</td>
+              <td style="text-align:center;color:var(--text-faint)">—</td>
+              <td style="font-size:10px;color:var(--text-dim)">B2B only</td>
+            </tr>
+            <tr>
+              <td>UWC Thailand</td>
+              <td style="text-align:center;color:var(--text-faint)">—</td>
+              <td style="text-align:center;color:var(--text-faint)">—</td>
+              <td style="text-align:center;color:var(--text-faint)">—</td>
+              <td style="text-align:center;color:var(--green)">●</td>
+              <td style="text-align:center;color:var(--green)">●</td>
+              <td style="text-align:center;color:var(--text-faint)">—</td>
+              <td style="text-align:center;color:var(--text-faint)">—</td>
+              <td style="font-size:10px;color:var(--text-dim)">corporate · code locked</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>

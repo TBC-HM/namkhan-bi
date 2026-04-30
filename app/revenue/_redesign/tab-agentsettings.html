@@ -1,0 +1,717 @@
+<div class="tab-content" id="tab-agentsettings">
+
+      <div class="design-note">
+        <strong>What this is:</strong> Centralized guardrails for all 9 revenue agents. Without this layer, AI agents either drift into bad decisions or get turned off because nobody trusts them. <strong>This is where you set the rules and where every action is auditable.</strong>
+      </div>
+
+      <!-- MASTER MODE STRIP -->
+      <div class="gr-master">
+        <div>
+          <div class="gr-master-title">⚡ Operating Mode</div>
+          <div class="gr-master-meta">Global behavior across all 9 agents. Per-agent overrides below.</div>
+        </div>
+        <div class="mode-strip" style="flex:1;min-width:340px;">
+          <div class="mode-option" onclick="setMode(this,'observe')" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Observe Mode&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Detection&lt;/span&gt;&lt;span class=&quot;val tt-pos&quot;&gt;on&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Composition&lt;/span&gt;&lt;span class=&quot;val tt-neg&quot;&gt;off&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Execution&lt;/span&gt;&lt;span class=&quot;val tt-neg&quot;&gt;off&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-note&quot;&gt;Agents detect and report only · no plans drafted · safest mode for trial&lt;/div&gt;'>
+            <span class="mode-icon">👁</span>
+            Observe<br><span style="font-size:10px;color:var(--text-faint);font-weight:400;">detect only</span>
+          </div>
+          <div class="mode-option active" onclick="setMode(this,'review')" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Review Mode (recommended)&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Detection&lt;/span&gt;&lt;span class=&quot;val tt-pos&quot;&gt;on&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Composition&lt;/span&gt;&lt;span class=&quot;val tt-pos&quot;&gt;on&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Execution&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;manual approval&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-note&quot;&gt;Default · agents draft plans · human approves before action · best ROI for trust building&lt;/div&gt;'>
+            <span class="mode-icon">👤</span>
+            Review<br><span style="font-size:10px;color:var(--accent);font-weight:600;">human approves</span>
+          </div>
+          <div class="mode-option" onclick="setMode(this,'autopilot-tier1')" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Auto-pilot · low-stakes only&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Auto-execute below&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;$2k impact&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Confidence floor&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;≥85%&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Pilot lock&lt;/span&gt;&lt;span class=&quot;val tt-neg&quot;&gt;disabled until 90d validation&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-note&quot;&gt;Locked during pilot phase · enable after 90d of Review-mode validation runs&lt;/div&gt;' style="opacity:0.5;cursor:not-allowed;">
+            <span class="mode-icon">🤖</span>
+            Auto · Tier 1<br><span style="font-size:10px;color:var(--amber);font-weight:600;">🔒 pilot locked</span>
+          </div>
+          <div class="mode-option" onclick="setMode(this,'autopilot-full')" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Full auto-pilot&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Risk&lt;/span&gt;&lt;span class=&quot;val tt-neg&quot;&gt;HIGH&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-note&quot;&gt;⚠ Not recommended for first 6 months · agents execute without approval · only enable after extensive Review-mode validation&lt;/div&gt;' style="opacity:0.4;cursor:not-allowed;">
+            <span class="mode-icon">🚀</span>
+            Auto · Full<br><span style="font-size:10px;color:var(--red);font-weight:600;">🔒 disabled</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="gr-sim-banner">
+        <strong>🧪 Dry-run available:</strong>
+        Click "Simulate" on any rule to see how it would have applied to the last 30 days of decisions before you commit changes. Recommended before every guardrail edit.
+        <button class="btn" style="margin-left:auto;font-size:10px;padding:3px 10px;">Run 30d simulation</button>
+      </div>
+
+      <!-- ============= PROMPT LIBRARY ============= -->
+      <div class="gr-layer">
+        <div class="gr-layer-header" onclick="toggleLayer(this)">
+          <div class="gr-layer-title"><span class="gr-layer-num">📝</span>Agent prompts · what each agent is told to do</div>
+          <div class="gr-layer-meta">9 system prompts · all editable · versioned · A/B testable</div>
+        </div>
+        <div class="gr-layer-body">
+
+          <div class="design-note" style="margin-top:0;">
+            <strong>Guardrails set the boundaries. Prompts set the behavior.</strong> Each agent has a system prompt that defines its identity, scope, decision rules, output format, and escalation logic. Edit any prompt below — every change creates a new version, you can A/B test against the previous version, and you can roll back instantly. Click any agent name to open its prompt editor.
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th>Current prompt</th>
+                <th>Last edit</th>
+                <th>Knowledge files</th>
+                <th>A/B test</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><a class="clickable" onclick="openAgent('pace-agent')">Pace &amp; Pickup</a></td><td><span class="v" style="font-family:monospace;color:var(--accent);">v2.1</span> · 412 tokens</td><td>3d ago · Federico</td><td class="num">3</td><td><span class="rule-status off">none</span></td><td><button class="prompt-btn" onclick="openAgent('pace-agent')">Edit</button></td></tr>
+              <tr><td><a class="clickable" onclick="openAgent('parity-agent')">Parity Watchdog</a></td><td><span class="v" style="font-family:monospace;color:var(--accent);">v1.8</span> · 287 tokens</td><td>21d ago · Federico</td><td class="num">2</td><td><span class="rule-status off">none</span></td><td><button class="prompt-btn" onclick="openAgent('parity-agent')">Edit</button></td></tr>
+              <tr><td><a class="clickable" onclick="openAgent('compset-agent')">Comp Set Scanner</a></td><td><span class="v" style="font-family:monospace;color:var(--accent);">v1.4</span> · 356 tokens</td><td>14d ago · Federico</td><td class="num">2</td><td><span class="rule-status off">none</span></td><td><button class="prompt-btn" onclick="openAgent('compset-agent')">Edit</button></td></tr>
+              <tr><td><a class="clickable" onclick="openAgent('plan-agent')">Plan Cleanup</a></td><td><span class="v" style="font-family:monospace;color:var(--accent);">v1.2</span> · 224 tokens</td><td>30d ago · Federico</td><td class="num">1</td><td><span class="rule-status off">none</span></td><td><button class="prompt-btn" onclick="openAgent('plan-agent')">Edit</button></td></tr>
+              <tr><td><a class="clickable" onclick="openAgent('forecast-agent')">Forecast Engine</a></td><td><span class="v" style="font-family:monospace;color:var(--text-faint);">v0.9 (paused)</span></td><td>60d ago · Setup</td><td class="num">2</td><td><span class="rule-status off">none</span></td><td><button class="prompt-btn" onclick="openAgent('forecast-agent')">Edit</button></td></tr>
+              <tr><td><a class="clickable" onclick="openAgent('cancel-agent')">Cancellation Risk</a></td><td><span class="v" style="font-family:monospace;color:var(--accent);">v1.6</span> · 318 tokens</td><td>9d ago · Federico</td><td class="num">2</td><td><span class="rule-status off">none</span></td><td><button class="prompt-btn" onclick="openAgent('cancel-agent')">Edit</button></td></tr>
+              <tr><td><a class="clickable" onclick="openAgent('discovery-agent')">Discovery</a></td><td><span class="v" style="font-family:monospace;color:var(--accent);">v1.1</span> · 401 tokens</td><td>14d ago · Federico</td><td class="num">3</td><td><span class="rule-status warn">v1.0 vs v1.1 · 7d</span></td><td><button class="prompt-btn" onclick="openAgent('discovery-agent')">Edit</button></td></tr>
+              <tr style="background:#fdf8f1;"><td><a class="clickable" onclick="openAgent('tactical-agent')"><strong>Tactical Detector ★</strong></a></td><td><span class="v" style="font-family:monospace;color:var(--accent);">v3.2</span> · 687 tokens</td><td>2h ago · Federico</td><td class="num">5</td><td><span class="rule-status active">v3.1 vs v3.2 · 14d</span></td><td><button class="prompt-btn primary" onclick="openAgent('tactical-agent')">Open editor</button></td></tr>
+              <tr><td><a class="clickable" onclick="openAgent('composer-agent')">Composer</a></td><td><span class="v" style="font-family:monospace;color:var(--accent);">v2.4</span> · 542 tokens</td><td>5d ago · Federico</td><td class="num">4</td><td><span class="rule-status off">none</span></td><td><button class="prompt-btn" onclick="openAgent('composer-agent')">Edit</button></td></tr>
+            </tbody>
+          </table>
+
+          <div style="margin-top:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <button class="btn" style="font-size:11px;">Export all prompts (JSON)</button>
+            <button class="btn" style="font-size:11px;">Import prompt template pack</button>
+            <button class="btn" style="font-size:11px;">Reset to defaults</button>
+            <span style="margin-left:auto;font-size:11px;color:var(--text-dim);">Tip: open the <strong>Tactical Detector</strong> first — it's the most complex prompt and the one most worth tuning</span>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- LAYER 1: DETECTION -->
+      <div class="gr-layer">
+        <div class="gr-layer-header" onclick="toggleLayer(this)">
+          <div class="gr-layer-title"><span class="gr-layer-num">1</span>Detection guardrails · when do agents fire?</div>
+          <div class="gr-layer-meta">5 rules · all active</div>
+        </div>
+        <div class="gr-layer-body">
+
+          <div class="gr-rule">
+            <div class="gr-rule-info">
+              <div class="gr-rule-name">Confidence floor</div>
+              <div class="gr-rule-desc">Don't surface alerts below this confidence level. Higher = fewer but more reliable.</div>
+            </div>
+            <div class="gr-rule-control">
+              <input class="gr-input" type="number" value="70" min="0" max="100">
+              <span class="gr-unit">%</span>
+              <span class="rule-status active">active</span>
+            </div>
+          </div>
+
+          <div class="gr-rule">
+            <div class="gr-rule-info">
+              <div class="gr-rule-name">Minimum impact threshold</div>
+              <div class="gr-rule-desc">Don't fire alerts below this revenue impact. Prevents agent noise.</div>
+            </div>
+            <div class="gr-rule-control">
+              <span class="gr-unit">$</span>
+              <input class="gr-input" type="number" value="1000">
+              <span class="rule-status active">active</span>
+            </div>
+          </div>
+
+          <div class="gr-rule">
+            <div class="gr-rule-info">
+              <div class="gr-rule-name">Cooldown per dimension</div>
+              <div class="gr-rule-desc">After firing on the same dimension combination, wait this long before firing again.</div>
+            </div>
+            <div class="gr-rule-control">
+              <input class="gr-input" type="number" value="6">
+              <span class="gr-unit">hrs</span>
+              <span class="rule-status active">active</span>
+            </div>
+          </div>
+
+          <div class="gr-rule">
+            <div class="gr-rule-info">
+              <div class="gr-rule-name">Quiet hours</div>
+              <div class="gr-rule-desc">No agent firings during these hours (LAK time). Operator off-hours.</div>
+            </div>
+            <div class="gr-rule-control">
+              <input class="gr-input wide" type="text" value="22:00 → 07:00">
+              <span class="rule-status active">active</span>
+            </div>
+          </div>
+
+          <div class="gr-rule">
+            <div class="gr-rule-info">
+              <div class="gr-rule-name">Sample size minimum</div>
+              <div class="gr-rule-desc">Don't act on cube cells with fewer than this many historical data points. Avoids acting on noise.</div>
+            </div>
+            <div class="gr-rule-control">
+              <input class="gr-input" type="number" value="10">
+              <span class="gr-unit">obs</span>
+              <span class="rule-status active">active</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- LAYER 2: ACTION GUARDRAILS -->
+      <div class="gr-layer">
+        <div class="gr-layer-header" onclick="toggleLayer(this)">
+          <div class="gr-layer-title"><span class="gr-layer-num">2</span>Action guardrails · what can agents do?</div>
+          <div class="gr-layer-meta">7 rules · 1 warning</div>
+        </div>
+        <div class="gr-layer-body">
+
+          <div class="gr-rule">
+            <div class="gr-rule-info">
+              <div class="gr-rule-name">Max rate change per day</div>
+              <div class="gr-rule-desc">Agent cannot recommend rate changes &gt; this % up or down vs current BAR in a single day.</div>
+            </div>
+            <div class="gr-rule-control">
+              <input class="gr-input" type="number" value="12">
+              <span class="gr-unit">%</span>
+              <span class="rule-status active">active</span>
+            </div>
+          </div>
+
+          <div class="gr-rule">
+            <div class="gr-rule-info">
+              <div class="gr-rule-name">Max rate change per week</div>
+              <div class="gr-rule-desc">Cumulative weekly cap to avoid rate volatility.</div>
+            </div>
+            <div class="gr-rule-control">
+              <input class="gr-input" type="number" value="20">
+              <span class="gr-unit">%</span>
+              <span class="rule-status active">active</span>
+            </div>
+          </div>
+
+          <div class="gr-rule">
+            <div class="gr-rule-info">
+              <div class="gr-rule-name">Hard rate floor (per room type)</div>
+              <div class="gr-rule-desc">Absolute price floor. Agents will never propose below these regardless of demand.</div>
+            </div>
+            <div class="gr-rule-control">
+              <button class="btn" style="font-size:10px;padding:4px 10px;">9 floors set</button>
+              <a class="clickable" style="font-size:11px;">edit</a>
+              <span class="rule-status active">active</span>
+            </div>
+          </div>
+
+          <div class="gr-rule">
+            <div class="gr-rule-info">
+              <div class="gr-rule-name">Hard rate ceiling (per room type)</div>
+              <div class="gr-rule-desc">Absolute price ceiling. Useful for brand positioning · prevents runaway pricing on peak demand.</div>
+            </div>
+            <div class="gr-rule-control">
+              <button class="btn" style="font-size:10px;padding:4px 10px;">9 ceilings set</button>
+              <a class="clickable" style="font-size:11px;">edit</a>
+              <span class="rule-status active">active</span>
+            </div>
+          </div>
+
+          <div class="gr-rule">
+            <div class="gr-rule-info">
+              <div class="gr-rule-name">Inventory restriction cap</div>
+              <div class="gr-rule-desc">Max % of inventory that can be restricted (CTA / stop-sell / min-stay) at once across all agents.</div>
+            </div>
+            <div class="gr-rule-control">
+              <input class="gr-input" type="number" value="30">
+              <span class="gr-unit">%</span>
+              <span class="rule-status active">active</span>
+            </div>
+          </div>
+
+          <div class="gr-rule">
+            <div class="gr-rule-info">
+              <div class="gr-rule-name">Blackout dates · no auto-changes</div>
+              <div class="gr-rule-desc">Agents will not propose any rate, restriction, or promo changes on these dates.</div>
+            </div>
+            <div class="gr-rule-control">
+              <span class="rule-status active">5 dates</span>
+            </div>
+          </div>
+
+          <div style="padding:8px 0 0;">
+            <span class="blackout-tag">Songkran · 13-16 Apr 2026<span class="x">×</span></span>
+            <span class="blackout-tag">LP Boat Racing · 24-27 Sep 2026<span class="x">×</span></span>
+            <span class="blackout-tag">That Luang Festival · 14-16 Nov 2026<span class="x">×</span></span>
+            <span class="blackout-tag">NYE · 28 Dec 2026 - 2 Jan 2027<span class="x">×</span></span>
+            <span class="blackout-tag">Lao NY · 13-16 Apr 2027<span class="x">×</span></span>
+            <button class="btn" style="font-size:10px;padding:3px 10px;">+ Add blackout</button>
+          </div>
+
+          <div class="gr-rule" style="margin-top:14px;border-top:1px solid var(--border);">
+            <div class="gr-rule-info">
+              <div class="gr-rule-name">Channel-specific frequency caps</div>
+              <div class="gr-rule-desc">Limit how often agents can use specific tactics. e.g. BDC Visibility Booster max 2x/month.</div>
+            </div>
+            <div class="gr-rule-control">
+              <button class="btn" style="font-size:10px;padding:4px 10px;">12 caps set</button>
+              <a class="clickable" style="font-size:11px;">edit</a>
+              <span class="rule-status warn">1 warning</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- LAYER 3: SPEND GUARDRAILS -->
+      <div class="gr-layer">
+        <div class="gr-layer-header" onclick="toggleLayer(this)">
+          <div class="gr-layer-title"><span class="gr-layer-num">3</span>Spend guardrails · money out the door</div>
+          <div class="gr-layer-meta">$3,200 / $5,000 monthly cap used (64%)</div>
+        </div>
+        <div class="gr-layer-body">
+
+          <div class="gr-rule">
+            <div class="gr-rule-info">
+              <div class="gr-rule-name">Total monthly AI-driven ad spend cap</div>
+              <div class="gr-rule-desc">Hard ceiling across all paid channels. Agents pause new tactics when this is hit.</div>
+            </div>
+            <div class="gr-rule-control">
+              <span class="gr-unit">$</span>
+              <input class="gr-input" type="number" value="5000">
+              <span class="gr-unit">/mo</span>
+              <span class="rule-status active">$3.2k used</span>
+            </div>
+          </div>
+
+          <div class="gr-rule">
+            <div class="gr-rule-info">
+              <div class="gr-rule-name">Per-channel monthly caps</div>
+              <div class="gr-rule-desc">Sub-caps per channel · prevents one channel eating the budget.</div>
+            </div>
+            <div class="gr-rule-control">
+              <button class="btn" style="font-size:10px;padding:4px 10px;">6 caps</button>
+              <a class="clickable" style="font-size:11px;">edit</a>
+            </div>
+          </div>
+
+          <!-- Per-channel breakdown -->
+          <table style="margin-top:8px;font-size:11px;">
+            <thead><tr><th>Channel</th><th class="num">Monthly cap</th><th class="num">Used MTD</th><th>Headroom</th><th>Auto-pause if CPA &gt;</th></tr></thead>
+            <tbody>
+              <tr><td>Google Ads</td><td class="num">$1,500</td><td class="num">$980</td><td><div style="background:#f3f4f6;border-radius:4px;height:6px;width:100px;overflow:hidden;"><div style="background:var(--green);height:100%;width:65%;"></div></div></td><td class="num">$45</td></tr>
+              <tr><td>Meta (FB/IG)</td><td class="num">$1,000</td><td class="num">$420</td><td><div style="background:#f3f4f6;border-radius:4px;height:6px;width:100px;overflow:hidden;"><div style="background:var(--green);height:100%;width:42%;"></div></div></td><td class="num">$60</td></tr>
+              <tr><td>Expedia TravelAds</td><td class="num">$800</td><td class="num">$720</td><td><div style="background:#f3f4f6;border-radius:4px;height:6px;width:100px;overflow:hidden;"><div style="background:var(--amber);height:100%;width:90%;"></div></div></td><td class="num">$50</td></tr>
+              <tr><td>BDC Visibility/PPC</td><td class="num">$1,000</td><td class="num">$680</td><td><div style="background:#f3f4f6;border-radius:4px;height:6px;width:100px;overflow:hidden;"><div style="background:var(--green);height:100%;width:68%;"></div></div></td><td class="num">$55</td></tr>
+              <tr><td>Influencer / Creator</td><td class="num">$500</td><td class="num">$300</td><td><div style="background:#f3f4f6;border-radius:4px;height:6px;width:100px;overflow:hidden;"><div style="background:var(--green);height:100%;width:60%;"></div></div></td><td>—</td></tr>
+              <tr><td>Email / Direct</td><td class="num">$200</td><td class="num">$120</td><td><div style="background:#f3f4f6;border-radius:4px;height:6px;width:100px;overflow:hidden;"><div style="background:var(--green);height:100%;width:60%;"></div></div></td><td>—</td></tr>
+            </tbody>
+          </table>
+
+          <div class="gr-rule" style="margin-top:14px;border-top:1px solid var(--border);">
+            <div class="gr-rule-info">
+              <div class="gr-rule-name">Auto-pause underperformers</div>
+              <div class="gr-rule-desc">If a tactic's actual CPA exceeds the limit set above, auto-pause and notify.</div>
+            </div>
+            <div class="gr-rule-control">
+              <label class="gr-toggle"><input type="checkbox" checked><span class="gr-toggle-slider"></span></label>
+            </div>
+          </div>
+
+          <div class="gr-rule">
+            <div class="gr-rule-info">
+              <div class="gr-rule-name">Daily spend velocity cap</div>
+              <div class="gr-rule-desc">No tactic can spend &gt; this much in a single day. Catches runaway campaigns.</div>
+            </div>
+            <div class="gr-rule-control">
+              <span class="gr-unit">$</span>
+              <input class="gr-input" type="number" value="500">
+              <span class="gr-unit">/day</span>
+              <span class="rule-status active">active</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- LAYER 4: APPROVAL MATRIX -->
+      <div class="gr-layer">
+        <div class="gr-layer-header" onclick="toggleLayer(this)">
+          <div class="gr-layer-title"><span class="gr-layer-num">4</span>Approval matrix · who signs off on what</div>
+          <div class="gr-layer-meta">3 approval tiers · 2-person rule on $5k+</div>
+        </div>
+        <div class="gr-layer-body">
+
+          <div class="write-banner" style="margin-top:0;">
+            <strong>👤 Pilot phase override:</strong>
+            For the first 90 days, <strong>every Cloudbeds write requires human approval</strong> regardless of the matrix below. The "Auto-execute" rows show the post-pilot target state — they do not apply yet. After 90 days of validation runs, Tier-1 actions move to auto per the matrix.
+          </div>
+
+          <table class="approval-matrix-table">
+            <thead>
+              <tr>
+                <th>Action type</th>
+                <th>Below $1k impact</th>
+                <th>$1k - $5k</th>
+                <th>Above $5k</th>
+                <th>Mandatory delay</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Rate change</td>
+                <td>Auto-execute</td>
+                <td>RM approval</td>
+                <td><strong>RM + GM (2-person)</strong></td>
+                <td class="num">4h</td>
+              </tr>
+              <tr>
+                <td>Restriction change (CTA/CTD/min-stay)</td>
+                <td>RM approval</td>
+                <td>RM approval</td>
+                <td><strong>RM + GM</strong></td>
+                <td class="num">2h</td>
+              </tr>
+              <tr>
+                <td>Paid media (Google/Meta/BDC ads)</td>
+                <td>Auto-execute</td>
+                <td>RM approval</td>
+                <td><strong>RM + GM</strong></td>
+                <td class="num">none</td>
+              </tr>
+              <tr>
+                <td>Email send (member segments)</td>
+                <td>Auto-execute</td>
+                <td>RM approval</td>
+                <td><strong>RM + Marketing</strong></td>
+                <td class="num">1h</td>
+              </tr>
+              <tr>
+                <td>Rate plan retire</td>
+                <td>RM approval</td>
+                <td>RM approval</td>
+                <td>RM approval</td>
+                <td class="num">24h</td>
+              </tr>
+              <tr style="background:#fef2f2;">
+                <td><strong>Comp set parity resync (auto)</strong></td>
+                <td><strong>Auto</strong></td>
+                <td>Auto</td>
+                <td>RM approval</td>
+                <td class="num">0</td>
+              </tr>
+              <tr>
+                <td>Discount &gt; 15%</td>
+                <td>Always RM + GM</td>
+                <td>Always RM + GM</td>
+                <td>Always RM + GM + Owner</td>
+                <td class="num">24h</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="gr-rule" style="margin-top:14px;border-top:1px solid var(--border);">
+            <div class="gr-rule-info">
+              <div class="gr-rule-name">Mandatory delay before execution</div>
+              <div class="gr-rule-desc">Even after approval, agents wait this long before pushing to external systems. Lets you cancel.</div>
+            </div>
+            <div class="gr-rule-control">
+              <span class="gr-unit">enabled</span>
+              <label class="gr-toggle"><input type="checkbox" checked><span class="gr-toggle-slider"></span></label>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- LAYER 5: BRAND / STRATEGY -->
+      <div class="gr-layer">
+        <div class="gr-layer-header" onclick="toggleLayer(this)">
+          <div class="gr-layer-title"><span class="gr-layer-num">5</span>Brand &amp; strategy guardrails · don't break positioning</div>
+          <div class="gr-layer-meta">6 rules</div>
+        </div>
+        <div class="gr-layer-body">
+
+          <div class="gr-rule">
+            <div class="gr-rule-info">
+              <div class="gr-rule-name">Max discount on Suite category</div>
+              <div class="gr-rule-desc">Brand-protection floor. No more aggressive than this on premium rooms.</div>
+            </div>
+            <div class="gr-rule-control">
+              <input class="gr-input" type="number" value="12">
+              <span class="gr-unit">%</span>
+              <span class="rule-status active">active</span>
+            </div>
+          </div>
+
+          <div class="gr-rule">
+            <div class="gr-rule-info">
+              <div class="gr-rule-name">Max discount on Glamping</div>
+              <div class="gr-rule-desc">Different category, different rules.</div>
+            </div>
+            <div class="gr-rule-control">
+              <input class="gr-input" type="number" value="20">
+              <span class="gr-unit">%</span>
+              <span class="rule-status active">active</span>
+            </div>
+          </div>
+
+          <div class="gr-rule">
+            <div class="gr-rule-info">
+              <div class="gr-rule-name">No flash sales N days before peak dates</div>
+              <div class="gr-rule-desc">Avoid signaling weak demand right before historically strong periods.</div>
+            </div>
+            <div class="gr-rule-control">
+              <input class="gr-input" type="number" value="14">
+              <span class="gr-unit">days</span>
+              <span class="rule-status active">active</span>
+            </div>
+          </div>
+
+          <div class="gr-rule">
+            <div class="gr-rule-info">
+              <div class="gr-rule-name">Comp set positioning floor</div>
+              <div class="gr-rule-desc">Don't drop my rate more than X% below comp set median (avoid races to bottom).</div>
+            </div>
+            <div class="gr-rule-control">
+              <input class="gr-input" type="number" value="-5">
+              <span class="gr-unit">%</span>
+              <span class="rule-status active">active</span>
+            </div>
+          </div>
+
+          <div class="gr-rule">
+            <div class="gr-rule-info">
+              <div class="gr-rule-name">Direct mix target floor</div>
+              <div class="gr-rule-desc">If direct mix drops below this, agents prioritize direct-channel tactics.</div>
+            </div>
+            <div class="gr-rule-control">
+              <input class="gr-input" type="number" value="25">
+              <span class="gr-unit">%</span>
+              <span class="rule-status warn">currently 21%</span>
+            </div>
+          </div>
+
+          <div class="gr-rule">
+            <div class="gr-rule-info">
+              <div class="gr-rule-name">Minimum LOS by season</div>
+              <div class="gr-rule-desc">Different LOS minimums apply in peak seasons.</div>
+            </div>
+            <div class="gr-rule-control">
+              <button class="btn" style="font-size:10px;padding:4px 10px;">4 seasons set</button>
+              <a class="clickable" style="font-size:11px;">edit</a>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- LAYER 6: DATA QUALITY -->
+      <div class="gr-layer">
+        <div class="gr-layer-header" onclick="toggleLayer(this)">
+          <div class="gr-layer-title"><span class="gr-layer-num">6</span>Data quality guardrails · don't act on bad data</div>
+          <div class="gr-layer-meta">4 rules · 1 currently blocking</div>
+        </div>
+        <div class="gr-layer-body">
+
+          <div class="gr-rule">
+            <div class="gr-rule-info">
+              <div class="gr-rule-name">Data freshness floor</div>
+              <div class="gr-rule-desc">Don't fire if Cloudbeds sync is older than this. Prevents acting on stale data.</div>
+            </div>
+            <div class="gr-rule-control">
+              <input class="gr-input" type="number" value="2">
+              <span class="gr-unit">hrs</span>
+              <span class="rule-status active">active</span>
+            </div>
+          </div>
+
+          <div class="gr-rule">
+            <div class="gr-rule-info">
+              <div class="gr-rule-name">Comp set scrape coverage minimum</div>
+              <div class="gr-rule-desc">Don't fire comp set alerts if &lt; this fraction of properties scraped successfully.</div>
+            </div>
+            <div class="gr-rule-control">
+              <input class="gr-input" type="number" value="80">
+              <span class="gr-unit">%</span>
+              <span class="rule-status active">7/7 today</span>
+            </div>
+          </div>
+
+          <div class="gr-rule">
+            <div class="gr-rule-info">
+              <div class="gr-rule-name">Pause during PMS sync windows</div>
+              <div class="gr-rule-desc">No agent firings during nightly Cloudbeds sync (01:00-02:30 LAK).</div>
+            </div>
+            <div class="gr-rule-control">
+              <label class="gr-toggle"><input type="checkbox" checked><span class="gr-toggle-slider"></span></label>
+            </div>
+          </div>
+
+          <div class="gr-rule">
+            <div class="gr-rule-info">
+              <div class="gr-rule-name">Anomaly auto-disable</div>
+              <div class="gr-rule-desc">If data anomaly detector flags suspicious data (e.g. duplicate bookings, currency mismatch), auto-disable agents until reviewed.</div>
+            </div>
+            <div class="gr-rule-control">
+              <label class="gr-toggle"><input type="checkbox" checked><span class="gr-toggle-slider"></span></label>
+              <span class="rule-status active">vigilant</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- LAYER 7: AUDIT & ROLLBACK -->
+      <div class="gr-layer">
+        <div class="gr-layer-header" onclick="toggleLayer(this)">
+          <div class="gr-layer-title"><span class="gr-layer-num">7</span>Audit trail &amp; rollback</div>
+          <div class="gr-layer-meta">all actions logged · 90d retention · one-click rollback</div>
+        </div>
+        <div class="gr-layer-body">
+
+          <div class="audit-row header">
+            <span>Time</span>
+            <span>Agent</span>
+            <span>Action</span>
+            <span>Decided by</span>
+            <span>Rollback</span>
+          </div>
+          <div class="audit-row">
+            <span class="audit-time">16:49:12</span>
+            <span class="audit-actor">Tactical Detector</span>
+            <span>Fired alert: EU Suite window closing · -$18.4k impact · 84% conf</span>
+            <span><span class="pill amber">awaiting human</span></span>
+            <span><a class="clickable">n/a</a></span>
+          </div>
+          <div class="audit-row">
+            <span class="audit-time">16:35:08</span>
+            <span class="audit-actor">Parity Watchdog</span>
+            <span>Auto-resync: BDC May 4 Riverview $215 → $245 (parity)</span>
+            <span><span class="pill green">auto · &lt;$2k tier</span></span>
+            <span><a class="clickable">↶ rollback</a></span>
+          </div>
+          <div class="audit-row">
+            <span class="audit-time">14:55:33</span>
+            <span class="audit-actor">Tactical Detector</span>
+            <span>Fired alert: Asian short-LOS Glamping · +$6.2k opportunity · 71% conf</span>
+            <span><span class="pill amber">awaiting human</span></span>
+            <span><a class="clickable">n/a</a></span>
+          </div>
+          <div class="audit-row">
+            <span class="audit-time">11:22:01</span>
+            <span class="audit-actor">Composer</span>
+            <span>Drafted brief: Hospitality Solutions channel restriction</span>
+            <span class="audit-actor">Federico (RM)</span>
+            <span><a class="clickable">↶ rollback</a></span>
+          </div>
+          <div class="audit-row">
+            <span class="audit-time">09:14:27</span>
+            <span class="audit-actor">Plan Cleanup</span>
+            <span>Recommended retire: 41 dormant rate plans (queued for review)</span>
+            <span><span class="pill amber">queued</span></span>
+            <span><a class="clickable">n/a</a></span>
+          </div>
+          <div class="audit-row">
+            <span class="audit-time">06:00:00</span>
+            <span class="audit-actor">Comp Set Scanner</span>
+            <span>Detected: Mekong Estate -8% over 7d</span>
+            <span><span class="pill green">auto · alert only</span></span>
+            <span><a class="clickable">view</a></span>
+          </div>
+          <div class="audit-row">
+            <span class="audit-time">02:00:00</span>
+            <span class="audit-actor">Discovery Agent</span>
+            <span>Weekly run: proposed 5 new candidates for Manual review</span>
+            <span><span class="pill green">auto</span></span>
+            <span><a class="clickable">view</a></span>
+          </div>
+
+          <div style="margin-top:14px;display:flex;gap:8px;align-items:center;">
+            <button class="btn" style="font-size:11px;">Export audit log (CSV)</button>
+            <button class="btn" style="font-size:11px;">Send weekly governance report → Owner</button>
+            <span style="margin-left:auto;font-size:11px;color:var(--text-dim);">Showing last 24h · <a class="clickable">view full</a></span>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- VERSION HISTORY -->
+      <div class="gr-layer">
+        <div class="gr-layer-header" onclick="toggleLayer(this)">
+          <div class="gr-layer-title"><span class="gr-layer-num">8</span>Guardrail version history</div>
+          <div class="gr-layer-meta">every edit creates a version · revert anytime</div>
+        </div>
+        <div class="gr-layer-body">
+
+          <div class="version-row">
+            <span class="v">v1.4.2</span>
+            <span style="flex:1;">Tightened Suite max discount 15% → 12% · added blackout for That Luang Festival</span>
+            <span style="color:var(--text-dim);">Federico · 2d ago</span>
+            <span class="rule-status active">current</span>
+          </div>
+          <div class="version-row">
+            <span class="v">v1.4.1</span>
+            <span style="flex:1;">Increased Google Ads cap $1,200 → $1,500</span>
+            <span style="color:var(--text-dim);">Federico · 8d ago</span>
+            <a class="clickable" style="font-size:11px;">view diff</a>
+          </div>
+          <div class="version-row">
+            <span class="v">v1.4.0</span>
+            <span style="flex:1;">Enabled Parity Watchdog auto-resync (Tier 1) · added $2k auto-execute threshold</span>
+            <span style="color:var(--text-dim);">Federico · 21d ago</span>
+            <a class="clickable" style="font-size:11px;">view diff</a>
+          </div>
+          <div class="version-row">
+            <span class="v">v1.3.0</span>
+            <span style="flex:1;">Initial guardrails configured · Review mode default</span>
+            <span style="color:var(--text-dim);">Setup · 60d ago</span>
+            <a class="clickable" style="font-size:11px;">view diff</a>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- PER-AGENT OVERRIDES -->
+      <div class="gr-layer">
+        <div class="gr-layer-header" onclick="toggleLayer(this)">
+          <div class="gr-layer-title"><span class="gr-layer-num">9</span>Per-agent overrides</div>
+          <div class="gr-layer-meta">9 agents · individual settings</div>
+        </div>
+        <div class="gr-layer-body">
+
+          <p style="font-size:12px;color:var(--text-dim);margin-bottom:14px;line-height:1.6;">
+            Each agent inherits the global guardrails above. Override per agent only when needed (e.g. lower confidence floor for the Composer because it pre-filters with the Tactical Detector).
+          </p>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th>Mode</th>
+                <th class="num">Conf floor</th>
+                <th class="num">Min impact</th>
+                <th>Auto-execute</th>
+                <th>Configure</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Pace &amp; Pickup</td><td><span class="pill green">Review</span></td><td class="num">75%</td><td class="num">$1,000</td><td><span class="rule-status off">manual</span></td><td><button class="btn" style="font-size:10px;padding:3px 8px;">edit</button></td></tr>
+              <tr><td>Parity Watchdog</td><td><span class="pill green">Auto T1</span></td><td class="num">90%</td><td class="num">$200</td><td><span class="rule-status active">auto resync</span></td><td><button class="btn" style="font-size:10px;padding:3px 8px;">edit</button></td></tr>
+              <tr><td>Comp Set Scanner</td><td><span class="pill green">Auto</span></td><td class="num">—</td><td class="num">—</td><td><span class="rule-status active">data only</span></td><td><button class="btn" style="font-size:10px;padding:3px 8px;">edit</button></td></tr>
+              <tr><td>Plan Cleanup</td><td><span class="pill green">Review</span></td><td class="num">100%</td><td class="num">—</td><td><span class="rule-status off">manual</span></td><td><button class="btn" style="font-size:10px;padding:3px 8px;">edit</button></td></tr>
+              <tr><td>Forecast Engine</td><td><span class="pill amber">Paused</span></td><td class="num">—</td><td class="num">—</td><td>—</td><td><button class="btn" style="font-size:10px;padding:3px 8px;">edit</button></td></tr>
+              <tr><td>Cancel Risk</td><td><span class="pill green">Review</span></td><td class="num">75%</td><td class="num">$500</td><td><span class="rule-status off">manual</span></td><td><button class="btn" style="font-size:10px;padding:3px 8px;">edit</button></td></tr>
+              <tr><td>Discovery</td><td><span class="pill green">Review</span></td><td class="num">80%</td><td class="num">—</td><td><span class="rule-status off">manual</span></td><td><button class="btn" style="font-size:10px;padding:3px 8px;">edit</button></td></tr>
+              <tr><td>Tactical Detector</td><td><span class="pill green">Review</span></td><td class="num">70%</td><td class="num">$1,000</td><td><span class="rule-status off">manual</span></td><td><button class="btn" style="font-size:10px;padding:3px 8px;">edit</button></td></tr>
+              <tr><td>Composer</td><td><span class="pill green">Review</span></td><td class="num">65%</td><td class="num">—</td><td><span class="rule-status off">drafts only</span></td><td><button class="btn" style="font-size:10px;padding:3px 8px;">edit</button></td></tr>
+            </tbody>
+          </table>
+
+        </div>
+      </div>
+
+      <!-- KILL SWITCH -->
+      <div class="section" style="background:#fef2f2;border:2px solid var(--red);">
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+          <div style="font-size:24px;">🛑</div>
+          <div style="flex:1;">
+            <div style="font-size:13px;font-weight:600;color:var(--red);">Master kill switch</div>
+            <div style="font-size:11px;color:var(--text);margin-top:2px;">Disable all 9 agents immediately. Existing pending actions are cancelled. Use only in emergencies (data corruption, major OTA outage, system-wide audit).</div>
+          </div>
+          <button class="btn" style="background:var(--red);color:#fff;border-color:var(--red);font-weight:600;">DISABLE ALL AGENTS</button>
+        </div>
+      </div>
+
+    </div>

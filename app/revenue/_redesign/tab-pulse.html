@@ -1,0 +1,845 @@
+<div class="tab-content active" id="tab-pulse">
+
+      <div class="design-note">
+        <strong>What changed:</strong> Single source of truth. KPIs reconcile across all tabs (one materialized view). Adds the 6 KPIs from your <code>05_KPI_DEFINITIONS.md</code> that were missing: Net ADR, Cancel %, No-Show %, Lead Time, ALOS, Commission %.
+      </div>
+
+      <div class="write-banner">
+        <strong>👤 Cloudbeds write policy · pilot phase:</strong>
+        Cloudbeds <code>patchRate</code> API supports rate + restriction writes (async, OAuth-scoped). Until the integration is validated against 90 days of decisions, <strong>every agent-proposed change to Cloudbeds requires explicit human approval in the chat</strong> — no auto-execute, no batch jobs, no exceptions. After validation, only Tier-1 actions (parity resync &lt;$2k impact, ≥85% confidence) move to auto. <em>Configure on the ⚙ Agent Guardrails tab.</em>
+      </div>
+
+      <!-- KPI ROW 1 -->
+      <div class="kpi-row">
+        <div class="kpi">
+          <div class="kpi-label">Occupancy</div>
+          <div class="kpi-value">34.0%</div>
+          <div class="kpi-sub">
+            <span class="kpi-delta-pos">▲ +5.2pp STLY</span>
+            <span class="kpi-delta-neg">▼ -3.1pp Bgt</span>
+          </div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">ADR</div>
+          <div class="kpi-value">$206</div>
+          <div class="kpi-sub">
+            <span class="kpi-delta-pos">▲ +$12 STLY</span>
+            <span class="kpi-delta-pos">▲ +$4 Bgt</span>
+          </div>
+        </div>
+        <div class="kpi data-pending" style="border-color:var(--accent);">
+          <div class="kpi-label">Net ADR <span style="color:var(--accent)">★</span> <span class="data-needed" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Data needed&lt;/div&gt;&lt;div style=&quot;font-size:11px;line-height:1.6;color:#fff;margin-top:4px;&quot;&gt;Per-channel commission % table. Cloudbeds stores channel source but not commission rates. Need: manual entry of OTA/wholesaler commissions OR pull from financial system.&lt;/div&gt;'>data needed</span></div>
+          <div class="kpi-value">$178</div>
+          <div class="kpi-sub">
+            <span class="kpi-delta-neutral">After commissions</span>
+          </div>
+          <div class="data-source-line"><strong>Needs:</strong> per-channel commission table (manual config or finance integration)</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">RevPAR</div>
+          <div class="kpi-value">$70</div>
+          <div class="kpi-sub">
+            <span class="kpi-delta-pos">▲ +$11 STLY</span>
+          </div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">TRevPAR</div>
+          <div class="kpi-value">$106</div>
+          <div class="kpi-sub">
+            <span class="kpi-delta-pos">▲ +$18 STLY</span>
+          </div>
+        </div>
+        <div class="kpi data-pending">
+          <div class="kpi-label">GOPPAR <span style="font-size:9px;color:var(--text-faint)">(Apr)</span> <span class="data-needed" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Data needed&lt;/div&gt;&lt;div style=&quot;font-size:11px;line-height:1.6;color:#fff;margin-top:4px;&quot;&gt;Monthly P&amp;L data with operating expenses. Not in Cloudbeds. Need: monthly close from accounting (Xero/QuickBooks) OR manual upload.&lt;/div&gt;'>data needed</span></div>
+          <div class="kpi-value">$42</div>
+          <div class="kpi-sub">
+            <span class="kpi-delta-neutral">→ Finance</span>
+          </div>
+          <div class="data-source-line"><strong>Needs:</strong> monthly P&amp;L feed from accounting system</div>
+        </div>
+      </div>
+
+      <!-- KPI ROW 2 -->
+      <div class="kpi-row">
+        <div class="kpi">
+          <div class="kpi-label">Cancel %</div>
+          <div class="kpi-value">23.4%</div>
+          <div class="kpi-sub"><span class="kpi-delta-neg">▲ +4.1pp STLY</span></div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">No-Show %</div>
+          <div class="kpi-value">2.1%</div>
+          <div class="kpi-sub"><span class="kpi-delta-neutral">→ stable</span></div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Lead Time</div>
+          <div class="kpi-value">42d</div>
+          <div class="kpi-sub"><span class="kpi-delta-pos">▲ +6d STLY</span></div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">ALOS</div>
+          <div class="kpi-value">2.8</div>
+          <div class="kpi-sub"><span class="kpi-delta-neutral">→ stable</span></div>
+        </div>
+        <div class="kpi data-pending">
+          <div class="kpi-label">Commission $ <span class="data-needed" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Data needed&lt;/div&gt;&lt;div style=&quot;font-size:11px;line-height:1.6;color:#fff;margin-top:4px;&quot;&gt;Per-channel commission % table. Same source as Net ADR.&lt;/div&gt;'>data needed</span></div>
+          <div class="kpi-value">$8.9k</div>
+          <div class="kpi-sub"><span class="kpi-delta-neg">21.6% of OTA rev</span></div>
+          <div class="data-source-line"><strong>Needs:</strong> per-channel commission table</div>
+        </div>
+        <div class="kpi data-pending">
+          <div class="kpi-label">Forecast +30d <span class="data-needed" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Data needed&lt;/div&gt;&lt;div style=&quot;font-size:11px;line-height:1.6;color:#fff;margin-top:4px;&quot;&gt;ML forecast model. Needs ≥90 days of clean Cloudbeds data (currently 42d). Forecast Engine agent paused until threshold reached. ETA ~48 days.&lt;/div&gt;'>data needed</span></div>
+          <div class="kpi-value">$48.2k</div>
+          <div class="kpi-sub"><span class="kpi-delta-neutral">±$4.1k · 80% CI</span></div>
+          <div class="data-source-line"><strong>Needs:</strong> 90d clean Cloudbeds history (42d available · ETA 48d)</div>
+        </div>
+      </div>
+
+      <!-- AGENT STRIP -->
+      <div class="agent-strip">
+        <div class="agent-strip-title">
+          <span class="ai-pulse"></span>
+          AI Revenue Agents
+        </div>
+        <div class="agent-chip running" onclick="openAgent('pace-agent')" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Pace &amp; Pickup Agent&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Status&lt;/span&gt;&lt;span class=&quot;val tt-pos&quot;&gt;running&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Last run&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;3 min ago&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Schedule&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;every 15 min&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Findings 24h&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;3&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-note&quot;&gt;Click to configure or fire manually&lt;/div&gt;'>
+          <span class="agent-status-dot"></span>
+          Pace
+        </div>
+        <div class="agent-chip running" onclick="openAgent('parity-agent')" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Parity Watchdog&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Status&lt;/span&gt;&lt;span class=&quot;val tt-pos&quot;&gt;running&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Last run&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;1 min ago&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Schedule&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;every 5 min&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Breaches&lt;/span&gt;&lt;span class=&quot;val tt-neg&quot;&gt;2 active&lt;/span&gt;&lt;/div&gt;'>
+          <span class="agent-status-dot"></span>
+          Parity
+        </div>
+        <div class="agent-chip running" onclick="openAgent('compset-agent')" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Comp Set Scanner&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Status&lt;/span&gt;&lt;span class=&quot;val tt-pos&quot;&gt;running&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Last run&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;12 min ago&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Schedule&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;hourly&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Properties tracked&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;7&lt;/span&gt;&lt;/div&gt;'>
+          <span class="agent-status-dot"></span>
+          Comp Set
+        </div>
+        <div class="agent-chip idle" onclick="openAgent('plan-agent')" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Rate Plan Cleanup&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Status&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;idle&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Last run&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;6h ago&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Schedule&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;daily 02:00&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Retire candidates&lt;/span&gt;&lt;span class=&quot;val tt-neg&quot;&gt;41&lt;/span&gt;&lt;/div&gt;'>
+          <span class="agent-status-dot"></span>
+          Plans
+        </div>
+        <div class="agent-chip paused" onclick="openAgent('forecast-agent')" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Forecast Engine&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Status&lt;/span&gt;&lt;span class=&quot;val tt-neg&quot;&gt;paused&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Reason&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;needs 90d data&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-note&quot;&gt;Will auto-resume when ML model has sufficient training data&lt;/div&gt;'>
+          <span class="agent-status-dot"></span>
+          Forecast
+        </div>
+        <div class="agent-chip idle" onclick="openAgent('cancel-agent')" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Cancellation Risk&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Status&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;idle&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Last run&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;2h ago&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;High-risk bookings&lt;/span&gt;&lt;span class=&quot;val tt-neg&quot;&gt;7&lt;/span&gt;&lt;/div&gt;'>
+          <span class="agent-status-dot"></span>
+          Cancel risk
+        </div>
+        <div class="agent-chip running" onclick="openAgent('discovery-agent')" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Comp Set Discovery&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Status&lt;/span&gt;&lt;span class=&quot;val tt-pos&quot;&gt;running&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Schedule&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;weekly&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Proposes&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;local + regional peers&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Pending&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;5 to review&lt;/span&gt;&lt;/div&gt;'>
+          <span class="agent-status-dot"></span>
+          Discovery
+        </div>
+        <div class="agent-chip running" onclick="openAgent('tactical-agent')" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Tactical Detector&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Status&lt;/span&gt;&lt;span class=&quot;val tt-pos&quot;&gt;running&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Scans&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;cube · 6 dimensions&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Active gaps&lt;/span&gt;&lt;span class=&quot;val tt-neg&quot;&gt;3&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-note&quot;&gt;Detects multi-dim demand gaps · LOS × Window × Country × Room × Channel × Segment&lt;/div&gt;'>
+          <span class="agent-status-dot"></span>
+          Tactical
+        </div>
+        <div class="agent-chip running" onclick="openAgent('composer-agent')" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Tactic Composer&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Status&lt;/span&gt;&lt;span class=&quot;val tt-pos&quot;&gt;running&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Library&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;47 tactics&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-note&quot;&gt;Triggered by Tactical Detector · drafts multi-channel response plans · hands off to specialists&lt;/div&gt;'>
+          <span class="agent-status-dot"></span>
+          Composer
+        </div>
+        <button class="agent-fire-btn" onclick="fireAllAgents()">⚡ Fire all</button>
+      </div>
+
+      <!-- ALERTS / DECISIONS -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">Decisions queued for you · 12 actions ranked by $ impact</div>
+          <div class="section-meta"><a class="clickable">View all →</a></div>
+        </div>
+        <div class="alerts">
+
+          <div class="alert high">
+            <div class="alert-impact pos">+$45.7k</div>
+            <div class="alert-body">
+              <div class="alert-title">Forward pace +222 rn vs STLY · tighten rates Apr–May 2026</div>
+              <div class="alert-meta">Stay dates: 2026-04-15 → 2026-05-31 · Affects: Riverview Suite, Riverfront Glamping · Confidence: 82% · Pickup velocity: +14/day</div>
+            </div>
+            <div class="alert-actions">
+              <button class="btn btn-primary" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Cloudbeds write · approval required&lt;/div&gt;&lt;div style=&quot;font-size:11px;line-height:1.6;color:#fff;margin-top:4px;&quot;&gt;Click → review proposed BAR changes per room type per date → approve each → patchRate API call → webhook confirms.&lt;/div&gt;'>Apply +8% BAR</button>
+              <button class="btn">Review</button>
+              <button class="btn">Defer</button>
+            </div>
+          </div>
+
+          <div class="alert high">
+            <div class="alert-impact neg">-$9.2k</div>
+            <div class="alert-body">
+              <div class="alert-title">September 2026 pace -89 rn vs STLY · demand gap unflagged</div>
+              <div class="alert-meta">Stay dates: 2026-09-01 → 2026-09-30 · OTB only 4 rn vs 93 STLY · Lead time window closing in 14 days</div>
+            </div>
+            <div class="alert-actions">
+              <button class="btn btn-primary">Launch promo</button>
+              <button class="btn">Open in Pace</button>
+              <button class="btn">Defer</button>
+            </div>
+          </div>
+
+          <div class="alert med">
+            <div class="alert-impact neg">-$3.1k</div>
+            <div class="alert-body">
+              <div class="alert-title">Hospitality Solutions · 75% cancel rate · channel review</div>
+              <div class="alert-meta">30 bookings · $6.6k revenue · Net ADR after cancellations: $41 · Below floor</div>
+            </div>
+            <div class="alert-actions">
+              <button class="btn btn-primary">Restrict</button>
+              <button class="btn">Investigate</button>
+            </div>
+          </div>
+
+          <div class="alert med">
+            <div class="alert-impact neg">$0</div>
+            <div class="alert-body">
+              <div class="alert-title">41 rate plans with 0 bookings 180d · retire candidates</div>
+              <div class="alert-meta">Of 100 configured plans, 77 dormant · channel manager mappings preserved on retire</div>
+            </div>
+            <div class="alert-actions">
+              <button class="btn btn-primary">Open kill list</button>
+            </div>
+          </div>
+
+          <div class="alert low">
+            <div class="alert-impact pos">+$1.8k</div>
+            <div class="alert-body">
+              <div class="alert-title">Booking.com vs Direct parity breach · 7 dates in May</div>
+              <div class="alert-meta">Booking.com $315 ADR vs Direct $380 ADR · auto-flagged by parity engine</div>
+            </div>
+            <div class="alert-actions">
+              <button class="btn btn-primary">Resync</button>
+              <button class="btn">View dates</button>
+            </div>
+          </div>
+
+          <div style="text-align:center;padding:8px;color:var(--text-faint);font-size:11px;">
+            7 more actions · medium &amp; low impact ↓
+          </div>
+        </div>
+      </div>
+
+      <!-- ============= TACTICAL ALERTS · MULTI-DIM GAP DETECTION ============= -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">Tactical alerts · cross-dimensional gaps <span class="data-needed" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Data needed&lt;/div&gt;&lt;div style=&quot;font-size:11px;line-height:1.6;color:#fff;margin-top:4px;&quot;&gt;1) Country attribution (Cloudbeds guest.country must be populated reliably, currently ~65% coverage). 2) BDC search impressions / clicks (BDC Partner API). 3) Google Ads &amp; Meta spend (advertiser API integration). 4) DMC CRM activity. Without these, alerts run on Cloudbeds-only signal — useful but partial.&lt;/div&gt;'>partial data</span></div>
+          <div class="section-meta">
+            From <strong>Tactical Detector</strong> agent · scans cube of LOS × Window × Country × Room × Channel × Segment · proposes plays via <strong>Composer</strong>
+          </div>
+        </div>
+
+        <!-- ALERT 1: EU × Suite × Window closing -->
+        <div class="tactical-alert high">
+          <div class="tactical-header">
+            <div>
+              <div class="tactical-title">EU window closing for Suite bookings · -34% vs STLY</div>
+              <div class="tactical-source">Detected 8 min ago · Tactical Detector v2.1 · confidence 84%</div>
+            </div>
+            <div class="tactical-impact">
+              <div class="tactical-impact-value">-$18.4k</div>
+              <div class="tactical-impact-label">at risk · 60d window</div>
+            </div>
+          </div>
+
+          <div class="dim-strip">
+            <span class="dim-label">dimensions</span>
+            <span class="dim-pill"><span class="dim-key">market</span><span class="dim-val">🇪🇺 DE/FR/UK/IT</span></span>
+            <span class="dim-pill"><span class="dim-key">room</span><span class="dim-val">Riverview + Riverfront Suite</span></span>
+            <span class="dim-pill"><span class="dim-key">window</span><span class="dim-val">30-60d before stay</span></span>
+            <span class="dim-pill"><span class="dim-key">stay-month</span><span class="dim-val">Jul-Aug 2026</span></span>
+            <span class="dim-pill"><span class="dim-key">LOS</span><span class="dim-val">3-7 nights</span></span>
+            <span class="dim-pill"><span class="dim-key">segment</span><span class="dim-val">Leisure FIT</span></span>
+          </div>
+
+          <div class="tactical-body">
+            <div class="diagnosis">
+              <strong>Diagnosis:</strong> EU lead-time for premium rooms is typically 45-60 days. STLY same window had 82 EU Suite bookings; current OTB is 54 (-34%). Booking.com EU search impressions for Luang Prabang dropped 18% over past 30d (BDC trend). Direct EU traffic via Google Ads paused 21d ago.<br>
+              <strong>Root cause hypothesis:</strong> Visibility decay on BDC for EU + paused Google Ads = shrinking top-of-funnel. Window will close in ~14 days.
+            </div>
+
+            <div class="tactics-label">
+              <span>⚡ Composed tactics · select to apply</span>
+              <span style="color:var(--text-faint);margin-left:auto;">Total composed plan: <strong style="color:var(--green)">+$14.8k recoverable · 76% prob</strong></span>
+            </div>
+
+            <div class="tactic-grid">
+              <div class="tactic-card selected" onclick="this.classList.toggle('selected')">
+                <div class="tactic-channel bdc">Booking.com</div>
+                <div class="tactic-title">Visibility Booster · EU geo · Suite category</div>
+                <div class="tactic-meta">+15% ranking boost on DE/FR/UK searches · 14d burst</div>
+                <div class="tactic-impact-line"><span>Cost: ~10% comm uplift</span><span class="imp">+$4.2k est</span></div>
+              </div>
+
+              <div class="tactic-card selected" onclick="this.classList.toggle('selected')">
+                <div class="tactic-channel expedia">Expedia</div>
+                <div class="tactic-title">TravelAds CPC · EU geo-targeted</div>
+                <div class="tactic-meta">€650 budget · DE/FR/UK · Suite/Premium room types only · 21d</div>
+                <div class="tactic-impact-line"><span>Spend: $720</span><span class="imp">+$3.1k est</span></div>
+              </div>
+
+              <div class="tactic-card selected" onclick="this.classList.toggle('selected')">
+                <div class="tactic-channel google">Google Ads</div>
+                <div class="tactic-title">Search · "Luang Prabang luxury hotel" · EU</div>
+                <div class="tactic-meta">Resume paused campaign · DE/FR/UK · Suite landing page · €1,200</div>
+                <div class="tactic-impact-line"><span>Spend: $1,330</span><span class="imp">+$5.4k est</span></div>
+              </div>
+
+              <div class="tactic-card" onclick="this.classList.toggle('selected')">
+                <div class="tactic-channel meta">Meta</div>
+                <div class="tactic-title">IG retargeting · EU site visitors 60d</div>
+                <div class="tactic-meta">Lookalike + retarget · video creative · €400</div>
+                <div class="tactic-impact-line"><span>Spend: $440</span><span class="imp">+$1.8k est</span></div>
+              </div>
+
+              <div class="tactic-card" onclick="this.classList.toggle('selected')">
+                <div class="tactic-channel email">Email</div>
+                <div class="tactic-title">EU Member segment · Suite flash promo</div>
+                <div class="tactic-meta">~340 NKMembers in EU · 12% off Suite · 7d window</div>
+                <div class="tactic-impact-line"><span>Cost: $0</span><span class="imp">+$2.1k est</span></div>
+              </div>
+
+              <div class="tactic-card" onclick="this.classList.toggle('selected')">
+                <div class="tactic-channel direct">Direct</div>
+                <div class="tactic-title">EU geo-banner · book-direct incentive</div>
+                <div class="tactic-meta">Free airport pickup for EU Suite bookings · website banner</div>
+                <div class="tactic-impact-line"><span>Cost: ~$80/booking</span><span class="imp">+$1.4k est</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="handoff-footer">
+            <span class="handoff-label">Hand off selected tactics to:</span>
+            <button class="specialist-btn" onclick="handoffTo('campaign')"><span class="spec-icon">CP</span>Campaign Planner</button>
+            <button class="specialist-btn" onclick="handoffTo('social')"><span class="spec-icon">SO</span>Social Agent</button>
+            <button class="specialist-btn" onclick="handoffTo('email')"><span class="spec-icon">EM</span>Email Agent</button>
+            <button class="specialist-btn" onclick="handoffTo('content')"><span class="spec-icon">CT</span>Content Agent</button>
+            <button class="approval-btn" onclick="approveAndSend()">Approve all 3 · send to specialists →</button>
+          </div>
+        </div>
+
+        <!-- ALERT 2: Asian short-LOS pickup gap -->
+        <div class="tactical-alert med">
+          <div class="tactical-header">
+            <div>
+              <div class="tactical-title">Asian short-LOS demand under-served · Glamping</div>
+              <div class="tactical-source">Detected 2h ago · Tactical Detector · confidence 71%</div>
+            </div>
+            <div class="tactical-impact">
+              <div class="tactical-impact-value" style="color:var(--amber)">+$6.2k</div>
+              <div class="tactical-impact-label">opportunity · 30d</div>
+            </div>
+          </div>
+
+          <div class="dim-strip">
+            <span class="dim-label">dimensions</span>
+            <span class="dim-pill"><span class="dim-key">market</span><span class="dim-val">🇹🇭 TH 🇲🇾 MY 🇸🇬 SG</span></span>
+            <span class="dim-pill"><span class="dim-key">room</span><span class="dim-val">Riverfront + Explorer Glamping</span></span>
+            <span class="dim-pill"><span class="dim-key">window</span><span class="dim-val">7-21d before stay</span></span>
+            <span class="dim-pill"><span class="dim-key">LOS</span><span class="dim-val">1-2 nights</span></span>
+            <span class="dim-pill"><span class="dim-key">segment</span><span class="dim-val">Weekend leisure</span></span>
+          </div>
+
+          <div class="tactical-body">
+            <div class="diagnosis">
+              <strong>Diagnosis:</strong> SEA weekend traveler bookings (1-2 night LOS, &lt;21d lead) for Glamping are at 18 OTB vs STLY 31 (-42%). However, Booking.com search clicks from TH/MY/SG are <em>up</em> 24% — meaning visibility is fine, conversion isn't. <br>
+              <strong>Root cause hypothesis:</strong> Min-stay restriction of 2 nights on Glamping rate plans is blocking 1-night SEA weekenders. Removing min-stay on weekday nights only could unlock supply.
+            </div>
+
+            <div class="tactics-label">
+              <span>⚡ Composed tactics</span>
+              <span style="color:var(--text-faint);margin-left:auto;">Plan total: <strong style="color:var(--green)">+$5.4k · 68% prob</strong></span>
+            </div>
+
+            <div class="tactic-grid">
+              <div class="tactic-card selected" onclick="this.classList.toggle('selected')">
+                <div class="tactic-channel direct">Restrictions</div>
+                <div class="tactic-title">Drop min-stay 2→1 · weekday Glamping · 30d</div>
+                <div class="tactic-meta">Riverfront + Explorer · Mon-Thu only · weekend keeps 2-night minimum</div>
+                <div class="tactic-impact-line"><span>Cost: $0</span><span class="imp">+$2.8k est</span></div>
+              </div>
+
+              <div class="tactic-card selected" onclick="this.classList.toggle('selected')">
+                <div class="tactic-channel bdc">Booking.com</div>
+                <div class="tactic-title">Mobile Rate boost · TH/MY/SG · Glamping</div>
+                <div class="tactic-meta">62% of SEA bookings are mobile · 8% mobile-only discount</div>
+                <div class="tactic-impact-line"><span>Net ADR: -$18</span><span class="imp">+$1.6k est</span></div>
+              </div>
+
+              <div class="tactic-card" onclick="this.classList.toggle('selected')">
+                <div class="tactic-channel google">Google Ads</div>
+                <div class="tactic-title">Bangkok weekender retarget</div>
+                <div class="tactic-meta">300km radius from BKK · "weekend getaway Laos" · $300</div>
+                <div class="tactic-impact-line"><span>Spend: $330</span><span class="imp">+$1.0k est</span></div>
+              </div>
+
+              <div class="tactic-card" onclick="this.classList.toggle('selected')">
+                <div class="tactic-channel meta">Meta</div>
+                <div class="tactic-title">IG Reels · BKK/KL/SG creators</div>
+                <div class="tactic-meta">3 micro-influencers · ~$500 total</div>
+                <div class="tactic-impact-line"><span>Spend: $500</span><span class="imp">+$0.9k est</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="handoff-footer">
+            <span class="handoff-label">Hand off to:</span>
+            <button class="specialist-btn" onclick="handoffTo('campaign')"><span class="spec-icon">CP</span>Campaign Planner</button>
+            <button class="specialist-btn" onclick="handoffTo('rev')"><span class="spec-icon">RM</span>Revenue Manager (restrictions) <span class="write-stamp" style="margin-left:6px;">writes Cloudbeds · approval req</span></button>
+            <button class="specialist-btn" onclick="handoffTo('social')"><span class="spec-icon">SO</span>Social Agent</button>
+            <button class="approval-btn" onclick="approveAndSend()">Approve · hand off →</button>
+          </div>
+        </div>
+
+        <!-- ALERT 3: US long-haul winter gap (Sep-Nov) -->
+        <div class="tactical-alert high">
+          <div class="tactical-header">
+            <div>
+              <div class="tactical-title">US long-haul winter window critical · Sep-Nov 2026</div>
+              <div class="tactical-source">Detected 14 min ago · Tactical Detector · confidence 88% · matches STLY pattern</div>
+            </div>
+            <div class="tactical-impact">
+              <div class="tactical-impact-value">-$31.2k</div>
+              <div class="tactical-impact-label">at risk · 90d window</div>
+            </div>
+          </div>
+
+          <div class="dim-strip">
+            <span class="dim-label">dimensions</span>
+            <span class="dim-pill"><span class="dim-key">market</span><span class="dim-val">🇺🇸 US 🇨🇦 CA</span></span>
+            <span class="dim-pill"><span class="dim-key">room</span><span class="dim-val">all premium</span></span>
+            <span class="dim-pill"><span class="dim-key">window</span><span class="dim-val">90-150d before stay</span></span>
+            <span class="dim-pill"><span class="dim-key">stay-month</span><span class="dim-val">Sep + Nov 2026</span></span>
+            <span class="dim-pill"><span class="dim-key">LOS</span><span class="dim-val">5-12 nights</span></span>
+            <span class="dim-pill"><span class="dim-key">channel</span><span class="dim-val">DMC / wholesale primary</span></span>
+          </div>
+
+          <div class="tactical-body">
+            <div class="diagnosis">
+              <strong>Diagnosis:</strong> US/CA leisure long-haul typically books Laos 90-150d ahead via DMC partners (Audley, Remote Lands, Asia Transpacific). Sep OTB 4 vs STLY 93 (-96%); Nov OTB 7 vs STLY 14 (-50%). DMC inquiries down ~40% per CRM. Lead-time profile suggests window closes in 30 days for Sep, 60 days for Nov.<br>
+              <strong>Root cause hypothesis:</strong> DMC outreach lapsed (last newsletter 64 days ago). Trade show absence (no LATA / Virtuoso presence Q1). US travel sentiment to SEA depressed per OAG.
+            </div>
+
+            <div class="tactics-label">
+              <span>⚡ Composed tactics</span>
+              <span style="color:var(--text-faint);margin-left:auto;">Plan total: <strong style="color:var(--green)">+$22.8k · 65% prob</strong></span>
+            </div>
+
+            <div class="tactic-grid">
+              <div class="tactic-card selected" onclick="this.classList.toggle('selected')">
+                <div class="tactic-channel direct">B2B</div>
+                <div class="tactic-title">DMC reactivation blast · top 12 US partners</div>
+                <div class="tactic-meta">Personalized rate sheets · Sep/Nov special · 5-night minimum</div>
+                <div class="tactic-impact-line"><span>Cost: $0</span><span class="imp">+$8.4k est</span></div>
+              </div>
+
+              <div class="tactic-card selected" onclick="this.classList.toggle('selected')">
+                <div class="tactic-channel email">Email</div>
+                <div class="tactic-title">US member segment · Autumn in Laos campaign</div>
+                <div class="tactic-meta">~180 US NKMembers · "rainy season into autumn" narrative · book-by date</div>
+                <div class="tactic-impact-line"><span>Cost: $0</span><span class="imp">+$3.6k est</span></div>
+              </div>
+
+              <div class="tactic-card selected" onclick="this.classList.toggle('selected')">
+                <div class="tactic-channel google">Google Ads</div>
+                <div class="tactic-title">US travel intent · "Laos September October"</div>
+                <div class="tactic-meta">Long-tail keywords · NYC/SF/LA/Boston · $1,800/30d</div>
+                <div class="tactic-impact-line"><span>Spend: $1,980</span><span class="imp">+$5.2k est</span></div>
+              </div>
+
+              <div class="tactic-card" onclick="this.classList.toggle('selected')">
+                <div class="tactic-channel meta">Meta</div>
+                <div class="tactic-title">Lookalike US · luxury slow-travel</div>
+                <div class="tactic-meta">Audience based on past US Suite bookers · video · $800</div>
+                <div class="tactic-impact-line"><span>Spend: $880</span><span class="imp">+$2.6k est</span></div>
+              </div>
+
+              <div class="tactic-card" onclick="this.classList.toggle('selected')">
+                <div class="tactic-channel bdc">Booking.com</div>
+                <div class="tactic-title">Mobile Rate · US geo · 5+ night LOS</div>
+                <div class="tactic-meta">10% off · only triggers on 5+ night stays</div>
+                <div class="tactic-impact-line"><span>Net ADR: -$22</span><span class="imp">+$3.0k est</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="handoff-footer">
+            <span class="handoff-label">Hand off to:</span>
+            <button class="specialist-btn" onclick="handoffTo('campaign')"><span class="spec-icon">CP</span>Campaign Planner</button>
+            <button class="specialist-btn" onclick="handoffTo('email')"><span class="spec-icon">EM</span>Email Agent</button>
+            <button class="specialist-btn" onclick="handoffTo('b2b')"><span class="spec-icon">B2</span>B2B / DMC Agent</button>
+            <button class="specialist-btn" onclick="handoffTo('content')"><span class="spec-icon">CT</span>Content Agent</button>
+            <button class="approval-btn" onclick="approveAndSend()">Approve · hand off →</button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- CHART ROW 1: OCC BY ROOM TYPE + PACE CURVE -->
+      <div class="grid-2">
+        <div class="section">
+          <div class="section-header">
+            <div class="section-title">Occupancy by room type · 30d</div>
+            <div class="section-meta">
+              Actual vs STLY vs Budget
+              <button class="expand-btn" onclick="openChart('occ-by-roomtype')" title="Expand">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+              </button>
+            </div>
+          </div>
+          <svg viewBox="0 0 520 260" style="width:100%;height:260px;">
+            <!-- y-axis grid -->
+            <line x1="60" y1="20" x2="510" y2="20" stroke="#e5e7eb" stroke-width="1"/>
+            <line x1="60" y1="70" x2="510" y2="70" stroke="#e5e7eb" stroke-width="1"/>
+            <line x1="60" y1="120" x2="510" y2="120" stroke="#e5e7eb" stroke-width="1"/>
+            <line x1="60" y1="170" x2="510" y2="170" stroke="#e5e7eb" stroke-width="1"/>
+            <line x1="60" y1="220" x2="510" y2="220" stroke="#9ca3af" stroke-width="1"/>
+            <text x="55" y="24" text-anchor="end" font-size="9" fill="#9ca3af">100%</text>
+            <text x="55" y="74" text-anchor="end" font-size="9" fill="#9ca3af">75%</text>
+            <text x="55" y="124" text-anchor="end" font-size="9" fill="#9ca3af">50%</text>
+            <text x="55" y="174" text-anchor="end" font-size="9" fill="#9ca3af">25%</text>
+            <text x="55" y="224" text-anchor="end" font-size="9" fill="#9ca3af">0%</text>
+
+            <!-- 9 room types, 3 bars each (actual, stly, budget) -->
+            <!-- Riverview Suite: 48% / 32% / 55% -->
+            <g transform="translate(70,0)">
+              <rect x="0" y="124" width="10" height="96" fill="#b8854a" data-tip='<div class=&quot;tt-title&quot;>Riverview Suite</div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Actual</span><span class=&quot;val&quot;>48%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>STLY</span><span class=&quot;val&quot;>32%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Budget</span><span class=&quot;val&quot;>55%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs STLY</span><span class=&quot;val tt-pos&quot;>+16pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs Budget</span><span class=&quot;val tt-neg&quot;>-7pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Sold</span><span class=&quot;val&quot;>115 rn</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>ADR</span><span class=&quot;val&quot;>$251</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Revenue</span><span class=&quot;val&quot;>$28.9k</span></div>'/>
+              <rect x="11" y="156" width="10" height="64" fill="#9ca3af" data-tip='<div class=&quot;tt-title&quot;>Riverview Suite</div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Actual</span><span class=&quot;val&quot;>48%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>STLY</span><span class=&quot;val&quot;>32%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Budget</span><span class=&quot;val&quot;>55%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs STLY</span><span class=&quot;val tt-pos&quot;>+16pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs Budget</span><span class=&quot;val tt-neg&quot;>-7pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Sold</span><span class=&quot;val&quot;>115 rn</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>ADR</span><span class=&quot;val&quot;>$251</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Revenue</span><span class=&quot;val&quot;>$28.9k</span></div>'/>
+              <rect x="22" y="110" width="10" height="110" fill="none" stroke="#2563eb" stroke-width="1" stroke-dasharray="2,2" data-tip='<div class=&quot;tt-title&quot;>Riverview Suite</div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Actual</span><span class=&quot;val&quot;>48%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>STLY</span><span class=&quot;val&quot;>32%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Budget</span><span class=&quot;val&quot;>55%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs STLY</span><span class=&quot;val tt-pos&quot;>+16pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs Budget</span><span class=&quot;val tt-neg&quot;>-7pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Sold</span><span class=&quot;val&quot;>115 rn</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>ADR</span><span class=&quot;val&quot;>$251</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Revenue</span><span class=&quot;val&quot;>$28.9k</span></div>'/>
+              <text x="16" y="240" text-anchor="middle" font-size="9" fill="#6b7280">Riverview</text>
+              <text x="16" y="250" text-anchor="middle" font-size="9" fill="#6b7280">Suite</text>
+            </g>
+            <!-- Riverfront Suite: 42% / 38% / 50% -->
+            <g transform="translate(120,0)">
+              <rect x="0" y="136" width="10" height="84" fill="#b8854a" data-tip='<div class=&quot;tt-title&quot;>Riverfront Suite</div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Actual</span><span class=&quot;val&quot;>42%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>STLY</span><span class=&quot;val&quot;>38%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Budget</span><span class=&quot;val&quot;>50%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs STLY</span><span class=&quot;val tt-pos&quot;>+4pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs Budget</span><span class=&quot;val tt-neg&quot;>-8pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Sold</span><span class=&quot;val&quot;>76 rn</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>ADR</span><span class=&quot;val&quot;>$294</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Revenue</span><span class=&quot;val&quot;>$22.3k</span></div>'/>
+              <rect x="11" y="144" width="10" height="76" fill="#9ca3af" data-tip='<div class=&quot;tt-title&quot;>Riverfront Suite</div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Actual</span><span class=&quot;val&quot;>42%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>STLY</span><span class=&quot;val&quot;>38%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Budget</span><span class=&quot;val&quot;>50%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs STLY</span><span class=&quot;val tt-pos&quot;>+4pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs Budget</span><span class=&quot;val tt-neg&quot;>-8pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Sold</span><span class=&quot;val&quot;>76 rn</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>ADR</span><span class=&quot;val&quot;>$294</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Revenue</span><span class=&quot;val&quot;>$22.3k</span></div>'/>
+              <rect x="22" y="120" width="10" height="100" fill="none" stroke="#2563eb" stroke-width="1" stroke-dasharray="2,2" data-tip='<div class=&quot;tt-title&quot;>Riverfront Suite</div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Actual</span><span class=&quot;val&quot;>42%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>STLY</span><span class=&quot;val&quot;>38%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Budget</span><span class=&quot;val&quot;>50%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs STLY</span><span class=&quot;val tt-pos&quot;>+4pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs Budget</span><span class=&quot;val tt-neg&quot;>-8pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Sold</span><span class=&quot;val&quot;>76 rn</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>ADR</span><span class=&quot;val&quot;>$294</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Revenue</span><span class=&quot;val&quot;>$22.3k</span></div>'/>
+              <text x="16" y="240" text-anchor="middle" font-size="9" fill="#6b7280">Riverfront</text>
+              <text x="16" y="250" text-anchor="middle" font-size="9" fill="#6b7280">Suite</text>
+            </g>
+            <!-- Riverfront Glamping: 38% / 28% / 45% -->
+            <g transform="translate(170,0)">
+              <rect x="0" y="144" width="10" height="76" fill="#b8854a" data-tip='<div class=&quot;tt-title&quot;>Riverfront Glamping</div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Actual</span><span class=&quot;val&quot;>38%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>STLY</span><span class=&quot;val&quot;>28%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Budget</span><span class=&quot;val&quot;>45%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs STLY</span><span class=&quot;val tt-pos&quot;>+10pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs Budget</span><span class=&quot;val tt-neg&quot;>-7pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Sold</span><span class=&quot;val&quot;>114 rn</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>ADR</span><span class=&quot;val&quot;>$235</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Revenue</span><span class=&quot;val&quot;>$26.8k</span></div>'/>
+              <rect x="11" y="164" width="10" height="56" fill="#9ca3af" data-tip='<div class=&quot;tt-title&quot;>Riverfront Glamping</div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Actual</span><span class=&quot;val&quot;>38%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>STLY</span><span class=&quot;val&quot;>28%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Budget</span><span class=&quot;val&quot;>45%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs STLY</span><span class=&quot;val tt-pos&quot;>+10pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs Budget</span><span class=&quot;val tt-neg&quot;>-7pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Sold</span><span class=&quot;val&quot;>114 rn</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>ADR</span><span class=&quot;val&quot;>$235</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Revenue</span><span class=&quot;val&quot;>$26.8k</span></div>'/>
+              <rect x="22" y="130" width="10" height="90" fill="none" stroke="#2563eb" stroke-width="1" stroke-dasharray="2,2" data-tip='<div class=&quot;tt-title&quot;>Riverfront Glamping</div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Actual</span><span class=&quot;val&quot;>38%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>STLY</span><span class=&quot;val&quot;>28%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Budget</span><span class=&quot;val&quot;>45%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs STLY</span><span class=&quot;val tt-pos&quot;>+10pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs Budget</span><span class=&quot;val tt-neg&quot;>-7pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Sold</span><span class=&quot;val&quot;>114 rn</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>ADR</span><span class=&quot;val&quot;>$235</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Revenue</span><span class=&quot;val&quot;>$26.8k</span></div>'/>
+              <text x="16" y="240" text-anchor="middle" font-size="9" fill="#6b7280">Riverfront</text>
+              <text x="16" y="250" text-anchor="middle" font-size="9" fill="#6b7280">Glamping</text>
+            </g>
+            <!-- Explorer Glamping: 32% / 24% / 40% -->
+            <g transform="translate(220,0)">
+              <rect x="0" y="156" width="10" height="64" fill="#b8854a" data-tip='<div class=&quot;tt-title&quot;>Explorer Glamping</div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Actual</span><span class=&quot;val&quot;>32%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>STLY</span><span class=&quot;val&quot;>24%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Budget</span><span class=&quot;val&quot;>40%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs STLY</span><span class=&quot;val tt-pos&quot;>+8pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs Budget</span><span class=&quot;val tt-neg&quot;>-8pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Sold</span><span class=&quot;val&quot;>77 rn</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>ADR</span><span class=&quot;val&quot;>$181</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Revenue</span><span class=&quot;val&quot;>$13.9k</span></div>'/>
+              <rect x="11" y="172" width="10" height="48" fill="#9ca3af" data-tip='<div class=&quot;tt-title&quot;>Explorer Glamping</div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Actual</span><span class=&quot;val&quot;>32%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>STLY</span><span class=&quot;val&quot;>24%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Budget</span><span class=&quot;val&quot;>40%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs STLY</span><span class=&quot;val tt-pos&quot;>+8pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs Budget</span><span class=&quot;val tt-neg&quot;>-8pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Sold</span><span class=&quot;val&quot;>77 rn</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>ADR</span><span class=&quot;val&quot;>$181</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Revenue</span><span class=&quot;val&quot;>$13.9k</span></div>'/>
+              <rect x="22" y="140" width="10" height="80" fill="none" stroke="#2563eb" stroke-width="1" stroke-dasharray="2,2" data-tip='<div class=&quot;tt-title&quot;>Explorer Glamping</div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Actual</span><span class=&quot;val&quot;>32%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>STLY</span><span class=&quot;val&quot;>24%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Budget</span><span class=&quot;val&quot;>40%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs STLY</span><span class=&quot;val tt-pos&quot;>+8pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs Budget</span><span class=&quot;val tt-neg&quot;>-8pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Sold</span><span class=&quot;val&quot;>77 rn</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>ADR</span><span class=&quot;val&quot;>$181</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Revenue</span><span class=&quot;val&quot;>$13.9k</span></div>'/>
+              <text x="16" y="240" text-anchor="middle" font-size="9" fill="#6b7280">Explorer</text>
+              <text x="16" y="250" text-anchor="middle" font-size="9" fill="#6b7280">Glamping</text>
+            </g>
+            <!-- Art Deluxe Room: 35% / 30% / 42% -->
+            <g transform="translate(270,0)">
+              <rect x="0" y="150" width="10" height="70" fill="#b8854a" data-tip='<div class=&quot;tt-title&quot;>Art Deluxe Room</div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Actual</span><span class=&quot;val&quot;>35%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>STLY</span><span class=&quot;val&quot;>30%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Budget</span><span class=&quot;val&quot;>42%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs STLY</span><span class=&quot;val tt-pos&quot;>+5pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs Budget</span><span class=&quot;val tt-neg&quot;>-7pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Sold</span><span class=&quot;val&quot;>63 rn</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>ADR</span><span class=&quot;val&quot;>$182</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Revenue</span><span class=&quot;val&quot;>$11.5k</span></div>'/>
+              <rect x="11" y="160" width="10" height="60" fill="#9ca3af" data-tip='<div class=&quot;tt-title&quot;>Art Deluxe Room</div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Actual</span><span class=&quot;val&quot;>35%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>STLY</span><span class=&quot;val&quot;>30%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Budget</span><span class=&quot;val&quot;>42%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs STLY</span><span class=&quot;val tt-pos&quot;>+5pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs Budget</span><span class=&quot;val tt-neg&quot;>-7pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Sold</span><span class=&quot;val&quot;>63 rn</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>ADR</span><span class=&quot;val&quot;>$182</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Revenue</span><span class=&quot;val&quot;>$11.5k</span></div>'/>
+              <rect x="22" y="136" width="10" height="84" fill="none" stroke="#2563eb" stroke-width="1" stroke-dasharray="2,2" data-tip='<div class=&quot;tt-title&quot;>Art Deluxe Room</div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Actual</span><span class=&quot;val&quot;>35%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>STLY</span><span class=&quot;val&quot;>30%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Budget</span><span class=&quot;val&quot;>42%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs STLY</span><span class=&quot;val tt-pos&quot;>+5pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs Budget</span><span class=&quot;val tt-neg&quot;>-7pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Sold</span><span class=&quot;val&quot;>63 rn</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>ADR</span><span class=&quot;val&quot;>$182</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Revenue</span><span class=&quot;val&quot;>$11.5k</span></div>'/>
+              <text x="16" y="240" text-anchor="middle" font-size="9" fill="#6b7280">Art Dlx</text>
+              <text x="16" y="250" text-anchor="middle" font-size="9" fill="#6b7280">Room</text>
+            </g>
+            <!-- Art Deluxe Suite: 28% / 26% / 38% -->
+            <g transform="translate(320,0)">
+              <rect x="0" y="164" width="10" height="56" fill="#b8854a" data-tip='<div class=&quot;tt-title&quot;>Art Deluxe Suite</div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Actual</span><span class=&quot;val&quot;>28%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>STLY</span><span class=&quot;val&quot;>26%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Budget</span><span class=&quot;val&quot;>38%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs STLY</span><span class=&quot;val tt-pos&quot;>+2pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs Budget</span><span class=&quot;val tt-neg&quot;>-10pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Sold</span><span class=&quot;val&quot;>34 rn</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>ADR</span><span class=&quot;val&quot;>$230</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Revenue</span><span class=&quot;val&quot;>$7.8k</span></div>'/>
+              <rect x="11" y="168" width="10" height="52" fill="#9ca3af" data-tip='<div class=&quot;tt-title&quot;>Art Deluxe Suite</div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Actual</span><span class=&quot;val&quot;>28%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>STLY</span><span class=&quot;val&quot;>26%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Budget</span><span class=&quot;val&quot;>38%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs STLY</span><span class=&quot;val tt-pos&quot;>+2pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs Budget</span><span class=&quot;val tt-neg&quot;>-10pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Sold</span><span class=&quot;val&quot;>34 rn</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>ADR</span><span class=&quot;val&quot;>$230</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Revenue</span><span class=&quot;val&quot;>$7.8k</span></div>'/>
+              <rect x="22" y="144" width="10" height="76" fill="none" stroke="#2563eb" stroke-width="1" stroke-dasharray="2,2" data-tip='<div class=&quot;tt-title&quot;>Art Deluxe Suite</div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Actual</span><span class=&quot;val&quot;>28%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>STLY</span><span class=&quot;val&quot;>26%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Budget</span><span class=&quot;val&quot;>38%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs STLY</span><span class=&quot;val tt-pos&quot;>+2pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs Budget</span><span class=&quot;val tt-neg&quot;>-10pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Sold</span><span class=&quot;val&quot;>34 rn</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>ADR</span><span class=&quot;val&quot;>$230</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Revenue</span><span class=&quot;val&quot;>$7.8k</span></div>'/>
+              <text x="16" y="240" text-anchor="middle" font-size="9" fill="#6b7280">Art Dlx</text>
+              <text x="16" y="250" text-anchor="middle" font-size="9" fill="#6b7280">Suite</text>
+            </g>
+            <!-- Art Deluxe Family: 22% / 18% / 35% — UNDERPERFORMING vs budget -->
+            <g transform="translate(370,0)">
+              <rect x="0" y="176" width="10" height="44" fill="#dc2626" data-tip='<div class=&quot;tt-title&quot;>Art Deluxe Family</div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Actual</span><span class=&quot;val&quot;>22%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>STLY</span><span class=&quot;val&quot;>18%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Budget</span><span class=&quot;val&quot;>35%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs STLY</span><span class=&quot;val tt-pos&quot;>+4pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs Budget</span><span class=&quot;val tt-neg&quot;>-13pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Sold</span><span class=&quot;val&quot;>20 rn</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>ADR</span><span class=&quot;val&quot;>$174</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Revenue</span><span class=&quot;val&quot;>$3.5k</span></div><div class=&quot;tt-note&quot;>🚨 -13pp vs budget · action needed</div>'/>
+              <rect x="11" y="184" width="10" height="36" fill="#9ca3af" data-tip='<div class=&quot;tt-title&quot;>Art Deluxe Family</div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Actual</span><span class=&quot;val&quot;>22%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>STLY</span><span class=&quot;val&quot;>18%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Budget</span><span class=&quot;val&quot;>35%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs STLY</span><span class=&quot;val tt-pos&quot;>+4pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs Budget</span><span class=&quot;val tt-neg&quot;>-13pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Sold</span><span class=&quot;val&quot;>20 rn</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>ADR</span><span class=&quot;val&quot;>$174</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Revenue</span><span class=&quot;val&quot;>$3.5k</span></div><div class=&quot;tt-note&quot;>🚨 -13pp vs budget · action needed</div>'/>
+              <rect x="22" y="150" width="10" height="70" fill="none" stroke="#2563eb" stroke-width="1" stroke-dasharray="2,2" data-tip='<div class=&quot;tt-title&quot;>Art Deluxe Family</div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Actual</span><span class=&quot;val&quot;>22%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>STLY</span><span class=&quot;val&quot;>18%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Budget</span><span class=&quot;val&quot;>35%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs STLY</span><span class=&quot;val tt-pos&quot;>+4pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs Budget</span><span class=&quot;val tt-neg&quot;>-13pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Sold</span><span class=&quot;val&quot;>20 rn</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>ADR</span><span class=&quot;val&quot;>$174</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Revenue</span><span class=&quot;val&quot;>$3.5k</span></div><div class=&quot;tt-note&quot;>🚨 -13pp vs budget · action needed</div>'/>
+              <text x="16" y="240" text-anchor="middle" font-size="9" fill="#dc2626">Art Dlx</text>
+              <text x="16" y="250" text-anchor="middle" font-size="9" fill="#dc2626">Family ⚠</text>
+            </g>
+            <!-- Sunset Namkhan Villa: 18% / 12% / 25% -->
+            <g transform="translate(420,0)">
+              <rect x="0" y="184" width="10" height="36" fill="#b8854a" data-tip='<div class=&quot;tt-title&quot;>Sunset Namkhan Villa</div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Actual</span><span class=&quot;val&quot;>18%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>STLY</span><span class=&quot;val&quot;>12%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Budget</span><span class=&quot;val&quot;>25%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs STLY</span><span class=&quot;val tt-pos&quot;>+6pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs Budget</span><span class=&quot;val tt-neg&quot;>-7pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Sold</span><span class=&quot;val&quot;>5 rn</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>ADR</span><span class=&quot;val&quot;>$387</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Revenue</span><span class=&quot;val&quot;>$1.9k</span></div>'/>
+              <rect x="11" y="196" width="10" height="24" fill="#9ca3af" data-tip='<div class=&quot;tt-title&quot;>Sunset Namkhan Villa</div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Actual</span><span class=&quot;val&quot;>18%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>STLY</span><span class=&quot;val&quot;>12%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Budget</span><span class=&quot;val&quot;>25%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs STLY</span><span class=&quot;val tt-pos&quot;>+6pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs Budget</span><span class=&quot;val tt-neg&quot;>-7pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Sold</span><span class=&quot;val&quot;>5 rn</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>ADR</span><span class=&quot;val&quot;>$387</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Revenue</span><span class=&quot;val&quot;>$1.9k</span></div>'/>
+              <rect x="22" y="170" width="10" height="50" fill="none" stroke="#2563eb" stroke-width="1" stroke-dasharray="2,2" data-tip='<div class=&quot;tt-title&quot;>Sunset Namkhan Villa</div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Actual</span><span class=&quot;val&quot;>18%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>STLY</span><span class=&quot;val&quot;>12%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Budget</span><span class=&quot;val&quot;>25%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs STLY</span><span class=&quot;val tt-pos&quot;>+6pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs Budget</span><span class=&quot;val tt-neg&quot;>-7pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Sold</span><span class=&quot;val&quot;>5 rn</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>ADR</span><span class=&quot;val&quot;>$387</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Revenue</span><span class=&quot;val&quot;>$1.9k</span></div>'/>
+              <text x="16" y="240" text-anchor="middle" font-size="9" fill="#6b7280">Sunset</text>
+              <text x="16" y="250" text-anchor="middle" font-size="9" fill="#6b7280">Namkhan</text>
+            </g>
+            <!-- Sunset LP Villa: 15% / 8% / 22% -->
+            <g transform="translate(470,0)">
+              <rect x="0" y="190" width="10" height="30" fill="#b8854a" data-tip='<div class=&quot;tt-title&quot;>Sunset LP Villa</div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Actual</span><span class=&quot;val&quot;>15%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>STLY</span><span class=&quot;val&quot;>8%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Budget</span><span class=&quot;val&quot;>22%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs STLY</span><span class=&quot;val tt-pos&quot;>+7pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs Budget</span><span class=&quot;val tt-neg&quot;>-7pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Sold</span><span class=&quot;val&quot;>5 rn</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>ADR</span><span class=&quot;val&quot;>$358</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Revenue</span><span class=&quot;val&quot;>$1.6k</span></div>'/>
+              <rect x="11" y="204" width="10" height="16" fill="#9ca3af" data-tip='<div class=&quot;tt-title&quot;>Sunset LP Villa</div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Actual</span><span class=&quot;val&quot;>15%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>STLY</span><span class=&quot;val&quot;>8%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Budget</span><span class=&quot;val&quot;>22%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs STLY</span><span class=&quot;val tt-pos&quot;>+7pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs Budget</span><span class=&quot;val tt-neg&quot;>-7pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Sold</span><span class=&quot;val&quot;>5 rn</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>ADR</span><span class=&quot;val&quot;>$358</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Revenue</span><span class=&quot;val&quot;>$1.6k</span></div>'/>
+              <rect x="22" y="176" width="10" height="44" fill="none" stroke="#2563eb" stroke-width="1" stroke-dasharray="2,2" data-tip='<div class=&quot;tt-title&quot;>Sunset LP Villa</div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Actual</span><span class=&quot;val&quot;>15%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>STLY</span><span class=&quot;val&quot;>8%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Budget</span><span class=&quot;val&quot;>22%</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs STLY</span><span class=&quot;val tt-pos&quot;>+7pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>vs Budget</span><span class=&quot;val tt-neg&quot;>-7pp</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Sold</span><span class=&quot;val&quot;>5 rn</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>ADR</span><span class=&quot;val&quot;>$358</span></div><div class=&quot;tt-row&quot;><span class=&quot;lbl&quot;>Revenue</span><span class=&quot;val&quot;>$1.6k</span></div>'/>
+              <text x="16" y="240" text-anchor="middle" font-size="9" fill="#6b7280">Sunset</text>
+              <text x="16" y="250" text-anchor="middle" font-size="9" fill="#6b7280">LP Villa</text>
+            </g>
+          </svg>
+          <div style="display:flex;gap:14px;font-size:11px;color:var(--text-dim);margin-top:6px;flex-wrap:wrap;">
+            <span><span class="mix-dot" style="background:#b8854a"></span>Actual 30d</span>
+            <span><span class="mix-dot" style="background:#9ca3af"></span>STLY</span>
+            <span><span style="display:inline-block;width:8px;height:8px;border:1.5px dashed #2563eb;margin-right:4px;vertical-align:middle;"></span>Budget</span>
+            <span style="color:var(--red);margin-left:auto;">⚠ Art Deluxe Family -13pp vs budget</span>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-header">
+            <div class="section-title">Booking pace curve · May 2026</div>
+            <div class="section-meta">
+              OTB on day-of-stay-window vs STLY vs Budget
+              <button class="expand-btn" onclick="openChart('pace-curve-may')" title="Expand">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+              </button>
+            </div>
+          </div>
+          <svg viewBox="0 0 520 260" style="width:100%;height:260px;">
+            <!-- grid -->
+            <line x1="40" y1="20" x2="510" y2="20" stroke="#e5e7eb" stroke-width="1"/>
+            <line x1="40" y1="70" x2="510" y2="70" stroke="#e5e7eb" stroke-width="1"/>
+            <line x1="40" y1="120" x2="510" y2="120" stroke="#e5e7eb" stroke-width="1"/>
+            <line x1="40" y1="170" x2="510" y2="170" stroke="#e5e7eb" stroke-width="1"/>
+            <line x1="40" y1="220" x2="510" y2="220" stroke="#9ca3af" stroke-width="1"/>
+            <text x="35" y="24" text-anchor="end" font-size="9" fill="#9ca3af">800</text>
+            <text x="35" y="74" text-anchor="end" font-size="9" fill="#9ca3af">600</text>
+            <text x="35" y="124" text-anchor="end" font-size="9" fill="#9ca3af">400</text>
+            <text x="35" y="174" text-anchor="end" font-size="9" fill="#9ca3af">200</text>
+            <text x="35" y="224" text-anchor="end" font-size="9" fill="#9ca3af">0</text>
+
+            <!-- x labels: 90d before stay → stay end -->
+            <text x="50" y="252" font-size="9" fill="#9ca3af">-90d</text>
+            <text x="180" y="252" font-size="9" fill="#9ca3af">-60d</text>
+            <text x="310" y="252" font-size="9" fill="#9ca3af">-30d</text>
+            <text x="430" y="252" font-size="9" fill="#9ca3af">today</text>
+
+            <!-- Budget (target) line - dashed blue -->
+            <polyline points="50,210 100,200 150,188 200,170 250,148 300,122 350,92 400,62 450,32 470,28"
+              fill="none" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="3,3"/>
+
+            <!-- STLY line - gray -->
+            <polyline points="50,215 100,210 150,205 200,196 250,184 300,170 350,154 400,138 450,124 470,118"
+              fill="none" stroke="#9ca3af" stroke-width="1.5"/>
+
+            <!-- Actual (OTB) line - accent, with area fill -->
+            <path d="M 50,212 L 100,205 L 150,195 L 200,180 L 250,160 L 300,135 L 350,108 L 400,82 L 450,58 L 470,52 L 470,220 L 50,220 Z"
+              fill="#b8854a" fill-opacity="0.08"/>
+            <polyline points="50,212 100,205 150,195 200,180 250,160 300,135 350,108 400,82 450,58 470,52"
+              fill="none" stroke="#b8854a" stroke-width="2"/>
+
+            <!-- Today marker -->
+            <line x1="470" y1="20" x2="470" y2="220" stroke="#dc2626" stroke-width="1" stroke-dasharray="2,2"/>
+            <circle cx="470" cy="52" r="4" fill="#b8854a"/>
+            <circle cx="470" cy="118" r="3" fill="#9ca3af"/>
+            <circle cx="470" cy="28" r="3" fill="#2563eb"/>
+
+            <!-- Annotations -->
+            <text x="475" y="48" font-size="10" fill="#b8854a" font-weight="600">OTB 187</text>
+            <text x="475" y="115" font-size="10" fill="#9ca3af">STLY 115</text>
+            <text x="475" y="25" font-size="10" fill="#2563eb">Bgt 220</text>
+          </svg>
+          <div style="display:flex;gap:14px;font-size:11px;color:var(--text-dim);margin-top:6px;flex-wrap:wrap;">
+            <span><span class="mix-dot" style="background:#b8854a"></span>OTB Actual</span>
+            <span><span class="mix-dot" style="background:#9ca3af"></span>STLY</span>
+            <span><span style="display:inline-block;width:8px;height:0;border-top:2px dashed #2563eb;margin-right:4px;vertical-align:middle;"></span>Budget target</span>
+            <span style="margin-left:auto;"><span class="pos">+72 vs STLY</span> · <span class="neg">-33 vs Bgt</span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- CHART ROW 2: ADR×OCC SCATTER + PICKUP VELOCITY -->
+      <div class="grid-2">
+        <div class="section">
+          <div class="section-header">
+            <div class="section-title">ADR × Occupancy by room type · 30d</div>
+            <div class="section-meta">
+              Bubble size = revenue contribution
+              <button class="expand-btn" onclick="openChart('adr-occ-scatter')" title="Expand">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+              </button>
+            </div>
+          </div>
+          <svg viewBox="0 0 520 260" style="width:100%;height:260px;">
+            <!-- axes -->
+            <line x1="50" y1="220" x2="510" y2="220" stroke="#9ca3af" stroke-width="1"/>
+            <line x1="50" y1="20" x2="50" y2="220" stroke="#9ca3af" stroke-width="1"/>
+            <!-- grid -->
+            <line x1="50" y1="70" x2="510" y2="70" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="2,2"/>
+            <line x1="50" y1="120" x2="510" y2="120" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="2,2"/>
+            <line x1="50" y1="170" x2="510" y2="170" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="2,2"/>
+            <line x1="160" y1="20" x2="160" y2="220" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="2,2"/>
+            <line x1="280" y1="20" x2="280" y2="220" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="2,2"/>
+            <line x1="400" y1="20" x2="400" y2="220" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="2,2"/>
+
+            <!-- y axis: ADR -->
+            <text x="45" y="24" text-anchor="end" font-size="9" fill="#9ca3af">$600</text>
+            <text x="45" y="74" text-anchor="end" font-size="9" fill="#9ca3af">$450</text>
+            <text x="45" y="124" text-anchor="end" font-size="9" fill="#9ca3af">$300</text>
+            <text x="45" y="174" text-anchor="end" font-size="9" fill="#9ca3af">$150</text>
+            <text x="45" y="224" text-anchor="end" font-size="9" fill="#9ca3af">$0</text>
+            <text x="20" y="120" text-anchor="middle" font-size="9" fill="#6b7280" transform="rotate(-90 20 120)">ADR</text>
+
+            <!-- x axis: occupancy -->
+            <text x="50" y="240" text-anchor="middle" font-size="9" fill="#9ca3af">0%</text>
+            <text x="160" y="240" text-anchor="middle" font-size="9" fill="#9ca3af">25%</text>
+            <text x="280" y="240" text-anchor="middle" font-size="9" fill="#9ca3af">50%</text>
+            <text x="400" y="240" text-anchor="middle" font-size="9" fill="#9ca3af">75%</text>
+            <text x="510" y="240" text-anchor="middle" font-size="9" fill="#9ca3af">100%</text>
+            <text x="280" y="255" text-anchor="middle" font-size="9" fill="#6b7280">Occupancy %</text>
+
+            <!-- quadrant labels -->
+            <text x="395" y="35" font-size="9" fill="#16a34a" opacity="0.6">★ STAR</text>
+            <text x="395" y="48" font-size="8" fill="#9ca3af">high occ + high ADR</text>
+            <text x="60" y="35" font-size="9" fill="#dc2626" opacity="0.6">⚠ DOG</text>
+            <text x="60" y="48" font-size="8" fill="#9ca3af">low occ + high ADR</text>
+            <text x="60" y="200" font-size="9" fill="#d97706" opacity="0.6">DISCOUNTED</text>
+            <text x="395" y="200" font-size="9" fill="#2563eb" opacity="0.6">CASH COW</text>
+
+            <!-- bubbles: cx = 50 + occ*4.6 ; cy = 220 - adr/3 -->
+            <!-- Sunset LP Villa: 15%, $358 — DOG -->
+            <circle cx="119" cy="101" r="6" fill="#dc2626" fill-opacity="0.5" stroke="#dc2626" stroke-width="1"/>
+            <text x="128" y="103" font-size="9" fill="#374151">Sunset LP $358</text>
+            <!-- Sunset Namkhan: 18%, $387 — DOG -->
+            <circle cx="133" cy="91" r="7" fill="#dc2626" fill-opacity="0.5" stroke="#dc2626" stroke-width="1"/>
+            <text x="142" y="93" font-size="9" fill="#374151">Sunset Nk $387</text>
+            <!-- Riverfront Suite: 42%, $294 -->
+            <circle cx="235" cy="122" r="14" fill="#2563eb" fill-opacity="0.4" stroke="#2563eb" stroke-width="1"/>
+            <text x="252" y="125" font-size="9" fill="#374151">Riverfront S. $294</text>
+            <!-- Riverview Suite: 48%, $251 — large bubble -->
+            <circle cx="262" cy="136" r="18" fill="#16a34a" fill-opacity="0.4" stroke="#16a34a" stroke-width="1"/>
+            <text x="282" y="139" font-size="9" fill="#374151">Riverview $251</text>
+            <!-- Riverfront Glamping: 38%, $235 -->
+            <circle cx="217" cy="142" r="13" fill="#2563eb" fill-opacity="0.4" stroke="#2563eb" stroke-width="1"/>
+            <text x="234" y="145" font-size="9" fill="#374151">Riverfront G. $235</text>
+            <!-- Art Deluxe Room: 35%, $182 -->
+            <circle cx="203" cy="159" r="10" fill="#d97706" fill-opacity="0.4" stroke="#d97706" stroke-width="1"/>
+            <text x="218" y="162" font-size="9" fill="#374151">Art Dlx Rm $182</text>
+            <!-- Art Deluxe Suite: 28%, $230 -->
+            <circle cx="179" cy="143" r="9" fill="#d97706" fill-opacity="0.4" stroke="#d97706" stroke-width="1"/>
+            <text x="192" y="146" font-size="9" fill="#374151">Art Dlx S. $230</text>
+            <!-- Explorer Glamping: 32%, $181 -->
+            <circle cx="194" cy="160" r="9" fill="#d97706" fill-opacity="0.4" stroke="#d97706" stroke-width="1"/>
+            <text x="207" y="163" font-size="9" fill="#374151">Explorer $181</text>
+            <!-- Art Deluxe Family: 22%, $174 -->
+            <circle cx="151" cy="162" r="6" fill="#dc2626" fill-opacity="0.5" stroke="#dc2626" stroke-width="1"/>
+            <text x="160" y="164" font-size="9" fill="#dc2626">Art Family ⚠</text>
+          </svg>
+          <div style="display:flex;gap:14px;font-size:11px;color:var(--text-dim);margin-top:6px;">
+            <span style="color:var(--green)">★ Riverview = revenue anchor</span>
+            <span style="color:var(--red);margin-left:auto;">⚠ 2 villas in DOG quadrant — pricing or marketing problem</span>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-header">
+            <div class="section-title">Pickup velocity · last 28 days</div>
+            <div class="section-meta">
+              Daily new bookings · forward stays
+              <button class="expand-btn" onclick="openChart('pickup-velocity')" title="Expand">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+              </button>
+            </div>
+          </div>
+          <svg viewBox="0 0 520 260" style="width:100%;height:260px;">
+            <!-- grid -->
+            <line x1="40" y1="40" x2="510" y2="40" stroke="#e5e7eb" stroke-width="1"/>
+            <line x1="40" y1="100" x2="510" y2="100" stroke="#e5e7eb" stroke-width="1"/>
+            <line x1="40" y1="160" x2="510" y2="160" stroke="#e5e7eb" stroke-width="1"/>
+            <line x1="40" y1="220" x2="510" y2="220" stroke="#9ca3af" stroke-width="1"/>
+            <text x="35" y="44" text-anchor="end" font-size="9" fill="#9ca3af">15</text>
+            <text x="35" y="104" text-anchor="end" font-size="9" fill="#9ca3af">10</text>
+            <text x="35" y="164" text-anchor="end" font-size="9" fill="#9ca3af">5</text>
+            <text x="35" y="224" text-anchor="end" font-size="9" fill="#9ca3af">0</text>
+
+            <!-- 28 daily bars: width=14, gap=2, x = 50 + i*16 -->
+            <g>
+              <rect x="50"  y="172" width="14" height="48" fill="#9ca3af" opacity="0.5"/>
+              <rect x="66"  y="160" width="14" height="60" fill="#9ca3af" opacity="0.5"/>
+              <rect x="82"  y="184" width="14" height="36" fill="#9ca3af" opacity="0.5"/>
+              <rect x="98"  y="148" width="14" height="72" fill="#9ca3af" opacity="0.5"/>
+              <rect x="114" y="172" width="14" height="48" fill="#9ca3af" opacity="0.5"/>
+              <rect x="130" y="136" width="14" height="84" fill="#9ca3af" opacity="0.5"/>
+              <rect x="146" y="160" width="14" height="60" fill="#9ca3af" opacity="0.5"/>
+              <rect x="162" y="148" width="14" height="72" fill="#b8854a"/>
+              <rect x="178" y="124" width="14" height="96" fill="#b8854a"/>
+              <rect x="194" y="160" width="14" height="60" fill="#b8854a"/>
+              <rect x="210" y="112" width="14" height="108" fill="#b8854a"/>
+              <rect x="226" y="100" width="14" height="120" fill="#b8854a"/>
+              <rect x="242" y="136" width="14" height="84" fill="#b8854a"/>
+              <rect x="258" y="148" width="14" height="72" fill="#b8854a"/>
+              <rect x="274" y="124" width="14" height="96" fill="#b8854a"/>
+              <rect x="290" y="88"  width="14" height="132" fill="#b8854a"/>
+              <rect x="306" y="100" width="14" height="120" fill="#b8854a"/>
+              <rect x="322" y="76"  width="14" height="144" fill="#b8854a"/>
+              <rect x="338" y="112" width="14" height="108" fill="#b8854a"/>
+              <rect x="354" y="100" width="14" height="120" fill="#b8854a"/>
+              <rect x="370" y="64"  width="14" height="156" fill="#b8854a"/>
+              <rect x="386" y="88"  width="14" height="132" fill="#b8854a"/>
+              <rect x="402" y="76"  width="14" height="144" fill="#b8854a"/>
+              <rect x="418" y="100" width="14" height="120" fill="#b8854a"/>
+              <rect x="434" y="76"  width="14" height="144" fill="#b8854a"/>
+              <rect x="450" y="52"  width="14" height="168" fill="#16a34a"/>
+              <rect x="466" y="64"  width="14" height="156" fill="#16a34a"/>
+            </g>
+
+            <!-- 7-day moving avg line -->
+            <polyline points="57,170 73,168 89,162 105,155 121,150 137,142 153,135 169,128 185,118 201,114 217,108 233,103 249,100 265,96 281,90 297,84 313,80 329,80 345,82 361,80 377,76 393,72 409,70 425,68 441,64 457,58 473,52"
+              fill="none" stroke="#dc2626" stroke-width="1.5"/>
+
+            <text x="50" y="248" font-size="9" fill="#9ca3af">28d ago</text>
+            <text x="280" y="248" font-size="9" fill="#9ca3af">14d ago</text>
+            <text x="465" y="248" font-size="9" fill="#9ca3af">today</text>
+          </svg>
+          <div style="display:flex;gap:14px;font-size:11px;color:var(--text-dim);margin-top:6px;flex-wrap:wrap;">
+            <span><span class="mix-dot" style="background:#9ca3af;opacity:0.5"></span>4 wks ago</span>
+            <span><span class="mix-dot" style="background:#b8854a"></span>last 3 wks</span>
+            <span><span class="mix-dot" style="background:#16a34a"></span>last 2 days</span>
+            <span><span style="display:inline-block;width:8px;height:0;border-top:2px solid #dc2626;margin-right:4px;vertical-align:middle;"></span>7d MA</span>
+            <span style="margin-left:auto;color:var(--green)">▲ Pickup accelerating · 7d MA +47% vs 28d ago</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- MIX + TREND -->
+      <div class="grid-2">
+        <div class="section">
+          <div class="section-header">
+            <div class="section-title">Channel mix · 30d</div>
+            <div class="section-meta">Commission leak: $8.9k</div>
+          </div>
+          <div class="mix-bar">
+            <div class="mix-seg" style="width:53%;background:#dc2626;color:#fff;">OTA 53%</div>
+            <div class="mix-seg" style="width:21%;background:#16a34a;color:#fff;">Direct 21%</div>
+            <div class="mix-seg" style="width:14%;background:#d97706;color:#fff;">Wholesale 14%</div>
+            <div class="mix-seg" style="width:8%;background:#2563eb;color:#fff;">Group 8%</div>
+            <div class="mix-seg" style="width:4%;background:#7c3aed;color:#fff;">Other</div>
+          </div>
+          <div class="mix-legend">
+            <span><span class="mix-dot" style="background:#dc2626"></span>OTA $21.9k · Net $17.1k</span>
+            <span><span class="mix-dot" style="background:#16a34a"></span>Direct $8.8k · Net $8.8k</span>
+          </div>
+          <div style="margin-top:14px;font-size:11px;color:var(--text-dim);">
+            Direct mix target: 35% · current 21% · <span class="warn">gap -14pp</span>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-header">
+            <div class="section-title">Daily revenue · last 90d</div>
+            <div class="section-meta">Stacked: Rooms · F&amp;B · Spa · Activity</div>
+          </div>
+          <svg viewBox="0 0 400 140" style="width:100%;height:140px;">
+            <defs>
+              <linearGradient id="g1" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stop-color="#b8854a" stop-opacity="0.5"/>
+                <stop offset="100%" stop-color="#b8854a" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <polyline points="0,90 20,85 40,78 60,82 80,70 100,65 120,72 140,55 160,48 180,52 200,40 220,45 240,38 260,42 280,30 300,35 320,28 340,32 360,25 380,28 400,22"
+              fill="none" stroke="#b8854a" stroke-width="1.5"/>
+            <polyline points="0,110 20,105 40,98 60,102 80,90 100,85 120,92 140,75 160,68 180,72 200,60 220,65 240,58 260,62 280,50 300,55 320,48 340,52 360,45 380,48 400,42"
+              fill="none" stroke="#2563eb" stroke-width="1" stroke-dasharray="2,2" opacity="0.6"/>
+            <text x="0" y="138" font-size="9" fill="#9ca3af">90d ago</text>
+            <text x="180" y="138" font-size="9" fill="#9ca3af">today</text>
+            <text x="350" y="138" font-size="9" fill="#9ca3af">+30d fcst</text>
+          </svg>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">
+            <span style="color:var(--accent)">— actual</span> &nbsp;
+            <span style="color:var(--blue)">-- STLY</span>
+          </div>
+        </div>
+      </div>
+    </div>

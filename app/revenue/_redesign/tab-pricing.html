@@ -1,0 +1,162 @@
+<div class="tab-content" id="tab-pricing">
+
+      <div class="design-note">
+        <strong>What changed:</strong> Replaces "Avg BAR" (useless across seasons) with a <strong>BAR calendar heatmap</strong> by room type. Shows rate × occupancy × pickup in one view. Adds parity engine. Active restrictions filtered to actual restrictions only.
+      </div>
+
+      <div class="write-banner">
+        <strong>👤 All rate &amp; restriction changes on this tab require human approval before push to Cloudbeds.</strong>
+        Click any cell on the BAR calendar to propose an override → review → approve. The system queues the <code>patchRate</code> API call and waits for your sign-off. After approval, Cloudbeds confirms async via webhook (usually &lt;30s). Roll back any change from the audit log on the ⚙ Agent Guardrails tab.
+      </div>
+
+      <div class="filterbar" style="margin-top:0;">
+        <div class="filter-group">
+          <span class="filter-label">Room type</span>
+          <button class="filter active">Riverview Suite</button>
+          <button class="filter">Riverfront Suite</button>
+          <button class="filter">Riverfront Glamping</button>
+          <button class="filter">Art Deluxe</button>
+          <button class="filter">Sunset Villa</button>
+        </div>
+        <div class="filter-group" style="margin-left:auto;">
+          <button class="filter active">BAR + Occ</button>
+          <button class="filter">vs Comp Set</button>
+          <button class="filter">Parity check</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">BAR calendar · Riverview Suite · next 4 weeks</div>
+          <div class="section-meta">Color = rate band · subtitle = occ% · Click cell to override</div>
+        </div>
+
+        <div class="calendar">
+          <div class="cal-head">Mon</div>
+          <div class="cal-head">Tue</div>
+          <div class="cal-head">Wed</div>
+          <div class="cal-head">Thu</div>
+          <div class="cal-head">Fri</div>
+          <div class="cal-head">Sat</div>
+          <div class="cal-head">Sun</div>
+          <div class="cal-head"></div>
+
+          <div class="cal-week-label">W18</div>
+          <div class="cal-cell cal-low"><div class="cal-rate">$182</div><div class="cal-occ">28% · +1</div></div>
+          <div class="cal-cell cal-low"><div class="cal-rate">$182</div><div class="cal-occ">31% · +0</div></div>
+          <div class="cal-cell cal-low"><div class="cal-rate">$195</div><div class="cal-occ">35% · +2</div></div>
+          <div class="cal-cell cal-mid"><div class="cal-rate">$215</div><div class="cal-occ">52% · +3</div></div>
+          <div class="cal-cell cal-mid"><div class="cal-rate">$235</div><div class="cal-occ">67% · +4</div></div>
+          <div class="cal-cell cal-mid"><div class="cal-rate">$235</div><div class="cal-occ">71% · +5</div></div>
+          <div class="cal-cell cal-mid"><div class="cal-rate">$215</div><div class="cal-occ">48% · +2</div></div>
+
+          <div class="cal-week-label">W19</div>
+          <div class="cal-cell cal-low"><div class="cal-rate">$195</div><div class="cal-occ">38% · +3</div></div>
+          <div class="cal-cell cal-low"><div class="cal-rate">$195</div><div class="cal-occ">42% · +2</div></div>
+          <div class="cal-cell cal-mid"><div class="cal-rate">$215</div><div class="cal-occ">55% · +4</div></div>
+          <div class="cal-cell cal-mid"><div class="cal-rate">$245</div><div class="cal-occ">68% · +6</div></div>
+          <div class="cal-cell cal-high"><div class="cal-rate">$265</div><div class="cal-occ">82% · +5</div></div>
+          <div class="cal-cell cal-high"><div class="cal-rate">$265</div><div class="cal-occ">88% · +7</div></div>
+          <div class="cal-cell cal-mid"><div class="cal-rate">$245</div><div class="cal-occ">61% · +3</div></div>
+
+          <div class="cal-week-label">W20</div>
+          <div class="cal-cell cal-mid"><div class="cal-rate">$235</div><div class="cal-occ">58% · +5</div></div>
+          <div class="cal-cell cal-mid"><div class="cal-rate">$235</div><div class="cal-occ">62% · +4</div></div>
+          <div class="cal-cell cal-high" style="border-color:var(--amber);"><div class="cal-rate" style="color:var(--amber)">$265 ⚠</div><div class="cal-occ">79% · +9</div></div>
+          <div class="cal-cell cal-high"><div class="cal-rate">$295</div><div class="cal-occ">85% · +8</div></div>
+          <div class="cal-cell cal-high"><div class="cal-rate">$325</div><div class="cal-occ">94% · +6</div></div>
+          <div class="cal-cell cal-high"><div class="cal-rate">$325</div><div class="cal-occ">96% · +5</div></div>
+          <div class="cal-cell cal-high"><div class="cal-rate">$295</div><div class="cal-occ">78% · +4</div></div>
+
+          <div class="cal-week-label">W21</div>
+          <div class="cal-cell cal-mid"><div class="cal-rate">$245</div><div class="cal-occ">52% · +6</div></div>
+          <div class="cal-cell cal-mid"><div class="cal-rate">$245</div><div class="cal-occ">54% · +4</div></div>
+          <div class="cal-cell cal-mid"><div class="cal-rate">$255</div><div class="cal-occ">60% · +5</div></div>
+          <div class="cal-cell cal-high"><div class="cal-rate">$285</div><div class="cal-occ">71% · +6</div></div>
+          <div class="cal-cell cal-high"><div class="cal-rate">$315</div><div class="cal-occ">81% · +5</div></div>
+          <div class="cal-cell cal-high"><div class="cal-rate">$315</div><div class="cal-occ">83% · +4</div></div>
+          <div class="cal-cell cal-high"><div class="cal-rate">$285</div><div class="cal-occ">62% · +3</div></div>
+        </div>
+
+        <div style="display:flex;gap:18px;margin-top:14px;font-size:11px;color:var(--text-dim);">
+          <span><span class="mix-dot" style="background:rgba(74,222,128,0.4)"></span>low band &lt;$200</span>
+          <span><span class="mix-dot" style="background:rgba(251,191,36,0.4)"></span>mid $200–$260</span>
+          <span><span class="mix-dot" style="background:rgba(248,113,113,0.4)"></span>high &gt;$260</span>
+          <span style="margin-left:auto;color:var(--amber)">⚠ rate gap detected W20-Wed: pickup +9 but rate flat vs Thu</span>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="section">
+          <div class="section-header">
+            <div class="section-title">Active restrictions · next 30d</div>
+            <div class="section-meta">Filtered: actual CTA/CTD/Stop-Sell only</div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Room / Plan</th>
+                <th>Type</th>
+                <th>Reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>15 May</td>
+                <td>Riverfront Suite · BAR</td>
+                <td><span class="pill red">Stop-Sell</span></td>
+                <td>Group hold</td>
+              </tr>
+              <tr>
+                <td>16-17 May</td>
+                <td>All · BAR</td>
+                <td><span class="pill amber">CTA</span></td>
+                <td>Festival peak</td>
+              </tr>
+              <tr>
+                <td>22 May</td>
+                <td>Sunset Villa · all</td>
+                <td><span class="pill amber">CTD</span></td>
+                <td>Maintenance</td>
+              </tr>
+              <tr style="color:var(--text-faint);">
+                <td colspan="4" style="font-size:11px;">+ 6 minstay-only entries hidden · <a class="clickable">show</a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="section">
+          <div class="section-header">
+            <div class="section-title">Parity check · Riverview Suite · 7d ahead</div>
+            <div class="section-meta">vs Direct rate</div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th class="num">Direct</th>
+                <th class="num">Booking</th>
+                <th class="num">Expedia</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>02 May</td><td class="num">$235</td><td class="num">$235</td><td class="num">$235</td><td><span class="pill green">parity</span></td></tr>
+              <tr><td>03 May</td><td class="num">$235</td><td class="num">$235</td><td class="num">$235</td><td><span class="pill green">parity</span></td></tr>
+              <tr style="background:#fef2f2;"><td>04 May</td><td class="num">$245</td><td class="num neg">$215</td><td class="num">$245</td><td><span class="pill red">breach -12%</span></td></tr>
+              <tr><td>05 May</td><td class="num">$215</td><td class="num">$215</td><td class="num">$215</td><td><span class="pill green">parity</span></td></tr>
+              <tr><td>06 May</td><td class="num">$215</td><td class="num">$215</td><td class="num">$215</td><td><span class="pill green">parity</span></td></tr>
+              <tr style="background:#fef2f2;"><td>07 May</td><td class="num">$245</td><td class="num neg">$220</td><td class="num">$245</td><td><span class="pill red">breach -10%</span></td></tr>
+              <tr><td>08 May</td><td class="num">$265</td><td class="num">$265</td><td class="num">$265</td><td><span class="pill green">parity</span></td></tr>
+            </tbody>
+          </table>
+          <div style="margin-top:10px;font-size:11px;color:var(--amber);">
+            ⚠ 2 parity breaches detected · auto-action available
+          </div>
+          <button class="btn btn-primary" style="margin-top:8px;" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Cloudbeds write · approval required&lt;/div&gt;&lt;div style=&quot;font-size:11px;line-height:1.6;color:#fff;margin-top:4px;&quot;&gt;Resyncs OTA rates to direct rate via patchRate. Once Tier-1 auto-execute is enabled in Guardrails, parity resyncs &lt;$2k impact and ≥85% confidence will run automatically.&lt;/div&gt;'>Resync rates → Cloudbeds</button>
+          <div style="margin-top:6px;font-size:11px;text-align:center;"><span class="write-stamp">writes Cloudbeds · approval req</span></div>
+        </div>
+      </div>
+    </div>

@@ -1,0 +1,729 @@
+<div class="tab-content" id="tab-compset">
+
+      <div class="design-note">
+        <strong>What changed:</strong> Comp set is no longer one source — it's <strong>4 complementary sources</strong> shown side-by-side. Cloudbeds PMS comp set (the legacy one), Booking.com Rate Insights (free, native), Manual strategic comp set (your real peers), and AI-proposed comp sets (local + regional). Use them together — never alone.
+      </div>
+
+      <!-- 4-SOURCE SWITCHER -->
+      <div class="source-tabs">
+        <div class="source-tab active" onclick="showSource('pms')">
+          <div class="source-name"><span class="source-status amber"></span>Cloudbeds PMS</div>
+          <div class="source-meta">5 properties · last updated 87d ago · stale</div>
+        </div>
+        <div class="source-tab" onclick="showSource('bdc')">
+          <div class="source-name"><span class="source-status gray"></span>Booking Rate Insights <span class="data-needed" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Data needed&lt;/div&gt;&lt;div style=&quot;font-size:11px;line-height:1.6;color:#fff;margin-top:4px;&quot;&gt;BDC Partner API access (Connectivity Programme). Need: enable on Booking extranet · request API credentials · OAuth flow.&lt;/div&gt;'>data needed</span></div>
+          <div class="source-meta">Native BDC · 12 properties · daily refresh (when enabled)</div>
+        </div>
+        <div class="source-tab" onclick="showSource('manual')">
+          <div class="source-name"><span class="source-status"></span>Manual Strategic</div>
+          <div class="source-meta">7 properties · curated by you</div>
+        </div>
+        <div class="source-tab" onclick="showSource('ai')">
+          <div class="source-name"><span class="source-status gray"></span>AI Proposed <span class="data-needed" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Data needed&lt;/div&gt;&lt;div style=&quot;font-size:11px;line-height:1.6;color:#fff;margin-top:4px;&quot;&gt;Discovery agent needs: BDC search co-occurrence (BDC Partner API) + price band scrape (Lighthouse / OTA Insight subscription, $200-400/mo) OR manual research. Cannot run on Cloudbeds alone.&lt;/div&gt;'>data needed</span></div>
+          <div class="source-meta">Local + regional · 16 properties (when feed configured)</div>
+        </div>
+      </div>
+
+      <!-- ============= SOURCE 1: PMS COMP SET ============= -->
+      <div class="source-content active" id="source-pms">
+        <div class="design-note" style="background:#fef3c7;border-color:var(--amber);color:#92400e;">
+          <strong>⚠ Stale data:</strong> The Cloudbeds PMS comp set was last updated 87 days ago. PMS comp sets are typically set once during onboarding and never refreshed. Use this as a baseline only — cross-reference with Booking Rate Insights and Manual sources for current decisions.
+        </div>
+
+        <div class="kpi-row" style="grid-template-columns:repeat(4,1fr);">
+          <div class="kpi"><div class="kpi-label">Properties tracked</div><div class="kpi-value">5</div><div class="kpi-sub"><span class="kpi-delta-neutral">PMS-defined</span></div></div>
+          <div class="kpi"><div class="kpi-label">Data source</div><div class="kpi-value" style="font-size:13px">Cloudbeds CompSet</div><div class="kpi-sub"><span class="kpi-delta-neutral">manual entry · static</span></div></div>
+          <div class="kpi"><div class="kpi-label">Last refresh</div><div class="kpi-value" style="color:var(--amber)">87d</div><div class="kpi-sub"><span class="kpi-delta-neg">action needed</span></div></div>
+          <div class="kpi"><div class="kpi-label">Cost</div><div class="kpi-value">$0</div><div class="kpi-sub"><span class="kpi-delta-pos">included in PMS</span></div></div>
+        </div>
+
+        <div class="section">
+          <div class="section-header">
+            <div class="section-title">PMS comp set · static configuration</div>
+            <div class="section-meta">Edit in Cloudbeds → Settings → Compset</div>
+          </div>
+          <table>
+            <thead><tr><th>Property</th><th>Stars</th><th class="num">Rooms</th><th class="num">PMS-stored ADR</th><th>Last updated</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td>Avani+ Luang Prabang</td><td class="num">5</td><td class="num">53</td><td class="num">$240</td><td>87d ago</td><td><span class="pill amber">stale</span></td></tr>
+              <tr><td>3 Nagas Luang Prabang</td><td class="num">4</td><td class="num">15</td><td class="num">$165</td><td>87d ago</td><td><span class="pill amber">stale</span></td></tr>
+              <tr><td>Satri House</td><td class="num">4</td><td class="num">31</td><td class="num">$210</td><td>87d ago</td><td><span class="pill amber">stale</span></td></tr>
+              <tr><td>Mekong Estate</td><td class="num">4</td><td class="num">12</td><td class="num">$185</td><td>87d ago</td><td><span class="pill amber">stale</span></td></tr>
+              <tr><td>Sofitel Luang Prabang</td><td class="num">5</td><td class="num">25</td><td class="num">$340</td><td>87d ago</td><td><span class="pill amber">stale</span></td></tr>
+            </tbody>
+          </table>
+          <div style="margin-top:10px;font-size:11px;color:var(--text-dim);">
+            <strong>What's missing:</strong> No daily rate tracking · No Rosewood (top-end peer) · No Maison Souvannaphoum · No regional benchmark
+          </div>
+          <button class="btn btn-primary" style="margin-top:8px;">Sync with Manual + AI sources →</button>
+        </div>
+      </div>
+
+      <!-- ============= SOURCE 2: BOOKING.COM RATE INSIGHTS ============= -->
+      <div class="source-content" id="source-bdc">
+        <div class="design-note">
+          <strong>Booking.com Rate Insights:</strong> Native BDC tool, free with extranet access. Shows daily rates for 12 properties Booking auto-selects based on your category and search competition. Pulled via BDC API. <strong>Limitation:</strong> Booking-only data, biased toward high-conversion properties.
+        </div>
+
+        <div class="kpi-row" style="grid-template-columns:repeat(4,1fr);">
+          <div class="kpi"><div class="kpi-label">Properties tracked</div><div class="kpi-value">12</div><div class="kpi-sub"><span class="kpi-delta-neutral">auto-selected by BDC</span></div></div>
+          <div class="kpi"><div class="kpi-label">My rate vs median</div><div class="kpi-value">+8%</div><div class="kpi-sub"><span class="kpi-delta-pos">premium positioning</span></div></div>
+          <div class="kpi"><div class="kpi-label">My rank on BDC</div><div class="kpi-value">#3 / 47</div><div class="kpi-sub"><span class="kpi-delta-pos">stable</span></div></div>
+          <div class="kpi"><div class="kpi-label">Last sync</div><div class="kpi-value" style="color:var(--green)">2h ago</div><div class="kpi-sub"><span class="kpi-delta-pos">via BDC API</span></div></div>
+        </div>
+
+        <div class="section">
+          <div class="section-header">
+            <div class="section-title">Booking Rate Insights matrix · next 14d</div>
+            <div class="section-meta">
+              Source: BDC Partner API · entry-level room
+              <button class="expand-btn" onclick="openChart('bdc-rate-insights')" title="Expand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>
+            </div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Property</th>
+                <th class="compset-cell">BDC Score</th>
+                <th class="compset-cell">May 2</th>
+                <th class="compset-cell">May 5</th>
+                <th class="compset-cell">May 7 Fri</th>
+                <th class="compset-cell">May 8 Sat</th>
+                <th class="compset-cell">May 14 Fri</th>
+                <th class="compset-cell">Avg 14d</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="compset-self">
+                <td><span class="compset-property-name"><span class="star">★</span> The Namkhan</span></td>
+                <td class="compset-cell">9.2</td>
+                <td class="compset-cell">$235</td>
+                <td class="compset-cell">$215</td>
+                <td class="compset-cell">$245</td>
+                <td class="compset-cell">$265</td>
+                <td class="compset-cell">$245</td>
+                <td class="compset-cell"><strong>$235</strong></td>
+              </tr>
+              <tr><td>Rosewood Luang Prabang</td><td class="compset-cell">9.5</td><td class="compset-cell">$485</td><td class="compset-cell">$465</td><td class="compset-cell">$525</td><td class="compset-cell">$565</td><td class="compset-cell">$525</td><td class="compset-cell">$498</td></tr>
+              <tr><td>Avani+ Luang Prabang</td><td class="compset-cell">8.9</td><td class="compset-cell">$280</td><td class="compset-cell">$255</td><td class="compset-cell">$295</td><td class="compset-cell">$320</td><td class="compset-cell">$295</td><td class="compset-cell">$280</td></tr>
+              <tr><td>Mekong Estate</td><td class="compset-cell">8.7</td><td class="compset-cell">$215</td><td class="compset-cell">$195</td><td class="compset-cell">$225</td><td class="compset-cell">$245</td><td class="compset-cell">$225</td><td class="compset-cell">$216</td></tr>
+              <tr><td>Sofitel Luang Prabang</td><td class="compset-cell">9.1</td><td class="compset-cell">$355</td><td class="compset-cell">$325</td><td class="compset-cell">$385</td><td class="compset-cell">$415</td><td class="compset-cell">$385</td><td class="compset-cell">$362</td></tr>
+              <tr><td>3 Nagas Luang Prabang</td><td class="compset-cell">8.5</td><td class="compset-cell">$185</td><td class="compset-cell">$165</td><td class="compset-cell">$195</td><td class="compset-cell">$215</td><td class="compset-cell">$195</td><td class="compset-cell">$186</td></tr>
+              <tr><td>Satri House</td><td class="compset-cell">9.0</td><td class="compset-cell">$245</td><td class="compset-cell">$215</td><td class="compset-cell">$255</td><td class="compset-cell">$285</td><td class="compset-cell">$255</td><td class="compset-cell">$245</td></tr>
+              <tr><td>Maison Souvannaphoum</td><td class="compset-cell">8.6</td><td class="compset-cell">$195</td><td class="compset-cell">$175</td><td class="compset-cell">$205</td><td class="compset-cell">$225</td><td class="compset-cell">$205</td><td class="compset-cell">$196</td></tr>
+              <tr style="color:var(--text-dim);font-style:italic;"><td>+ 4 more BDC-selected</td><td colspan="7"><a class="clickable">show all</a></td></tr>
+              <tr style="border-top:2px solid var(--text-faint);font-style:italic;color:var(--text-dim);">
+                <td>BDC comp set median</td><td class="compset-cell">8.95</td><td class="compset-cell">$262</td><td class="compset-cell">$235</td><td class="compset-cell">$275</td><td class="compset-cell">$300</td><td class="compset-cell">$275</td><td class="compset-cell">$263</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ============= SOURCE 3: MANUAL STRATEGIC COMP SET ============= -->
+      <div class="source-content" id="source-manual">
+        <div class="design-note">
+          <strong>Manual Strategic Comp Set:</strong> Properties YOU define as competitive peers — based on positioning, target guest, geography. Editable. This is the source you trust most because it reflects strategy, not algorithms.
+        </div>
+
+        <div style="display:flex;gap:8px;margin-bottom:14px;">
+          <button class="btn btn-primary">+ Add property</button>
+          <button class="btn">Import from BDC list</button>
+          <button class="btn">Edit list</button>
+          <button class="btn" style="margin-left:auto;">Export config</button>
+        </div>
+
+        <div class="section">
+          <div class="section-header">
+            <div class="section-title">Your strategic peers · 7 properties</div>
+            <div class="section-meta">Curated by you · used in MPI/ARI/RGI calculations</div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Property</th>
+                <th>Why competitor</th>
+                <th class="num">Rooms</th>
+                <th class="num">Avg ADR (14d)</th>
+                <th class="num">Score</th>
+                <th>Geo</th>
+                <th>Edit</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>Rosewood Luang Prabang</strong></td><td>Top-end aspirational peer</td><td class="num">23</td><td class="num">$498</td><td class="num">9.5</td><td>LP riverside</td><td><a class="clickable">edit</a></td></tr>
+              <tr><td><strong>Sofitel Luang Prabang</strong></td><td>5★ luxury direct competitor</td><td class="num">25</td><td class="num">$362</td><td class="num">9.1</td><td>LP central</td><td><a class="clickable">edit</a></td></tr>
+              <tr><td><strong>Avani+ Luang Prabang</strong></td><td>Closest mid-luxury peer</td><td class="num">53</td><td class="num">$280</td><td class="num">8.9</td><td>LP riverside</td><td><a class="clickable">edit</a></td></tr>
+              <tr><td><strong>Satri House</strong></td><td>Boutique heritage · same guest</td><td class="num">31</td><td class="num">$245</td><td class="num">9.0</td><td>LP central</td><td><a class="clickable">edit</a></td></tr>
+              <tr><td><strong>Mekong Estate</strong></td><td>Boutique riverside · target guest overlap</td><td class="num">12</td><td class="num">$216</td><td class="num">8.7</td><td>LP riverside</td><td><a class="clickable">edit</a></td></tr>
+              <tr><td><strong>3 Nagas Luang Prabang</strong></td><td>Heritage boutique · price floor reference</td><td class="num">15</td><td class="num">$186</td><td class="num">8.5</td><td>LP central</td><td><a class="clickable">edit</a></td></tr>
+              <tr><td><strong>Maison Souvannaphoum</strong></td><td>Heritage · slight downmarket</td><td class="num">24</td><td class="num">$196</td><td class="num">8.6</td><td>LP central</td><td><a class="clickable">edit</a></td></tr>
+            </tbody>
+          </table>
+          <div style="margin-top:10px;font-size:11px;color:var(--text-dim);">
+            <strong>This is the canonical comp set</strong> used for MPI/ARI/RGI on the Pulse and Pace tabs. Edit thoughtfully — too many "peers" dilutes the signal.
+          </div>
+        </div>
+      </div>
+
+      <!-- ============= SOURCE 4: AI PROPOSED ============= -->
+      <div class="source-content" id="source-ai">
+        <div class="design-note">
+          <strong>AI-Proposed Comp Sets:</strong> The Comp Set Discovery agent analyzes BDC ranking, search co-occurrence, price band, room count, target guest segments, and geography to propose <strong>Local</strong> (Luang Prabang area) and <strong>Regional</strong> (SEA luxury riverside / boutique heritage) peer groups. Click to add to your Manual list.
+        </div>
+
+        <!-- LOCAL VS REGIONAL TOGGLE -->
+        <div class="filterbar" style="margin-top:0;">
+          <div class="filter-group">
+            <span class="filter-label">Scope</span>
+            <button class="filter active">Local · Luang Prabang</button>
+            <button class="filter">Regional · SEA luxury riverside</button>
+            <button class="filter">Regional · Boutique heritage SEA</button>
+          </div>
+          <div class="filter-group" style="margin-left:auto;">
+            <button class="btn btn-primary" style="padding:5px 10px;font-size:11px;">⚡ Re-run discovery</button>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <!-- LOCAL -->
+          <div class="section">
+            <div class="section-header">
+              <div class="section-title">AI-proposed · Local Luang Prabang</div>
+              <div class="section-meta">8 properties · ranked by overlap score</div>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th class="num">Match</th>
+                  <th class="num">ADR</th>
+                  <th>Why match</th>
+                  <th>Add</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style="background:#f0fdf4">
+                  <td><strong>Rosewood LP</strong></td>
+                  <td class="num pos">98%</td>
+                  <td class="num">$498</td>
+                  <td style="font-size:10px;color:var(--text-dim)">Same guest · BDC co-search 84%</td>
+                  <td><span class="pill green">in manual</span></td>
+                </tr>
+                <tr style="background:#f0fdf4"><td><strong>Sofitel LP</strong></td><td class="num pos">96%</td><td class="num">$362</td><td style="font-size:10px;color:var(--text-dim)">5★ heritage · same district</td><td><span class="pill green">in manual</span></td></tr>
+                <tr style="background:#f0fdf4"><td><strong>Avani+ LP</strong></td><td class="num pos">94%</td><td class="num">$280</td><td style="font-size:10px;color:var(--text-dim)">Riverside · price band</td><td><span class="pill green">in manual</span></td></tr>
+                <tr><td><strong>Belmond La Résidence Phou Vao</strong></td><td class="num pos">91%</td><td class="num">$520</td><td style="font-size:10px;color:var(--text-dim)">5★ peer · LP hilltop</td><td><button class="btn btn-primary" style="padding:2px 8px;font-size:10px;">+ add</button></td></tr>
+                <tr><td><strong>Pullman Luang Prabang</strong></td><td class="num pos">87%</td><td class="num">$310</td><td style="font-size:10px;color:var(--text-dim)">Modern · BDC co-search 71%</td><td><button class="btn btn-primary" style="padding:2px 8px;font-size:10px;">+ add</button></td></tr>
+                <tr style="background:#f0fdf4"><td><strong>Satri House</strong></td><td class="num">82%</td><td class="num">$245</td><td style="font-size:10px;color:var(--text-dim)">Boutique heritage</td><td><span class="pill green">in manual</span></td></tr>
+                <tr><td><strong>Le Sen Boutique Hotel</strong></td><td class="num">76%</td><td class="num">$165</td><td style="font-size:10px;color:var(--text-dim)">Lower price · borderline peer</td><td><button class="btn" style="padding:2px 8px;font-size:10px;">consider</button></td></tr>
+                <tr><td><strong>My Dream Boutique Resort</strong></td><td class="num">71%</td><td class="num">$135</td><td style="font-size:10px;color:var(--text-dim)">Below price band · weak match</td><td><button class="btn" style="padding:2px 8px;font-size:10px;color:var(--text-faint)">skip</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- REGIONAL -->
+          <div class="section">
+            <div class="section-header">
+              <div class="section-title">AI-proposed · Regional SEA peers</div>
+              <div class="section-meta">8 properties · for benchmarking ADR ceiling</div>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Property</th>
+                  <th>Location</th>
+                  <th class="num">ADR</th>
+                  <th class="num">Match</th>
+                  <th>Add</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td><strong>Anantara Hoi An</strong></td><td>Hoi An, VN</td><td class="num">$285</td><td class="num pos">88%</td><td><button class="btn btn-primary" style="padding:2px 8px;font-size:10px;">+ track</button></td></tr>
+                <tr><td><strong>An Lam Retreats Saigon River</strong></td><td>HCMC, VN</td><td class="num">$420</td><td class="num pos">85%</td><td><button class="btn btn-primary" style="padding:2px 8px;font-size:10px;">+ track</button></td></tr>
+                <tr><td><strong>Four Seasons Tented Camp Golden Triangle</strong></td><td>Chiang Rai, TH</td><td class="num">$1,850</td><td class="num">79%</td><td><button class="btn btn-primary" style="padding:2px 8px;font-size:10px;">+ track</button></td></tr>
+                <tr><td><strong>137 Pillars Suites &amp; Residences Bangkok</strong></td><td>Bangkok, TH</td><td class="num">$340</td><td class="num">76%</td><td><button class="btn btn-primary" style="padding:2px 8px;font-size:10px;">+ track</button></td></tr>
+                <tr><td><strong>Six Senses Krabey Island</strong></td><td>Cambodia</td><td class="num">$725</td><td class="num">73%</td><td><button class="btn" style="padding:2px 8px;font-size:10px;">consider</button></td></tr>
+                <tr><td><strong>Phum Baitang</strong></td><td>Siem Reap, KH</td><td class="num">$485</td><td class="num">71%</td><td><button class="btn" style="padding:2px 8px;font-size:10px;">consider</button></td></tr>
+                <tr><td><strong>The Datai Langkawi</strong></td><td>Langkawi, MY</td><td class="num">$680</td><td class="num">68%</td><td><button class="btn" style="padding:2px 8px;font-size:10px;">consider</button></td></tr>
+                <tr><td><strong>Amantaka</strong></td><td>Luang Prabang, LA</td><td class="num">$1,650</td><td class="num pos">95%</td><td><button class="btn btn-primary" style="padding:2px 8px;font-size:10px;">+ add (premium)</button></td></tr>
+              </tbody>
+            </table>
+            <div style="margin-top:10px;font-size:11px;color:var(--text-dim);">
+              <strong>Regional benchmarks</strong> are for ADR ceiling reference and pricing power validation, not direct competition. Track but don't include in MPI calc.
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-header">
+            <div class="section-title">Discovery agent reasoning</div>
+            <div class="section-meta">How the AI ranked these</div>
+          </div>
+          <table>
+            <thead><tr><th>Signal</th><th>Weight</th><th>What it measures</th></tr></thead>
+            <tbody>
+              <tr><td>BDC search co-occurrence</td><td class="num">35%</td><td>How often guests view your property AND the candidate in same search session</td></tr>
+              <tr><td>Price band overlap</td><td class="num">25%</td><td>ADR within ±25% of yours</td></tr>
+              <tr><td>Star rating match</td><td class="num">15%</td><td>Same star tier (4★/5★)</td></tr>
+              <tr><td>Geographic proximity</td><td class="num">10%</td><td>Same city or sub-region weight</td></tr>
+              <tr><td>Review profile similarity</td><td class="num">10%</td><td>Boutique/heritage/luxury keyword match in reviews</td></tr>
+              <tr><td>Room count band</td><td class="num">5%</td><td>Properties of similar inventory size</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- AGENT BAR for Comp Set context -->
+      <div class="agent-strip">
+        <div class="agent-strip-title">
+          <span class="ai-pulse"></span>
+          Comp Set Agents
+        </div>
+        <div class="agent-chip running" onclick="openAgent('compset-agent')" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Comp Set Scanner&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Status&lt;/span&gt;&lt;span class=&quot;val tt-pos&quot;&gt;running&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Source&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;Booking.com scrape&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Coverage&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;7/7 properties&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Cost / month&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;$24&lt;/span&gt;&lt;/div&gt;'>
+          <span class="agent-status-dot"></span>
+          Rate Scanner
+        </div>
+        <div class="agent-chip running" onclick="openAgent('rank-agent')" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Position Tracker&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Status&lt;/span&gt;&lt;span class=&quot;val tt-pos&quot;&gt;running&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Tracks&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;rank, score, reviews&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Schedule&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;daily 06:00&lt;/span&gt;&lt;/div&gt;'>
+          <span class="agent-status-dot"></span>
+          Position
+        </div>
+        <div class="agent-chip idle" onclick="openAgent('move-agent')" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Rate Move Detector&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Status&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;idle&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Last alert&lt;/span&gt;&lt;span class=&quot;val tt-neg&quot;&gt;Mekong Estate -8%&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Threshold&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;±5% in 24h&lt;/span&gt;&lt;/div&gt;'>
+          <span class="agent-status-dot"></span>
+          Rate Moves
+        </div>
+        <button class="agent-fire-btn" onclick="fireCompsetAgent()">⚡ Refresh now</button>
+      </div>
+
+      <!-- SOURCE TOGGLE FOR INDICES -->
+      <div class="section" style="background:#fdf8f1;border-color:var(--accent);">
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+          <div style="font-size:11px;text-transform:uppercase;color:var(--accent);font-weight:600;letter-spacing:0.05em;">
+            Index source
+          </div>
+          <div class="filter-group">
+            <button class="filter" onclick="setIndexSource(this,'pms')">PMS</button>
+            <button class="filter" onclick="setIndexSource(this,'bdc')">BDC Insights</button>
+            <button class="filter active" onclick="setIndexSource(this,'manual')">Manual ★</button>
+            <button class="filter" onclick="setIndexSource(this,'ai-local')">AI Local</button>
+            <button class="filter" onclick="setIndexSource(this,'ai-regional')">AI Regional</button>
+            <button class="filter" onclick="setIndexSource(this,'diff')">Compare all</button>
+          </div>
+          <div style="font-size:11px;color:var(--text-dim);margin-left:auto;">
+            MPI/ARI/RGI scores below recalculate based on selected comp set source.
+          </div>
+        </div>
+
+        <!-- DIFF TABLE - shows when "compare all" is active, hidden by default -->
+        <div id="index-diff-table" style="display:none;margin-top:14px;">
+          <table>
+            <thead>
+              <tr>
+                <th>Source</th>
+                <th class="num">Properties</th>
+                <th class="num">Comp Occ</th>
+                <th class="num">Comp ADR</th>
+                <th class="num">MPI</th>
+                <th class="num">ARI</th>
+                <th class="num">RGI</th>
+                <th>Δ from Manual</th>
+                <th>Recommendation</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Cloudbeds PMS <span class="pill amber" style="font-size:9px;">stale 87d</span></td>
+                <td class="num">5</td>
+                <td class="num">28%</td>
+                <td class="num">$228</td>
+                <td class="num">121</td>
+                <td class="num">103</td>
+                <td class="num">125</td>
+                <td class="num warn">+19 MPI</td>
+                <td style="font-size:10px;color:var(--text-dim)">Inflated · stale rates</td>
+              </tr>
+              <tr>
+                <td>Booking Rate Insights</td>
+                <td class="num">12</td>
+                <td class="num">35%</td>
+                <td class="num">$263</td>
+                <td class="num">97</td>
+                <td class="num">89</td>
+                <td class="num">86</td>
+                <td class="num neg">-13 MPI</td>
+                <td style="font-size:10px;color:var(--text-dim)">BDC bias · skewed</td>
+              </tr>
+              <tr style="background:#fdf8f1;font-weight:600;">
+                <td>★ Manual Strategic <span class="pill green" style="font-size:9px;">canonical</span></td>
+                <td class="num">7</td>
+                <td class="num">33%</td>
+                <td class="num">$217</td>
+                <td class="num">102</td>
+                <td class="num">108</td>
+                <td class="num">110</td>
+                <td class="num">baseline</td>
+                <td style="font-size:10px;color:var(--text-dim)">Used in Pulse</td>
+              </tr>
+              <tr>
+                <td>AI · Local LP</td>
+                <td class="num">8</td>
+                <td class="num">32%</td>
+                <td class="num">$295</td>
+                <td class="num">106</td>
+                <td class="num">80</td>
+                <td class="num">85</td>
+                <td class="num neg">-25 RGI</td>
+                <td style="font-size:10px;color:var(--text-dim)">Includes premium peers (Rosewood)</td>
+              </tr>
+              <tr>
+                <td>AI · Regional SEA</td>
+                <td class="num">8</td>
+                <td class="num">38%</td>
+                <td class="num">$612</td>
+                <td class="num">89</td>
+                <td class="num">38</td>
+                <td class="num">34</td>
+                <td class="num neg">ceiling ref</td>
+                <td style="font-size:10px;color:var(--text-dim)">Use as ADR ceiling, not for MPI</td>
+              </tr>
+            </tbody>
+          </table>
+          <div style="margin-top:10px;font-size:11px;color:var(--text-dim);line-height:1.6;">
+            <strong style="color:var(--text)">Insight:</strong> Your "RGI 110" headline only holds against the Manual list. PMS overstates it (stale rates), BDC understates it (selection bias), AI Local moves you to a Cash-Cow position vs aspirational peers. Pick the source consciously based on the question being asked.
+          </div>
+        </div>
+      </div>
+
+      <!-- HEADER STATS -->
+      <div class="kpi-row" style="grid-template-columns:repeat(5,1fr);">
+        <div class="kpi">
+          <div class="kpi-label">My ADR vs Comp Set</div>
+          <div class="kpi-value">$235</div>
+          <div class="kpi-sub">
+            <span class="kpi-delta-pos">▲ +$18 vs median</span>
+          </div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Position rank</div>
+          <div class="kpi-value">#3 / 7</div>
+          <div class="kpi-sub">
+            <span class="kpi-delta-neutral">↔ unchanged 30d</span>
+          </div>
+        </div>
+        <div class="kpi" style="border-color:var(--accent);">
+          <div class="kpi-label">MPI <span style="color:var(--accent)">★</span></div>
+          <div class="kpi-value">102</div>
+          <div class="kpi-sub">
+            <span class="kpi-delta-pos">market penetration index</span>
+          </div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">ARI</div>
+          <div class="kpi-value">108</div>
+          <div class="kpi-sub">
+            <span class="kpi-delta-pos">ADR rate index</span>
+          </div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">RGI</div>
+          <div class="kpi-value">110</div>
+          <div class="kpi-sub">
+            <span class="kpi-delta-pos">RevPAR generation index</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- RATE MATRIX -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">Comp set rate matrix · next 14 days</div>
+          <div class="section-meta">
+            BAR for entry-level room · Booking.com · refreshed hourly
+            <button class="expand-btn" onclick="openChart('compset-matrix')" title="Expand">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+            </button>
+          </div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="compset-rate-table">
+            <thead>
+              <tr>
+                <th style="text-align:left">Property</th>
+                <th class="compset-cell">Stars</th>
+                <th class="compset-cell">Score</th>
+                <th class="compset-cell">May 2</th>
+                <th class="compset-cell">May 3</th>
+                <th class="compset-cell">May 4</th>
+                <th class="compset-cell">May 5</th>
+                <th class="compset-cell">May 6</th>
+                <th class="compset-cell">May 7 Fri</th>
+                <th class="compset-cell">May 8 Sat</th>
+                <th class="compset-cell">Avg 14d</th>
+                <th class="compset-cell">Δ 7d</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="compset-self">
+                <td><span class="compset-property-name"><span class="star">★</span> The Namkhan <em style="color:var(--text-faint);font-style:normal">(you)</em></span></td>
+                <td class="compset-cell">5★</td>
+                <td class="compset-cell">9.2</td>
+                <td class="compset-cell" data-tip='&lt;div class=&quot;tt-title&quot;&gt;The Namkhan · May 2&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;BAR&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;$235&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;vs median&lt;/span&gt;&lt;span class=&quot;val tt-pos&quot;&gt;+8%&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Position&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;3rd of 7&lt;/span&gt;&lt;/div&gt;'>$235</td>
+                <td class="compset-cell">$235</td>
+                <td class="compset-cell">$245</td>
+                <td class="compset-cell">$215</td>
+                <td class="compset-cell">$215</td>
+                <td class="compset-cell">$245</td>
+                <td class="compset-cell">$265</td>
+                <td class="compset-cell"><strong>$235</strong></td>
+                <td class="compset-cell price-pos">+2%</td>
+              </tr>
+              <tr>
+                <td><span class="compset-property-name">Rosewood Luang Prabang</span></td>
+                <td class="compset-cell">5★</td>
+                <td class="compset-cell">9.5</td>
+                <td class="compset-cell">$485</td>
+                <td class="compset-cell">$485</td>
+                <td class="compset-cell">$510</td>
+                <td class="compset-cell">$465</td>
+                <td class="compset-cell">$465</td>
+                <td class="compset-cell">$525</td>
+                <td class="compset-cell">$565</td>
+                <td class="compset-cell">$498</td>
+                <td class="compset-cell price-neg">+0%</td>
+              </tr>
+              <tr>
+                <td><span class="compset-property-name">Avani+ Luang Prabang</span></td>
+                <td class="compset-cell">5★</td>
+                <td class="compset-cell">8.9</td>
+                <td class="compset-cell">$280</td>
+                <td class="compset-cell">$280</td>
+                <td class="compset-cell">$295</td>
+                <td class="compset-cell">$255</td>
+                <td class="compset-cell">$255</td>
+                <td class="compset-cell">$295</td>
+                <td class="compset-cell">$320</td>
+                <td class="compset-cell">$280</td>
+                <td class="compset-cell price-pos">+3%</td>
+              </tr>
+              <tr style="background:#fef2f2">
+                <td><span class="compset-property-name">Mekong Estate</span></td>
+                <td class="compset-cell">4★</td>
+                <td class="compset-cell">8.7</td>
+                <td class="compset-cell" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Mekong Estate · May 2&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;BAR&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;$215&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;vs prev wk&lt;/span&gt;&lt;span class=&quot;val tt-neg&quot;&gt;-8%&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-note&quot;&gt;⚠ Aggressive cut detected · monitor pickup impact&lt;/div&gt;'>$215 ⚠</td>
+                <td class="compset-cell">$215</td>
+                <td class="compset-cell">$225</td>
+                <td class="compset-cell">$195</td>
+                <td class="compset-cell">$195</td>
+                <td class="compset-cell">$225</td>
+                <td class="compset-cell">$245</td>
+                <td class="compset-cell">$216</td>
+                <td class="compset-cell price-neg">-8%</td>
+              </tr>
+              <tr>
+                <td><span class="compset-property-name">Sofitel Luang Prabang</span></td>
+                <td class="compset-cell">5★</td>
+                <td class="compset-cell">9.1</td>
+                <td class="compset-cell">$355</td>
+                <td class="compset-cell">$355</td>
+                <td class="compset-cell">$375</td>
+                <td class="compset-cell">$325</td>
+                <td class="compset-cell">$325</td>
+                <td class="compset-cell">$385</td>
+                <td class="compset-cell">$415</td>
+                <td class="compset-cell">$362</td>
+                <td class="compset-cell price-pos">+1%</td>
+              </tr>
+              <tr>
+                <td><span class="compset-property-name">3 Nagas Luang Prabang</span></td>
+                <td class="compset-cell">4★</td>
+                <td class="compset-cell">8.5</td>
+                <td class="compset-cell">$185</td>
+                <td class="compset-cell">$185</td>
+                <td class="compset-cell">$195</td>
+                <td class="compset-cell">$165</td>
+                <td class="compset-cell">$165</td>
+                <td class="compset-cell">$195</td>
+                <td class="compset-cell">$215</td>
+                <td class="compset-cell">$186</td>
+                <td class="compset-cell price-pos">+2%</td>
+              </tr>
+              <tr>
+                <td><span class="compset-property-name">Satri House</span></td>
+                <td class="compset-cell">4★</td>
+                <td class="compset-cell">9.0</td>
+                <td class="compset-cell">$245</td>
+                <td class="compset-cell">$245</td>
+                <td class="compset-cell">$255</td>
+                <td class="compset-cell">$215</td>
+                <td class="compset-cell">$215</td>
+                <td class="compset-cell">$255</td>
+                <td class="compset-cell">$285</td>
+                <td class="compset-cell">$245</td>
+                <td class="compset-cell price-pos">+0%</td>
+              </tr>
+              <tr style="border-top:2px solid var(--text-faint);font-style:italic;color:var(--text-dim);">
+                <td>Comp set median (excl. self)</td>
+                <td class="compset-cell">—</td>
+                <td class="compset-cell">8.95</td>
+                <td class="compset-cell">$262</td>
+                <td class="compset-cell">$262</td>
+                <td class="compset-cell">$275</td>
+                <td class="compset-cell">$235</td>
+                <td class="compset-cell">$235</td>
+                <td class="compset-cell">$275</td>
+                <td class="compset-cell">$300</td>
+                <td class="compset-cell">$263</td>
+                <td class="compset-cell">—</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="display:flex;gap:14px;font-size:11px;color:var(--text-dim);margin-top:10px;flex-wrap:wrap;">
+          <span><span class="mix-dot" style="background:#fdf8f1;border:1px solid var(--accent)"></span>You</span>
+          <span><span class="mix-dot" style="background:#fef2f2;border:1px solid var(--red)"></span>Recent rate move detected</span>
+          <span style="margin-left:auto;color:var(--amber)">⚠ Mekong Estate dropped -8% over 7 days · pickup likely shifting</span>
+        </div>
+      </div>
+
+      <!-- POSITION + STR INDEX -->
+      <div class="grid-2">
+        <div class="section">
+          <div class="section-header">
+            <div class="section-title">Rate position · 30 day trend</div>
+            <div class="section-meta">
+              vs comp set median
+              <button class="expand-btn" onclick="openChart('compset-position')" title="Expand">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+              </button>
+            </div>
+          </div>
+          <svg viewBox="0 0 520 260" style="width:100%;height:260px;">
+            <line x1="50" y1="20" x2="510" y2="20" stroke="#e5e7eb"/>
+            <line x1="50" y1="70" x2="510" y2="70" stroke="#e5e7eb"/>
+            <line x1="50" y1="120" x2="510" y2="120" stroke="#9ca3af" stroke-dasharray="4,4"/>
+            <line x1="50" y1="170" x2="510" y2="170" stroke="#e5e7eb"/>
+            <line x1="50" y1="220" x2="510" y2="220" stroke="#9ca3af"/>
+            <text x="45" y="24" text-anchor="end" font-size="9" fill="#9ca3af">+30%</text>
+            <text x="45" y="74" text-anchor="end" font-size="9" fill="#9ca3af">+15%</text>
+            <text x="45" y="124" text-anchor="end" font-size="9" fill="#9ca3af">median</text>
+            <text x="45" y="174" text-anchor="end" font-size="9" fill="#9ca3af">-15%</text>
+            <text x="45" y="224" text-anchor="end" font-size="9" fill="#9ca3af">-30%</text>
+
+            <!-- The Namkhan: hovering ~+8% above median -->
+            <polyline points="60,108 90,105 120,102 150,100 180,98 210,100 240,102 270,99 300,96 330,93 360,91 390,90 420,92 450,95 480,98 500,100"
+              fill="none" stroke="#b8854a" stroke-width="2.5" data-tip='&lt;div class=&quot;tt-title&quot;&gt;The Namkhan · 30d position&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Avg position&lt;/span&gt;&lt;span class=&quot;val tt-pos&quot;&gt;+8% above median&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Trend&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;stable&lt;/span&gt;&lt;/div&gt;'/>
+
+            <!-- Mekong Estate: dropping -->
+            <polyline points="60,118 90,118 120,116 150,116 180,118 210,122 240,128 270,138 300,148 330,156 360,160 390,162 420,165 450,167 480,168 500,168"
+              fill="none" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="2,2" data-tip='&lt;div class=&quot;tt-title&quot;&gt;Mekong Estate · 30d position&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Trend&lt;/span&gt;&lt;span class=&quot;val tt-neg&quot;&gt;dropping&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;30d move&lt;/span&gt;&lt;span class=&quot;val tt-neg&quot;&gt;-12%&lt;/span&gt;&lt;/div&gt;'/>
+
+            <!-- Rosewood: stable high -->
+            <polyline points="60,55 90,52 120,55 150,58 180,55 210,52 240,50 270,55 300,58 330,55 360,52 390,50 420,52 450,55 480,52 500,50"
+              fill="none" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="2,2"/>
+
+            <!-- Sofitel: stable mid-high -->
+            <polyline points="60,82 90,80 120,82 150,85 180,82 210,80 240,82 270,85 300,82 330,80 360,82 390,80 420,82 450,85 480,82 500,80"
+              fill="none" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="2,2"/>
+
+            <text x="60" y="252" font-size="9" fill="#9ca3af">30d ago</text>
+            <text x="270" y="252" font-size="9" fill="#9ca3af">15d ago</text>
+            <text x="490" y="252" font-size="9" fill="#9ca3af">today</text>
+
+            <text x="510" y="100" font-size="10" fill="#b8854a" font-weight="600" text-anchor="end">Namkhan +8%</text>
+            <text x="510" y="170" font-size="10" fill="#dc2626" font-weight="600" text-anchor="end">Mekong -12%</text>
+            <text x="510" y="50" font-size="10" fill="#2563eb" text-anchor="end">Rosewood +24%</text>
+          </svg>
+        </div>
+
+        <div class="section">
+          <div class="section-header">
+            <div class="section-title">STR-style indices · 30d</div>
+            <div class="section-meta">
+              MPI · ARI · RGI · 100 = parity
+              <button class="expand-btn" onclick="openChart('compset-str')" title="Expand">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+              </button>
+            </div>
+          </div>
+          <svg viewBox="0 0 520 260" style="width:100%;height:260px;">
+            <line x1="60" y1="20" x2="510" y2="20" stroke="#e5e7eb"/>
+            <line x1="60" y1="80" x2="510" y2="80" stroke="#e5e7eb"/>
+            <line x1="60" y1="140" x2="510" y2="140" stroke="#9ca3af" stroke-dasharray="4,4"/>
+            <line x1="60" y1="200" x2="510" y2="200" stroke="#e5e7eb"/>
+            <line x1="60" y1="220" x2="510" y2="220" stroke="#9ca3af"/>
+            <text x="55" y="24" text-anchor="end" font-size="9" fill="#9ca3af">130</text>
+            <text x="55" y="84" text-anchor="end" font-size="9" fill="#9ca3af">115</text>
+            <text x="55" y="144" text-anchor="end" font-size="9" fill="#9ca3af">100</text>
+            <text x="55" y="204" text-anchor="end" font-size="9" fill="#9ca3af">85</text>
+
+            <!-- 3 grouped bars: MPI, ARI, RGI -->
+            <g transform="translate(110,0)">
+              <rect x="0" y="62" width="40" height="158" fill="#b8854a" data-tip='&lt;div class=&quot;tt-title&quot;&gt;MPI · Market Penetration Index&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Score&lt;/span&gt;&lt;span class=&quot;val tt-pos&quot;&gt;102&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Meaning&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;Occ vs comp set&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-note&quot;&gt;Slightly above fair share — capturing 102% of expected occupancy&lt;/div&gt;'/>
+              <text x="20" y="55" text-anchor="middle" font-size="14" fill="#b8854a" font-weight="600">102</text>
+              <text x="20" y="240" text-anchor="middle" font-size="11" fill="#374151">MPI</text>
+              <text x="20" y="252" text-anchor="middle" font-size="9" fill="#6b7280">Occupancy</text>
+            </g>
+            <g transform="translate(230,0)">
+              <rect x="0" y="38" width="40" height="182" fill="#b8854a" data-tip='&lt;div class=&quot;tt-title&quot;&gt;ARI · ADR Rate Index&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Score&lt;/span&gt;&lt;span class=&quot;val tt-pos&quot;&gt;108&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Meaning&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;ADR vs comp set&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-note&quot;&gt;Charging 8% above market median&lt;/div&gt;'/>
+              <text x="20" y="31" text-anchor="middle" font-size="14" fill="#b8854a" font-weight="600">108</text>
+              <text x="20" y="240" text-anchor="middle" font-size="11" fill="#374151">ARI</text>
+              <text x="20" y="252" text-anchor="middle" font-size="9" fill="#6b7280">ADR</text>
+            </g>
+            <g transform="translate(350,0)">
+              <rect x="0" y="30" width="40" height="190" fill="#16a34a" data-tip='&lt;div class=&quot;tt-title&quot;&gt;RGI · RevPAR Generation Index&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Score&lt;/span&gt;&lt;span class=&quot;val tt-pos&quot;&gt;110&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-row&quot;&gt;&lt;span class=&quot;lbl&quot;&gt;Meaning&lt;/span&gt;&lt;span class=&quot;val&quot;&gt;RevPAR vs comp set&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;tt-note&quot;&gt;★ The metric that matters — outperforming comp set by 10%&lt;/div&gt;'/>
+              <text x="20" y="23" text-anchor="middle" font-size="14" fill="#16a34a" font-weight="600">110 ★</text>
+              <text x="20" y="240" text-anchor="middle" font-size="11" fill="#16a34a" font-weight="600">RGI</text>
+              <text x="20" y="252" text-anchor="middle" font-size="9" fill="#6b7280">RevPAR</text>
+            </g>
+
+            <!-- Reference line at 100 -->
+            <text x="65" y="138" font-size="9" fill="#9ca3af">parity (100)</text>
+          </svg>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:6px;line-height:1.6;">
+            <strong style="color:var(--green)">RGI = 110</strong> means you're capturing 10% more RevPAR than your fair share. Combined ARI+MPI signals healthy positioning — high rate not yet hurting demand.
+          </div>
+        </div>
+      </div>
+
+      <!-- COMP SET ALERTS -->
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">Comp set alerts · last 24h</div>
+          <div class="section-meta">From AI agents · 3 active</div>
+        </div>
+        <div class="alerts">
+          <div class="alert med">
+            <div class="alert-impact">$215</div>
+            <div class="alert-body">
+              <div class="alert-title">Mekong Estate dropped BAR -8% over 7 days · now $215</div>
+              <div class="alert-meta">Detected 14 min ago by Rate Move Detector · they may be reacting to softening Jul-Aug demand · their LOS restriction also lifted</div>
+            </div>
+            <div class="alert-actions">
+              <button class="btn btn-primary">Hold rate</button>
+              <button class="btn">Match</button>
+              <button class="btn">Investigate</button>
+            </div>
+          </div>
+          <div class="alert low">
+            <div class="alert-impact">+0.3</div>
+            <div class="alert-body">
+              <div class="alert-title">Avani+ review score moved 8.6 → 8.9 (Booking.com)</div>
+              <div class="alert-meta">+47 reviews in last 30 days · likely renovation or new GM impact · monitor for rate-power increase</div>
+            </div>
+            <div class="alert-actions">
+              <button class="btn">Track</button>
+            </div>
+          </div>
+          <div class="alert low">
+            <div class="alert-impact">#3</div>
+            <div class="alert-body">
+              <div class="alert-title">Position rank stable at #3 of 7 · 30d unchanged</div>
+              <div class="alert-meta">Beating Avani+, 3 Nagas, Satri, Mekong Estate · trailing Rosewood and Sofitel</div>
+            </div>
+            <div class="alert-actions">
+              <button class="btn">View detail</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
