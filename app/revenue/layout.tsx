@@ -11,6 +11,7 @@ import FilterStrip from '@/components/nav/FilterStrip';
 import { RAIL_SUBNAV, PILLAR_HEADER } from '@/components/nav/subnavConfig';
 
 import REDESIGN_CSS from './_redesign/redesignCss';
+import OVERRIDE_CSS from './_redesign/overrideCss';
 import AGENT_DOCK_HTML from './_redesign/agentDockHtml';
 import MODAL_HTML from './_redesign/modalHtml';
 import TOOLTIP_HTML from './_redesign/tooltipHtml';
@@ -33,6 +34,8 @@ export default function RevenueLayout({ children }: { children: React.ReactNode 
 
       {/* Mockup CSS — scoped to .bc-redesign so it doesn't bleed into other pillars */}
       <style dangerouslySetInnerHTML={{ __html: REDESIGN_CSS }} />
+      {/* Emergency layout overrides applied AFTER mockup CSS so they win */}
+      <style dangerouslySetInnerHTML={{ __html: OVERRIDE_CSS }} />
 
       <div className="panel bc-redesign">
         {children}
