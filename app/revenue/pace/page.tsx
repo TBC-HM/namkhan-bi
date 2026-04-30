@@ -1,11 +1,12 @@
 // app/revenue/pace/page.tsx
-// D6 (staged, not deployed): wire Pace mockup top KPIs to live mv_pace_otb data.
-// Mockup table sections (curves, drill-downs) stay as-is for now — heavier lift in a later deploy.
-// Replaces /revenue/demand semantically (demand still serves as legacy URL until D14 cleanup).
+// D6+D6b (staged): wire Pace top KPIs + OTB-vs-STLY-by-stay-month chart from mv_pace_otb.
+// Other Pace charts (pace curves Apr-Aug, 4-month overlay) keep mockup until snapshot history table lands.
 
 import tabPace from '../_redesign/tabPace';
 import { getPaceOtb } from '@/lib/data';
 import { fmtMoney } from '@/lib/format';
+import { paceOtbStlySvg } from '@/lib/svgCharts';
+import { replaceChartInSection } from '../_redesign/chartReplace';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -21,7 +22,6 @@ function patchKpi(html: string, labelText: string, newValue: string): string {
 export default async function PacePage() {
   const pace = await getPaceOtb().catch(() => []);
 
-  // Aggregate forward 12mo OTB
   const totals = pace.reduce(
     (a: { otb: number; rev: number; stly: number; stlyRev: number }, r: any) => ({
       otb: a.otb + Number(r.otb_roomnights || 0),
@@ -32,7 +32,6 @@ export default async function PacePage() {
     { otb: 0, rev: 0, stly: 0, stlyRev: 0 }
   );
 
-  // Risk months: any month with >= 30rn negative delta vs STLY
   const riskMonths = pace.filter((r: any) => Number(r.roomnights_delta || 0) <= -30).length;
 
   let html = tabPace.replace(/class="tab-content"/, 'class="tab-content active"');
@@ -41,9 +40,20 @@ export default async function PacePage() {
     html = patchKpi(html, 'OTB Roomnights · 12mo fwd', String(totals.otb));
     html = patchKpi(html, 'OTB Revenue',               fmtMoney(totals.rev, 'USD'));
   }
-  // Pickup last 7d / 28d — proper pickup deltas need snapshot history table (mv_pace_snapshots).
-  // Leave mockup placeholders for now — graceful fallback per spec.
   html = patchKpi(html, 'Risk months', String(riskMonths));
+
+  // Chart: OTB vs STLY · by stay month — wire from getPaceOtb
+  if (pace.length > 0) {
+    const rows = pace.map((r: any) => ({
+      ci_month: String(r.ci_month),
+      otb: Number(r.otb_roomnights || 0),
+      stly: Number(r.stly_roomnights || 0),
+    }));
+    const svg = paceOtbStlySvg(rows);
+    html = replaceChartInSection(html, 'OTB vs STLY vs Budget · by stay month', svg);
+    // also try alternate title text variants used in mockup
+    html = replaceChartInSection(html, 'Pace by check-in month · OTB vs STLY · forward 18 months', svg);
+  }
 
   return <div dangerouslySetInnerHTML={{ __html: html }} />;
 }
