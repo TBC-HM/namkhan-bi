@@ -1,5 +1,8 @@
+'use client';
+
 // app/operations/housekeeping/_components/LostFound.tsx
-// Recent L&F intake list.
+// Recent L&F intake list. Client component because the empty-state CTA
+// has an onClick handler.
 
 import DataNeededOverlay from '@/components/ops/DataNeededOverlay';
 import type { LostFoundRow } from '../_data/lostFound';
