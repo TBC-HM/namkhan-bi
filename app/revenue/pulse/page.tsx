@@ -1,10 +1,13 @@
 // app/revenue/pulse/page.tsx
-// Renders Federico's mockup verbatim AND patches the 4 main KPIs (Occupancy, ADR, RevPAR, TRevPAR)
-// with real values for the resolved period from FilterStrip. Other tiles keep mockup placeholder values.
+// D5 (staged, not deployed): wires 8 Pulse KPIs to live data with graceful mockup fallback:
+//   D3 (deployed): Occupancy, ADR, RevPAR, TRevPAR (from mv_kpi_daily)
+//   D5 (NEW):      Cancel %, No-Show %, Lead Time, ALOS (from reservations table)
+// Net ADR, GOPPAR, Commission $, Forecast +30d remain as mockup placeholders pending data sources.
 
 import tabPulse from '../_redesign/tabPulse';
 import { resolvePeriod } from '@/lib/period';
 import { getKpiDaily, aggregateDaily } from '@/lib/data';
+import { getPulseExtendedKpis } from '@/lib/pulseExtended';
 import { fmtMoney, fmtPct } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
@@ -26,16 +29,37 @@ function patchKpi(html: string, labelText: string, newValue: string): string {
 
 export default async function PulsePage({ searchParams }: Props) {
   const period = resolvePeriod(searchParams);
-  const daily = await getKpiDaily(period.from, period.to).catch(() => []);
+
+  // Parallel fetch — D3 + D5 data
+  const [daily, extended] = await Promise.all([
+    getKpiDaily(period.from, period.to).catch(() => []),
+    getPulseExtendedKpis(period),
+  ]);
+
   const agg = aggregateDaily(daily);
 
   let html = tabPulse.replace(/class="tab-content"/, 'class="tab-content active"');
 
+  // D3 wired KPIs
   if (agg) {
     html = patchKpi(html, 'Occupancy', fmtPct(agg.occupancy_pct ?? 0));
     html = patchKpi(html, 'ADR',       fmtMoney(agg.adr ?? 0, 'USD'));
     html = patchKpi(html, 'RevPAR',    fmtMoney(agg.revpar ?? 0, 'USD'));
     html = patchKpi(html, 'TRevPAR',   fmtMoney(agg.trevpar ?? 0, 'USD'));
+  }
+
+  // D5 wired KPIs — only patch when we got a non-null number, otherwise mockup placeholder stays
+  if (extended.cancelPct != null) {
+    html = patchKpi(html, 'Cancel %', fmtPct(extended.cancelPct));
+  }
+  if (extended.noShowPct != null) {
+    html = patchKpi(html, 'No-Show %', fmtPct(extended.noShowPct));
+  }
+  if (extended.leadTimeDays != null) {
+    html = patchKpi(html, 'Lead Time', `${extended.leadTimeDays.toFixed(0)}d`);
+  }
+  if (extended.alosNights != null) {
+    html = patchKpi(html, 'ALOS', extended.alosNights.toFixed(1));
   }
 
   // Period banner so the date filter is visibly driving the page.
