@@ -38,12 +38,13 @@ const CMP_OPTS: { v: CompareKey; label: string }[] = [
 ];
 
 const SEG_OPTS: { v: SegmentKey; label: string }[] = [
-  { v: 'all',       label: 'All segments' },
-  { v: 'leisure',   label: 'Leisure' },
-  { v: 'group',     label: 'Group / MICE' },
-  { v: 'wholesale', label: 'Wholesale' },
-  { v: 'corporate', label: 'Corporate' },
-  { v: 'honeymoon', label: 'Honeymoon' },
+  { v: 'all',          label: 'All segments' },
+  { v: 'retail',       label: 'Retail' },
+  { v: 'dmc',          label: 'DMC' },
+  { v: 'group',        label: 'Group bookings' },
+  { v: 'discount',     label: 'Discount' },
+  { v: 'comp',         label: 'Comp' },
+  { v: 'unsegmented',  label: 'Unsegmented' },
 ];
 
 const CAP_OPTS: { v: CapacityMode; label: string }[] = [
@@ -69,7 +70,7 @@ export default function FilterStrip({
   showForward = true,
   showCompare = true,
   showSegment = true,
-  showCapacity = true,
+  showCapacity = false,
   liveSource = 'Cloudbeds · live',
 }: Props) {
   const pathname = usePathname();

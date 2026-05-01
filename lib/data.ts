@@ -30,10 +30,16 @@ import { segmentFilter } from './period';
  *
  * Phase 2 backlog: rebuild kpi/capture views with segment dimension.
  */
-function applySegment<T>(query: any, period: ResolvedPeriod, column = 'source'): any {
+function applySegment<T>(query: any, period: ResolvedPeriod, column = 'market_segment'): any {
   const seg = segmentFilter(period.seg);
-  if (seg.column && seg.values && seg.values.length > 0) {
-    return query.in(column, seg.values);
+  // Override default column if caller passes one explicitly (e.g. 'source' for mv_channel_perf).
+  // Otherwise use seg.column ('market_segment') from the new mapping.
+  const col = seg.column ? column : null;
+  if (seg.isNull && col) {
+    return query.is(col, null);
+  }
+  if (col && seg.values && seg.values.length > 0) {
+    return query.in(col, seg.values);
   }
   return query;
 }

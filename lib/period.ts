@@ -19,7 +19,9 @@ export type WindowKey =
   | 'next7' | 'next30' | 'next90' | 'next180' | 'next365';
 
 export type CompareKey = 'none' | 'pp' | 'stly';
-export type SegmentKey = 'all' | 'leisure' | 'group' | 'wholesale' | 'corporate' | 'honeymoon';
+// SegmentKey aligned to actual reservations.market_segment values
+// (verified 2026-05-01: Retail, Discount, DMC, Comp, Group Bookings, NULL).
+export type SegmentKey = 'all' | 'retail' | 'dmc' | 'group' | 'discount' | 'comp' | 'unsegmented';
 
 // Capacity-mode toggle (added 2026-05-01 per Cowork handoff).
 //   selling → mv_kpi_daily.capacity_selling  (24 — USALI default; bookings in last 90d)
@@ -54,7 +56,7 @@ export interface ResolvedPeriod {
 // ---------- Allowed values, defaults ----------
 const WIN_VALUES: WindowKey[] = ['today','7d','30d','90d','ytd','l12m','next7','next30','next90','next180','next365'];
 const CMP_VALUES: CompareKey[] = ['none','pp','stly'];
-const SEG_VALUES: SegmentKey[] = ['all','leisure','group','wholesale','corporate','honeymoon'];
+const SEG_VALUES: SegmentKey[] = ['all','retail','dmc','group','discount','comp','unsegmented'];
 const CAP_VALUES: CapacityMode[] = ['selling','live','total'];
 
 const DEFAULT_WIN: WindowKey = '30d';
@@ -129,11 +131,12 @@ const CMP_LABELS: Record<CompareKey, string> = {
 };
 const SEG_LABELS: Record<SegmentKey, string> = {
   all: 'All segments',
-  leisure: 'Leisure',
-  group: 'Group / MICE',
-  wholesale: 'Wholesale',
-  corporate: 'Corporate',
-  honeymoon: 'Honeymoon',
+  retail: 'Retail',
+  dmc: 'DMC',
+  group: 'Group bookings',
+  discount: 'Discount',
+  comp: 'Comp',
+  unsegmented: 'Unsegmented (NULL)',
 };
 const CAP_LABELS: Record<CapacityMode, string> = {
   selling: 'Selling',
@@ -183,16 +186,38 @@ export const CAPACITY_MODES = CAP_VALUES;
 export type Segment = SegmentKey;
 
 /**
- * v1.2 changed segment taxonomy from channel-based (ota/direct/walkin)
- * to guest-type (leisure/group/wholesale/corporate/honeymoon).
- * Source mapping not yet defined — returns no-op so segment dropdown is
- * cosmetic until business defines what each segment means in source data.
- * TODO: map each v1.2 segment to Cloudbeds source values when defined.
+ * Maps SegmentKey to the actual public.reservations.market_segment values.
+ * Wired 2026-05-01 — segment dropdown is now functional, not cosmetic.
+ *
+ * Returns:
+ *   { column: 'market_segment', values: ['Retail'], isNull: false }   for retail
+ *   { column: 'market_segment', values: null, isNull: true }          for unsegmented
+ *   { column: null, ... }                                              for 'all' (no filter)
  */
-export function segmentFilter(_seg: SegmentKey): {
+export function segmentFilter(seg: SegmentKey): {
   column: string | null;
   values: string[] | null;
+  isNull: boolean;
+  // legacy field, kept for compat with old callers expecting `ilike`
   ilike: string | null;
 } {
-  return { column: null, values: null, ilike: null };
+  const mapping: Record<SegmentKey, { values: string[] | null; isNull: boolean }> = {
+    all:          { values: null,                  isNull: false },
+    retail:       { values: ['Retail'],            isNull: false },
+    dmc:          { values: ['DMC'],               isNull: false },
+    group:        { values: ['Group Bookings'],    isNull: false },
+    discount:     { values: ['Discount'],          isNull: false },
+    comp:         { values: ['Comp'],              isNull: false },
+    unsegmented:  { values: null,                  isNull: true  },
+  };
+  const m = mapping[seg];
+  if (seg === 'all') {
+    return { column: null, values: null, isNull: false, ilike: null };
+  }
+  return {
+    column: 'market_segment',
+    values: m.values,
+    isNull: m.isNull,
+    ilike: null,
+  };
 }

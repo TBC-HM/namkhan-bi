@@ -98,13 +98,21 @@ export async function getChannelEconomicsLive(period?: ResolvedPeriod): Promise<
   const fromDate = period.from;
   const toDate = period.to;
 
+  // Build query with optional segment filter on market_segment
+  const { segmentFilter } = await import('./period');
+  const seg = segmentFilter(period.seg);
+
+  let resQ = supabase
+    .from('reservations')
+    .select('source_name, status, total_amount, nights, check_in_date, booking_date, market_segment')
+    .eq('property_id', PROPERTY_ID)
+    .gte('booking_date', fromDate)
+    .lte('booking_date', toDate);
+  if (seg.column && seg.isNull) resQ = resQ.is(seg.column, null);
+  else if (seg.column && seg.values && seg.values.length > 0) resQ = resQ.in(seg.column, seg.values);
+
   const [{ data: resRaw, error: e1 }, { data: comm, error: e2 }] = await Promise.all([
-    supabase
-      .from('reservations')
-      .select('source_name, status, total_amount, nights, check_in_date, booking_date')
-      .eq('property_id', PROPERTY_ID)
-      .gte('booking_date', fromDate)
-      .lte('booking_date', toDate),
+    resQ,
     supabase
       .from('v_commission_lookup')
       .select('source_name, commission_pct'),
@@ -202,12 +210,17 @@ export async function getChannelXRoomtype(period?: ResolvedPeriod): Promise<Chan
 
 export async function getChannelXRoomtypeLive(period?: ResolvedPeriod): Promise<ChannelXRoomRow[]> {
   if (!period) return [];
-  const { data, error } = await supabase
+  const { segmentFilter } = await import('./period');
+  const seg = segmentFilter(period.seg);
+  let q = supabase
     .from('reservations')
-    .select('source_name, room_type_name, status, total_amount, nights, booking_date')
+    .select('source_name, room_type_name, status, total_amount, nights, booking_date, market_segment')
     .eq('property_id', PROPERTY_ID)
     .gte('booking_date', period.from)
     .lte('booking_date', period.to);
+  if (seg.column && seg.isNull) q = q.is(seg.column, null);
+  else if (seg.column && seg.values && seg.values.length > 0) q = q.in(seg.column, seg.values);
+  const { data, error } = await q;
   if (error) {
     console.error('[matrix live] error', error);
     return [];
