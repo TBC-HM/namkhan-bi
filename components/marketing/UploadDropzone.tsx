@@ -2,11 +2,11 @@
 
 // components/marketing/UploadDropzone.tsx
 // Drag-drop upload widget with processing queue.
-// Phase 2: UI is wired but actual upload pipeline lives in Drive sync (Phase 1).
-// We accept files into local state, mock the queue progression, and expose
-// a "Force re-sync now" CTA. Real upload-to-bucket wiring lands in Phase 2.5.
+// Phase 2.5 (2026-05-01): real upload via POST /api/marketing/upload.
+// Bytes go to media-raw bucket; row inserted into marketing.media_assets.
+// Requires SUPABASE_SERVICE_ROLE_KEY env var on the deployment.
 
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useRef } from 'react';
 
 type Status = 'queued' | 'uploading' | 'ingested' | 'qc' | 'enhancing' | 'rendering' | 'tagging' | 'ready' | 'rejected';
 
@@ -16,6 +16,8 @@ interface QueueItem {
   size: number;
   status: Status;
   reason?: string;
+  asset_id?: string;
+  file?: File;
 }
 
 const STATUS_LABEL: Record<Status, string> = {
@@ -45,6 +47,39 @@ const STATUS_COLOR: Record<Status, string> = {
 export default function UploadDropzone() {
   const [items, setItems] = useState<QueueItem[]>([]);
   const [dragOver, setDragOver] = useState(false);
+  const photographerRef = useRef<HTMLInputElement>(null);
+  const licenseRef = useRef<HTMLSelectElement>(null);
+  const campaignRef = useRef<HTMLInputElement>(null);
+
+  async function uploadOne(item: QueueItem, file: File) {
+    setItems(prev => prev.map(p => p.id === item.id ? { ...p, status: 'uploading' } : p));
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const photographer = photographerRef.current?.value ?? '';
+      const license = licenseRef.current?.value ?? 'owned';
+      const campaign = campaignRef.current?.value ?? '';
+      if (photographer) fd.append('photographer', photographer);
+      fd.append('license', license);
+      if (campaign) fd.append('campaign_tag', campaign);
+
+      const resp = await fetch('/api/marketing/upload', { method: 'POST', body: fd });
+      const json: any = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        setItems(prev => prev.map(p => p.id === item.id ? { ...p, status: 'rejected', reason: json?.error ?? `HTTP ${resp.status}` } : p));
+        return;
+      }
+      const result = (json?.results ?? [])[0] ?? {};
+      if (result.ok) {
+        setItems(prev => prev.map(p => p.id === item.id ? { ...p, status: 'ready', asset_id: result.asset_id } : p));
+      } else {
+        setItems(prev => prev.map(p => p.id === item.id ? { ...p, status: 'rejected', reason: result.error ?? 'Upload failed' } : p));
+      }
+    } catch (e: any) {
+      setItems(prev => prev.map(p => p.id === item.id ? { ...p, status: 'rejected', reason: e?.message ?? 'Network error' } : p));
+    }
+  }
 
   const onFiles = useCallback((files: FileList | File[]) => {
     const arr = Array.from(files);
@@ -54,18 +89,18 @@ export default function UploadDropzone() {
       name: f.name,
       size: f.size,
       status: 'queued',
+      file: f,
     }));
     setItems(prev => [...prev, ...next]);
 
-    // Mock processing — for the Phase 2 UI demo. Real pipeline runs server-side.
-    next.forEach((item, i) => {
-      const stages: Status[] = ['uploading', 'ingested', 'qc', 'enhancing', 'rendering', 'tagging', 'ready'];
-      stages.forEach((s, idx) => {
-        setTimeout(() => {
-          setItems(prev => prev.map(p => p.id === item.id ? { ...p, status: s } : p));
-        }, 800 + idx * 700 + i * 200);
-      });
-    });
+    // Real upload — sequential to avoid hammering the route. For 200-file
+    // batches this is fine; switch to parallel-with-limit if it gets slow.
+    (async () => {
+      for (const item of next) {
+        if (!item.file) continue;
+        await uploadOne(item, item.file);
+      }
+    })();
   }, []);
 
   function onDrop(e: React.DragEvent) {
@@ -132,10 +167,10 @@ export default function UploadDropzone() {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, fontSize: 12 }}>
           <Field label="Photographer">
-            <input style={fieldStyle} placeholder="select staff or type name" />
+            <input ref={photographerRef} style={fieldStyle} placeholder="select staff or type name" />
           </Field>
           <Field label="License">
-            <select style={fieldStyle} defaultValue="owned">
+            <select ref={licenseRef} style={fieldStyle} defaultValue="owned">
               <option value="owned">Owned</option>
               <option value="licensed">Licensed</option>
               <option value="editorial">Editorial only</option>
@@ -153,7 +188,7 @@ export default function UploadDropzone() {
             </select>
           </Field>
           <Field label="Campaign tag (optional)">
-            <input style={fieldStyle} placeholder="e.g. pi_mai_2026" />
+            <input ref={campaignRef} style={fieldStyle} placeholder="e.g. pi_mai_2026" />
           </Field>
         </div>
       </div>
@@ -184,7 +219,10 @@ export default function UploadDropzone() {
             <tbody>
               {items.map(i => (
                 <tr key={i.id}>
-                  <td className="lbl"><strong>{i.name}</strong></td>
+                  <td className="lbl">
+                    <strong>{i.name}</strong>
+                    {i.reason && <div style={{ fontSize: 10, color: 'var(--oxblood)', marginTop: 2 }}>{i.reason}</div>}
+                  </td>
                   <td className="num" style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>{(i.size / 1_000_000).toFixed(1)} MB</td>
                   <td>
                     <span className="pill" style={{ background: STATUS_COLOR[i.status], color: '#fff' }}>
@@ -208,8 +246,8 @@ export default function UploadDropzone() {
       )}
 
       <div style={{ fontSize: 11, color: 'var(--ink-mute)', textAlign: 'center', padding: 12 }}>
-        the actual upload pipeline currently runs via Google Drive sync — this UI demos the queue states.
-        direct browser upload to <code>media-raw</code> bucket lands in Phase 2.5.
+        Live — files upload to <code>media-raw</code> bucket via <code>/api/marketing/upload</code>.
+        AI-tagging and tier-routing pipeline still deferred (status stays at <strong>ingested</strong>).
       </div>
     </div>
   );

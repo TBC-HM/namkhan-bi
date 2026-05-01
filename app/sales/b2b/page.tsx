@@ -6,6 +6,7 @@
 import Link from 'next/link';
 import B2bSubNav from './_components/B2bSubNav';
 import B2bKpiStrip from './_components/B2bKpiStrip';
+import UploadContractButton from './_components/UploadContractButton';
 import { getDmcContracts, getLpaReservations, matchSourceToContract } from '@/lib/dmc';
 
 export const dynamic = 'force-dynamic';
@@ -122,11 +123,16 @@ export default async function B2bDmcContractsPage() {
       <div style={{ fontSize: 11, color: '#8a8170', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 14 }}>
         <strong style={{ color: '#4a4538' }}>Sales</strong> › B2B / DMC › Partners
       </div>
-      <h1 style={{ margin: '4px 0 2px', fontFamily: 'Georgia, serif', fontWeight: 500, fontSize: 30 }}>
-        B2B / DMC · <em style={{ color: '#a17a4f' }}>{contracts.length} on file · {uncontractedRows.length} uncontracted</em>
-      </h1>
-      <div style={{ fontSize: 13, color: '#4a4538' }}>
-        Every partner with a contract <strong>or</strong> sending business via the LPA rate plan. Uncontracted sources highlighted — that's revenue with no anti-publication clause / parity guard / payment terms.
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16 }}>
+        <div>
+          <h1 style={{ margin: '4px 0 2px', fontFamily: 'Georgia, serif', fontWeight: 500, fontSize: 30 }}>
+            B2B / DMC · <em style={{ color: '#a17a4f' }}>{contracts.length} on file · {uncontractedRows.length} uncontracted</em>
+          </h1>
+          <div style={{ fontSize: 13, color: '#4a4538' }}>
+            Every partner with a contract <strong>or</strong> sending business via the LPA rate plan. Uncontracted sources highlighted — that's revenue with no anti-publication clause / parity guard / payment terms.
+          </div>
+        </div>
+        <UploadContractButton />
       </div>
 
       <B2bSubNav />
