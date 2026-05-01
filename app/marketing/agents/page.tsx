@@ -79,6 +79,14 @@ export default function MarketingAgentsPage() {
       ]}
       spendCapMonthly={5000}
       spendUsedMtd={3200}
+      channelSpend={[
+        { channel: 'Google Ads',         cap: 1500, used: 980, cpaCap: 45 },
+        { channel: 'Meta (FB/IG)',       cap: 1000, used: 420, cpaCap: 60 },
+        { channel: 'Expedia TravelAds',  cap:  800, used: 720, cpaCap: 50 },
+        { channel: 'BDC Visibility/PPC', cap: 1000, used: 680, cpaCap: 55 },
+        { channel: 'Influencer / Creator', cap: 500, used: 300 },
+        { channel: 'Email / Direct',     cap:  200, used: 120 },
+      ]}
       brandRules={[
         'Brand voice locked · no superlatives ("luxury", "best", "world-class") without owner approval',
         'No guest faces / property interiors in paid creative without consent log',

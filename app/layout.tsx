@@ -6,6 +6,7 @@ import type { Metadata } from 'next';
 import './../styles/globals.css';
 import LeftRail from '@/components/nav/LeftRail';
 import CapacityResetOnPillarChange from '@/components/nav/CapacityResetOnPillarChange';
+import AgentEditModal from '@/components/agents/AgentEditModal';
 
 export const metadata: Metadata = {
   title: 'The Namkhan · BI',
@@ -22,6 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <LeftRail />
           <div className="main">{children}</div>
         </div>
+        <AgentEditModal />
       </body>
     </html>
   );

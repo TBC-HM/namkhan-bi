@@ -81,6 +81,23 @@ export default function SettingsPage() {
             </div>
           </Card>
         </div>
+
+        <div className="card-grid-2" style={{ marginTop: 22 }}>
+          <Card title="Agent" emphasis="guardrails" sub="Cross-pillar AI agent governance — global config" source="new">
+            <div className="stub" style={{ padding: 32 }}>
+              <h3>Global agent governance</h3>
+              <p>
+                Operating mode · detection thresholds · approval matrix · data quality ·
+                audit trail · master kill switch. Domain-specific rules (Revenue rate caps,
+                Marketing ad spend) live on each pillar's <strong>Agents</strong> tab.
+              </p>
+              <p style={{ marginTop: 10 }}>
+                <a href="/settings/agents" style={{ color: 'var(--moss)', fontWeight: 600 }}>Open Agent guardrails →</a>
+              </p>
+            </div>
+          </Card>
+          <div />
+        </div>
       </div>
     </>
   );
