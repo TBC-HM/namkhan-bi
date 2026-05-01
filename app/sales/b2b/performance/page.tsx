@@ -1,22 +1,61 @@
 // app/sales/b2b/performance/page.tsx
 // Sales › B2B/DMC › Performance scorecard.
-// Spec: docs/specs/sales-b2b-dmc/full-spec-v3.md §8.
+// WIRED: aggregates real LPA reservations grouped by source_name + matches against contracts.
 
 import Link from 'next/link';
 import B2bSubNav from '../_components/B2bSubNav';
 import B2bKpiStrip from '../_components/B2bKpiStrip';
-import { MOCK_CONTRACTS } from '../_components/mockContracts';
+import { getLpaReservations, getDmcContracts, matchSourceToContract } from '@/lib/dmc';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 60;
 
-export default function PerformancePage() {
-  // sort by revenue desc
-  const partners = [...MOCK_CONTRACTS]
-    .filter((c) => c.status !== 'expired' && c.status !== 'draft')
-    .sort((a, b) => b.revenueYtd - a.revenueYtd);
+interface PartnerRow {
+  source_name: string;
+  reservation_count: number;
+  rns: number;
+  revenue: number;
+  cancelled_count: number;
+  matched_contract_id: string | null;
+  matched_partner: string | null;
+}
 
-  const totalRevenue = partners.reduce((s, p) => s + p.revenueYtd, 0);
-  const totalRns = partners.reduce((s, p) => s + p.rnsYtd, 0);
+export default async function PerformancePage() {
+  const [reservations, contracts] = await Promise.all([
+    getLpaReservations(),
+    getDmcContracts(),
+  ]);
+
+  // Aggregate by source_name
+  const byPartner = new Map<string, PartnerRow>();
+  for (const r of reservations) {
+    const src = r.source_name ?? '(unknown)';
+    if (!byPartner.has(src)) {
+      const m = matchSourceToContract(src, contracts);
+      byPartner.set(src, {
+        source_name: src,
+        reservation_count: 0,
+        rns: 0,
+        revenue: 0,
+        cancelled_count: 0,
+        matched_contract_id: m.contract_id,
+        matched_partner: m.partner_short_name,
+      });
+    }
+    const row = byPartner.get(src)!;
+    if (r.is_cancelled) {
+      row.cancelled_count += 1;
+    } else {
+      row.reservation_count += 1;
+      row.rns += Number(r.nights) || 0;
+      row.revenue += Number(r.total_amount) || 0;
+    }
+  }
+
+  const partners = Array.from(byPartner.values()).sort((a, b) => b.revenue - a.revenue);
+  const totalRevenue = partners.reduce((s, p) => s + p.revenue, 0);
+  const totalRns = partners.reduce((s, p) => s + p.rns, 0);
+  const totalRes = partners.reduce((s, p) => s + p.reservation_count, 0);
 
   return (
     <>
@@ -24,10 +63,10 @@ export default function PerformancePage() {
         <strong style={{ color: '#4a4538' }}>Sales</strong> › B2B / DMC › Performance
       </div>
       <h1 style={{ margin: '4px 0 2px', fontFamily: 'Georgia, serif', fontWeight: 500, fontSize: 30 }}>
-        Partner scorecard · <em style={{ color: '#a17a4f' }}>YTD</em>
+        Partner scorecard · <em style={{ color: '#a17a4f' }}>all-time</em>
       </h1>
       <div style={{ fontSize: 13, color: '#4a4538' }}>
-        Ranked by revenue. Mapping health = (mapped reservations) ÷ (detected DMC reservations) per partner.
+        {partners.length} unique sources on LPA rate plan. Aggregated from <code>public.reservations</code>.
       </div>
 
       <B2bSubNav />
@@ -38,63 +77,57 @@ export default function PerformancePage() {
           <thead>
             <tr style={{ background: '#f7f3e7', textAlign: 'left', color: '#8a8170', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               <th style={{ padding: '10px 12px' }}>#</th>
-              <th style={{ padding: '10px 12px' }}>Partner</th>
-              <th style={{ padding: '10px 12px' }}>Country</th>
-              <th style={{ padding: '10px 12px', textAlign: 'right' }}>RNs YTD</th>
-              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Revenue YTD</th>
+              <th style={{ padding: '10px 12px' }}>Source (Cloudbeds)</th>
+              <th style={{ padding: '10px 12px' }}>Matched contract</th>
+              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Bookings</th>
+              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Cxl</th>
+              <th style={{ padding: '10px 12px', textAlign: 'right' }}>RNs</th>
+              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Revenue</th>
               <th style={{ padding: '10px 12px', textAlign: 'right' }}>ADR</th>
               <th style={{ padding: '10px 12px', textAlign: 'right' }}>Share</th>
-              <th style={{ padding: '10px 12px', textAlign: 'center' }}>Parity</th>
-              <th style={{ padding: '10px 12px', textAlign: 'center' }}>Mapping health</th>
             </tr>
           </thead>
           <tbody>
             {partners.map((p, i) => {
-              const adr = p.rnsYtd > 0 ? p.revenueYtd / p.rnsYtd : 0;
-              const share = totalRevenue > 0 ? (p.revenueYtd / totalRevenue) * 100 : 0;
-              const mappingHealth = 85 + ((i * 7) % 15); // mock 85-99%
-              const mappingColor = mappingHealth >= 95 ? '#1f6f43' : mappingHealth >= 90 ? '#a17a4f' : '#a83232';
+              const adr = p.rns > 0 ? p.revenue / p.rns : 0;
+              const share = totalRevenue > 0 ? (p.revenue / totalRevenue) * 100 : 0;
               return (
-                <tr key={p.id} style={{ borderTop: '1px solid #f0eadb' }}>
+                <tr key={p.source_name} style={{ borderTop: '1px solid #f0eadb' }}>
                   <td style={{ padding: '10px 12px', fontFamily: 'Menlo, monospace', color: '#8a8170' }}>{i + 1}</td>
+                  <td style={{ padding: '10px 12px', fontWeight: 500 }}>{p.source_name}</td>
                   <td style={{ padding: '10px 12px' }}>
-                    <Link href={`/sales/b2b/partner/${p.id}`} style={{ color: '#4a4538', textDecoration: 'none', fontWeight: 500 }}>
-                      {p.partner}
-                    </Link>
-                  </td>
-                  <td style={{ padding: '10px 12px' }}>{p.flag} {p.country}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>{p.rnsYtd}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>USD {p.revenueYtd.toLocaleString()}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: '#8a8170' }}>USD {adr.toFixed(0)}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>{share.toFixed(1)}%</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                    {p.parity > 0 ? (
-                      <span style={{ color: '#a83232', fontWeight: 600 }}>{p.parity}</span>
+                    {p.matched_contract_id ? (
+                      <Link href={`/sales/b2b/partner/${p.matched_contract_id}`} style={{ color: '#1f6f43', textDecoration: 'none', fontWeight: 500 }}>
+                        ✓ {p.matched_partner}
+                      </Link>
                     ) : (
-                      <span style={{ color: '#1f6f43' }}>✓</span>
+                      <span style={{ color: '#a83232', fontStyle: 'italic', fontSize: 11.5 }}>no contract on file</span>
                     )}
                   </td>
-                  <td style={{ padding: '10px 12px', textAlign: 'center', fontFamily: 'Menlo, monospace', color: mappingColor, fontWeight: 600 }}>
-                    {mappingHealth}%
-                  </td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>{p.reservation_count}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: p.cancelled_count > 0 ? '#a83232' : '#8a8170' }}>{p.cancelled_count || '—'}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>{p.rns}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>USD {p.revenue.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: '#8a8170' }}>USD {adr.toFixed(0)}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>{share.toFixed(1)}%</td>
                 </tr>
               );
             })}
             <tr style={{ borderTop: '2px solid #e6dfc9', background: '#f7f3e7', fontWeight: 600 }}>
-              <td colSpan={3} style={{ padding: '10px 12px' }}>Total · {partners.length} active partners</td>
+              <td colSpan={3} style={{ padding: '10px 12px' }}>Total · {partners.length} sources</td>
+              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>{totalRes}</td>
+              <td style={{ padding: '10px 12px' }}></td>
               <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>{totalRns}</td>
-              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>USD {totalRevenue.toLocaleString()}</td>
+              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>USD {totalRevenue.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
               <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: '#8a8170' }}>USD {totalRns > 0 ? (totalRevenue / totalRns).toFixed(0) : 0}</td>
               <td style={{ padding: '10px 12px', textAlign: 'right' }}>100%</td>
-              <td colSpan={2}></td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <div style={{ marginTop: 14, padding: '10px 14px', background: '#fef3c7', border: '1px solid #f3d57a', borderRadius: 6, color: '#5e4818', fontSize: 11.5 }}>
-        <strong>Data needed.</strong> Mock scorecard. Mapping health % is computed; rest is mock. Wire to{' '}
-        <code style={{ background: '#fff', padding: '1px 5px', borderRadius: 3 }}>dmc_partner_performance_mv</code> after migration.
+      <div style={{ marginTop: 14, padding: '10px 14px', background: '#e6f4ec', border: '1px solid #aed6c0', borderRadius: 6, color: '#1f5f3a', fontSize: 11.5 }}>
+        <strong>✓ Wired.</strong> Real revenue + RNs from {partners.length} sources on LPA rate plan. Sources without contracts = revenue at risk (no anti-publication clause / parity guard / payment terms enforced).
       </div>
     </>
   );
