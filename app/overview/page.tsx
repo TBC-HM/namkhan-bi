@@ -30,13 +30,11 @@ export default async function OverviewPage({ searchParams }: Props) {
   const daily = await getKpiDaily(period).catch(() => []);
   const capture = await getCaptureRates().catch(() => null);
   const dq = await getDqIssues().catch(() => []);
-  const agg = aggregateDaily(daily);
+  const agg = aggregateDaily(daily, period.capacityMode);
 
-  // 90d for chart — independent of selected period
-  const chartTo = new Date();
-  const chartFrom = new Date(chartTo.getTime() - 90 * 86_400_000);
-  const fmt = (d: Date) => d.toISOString().slice(0, 10);
-  const daily90 = await getKpiDaily(fmt(chartFrom), fmt(chartTo)).catch(() => []);
+  // Chart range now matches the selected window (was hardcoded 90d).
+  // Bug 10 fix per Cowork handoff 2026-05-01.
+  const daily90 = await getKpiDaily(period.from, period.to).catch(() => []);
 
   const ch = await getChannelPerf().catch(() => []);
   // exclude zero-revenue rows (B3 fix)

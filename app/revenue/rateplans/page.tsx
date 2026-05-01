@@ -1,81 +1,101 @@
-// app/revenue/rateplans/page.tsx
-// D8 (staged, not deployed): wire Rate Plans mockup KPIs to live rate_plans data.
-// Plans configured / Active 90d / Dormant / Retire candidates / Avg ADR / Top 5 share.
+// app/revenue/rateplans/page.tsx — REPLACEMENT (audit fix 2026-05-01)
+// Page now consumes ?win=. Was hardcoded last-90d.
 
-import tabRateplans from '../_redesign/tabRateplans';
+import PanelHero from '@/components/sections/PanelHero';
+import Card from '@/components/sections/Card';
+import KpiCard from '@/components/kpi/KpiCard';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
+import { resolvePeriod } from '@/lib/period';
 import { fmtMoney } from '@/lib/format';
 
-export const dynamic = 'force-dynamic';
 export const revalidate = 60;
+export const dynamic = 'force-dynamic';
 
-function patchKpi(html: string, labelStartsWith: string, newValue: string): string {
-  const esc = labelStartsWith.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const re = new RegExp(
-    `(<div class="kpi-label">\\s*${esc}[^<]*(?:<[^>]+>[^<]*</[^>]+>\\s*)*</div>\\s*<div class="kpi-value"[^>]*>)([^<]*)(</div>)`
+interface Props { searchParams: Record<string, string | string[] | undefined>; }
+
+export default async function RatePlansPage({ searchParams }: Props) {
+  const period = resolvePeriod(searchParams);
+
+  const { data: plans } = await supabase
+    .from('rate_plans')
+    .select('rate_id, rate_name, rate_type, is_active')
+    .eq('property_id', PROPERTY_ID)
+    .order('rate_name');
+
+  // Period-scoped reservation usage
+  const { data: usage } = await supabase
+    .from('reservations')
+    .select('rate_plan, total_amount, nights, status, check_in_date')
+    .eq('property_id', PROPERTY_ID)
+    .gte('check_in_date', period.from)
+    .lte('check_in_date', period.to);
+
+  const usageMap: Record<string, { bookings: number; revenue: number; nights: number }> = {};
+  (usage ?? []).forEach((r: any) => {
+    if (!r.rate_plan || r.status === 'canceled') return;
+    if (!usageMap[r.rate_plan]) usageMap[r.rate_plan] = { bookings: 0, revenue: 0, nights: 0 };
+    usageMap[r.rate_plan].bookings += 1;
+    usageMap[r.rate_plan].revenue += Number(r.total_amount || 0);
+    usageMap[r.rate_plan].nights += Number(r.nights || 0);
+  });
+
+  const ranked = Object.entries(usageMap)
+    .map(([name, u]) => ({ name, ...u, adr: u.nights ? u.revenue / u.nights : 0 }))
+    .sort((a, b) => b.revenue - a.revenue);
+
+  const totalRev = ranked.reduce((s, r) => s + r.revenue, 0);
+  const totalBookings = ranked.reduce((s, r) => s + r.bookings, 0);
+  const activePlans = (plans ?? []).filter((p: any) => p.is_active).length;
+
+  return (
+    <>
+      <PanelHero
+        eyebrow={`Rate plans · ${period.label}`}
+        title="Rate plan"
+        emphasis="performance"
+        sub={`${period.rangeLabel} · by revenue · ADR · roomnight contribution`}
+        kpis={
+          <>
+            <KpiCard label="Configured plans" value={plans?.length ?? 0} />
+            <KpiCard label="Active plans" value={activePlans} />
+            <KpiCard label={`Bookings ${period.label}`} value={totalBookings} />
+            <KpiCard label={`Revenue ${period.label}`} value={totalRev} kind="money" />
+          </>
+        }
+      />
+
+      <Card title="Plans" emphasis="ranked" sub={`${period.label} · sorted by revenue`} source="reservations">
+        {ranked.length === 0 ? (
+          <div style={{ padding: 24, color: 'var(--ink-mute)', fontStyle: 'italic' }}>
+            No rate plan usage in selected window.
+          </div>
+        ) : (
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Rate Plan</th>
+                <th className="num">Bookings</th>
+                <th className="num">Roomnights</th>
+                <th className="num">Revenue</th>
+                <th className="num">ADR</th>
+                <th className="num">% Mix</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ranked.slice(0, 30).map((r) => (
+                <tr key={r.name}>
+                  <td className="lbl"><strong>{r.name}</strong></td>
+                  <td className="num">{r.bookings}</td>
+                  <td className="num">{r.nights}</td>
+                  <td className="num">{fmtMoney(r.revenue, 'USD')}</td>
+                  <td className="num">${r.adr.toFixed(0)}</td>
+                  <td className="num text-mute">{totalRev ? `${((r.revenue / totalRev) * 100).toFixed(0)}%` : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
+    </>
   );
-  return html.replace(re, (_match, p1: string, _p2: string, p3: string) => p1 + newValue + p3);
-}
-
-interface PlanRow {
-  rate_plan_id?: string;
-  name?: string;
-  is_active?: boolean;
-  last_booking_date?: string | null;
-  bookings_90d?: number | null;
-  revenue_90d?: number | null;
-  bookings_180d?: number | null;
-  adr_90d?: number | null;
-}
-
-export default async function RatePlansPage() {
-  // Try multiple source patterns — table or view — gracefully fall back if neither exists.
-  let plans: PlanRow[] = [];
-  try {
-    const { data } = await supabase
-      .from('rate_plans')
-      .select('*')
-      .eq('property_id', PROPERTY_ID);
-    plans = (data ?? []) as PlanRow[];
-  } catch {
-    plans = [];
-  }
-
-  let html = tabRateplans.replace(/class="tab-content"/, 'class="tab-content active"');
-
-  if (plans.length > 0) {
-    const total = plans.length;
-
-    const active90 = plans.filter((p) => Number(p.bookings_90d ?? 0) > 0).length;
-    const dormant = plans.filter((p) => {
-      const b90 = Number(p.bookings_90d ?? 0);
-      const b180 = Number(p.bookings_180d ?? 0);
-      return b90 === 0 && b180 > 0;
-    }).length;
-    const retire = plans.filter((p) => Number(p.bookings_180d ?? 0) === 0).length;
-
-    const activePlans = plans.filter((p) => Number(p.bookings_90d ?? 0) > 0);
-    const avgAdr =
-      activePlans.length > 0
-        ? activePlans.reduce((s, p) => s + Number(p.adr_90d ?? 0), 0) / activePlans.length
-        : 0;
-
-    const sortedByRev = [...plans].sort(
-      (a, b) => Number(b.revenue_90d ?? 0) - Number(a.revenue_90d ?? 0)
-    );
-    const totalRev = plans.reduce((s, p) => s + Number(p.revenue_90d ?? 0), 0);
-    const top5Rev = sortedByRev.slice(0, 5).reduce((s, p) => s + Number(p.revenue_90d ?? 0), 0);
-    const top5Pct = totalRev > 0 ? Math.round((top5Rev / totalRev) * 100) : 0;
-
-    html = patchKpi(html, 'Plans configured',     String(total));
-    html = patchKpi(html, 'Active 90d',           String(active90));
-    html = patchKpi(html, 'Dormant',              String(dormant));
-    html = patchKpi(html, 'Retire candidates',    String(retire));
-    if (avgAdr > 0) {
-      html = patchKpi(html, 'Avg ADR (active)',   fmtMoney(avgAdr, 'USD'));
-    }
-    html = patchKpi(html, 'Top 5 plans = revenue', `${top5Pct}%`);
-  }
-
-  return <div dangerouslySetInnerHTML={{ __html: html }} />;
 }

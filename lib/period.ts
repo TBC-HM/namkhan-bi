@@ -6,6 +6,7 @@
 //   ?win=today | 7d | 30d | 90d | ytd | l12m | next7 | next30 | next90 | next180 | next365   (default: 30d)
 //   ?cmp=none | pp | stly                                                                      (default: none)
 //   ?seg=all | leisure | group | wholesale | corporate | honeymoon                             (default: all)
+//   ?cap=selling | live | total                                                                 (default: selling)
 //
 // Two important behaviors:
 //   1. UNKNOWN VALUES ARE COERCED TO DEFAULTS. Never throw.
@@ -20,10 +21,19 @@ export type WindowKey =
 export type CompareKey = 'none' | 'pp' | 'stly';
 export type SegmentKey = 'all' | 'leisure' | 'group' | 'wholesale' | 'corporate' | 'honeymoon';
 
+// Capacity-mode toggle (added 2026-05-01 per Cowork handoff).
+//   selling → mv_kpi_daily.capacity_selling  (24 — USALI default; bookings in last 90d)
+//   live    → mv_kpi_daily.capacity_live     (30 — currently-marketable, incl. soon-launching)
+//   total   → mv_kpi_daily.capacity_total    (30 — all physical room types in PMS)
+// Behavior: URL param ?cap=. Default: selling. Resets on pillar-boundary nav
+// (see components/nav/CapacityResetOnPillarChange.tsx).
+export type CapacityMode = 'selling' | 'live' | 'total';
+
 export interface ResolvedPeriod {
   win: WindowKey;
   cmp: CompareKey;
   seg: SegmentKey;
+  capacityMode: CapacityMode;
   // Direction: 'back' (looks at past), 'fwd' (looks at future). Today = 'back'.
   direction: 'back' | 'fwd';
   // Primary range
@@ -38,16 +48,19 @@ export interface ResolvedPeriod {
   rangeLabel: string;   // "31 Mar 2026 → 30 Apr 2026"
   cmpLabel: string;     // "Prior period", "Same time last year", ""
   segLabel: string;     // "All segments", "Leisure"
+  capLabel: string;     // "Selling", "Live", "Total"
 }
 
 // ---------- Allowed values, defaults ----------
 const WIN_VALUES: WindowKey[] = ['today','7d','30d','90d','ytd','l12m','next7','next30','next90','next180','next365'];
 const CMP_VALUES: CompareKey[] = ['none','pp','stly'];
 const SEG_VALUES: SegmentKey[] = ['all','leisure','group','wholesale','corporate','honeymoon'];
+const CAP_VALUES: CapacityMode[] = ['selling','live','total'];
 
 const DEFAULT_WIN: WindowKey = '30d';
 const DEFAULT_CMP: CompareKey = 'none';
 const DEFAULT_SEG: SegmentKey = 'all';
+const DEFAULT_CAP: CapacityMode = 'selling';
 
 // ---------- Helpers ----------
 function clamp<T extends string>(input: unknown, allowed: readonly T[], fallback: T): T {
@@ -122,6 +135,11 @@ const SEG_LABELS: Record<SegmentKey, string> = {
   corporate: 'Corporate',
   honeymoon: 'Honeymoon',
 };
+const CAP_LABELS: Record<CapacityMode, string> = {
+  selling: 'Selling',
+  live: 'Live',
+  total: 'Total',
+};
 
 // ---------- Main resolver ----------
 export function resolvePeriod(
@@ -131,13 +149,14 @@ export function resolvePeriod(
   const win = clamp(sp.win, WIN_VALUES, DEFAULT_WIN);
   const cmp = clamp(sp.cmp, CMP_VALUES, DEFAULT_CMP);
   const seg = clamp(sp.seg, SEG_VALUES, DEFAULT_SEG);
+  const cap = clamp(sp.cap, CAP_VALUES, DEFAULT_CAP);
 
   const today = new Date();
   const { from, to, direction, days, label } = windowRange(win, today);
   const cmpRange = compareRange(cmp, from, to, days);
 
   return {
-    win, cmp, seg, direction, days,
+    win, cmp, seg, capacityMode: cap, direction, days,
     from: iso(from),
     to: iso(to),
     compareFrom: cmpRange ? iso(cmpRange.from) : null,
@@ -146,6 +165,7 @@ export function resolvePeriod(
     rangeLabel: `${pretty(from)} → ${pretty(to)}`,
     cmpLabel: CMP_LABELS[cmp],
     segLabel: SEG_LABELS[seg],
+    capLabel: CAP_LABELS[cap],
   };
 }
 
@@ -153,6 +173,7 @@ export function resolvePeriod(
 export const WINDOWS = WIN_VALUES;
 export const COMPARES = CMP_VALUES;
 export const SEGMENTS = SEG_VALUES;
+export const CAPACITY_MODES = CAP_VALUES;
 
 // ---------- Backwards-compat shims (v1.2 repair) ----------
 // lib/data.ts and any other pre-v1.2 consumers import Segment + segmentFilter.

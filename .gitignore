@@ -15,3 +15,10 @@ Archive/
 namkhan-bi-tarballs/
 revfiles.zip
 *.tar.gz
+
+# Cleanup hygiene (added 2026-05-01)
+*.zip
+tsconfig.tsbuildinfo
+PROPOSE DELETE/
+to vercel production /
+to vercel production/

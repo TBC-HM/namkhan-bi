@@ -13,6 +13,9 @@ const nextConfig = {
       { source: '/departments/roots',           destination: '/operations/restaurant',   permanent: false },
       { source: '/departments/spa-activities',  destination: '/operations/spa',          permanent: false },
       { source: '/actions',                     destination: '/operations',              permanent: false },
+      // Front Office unfolded to top-level pillar 2026-05-01.
+      { source: '/operations/frontoffice',      destination: '/front-office/arrivals',   permanent: false },
+      { source: '/operations/frontoffice/:path*', destination: '/front-office/arrivals', permanent: false },
     ];
   },
 };

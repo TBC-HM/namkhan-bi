@@ -6,17 +6,20 @@ import PanelHero from '@/components/sections/PanelHero';
 import Card from '@/components/sections/Card';
 import KpiCard from '@/components/kpi/KpiCard';
 import Insight from '@/components/sections/Insight';
-import { getCaptureRates, getKpiDaily, defaultDailyRange, aggregateDaily } from '@/lib/data';
+import { getCaptureRates, getKpiDaily, aggregateDaily } from '@/lib/data';
+import { resolvePeriod } from '@/lib/period';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import { fmtMoney } from '@/lib/format';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
 
-export default async function SpaPage() {
-  const r30 = defaultDailyRange(30);
-  const d30 = await getKpiDaily(r30.from, r30.to).catch(() => []);
-  const a30 = aggregateDaily(d30);
+interface Props { searchParams: Record<string, string | string[] | undefined>; }
+
+export default async function SpaPage({ searchParams }: Props) {
+  const period = resolvePeriod(searchParams);
+  const daily = await getKpiDaily(period.from, period.to).catch(() => []);
+  const a30 = aggregateDaily(daily, period.capacityMode);
   const cap = await getCaptureRates().catch(() => null);
 
   const { data: spaItems } = await supabase
@@ -25,8 +28,8 @@ export default async function SpaPage() {
     .eq('property_id', PROPERTY_ID)
     .eq('usali_dept', 'Other Operated')
     .eq('usali_subdept', 'Spa')
-    .gte('transaction_date', r30.from)
-    .lte('transaction_date', r30.to);
+    .gte('transaction_date', period.from)
+    .lte('transaction_date', period.to);
 
   // Top treatments
   const map: Record<string, { count: number; revenue: number }> = {};
@@ -48,14 +51,14 @@ export default async function SpaPage() {
   return (
     <>
       <PanelHero
-        eyebrow="Spa · 30d"
+        eyebrow={`Spa · ${period.label}`}
         title="Wellness"
         emphasis="treatments"
         sub="Therapy · attached treatments · capture rate · per-occupied-roomnight"
         kpis={
           <>
             <KpiCard label="Spa Revenue" value={a30?.spa_revenue ?? 0} kind="money" />
-            <KpiCard label="Treatments" value={topSpa.reduce((s, t) => s + t.count, 0)} hint="line items 30d" />
+            <KpiCard label="Treatments" value={topSpa.reduce((s, t) => s + t.count, 0)} hint={`line items ${period.label}`} />
             <KpiCard label="Reservations" value={totalSpaResv} hint="with at least 1 spa charge" />
             <KpiCard
               label="Spa / Occ Rn"
@@ -80,7 +83,7 @@ export default async function SpaPage() {
         <KpiCard label="Avg Treatment $" value={null} greyed hint="Spa scheduler not synced" />
       </div>
 
-      <Card title="Top spa treatments" emphasis="30d" sub={`${topSpa.length} treatments · ranked by revenue`} source="mv_classified_transactions">
+      <Card title="Top spa treatments" emphasis={period.label} sub={`${topSpa.length} treatments · ranked by revenue`} source="mv_classified_transactions">
         {topSpa.length === 0 ? (
           <div style={{ padding: 24, color: 'var(--ink-mute)', fontStyle: 'italic' }}>
             No spa transactions in window.

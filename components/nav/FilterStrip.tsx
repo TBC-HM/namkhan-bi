@@ -1,20 +1,21 @@
 'use client';
 
 // components/nav/FilterStrip.tsx
-// Three-control filter strip used on every pillar Snapshot page (and most sub-pages).
+// Four-control filter strip used on every pillar Snapshot page (and most sub-pages).
 //
 // Controls:
 //   1. Window buttons:  Today · 7d · 30d · 90d · YTD  (back) ¦ Next 7 · 30 · 90 (fwd, optional)
 //   2. Compare select:  none · vs Prior period · vs Same time last year
 //   3. Segment select:  All · Leisure · Group · Wholesale · Corporate · Honeymoon
+//   4. Capacity select: Selling (24) · Live (30) · Total (30)         [added 2026-05-01]
 //
-// All three drive query params (?win=, ?cmp=, ?seg=) on the same path.
+// All four drive query params (?win=, ?cmp=, ?seg=, ?cap=) on the same path.
 // Server pages MUST read them via resolvePeriod(searchParams) — see lib/period.ts.
 
 import Link from 'next/link';
 import { usePathname, useSearchParams, useRouter } from 'next/navigation';
 import { useMemo } from 'react';
-import type { WindowKey, CompareKey, SegmentKey } from '@/lib/period';
+import type { WindowKey, CompareKey, SegmentKey, CapacityMode } from '@/lib/period';
 
 // ---------- Tab definitions ----------
 const BACK_TABS: { win: WindowKey; label: string }[] = [
@@ -45,6 +46,12 @@ const SEG_OPTS: { v: SegmentKey; label: string }[] = [
   { v: 'honeymoon', label: 'Honeymoon' },
 ];
 
+const CAP_OPTS: { v: CapacityMode; label: string }[] = [
+  { v: 'selling', label: 'Selling (24)' },
+  { v: 'live',    label: 'Live (30)' },
+  { v: 'total',   label: 'Total (30)' },
+];
+
 interface Props {
   /** When false, hides the forward window tabs (Next 7/30/90). Default true. */
   showForward?: boolean;
@@ -52,6 +59,8 @@ interface Props {
   showCompare?: boolean;
   /** When false, hides the segment dropdown. Default true. */
   showSegment?: boolean;
+  /** When false, hides the capacity dropdown. Default true. */
+  showCapacity?: boolean;
   /** Live-data badge text. */
   liveSource?: string;
 }
@@ -60,6 +69,7 @@ export default function FilterStrip({
   showForward = true,
   showCompare = true,
   showSegment = true,
+  showCapacity = true,
   liveSource = 'Cloudbeds · live',
 }: Props) {
   const pathname = usePathname();
@@ -70,18 +80,20 @@ export default function FilterStrip({
   const currentWin = (search.get('win') ?? '30d') as WindowKey;
   const currentCmp = (search.get('cmp') ?? 'none') as CompareKey;
   const currentSeg = (search.get('seg') ?? 'all') as SegmentKey;
+  const currentCap = (search.get('cap') ?? 'selling') as CapacityMode;
 
   // Build href that preserves all other params
-  const hrefWith = useMemo(() => (key: 'win' | 'cmp' | 'seg', value: string) => {
+  const hrefWith = useMemo(() => (key: 'win' | 'cmp' | 'seg' | 'cap', value: string) => {
     const p = new URLSearchParams(search.toString());
-    if (key === 'win' && value === '30d')  p.delete('win'); else if (key === 'win')  p.set('win',  value);
-    if (key === 'cmp' && value === 'none') p.delete('cmp'); else if (key === 'cmp')  p.set('cmp',  value);
-    if (key === 'seg' && value === 'all')  p.delete('seg'); else if (key === 'seg')  p.set('seg',  value);
+    if (key === 'win' && value === '30d')      p.delete('win'); else if (key === 'win') p.set('win', value);
+    if (key === 'cmp' && value === 'none')     p.delete('cmp'); else if (key === 'cmp') p.set('cmp', value);
+    if (key === 'seg' && value === 'all')      p.delete('seg'); else if (key === 'seg') p.set('seg', value);
+    if (key === 'cap' && value === 'selling')  p.delete('cap'); else if (key === 'cap') p.set('cap', value);
     const qs = p.toString();
     return qs ? `${pathname}?${qs}` : pathname;
   }, [pathname, search]);
 
-  const onSelect = (key: 'cmp' | 'seg') => (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const onSelect = (key: 'cmp' | 'seg' | 'cap') => (e: React.ChangeEvent<HTMLSelectElement>) => {
     router.push(hrefWith(key, e.target.value));
   };
 
@@ -138,6 +150,24 @@ export default function FilterStrip({
             aria-label="Market segment"
           >
             {SEG_OPTS.map((o) => (
+              <option key={o.v} value={o.v}>{o.label}</option>
+            ))}
+          </select>
+        </>
+      )}
+
+      {showCapacity && (
+        <>
+          <span className="filter-divider" aria-hidden />
+          <span className="filter-label">Capacity</span>
+          <select
+            className={`filter-select ${currentCap !== 'selling' ? 'active' : ''}`}
+            value={currentCap}
+            onChange={onSelect('cap')}
+            aria-label="Capacity mode"
+            title="Selling = USALI default · Live = currently marketable · Total = all physical rooms"
+          >
+            {CAP_OPTS.map((o) => (
               <option key={o.v} value={o.v}>{o.label}</option>
             ))}
           </select>

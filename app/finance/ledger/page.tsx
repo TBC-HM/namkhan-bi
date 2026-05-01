@@ -1,11 +1,13 @@
 // app/finance/ledger/page.tsx
 // Finance · Ledger — in-house balance + aged AR + city ledger.
+// Missing-email DQ tile is window-scoped (?win=) per Cowork handoff 2026-05-01.
 
 import PanelHero from '@/components/sections/PanelHero';
 import Card from '@/components/sections/Card';
 import KpiCard from '@/components/kpi/KpiCard';
 import Insight from '@/components/sections/Insight';
 import { getAgedAr, getKpiToday } from '@/lib/data';
+import { resolvePeriod } from '@/lib/period';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import { fmtMoney } from '@/lib/format';
 
@@ -26,7 +28,10 @@ const bucketTone: Record<string, 'good' | 'warn' | 'bad' | ''> = {
   '90_plus': 'bad',
 };
 
-export default async function LedgerPage() {
+interface Props { searchParams: Record<string, string | string[] | undefined>; }
+
+export default async function LedgerPage({ searchParams }: Props) {
+  const period = resolvePeriod(searchParams);
   const today = await getKpiToday().catch(() => null);
   const aged = await getAgedAr().catch(() => []);
 
@@ -44,12 +49,14 @@ export default async function LedgerPage() {
     .eq('is_active', true)
     .limit(20);
 
+  // Window-scoped per ?win= (was hardcoded last-90d arrivals)
   const { count: missingEmailCount } = await supabase
     .from('reservations')
     .select('reservation_id', { count: 'exact', head: true })
     .eq('property_id', PROPERTY_ID)
     .is('guest_email', null)
-    .gte('check_in_date', new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10));
+    .gte('check_in_date', period.from)
+    .lte('check_in_date', period.to);
 
   const { data: inHouse } = await supabase
     .from('mv_arrivals_departures_today')
@@ -83,10 +90,10 @@ export default async function LedgerPage() {
               hint="> $1,000"
             />
             <KpiCard
-              label="Missing Email"
+              label={`Missing Email (${period.label})`}
               value={missingEmailCount ?? 0}
               tone={(missingEmailCount ?? 0) > 5 ? 'warn' : 'neutral'}
-              hint="Last 90d arrivals"
+              hint={`${period.rangeLabel} arrivals`}
             />
           </>
         }

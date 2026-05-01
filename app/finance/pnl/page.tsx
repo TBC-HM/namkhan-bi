@@ -40,7 +40,7 @@ export default async function PnLPage({ searchParams }: Props) {
   // Fetch wired data
   const usali = await getRevenueByUsali(period).catch(() => []);
   const daily = await getKpiDaily(period).catch(() => []);
-  const agg = aggregateDaily(daily);
+  const agg = aggregateDaily(daily, period.capacityMode);
 
   // Latest two months from USALI for current vs prior comparison
   const months = Array.from(new Set(usali.map((r: any) => r.month))).sort().reverse() as string[];

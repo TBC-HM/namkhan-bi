@@ -1,0 +1,12 @@
+# Supabase CLI scratch state — never commit
+.branches/
+.temp/
+.env
+
+# Local seed data dumps that may contain real guest data
+seed-prod.sql
+seed-prod*.sql
+*.dump
+
+# Local edge-function build artefacts
+functions/**/.deno/

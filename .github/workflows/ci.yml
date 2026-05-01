@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-typecheck-build:
+    name: lint · typecheck · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      # Build-time env vars. Real anon key NOT required — placeholder values keep
+      # the build deterministic and never reach the deployed bundle.
+      NEXT_PUBLIC_SUPABASE_URL: https://kpenyneooigsyuuomgct.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-for-ci
+      NEXT_PUBLIC_FX_LAK_USD: '21800'
+      NEXT_PUBLIC_PROPERTY_ID: '260955'
+      DASHBOARD_PASSWORD: ci-placeholder
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Cache .next/cache
+        uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: ${{ runner.os }}-nextcache-${{ hashFiles('package-lock.json') }}-${{ hashFiles('app/**', 'components/**', 'lib/**') }}
+          restore-keys: |
+            ${{ runner.os }}-nextcache-${{ hashFiles('package-lock.json') }}-
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build

@@ -1,11 +1,12 @@
 'use client';
 
 // components/nav/LeftRail.tsx
-// 6-pillar architecture (v10 + Marketing restore 2026-04-30):
-//   01 Revenue · 02 Sales · 03 Marketing · 04 Operations · 05 Guest · 06 Finance
+// 7-pillar architecture (v10 + Marketing restore 2026-04-30 + Front Office unfold 2026-05-01):
+//   01 Revenue · 02 Sales · 03 Marketing · 04 Operations · 04b Front Office · 05 Guest · 06 Finance
 // Bottom utility section: Knowledge · Settings.
 // Click N at top → Home (overview lives at /).
 // Note: Sales glyph is '$' to avoid collision with Settings 'S'.
+// Front Office glyph is 'A' (Arrivals) — distinct from Operations 'O' and Marketing 'M'.
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -43,6 +44,12 @@ const PILLARS: RailItem[] = [
     label: 'Ops',
     // operations folds in: today, departments, action plans
     matches: ['/operations', '/today', '/departments', '/actions'],
+  },
+  {
+    href: '/front-office/arrivals',
+    glyph: 'A',
+    label: 'Front',
+    matches: ['/front-office'],
   },
   {
     href: '/guest',

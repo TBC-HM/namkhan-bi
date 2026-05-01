@@ -3,6 +3,12 @@ namkhan-bi-tarballs/
 period-wiring/
 .backup-batch1/
 *.zip
+*.tar.gz
 proposals approved/
 to vercel production /
 to vercel production/
+NEDEPLOYFiles/
+PROPOSE DELETE/
+agents-frontend/
+marketing-frontend/
+tsconfig.tsbuildinfo

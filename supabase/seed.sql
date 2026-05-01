@@ -1,0 +1,51 @@
+-- supabase/seed.sql
+-- Reference seed for local dev / branch databases ONLY.
+-- Production rows for these tables already exist; this file MUST NOT be applied to
+-- the linked cloud project. Local supabase start runs it automatically; cloud db
+-- push does not.
+--
+-- Scope (per handover §4.1):
+--   - USALI category mappings  (gl.usali_category_map)
+--   - Market segments          (public.market_segments / dim_market_segment)
+--   - FX rates                 (gl.fx_rates)            — single anchor row, history NOT seeded
+--   - System settings          (app.system_settings or public.system_settings)
+--
+-- The exact column lists below are placeholders. After `npx supabase db pull`
+-- produces the initial migration, regenerate this file from the cloud rows
+-- (export → INSERT statements → trim PII / IDs).
+
+----------------------------------------------------------------------
+-- 1. USALI category mappings (11th edition)
+----------------------------------------------------------------------
+-- INSERT INTO gl.usali_category_map (account_code, dept, subdept, ...)
+-- VALUES (...)
+-- ON CONFLICT (account_code) DO NOTHING;
+
+----------------------------------------------------------------------
+-- 2. Market segments
+----------------------------------------------------------------------
+-- INSERT INTO public.market_segments (code, label, segment_type, ...)
+-- VALUES (...)
+-- ON CONFLICT (code) DO NOTHING;
+
+----------------------------------------------------------------------
+-- 3. FX rates — anchor only (LAK base, USD comms, 21,800 LAK / USD)
+----------------------------------------------------------------------
+-- INSERT INTO gl.fx_rates (effective_date, base_ccy, quote_ccy, rate)
+-- VALUES (CURRENT_DATE, 'LAK', 'USD', 21800)
+-- ON CONFLICT DO NOTHING;
+
+----------------------------------------------------------------------
+-- 4. System settings
+----------------------------------------------------------------------
+-- INSERT INTO app.system_settings (key, value)
+-- VALUES
+--   ('property_id',            '260955'),
+--   ('selling_capacity_rooms', '24'),
+--   ('total_capacity_rooms',   '30'),
+--   ('default_currency',       'LAK'),
+--   ('display_currency',       'USD')
+-- ON CONFLICT (key) DO NOTHING;
+
+-- TODO(handover-followup): regenerate body of this file from `db pull` output
+-- and tag with the cloud row count for each section so future drifts surface.

@@ -316,9 +316,22 @@ export function defaultDailyRange(daysBack = 90): { from: string; to: string } {
 // AGGREGATION
 // ============================================================================
 
-export function aggregateDaily(rows: any[]) {
+// Aggregate daily KPI rows over the requested capacity-mode column.
+// Bug 11 fix (Cowork handoff 2026-05-01): the prior implementation used the LAST row's
+// total_rooms, which was wrong for windows that span a capacity change. Now we sum
+// per-night capacity from the chosen capacity_<mode> column (selling/live/total),
+// falling back to total_rooms when those columns aren't present (older matview).
+//
+// `mode` is optional + defaults to 'selling' so legacy callers that pass only `rows`
+// keep working — but every caller should pass `period.capacityMode` to honour ?cap=.
+export function aggregateDaily(rows: any[], mode: 'selling' | 'live' | 'total' = 'selling') {
   if (!rows.length) return null;
-  const totals = rows.reduce((a, r) => {
+  const capCol =
+    mode === 'live'    ? 'capacity_live' :
+    mode === 'total'   ? 'capacity_total' :
+                         'capacity_selling';
+
+  const totals = rows.reduce((a: any, r: any) => {
     a.rooms_sold += Number(r.rooms_sold || 0);
     a.rooms_revenue += Number(r.rooms_revenue || 0);
     a.fnb_revenue += Number(r.fnb_revenue || 0);
@@ -330,21 +343,81 @@ export function aggregateDaily(rows: any[]) {
     a.total_ancillary_revenue += Number(r.total_ancillary_revenue || 0);
     a.unclassified_revenue += Number(r.unclassified_revenue || 0);
     a.days += 1;
-    a.total_rooms = Number(r.total_rooms || 0); // last seen
+    // Per-night capacity sum from the selected mode; fall back to total_rooms when missing.
+    const perNightCap = Number(r[capCol] ?? r.total_rooms ?? 0);
+    a.available_roomnights += perNightCap;
+    a.total_rooms = Number(r.total_rooms || a.total_rooms); // last seen — legacy tile compat
     return a;
   }, {
     rooms_sold: 0, rooms_revenue: 0, fnb_revenue: 0, fnb_food_revenue: 0,
     fnb_beverage_revenue: 0, spa_revenue: 0, activity_revenue: 0,
     retail_revenue: 0, total_ancillary_revenue: 0, unclassified_revenue: 0,
-    days: 0, total_rooms: 0
+    days: 0, total_rooms: 0, available_roomnights: 0,
   });
-  const availableRn = totals.days * totals.total_rooms;
+
+  const availableRn = totals.available_roomnights;
   return {
     ...totals,
+    capacity_mode: mode,
     available_roomnights: availableRn,
     occupancy_pct: availableRn ? (totals.rooms_sold / availableRn) * 100 : 0,
     adr: totals.rooms_sold ? totals.rooms_revenue / totals.rooms_sold : 0,
     revpar: availableRn ? totals.rooms_revenue / availableRn : 0,
-    trevpar: availableRn ? (totals.rooms_revenue + totals.total_ancillary_revenue) / availableRn : 0
+    trevpar: availableRn ? (totals.rooms_revenue + totals.total_ancillary_revenue) / availableRn : 0,
   };
+}
+
+// ============================================================================
+// HELPERS — added 2026-05-01 (Cowork handoff)
+// ============================================================================
+
+/**
+ * Booking count per rate plan over the requested window.
+ * Used by /revenue/rateplans (existing replacement page already imports a similar shape).
+ * Falls back to [] if reservation_rooms isn't reachable.
+ */
+export async function getRatePlanUsage(from: string, to: string): Promise<Array<{
+  rate_plan_name: string; bookings: number; revenue: number;
+}>> {
+  try {
+    const { supabase, PROPERTY_ID } = await import('./supabase');
+    const { data, error } = await supabase
+      .from('reservation_rooms')
+      .select('rate_plan_name, rate, reservation_id, reservations!inner(property_id, booking_date, status)')
+      .gte('reservations.booking_date', from)
+      .lte('reservations.booking_date', to)
+      .eq('reservations.property_id', PROPERTY_ID)
+      .neq('reservations.status', 'canceled')
+      .neq('reservations.status', 'no_show');
+    if (error) { console.error('getRatePlanUsage', error); return []; }
+    const map: Record<string, { bookings: number; revenue: number }> = {};
+    (data ?? []).forEach((r: any) => {
+      const k = r.rate_plan_name || '(none)';
+      if (!map[k]) map[k] = { bookings: 0, revenue: 0 };
+      map[k].bookings += 1;
+      map[k].revenue += Number(r.rate || 0);
+    });
+    return Object.entries(map)
+      .map(([rate_plan_name, x]) => ({ rate_plan_name, ...x }))
+      .sort((a, b) => b.revenue - a.revenue);
+  } catch (e) { console.error('getRatePlanUsage', e); return []; }
+}
+
+/**
+ * Count of guests/reservations missing email in the requested window.
+ * Used by /finance/ledger and /actions to surface DQ debt.
+ */
+export async function countMissingEmail(from: string, to: string): Promise<number> {
+  try {
+    const { supabase, PROPERTY_ID } = await import('./supabase');
+    const { count, error } = await supabase
+      .from('reservations')
+      .select('reservation_id', { count: 'exact', head: true })
+      .eq('property_id', PROPERTY_ID)
+      .gte('booking_date', from)
+      .lte('booking_date', to)
+      .or('email.is.null,email.eq.');
+    if (error) { console.error('countMissingEmail', error); return 0; }
+    return count ?? 0;
+  } catch (e) { console.error('countMissingEmail', e); return 0; }
 }

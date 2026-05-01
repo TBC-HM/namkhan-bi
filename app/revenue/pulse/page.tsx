@@ -33,19 +33,16 @@ const WHOLESALE_RX = /wholesale|tour|dmc|gta|hotelbeds|expedia partner|webbeds/i
 export default async function PulsePage({ searchParams }: Props) {
   const period = resolvePeriod(searchParams);
 
-  // 90d window for the daily revenue chart (independent of period filter)
-  const today = new Date();
-  const ninetyAgo = new Date(today.getTime() - 89 * 86_400_000);
-  const fmt = (d: Date) => d.toISOString().slice(0, 10);
-
+  // Daily revenue chart now matches the selected window (was hardcoded 90d).
+  // Bug 10 fix per Cowork handoff 2026-05-01.
   const [daily, daily90, extended, channels] = await Promise.all([
     getKpiDaily(period.from, period.to).catch(() => []),
-    getKpiDaily(fmt(ninetyAgo), fmt(today)).catch(() => []),
+    getKpiDaily(period.from, period.to).catch(() => []),
     getPulseExtendedKpis(period),
     getChannelPerf().catch(() => []),
   ]);
 
-  const agg = aggregateDaily(daily);
+  const agg = aggregateDaily(daily, period.capacityMode);
 
   let html = tabPulse.replace(/class="tab-content"/, 'class="tab-content active"');
 

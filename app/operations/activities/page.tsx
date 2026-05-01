@@ -6,17 +6,20 @@ import PanelHero from '@/components/sections/PanelHero';
 import Card from '@/components/sections/Card';
 import KpiCard from '@/components/kpi/KpiCard';
 import Insight from '@/components/sections/Insight';
-import { getCaptureRates, getKpiDaily, defaultDailyRange, aggregateDaily } from '@/lib/data';
+import { getCaptureRates, getKpiDaily, aggregateDaily } from '@/lib/data';
+import { resolvePeriod } from '@/lib/period';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import { fmtMoney } from '@/lib/format';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
 
-export default async function ActivitiesPage() {
-  const r30 = defaultDailyRange(30);
-  const d30 = await getKpiDaily(r30.from, r30.to).catch(() => []);
-  const a30 = aggregateDaily(d30);
+interface Props { searchParams: Record<string, string | string[] | undefined>; }
+
+export default async function ActivitiesPage({ searchParams }: Props) {
+  const period = resolvePeriod(searchParams);
+  const daily = await getKpiDaily(period.from, period.to).catch(() => []);
+  const a30 = aggregateDaily(daily, period.capacityMode);
   const cap = await getCaptureRates().catch(() => null);
 
   const { data: actItems } = await supabase
@@ -25,8 +28,8 @@ export default async function ActivitiesPage() {
     .eq('property_id', PROPERTY_ID)
     .eq('usali_dept', 'Other Operated')
     .eq('usali_subdept', 'Activities')
-    .gte('transaction_date', r30.from)
-    .lte('transaction_date', r30.to);
+    .gte('transaction_date', period.from)
+    .lte('transaction_date', period.to);
 
   // Transport (separate sub-dept inside Other Operated)
   const { data: transportItems } = await supabase
@@ -35,8 +38,8 @@ export default async function ActivitiesPage() {
     .eq('property_id', PROPERTY_ID)
     .eq('usali_dept', 'Other Operated')
     .eq('usali_subdept', 'Transportation')
-    .gte('transaction_date', r30.from)
-    .lte('transaction_date', r30.to);
+    .gte('transaction_date', period.from)
+    .lte('transaction_date', period.to);
 
   const map: Record<string, { count: number; revenue: number }> = {};
   (actItems ?? []).forEach((t: any) => {
@@ -58,14 +61,14 @@ export default async function ActivitiesPage() {
   return (
     <>
       <PanelHero
-        eyebrow="Activities · 30d"
+        eyebrow={`Activities · ${period.label}`}
         title="Excursions"
         emphasis="& experiences"
         sub="Bookings · capture · per-occupied-roomnight · transport"
         kpis={
           <>
             <KpiCard label="Activity Revenue" value={a30?.activity_revenue ?? 0} kind="money" />
-            <KpiCard label="Bookings" value={topAct.reduce((s, t) => s + t.count, 0)} hint="line items 30d" />
+            <KpiCard label="Bookings" value={topAct.reduce((s, t) => s + t.count, 0)} hint={`line items ${period.label}`} />
             <KpiCard label="Reservations" value={totalActResv} hint="with at least 1 activity" />
             <KpiCard label="Transport Revenue" value={transportRevenue} kind="money" hint="airport · transfers" />
           </>
@@ -90,7 +93,7 @@ export default async function ActivitiesPage() {
         <KpiCard label="Supplier Margin" value={null} greyed hint="Supplier P&L not yet integrated" />
       </div>
 
-      <Card title="Top activities" emphasis="30d" sub={`${topAct.length} activities · ranked by revenue`} source="mv_classified_transactions">
+      <Card title="Top activities" emphasis={period.label} sub={`${topAct.length} activities · ranked by revenue`} source="mv_classified_transactions">
         {topAct.length === 0 ? (
           <div style={{ padding: 24, color: 'var(--ink-mute)', fontStyle: 'italic' }}>
             No activity transactions in window.

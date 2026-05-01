@@ -49,6 +49,7 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/sales/b2b',        label: 'B2B / DMC', coming: true },
     { href: '/sales/pipeline',   label: 'Pipeline',  coming: true },
     { href: '/sales/roster',     label: 'Roster',    coming: true },
+    { href: '/sales/agents',     label: 'Agents' },
   ],
 
   // ===== 03 Marketing (restored 2026-04-30) =====
@@ -59,18 +60,35 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/marketing/social',       label: 'Social' },
     { href: '/marketing/influencers',  label: 'Influencers' },
     { href: '/marketing/media',        label: 'Media' },
+    { href: '/marketing/agents',       label: 'Agents' },
   ],
 
   // ===== 04 Operations =====
+  // Note: Front Office unfolded to its own top-level pillar 2026-05-01 (sibling of Sales/Marketing/Ops).
+  // Old /operations/frontoffice placeholder removed; redirect set in next.config.js.
   operations: [
     { href: '/operations',                  label: 'Snapshot' },
     { href: '/operations/today',            label: 'Today' },
     { href: '/operations/restaurant',       label: 'Restaurant' },
     { href: '/operations/spa',              label: 'Spa' },
     { href: '/operations/activities',       label: 'Activities' },
-    { href: '/operations/frontoffice',      label: 'Front Office',  coming: true },
     { href: '/operations/housekeeping',     label: 'Housekeeping',  isNew: true },
     { href: '/operations/maintenance',      label: 'Maintenance',   isNew: true },
+    { href: '/operations/agents',           label: 'Agents' },
+  ],
+
+  // ===== 04b Front Office (added 2026-05-01) =====
+  // Top-level pillar shipped with /front-office/arrivals (NEW). Other 6 sub-tabs
+  // (In-house · Departures · Walk-ins · Handover · VIP & Cases · Roster) are
+  // `coming: true` placeholders until each IA proposal lands.
+  frontOffice: [
+    { href: '/front-office/arrivals',   label: 'Arrivals',      isNew: true },
+    { href: '/front-office/inhouse',    label: 'In-house',      coming: true },
+    { href: '/front-office/departures', label: 'Departures',    coming: true },
+    { href: '/front-office/walkins',    label: 'Walk-ins',      coming: true },
+    { href: '/front-office/handover',   label: 'Handover',      coming: true },
+    { href: '/front-office/vip',        label: 'VIP & Cases',   coming: true },
+    { href: '/front-office/roster',     label: 'Roster',        coming: true },
   ],
 
   // ===== 05 Guest =====
@@ -80,6 +98,7 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/guest/reputation',       label: 'Reputation',  coming: true },
     { href: '/guest/journey',          label: 'Journey',     coming: true },
     { href: '/guest/loyalty',          label: 'Loyalty',     coming: true },
+    { href: '/guest/agents',           label: 'Agents' },
   ],
 
   // ===== 04 Finance =====
@@ -91,6 +110,7 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/finance/cashflow',       label: 'Cashflow',        coming: true },
     { href: '/finance/variance',       label: 'Variance',        coming: true },
     { href: '/finance/apar',           label: 'AP / AR',         coming: true },
+    { href: '/finance/agents',         label: 'Agents' },
   ],
 
   // ===== Knowledge (utility) =====
@@ -125,6 +145,7 @@ export const PILLAR_HEADER: Record<
   sales:       { eyebrow: 'Pillar 02 · Sales',          title: 'Inbound',      emphasis: 'funnel',          sub: 'Inquiries · groups · FIT · packages · B2B/DMC · pipeline' },
   marketing:   { eyebrow: 'Pillar 03 · Marketing',      title: 'Brand',        emphasis: 'reach',           sub: 'Reviews · social · influencers · media' },
   operations:  { eyebrow: 'Pillar 04 · Operations',     title: 'Operations',   emphasis: 'live',            sub: 'Today · F&B · spa · activities · property' },
+  frontOffice: { eyebrow: 'Pillar 04b · Front Office',  title: 'Arrivals',     emphasis: 'cockpit',         sub: 'Arrivals · in-house · departures · VIP · groups · roster' },
   guest:       { eyebrow: 'Pillar 05 · Guest',          title: 'Guest',        emphasis: 'voice',           sub: 'Reputation · journey · loyalty' },
   finance:     { eyebrow: 'Pillar 06 · Finance',        title: 'USALI',        emphasis: 'ledger',          sub: 'P&L · ledger · budget · variance' },
   knowledge:   { eyebrow: 'Knowledge',                  title: 'Repos',        emphasis: '& agents',        sub: 'SOPs · brand · automation' },

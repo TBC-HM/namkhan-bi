@@ -1,0 +1,18 @@
+{
+  "extends": "next/core-web-vitals",
+  "rules": {
+    "react/no-unescaped-entities": "off",
+    "@next/next/no-img-element": "off"
+  },
+  "ignorePatterns": [
+    "node_modules/",
+    ".next/",
+    "out/",
+    "Archive/",
+    "agents-frontend/",
+    "marketing-frontend/",
+    "period-wiring/",
+    "namkhan-bi-tarballs/",
+    "proposals approved/"
+  ]
+}

@@ -1,20 +1,23 @@
-// app/departments/roots/page.tsx
-// Departments · Roots (F&B).
+// app/operations/restaurant/page.tsx
+// Operations · Restaurant (F&B). Period-aware (?win= ?cap=) per Cowork handoff 2026-05-01.
 
 import PanelHero from '@/components/sections/PanelHero';
 import Card from '@/components/sections/Card';
 import KpiCard from '@/components/kpi/KpiCard';
-import { getCaptureRates, getKpiDaily, defaultDailyRange, aggregateDaily } from '@/lib/data';
+import { getCaptureRates, getKpiDaily, aggregateDaily } from '@/lib/data';
+import { resolvePeriod } from '@/lib/period';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import { fmtMoney } from '@/lib/format';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
 
-export default async function RootsPage() {
-  const r30 = defaultDailyRange(30);
-  const d30 = await getKpiDaily(r30.from, r30.to).catch(() => []);
-  const a30 = aggregateDaily(d30);
+interface Props { searchParams: Record<string, string | string[] | undefined>; }
+
+export default async function RootsPage({ searchParams }: Props) {
+  const period = resolvePeriod(searchParams);
+  const daily = await getKpiDaily(period.from, period.to).catch(() => []);
+  const a30 = aggregateDaily(daily, period.capacityMode);
   const cap = await getCaptureRates().catch(() => null);
 
   const { data: topSellers } = await supabase
@@ -22,8 +25,8 @@ export default async function RootsPage() {
     .select('description, amount')
     .eq('property_id', PROPERTY_ID)
     .eq('usali_dept', 'F&B')
-    .gte('transaction_date', r30.from)
-    .lte('transaction_date', r30.to);
+    .gte('transaction_date', period.from)
+    .lte('transaction_date', period.to);
 
   const sellerMap: Record<string, { count: number; revenue: number }> = {};
   (topSellers ?? []).forEach((t: any) => {
@@ -40,7 +43,7 @@ export default async function RootsPage() {
   return (
     <>
       <PanelHero
-        eyebrow="Roots · F&B · 30d"
+        eyebrow={`Roots · F&B · ${period.label}`}
         title="Roots"
         emphasis="restaurant"
         sub="Food · beverage · capture · per-occupied-roomnight"
@@ -70,7 +73,7 @@ export default async function RootsPage() {
         <KpiCard label="Cover Count" value={null} greyed hint="POS schedule pending" />
       </div>
 
-      <Card title="Top sellers" emphasis="30d" sub={`${sellers.length} items · ranked by revenue`} source="mv_classified_transactions">
+      <Card title="Top sellers" emphasis={period.label} sub={`${sellers.length} items · ranked by revenue`} source="mv_classified_transactions">
         {sellers.length === 0 ? (
           <div style={{ padding: 24, color: 'var(--ink-mute)', fontStyle: 'italic' }}>No F&B transactions in window.</div>
         ) : (
