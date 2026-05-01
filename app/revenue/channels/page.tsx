@@ -48,12 +48,34 @@ interface Props { searchParams: Record<string, string | string[] | undefined>; }
 export default async function ChannelsPage({ searchParams }: Props) {
   const period = resolvePeriod(searchParams);
 
-  const [channelsRaw, matrixRaw] = await Promise.all([
+  // Compare period synth (when cmp != none) — fetch same window shape but in the past.
+  const cmpPeriod = period.cmp !== 'none' && period.compareFrom && period.compareTo
+    ? { ...period, from: period.compareFrom, to: period.compareTo, cmp: 'none' as const }
+    : null;
+
+  const [channelsRaw, matrixRaw, channelsCmp] = await Promise.all([
     getChannelEconomics(period).catch(() => [] as Awaited<ReturnType<typeof getChannelEconomics>>),
     getChannelXRoomtype(period).catch(() => [] as Awaited<ReturnType<typeof getChannelXRoomtype>>),
+    cmpPeriod ? getChannelEconomics(cmpPeriod).catch(() => []) : Promise.resolve([] as any[]),
   ]);
   const channels = channelsRaw;
   const matrix = matrixRaw;
+
+  // Comparison totals
+  const cmpArr: any[] = channelsCmp as any[];
+  const cmpTotalRev: number = cmpArr.reduce((s: number, c: any) => s + Number(c.gross_revenue || 0), 0);
+  const cmpTotalCommission: number = cmpArr.reduce((s: number, c: any) => s + Number(c.commission_usd || 0), 0);
+  const cmpDirectRev: number = cmpArr.filter((c: any) => DIRECT_RX.test(String(c.source_name || ''))).reduce((s: number, c: any) => s + Number(c.gross_revenue || 0), 0);
+  const cmpOtaRev: number = cmpArr.filter((c: any) => OTA_RX.test(String(c.source_name || ''))).reduce((s: number, c: any) => s + Number(c.gross_revenue || 0), 0);
+  const cmpDirectMix = cmpTotalRev ? (cmpDirectRev / cmpTotalRev) * 100 : 0;
+  const cmpOtaMix = cmpTotalRev ? (cmpOtaRev / cmpTotalRev) * 100 : 0;
+  function deltaHint(now: number, prior: number, suffix: string): string {
+    if (!cmpPeriod) return suffix;
+    if (prior === 0) return suffix + ' · no prior';
+    const pct = ((now - prior) / prior) * 100;
+    const arrow = pct > 0 ? '▲' : pct < 0 ? '▼' : '·';
+    return `${suffix} · ${arrow} ${Math.abs(pct).toFixed(0)}% vs ${period.cmpLabel.replace('vs ', '')}`;
+  }
 
   // Aggregates
   const totalRev = channels.reduce<number>((s, c) => s + Number(c.gross_revenue || 0), 0);
@@ -105,21 +127,21 @@ export default async function ChannelsPage({ searchParams }: Props) {
               value={totalCommission}
               kind="money"
               tone={commissionPctOfRev > 12 ? 'warn' : 'neutral'}
-              hint={`${commissionPctOfRev.toFixed(1)}% of OTA rev`}
+              hint={deltaHint(totalCommission, cmpTotalCommission, `${commissionPctOfRev.toFixed(1)}% of rev`)}
             />
             <KpiCard
               label="Direct mix"
               value={directMix}
               kind="pct"
               tone={directMix < 35 ? 'warn' : 'pos'}
-              hint="Target 35%"
+              hint={deltaHint(directMix, cmpDirectMix, 'Target 35%')}
             />
             <KpiCard
               label="OTA mix"
               value={otaMix}
               kind="pct"
               tone={otaMix > 60 ? 'warn' : 'neutral'}
-              hint={otaMix > 70 ? 'Heavy OTA dependence' : 'stable'}
+              hint={deltaHint(otaMix, cmpOtaMix, otaMix > 70 ? 'Heavy OTA' : 'stable')}
             />
             <KpiCard
               label="Wholesale mix"
