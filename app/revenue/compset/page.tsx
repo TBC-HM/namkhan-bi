@@ -92,8 +92,52 @@ export default async function CompsetPage() {
   const primary = ordered.find((s) => s.is_primary) ?? ordered[0];
   const primaryProps = primary ? bySet.get(primary.set_id) ?? [] : [];
 
+  // Empty-state detection for the primary manual set: peers exist but no rate
+  // observations have been logged. Without this banner the page reads as broken
+  // (table renders 7 rows of "—") to anyone outside the workflow.
+  const manualPrimary =
+    primary?.set_type === 'manual' && primary.properties_tracked > 0;
+  const ratesLoggedThisWeek = primaryProps.some(
+    (p) => p.latest_rate_usd != null && Number(p.latest_rate_usd) > 0
+  );
+  const showEmptyStateBanner = !!manualPrimary && !ratesLoggedThisWeek;
+
+  // Days since last shop on the primary set — for the urgency tone of the CTA
+  const daysSinceLastShop = (() => {
+    if (!primary?.last_rate_shop) return null;
+    const last = new Date(primary.last_rate_shop + 'T00:00:00');
+    const now = new Date();
+    return Math.floor((now.getTime() - last.getTime()) / 86_400_000);
+  })();
+
   return (
     <div className="space-y-8 px-8 py-6">
+      {/* Empty-state CTA — only when the primary manual set has no rates logged */}
+      {showEmptyStateBanner && (
+        <div className="rounded-sm border-2 border-emerald-700/50 bg-emerald-50/70 p-4 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-medium text-emerald-900">
+                {daysSinceLastShop == null
+                  ? 'No peer rates have been logged yet.'
+                  : `No peer rates logged for ${daysSinceLastShop} day${daysSinceLastShop === 1 ? '' : 's'}.`}
+              </p>
+              <p className="mt-1 text-xs text-emerald-900/80">
+                The comparison table below will be empty until you log this
+                week&apos;s Booking.com rates for the {primary?.properties_tracked} peers.
+                Takes ~5&nbsp;min weekly.
+              </p>
+            </div>
+            <Link
+              href="/revenue/compset/manual"
+              className="rounded-sm bg-emerald-900 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.16em] text-white hover:bg-emerald-700"
+            >
+              Log this week&apos;s rates →
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* Honest banner */}
       <div className="rounded-sm border border-stone-300 bg-stone-50/80 p-4 text-sm text-stone-700">
         <p>

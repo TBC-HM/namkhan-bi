@@ -34,6 +34,14 @@ export function SourceCard({
   const f = FRESH_META[freshness];
   const isEmpty = properties === 0;
 
+  // Manual set is implemented but waiting for owner input — escalate the empty
+  // state to action-required tone instead of the passive "No data" gray.
+  const manualNeedsAction =
+    setType === "manual" && properties > 0 && freshness === "no_data";
+  const badge = manualNeedsAction
+    ? { tone: "bg-amber-100 text-amber-900", label: "Action needed" }
+    : f;
+
   return (
     <div
       className={`rounded-sm border p-5 transition ${
@@ -56,9 +64,9 @@ export function SourceCard({
           </h3>
         </div>
         <span
-          className={`rounded-sm px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider ${f.tone}`}
+          className={`rounded-sm px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider ${badge.tone}`}
         >
-          {f.label}
+          {badge.label}
         </span>
       </div>
 
@@ -74,6 +82,10 @@ export function SourceCard({
       {lastShop ? (
         <p className="mt-1 text-xs text-stone-500">
           Last shop: <span className="font-mono">{lastShop}</span>
+        </p>
+      ) : manualNeedsAction ? (
+        <p className="mt-1 text-xs font-medium text-amber-900">
+          Log this week&apos;s rates →
         </p>
       ) : (
         <p className="mt-1 text-xs text-stone-400">No rates observed yet</p>

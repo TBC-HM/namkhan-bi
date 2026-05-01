@@ -7,6 +7,7 @@
 
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import { resolvePeriod, type WindowKey } from '@/lib/period';
+import { capacityFor, capacityRnRange, CAPACITY_PIVOT, CAPACITY_PRE, CAPACITY_POST } from '@/lib/capacity';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -45,7 +46,7 @@ async function getPace(fromDate: string, toDate: string): Promise<PaceRow[]> {
   return (data ?? []) as PaceRow[];
 }
 
-const ROOM_CAPACITY = 20; // public.rooms count
+// Capacity is date-dependent: 24 pre-2026-07-01, 30 post. Use capacityFor()/capacityRnRange().
 
 function bucketRows(rows: PaceRow[], gran: 'day' | 'week' | 'month') {
   const buckets = new Map<string, { rns: number; rev: number; cxl: number; days: number }>();
@@ -92,9 +93,10 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
   const totalRev = rows.reduce((s, r) => s + (Number(r.confirmed_revenue) || 0), 0);
   const totalCxl = rows.reduce((s, r) => s + (Number(r.cancelled_rooms) || 0), 0);
   const adr = totalRns > 0 ? totalRev / totalRns : 0;
-  const capacityRn = ROOM_CAPACITY * period.days;
+  const capacityRn = capacityRnRange(fromIso, toIso); // date-dependent, 24→30 pivot
   const occ = capacityRn > 0 ? (totalRns / capacityRn) * 100 : 0;
   const cxlRate = totalRns + totalCxl > 0 ? (totalCxl / (totalRns + totalCxl)) * 100 : 0;
+  const straddles = fromIso < CAPACITY_PIVOT && toIso >= CAPACITY_PIVOT;
 
   const buckets = bucketRows(rows, gran);
   const maxRns = Math.max(1, ...buckets.map((b) => b.rns));
@@ -121,7 +123,9 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
         Pace · <em style={{ color: '#a17a4f' }}>{winLabels[win]} · by {granLabels[gran].toLowerCase()}</em>
       </h1>
       <div style={{ fontSize: 13, color: '#4a4538' }}>
-        Forward on-the-books from <code>public.v_otb_pace</code>. Window <strong>{period.label}</strong> ({fromIso} → {toIso}, {period.days} nights × {ROOM_CAPACITY} rooms = {capacityRn} capacity).
+        Forward on-the-books from <code>public.v_otb_pace</code>. Window <strong>{period.label}</strong> ({fromIso} → {toIso}, {period.days} nights, capacity = {capacityRn} RN
+        {straddles ? <> · <em>flips {CAPACITY_PRE}→{CAPACITY_POST} on {CAPACITY_PIVOT}</em></> : null}
+        ).
         <br />
         <span style={{ fontSize: 11, color: '#8a8170' }}>
           Backward chips greyed out — pace is forward-looking by definition.
@@ -238,7 +242,28 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
           <tbody>
             {buckets.map((b) => {
               const adrB = b.rns > 0 ? b.rev / b.rns : 0;
-              const cap = b.days * ROOM_CAPACITY;
+              // Per-bucket capacity uses date-dependent capacity. For month buckets,
+              // use the avg of daily capacities; for day buckets, exact value.
+              let cap = 0;
+              if (gran === 'month') {
+                // bucket key is yyyy-mm; iterate days in month within window
+                const monthStart = b.key + '-01';
+                const next = new Date(b.key + '-01T00:00:00Z');
+                next.setUTCMonth(next.getUTCMonth() + 1);
+                const monthEnd = new Date(next.getTime() - 86400000).toISOString().slice(0, 10);
+                const winFrom = monthStart < fromIso ? fromIso : monthStart;
+                const winTo = monthEnd > toIso ? toIso : monthEnd;
+                cap = capacityRnRange(winFrom, winTo);
+              } else if (gran === 'week') {
+                // 7 days from week start, clamped
+                const winFrom = b.key < fromIso ? fromIso : b.key;
+                const weekEnd = new Date(b.key + 'T00:00:00Z');
+                weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
+                const winTo = weekEnd.toISOString().slice(0, 10) > toIso ? toIso : weekEnd.toISOString().slice(0, 10);
+                cap = capacityRnRange(winFrom, winTo);
+              } else {
+                cap = capacityFor(b.key);
+              }
               const occB = cap > 0 ? (b.rns / cap) * 100 : 0;
               return (
                 <tr key={b.key} style={{ borderTop: '1px solid #f0eadb' }}>
