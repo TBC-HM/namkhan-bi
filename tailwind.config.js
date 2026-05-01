@@ -24,7 +24,11 @@ module.exports = {
         sans: ['Inter', '-apple-system', 'system-ui', 'sans-serif'],
         mono: ['"JetBrains Mono"', 'monospace']
       },
-      letterSpacing: { wide2: '0.08em', wide3: '0.14em' }
+      letterSpacing: { wide2: '0.08em', wide3: '0.14em' },
+      gridTemplateColumns: {
+        '15': 'repeat(15, minmax(0, 1fr))',
+        '30': 'repeat(30, minmax(0, 1fr))'
+      }
     }
   },
   plugins: []
