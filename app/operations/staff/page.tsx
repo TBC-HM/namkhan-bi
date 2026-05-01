@@ -68,35 +68,29 @@ const ANOMALY_LABELS: Record<string, { title: string; sub: string }> = {
 };
 
 export default async function OperationsStaffPage({ searchParams: _ }: Props) {
-  // Fetch in parallel. Each query gracefully degrades on error.
-  const [registerRes, deptRes, anomaliesRes, lastPeriodRes] = await Promise.all([
+  // Fetch in parallel. Reads public-schema proxy views over ops.* (proxy
+  // migration phase3_02_staff_public_proxies). Each query gracefully degrades.
+  const [registerRes, deptRes, anomaliesRes] = await Promise.all([
     supabase
-      .schema('ops' as any)
       .from('v_staff_register_extended')
       .select('staff_id, emp_id, full_name, position_title, dept_code, dept_name, employment_type, monthly_salary, hourly_cost_lak, hire_date, is_active, payslip_status, last_payslip_period')
       .eq('is_active', true)
       .order('full_name'),
     supabase
-      .schema('ops' as any)
       .from('v_payroll_dept_monthly')
       .select('period_month, dept_code, dept_name, headcount, total_days_worked, total_net_lak, total_grand_usd'),
     supabase
-      .schema('ops' as any)
       .from('v_staff_anomalies')
       .select('issue, staff_id, full_name, dept_code, dept_name'),
-    supabase
-      .schema('ops' as any)
-      .from('payroll_monthly')
-      .select('period_month')
-      .order('period_month', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
   ]);
 
   const staff: StaffRow[] = (registerRes.data ?? []) as any;
   const allDept: DeptRow[]  = (deptRes.data ?? []) as any;
   const anomalies: AnomalyRow[] = (anomaliesRes.data ?? []) as any;
-  const lastPeriod: string | null = (lastPeriodRes.data as any)?.period_month ?? null;
+  // Derive last closed period from the dept view (max period_month).
+  const lastPeriod: string | null = allDept.length > 0
+    ? allDept.reduce((m, r) => (r.period_month > m ? r.period_month : m), '0000-00-00')
+    : null;
 
   // Filter dept rows to last closed period
   const deptRows = lastPeriod
