@@ -63,6 +63,32 @@ export interface MediaLink {
   added_at: string;
 }
 
+// New media pipeline (Phase 1, 2026-05-01)
+export interface MediaAssetReady {
+  asset_id: string;
+  asset_type: string;
+  original_filename: string;
+  caption: string | null;
+  alt_text: string | null;
+  primary_tier: string | null;
+  secondary_tiers: string[] | null;
+  property_area: string | null;
+  room_type_id: number | null;
+  captured_at: string | null;
+  license_type: string;
+  usage_rights: string[] | null;
+  do_not_modify: boolean;
+  has_identifiable_people: boolean;
+  raw_path: string | null;
+  master_path: string | null;
+  width_px: number | null;
+  height_px: number | null;
+  qc_score: number | null;
+  ai_confidence: number | null;
+  tags: string[] | null;
+  renders: Record<string, string> | null;
+}
+
 // ----- Queries -----
 
 // Latest reviews — default 50, with optional source filter
@@ -208,4 +234,56 @@ export async function getMediaLinks(): Promise<MediaLink[]> {
     return [];
   }
   return (data ?? []) as MediaLink[];
+}
+
+// ----- New media pipeline (Phase 1 — 2026-05-01) -----
+// Pulls from marketing.v_media_ready (license-aware, status='ready' only).
+
+export async function getMediaReady(opts: {
+  limit?: number;
+  tier?: string;
+  tag?: string;
+} = {}): Promise<MediaAssetReady[]> {
+  const { limit = 200, tier, tag } = opts;
+  let q = supabase
+    .schema('marketing')
+    .from('v_media_ready')
+    .select('*')
+    .order('captured_at', { ascending: false, nullsFirst: false })
+    .limit(limit);
+
+  if (tier) q = q.eq('primary_tier', tier);
+  if (tag)  q = q.contains('tags', [tag]);
+
+  const { data, error } = await q;
+  if (error) {
+    console.error('getMediaReady error', error);
+    return [];
+  }
+  return (data ?? []) as MediaAssetReady[];
+}
+
+export async function getMediaTierCounts(): Promise<Array<{
+  primary_tier: string | null;
+  total: number;
+  photos: number;
+  videos: number;
+}>> {
+  const { data, error } = await supabase
+    .schema('marketing')
+    .from('v_media_by_tier')
+    .select('*');
+  if (error) {
+    console.error('getMediaTierCounts error', error);
+    return [];
+  }
+  return (data ?? []) as any;
+}
+
+export async function getMediaRendersBucketUrl(asset: MediaAssetReady, purpose: string): Promise<string | null> {
+  // Renders bucket is public, so we can build the URL directly.
+  const path = asset.renders?.[purpose];
+  if (!path) return null;
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
+  return `${base}/storage/v1/object/public/media-renders/${path}`;
 }

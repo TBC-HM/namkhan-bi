@@ -60,6 +60,7 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/marketing/social',       label: 'Social' },
     { href: '/marketing/influencers',  label: 'Influencers' },
     { href: '/marketing/media',        label: 'Media' },
+    { href: '/marketing/media/upload', label: 'Upload', isNew: true },
     { href: '/marketing/agents',       label: 'Agents' },
   ],
 
