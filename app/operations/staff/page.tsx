@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase';
 import { fmtMoney } from '@/lib/format';
 import { AnomalyCard } from './_components/AnomalyCard';
 import { StaffTable } from './_components/StaffTable';
+import UploadPayslipsButton from './_components/UploadPayslipsButton';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -109,11 +110,14 @@ export default async function StaffPage() {
             {totalActive} active · {fmtMoney(totalMonthlyLAK, 'LAK')} monthly payroll
           </p>
         </div>
-        <div className="text-right">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-stone-500">Source</p>
-          <p className="font-mono text-xs text-stone-700">
-            public.v_staff_register_extended · Supabase live
-          </p>
+        <div className="flex items-end gap-4">
+          <div className="text-right">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-stone-500">Source</p>
+            <p className="font-mono text-xs text-stone-700">
+              public.v_staff_register_extended · Supabase live
+            </p>
+          </div>
+          <UploadPayslipsButton />
         </div>
       </header>
 
