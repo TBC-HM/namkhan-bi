@@ -1,5 +1,6 @@
 // app/sales/roster/page.tsx
-// Sales › Roster — staff & sales agents. WIRED to ops.staff_employment + ops.departments.
+// Sales › Roster — staff & sales agents.
+// WIRED to public.v_staff_register_extended (proxy view, since 'ops' schema not API-exposed).
 
 import { supabase } from '@/lib/supabase';
 
@@ -7,9 +8,11 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
 interface StaffRow {
-  id: string;
+  staff_id: string;
   full_name: string | null;
   position_title: string | null;
+  dept_code: string | null;
+  dept_name: string | null;
   employment_type: string | null;
   monthly_salary: number | null;
   salary_currency: string | null;
@@ -17,43 +20,27 @@ interface StaffRow {
   is_active: boolean | null;
   contract_hours_pw: number | null;
   skills: string[] | null;
-  dept_id: string | null;
 }
 
-interface DeptRow {
-  dept_id: string;
-  name: string;
-  code: string | null;
-}
-
-async function getStaffWithDepts() {
-  const [{ data: staff }, { data: depts }] = await Promise.all([
-    supabase
-      .schema('ops')
-      .from('staff_employment')
-      .select('id, full_name, position_title, employment_type, monthly_salary, salary_currency, hire_date, is_active, contract_hours_pw, skills, dept_id')
-      .eq('is_active', true)
-      .order('full_name'),
-    supabase
-      .schema('ops')
-      .from('departments')
-      .select('dept_id, name, code'),
-  ]);
-  return {
-    staff: (staff ?? []) as StaffRow[],
-    depts: (depts ?? []) as DeptRow[],
-  };
+async function getStaff() {
+  const { data, error } = await supabase
+    .from('v_staff_register_extended')
+    .select('staff_id, full_name, position_title, dept_code, dept_name, employment_type, monthly_salary, salary_currency, hire_date, is_active, contract_hours_pw, skills')
+    .eq('is_active', true)
+    .order('full_name');
+  if (error) {
+    console.error('[roster] error', error);
+    return [] as StaffRow[];
+  }
+  return (data ?? []) as StaffRow[];
 }
 
 export default async function RosterPage() {
-  const { staff, depts } = await getStaffWithDepts();
-  const deptName = new Map(depts.map((d) => [d.dept_id, d.name] as const));
+  const staff = await getStaff();
 
-  const salesDeptCodes = ['SALES', 'RES', 'FRONTOFFICE', 'FO', 'GM', 'MGT'];
-  const salesDeptIds = new Set(depts.filter((d) => salesDeptCodes.includes((d.code ?? '').toUpperCase())).map((d) => d.dept_id));
-  const salesStaff = salesDeptIds.size > 0
-    ? staff.filter((s) => s.dept_id && salesDeptIds.has(s.dept_id))
-    : staff.slice(0, 30);
+  const salesDeptCodes = ['SALES', 'RES', 'FRONTOFFICE', 'FO', 'GM', 'MGT', 'SAL'];
+  const salesStaff = staff.filter((s) => s.dept_code && salesDeptCodes.includes(s.dept_code.toUpperCase()));
+  const display = salesStaff.length > 0 ? salesStaff : staff.slice(0, 30);
 
   const fmtSalary = (n: number | null, cur: string | null) =>
     n == null ? '—' : `${cur ?? 'LAK'} ${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
@@ -64,19 +51,19 @@ export default async function RosterPage() {
         <strong style={{ color: '#4a4538' }}>Sales</strong> › Roster
       </div>
       <h1 style={{ margin: '4px 0 2px', fontFamily: 'Georgia, serif', fontWeight: 500, fontSize: 30 }}>
-        Roster · <em style={{ color: '#a17a4f' }}>{salesStaff.length} active</em>
+        Roster · <em style={{ color: '#a17a4f' }}>{display.length} active</em>
       </h1>
       <div style={{ fontSize: 13, color: '#4a4538' }}>
-        Sales-adjacent staff from <code style={{ fontSize: 11 }}>ops.staff_employment</code>. Territory & comp ledger pending.
+        {salesStaff.length > 0 ? `Sales-adjacent staff (${salesStaff.length} of ${staff.length} total)` : `Showing first 30 of ${staff.length} active staff (no sales-coded department found)`} from <code style={{ fontSize: 11 }}>v_staff_register_extended</code>.
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 10, margin: '14px 0' }}>
         {[
-          { scope: 'Active staff',     value: String(salesStaff.length), sub: 'sales-adjacent depts', lorem: false },
-          { scope: 'AI agents',        value: '8',                       sub: 'inquiry, group, fit, dmc, etc.', lorem: false },
-          { scope: 'Avg tenure',       value: 'lorem',                   sub: 'needs hire_date analytics', lorem: true },
-          { scope: 'Productivity',     value: 'lorem',                   sub: 'needs deal data', lorem: true },
-          { scope: 'Comp accruals',    value: 'lorem',                   sub: 'needs payroll_monthly join', lorem: true },
+          { scope: 'Active staff',     value: String(display.length),  sub: `of ${staff.length} total`,             lorem: false },
+          { scope: 'AI agents',        value: '8',                     sub: 'inquiry, group, fit, dmc, etc.',       lorem: false },
+          { scope: 'Avg tenure',       value: 'lorem',                 sub: 'needs hire_date analytics',            lorem: true  },
+          { scope: 'Productivity',     value: 'lorem',                 sub: 'needs deal data',                       lorem: true  },
+          { scope: 'Comp accruals',    value: 'lorem',                 sub: 'needs payroll_monthly join',            lorem: true  },
         ].map((k) => (
           <div key={k.scope} style={{ background: '#fff', border: '1px solid #e6dfc9', borderRadius: 8, padding: '12px 14px' }}>
             <div style={{ fontSize: 10.5, color: '#8a8170', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{k.scope}</div>
@@ -101,11 +88,11 @@ export default async function RosterPage() {
             </tr>
           </thead>
           <tbody>
-            {salesStaff.map((s) => (
-              <tr key={s.id} style={{ borderTop: '1px solid #f0eadb' }}>
+            {display.map((s) => (
+              <tr key={s.staff_id} style={{ borderTop: '1px solid #f0eadb' }}>
                 <td style={{ padding: '10px 12px', fontWeight: 500 }}>{s.full_name ?? '—'}</td>
                 <td style={{ padding: '10px 12px' }}>{s.position_title ?? '—'}</td>
-                <td style={{ padding: '10px 12px', color: '#8a8170' }}>{s.dept_id ? (deptName.get(s.dept_id) ?? '—') : '—'}</td>
+                <td style={{ padding: '10px 12px', color: '#8a8170' }}>{s.dept_name ?? s.dept_code ?? '—'}</td>
                 <td style={{ padding: '10px 12px', fontSize: 11.5 }}>{s.employment_type ?? '—'}</td>
                 <td style={{ padding: '10px 12px', color: '#8a8170', fontFamily: 'Menlo, monospace', fontSize: 11.5 }}>{s.hire_date ?? '—'}</td>
                 <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>{s.contract_hours_pw ?? '—'}</td>
@@ -120,7 +107,7 @@ export default async function RosterPage() {
       </div>
 
       <div style={{ marginTop: 14, padding: '10px 14px', background: '#e6f4ec', border: '1px solid #aed6c0', borderRadius: 6, color: '#1f5f3a', fontSize: 11.5 }}>
-        <strong>✓ Wired.</strong> {staff.length} total active staff in <code>ops.staff_employment</code>; showing sales-adjacent slice. Productivity &amp; comp metrics need deal/payroll join.
+        <strong>✓ Wired.</strong> Reading from <code>public.v_staff_register_extended</code> ({staff.length} active rows). Productivity &amp; comp metrics need deal/payroll join.
       </div>
     </>
   );
