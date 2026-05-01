@@ -56,11 +56,12 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
   // Marketing pillar owns reviews/social/influencers/media (existing /marketing/* routes).
   marketing: [
     { href: '/marketing',              label: 'Snapshot' },
+    { href: '/marketing/library',      label: 'Library',    isNew: true },
+    { href: '/marketing/campaigns',    label: 'Campaigns',  isNew: true },
     { href: '/marketing/reviews',      label: 'Reviews' },
     { href: '/marketing/social',       label: 'Social' },
     { href: '/marketing/influencers',  label: 'Influencers' },
-    { href: '/marketing/media',        label: 'Media' },
-    { href: '/marketing/media/upload', label: 'Upload', isNew: true },
+    { href: '/marketing/taxonomy',     label: 'Taxonomy',   isNew: true },
     { href: '/marketing/agents',       label: 'Agents' },
   ],
 
@@ -145,7 +146,7 @@ export const PILLAR_HEADER: Record<
   overview:    { eyebrow: 'Home',                       title: 'The',          emphasis: 'Namkhan',         sub: 'Right-now operator intelligence' },
   revenue:     { eyebrow: 'Pillar 01 · Revenue',        title: 'Revenue',      emphasis: 'management',      sub: 'Pricing · pace · channels · yield' },
   sales:       { eyebrow: 'Pillar 02 · Sales',          title: 'Inbound',      emphasis: 'funnel',          sub: 'Inquiries · groups · FIT · packages · B2B/DMC · pipeline' },
-  marketing:   { eyebrow: 'Pillar 03 · Marketing',      title: 'Brand',        emphasis: 'reach',           sub: 'Reviews · social · influencers · media' },
+  marketing:   { eyebrow: 'Pillar 03 · Marketing',      title: 'Brand',        emphasis: 'reach',           sub: 'Library · campaigns · reviews · social · influencers' },
   operations:  { eyebrow: 'Pillar 04 · Operations',     title: 'Operations',   emphasis: 'live',            sub: 'Today · F&B · spa · activities · property' },
   frontOffice: { eyebrow: 'Pillar 04b · Front Office',  title: 'Arrivals',     emphasis: 'cockpit',         sub: 'Arrivals · in-house · departures · VIP · groups · roster' },
   guest:       { eyebrow: 'Pillar 05 · Guest',          title: 'Guest',        emphasis: 'voice',           sub: 'Reputation · journey · loyalty' },
