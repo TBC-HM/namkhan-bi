@@ -92,6 +92,33 @@ export async function getDmcQueue(): Promise<DmcQueueRow[]> {
 }
 
 // =====================================================================
+// Mapping (minimal phase2_01) — confirms reservation → contract
+// =====================================================================
+
+export interface MappingRow {
+  reservation_id: string;
+  contract_id: string;
+  mapping_status: string;
+  created_at: string;
+}
+
+export async function getMappings(): Promise<MappingRow[]> {
+  const { data, error } = await supabase
+    .from('v_dmc_reservation_mapping')
+    .select('reservation_id, contract_id, mapping_status, created_at');
+  if (error) {
+    console.error('[dmc] getMappings error', error);
+    return [];
+  }
+  return (data ?? []) as MappingRow[];
+}
+
+// Cloudbeds deeplink — opens reservation in Cloudbeds Connect
+export function cloudbedsReservationUrl(reservationId: string, propertyId: number): string {
+  return `https://hotels.cloudbeds.com/connect/${propertyId}#/reservations/${reservationId}`;
+}
+
+// =====================================================================
 // Real LPA reservations from public.reservations
 // =====================================================================
 

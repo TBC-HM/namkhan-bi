@@ -1,19 +1,15 @@
 // app/sales/b2b/reconciliation/page.tsx
 // Sales › B2B/DMC › Reconciliation Queue.
-// WIRED to real public.reservations on LPA rate plan + fuzzy-matched against governance.dmc_contracts.
+// WIRED: 101 LPA reservations + per-row partner picker + Confirm action + Cloudbeds deeplink.
 
 import B2bSubNav from '../_components/B2bSubNav';
 import B2bKpiStrip from '../_components/B2bKpiStrip';
-import { getLpaReservations, getDmcContracts, matchSourceToContract } from '@/lib/dmc';
+import MappingPicker from '../_components/MappingPicker';
+import { getLpaReservations, getDmcContracts, matchSourceToContract, getMappings, cloudbedsReservationUrl } from '@/lib/dmc';
+import { PROPERTY_ID } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 30;
-
-function pctColor(p: number) {
-  if (p >= 0.9) return '#1f6f43';
-  if (p >= 0.7) return '#a17a4f';
-  return '#a83232';
-}
+export const revalidate = 0;
 
 const STATUS_PILL: Record<string, { bg: string; bd: string; fg: string }> = {
   confirmed:     { bg: '#e6f4ec', bd: '#aed6c0', fg: '#1f6f43' },
@@ -24,26 +20,42 @@ const STATUS_PILL: Record<string, { bg: string; bd: string; fg: string }> = {
 };
 
 export default async function ReconciliationPage() {
-  const [reservations, contracts] = await Promise.all([
+  const [reservations, contracts, mappings] = await Promise.all([
     getLpaReservations(),
     getDmcContracts(),
+    getMappings(),
   ]);
 
-  // For each reservation, fuzzy-match source_name against contracts
+  const mappingByRes = new Map(mappings.map((m) => [m.reservation_id, m] as const));
+  const contractOptions = contracts
+    .filter((c) => c.computed_status !== 'expired')
+    .map((c) => ({ contract_id: c.contract_id, partner_short_name: c.partner_short_name, country: c.country }))
+    .sort((a, b) => a.partner_short_name.localeCompare(b.partner_short_name));
+
   const enriched = reservations.map((r) => {
+    const existing = mappingByRes.get(r.reservation_id);
+    if (existing) {
+      const c = contracts.find((x) => x.contract_id === existing.contract_id);
+      return {
+        ...r,
+        matched_contract_id: existing.contract_id,
+        matched_partner: c?.partner_short_name ?? '?',
+        confirmed: true,
+        suggested_only: false,
+      };
+    }
     const m = matchSourceToContract(r.source_name, contracts);
-    const confidence = m.contract_id
-      ? (r.source_name && m.partner_short_name && r.source_name.toLowerCase() === m.partner_short_name.toLowerCase() ? 1.0 : 0.85)
-      : 0;
-    return { ...r, matched_contract_id: m.contract_id, matched_partner: m.partner_short_name, confidence };
+    return {
+      ...r,
+      matched_contract_id: m.contract_id,
+      matched_partner: m.partner_short_name,
+      confirmed: false,
+      suggested_only: !!m.contract_id,
+    };
   });
 
-  const unmatchedSources = Array.from(
-    new Set(enriched.filter((r) => !r.matched_contract_id).map((r) => r.source_name ?? '(unknown)')),
-  ).sort();
-
-  const matched = enriched.filter((r) => r.matched_contract_id);
-  const unmatched = enriched.filter((r) => !r.matched_contract_id);
+  const confirmed = enriched.filter((r) => r.confirmed);
+  const unconfirmed = enriched.filter((r) => !r.confirmed);
 
   return (
     <>
@@ -51,84 +63,70 @@ export default async function ReconciliationPage() {
         <strong style={{ color: '#4a4538' }}>Sales</strong> › B2B / DMC › Reconciliation
       </div>
       <h1 style={{ margin: '4px 0 2px', fontFamily: 'Georgia, serif', fontWeight: 500, fontSize: 30 }}>
-        Reconciliation queue · <em style={{ color: '#a17a4f' }}>{reservations.length} LPA reservations</em>
+        Reconciliation queue · <em style={{ color: '#a17a4f' }}>{unconfirmed.length} pending · {confirmed.length} mapped</em>
       </h1>
       <div style={{ fontSize: 13, color: '#4a4538' }}>
-        All reservations on rate plan <code>Leisure Partnership Agreement</code> (and Corporate variant). Fuzzy-matched to <code>dmc_contracts.partner_short_name</code> by source.
+        All <code>Leisure Partnership Agreement</code> reservations. Pick a contract from the dropdown and click <strong>Confirm</strong> — saves to <code>governance.dmc_reservation_mapping</code>. Reservation IDs deeplink to Cloudbeds.
       </div>
 
       <B2bSubNav />
       <B2bKpiStrip />
 
-      {/* Unmatched sources alert */}
-      {unmatchedSources.length > 0 && (
-        <div
-          style={{
-            marginBottom: 12,
-            padding: '10px 14px',
-            background: '#fef3c7',
-            border: '1px solid #f3d57a',
-            borderRadius: 6,
-            color: '#5e4818',
-            fontSize: 12,
-          }}
-        >
-          <strong>{unmatchedSources.length} unmatched source{unmatchedSources.length === 1 ? '' : 's'}.</strong>{' '}
-          Add as contracts: {unmatchedSources.slice(0, 6).map((s, i) => (
-            <span key={s}>
-              <code style={{ background: '#fff', padding: '1px 5px', borderRadius: 3, marginRight: 4 }}>{s}</code>
-            </span>
-          ))}
-          {unmatchedSources.length > 6 ? <em> + {unmatchedSources.length - 6} more</em> : null}
-        </div>
-      )}
-
       <div style={{ background: '#fff', border: '1px solid #e6dfc9', borderRadius: 8, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
             <tr style={{ background: '#f7f3e7', textAlign: 'left', color: '#8a8170', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              <th style={{ padding: '10px 12px' }}>Reservation</th>
-              <th style={{ padding: '10px 12px' }}>Guest</th>
-              <th style={{ padding: '10px 12px' }}>Country</th>
-              <th style={{ padding: '10px 12px' }}>Source (Cloudbeds)</th>
-              <th style={{ padding: '10px 12px' }}>Suggested partner</th>
-              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Conf.</th>
-              <th style={{ padding: '10px 12px' }}>Check-in</th>
-              <th style={{ padding: '10px 12px', textAlign: 'right' }}>N</th>
-              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Total</th>
-              <th style={{ padding: '10px 12px' }}>Room</th>
-              <th style={{ padding: '10px 12px' }}>Status</th>
+              <th style={{ padding: '10px 10px' }}>Cloudbeds ID</th>
+              <th style={{ padding: '10px 10px' }}>Guest</th>
+              <th style={{ padding: '10px 10px' }}>Source</th>
+              <th style={{ padding: '10px 10px' }}>Check-in</th>
+              <th style={{ padding: '10px 10px', textAlign: 'right' }}>N</th>
+              <th style={{ padding: '10px 10px', textAlign: 'right' }}>Total</th>
+              <th style={{ padding: '10px 10px' }}>Status</th>
+              <th style={{ padding: '10px 10px' }}>Mapping</th>
             </tr>
           </thead>
           <tbody>
-            {/* Unmatched first (need attention) */}
-            {[...unmatched, ...matched].map((r) => {
+            {[...unconfirmed, ...confirmed].map((r) => {
               const pillKey = (r.status ?? 'not_confirmed').toLowerCase();
               const pill = STATUS_PILL[pillKey] ?? STATUS_PILL.not_confirmed;
+              const rowBg = r.confirmed ? '#f6faf6' : !r.matched_contract_id ? '#fffbf2' : '#fff';
               return (
-                <tr key={r.reservation_id} style={{ borderTop: '1px solid #f0eadb', background: !r.matched_contract_id ? '#fffbf2' : '#fff' }}>
-                  <td style={{ padding: '8px 12px', fontFamily: 'Menlo, monospace', color: '#8a8170', fontSize: 11 }}>{r.reservation_id.slice(-8)}</td>
-                  <td style={{ padding: '8px 12px', fontSize: 12 }}>{r.guest_name ?? '—'}</td>
-                  <td style={{ padding: '8px 12px', color: '#8a8170', fontSize: 11.5 }}>{r.guest_country ?? '—'}</td>
-                  <td style={{ padding: '8px 12px', fontWeight: 500, fontSize: 12 }}>{r.source_name ?? '—'}</td>
-                  <td style={{ padding: '8px 12px' }}>
-                    {r.matched_partner ? (
-                      <span style={{ color: '#1f6f43', fontWeight: 500 }}>→ {r.matched_partner}</span>
-                    ) : (
-                      <span style={{ color: '#a83232', fontStyle: 'italic' }}>unmatched</span>
-                    )}
+                <tr key={r.reservation_id} style={{ borderTop: '1px solid #f0eadb', background: rowBg }}>
+                  <td style={{ padding: '6px 10px' }}>
+                    <a
+                      href={cloudbedsReservationUrl(r.reservation_id, PROPERTY_ID)}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ fontFamily: 'Menlo, monospace', color: '#2c4d70', textDecoration: 'none', fontSize: 11 }}
+                      title="Open in Cloudbeds"
+                    >
+                      {r.reservation_id} ↗
+                    </a>
                   </td>
-                  <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: pctColor(r.confidence), fontWeight: 600 }}>
-                    {r.confidence > 0 ? `${(r.confidence * 100).toFixed(0)}%` : '—'}
-                  </td>
-                  <td style={{ padding: '8px 12px', color: '#8a8170', fontFamily: 'Menlo, monospace', fontSize: 11.5 }}>{r.check_in_date ?? '—'}</td>
-                  <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>{r.nights ?? '—'}</td>
-                  <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>USD {Number(r.total_amount ?? 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
-                  <td style={{ padding: '8px 12px', fontSize: 11.5, color: '#8a8170' }}>{r.room_type_name ?? '—'}</td>
-                  <td style={{ padding: '8px 12px' }}>
-                    <span style={{ background: pill.bg, border: `1px solid ${pill.bd}`, color: pill.fg, padding: '2px 8px', borderRadius: 10, fontSize: 10.5, fontWeight: 600, textTransform: 'capitalize' }}>
+                  <td style={{ padding: '6px 10px', fontSize: 11.5 }}>{r.guest_name ?? '—'}</td>
+                  <td style={{ padding: '6px 10px', fontWeight: 500, fontSize: 11.5 }}>{r.source_name ?? '—'}</td>
+                  <td style={{ padding: '6px 10px', color: '#8a8170', fontFamily: 'Menlo, monospace', fontSize: 11 }}>{r.check_in_date ?? '—'}</td>
+                  <td style={{ padding: '6px 10px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>{r.nights ?? '—'}</td>
+                  <td style={{ padding: '6px 10px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>USD {Number(r.total_amount ?? 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
+                  <td style={{ padding: '6px 10px' }}>
+                    <span style={{ background: pill.bg, border: `1px solid ${pill.bd}`, color: pill.fg, padding: '2px 7px', borderRadius: 10, fontSize: 10, fontWeight: 600, textTransform: 'capitalize' }}>
                       {(r.status ?? 'pending').replace('_', ' ')}
                     </span>
+                  </td>
+                  <td style={{ padding: '6px 10px' }}>
+                    <MappingPicker
+                      reservationId={r.reservation_id}
+                      contracts={contractOptions}
+                      initialContractId={r.matched_contract_id}
+                      initialMappedStatus={r.confirmed ? 'mapped' : 'unmapped'}
+                      meta={{
+                        source_name: r.source_name,
+                        rate_plan: 'Leisure Partnership Agreement',
+                        total_amount: Number(r.total_amount) || null,
+                        check_in_date: r.check_in_date,
+                      }}
+                    />
                   </td>
                 </tr>
               );
@@ -138,7 +136,7 @@ export default async function ReconciliationPage() {
       </div>
 
       <div style={{ marginTop: 14, padding: '10px 14px', background: '#e6f4ec', border: '1px solid #aed6c0', borderRadius: 6, color: '#1f5f3a', fontSize: 11.5 }}>
-        <strong>✓ Wired.</strong> Real <code>public.reservations</code> on LPA rate plan ({reservations.length} rows). Auto-suggestions are name-fuzzy matches; full hint-based reconciliation needs <code>dmc_reservation_mapping</code> + <code>partner_mapping_hints</code> from migration-draft.sql. Confirm/Reject actions also pending.
+        <strong>✓ Live.</strong> {reservations.length} LPA reservations · {confirmed.length} mapped · {unconfirmed.length} pending. Yellow rows = unmatched (no contract on file). Green rows = already confirmed. Click <strong>Confirm</strong> to persist to <code>governance.dmc_reservation_mapping</code>.
       </div>
     </>
   );
