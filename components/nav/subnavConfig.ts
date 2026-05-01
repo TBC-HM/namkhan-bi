@@ -46,7 +46,7 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/sales/groups',     label: 'Groups',    coming: true },
     { href: '/sales/fit',        label: 'FIT',       coming: true },
     { href: '/sales/packages',   label: 'Packages',  coming: true },
-    { href: '/sales/b2b',        label: 'B2B / DMC', coming: true },
+    { href: '/sales/b2b',        label: 'B2B / DMC', isNew: true },
     { href: '/sales/pipeline',   label: 'Pipeline',  coming: true },
     { href: '/sales/roster',     label: 'Roster',    coming: true },
     { href: '/sales/agents',     label: 'Agents' },
