@@ -16,6 +16,10 @@ const nextConfig = {
       // Front Office unfolded to top-level pillar 2026-05-01.
       { source: '/operations/frontoffice',      destination: '/front-office/arrivals',   permanent: false },
       { source: '/operations/frontoffice/:path*', destination: '/front-office/arrivals', permanent: false },
+      // Phase 2 marketing restructure 2026-05-01 PM: /media* → /library, /upload, /taxonomy.
+      { source: '/marketing/media',             destination: '/marketing/library',  permanent: false },
+      { source: '/marketing/media/upload',      destination: '/marketing/upload',   permanent: false },
+      { source: '/marketing/media/taxonomy',    destination: '/marketing/taxonomy', permanent: false },
     ];
   },
 };

@@ -63,6 +63,32 @@ export interface MediaLink {
   added_at: string;
 }
 
+// New media pipeline (Phase 1, 2026-05-01)
+export interface MediaAssetReady {
+  asset_id: string;
+  asset_type: string;
+  original_filename: string;
+  caption: string | null;
+  alt_text: string | null;
+  primary_tier: string | null;
+  secondary_tiers: string[] | null;
+  property_area: string | null;
+  room_type_id: number | null;
+  captured_at: string | null;
+  license_type: string;
+  usage_rights: string[] | null;
+  do_not_modify: boolean;
+  has_identifiable_people: boolean;
+  raw_path: string | null;
+  master_path: string | null;
+  width_px: number | null;
+  height_px: number | null;
+  qc_score: number | null;
+  ai_confidence: number | null;
+  tags: string[] | null;
+  renders: Record<string, string> | null;
+}
+
 // ----- Queries -----
 
 // Latest reviews — default 50, with optional source filter
@@ -209,3 +235,260 @@ export async function getMediaLinks(): Promise<MediaLink[]> {
   }
   return (data ?? []) as MediaLink[];
 }
+
+// ----- New media pipeline (Phase 1 — 2026-05-01) -----
+// Pulls from marketing.v_media_ready (license-aware, status='ready' only).
+
+export async function getMediaReady(opts: {
+  limit?: number;
+  tier?: string;
+  tag?: string;
+} = {}): Promise<MediaAssetReady[]> {
+  const { limit = 200, tier, tag } = opts;
+  let q = supabase
+    .schema('marketing')
+    .from('v_media_ready')
+    .select('*')
+    .order('captured_at', { ascending: false, nullsFirst: false })
+    .limit(limit);
+
+  if (tier) q = q.eq('primary_tier', tier);
+  if (tag)  q = q.contains('tags', [tag]);
+
+  const { data, error } = await q;
+  if (error) {
+    console.error('getMediaReady error', error);
+    return [];
+  }
+  return (data ?? []) as MediaAssetReady[];
+}
+
+export async function getMediaTierCounts(): Promise<Array<{
+  primary_tier: string | null;
+  total: number;
+  photos: number;
+  videos: number;
+}>> {
+  const { data, error } = await supabase
+    .schema('marketing')
+    .from('v_media_by_tier')
+    .select('*');
+  if (error) {
+    console.error('getMediaTierCounts error', error);
+    return [];
+  }
+  return (data ?? []) as any;
+}
+
+export async function getMediaRendersBucketUrl(asset: MediaAssetReady, purpose: string): Promise<string | null> {
+  // Renders bucket is public, so we can build the URL directly.
+  const path = asset.renders?.[purpose];
+  if (!path) return null;
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
+  return `${base}/storage/v1/object/public/media-renders/${path}`;
+}
+
+// ===== Phase 2: Campaign workflow (2026-05-01) =====
+
+export type CampaignChannel =
+  | 'instagram_post' | 'instagram_carousel' | 'instagram_reel' | 'instagram_story'
+  | 'facebook_post' | 'tiktok' | 'email_header' | 'email_full'
+  | 'booking_com_gallery' | 'expedia_gallery' | 'agoda_gallery' | 'slh_gallery'
+  | 'website_hero' | 'pdf_offer' | 'print_poster' | 'blog_header' | 'other';
+
+export type CampaignStatus =
+  | 'draft' | 'curating' | 'composing' | 'pending_approval' | 'approved'
+  | 'scheduled' | 'published' | 'archived' | 'cancelled';
+
+export type UsageTier =
+  | 'tier_ota_profile' | 'tier_website_hero' | 'tier_social_pool' | 'tier_internal';
+
+export interface CampaignTemplate {
+  template_id: number;
+  channel: CampaignChannel;
+  name: string;
+  aspect_ratio: string;
+  output_width: number;
+  output_height: number;
+  min_assets: number;
+  max_assets: number;
+  caption_max_chars: number | null;
+  hashtag_max: number | null;
+  license_filter: string[] | null;
+  logo_position: string | null;
+  is_active: boolean;
+}
+
+export interface Campaign {
+  campaign_id: string;
+  name: string;
+  channel: CampaignChannel;
+  template_id: number | null;
+  brief_text: string | null;
+  vibe_tags: string[] | null;
+  caption: string | null;
+  hashtags: string[] | null;
+  status: CampaignStatus;
+  scheduled_at: string | null;
+  published_at: string | null;
+  external_post_url: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CampaignCalendarRow extends Campaign {
+  calendar_at: string;
+  asset_count: number;
+}
+
+export interface CampaignAssetRow {
+  campaign_id: string;
+  slot_order: number;
+  asset_id: string;
+  caption_per_slot: string | null;
+  alt_text_per_slot: string | null;
+  final_render_path: string | null;
+  created_at: string;
+}
+
+export interface TaxonomyEntry {
+  tag_id: number;
+  category: string;
+  label: string;
+  parent_id?: number | null;
+  synonyms?: string[] | null;
+  is_active?: boolean | null;
+  used_count?: number | null;
+}
+
+// ----- Campaign queries -----
+
+export async function getCampaigns(opts: { status?: CampaignStatus; limit?: number } = {}): Promise<CampaignCalendarRow[]> {
+  let q = supabase
+    .schema('marketing')
+    .from('v_campaign_calendar')
+    .select('*')
+    .order('calendar_at', { ascending: false });
+  if (opts.status) q = q.eq('status', opts.status);
+  if (opts.limit)  q = q.limit(opts.limit);
+  const { data, error } = await q;
+  if (error) {
+    console.error('getCampaigns error', error);
+    return [];
+  }
+  return (data ?? []) as CampaignCalendarRow[];
+}
+
+export async function getCampaign(campaignId: string): Promise<Campaign | null> {
+  const { data, error } = await supabase
+    .schema('marketing')
+    .from('campaigns')
+    .select('*')
+    .eq('campaign_id', campaignId)
+    .maybeSingle();
+  if (error) {
+    console.error('getCampaign error', error);
+    return null;
+  }
+  return data as Campaign | null;
+}
+
+export async function getCampaignAssets(campaignId: string): Promise<CampaignAssetRow[]> {
+  const { data, error } = await supabase
+    .schema('marketing')
+    .from('campaign_assets')
+    .select('*')
+    .eq('campaign_id', campaignId)
+    .order('slot_order', { ascending: true });
+  if (error) {
+    console.error('getCampaignAssets error', error);
+    return [];
+  }
+  return (data ?? []) as CampaignAssetRow[];
+}
+
+export async function getCampaignTemplates(): Promise<CampaignTemplate[]> {
+  const { data, error } = await supabase
+    .schema('marketing')
+    .from('campaign_templates')
+    .select('*')
+    .eq('is_active', true)
+    .order('template_id', { ascending: true });
+  if (error) {
+    console.error('getCampaignTemplates error', error);
+    return [];
+  }
+  return (data ?? []) as CampaignTemplate[];
+}
+
+export async function getTaxonomy(): Promise<TaxonomyEntry[]> {
+  const { data, error } = await supabase
+    .schema('marketing')
+    .from('media_taxonomy')
+    .select('*')
+    .order('category', { ascending: true })
+    .order('label', { ascending: true });
+  if (error) {
+    console.error('getTaxonomy error', error);
+    return [];
+  }
+  return (data ?? []) as TaxonomyEntry[];
+}
+
+export async function getFreeKeywords(): Promise<Array<{ keyword: string; seen_count?: number; promoted_to_tag_id?: number | null }>> {
+  const { data, error } = await supabase
+    .schema('marketing')
+    .from('media_keywords_free')
+    .select('*')
+    .order('seen_count', { ascending: false, nullsFirst: false })
+    .limit(500);
+  if (error) {
+    console.error('getFreeKeywords error', error);
+    return [];
+  }
+  return (data ?? []) as Array<{ keyword: string; seen_count?: number; promoted_to_tag_id?: number | null }>;
+}
+
+// ----- Constants -----
+
+export const TIER_LABEL: Record<UsageTier, string> = {
+  tier_ota_profile:  'OTA Profile',
+  tier_website_hero: 'Website Hero',
+  tier_social_pool:  'Social Pool',
+  tier_internal:     'Internal',
+};
+
+export const CHANNEL_LABEL: Record<CampaignChannel, string> = {
+  instagram_post:      'Instagram · Post',
+  instagram_carousel:  'Instagram · Carousel',
+  instagram_reel:      'Instagram · Reel',
+  instagram_story:     'Instagram · Story',
+  facebook_post:       'Facebook · Post',
+  tiktok:              'TikTok',
+  email_header:        'Email · Header',
+  email_full:          'Email · Full',
+  booking_com_gallery: 'Booking.com · Gallery',
+  expedia_gallery:     'Expedia · Gallery',
+  agoda_gallery:       'Agoda · Gallery',
+  slh_gallery:         'SLH · Submission',
+  website_hero:        'Website · Hero',
+  pdf_offer:           'PDF · Offer',
+  print_poster:        'Print · Poster',
+  blog_header:         'Blog · Header',
+  other:               'Custom',
+};
+
+export const STATUS_COLOR: Record<CampaignStatus, { bg: string; tx: string; label: string }> = {
+  draft:            { bg: 'var(--ink-mute)', tx: '#fff', label: 'draft' },
+  curating:         { bg: 'var(--brass)',    tx: '#fff', label: 'curating' },
+  composing:        { bg: 'var(--brass)',    tx: '#fff', label: 'composing' },
+  pending_approval: { bg: 'var(--brass)',    tx: '#fff', label: 'pending approval' },
+  approved:         { bg: 'var(--moss)',     tx: '#fff', label: 'approved' },
+  scheduled:        { bg: 'var(--moss)',     tx: '#fff', label: 'scheduled' },
+  published:        { bg: 'var(--moss)',     tx: '#fff', label: 'published' },
+  archived:         { bg: 'var(--ink-mute)', tx: '#fff', label: 'archived' },
+  cancelled:        { bg: 'var(--oxblood)',  tx: '#fff', label: 'cancelled' },
+};
