@@ -28,13 +28,34 @@ interface Props { searchParams: Record<string, string | string[] | undefined>; }
 export default async function RatePlansPage({ searchParams }: Props) {
   const period = resolvePeriod(searchParams);
 
-  // -------- Master plans (configured in Cloudbeds) --------
+  // -------- Master plans (configured + flagged active in Cloudbeds) --------
+  // Note 2026-05-02: every rate_plans row in this property has is_active=true,
+  // so the filter is a no-op today but future-proofs once Cloudbeds starts
+  // flagging retired plans.
   const { data: configuredPlans } = await supabase
     .from('rate_plans')
     .select('rate_id, rate_name, rate_type, is_active')
-    .eq('property_id', PROPERTY_ID);
+    .eq('property_id', PROPERTY_ID)
+    .eq('is_active', true);
 
   const configuredCount = configuredPlans?.length ?? 0;
+  const masterNames = new Set((configuredPlans ?? []).map((p: any) => p.rate_name));
+
+  // -------- "Active" master plans = master plan with at least one non-canceled
+  // booking in the last 90 days. Operational definition of "currently selling",
+  // since the Cloudbeds is_active flag is always true here and therefore useless. --------
+  const { data: recent90 } = await supabase
+    .from('reservations')
+    .select('rate_plan, status, booking_date')
+    .eq('property_id', PROPERTY_ID)
+    .gte('booking_date', new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10))
+    .neq('status', 'canceled');
+  const activeMasterNames = new Set(
+    (recent90 ?? [])
+      .map((r: any) => r.rate_plan)
+      .filter((n: string) => n && masterNames.has(n))
+  );
+  const activeMasterCount = activeMasterNames.size;
 
   // -------- Window-scoped reservations (for the period) --------
   const { data: windowRows } = await supabase
@@ -80,7 +101,10 @@ export default async function RatePlansPage({ searchParams }: Props) {
     if (bookDate && (!p.lastBooked || bookDate > p.lastBooked)) p.lastBooked = bookDate;
   });
 
-  const ranked = Object.values(planMap)
+  // Aggregate every plan that had any movement in window, then strip
+  // anything not in the active master set. Orphans (channel-injected names
+  // not in rate_plans) are still surfaced separately in the Orphans card below.
+  const rankedAll = Object.values(planMap)
     .map(p => ({
       ...p,
       adr: p.nights ? p.revenue / p.nights : 0,
@@ -91,6 +115,9 @@ export default async function RatePlansPage({ searchParams }: Props) {
     }))
     .filter(p => p.bookings > 0 || p.cancellations > 0)
     .sort((a, b) => b.revenue - a.revenue);
+
+  const ranked = rankedAll.filter(p => activeMasterNames.has(p.name));
+  const hiddenOrphanInWindow = rankedAll.length - ranked.length;
 
   const totalRev = ranked.reduce((s, r) => s + r.revenue, 0);
   const totalBookings = ranked.reduce((s, r) => s + r.bookings, 0);
@@ -138,14 +165,14 @@ export default async function RatePlansPage({ searchParams }: Props) {
         eyebrow={`Rate plans · ${period.label}`}
         title="Rate plan"
         emphasis="performance"
-        sub={`${period.rangeLabel} · ${plansBookingInWindow}/${configuredCount} plans booking · top 3 = ${top3Pct.toFixed(0)}% of revenue`}
+        sub={`${period.rangeLabel} · ${plansBookingInWindow}/${activeMasterCount} active plans booking · top 3 = ${top3Pct.toFixed(0)}% of revenue · ${configuredCount - activeMasterCount} retired or sleeping (90d) hidden`}
         kpis={
           <>
             <KpiCard
               label={`Plans booking ${period.label}`}
-              value={`${plansBookingInWindow}/${configuredCount}`}
+              value={`${plansBookingInWindow}/${activeMasterCount}`}
               kind="text"
-              hint={`${Math.round((plansBookingInWindow / configuredCount) * 100)}% activation`}
+              hint={`${activeMasterCount > 0 ? Math.round((plansBookingInWindow / activeMasterCount) * 100) : 0}% of active inventory`}
             />
             <KpiCard
               label="Sleeping plans 90d"
@@ -172,7 +199,7 @@ export default async function RatePlansPage({ searchParams }: Props) {
       <Card
         title="By plan type"
         emphasis="grouped"
-        sub={`${period.label} · classified by name pattern · revenue mix · ADR by category`}
+        sub={`${period.label} · active master plans only · classified by name pattern · revenue mix`}
         source="v_rate_plan_perf"
       >
         {typeRollup.length === 0 ? (
@@ -211,7 +238,7 @@ export default async function RatePlansPage({ searchParams }: Props) {
       <Card
         title="Plans"
         emphasis="ranked"
-        sub={`${period.label} · sorted by revenue · cancel rate · lead time`}
+        sub={`${period.label} · active master plans only · sorted by revenue${hiddenOrphanInWindow > 0 ? ` · ${hiddenOrphanInWindow} orphan/retired rows hidden (see Orphans below)` : ''}`}
         source="v_rate_plan_perf"
       >
         {ranked.length === 0 ? (
