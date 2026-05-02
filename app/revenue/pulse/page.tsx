@@ -5,7 +5,7 @@
 
 import tabPulse from '../_redesign/tabPulse';
 import { resolvePeriod } from '@/lib/period';
-import { getKpiDaily, aggregateDaily, getChannelPerf } from '@/lib/data';
+import { getKpiDaily, getChannelPerf, getOverviewKpis } from '@/lib/data';
 import { getPulseExtendedKpis } from '@/lib/pulseExtended';
 import { fmtMoney, fmtPct } from '@/lib/format';
 import { dailyRevenue90dSvg, channelMix30dSvg } from '@/lib/svgCharts';
@@ -33,25 +33,26 @@ const WHOLESALE_RX = /wholesale|tour|dmc|gta|hotelbeds|expedia partner|webbeds/i
 export default async function PulsePage({ searchParams }: Props) {
   const period = resolvePeriod(searchParams);
 
-  // Daily revenue chart now matches the selected window (was hardcoded 90d).
-  // Bug 10 fix per Cowork handoff 2026-05-01.
-  const [daily, daily90, extended, channels] = await Promise.all([
-    getKpiDaily(period.from, period.to).catch(() => []),
+  // KPIs now come from f_overview_kpis (canonical wiring per Cowork audit
+  // 2026-05-03) so Pulse matches Overview exactly. Daily 90d chart still uses
+  // mv_kpi_daily (the only daily source). Channel mix card unchanged.
+  const [daily90, extended, channels, kpis] = await Promise.all([
     getKpiDaily(period.from, period.to).catch(() => []),
     getPulseExtendedKpis(period),
     getChannelPerf().catch(() => []),
+    getOverviewKpis(period).catch(() => ({ current: null, compare: null } as any)),
   ]);
 
-  const agg = aggregateDaily(daily, period.capacityMode);
+  const cur = kpis.current;
 
   let html = tabPulse.replace(/class="tab-content"/, 'class="tab-content active"');
 
   // ── KPI tile patches ─────────────────────────────────────────────────
-  if (agg) {
-    html = patchKpi(html, 'Occupancy', fmtPct(agg.occupancy_pct ?? 0));
-    html = patchKpi(html, 'ADR',       fmtMoney(agg.adr ?? 0, 'USD'));
-    html = patchKpi(html, 'RevPAR',    fmtMoney(agg.revpar ?? 0, 'USD'));
-    html = patchKpi(html, 'TRevPAR',   fmtMoney(agg.trevpar ?? 0, 'USD'));
+  if (cur) {
+    html = patchKpi(html, 'Occupancy', fmtPct(Number(cur.occupancy_pct ?? 0)));
+    html = patchKpi(html, 'ADR',       fmtMoney(Number(cur.adr_usd ?? 0), 'USD'));
+    html = patchKpi(html, 'RevPAR',    fmtMoney(Number(cur.revpar_usd ?? 0), 'USD'));
+    html = patchKpi(html, 'TRevPAR',   fmtMoney(Number(cur.trevpar_usd ?? 0), 'USD'));
   }
   if (extended.cancelPct != null) html = patchKpi(html, 'Cancel %',  fmtPct(extended.cancelPct));
   if (extended.noShowPct != null) html = patchKpi(html, 'No-Show %', fmtPct(extended.noShowPct));
