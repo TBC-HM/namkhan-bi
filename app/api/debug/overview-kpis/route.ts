@@ -4,12 +4,13 @@
 // DELETE this file once the wiring is verified.
 
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  const { data, error } = await supabase.rpc('f_overview_kpis', {
+  const admin = getSupabaseAdmin();
+  const { data, error } = await admin.rpc('f_overview_kpis', {
     p_window:  '30D',
     p_compare: 'NONE',
     p_segment: null,
