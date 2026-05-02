@@ -3,6 +3,7 @@
 // Note: "Today" KPIs (in-house/arrivals/departures) are always real-time
 // and ignore window. The window only applies to capture rate / DQ trend cards.
 
+import FilterStrip from '@/components/nav/FilterStrip';
 import PanelHero from '@/components/sections/PanelHero';
 import KpiCard from '@/components/kpi/KpiCard';
 import ActionCard, { ActionStack } from '@/components/sections/ActionCard';
@@ -122,6 +123,7 @@ export default async function OperationsSnapshotPage({ searchParams }: Props) {
 
   return (
     <>
+      <FilterStrip showForward={false} showCompare showSegment liveSource="Cloudbeds · live" />
       <PanelHero
         eyebrow={`Operations · Snapshot${period.seg !== 'all' ? ` · ${period.segLabel}` : ''}`}
         title="The property"

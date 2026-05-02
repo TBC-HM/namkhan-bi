@@ -3,9 +3,11 @@
 // Mirrors /sales/layout.tsx pattern. Hides forward-window buttons since
 // arrivals are bounded to the next-72h default window per the IA proposal.
 
+// Cowork audit 2026-05-03: removed FilterStrip from this layout — every Front
+// Office page is a live (today / next-72h) view with no period semantics, so
+// Window/Compare/Segment selectors don't apply.
 import Banner from '@/components/nav/Banner';
 import SubNav from '@/components/nav/SubNav';
-import FilterStrip from '@/components/nav/FilterStrip';
 import { RAIL_SUBNAV, PILLAR_HEADER } from '@/components/nav/subnavConfig';
 
 export default function FrontOfficeLayout({ children }: { children: React.ReactNode }) {
@@ -30,7 +32,6 @@ export default function FrontOfficeLayout({ children }: { children: React.ReactN
         }
       />
       <SubNav items={RAIL_SUBNAV.frontOffice} />
-      <FilterStrip showForward={false} showCompare showSegment liveSource="Cloudbeds · poll 60s" />
       <div className="panel">{children}</div>
     </>
   );

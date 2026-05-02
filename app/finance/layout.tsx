@@ -1,7 +1,9 @@
 // app/finance/layout.tsx
+// Cowork audit 2026-05-03: removed FilterStrip from this layout. Finance has
+// snapshot pages (ledger AR aging, agents) where window/compare/segment don't
+// apply. Period-aware pages (snapshot, P&L, budget) render their own FilterStrip.
 import Banner from '@/components/nav/Banner';
 import SubNav from '@/components/nav/SubNav';
-import FilterStrip from '@/components/nav/FilterStrip';
 import { RAIL_SUBNAV, PILLAR_HEADER } from '@/components/nav/subnavConfig';
 
 export default function FinanceLayout({ children }: { children: React.ReactNode }) {
@@ -18,8 +20,6 @@ export default function FinanceLayout({ children }: { children: React.ReactNode 
         meta={<><strong>USALI ledger</strong><br />Refreshed {t} ICT</>}
       />
       <SubNav items={RAIL_SUBNAV.finance} />
-      {/* Finance: back-only windows, compare is critical, segment less so but available */}
-      <FilterStrip showForward={false} showCompare showSegment liveSource="Cloudbeds + ledger · live" />
       <div className="panel">{children}</div>
     </>
   );

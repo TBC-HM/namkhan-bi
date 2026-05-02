@@ -2,6 +2,7 @@
 // Operations · Spa — wellness only.
 // Body-only page (layout provides Banner + SubNav + FilterStrip).
 
+import FilterStrip from '@/components/nav/FilterStrip';
 import PanelHero from '@/components/sections/PanelHero';
 import Card from '@/components/sections/Card';
 import KpiCard from '@/components/kpi/KpiCard';
@@ -50,6 +51,7 @@ export default async function SpaPage({ searchParams }: Props) {
 
   return (
     <>
+      <FilterStrip showForward={false} showCompare={false} showSegment={false} liveSource="Cloudbeds · live" />
       <PanelHero
         eyebrow={`Spa · ${period.label}`}
         title="Wellness"

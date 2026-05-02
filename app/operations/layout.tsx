@@ -1,7 +1,11 @@
 // app/operations/layout.tsx
+// Cowork audit 2026-05-03: removed FilterStrip from this layout. Most Ops
+// sub-pages (today, housekeeping, maintenance, staff, inventory) are live
+// snapshots and shouldn't show window/compare/segment selectors. Pages that
+// ARE period-aware (operations/page.tsx, restaurant, spa, activities) render
+// their own FilterStrip inline.
 import Banner from '@/components/nav/Banner';
 import SubNav from '@/components/nav/SubNav';
-import FilterStrip from '@/components/nav/FilterStrip';
 import { RAIL_SUBNAV, PILLAR_HEADER } from '@/components/nav/subnavConfig';
 
 export default function OperationsLayout({ children }: { children: React.ReactNode }) {
@@ -18,8 +22,6 @@ export default function OperationsLayout({ children }: { children: React.ReactNo
         meta={<><strong>Live operations</strong><br />Refreshed {t} ICT</>}
       />
       <SubNav items={RAIL_SUBNAV.operations} />
-      {/* Operations can hide forward windows — most ops queries are about the past or now */}
-      <FilterStrip showForward={false} showCompare showSegment liveSource="Cloudbeds · live" />
       <div className="panel">{children}</div>
     </>
   );

@@ -1,6 +1,7 @@
 // app/operations/restaurant/page.tsx
 // Operations · Restaurant (F&B). Period-aware (?win= ?cap=) per Cowork handoff 2026-05-01.
 
+import FilterStrip from '@/components/nav/FilterStrip';
 import PanelHero from '@/components/sections/PanelHero';
 import Card from '@/components/sections/Card';
 import KpiCard from '@/components/kpi/KpiCard';
@@ -42,6 +43,7 @@ export default async function RootsPage({ searchParams }: Props) {
 
   return (
     <>
+      <FilterStrip showForward={false} showCompare={false} showSegment={false} liveSource="Cloudbeds · live" />
       <PanelHero
         eyebrow={`Roots · F&B · ${period.label}`}
         title="Roots"

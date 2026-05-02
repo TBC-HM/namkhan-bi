@@ -1,12 +1,15 @@
 // app/finance/page.tsx
 // Finance · Snapshot — period-aware (?win=, ?cmp=, ?seg=).
 
+import FilterStrip from '@/components/nav/FilterStrip';
 import PanelHero from '@/components/sections/PanelHero';
 import KpiCard from '@/components/kpi/KpiCard';
 import ActionCard, { ActionStack } from '@/components/sections/ActionCard';
-import { getRevenueByUsali, getAgedAr } from '@/lib/data';
+import { getAgedAr } from '@/lib/data';
 import { resolvePeriod } from '@/lib/period';
 import { fmtMoney } from '@/lib/format';
+import { getPlSectionsAll, getUsaliHouse, getUsaliDept, currentPeriod, pickPeriod } from './_data';
+import { priorPeriod } from '@/lib/supabase-gl';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -17,21 +20,29 @@ interface Props {
 
 export default async function FinanceSnapshotPage({ searchParams }: Props) {
   const period = resolvePeriod(searchParams);
-  const [usali, aged] = await Promise.all([
-    getRevenueByUsali(period.from, period.to).catch(() => []),
+  const cur = currentPeriod();
+  const prior = priorPeriod(cur);
+
+  const [plAll, houseRows, deptCur, aged] = await Promise.all([
+    getPlSectionsAll(),
+    getUsaliHouse([cur, prior]),
+    getUsaliDept([cur]),
     getAgedAr().catch(() => []),
   ]);
 
-  const months = Array.from(new Set(usali.map((row: any) => row.month))).sort().reverse();
-  const latestMonth = months[1] || months[0];
-  const latestRows = usali.filter((row: any) => row.month === latestMonth);
-  const totalRev = latestRows.reduce((s: number, r: any) => s + Number(r.revenue || 0), 0);
-
-  const priorMonth = months[2];
-  const priorTotal = usali
-    .filter((row: any) => row.month === priorMonth)
-    .reduce((s: number, r: any) => s + Number(r.revenue || 0), 0);
+  // Revenue from pl_section_monthly (income section)
+  const incomeByPeriod = new Map<string, number>();
+  const netByPeriod = new Map<string, number>();
+  for (const r of plAll) {
+    if (r.section === 'income') incomeByPeriod.set(r.period_yyyymm, Number(r.amount_usd || 0));
+    if (r.section === 'net_earnings') netByPeriod.set(r.period_yyyymm, Number(r.amount_usd || 0));
+  }
+  const totalRev = incomeByPeriod.get(cur) ?? 0;
+  const priorTotal = incomeByPeriod.get(prior) ?? 0;
   const monthDelta = priorTotal ? ((totalRev - priorTotal) / priorTotal) * 100 : 0;
+  const netEarnings = netByPeriod.get(cur);
+  const houseCur = pickPeriod(houseRows, cur);
+  const gop = houseCur?.gop ?? null;
 
   const totalAr = aged.reduce((s: number, r: any) => s + Number(r.open_balance || 0), 0);
   const ar90Plus = aged
@@ -40,6 +51,10 @@ export default async function FinanceSnapshotPage({ searchParams }: Props) {
   const ar6190 = aged
     .filter((r: any) => r.bucket === '61_90')
     .reduce((s: number, r: any) => s + Number(r.open_balance || 0), 0);
+
+  // For trend label
+  const months = Array.from(incomeByPeriod.keys()).sort();
+  const latestMonth = months[months.length - 1] || cur;
 
   const cards: any[] = [];
 
@@ -117,6 +132,7 @@ export default async function FinanceSnapshotPage({ searchParams }: Props) {
 
   return (
     <>
+      <FilterStrip showForward={false} showCompare showSegment liveSource="Cloudbeds + ledger · live" />
       <PanelHero
         eyebrow={`Finance · Snapshot · ${latestMonth ? String(latestMonth).slice(0, 7) : '—'}${period.seg !== 'all' ? ` · ${period.segLabel}` : ''}`}
         title="USALI"
@@ -125,14 +141,27 @@ export default async function FinanceSnapshotPage({ searchParams }: Props) {
         kpis={
           <>
             <KpiCard
-              label="Total Revenue"
+              label="Revenue MTD"
               value={totalRev}
               kind="money"
-              delta={priorMonth ? `${monthDelta >= 0 ? '+' : ''}${monthDelta.toFixed(1)}% vs prior` : undefined}
+              delta={priorTotal ? `${monthDelta >= 0 ? '+' : ''}${monthDelta.toFixed(1)}% vs prior` : undefined}
               deltaTone={monthDelta >= 0 ? 'pos' : 'neg'}
             />
-            <KpiCard label="GOP" value={null} kind="money" greyed hint="Cost data needed" />
-            <KpiCard label="Total AR" value={totalAr} kind="money" tone={totalAr > 5000 ? 'warn' : 'neutral'} />
+            <KpiCard
+              label="GOP MTD"
+              value={gop}
+              kind="money"
+              greyed={gop == null}
+              hint={gop == null ? 'awaiting gl_entries load' : undefined}
+            />
+            <KpiCard
+              label="Net Earnings MTD"
+              value={netEarnings ?? null}
+              kind="money"
+              greyed={netEarnings == null}
+              tone={netEarnings != null && netEarnings < 0 ? 'neg' : 'neutral'}
+              hint={netEarnings == null ? 'pl_section_monthly net_earnings' : undefined}
+            />
             <KpiCard
               label="AR 90+"
               value={ar90Plus}
