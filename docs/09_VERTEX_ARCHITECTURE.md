@@ -1,6 +1,10 @@
 # 09 — Vertex Architecture
 
-> GCP-native architecture. Vertex used surgically for ML; the bulk runs on cheaper GCP primitives.
+> **STATUS: ASPIRATIONAL — NOT IMPLEMENTED (verified 2026-05-02).**
+> The system as built runs on Supabase Postgres + Edge Functions (Deno) + Vercel (Next.js). None of the GCP components below — Cloud Run, Pub/Sub, Dataflow, BigQuery, Vertex AI, GCS, Looker Studio, IAP — are deployed. Make.com referenced for alerts in this doc is also NOT integrated.
+> Treat this file as a future-state reference. For what's actually running, see `docs/PROJECT_ASSESSMENT_2026-05-02.md` and `docs/15_SUPABASE_ARCHITECTURE.md`.
+
+> GCP-native architecture (PLANNED). Vertex used surgically for ML; the bulk runs on cheaper GCP primitives.
 
 ## High-level flow
 ```

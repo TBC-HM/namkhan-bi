@@ -22,3 +22,9 @@ tsconfig.tsbuildinfo
 PROPOSE DELETE/
 to vercel production /
 to vercel production/
+
+# Local helper scripts (added 2026-05-02)
+.verify-*
+*.command
+migration_phase2_*.sql
+

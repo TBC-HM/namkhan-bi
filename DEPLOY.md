@@ -1,96 +1,58 @@
 # DEPLOY.md — Ship Namkhan BI to Vercel
 
-Literal click-by-click. ~10 minutes total. Follow in order.
+**Reality check (verified 2026-05-02):** GitHub auto-deploy DOES NOT WORK on this project. Every code change requires a manual `npx vercel --prod --yes --force` from the local repo. See section "Why no auto-deploy" below.
 
-## Prerequisites
-- A GitHub account with permission to create private repos
-- A Vercel account linked to GitHub (free tier is fine)
-- Access to Supabase project `namkhan-pms` (for the anon key)
+For a deeper assessment of platforms (GitHub / Vercel / Supabase / Make.com), read `docs/PROJECT_ASSESSMENT_2026-05-02.md`.
 
 ---
 
-## Step 1 — Get your Supabase anon key (1 min)
+## Standard repeat deploy (90 % of the time)
 
-1. Open https://supabase.com/dashboard/project/kpenyneooigsyuuomgct/settings/api
-2. Scroll to **Project API keys**
-3. Copy the value next to `anon` `public` (starts with `eyJ…`)
-4. Paste it somewhere safe — you'll use it twice (Vercel + optionally local dev)
-
----
-
-## Step 2 — Create GitHub repo (2 min)
-
-1. Go to https://github.com/new
-2. **Repository name:** `namkhan-bi`
-3. **Visibility:** Private
-4. **Do NOT** check "initialize with README/license/.gitignore"
-5. Click **Create repository**
-6. On the next screen, copy the SSH URL (looks like `git@github.com:yourusername/namkhan-bi.git`)
-
----
-
-## Step 3 — Push the code (2 min)
-
-Open Terminal, navigate to where you unzipped the `namkhan-bi/` folder:
+You're already linked, env vars are set, you just changed code. Three commands:
 
 ```bash
-cd ~/Downloads/namkhan-bi   # or wherever you unzipped
-git init
-git add .
-git commit -m "Namkhan BI v0.1 - initial"
-git branch -M main
-git remote add origin git@github.com:YOURUSER/namkhan-bi.git
-git push -u origin main
+cd ~/Desktop/namkhan-bi
+export PATH=/usr/local/bin:/usr/bin:/bin:$PATH
+npx --yes tsc --noEmit                  # mandatory — catches issues Vercel build doesn't
+npx --yes vercel --prod --yes --force   # --force is mandatory — see "Why --force" below
 ```
 
-If `git push` complains about SSH auth, switch to HTTPS:
+Wait 60–120 s. Output ends with `Production: https://...vercel.app [Xs]`. Alias updates within ~30 s.
+
+**Then verify (mandatory):**
 
 ```bash
-git remote set-url origin https://github.com/YOURUSER/namkhan-bi.git
-git push -u origin main
-# When prompted, use a GitHub Personal Access Token (Settings → Developer settings → PATs)
-# instead of your password.
+curl -sI https://namkhan-bi.vercel.app/overview | head -3
+curl -sI https://namkhan-bi.vercel.app/overview?win=l12m | head -3
 ```
 
----
-
-## Step 4 — Deploy to Vercel (3 min)
-
-1. Go to https://vercel.com/new
-2. Click **Import** next to your `namkhan-bi` repo
-   (if it's not visible, click "Adjust GitHub App permissions" → grant access)
-3. **Framework Preset:** Next.js (auto-detected — leave as is)
-4. **Root Directory:** `./` (leave default)
-5. **Build Command, Output Directory, Install Command:** leave defaults
-6. Expand **Environment Variables** and add these five (one per row):
-
-| Name | Value |
-|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | `https://kpenyneooigsyuuomgct.supabase.co` |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | (paste from Step 1) |
-| `DASHBOARD_PASSWORD` | (pick a strong password — share with your team out-of-band) |
-| `NEXT_PUBLIC_FX_LAK_USD` | `21800` |
-| `NEXT_PUBLIC_PROPERTY_ID` | `260955` |
-
-7. Click **Deploy**
-8. Wait ~2 min for the build. When done, click the assigned URL (e.g. `namkhan-bi.vercel.app`)
-9. You'll see the login screen → enter your `DASHBOARD_PASSWORD` → done
+Both must return `HTTP/2 200`. If they return identical KPIs, the deploy did not pick up new code (cache restore problem, see below).
 
 ---
 
-## Step 5 — (Optional) Custom domain (3 min)
+## First-time setup (you only do this once per machine)
 
-1. In Vercel project: **Settings → Domains**
-2. Add `bi.thenamkhan.com`
-3. Vercel shows you the CNAME record to add at your DNS provider
-4. Add the CNAME, wait for propagation (~5–60 min)
-5. Vercel auto-provisions SSL
+### 1. Get Supabase anon key
 
----
+https://supabase.com/dashboard/project/kpenyneooigsyuuomgct/settings/api → **anon public** key.
 
-## Step 6 — Schedule data refresh (1 min, do once)
+### 2. Pull the env vars from Vercel into a local `.env.local`
 
-In Supabase SQL editor (https://supabase.com/dashboard/project/kpenyneooigsyuuomgct/sql/new):
+```bash
+cd ~/Desktop/namkhan-bi
+npx --yes vercel link              # confirm scope = pbsbase-2825's projects, project = namkhan-bi
+npx --yes vercel env pull .env.local  # populates all 6 keys including SUPABASE_SERVICE_ROLE_KEY
+```
+
+Confirm contents (names only):
+
+```bash
+cut -d= -f1 .env.local
+```
+
+You should see: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_FX_LAK_USD`, `NEXT_PUBLIC_PROPERTY_ID`, `DASHBOARD_PASSWORD`, `SUPABASE_SERVICE_ROLE_KEY`.
+
+### 3. Schedule the data refresh (one time, in Supabase SQL editor)
 
 ```sql
 SELECT cron.schedule(
@@ -100,75 +62,83 @@ SELECT cron.schedule(
 );
 ```
 
-This refreshes all materialized views every 15 minutes.
+If `cron.schedule` errors with "schema cron does not exist", enable `pg_cron` in Database → Extensions, then re-run.
 
-If `cron.schedule` errors with "schema cron does not exist":
-1. Database → Extensions → search `pg_cron` → toggle ON
-2. Then re-run the SQL above
+### 4. (Optional) Custom domain
+
+Vercel project → Settings → Domains → add `bi.thenamkhan.com`. Vercel shows you the CNAME to add at your DNS provider.
 
 ---
 
-## Verification checklist
+## Why no auto-deploy?
 
-After deployment, click through and check:
+The repo lives at `github.com/TBC-HM/namkhan-bi`. The Vercel GitHub App must be installed on the `TBC-HM` org for git-push-deploys to work — that requires Owner/Admin on the org, which `pbsbase@gmail.com` does not have.
 
-- [ ] Login screen loads at the Vercel URL
-- [ ] Wrong password is rejected
-- [ ] Correct password redirects to `/overview`
-- [ ] Overview shows real numbers (not zeros) for in-house, occupancy, ADR
-- [ ] Currency toggle (top right) flips USD ↔ LAK
-- [ ] **Today's Snapshot** shows actual arrivals/departures/in-house
-- [ ] **Revenue · Pulse** shows last-30-day numbers and a 90-day chart
-- [ ] **Revenue · Demand** shows OTB vs STLY pace table
-- [ ] **Revenue · Channels** shows your top sources with bookings
-- [ ] **Revenue · Rates** shows BAR per room type for next 30 days
-- [ ] **Departments · Roots** shows top F&B sellers
-- [ ] **Departments · Spa & Activities** shows treatments and activities
-- [ ] **Finance · P&L** shows USALI breakdown for the latest full month
-- [ ] **Finance · Ledger** shows aged AR with bucket pills
-- [ ] Greyed-out tabs show the "Coming soon" overlay (Action Plans, Comp Set, Promotions, Budget, expense side of P&L)
+**Two ways to fix this** (either enables `git push` → auto-deploy):
+
+**Option A — install Vercel GitHub App (preferred, native Git integration)**
+A TBC-HM org admin opens https://github.com/apps/vercel/installations/new, selects the org, grants access to `namkhan-bi`. Then in Vercel → Project → Settings → Git → connect the GitHub repo.
+
+**Option B — GitHub Action with VERCEL_TOKEN (token-based, no GitHub App needed)**
+1. Generate token at https://vercel.com/account/tokens
+2. Add to https://github.com/TBC-HM/namkhan-bi/settings/secrets/actions as `VERCEL_TOKEN`
+3. Re-add the deleted workflow `.github/workflows/vercel-deploy.yml` (was removed in commit `846ea4e`)
+
+Until either is done: CLI is the only path, and `git push` only triggers `ci.yml` (lint + typecheck + build) — no deploy.
+
+---
+
+## Why `--force`?
+
+Without `--force`, Vercel restores the build cache from a prior deployment. That cache contains the stale `to vercel production /` folder, which is excluded by `.vercelignore` AND `tsconfig.json exclude` but ends up referenced by the cached typecheck and fails:
+
+```
+Cannot find module '@/components/nav/Banner'
+```
+
+`--force` uploads ~125 fresh files instead of ~153 cached ones and the build passes. This is non-negotiable until the stale folder is removed from the repo.
+
+---
+
+## Verification protocol (run after every deploy)
+
+| URL | Expected |
+|---|---|
+| `https://namkhan-bi.vercel.app/` | 307 → `/overview` |
+| `https://namkhan-bi.vercel.app/overview` | 200, period heading "Last Month", KPIs render |
+| `https://namkhan-bi.vercel.app/overview?win=l12m` | 200, period heading "Last 12 months", KPIs DIFFER from above |
+| `https://namkhan-bi.vercel.app/guest/directory` | 200, directory loads with 4,111 guests |
+| `https://namkhan-bi.vercel.app/sales/b2b` | 200, DMC tab loads |
+| `https://namkhan-bi.vercel.app/marketing/library` | 200 |
+| `https://namkhan-bi.vercel.app/operations/staff` | 200 |
+| `https://namkhan-bi.vercel.app/revenue/compset` | 200 |
+
+If any return 4xx/5xx — open Vercel runtime logs at https://vercel.com/pbsbase-2825s-projects/namkhan-bi.
 
 ---
 
 ## Troubleshooting
 
-**Login loops (keeps going back to login)**
-- Cookie not setting. Check `DASHBOARD_PASSWORD` is set in Vercel and matches what you typed.
-- In Vercel → Project → Settings → Environment Variables → confirm var present in Production.
-
-**Pages show all zeros / "—"**
-- Materialized views are empty. Run `SELECT public.refresh_bi_views();` in Supabase SQL.
-- Check anon key is correct (paste fresh from Supabase API settings).
-
-**500 errors / blank pages**
-- Vercel → Project → Deployments → click latest → Runtime Logs. Look for Supabase errors.
-- Most common: wrong env var name (must be exact, case-sensitive).
-
-**Build fails**
-- Vercel build log will show the error. Most common: missing env var → already covered above.
+**Login loops** → `DASHBOARD_PASSWORD` mismatch or missing on Vercel.
+**Pages show all zeros** → matviews stale. Run `SELECT public.refresh_bi_views();` in Supabase SQL.
+**Upload returns 500** → `SUPABASE_SERVICE_ROLE_KEY` missing on Vercel (verify with `vercel env ls production`).
+**Build fails on `Cannot find module '@/components/nav/Banner'`** → forgot `--force`. Re-run.
+**Build fails on something else** → run `npx tsc --noEmit` locally first, fix, re-deploy.
 
 ---
 
-## Cost
+## What I (Claude) cannot do
 
-- Vercel free tier: covers a single dashboard for ~one user
-- Supabase free tier: covers Phase 1 storage and traffic
-- Custom domain: ~$10/year if you don't already own `thenamkhan.com`
-
-When you outgrow the free tier (10+ daily users / many concurrent dashboards), upgrade Vercel Pro ($20/mo) and Supabase Pro ($25/mo).
+- **Type into Terminal in Cowork mode.** Terminal is "click" tier — clicks allowed, typing blocked. Use `osascript do shell script` from Claude, or paste commands yourself.
+- **Bypass GitHub sudo mode** for App-install actions.
+- **Install Vercel App on TBC-HM** without org-admin rights.
 
 ---
 
-## Pushing updates later
+## Useful URLs
 
-After the first deploy, every `git push` to `main` auto-deploys to production.
-
-```bash
-# make changes
-git add .
-git commit -m "describe change"
-git push
-# Vercel rebuilds in ~2 min, no manual steps
-```
-
-For preview environments (test before prod): create a branch, push it, Vercel makes a preview URL automatically.
+- Vercel project: https://vercel.com/pbsbase-2825s-projects/namkhan-bi
+- Deployments: https://vercel.com/pbsbase-2825s-projects/namkhan-bi/deployments
+- Build logs: click any row in deployments → Build Logs tab
+- Vercel App install (when org admin available): https://github.com/apps/vercel/installations/new
+- Live: https://namkhan-bi.vercel.app

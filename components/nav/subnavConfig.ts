@@ -98,6 +98,7 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
   // Reviews/Social/Influencers/Media moved to Marketing pillar.
   guest: [
     { href: '/guest',                  label: 'Snapshot' },
+    { href: '/guest/directory',        label: 'Directory' },
     { href: '/guest/reputation',       label: 'Reputation',  coming: true },
     { href: '/guest/journey',          label: 'Journey',     coming: true },
     { href: '/guest/loyalty',          label: 'Loyalty',     coming: true },

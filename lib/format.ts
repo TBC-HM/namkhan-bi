@@ -23,6 +23,11 @@ export function fmtMoney(n: number | null | undefined, ccy: Currency = 'USD'): s
   return `₭${Math.round(lak).toLocaleString()}`;
 }
 
+// Convenience alias used by app/guest/directory/_components — formats USD.
+export function fmtUSD(n: number | null | undefined): string {
+  return fmtMoney(n, 'USD');
+}
+
 export function fmtPct(n: number | null | undefined, dp = 1): string {
   if (n == null || isNaN(n as number)) return '—';
   return `${n.toFixed(dp)}%`;
