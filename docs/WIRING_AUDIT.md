@@ -50,3 +50,15 @@ Non-canonical UI windows (`l12m`, `next180`, `next365`) are unreachable from Fil
 | Knowledge (`/knowledge`) | selectors | none in source | none | OK |
 | Settings (all pages) | selectors | none in source | none | OK |
 
+## Revenue pages (Cowork audit 2026-05-03)
+
+| Page | Element | Source claimed | Source actual | Match? | Action | Status |
+|------|---------|----------------|---------------|--------|--------|--------|
+| Revenue · Pulse | Occupancy / ADR / RevPAR / TRevPAR | `mv_kpi_daily` aggregated client-side via `aggregateDaily` | client-side aggregation | NO (could differ from Overview, didn't respect segment) | Switched to `f_overview_kpis(p_window,p_compare,p_segment)` so Pulse and Overview share one number | FIXED |
+| Revenue · Pulse | Cancel % / No-Show % / Lead Time / ALOS | `lib/pulseExtended` (queries `reservations` directly) | same | YES (period-scoped) | none | OK |
+| Revenue · Pulse | Daily revenue 90d chart | `mv_kpi_daily` rooms_revenue + total_ancillary_revenue | same | YES | none | OK |
+| Revenue · Pulse | Channel mix 30d chart | `mv_channel_perf` revenue_30d | same | YES | none | OK |
+| Revenue · Pace | OTB pace · forward windows | `public.v_otb_pace` (back-window chips greyed out) | `v_otb_pace` | YES | none — page enforces forward-only | OK |
+| Revenue · Channels | Channel KPIs + commissions + OTA × Roomtype | `mv_channel_economics`, `mv_channel_x_roomtype` | same | YES | none | OK |
+| Revenue · Rates | BAR ladder / Min/Max | `mv_rate_inventory_calendar` via `getRateInventoryCalendar(period)` | same | YES (period-driven) | none | OK |
+
