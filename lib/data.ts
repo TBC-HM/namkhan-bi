@@ -59,6 +59,97 @@ export async function getKpiToday() {
 }
 
 // ============================================================================
+// OVERVIEW — canonical wiring per Cowork audit 2026-05-03
+// ============================================================================
+// Source-of-truth views/functions deployed in Supabase:
+//   - public.v_overview_live           (LIVE strip — In-house, arrivals, OTB, cancel%, no-show%)
+//   - public.v_overview_dq             (DQ tile — column action_required)
+//   - public.f_overview_kpis(p_window, p_compare, p_segment)  (Performance + capture rows, both USD AND LAK columns)
+// Brief: "Use the new overview wiring (already deployed). Do not invent new queries when these already exist."
+
+const WIN_MAP: Record<string, string> = {
+  today:   'TODAY',
+  '7d':    '7D',
+  '30d':   '30D',
+  '90d':   '90D',
+  ytd:     'YTD',
+  l12m:    'YTD',         // l12m is non-canonical per brief; coerce to nearest valid
+  next7:   'NEXT_7',
+  next30:  'NEXT_30',
+  next90:  'NEXT_90',
+  next180: 'NEXT_90',     // non-canonical; coerce
+  next365: 'NEXT_90',     // non-canonical; coerce
+};
+const CMP_MAP: Record<string, string> = {
+  none: 'NONE',
+  pp:   'PREV_PERIOD',
+  stly: 'YOY',
+};
+// SegmentKey -> reservations.market_segment text the function expects.
+// 'all' and 'unsegmented' both map to NULL (no filter).
+const SEG_MAP: Record<string, string | null> = {
+  all:         null,
+  retail:      'Retail',
+  dmc:         'DMC',
+  group:       'Group Bookings',
+  discount:    'Discount',
+  comp:        'Comp',
+  unsegmented: null,
+};
+
+export async function getOverviewLive() {
+  const { data, error } = await supabase
+    .from('v_overview_live')
+    .select('*')
+    .eq('property_id', PROPERTY_ID)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function getOverviewDqSummary() {
+  const { data, error } = await supabase
+    .from('v_overview_dq')
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Period KPIs from f_overview_kpis. Returns { current, compare? } objects with
+ * BOTH usd and lak columns (no FX multiplication anywhere).
+ *
+ * If the period.win value is non-canonical (l12m, next180, next365), it's
+ * coerced to the nearest valid f_overview_kpis enum value.
+ */
+export async function getOverviewKpis(period: ResolvedPeriod) {
+  const win = WIN_MAP[period.win] ?? '30D';
+  const cmp = CMP_MAP[period.cmp] ?? 'NONE';
+  const seg = SEG_MAP[period.seg] ?? null;
+  const { data, error } = await supabase.rpc('f_overview_kpis', {
+    p_window:  win,
+    p_compare: cmp,
+    p_segment: seg,
+  });
+  if (error) throw error;
+  const rows = (data ?? []) as any[];
+  const current = rows.find((r: any) => r.period_kind === 'current') ?? null;
+  const compare = rows.find((r: any) => r.period_kind === 'compare') ?? null;
+  return { current, compare };
+}
+
+export async function getOverviewSegments() {
+  const { data, error } = await supabase
+    .from('v_overview_segments')
+    .select('*')
+    .order('sort_order')
+    .order('segment');
+  if (error) throw error;
+  return data ?? [];
+}
+
+// ============================================================================
 // DAILY KPI — drives Overview, Pulse, Departments, P&L cards
 // ============================================================================
 

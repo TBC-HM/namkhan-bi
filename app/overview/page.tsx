@@ -1,6 +1,14 @@
 // app/overview/page.tsx
 // Owner overview — Beyond Circle layout.
 // Hero strip + 3 KPI rows + channel mix card.
+//
+// Wiring (Cowork audit 2026-05-03):
+//   - LIVE strip            -> v_overview_live           via getOverviewLive()
+//   - Performance + capture -> f_overview_kpis(...)      via getOverviewKpis(period)
+//   - DQ tile               -> v_overview_dq.action_required via getOverviewDqSummary()
+//   - Trend chart           -> mv_kpi_daily              via getKpiDaily(period)
+//   - Channel mix card      -> mv_channel_perf           via getChannelPerf()
+// All money tiles read paired *_usd / *_lak columns directly (no hardcoded FX).
 
 import Banner from '@/components/nav/Banner';
 import FilterStrip from '@/components/nav/FilterStrip';
@@ -11,8 +19,8 @@ import KpiCard from '@/components/kpi/KpiCard';
 import { DailyRevenueChart } from '@/components/charts/DailyRevenueChart';
 import { PILLAR_HEADER } from '@/components/nav/subnavConfig';
 import {
-  getKpiToday, getKpiDaily, getCaptureRates,
-  aggregateDaily, getDqIssues, getChannelPerf,
+  getOverviewLive, getOverviewKpis, getOverviewDqSummary,
+  getKpiDaily, getChannelPerf,
 } from '@/lib/data';
 import { resolvePeriod } from '@/lib/period';
 
@@ -26,14 +34,9 @@ interface Props {
 export default async function OverviewPage({ searchParams }: Props) {
   const period = resolvePeriod(searchParams);
 
-  const today = await getKpiToday().catch(() => null);
-  const daily = await getKpiDaily(period).catch(() => []);
-  const capture = await getCaptureRates().catch(() => null);
-  const dq = await getDqIssues().catch(() => []);
-  const agg = aggregateDaily(daily, period.capacityMode);
-
-  // Chart range now matches the selected window (was hardcoded 90d).
-  // Bug 10 fix per Cowork handoff 2026-05-01.
+  const live    = await getOverviewLive().catch(() => null);
+  const kpis    = await getOverviewKpis(period).catch(() => ({ current: null, compare: null } as any));
+  const dq      = await getOverviewDqSummary().catch(() => null);
   const daily90 = await getKpiDaily(period.from, period.to).catch(() => []);
 
   const ch = await getChannelPerf().catch(() => []);
@@ -42,6 +45,9 @@ export default async function OverviewPage({ searchParams }: Props) {
     .filter((c: any) => Number(c.revenue_30d) > 0 || Number(c.bookings_30d) > 0)
     .slice(0, 6);
   const total30 = topChannels.reduce((s: number, c: any) => s + Number(c.revenue_30d || 0), 0);
+
+  const cur = kpis.current;
+  const dqCount = Number(dq?.action_required ?? 0);
 
   const header = PILLAR_HEADER.overview;
   const refreshTime = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Vientiane' });
@@ -63,7 +69,7 @@ export default async function OverviewPage({ searchParams }: Props) {
       <FilterStrip liveSource="Cloudbeds · Supabase · live" />
 
       <div className="panel">
-        {/* Hero strip — headline + 4 today KPIs */}
+        {/* Hero strip — headline + 4 today KPIs (LIVE, period-independent) */}
         <PanelHero
           eyebrow="Today · live"
           title="Right Now"
@@ -71,39 +77,58 @@ export default async function OverviewPage({ searchParams }: Props) {
           sub="In-house, arriving, departing, on-the-books"
           kpis={
             <>
-              <KpiCard label="In-House" value={today?.in_house ?? 0} />
-              <KpiCard label="Arriving Today" value={today?.arrivals_today ?? 0} />
-              <KpiCard label="Departing Today" value={today?.departures_today ?? 0} />
-              <KpiCard label="OTB Next 90d" value={today?.otb_next_90d ?? 0} />
+              <KpiCard label="In-House"         value={live?.in_house         ?? 0} />
+              <KpiCard label="Arriving Today"   value={live?.arriving_today   ?? 0} />
+              <KpiCard label="Departing Today"  value={live?.departing_today  ?? 0} />
+              <KpiCard label="OTB Next 90d"     value={live?.otb_next_90d     ?? 0} />
             </>
           }
         />
 
-        {/* Performance row */}
+        {/* Performance row — period-driven via f_overview_kpis */}
         <div className="card-grid-5">
-          <KpiCard label={`Occupancy (${period.days}d)`} value={agg?.occupancy_pct ?? 0} kind="pct" />
-          <KpiCard label={`ADR (${period.days}d)`} value={agg?.adr ?? 0} kind="money" />
-          <KpiCard label={`RevPAR (${period.days}d)`} value={agg?.revpar ?? 0} kind="money" />
-          <KpiCard label={`TRevPAR (${period.days}d)`} value={agg?.trevpar ?? 0} kind="money" />
+          <KpiCard
+            label={`Occupancy (${period.label})`}
+            value={Number(cur?.occupancy_pct ?? 0)}
+            kind="pct"
+          />
+          <KpiCard
+            label={`ADR (${period.label})`}
+            value={Number(cur?.adr_usd ?? 0)}
+            valueLak={Number(cur?.adr_lak ?? 0)}
+            kind="money"
+          />
+          <KpiCard
+            label={`RevPAR (${period.label})`}
+            value={Number(cur?.revpar_usd ?? 0)}
+            valueLak={Number(cur?.revpar_lak ?? 0)}
+            kind="money"
+          />
+          <KpiCard
+            label={`TRevPAR (${period.label})`}
+            value={Number(cur?.trevpar_usd ?? 0)}
+            valueLak={Number(cur?.trevpar_lak ?? 0)}
+            kind="money"
+          />
           <KpiCard label="GOPPAR" value={null} greyed hint="Cost data needed" />
         </div>
 
-        {/* Mix row */}
+        {/* Mix row — cancel/no-show from v_overview_live; capture rates from f_overview_kpis */}
         <div className="card-grid-6">
-          <KpiCard label="Cancellation %" value={Number(today?.cancellation_pct_90d ?? 0)} kind="pct" />
-          <KpiCard label="No-show %" value={Number(today?.no_show_pct_90d ?? 0)} kind="pct" />
-          <KpiCard label="F&B / Occ Rn" value={Number(capture?.fnb_per_occ_room ?? 0)} kind="money" showSecondaryCurrency={false} />
-          <KpiCard label="Spa / Occ Rn" value={Number(capture?.spa_per_occ_room ?? 0)} kind="money" showSecondaryCurrency={false} />
-          <KpiCard label="Activity / Occ Rn" value={Number(capture?.activity_per_occ_room ?? 0)} kind="money" showSecondaryCurrency={false} />
+          <KpiCard label="Cancellation %"    value={Number(live?.cancellation_pct ?? 0)} kind="pct" />
+          <KpiCard label="No-show %"         value={Number(live?.no_show_pct      ?? 0)} kind="pct" />
+          <KpiCard label="F&B / Occ Rn"      value={Number(cur?.fnb_per_occ_rn_usd      ?? 0)} kind="money" showSecondaryCurrency={false} />
+          <KpiCard label="Spa / Occ Rn"      value={Number(cur?.spa_per_occ_rn_usd      ?? 0)} kind="money" showSecondaryCurrency={false} />
+          <KpiCard label="Activity / Occ Rn" value={Number(cur?.activity_per_occ_rn_usd ?? 0)} kind="money" showSecondaryCurrency={false} />
           <KpiCard
             label="Open DQ Issues"
-            value={dq.length}
-            tone={dq.length > 0 ? 'warn' : 'pos'}
+            value={dqCount}
+            tone={dqCount > 0 ? 'warn' : 'pos'}
           />
         </div>
 
         {/* Revenue chart */}
-        <Card title="Revenue & Occupancy" emphasis="trend" sub="Last 90 days · daily" source="mv_kpi_daily">
+        <Card title="Revenue & Occupancy" emphasis="trend" sub={`${period.rangeLabel} · daily`} source="mv_kpi_daily">
           {daily90.length > 0
             ? <DailyRevenueChart data={daily90} />
             : <div style={{ padding: 40, textAlign: 'center', color: 'var(--ink-mute)' }}>No data in window.</div>
@@ -160,22 +185,18 @@ export default async function OverviewPage({ searchParams }: Props) {
         </div>
 
         {/* Insight strip */}
-        {dq.length > 0 ? (
+        {dqCount > 0 ? (
           <Insight tone="warn" eye="DQ alert">
-            <strong>{dq.length} open data-quality issues.</strong> Fix or document before SLH review.
+            <strong>{dqCount} action-required DQ issues.</strong> Fix or document before SLH review.
             See <em>Agents · DQ Roster</em>.
           </Insight>
         ) : (
           <Insight tone="info" eye="Health">
             <strong>All KPI feeds green.</strong> Last sync {refreshTime} ICT.
-            Cancellation {Number(today?.cancellation_pct_90d ?? 0).toFixed(1)}% over 90d — within tolerance.
+            Cancellation {Number(live?.cancellation_pct ?? 0).toFixed(1)}% — within tolerance.
           </Insight>
         )}
       </div>
     </>
   );
-}
-
-function monthShort(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short' });
 }

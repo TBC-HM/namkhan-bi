@@ -19,23 +19,50 @@ interface Props {
   hint?: string;             // small hint below
   greyed?: boolean;
   showSecondaryCurrency?: boolean;
+  /**
+   * Real-column LAK value (no FX multiplication). When `valueLak` is provided
+   * alongside a numeric `value` (interpreted as USD), the secondary currency
+   * line uses this exact LAK value rather than synthesizing one via FX.
+   *
+   * If `value` is missing and `valueLak` present, LAK becomes primary when
+   * the user toggles to LAK — picked from real columns end-to-end.
+   *
+   * Use this whenever the source view exposes `<metric>_usd` AND `<metric>_lak`
+   * pairs (e.g. f_overview_kpis). This satisfies the audit rule:
+   * "Never multiply USD by a hardcoded number to fake LAK."
+   */
+  valueLak?: number | null;
 }
 
 export default function KpiCard({
   label, value, kind = 'number', tone = 'neutral',
   delta, deltaTone, hint, greyed = false,
   showSecondaryCurrency = true,
+  valueLak,
 }: Props) {
   const { ccy } = useCcy();
   let display = '—';
   let secondary: string | null = null;
 
+  // Real-column dual-currency path: caller passed both USD and LAK columns.
+  // We render whichever currency is selected from its own column — no FX math.
+  const hasRealLak = typeof valueLak === 'number';
+
   if (greyed || value === null || value === undefined || value === '') {
     display = '—';
   } else if (kind === 'money' && typeof value === 'number') {
-    display = fmtMoney(value, ccy);
-    if (showSecondaryCurrency) {
-      secondary = fmtMoney(value, ccy === 'USD' ? 'LAK' : 'USD');
+    if (hasRealLak) {
+      const primary = ccy === 'LAK' ? (valueLak as number) : value;
+      display = fmtMoney(primary, ccy);
+      if (showSecondaryCurrency) {
+        const altCcy = ccy === 'LAK' ? 'USD' : 'LAK';
+        const altVal = ccy === 'LAK' ? value : (valueLak as number);
+        secondary = fmtMoney(altVal, altCcy);
+      }
+    } else {
+      // Legacy single-value path. Secondary currency is suppressed because
+      // synthesizing it via FX violates the no-hardcoded-FX rule.
+      display = fmtMoney(value, ccy);
     }
   } else if (kind === 'pct' && typeof value === 'number') {
     display = fmtPct(value);
