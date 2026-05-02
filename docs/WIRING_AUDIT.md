@@ -29,3 +29,24 @@ Cowork audit started 2026-05-03. One row per UI element. Status = `OK` (already 
 Window enum mapping (frontend → `f_overview_kpis` arg):
 `today→TODAY · 7d→7D · 30d→30D · 90d→90D · ytd→YTD · next7→NEXT_7 · next30→NEXT_30 · next90→NEXT_90`.
 Non-canonical UI windows (`l12m`, `next180`, `next365`) are unreachable from FilterStrip but tolerated by `resolvePeriod` for legacy callers; coerced to nearest valid by `getOverviewKpis`.
+
+## Selector cleanup (Cowork audit 2026-05-03)
+
+| Page | Element | Was | Now | Status |
+|------|---------|-----|-----|--------|
+| Front Office (all pages) | Window/Compare/Segment | rendered by layout `app/front-office/layout.tsx` | layout no longer renders FilterStrip — all front pages are live snapshots | FIXED |
+| Operations (layout) | Window/Compare/Segment | rendered by layout for every Ops sub-page incl. live ones (today, housekeeping, maintenance, staff, inventory) | layout no longer renders FilterStrip; period-aware sub-pages render their own | FIXED |
+| Operations · Snapshot (`/operations`) | Window/Compare/Segment | from layout | rendered inline by page (period-aware) | OK |
+| Operations · Restaurant (`/operations/restaurant`) | Window | from layout | rendered inline by page | OK |
+| Operations · Spa (`/operations/spa`) | Window | from layout | rendered inline by page | OK |
+| Operations · Activities (`/operations/activities`) | Window | from layout | rendered inline by page | OK |
+| Operations · Today / Housekeeping / Maintenance / Staff / Inventory | Window/Compare/Segment | from layout | none (live snapshots) | FIXED |
+| Front Office · Arrivals (`/front-office/arrivals`) | Window/Compare/Segment | from layout | none (live next-72h, no period semantics) | FIXED |
+| Finance (layout) | Window/Compare/Segment | rendered by layout for every finance sub-page incl. AR aging snapshot | layout no longer renders FilterStrip; period-aware pages render their own | FIXED |
+| Finance · Snapshot (`/finance`) | Window/Compare/Segment | from layout | rendered inline (period-aware) | OK |
+| Finance · P&L (`/finance/pnl`) | Window/Compare | from layout (with segment) | rendered inline; segment dropped (P&L is by USALI dept, not market segment) | FIXED |
+| Finance · Ledger (`/finance/ledger`) | Window/Compare/Segment | from layout | none (AR aging is a snapshot, not a window) | FIXED |
+| Finance · Agents (`/finance/agents`) | selectors | from layout | none (configuration page) | FIXED |
+| Knowledge (`/knowledge`) | selectors | none in source | none | OK |
+| Settings (all pages) | selectors | none in source | none | OK |
+
