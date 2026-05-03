@@ -117,8 +117,8 @@ export default async function InventoryOverviewPage() {
         <KpiBox value={snap.capexApprovedUsd} unit="usd" label="CapEx approved" tooltip="Approved + not yet received" />
         <KpiBox value={snap.capexProposedUsd} unit="usd" label="CapEx proposed" tooltip="In pipeline, awaiting decision" />
         <KpiBox value={snap.itemsActive} unit="count" label="Active SKUs" />
-        <KpiBox value={null} unit="usd" label="Wastage MTD" state="data-needed" needs="movement type ‘waste’ tracking" />
-        <KpiBox value={null} unit="pct" label="Stock turn" state="data-needed" needs="cost-of-goods feed" />
+        <KpiBox value={snap.wastageValueMtdUsd} unit="usd" label="Wastage MTD" tooltip="inv.movements WHERE movement_type='write_off' AND date >= month start · valued at recorded total_cost_usd" />
+        <KpiBox value={snap.stockTurnAnnualized} unit="nights" label="Stock turn" dp={2} tooltip={`Annualized: 90d cogs ($${Math.round(snap.cogs90dUsd).toLocaleString()}) × 365/90 ÷ on-hand value ($${Math.round(snap.inventoryValueUsd).toLocaleString()})`} />
       </div>
 
       {/* === Heatmap === */}

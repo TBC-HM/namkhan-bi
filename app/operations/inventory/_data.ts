@@ -33,6 +33,9 @@ export interface InvSnapshotKpis {
   capexProposedUsd: number;
   capexApprovedUsd: number;
   faNbvUsd: number;
+  wastageValueMtdUsd: number;
+  cogs90dUsd: number;
+  stockTurnAnnualized: number | null;
 }
 
 export async function getInventorySnapshot(): Promise<InvSnapshotKpis> {
@@ -40,11 +43,17 @@ export async function getInventorySnapshot(): Promise<InvSnapshotKpis> {
     itemsActive: 0, itemsTotal: 0, belowPar: 0, slowMovers: 0,
     inventoryValueUsd: 0, openPosUsd: 0, pendingRequests: 0,
     suppliersActive: 0, localSourcingPct: 0, capexProposedUsd: 0, capexApprovedUsd: 0, faNbvUsd: 0,
+    wastageValueMtdUsd: 0, cogs90dUsd: 0, stockTurnAnnualized: null,
   };
   let admin;
   try { admin = getSupabaseAdmin(); } catch { return empty; }
 
-  const [items, stock, pars, openPos, openPrs, sups, capex, fa] = await Promise.all([
+  // Compute wastage + COGS window dates
+  const today = new Date();
+  const monthStartIso = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1)).toISOString().slice(0,10);
+  const ninetyDaysAgoIso = new Date(today.getTime() - 90 * 24 * 3600 * 1000).toISOString().slice(0,10);
+
+  const [items, stock, pars, openPos, openPrs, sups, capex, fa, wastage, cogs] = await Promise.all([
     safe(admin.schema('inv').from('items').select('item_id, last_unit_cost_usd, is_active').then(r => r.data ?? []), [] as any[]),
     safe(admin.schema('inv').from('stock_balance').select('item_id, location_id, quantity_on_hand, last_movement_at').then(r => r.data ?? []), [] as any[]),
     safe(admin.schema('inv').from('par_levels').select('item_id, location_id, par_quantity').then(r => r.data ?? []), [] as any[]),
@@ -53,6 +62,8 @@ export async function getInventorySnapshot(): Promise<InvSnapshotKpis> {
     safe(admin.schema('suppliers').from('suppliers').select('supplier_id, status, is_local_sourcing').eq('status', 'active').then(r => r.data ?? []), [] as any[]),
     safe(admin.schema('fa').from('capex_pipeline').select('estimated_cost_usd, status').then(r => r.data ?? []), [] as any[]),
     safe(admin.schema('fa').from('assets').select('purchase_cost_usd, residual_value_usd, in_service_date, useful_life_years, status').eq('status', 'in_service').then(r => r.data ?? []), [] as any[]),
+    safe(admin.schema('inv').from('movements').select('total_cost_usd').eq('movement_type', 'write_off').gte('movement_date', monthStartIso).then(r => r.data ?? []), [] as any[]),
+    safe(admin.schema('inv').from('movements').select('total_cost_usd, movement_type').in('movement_type', ['consume','issue']).gte('movement_date', ninetyDaysAgoIso).then(r => r.data ?? []), [] as any[]),
   ]);
 
   const itemCostBySku = new Map<string, number>();
@@ -87,7 +98,7 @@ export async function getInventorySnapshot(): Promise<InvSnapshotKpis> {
     .reduce((s: number, c: any) => s + Number(c.estimated_cost_usd ?? 0), 0);
 
   // Net book value: cost − accumulated depreciation (straight-line)
-  const today = new Date();
+  // (uses outer `today` already declared above)
   const faNbv = fa.reduce((sum: number, a: any) => {
     const cost = Number(a.purchase_cost_usd ?? 0);
     const residual = Number(a.residual_value_usd ?? 0);
@@ -98,6 +109,15 @@ export async function getInventorySnapshot(): Promise<InvSnapshotKpis> {
     const accDep = Math.min(Math.max(yrsInSvc, 0) * annualDep, cost - residual);
     return sum + Math.max(cost - accDep, residual);
   }, 0);
+
+  // Wastage MTD — write_off movements valued at recorded total_cost_usd
+  const wastageValueMtdUsd = wastage.reduce((s: number, m: any) => s + Number(m.total_cost_usd ?? 0), 0);
+
+  // COGS rolling 90d (consume + issue value), annualized stock turn = (cogs * 365/90) / avg_inv
+  const cogs90dUsd = cogs.reduce((s: number, m: any) => s + Number(m.total_cost_usd ?? 0), 0);
+  const stockTurnAnnualized = (inventoryValueUsd > 0 && cogs90dUsd > 0)
+    ? (cogs90dUsd * (365 / 90)) / inventoryValueUsd
+    : null;
 
   return {
     itemsActive: items.filter((i: any) => i.is_active).length,
@@ -112,6 +132,9 @@ export async function getInventorySnapshot(): Promise<InvSnapshotKpis> {
     capexProposedUsd: capexProposed,
     capexApprovedUsd: capexApproved,
     faNbvUsd: faNbv,
+    wastageValueMtdUsd,
+    cogs90dUsd,
+    stockTurnAnnualized,
   };
 }
 

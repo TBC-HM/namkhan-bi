@@ -77,7 +77,7 @@ export default async function StockPage() {
         <KpiBox value={skusOnHand} unit="count" label="Active SKUs" tooltip="SKUs with quantity > 0 in any location" />
         <KpiBox value={medianDoc} unit="d" label="Median days of cover" tooltip="Median across SKUs that have both burn rate and stock; excludes ∞" state={medianDoc == null ? 'data-needed' : 'live'} needs={medianDoc == null ? 'inv.movements (no consumption recorded yet)' : undefined} />
         <KpiBox value={slow.length} unit="count" label="Slow movers" tooltip={`Tied-up $${Math.round(slowMoverValue / 1000)}k · no movement >60d, qty > 0`} />
-        <KpiBox value={expiring14} unit="count" label="Expiring ≤14d" tooltip={`At-risk value $${Math.round(atRiskValue / 1000)}k`} />
+        <KpiBox value={null} unit="count" label="Expiring ≤14d" valueText="xx" tooltip="Not wired — no movements have batch_code / expiry_date set yet. Source: inv.v_inv_expiring_soon (0 rows)." />
       </div>
 
       {/* Stock on hand */}

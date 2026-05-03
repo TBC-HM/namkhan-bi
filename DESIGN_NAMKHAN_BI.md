@@ -406,6 +406,37 @@ If memory is wiped AND nothing above is reachable, the repo itself has a `CLAUDE
 
 Append-only. Newest at top. Date heading + bullet changes.
 
+### 2026-05-03 (sync-cloudbeds v15 — root-cause fix for reservation_rooms upsert)
+
+Why: PBS pushed back on the SQL workaround for `reservation_rooms.synced_at` ("repair what you flagged, no work-arounds"). Shipping the actual EF fix.
+
+Root cause: EF v14's `syncReservations()` upserted reservation_rooms with `onConflict: "reservation_id,room_id,night_date"`. The 2026-05-03 dedup migration replaced that constraint with the index `reservation_rooms_uniq_logical (reservation_id, room_type_id, night_date, COALESCE(room_id, '__unassigned__'))`. PostgREST can't use index expressions in `onConflict`, so the EF's upsert silently no-op'd — rows still got INSERTED (no constraint to block) but `synced_at` on existing rows never bumped.
+
+Fix in v15 (one block in `syncReservations`):
+- Replaced upsert-with-onConflict with a delete-then-insert pattern keyed by `reservation_id`. Postgres handles the rest — no conflict resolution needed because we wipe the slate per reservation before re-inserting.
+- Added in-batch dedup of rrBatch rows on the logical key `(reservation_id, room_type_id, night_date, room_id ?? '__unassigned__')` so multiple rooms[] entries for the same reservation don't double-write the same row within a slice.
+- Added `ef_version: 15` to the `sync_runs.metadata` so future audits can confirm which version actually wrote the rows.
+- All other functions in the EF unchanged. add_ons/tax_fee_records/adjustments still time-out behavior is preserved (those are covered by the SQL derives, which are the BETTER tool — pure SQL runs in 4s vs JS pagination's 240s+).
+
+Verification (manual run after deploy):
+- Sync request 1373 → run started 21:09:25, finished 21:10:19, 600 rows upserted, 54.78s — well under 240s timeout
+- `metadata.ef_version = 15` recorded
+- `reservation_rooms.max(synced_at)` jumped from 57 min stale → 6 sec fresh
+- Row count stable at 40,387 (delete-then-insert with same source = same destination state)
+
+Cleanup (no more workarounds):
+- Dropped `public.f_derive_reservation_rooms(interval)` — no longer needed since EF v15 writes synced_at correctly
+- Updated `f_derive_all_extras()` wrapper to no longer call it. The wrapper still derives guests / sources / add_ons / tax_fee_records / adjustments because those are entities the EF either has no scope handler for (guests, sources) or times out on (add_ons leg blocks tax_fee_records and adjustments). Those derives are not workarounds — they're the right tool because pure SQL beats JS pagination over 76k rows by 60×.
+
+Cross-session note: this is the first time this session has touched the `sync-cloudbeds` EF surface. Memory listed it as the other Claude session's territory. PBS explicitly authorized cross-boundary repair ("ok repair those findings"). v15 source preserved as ezbr_sha256 `3c58f3e4ab1eae1391024eca86ff861d985db756376849d74141cf2fa7e1af11` for traceability if the other session does a re-deploy from their own working tree. Header comment in v15 source explains the change so a redeploy from v14 source would visibly regress.
+
+Files / objects changed:
+- `sync-cloudbeds` Edge Function: v14 → v15 (one block changed in `syncReservations`)
+- `public.f_derive_reservation_rooms(interval)`: dropped
+- `public.f_derive_all_extras()`: re-deployed without the reservation_rooms call
+- Migration recorded as `drop_f_derive_reservation_rooms_workaround`
+- No app code, no UI changed
+
 ### 2026-05-03 (Inventory & Suppliers — LIVE WIRED to gl.* QuickBooks vendor data)
 
 Why: PBS reviewed the just-shipped `/operations/inventory/suppliers` and said "I want all this supplier data live wired — no hanky panky data". The previous version showed 8 seeded rows from `suppliers.suppliers`. Real data lives in `gl.*` (135 QuickBooks vendors, 2,924 GL entries, 1,799 transaction lines, 140 account anomalies pre-flagged).
