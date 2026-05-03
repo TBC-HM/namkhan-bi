@@ -9,6 +9,7 @@ import { resolvePeriod } from '@/lib/period';
 import {
   getPlSections, getUsaliHouse, getUsaliDept, getUsaliPlBySubcat,
   getDqUnmappedCount, getPendingDecisions, periodsForWindow, currentPeriod, pickSection, pickPeriod,
+  getLyTotalRevenue, getLyByDept,
 } from '../_data';
 import { priorPeriod, type PeriodWindow } from '@/lib/supabase-gl';
 import PageHeader from '@/components/layout/PageHeader';
@@ -70,6 +71,9 @@ export default async function PnLPage({ searchParams }: Props) {
     getPendingDecisions(5),
     getKpiDaily(period).catch(() => []),
   ]);
+
+  // LY (last-year) data from gl.pnl_snapshot — used to populate the LY column
+  // in the USALI grid + flow-through KPI. Only fetches once cur is known.
   const agg = aggregateDaily(daily, period.capacityMode);
 
   // Pick the latest CLOSED period: explicitly exclude the calendar-current month
@@ -124,6 +128,21 @@ export default async function PnLPage({ searchParams }: Props) {
 
   // Dept rows for USALI table — current period only
   const deptCurMap = new Map(deptRows.filter(r => r.period_yyyymm === cur).map(r => [r.usali_department, r]));
+
+  // LY fetch (parallel with rest is overkill — happens after we know `cur`)
+  const [lyTotalRev, lyByDept] = await Promise.all([
+    getLyTotalRevenue(cur),
+    getLyByDept(cur),
+  ]);
+  const lyRevBySubcat = new Map(lyByDept.map(r => [r.usali_subcategory, r.revenue]));
+  const revVsLyPct = (lyTotalRev != null && lyTotalRev !== 0)
+    ? ((totalRev - lyTotalRev) / lyTotalRev) * 100
+    : null;
+  // Flow-through = ΔGOP / ΔRevenue. We have curGop but no LY GOP, so we
+  // approximate flow as the year-over-year change in revenue retained as
+  // current-period GOP — only meaningful when LY rev > 0 and gop is set.
+  // True flow-through needs LY GOP — surfaced as `xx` when not available.
+
   const months = Array.from(new Set(plSections.map(r => r.period_yyyymm))).sort().reverse();
   const latestMonth = months[0] || cur;
   const monthLabel = latestMonth ? new Date(latestMonth + '-01').toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : 'Apr 2026';
@@ -183,12 +202,12 @@ export default async function PnLPage({ searchParams }: Props) {
             <div className="deltas"><span className="neu">{gopMargin == null ? 'awaiting GOP$' : 'gop / total_revenue'}</span></div>
             <div className="lbl">GOP margin</div>
           </div>
-          <div className="kpi dim">
+          <div className={'kpi ' + (revVsLyPct == null ? 'dim' : '')}>
             <div className="scope">Flow</div>
-            <div className="val">—</div>
-            <div className="deltas"><span className="neu">needs LY data</span></div>
-            <div className="lbl">Flow-through</div>
-            <span className="needs" title="Phase 3 — needs LY P&amp;L import">deferred</span>
+            <div className="val">{revVsLyPct == null ? 'xx' : fmtPctV(revVsLyPct)}</div>
+            <div className="deltas"><span className="neu">{revVsLyPct == null ? 'no LY data this month' : 'rev vs same month LY · pnl_snapshot'}</span></div>
+            <div className="lbl">Revenue vs LY</div>
+            {revVsLyPct == null && <span className="needs" title="gl.pnl_snapshot has no row for this period">no LY row</span>}
           </div>
           <div className={'kpi ' + (ebitda == null ? 'dim' : '')}>
             <div className="scope">P&amp;L</div>
@@ -198,10 +217,10 @@ export default async function PnLPage({ searchParams }: Props) {
           </div>
           <div className="kpi dim">
             <div className="scope">Cash</div>
-            <div className="val">—</div>
-            <div className="deltas"><span className="neu">bank feed pending</span></div>
+            <div className="val">xx</div>
+            <div className="deltas"><span className="neu">bank feed not connected</span></div>
             <div className="lbl">Cash on hand</div>
-            <span className="needs" title="Gap 4 — gl.cash_forecast_weekly">data needed · Gap 4</span>
+            <span className="needs" title="Gap 4 — gl.cash_forecast_weekly empty">not wired</span>
           </div>
         </div>
 
@@ -242,11 +261,11 @@ export default async function PnLPage({ searchParams }: Props) {
 
       {/* ============== BLOCK 5 — Agent strip ============== */}
       <div className="agent-strip">
-        <span className="heading"><span className="dot" /> Finance agents <span className="new-badge">NEW</span></span>
-        <span className="chip" title="Daily 06:00 · last run 06:02 · 4 findings"><span className="dot idle" />P&amp;L Detector</span>
-        <span className="chip" title="On-demand · 1 draft pending review"><span className="dot idle" />Variance Composer</span>
-        <span className="chip" title="Weekly Mon 07:00 · running · 3 JE proposals"><span className="dot running" />Controller Agent</span>
-        <span className="chip" title="Weekly Wed 09:00 · idle · 2 RFQ drafts"><span className="dot idle" />Procurement Agent</span>
+        <span className="heading"><span className="dot" /> Finance agents <span className="new-badge" title="agent runtime not connected">not wired</span></span>
+        <span className="chip" title="agents.runs / agents.findings tables empty"><span className="dot idle" />P&amp;L Detector · xx findings</span>
+        <span className="chip" title="agents.runs / commentary_drafts empty"><span className="dot idle" />Variance Composer · xx drafts</span>
+        <span className="chip" title="agents.runs / je_proposals empty"><span className="dot idle" />Controller Agent · xx JEs</span>
+        <span className="chip" title="agents.runs / rfq_drafts empty"><span className="dot idle" />Procurement Agent · xx RFQs</span>
         <button type="button" className="fire" disabled>⚡ Fire all</button>
       </div>
 
@@ -258,11 +277,11 @@ export default async function PnLPage({ searchParams }: Props) {
       <div className="queue">
         {(() => {
           const sample = [
-            { impact: '+$4,200', title: 'Renegotiate beverage supplier (Q2 cost +18% YoY)', meta: 'Top 3 SKUs · Lao Beverage Co · conf 72% · velocity: this week · Procurement Agent' },
-            { impact: '+$2,800', title: 'Cut Tuesday spa shift Apr–May (utilisation 31%)', meta: 'Spa · 8 weeks · cross-section → Operations RosterAgent · conf 84% · velocity: this week' },
-            { impact: '+$1,950', title: 'Approve revised energy mix (solar inverter), payback 14mo', meta: 'CapEx $27k · IRR 22% · conf 88% · velocity: this month · Maintenance Agent' },
-            { impact: '+$1,600', title: 'Reclassify Mar marketing accruals (mis-coded to Rooms OPEX)', meta: '12 entries · Controller Agent · conf 95%', stamp: 'writes GL · 4-eyes req' },
-            { impact: '+$1,400', title: 'Hire 1.0 FTE Front Office (offsets 0.5 OT + 0.5 contractor)', meta: 'manual review (HR) · conf 67% · velocity: this month' },
+            { impact: '+$xx', title: 'Renegotiate beverage supplier (placeholder — Procurement Agent will populate)', meta: 'governance.decision_queue is empty · template shown' },
+            { impact: '+$xx', title: 'Cut low-utilisation shift (placeholder — RosterAgent will populate)', meta: 'governance.decision_queue is empty · template shown' },
+            { impact: '+$xx', title: 'Approve revised energy mix (placeholder — Maintenance Agent will populate)', meta: 'governance.decision_queue is empty · template shown' },
+            { impact: '+$xx', title: 'Reclassify accruals (placeholder — Controller Agent will populate)', meta: 'governance.decision_queue is empty · template shown', stamp: 'writes GL · 4-eyes req' },
+            { impact: '+$xx', title: 'Hire FTE (placeholder — manual review)', meta: 'governance.decision_queue is empty · template shown' },
           ];
           const rows = decisions.length > 0
             ? decisions.map((d) => {
@@ -301,43 +320,43 @@ export default async function PnLPage({ searchParams }: Props) {
 
       {/* ============== BLOCK 7 — Tactical alerts ============== */}
       <div className="section-head" style={{ marginTop: 24 }}>
-        <h3>Tactical <em>alerts</em></h3>
-        <span className="meta">cross-dimensional gaps · severity-bordered · sample data until detectors wire</span>
+        <h3>Tactical <em>alerts</em> <span className="needs" style={{ marginLeft: 8 }}>not wired</span></h3>
+        <span className="meta">No detector outputs in <code>governance.dq_findings</code> yet. Cards below are placeholders showing what will render once detectors run.</span>
       </div>
-      <div className="alerts">
+      <div className="alerts" style={{ opacity: .55 }}>
         <div className="alert hi">
-          <h4>F&amp;B cost % 38% (target 30%) <span className="imp">−$3.6k / mo</span></h4>
-          <div className="dims">dept=F&amp;B × line=beverage × vendor=Lao Beverage Co · breach 6pp</div>
-          <div className="reason">Detector: beverage line driving the gap; volume flat, unit cost +18% YoY.</div>
-          <div className="tactic"><b>Composer:</b> 1) RFQ to 3 alt suppliers · 2) menu remix toward higher-margin bottles · 3) renegotiate volume tier.</div>
+          <h4>F&amp;B cost % xx% (target xx%) <span className="imp">−$xx / mo</span></h4>
+          <div className="dims">dept=F&amp;B × line=xx × vendor=xx · breach xx pp</div>
+          <div className="reason">Detector pending — needs gl_entries × class join + materiality threshold check.</div>
+          <div className="tactic"><b>Composer:</b> 1) RFQ to alt suppliers · 2) menu remix · 3) renegotiate volume tier (template).</div>
           <div className="handoffs">
             <button type="button" className="btn" disabled>→ Procurement Agent <span className="stamp">approval req</span></button>
             <button type="button" className="btn" disabled>→ F&amp;B head</button>
           </div>
         </div>
         <div className="alert med">
-          <h4>Rooms labour HpOR 1.8 (target 1.5) <span className="imp">−$1.9k / mo</span></h4>
-          <div className="dims">dept=Rooms × dow=Tue+Wed × shift=night-audit · 2σ breach</div>
-          <div className="reason">Detector: 2 night-audit overlap shifts during low occ; unchanged since Q4.</div>
-          <div className="tactic"><b>Composer:</b> collapse to single-shift Tue/Wed; reassign overlap to weekend cover.</div>
+          <h4>Rooms labour HpOR xx (target xx) <span className="imp">−$xx / mo</span></h4>
+          <div className="dims">dept=Rooms × dow=xx × shift=xx · xx σ breach</div>
+          <div className="reason">Detector pending — needs roster × occupancy join.</div>
+          <div className="tactic"><b>Composer:</b> consolidate shifts on low-occ days (template).</div>
           <div className="handoffs">
             <button type="button" className="btn" disabled>→ RosterAgent (Operations) <span className="stamp">approval req</span></button>
           </div>
         </div>
         <div className="alert med">
-          <h4>Energy +22% MoM, no occ change <span className="imp">−$1.1k / mo</span></h4>
-          <div className="dims">dept=POM × line=utilities × period=Mar→Apr · 1.6σ</div>
-          <div className="reason">Detector: chiller usage abnormal Apr 14–22; possible refrigerant leak or set-point drift.</div>
-          <div className="tactic"><b>Composer:</b> dispatch maintenance check; recalibrate BMS schedule; reset chiller set-point.</div>
+          <h4>Energy ±xx% MoM, no occ change <span className="imp">−$xx / mo</span></h4>
+          <div className="dims">dept=POM × line=utilities × period=xx · xx σ</div>
+          <div className="reason">Detector pending — needs utility meter feed.</div>
+          <div className="tactic"><b>Composer:</b> dispatch maintenance check; recalibrate BMS schedule (template).</div>
           <div className="handoffs">
             <button type="button" className="btn" disabled>→ Maintenance Agent <span className="stamp">approval req</span></button>
           </div>
         </div>
         <div className="alert low">
-          <h4>Spa products write-off 1.4% (target 1.0%) <span className="imp">−$220 / mo</span></h4>
+          <h4>Spa products write-off xx% (target xx%) <span className="imp">−$xx / mo</span></h4>
           <div className="dims">dept=Spa × line=inventory write-off · audit-hygiene</div>
-          <div className="reason">Detector: 6-month products approaching expiry; usage rate lower than 2024.</div>
-          <div className="tactic"><b>Composer:</b> 1) discount package combo · 2) staff training on shelf-life rotation.</div>
+          <div className="reason">Detector pending — needs inv.spa_products + write-off log.</div>
+          <div className="tactic"><b>Composer:</b> discount combo · staff training (template).</div>
           <div className="handoffs">
             <button type="button" className="btn" disabled>→ Procurement Agent</button>
           </div>
@@ -380,22 +399,22 @@ export default async function PnLPage({ searchParams }: Props) {
                   <tr key={r.name}>
                     <td>{r.name}</td>
                     <td>{fmtK(r.val)}</td>
-                    <td>—</td>
-                    <td>—</td>
-                    <td>—</td>
-                    <td>—</td>
-                    <td>—</td>
+                    <td title="needs gl.budgets table">xx</td>
+                    <td title="needs LY breakdown by dept">xx</td>
+                    <td title="needs gl.budgets table">xx</td>
+                    <td title="needs prior-mo dept breakdown">xx</td>
+                    <td title="needs gl.budgets + LY">xx</td>
                   </tr>
                 ));
               })()}
               <tr className="subtotal">
                 <td>Total Revenue</td>
                 <td>{fmtK(totalRev)}</td>
-                <td>—</td>
-                <td>{fmtK(priorTotalRev)}</td>
-                <td>—</td>
+                <td title="needs gl.budgets table">xx</td>
+                <td>{lyTotalRev != null ? fmtK(lyTotalRev) : <span title="no pnl_snapshot row for this period">xx</span>}</td>
+                <td title="needs gl.budgets table">xx</td>
                 <td className={revVsPriorPct >= 0 ? 'var-green' : 'var-amber'}>{fmtPctV(revVsPriorPct)}</td>
-                <td>—</td>
+                <td title="needs gl.budgets table">xx</td>
               </tr>
 
               <tr className="section"><td colSpan={7}>Departmental Expenses (USALI · live from <code>gl.v_usali_dept_summary</code>)</td></tr>
@@ -421,11 +440,11 @@ export default async function PnLPage({ searchParams }: Props) {
                   <tr key={r.name}>
                     <td>{r.name}</td>
                     <td>{fmtK(r.val)}</td>
-                    <td>—</td>
-                    <td>—</td>
-                    <td>—</td>
-                    <td>—</td>
-                    <td>—</td>
+                    <td title="needs gl.budgets table">xx</td>
+                    <td title="needs LY breakdown by dept">xx</td>
+                    <td title="needs gl.budgets table">xx</td>
+                    <td title="needs prior-mo dept breakdown">xx</td>
+                    <td title="needs gl.budgets + LY">xx</td>
                   </tr>
                 ));
               })()}
@@ -433,50 +452,50 @@ export default async function PnLPage({ searchParams }: Props) {
               <tr className="gop">
                 <td>Departmental Profit</td>
                 <td>{fmtK(houseCur?.total_dept_profit ?? null)}</td>
-                <td>—</td>
-                <td>—</td>
-                <td>—</td>
-                <td>—</td>
-                <td>—</td>
+                <td title="needs gl.budgets table">xx</td>
+                <td title="needs LY GOP">xx</td>
+                <td title="needs gl.budgets table">xx</td>
+                <td title="needs prior-mo">xx</td>
+                <td title="needs gl.budgets + LY">xx</td>
               </tr>
 
               <tr className="section"><td colSpan={7}>Undistributed Operating Expenses (live from <code>gl.v_usali_house_summary</code>)</td></tr>
               <tr>
                 <td>A&amp;G</td>
                 <td>{fmtK(houseCur?.ag_total ?? null)}</td>
-                <td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>
+                <td title="needs gl.budgets table">xx</td><td title="needs LY breakdown by dept">xx</td><td title="needs gl.budgets table">xx</td><td title="needs prior-mo dept breakdown">xx</td><td title="needs gl.budgets + LY">xx</td>
               </tr>
               <tr>
                 <td>Sales &amp; Marketing</td>
                 <td>{fmtK(houseCur?.sales_marketing ?? null)}</td>
-                <td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>
+                <td title="needs gl.budgets table">xx</td><td title="needs LY breakdown by dept">xx</td><td title="needs gl.budgets table">xx</td><td title="needs prior-mo dept breakdown">xx</td><td title="needs gl.budgets + LY">xx</td>
               </tr>
               <tr>
                 <td>POM</td>
                 <td>{fmtK(houseCur?.pom ?? null)}</td>
-                <td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>
+                <td title="needs gl.budgets table">xx</td><td title="needs LY breakdown by dept">xx</td><td title="needs gl.budgets table">xx</td><td title="needs prior-mo dept breakdown">xx</td><td title="needs gl.budgets + LY">xx</td>
               </tr>
               <tr>
                 <td>Utilities</td>
                 <td>{fmtK(houseCur?.utilities ?? null)}</td>
-                <td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>
+                <td title="needs gl.budgets table">xx</td><td title="needs LY breakdown by dept">xx</td><td title="needs gl.budgets table">xx</td><td title="needs prior-mo dept breakdown">xx</td><td title="needs gl.budgets + LY">xx</td>
               </tr>
               <tr>
                 <td>Mgmt Fees</td>
                 <td>{fmtK(houseCur?.mgmt_fees ?? null)}</td>
-                <td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>
+                <td title="needs gl.budgets table">xx</td><td title="needs LY breakdown by dept">xx</td><td title="needs gl.budgets table">xx</td><td title="needs prior-mo dept breakdown">xx</td><td title="needs gl.budgets + LY">xx</td>
               </tr>
 
               <tr className="gop">
                 <td>GOP after Undistributed</td>
                 <td>{fmtK(houseCur?.gop ?? null)}</td>
-                <td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>
+                <td title="needs gl.budgets table">xx</td><td title="needs LY breakdown by dept">xx</td><td title="needs gl.budgets table">xx</td><td title="needs prior-mo dept breakdown">xx</td><td title="needs gl.budgets + LY">xx</td>
               </tr>
 
               <tr className="ebitda">
                 <td>EBITDA</td>
                 <td>{fmtK(ebitda)}</td>
-                <td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>
+                <td title="needs gl.budgets table">xx</td><td title="needs LY breakdown by dept">xx</td><td title="needs gl.budgets table">xx</td><td title="needs prior-mo dept breakdown">xx</td><td title="needs gl.budgets + LY">xx</td>
               </tr>
             </tbody>
           </table>
@@ -485,71 +504,71 @@ export default async function PnLPage({ searchParams }: Props) {
         {/* RIGHT — sidekick stack */}
         <div>
           <div className="panel">
-            <h3>Top <em>variances</em> vs Budget</h3>
-            <div className="meta">requires plan schema join · Gap 2</div>
+            <h3>Top <em>variances</em> vs Budget <span className="needs" style={{ marginLeft: 8 }}>not wired</span></h3>
+            <div className="meta">no <code>gl.budgets</code> table — every value below is a placeholder until owner uploads an annual budget.</div>
             <div className="waterfall">
-              <div className="wfr"><div className="lbl">A&amp;G overrun</div><div><div className="bar neg" style={{ width: '96%' }} /></div><div className="num neg">−$7.1k</div></div>
-              <div className="wfr"><div className="lbl">F&amp;B beverage</div><div><div className="bar neg" style={{ width: '48%' }} /></div><div className="num neg">−$3.6k</div></div>
-              <div className="wfr"><div className="lbl">Rooms labour OT</div><div><div className="bar neg" style={{ width: '28%' }} /></div><div className="num neg">−$2.1k</div></div>
-              <div className="wfr"><div className="lbl">Utilities</div><div><div className="bar neg" style={{ width: '14%' }} /></div><div className="num neg">−$0.9k</div></div>
-              <div className="wfr"><div className="lbl">Sales &amp; Marketing</div><div><div className="bar pos" style={{ width: '30%' }} /></div><div className="num pos">+$2.3k</div></div>
-              <div className="wfr"><div className="lbl">Spa rev mix</div><div><div className="bar pos" style={{ width: '20%' }} /></div><div className="num pos">+$1.5k</div></div>
+              <div className="wfr"><div className="lbl">A&amp;G overrun</div><div><div className="bar neg" style={{ width: '60%', opacity: .25 }} /></div><div className="num neg">xx</div></div>
+              <div className="wfr"><div className="lbl">F&amp;B beverage</div><div><div className="bar neg" style={{ width: '60%', opacity: .25 }} /></div><div className="num neg">xx</div></div>
+              <div className="wfr"><div className="lbl">Rooms labour OT</div><div><div className="bar neg" style={{ width: '60%', opacity: .25 }} /></div><div className="num neg">xx</div></div>
+              <div className="wfr"><div className="lbl">Utilities</div><div><div className="bar neg" style={{ width: '60%', opacity: .25 }} /></div><div className="num neg">xx</div></div>
+              <div className="wfr"><div className="lbl">Sales &amp; Marketing</div><div><div className="bar pos" style={{ width: '60%', opacity: .25 }} /></div><div className="num pos">xx</div></div>
+              <div className="wfr"><div className="lbl">Spa rev mix</div><div><div className="bar pos" style={{ width: '60%', opacity: .25 }} /></div><div className="num pos">xx</div></div>
             </div>
-            <div className="meta" style={{ marginTop: 8 }}>Sample magnitudes · live values pending Gap 2 migration.</div>
+            <div className="meta" style={{ marginTop: 8 }}>Source: <code>gl.budgets</code> (does not exist yet) joined to <code>v_usali_house_summary</code>.</div>
           </div>
 
           <div className="panel" style={{ marginTop: 10 }}>
-            <h3>13-week <em>cash</em> forecast</h3>
-            <div className="meta">Gap 4 — <code>gl.cash_forecast_weekly</code></div>
+            <h3>13-week <em>cash</em> forecast <span className="needs" style={{ marginLeft: 8 }}>not wired</span></h3>
+            <div className="meta"><code>gl.cash_forecast_weekly</code> exists but has 0 rows — needs bank feed import.</div>
             <div className="cash-strip">
-              <div className="flag">cash dip W34–W36</div>
-              <div className="legend">$ position · weekly buckets · sample</div>
+              <div className="flag">cash dip Wxx–Wxx</div>
+              <div className="legend">$ position · weekly buckets · xx (placeholder)</div>
             </div>
           </div>
 
           <div className="panel" style={{ marginTop: 10 }}>
-            <h3>Margin leak <em>heatmap</em></h3>
-            <div className="meta">$k impact · dept × week · sample · Gap 1+2</div>
+            <h3>Margin leak <em>heatmap</em> <span className="needs" style={{ marginLeft: 8 }}>not wired</span></h3>
+            <div className="meta">$k impact · dept × week · needs <code>governance.dq_findings</code> filtered by detector type. Cells below are placeholders.</div>
             <div className="heatmap">
               <div className="hm-lbl">Rooms</div>
-              <div className="hm" style={{ background: 'var(--st-good-bg)' }}>0.2</div>
-              <div className="hm" style={{ background: 'var(--st-bad-bd)' }}>2.1</div>
-              <div className="hm" style={{ background: 'var(--st-warn-bd)' }}>1.0</div>
-              <div className="hm" style={{ background: 'var(--st-good-bg)' }}>0.4</div>
-              <div className="hm" style={{ background: 'var(--st-good-bg)' }}>0.1</div>
+              <div className="hm" style={{ background: 'var(--surf-2, #f5f1e7)', opacity: .35 }}>xx</div>
+              <div className="hm" style={{ background: 'var(--surf-2, #f5f1e7)', opacity: .35 }}>xx</div>
+              <div className="hm" style={{ background: 'var(--surf-2, #f5f1e7)', opacity: .35 }}>xx</div>
+              <div className="hm" style={{ background: 'var(--surf-2, #f5f1e7)', opacity: .35 }}>xx</div>
+              <div className="hm" style={{ background: 'var(--surf-2, #f5f1e7)', opacity: .35 }}>xx</div>
               <div className="hm-lbl">F&amp;B</div>
-              <div className="hm" style={{ background: 'var(--st-bad)', color: 'var(--paper-warm)' }}>3.6</div>
-              <div className="hm" style={{ background: 'var(--st-warn-bd)' }}>1.2</div>
-              <div className="hm" style={{ background: 'var(--st-good-bg)' }}>0.3</div>
-              <div className="hm" style={{ background: 'var(--st-warn-bd)' }}>0.9</div>
-              <div className="hm" style={{ background: 'var(--st-good-bg)' }}>0.4</div>
+              <div className="hm" style={{ background: 'var(--surf-2, #f5f1e7)', opacity: .35 }}>xx</div>
+              <div className="hm" style={{ background: 'var(--surf-2, #f5f1e7)', opacity: .35 }}>xx</div>
+              <div className="hm" style={{ background: 'var(--surf-2, #f5f1e7)', opacity: .35 }}>xx</div>
+              <div className="hm" style={{ background: 'var(--surf-2, #f5f1e7)', opacity: .35 }}>xx</div>
+              <div className="hm" style={{ background: 'var(--surf-2, #f5f1e7)', opacity: .35 }}>xx</div>
               <div className="hm-lbl">Spa</div>
-              <div className="hm" style={{ background: 'var(--st-good-bg)' }}>0.4</div>
-              <div className="hm" style={{ background: 'var(--st-good-bg)' }}>0.5</div>
-              <div className="hm" style={{ background: 'var(--st-warn-bd)' }}>1.0</div>
-              <div className="hm" style={{ background: 'var(--st-good-bg)' }}>0.2</div>
-              <div className="hm" style={{ background: 'var(--st-good-bg)' }}>0.3</div>
+              <div className="hm" style={{ background: 'var(--surf-2, #f5f1e7)', opacity: .35 }}>xx</div>
+              <div className="hm" style={{ background: 'var(--surf-2, #f5f1e7)', opacity: .35 }}>xx</div>
+              <div className="hm" style={{ background: 'var(--surf-2, #f5f1e7)', opacity: .35 }}>xx</div>
+              <div className="hm" style={{ background: 'var(--surf-2, #f5f1e7)', opacity: .35 }}>xx</div>
+              <div className="hm" style={{ background: 'var(--surf-2, #f5f1e7)', opacity: .35 }}>xx</div>
               <div className="hm-lbl">A&amp;G</div>
-              <div className="hm" style={{ background: 'var(--st-bad)', color: 'var(--paper-warm)' }}>7.1</div>
-              <div className="hm" style={{ background: 'var(--st-warn-bd)' }}>1.1</div>
-              <div className="hm" style={{ background: 'var(--st-bad-bd)' }}>2.0</div>
-              <div className="hm" style={{ background: 'var(--st-good-bg)' }}>0.2</div>
-              <div className="hm" style={{ background: 'var(--st-good-bg)' }}>0.1</div>
+              <div className="hm" style={{ background: 'var(--surf-2, #f5f1e7)', opacity: .35 }}>xx</div>
+              <div className="hm" style={{ background: 'var(--surf-2, #f5f1e7)', opacity: .35 }}>xx</div>
+              <div className="hm" style={{ background: 'var(--surf-2, #f5f1e7)', opacity: .35 }}>xx</div>
+              <div className="hm" style={{ background: 'var(--surf-2, #f5f1e7)', opacity: .35 }}>xx</div>
+              <div className="hm" style={{ background: 'var(--surf-2, #f5f1e7)', opacity: .35 }}>xx</div>
             </div>
           </div>
 
           <div className="panel" style={{ marginTop: 10 }}>
-            <h3>Variance <em>commentary</em> · draft</h3>
-            <div className="meta">Tone: Owner direct · never auto-published · Gap 5 — <code>gl.commentary_drafts</code></div>
-            <div className="comm">
+            <h3>Variance <em>commentary</em> · draft <span className="needs" style={{ marginLeft: 8 }}>not wired</span></h3>
+            <div className="meta"><code>gl.commentary_drafts</code> exists but has 0 rows · LLM composer not yet scheduled. Body below is a placeholder template.</div>
+            <div className="comm" style={{ opacity: .45 }}>
               <h4>Headline</h4>
-              <p>April closes 21% behind budgeted GOP despite revenue +3.7%. Margin compression sits in A&amp;G and F&amp;B labor — neither is a revenue problem.</p>
+              <p>{monthLabel} closes xx% behind budgeted GOP despite revenue ±xx%. Margin compression sits in xx — placeholder until composer runs.</p>
               <h4>A&amp;G</h4>
-              <p>$7.1k over budget (+47%). USALI Auditor flags GL-6420 as a likely Sales miscoding worth $12.4k YTD. Reclassification queued for 4-eyes (CFO+GM). If approved, GOP % recovers ~0.4 pp YTD.</p>
+              <p>$xx over budget (xx%). Auditor flags GL-xxxx as a likely miscoding worth $xx YTD. Reclassification queued for 4-eyes (CFO+GM). If approved, GOP % recovers ~xx pp YTD.</p>
               <h4>F&amp;B</h4>
-              <p>Labor $14.6k vs $11.5k budget (+27%) while revenue lagged 4.4%. Result: 38% labor ratio against the 28–32% norm. Margin Leak Sentinel flagged on day 12; roster optimizer recommendation pending GM approval.</p>
+              <p>Labor $xx vs $xx budget (xx%) while revenue lagged xx%. Result: xx% labor ratio against the 28–32% norm. Margin Leak Sentinel flagged on day xx; roster optimizer recommendation pending GM approval.</p>
               <h4>Utilities</h4>
-              <p>+8.6% vs budget, third consecutive month above LY ratio. Energy audit recommended.</p>
+              <p>±xx% vs budget, xx consecutive month above LY ratio. Energy audit recommended.</p>
             </div>
             <div className="comm-foot">
               <button type="button" className="btn primary" disabled>Save draft</button>
@@ -570,12 +589,23 @@ export default async function PnLPage({ searchParams }: Props) {
       </div>
 
       <div className="legend-foot">
-        Block compliance: 1 ✓ · 2 ✓ · 3 ✓ · 4 ✓ (primary 6 + secondary 5) · 5 ✓ · 6 ✓ · 7 ✓ · 8 ✓ · 9 ✓.
-        Wired (gl.* schema, 2026-05-02): Total Revenue (<code>pl_section_monthly</code>) · GOP $ / margin / EBITDA (<code>v_usali_house_summary</code>) ·
-        Labour % / F&amp;B labour % / A&amp;G $ / channels commission % (<code>mv_usali_pl_monthly</code>) · USALI dept table (<code>v_usali_dept_summary</code>) ·
-        mapping gaps (<code>dq_findings</code> DQ-04) · decisions queue (<code>governance.decision_queue</code>).
-        Deferred: Flow-through (LY data) · Cash on hand (bank feed) · Top variances vs Budget (<code>gl.budgets</code> not in schema) · 13-week cash · Margin leak heatmap (sample) · Variance commentary draft (<code>gl.commentary_drafts</code>).
-        gl_entries-derived tiles render <code>—</code> until <code>qb-deploy/gl_entries_load.sql</code> is run via psql.
+        <div style={{ marginBottom: 8 }}><b>WIRED (real numbers, no <code>xx</code>):</b></div>
+        <div style={{ marginBottom: 12 }}>
+          Total Revenue · prior-mo Δ · Revenue vs LY (<code>pl_section_monthly</code> + <code>pnl_snapshot</code>) ·
+          GOP $ / GOP margin / EBITDA (<code>v_usali_house_summary</code>) ·
+          Labour % / F&amp;B labour % / A&amp;G $ / Distribution cost % (<code>mv_usali_pl_monthly</code>) ·
+          USALI dept Actual + LY total (<code>v_usali_dept_summary</code>, <code>pnl_snapshot</code>) ·
+          USALI mapping gaps (<code>dq_findings</code> DQ-04) ·
+          Decisions queue (<code>governance.decision_queue</code> if present, else placeholder).
+        </div>
+        <div style={{ marginBottom: 8 }}><b>NOT WIRED (rendered as <code>xx</code>):</b></div>
+        <div>
+          Cash on hand (no bank feed) ·
+          USALI Budget / Δ Bgt / Flow columns (no <code>gl.budgets</code> table) ·
+          Per-dept LY breakdown (LY snapshot lacks class join) ·
+          Top variances vs Budget waterfall · 13-week cash forecast · Margin leak heatmap · Variance commentary · Tactical alerts (all need detectors + budgets).
+          Account mapping fixes for <code>not_specified</code> entries: edit at <a href="/finance/mapping" style={{ color: 'var(--brass)', textDecoration: 'underline' }}>/finance/mapping</a>.
+        </div>
       </div>
     </div>
   );

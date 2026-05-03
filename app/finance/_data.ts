@@ -148,6 +148,83 @@ export async function getDqUnmappedCount(): Promise<number> {
   return count ?? 0;
 }
 
+// ----- Last-Year P&L (gl.pnl_snapshot) ------------------------------------
+// pnl_snapshot has 2025 historical data. Used to populate the "LY" column
+// on /finance/pnl. Joins to gl.accounts to derive USALI department + subcat.
+
+export interface LyDeptRow {
+  usali_department: string | null;
+  usali_subcategory: string | null;
+  revenue: number;
+  cost_of_sales: number;
+  payroll: number;
+  other_op_exp: number;
+}
+
+/**
+ * Pull last-year P&L for the same calendar month as `period` (YYYY-MM).
+ * Returns an aggregate-by-department record. If no 2025 data exists for
+ * that month, returns an empty array.
+ */
+export async function getLyByDept(period: string): Promise<LyDeptRow[]> {
+  const [yStr, mStr] = period.split('-');
+  const y = Number(yStr) - 1;
+  const m = Number(mStr);
+  if (!Number.isFinite(y) || !Number.isFinite(m)) return [];
+
+  // pnl_snapshot.account_code joins to gl.accounts.account_id. We pull every
+  // row for that month and aggregate client-side by USALI subcategory + dept.
+  const { data, error } = await supabaseGl
+    .from('pnl_snapshot')
+    .select('account_code, amount_usd')
+    .eq('period_year', y)
+    .eq('period_month', m);
+  if (error) { console.error('[gl] getLyByDept', error); return []; }
+
+  const rows = (data ?? []) as { account_code: string; amount_usd: number }[];
+  if (rows.length === 0) return [];
+
+  // Need account → usali_subcategory mapping. Pull once.
+  const ids = Array.from(new Set(rows.map(r => r.account_code))).filter(Boolean);
+  const { data: accts, error: aErr } = await supabaseGl
+    .from('accounts')
+    .select('account_id, usali_subcategory')
+    .in('account_id', ids);
+  if (aErr) { console.error('[gl] getLyByDept accounts join', aErr); return []; }
+  const subcatById = new Map<string, string | null>();
+  for (const a of (accts ?? []) as { account_id: string; usali_subcategory: string | null }[]) {
+    subcatById.set(a.account_id, a.usali_subcategory);
+  }
+
+  // For LY we don't have class assignment in pnl_snapshot, so we can't break
+  // out by usali_department without a class join. Aggregate by subcategory
+  // only; the consumer rolls up to a single LY total per dept-equivalent.
+  const bySub = new Map<string, { revenue: number; cost_of_sales: number; payroll: number; other_op_exp: number }>();
+  for (const r of rows) {
+    const sub = subcatById.get(r.account_code) ?? 'Other';
+    const cur = bySub.get(sub) ?? { revenue: 0, cost_of_sales: 0, payroll: 0, other_op_exp: 0 };
+    const amt = Number(r.amount_usd || 0);
+    if (sub === 'Revenue') cur.revenue += -amt; // revenue stored as credit (negative)
+    else if (sub === 'Cost of Sales') cur.cost_of_sales += amt;
+    else if (sub === 'Payroll & Related') cur.payroll += amt;
+    else cur.other_op_exp += amt;
+    bySub.set(sub, cur);
+  }
+  // Flatten to one row per subcategory (department info absent at LY level)
+  return Array.from(bySub.entries()).map(([sub, v]) => ({
+    usali_department: null,
+    usali_subcategory: sub,
+    ...v,
+  }));
+}
+
+/** Convenience: total revenue for the same month last year. */
+export async function getLyTotalRevenue(period: string): Promise<number | null> {
+  const ly = await getLyByDept(period);
+  if (ly.length === 0) return null;
+  return ly.reduce((s, r) => s + (r.revenue || 0), 0);
+}
+
 // ----- Decisions queue (cross-schema: governance) -------------------------
 export interface DecisionQueueItem {
   id?: string;
