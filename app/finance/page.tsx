@@ -33,12 +33,13 @@ export default async function FinanceSnapshotPage({ searchParams }: Props) {
     if (r.section === 'income') incomeByPeriod.set(r.period_yyyymm, Number(r.amount_usd || 0));
     if (r.section === 'net_earnings') netByPeriod.set(r.period_yyyymm, Number(r.amount_usd || 0));
   }
+  const calCur = currentPeriod();
   const periodsWithRev = Array.from(incomeByPeriod.entries())
-    .filter(([, v]) => v > 0)
+    .filter(([k, v]) => v >= 1000 && k !== calCur) // skip in-progress month + stray pennies
     .map(([k]) => k)
     .sort()
     .reverse();
-  const cur = periodsWithRev[0] || currentPeriod();
+  const cur = periodsWithRev[0] || calCur;
   const prior = periodsWithRev[1] || priorPeriod(cur);
 
   const [houseRows, deptCur] = await Promise.all([

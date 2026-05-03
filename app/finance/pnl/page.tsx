@@ -69,11 +69,16 @@ export default async function PnLPage({ searchParams }: Props) {
   ]);
   const agg = aggregateDaily(daily, period.capacityMode);
 
-  // Pick the latest period that has actual revenue (skip current empty month).
+  // Pick the latest CLOSED period: explicitly exclude the calendar-current month
+  // (it's always in progress and may have stray $13 of misposted revenue) — and
+  // require at least $1,000 of income to count as a "real" closed month.
+  const calCur = currentPeriod();
   const periodsWithRev = Array.from(new Set(
-    plSections.filter(r => r.section === 'income' && Number(r.amount_usd) > 0).map(r => r.period_yyyymm)
+    plSections
+      .filter(r => r.section === 'income' && Number(r.amount_usd) >= 1000 && r.period_yyyymm !== calCur)
+      .map(r => r.period_yyyymm)
   )).sort().reverse();
-  const cur = periodsWithRev[0] || currentPeriod();
+  const cur = periodsWithRev[0] || calCur;
   const prior = periodsWithRev[1] || priorPeriod(cur);
   const plPrior = plSections.filter(r => r.period_yyyymm === prior);
 
