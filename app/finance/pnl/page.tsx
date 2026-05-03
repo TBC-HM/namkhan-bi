@@ -158,7 +158,10 @@ export default async function PnLPage({ searchParams }: Props) {
 
   const months = Array.from(new Set(plSections.map(r => r.period_yyyymm))).sort().reverse();
   const latestMonth = months[0] || cur;
-  const monthLabel = latestMonth ? new Date(latestMonth + '-01').toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : 'Apr 2026';
+  // Display label always reflects the latest CLOSED month (cur), not whatever
+  // calendar-current month has stray $13. cur was already chosen with this
+  // logic earlier; reuse it for every "this month" label on the page.
+  const monthLabel = cur ? new Date(cur + '-01').toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : 'Apr 2026';
   const priorLabel = prior ? new Date(prior + '-01').toLocaleDateString('en-GB', { month: 'short' }) : '—';
 
   // === MoM variance per dept (replaces budget-variance waterfall) ============
