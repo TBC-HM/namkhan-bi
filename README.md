@@ -3,6 +3,14 @@
 Read-only operator dashboard for The Namkhan (Luang Prabang).
 Reads from Supabase project `namkhan-pms` (ref `kpenyneooigsyuuomgct`).
 
+> **🎨 Design system — READ FIRST before any UI change**
+>
+> - **`DESIGN_NAMKHAN_BI.md`** (repo root) — canonical reference + locked rules + update history
+> - **`docs/11_BRAND_AND_UI_STANDARDS.md`** — full spec for `<KpiBox>`, `<DataTable>`, `<StatusPill>`, `<PageHeader>`
+> - **`CLAUDE.md`** (repo root) — instructions auto-loaded by AI coding agents (Claude Code, Cursor, etc)
+>
+> Reference page: [/sales/inquiries](https://namkhan-bi.vercel.app/sales/inquiries) — every other page must match its typography / hierarchy / surface. Mandatory session ritual for AI sessions: read `DESIGN_NAMKHAN_BI.md` at start, append a `### YYYY-MM-DD` changelog entry at end. Auto-cycle locked 2026-05-03.
+
 ## Status
 
 - **Live:** https://namkhan-bi.vercel.app (password-gated — `DASHBOARD_PASSWORD`)

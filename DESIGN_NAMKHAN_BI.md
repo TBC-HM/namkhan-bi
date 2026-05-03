@@ -328,9 +328,90 @@ The auto-memory pointer at `reference_namkhan_bi_design_system.md` always lists 
 
 ---
 
+## Bootstrap if memory is wiped (recovery procedure)
+
+If a future session can't find `reference_namkhan_bi_design_system.md` or `feedback_namkhan_bi_design_session_ritual.md` in auto-memory, recreate them. The doc is the source of truth — memory entries are convenience pointers.
+
+### Recreate `reference_namkhan_bi_design_system.md`
+Path: `<auto-memory-dir>/reference_namkhan_bi_design_system.md`
+Content:
+```
+---
+name: namkhan-bi design system canonical reference
+description: Where the locked design rules live, which components are canonical, and how to add new code without breaking visual consistency. Read FIRST for any namkhan-bi UI work.
+type: reference
+---
+
+The Namkhan BI portal has a single locked design system. Two canonical docs:
+
+1. /Users/paulbauer/Desktop/namkhan-bi/DESIGN_NAMKHAN_BI.md — high-level reference (file map, component list, surface checklist, verification gates, migration ledger)
+2. /Users/paulbauer/Desktop/namkhan-bi/docs/11_BRAND_AND_UI_STANDARDS.md — full canonical spec (KpiBox + DataTable + StatusPill + PageHeader rules with examples)
+
+Reference page: https://namkhan-bi.vercel.app/sales/inquiries
+
+Canonical components:
+- KPI tiles → <KpiBox> at components/kpi/KpiBox.tsx
+- Tables → <DataTable> at components/ui/DataTable.tsx (must be wrapped in 'use client')
+- Status pills → <StatusPill tone> at components/ui/StatusPill.tsx
+- Page headers → <PageHeader> at components/layout/PageHeader.tsx
+
+Format helpers in lib/format.ts: fmtKpi, fmtDelta, fmtTableUsd, fmtIsoDate, fmtCountry, fmtBool, EMPTY.
+$ prefix only (never USD ). ISO YYYY-MM-DD only. — em-dash for empty.
+
+Token scale in styles/globals.css :root: 8-step ramp --t-xs (10px) → --t-3xl (30px), brand palette (--paper, --paper-warm, --ink, --brass, --moss).
+
+Why / how to apply: read DESIGN_NAMKHAN_BI.md FIRST. Don't refactor, force-align legacy via !important. New pages: follow Surface checklist.
+```
+
+### Recreate `feedback_namkhan_bi_design_session_ritual.md`
+Path: `<auto-memory-dir>/feedback_namkhan_bi_design_session_ritual.md`
+Content:
+```
+---
+name: namkhan-bi design session ritual — read at start, update at end
+description: Every session that touches namkhan-bi UI must (1) read DESIGN_NAMKHAN_BI.md first, (2) append a dated changelog entry to it before finishing.
+type: feedback
+---
+
+For ANY session that touches Namkhan BI UI / design / components / styles:
+
+AT SESSION START:
+1. Read /Users/paulbauer/Desktop/namkhan-bi/DESIGN_NAMKHAN_BI.md end-to-end
+2. Read docs/11_BRAND_AND_UI_STANDARDS.md if defining new component spec
+
+AT SESSION END:
+1. Run `bash date +%Y-%m-%d` to get today's date — never invent
+2. Append a ### YYYY-MM-DD heading to the "Update history" section at bottom of DESIGN_NAMKHAN_BI.md with bullet list of changes
+3. Commit the doc update with the deploy
+
+Why: User locked this auto-cycle 2026-05-03. Without it design rules drift across sessions and rebuilds-from-scratch happen.
+
+How to apply: applies to ANY session touching app/, components/, styles/, or lib/format.ts. Even a 1-line CSS change gets a dated entry.
+```
+
+### Update `MEMORY.md` index
+Path: `<auto-memory-dir>/MEMORY.md`
+Add these two entries at the top (or merge with existing top-of-file entries):
+```
+- [namkhan-bi DESIGN SYSTEM (canonical UI rules, locked 2026-05-03)](reference_namkhan_bi_design_system.md) — **READ FIRST for any UI/design work.** Master doc at `Desktop/namkhan-bi/DESIGN_NAMKHAN_BI.md` + full spec at `docs/11_BRAND_AND_UI_STANDARDS.md`. Canonical components: `<KpiBox>`, `<DataTable>`, `<StatusPill>`, `<PageHeader>`. Format helpers in `lib/format.ts`. Reference page = `/sales/inquiries`.
+- [namkhan-bi DESIGN SESSION RITUAL (mandatory for every UI session)](feedback_namkhan_bi_design_session_ritual.md) — **AT START** read DESIGN_NAMKHAN_BI.md. **AT END** append a dated changelog entry to it. Auto-cycle locked by user 2026-05-03.
+```
+
+### Even simpler fallback
+If memory is wiped AND nothing above is reachable, the repo itself has a `CLAUDE.md` at the root with the same instructions — that's the last line of defense for AI tools that auto-load CLAUDE.md.
+
+---
+
 ## Update history
 
 Append-only. Newest at top. Date heading + bullet changes.
+
+### 2026-05-03 (later) — risk mitigation: 4-layer survival of memory wipes
+- Added `CLAUDE.md` at repo root — auto-loaded by Claude Code / Cursor / future Claude sessions; embeds the locked rules + ritual so memory-wipe is survivable
+- Added README.md design-system call-out at the top — visible to any human or tool browsing the repo
+- Added `.github/workflows/design-doc-check.yml` — soft-warn (non-blocking) when a PR touches `app/` / `components/` / `styles/` / `lib/format.ts` without updating `DESIGN_NAMKHAN_BI.md`
+- Added "Bootstrap if memory is wiped" section to this doc with copy-paste templates for the two memory entries (`reference_namkhan_bi_design_system.md`, `feedback_namkhan_bi_design_session_ritual.md`) and the `MEMORY.md` index lines
+- Net effect: even if all auto-memory is cleared, an AI session reading `CLAUDE.md` or `DESIGN_NAMKHAN_BI.md` can recover the full ritual + canonical rule set
 
 ### 2026-05-03 — initial canonical lockdown (this session)
 - New components shipped (canonical):

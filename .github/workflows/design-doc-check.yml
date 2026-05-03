@@ -1,0 +1,60 @@
+name: Design doc check
+
+# Soft-warn when a PR touches design surfaces (app/, components/, styles/, lib/format.ts)
+# but doesn't update DESIGN_NAMKHAN_BI.md. Per the auto-cycle ritual locked 2026-05-03,
+# every UI change should append a dated entry to the doc's "Update history" section.
+#
+# This is a soft warning (continue-on-error), not a blocker — it surfaces the miss in the
+# PR without preventing merges, so a hotfix doesn't need to wait for a doc update.
+
+on:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'components/**'
+      - 'styles/**'
+      - 'lib/format.ts'
+
+jobs:
+  design-doc-check:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check DESIGN_NAMKHAN_BI.md was updated
+        run: |
+          set -e
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+
+          # 1. Did the PR change design-system surfaces?
+          DESIGN_CHANGED=$(git diff --name-only "$BASE" "$HEAD" | \
+            grep -E '^(app/|components/|styles/|lib/format\.ts$)' | wc -l | tr -d ' ')
+
+          # 2. Did it update DESIGN_NAMKHAN_BI.md?
+          DOC_CHANGED=$(git diff --name-only "$BASE" "$HEAD" | grep -c 'DESIGN_NAMKHAN_BI\.md' || true)
+
+          echo "Design surface files changed: $DESIGN_CHANGED"
+          echo "DESIGN_NAMKHAN_BI.md changed:  $DOC_CHANGED"
+
+          if [ "$DESIGN_CHANGED" -gt 0 ] && [ "$DOC_CHANGED" -eq 0 ]; then
+            echo ""
+            echo "⚠️  WARNING — Design files were modified but DESIGN_NAMKHAN_BI.md was not updated."
+            echo ""
+            echo "Per the locked session ritual (2026-05-03), every UI change must append"
+            echo "a dated entry to the 'Update history' section at the bottom of"
+            echo "DESIGN_NAMKHAN_BI.md so the next session knows what's canonical."
+            echo ""
+            echo "Format:"
+            echo "  ### YYYY-MM-DD — short title"
+            echo "  - bullet list of changes"
+            echo ""
+            echo "This is a soft warning. The merge is not blocked, but please update the doc"
+            echo "before completing the work."
+            exit 1
+          fi
+
+          echo "✓ Design doc check passed."
