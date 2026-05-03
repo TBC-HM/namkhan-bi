@@ -506,6 +506,19 @@ button { font-family: inherit; }
   letter-spacing: 0.04em;
 }
 
+/* ===== Dev/design callout boxes — HIDDEN globally =====
+ * Per user 2026-05-03: stakeholder-facing dev notes ("What changed:",
+ * "Cloudbeds write policy · pilot phase", "⚠ pilot phase", "DRY-RUN"
+ * banners, "Source: ..." italic notes) are noise in the actual UX.
+ * Hide them site-wide. Re-enable per-page only if explicitly intended. */
+.design-note,
+.write-banner,
+.warn-banner,
+.gr-sim-banner,
+.data-source-line,
+.pnl-page .warn-banner,
+.period-banner /* meta token strip with "win=30d · cmp=none" */ { display: none !important; }
+
 /* ===== Typography utility classes =====
  * Use instead of inline fontSize literals so the type ramp stays unified.
  *  .t-xs / .t-sm / .t-base / .t-md / .t-lg / .t-xl / .t-2xl / .t-num

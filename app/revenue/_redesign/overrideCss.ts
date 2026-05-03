@@ -218,4 +218,20 @@ export default `
 .bc-redesign .tab-content.active { display: block; }
 .bc-redesign .kpi-row .kpi { min-width: 0; }
 .bc-redesign .kpi-value { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ============================================================
+ * 8. KILL DEV/DESIGN CALLOUT BOXES (user 2026-05-03)
+ *    These are stakeholder-facing dev notes baked into the legacy
+ *    mockup HTML — they pollute the actual UX. Hide everywhere.
+ *    .design-note      = blue-dashed "What changed:" box
+ *    .write-banner     = yellow "Cloudbeds write policy · pilot" banner
+ *    .warn-banner      = yellow "⚠ pilot phase" banners
+ *    .gr-sim-banner    = "DRY-RUN" amber banner
+ *    .data-source-line = italic grey "Source: ..." sub-text
+ * ============================================================ */
+.bc-redesign .design-note,
+.bc-redesign .write-banner,
+.bc-redesign .warn-banner,
+.bc-redesign .gr-sim-banner,
+.bc-redesign .data-source-line { display: none !important; }
 `;
