@@ -7,6 +7,8 @@
 // Mockup-data mode: sales schema not yet deployed. KPI tiles + tray + feed all
 // carry "data needed" tags pointing at the email-ingest webhook + sales.* tables.
 
+import { redirect } from 'next/navigation';
+
 import OpsKpiTile from '@/components/ops/OpsKpiTile';
 import AgentStrip from '@/components/ops/AgentStrip';
 import DecisionQueue, { type DecisionRow } from '@/components/ops/DecisionQueue';
@@ -22,7 +24,7 @@ import SourceMix from './_components/SourceMix';
 import LostReasonTape from './_components/LostReasonTape';
 
 import { getKpiDaily, aggregateDaily } from '@/lib/data';
-import { listInquiries } from '@/lib/sales';
+import { listInquiries, createProposalFromInquiry } from '@/lib/sales';
 import { fmtMoney } from '@/lib/format';
 
 import { inquiryTriager } from '@/lib/agents/sales/inquiryTriager';
@@ -36,6 +38,16 @@ import { conversionCoach } from '@/lib/agents/sales/conversionCoach';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
+
+// Server action — Compose button on a Decision row creates a draft proposal
+// from the inquiry and routes the user into the composer.
+async function composeFromInquiryAction(formData: FormData) {
+  'use server';
+  const id = formData.get('inquiry_id');
+  if (typeof id !== 'string' || !id) return;
+  const created = await createProposalFromInquiry(id);
+  if (created?.id) redirect(`/sales/proposals/${created.id}/edit`);
+}
 
 export default async function InquiriesPage() {
   // sales schema not yet deployed → all blocks render with mockup data
@@ -53,7 +65,8 @@ export default async function InquiriesPage() {
     const pax = (inq.party_adults ?? 0) + (inq.party_children ?? 0);
     const dollars = pax > 0 ? nights * pax * 280 : 0;
     return {
-      id: inq.id.slice(0, 8),
+      id: inq.id,
+      inquiryId: inq.id,
       impact: dollars > 0 ? '$' + dollars.toLocaleString('en-US') : '$—',
       urgency: (inq.triage_kind === 'group' || inq.triage_kind === 'retreat' ? 'urg' : 'med') as 'urg' | 'med' | 'neu',
       title: (inq.guest_name ?? 'Unknown') + ' · ' + inq.source + ' · ' + (inq.party_adults ?? '?') + 'A' + (inq.party_children ? '+' + inq.party_children + 'C' : '') + ' · ' + inq.date_in + ' → ' + inq.date_out,
@@ -382,6 +395,7 @@ export default async function InquiriesPage() {
       <DecisionQueue
         rows={decisions}
         meta="ranked $ × decay × confidence · today"
+        composeAction={composeFromInquiryAction}
         emptyOverlay={
           <DataNeededOverlay
             gap="sales.queue_rank"

@@ -1180,3 +1180,113 @@ After uploading 8 sample docs (6 NK SOPs + 2 Hilton PDFs), found 2 blockers:
 - **Scanned PDFs** (Hilton finance + monthly data) confirmed via system `pdftotext` — no text layer. Filename-only classification still works (party=Hilton, doc_type=partner/template, sensitivity=confidential/internal correctly inferred). Q/A on these returns "metadata exists but body content not indexed" — graceful degradation. OCR fallback (Claude Vision) deferred to v2.
 - **Build cache bust required.** Vercel restored a stale build cache from a deployment predating the inventory `InvSnapshotKpis` interface expansion (3 fields added by the parallel session). `npx vercel --prod --yes --force` rebuilt clean. No app code changes needed.
 - **Verification:** Live tests against `https://namkhan-bi.vercel.app/api/docs/ask` and `/api/docs/search`. 8 docs successfully landed in `docs.documents` (6 in documents-internal, 2 in documents-confidential). All Q/A confidence gates working as designed.
+
+### 2026-05-03 (later still 3) — /finance/pnl panel month dropdown + /finance/ledger full KPI rewire
+- **Panel-level month dropdown** added to USALI department schedule panel (`app/finance/pnl/page.tsx`). Top-right of the panel `<h3>`, reuses same `<MonthDropdown>` component + `?month=` URL param as the global picker — both stay in sync.
+- **`/finance/ledger` rewritten end-to-end** to use canonical `<KpiBox>` per locked design system spec:
+  - **Old data source:** `mv_arrivals_departures_today` (only 2 in-house rows synced — broken matview) and `mv_kpi_today.in_house` (8). The two disagreed → KPI tiles rendered empty/wrong.
+  - **New data source:** `reservations` table direct. `status='checked_in'` for in-house counts, `status='checked_out' AND balance > 0` for "checked-out unpaid" (the user-flagged Cloudbeds data point).
+  - **6 hero tiles** (was 4): In-House Guests · In-House Balance · **Checked-Out Unpaid (count)** · **Checked-Out Unpaid $** · High-Balance Flags (>$1k, in-house OR checked-out) · Missing Email (window-scoped).
+  - **5 aged-AR bucket tiles** (Total AR / 0–30 / 31–60 / 61–90 / 90+) all converted to `<KpiBox unit="usd">`.
+  - **3 deposits tiles** (Deposits Held / Deposits Due 30d / Overdue Deposits) marked `state="data-needed"` with explicit `needs` text — Cloudbeds payment-status feed not synced yet.
+- **Live numbers at deploy:** In-House 8 guests / $3.0k balance · Checked-Out Unpaid 11 / $5.6k · High-Balance Flags 1 · Missing Email 101 · Total AR $5.6k (split $817 / $880 / $0 / $3.9k across 0–30/31–60/61–90/90+).
+- **`KpiCard` removed from /finance/ledger.** No more pre-formatted strings — every tile passes raw numbers + `unit` prop, formatted by `fmtKpi` per locked typography spec.
+- **Verification gates:** `tsc --noEmit` clean (only pre-existing inventory errors from concurrent session). 0 hardcoded fontSize. 0 `USD ` prefix. Deployed → https://namkhan-bi.vercel.app/finance/ledger renders all 14 tiles with live data.
+
+### 2026-05-03 (later) — Knowledge v1.2: signed-URL upload + classifier robustness
+
+After live bulk-test (~50 docs across 4 batches), found 2 categories of failures:
+
+- **Vercel Hobby tier 4.5 MB body limit** silently rejected 6 PDFs (5-22 MB) with HTTP 413 + empty body. Look like timeouts but aren't. Fix: signed-URL pattern mirroring `/api/marketing/upload-sign`:
+  - New `POST /api/docs/upload-sign` returns a presigned upload URL into `documents-internal/_staging/{ts}-{rand}-{slug}` plus `{staging_bucket, staging_path, signed_url, token}`.
+  - `/api/docs/ingest` now dual-mode: `multipart/form-data` (small files, ≤4 MB) OR `application/json {staging_bucket, staging_path, file_name, mime}` (large files already uploaded to storage). Server downloads from staging, classifies, moves to final bucket via existing pipeline, and best-effort cleans up staging file on success.
+  - `KnowledgeApp` upload panel switches mode automatically at >4 MB threshold: `/upload-sign` → direct PUT to Supabase → JSON `/ingest`.
+  - All 6 stuck PDFs re-ingested cleanly (SLH Mystery Inspection 21 MB, SLH Hotel Guide v31 7 MB, etc). Audit/inspection PDFs correctly auto-classified as `audit / critical / confidential` with party=SLH.
+- **Classifier returning out-of-allowlist `doc_type` strings** (e.g. `"training"`, `"data_submission"`) caused `documents_doc_type_check` constraint violations on 2 docs. Fix: `safeDocType()` remap function in `/api/docs/ingest` — 23-value allowlist + smart fallback (e.g. `*train*` → `training_material`, `*partner|hilton|slh|vendor*` → `partner`, `*audit|inspection*` → `audit`, etc., default `other`). Adds `tags: ['remap:original->safe']` so we can spot drift later. Both failures retried clean.
+- **30s extraction timeout** on `pdf-parse` via Promise.race — prevents hangs on malformed/heavily-compressed scanned PDFs. Empty text falls back to filename-only classification (still accurate for partner docs with descriptive filenames).
+- **Vercel maxDuration bumped** from 60s → 90s.
+- **Final tally tonight:** 56 new docs in `docs.documents` (49 batch + 6 large via signed-URL + 1 retry). Parties indexed: SLH, Hilton, Sabre, GSTC, Travelife, NK. Critical-tier: 4 (Investment License, Enterprise Registration, 2× SLH Inspections, SLH Mystery Inspection, NK Fire SOP). All scanned PDFs (~75% of tonight's upload) carry empty `body_markdown` — searchable by metadata, not Q/A-able until OCR fallback ships.
+- **Verification:** `npx tsc --noEmit` exit 0. Vercel deploy: build 39s, alias 57s. Live curl test: 6/6 large PDFs ingested via signed-URL flow.
+
+### 2026-05-03 (F&B + Spa real cost wiring · 12-month P&L grid · Supplier mapping)
+- **F&B / Spa Cost % tiles wired off QuickBooks GL** — replaced `data-needed` placeholders. Source `gl.mv_usali_pl_monthly` (refreshed by cron 37 every 4h). New `getDeptPl(dept, monthsBack)` helper in `lib/data.ts` pivots long-format USALI rows into a wide per-month object with revenue, food/bev/spa cost, payroll, GOP $ and %, plus Cloudbeds revenue for the same month for CB↔QB reconciliation.
+- **Brutal P&L truth surfaced:** Roots is GOP-negative 3 of last 4 months. Food cost % is 49–64% (target 30%); Bev cost 17–48%. Spa COGS is fine (~5%) but fixed payroll vs collapsing demand drove April GOP to −67%. CB↔QB revenue posting drift up to ±41% in April (Spa) — flagged inline.
+- **New canonical component**: `components/pl/PnlGrid.tsx` — 12-month P&L grid with USALI targets + tone (pos/warn/neg) per cell, used on both `/operations/restaurant` and `/operations/spa`.
+- **`/operations/restaurant`**: 7 mock tiles → 8 (added GOP %); secondary row of capture metrics preserved; PnlGrid below.
+- **`/operations/spa`**: replaced `card-grid-3` row with KpiBox grid showing Spa Cost %, Labor Cost %, GOP %, **Breakeven Revenue** (fixed payroll ÷ contribution margin), Capture %, Therapist Util (data-needed).
+- **`/finance/supplier-mapping` (NEW)**: vendor × USALI dept queue (180d). Surfaces multi-dept vendors (54 of 135), no-class GL entries, unmapped accounts. Source = new `public.v_vendor_dept_mapping` + `public.v_unmapped_accounts` views over `gl.gl_entries → gl.accounts → gl.classes`. Filter chips: All / Multi-dept / Unmapped account / No QB class / Clean.
+- **SubNav**: added Finance · "Supplier mapping" with NEW pill.
+- **Verification gates**: `tsc --noEmit` clean. No new hardcoded fontSize/fontFamily. Currency uses `$` prefix. Empty cells render `—`.
+
+### 2026-05-03 (final batch) — VAT strip + negative red + deposits + transactions + POS tabs
+- **VAT strip on budget** (`gl.v_budget_lines` patched migration `vat_strip_budget_lines_v3`). Lao 10% VAT divided out of: Revenue / Cost of Sales / Other Operating Expenses / A&G / Sales & Marketing / POM / Utilities / Mgmt Fees. Preserved gross (no VAT applies): Payroll & Related / Depreciation / Interest / Income Tax / FX Gain/Loss / Non-Operating. Effect on Apr 2026: GOP Budget $30.9k → **$24.9k** (net), variance vs actual $-43.6k → **$-37.7k**. `gl.v_scenario_stack` and `gl.v_budget_vs_actual` rebuilt with CASCADE drop because they depended on `v_budget_lines`.
+- **Negative numbers render red across all finance pages.** `KpiBox` now auto-detects `value < 0 && unit !== 'text'` and applies a `negative` class. `globals.css` rule: `.kpi-box .kpi-tile-value.negative { color: var(--st-bad); }`. Existing `.var-amber` table-cell class hardened with `!important` to use `var(--st-bad)`.
+- **/finance/ledger Deposits & Cancellations card live-wired.** 4 tiles: Deposits Held (Σ paid_amount confirmed future arrivals), Deposits Due 30d (Σ balance arrivals next 30d), Overdue Deposits (count arrivals ≤7d w/ balance > 0), Cancellations 30d (count). All from `reservations` (Cloudbeds-synced). Replaces 3 DATA-NEEDED tiles. Live numbers at deploy: $16.3k held / $16.8k due / 11 overdue / 24 cancellations.
+- **/finance/transactions sub-tab added** (`app/finance/transactions/page.tsx`). 9 KPI tiles in 6+3 grid (Total Txns / Sales / Payments / Refunds / Tax / Adjustments / Rooms / F&B / Other Op). Search box (description / item / user / reservation_id). Filters: dept, type (debit/credit), date range. Pagination at 200 rows/page. Wired to subnav.
+- **/finance/pos-transactions sub-tab added** (`app/finance/pos-transactions/page.tsx`). POS subset = `usali_dept IN ('F&B','Other Operated','Retail') AND category NOT IN (tax/fee/void/adjustment/payment/rate/refund)`. 9 KPI tiles + top-5 categories panel + same search/filter pattern. Service date + outlet + meal period columns surfaced.
+- **Subnav** (`components/nav/subnavConfig.ts`) — added Transactions and POS entries between Ledger and Account mapping. Both flagged `isNew`.
+- **Verification:** `tsc --noEmit` clean. All 4 finance routes return 200. Deposits tiles render real values. Transactions $12.8k sales / $14.0k payments / $1.1k tax in last 30d window.
+
+### 2026-05-04 (/sales/inquiries — wire View + Compose actions in DecisionQueue)
+- **`components/ops/DecisionQueue.tsx` extended**: row gains optional `inquiryId?: string` (full UUID); component prop `composeAction?: (formData: FormData) => void | Promise<void>` accepts a server action. When `inquiryId` present → render `<Link>` to `/sales/inquiries/[id]` (View) + `<form action={composeAction}>` with hidden inquiry_id (Compose, brass primary button). When absent (mockup mode `sq-1`…`sq-9`) → render `MOCK` mono-uppercase eyebrow instead of broken buttons. Replaces the previous static `Approve / Send back / Snooze / Detail` row that did nothing.
+- **`app/sales/inquiries/page.tsx`**: imported `createProposalFromInquiry` + `redirect`; defined `composeFromInquiryAction` server action that calls the lib helper and redirects to `/sales/proposals/[id]/edit`. Live decision rows now pass `inq.id` (full UUID) as both `id` and `inquiryId` (was previously truncated via `.slice(0,8)` for display only).
+- **Closes the gap** between the `feature-builder/output/sales-proposal-builder/02-prototype.html` mockup (which had a one-click `COMPOSE` flow on every row) and the deployed page (which required two clicks: row → detail page → "Open in Composer"). Now a single click on a Live row goes straight to the composer.
+- **No new design-system violations introduced**: 0 hardcoded `fontSize` literals, 0 `USD ` prefixes, 0 hardcoded `fontFamily` (the one pre-existing `Georgia` in `PageHeader.tsx` line 11 is still a code comment, untouched).
+- **Verification**: `npx tsc --noEmit` clean. Deploy via `~/Desktop/namkhan-bi/deploy-inquiries-compose.command` (Vercel CLI not available in agent sandbox; standing CLI-deploy pattern per `DEPLOY.md`).
+
+### 2026-05-04 (/operations/staff redesign — proper landing page)
+- **Header upgraded to canonical `<PageHeader pillar="Operations" tab="Staff" .../>`** (Soho-style serif h1 with brass accent, eyebrow, lede, right-slot for upload button). Replaces previous bespoke `<header>` block.
+- **5-tile `<KpiBox>` strip on top**: Active headcount · Payroll USD (last paid month with MoM delta) · Benefits & allowances LAK (SC + gasoline + internet + other, MoM delta) · Paid headcount last month · DQ flags. Unwired DQ tile auto-flips to `data-needed` state when count > 0.
+- **Department breakdown table re-introduced** (was missing pre-redesign): canonical `<DataTable>` with HC · base · OT · service charge · allowances · SSO · tax · net LAK · total USD. Sortable, defaults sort by Total USD desc. Source: `public.v_payroll_dept_monthly` for last paid period.
+- **4-month payroll trend strip** (`PayrollTrend.tsx` new component) explicitly shows missing months as dashed panels with `<StatusPill tone="pending">Data needed</StatusPill>` — surfaces the Jan/Feb 2026 import gap that was previously hidden by the dept-month proxy view returning only March/April rows.
+- **Staff register collapsed behind `<details>`** with brass-mono "Details" eyebrow + "Staff list · N active · ▾ click to expand" summary. Defaults closed; full `StaffTable` (search + dept filter) lives inside.
+- **DB probe confirmed Jan/Feb gap**: `ops.payroll_monthly` only contains 2026-03 (70 rows) + 2026-04 (70 rows). Surfaced this in UI rather than hiding it.
+- **New components**: `app/operations/staff/_components/DeptBreakdown.tsx`, `app/operations/staff/_components/PayrollTrend.tsx`.
+- **Verification**: `tsc --noEmit` clean (no errors). 0 hardcoded `fontSize` literals in changed files. 0 `USD ` prefixes. 0 hardcoded brand-color hex. Existing pre-existing `fontFamily:'Georgia'` in PageHeader.tsx (a code comment, line 11) is unchanged.
+
+### 2026-05-03 (final batch 2) — VAT lookup + manual entries + forecast VAT-strip
+- **`gl.vat_rates` lookup table** (migration `create_gl_vat_rates_lookup`). 14 USALI subcategories seeded with default rates (10% for VAT-applicable, 0% for Payroll/Depreciation/Interest/Tax/FX/Non-Op). Columns: `usali_subcategory`, `vat_rate_pct`, `applies_to` (`budget`/`actual`/`both`/`none`), `notes`, `updated_at`, `updated_by`.
+- **`gl.v_budget_lines` rewritten** to read VAT rate from lookup table instead of hardcoded 10%. Migration `v_budget_lines_use_vat_rates_lookup`. Net = gross / (1 + rate/100). Same logic applied to `gl.v_forecast_lines` (Conservative 2026 scenario) via migration `v_forecast_lines_vat_strip` so forecast comparisons are also net.
+- **`/settings/vat-rates` UI** (`app/settings/vat-rates/page.tsx`). Server-component table + Next.js server action for save. Each row: subcat label · numeric rate input (0–100, step 0.01) · applies_to select · notes input · last-updated timestamp · Save button. On save: `revalidatePath('/finance/pnl')` so P&L picks up new rates immediately.
+- **`gl.manual_entries` lookup table** (migration `create_gl_manual_entries`). For lines QuickBooks doesn't post (Mgmt Fees, Depreciation, Interest, Tax, FX, accruals). Columns: `period_yyyymm`, `usali_subcategory`, `usali_department`, `amount_usd`, `kind` (`manual`/`accrual`/`estimate`/`override`), `notes`. Combined view `gl.v_actuals_with_manual` UNIONs QB actuals + manual rows.
+- **`/settings/manual-entries` UI** (`app/settings/manual-entries/page.tsx`). Top: add-entry form (period + subcat + dept + amount + kind + notes). Bottom: existing-entries table with delete buttons. Server actions handle insert + delete with `revalidatePath`.
+- **Subnav** (`components/nav/subnavConfig.ts`) — added VAT rates + Manual entries between Budget and Integrations.
+- **`gl.v_scenario_stack` exposes 4 columns** (`actual_usd`, `budget_usd`, `ly_usd`, `forecast_usd`) — UI toggle to swap Budget↔Forecast in the 12-month panel deferred to next iteration; helper `getScenarioStack(periods)` added in `app/finance/_data.ts` so the UI work is one-shot when picked up.
+- **Verification:** `tsc --noEmit` clean. All 6 finance + settings routes return HTTP 200. VAT rates page shows all 14 subcats editable with default values. Manual entries page renders empty-state form correctly.
+
+### 2026-05-03 (later) — Knowledge v2: Vision OCR + chunk retrieval + data Q/A agent
+
+Three stacked fixes addressing "give me the paragraph not the doc" + "answer my budget questions":
+
+**Fix 1 — Claude Vision OCR for scanned PDFs**
+- New `lib/docs/visionOcr.ts` with `classifyPdfWithVision()` — sends PDF directly to Claude Haiku 4.5 via `{type:'document', source:base64}` content block. Returns full extracted text + classification in one call.
+- Wired into `/api/docs/ingest`: when text-layer extraction returns < 200 chars and file is PDF ≤ 30 MB, fall back to Vision OCR.
+- Updated `body_markdown` storage rule: store body for ANY doc with ≥200 extracted chars (was: only sop/template/kb_article/research/note/presentation). Now OCR'd partner/audit/financial docs are Q/A-able.
+- Verified live: Hilton Monthly Data Submission Guide previously had 0 body chars → after Vision OCR has **7,383 chars + 6 chunks built**. `raw->>'vision_ocr'` flag on the row.
+- Cost: ~$0.005-0.02 per doc depending on page count. Negligible.
+
+**Fix 2 — Paragraph-level retrieval via `docs.chunks`**
+- New table `docs.chunks(chunk_id, doc_id, chunk_idx, page_num, content, char_start, char_end, search_tsv)` with GIN index on tsv + auto-update trigger + RLS mirroring `docs.documents` read policy.
+- Migration `docs_chunks_paragraph_retrieval`. New RPC `public.docs_ask_chunks(q, lim)` → top-N matching paragraphs across ALL docs ranked by ts_rank.
+- New `lib/docs/chunker.ts`: paragraph splitter (200/1200/2400 char min/target/max), merges short paragraphs, splits overlong at sentence boundaries. No embeddings — uses simple tsv config + `docs_query_clean()` OR-joining (same as doc-level).
+- `/api/docs/ingest` populates chunks after row insert (best-effort, non-fatal if it fails).
+- `/api/docs/ask` now tries chunk-level RPC first; falls back to doc-level only if no chunks exist for the corpus.
+- Result: "what does Hilton say about waste handling" returns the exact paragraph from the relevant page, with `[#N · p.7]`-style citations, not the whole 50-page guide.
+
+**Fix 3 — Data Q/A agent for budget/supplier/KPI questions**
+- New `/api/data/ask` endpoint: question → Claude Sonnet generates SQL using curated `lib/data/schemaCatalog.ts` (gl/inv/kpi/suppliers/proc/docs views) → SQL guard (`lib/data/sqlGuard.ts` blocks DDL/DML, forces LIMIT) → execute via new `public.docs_data_query(sql_text)` SECURITY DEFINER RPC (granted only to service_role) → results back to Sonnet for natural-language summary.
+- Migration `data_agent_arbitrary_select_rpc` adds the RPC with belt-and-braces server-side keyword filter (rejects insert/update/delete/drop/truncate/alter/create/grant/revoke/copy/vacuum/analyze/reindex/cluster/reset/do/lock/comment/execute/call).
+- `/knowledge` Ask tab now has 3-mode router (`⚡ Auto | 📄 Docs | 📊 Data`). Auto-routes via `looksLikeDataQuestion()` heuristic (matches budget/variance/revenue/suppliers/inventory/adr/occupancy/contracts/january…/q1…/etc). Forced modes available.
+- Data answer renders as: NL summary + result table (cols + rows, mono right-aligned numbers) + collapsible generated-SQL.
+- Verified live with 5 real questions:
+  - **"show me budget variance January for F&B"** → 7 USALI subcategories, Cost of Sales 401% over budget ($10,947 actual vs $2,183 budget)
+  - **"what's our ADR last month"** → $203.20, 15.79% occupancy, $609.60 rooms revenue
+  - **"occupancy this month"** → 33% avg over 2 nights, $197-$226 ADR range
+  - **"top 5 suppliers by spend last 90 days"** → Oulaivan Food Shop $16,035 / 135 txns top, plus Government, Booking.com, Electricite Du Lao, Hy Group
+  - **"top food suppliers this year"** → 27 vendors ranked, Oulaivan top at $15,243
+
+**Schema catalog corrections during testing:**
+- `gl.v_budget_vs_actual.period_yyyymm` is TEXT in 'YYYY-MM' format, not separate year/month integers (caught when first SQL gen used `period_year=...` — column doesn't exist).
+- KPI source is `kpi.daily_snapshots` table, not the long-rumored `kpi.mv_kpi_daily` matview (which doesn't exist). Updated catalog with full column list (snapshot_date, occupancy_pct, adr_usd, revpar_usd, rooms_revenue_usd, fnb/spa/activity_revenue_usd, etc.).
+
+**Verification:** `npx tsc --noEmit` exit 0. Vercel Hobby deploys (~60s build, ~1m alias). All fix paths confirmed via live curl. Anthropic spend tonight: ~$0.50 across ~60 ingests + ~10 Q/A calls.

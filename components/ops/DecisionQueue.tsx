@@ -1,13 +1,16 @@
 // components/ops/DecisionQueue.tsx
 // Block 6 — Decisions Queued For You.
-// Each row: $ impact tag, title, meta line, Approve / Send back / Snooze / Detail.
+// Each row: $ impact tag, title, meta line, View / Compose (when inquiryId present).
+// When inquiryId is absent (mockup mode) → "MOCK" eyebrow, no actions.
 
+import Link from 'next/link';
 import { ReactNode } from 'react';
 
 export type DecisionUrgency = 'urg' | 'med' | 'neu';
 
 export interface DecisionRow {
   id: string;
+  inquiryId?: string;      // full UUID — when present, View + Compose are wired
   impact: string;          // e.g. "SLA RISK", "$40 · RETENTION", "EFFICIENCY"
   urgency: DecisionUrgency;
   title: string;
@@ -16,8 +19,9 @@ export interface DecisionRow {
 
 interface Props {
   rows: DecisionRow[];
-  meta?: string;           // section meta line — e.g. "7 ranked by urgency · today"
-  emptyOverlay?: ReactNode; // rendered when rows.length === 0 (data-needed case)
+  meta?: string;                                            // section meta line
+  emptyOverlay?: ReactNode;                                 // rendered when rows.length === 0
+  composeAction?: (formData: FormData) => void | Promise<void>; // server action — wires Compose button
 }
 
 const impactColor: Record<DecisionUrgency, string> = {
@@ -26,7 +30,7 @@ const impactColor: Record<DecisionUrgency, string> = {
   neu: '#8a8170',
 };
 
-export default function DecisionQueue({ rows, meta, emptyOverlay }: Props) {
+export default function DecisionQueue({ rows, meta, emptyOverlay, composeAction }: Props) {
   return (
     <>
       <div
@@ -92,19 +96,38 @@ export default function DecisionQueue({ rows, meta, emptyOverlay }: Props) {
                   {r.meta}
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button type="button" className="btn primary" style={btnPrimary}>
-                  Approve
-                </button>
-                <button type="button" className="btn" style={btnDefault}>
-                  Send back
-                </button>
-                <button type="button" className="btn" style={btnDefault}>
-                  Snooze
-                </button>
-                <button type="button" className="btn" style={btnDefault}>
-                  Detail
-                </button>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                {r.inquiryId ? (
+                  <>
+                    <Link
+                      href={`/sales/inquiries/${r.inquiryId}`}
+                      style={{ ...btnDefault, textDecoration: 'none', display: 'inline-block' }}
+                    >
+                      View
+                    </Link>
+                    {composeAction && (
+                      <form action={composeAction} style={{ display: 'inline' }}>
+                        <input type="hidden" name="inquiry_id" value={r.inquiryId} />
+                        <button type="submit" style={btnPrimary}>
+                          Compose
+                        </button>
+                      </form>
+                    )}
+                  </>
+                ) : (
+                  <span
+                    style={{
+                      fontFamily: 'var(--mono)',
+                      fontSize: 'var(--t-xs)',
+                      letterSpacing: 'var(--ls-extra)',
+                      textTransform: 'uppercase',
+                      color: 'var(--ink-mute)',
+                      padding: '6px 11px',
+                    }}
+                  >
+                    mock
+                  </span>
+                )}
               </div>
             </div>
           ))}
