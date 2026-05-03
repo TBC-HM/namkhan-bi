@@ -150,6 +150,19 @@ Every page in the left nav + every sub-tab returns 200. The two earlier 404s (`/
 | INFO | 20 RLS-enabled-no-policy + 20 always-true policies | Mostly the parallel session's domain. DEFER. | DEFER |
 | WARN | `auth_leaked_password_protection` disabled | Supabase Auth setting, requires console toggle. | DEFER |
 
+## Performance advisor triage (Cowork audit 2026-05-03)
+
+882 total lints. Most low-severity. Triage:
+
+| Severity | Issue | Action | Status |
+|----------|-------|--------|--------|
+| WARN | 2 duplicate indexes (`idx_res_status` ↔ `idx_reservations_status`, `idx_res_rooms_night` ↔ `idx_rr_night_date`) | Dropped older-named duplicates | FIXED |
+| WARN | 362 multiple permissive RLS policies on same table — perf overhead | Mostly auth.*/storage.* internals or parallel session's domain | DEFER |
+| WARN | 45 `auth_rls_initplan` (auth fn called per row) | Same as above | DEFER |
+| INFO | 242 unindexed foreign keys | Could add per-FK indexes but each costs storage + write throughput. Skipping until a slow query is reported. | DEFER |
+| INFO | 230 unused indexes | Same calculus — would need write-rate vs storage analysis | DEFER |
+| INFO | 1 auth db connections absolute | Supabase platform-level metric | DEFER |
+
 | `public.v_dq_open` | view | did not exist | created — joins `dq.violations` + `dq.rules`, returns full row list incl. severity/title/description/category. Granted SELECT to anon/authenticated/service_role | FIXED |
 
 ## DQ inspection (the 17 action-required rules)
