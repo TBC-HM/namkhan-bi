@@ -14,6 +14,7 @@
 // Returns: { ok, summary: { fetched, mapped, inserted, updated, failed } }
 
 import { NextResponse } from 'next/server';
+import crypto from 'node:crypto';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const runtime = 'nodejs';
@@ -48,10 +49,10 @@ export async function POST(req: Request) {
     body.excludeCategories.forEach(c => excludeSet.add(String(c).toLowerCase()));
   }
 
-  // Use SQL via supabase-js: we have to RPC or hand-aggregate. There's no .group()
-  // method, so we'll fetch pages and aggregate in memory. With ~30k transaction
-  // rows max, this is fast enough to run on demand.
-  const pageSize = 5000;
+  // PostgREST default max-rows is typically 1000. We page through and aggregate
+  // in memory. With ~63k transaction rows this is ~63 round trips — acceptable
+  // because this endpoint is invoked manually by the operator, not on every page load.
+  const pageSize = 1000;
   const products = new Map<string, {
     description: string;
     item_category_name: string | null;
@@ -142,14 +143,11 @@ export async function POST(req: Request) {
     return 'ose';
   }
 
+  // Use Node crypto md5 + take first 10 hex chars — matches the SQL seeding pattern
+  // (`substring(md5(description || category) for 10)`) so the API and the original
+  // SQL bulk-load produce IDENTICAL SKUs and re-runs upsert cleanly.
   function md5Hex(s: string): string {
-    // Lightweight 32-bit hash (not cryptographically md5 — good enough for slug)
-    let h1 = 0x811c9dc5;
-    for (let i = 0; i < s.length; i++) {
-      h1 ^= s.charCodeAt(i);
-      h1 = (h1 + ((h1 << 1) + (h1 << 4) + (h1 << 7) + (h1 << 8) + (h1 << 24))) >>> 0;
-    }
-    return h1.toString(16).padStart(8, '0').slice(0, 8) + Math.abs((s.length * 31) | 0).toString(16).padStart(2, '0').slice(0,2);
+    return crypto.createHash('md5').update(s).digest('hex').slice(0, 10);
   }
 
   let mapped = 0;
