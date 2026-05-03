@@ -406,6 +406,34 @@ If memory is wiped AND nothing above is reachable, the repo itself has a `CLAUDE
 
 Append-only. Newest at top. Date heading + bullet changes.
 
+### 2026-05-03 (sales-proposal-builder · pre-send room availability gate) — agent-confidence layer
+
+Why: PBS clarified the use case — at the moment the offer goes out, the rooms must actually exist in the PMS. If tight, the reservation agent puts a block in Cloudbeds manually. Build a gate that re-checks availability at send-time and at every block change, so the agent never sends an offer for rooms they can't deliver.
+
+Backend (no schema change — pure read-side):
+- `lib/sales.ts` — added `checkProposalRoomsAvail(proposalId)` returning `ProposalCheck` with per-room status (green/yellow/red), inventory freshness in minutes, overall worst-status reduction, and human-readable messages with Cloudbeds-action prompts ("Open Cloudbeds → Calendar → River Suite to add a block, then re-check.")
+- `lib/sales.ts` — added types `RoomCheckRow`, `ProposalCheck`
+- `app/api/sales/proposals/[id]/check/route.ts` — new GET endpoint, just calls the lib function and returns JSON. 404 on unknown proposal id.
+- `app/api/sales/proposals/[id]/send/route.ts` — pre-send check now mandatory. Returns HTTP 409 with `{ error: 'rooms_unavailable', message, check }` when status is 'red'. Yellow + green proceed. `?force=1` query param lets an agent override (logged in `proposal_sent` Make webhook payload as `forced: true`).
+
+Frontend (design-conformant):
+- `components/proposal/ComposerEditor.tsx` — calls `/check` on mount and after every block change via `useEffect([blocks.length])`. Adds `<div className="avail-banner avail-{status}">` between header and tabs, with per-room messages, "↻ Re-check" button, "Force-send anyway" button (only when red).
+- Send button now `disabled={check?.status === 'red'}`; tooltip explains why.
+- `sendProposal({ force: true })` path covers the override, including the 409-handling fallback that just re-renders the banner.
+
+CSS additions to `styles/globals.css` (~70 lines):
+- `.avail-banner` / `.avail-banner-{head,msg,list,icon}` — banner shell
+- `.avail-banner.avail-{green,yellow,red}` + `.avail-room-pill.avail-{yellow,red}` — status tints using `var(--st-good-bg/bd)` / `var(--st-warn-bg/bd)` / `var(--st-bad-bg/bd)` — same status palette as `<StatusPill>`, no new tokens introduced
+- All values flow through brand tokens
+
+Bonus fix shipped with this commit:
+- `app/finance/pnl/page.tsx` — removed dangling `import TwelveMonthPanel from './TwelveMonthPanel';` (file never existed; left over from a previous session). Was breaking `npx tsc --noEmit` exit 1, which would have failed the Vercel build.
+
+Verification gates re-run live: 0 hardcoded fontSize, 0 fontFamily, 0 hex outside `:root`, 0 USD prefix, `'use client'` directive present on the modified ComposerEditor, `npx tsc --noEmit` exit 0, build 54s, 422 deployment files, alias updated to namkhan-bi.vercel.app within 1m of READY.
+
+Known operational gap (NOT a code regression):
+- `rate_inventory.synced_at` is currently 4.4 days stale because `cb_sync_*` cron is dead (other Claude session owns). Result: every proposal currently shows YELLOW with "stale" in the message. That is correct — the gate is honestly reporting reality. Once `cb_sync_*` is back, the gate will start showing green again.
+
 ### 2026-05-03 (sales-proposal-builder feature shipped) — design-conformant rebuild
 
 Backend (no UI):

@@ -17,10 +17,23 @@
 - `lib/sales.ts` — server-only data layer, all queries via `getSupabaseAdmin()`
 - `lib/composerRunner.ts` — Auto-Offer Composer with stub fallback (€0.20/proposal cost cap, logs to `sales.agent_runs`)
 - `lib/ics.ts`, `lib/makeWebhooks.ts`
-- 10 API routes under `/api/sales/proposals/*` and `/api/p/[token]/*`
+- 11 API routes under `/api/sales/proposals/*` and `/api/p/[token]/*` (added `/check` for the pre-send gate)
 - 3 pages: `/sales/inquiries/[id]`, `/sales/proposals/[id]/edit`, `/p/[token]`
 - 5 React components in `components/proposal/` — all use `<PageHeader>`, `<DataTable>`, `<StatusPill>`, `.panel`, `.btn`, `lib/format`
-- ~150 lines of CSS appended to `styles/globals.css` using brand tokens (zero hex literals introduced)
+- ~220 lines of CSS appended to `styles/globals.css` using brand tokens (zero hex literals introduced)
+
+### Pre-send room availability gate (commit `f0d6942`)
+At Send time, re-checks `rate_inventory` for every room block on the proposal:
+- 🟢 GREEN: `min_avail > qty` AND `synced_at` < 60min — Send button enabled
+- 🟡 YELLOW: tight (`min_avail == qty` or `qty + 1`) OR rate_inventory stale — Send allowed but warning banner
+- 🔴 RED: any room sold out for ≥1 night, OR `min_avail < qty` — Send button DISABLED + "Force-send anyway" button surfaces
+
+Per-room messages spell out the action: *"Open Cloudbeds → Calendar → River Suite to add a block, then re-check."* The agent's mental model: pick rooms in composer → see banner → if red, go to Cloudbeds and add a manual block → click "↻ Re-check" → green → send.
+
+Endpoints:
+- `GET /api/sales/proposals/[id]/check` — returns the `ProposalCheck` JSON (used by the live banner)
+- `POST /api/sales/proposals/[id]/send` — pre-checks; returns 409 with check details if blocked
+- `POST /api/sales/proposals/[id]/send?force=1` — agent override, logged in `proposal_sent` Make webhook payload as `forced: true`
 
 ### Modifications to existing files
 - `components/nav/subnavConfig.ts` — Packages flipped `coming` → `isNew`
