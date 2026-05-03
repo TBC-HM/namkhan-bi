@@ -406,6 +406,184 @@ If memory is wiped AND nothing above is reachable, the repo itself has a `CLAUDE
 
 Append-only. Newest at top. Date heading + bullet changes.
 
+### 2026-05-03 (Cloudbeds sync — SQL derives for 6 stuck entities, fixes EF v14 bugs)
+
+Why: PBS asked "ok repair those findings" after the prior session showed 6 entities stuck (`guests`, `sources`, `add_ons`, `tax_fee_records`, `adjustments`, `reservation_rooms.synced_at`). Investigation of `sync-cloudbeds` Edge Function v14 source revealed:
+
+- `guests` and `sources`: NO sync function exists at all in EF — silent gap
+- `add_ons` / `tax_fee_records` / `adjustments`: EF DOES handle them (derived from transactions inside the EF) but they run AFTER reservations and the EF hits its 240s timeout before reaching them. `add_ons` was last seen `status='running'` at 02:02 today and never finished. Total run never gets to tax_fee_records or adjustments.
+- `reservation_rooms.synced_at`: EF upserts using `onConflict: "reservation_id,room_id,night_date"` — but this morning's dedup migration replaced that constraint with `reservation_rooms_uniq_logical` on `(reservation_id, room_type_id, night_date, COALESCE(room_id, '__unassigned__'))`. The EF's onConflict columns no longer match a unique index → upsert silently fails. Rows still get INSERTED (no constraint to block) but the synced_at field on EXISTING rows never updates.
+- `room_blocks`: EF has the code (nested in `syncGroups`) but the hotel has no group blocks → 0 rows is correct, not a bug.
+
+Approach: SQL-side derives instead of touching EF v14 (avoids cross-session race with the other Claude that owns sync-cloudbeds). The EF's transaction-derive logic is just SELECT + UPSERT — easily replicable as Postgres functions, and they run in 4 seconds total vs the EF's >240s timeout because the data already lives in `public.transactions` / `public.reservations` and we don't need to paginate through Supabase JS.
+
+Migration `add_sql_derive_extras_for_stuck_entities`:
+- `f_derive_guests()` — derives from `reservations.cb_guest_id` + name/email/country, computes `total_stays`, `last_stay_date`, `total_spent`, `is_repeat`. Bumps `sync_watermarks` to record `strategy='derived_from_reservations'`.
+- `f_derive_sources()` — derives from `reservations.source` + `source_name`, auto-categorizes (OTA/Direct/Wholesale/Group/Other) by name patterns matching the same regexes the Pulse page uses
+- `f_derive_add_ons(p_lookback)` — replicates EF's transaction-derive logic for `category IN ('custom_item','product','addon')` with default 730d lookback
+- `f_derive_tax_fee_records(p_lookback)` — same for `('tax','fee')`
+- `f_derive_adjustments()` — same for `('adjustment','void','refund')` (no lookback — small table)
+- `f_derive_reservation_rooms(p_lookback)` — re-derives from `reservations.raw->'rooms'->[].detailedRoomRates` JSONB, using the CORRECT unique index expression (`COALESCE(room_id, '__unassigned__')`) so upserts actually land. Default 7d lookback. Hit the classic "ON CONFLICT DO UPDATE cannot affect row a second time" on first run because some reservations have multiple `rooms[]` entries colliding on the logical key — fixed in a follow-up migration `fix_derive_reservation_rooms_dedup_source` by adding `DISTINCT ON (...)` with `ORDER BY ... rate DESC NULLS LAST` so the highest rate wins per logical key.
+- `f_derive_all_extras()` wrapper — runs all six in sequence, returns `{guests:N, sources:N, add_ons:N, tax_fee_records:N, adjustments:N, reservation_rooms:N, duration_ms:N}`
+
+All functions: `SECURITY DEFINER`, `search_path=public,pg_temp`, granted EXECUTE to `service_role`.
+
+Cron `jobid=40 derive-extras-3h` at `30 */3 * * *` calling `f_derive_all_extras()`. Schedule offset 30 min from `cb-sync-full-3h` (cron 39 at `0 */3 * * *`) so the EF's fresh transactions/reservations data lands before we derive from it.
+
+Manual run results (4,213 ms total):
+- guests: 4,131 rows (was 4,111 stale — +20 new guests)
+- sources: 127 rows (was 117 — +10 new sources)
+- add_ons: 19,319 rows (vs EF's stuck 19,670 partial)
+- tax_fee_records: 19,421 rows (vs EF's 19,725 from 2026-04-28)
+- adjustments: 370 rows (vs EF's 698 from 2026-04-28)
+- reservation_rooms: 40,387 rows touched
+
+Verified post-run freshness — all 6 stuck entities now show 20 sec age.
+
+Cron landscape (final):
+| jobid | name                          | schedule       | owner          |
+|-------|-------------------------------|----------------|----------------|
+| 30    | cb-sync-reservations-30min    | `*/30 * * * *` | other session  |
+| 31    | cb-sync-transactions-30min    | `5,35 * * * *` | other session  |
+| 32    | cb-sync-full-daily            | `0 2 * * *`    | other session  |
+| 39    | cb-sync-full-3h               | `0 */3 * * *`  | this session   |
+| 40    | derive-extras-3h              | `30 */3 * * *` | this session   |
+
+Net effect: every entity in the BI portal now refreshes at most every 3 hours. No EF code changed. No cross-session conflict. The other session's `sync-cloudbeds` v14 keeps running unmodified — my derives run AFTER it and either fill the gaps it doesn't cover (`guests`, `sources`) OR work around its bugs (`reservation_rooms.synced_at`) OR finish work it times out on (`add_ons`/`tax_fee_records`/`adjustments`).
+
+Out-of-scope (still won't fix here):
+- The `reservation_rooms.synced_at` EF bug (wrong onConflict columns) is now masked by the SQL derive, but the canonical fix is still a 1-line change in `sync-cloudbeds` Edge Function source (other session's surface). Until they ship v15, keeping the SQL workaround is fine.
+- `room_blocks` will stay at 0 rows until the hotel has actual group bookings with blocks. EF code already handles it correctly when data appears.
+
+Files / objects changed:
+- 6 new functions in `public` schema + 1 wrapper
+- 1 new cron (`jobid=40`)
+- 5 new rows in `sync_watermarks` (one per derived entity)
+- Migrations recorded as `add_sql_derive_extras_for_stuck_entities` + `fix_derive_reservation_rooms_dedup_source`
+- No app code changed; pure DB infra.
+
+### 2026-05-03 (Cloudbeds sync — added 3-hourly cron, cleaned zombie runs)
+
+Why: PBS asked "every freshness max every 3 hours". Audit found the 'all'-scope sync was running daily at 02:00 only (cron 32) — leaving rate_inventory / room_types / rooms / rate_plans / market_segments / item_categories / items / payment_methods / taxes_and_fees_config / housekeeping_status / house_accounts / hotels / groups / add_ons up to 24h stale.
+
+Backend changes (no UI, no app code touched):
+- New cron `jobid=39 cb-sync-full-3h` at `0 */3 * * *` calling `cb_invoke_sync('all', -90, 180, 8, 12)` — same args as cron 32 but 8x more frequent. Fires at 0,3,6,9,12,15,18,21 UTC.
+- Cron 32 (`cb-sync-full-daily` at `0 2 * * *`) left active for redundancy — owned by the other Claude session per memory ownership split, modifying it would step on their territory.
+- Cleaned up 5 zombie `running` rows in `sync_runs` (4× reservations from 2026-05-02 + 1× add_ons stuck since 02:02 today). Used a generic `WHERE status='running' AND started_at < now() - interval '1 hour'` rule — safe one-shot maintenance.
+- Manual `cb_invoke_sync('all', -90, 180, 8, 12)` triggered to verify (request_id 1278). Edge Function processed 12 entities in 37 sec, all `success`, 0 failed. Reservations leg ran 41 sec end-to-end. Total run time ~96s — fits comfortably inside the 3h slot.
+
+Verified post-run freshness:
+- `reservations` 3s ago, `rate_inventory` 60s ago, `rooms`/`room_types` ~1m 37s ago, `transactions` 8m (waiting for next 30-min cron at :05/:35)
+- `reservation_rooms` still 5h 12m — NOT refreshed by 'all' scope (Edge Function v12 doesn't seem to touch it). Worth digging into as a separate task — the table is downstream of `reservations` in some flow not visible from sync_runs.
+- `sources` / `guests` still 6 days stale — confirmed NOT in 'all' scope. The Edge Function emits no sync_runs entries with those entity names, ever. Same for `adjustments` and `tax_fee_records` (last successful 2026-04-28).
+
+Updated memory entries (now stale due to this change):
+- The avail-banner feedback memory: the gate still uses `rate_inventory.synced_at`, but now max staleness drops from ~24h to ~3h. Banner should mostly show GREEN now, only YELLOW briefly between 3-hour windows.
+- Memory listing cb_sync_* among failing crons — outdated. The other Claude session got cb_sync_* back online before today. Cron run history shows 100% `success` rate over the last ~10 hours.
+
+Out of scope (separate Edge Function v12 fix needed in the other session's surface):
+- Add scope handlers in `sync-cloudbeds` Edge Function for: `guests`, `sources`, `room_blocks`, `adjustments`, `tax_fee_records`. Without those, no cron schedule can refresh them. This is code-level work in the Edge Function source, not a Postgres change.
+- Investigate why `reservation_rooms.synced_at` doesn't update from `'reservations'` scope runs even though the Edge Function clearly writes to that table.
+
+Files / objects changed:
+- `cron.job` table — 1 new row (`jobid=39 cb-sync-full-3h`)
+- `sync_runs` table — 5 zombie rows updated to `status='failed'`
+- Migration recorded as `add_cb_sync_full_3h_cron`
+- No app code changed; this is pure DB infra.
+
+### 2026-05-03 (compset settings sub-pages — scoring + agent)
+
+Built the two sub-pages linked from `/revenue/compset` util bar that were 404ing:
+- `/revenue/compset/scoring-settings` — versioned config of date-picker weights
+- `/revenue/compset/agent-settings` — runtime knobs (RM-editable) + mandate rules (read-only)
+
+New files:
+- `app/revenue/compset/scoring-settings/page.tsx` (383 lines, server component) — loads active config + all versions + audit log + event types + active-config preview via 5 parallel `supabase.from('v_compset_*')` reads. Status row uses 3 KpiBox-shaped panels (italic Fraunces value + mono brass eyebrow), then renders the editor inside, then read-only event-types table, then live preview, then version history.
+- `app/revenue/compset/agent-settings/page.tsx` (385 lines, server component) — loads both compset agents from `v_compset_agent_settings`. URL-driven `?agent=<code>` selection. Agent header card → `<AgentSettingsEditor>` (green-tinted, RM-editable) → mandate block (red-tinted, read-only) with budget progress bar + mandate-rules table + footer "Mandate changes require an owner" disclaimer.
+
+New components under `app/revenue/compset/_components/scoring/`:
+- `types.ts` (95) — `ScoringConfigRow`, `ScoringConfigAuditRow`, `EventTypeRow`, `AgentSettingsRow`, `MandateRule`, `LeadTimeBand`, plus `DOW_KEYS` / `DOW_LABELS` constants. Mirrors public.v_compset_* shapes verified against `information_schema` 2026-05-03.
+- `ScoringSettingsEditor.tsx` (716, `'use client'`) — stateful editor with weights row (live sum + green/red indicator), 7-day DOW score grid, lead-time bands editor (add/remove rows, ascending validation by max_days), validation panel, sticky save bar with reason textarea (required, min 10 chars), and an "Activate now?" modal that posts to `/api/compset/scoring/activate` after `/api/compset/scoring/draft`. Uses `router.refresh()` on success.
+- `VersionHistoryTable.tsx` (123, `'use client'`) — `<DataTable>` wrapper with `<StatusPill tone={active|expired|inactive}>` per version. `buildVersionRows()` helper joins each config to its latest audit row's reason.
+- `EventTypesTable.tsx` (109, `'use client'`) — `<DataTable>` over 17 event types: TYPE CODE · DISPLAY NAME · CATEGORY · DEFAULT DEMAND · LEAD WINDOW · SCRAPE WINDOW · SOURCE MARKETS · NOTES. Footer text "Edit event scores → /marketing/calendar (TBD)".
+
+New components under `app/revenue/compset/_components/agent/`:
+- `AgentSelectorTabs.tsx` (50, `'use client'`) — pill-style `<Link>` tabs flipping `?agent=` URL param.
+- `AgentSettingsEditor.tsx` (707, `'use client'`) — runtime_settings editor with picker_mode select (3 options), 4 numeric inputs (max_dates / horizon / min_score / LOS), channels-to-scrape multi-select chips (7 options), default_geo_markets chips with inline 2-letter "+ ADD" form, cron toggle + 5-field cron text input with live human-readable label below, phase as read-only. For `comp_discovery_agent` (empty `runtime_settings`) shows amber banner + "Initialize defaults" button that pre-loads sensible values matching `compset_agent` shape but waits for explicit save.
+- `MandateRulesTable.tsx` (117, `'use client'`) — `<DataTable>` over `locked_by_mandate.mandate_rules[]`. Severity rendered via `<StatusPill tone={expired|pending|info}>` (block→expired/red, warn→pending/amber, other→info).
+
+New API routes (all `runtime = 'nodejs'` + `dynamic = 'force-dynamic'`, all use `getSupabaseAdmin()` service-role client):
+- `app/api/compset/scoring/draft/route.ts` (179) — POST `{weight_dow, weight_event, weight_lead_time, weight_peak_bonus, dow_scores, lead_time_bands, notes}` → calls `compset_create_scoring_config_draft` RPC. Validates weights sum 0.99–1.01, DOW keys "0".."6" with 0–100 scores, lead-time bands non-empty + ascending max_days. Returns `{ok, config_id}`.
+- `app/api/compset/scoring/activate/route.ts` (71) — POST `{config_id, reason}` → calls `compset_activate_scoring_config` RPC. Validates UUID format + reason ≥10 chars. Returns `{ok, config_id, activated_at}`.
+- `app/api/compset/agent-runtime/route.ts` (73) — POST `{agent_code, runtime_settings}` → calls `compset_update_agent_runtime` RPC. Restricts agent_code to `compset_agent` or `comp_discovery_agent` (defense in depth — RPC also restricts). Returns `{ok, runtime_settings}`.
+
+DB prereqs (already applied to `kpenyneooigsyuuomgct` 2026-05-03 by parallel session, verified 2026-05-03):
+- `public.v_compset_scoring_config` (14 cols incl. `weight_dow|event|lead_time|peak_bonus`, `dow_scores` jsonb, `lead_time_bands` jsonb, `is_active`, `version`, `activated_at`, `retired_at`, `notes`, `created_by/at`)
+- `public.v_compset_scoring_config_audit` (8 cols incl. `action`, `changed_by/at`, `reason`, `diff`)
+- `public.v_compset_event_types` (10 cols incl. `type_code`, `display_name`, `category`, `default_demand_score`, `marketing_lead_days_min/max`, `scrape_lead_days_min/max`, `default_source_markets`, `notes`)
+- `public.v_compset_agent_settings` (7 cols incl. `code`, `name`, `status`, `pillar`, `runtime_settings` jsonb, `locked_by_mandate` jsonb)
+- RPCs: `compset_create_scoring_config_draft(numeric, numeric, numeric, numeric, jsonb, jsonb, text)→uuid`, `compset_activate_scoring_config(uuid, text)→uuid`, `compset_update_agent_runtime(text, jsonb)→jsonb`
+
+Lead-time-bands shape uses the existing v1 schema (`{label, score, max_days}` ascending), NOT the spec's `{min, max, score}` — the implicit min for band[i] is band[i-1].max_days+1 or 0 for the first row. Validation enforces strict ascending max_days. dow_scores jsonb keys are numeric strings "0".."6" (Sun..Sat) per the live v1 row.
+
+Design conformance:
+- ALL UI uses `<PageHeader>`, `<DataTable>`, `<StatusPill>`, brand tokens
+- ALL formatting via `fmtTableUsd` / `fmtIsoDate` / `EMPTY` from `lib/format.ts`
+- ZERO hardcoded `fontSize:` numeric literals (verified, count=0)
+- ZERO hardcoded brand-color hex outside `var(--…)` (verified, count=0; the 2 `rgba(0,0,0,…)` shadows on the modal/save-bar are neutral, not brand)
+- ZERO `'USD '` prefix in JSX (verified, count=0)
+- ZERO hardcoded `fontFamily:'Georgia|Menlo|...'` (verified, count=0)
+- All 6 client components carry `'use client';` directive
+- Form inputs use `var(--paper)` background + `var(--paper-deep)` border + `var(--mono)` font + tabular-nums
+- Save bar pattern: sticky bottom, `var(--paper-warm)` bg, soft shadow above, secondary "DISCARD" + primary "SAVE" buttons (moss bg, paper-warm text)
+- "← BACK TO COMP SET" link in `<PageHeader rightSlot>` on both pages
+- Mandate red-tint card uses `var(--st-bad-bg)` + `var(--st-bad-bd)` + 4px `var(--st-bad)` left border (matches handover spec for OWNER-ONLY visual)
+- Runtime green-tint card uses `var(--st-good-bg)` + `var(--st-good-bd)` + 4px `var(--moss)` left border
+
+Type-check: `npx tsc --noEmit` clean (exit 0).
+
+Empty states handled:
+- No active scoring config → "Run RPC to seed v1" panel
+- Empty audit log → "Audit log is empty" + italic "never" placeholder in status row
+- Empty event types → "Seed marketing.calendar_event_types" empty-state row
+- Empty version history → "Save your first scoring config" empty-state row
+- Empty `runtime_settings` (e.g. comp_discovery_agent) → amber "No runtime config yet" banner + "Initialize defaults" button (loads sensible defaults, doesn't save until user confirms)
+- No mandate rules → "Owner-published mandates appear here" empty-state row
+- No compset agents → "Seed compset_agent or comp_discovery_agent" panel
+
+Deferred (intentional, per task scope):
+- Click-to-expand audit trail per row in version history (v1 just shows latest reason flat)
+- Client-side draft preview that re-scores dates against the in-memory weights (handover §4.4 Option A) — currently the preview always reflects the active config; banner explains
+- `pick_scrape_dates_preview` RPC (handover §4.4 Option B) not added
+- `governance.agents` write RLS not validated — service-role client bypasses it; tighten before opening to non-owner users
+- Audit surface for `compset_update_agent_runtime` calls (handover §12 Q5) — not built
+- `/marketing/calendar` page (link from event-types footer) — handover §7 deferred
+
+### 2026-05-03 (Pulse channel-mix HTML widgets — final live wiring)
+
+Why: After the chart-SVG wiring shipped earlier today, PBS spotted the static "OTA 53% / Direct 21% / Wholesale 14% / Commission leak: $8.9k" badges still showing on the Channel mix card. Those weren't in a chart — they were the HTML stacked-bar (`<div class="mix-bar">`) + legend (`<div class="mix-legend">`) + Direct-mix-target line that sit BELOW the SVG inside the same card. PBS said "wire it" — shipped.
+
+What changed in `app/revenue/pulse/page.tsx`:
+- New helper `patchChannelMixHtmlBlock(html, rows)` rewrites three siblings of the SVG using the same `v_channel_mix_categorized_30d` data that feeds the chart:
+  1. `section-meta` text — `Commission leak: $X.Xk` from `SUM(commission_leak)` (now $6.1k vs mock $8.9k)
+  2. `<div class="mix-bar">` — segments rebuilt from real `net_revenue_pct` per category, using brand tokens (`var(--ch-direct/ota/wholesale/groups/other)`) instead of the legacy hardcoded hex (#dc2626 / #16a34a / #d97706 / #2563eb / #7c3aed) — this also nets the design system 5 fewer hex literals on the rendered page
+  3. `<div class="mix-legend">` + Direct-mix-target line — combined into a single replacement block to avoid greedy-regex sibling overlap. Each legend entry shows `{Category} ${gross}k · Net ${net}k`. The target line now reads `Direct mix target: 35% · current 39.3% · +4.3pp ahead` (auto-flips between "gap" / "ahead" tone classes via `<span class="warn">` vs `var(--st-good-tx)` based on sign of gap)
+- New format helper `fmtUsdShort(n)` for the legend's compact $X.Xk form (kept inline in the page since it's a one-pass renderer concern, not a global formatter)
+- Added `DIRECT_MIX_TARGET_PCT = 35` constant (long-stated revenue-management target — single source of truth)
+- Idempotent regex design: lazy `<div class="mix-legend">[\s\S]*?<\/div>` + optional trailing target div, so re-runs on already-patched pages match cleanly. Caught a subtle bug on first deploy where greedy `(?:<[^>]+>[^<]*)*` swallowed the target line because `</span>` tokens inside the regex's flexible body matched the legend's closing `</span>` AND continued past it — fixed in a second deploy.
+
+Verified live (run #2 after greedy-regex fix):
+- All 7 mock literals (`OTA 53%`, `Direct 21%`, `Wholesale 14%`, `Group 8%`, `Commission leak: $8.9k`, `current 21%`, `gap -14pp`) → 0 hits
+- Live values present: `Direct 39%`, `Wholesale 33%`, `OTA 28%`, `Direct mix target: 35%`, `current 39.3%`, `Commission leak: $6.1k`, full legend with $-values per category
+- Brand tokens `var(--ch-direct/ota/wholesale)` rendered 3× each (mix-bar fill + legend dot + SVG title slice)
+
+Files changed: `app/revenue/pulse/page.tsx` (one helper added, one block reshaped). No new SVG generators, no new data loaders — same backend pass.
+
+Out-of-scope items that remain:
+- "Tactical alerts · cross-dimensional gaps" panel further down the same page is still illustrative — the panel header has `<span class="data-needed">partial data</span>` flagging that 5 upstream sources are missing (BDC search impressions API, Google Ads/Meta spend API, country attribution >65% coverage, DMC CRM activity, Tactical Detector v2.1 agent itself). Wiring it requires building the agent + integrating those APIs — separate ticket, not done here.
+- Per-room-type budget overlay still dropped (no upstream data)
+- Pace-curve STLY/Budget series remain monthly-flattened (need 2025 daily reservation history)
+
 ### 2026-05-03 (compset v3+v4 main page rebuild) — full UI rewrite
 
 Rewrote `/revenue/compset` per `docs/compset_page_mockup_v3.html` + `_v4.html`. Replaces the v1 4-source UI from `d142ab8`. **NOT yet deployed** — code only, awaiting PBS review.
@@ -673,3 +851,17 @@ Verification gates run live: 0 hardcoded fontSize, 0 fontFamily, 0 hex outside :
 - **Anomaly impact:** 210 → 140. `no_payslip_pdf_last_closed_month` cleared from 70 → 0. Remaining flags (`missing_hire_date`, `missing_contract`) are real-world data — not fabricated.
 - **Migrations committed to repo:** `supabase/migrations/20260503190000_phase2_staff_fix_hr_docs_fk.sql` and `…_190100_phase2_staff_payslip_backfill.sql`.
 - **No UI files touched** — design system unchanged.
+
+### 2026-05-03 (later) — Inventory module Phase B (full snapshot + 4 sub-pages + dummy data)
+
+- **Seeded data:** 36 items across all 10 inv.categories (FB_FOOD/FB_BEVERAGE/FB_SMALLW/LINEN/AMENITIES/SPA_PROD/CLEANING/OFFICE/OSE/ENGINEERING); 8 suppliers (4 local Lao + Bangkok/China/France); 12 fixed assets (FF&E guest, public, spa; plant; vehicles; IT/POS); 7 capex pipeline items; 5 POs; 4 active requests; 25 movements. Stock balances + par levels populate the heatmap.
+- **3 new locations** (now 10 total): Maintenance Workshop, Linen Room, Front Office.
+- **Snapshot rebuild** (`/operations/inventory`): 12 KPI tiles (Inv on hand, Below par, Slow movers, Open POs, Pending requests, Suppliers, FA NBV, CapEx approved/proposed, Active SKUs + 2 data-needed); category × location heatmap (OK/LOW/OUT/OVR/empty); 3 side-by-side mini-tables (Open POs / Requests / CapEx); top-suppliers strip with reliability/quality scores; quick-link grid.
+- **4 new sub-pages:**
+  - `/operations/inventory/assets` — register grouped by FA category (Building/FFE_GUEST/FFE_PUBLIC/FFE_SPA/PLANT/VEHICLES/IT_POS); NBV calculated via straight-line dep against in_service_date.
+  - `/operations/inventory/capex` — pipeline table; 4 stat tiles (proposed / approved / total active / archived).
+  - `/operations/inventory/orders` — PO queue; 4 stat tiles (open / open value / partially received / overdue).
+  - `/operations/inventory/requests` — PR queue; dept colour-coded badges; 4 stat tiles.
+- **Shared data layer:** `app/operations/inventory/_data.ts` — 7 server-side helpers (getInventorySnapshot, getStockHeatmap, getCapexPipeline, getAssetRegister, getOpenPOs, getOpenRequests, getSuppliers). All use service-role admin client because anon has no grants on inv/fa/suppliers/proc.
+- **Heatmap component** (`_components/Heatmap.tsx`): pure markup, no event handlers, server-component-safe.
+- **Verification gates:** 0 hardcoded fontSize, 0 `USD ` prefix, 0 hardcoded fontFamily. `tsc --noEmit` clean. All 6 routes return 200.
