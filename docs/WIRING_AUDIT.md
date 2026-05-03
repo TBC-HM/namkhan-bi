@@ -114,6 +114,11 @@ DEFER cases (wiring correct, source data missing or schema migration required):
 | `gl.gl_entries` | data load | empty | 2,924 unique rows (`upload_id 0884da5d-c9d7...`); deduplicated post-load (Edge Function ran twice) | FIXED |
 | `gl.mv_usali_pl_monthly` | matview | stale | refreshed | FIXED |
 | `gl.mv_usali_pl_monthly` | refresh schedule | none — manual only | `cron.job` 37 every 4h at xx:20 (`refresh-gl-mv-usali-pl-monthly`) | FIXED |
+| `components/charts/MonthlyByDeptChart.tsx` | LAK Y-axis | `value * FX_LAK_PER_USD` (hardcoded 21800) | pinned to USD (matches DailyRevenueChart fix). To enable LAK, add `revenue_lak` to `mv_revenue_by_usali_dept` first | FIXED |
+| `app/revenue/compset/_actions/saveRates.ts` | LAK column written to DB | `rate_usd * FX_LAK_PER_USD` (hardcoded) | uses live `public.fx_usd_to_lak()` rate at write time (single round-trip per save batch) | FIXED |
+| `auth_ext` schema | grants | not exposed to anon | granted USAGE + EXECUTE on functions to anon/authenticated; `getOverviewKpis` continues using service_role for JWT-less server contexts | FIXED |
+| `/settings/platform-map` | page | 404 (Phase 2.5 file not on main) | brought forward `app/settings/platform-map/page.tsx` + `components/settings/PlatformMapRenderer.tsx` + `content/settings/platform-map.md` | FIXED |
+| `/finance/mapping` | page | wasn't on main | brought forward by parallel session — now live with `MappingTable` component | FIXED |
 | `public.v_dq_open` | view | did not exist | created — joins `dq.violations` + `dq.rules`, returns full row list incl. severity/title/description/category. Granted SELECT to anon/authenticated/service_role | FIXED |
 
 ## DQ inspection (the 17 action-required rules)
