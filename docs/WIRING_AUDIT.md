@@ -97,5 +97,21 @@ DEFER cases (wiring correct, source data missing or schema migration required):
 - `mv_kpi_daily` lacks paired `*_lak` columns → daily revenue chart pinned to USD until migration adds them
 - `f_overview_kpis` references schema `auth_ext` that anon doesn't have USAGE on → called via `service_role` server-side. `SECURITY DEFINER` is the proper long-term fix.
 - Sales (non-B2B), Marketing reviews, Guest reviews/NPS/loyalty: source tables exist but are empty
-- Finance P&L GOP/EBITDA: awaiting `gl_entries_load.sql` from `qb-deploy/`
+- Finance P&L GOP/EBITDA: ~~awaiting `gl_entries_load.sql` from `qb-deploy/`~~ — **LOADED 2026-05-03** (2,924 rows). P&L now shows April actuals: $44k revenue / -$12.8k GOP / -29.2 % margin / 75.7 % labour / 43.3 % F&B pay-through / $3.8k A&G.
+
+## Follow-up fixes shipped 2026-05-03 (post-audit)
+
+| Page | Element | Was | Now | Status |
+|------|---------|-----|-----|--------|
+| `/actions` | Open DQ count + critical/medium/low buckets | `dq_known_issues` table (4 stale rows) | `public.v_dq_open` (joins `dq.violations` + `dq.rules`, 29 live: 12 CRITICAL + 5 WARNING + 12 INFO) | FIXED |
+| `/settings/platform-map` | entire page | 404 (Phase 2.5 file missing on main) | brought forward `app/settings/platform-map/page.tsx` + `components/settings/PlatformMapRenderer.tsx` + `content/settings/platform-map.md` from feat | FIXED |
+| `/settings` | Platform Map card link | not rendered | added link card pointing to `/settings/platform-map` | FIXED |
+| `/finance/pnl` | Labour cost %, F&B Pay-Through, A&G Total | 0.0 % / — / $0.0k (winPeriods scoped to empty May) | **75.7 %** / **43.3 %** / **$3.8k** (scoped to latest closed period) | FIXED |
+| `/finance/pnl` | Channels Comm % / OTA tile | 0.0 % / 0 | 0.0 % / 0 (no `account_id` starting `624` or `usali_line_code` containing `OTA` in current data) | DEFER (data tagging gap) |
+| `/finance/pnl` | Cash on hand | greyed `—` | greyed `—` (Gap 4 — bank feed pending) | DEFER (no data feed) |
+| `/finance/pnl` | Flow-through | greyed `—` | greyed `—` (depends on positive GOP — April GOP is negative) | OK (correct rendering) |
+| `lib/data.ts` | `getDqIssues()` | `dq_known_issues.*` | `v_dq_open` with severity shim (`CRITICAL→high`, `WARNING→medium`, `INFO→low`) so existing UI buckets keep working | FIXED |
+| `gl.gl_entries` | data load | empty | 2,924 unique rows (`upload_id 0884da5d-c9d7...`); deduplicated post-load (Edge Function ran twice) | FIXED |
+| `gl.mv_usali_pl_monthly` | matview | stale | refreshed | FIXED |
+
 
