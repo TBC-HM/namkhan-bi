@@ -123,18 +123,16 @@ export async function getOverviewDqSummary() {
  * If the period.win value is non-canonical (l12m, next180, next365), it's
  * coerced to the nearest valid f_overview_kpis enum value.
  *
- * Uses the service-role client because f_overview_kpis isn't SECURITY DEFINER
- * and references schema `auth_ext` that anon doesn't have USAGE on. Pages
- * importing this run server-side only; SUPABASE_SERVICE_ROLE_KEY is never
- * shipped to the browser.
+ * Uses the anon client. Function is `SECURITY DEFINER` (set 2026-05-03 via
+ * Cowork audit) and runs as `postgres`, so it bypasses downstream RLS on
+ * mv_kpi_daily and auth_ext. Search_path is locked to `public, pg_temp` to
+ * prevent path-injection. EXECUTE granted to anon/authenticated/service_role.
  */
 export async function getOverviewKpis(period: ResolvedPeriod) {
   const win = WIN_MAP[period.win] ?? '30D';
   const cmp = CMP_MAP[period.cmp] ?? 'NONE';
   const seg = SEG_MAP[period.seg] ?? null;
-  const { getSupabaseAdmin } = await import('./supabaseAdmin');
-  const admin = getSupabaseAdmin();
-  const { data, error } = await admin.rpc('f_overview_kpis', {
+  const { data, error } = await supabase.rpc('f_overview_kpis', {
     p_window:  win,
     p_compare: cmp,
     p_segment: seg,
