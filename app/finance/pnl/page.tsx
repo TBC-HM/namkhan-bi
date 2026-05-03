@@ -54,15 +54,17 @@ export default async function PnLPage({ searchParams }: Props) {
   })();
   const fetchPeriods = Array.from(new Set([...winPeriods, ...lookbackPeriods]));
 
-  // Parallel fetch: gl.* + legacy daily KPI
+  // Parallel fetch: gl.* + legacy daily KPI.
+  // Subcategory queries use `fetchPeriods` (12-month lookback) so we always have
+  // closed-month data even when the calendar-current month is empty.
   const [plSections, houseRows, deptRows, agSubcat, payrollSubcat, fbDeptOnly, otaCommissions, dqUnmapped, decisions, daily] = await Promise.all([
     getPlSections(fetchPeriods),
     getUsaliHouse(fetchPeriods),
     getUsaliDept(fetchPeriods),
-    getUsaliPlBySubcat(winPeriods, 'A&G'),
-    getUsaliPlBySubcat(winPeriods, 'Payroll & Related'),
-    getUsaliDept(winPeriods).then(rs => rs.filter(r => r.usali_department === 'F&B')),
-    getUsaliPlBySubcat(winPeriods, 'Sales & Marketing'),
+    getUsaliPlBySubcat(fetchPeriods, 'A&G'),
+    getUsaliPlBySubcat(fetchPeriods, 'Payroll & Related'),
+    getUsaliDept(fetchPeriods).then(rs => rs.filter(r => r.usali_department === 'F&B')),
+    getUsaliPlBySubcat(fetchPeriods, 'Sales & Marketing'),
     getDqUnmappedCount(),
     getPendingDecisions(5),
     getKpiDaily(period).catch(() => []),
@@ -92,22 +94,32 @@ export default async function PnLPage({ searchParams }: Props) {
   const gopMargin = (gop != null && totalRev > 0) ? (gop / totalRev) * 100 : null;
   const ebitda = (gop != null) ? gop - (houseCur?.depreciation || 0) - (houseCur?.interest || 0) - (houseCur?.income_tax || 0) : null;
 
-  const totalRevWindow = winPeriods.reduce((s, p) => s + pickSection(plSections.filter(r => r.period_yyyymm === p), 'income'), 0);
-  const totalPayrollWindow = payrollSubcat.reduce((s, r) => s + Number(r.amount_usd || 0), 0);
+  // Window stats: scope to the latest closed period only so the secondary KPIs
+  // line up with the primary KPIs (both reflect April when calendar=May).
+  const closedScope = [cur];
+  const totalRevWindow = closedScope.reduce((s, p) => s + pickSection(plSections.filter(r => r.period_yyyymm === p), 'income'), 0);
+  const totalPayrollWindow = payrollSubcat
+    .filter(r => closedScope.includes(r.period_yyyymm))
+    .reduce((s, r) => s + Number(r.amount_usd || 0), 0);
   const labourPct = totalRevWindow > 0 ? (totalPayrollWindow / totalRevWindow) * 100 : null;
 
-  const fbRevWindow = fbDeptOnly.reduce((s, r) => s + Number(r.revenue || 0), 0);
+  const fbRevWindow = fbDeptOnly
+    .filter(r => closedScope.includes(r.period_yyyymm))
+    .reduce((s, r) => s + Number(r.revenue || 0), 0);
   const fbPayrollWindow = payrollSubcat
-    .filter(r => r.usali_department === 'F&B')
+    .filter(r => r.usali_department === 'F&B' && closedScope.includes(r.period_yyyymm))
     .reduce((s, r) => s + Number(r.amount_usd || 0), 0);
   const fbLabourPct = fbRevWindow > 0 ? (fbPayrollWindow / fbRevWindow) * 100 : null;
 
   const otaCommWindow = otaCommissions
+    .filter(r => closedScope.includes(r.period_yyyymm))
     .filter(r => (r.usali_line_code || '').includes('OTA') || (r.account_id || '').startsWith('624'))
     .reduce((s, r) => s + Number(r.amount_usd || 0), 0);
   const channelsCommissionPct = totalRevWindow > 0 ? (otaCommWindow / totalRevWindow) * 100 : null;
 
-  const agTotalWindow = agSubcat.reduce((s, r) => s + Number(r.amount_usd || 0), 0);
+  const agTotalWindow = agSubcat
+    .filter(r => closedScope.includes(r.period_yyyymm))
+    .reduce((s, r) => s + Number(r.amount_usd || 0), 0);
 
   // Dept rows for USALI table — current period only
   const deptCurMap = new Map(deptRows.filter(r => r.period_yyyymm === cur).map(r => [r.usali_department, r]));
