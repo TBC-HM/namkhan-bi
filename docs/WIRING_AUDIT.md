@@ -136,6 +136,20 @@ Every page in the left nav + every sub-tab returns 200. The two earlier 404s (`/
 | `agent-snapshot_agent` / `pricing` / `variance` / `cashflow` / `forecast` (hourly) | `agent_runs_status_check` rejected `'queued'` | Added `'queued'` to the CHECK constraint (was: `running/success/partial/failed/timeout`) | FIXED |
 | `dq-engine-run` (every 4h) | `column a.account_code does not exist` in R-021/R-022 (gl.accounts uses `account_id`) | Updated `dq.run_all()` JOIN clauses to use `a.account_id = ps/pl.account_code` | FIXED |
 
+## Security advisor triage (Cowork audit 2026-05-03)
+
+`mcp_get_advisors(security)` surfaced 198 lints. Triage:
+
+| Severity | Issue | Action | Status |
+|----------|-------|--------|--------|
+| ERROR | `public.app_users` / `app_settings` / `action_decisions` have RLS disabled | Frontend reads via anon today; DASHBOARD_PASSWORD is the real boundary. Enabling RLS without UI rework would break /settings/users. Logged for follow-up. | DEFER |
+| ERROR | 37 SECURITY DEFINER views in public | Most are intentional public proxies (added by parallel session for cross-schema reads). Working as designed. | OK |
+| WARN | 5 SECURITY DEFINER fns executable by anon: `cb_invoke_sync`, `cb_sync_now`, `refresh_bi_views`, `save_competitor_rates`, `f_overview_kpis` | REVOKE EXECUTE on the 4 dangerous ones from anon/authenticated/PUBLIC. Service_role only. `f_overview_kpis` kept open (intentional). | FIXED |
+| WARN | 89 functions with mutable `search_path` | Added `SET search_path = public, pg_temp` on `f_overview_kpis` (the one we changed). Others touched by other sessions — DEFER. | DEFER |
+| WARN | 14 matviews exposed to API | Other Claude session owns these (mv_channel_economics, mv_kpi_*, etc.). DEFER. | DEFER |
+| INFO | 20 RLS-enabled-no-policy + 20 always-true policies | Mostly the parallel session's domain. DEFER. | DEFER |
+| WARN | `auth_leaked_password_protection` disabled | Supabase Auth setting, requires console toggle. | DEFER |
+
 | `public.v_dq_open` | view | did not exist | created — joins `dq.violations` + `dq.rules`, returns full row list incl. severity/title/description/category. Granted SELECT to anon/authenticated/service_role | FIXED |
 
 ## DQ inspection (the 17 action-required rules)
