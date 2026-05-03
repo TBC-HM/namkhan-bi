@@ -157,7 +157,10 @@ export async function POST(req: Request) {
     const catId = cats.get(code);
     if (!catId) continue;
     mapped++;
-    const slug = md5Hex((e.description ?? '') + '|' + (e.item_category_name ?? ''));
+    // MUST match the SQL bulk-load slug pattern exactly:
+    //   substring(md5(description || category_name) for 10)
+    // No separator between fields.
+    const slug = md5Hex((e.description ?? '') + (e.item_category_name ?? ''));
     const avgPrice = e.sum_qty > 0 ? e.sum_amount / e.sum_qty : null;
     candidates.push({
       sku: `POS-${slug}`,
