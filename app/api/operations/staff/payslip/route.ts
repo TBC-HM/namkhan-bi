@@ -166,7 +166,7 @@ export async function POST(req: Request) {
         .schema('docs' as any)
         .from('documents')
         .insert({
-          doc_type: 'hr',
+          doc_type: 'hr_doc',
           doc_subtype: hr_doc_kind,
           title,
           storage_bucket: 'documents-confidential',

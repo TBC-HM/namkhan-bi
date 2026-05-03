@@ -1,6 +1,20 @@
 # 12 — Backlog and Roadmap
 
-> Phased plan with **actual** status as of 2026-04-28.
+> Phased plan with **actual** status as of 2026-05-03.
+
+## Phase 2 — Staff module status (2026-05-03)
+
+| Layer | Status |
+|---|---|
+| Schema (`ops.v_staff_register` / `_extended` / `_detail` / `_anomalies` + public proxies) | DONE — `migration_phase2_staff_detail.sql` applied; 70 staff, 140 payroll rows, 2,100 attendance rows, 490 availability rows |
+| Frontend register `/operations/staff` (5 KPIs + anomaly cards + `<StaffTable>`) | DONE — commit `8eb1f7f` |
+| Frontend drill-down `/operations/staff/[staffId]` (attendance · payroll · availability · docs) | DONE — commit `346b1f7` |
+| Bulk payslip upload `POST /api/operations/staff/payslip` | DONE — commit `c51cbcd`; bug fixed 2026-05-03 (`doc_type 'hr'`→`'hr_doc'`) |
+| `docs.hr_docs.staff_user_id` FK pointing at wrong table | FIXED 2026-05-03 — repointed to `ops.staff_employment(id)` |
+| Payslip metadata backfill (70 × 2 months = 140 rows) | DONE 2026-05-03 — anomalies dropped 210 → 140 |
+| Real signed payslip PDFs in storage | TODO — sysgen placeholders in metadata, real PDFs to be uploaded via UI |
+| `staff_employment.hire_date` for 70 staff | TODO — needs operator data, will not fabricate |
+| `staff_employment.contract_doc_id` for 70 staff | TODO — needs scanned signed contracts |
 
 ## ✅ Phase 0 — Discovery (DONE)
 | Task | Status |

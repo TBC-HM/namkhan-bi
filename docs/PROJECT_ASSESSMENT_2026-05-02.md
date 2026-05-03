@@ -1,9 +1,21 @@
 # Project Assessment — namkhan-bi
 
-**Date:** 2026-05-02 (verified live)
+**Date:** 2026-05-02 (original) · **Patched:** 2026-05-03 (Phase 2 Staff backend)
 **Scope:** GitHub · Vercel · Supabase · Make.com
 **Author:** Claude (Cowork session)
 **Live URL:** https://namkhan-bi.vercel.app/
+
+## Update 2026-05-03 — Phase 2 Staff backend wired
+
+| Item | Status |
+|---|---|
+| `docs.hr_docs.staff_user_id` FK fixed (was → `auth.users`, now → `ops.staff_employment(id)`) | DONE |
+| `app/api/operations/staff/payslip/route.ts` `doc_type` bug fixed (`'hr'` → `'hr_doc'`) | DONE — needs deploy |
+| 140 payslip metadata rows backfilled from `ops.payroll_monthly` | DONE |
+| `ops.v_staff_anomalies` row count | 210 → **140** |
+| `no_payslip_pdf_last_closed_month` flags | 70 → **0** |
+| Migrations now committed to `supabase/migrations/` | `20260503190000_phase2_staff_fix_hr_docs_fk.sql` + `..._190100_phase2_staff_payslip_backfill.sql` |
+| Remaining anomalies | 70 `missing_hire_date` + 70 `missing_contract` — both require real operator data, will NOT be fabricated |
 
 This document supersedes the platform sections of `15_DEPLOYMENT_GUIDE.md`, `17_DEPLOYMENT_GUIDE.md`, `DEPLOY.md`, and `09_VERTEX_ARCHITECTURE.md` where those contradict it. See "Doc staleness" at the end.
 
