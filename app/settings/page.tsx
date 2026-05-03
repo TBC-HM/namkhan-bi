@@ -96,7 +96,21 @@ export default function SettingsPage() {
               </p>
             </div>
           </Card>
-          <div />
+          <Card title="Platform" emphasis="map" sub="Owner-maintained reference · sources · DB · agents · frontend" source="new">
+            <div className="stub" style={{ padding: 32 }}>
+              <h3>Full-stack inventory</h3>
+              <p>
+                Layer-by-layer map of the entire platform — every source system, ingestion
+                Edge Function, schema, agent, frontend page and cross-cutting concern.
+                Each row carries a <strong>[STATUS]</strong> tag (Gap / Next / Partial / Live)
+                that drives the colour. Edit{' '}
+                <code>content/settings/platform-map.md</code> and push to update.
+              </p>
+              <p style={{ marginTop: 10 }}>
+                <a href="/settings/platform-map" style={{ color: 'var(--moss)', fontWeight: 600 }}>Open Platform map →</a>
+              </p>
+            </div>
+          </Card>
         </div>
       </div>
     </>

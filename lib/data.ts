@@ -385,13 +385,32 @@ export async function getRateInventoryCalendar(a: ResolvedPeriod | string, b?: s
 // ============================================================================
 
 export async function getDqIssues() {
+  // Cowork audit 2026-05-03: switched from legacy `dq_known_issues` (4 stale rows)
+  // to canonical `public.v_dq_open` (joins dq.violations + dq.rules, ~29 live rows).
+  // Severity values: CRITICAL | WARNING | INFO. Caller maps to its own UI buckets.
   const { data, error } = await supabase
-    .from('dq_known_issues')
+    .from('v_dq_open')
     .select('*')
-    .neq('status', 'fixed')
-    .order('severity', { ascending: false });
+    .order('detected_at', { ascending: false });
   if (error) throw error;
-  return data ?? [];
+  // Shim so existing callers (which read .severity, .category, .title, .description) keep working
+  return (data ?? []).map((r: any) => ({
+    id: r.violation_id,
+    severity: (() => {
+      const s = String(r.severity || '').toLowerCase();
+      if (s === 'critical') return 'high';
+      if (s === 'warning') return 'medium';
+      if (s === 'info') return 'low';
+      return s;
+    })(),
+    category: r.rule_category,
+    title: r.rule_title || r.rule_id,
+    description: r.rule_description,
+    entity_type: r.entity_type,
+    entity_id: r.entity_id,
+    detected_at: r.detected_at,
+    details: r.details,
+  }));
 }
 
 // ============================================================================

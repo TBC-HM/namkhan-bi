@@ -38,38 +38,6 @@
   --serif: 'Fraunces', Georgia, serif;
   --sans: 'Inter Tight', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, monospace;
-
-  /* ===== Mockup-vocabulary aliases (cross-page bridge) =====
-   * Pages ported from external mockups use a generic token vocabulary
-   * (--card, --bad, --ok, --body, --num, --tan, --green …). Re-bind
-   * those names to the canonical brand palette here so any new page
-   * that uses them renders correctly without authoring a local bridge.
-   * If any page needs to override, scope it (e.g. .my-page { --card: … }).
-   */
-  --body:        var(--ink-soft);
-  --muted:       var(--ink-mute);
-  --border:      var(--line-soft);
-  --border-hard: var(--line);
-  --card:        var(--paper-warm);
-  --bg-sub:      var(--paper-deep);
-  --num:         var(--mono);
-  --ok:          var(--st-good);
-  --bad:         var(--st-bad);
-  --amber:       var(--st-warn);
-  --gold:        var(--brass);
-  --tan:         var(--brass);
-  --tan-2:       var(--brass-soft);
-  --tan-deep:    var(--brass-soft);
-  --green:       var(--moss-glow);
-  --green-2:     var(--moss);
-  --green-deep:  var(--moss);
-  --warn-bg:     #fdf3d6;
-  --warn-bd:     #e3c97a;
-  --warn-tx:     #6b4f12;
-  --dot-running: var(--st-good);
-  --dot-idle:    var(--ink-faint);
-  --dot-paused:  var(--brass);
-  --dot-err:     var(--oxblood);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1221,10 +1189,34 @@ td.num   { text-align: right; font-family: var(--mono); font-size: 11px; color: 
   .user-name { font-size: 12px; }
 }
 
-/* ===== /finance/pnl page styles (scoped under .pnl-page) — IA mockup 2026-04-30 =====
- * Mockup-vocabulary tokens (--card, --bad, --ok, --body, --num, --tan, --green,
- * --green-2, --tan-2, etc.) used below are now defined globally in :root —
- * see "Mockup-vocabulary aliases" block above. No local re-bind needed. */
+/* ===== /finance/pnl page styles (scoped under .pnl-page) — IA mockup 2026-04-30 ===== */
+/* Local-token mapping: the .pnl-page rules below were authored against a different
+   design system. Re-bind those tokens to the site's brand palette so all child
+   `var(--xxx)` references resolve. Without this block the whole page renders unstyled. */
+.pnl-page {
+  --body: var(--ink-soft);
+  --muted: var(--ink-mute);
+  --border: var(--line-soft);
+  --border-hard: var(--line);
+  --card: var(--paper-warm);
+  --bg-sub: var(--paper-deep);
+  --num: var(--mono);
+  --ok: var(--st-good);
+  --bad: var(--st-bad);
+  --amber: var(--st-warn);
+  --gold: var(--brass);
+  --tan: var(--brass);
+  --green: var(--moss-glow);
+  --green-deep: var(--moss);
+  --tan-deep: var(--brass-soft);
+  --warn-bg: #fdf3d6;
+  --warn-bd: #e3c97a;
+  --warn-tx: #6b4f12;
+  --dot-running: var(--st-good);
+  --dot-idle: var(--ink-faint);
+  --dot-paused: var(--brass);
+  --dot-err: var(--oxblood);
+}
 
 /* Component layout — wrappers, grids, panels */
 .pnl-page { padding: 28px 40px; max-width: 1600px; margin: 0 auto; width: 100%; }
