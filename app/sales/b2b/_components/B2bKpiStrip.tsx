@@ -3,6 +3,7 @@
 // WIRED to real LPA reservations + dmc_contracts.
 
 import { getDmcKpisLive } from '@/lib/dmc';
+import { fmtKpi, fmtTableUsd } from '@/lib/format';
 
 const TONE_CLS: Record<string, string> = {
   flat: '',
@@ -14,13 +15,16 @@ const TONE_CLS: Record<string, string> = {
 export default async function B2bKpiStrip() {
   const k = await getDmcKpisLive();
 
+  const adr = k.totalRns > 0 ? k.totalRevenue / k.totalRns : 0;
+  const avgBookingValue = k.reservationCount > 0 ? k.totalRevenue / k.reservationCount : 0;
+
   const kpis = [
     { scope: 'Active LPAs',         value: String(k.activeContracts),                          sub: `of ${k.contractCount} contracts`,        tone: 'flat' as const },
     { scope: 'Expiring 90d',        value: String(k.expiringIn90),                             sub: 'auto-alerts armed',                       tone: k.expiringIn90 > 0 ? 'warn' as const : 'flat' as const },
     { scope: 'LPA reservations',    value: String(k.reservationCount),                         sub: `${k.totalRns} room nights`,               tone: 'flat' as const },
     { scope: 'Mapped reservations', value: `${k.matchedReservations}/${k.reservationCount}`,    sub: `${k.unmatchedSources} unmapped sources`,  tone: k.unmatchedSources > 0 ? 'warn' as const : 'up' as const },
-    { scope: 'LPA revenue',         value: `$${(k.totalRevenue / 1000).toFixed(1)}k`,        sub: 'all-time on LPA rate plan',               tone: 'up' as const },
-    { scope: 'Avg booking value',   value: k.reservationCount > 0 ? `$${(k.totalRevenue / k.reservationCount).toFixed(0)}` : '—', sub: `${k.totalRns > 0 ? `$${(k.totalRevenue / k.totalRns).toFixed(0)} ADR` : 'no data'}`, tone: 'flat' as const },
+    { scope: 'LPA revenue',         value: fmtKpi(k.totalRevenue, 'usd'),                       sub: 'all-time on LPA rate plan',               tone: 'up' as const },
+    { scope: 'Avg booking value',   value: avgBookingValue > 0 ? fmtTableUsd(avgBookingValue) : '—', sub: k.totalRns > 0 ? `${fmtTableUsd(adr)} ADR` : 'no data', tone: 'flat' as const },
   ];
 
   return (
