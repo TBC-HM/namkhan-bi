@@ -11,6 +11,7 @@ import {
   getDqUnmappedCount, getPendingDecisions, periodsForWindow, currentPeriod, pickSection, pickPeriod,
   getLyTotalRevenue, getLyByDept, getLyByUsaliDept, getDeptByPeriods,
   getBudgetByPeriod, getBudgetVsActual,
+  getLyLinesByPeriod, getForecastLinesByPeriod,
 } from '../_data';
 import { priorPeriod, type PeriodWindow } from '@/lib/supabase-gl';
 import PageHeader from '@/components/layout/PageHeader';
@@ -144,13 +145,15 @@ export default async function PnLPage({ searchParams }: Props) {
   })();
   // 12-month panel needs all of FY2026 actuals + budgets
   const fy2026 = ['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06','2026-07','2026-08','2026-09','2026-10','2026-11','2026-12'];
-  const [lyTotalRev, lyByDept, lyByUsaliDept, deptByPeriods, budgetCur, twelveMonth] = await Promise.all([
+  const [lyTotalRev, lyByDept, lyByUsaliDept, deptByPeriods, budgetCur, twelveMonth, lyLines, forecastLines] = await Promise.all([
     getLyTotalRevenue(cur),
     getLyByDept(cur),
     getLyByUsaliDept(cur),
     getDeptByPeriods(heatmapPeriods),
     getBudgetByPeriod(cur),
     getBudgetVsActual(fy2026),
+    getLyLinesByPeriod(cur),       // Actuals 2025 same-month, keyed `${subcat}||${dept}`
+    getForecastLinesByPeriod(cur), // Conservative 2026 cur-month
   ]);
   const lyRevBySubcat = new Map(lyByDept.map(r => [r.usali_subcategory, r.revenue]));
   const revVsLyPct = (lyTotalRev != null && lyTotalRev !== 0)
@@ -533,8 +536,8 @@ export default async function PnLPage({ searchParams }: Props) {
                   );
                 }
                 return rows.map((r) => {
-                  const ly = lyByUsaliDept[r.name];
-                  const lyRev = ly ? ly.revenue : null;
+                  // LY now sourced from plan.lines · "Actuals 2025" — richer than pnl_snapshot
+                  const lyRev = lyLines[`Revenue||${r.name}`] ?? null;
                   const priorR = deptPriorMap.get(r.name);
                   const priorRev = priorR ? Number(priorR.revenue || 0) : null;
                   const momPct = priorRev && priorRev !== 0 ? ((r.val - priorRev) / Math.abs(priorRev)) * 100 : null;
@@ -545,8 +548,8 @@ export default async function PnLPage({ searchParams }: Props) {
                   <tr key={r.name}>
                     <td>{r.name}</td>
                     <td>{fmtK(r.val)}</td>
-                    <td title={budget != null ? `gl.budgets · Revenue · ${r.name}` : 'no budget row uploaded'}>{budget != null ? fmtK(budget) : <span title="upload at /finance/budget">xx</span>}</td>
-                    <td title={ly ? `LY same-month from gl.pnl_snapshot, dept inferred via gl_entries class` : 'no LY rows'}>{lyRev != null && lyRev > 0 ? fmtK(lyRev) : <span title="no LY rows">xx</span>}</td>
+                    <td title={budget != null ? `Budget 2026 v1 · Revenue · ${r.name}` : 'no budget row'}>{budget != null ? fmtK(budget) : <span>xx</span>}</td>
+                    <td title={lyRev != null ? `Actuals 2025 · Revenue · ${r.name}` : 'no LY row'}>{lyRev != null && lyRev > 0 ? fmtK(lyRev) : <span>xx</span>}</td>
                     <td className={dBgt == null ? '' : (dBgt >= 0 ? 'var-green' : 'var-amber')}>{dBgt != null ? fmtK(dBgt) : <span title="no budget row">xx</span>}</td>
                     <td title={priorRev != null ? `${prior} dept rev: $${(priorRev/1000).toFixed(1)}k` : 'no prior-mo dept row'} className={momPct == null ? '' : (momPct >= 0 ? 'var-green' : 'var-amber')}>{momPct != null ? fmtPctV(momPct) : <span title="no prior-mo data">xx</span>}</td>
                     <td className={flowPct == null ? '' : (flowPct >= 0 ? 'var-green' : 'var-amber')} title="vs Budget %">{flowPct != null ? fmtPctV(flowPct) : <span title="no budget">xx</span>}</td>
@@ -594,8 +597,11 @@ export default async function PnLPage({ searchParams }: Props) {
                   );
                 }
                 return rows.map((r) => {
-                  const ly = lyByUsaliDept[r.name];
-                  const lyExp = ly ? ly.expense : null;
+                  // LY expense sum from Actuals 2025 — same 3 subcats per dept
+                  const lyExp = (lyLines[`Cost of Sales||${r.name}`] ?? 0)
+                    + (lyLines[`Payroll & Related||${r.name}`] ?? 0)
+                    + (lyLines[`Other Operating Expenses||${r.name}`] ?? 0);
+                  const hasLy = lyExp > 0;
                   const priorR = deptPriorMap.get(r.name);
                   const priorExp = priorR ? Number(priorR.cost_of_sales || 0) + Number(priorR.payroll || 0) + Number(priorR.other_op_exp || 0) : null;
                   const momPct = priorExp && priorExp !== 0 ? ((r.val - priorExp) / Math.abs(priorExp)) * 100 : null;
@@ -609,8 +615,8 @@ export default async function PnLPage({ searchParams }: Props) {
                   <tr key={r.name}>
                     <td>{r.name}</td>
                     <td>{fmtK(r.val)}</td>
-                    <td title={hasBudget ? `sum expense subcats for ${r.name}` : 'no expense budget rows'}>{hasBudget ? fmtK(expBudget) : <span title="upload at /finance/budget">xx</span>}</td>
-                    <td title={ly ? `LY expenses from pnl_snapshot, dept inferred` : 'no LY rows'}>{lyExp != null && lyExp > 0 ? fmtK(lyExp) : <span title="no LY rows">xx</span>}</td>
+                    <td title={hasBudget ? `sum expense subcats for ${r.name}` : 'no expense budget rows'}>{hasBudget ? fmtK(expBudget) : <span>xx</span>}</td>
+                    <td title={hasLy ? `Actuals 2025 · expenses · ${r.name}` : 'no LY row'}>{hasLy ? fmtK(lyExp) : <span>xx</span>}</td>
                     <td className={dBgt == null ? '' : (dBgt <= 0 ? 'var-green' : 'var-amber')}>{dBgt != null ? fmtK(dBgt) : <span>xx</span>}</td>
                     <td title={priorExp != null ? `${prior} dept expense: $${(priorExp/1000).toFixed(1)}k` : 'no prior-mo dept row'} className={momPct == null ? '' : (momPct <= 0 ? 'var-green' : 'var-amber')}>{momPct != null ? fmtPctV(momPct) : <span title="no prior-mo data">xx</span>}</td>
                     <td className={flowPct == null ? '' : (flowPct <= 0 ? 'var-green' : 'var-amber')} title="vs Budget %">{flowPct != null ? fmtPctV(flowPct) : <span>xx</span>}</td>
@@ -629,18 +635,22 @@ export default async function PnLPage({ searchParams }: Props) {
                   const cls = (betterDown ? pct <= 0 : pct >= 0) ? 'var-green' : 'var-amber';
                   return <td title={`prior ${prior}: $${(prior_/1000).toFixed(1)}k`} className={cls}>{fmtPctV(pct)}</td>;
                 }
-                // Undistributed budget lookups (subcat||'' since dept is empty)
+                // Undistributed budget + LY lookups (subcat||'' since dept is empty)
                 function bg(subcat: string): number | null {
                   const v = budgetCur[`${subcat}||`];
                   return v != null && v !== 0 ? v : null;
                 }
+                function ly(subcat: string): number | null {
+                  const v = lyLines[`${subcat}||`];
+                  return v != null && v !== 0 ? v : null;
+                }
                 function BudgetCells({ actual, subcat, betterDown = false }: { actual: number | null; subcat: string; betterDown?: boolean }) {
                   const b = bg(subcat);
+                  const lyAmt = ly(subcat);
                   const dBgt = (actual != null && b != null) ? actual - b : null;
-                  const flowPct = (actual != null && b != null && b !== 0) ? ((actual - b) / Math.abs(b)) * 100 : null;
                   return (<>
-                    <td title={b != null ? `gl.budgets · ${subcat}` : 'no budget row'}>{b != null ? fmtK(b) : <span>xx</span>}</td>
-                    <td title="LY undistributed breakdown not in pnl_snapshot">xx</td>
+                    <td title={b != null ? `Budget 2026 v1 · ${subcat}` : 'no budget row'}>{b != null ? fmtK(b) : <span>xx</span>}</td>
+                    <td title={lyAmt != null ? `Actuals 2025 · ${subcat}` : 'no LY row'}>{lyAmt != null ? fmtK(lyAmt) : <span>xx</span>}</td>
                     <td className={dBgt == null ? '' : ((betterDown ? dBgt <= 0 : dBgt >= 0) ? 'var-green' : 'var-amber')}>{dBgt != null ? fmtK(dBgt) : <span>xx</span>}</td>
                   </>);
                 }
@@ -652,16 +662,60 @@ export default async function PnLPage({ searchParams }: Props) {
                 const priorMgmt = priorH ? Number(priorH.mgmt_fees ?? 0) : null;
                 const priorGop = priorH ? Number(priorH.gop ?? 0) : null;
                 const priorEbitda = priorH != null ? Number(priorH.gop ?? 0) - Number(priorH.depreciation ?? 0) - Number(priorH.interest ?? 0) - Number(priorH.income_tax ?? 0) : null;
+
+                // Composite Budget + LY for GOP / Dept Profit / EBITDA
+                // Sum across all keys in budgetCur / lyLines
+                function sumKeys(src: Record<string, number>, predicate: (subcat: string) => boolean): number {
+                  let s = 0;
+                  for (const [k, v] of Object.entries(src)) {
+                    const subcat = k.split('||')[0];
+                    if (predicate(subcat)) s += Number(v || 0);
+                  }
+                  return s;
+                }
+                const REV_SC = (sc: string) => sc === 'Revenue';
+                const DEPT_EXP_SC = (sc: string) => ['Cost of Sales','Payroll & Related','Other Operating Expenses'].includes(sc);
+                const UNDIST_SC = (sc: string) => ['A&G','Sales & Marketing','POM','Utilities','Mgmt Fees'].includes(sc);
+                const BELOW_GOP_SC = (sc: string) => ['Depreciation','Interest','Income Tax','FX Gain/Loss','Non-Operating'].includes(sc);
+
+                const budgetRev    = sumKeys(budgetCur, REV_SC);
+                const budgetDeptExp = sumKeys(budgetCur, DEPT_EXP_SC);
+                const budgetUndist = sumKeys(budgetCur, UNDIST_SC);
+                const budgetBelowGop = sumKeys(budgetCur, BELOW_GOP_SC);
+                const budgetDeptProfit = budgetRev - budgetDeptExp;
+                const budgetGop = budgetDeptProfit - budgetUndist;
+                const budgetEbitda = budgetGop - budgetBelowGop; // simple proxy
+
+                const lyRev_    = sumKeys(lyLines, REV_SC);
+                const lyDeptExp_ = sumKeys(lyLines, DEPT_EXP_SC);
+                const lyUndist_ = sumKeys(lyLines, UNDIST_SC);
+                const lyBelowGop_ = sumKeys(lyLines, BELOW_GOP_SC);
+                const lyDeptProfit = lyRev_ - lyDeptExp_;
+                const lyGop = lyDeptProfit - lyUndist_;
+                const lyEbitda = lyGop - lyBelowGop_;
+
+                function VarBgt({ a, b, betterDown = false }: { a: number | null; b: number; betterDown?: boolean }) {
+                  if (a == null || b === 0) return <td><span>xx</span></td>;
+                  const v = a - b;
+                  const cls = (betterDown ? v <= 0 : v >= 0) ? 'var-green' : 'var-amber';
+                  return <td className={cls}>{fmtK(v)}</td>;
+                }
+                function FlowPct({ a, b, betterDown = false }: { a: number | null; b: number; betterDown?: boolean }) {
+                  if (a == null || b === 0) return <td><span>xx</span></td>;
+                  const v = ((a - b) / Math.abs(b)) * 100;
+                  const cls = (betterDown ? v <= 0 : v >= 0) ? 'var-green' : 'var-amber';
+                  return <td className={cls}>{fmtPctV(v)}</td>;
+                }
                 return (
                   <>
                     <tr className="gop">
                       <td>Departmental Profit</td>
                       <td>{fmtK(houseCur?.total_dept_profit ?? null)}</td>
-                      <td title="GOP-level budget — needs aggregate computation">xx</td>
-                      <td title="needs LY GOP">xx</td>
-                      <td title="GOP-level budget — needs aggregate">xx</td>
+                      <td title="Budget rev minus dept expenses">{budgetDeptProfit !== 0 ? fmtK(budgetDeptProfit) : <span>xx</span>}</td>
+                      <td title="LY rev minus dept expenses · Actuals 2025">{lyDeptProfit !== 0 ? fmtK(lyDeptProfit) : <span>xx</span>}</td>
+                      <VarBgt a={houseCur?.total_dept_profit ?? null} b={budgetDeptProfit} />
                       <MomCell cur_={houseCur?.total_dept_profit ?? null} prior_={priorDeptProfit} />
-                      <td title="needs budget aggregate">xx</td>
+                      <FlowPct a={houseCur?.total_dept_profit ?? null} b={budgetDeptProfit} />
                     </tr>
 
                     <tr className="section"><td colSpan={7}>Undistributed Operating Expenses (live from <code>gl.v_usali_house_summary</code>)</td></tr>
@@ -704,21 +758,21 @@ export default async function PnLPage({ searchParams }: Props) {
                     <tr className="gop">
                       <td>GOP after Undistributed</td>
                       <td>{fmtK(houseCur?.gop ?? null)}</td>
-                      <td title="GOP composite — needs aggregate budget">xx</td>
-                      <td title="LY GOP composite">xx</td>
-                      <td title="GOP composite">xx</td>
+                      <td title="Dept profit budget minus undistributed budget">{budgetGop !== 0 ? fmtK(budgetGop) : <span>xx</span>}</td>
+                      <td title="LY · Actuals 2025 GOP composite">{lyGop !== 0 ? fmtK(lyGop) : <span>xx</span>}</td>
+                      <VarBgt a={houseCur?.gop ?? null} b={budgetGop} />
                       <MomCell cur_={houseCur?.gop ?? null} prior_={priorGop} />
-                      <td title="needs aggregate budget">xx</td>
+                      <FlowPct a={houseCur?.gop ?? null} b={budgetGop} />
                     </tr>
 
                     <tr className="ebitda">
                       <td>EBITDA</td>
                       <td>{fmtK(ebitda)}</td>
-                      <td title="EBITDA composite — needs aggregate budget">xx</td>
-                      <td title="LY EBITDA composite">xx</td>
-                      <td title="EBITDA composite">xx</td>
+                      <td title="GOP budget minus depreciation/interest/tax/FX/non-op budget">{budgetEbitda !== 0 ? fmtK(budgetEbitda) : <span>xx</span>}</td>
+                      <td title="LY · Actuals 2025 EBITDA composite">{lyEbitda !== 0 ? fmtK(lyEbitda) : <span>xx</span>}</td>
+                      <VarBgt a={ebitda} b={budgetEbitda} />
                       <MomCell cur_={ebitda} prior_={priorEbitda} />
-                      <td title="needs aggregate budget">xx</td>
+                      <FlowPct a={ebitda} b={budgetEbitda} />
                     </tr>
                   </>
                 );

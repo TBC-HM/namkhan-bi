@@ -226,6 +226,48 @@ export async function getLyTotalRevenue(period: string): Promise<number | null> 
 }
 
 /**
+ * Read LY (Actuals 2025) lines for the same calendar month and return a
+ * Record keyed `${subcat}||${dept}` (where dept='' replaces 'Undistributed'
+ * to match the page convention). Sourced from gl.v_ly_lines (plan.lines
+ * scenario "Actuals 2025").
+ */
+export async function getLyLinesByPeriod(period: string): Promise<Record<string, number>> {
+  const [yStr, mStr] = period.split('-');
+  const y = Number(yStr) - 1;
+  const m = Number(mStr);
+  if (!Number.isFinite(y) || !Number.isFinite(m)) return {};
+  const lyPeriod = `${y}-${String(m).padStart(2, '0')}`;
+  const { data, error } = await supabaseGl
+    .from('v_ly_lines')
+    .select('usali_subcategory, usali_department, amount_usd')
+    .eq('period_yyyymm', lyPeriod);
+  if (error || !data) return {};
+  const out: Record<string, number> = {};
+  for (const r of data as { usali_subcategory: string; usali_department: string; amount_usd: number }[]) {
+    const dept = r.usali_department === 'Undistributed' ? '' : r.usali_department;
+    const k = `${r.usali_subcategory}||${dept}`;
+    out[k] = (out[k] ?? 0) + Number(r.amount_usd || 0);
+  }
+  return out;
+}
+
+/** Forecast (Conservative 2026) lines, same key shape. */
+export async function getForecastLinesByPeriod(period: string): Promise<Record<string, number>> {
+  const { data, error } = await supabaseGl
+    .from('v_forecast_lines')
+    .select('usali_subcategory, usali_department, amount_usd')
+    .eq('period_yyyymm', period);
+  if (error || !data) return {};
+  const out: Record<string, number> = {};
+  for (const r of data as { usali_subcategory: string; usali_department: string; amount_usd: number }[]) {
+    const dept = r.usali_department === 'Undistributed' ? '' : r.usali_department;
+    const k = `${r.usali_subcategory}||${dept}`;
+    out[k] = (out[k] ?? 0) + Number(r.amount_usd || 0);
+  }
+  return out;
+}
+
+/**
  * LY by USALI department. We infer department from gl_entries class assignment
  * (account_id → most-frequent class_id → classes.usali_department). Accounts not
  * present in gl_entries get null department.
