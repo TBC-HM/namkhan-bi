@@ -406,6 +406,59 @@ If memory is wiped AND nothing above is reachable, the repo itself has a `CLAUDE
 
 Append-only. Newest at top. Date heading + bullet changes.
 
+### 2026-05-03 (sales-proposal-builder feature shipped) — design-conformant rebuild
+
+Backend (no UI):
+- New schema `sales` (17 tables · 41 RLS policies · 2 RPCs) applied to namkhan-pms
+- 7 categories + 7 LP partners + 30 activities seeded
+- 5 sample inquiries seeded (James Kim, Hanoi Architects Co, Sophie Martin, Liu Wei, Hartmann GmbH)
+- `pgrst.db_schemas` correctly merged: appended only `sales` (per memory rule, never overwrite)
+- 6 migration files at `supabase/migrations/2026050309000{1..6}_*.sql` + rollback
+- Schema fixes vs original spec: FKs targeted real PKs (`marketing.media_assets(asset_id)`, `governance.dmc_contracts(contract_id)`)
+
+New code (design-conformant):
+- `lib/sales.ts` — server-only data layer (Inquiry / Proposal / ProposalBlock / Activity / RoomAvail types + 12 query functions, all via `getSupabaseAdmin()` service-role)
+- `lib/composerRunner.ts` — Auto-Offer Composer with stub fallback when ANTHROPIC_API_KEY absent (€0.20 cost cap, logs to `sales.agent_runs`)
+- `lib/ics.ts` — RFC-5545 calendar file builder (no external dep)
+- `lib/makeWebhooks.ts` — graceful-degrade Make.com webhook firer (logs to console if env var missing, never crashes the request)
+- 10 API routes: `/api/sales/proposals/{rooms,activities}`, `/api/sales/proposals/[id]/{blocks,email,email/regenerate,send}`, `/api/p/[token]/{blocks,view,sign}`
+- 3 pages: `/sales/inquiries/[id]` (detail + Open in Composer CTA), `/sales/proposals/[id]/edit` (composer), `/p/[token]` (public guest-facing proposal)
+- 5 React components in `components/proposal/`: `ComposerEditor`, `RoomPickerDrawer`, `ActivityCatalogDrawer`, `EmailEditor`, `PublicProposalClient`
+
+Design-system conformance:
+- ALL new UI uses `<PageHeader>`, `<DataTable>`, `<StatusPill>`, `.panel`, `.t-eyebrow`, `.btn`, `.card-grid-3` — no new tile/table markup invented
+- ALL formatting via `fmtTableUsd`, `fmtIsoDate`, `EMPTY`, `FX_LAK_PER_USD` from `lib/format.ts`
+- ZERO hardcoded `fontSize:` numeric literals in proposal code (verified via grep)
+- ZERO hardcoded brand-color hex outside `:root` (verified via grep)
+- ZERO `'USD '` prefix in JSX (verified via grep)
+- ZERO `fontFamily:` legacy literals (verified via grep)
+- All 5 client components carry `'use client';` directive (verified via head-of-file grep)
+
+CSS additions to `styles/globals.css` (~150 lines):
+- `.proposal-drawer` / `.proposal-drawer-mask` / `.proposal-drawer-{head,body,warn,tabs,chips,controls,title}` — drawer surface
+- `.proposal-input` — themed text/select input
+- `.chip` / `.chip.on` — category filter chip
+- `.composer-grid` / `.composer-block-row` / `.composer-block-{label,meta}` / `.composer-num-input` / `.composer-total-{row,label,value}` — composer screen
+- `.email-editor-{label,input,textarea}` — email editor
+- `.public-prop-{bg,hero,hero-eyebrow,hero-title,hero-sub,main,block,block-title,block-note,qty-btn,removed,sign-form,cta,done,done-h1}` — guest-facing public page
+- All values flow through brand tokens (no hex literals introduced)
+- `body:has(.public-prop-bg) .rail { display: none }` — bare layout for `/p/[token]` (bypasses portal nav)
+
+Mods to existing files:
+- `components/nav/subnavConfig.ts` — Packages flipped from `coming: true` to `isNew: true`
+- `app/sales/inquiries/page.tsx` — wired to live `sales.inquiries` data via `listInquiries()`, falls back to mock decisions if empty
+- `next.config.js` — added `headers()` block with `X-Robots-Tag: noindex` + `Cache-Control: private, no-store` for `/p/:token`
+- `lib/agents/sales/autoOfferComposer.ts` — agent status flipped `idle` → `run`
+
+Make blueprints (handoff folder):
+- `to-vercel-production/sales-proposal-builder/` populated with 5 JSON blueprints (proposal-sent, viewed, guest-edited, signed, expired) + README + env-vars-to-add.md
+- PBS imports manually in Make.com; webhook URLs go to `MAKE_WEBHOOK_PROPOSAL_*` env vars
+
+Race-survival:
+- `git add -f` after each batch of edits (per memory `feedback_namkhan_bi_multi_session_race.md`) — first attempt yesterday lost 25 files to a parallel session
+
+Verification gates run live: 0 hardcoded fontSize, 0 fontFamily, 0 hex outside :root, 0 USD prefix, all 5 client components carry 'use client', `npx tsc --noEmit` exit 0.
+
 ### 2026-05-03 (later) — risk mitigation: 4-layer survival of memory wipes
 - Added `CLAUDE.md` at repo root — auto-loaded by Claude Code / Cursor / future Claude sessions; embeds the locked rules + ritual so memory-wipe is survivable
 - Added README.md design-system call-out at the top — visible to any human or tool browsing the repo

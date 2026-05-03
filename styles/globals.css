@@ -2301,3 +2301,303 @@ td.num   { text-align: right; font-family: var(--mono); font-size: 11px; color: 
   .settings-sidebar { position: static; border-right: 0; padding-right: 0; }
   .settings-row-grid { grid-template-columns: 1fr; }
 }
+
+/* ============================================================
+   PROPOSAL BUILDER — drawers + composer + public proposal page
+   Added 2026-05-04 with sales-proposal-builder feature.
+   All values flow through brand tokens (no hardcoded hex/sizes).
+   ============================================================ */
+
+.proposal-drawer-mask {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(28, 24, 21, 0.45);
+  display: flex; justify-content: flex-end;
+}
+.proposal-drawer {
+  width: min(680px, 100%); height: 100%;
+  background: var(--paper-warm);
+  overflow-y: auto;
+  box-shadow: -4px 0 24px rgba(28, 24, 21, 0.12);
+  display: flex; flex-direction: column;
+}
+.proposal-drawer.wide { width: min(900px, 100%); }
+.proposal-drawer-head {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 22px 24px 12px; gap: 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.proposal-drawer-title {
+  margin: 4px 0 0;
+  font-family: var(--serif); font-weight: 500;
+  font-size: var(--t-xl);
+  letter-spacing: var(--ls-tight);
+}
+.proposal-drawer-warn {
+  margin: 12px 24px 0;
+  padding: 10px 14px;
+  background: var(--st-warn-bg);
+  border: 1px solid var(--st-warn-bd);
+  color: var(--brass);
+  font-size: var(--t-sm);
+  border-radius: 4px;
+}
+.proposal-drawer-body {
+  padding: 16px 24px 32px;
+  flex: 1;
+}
+.proposal-drawer-tabs {
+  display: flex; gap: 6px; margin-bottom: 12px;
+}
+.proposal-drawer-chips {
+  display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 12px;
+}
+.proposal-drawer-controls {
+  display: flex; gap: 8px; margin-bottom: 16px;
+}
+.proposal-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: var(--t-sm);
+}
+.proposal-input:focus {
+  outline: none;
+  border-color: var(--brass-soft);
+}
+.chip {
+  padding: 4px 12px;
+  background: var(--paper);
+  color: var(--ink-soft);
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  letter-spacing: var(--ls-loose);
+  text-transform: uppercase;
+}
+.chip:hover { border-color: var(--brass-soft); }
+.chip.on {
+  background: var(--moss);
+  color: var(--paper);
+  border-color: var(--moss);
+}
+
+/* Composer two-column layout */
+.composer-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-top: 14px;
+}
+@media (max-width: 1100px) {
+  .composer-grid { grid-template-columns: 1fr; }
+}
+.composer-block-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.composer-block-row:last-child { border-bottom: none; }
+.composer-block-label {
+  flex: 1;
+  font-size: var(--t-sm);
+  color: var(--ink);
+}
+.composer-block-meta {
+  font-size: var(--t-xs);
+  color: var(--ink-mute);
+  font-family: var(--mono);
+  letter-spacing: var(--ls-loose);
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+.composer-num-input {
+  width: 56px;
+  padding: 4px 6px;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: var(--t-sm);
+  text-align: right;
+}
+.composer-total-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-top: 16px; padding-top: 14px;
+  border-top: 2px solid var(--moss);
+}
+.composer-total-label {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  letter-spacing: var(--ls-extra);
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.composer-total-value {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: var(--t-2xl);
+  color: var(--brass);
+  font-variation-settings: "opsz" 144;
+}
+
+/* Email editor */
+.email-editor-label {
+  display: block;
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  letter-spacing: var(--ls-extra);
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  margin: 14px 0 4px;
+}
+.email-editor-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: var(--t-md);
+}
+.email-editor-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: var(--t-md);
+  line-height: 1.55;
+  resize: vertical;
+}
+
+/* Public proposal page (/p/[token]) */
+.public-prop-bg {
+  background: var(--paper);
+  min-height: 100vh;
+}
+.public-prop-hero {
+  background: linear-gradient(135deg, var(--moss) 0%, var(--ink) 100%);
+  color: var(--paper);
+  padding: 64px 24px 80px;
+  text-align: center;
+}
+.public-prop-hero-eyebrow {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  letter-spacing: var(--ls-extra);
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.public-prop-hero-title {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 400;
+  font-size: var(--t-3xl);
+  margin: 12px 0 4px;
+  font-variation-settings: "opsz" 144;
+}
+.public-prop-hero-sub {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: var(--t-md);
+  color: var(--paper-deep);
+}
+.public-prop-main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 20px 80px;
+}
+.public-prop-block {
+  background: var(--paper-warm);
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  padding: 16px 18px;
+  margin-bottom: 10px;
+  display: flex; align-items: center; gap: 12px;
+}
+.public-prop-block-title {
+  font-family: var(--serif);
+  font-size: var(--t-lg);
+  color: var(--ink);
+}
+.public-prop-block-note {
+  font-size: var(--t-sm);
+  color: var(--ink-soft);
+  margin-top: 2px;
+}
+.public-prop-qty-btn {
+  width: 30px; height: 30px;
+  border: 1px solid var(--moss);
+  background: var(--paper);
+  color: var(--moss);
+  border-radius: 4px;
+  font-size: var(--t-md);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono);
+}
+.public-prop-qty-btn:hover { background: var(--paper-warm); }
+.public-prop-removed {
+  background: var(--paper);
+  border: 1px dashed var(--ink-faint);
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  display: flex; align-items: center; gap: 10px;
+  opacity: 0.7;
+}
+.public-prop-sign-form {
+  margin-top: 24px;
+  padding: 20px;
+  background: var(--paper-warm);
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+}
+.public-prop-cta {
+  width: 100%;
+  margin-top: 24px;
+  padding: 14px;
+  background: var(--moss);
+  color: var(--paper);
+  border: none;
+  border-radius: 6px;
+  font-family: var(--sans);
+  font-size: var(--t-lg);
+  cursor: pointer;
+}
+.public-prop-cta:hover { background: var(--ink); }
+.public-prop-cta:disabled { opacity: 0.5; cursor: not-allowed; }
+.public-prop-done {
+  max-width: 520px;
+  margin: 80px auto;
+  padding: 24px;
+  text-align: center;
+}
+.public-prop-done-h1 {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: var(--t-3xl);
+  color: var(--brass);
+  font-variation-settings: "opsz" 144;
+}
+
+/* /p/[token] bypasses portal nav — bare layout */
+body:has(.public-prop-bg) .shell {
+  grid-template-columns: 1fr !important;
+}
+body:has(.public-prop-bg) .rail {
+  display: none !important;
+}
+body:has(.public-prop-bg) .main {
+  width: 100% !important;
+}

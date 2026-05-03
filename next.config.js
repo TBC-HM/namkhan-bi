@@ -6,6 +6,17 @@ const nextConfig = {
   },
   // Marketing restored as 3rd pillar (2026-04-30) — its own routes live again.
   // Today/Departments/Actions still fold into Operations.
+  async headers() {
+    return [
+      {
+        source: '/p/:token',
+        headers: [
+          { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
+          { key: 'Cache-Control', value: 'private, no-store' },
+        ],
+      },
+    ];
+  },
   async redirects() {
     return [
       { source: '/today',                       destination: '/operations/today',        permanent: false },

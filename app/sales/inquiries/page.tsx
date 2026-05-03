@@ -22,6 +22,7 @@ import SourceMix from './_components/SourceMix';
 import LostReasonTape from './_components/LostReasonTape';
 
 import { getKpiDaily, aggregateDaily } from '@/lib/data';
+import { listInquiries } from '@/lib/sales';
 import { fmtMoney } from '@/lib/format';
 
 import { inquiryTriager } from '@/lib/agents/sales/inquiryTriager';
@@ -42,7 +43,23 @@ export default async function InquiriesPage() {
   // Exception: total hotel revenue MTD is wired via existing kpi.* helpers
   // (every booking flows through the inquiry/quote funnel by definition,
   // so until sales.quotes attribution exists, total revenue MTD = sales MTD).
-  const SCHEMA_LIVE = false;
+  // Live inquiries from sales schema. Falls back to mock if empty.
+  const liveInquiries = await listInquiries(260955, 30).catch(() => []);
+  const SCHEMA_LIVE = liveInquiries.length > 0;
+  const liveDecisions: DecisionRow[] = liveInquiries.map((inq) => {
+    const nights = inq.date_in && inq.date_out
+      ? Math.max(1, Math.round((new Date(inq.date_out).getTime() - new Date(inq.date_in).getTime())/86400000))
+      : 1;
+    const pax = (inq.party_adults ?? 0) + (inq.party_children ?? 0);
+    const dollars = pax > 0 ? nights * pax * 280 : 0;
+    return {
+      id: inq.id.slice(0, 8),
+      impact: dollars > 0 ? '$' + dollars.toLocaleString('en-US') : '$—',
+      urgency: (inq.triage_kind === 'group' || inq.triage_kind === 'retreat' ? 'urg' : 'med') as 'urg' | 'med' | 'neu',
+      title: (inq.guest_name ?? 'Unknown') + ' · ' + inq.source + ' · ' + (inq.party_adults ?? '?') + 'A' + (inq.party_children ? '+' + inq.party_children + 'C' : '') + ' · ' + inq.date_in + ' → ' + inq.date_out,
+      meta: (inq.triage_kind ?? 'fit') + ' ' + (inq.triage_conf ? Number(inq.triage_conf).toFixed(2) : '') + ' · ' + (inq.country ?? '') + ' · status: ' + inq.status,
+    };
+  });
 
   // ── Wired KPI: Sales revenue MTD ────────────────────────────────────
   const today = new Date();
@@ -67,7 +84,7 @@ export default async function InquiriesPage() {
   // Decision queue rows — populated when sales.queue_rank lands.
   // For mockup-mode we ship the 9 ranked rows from the proposal so the block has shape.
   const decisions: DecisionRow[] = SCHEMA_LIVE
-    ? []
+    ? liveDecisions
     : [
         {
           id: 'sq-1',
