@@ -319,17 +319,25 @@ export async function getBudgetVsActual(periods: string[]): Promise<BudgetActual
   return (data ?? []) as BudgetActualRow[];
 }
 
-/** All budget rows for one period — used by USALI grid Budget column. */
+/**
+ * All budget rows for one period — used by USALI grid Budget column.
+ * Reads from gl.v_budget_lines (sourced from plan.lines · Budget 2026 v1)
+ * which uses dept = 'Undistributed' for undistributed lines. We normalise
+ * the key to match the page convention (`||` empty suffix for undistributed)
+ * so existing page code doesn't have to change.
+ */
 export async function getBudgetByPeriod(period: string): Promise<Record<string, number>> {
   const { data, error } = await supabaseGl
-    .from('budgets')
+    .from('v_budget_lines')
     .select('usali_subcategory, usali_department, amount_usd')
     .eq('period_yyyymm', period);
   if (error || !data) return {};
   const out: Record<string, number> = {};
   for (const r of data as { usali_subcategory: string; usali_department: string; amount_usd: number }[]) {
-    // Keyed by subcategory + dept (dept can be '')
-    const k = `${r.usali_subcategory}||${r.usali_department || ''}`;
+    // Page code keys undistributed lines as `${subcat}||` (empty dept) — translate
+    // 'Undistributed' back to '' to match.
+    const dept = r.usali_department === 'Undistributed' ? '' : r.usali_department;
+    const k = `${r.usali_subcategory}||${dept}`;
     out[k] = (out[k] ?? 0) + Number(r.amount_usd || 0);
   }
   return out;

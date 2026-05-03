@@ -44,7 +44,7 @@ function fmtK(n: number | null | undefined): string {
 
 export default async function BudgetPage() {
   const { data: rows, error } = await supabaseGl
-    .from('budgets')
+    .from('v_budget_lines')
     .select('period_yyyymm, usali_subcategory, amount_usd');
 
   if (error) {
@@ -85,9 +85,9 @@ export default async function BudgetPage() {
         <div className="eyebrow">Finance · Budget · 2026</div>
         <h1>USALI annual budget</h1>
         <p className="lead">
-          Upload a CSV with period, USALI subcategory and amount. Updates flow into{' '}
-          <a href="/finance/pnl">/finance/pnl</a> Budget / Δ Bgt / Flow columns + the 12-month bottom panel.
-          Download a pre-filled template, edit in Excel, then upload here.
+          Source: <code>plan.lines</code> · scenario <strong>Budget 2026 v1</strong> · 900 rows imported.
+          Numbers below feed <a href="/finance/pnl">/finance/pnl</a> Budget / Δ Bgt / Flow columns + the 12-month bottom panel.
+          To replace this budget, upload a new CSV (creates a new plan scenario) or edit <code>plan.lines</code> directly.
         </p>
       </header>
 
