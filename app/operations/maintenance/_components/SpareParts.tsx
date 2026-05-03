@@ -21,7 +21,7 @@ export default function SpareParts({ rows }: Props) {
       <h3
         style={{
           fontFamily: 'var(--serif)',
-          fontSize: 16,
+          fontSize: "var(--t-xl)",
           fontWeight: 500,
           margin: '0 0 8px',
         }}
@@ -45,7 +45,7 @@ export default function SpareParts({ rows }: Props) {
                 display: 'grid',
                 gridTemplateColumns: '60px 1fr 50px 50px 60px',
                 gap: 6,
-                fontSize: 11.5,
+                fontSize: "var(--t-sm)",
                 padding: '6px 0',
                 borderBottom: '1px dashed #e6dfc9',
                 alignItems: 'center',
@@ -54,7 +54,7 @@ export default function SpareParts({ rows }: Props) {
               <span
                 style={{
                   fontFamily: 'ui-monospace, Menlo, monospace',
-                  fontSize: 10,
+                  fontSize: "var(--t-xs)",
                   color: '#8a8170',
                 }}
               >
@@ -75,7 +75,7 @@ export default function SpareParts({ rows }: Props) {
                 style={{
                   fontFamily: 'ui-monospace, Menlo, monospace',
                   textAlign: 'right',
-                  fontSize: 10,
+                  fontSize: "var(--t-xs)",
                   color: '#8a8170',
                 }}
               >
@@ -85,7 +85,7 @@ export default function SpareParts({ rows }: Props) {
                 style={{
                   fontFamily: 'ui-monospace, Menlo, monospace',
                   textAlign: 'right',
-                  fontSize: 10,
+                  fontSize: "var(--t-xs)",
                   color: '#8a8170',
                 }}
               >

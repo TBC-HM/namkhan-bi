@@ -19,7 +19,7 @@ export function AgentLink({ id, label, children, asButton, style }: {
   }
   if (asButton) {
     return (
-      <button className="btn" style={{ fontSize: 10, ...style }} onClick={open}>
+      <button className="btn" style={{ fontSize: "var(--t-xs)", ...style }} onClick={open}>
         {children}
       </button>
     );

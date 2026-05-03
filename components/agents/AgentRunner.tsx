@@ -212,7 +212,7 @@ export default function AgentRunner({ agent }: { agent: AgentDefinition }) {
           <div className="agent-form-section-title">Inputs</div>
 
           {agent.inputs.length === 0 && (
-            <div className="muted" style={{ fontSize: 12 }}>This agent takes no parameters.</div>
+            <div className="muted" style={{ fontSize: "var(--t-base)" }}>This agent takes no parameters.</div>
           )}
 
           {agent.inputs.map(inp => (

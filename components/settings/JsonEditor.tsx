@@ -26,7 +26,7 @@ export default function JsonEditor({ value, onChange }: Props) {
         className="settings-input"
         style={{
           fontFamily: 'ui-monospace, Menlo, monospace',
-          fontSize: 12,
+          fontSize: "var(--t-base)",
           minHeight: 160,
           width: '100%',
           borderColor: err ? 'var(--bad, #c93b3b)' : undefined,
@@ -49,7 +49,7 @@ export default function JsonEditor({ value, onChange }: Props) {
         }}
       />
       {err && (
-        <div className="text-mono" style={{ fontSize: 10, color: 'var(--bad, #c93b3b)', marginTop: 2 }}>
+        <div className="text-mono" style={{ fontSize: "var(--t-xs)", color: 'var(--bad, #c93b3b)', marginTop: 2 }}>
           JSON: {err}
         </div>
       )}

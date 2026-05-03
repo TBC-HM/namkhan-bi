@@ -50,7 +50,7 @@ export default function UploadContractButton() {
           border: 'none',
           padding: '8px 14px',
           borderRadius: 4,
-          fontSize: 12.5,
+          fontSize: "var(--t-base)",
           fontWeight: 600,
           cursor: 'pointer',
           letterSpacing: '0.02em',
@@ -84,18 +84,18 @@ export default function UploadContractButton() {
               overflowY: 'auto',
               padding: 24,
               border: '1px solid #e6dfc9',
-              fontSize: 13,
+              fontSize: "var(--t-md)",
               color: '#4a4538',
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 18 }}>
-              <h2 style={{ margin: 0, fontFamily: 'var(--serif)', fontWeight: 500, fontSize: 22 }}>
+              <h2 style={{ margin: 0, fontFamily: 'var(--serif)', fontWeight: 500, fontSize: "var(--t-2xl)" }}>
                 New <em style={{ color: '#a17a4f' }}>contract</em>
               </h2>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                style={{ background: 'transparent', border: 'none', fontSize: 22, color: '#8a8170', cursor: 'pointer' }}
+                style={{ background: 'transparent', border: 'none', fontSize: "var(--t-2xl)", color: '#8a8170', cursor: 'pointer' }}
               >×</button>
             </div>
 
@@ -183,18 +183,18 @@ export default function UploadContractButton() {
 
             <div style={{ marginTop: 16, padding: 14, background: '#f9f5e8', border: '1px solid #e6dfc9', borderRadius: 4 }}>
               <Field label="Contract PDF (optional · max 25 MB)">
-                <input name="pdf" type="file" accept="application/pdf" style={{ fontSize: 12 }} />
+                <input name="pdf" type="file" accept="application/pdf" style={{ fontSize: "var(--t-base)" }} />
               </Field>
-              <div style={{ fontSize: 10.5, color: '#8a8170', marginTop: 6 }}>
+              <div style={{ fontSize: "var(--t-xs)", color: '#8a8170', marginTop: 6 }}>
                 Stored in <code>documents-confidential/dmc/&lt;contract_id&gt;/</code>. Owner-only access.
               </div>
             </div>
 
             {error && (
-              <div style={{ marginTop: 14, padding: '10px 14px', background: '#f7d9d9', border: '1px solid #e2a8a8', color: '#7a1f1f', borderRadius: 4, fontSize: 12 }}>
+              <div style={{ marginTop: 14, padding: '10px 14px', background: '#f7d9d9', border: '1px solid #e2a8a8', color: '#7a1f1f', borderRadius: 4, fontSize: "var(--t-base)" }}>
                 <strong>Error:</strong> {error}
                 {/SUPABASE_SERVICE_ROLE_KEY/.test(error) && (
-                  <div style={{ marginTop: 6, fontSize: 11 }}>
+                  <div style={{ marginTop: 6, fontSize: "var(--t-sm)" }}>
                     Add this env var in Vercel → namkhan-bi → Settings → Environment Variables, then redeploy.
                   </div>
                 )}
@@ -205,12 +205,12 @@ export default function UploadContractButton() {
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                style={{ background: 'transparent', border: '1px solid #e6dfc9', padding: '8px 14px', borderRadius: 4, fontSize: 12.5, cursor: 'pointer', color: '#4a4538' }}
+                style={{ background: 'transparent', border: '1px solid #e6dfc9', padding: '8px 14px', borderRadius: 4, fontSize: "var(--t-base)", cursor: 'pointer', color: '#4a4538' }}
               >Cancel</button>
               <button
                 type="submit"
                 disabled={busy}
-                style={{ background: '#1f5f3a', color: 'var(--paper-warm)', border: 'none', padding: '8px 18px', borderRadius: 4, fontSize: 12.5, fontWeight: 600, cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1 }}
+                style={{ background: '#1f5f3a', color: 'var(--paper-warm)', border: 'none', padding: '8px 18px', borderRadius: 4, fontSize: "var(--t-base)", fontWeight: 600, cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1 }}
               >
                 {busy ? 'Saving…' : 'Save contract'}
               </button>
@@ -224,7 +224,7 @@ export default function UploadContractButton() {
 
 const inp: React.CSSProperties = {
   width: '100%',
-  fontSize: 12.5,
+  fontSize: "var(--t-base)",
   padding: '7px 10px',
   border: '1px solid #e6dfc9',
   borderRadius: 4,
@@ -236,7 +236,7 @@ const inp: React.CSSProperties = {
 function Field({ label, children, required }: { label: string; children: React.ReactNode; required?: boolean }) {
   return (
     <div>
-      <div style={{ fontSize: 10, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1.2, color: '#8a8170', marginBottom: 4, fontWeight: 600 }}>
+      <div style={{ fontSize: "var(--t-xs)", fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1.2, color: '#8a8170', marginBottom: 4, fontWeight: 600 }}>
         {label}
       </div>
       {children}

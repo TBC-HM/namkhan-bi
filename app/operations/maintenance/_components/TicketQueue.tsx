@@ -26,7 +26,7 @@ export default function TicketQueue({ rows }: Props) {
       <h3
         style={{
           fontFamily: 'var(--serif)',
-          fontSize: 16,
+          fontSize: "var(--t-xl)",
           fontWeight: 500,
           margin: '0 0 8px',
         }}
@@ -47,7 +47,7 @@ export default function TicketQueue({ rows }: Props) {
               display: 'grid',
               gridTemplateColumns: '90px 1fr 90px 70px',
               gap: 8,
-              fontSize: 10,
+              fontSize: "var(--t-xs)",
               color: '#8a8170',
               textTransform: 'uppercase',
               letterSpacing: '0.06em',
@@ -68,7 +68,7 @@ export default function TicketQueue({ rows }: Props) {
                 display: 'grid',
                 gridTemplateColumns: '90px 1fr 90px 70px',
                 gap: 8,
-                fontSize: 12,
+                fontSize: "var(--t-base)",
                 padding: '7px 0',
                 borderBottom: '1px dashed #e6dfc9',
                 alignItems: 'center',
@@ -77,7 +77,7 @@ export default function TicketQueue({ rows }: Props) {
               <span
                 style={{
                   fontFamily: 'ui-monospace, Menlo, monospace',
-                  fontSize: 11,
+                  fontSize: "var(--t-sm)",
                   color: priorityColor[r.priority],
                   fontWeight: 700,
                   textTransform: 'uppercase',
@@ -91,7 +91,7 @@ export default function TicketQueue({ rows }: Props) {
                   <span
                     style={{
                       marginLeft: 6,
-                      fontSize: 11,
+                      fontSize: "var(--t-sm)",
                       color: '#8a8170',
                       fontFamily: 'ui-monospace, Menlo, monospace',
                     }}
@@ -104,7 +104,7 @@ export default function TicketQueue({ rows }: Props) {
                 style={{
                   fontFamily: 'ui-monospace, Menlo, monospace',
                   textAlign: 'right',
-                  fontSize: 11,
+                  fontSize: "var(--t-sm)",
                   color:
                     r.hours_to_sla_breach !== null && r.hours_to_sla_breach !== undefined
                       ? r.hours_to_sla_breach < 4
@@ -121,7 +121,7 @@ export default function TicketQueue({ rows }: Props) {
               </span>
               <span
                 style={{
-                  fontSize: 10,
+                  fontSize: "var(--t-xs)",
                   color: '#8a8170',
                   textTransform: 'uppercase',
                   letterSpacing: '0.06em',

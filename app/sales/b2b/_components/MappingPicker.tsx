@@ -79,7 +79,7 @@ export default function MappingPicker({
           border: '1px solid #d9d2bc',
           borderRadius: 4,
           padding: '3px 6px',
-          fontSize: 11,
+          fontSize: "var(--t-sm)",
           background: isMapped ? '#f0eadb' : 'var(--paper-warm)',
           color: '#4a4538',
           maxWidth: 160,
@@ -103,7 +103,7 @@ export default function MappingPicker({
             border: '1px solid #e2a8a8',
             borderRadius: 4,
             padding: '3px 8px',
-            fontSize: 11,
+            fontSize: "var(--t-sm)",
             cursor: pending ? 'wait' : 'pointer',
           }}
         >
@@ -120,14 +120,14 @@ export default function MappingPicker({
             border: 'none',
             borderRadius: 4,
             padding: '3px 9px',
-            fontSize: 11,
+            fontSize: "var(--t-sm)",
             cursor: pending || !selected ? 'not-allowed' : 'pointer',
           }}
         >
           {pending ? '…' : 'Confirm'}
         </button>
       )}
-      {err && <span style={{ color: '#a83232', fontSize: 10.5, marginLeft: 4 }}>{err}</span>}
+      {err && <span style={{ color: '#a83232', fontSize: "var(--t-xs)", marginLeft: 4 }}>{err}</span>}
     </div>
   );
 }

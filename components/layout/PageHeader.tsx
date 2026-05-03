@@ -5,13 +5,13 @@
 // brass accent, and a lede subtitle.
 //
 // Replaces inline duplication of:
-//   <div style={{ fontSize:11, color:'var(--ink-mute)', textTransform:'uppercase', ...}}>
+//   <div style={{ fontSize: "var(--t-sm)", color:'var(--ink-mute)', textTransform:'uppercase', ...}}>
 //     <strong style={{color:'var(--ink-soft)'}}>Pillar</strong> › Tab
 //   </div>
-//   <h1 style={{margin:'4px 0 2px', fontFamily:'Georgia, serif', fontWeight:500, fontSize:30}}>
+//   <h1 style={{margin:'4px 0 2px', fontFamily:'Georgia, serif', fontWeight:500, fontSize: "var(--t-3xl)"}}>
 //     Some title with <em style={{color:'var(--brass)'}}>accent</em> here.
 //   </h1>
-//   <div style={{fontSize:13, color:'var(--ink-soft)'}}>Lede goes here.</div>
+//   <div style={{fontSize: "var(--t-md)", color:'var(--ink-soft)'}}>Lede goes here.</div>
 //
 // Same markup, same tokens, same spacing — every time.
 

@@ -21,7 +21,7 @@ export default function DataNeededOverlay({ gap, table, reason, cta }: Props) {
         border: '1px solid #f3d57a',
         borderRadius: 8,
         color: '#5e4818',
-        fontSize: 12.5,
+        fontSize: "var(--t-base)",
         lineHeight: 1.5,
         margin: '8px 0',
       }}
@@ -29,7 +29,7 @@ export default function DataNeededOverlay({ gap, table, reason, cta }: Props) {
       <div
         style={{
           display: 'inline-block',
-          fontSize: 9.5,
+          fontSize: "var(--t-xs)",
           background: 'var(--paper-warm)',
           border: '1px solid #f3d57a',
           color: '#5e4818',
@@ -44,7 +44,7 @@ export default function DataNeededOverlay({ gap, table, reason, cta }: Props) {
         Data needed · {gap}
       </div>
       {table && (
-        <code style={{ fontSize: 11, color: '#7a5a1a' }}>{table}</code>
+        <code style={{ fontSize: "var(--t-sm)", color: '#7a5a1a' }}>{table}</code>
       )}
       {reason && <div style={{ marginTop: 6 }}>{reason}</div>}
       {cta && <div style={{ marginTop: 8 }}>{cta}</div>}

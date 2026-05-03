@@ -232,7 +232,7 @@ export default async function MarketingPage() {
                     <td className="lbl"><strong>{m.label}</strong></td>
                     <td className="lbl text-mute">{m.category}</td>
                     <td>
-                      <a href={m.url} target="_blank" rel="noopener noreferrer" className="text-mono" style={{ color: 'var(--brass)', fontSize: 11 }}>
+                      <a href={m.url} target="_blank" rel="noopener noreferrer" className="text-mono" style={{ color: 'var(--brass)', fontSize: "var(--t-sm)" }}>
                         Open ↗
                       </a>
                     </td>

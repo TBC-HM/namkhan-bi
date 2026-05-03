@@ -48,7 +48,7 @@ export default function AgentStrip({ agents, pageScope }: Props) {
       >
         <span
           style={{
-            fontSize: 11,
+            fontSize: "var(--t-sm)",
             color: '#8a8170',
             textTransform: 'uppercase',
             letterSpacing: '0.1em',
@@ -84,7 +84,7 @@ export default function AgentStrip({ agents, pageScope }: Props) {
               border: '1px solid #e6dfc9',
               borderRadius: 999,
               background: 'var(--paper-warm)',
-              fontSize: 12,
+              fontSize: "var(--t-base)",
               cursor: 'pointer',
               fontFamily: 'inherit',
             }}
@@ -117,7 +117,7 @@ export default function AgentStrip({ agents, pageScope }: Props) {
             border: 0,
             padding: '6px 14px',
             borderRadius: 6,
-            fontSize: 12,
+            fontSize: "var(--t-base)",
             fontWeight: 600,
             cursor: 'pointer',
             textTransform: 'uppercase',
@@ -156,7 +156,7 @@ export default function AgentStrip({ agents, pageScope }: Props) {
           >
             <div
               style={{
-                fontSize: 11,
+                fontSize: "var(--t-sm)",
                 color: '#8a8170',
                 textTransform: 'uppercase',
                 letterSpacing: '0.08em',
@@ -168,20 +168,20 @@ export default function AgentStrip({ agents, pageScope }: Props) {
               style={{
                 margin: '6px 0 8px',
                 fontFamily: 'var(--serif)',
-                fontSize: 22,
+                fontSize: "var(--t-2xl)",
                 fontWeight: 500,
               }}
             >
               {active.name}
             </h3>
-            <div style={{ fontSize: 13, color: '#4a4538', marginBottom: 12 }}>
+            <div style={{ fontSize: "var(--t-md)", color: '#4a4538', marginBottom: 12 }}>
               Cadence · {active.cadence} · status{' '}
               <span style={{ color: dotColors[active.status], fontWeight: 600 }}>
                 {active.status}
               </span>
             </div>
             {active.description && (
-              <p style={{ fontSize: 13, color: '#4a4538', lineHeight: 1.55 }}>
+              <p style={{ fontSize: "var(--t-md)", color: '#4a4538', lineHeight: 1.55 }}>
                 {active.description}
               </p>
             )}
@@ -189,7 +189,7 @@ export default function AgentStrip({ agents, pageScope }: Props) {
               <div style={{ marginTop: 10 }}>
                 <div
                   style={{
-                    fontSize: 10.5,
+                    fontSize: "var(--t-xs)",
                     color: '#8a8170',
                     textTransform: 'uppercase',
                     letterSpacing: '0.08em',
@@ -198,7 +198,7 @@ export default function AgentStrip({ agents, pageScope }: Props) {
                 >
                   Guardrails
                 </div>
-                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: '#4a4538' }}>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: "var(--t-base)", color: '#4a4538' }}>
                   {active.guardrails.map((g) => (
                     <li key={g}>{g}</li>
                   ))}
@@ -215,7 +215,7 @@ export default function AgentStrip({ agents, pageScope }: Props) {
                   border: 0,
                   padding: '7px 16px',
                   borderRadius: 6,
-                  fontSize: 12,
+                  fontSize: "var(--t-base)",
                   fontWeight: 600,
                   cursor: 'pointer',
                   textTransform: 'uppercase',

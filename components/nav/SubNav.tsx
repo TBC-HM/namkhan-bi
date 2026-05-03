@@ -28,7 +28,7 @@ export default function SubNav({ items }: { items: SubNavTab[] }) {
               className="subnav-btn coming"
               title="Coming soon"
             >
-              <span className="text-mono" style={{ fontSize: 9, color: 'var(--brass)' }}>
+              <span className="text-mono" style={{ fontSize: "var(--t-xs)", color: 'var(--brass)' }}>
                 {String(i + 1).padStart(2, '0')}
               </span>
               {it.label}
@@ -43,14 +43,14 @@ export default function SubNav({ items }: { items: SubNavTab[] }) {
             href={it.href}
             className={`subnav-btn ${active ? 'active' : ''}`}
           >
-            <span className="text-mono" style={{ fontSize: 9, color: 'var(--brass)' }}>
+            <span className="text-mono" style={{ fontSize: "var(--t-xs)", color: 'var(--brass)' }}>
               {String(i + 1).padStart(2, '0')}
             </span>
             {it.label}
             {it.isNew ? (
               <span
                 style={{
-                  fontSize: 9,
+                  fontSize: "var(--t-xs)",
                   background: 'var(--tan, #a17a4f)',
                   color: '#fff8eb',
                   padding: '1px 5px',

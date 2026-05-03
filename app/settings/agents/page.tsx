@@ -89,9 +89,9 @@ export default function SettingsAgentsPage() {
                 opacity: m.locked ? 0.5 : 1,
                 cursor: m.locked ? 'not-allowed' : 'pointer',
               }}>
-                <div style={{ fontSize: 20 }}>{m.icon}</div>
-                <div style={{ fontWeight: 600, color: 'var(--ink)', marginTop: 6, fontSize: 13 }}>{m.title}</div>
-                <div style={{ fontSize: 10, color: m.locked ? 'var(--brass)' : 'var(--ink-mute)', marginTop: 2 }}>{m.sub}</div>
+                <div style={{ fontSize: "var(--t-xl)" }}>{m.icon}</div>
+                <div style={{ fontWeight: 600, color: 'var(--ink)', marginTop: 6, fontSize: "var(--t-md)" }}>{m.title}</div>
+                <div style={{ fontSize: "var(--t-xs)", color: m.locked ? 'var(--brass)' : 'var(--ink-mute)', marginTop: 2 }}>{m.sub}</div>
               </div>
             ))}
           </div>
@@ -100,7 +100,7 @@ export default function SettingsAgentsPage() {
             padding: '10px 14px',
             background: 'rgba(168,133,74,0.1)',
             borderLeft: '3px solid var(--brass)',
-            fontSize: 11,
+            fontSize: "var(--t-sm)",
             color: 'var(--ink-soft)',
             lineHeight: 1.6,
           }}>
@@ -129,7 +129,7 @@ export default function SettingsAgentsPage() {
             padding: '10px 14px',
             background: 'rgba(168,133,74,0.1)',
             borderLeft: '3px solid var(--brass)',
-            fontSize: 11,
+            fontSize: "var(--t-sm)",
             color: 'var(--ink-soft)',
             lineHeight: 1.6,
             marginBottom: 12,
@@ -193,20 +193,20 @@ export default function SettingsAgentsPage() {
                   'var(--ink-mute)';
                 return (
                   <tr key={i}>
-                    <td style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>{r.time}</td>
+                    <td style={{ fontFamily: 'var(--mono)', fontSize: "var(--t-sm)" }}>{r.time}</td>
                     <td className="lbl"><strong>{r.agent}</strong></td>
-                    <td style={{ fontSize: 12 }}>{r.action}</td>
+                    <td style={{ fontSize: "var(--t-base)" }}>{r.action}</td>
                     <td><span className="pill" style={{ background: decBg, color: 'var(--paper-warm)' }}>{r.decided}</span></td>
-                    <td style={{ fontSize: 11, color: 'var(--moss)', cursor: 'pointer' }}>view</td>
+                    <td style={{ fontSize: "var(--t-sm)", color: 'var(--moss)', cursor: 'pointer' }}>view</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
           <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <button className="btn" style={{ fontSize: 11 }}>Export audit log (CSV)</button>
-            <button className="btn" style={{ fontSize: 11 }}>Send weekly governance report → Owner</button>
-            <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--ink-mute)' }}>Showing last 24h · cross-pillar</span>
+            <button className="btn" style={{ fontSize: "var(--t-sm)" }}>Export audit log (CSV)</button>
+            <button className="btn" style={{ fontSize: "var(--t-sm)" }}>Send weekly governance report → Owner</button>
+            <span style={{ marginLeft: 'auto', fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>Showing last 24h · cross-pillar</span>
           </div>
         </Card>
 
@@ -217,13 +217,13 @@ export default function SettingsAgentsPage() {
             <tbody>
               {VERSION_ROWS.map((r, i) => (
                 <tr key={i}>
-                  <td style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--moss)' }}>{r.v}</td>
-                  <td style={{ fontSize: 12 }}>{r.desc}</td>
-                  <td style={{ fontSize: 11, color: 'var(--ink-mute)' }}>{r.who}</td>
+                  <td style={{ fontFamily: 'var(--mono)', fontSize: "var(--t-sm)", color: 'var(--moss)' }}>{r.v}</td>
+                  <td style={{ fontSize: "var(--t-base)" }}>{r.desc}</td>
+                  <td style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>{r.who}</td>
                   <td>
                     {r.tag === 'current'
                       ? <span className="pill" style={{ background: 'var(--moss)', color: 'var(--paper-warm)' }}>current</span>
-                      : <a style={{ fontSize: 11, color: 'var(--moss)', cursor: 'pointer' }}>view diff</a>
+                      : <a style={{ fontSize: "var(--t-sm)", color: 'var(--moss)', cursor: 'pointer' }}>view diff</a>
                     }
                   </td>
                 </tr>
@@ -235,10 +235,10 @@ export default function SettingsAgentsPage() {
         {/* KILL SWITCH */}
         <div className="card mt-22" style={{ background: 'rgba(110,30,30,0.06)', border: '2px solid var(--oxblood)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-            <div style={{ fontSize: 28 }}>🛑</div>
+            <div style={{ fontSize: "var(--t-3xl)" }}>🛑</div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--oxblood)' }}>Master kill switch · disable ALL {totalAgents} agents across ALL pillars</div>
-              <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 3 }}>
+              <div style={{ fontSize: "var(--t-lg)", fontWeight: 600, color: 'var(--oxblood)' }}>Master kill switch · disable ALL {totalAgents} agents across ALL pillars</div>
+              <div style={{ fontSize: "var(--t-sm)", color: 'var(--ink-soft)', marginTop: 3 }}>
                 Existing pending actions are cancelled. Use only in emergencies (data corruption, OTA outage, system-wide audit). Per-pillar kill switches available on each pillar's Agents page.
               </div>
             </div>
@@ -248,7 +248,7 @@ export default function SettingsAgentsPage() {
               border: 'none',
               borderRadius: 4,
               padding: '10px 20px',
-              fontSize: 12,
+              fontSize: "var(--t-base)",
               fontWeight: 600,
               cursor: 'pointer',
             }}>DISABLE ALL AGENTS</button>

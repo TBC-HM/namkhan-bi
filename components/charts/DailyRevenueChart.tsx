@@ -45,7 +45,7 @@ export function DailyRevenueChart({ data }: { data: any[] }) {
           cursor={{ stroke: c.label, strokeWidth: 1, strokeDasharray: '2 2' }}
           contentStyle={{
             background: c.bg, border: `1px solid ${c.border}`,
-            fontSize: 11.5, fontFamily: 'JetBrains Mono, ui-monospace, monospace',
+            fontSize: "var(--t-sm)", fontFamily: 'JetBrains Mono, ui-monospace, monospace',
             color: '#f4ecd8', borderRadius: 4, padding: '8px 12px',
           }}
           labelStyle={{ color: c.label, marginBottom: 4, fontWeight: 600 }}

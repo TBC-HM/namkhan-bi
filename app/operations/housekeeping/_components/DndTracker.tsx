@@ -22,7 +22,7 @@ export default function DndTracker({ rows }: Props) {
       <h3
         style={{
           fontFamily: 'var(--serif)',
-          fontSize: 16,
+          fontSize: "var(--t-xl)",
           fontWeight: 500,
           margin: '0 0 8px',
         }}
@@ -53,14 +53,14 @@ export default function DndTracker({ rows }: Props) {
                 border: `1px solid ${r.flagged_for_welfare ? '#a02d2d' : '#e6dfc9'}`,
                 borderRadius: 6,
                 padding: 10,
-                fontSize: 11.5,
+                fontSize: "var(--t-sm)",
               }}
             >
               <div
                 style={{
                   fontFamily: 'ui-monospace, Menlo, monospace',
                   fontWeight: 700,
-                  fontSize: 13,
+                  fontSize: "var(--t-md)",
                 }}
               >
                 R{r.room_no}
@@ -68,7 +68,7 @@ export default function DndTracker({ rows }: Props) {
               <div
                 style={{
                   fontFamily: 'ui-monospace, Menlo, monospace',
-                  fontSize: 11,
+                  fontSize: "var(--t-sm)",
                   color: '#a02d2d',
                   fontWeight: 600,
                 }}
@@ -77,7 +77,7 @@ export default function DndTracker({ rows }: Props) {
               </div>
               <div
                 style={{
-                  fontSize: 10,
+                  fontSize: "var(--t-xs)",
                   color: '#8a8170',
                   textTransform: 'uppercase',
                   letterSpacing: '0.04em',

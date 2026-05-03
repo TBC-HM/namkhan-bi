@@ -56,19 +56,19 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
       />
 
       <Card title="Brief" emphasis="& schedule" sub="" source="marketing.campaigns">
-        <div style={{ fontSize: 11, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1, color: 'var(--ink-mute)', marginBottom: 6 }}>brief</div>
-        <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 15, color: 'var(--ink)', lineHeight: 1.6 }}>{campaign.brief_text ?? '—'}</div>
-        <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, fontSize: 12 }}>
+        <div style={{ fontSize: "var(--t-sm)", fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1, color: 'var(--ink-mute)', marginBottom: 6 }}>brief</div>
+        <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: "var(--t-lg)", color: 'var(--ink)', lineHeight: 1.6 }}>{campaign.brief_text ?? '—'}</div>
+        <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, fontSize: "var(--t-base)" }}>
           <div>
-            <div style={{ fontSize: 10, fontFamily: 'var(--mono)', textTransform: 'uppercase', color: 'var(--ink-mute)', marginBottom: 4 }}>scheduled</div>
+            <div style={{ fontSize: "var(--t-xs)", fontFamily: 'var(--mono)', textTransform: 'uppercase', color: 'var(--ink-mute)', marginBottom: 4 }}>scheduled</div>
             <div>{campaign.scheduled_at ? new Date(campaign.scheduled_at).toLocaleString('en-GB') : '—'}</div>
           </div>
           <div>
-            <div style={{ fontSize: 10, fontFamily: 'var(--mono)', textTransform: 'uppercase', color: 'var(--ink-mute)', marginBottom: 4 }}>published</div>
+            <div style={{ fontSize: "var(--t-xs)", fontFamily: 'var(--mono)', textTransform: 'uppercase', color: 'var(--ink-mute)', marginBottom: 4 }}>published</div>
             <div>{campaign.published_at ? new Date(campaign.published_at).toLocaleString('en-GB') : '—'}</div>
           </div>
           <div>
-            <div style={{ fontSize: 10, fontFamily: 'var(--mono)', textTransform: 'uppercase', color: 'var(--ink-mute)', marginBottom: 4 }}>vibes</div>
+            <div style={{ fontSize: "var(--t-xs)", fontFamily: 'var(--mono)', textTransform: 'uppercase', color: 'var(--ink-mute)', marginBottom: 4 }}>vibes</div>
             <div>{(campaign.vibe_tags ?? []).join(', ') || '—'}</div>
           </div>
         </div>
@@ -88,12 +88,12 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
                     {thumb
                       // eslint-disable-next-line @next/next/no-img-element
                       ? <img src={thumb} alt={s.alt_text_per_slot ?? a?.alt_text ?? ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      : <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#888', fontFamily: 'var(--mono)', fontSize: 10 }}>—</div>
+                      : <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#888', fontFamily: 'var(--mono)', fontSize: "var(--t-xs)" }}>—</div>
                     }
-                    <div style={{ position: 'absolute', top: 6, left: 6, background: 'rgba(0,0,0,0.7)', color: 'var(--paper-warm)', fontFamily: 'var(--mono)', fontSize: 10, padding: '2px 6px' }}>slot {s.slot_order}</div>
+                    <div style={{ position: 'absolute', top: 6, left: 6, background: 'rgba(0,0,0,0.7)', color: 'var(--paper-warm)', fontFamily: 'var(--mono)', fontSize: "var(--t-xs)", padding: '2px 6px' }}>slot {s.slot_order}</div>
                   </div>
                   <div style={{ padding: '8px 10px' }}>
-                    <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 12, color: 'var(--ink)' }}>{s.caption_per_slot ?? a?.caption ?? '—'}</div>
+                    <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: "var(--t-base)", color: 'var(--ink)' }}>{s.caption_per_slot ?? a?.caption ?? '—'}</div>
                   </div>
                 </div>
               );
@@ -103,21 +103,21 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
       </Card>
 
       <Card title="Caption" emphasis="& hashtags" sub="" source="marketing.campaigns" className="mt-22">
-        <div style={{ fontSize: 11, fontFamily: 'var(--mono)', textTransform: 'uppercase', color: 'var(--ink-mute)', marginBottom: 6 }}>caption</div>
-        <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 14, whiteSpace: 'pre-wrap', lineHeight: 1.6, color: 'var(--ink)' }}>
+        <div style={{ fontSize: "var(--t-sm)", fontFamily: 'var(--mono)', textTransform: 'uppercase', color: 'var(--ink-mute)', marginBottom: 6 }}>caption</div>
+        <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: "var(--t-lg)", whiteSpace: 'pre-wrap', lineHeight: 1.6, color: 'var(--ink)' }}>
           {campaign.caption ?? '—'}
         </div>
-        <div style={{ fontSize: 11, fontFamily: 'var(--mono)', textTransform: 'uppercase', color: 'var(--ink-mute)', marginTop: 14, marginBottom: 6 }}>hashtags ({(campaign.hashtags ?? []).length})</div>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--ink)' }}>
+        <div style={{ fontSize: "var(--t-sm)", fontFamily: 'var(--mono)', textTransform: 'uppercase', color: 'var(--ink-mute)', marginTop: 14, marginBottom: 6 }}>hashtags ({(campaign.hashtags ?? []).length})</div>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: "var(--t-sm)", color: 'var(--ink)' }}>
           {(campaign.hashtags ?? []).map(h => `#${h}`).join('  ')}
         </div>
       </Card>
 
       <div style={{ marginTop: 22, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <Link href="/marketing/campaigns" className="btn" style={{ fontSize: 11, textDecoration: 'none' }}>← all campaigns</Link>
-        <button className="btn" style={{ fontSize: 11 }}>edit</button>
-        <button className="btn" style={{ fontSize: 11 }}>duplicate</button>
-        <button className="btn" style={{ fontSize: 11, marginLeft: 'auto', color: 'var(--oxblood)' }}>archive</button>
+        <Link href="/marketing/campaigns" className="btn" style={{ fontSize: "var(--t-sm)", textDecoration: 'none' }}>← all campaigns</Link>
+        <button className="btn" style={{ fontSize: "var(--t-sm)" }}>edit</button>
+        <button className="btn" style={{ fontSize: "var(--t-sm)" }}>duplicate</button>
+        <button className="btn" style={{ fontSize: "var(--t-sm)", marginLeft: 'auto', color: 'var(--oxblood)' }}>archive</button>
       </div>
     </>
   );

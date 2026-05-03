@@ -43,7 +43,7 @@ export default function RoomBoard({ rooms }: Props) {
       <h3
         style={{
           fontFamily: 'var(--serif)',
-          fontSize: 16,
+          fontSize: "var(--t-xl)",
           fontWeight: 500,
           margin: '0 0 8px',
         }}
@@ -75,7 +75,7 @@ export default function RoomBoard({ rooms }: Props) {
                   style={{
                     padding: 8,
                     borderRadius: 6,
-                    fontSize: 11,
+                    fontSize: "var(--t-sm)",
                     fontFamily: 'ui-monospace, Menlo, monospace',
                     minHeight: 78,
                     background: s.bg,
@@ -89,7 +89,7 @@ export default function RoomBoard({ rooms }: Props) {
                   <div
                     style={{
                       fontWeight: 700,
-                      fontSize: 12,
+                      fontSize: "var(--t-base)",
                       display: 'flex',
                       justifyContent: 'space-between',
                     }}
@@ -103,7 +103,7 @@ export default function RoomBoard({ rooms }: Props) {
                           padding: '1px 5px',
                           borderRadius: 3,
                           fontFamily: 'sans-serif',
-                          fontSize: 9,
+                          fontSize: "var(--t-xs)",
                           letterSpacing: '0.04em',
                         }}
                       >
@@ -118,7 +118,7 @@ export default function RoomBoard({ rooms }: Props) {
                           padding: '1px 5px',
                           borderRadius: 3,
                           fontFamily: 'sans-serif',
-                          fontSize: 9,
+                          fontSize: "var(--t-xs)",
                           letterSpacing: '0.04em',
                         }}
                       >
@@ -130,7 +130,7 @@ export default function RoomBoard({ rooms }: Props) {
                     <div
                       style={{
                         fontFamily: 'sans-serif',
-                        fontSize: 10,
+                        fontSize: "var(--t-xs)",
                         color: '#4a4538',
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
@@ -143,7 +143,7 @@ export default function RoomBoard({ rooms }: Props) {
                   <div
                     style={{
                       fontFamily: 'ui-monospace, Menlo, monospace',
-                      fontSize: 9,
+                      fontSize: "var(--t-xs)",
                       color: '#8a8170',
                     }}
                   >
@@ -153,7 +153,7 @@ export default function RoomBoard({ rooms }: Props) {
                     <div
                       style={{
                         fontFamily: 'sans-serif',
-                        fontSize: 9,
+                        fontSize: "var(--t-xs)",
                         color: '#1f3d2e',
                         fontWeight: 700,
                         textTransform: 'uppercase',
@@ -170,7 +170,7 @@ export default function RoomBoard({ rooms }: Props) {
             style={{
               display: 'flex',
               gap: 12,
-              fontSize: 10,
+              fontSize: "var(--t-xs)",
               color: '#8a8170',
               marginTop: 8,
               flexWrap: 'wrap',

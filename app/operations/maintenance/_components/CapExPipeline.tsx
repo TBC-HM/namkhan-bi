@@ -45,7 +45,7 @@ export default function CapExPipeline({ rows }: Props) {
       <h3
         style={{
           fontFamily: 'var(--serif)',
-          fontSize: 16,
+          fontSize: "var(--t-xl)",
           fontWeight: 500,
           margin: '0 0 8px',
         }}
@@ -67,7 +67,7 @@ export default function CapExPipeline({ rows }: Props) {
               display: 'grid',
               gridTemplateColumns: '1fr 80px 80px 90px',
               gap: 8,
-              fontSize: 12,
+              fontSize: "var(--t-base)",
               padding: '8px 0',
               borderBottom: '1px dashed #e6dfc9',
               alignItems: 'center',
@@ -78,7 +78,7 @@ export default function CapExPipeline({ rows }: Props) {
               <span
                 style={{
                   marginLeft: 6,
-                  fontSize: 10,
+                  fontSize: "var(--t-xs)",
                   color: catColor[r.category],
                   textTransform: 'uppercase',
                   fontWeight: 700,
@@ -101,7 +101,7 @@ export default function CapExPipeline({ rows }: Props) {
               style={{
                 fontFamily: 'ui-monospace, Menlo, monospace',
                 textAlign: 'right',
-                fontSize: 11,
+                fontSize: "var(--t-sm)",
                 color: '#8a8170',
               }}
             >
@@ -112,7 +112,7 @@ export default function CapExPipeline({ rows }: Props) {
               onClick={() => onPromote(r.id, r.title)}
               disabled={promoted.has(r.id) || r.status !== 'draft'}
               style={{
-                fontSize: 11,
+                fontSize: "var(--t-sm)",
                 padding: '5px 10px',
                 borderRadius: 5,
                 background: promoted.has(r.id) ? '#e6dfc9' : '#a17a4f',

@@ -57,7 +57,7 @@ export default function AssetCard({ asset, thumbUrl, selected, onSelectChange, r
           // eslint-disable-next-line @next/next/no-img-element
           <img src={thumbUrl} alt={asset.alt_text ?? ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
-          <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#888', fontFamily: 'var(--mono)', fontSize: 10 }}>
+          <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#888', fontFamily: 'var(--mono)', fontSize: "var(--t-xs)" }}>
             no render yet
           </div>
         )}
@@ -66,7 +66,7 @@ export default function AssetCard({ asset, thumbUrl, selected, onSelectChange, r
           <div style={{
             position: 'absolute', top: 6, left: 6,
             background: tierBg, color: 'var(--paper-warm)',
-            fontFamily: 'var(--mono)', fontSize: 9, fontWeight: 600,
+            fontFamily: 'var(--mono)', fontSize: "var(--t-xs)", fontWeight: 600,
             padding: '2px 6px', textTransform: 'uppercase', letterSpacing: '0.05em',
           }}>
             {TIER_LABEL[tier as keyof typeof TIER_LABEL] ?? tier}
@@ -77,7 +77,7 @@ export default function AssetCard({ asset, thumbUrl, selected, onSelectChange, r
           <div style={{
             position: 'absolute', top: 6, right: 6,
             background: 'rgba(0,0,0,0.6)', color: 'var(--paper-warm)',
-            fontFamily: 'var(--mono)', fontSize: 9,
+            fontFamily: 'var(--mono)', fontSize: "var(--t-xs)",
             padding: '2px 6px',
           }}>
             {asset.license_type}
@@ -88,7 +88,7 @@ export default function AssetCard({ asset, thumbUrl, selected, onSelectChange, r
           <div style={{
             position: 'absolute', bottom: 6, left: 6,
             background: 'var(--brass)', color: 'var(--paper-warm)',
-            fontFamily: 'var(--mono)', fontSize: 10, fontWeight: 700,
+            fontFamily: 'var(--mono)', fontSize: "var(--t-xs)", fontWeight: 700,
             padding: '3px 8px',
           }}>
             {scoreLabel}
@@ -106,18 +106,18 @@ export default function AssetCard({ asset, thumbUrl, selected, onSelectChange, r
               background: selected ? 'var(--moss)' : 'rgba(255,255,255,0.85)',
               color: selected ? 'var(--paper-warm)' : 'var(--ink)',
               cursor: 'pointer',
-              fontSize: 14, fontWeight: 600,
+              fontSize: "var(--t-lg)", fontWeight: 600,
             }}
           >{selected ? '✓' : '+'}</button>
         )}
       </div>
 
       <div style={{ padding: '8px 10px', flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 13, color: 'var(--ink)', lineHeight: 1.3 }}>
+        <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: "var(--t-md)", color: 'var(--ink)', lineHeight: 1.3 }}>
           {asset.caption ?? asset.original_filename}
         </div>
         {reasonText && (
-          <div style={{ marginTop: 4, fontSize: 11, color: 'var(--ink-soft)', fontStyle: 'italic' }}>
+          <div style={{ marginTop: 4, fontSize: "var(--t-sm)", color: 'var(--ink-soft)', fontStyle: 'italic' }}>
             {reasonText}
           </div>
         )}
@@ -125,18 +125,18 @@ export default function AssetCard({ asset, thumbUrl, selected, onSelectChange, r
           <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 3 }}>
             {asset.tags.slice(0, 4).map(t => (
               <span key={t} style={{
-                fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--ink-mute)',
+                fontFamily: 'var(--mono)', fontSize: "var(--t-xs)", color: 'var(--ink-mute)',
                 background: 'var(--line-soft, #efeae0)', padding: '1px 5px',
               }}>{t}</span>
             ))}
             {asset.tags.length > 4 && (
-              <span style={{ fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--ink-mute)' }}>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: "var(--t-xs)", color: 'var(--ink-mute)' }}>
                 +{asset.tags.length - 4}
               </span>
             )}
           </div>
         )}
-        <div style={{ marginTop: 'auto', paddingTop: 6, fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--ink-mute)' }}>
+        <div style={{ marginTop: 'auto', paddingTop: 6, fontFamily: 'var(--mono)', fontSize: "var(--t-xs)", color: 'var(--ink-mute)' }}>
           {asset.captured_at ? new Date(asset.captured_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
           {' · '}
           {asset.width_px ?? '?'}×{asset.height_px ?? '?'}

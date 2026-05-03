@@ -11,7 +11,7 @@ export default function ComingSoon({ tab, proposalLine }: Props) {
     <>
       <div
         style={{
-          fontSize: 11,
+          fontSize: "var(--t-sm)",
           color: '#8a8170',
           textTransform: 'uppercase',
           letterSpacing: '0.08em',
@@ -25,12 +25,12 @@ export default function ComingSoon({ tab, proposalLine }: Props) {
           margin: '4px 0 2px',
           fontFamily: 'var(--serif)',
           fontWeight: 500,
-          fontSize: 30,
+          fontSize: "var(--t-3xl)",
         }}
       >
         {tab} · <em style={{ color: '#a17a4f' }}>coming</em>
       </h1>
-      <div style={{ fontSize: 13, color: '#4a4538' }}>{proposalLine}</div>
+      <div style={{ fontSize: "var(--t-md)", color: '#4a4538' }}>{proposalLine}</div>
 
       <div
         style={{
@@ -40,7 +40,7 @@ export default function ComingSoon({ tab, proposalLine }: Props) {
           border: '1px solid #f3d57a',
           borderRadius: 8,
           color: '#5e4818',
-          fontSize: 12.5,
+          fontSize: "var(--t-base)",
           lineHeight: 1.5,
         }}
       >

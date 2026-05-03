@@ -44,14 +44,14 @@ export default function TacticalAlerts({ alerts }: Props) {
         <h3
           style={{
             fontFamily: 'var(--serif)',
-            fontSize: 18,
+            fontSize: "var(--t-xl)",
             fontWeight: 500,
             margin: 0,
           }}
         >
           Tactical <em style={{ color: '#a17a4f' }}>alerts</em>
         </h3>
-        <span style={{ fontSize: 12, color: '#8a8170' }}>
+        <span style={{ fontSize: "var(--t-base)", color: '#8a8170' }}>
           cross-dim · detector → composer → handoff
         </span>
       </div>
@@ -74,7 +74,7 @@ export default function TacticalAlerts({ alerts }: Props) {
                 style={{
                   margin: '0 0 4px',
                   fontFamily: 'var(--serif)',
-                  fontSize: 15,
+                  fontSize: "var(--t-lg)",
                   fontWeight: 600,
                   display: 'flex',
                   justifyContent: 'space-between',
@@ -85,7 +85,7 @@ export default function TacticalAlerts({ alerts }: Props) {
                 <span
                   style={{
                     fontFamily: 'ui-monospace, Menlo, monospace',
-                    fontSize: 12,
+                    fontSize: "var(--t-base)",
                     color: sc.impColor,
                     fontWeight: 700,
                     whiteSpace: 'nowrap',
@@ -94,10 +94,10 @@ export default function TacticalAlerts({ alerts }: Props) {
                   {a.severityLabel}
                 </span>
               </div>
-              <div style={{ fontSize: 11, color: '#8a8170', marginBottom: 6 }}>
+              <div style={{ fontSize: "var(--t-sm)", color: '#8a8170', marginBottom: 6 }}>
                 {a.dims}
               </div>
-              <div style={{ fontSize: 12.5, color: '#4a4538', marginBottom: 4 }}>
+              <div style={{ fontSize: "var(--t-base)", color: '#4a4538', marginBottom: 4 }}>
                 {a.reason}
               </div>
               <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
@@ -108,7 +108,7 @@ export default function TacticalAlerts({ alerts }: Props) {
                     style={
                       i === 0
                         ? {
-                            fontSize: 11.5,
+                            fontSize: "var(--t-sm)",
                             padding: '6px 11px',
                             borderRadius: 5,
                             background: '#a17a4f',
@@ -120,7 +120,7 @@ export default function TacticalAlerts({ alerts }: Props) {
                             letterSpacing: '0.04em',
                           }
                         : {
-                            fontSize: 11.5,
+                            fontSize: "var(--t-sm)",
                             padding: '6px 11px',
                             borderRadius: 5,
                             background: 'var(--paper-warm)',
@@ -137,7 +137,7 @@ export default function TacticalAlerts({ alerts }: Props) {
                     {h.writesExternal && h.stampLabel && (
                       <span
                         style={{
-                          fontSize: 9.5,
+                          fontSize: "var(--t-xs)",
                           background: '#fef3c7',
                           border: '1px solid #f3d57a',
                           color: '#5e4818',

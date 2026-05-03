@@ -22,7 +22,7 @@ export default function AmenityQueue({ rows }: Props) {
       <h3
         style={{
           fontFamily: 'var(--serif)',
-          fontSize: 16,
+          fontSize: "var(--t-xl)",
           fontWeight: 500,
           margin: '0 0 8px',
         }}
@@ -44,7 +44,7 @@ export default function AmenityQueue({ rows }: Props) {
               display: 'grid',
               gridTemplateColumns: '50px 1fr 60px 80px',
               gap: 6,
-              fontSize: 11.5,
+              fontSize: "var(--t-sm)",
               alignItems: 'center',
               padding: '7px 0',
               borderBottom: '1px dashed #e6dfc9',
@@ -71,7 +71,7 @@ export default function AmenityQueue({ rows }: Props) {
             </span>
             <span
               style={{
-                fontSize: 10,
+                fontSize: "var(--t-xs)",
                 color: '#8a8170',
                 textTransform: 'uppercase',
                 letterSpacing: '0.06em',

@@ -146,12 +146,12 @@ export default async function ReviewsPage() {
                       {statusPill(r.response_status)}
                     </div>
                     {r.title && (
-                      <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 15, fontWeight: 500, color: 'var(--ink)' }}>
+                      <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: "var(--t-lg)", fontWeight: 500, color: 'var(--ink)' }}>
                         {r.title}
                       </div>
                     )}
                     {r.body && <div className="review-body">{r.body}</div>}
-                    <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--ink-mute)', letterSpacing: '0.04em' }}>
+                    <div style={{ fontFamily: 'var(--mono)', fontSize: "var(--t-xs)", color: 'var(--ink-mute)', letterSpacing: '0.04em' }}>
                       {r.reviewer_name && <span>{r.reviewer_name}</span>}
                       {r.reviewer_country && <span> · {r.reviewer_country}</span>}
                       {r.language && r.language !== 'en' && <span> · lang {r.language}</span>}

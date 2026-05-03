@@ -21,7 +21,7 @@ export default function EnergyDash({ rows }: Props) {
       <h3
         style={{
           fontFamily: 'var(--serif)',
-          fontSize: 16,
+          fontSize: "var(--t-xl)",
           fontWeight: 500,
           margin: '0 0 8px',
         }}
@@ -42,7 +42,7 @@ export default function EnergyDash({ rows }: Props) {
               display: 'grid',
               gridTemplateColumns: '1fr 1fr 1fr 60px',
               gap: 6,
-              fontSize: 10,
+              fontSize: "var(--t-xs)",
               color: '#8a8170',
               textTransform: 'uppercase',
               letterSpacing: '0.06em',
@@ -63,7 +63,7 @@ export default function EnergyDash({ rows }: Props) {
                 display: 'grid',
                 gridTemplateColumns: '1fr 1fr 1fr 60px',
                 gap: 6,
-                fontSize: 11.5,
+                fontSize: "var(--t-sm)",
                 padding: '5px 0',
                 borderBottom: '1px dashed #e6dfc9',
                 alignItems: 'center',
@@ -90,7 +90,7 @@ export default function EnergyDash({ rows }: Props) {
               </span>
               <span
                 style={{
-                  fontSize: 10,
+                  fontSize: "var(--t-xs)",
                   color: r.anomaly_flag ? '#a02d2d' : '#8a8170',
                   textAlign: 'right',
                   fontWeight: 700,

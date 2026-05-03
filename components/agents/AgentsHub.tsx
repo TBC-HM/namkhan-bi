@@ -60,7 +60,7 @@ export default function AgentsHub({
     <div className="agents-hub" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       {/* Intro + pointer to global settings */}
       <div className="card" style={{ background: 'var(--paper-warm)', borderLeft: '3px solid var(--moss)' }}>
-        <div style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--ink-soft)' }}>
+        <div style={{ fontSize: "var(--t-md)", lineHeight: 1.6, color: 'var(--ink-soft)' }}>
           <strong style={{ color: 'var(--ink)' }}>{pillarLabel} agents · </strong>{intro}
         </div>
         <div style={{
@@ -68,7 +68,7 @@ export default function AgentsHub({
           padding: '8px 12px',
           background: 'rgba(168,133,74,0.08)',
           borderLeft: '3px solid var(--brass)',
-          fontSize: 11,
+          fontSize: "var(--t-sm)",
           color: 'var(--ink-soft)',
         }}>
           Global guardrails (operating mode · detection · approval matrix · data quality · audit · kill switch) live at{' '}
@@ -130,13 +130,13 @@ export default function AgentsHub({
                     <AgentLink id={id} label={a.name}>{a.name}</AgentLink>
                   </td>
                   <td>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: "var(--t-sm)" }}>
                       <span style={{ width: 8, height: 8, borderRadius: '50%', background: sc.dot, display: 'inline-block' }} />
                       <span style={{ color: sc.pill }}>{sc.label}</span>
                     </span>
                   </td>
-                  <td style={{ fontSize: 12, color: 'var(--ink-mute)' }}>{a.cadence}</td>
-                  <td style={{ fontSize: 12, color: 'var(--ink-soft)', maxWidth: 380 }}>{a.description ?? '—'}</td>
+                  <td style={{ fontSize: "var(--t-base)", color: 'var(--ink-mute)' }}>{a.cadence}</td>
+                  <td style={{ fontSize: "var(--t-base)", color: 'var(--ink-soft)', maxWidth: 380 }}>{a.description ?? '—'}</td>
                   <td className="num">{a.guardrails?.length ?? 0}</td>
                   <td style={{ textAlign: 'right' }}>
                     <AgentLink id={id} label={a.name} asButton>edit →</AgentLink>
@@ -175,7 +175,7 @@ export default function AgentsHub({
                   width: `${Math.min(100, ((spendUsedMtd ?? 0) / spendCapMonthly) * 100)}%`,
                 }} />
               </div>
-              <div style={{ fontSize: 11, color: 'var(--ink-mute)', marginTop: 4 }}>
+              <div style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)', marginTop: 4 }}>
                 {Math.round(((spendUsedMtd ?? 0) / spendCapMonthly) * 100)}% used
               </div>
             </div>
@@ -223,7 +223,7 @@ export default function AgentsHub({
             background: 'var(--paper-warm)',
             borderRadius: 4,
           }}>
-            <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+            <span style={{ fontSize: "var(--t-base)", color: 'var(--ink-soft)' }}>
               <strong>Auto-pause underperformers</strong> · if a tactic's actual CPA exceeds the per-channel limit, auto-pause and notify
             </span>
             <span className="pill" style={{ marginLeft: 'auto', background: 'var(--moss)', color: 'var(--paper-warm)' }}>enabled</span>
@@ -237,10 +237,10 @@ export default function AgentsHub({
             background: 'var(--paper-warm)',
             borderRadius: 4,
           }}>
-            <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+            <span style={{ fontSize: "var(--t-base)", color: 'var(--ink-soft)' }}>
               <strong>Daily spend velocity cap</strong> · no tactic can spend &gt; this much in a single day
             </span>
-            <span style={{ marginLeft: 'auto', fontSize: 12, fontFamily: 'var(--mono)' }}>$500 / day</span>
+            <span style={{ marginLeft: 'auto', fontSize: "var(--t-base)", fontFamily: 'var(--mono)' }}>$500 / day</span>
           </div>
         </div>
       )}
@@ -254,7 +254,7 @@ export default function AgentsHub({
               <div className="card-sub">Don't break positioning · {pillarLabel}-specific</div>
             </div>
           </div>
-          <ul style={{ fontSize: 12, color: 'var(--ink-soft)', lineHeight: 1.8, paddingLeft: 18, margin: 0 }}>
+          <ul style={{ fontSize: "var(--t-base)", color: 'var(--ink-soft)', lineHeight: 1.8, paddingLeft: 18, margin: 0 }}>
             {brandRules.map((r, i) => <li key={i}>{r}</li>)}
           </ul>
         </div>

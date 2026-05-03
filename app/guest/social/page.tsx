@@ -99,7 +99,7 @@ export default async function SocialPage() {
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-mono"
-                        style={{ color: 'var(--brass)', fontSize: 11 }}
+                        style={{ color: 'var(--brass)', fontSize: "var(--t-sm)" }}
                       >
                         Open ↗
                       </a>

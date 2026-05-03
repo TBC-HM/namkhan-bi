@@ -268,7 +268,7 @@ export default async function RatePlansPage({ searchParams }: Props) {
                     <td className="lbl">
                       <strong>{r.name}</strong>
                       {!r.isConfigured && (
-                        <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--warn)', textTransform: 'uppercase' }}>
+                        <span style={{ marginLeft: 8, fontSize: "var(--t-xs)", color: 'var(--warn)', textTransform: 'uppercase' }}>
                           orphan
                         </span>
                       )}

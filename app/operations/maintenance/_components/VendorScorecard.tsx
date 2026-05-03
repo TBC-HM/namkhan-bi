@@ -29,7 +29,7 @@ export default function VendorScorecard({ rows }: Props) {
       <h3
         style={{
           fontFamily: 'var(--serif)',
-          fontSize: 16,
+          fontSize: "var(--t-xl)",
           fontWeight: 500,
           margin: '0 0 8px',
         }}
@@ -50,7 +50,7 @@ export default function VendorScorecard({ rows }: Props) {
               display: 'grid',
               gridTemplateColumns: '1fr 100px 70px 90px 90px 70px 50px',
               gap: 8,
-              fontSize: 10,
+              fontSize: "var(--t-xs)",
               color: '#8a8170',
               textTransform: 'uppercase',
               letterSpacing: '0.06em',
@@ -74,14 +74,14 @@ export default function VendorScorecard({ rows }: Props) {
                 display: 'grid',
                 gridTemplateColumns: '1fr 100px 70px 90px 90px 70px 50px',
                 gap: 8,
-                fontSize: 12,
+                fontSize: "var(--t-base)",
                 padding: '7px 0',
                 borderBottom: '1px dashed #e6dfc9',
                 alignItems: 'center',
               }}
             >
               <span style={{ fontWeight: 600 }}>{r.vendor}</span>
-              <span style={{ fontSize: 11, color: '#8a8170' }}>{r.category}</span>
+              <span style={{ fontSize: "var(--t-sm)", color: '#8a8170' }}>{r.category}</span>
               <span
                 style={{
                   fontFamily: 'ui-monospace, Menlo, monospace',

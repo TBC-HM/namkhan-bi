@@ -41,14 +41,14 @@ export default function FunnelSnapshot() {
         <h3
           style={{
             fontFamily: 'var(--serif)',
-            fontSize: 18,
+            fontSize: "var(--t-xl)",
             fontWeight: 500,
             margin: 0,
           }}
         >
           Funnel <em style={{ color: '#a17a4f' }}>snapshot</em>
         </h3>
-        <span style={{ fontSize: 11, color: '#8a8170' }}>last 30d · mockup</span>
+        <span style={{ fontSize: "var(--t-sm)", color: '#8a8170' }}>last 30d · mockup</span>
       </div>
 
       {STAGES.map((s, i) => (
@@ -57,7 +57,7 @@ export default function FunnelSnapshot() {
             style={{
               display: 'flex',
               justifyContent: 'space-between',
-              fontSize: 11.5,
+              fontSize: "var(--t-sm)",
               marginBottom: 2,
             }}
           >
@@ -95,7 +95,7 @@ export default function FunnelSnapshot() {
           borderTop: '1px solid #f0e8d0',
           display: 'flex',
           justifyContent: 'space-between',
-          fontSize: 11.5,
+          fontSize: "var(--t-sm)",
         }}
       >
         <span>Lost</span>

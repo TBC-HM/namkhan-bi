@@ -29,7 +29,7 @@ export default function PpmCalendar({ rows }: Props) {
       <h3
         style={{
           fontFamily: 'var(--serif)',
-          fontSize: 16,
+          fontSize: "var(--t-xl)",
           fontWeight: 500,
           margin: '0 0 8px',
         }}
@@ -51,7 +51,7 @@ export default function PpmCalendar({ rows }: Props) {
               display: 'grid',
               gridTemplateColumns: '1fr 90px 80px 60px',
               gap: 8,
-              fontSize: 12,
+              fontSize: "var(--t-base)",
               padding: '6px 0',
               borderBottom: '1px dashed #e6dfc9',
               alignItems: 'center',
@@ -61,7 +61,7 @@ export default function PpmCalendar({ rows }: Props) {
             <span
               style={{
                 fontFamily: 'ui-monospace, Menlo, monospace',
-                fontSize: 11,
+                fontSize: "var(--t-sm)",
                 color: '#8a8170',
               }}
             >
@@ -70,7 +70,7 @@ export default function PpmCalendar({ rows }: Props) {
             <span
               style={{
                 fontFamily: 'ui-monospace, Menlo, monospace',
-                fontSize: 11,
+                fontSize: "var(--t-sm)",
                 color: '#4a4538',
               }}
             >
@@ -78,7 +78,7 @@ export default function PpmCalendar({ rows }: Props) {
             </span>
             <span
               style={{
-                fontSize: 10,
+                fontSize: "var(--t-xs)",
                 color: statusColor[r.status],
                 textTransform: 'uppercase',
                 letterSpacing: '0.06em',

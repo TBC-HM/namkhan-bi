@@ -99,18 +99,18 @@
   --ch-corporate: #6b1f1f;
   --ch-groups:    #8e3a35;
 
-  /* Typography scale — modular 8-step ramp.
-   * Use these tokens (or the .t-* utility classes below) instead of ad-hoc
-   * fontSize: 11.5 / 12.5 / 13 / 15 etc. that drift across pages.
-   * Audit 2026-05-03: 25+ distinct font-sizes were in use. Pick one of these. */
-  --t-xs:   10px;   /* eyebrow labels, microcopy, table cell sub */
-  --t-sm:   12px;   /* table body, small UI text */
-  --t-base: 13px;   /* default body */
-  --t-md:   16px;   /* card subheadings */
-  --t-lg:   20px;   /* h3 / section titles */
-  --t-xl:   24px;   /* h2 */
-  --t-2xl:  30px;   /* page titles */
-  --t-num:  26px;   /* big KPI value numerals */
+  /* Typography scale — calibrated to /sales/inquiries (the canonical page).
+   * Principal rule per user 2026-05-03: nothing hardcoded, every fontSize
+   * resolves through one of these tokens. */
+  --t-xs:   10px;   /* eyebrow labels, mono caps */
+  --t-sm:   11px;   /* tile sub-text, table cells, small UI text */
+  --t-base: 12px;   /* table body, decision meta */
+  --t-md:   13px;   /* default body, lede, section title sub */
+  --t-lg:   14px;   /* decision impact, panel head subhead */
+  --t-xl:   16px;   /* card subheadings, h3 */
+  --t-2xl:  22px;   /* tile value (italic serif) */
+  --t-3xl:  30px;   /* page title (italic serif h1) */
+  --t-num:  22px;   /* alias for tile values to match --t-2xl */
 
   /* Letter-spacing scale for the brand voice (eyebrow / mono labels / titles). */
   --ls-tight:  -0.01em; /* page titles */

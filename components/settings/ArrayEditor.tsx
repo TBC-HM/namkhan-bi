@@ -39,7 +39,7 @@ export default function ArrayEditor({ value, onChange }: Props) {
         type="button"
         className="btn btn-ghost"
         onClick={() => onChange([...items, ''])}
-        style={{ alignSelf: 'flex-start', fontSize: 11 }}
+        style={{ alignSelf: 'flex-start', fontSize: "var(--t-sm)" }}
       >
         + Add item
       </button>

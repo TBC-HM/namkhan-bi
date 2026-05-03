@@ -23,7 +23,7 @@ export default function SettingsIndexPage() {
         <tbody>
           {AGENTS.map(a => (
             <tr key={a.id}>
-              <td style={{ fontSize: 20, width: 32 }}>{a.emoji}</td>
+              <td style={{ fontSize: "var(--t-xl)", width: 32 }}>{a.emoji}</td>
               <td className="label">{a.name}</td>
               <td className="muted mono">{a.model}</td>
               <td className="muted">{a.trigger}{a.schedule ? ` · ${a.schedule}` : ''}</td>

@@ -55,7 +55,7 @@ export default async function CampaignsPage({ searchParams }: SP) {
         sub={status ? `filtered by ${status}` : 'newest first'}
         source="marketing.v_campaign_calendar"
         actions={
-          <Link href="/marketing/campaigns/new" className="btn" style={{ fontSize: 11, textDecoration: 'none', background: 'var(--moss)', color: 'var(--paper-warm)', borderColor: 'var(--moss)' }}>
+          <Link href="/marketing/campaigns/new" className="btn" style={{ fontSize: "var(--t-sm)", textDecoration: 'none', background: 'var(--moss)', color: 'var(--paper-warm)', borderColor: 'var(--moss)' }}>
             + new campaign
           </Link>
         }
@@ -70,7 +70,7 @@ export default async function CampaignsPage({ searchParams }: SP) {
                 href={t.key ? `/marketing/campaigns?status=${t.key}` : '/marketing/campaigns'}
                 className="btn"
                 style={{
-                  fontSize: 11,
+                  fontSize: "var(--t-sm)",
                   textDecoration: 'none',
                   background: active ? 'var(--moss)' : 'var(--paper-warm)',
                   color: active ? 'var(--paper-warm)' : 'var(--ink)',
@@ -86,7 +86,7 @@ export default async function CampaignsPage({ searchParams }: SP) {
             <h3>No campaigns yet</h3>
             <p>Build your first campaign in 4 minutes — pick a channel, brief one sentence, AI proposes assets, you approve and download.</p>
             <p style={{ marginTop: 12 }}>
-              <Link href="/marketing/campaigns/new" className="btn" style={{ fontSize: 11, textDecoration: 'none', background: 'var(--moss)', color: 'var(--paper-warm)', borderColor: 'var(--moss)' }}>
+              <Link href="/marketing/campaigns/new" className="btn" style={{ fontSize: "var(--t-sm)", textDecoration: 'none', background: 'var(--moss)', color: 'var(--paper-warm)', borderColor: 'var(--moss)' }}>
                 start a campaign →
               </Link>
             </p>
@@ -112,16 +112,16 @@ export default async function CampaignsPage({ searchParams }: SP) {
                       <Link href={`/marketing/campaigns/${c.campaign_id}`} style={{ color: 'var(--ink)', textDecoration: 'none', fontWeight: 600 }}>
                         {c.name}
                       </Link>
-                      {c.brief_text && <div style={{ fontSize: 11, color: 'var(--ink-mute)', marginTop: 2, fontStyle: 'italic' }}>{c.brief_text.slice(0, 80)}{c.brief_text.length > 80 ? '…' : ''}</div>}
+                      {c.brief_text && <div style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)', marginTop: 2, fontStyle: 'italic' }}>{c.brief_text.slice(0, 80)}{c.brief_text.length > 80 ? '…' : ''}</div>}
                     </td>
-                    <td style={{ fontSize: 12 }}>{CHANNEL_LABEL[c.channel]}</td>
+                    <td style={{ fontSize: "var(--t-base)" }}>{CHANNEL_LABEL[c.channel]}</td>
                     <td className="num">{c.asset_count}</td>
                     <td><span className="pill" style={{ background: sc.bg, color: sc.tx }}>{sc.label}</span></td>
-                    <td style={{ fontSize: 11, color: 'var(--ink-mute)' }}>
+                    <td style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>
                       {c.calendar_at ? new Date(c.calendar_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                     </td>
                     <td style={{ textAlign: 'right' }}>
-                      <Link href={`/marketing/campaigns/${c.campaign_id}`} style={{ fontSize: 11, color: 'var(--moss)' }}>open ↗</Link>
+                      <Link href={`/marketing/campaigns/${c.campaign_id}`} style={{ fontSize: "var(--t-sm)", color: 'var(--moss)' }}>open ↗</Link>
                     </td>
                   </tr>
                 );

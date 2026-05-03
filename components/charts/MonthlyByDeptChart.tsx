@@ -37,14 +37,14 @@ export function MonthlyByDeptChart({ rows }: { rows: any[] }) {
           cursor={{ fill: 'rgba(196, 160, 107, 0.08)' }}
           contentStyle={{
             background: c.bg, border: `1px solid ${c.border}`,
-            fontSize: 11.5, fontFamily: 'JetBrains Mono, ui-monospace, monospace',
+            fontSize: "var(--t-sm)", fontFamily: 'JetBrains Mono, ui-monospace, monospace',
             color: '#f4ecd8', borderRadius: 4, padding: '8px 12px',
           }}
           labelStyle={{ color: c.label, marginBottom: 4, fontWeight: 600 }}
           labelFormatter={(m: string) => `${m?.slice(0, 7)} · USD · USALI`}
           formatter={(v: any, name: string) => [fmtMoney(Number(v), 'USD'), name]}
         />
-        <Legend wrapperStyle={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase' }} />
+        <Legend wrapperStyle={{ fontSize: "var(--t-xs)", letterSpacing: '0.1em', textTransform: 'uppercase' }} />
         <Bar dataKey="Rooms"          stackId="a" fill={c.rooms} />
         <Bar dataKey="F&B"            stackId="a" fill={c.fnb} />
         <Bar dataKey="Other Operated" stackId="a" fill={c.other} />

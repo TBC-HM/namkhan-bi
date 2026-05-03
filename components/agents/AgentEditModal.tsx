@@ -257,13 +257,13 @@ export default function AgentEditModal() {
           gap: 16,
         }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 11, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: 1.4 }}>
+            <div style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: 1.4 }}>
               {agent.pillar} · agent configuration
             </div>
-            <div style={{ fontSize: 22, fontWeight: 600, color: 'var(--ink)', marginTop: 2 }}>
+            <div style={{ fontSize: "var(--t-2xl)", fontWeight: 600, color: 'var(--ink)', marginTop: 2 }}>
               {agent.label}
             </div>
-            <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
+            <div style={{ fontSize: "var(--t-base)", color: 'var(--ink-soft)', marginTop: 4 }}>
               {agent.description}
             </div>
           </div>
@@ -273,7 +273,7 @@ export default function AgentEditModal() {
             style={{
               background: 'none',
               border: 'none',
-              fontSize: 22,
+              fontSize: "var(--t-2xl)",
               cursor: 'pointer',
               color: 'var(--ink-mute)',
               padding: 4,
@@ -301,7 +301,7 @@ export default function AgentEditModal() {
                   border: 'none',
                   borderBottom: active ? '2px solid var(--moss)' : '2px solid transparent',
                   padding: '12px 14px',
-                  fontSize: 12,
+                  fontSize: "var(--t-base)",
                   fontWeight: active ? 600 : 500,
                   color: active ? 'var(--ink)' : 'var(--ink-mute)',
                   cursor: 'pointer',
@@ -339,15 +339,15 @@ export default function AgentEditModal() {
           background: 'var(--paper-deep, #f7f3eb)',
           borderRadius: '0 0 8px 8px',
         }}>
-          <button className="btn" style={{ fontSize: 11 }}>Discard changes</button>
-          <button className="btn" style={{ fontSize: 11 }}>Backtest 30d</button>
-          <button className="btn" style={{ fontSize: 11 }}>Dry-run</button>
-          <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--ink-mute)' }}>
+          <button className="btn" style={{ fontSize: "var(--t-sm)" }}>Discard changes</button>
+          <button className="btn" style={{ fontSize: "var(--t-sm)" }}>Backtest 30d</button>
+          <button className="btn" style={{ fontSize: "var(--t-sm)" }}>Dry-run</button>
+          <span style={{ marginLeft: 'auto', fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>
             Edits create a new version · pilot phase requires human approval before publish
           </span>
-          <button className="btn" style={{ fontSize: 11 }}>Save draft</button>
+          <button className="btn" style={{ fontSize: "var(--t-sm)" }}>Save draft</button>
           <button className="btn" style={{
-            fontSize: 11,
+            fontSize: "var(--t-sm)",
             background: 'var(--moss)',
             color: 'var(--paper-warm)',
             borderColor: 'var(--moss)',
@@ -368,7 +368,7 @@ function StatusPill({ status, reason }: { status: AgentStatus; reason?: string }
   return (
     <div style={{ textAlign: 'right' }}>
       <span className="pill" style={{ background: color, color: 'var(--paper-warm)', textTransform: 'capitalize' }}>{status}</span>
-      {reason && <div style={{ fontSize: 10, color: 'var(--ink-mute)', marginTop: 4, maxWidth: 220 }}>{reason}</div>}
+      {reason && <div style={{ fontSize: "var(--t-xs)", color: 'var(--ink-mute)', marginTop: 4, maxWidth: 220 }}>{reason}</div>}
     </div>
   );
 }
@@ -388,12 +388,12 @@ function Overview({ agent }: { agent: AgentDef }) {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {(['inherit', 'observe', 'review', 'auto-t1'] as AgentMode[]).map((m, i) => (
             <button key={m} className="btn" style={{
-              fontSize: 11,
+              fontSize: "var(--t-sm)",
               ...(i === 0 ? { background: 'var(--moss)', color: 'var(--paper-warm)', borderColor: 'var(--moss)' } : {}),
             }}>{m === 'inherit' ? 'Inherit global' : m}</button>
           ))}
         </div>
-        <p style={{ fontSize: 11, color: 'var(--ink-mute)', marginTop: 8 }}>
+        <p style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)', marginTop: 8 }}>
           By default, agents inherit the master operating mode set in <strong>Settings · Agent guardrails</strong>.
           Override here only when this agent needs different behavior (e.g. lower confidence floor for a downstream
           composer that pre-filters with the Tactical Detector).
@@ -401,7 +401,7 @@ function Overview({ agent }: { agent: AgentDef }) {
       </Section>
 
       <Section title="What this agent produces">
-        <ul style={{ fontSize: 12, lineHeight: 1.8, color: 'var(--ink-soft)', margin: 0, paddingLeft: 18 }}>
+        <ul style={{ fontSize: "var(--t-base)", lineHeight: 1.8, color: 'var(--ink-soft)', margin: 0, paddingLeft: 18 }}>
           {(agent.produces ?? []).map((p, i) => <li key={i}>{p}</li>)}
         </ul>
       </Section>
@@ -415,11 +415,11 @@ function PromptEditor({ agent }: { agent: AgentDef }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
         <span className="pill" style={{ background: 'var(--moss)', color: 'var(--paper-warm)' }}>{agent.promptVersion} · current</span>
-        <span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>{agent.promptTokens} tokens · last edit 2h ago by Federico</span>
+        <span style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>{agent.promptTokens} tokens · last edit 2h ago by Federico</span>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-          <button className="btn" style={{ fontSize: 11 }}>A/B vs previous</button>
-          <button className="btn" style={{ fontSize: 11 }}>Compare versions</button>
-          <button className="btn" style={{ fontSize: 11 }}>Reset to template</button>
+          <button className="btn" style={{ fontSize: "var(--t-sm)" }}>A/B vs previous</button>
+          <button className="btn" style={{ fontSize: "var(--t-sm)" }}>Compare versions</button>
+          <button className="btn" style={{ fontSize: "var(--t-sm)" }}>Reset to template</button>
         </div>
       </div>
 
@@ -428,7 +428,7 @@ function PromptEditor({ agent }: { agent: AgentDef }) {
         rows={20}
         style={{
           fontFamily: 'var(--mono)',
-          fontSize: 12,
+          fontSize: "var(--t-base)",
           lineHeight: 1.55,
           color: '#cdd6cf',
           background: '#0f1410',
@@ -445,7 +445,7 @@ function PromptEditor({ agent }: { agent: AgentDef }) {
         padding: '10px 14px',
         background: 'rgba(168,133,74,0.1)',
         borderLeft: '3px solid var(--brass)',
-        fontSize: 11,
+        fontSize: "var(--t-sm)",
         color: 'var(--ink-soft)',
         lineHeight: 1.6,
       }}>
@@ -470,19 +470,19 @@ function Knowledge({ agent }: { agent: AgentDef }) {
                 <td>{k.size}</td>
                 <td style={{ color: 'var(--ink-mute)' }}>{k.updated}</td>
                 <td style={{ textAlign: 'right' }}>
-                  <button className="btn" style={{ fontSize: 10, marginRight: 4 }}>preview</button>
-                  <button className="btn" style={{ fontSize: 10 }}>remove</button>
+                  <button className="btn" style={{ fontSize: "var(--t-xs)", marginRight: 4 }}>preview</button>
+                  <button className="btn" style={{ fontSize: "var(--t-xs)" }}>remove</button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
         <div style={{ display: 'flex', gap: 6, marginTop: 12, flexWrap: 'wrap' }}>
-          <button className="btn" style={{ fontSize: 11 }}>+ Add file</button>
-          <button className="btn" style={{ fontSize: 11 }}>+ Add Supabase view</button>
-          <button className="btn" style={{ fontSize: 11 }}>+ Add URL</button>
+          <button className="btn" style={{ fontSize: "var(--t-sm)" }}>+ Add file</button>
+          <button className="btn" style={{ fontSize: "var(--t-sm)" }}>+ Add Supabase view</button>
+          <button className="btn" style={{ fontSize: "var(--t-sm)" }}>+ Add URL</button>
         </div>
-        <p style={{ fontSize: 11, color: 'var(--ink-mute)', marginTop: 12, lineHeight: 1.6 }}>
+        <p style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)', marginTop: 12, lineHeight: 1.6 }}>
           Knowledge is injected into the agent's context window before each run. Keep total tokens under 8k for best
           results. Larger sources are auto-retrieved by similarity (RAG).
         </p>
@@ -497,7 +497,7 @@ function Triggers({ agent }: { agent: AgentDef }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Section title="Schedule">
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <select defaultValue={agent.cadenceType} className="btn" style={{ fontSize: 12, padding: '6px 10px' }}>
+          <select defaultValue={agent.cadenceType} className="btn" style={{ fontSize: "var(--t-base)", padding: '6px 10px' }}>
             <option value="cron">Cron expression</option>
             <option value="interval">Fixed interval</option>
             <option value="event">Event-driven only</option>
@@ -508,35 +508,35 @@ function Triggers({ agent }: { agent: AgentDef }) {
               flex: 1,
               minWidth: 200,
               fontFamily: 'var(--mono)',
-              fontSize: 12,
+              fontSize: "var(--t-base)",
               padding: '6px 10px',
               border: '1px solid var(--line-soft)',
               borderRadius: 4,
               background: 'var(--paper-warm)',
             }}
           />
-          <span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>LAK timezone</span>
+          <span style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>LAK timezone</span>
         </div>
       </Section>
 
       <Section title="Event triggers">
-        <ul style={{ fontSize: 12, lineHeight: 1.8, paddingLeft: 18, color: 'var(--ink-soft)', margin: 0 }}>
+        <ul style={{ fontSize: "var(--t-base)", lineHeight: 1.8, paddingLeft: 18, color: 'var(--ink-soft)', margin: 0 }}>
           {agent.triggers.map((t, i) => (
             <li key={i}>
-              <code style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>{t}</code>
-              <a style={{ marginLeft: 8, fontSize: 11, color: 'var(--moss)', cursor: 'pointer' }}>remove</a>
+              <code style={{ fontFamily: 'var(--mono)', fontSize: "var(--t-sm)" }}>{t}</code>
+              <a style={{ marginLeft: 8, fontSize: "var(--t-sm)", color: 'var(--moss)', cursor: 'pointer' }}>remove</a>
             </li>
           ))}
         </ul>
-        <button className="btn" style={{ fontSize: 11, marginTop: 10 }}>+ Add trigger</button>
+        <button className="btn" style={{ fontSize: "var(--t-sm)", marginTop: 10 }}>+ Add trigger</button>
       </Section>
 
       <Section title="Conditions (gating)">
-        <p style={{ fontSize: 12, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
+        <p style={{ fontSize: "var(--t-base)", color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
           Add conditions that must be true at fire time (e.g. <code>data.freshness_hours &lt; 2</code>,
           <code> compset.coverage_pct &gt;= 80</code>, <code>day_of_week not in (Sat, Sun)</code>).
         </p>
-        <button className="btn" style={{ fontSize: 11, marginTop: 10 }}>+ Add condition</button>
+        <button className="btn" style={{ fontSize: "var(--t-sm)", marginTop: 10 }}>+ Add condition</button>
       </Section>
     </div>
   );
@@ -547,7 +547,7 @@ function GuardrailOverrides({ agent }: { agent: AgentDef }) {
   const o = agent.guardrailOverrides;
   return (
     <div>
-      <p style={{ fontSize: 12, color: 'var(--ink-soft)', lineHeight: 1.6, margin: '0 0 14px' }}>
+      <p style={{ fontSize: "var(--t-base)", color: 'var(--ink-soft)', lineHeight: 1.6, margin: '0 0 14px' }}>
         These override the global thresholds in <strong>Settings · Agent guardrails</strong> for this agent only.
         Leave blank to inherit. Most agents should inherit — override only when you have a clear reason.
       </p>
@@ -558,25 +558,25 @@ function GuardrailOverrides({ agent }: { agent: AgentDef }) {
             <td className="lbl"><strong>Confidence floor</strong></td>
             <td>70 %</td>
             <td><InputNum value={o.confFloor} unit="%" /></td>
-            <td style={{ fontSize: 11, color: 'var(--ink-mute)' }}>{o.confFloor ? 'override active' : 'inherits global'}</td>
+            <td style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>{o.confFloor ? 'override active' : 'inherits global'}</td>
           </tr>
           <tr>
             <td className="lbl"><strong>Min revenue impact</strong></td>
             <td>$1,000</td>
             <td><InputNum value={o.minImpact} prefix="$" /></td>
-            <td style={{ fontSize: 11, color: 'var(--ink-mute)' }}>{o.minImpact ? 'override active' : 'inherits global'}</td>
+            <td style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>{o.minImpact ? 'override active' : 'inherits global'}</td>
           </tr>
           <tr>
             <td className="lbl"><strong>Cooldown per dimension</strong></td>
             <td>6 hrs</td>
             <td><InputNum value={o.cooldownH} unit="hrs" /></td>
-            <td style={{ fontSize: 11, color: 'var(--ink-mute)' }}>{o.cooldownH ? 'override active' : 'inherits global'}</td>
+            <td style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>{o.cooldownH ? 'override active' : 'inherits global'}</td>
           </tr>
           <tr>
             <td className="lbl"><strong>Max actions per day</strong></td>
             <td>—</td>
             <td><InputNum value={o.maxActionsPerDay} unit="acts" /></td>
-            <td style={{ fontSize: 11, color: 'var(--ink-mute)' }}>{o.maxActionsPerDay ? 'cap set' : 'no cap'}</td>
+            <td style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>{o.maxActionsPerDay ? 'cap set' : 'no cap'}</td>
           </tr>
         </tbody>
       </table>
@@ -588,7 +588,7 @@ function GuardrailOverrides({ agent }: { agent: AgentDef }) {
 function Tools({ agent }: { agent: AgentDef }) {
   return (
     <div>
-      <p style={{ fontSize: 12, color: 'var(--ink-soft)', lineHeight: 1.6, margin: '0 0 14px' }}>
+      <p style={{ fontSize: "var(--t-base)", color: 'var(--ink-soft)', lineHeight: 1.6, margin: '0 0 14px' }}>
         Capabilities this agent can invoke. <strong>Read</strong> = data access, <strong>Write</strong> = mutates internal state,
         <strong> External</strong> = calls outside system (Cloudbeds, Slack, ad platforms). External writes always require approval.
       </p>
@@ -599,7 +599,7 @@ function Tools({ agent }: { agent: AgentDef }) {
             <tr key={t.key}>
               <td className="lbl">
                 <strong>{t.label}</strong>
-                <div style={{ fontSize: 10, color: 'var(--ink-mute)', fontFamily: 'var(--mono)' }}>{t.key}</div>
+                <div style={{ fontSize: "var(--t-xs)", color: 'var(--ink-mute)', fontFamily: 'var(--mono)' }}>{t.key}</div>
               </td>
               <td>
                 <span className="pill" style={{
@@ -611,12 +611,12 @@ function Tools({ agent }: { agent: AgentDef }) {
                 }}>{t.tier}</span>
               </td>
               <td>
-                <label style={{ fontSize: 11, display: 'inline-flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
+                <label style={{ fontSize: "var(--t-sm)", display: 'inline-flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
                   <input type="checkbox" defaultChecked={t.allowed} />
                   {t.allowed ? 'allowed' : 'blocked'}
                 </label>
               </td>
-              <td style={{ fontSize: 11, color: 'var(--ink-mute)' }}>
+              <td style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>
                 {t.tier === 'read' ? 'auto' : t.tier === 'write' ? 'RM approval' : 'RM + GM ($5k+)'}
               </td>
             </tr>
@@ -634,11 +634,11 @@ function Output({ agent }: { agent: AgentDef }) {
       <Section title="Delivery channel">
         <input
           defaultValue={agent.output.channel}
-          style={{ width: '100%', fontSize: 12, padding: '8px 10px', border: '1px solid var(--line-soft)', borderRadius: 4, background: 'var(--paper-warm)' }}
+          style={{ width: '100%', fontSize: "var(--t-base)", padding: '8px 10px', border: '1px solid var(--line-soft)', borderRadius: 4, background: 'var(--paper-warm)' }}
         />
       </Section>
       <Section title="Output format">
-        <select defaultValue={agent.output.format} style={{ width: '100%', fontSize: 12, padding: '8px 10px', border: '1px solid var(--line-soft)', borderRadius: 4, background: 'var(--paper-warm)' }}>
+        <select defaultValue={agent.output.format} style={{ width: '100%', fontSize: "var(--t-base)", padding: '8px 10px', border: '1px solid var(--line-soft)', borderRadius: 4, background: 'var(--paper-warm)' }}>
           <option>structured JSON + human summary</option>
           <option>structured JSON only</option>
           <option>markdown brief</option>
@@ -651,11 +651,11 @@ function Output({ agent }: { agent: AgentDef }) {
           {agent.output.recipients.map(r => (
             <span key={r} className="pill" style={{ background: 'var(--moss)', color: 'var(--paper-warm)' }}>{r} ×</span>
           ))}
-          <button className="btn" style={{ fontSize: 11 }}>+ Add recipient</button>
+          <button className="btn" style={{ fontSize: "var(--t-sm)" }}>+ Add recipient</button>
         </div>
       </Section>
       <Section title="Escalation paths">
-        <ul style={{ fontSize: 12, lineHeight: 1.8, paddingLeft: 18, color: 'var(--ink-soft)', margin: 0 }}>
+        <ul style={{ fontSize: "var(--t-base)", lineHeight: 1.8, paddingLeft: 18, color: 'var(--ink-soft)', margin: 0 }}>
           <li>If no ack in <strong>30 min</strong> → reroute to GM</li>
           <li>If no ack in <strong>2 hrs</strong>  → page Owner</li>
           <li>If anomaly auto-disable triggers → freeze + email Federico</li>
@@ -671,40 +671,40 @@ function Test({ agent: _agent }: { agent: AgentDef }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Section title="Backtest">
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <select className="btn" style={{ fontSize: 12, padding: '6px 10px' }}>
+          <select className="btn" style={{ fontSize: "var(--t-base)", padding: '6px 10px' }}>
             <option>last 30 days</option>
             <option>last 60 days</option>
             <option>last 90 days</option>
           </select>
-          <button className="btn" style={{ fontSize: 11, background: 'var(--moss)', color: 'var(--paper-warm)', borderColor: 'var(--moss)' }}>
+          <button className="btn" style={{ fontSize: "var(--t-sm)", background: 'var(--moss)', color: 'var(--paper-warm)', borderColor: 'var(--moss)' }}>
             Run backtest
           </button>
-          <span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>Replays the agent against historical data with the current prompt + guardrails. Does not write.</span>
+          <span style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>Replays the agent against historical data with the current prompt + guardrails. Does not write.</span>
         </div>
       </Section>
       <Section title="Dry-run">
-        <p style={{ fontSize: 12, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
+        <p style={{ fontSize: "var(--t-base)", color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
           Run the agent now against live data, log the decision, but block any external writes. Use to validate prompt changes before committing.
         </p>
-        <button className="btn" style={{ fontSize: 11, marginTop: 10 }}>Run dry-run on current state</button>
+        <button className="btn" style={{ fontSize: "var(--t-sm)", marginTop: 10 }}>Run dry-run on current state</button>
       </Section>
       <Section title="A/B test vs previous version">
-        <p style={{ fontSize: 12, color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
+        <p style={{ fontSize: "var(--t-base)", color: 'var(--ink-soft)', lineHeight: 1.6, margin: 0 }}>
           Split traffic 50/50 between current and previous prompt version for N days. Compare ack rate, accuracy, and impact.
         </p>
         <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-          <input type="number" defaultValue={7} style={{ width: 80, fontSize: 12, padding: '6px 10px', border: '1px solid var(--line-soft)', borderRadius: 4 }} />
-          <span style={{ fontSize: 12, color: 'var(--ink-soft)', alignSelf: 'center' }}>days</span>
-          <button className="btn" style={{ fontSize: 11 }}>Start A/B</button>
+          <input type="number" defaultValue={7} style={{ width: 80, fontSize: "var(--t-base)", padding: '6px 10px', border: '1px solid var(--line-soft)', borderRadius: 4 }} />
+          <span style={{ fontSize: "var(--t-base)", color: 'var(--ink-soft)', alignSelf: 'center' }}>days</span>
+          <button className="btn" style={{ fontSize: "var(--t-sm)" }}>Start A/B</button>
         </div>
       </Section>
       <Section title="Sample run · paste a hypothetical input">
         <textarea
           rows={6}
           placeholder="Paste a hypothetical scenario (e.g. an inventory snapshot) and run the agent against it without touching live data..."
-          style={{ width: '100%', fontFamily: 'var(--mono)', fontSize: 12, padding: 10, border: '1px solid var(--line-soft)', borderRadius: 4, background: 'var(--paper-warm)', boxSizing: 'border-box' }}
+          style={{ width: '100%', fontFamily: 'var(--mono)', fontSize: "var(--t-base)", padding: 10, border: '1px solid var(--line-soft)', borderRadius: 4, background: 'var(--paper-warm)', boxSizing: 'border-box' }}
         />
-        <button className="btn" style={{ fontSize: 11, marginTop: 8 }}>Run sample</button>
+        <button className="btn" style={{ fontSize: "var(--t-sm)", marginTop: 8 }}>Run sample</button>
       </Section>
     </div>
   );
@@ -722,7 +722,7 @@ function Metrics({ agent }: { agent: AgentDef }) {
         <Mini label="Avg revenue impact" value={m.avgImpact} />
       </div>
       <Section title="Drift indicators">
-        <ul style={{ fontSize: 12, lineHeight: 1.8, paddingLeft: 18, color: 'var(--ink-soft)', margin: 0 }}>
+        <ul style={{ fontSize: "var(--t-base)", lineHeight: 1.8, paddingLeft: 18, color: 'var(--ink-soft)', margin: 0 }}>
           <li>Confidence drift · <strong>stable</strong> (mean 78% over last 30d, σ 4%)</li>
           <li>Output token drift · <strong>watch</strong> (avg 412 tokens, up 18% over baseline)</li>
           <li>Refusal rate · <strong>stable</strong> (1.2%)</li>
@@ -730,7 +730,7 @@ function Metrics({ agent }: { agent: AgentDef }) {
         </ul>
       </Section>
       <Section title="Cost (last 30d)">
-        <ul style={{ fontSize: 12, lineHeight: 1.8, paddingLeft: 18, color: 'var(--ink-soft)', margin: 0 }}>
+        <ul style={{ fontSize: "var(--t-base)", lineHeight: 1.8, paddingLeft: 18, color: 'var(--ink-soft)', margin: 0 }}>
           <li>Inference spend · <strong>$8.40</strong> ($0.18 per fire)</li>
           <li>Embedding/retrieval spend · <strong>$1.10</strong></li>
           <li>Total · <strong>$9.50</strong></li>
@@ -749,10 +749,10 @@ function History({ agent }: { agent: AgentDef }) {
         <tbody>
           {agent.history.map((h, i) => (
             <tr key={i}>
-              <td style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--ink-mute)' }}>{h.when}</td>
+              <td style={{ fontFamily: 'var(--mono)', fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>{h.when}</td>
               <td className="lbl"><strong>{h.who}</strong></td>
-              <td style={{ fontSize: 12 }}>{h.what}</td>
-              <td style={{ textAlign: 'right' }}><a style={{ fontSize: 11, color: 'var(--moss)', cursor: 'pointer' }}>view diff · revert</a></td>
+              <td style={{ fontSize: "var(--t-base)" }}>{h.what}</td>
+              <td style={{ textAlign: 'right' }}><a style={{ fontSize: "var(--t-sm)", color: 'var(--moss)', cursor: 'pointer' }}>view diff · revert</a></td>
             </tr>
           ))}
         </tbody>
@@ -766,7 +766,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <div>
       <div style={{
-        fontSize: 11,
+        fontSize: "var(--t-sm)",
         textTransform: 'uppercase',
         letterSpacing: 1.2,
         color: 'var(--ink-mute)',
@@ -781,9 +781,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Mini({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="kpi-card">
-      <div className="kpi-num" style={{ fontSize: 18, textTransform: 'capitalize' }}>{value}</div>
+      <div className="kpi-num" style={{ fontSize: "var(--t-xl)", textTransform: 'capitalize' }}>{value}</div>
       <div className="kpi-lbl">{label}</div>
-      {hint && <div style={{ fontSize: 10, color: 'var(--ink-mute)', marginTop: 2 }}>{hint}</div>}
+      {hint && <div style={{ fontSize: "var(--t-xs)", color: 'var(--ink-mute)', marginTop: 2 }}>{hint}</div>}
     </div>
   );
 }
@@ -791,14 +791,14 @@ function Mini({ label, value, hint }: { label: string; value: string; hint?: str
 function InputNum({ value, prefix, unit }: { value?: number; prefix?: string; unit?: string }) {
   return (
     <div style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
-      {prefix && <span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>{prefix}</span>}
+      {prefix && <span style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>{prefix}</span>}
       <input
         type="number"
         defaultValue={value ?? ''}
         placeholder="—"
-        style={{ width: 70, fontSize: 12, padding: '4px 6px', border: '1px solid var(--line-soft)', borderRadius: 4, background: 'var(--paper-warm)' }}
+        style={{ width: 70, fontSize: "var(--t-base)", padding: '4px 6px', border: '1px solid var(--line-soft)', borderRadius: 4, background: 'var(--paper-warm)' }}
       />
-      {unit && <span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>{unit}</span>}
+      {unit && <span style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>{unit}</span>}
     </div>
   );
 }

@@ -18,14 +18,14 @@ export default function GuardrailsBanner({ children }: Props) {
         border: '1px solid #f3d57a',
         borderRadius: 8,
         color: '#5e4818',
-        fontSize: 12.5,
+        fontSize: "var(--t-base)",
         lineHeight: 1.5,
       }}
     >
       <span
         style={{
           display: 'inline-block',
-          fontSize: 10,
+          fontSize: "var(--t-xs)",
           background: 'var(--paper-warm)',
           border: '1px solid #f3d57a',
           color: '#5e4818',

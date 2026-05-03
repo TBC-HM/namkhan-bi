@@ -81,8 +81,8 @@ export default async function LibraryPage({ searchParams }: SP) {
         source="marketing.v_media_ready"
         actions={
           <div style={{ display: 'flex', gap: 6 }}>
-            <Link href="/marketing/upload" className="btn" style={{ fontSize: 11, textDecoration: 'none', background: 'var(--brass)', color: 'var(--paper-warm)', borderColor: 'var(--brass)' }}>upload ↗</Link>
-            <Link href="/marketing/campaigns/new" className="btn" style={{ fontSize: 11, textDecoration: 'none', background: 'var(--moss)', color: 'var(--paper-warm)', borderColor: 'var(--moss)' }}>+ new campaign</Link>
+            <Link href="/marketing/upload" className="btn" style={{ fontSize: "var(--t-sm)", textDecoration: 'none', background: 'var(--brass)', color: 'var(--paper-warm)', borderColor: 'var(--brass)' }}>upload ↗</Link>
+            <Link href="/marketing/campaigns/new" className="btn" style={{ fontSize: "var(--t-sm)", textDecoration: 'none', background: 'var(--moss)', color: 'var(--paper-warm)', borderColor: 'var(--moss)' }}>+ new campaign</Link>
           </div>
         }
       >
@@ -102,7 +102,7 @@ export default async function LibraryPage({ searchParams }: SP) {
                 href={t.key ? `/marketing/library?tier=${t.key}` : '/marketing/library'}
                 className="btn"
                 style={{
-                  fontSize: 11,
+                  fontSize: "var(--t-sm)",
                   textDecoration: 'none',
                   background: active ? 'var(--moss)' : 'var(--paper-warm)',
                   color: active ? 'var(--paper-warm)' : 'var(--ink)',
@@ -123,7 +123,7 @@ export default async function LibraryPage({ searchParams }: SP) {
             placeholder="search caption, alt-text, filename…"
             style={{
               flex: 1,
-              fontSize: 12,
+              fontSize: "var(--t-base)",
               padding: '8px 12px',
               border: '1px solid var(--line)',
               borderRadius: 4,
@@ -131,13 +131,13 @@ export default async function LibraryPage({ searchParams }: SP) {
               fontFamily: 'var(--sans)',
             }}
           />
-          <button type="submit" className="btn" style={{ fontSize: 11 }}>search</button>
-          {q && <Link href="/marketing/library" className="btn" style={{ fontSize: 11, textDecoration: 'none' }}>clear</Link>}
+          <button type="submit" className="btn" style={{ fontSize: "var(--t-sm)" }}>search</button>
+          {q && <Link href="/marketing/library" className="btn" style={{ fontSize: "var(--t-sm)", textDecoration: 'none' }}>clear</Link>}
         </form>
 
         {/* Tag chip filter (single-tag for now) */}
         {tag && (
-          <div style={{ marginBottom: 12, fontSize: 11, color: 'var(--ink-soft)' }}>
+          <div style={{ marginBottom: 12, fontSize: "var(--t-sm)", color: 'var(--ink-soft)' }}>
             tag filter: <strong>{tag}</strong>
             <Link href={`/marketing/library${tier ? `?tier=${tier}` : ''}`} style={{ marginLeft: 6, color: 'var(--moss)' }}>×</Link>
           </div>
@@ -145,14 +145,14 @@ export default async function LibraryPage({ searchParams }: SP) {
 
         <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 18 }}>
           {/* Filter rail */}
-          <aside style={{ fontSize: 12 }}>
+          <aside style={{ fontSize: "var(--t-base)" }}>
             <FilterCategory title={`Tags (${taxonomy.length})`}>
               {Array.from(tagsByCategory.entries())
                 .sort((a, b) => a[0].localeCompare(b[0]))
                 .slice(0, 6)
                 .map(([cat, items]) => (
                   <div key={cat} style={{ marginTop: 12 }}>
-                    <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--ink-mute)', marginBottom: 4, fontFamily: 'var(--mono)' }}>
+                    <div style={{ fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: 1, color: 'var(--ink-mute)', marginBottom: 4, fontFamily: 'var(--mono)' }}>
                       {cat} · {items.length}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -161,14 +161,14 @@ export default async function LibraryPage({ searchParams }: SP) {
                           key={t.label}
                           href={`/marketing/library?tag=${encodeURIComponent(t.label)}${tier ? `&tier=${tier}` : ''}`}
                           style={{
-                            fontSize: 11,
+                            fontSize: "var(--t-sm)",
                             color: tag === t.label ? 'var(--moss)' : 'var(--ink-soft)',
                             textDecoration: 'none',
                             fontWeight: tag === t.label ? 600 : 400,
                           }}
                         >{tag === t.label ? '☑' : '☐'} {t.label}</Link>
                       ))}
-                      {items.length > 8 && <span style={{ fontSize: 10, color: 'var(--ink-mute)' }}>+{items.length - 8} more</span>}
+                      {items.length > 8 && <span style={{ fontSize: "var(--t-xs)", color: 'var(--ink-mute)' }}>+{items.length - 8} more</span>}
                     </div>
                   </div>
                 ))}
@@ -203,7 +203,7 @@ export default async function LibraryPage({ searchParams }: SP) {
               emptyAction={
                 totalReady === 0
                   ? <p>Drop your first photos at <Link href="/marketing/upload" style={{ color: 'var(--brass)' }}>upload</Link>, or sync via Google Drive (Phase 1 ingest pipeline).</p>
-                  : <p style={{ fontSize: 12, color: 'var(--ink-mute)' }}>Try removing a filter or <Link href="/marketing/library" style={{ color: 'var(--moss)' }}>clear all</Link>.</p>
+                  : <p style={{ fontSize: "var(--t-base)", color: 'var(--ink-mute)' }}>Try removing a filter or <Link href="/marketing/library" style={{ color: 'var(--moss)' }}>clear all</Link>.</p>
               }
             />
           </div>
@@ -216,12 +216,12 @@ export default async function LibraryPage({ searchParams }: SP) {
 function FilterCategory({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 18, paddingBottom: 14, borderBottom: '1px solid var(--line-soft)' }}>
-      <div style={{ fontSize: 10, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--ink)', fontWeight: 600, marginBottom: 8 }}>{title}</div>
+      <div style={{ fontSize: "var(--t-xs)", fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--ink)', fontWeight: 600, marginBottom: 8 }}>{title}</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>{children}</div>
     </div>
   );
 }
 
 function Label({ children }: { children: React.ReactNode }) {
-  return <span style={{ fontSize: 11, color: 'var(--ink-soft)', cursor: 'default' }}>{children}</span>;
+  return <span style={{ fontSize: "var(--t-sm)", color: 'var(--ink-soft)', cursor: 'default' }}>{children}</span>;
 }

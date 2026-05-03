@@ -77,7 +77,7 @@ export default function AutoDraftTray({ overlay }: { overlay?: ReactNode }) {
       >
         <div
           style={{
-            fontSize: 11,
+            fontSize: "var(--t-sm)",
             color: '#8a8170',
             textTransform: 'uppercase',
             letterSpacing: '0.1em',
@@ -88,7 +88,7 @@ export default function AutoDraftTray({ overlay }: { overlay?: ReactNode }) {
         <h3
           style={{
             fontFamily: 'var(--serif)',
-            fontSize: 18,
+            fontSize: "var(--t-xl)",
             fontWeight: 500,
             margin: '2px 0 0',
           }}
@@ -107,7 +107,7 @@ export default function AutoDraftTray({ overlay }: { overlay?: ReactNode }) {
             style={{
               padding: '10px 14px',
               borderTop: i === 0 ? 0 : '1px solid #f0e8d0',
-              fontSize: 12.5,
+              fontSize: "var(--t-base)",
             }}
           >
             <div
@@ -128,10 +128,10 @@ export default function AutoDraftTray({ overlay }: { overlay?: ReactNode }) {
                 {d.value}
               </span>
             </div>
-            <div style={{ fontSize: 11, color: '#4a4538' }}>{d.meta}</div>
+            <div style={{ fontSize: "var(--t-sm)", color: '#4a4538' }}>{d.meta}</div>
             <div
               style={{
-                fontSize: 10.5,
+                fontSize: "var(--t-xs)",
                 color: '#8a8170',
                 marginTop: 2,
                 fontFamily: 'ui-monospace, Menlo, monospace',
@@ -148,7 +148,7 @@ export default function AutoDraftTray({ overlay }: { overlay?: ReactNode }) {
                 color: c.fg,
                 border: 0,
                 borderRadius: 4,
-                fontSize: 11,
+                fontSize: "var(--t-sm)",
                 fontWeight: 600,
                 letterSpacing: '0.04em',
                 textTransform: 'uppercase',

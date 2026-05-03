@@ -101,11 +101,11 @@ export default function AssetDetailDrawer() {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: '1px solid var(--line-soft)' }}>
-          <span style={{ fontFamily: 'var(--mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--ink-mute)' }}>asset detail</span>
-          <button onClick={() => setOpen(false)} aria-label="close" style={{ background: 'none', border: 'none', fontSize: 22, color: 'var(--ink-mute)', cursor: 'pointer' }}>×</button>
+          <span style={{ fontFamily: 'var(--mono)', fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--ink-mute)' }}>asset detail</span>
+          <button onClick={() => setOpen(false)} aria-label="close" style={{ background: 'none', border: 'none', fontSize: "var(--t-2xl)", color: 'var(--ink-mute)', cursor: 'pointer' }}>×</button>
         </div>
 
-        {loading && <div style={{ padding: 22, fontSize: 12, color: 'var(--ink-mute)' }}>loading…</div>}
+        {loading && <div style={{ padding: 22, fontSize: "var(--t-base)", color: 'var(--ink-mute)' }}>loading…</div>}
 
         {!loading && asset && (
           <>
@@ -114,19 +114,19 @@ export default function AssetDetailDrawer() {
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={previewUrl} alt={asset.alt_text ?? ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
-                <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#888', fontFamily: 'var(--mono)', fontSize: 10 }}>no preview</div>
+                <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#888', fontFamily: 'var(--mono)', fontSize: "var(--t-xs)" }}>no preview</div>
               )}
             </div>
 
             <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
               <Section label="caption">
-                <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 14, color: 'var(--ink)', lineHeight: 1.5 }}>
+                <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: "var(--t-lg)", color: 'var(--ink)', lineHeight: 1.5 }}>
                   {asset.caption ?? '—'}
                 </div>
               </Section>
 
               <Section label="alt-text">
-                <div style={{ fontSize: 12, color: 'var(--ink-soft)', lineHeight: 1.5 }}>
+                <div style={{ fontSize: "var(--t-base)", color: 'var(--ink-soft)', lineHeight: 1.5 }}>
                   {asset.alt_text ?? '—'}
                 </div>
               </Section>
@@ -134,9 +134,9 @@ export default function AssetDetailDrawer() {
               <Section label={`tags (${asset.tags?.length ?? 0})`}>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                   {(asset.tags ?? []).map(t => (
-                    <span key={t} style={{ fontFamily: 'var(--mono)', fontSize: 10, background: 'var(--line-soft, #efeae0)', padding: '2px 6px', color: 'var(--ink)' }}>{t}</span>
+                    <span key={t} style={{ fontFamily: 'var(--mono)', fontSize: "var(--t-xs)", background: 'var(--line-soft, #efeae0)', padding: '2px 6px', color: 'var(--ink)' }}>{t}</span>
                   ))}
-                  {(!asset.tags || asset.tags.length === 0) && <span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>—</span>}
+                  {(!asset.tags || asset.tags.length === 0) && <span style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>—</span>}
                 </div>
               </Section>
 
@@ -156,7 +156,7 @@ export default function AssetDetailDrawer() {
               </Section>
 
               <Section label="metadata">
-                <div style={{ fontSize: 12, color: 'var(--ink-soft)', lineHeight: 1.7 }}>
+                <div style={{ fontSize: "var(--t-base)", color: 'var(--ink-soft)', lineHeight: 1.7 }}>
                   Photographer: <strong>{asset.photographer ?? '—'}</strong><br />
                   Captured: {asset.captured_at ? new Date(asset.captured_at).toLocaleString('en-GB') : '—'}<br />
                   License: {asset.license_type ?? '—'}<br />
@@ -165,7 +165,7 @@ export default function AssetDetailDrawer() {
               </Section>
 
               <Section label={`renders available (${Object.keys(asset.renders ?? {}).length})`}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--ink-soft)' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: "var(--t-sm)", fontFamily: 'var(--mono)', color: 'var(--ink-soft)' }}>
                   {Object.keys(asset.renders ?? {}).map(k => (
                     <div key={k} style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span>✓ {k}</span>
@@ -184,8 +184,8 @@ export default function AssetDetailDrawer() {
                 >
                   use in new campaign →
                 </a>
-                <button className="btn" style={{ fontSize: 11 }}>add to collection</button>
-                <button className="btn" style={{ fontSize: 11 }}>mark as do-not-modify</button>
+                <button className="btn" style={{ fontSize: "var(--t-sm)" }}>add to collection</button>
+                <button className="btn" style={{ fontSize: "var(--t-sm)" }}>mark as do-not-modify</button>
               </div>
             </div>
           </>
@@ -198,7 +198,7 @@ export default function AssetDetailDrawer() {
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <div style={{ fontFamily: 'var(--mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--ink-mute)', marginBottom: 6, fontWeight: 600 }}>{label}</div>
+      <div style={{ fontFamily: 'var(--mono)', fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--ink-mute)', marginBottom: 6, fontWeight: 600 }}>{label}</div>
       {children}
     </div>
   );

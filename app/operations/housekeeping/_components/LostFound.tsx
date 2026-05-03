@@ -25,7 +25,7 @@ export default function LostFound({ rows }: Props) {
       <h3
         style={{
           fontFamily: 'var(--serif)',
-          fontSize: 16,
+          fontSize: "var(--t-xl)",
           fontWeight: 500,
           margin: '0 0 8px',
         }}
@@ -47,7 +47,7 @@ export default function LostFound({ rows }: Props) {
                 border: 0,
                 padding: '6px 14px',
                 borderRadius: 6,
-                fontSize: 11.5,
+                fontSize: "var(--t-sm)",
                 fontWeight: 600,
                 cursor: 'pointer',
                 textTransform: 'uppercase',
@@ -69,7 +69,7 @@ export default function LostFound({ rows }: Props) {
               display: 'grid',
               gridTemplateColumns: '1fr 80px 60px',
               gap: 6,
-              fontSize: 11.5,
+              fontSize: "var(--t-sm)",
               padding: '6px 0',
               borderBottom: '1px dashed #e6dfc9',
               alignItems: 'center',
@@ -78,7 +78,7 @@ export default function LostFound({ rows }: Props) {
             <span style={{ fontWeight: 600 }}>{r.item}</span>
             <span
               style={{
-                fontSize: 10,
+                fontSize: "var(--t-xs)",
                 color: '#8a8170',
                 fontFamily: 'ui-monospace, Menlo, monospace',
               }}
@@ -87,7 +87,7 @@ export default function LostFound({ rows }: Props) {
             </span>
             <span
               style={{
-                fontSize: 10,
+                fontSize: "var(--t-xs)",
                 color: '#8a8170',
                 textTransform: 'uppercase',
                 letterSpacing: '0.06em',

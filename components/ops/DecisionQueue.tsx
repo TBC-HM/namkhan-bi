@@ -40,7 +40,7 @@ export default function DecisionQueue({ rows, meta, emptyOverlay }: Props) {
         <h3
           style={{
             fontFamily: 'var(--serif)',
-            fontSize: 18,
+            fontSize: "var(--t-xl)",
             fontWeight: 500,
             margin: 0,
           }}
@@ -48,7 +48,7 @@ export default function DecisionQueue({ rows, meta, emptyOverlay }: Props) {
           Decisions queued <em style={{ color: '#a17a4f' }}>for you</em>
         </h3>
         {meta && (
-          <span style={{ fontSize: 12, color: '#8a8170' }}>{meta}</span>
+          <span style={{ fontSize: "var(--t-base)", color: '#8a8170' }}>{meta}</span>
         )}
       </div>
 
@@ -77,7 +77,7 @@ export default function DecisionQueue({ rows, meta, emptyOverlay }: Props) {
               <div
                 style={{
                   fontFamily: 'ui-monospace, Menlo, monospace',
-                  fontSize: 12,
+                  fontSize: "var(--t-base)",
                   fontWeight: 700,
                   color: impactColor[r.urgency],
                 }}
@@ -85,10 +85,10 @@ export default function DecisionQueue({ rows, meta, emptyOverlay }: Props) {
                 {r.impact}
               </div>
               <div>
-                <div style={{ fontSize: 13.5, fontWeight: 600, color: '#1c1c1a' }}>
+                <div style={{ fontSize: "var(--t-md)", fontWeight: 600, color: '#1c1c1a' }}>
                   {r.title}
                 </div>
-                <div style={{ fontSize: 11.5, color: '#8a8170', marginTop: 2 }}>
+                <div style={{ fontSize: "var(--t-sm)", color: '#8a8170', marginTop: 2 }}>
                   {r.meta}
                 </div>
               </div>
@@ -115,7 +115,7 @@ export default function DecisionQueue({ rows, meta, emptyOverlay }: Props) {
 }
 
 const btnDefault: React.CSSProperties = {
-  fontSize: 11.5,
+  fontSize: "var(--t-sm)",
   padding: '6px 11px',
   borderRadius: 5,
   border: '1px solid #e6dfc9',

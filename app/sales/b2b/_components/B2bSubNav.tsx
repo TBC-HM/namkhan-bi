@@ -31,7 +31,7 @@ export default function B2bSubNav() {
             href={t.href}
             style={{
               padding: '8px 14px',
-              fontSize: 13,
+              fontSize: "var(--t-md)",
               color: active ? '#4a4538' : '#8a8170',
               borderBottom: active ? '2px solid #a17a4f' : '2px solid transparent',
               textDecoration: 'none',
@@ -51,7 +51,7 @@ export default function B2bSubNav() {
                   color: '#5e4818',
                   borderRadius: 10,
                   padding: '1px 7px',
-                  fontSize: 10.5,
+                  fontSize: "var(--t-xs)",
                   fontWeight: 600,
                 }}
               >

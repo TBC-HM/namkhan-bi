@@ -105,7 +105,7 @@ export default function CampaignWizard({ templates, assetPool }: Props) {
             <div key={s.n} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <div style={{
                 padding: '6px 14px',
-                fontSize: 12,
+                fontSize: "var(--t-base)",
                 fontWeight: active || done ? 600 : 500,
                 color: active ? 'var(--paper-warm)' : done ? 'var(--moss)' : 'var(--ink-mute)',
                 background: active ? 'var(--moss)' : done ? 'rgba(31,53,40,0.10)' : 'transparent',
@@ -173,8 +173,8 @@ export default function CampaignWizard({ templates, assetPool }: Props) {
         gap: 8,
         alignItems: 'center',
       }}>
-        {step > 1 && step < 5 && <button onClick={back} className="btn" style={{ fontSize: 11 }}>← back</button>}
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--ink-mute)' }}>
+        {step > 1 && step < 5 && <button onClick={back} className="btn" style={{ fontSize: "var(--t-sm)" }}>← back</button>}
+        <span style={{ marginLeft: 'auto', fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>
           {step === 1 && (canContinue ? 'looks good' : 'pick a template + write a brief sentence')}
           {step === 2 && template && `picked ${picked.length} of ${template.min_assets === template.max_assets ? template.max_assets : `${template.min_assets}–${template.max_assets}`}`}
           {step === 3 && `caption ${caption.length} / ${template?.caption_max_chars || 2200} chars`}
@@ -185,7 +185,7 @@ export default function CampaignWizard({ templates, assetPool }: Props) {
             disabled={!canContinue}
             className="btn"
             style={{
-              fontSize: 11,
+              fontSize: "var(--t-sm)",
               background: canContinue ? 'var(--moss)' : 'var(--ink-mute)',
               color: 'var(--paper-warm)',
               borderColor: canContinue ? 'var(--moss)' : 'var(--ink-mute)',
@@ -197,11 +197,11 @@ export default function CampaignWizard({ templates, assetPool }: Props) {
           <button
             onClick={() => setStep(5)}
             className="btn"
-            style={{ fontSize: 11, background: 'var(--moss)', color: 'var(--paper-warm)', borderColor: 'var(--moss)' }}
+            style={{ fontSize: "var(--t-sm)", background: 'var(--moss)', color: 'var(--paper-warm)', borderColor: 'var(--moss)' }}
           >✓ approve & schedule</button>
         )}
         {step === 5 && (
-          <a href="/marketing/campaigns" className="btn" style={{ fontSize: 11, textDecoration: 'none' }}>back to campaigns</a>
+          <a href="/marketing/campaigns" className="btn" style={{ fontSize: "var(--t-sm)", textDecoration: 'none' }}>back to campaigns</a>
         )}
       </div>
     </div>
@@ -233,8 +233,8 @@ function Step1Brief({ brief, setBrief, templates }: { brief: Brief; setBrief: (b
                   fontFamily: 'var(--sans)',
                 }}
               >
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>{t.name}</div>
-                <div style={{ fontSize: 10, fontFamily: 'var(--mono)', color: 'var(--ink-mute)', marginTop: 3 }}>
+                <div style={{ fontSize: "var(--t-base)", fontWeight: 600, color: 'var(--ink)' }}>{t.name}</div>
+                <div style={{ fontSize: "var(--t-xs)", fontFamily: 'var(--mono)', color: 'var(--ink-mute)', marginTop: 3 }}>
                   {t.aspect_ratio} · {t.output_width}×{t.output_height} · {t.min_assets === t.max_assets ? t.max_assets : `${t.min_assets}–${t.max_assets}`} asset{t.max_assets > 1 ? 's' : ''}
                 </div>
               </button>
@@ -250,7 +250,7 @@ function Step1Brief({ brief, setBrief, templates }: { brief: Brief; setBrief: (b
           placeholder='e.g. "Pi Mai festival in April — invite Bangkok guests"'
           style={{
             width: '100%',
-            fontSize: 14,
+            fontSize: "var(--t-lg)",
             padding: '12px 14px',
             border: '1px solid var(--line)',
             borderRadius: 4,
@@ -277,7 +277,7 @@ function Step1Brief({ brief, setBrief, templates }: { brief: Brief; setBrief: (b
                 onClick={() => setBrief({ ...brief, whenLive: opt.k })}
                 className="btn"
                 style={{
-                  fontSize: 11,
+                  fontSize: "var(--t-sm)",
                   background: active ? 'var(--moss)' : 'var(--paper-warm)',
                   color: active ? 'var(--paper-warm)' : 'var(--ink)',
                   borderColor: active ? 'var(--moss)' : 'var(--line)',
@@ -301,7 +301,7 @@ function Step1Brief({ brief, setBrief, templates }: { brief: Brief; setBrief: (b
                 })}
                 className="btn"
                 style={{
-                  fontSize: 11,
+                  fontSize: "var(--t-sm)",
                   textTransform: 'capitalize',
                   background: active ? 'var(--brass)' : 'var(--paper-warm)',
                   color: active ? 'var(--paper-warm)' : 'var(--ink)',
@@ -318,7 +318,7 @@ function Step1Brief({ brief, setBrief, templates }: { brief: Brief; setBrief: (b
           padding: '12px 14px',
           background: 'rgba(168,133,74,0.10)',
           borderLeft: '3px solid var(--brass)',
-          fontSize: 12,
+          fontSize: "var(--t-base)",
           color: 'var(--ink-soft)',
           lineHeight: 1.6,
         }}>
@@ -359,7 +359,7 @@ function Step2Curate({
       <div className="stub" style={{ padding: 32, textAlign: 'center' }}>
         <h3>No assets in the library yet</h3>
         <p>Upload some photos at <a href="/marketing/upload" style={{ color: 'var(--brass)' }}>/marketing/upload</a> first, then return to build a campaign.</p>
-        <p style={{ fontSize: 11, color: 'var(--ink-mute)', marginTop: 16 }}>
+        <p style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)', marginTop: 16 }}>
           Once Phase 1 ingest pipeline is fed, the AI will rank candidates against your brief automatically.
         </p>
       </div>
@@ -372,7 +372,7 @@ function Step2Curate({
         padding: '10px 14px',
         background: 'rgba(31,53,40,0.06)',
         borderLeft: '3px solid var(--moss)',
-        fontSize: 12,
+        fontSize: "var(--t-base)",
         color: 'var(--ink-soft)',
         lineHeight: 1.6,
       }}>
@@ -399,9 +399,9 @@ function Step2Curate({
         })}
       </div>
 
-      <div style={{ display: 'flex', gap: 8, fontSize: 11, color: 'var(--ink-mute)', alignItems: 'center', marginTop: 8 }}>
-        <button className="btn" style={{ fontSize: 11 }}>show 10 more</button>
-        <a href="/marketing/library" target="_blank" rel="noreferrer" className="btn" style={{ fontSize: 11, textDecoration: 'none' }}>browse library manually ↗</a>
+      <div style={{ display: 'flex', gap: 8, fontSize: "var(--t-sm)", color: 'var(--ink-mute)', alignItems: 'center', marginTop: 8 }}>
+        <button className="btn" style={{ fontSize: "var(--t-sm)" }}>show 10 more</button>
+        <a href="/marketing/library" target="_blank" rel="noreferrer" className="btn" style={{ fontSize: "var(--t-sm)", textDecoration: 'none' }}>browse library manually ↗</a>
         <span style={{ marginLeft: 'auto' }}>
           you picked <strong style={{ color: 'var(--ink)' }}>{picked.length}</strong> of {template?.max_assets ?? '?'}
         </span>
@@ -437,12 +437,12 @@ function ProposalCard({ asset, picked, score, reason, onToggle }: {
         {thumb
           // eslint-disable-next-line @next/next/no-img-element
           ? <img src={thumb} alt={asset.alt_text ?? ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          : <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#888', fontFamily: 'var(--mono)', fontSize: 10 }}>no preview</div>
+          : <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#888', fontFamily: 'var(--mono)', fontSize: "var(--t-xs)" }}>no preview</div>
         }
         <div style={{
           position: 'absolute', top: 6, right: 6,
           background: 'var(--brass)', color: 'var(--paper-warm)',
-          fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 700,
+          fontFamily: 'var(--mono)', fontSize: "var(--t-sm)", fontWeight: 700,
           padding: '3px 8px',
         }}>{score.toFixed(2)}</div>
         <div style={{
@@ -451,14 +451,14 @@ function ProposalCard({ asset, picked, score, reason, onToggle }: {
           background: picked ? 'var(--moss)' : 'rgba(255,255,255,0.92)',
           color: picked ? 'var(--paper-warm)' : 'var(--ink)',
           display: 'grid', placeItems: 'center',
-          fontSize: 14, fontWeight: 700,
+          fontSize: "var(--t-lg)", fontWeight: 700,
         }}>{picked ? '✓' : '+'}</div>
       </div>
       <div style={{ padding: '8px 10px' }}>
-        <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 13, color: 'var(--ink)', lineHeight: 1.3 }}>
+        <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: "var(--t-md)", color: 'var(--ink)', lineHeight: 1.3 }}>
           {asset.caption ?? asset.original_filename}
         </div>
-        <div style={{ marginTop: 4, fontSize: 10, color: 'var(--ink-mute)', fontStyle: 'italic' }}>
+        <div style={{ marginTop: 4, fontSize: "var(--t-xs)", color: 'var(--ink-mute)', fontStyle: 'italic' }}>
           {reason}
         </div>
       </div>
@@ -501,7 +501,7 @@ function Step3Compose({
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 22 }}>
       {/* Preview */}
       <div>
-        <div style={{ fontSize: 11, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--ink-mute)', marginBottom: 8 }}>preview · {template?.name}</div>
+        <div style={{ fontSize: "var(--t-sm)", fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--ink-mute)', marginBottom: 8 }}>preview · {template?.name}</div>
         <div style={{
           aspectRatio: aspectStr.replace(':', ' / '),
           background: '#0c0e0d',
@@ -512,14 +512,14 @@ function Step3Compose({
           {slideUrl
             // eslint-disable-next-line @next/next/no-img-element
             ? <img src={slideUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#666', fontFamily: 'var(--mono)', fontSize: 11 }}>(no preview)</div>}
-          <div style={{ position: 'absolute', bottom: 12, right: 12, fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--paper-warm)', background: 'rgba(0,0,0,0.5)', padding: '2px 6px' }}>thenamkhan</div>
+            : <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#666', fontFamily: 'var(--mono)', fontSize: "var(--t-sm)" }}>(no preview)</div>}
+          <div style={{ position: 'absolute', bottom: 12, right: 12, fontFamily: 'var(--mono)', fontSize: "var(--t-xs)", color: 'var(--paper-warm)', background: 'rgba(0,0,0,0.5)', padding: '2px 6px' }}>thenamkhan</div>
         </div>
         {slides.length > 1 && (
-          <div style={{ display: 'flex', gap: 6, marginTop: 12, justifyContent: 'center', alignItems: 'center', fontSize: 11, color: 'var(--ink-mute)' }}>
-            <button className="btn" style={{ fontSize: 10 }} onClick={() => setSlideIdx((slideIdx - 1 + slides.length) % slides.length)}>◀</button>
+          <div style={{ display: 'flex', gap: 6, marginTop: 12, justifyContent: 'center', alignItems: 'center', fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>
+            <button className="btn" style={{ fontSize: "var(--t-xs)" }} onClick={() => setSlideIdx((slideIdx - 1 + slides.length) % slides.length)}>◀</button>
             <span style={{ fontFamily: 'var(--mono)' }}>slide {slideIdx + 1} of {slides.length}</span>
-            <button className="btn" style={{ fontSize: 10 }} onClick={() => setSlideIdx((slideIdx + 1) % slides.length)}>▶</button>
+            <button className="btn" style={{ fontSize: "var(--t-xs)" }} onClick={() => setSlideIdx((slideIdx + 1) % slides.length)}>▶</button>
           </div>
         )}
       </div>
@@ -535,7 +535,7 @@ function Step3Compose({
               width: '100%',
               fontFamily: 'var(--serif)',
               fontStyle: 'italic',
-              fontSize: 14,
+              fontSize: "var(--t-lg)",
               padding: 12,
               border: '1px solid var(--line)',
               borderRadius: 4,
@@ -545,15 +545,15 @@ function Step3Compose({
             }}
           />
           <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
-            <button className="btn" style={{ fontSize: 11 }} onClick={regenerate}>regenerate</button>
-            <span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>tone:</span>
+            <button className="btn" style={{ fontSize: "var(--t-sm)" }} onClick={regenerate}>regenerate</button>
+            <span style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>tone:</span>
             {TONES.map(t => (
               <button
                 key={t.key}
                 onClick={() => setTone(t.key)}
                 className="btn"
                 style={{
-                  fontSize: 10,
+                  fontSize: "var(--t-xs)",
                   background: tone === t.key ? 'var(--moss)' : 'var(--paper-warm)',
                   color: tone === t.key ? 'var(--paper-warm)' : 'var(--ink)',
                   borderColor: tone === t.key ? 'var(--moss)' : 'var(--line)',
@@ -567,18 +567,18 @@ function Step3Compose({
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
             {hashtags.map((h, i) => (
               <span key={i} style={{
-                fontFamily: 'var(--mono)', fontSize: 11, padding: '3px 8px',
+                fontFamily: 'var(--mono)', fontSize: "var(--t-sm)", padding: '3px 8px',
                 background: 'var(--paper-warm)', border: '1px solid var(--line)',
               }}>#{h}</span>
             ))}
-            {hashtags.length === 0 && <span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>—</span>}
+            {hashtags.length === 0 && <span style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>—</span>}
           </div>
         </Section>
 
         <Section title="Logo placement">
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             <span className="pill" style={{ background: 'var(--moss)', color: 'var(--paper-warm)' }}>{template?.logo_position ?? 'bottom-right'} (default)</span>
-            <button className="btn" style={{ fontSize: 11 }}>change</button>
+            <button className="btn" style={{ fontSize: "var(--t-sm)" }}>change</button>
           </div>
         </Section>
       </div>
@@ -610,29 +610,29 @@ function Step4Approve({ template, picked, assetPool, caption, hashtags, brief }:
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <div style={{ fontFamily: 'var(--mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--ink-mute)' }}>review · {template?.name} · {slides.length} asset{slides.length === 1 ? '' : 's'}</div>
+      <div style={{ fontFamily: 'var(--mono)', fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--ink-mute)' }}>review · {template?.name} · {slides.length} asset{slides.length === 1 ? '' : 's'}</div>
 
       <div>
-        <div style={{ fontSize: 11, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1, color: 'var(--ink-mute)', marginBottom: 6 }}>brief</div>
-        <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 14, color: 'var(--ink)' }}>{brief.briefText}</div>
-        <div style={{ fontSize: 11, color: 'var(--ink-mute)', marginTop: 4 }}>schedule: {brief.whenLive.replace('_', ' ')}</div>
+        <div style={{ fontSize: "var(--t-sm)", fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1, color: 'var(--ink-mute)', marginBottom: 6 }}>brief</div>
+        <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: "var(--t-lg)", color: 'var(--ink)' }}>{brief.briefText}</div>
+        <div style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)', marginTop: 4 }}>schedule: {brief.whenLive.replace('_', ' ')}</div>
       </div>
 
       <div>
-        <div style={{ fontSize: 11, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1, color: 'var(--ink-mute)', marginBottom: 6 }}>caption</div>
-        <div style={{ fontSize: 13, color: 'var(--ink-soft)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{caption}</div>
+        <div style={{ fontSize: "var(--t-sm)", fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1, color: 'var(--ink-mute)', marginBottom: 6 }}>caption</div>
+        <div style={{ fontSize: "var(--t-md)", color: 'var(--ink-soft)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{caption}</div>
       </div>
 
       <div>
-        <div style={{ fontSize: 11, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1, color: 'var(--ink-mute)', marginBottom: 6 }}>hashtags ({hashtags.length})</div>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--ink)' }}>
+        <div style={{ fontSize: "var(--t-sm)", fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1, color: 'var(--ink-mute)', marginBottom: 6 }}>hashtags ({hashtags.length})</div>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: "var(--t-sm)", color: 'var(--ink)' }}>
           {hashtags.map(h => `#${h}`).join('  ')}
         </div>
       </div>
 
       <div>
-        <div style={{ fontSize: 11, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1, color: 'var(--ink-mute)', marginBottom: 8 }}>checklist</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
+        <div style={{ fontSize: "var(--t-sm)", fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1, color: 'var(--ink-mute)', marginBottom: 8 }}>checklist</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: "var(--t-base)" }}>
           {checks.map((c, i) => (
             <div key={i} style={{ color: c.pass ? 'var(--moss)' : 'var(--oxblood)' }}>
               {c.pass ? '✓' : '✕'} {c.label}
@@ -644,7 +644,7 @@ function Step4Approve({ template, picked, assetPool, caption, hashtags, brief }:
       </div>
 
       <div>
-        <div style={{ fontSize: 11, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1, color: 'var(--ink-mute)', marginBottom: 6 }}>approver</div>
+        <div style={{ fontSize: "var(--t-sm)", fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1, color: 'var(--ink-mute)', marginBottom: 6 }}>approver</div>
         <span className="pill" style={{ background: 'var(--moss)', color: 'var(--paper-warm)' }}>Paul Bauer (Owner)</span>
       </div>
     </div>
@@ -661,30 +661,30 @@ function Step5Distribute({ template, picked, brief }: { template: CampaignTempla
         padding: '14px 18px',
         background: 'rgba(31,53,40,0.10)',
         borderLeft: '3px solid var(--moss)',
-        fontSize: 14,
+        fontSize: "var(--t-lg)",
         color: 'var(--ink)',
       }}>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--moss)', fontWeight: 600 }}>✓ approved</div>
-        <div style={{ marginTop: 4, fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 18 }}>your campaign is queued</div>
-        <div style={{ marginTop: 4, fontSize: 12, color: 'var(--ink-soft)' }}>{template?.name} · {picked.length} asset{picked.length === 1 ? '' : 's'} · scheduled {brief.whenLive.replace('_', ' ')}</div>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--moss)', fontWeight: 600 }}>✓ approved</div>
+        <div style={{ marginTop: 4, fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: "var(--t-xl)" }}>your campaign is queued</div>
+        <div style={{ marginTop: 4, fontSize: "var(--t-base)", color: 'var(--ink-soft)' }}>{template?.name} · {picked.length} asset{picked.length === 1 ? '' : 's'} · scheduled {brief.whenLive.replace('_', ' ')}</div>
       </div>
 
       <div className="card" style={{ background: 'var(--paper)', padding: 16 }}>
-        <div style={{ fontSize: 11, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1, color: 'var(--ink-mute)', marginBottom: 10 }}>where it goes</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12 }}>
+        <div style={{ fontSize: "var(--t-sm)", fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1, color: 'var(--ink-mute)', marginBottom: 10 }}>where it goes</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: "var(--t-base)" }}>
           <Row label="Logged in usage history for all assets" status="done" />
           <Row label="Backed up to /campaigns archive" status="done" />
           <Row label={`Auto-post to ${template?.channel.startsWith('instagram') ? 'Instagram @thenamkhan' : template?.name ?? 'channel'} (via Make scenario)`} status="scheduled" />
         </div>
       </div>
 
-      <div style={{ padding: 14, background: 'rgba(168,133,74,0.10)', borderLeft: '3px solid var(--brass)', fontSize: 11, color: 'var(--ink-soft)', lineHeight: 1.6 }}>
+      <div style={{ padding: 14, background: 'rgba(168,133,74,0.10)', borderLeft: '3px solid var(--brass)', fontSize: "var(--t-sm)", color: 'var(--ink-soft)', lineHeight: 1.6 }}>
         <strong>auto-posting comes in Phase 4.</strong> for now, download the renders below and post manually.
       </div>
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <button className="btn" style={{ fontSize: 11 }}>⤓ all slides as ZIP</button>
-        <button className="btn" style={{ fontSize: 11 }}>⤓ caption + hashtags TXT</button>
+        <button className="btn" style={{ fontSize: "var(--t-sm)" }}>⤓ all slides as ZIP</button>
+        <button className="btn" style={{ fontSize: "var(--t-sm)" }}>⤓ caption + hashtags TXT</button>
       </div>
     </div>
   );
@@ -710,7 +710,7 @@ function Row({ label, status }: { label: string; status: 'done' | 'scheduled' | 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <div style={{ fontSize: 11, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--ink-mute)', fontWeight: 600, marginBottom: 8 }}>{title}</div>
+      <div style={{ fontSize: "var(--t-sm)", fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--ink-mute)', fontWeight: 600, marginBottom: 8 }}>{title}</div>
       {children}
     </div>
   );

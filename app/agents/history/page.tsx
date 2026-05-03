@@ -63,7 +63,7 @@ export default function HistoryPage() {
           <tbody>
             {MOCK_HISTORY.map(r => (
               <tr key={r.id}>
-                <td style={{ fontSize: 18, width: 28 }}>{r.emoji}</td>
+                <td style={{ fontSize: "var(--t-xl)", width: 28 }}>{r.emoji}</td>
                 <td className="label">{r.agent_name}</td>
                 <td className="muted">{r.when}</td>
                 <td className="num">{r.duration}</td>
@@ -78,7 +78,7 @@ export default function HistoryPage() {
         </table>
       </div>
 
-      <div className="muted" style={{ fontSize: 12, lineHeight: 1.6, padding: '16px 0' }}>
+      <div className="muted" style={{ fontSize: "var(--t-base)", lineHeight: 1.6, padding: '16px 0' }}>
         ⓘ History is mock data. When agents are wired to real models, runs will be persisted in <code>public.agent_runs</code> with full output, inputs, and cost tracking.
       </div>
     </>

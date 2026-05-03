@@ -22,7 +22,7 @@ export default function LadderTable({ rows }: Props) {
       <h3
         style={{
           fontFamily: 'var(--serif)',
-          fontSize: 16,
+          fontSize: "var(--t-xl)",
           fontWeight: 500,
           margin: '0 0 8px',
         }}
@@ -43,7 +43,7 @@ export default function LadderTable({ rows }: Props) {
               display: 'grid',
               gridTemplateColumns: '1fr 60px 70px 70px',
               gap: 8,
-              fontSize: 10,
+              fontSize: "var(--t-xs)",
               color: '#8a8170',
               textTransform: 'uppercase',
               letterSpacing: '0.06em',
@@ -64,7 +64,7 @@ export default function LadderTable({ rows }: Props) {
                 display: 'grid',
                 gridTemplateColumns: '1fr 60px 70px 70px',
                 gap: 8,
-                fontSize: 12,
+                fontSize: "var(--t-base)",
                 padding: '7px 0',
                 borderBottom: '1px dashed #e6dfc9',
                 alignItems: 'center',

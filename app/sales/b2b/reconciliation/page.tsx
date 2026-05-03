@@ -71,9 +71,9 @@ export default async function ReconciliationPage() {
       <B2bKpiStrip />
 
       <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: "var(--t-base)" }}>
           <thead>
-            <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               <th style={{ padding: '10px 10px' }}>Cloudbeds ID</th>
               <th style={{ padding: '10px 10px' }}>Guest</th>
               <th style={{ padding: '10px 10px' }}>Source</th>
@@ -96,19 +96,19 @@ export default async function ReconciliationPage() {
                       href={cloudbedsReservationUrl(r.reservation_id, PROPERTY_ID)}
                       target="_blank"
                       rel="noreferrer"
-                      style={{ fontFamily: 'var(--mono)', color: 'var(--st-info-tx)', textDecoration: 'none', fontSize: 11 }}
+                      style={{ fontFamily: 'var(--mono)', color: 'var(--st-info-tx)', textDecoration: 'none', fontSize: "var(--t-sm)" }}
                       title="Open in Cloudbeds"
                     >
                       {r.reservation_id} ↗
                     </a>
                   </td>
-                  <td style={{ padding: '6px 10px', fontSize: 11.5 }}>{r.guest_name ?? '—'}</td>
-                  <td style={{ padding: '6px 10px', fontWeight: 500, fontSize: 11.5 }}>{r.source_name ?? '—'}</td>
-                  <td style={{ padding: '6px 10px', color: 'var(--ink-mute)', fontFamily: 'var(--mono)', fontSize: 11 }}>{r.check_in_date ?? '—'}</td>
+                  <td style={{ padding: '6px 10px', fontSize: "var(--t-sm)" }}>{r.guest_name ?? '—'}</td>
+                  <td style={{ padding: '6px 10px', fontWeight: 500, fontSize: "var(--t-sm)" }}>{r.source_name ?? '—'}</td>
+                  <td style={{ padding: '6px 10px', color: 'var(--ink-mute)', fontFamily: 'var(--mono)', fontSize: "var(--t-sm)" }}>{r.check_in_date ?? '—'}</td>
                   <td style={{ padding: '6px 10px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{r.nights ?? '—'}</td>
                   <td style={{ padding: '6px 10px', textAlign: 'right', fontFamily: 'var(--mono)' }}>USD {Number(r.total_amount ?? 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
                   <td style={{ padding: '6px 10px' }}>
-                    <span style={{ background: pill.bg, border: `1px solid ${pill.bd}`, color: pill.fg, padding: '2px 7px', borderRadius: 10, fontSize: 10, fontWeight: 600, textTransform: 'capitalize' }}>
+                    <span style={{ background: pill.bg, border: `1px solid ${pill.bd}`, color: pill.fg, padding: '2px 7px', borderRadius: 10, fontSize: "var(--t-xs)", fontWeight: 600, textTransform: 'capitalize' }}>
                       {(r.status ?? 'pending').replace('_', ' ')}
                     </span>
                   </td>
@@ -133,7 +133,7 @@ export default async function ReconciliationPage() {
         </table>
       </div>
 
-      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: 11.5 }}>
+      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: "var(--t-sm)" }}>
         <strong>✓ Live.</strong> {reservations.length} LPA reservations · {confirmed.length} mapped · {unconfirmed.length} pending. Yellow rows = unmatched (no contract on file). Green rows = already confirmed. Click <strong>Confirm</strong> to persist to <code>governance.dmc_reservation_mapping</code>.
       </div>
     </>

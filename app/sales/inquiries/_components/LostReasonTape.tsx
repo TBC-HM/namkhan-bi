@@ -36,18 +36,18 @@ export default function LostReasonTape() {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          fontSize: 13,
+          fontSize: "var(--t-md)",
         }}
       >
         <span>
-          <strong style={{ fontFamily: 'var(--serif)', fontSize: 16 }}>
+          <strong style={{ fontFamily: 'var(--serif)', fontSize: "var(--t-xl)" }}>
             Lost-reason tape
           </strong>
-          <span style={{ color: '#8a8170', marginLeft: 8, fontSize: 11.5 }}>
+          <span style={{ color: '#8a8170', marginLeft: 8, fontSize: "var(--t-sm)" }}>
             last 30 closed-lost · taxonomy-coded · feeds Conversion Coach
           </span>
         </span>
-        <span style={{ color: '#a17a4f', fontSize: 11 }}>expand ▾</span>
+        <span style={{ color: '#a17a4f', fontSize: "var(--t-sm)" }}>expand ▾</span>
       </summary>
 
       <div
@@ -70,7 +70,7 @@ export default function LostReasonTape() {
           >
             <div
               style={{
-                fontSize: 22,
+                fontSize: "var(--t-2xl)",
                 fontFamily: 'var(--serif)',
                 color: '#1c1815',
               }}
@@ -79,7 +79,7 @@ export default function LostReasonTape() {
             </div>
             <div
               style={{
-                fontSize: 10.5,
+                fontSize: "var(--t-xs)",
                 color: '#4a4538',
                 textTransform: 'uppercase',
                 letterSpacing: '0.06em',
@@ -88,14 +88,14 @@ export default function LostReasonTape() {
             >
               {b.reason}
             </div>
-            <div style={{ fontSize: 10, color: '#8a8170', marginTop: 1 }}>
+            <div style={{ fontSize: "var(--t-xs)", color: '#8a8170', marginTop: 1 }}>
               {b.pct}%
             </div>
           </div>
         ))}
       </div>
 
-      <div style={{ marginTop: 10, fontSize: 11, color: '#8a8170' }}>
+      <div style={{ marginTop: 10, fontSize: "var(--t-sm)", color: '#8a8170' }}>
         Live taxonomy populates once <code>sales.lost_reasons</code> ships and
         Conversion Coach has ≥50 closed quotes.
       </div>

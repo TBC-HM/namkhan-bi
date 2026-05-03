@@ -147,7 +147,7 @@ export default function InquiryFeed({ overlay }: { overlay?: ReactNode }) {
         <div>
           <div
             style={{
-              fontSize: 11,
+              fontSize: "var(--t-sm)",
               color: '#8a8170',
               textTransform: 'uppercase',
               letterSpacing: '0.1em',
@@ -158,7 +158,7 @@ export default function InquiryFeed({ overlay }: { overlay?: ReactNode }) {
           <h3
             style={{
               fontFamily: 'var(--serif)',
-              fontSize: 18,
+              fontSize: "var(--t-xl)",
               fontWeight: 500,
               margin: '2px 0 0',
             }}
@@ -166,7 +166,7 @@ export default function InquiryFeed({ overlay }: { overlay?: ReactNode }) {
             Inbound, <em style={{ color: '#a17a4f' }}>ranked</em> by $ × decay × confidence
           </h3>
         </div>
-        <span style={{ fontSize: 11, color: '#8a8170' }}>
+        <span style={{ fontSize: "var(--t-sm)", color: '#8a8170' }}>
           {ROWS.length} open · last 24h
         </span>
       </div>
@@ -183,13 +183,13 @@ export default function InquiryFeed({ overlay }: { overlay?: ReactNode }) {
             padding: '10px 14px',
             borderTop: i === 0 ? 0 : '1px solid #f0e8d0',
             alignItems: 'center',
-            fontSize: 12.5,
+            fontSize: "var(--t-base)",
           }}
         >
           <span
             style={{
               fontFamily: 'ui-monospace, Menlo, monospace',
-              fontSize: 11,
+              fontSize: "var(--t-sm)",
               color: '#8a8170',
             }}
           >
@@ -203,7 +203,7 @@ export default function InquiryFeed({ overlay }: { overlay?: ReactNode }) {
               background: 'var(--paper-warm)',
               border: `1px solid ${typeColor[r.type]}`,
               color: typeColor[r.type],
-              fontSize: 10.5,
+              fontSize: "var(--t-xs)",
               textTransform: 'uppercase',
               letterSpacing: '0.06em',
               fontWeight: 600,
@@ -219,7 +219,7 @@ export default function InquiryFeed({ overlay }: { overlay?: ReactNode }) {
                 <span
                   style={{
                     marginLeft: 6,
-                    fontSize: 9.5,
+                    fontSize: "var(--t-xs)",
                     background: '#1f3d2e',
                     color: 'var(--paper-warm)',
                     padding: '1px 5px',
@@ -234,7 +234,7 @@ export default function InquiryFeed({ overlay }: { overlay?: ReactNode }) {
                 <span
                   style={{
                     marginLeft: 6,
-                    fontSize: 10,
+                    fontSize: "var(--t-xs)",
                     color: '#8a8170',
                     fontWeight: 400,
                   }}
@@ -243,10 +243,10 @@ export default function InquiryFeed({ overlay }: { overlay?: ReactNode }) {
                 </span>
               ) : null}
             </div>
-            <div style={{ fontSize: 11.5, color: '#4a4538', marginTop: 2 }}>
+            <div style={{ fontSize: "var(--t-sm)", color: '#4a4538', marginTop: 2 }}>
               {r.subject}
             </div>
-            <div style={{ fontSize: 10.5, color: '#8a8170', marginTop: 2 }}>
+            <div style={{ fontSize: "var(--t-xs)", color: '#8a8170', marginTop: 2 }}>
               {r.source}
             </div>
           </div>
@@ -266,7 +266,7 @@ export default function InquiryFeed({ overlay }: { overlay?: ReactNode }) {
               borderRadius: 4,
               background: statusBg[r.status],
               border: '1px solid #e6dfc9',
-              fontSize: 11,
+              fontSize: "var(--t-sm)",
               textAlign: 'center',
             }}
           >

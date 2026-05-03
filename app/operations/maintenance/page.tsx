@@ -137,7 +137,7 @@ export default async function MaintenancePage() {
         <span style={pill}>All categories</span>
         <span style={pill}>All priorities</span>
         <span style={pill}>All vendors</span>
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--ink-mute)' }}>
+        <span style={{ marginLeft: 'auto', fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>
           Property + segment filters above (layout)
         </span>
       </div>
@@ -263,7 +263,7 @@ const pill: React.CSSProperties = {
   border: '1px solid var(--paper-deep)',
   borderRadius: 6,
   background: 'var(--paper-warm)',
-  fontSize: 12,
+  fontSize: "var(--t-base)",
 };
 
 const pillActive: React.CSSProperties = {

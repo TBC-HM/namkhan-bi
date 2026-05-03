@@ -33,7 +33,7 @@ export default function AssetHeatMap({ cells }: Props) {
       <h3
         style={{
           fontFamily: 'var(--serif)',
-          fontSize: 16,
+          fontSize: "var(--t-xl)",
           fontWeight: 500,
           margin: '0 0 8px',
         }}
@@ -68,7 +68,7 @@ export default function AssetHeatMap({ cells }: Props) {
                 borderRadius: 4,
                 padding: 6,
                 fontFamily: 'ui-monospace, Menlo, monospace',
-                fontSize: 10,
+                fontSize: "var(--t-xs)",
                 minHeight: 50,
                 display: 'flex',
                 flexDirection: 'column',
@@ -76,7 +76,7 @@ export default function AssetHeatMap({ cells }: Props) {
               }}
             >
               <div style={{ fontWeight: 700 }}>{c.asset_code}</div>
-              <div style={{ color: '#8a8170', fontSize: 9 }}>{c.location}</div>
+              <div style={{ color: '#8a8170', fontSize: "var(--t-xs)" }}>{c.location}</div>
             </div>
           ))}
         </div>

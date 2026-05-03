@@ -133,9 +133,9 @@ export default async function B2bDmcContractsPage() {
       <B2bKpiStrip />
 
       <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: "var(--t-base)" }}>
           <thead>
-            <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               <th style={{ padding: '10px 12px' }}>Partner</th>
               <th style={{ padding: '10px 12px' }}>Country</th>
               <th style={{ padding: '10px 12px' }}>Type</th>
@@ -176,12 +176,12 @@ export default async function B2bDmcContractsPage() {
                   <td style={{ padding: '10px 12px' }}>{row.flag ?? ''} {row.country ?? '—'}</td>
                   <td style={{ padding: '10px 12px' }}>{row.type}</td>
                   <td style={{ padding: '10px 12px' }}>
-                    <span style={{ background: pill.bg, border: `1px solid ${pill.bd}`, color: pill.fg, padding: '2px 8px', borderRadius: 10, fontSize: 10.5, fontWeight: 600 }}>
+                    <span style={{ background: pill.bg, border: `1px solid ${pill.bd}`, color: pill.fg, padding: '2px 8px', borderRadius: 10, fontSize: "var(--t-xs)", fontWeight: 600 }}>
                       {pill.label}
                     </span>
                   </td>
-                  <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontSize: 11.5 }}>{row.effective ?? '—'}</td>
-                  <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontSize: 11.5 }}>{row.expires ?? '—'}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontSize: "var(--t-sm)" }}>{row.effective ?? '—'}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontSize: "var(--t-sm)" }}>{row.expires ?? '—'}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: dayColor }}>
                     {row.daysToExpiry == null ? '—' :
                       row.daysToExpiry > 0 ? `${row.daysToExpiry}` :
@@ -201,7 +201,7 @@ export default async function B2bDmcContractsPage() {
         </table>
       </div>
 
-      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: 11.5 }}>
+      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: "var(--t-sm)" }}>
         <strong>✓ Wired.</strong> {contractRows.length} contracts on file · {uncontractedRows.length} uncontracted sources sending LPA business. Yellow rows = revenue at risk — create contracts for them via Reconciliation queue.
       </div>
     </>

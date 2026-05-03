@@ -71,9 +71,9 @@ export default async function PerformancePage() {
       <B2bKpiStrip />
 
       <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: "var(--t-base)" }}>
           <thead>
-            <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               <th style={{ padding: '10px 12px' }}>#</th>
               <th style={{ padding: '10px 12px' }}>Source (Cloudbeds)</th>
               <th style={{ padding: '10px 12px' }}>Matched contract</th>
@@ -99,7 +99,7 @@ export default async function PerformancePage() {
                         ✓ {p.matched_partner}
                       </Link>
                     ) : (
-                      <span style={{ color: 'var(--st-bad)', fontStyle: 'italic', fontSize: 11.5 }}>no contract on file</span>
+                      <span style={{ color: 'var(--st-bad)', fontStyle: 'italic', fontSize: "var(--t-sm)" }}>no contract on file</span>
                     )}
                   </td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{p.reservation_count}</td>
@@ -124,7 +124,7 @@ export default async function PerformancePage() {
         </table>
       </div>
 
-      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: 11.5 }}>
+      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: "var(--t-sm)" }}>
         <strong>✓ Wired.</strong> Real revenue + RNs from {partners.length} sources on LPA rate plan. Sources without contracts = revenue at risk (no anti-publication clause / parity guard / payment terms enforced).
       </div>
     </>

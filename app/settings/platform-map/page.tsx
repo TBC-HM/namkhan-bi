@@ -68,7 +68,7 @@ export default function PlatformMapPage() {
                 padding: '8px 14px',
                 background: 'var(--moss)',
                 color: 'var(--paper-warm)',
-                fontSize: 12,
+                fontSize: "var(--t-base)",
                 fontWeight: 600,
                 letterSpacing: 0.5,
                 textTransform: 'uppercase',
@@ -78,7 +78,7 @@ export default function PlatformMapPage() {
             >
               Open architecture diagram →
             </a>
-            <span style={{ fontSize: 12, color: 'var(--ink-mute)' }}>
+            <span style={{ fontSize: "var(--t-base)", color: 'var(--ink-mute)' }}>
               Layered visual map (sources → ingest → DB → agents → frontend). Opens in a new tab.
             </span>
           </div>

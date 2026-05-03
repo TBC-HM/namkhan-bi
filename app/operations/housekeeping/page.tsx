@@ -141,7 +141,7 @@ export default async function HousekeepingPage() {
         <span style={shiftPill}>Night</span>
         <span style={shiftPill}>All categories</span>
         <span style={shiftPill}>All staff</span>
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--ink-mute)' }}>
+        <span style={{ marginLeft: 'auto', fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>
           Property + date + segment filters above (layout)
         </span>
       </div>
@@ -264,7 +264,7 @@ const shiftPill: React.CSSProperties = {
   border: '1px solid var(--paper-deep)',
   borderRadius: 6,
   background: 'var(--paper-warm)',
-  fontSize: 12,
+  fontSize: "var(--t-base)",
 };
 
 const shiftPillActive: React.CSSProperties = {

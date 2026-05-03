@@ -292,7 +292,7 @@ export default async function PnLPage({ searchParams }: Props) {
           ));
         })()}
       </div>
-      <div style={{ marginTop: 6, fontSize: 11, color: 'var(--ink-mute, #8a8170)' }}>
+      <div style={{ marginTop: 6, fontSize: "var(--t-sm)", color: 'var(--ink-mute, #8a8170)' }}>
         {decisions.length > 0
           ? <>Live queue from <code>governance.decision_queue</code> · {decisions.length} pending. Action handlers (Approve/Snooze) require server actions wiring — defer to Phase 3.</>
           : <>No pending items in <code>governance.decision_queue</code> · sample shown. Action handlers (Approve/Snooze) require server actions wiring — defer to Phase 3.</>

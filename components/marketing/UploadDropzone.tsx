@@ -232,10 +232,10 @@ export default function UploadDropzone() {
           onChange={onPick}
           style={{ display: 'none' }}
         />
-        <div style={{ fontSize: 28, color: 'var(--brass)' }}>⤴</div>
-        <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 18, color: 'var(--ink)', marginTop: 10 }}>drop files here</div>
-        <div style={{ fontSize: 12, color: 'var(--ink-mute)', marginTop: 6 }}>or click to browse</div>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--ink-mute)', marginTop: 14, letterSpacing: 0.4 }}>
+        <div style={{ fontSize: "var(--t-3xl)", color: 'var(--brass)' }}>⤴</div>
+        <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: "var(--t-xl)", color: 'var(--ink)', marginTop: 10 }}>drop files here</div>
+        <div style={{ fontSize: "var(--t-base)", color: 'var(--ink-mute)', marginTop: 6 }}>or click to browse</div>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: "var(--t-xs)", color: 'var(--ink-mute)', marginTop: 14, letterSpacing: 0.4 }}>
           photos · up to 200 files · max 500 MB per file · direct upload (signed URL)
         </div>
       </label>
@@ -248,7 +248,7 @@ export default function UploadDropzone() {
             <div className="card-sub">optional · helps the AI tagger</div>
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, fontSize: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, fontSize: "var(--t-base)" }}>
           <Field label="Photographer">
             <input ref={photographerRef} style={fieldStyle} placeholder="select staff or type name" />
           </Field>
@@ -306,10 +306,10 @@ export default function UploadDropzone() {
                 <tr key={i.id}>
                   <td className="lbl">
                     <strong>{i.name}</strong>
-                    {i.reason && <div style={{ fontSize: 10, color: 'var(--oxblood)', marginTop: 2 }}>{i.reason}</div>}
+                    {i.reason && <div style={{ fontSize: "var(--t-xs)", color: 'var(--oxblood)', marginTop: 2 }}>{i.reason}</div>}
                   </td>
-                  <td className="num" style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>{(i.size / 1_000_000).toFixed(1)} MB</td>
-                  <td className="num" style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--ink-mute)' }}>
+                  <td className="num" style={{ fontFamily: 'var(--mono)', fontSize: "var(--t-sm)" }}>{(i.size / 1_000_000).toFixed(1)} MB</td>
+                  <td className="num" style={{ fontFamily: 'var(--mono)', fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>
                     {i.status === 'uploading' ? `${i.progress ?? 0}%` : ''}
                   </td>
                   <td>
@@ -319,7 +319,7 @@ export default function UploadDropzone() {
                   </td>
                   <td style={{ textAlign: 'right' }}>
                     {(i.status === 'ingested' || i.status === 'ready' || i.status === 'duplicate') && (
-                      <a href="/marketing/library" style={{ fontSize: 11, color: 'var(--moss)' }}>view ↗</a>
+                      <a href="/marketing/library" style={{ fontSize: "var(--t-sm)", color: 'var(--moss)' }}>view ↗</a>
                     )}
                   </td>
                 </tr>
@@ -327,7 +327,7 @@ export default function UploadDropzone() {
             </tbody>
           </table>
           {counts.ready > 0 && counts.proc === 0 && (
-            <div style={{ marginTop: 14, padding: '10px 14px', background: 'rgba(31,53,40,0.06)', borderLeft: '3px solid var(--moss)', fontSize: 12 }}>
+            <div style={{ marginTop: 14, padding: '10px 14px', background: 'rgba(31,53,40,0.06)', borderLeft: '3px solid var(--moss)', fontSize: "var(--t-base)" }}>
               <strong>{counts.ready} asset{counts.ready === 1 ? '' : 's'} added to your library.</strong>{' '}
               <a href="/marketing/library" style={{ color: 'var(--moss)', fontWeight: 600 }}>view in library →</a>
             </div>
@@ -335,7 +335,7 @@ export default function UploadDropzone() {
         </div>
       )}
 
-      <div style={{ fontSize: 11, color: 'var(--ink-mute)', textAlign: 'center', padding: 12 }}>
+      <div style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)', textAlign: 'center', padding: 12 }}>
         Live — files upload direct to <code>media-raw</code> via signed URL.
         Bytes never traverse Vercel function bodies (no 4.5 MB cap).
         Status stays at <strong>ingested</strong> until tagging pipeline runs.
@@ -346,7 +346,7 @@ export default function UploadDropzone() {
 
 const fieldStyle: React.CSSProperties = {
   width: '100%',
-  fontSize: 12,
+  fontSize: "var(--t-base)",
   padding: '8px 10px',
   border: '1px solid var(--line)',
   borderRadius: 4,
@@ -357,7 +357,7 @@ const fieldStyle: React.CSSProperties = {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <div style={{ fontSize: 10, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--ink-mute)', marginBottom: 5, fontWeight: 600 }}>{label}</div>
+      <div style={{ fontSize: "var(--t-xs)", fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--ink-mute)', marginBottom: 5, fontWeight: 600 }}>{label}</div>
       {children}
     </div>
   );

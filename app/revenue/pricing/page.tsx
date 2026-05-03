@@ -156,7 +156,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
       />
 
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 12, marginBottom: 10 }}>
-        <span style={{ fontSize: 11, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Granularity</span>
+        <span style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Granularity</span>
         {(['day', 'week', 'month'] as const).map((g) => {
           const active = g === gran;
           const params = new URLSearchParams();
@@ -167,7 +167,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
             <a key={g} href={href} style={{
               padding: '4px 12px', borderRadius: 4, border: '1px solid var(--line-soft)',
               background: active ? 'var(--ink-soft)' : 'var(--paper-warm)', color: active ? 'var(--paper-warm)' : 'var(--ink-soft)',
-              fontSize: 12, textDecoration: 'none', textTransform: 'capitalize',
+              fontSize: "var(--t-base)", textDecoration: 'none', textTransform: 'capitalize',
             }}>{g}</a>
           );
         })}
@@ -184,11 +184,11 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
 
       <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, marginBottom: 14, overflow: 'hidden' }}>
         <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--paper-deep)' }}>
-          <h2 style={{ margin: 0, fontFamily: 'var(--serif)', fontWeight: 500, fontSize: 17 }}>BAR ladder by room type</h2>
+          <h2 style={{ margin: 0, fontFamily: 'var(--serif)', fontWeight: 500, fontSize: "var(--t-xl)" }}>BAR ladder by room type</h2>
         </div>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: "var(--t-base)" }}>
           <thead>
-            <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               <th style={{ padding: '10px 12px' }}>Room type</th>
               <th style={{ padding: '10px 12px', textAlign: 'right' }}>Cells</th>
               <th style={{ padding: '10px 12px', textAlign: 'right' }}>Avg</th>
@@ -220,15 +220,15 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
 
       <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px', marginBottom: 14, overflowX: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
-          <h2 style={{ margin: 0, fontFamily: 'var(--serif)', fontWeight: 500, fontSize: 17 }}>Rate calendar · room × {gran}</h2>
-          <span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>Color = avg USD (terracotta=high, pale=low) · hover for details</span>
+          <h2 style={{ margin: 0, fontFamily: 'var(--serif)', fontWeight: 500, fontSize: "var(--t-xl)" }}>Rate calendar · room × {gran}</h2>
+          <span style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>Color = avg USD (terracotta=high, pale=low) · hover for details</span>
         </div>
-        <table style={{ borderCollapse: 'collapse', fontSize: 11, minWidth: '100%' }}>
+        <table style={{ borderCollapse: 'collapse', fontSize: "var(--t-sm)", minWidth: '100%' }}>
           <thead>
             <tr>
-              <th style={{ padding: '6px 10px', textAlign: 'left', color: 'var(--ink-mute)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Room</th>
+              <th style={{ padding: '6px 10px', textAlign: 'left', color: 'var(--ink-mute)', fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: '0.05em' }}>Room</th>
               {buckets.map((b) => (
-                <th key={b} style={{ padding: '6px 4px', textAlign: 'center', color: 'var(--ink-mute)', fontSize: 10, fontWeight: 500, minWidth: 50 }}>
+                <th key={b} style={{ padding: '6px 4px', textAlign: 'center', color: 'var(--ink-mute)', fontSize: "var(--t-xs)", fontWeight: 500, minWidth: 50 }}>
                   {gran === 'month' ? fmtMonth(b) : b.slice(5)}
                 </th>
               ))}
@@ -237,7 +237,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
           <tbody>
             {roomAggs.map((a) => (
               <tr key={a.id}>
-                <td style={{ padding: '4px 10px', fontWeight: 500, fontSize: 11.5, whiteSpace: 'nowrap' }}>{a.rt}</td>
+                <td style={{ padding: '4px 10px', fontWeight: 500, fontSize: "var(--t-sm)", whiteSpace: 'nowrap' }}>{a.rt}</td>
                 {buckets.map((b) => {
                   const k = `${a.id}|${b}`;
                   const c = cellRates.get(k);
@@ -248,7 +248,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
                     <td key={b} style={{
                       padding: '6px 4px', textAlign: 'center', background: bg,
                       color: avg > avgRate * 1.2 ? 'var(--paper-warm)' : 'var(--ink-soft)',
-                      fontFamily: 'var(--mono)', fontSize: 10.5, border: '1px solid #fff',
+                      fontFamily: 'var(--mono)', fontSize: "var(--t-xs)", border: '1px solid #fff',
                     }} title={`${a.rt} · ${b}\navg USD ${avg.toFixed(0)}\nmin USD ${c.min.toFixed(0)} · max USD ${c.max.toFixed(0)}${c.stops > 0 ? `\n${c.stops} stop-sell` : ''}`}>
                       {avg.toFixed(0)}
                     </td>
@@ -262,11 +262,11 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
 
       <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
         <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--paper-deep)' }}>
-          <h2 style={{ margin: 0, fontFamily: 'var(--serif)', fontWeight: 500, fontSize: 17 }}>Rate plans active in window ({planAggs.length})</h2>
+          <h2 style={{ margin: 0, fontFamily: 'var(--serif)', fontWeight: 500, fontSize: "var(--t-xl)" }}>Rate plans active in window ({planAggs.length})</h2>
         </div>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: "var(--t-base)" }}>
           <thead>
-            <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               <th style={{ padding: '10px 12px' }}>Rate plan</th>
               <th style={{ padding: '10px 12px' }}>Type</th>
               <th style={{ padding: '10px 12px', textAlign: 'right' }}>Cells</th>
@@ -283,7 +283,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
               return (
                 <tr key={p.name} style={{ borderTop: '1px solid var(--paper-warm)' }}>
                   <td style={{ padding: '10px 12px', fontWeight: 500 }}>{p.name}</td>
-                  <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontSize: 11.5 }}>{p.type ?? '—'}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontSize: "var(--t-sm)" }}>{p.type ?? '—'}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{p.count}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>USD {p.avg.toFixed(0)}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>USD {p.min.toFixed(0)}</td>
@@ -294,10 +294,10 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
             })}
           </tbody>
         </table>
-        {planAggs.length > 30 && <div style={{ padding: '8px 16px', fontSize: 11, color: 'var(--ink-mute)' }}>+ {planAggs.length - 30} more</div>}
+        {planAggs.length > 30 && <div style={{ padding: '8px 16px', fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>+ {planAggs.length - 30} more</div>}
       </div>
 
-      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: 11.5 }}>
+      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: "var(--t-sm)" }}>
         <strong>✓ Wired.</strong> {totalInv.toLocaleString()} live inventory cells. KPIs · BAR ladder · heatmap · rate-plan breakdown all driven by URL <code>?win=</code> + <code>?gran=</code>.
       </div>
     </>

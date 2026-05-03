@@ -23,13 +23,13 @@ interface Props {
 export default function LoremPage({ pillar, tab, lede, kpis, sections, dataSourceNote }: Props) {
   return (
     <>
-      <div style={{ fontSize: 11, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 14 }}>
+      <div style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 14 }}>
         <strong style={{ color: 'var(--ink-soft)' }}>{pillar}</strong> › {tab}
       </div>
-      <h1 style={{ margin: '4px 0 2px', fontFamily: 'var(--serif)', fontWeight: 500, fontSize: 30, letterSpacing: '-0.01em' }}>
+      <h1 style={{ margin: '4px 0 2px', fontFamily: 'var(--serif)', fontWeight: 500, fontSize: "var(--t-3xl)", letterSpacing: '-0.01em' }}>
         {tab} · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>not yet wired</em>
       </h1>
-      <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>{lede}</div>
+      <div style={{ fontSize: "var(--t-md)", color: 'var(--ink-soft)' }}>{lede}</div>
 
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(kpis.length, 5)}, minmax(0, 1fr))`, gap: 10, margin: '14px 0' }}>
         {kpis.map((k) => (
@@ -49,12 +49,12 @@ export default function LoremPage({ pillar, tab, lede, kpis, sections, dataSourc
         {sections.map((s) => (
           <div key={s.heading} className="panel">
             <div className="kpi-tile-scope" style={{ marginBottom: 6 }}>{s.heading}</div>
-            <div style={{ fontSize: 13, color: 'var(--ink-faint)', fontStyle: 'italic', lineHeight: 1.6 }}>{s.body}</div>
+            <div style={{ fontSize: "var(--t-md)", color: 'var(--ink-faint)', fontStyle: 'italic', lineHeight: 1.6 }}>{s.body}</div>
           </div>
         ))}
       </div>
 
-      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-warn-bg)', border: '1px solid var(--st-warn-bd)', borderRadius: 6, color: 'var(--brass)', fontSize: 11.5 }}>
+      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-warn-bg)', border: '1px solid var(--st-warn-bd)', borderRadius: 6, color: 'var(--brass)', fontSize: "var(--t-sm)" }}>
         <strong>Not wired.</strong> {dataSourceNote}
       </div>
     </>

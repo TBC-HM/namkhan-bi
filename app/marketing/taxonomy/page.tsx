@@ -48,13 +48,13 @@ export default async function TaxonomyPage() {
           .sort((a, b) => a[0].localeCompare(b[0]))
           .map(([cat, items]) => (
             <div key={cat} style={{ marginTop: 14 }}>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--ink-mute)', marginBottom: 8, fontWeight: 600 }}>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--ink-mute)', marginBottom: 8, fontWeight: 600 }}>
                 {cat} · {items.length}
               </div>
               <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                 {items.map(t => (
                   <span key={t.tag_id} style={{
-                    fontSize: 11,
+                    fontSize: "var(--t-sm)",
                     fontFamily: 'var(--mono)',
                     padding: '3px 8px',
                     background: 'var(--paper-warm)',
@@ -100,10 +100,10 @@ export default async function TaxonomyPage() {
                 <tr key={i}>
                   <td className="lbl"><strong style={{ fontFamily: 'var(--mono)' }}>{k.keyword}</strong></td>
                   <td className="num">{k.seen_count ?? 1} asset{(k.seen_count ?? 1) === 1 ? '' : 's'}</td>
-                  <td style={{ fontSize: 11, color: 'var(--ink-mute)' }}>—</td>
+                  <td style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>—</td>
                   <td style={{ textAlign: 'right' }}>
-                    <button className="btn" style={{ fontSize: 10, marginRight: 4 }}>promote</button>
-                    <button className="btn" style={{ fontSize: 10 }}>discard</button>
+                    <button className="btn" style={{ fontSize: "var(--t-xs)", marginRight: 4 }}>promote</button>
+                    <button className="btn" style={{ fontSize: "var(--t-xs)" }}>discard</button>
                   </td>
                 </tr>
               ))}
@@ -111,7 +111,7 @@ export default async function TaxonomyPage() {
           </table>
         )}
 
-        <div style={{ marginTop: 14, padding: '10px 14px', background: 'rgba(168,133,74,0.10)', borderLeft: '3px solid var(--brass)', fontSize: 11, color: 'var(--ink-soft)', lineHeight: 1.6 }}>
+        <div style={{ marginTop: 14, padding: '10px 14px', background: 'rgba(168,133,74,0.10)', borderLeft: '3px solid var(--brass)', fontSize: "var(--t-sm)", color: 'var(--ink-soft)', lineHeight: 1.6 }}>
           <strong>promote</strong> inserts the keyword into <code>marketing.media_taxonomy</code>, sets a category, and back-links the existing assets that already have it. ID stays stable across edits.
         </div>
       </Card>

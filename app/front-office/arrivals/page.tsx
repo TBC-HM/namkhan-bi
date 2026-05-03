@@ -245,14 +245,14 @@ export default async function ArrivalsPage() {
             <h3
               style={{
                 fontFamily: 'var(--serif)',
-                fontSize: 18,
+                fontSize: "var(--t-xl)",
                 fontWeight: 500,
                 margin: 0,
               }}
             >
               Tactical <em style={{ color: 'var(--brass)' }}>alerts</em>
             </h3>
-            <span style={{ fontSize: 12, color: 'var(--ink-mute)' }}>0 today</span>
+            <span style={{ fontSize: "var(--t-base)", color: 'var(--ink-mute)' }}>0 today</span>
           </div>
           <DataNeededOverlay
             gap="F1+ingest"
@@ -275,10 +275,10 @@ export default async function ArrivalsPage() {
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ fontFamily: 'var(--serif)', fontSize: 16, fontWeight: 500, margin: 0 }}>
+            <h3 style={{ fontFamily: 'var(--serif)', fontSize: "var(--t-xl)", fontWeight: 500, margin: 0 }}>
               Arrivals <em style={{ color: 'var(--brass)' }}>board</em>
             </h3>
-            <span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>72h window · tier-sorted</span>
+            <span style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>72h window · tier-sorted</span>
           </div>
           <DataNeededOverlay
             gap="F1+ingest"
@@ -298,10 +298,10 @@ export default async function ArrivalsPage() {
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ fontFamily: 'var(--serif)', fontSize: 16, fontWeight: 500, margin: 0 }}>
+            <h3 style={{ fontFamily: 'var(--serif)', fontSize: "var(--t-xl)", fontWeight: 500, margin: 0 }}>
               Composer <em style={{ color: 'var(--brass)' }}>tray</em>
             </h3>
-            <span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>conf × $ × decay</span>
+            <span style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>conf × $ × decay</span>
           </div>
           <DataNeededOverlay
             gap="F1+composers"
@@ -322,10 +322,10 @@ export default async function ArrivalsPage() {
             minHeight: 200,
           }}
         >
-          <h3 style={{ fontFamily: 'var(--serif)', fontSize: 16, fontWeight: 500, margin: 0 }}>
+          <h3 style={{ fontFamily: 'var(--serif)', fontSize: "var(--t-xl)", fontWeight: 500, margin: 0 }}>
             30d <em style={{ color: 'var(--brass)' }}>funnel</em>
           </h3>
-          <p style={{ fontSize: 11, color: 'var(--ink-mute)', margin: '4px 0 8px' }}>
+          <p style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)', margin: '4px 0 8px' }}>
             booked → triaged → prearr_sent → reply → vip_brief → upsell → checked_in
           </p>
           <DataNeededOverlay
@@ -343,10 +343,10 @@ export default async function ArrivalsPage() {
             minHeight: 200,
           }}
         >
-          <h3 style={{ fontFamily: 'var(--serif)', fontSize: 16, fontWeight: 500, margin: 0 }}>
+          <h3 style={{ fontFamily: 'var(--serif)', fontSize: "var(--t-xl)", fontWeight: 500, margin: 0 }}>
             Upsell <em style={{ color: 'var(--brass)' }}>mix</em>
           </h3>
-          <p style={{ fontSize: 11, color: 'var(--ink-mute)', margin: '4px 0 8px' }}>
+          <p style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)', margin: '4px 0 8px' }}>
             room_up · late_checkout · welcome_dinner · spa · activity · transfer · package
           </p>
           <DataNeededOverlay
@@ -364,10 +364,10 @@ export default async function ArrivalsPage() {
             minHeight: 200,
           }}
         >
-          <h3 style={{ fontFamily: 'var(--serif)', fontSize: 16, fontWeight: 500, margin: 0 }}>
+          <h3 style={{ fontFamily: 'var(--serif)', fontSize: "var(--t-xl)", fontWeight: 500, margin: 0 }}>
             VIP · <em style={{ color: 'var(--brass)' }}>next 14d</em>
           </h3>
-          <p style={{ fontSize: 11, color: 'var(--ink-mute)', margin: '4px 0 8px' }}>
+          <p style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)', margin: '4px 0 8px' }}>
             tier=vip OR rep_champion · joined to vip_briefs
           </p>
           <DataNeededOverlay
@@ -386,10 +386,10 @@ export default async function ArrivalsPage() {
             minHeight: 200,
           }}
         >
-          <h3 style={{ fontFamily: 'var(--serif)', fontSize: 16, fontWeight: 500, margin: 0 }}>
+          <h3 style={{ fontFamily: 'var(--serif)', fontSize: "var(--t-xl)", fontWeight: 500, margin: 0 }}>
             Group · <em style={{ color: 'var(--brass)' }}>next 30d</em>
           </h3>
-          <p style={{ fontSize: 11, color: 'var(--ink-mute)', margin: '4px 0 8px' }}>
+          <p style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)', margin: '4px 0 8px' }}>
             group_arrival_plans · cohesion · key handout · bag · F&B · briefing
           </p>
           <DataNeededOverlay

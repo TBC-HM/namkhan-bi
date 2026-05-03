@@ -40,14 +40,14 @@ export default function SourceMix() {
         <h3
           style={{
             fontFamily: 'var(--serif)',
-            fontSize: 18,
+            fontSize: "var(--t-xl)",
             fontWeight: 500,
             margin: 0,
           }}
         >
           Source mix <em style={{ color: '#a17a4f' }}>$</em>
         </h3>
-        <span style={{ fontSize: 11, color: '#8a8170' }}>open pipeline · weighted</span>
+        <span style={{ fontSize: "var(--t-sm)", color: '#8a8170' }}>open pipeline · weighted</span>
       </div>
 
       {SLICES.map((s) => {
@@ -58,7 +58,7 @@ export default function SourceMix() {
               style={{
                 display: 'flex',
                 justifyContent: 'space-between',
-                fontSize: 11.5,
+                fontSize: "var(--t-sm)",
                 marginBottom: 2,
               }}
             >
@@ -95,7 +95,7 @@ export default function SourceMix() {
           marginTop: 10,
           paddingTop: 10,
           borderTop: '1px solid #f0e8d0',
-          fontSize: 11.5,
+          fontSize: "var(--t-sm)",
           display: 'flex',
           justifyContent: 'space-between',
         }}

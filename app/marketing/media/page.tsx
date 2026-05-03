@@ -111,11 +111,11 @@ export default async function MediaPage() {
                     }}
                     className="media-card"
                   >
-                    <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 15, fontWeight: 500, color: 'var(--ink)' }}>
+                    <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: "var(--t-lg)", fontWeight: 500, color: 'var(--ink)' }}>
                       {m.label}
                     </div>
                     {m.description && (
-                      <div style={{ fontSize: 12, color: 'var(--ink-mute)', marginTop: 4, lineHeight: 1.4 }}>
+                      <div style={{ fontSize: "var(--t-base)", color: 'var(--ink-mute)', marginTop: 4, lineHeight: 1.4 }}>
                         {m.description}
                       </div>
                     )}
@@ -127,7 +127,7 @@ export default async function MediaPage() {
                         paddingTop: 10,
                         borderTop: '1px solid var(--line-soft)',
                         fontFamily: 'var(--mono)',
-                        fontSize: 10,
+                        fontSize: "var(--t-xs)",
                       }}
                     >
                       <span style={{ color: 'var(--ink-mute)' }}>{formatDate(m.added_at)}</span>

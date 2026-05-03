@@ -69,14 +69,14 @@ export default async function GroupsPage() {
       </div>
 
       {groups.length === 0 ? (
-        <div style={{ background: 'var(--paper-warm)', border: '1px dashed var(--line-soft)', borderRadius: 8, padding: '40px 20px', textAlign: 'center', color: 'var(--ink-mute)', fontSize: 13 }}>
+        <div style={{ background: 'var(--paper-warm)', border: '1px dashed var(--line-soft)', borderRadius: 8, padding: '40px 20px', textAlign: 'center', color: 'var(--ink-mute)', fontSize: "var(--t-md)" }}>
           No group blocks in <code>public.groups</code>.
         </div>
       ) : (
         <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: "var(--t-base)" }}>
             <thead>
-              <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 <th style={{ padding: '10px 12px' }}>Group</th>
                 <th style={{ padding: '10px 12px' }}>Arrival</th>
                 <th style={{ padding: '10px 12px' }}>Departure</th>
@@ -95,17 +95,17 @@ export default async function GroupsPage() {
                 return (
                   <tr key={g.group_id} style={{ borderTop: '1px solid var(--paper-warm)' }}>
                     <td style={{ padding: '10px 12px', fontWeight: 500 }}>{g.group_name ?? '—'}</td>
-                    <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontFamily: 'var(--mono)', fontSize: 11.5 }}>{g.arrival_date ?? '—'}</td>
-                    <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontFamily: 'var(--mono)', fontSize: 11.5 }}>{g.departure_date ?? '—'}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontFamily: 'var(--mono)', fontSize: "var(--t-sm)" }}>{g.arrival_date ?? '—'}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontFamily: 'var(--mono)', fontSize: "var(--t-sm)" }}>{g.departure_date ?? '—'}</td>
                     <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{g.block_size ?? '—'}</td>
                     <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{g.pickup ?? '—'}</td>
                     <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: (Number(g.pickup_pct) ?? 0) >= 80 ? 'var(--moss-glow)' : (Number(g.pickup_pct) ?? 0) >= 50 ? 'var(--brass)' : 'var(--st-bad)' }}>
                       {g.pickup_pct == null ? '—' : `${Number(g.pickup_pct).toFixed(0)}%`}
                     </td>
-                    <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontFamily: 'var(--mono)', fontSize: 11.5 }}>{g.cutoff_date ?? '—'}</td>
-                    <td style={{ padding: '10px 12px', fontSize: 11.5 }}>{g.contact_name ?? '—'}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontFamily: 'var(--mono)', fontSize: "var(--t-sm)" }}>{g.cutoff_date ?? '—'}</td>
+                    <td style={{ padding: '10px 12px', fontSize: "var(--t-sm)" }}>{g.contact_name ?? '—'}</td>
                     <td style={{ padding: '10px 12px' }}>
-                      <span style={{ background: pill.bg, border: `1px solid ${pill.bd}`, color: pill.fg, padding: '2px 8px', borderRadius: 10, fontSize: 10.5, fontWeight: 600, textTransform: 'capitalize' }}>
+                      <span style={{ background: pill.bg, border: `1px solid ${pill.bd}`, color: pill.fg, padding: '2px 8px', borderRadius: 10, fontSize: "var(--t-xs)", fontWeight: 600, textTransform: 'capitalize' }}>
                         {g.status ?? 'open'}
                       </span>
                     </td>
@@ -117,7 +117,7 @@ export default async function GroupsPage() {
         </div>
       )}
 
-      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: 11.5 }}>
+      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: "var(--t-sm)" }}>
         <strong>✓ Wired.</strong> Reading from <code>public.groups</code> ({groups.length} rows). Margin floor requires revenue + cost join — pending.
       </div>
     </>

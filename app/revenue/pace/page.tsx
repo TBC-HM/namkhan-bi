@@ -130,7 +130,7 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
 
       {/* Granularity chips */}
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 12, marginBottom: 10 }}>
-        <span style={{ fontSize: 11, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Granularity</span>
+        <span style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Granularity</span>
         {(['day', 'week', 'month'] as const).map((g) => {
           const active = g === gran;
           const params = new URLSearchParams();
@@ -147,7 +147,7 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
                 border: '1px solid var(--line-soft)',
                 background: active ? 'var(--ink-soft)' : 'var(--paper-warm)',
                 color: active ? 'var(--paper-warm)' : 'var(--ink-soft)',
-                fontSize: 12,
+                fontSize: "var(--t-base)",
                 textDecoration: 'none',
                 textTransform: 'capitalize',
               }}
@@ -156,7 +156,7 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
             </a>
           );
         })}
-        <span style={{ marginLeft: 12, fontSize: 11, color: 'var(--ink-mute)' }}>
+        <span style={{ marginLeft: 12, fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>
           Forward window selectors are at the top filter strip ↑
         </span>
       </div>
@@ -174,13 +174,13 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
       {/* Chart: OTB by bucket */}
       <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px', marginBottom: 14 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
-          <h2 style={{ margin: 0, fontFamily: 'var(--serif)', fontWeight: 500, fontSize: 17 }}>
+          <h2 style={{ margin: 0, fontFamily: 'var(--serif)', fontWeight: 500, fontSize: "var(--t-xl)" }}>
             On-the-books by stay-{gran}
           </h2>
-          <span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>{buckets.length} bucket{buckets.length === 1 ? '' : 's'} · max {maxRns} RN</span>
+          <span style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>{buckets.length} bucket{buckets.length === 1 ? '' : 's'} · max {maxRns} RN</span>
         </div>
         {buckets.length === 0 ? (
-          <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-mute)', fontSize: 12 }}>
+          <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-mute)', fontSize: "var(--t-base)" }}>
             No on-the-books in this window.
           </div>
         ) : (
@@ -194,7 +194,7 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
                   style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 0 }}
                   title={`${b.key} · ${b.rns} RN · USD ${b.rev.toFixed(0)} · ADR USD ${adrB.toFixed(0)}`}
                 >
-                  <span style={{ fontSize: 10, color: 'var(--ink-soft)', marginBottom: 2 }}>{b.rns}</span>
+                  <span style={{ fontSize: "var(--t-xs)", color: 'var(--ink-soft)', marginBottom: 2 }}>{b.rns}</span>
                   <div
                     style={{
                       width: '100%',
@@ -212,7 +212,7 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
         {buckets.length > 0 && (
           <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
             {buckets.map((b) => (
-              <div key={b.key} style={{ flex: 1, fontSize: 9.5, color: 'var(--ink-mute)', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <div key={b.key} style={{ flex: 1, fontSize: "var(--t-xs)", color: 'var(--ink-mute)', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {gran === 'month' ? fmtMonth(b.key) : b.key.slice(5)}
               </div>
             ))}
@@ -222,9 +222,9 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
 
       {/* Detail table */}
       <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: "var(--t-base)" }}>
           <thead>
-            <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               <th style={{ padding: '10px 12px' }}>{granLabels[gran]}</th>
               <th style={{ padding: '10px 12px', textAlign: 'right' }}>Days</th>
               <th style={{ padding: '10px 12px', textAlign: 'right' }}>OTB RN</th>
@@ -280,7 +280,7 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
         </table>
       </div>
 
-      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: 11.5 }}>
+      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: "var(--t-sm)" }}>
         <strong>✓ Wired.</strong> Real OTB pace from <code>public.v_otb_pace</code>. KPIs + chart + table all driven by URL <code>?win=</code> + <code>?gran=</code>. Forward windows: Next 7 / 30 / 90 / 180 / 365 (top filter strip). STLY column needs snapshot history table — pending.
       </div>
     </>
