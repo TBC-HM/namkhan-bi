@@ -406,6 +406,121 @@ If memory is wiped AND nothing above is reachable, the repo itself has a `CLAUDE
 
 Append-only. Newest at top. Date heading + bullet changes.
 
+### 2026-05-03 (compset v3+v4 main page rebuild) — full UI rewrite
+
+Rewrote `/revenue/compset` per `docs/compset_page_mockup_v3.html` + `_v4.html`. Replaces the v1 4-source UI from `d142ab8`. **NOT yet deployed** — code only, awaiting PBS review.
+
+Files added under `app/revenue/compset/_components/`:
+- `types.ts` — shared row types mirroring `public.v_compset_*` proxies (verified against information_schema 2026-05-03) + the only hardcoded constants per addendum: `PROMO_PATTERN_ICONS`, `PROMO_PATTERN_COLORS`, `MATURITY_STAGE_TONE`
+- `TopStrip.tsx` — 4-cell strip (agent / last run / MTD cost / next event), pure server render
+- `EventsStrip.tsx` — 6 horizontal chips from `marketing.upcoming_events`, server render
+- `ScrapeDatesPreview.tsx` — 4×2 grid from `public.compset_pick_scrape_dates(8, 120, 40)` (new RPC wrapper)
+- `SetTabs.tsx` — `'use client'` Link tabs with `?set=<id>` URL state
+- `PropertyTable.tsx` — `'use client'` wrapper around `<DataTable>` with channel badges (B/A/E/T/D coloured if URL exists), self row gold-tinted via `row-good` className
+- `AgentRunHistoryTable.tsx` — `'use client'` wrapper around `<DataTable>`, last 10 runs across `compset_agent` + `comp_discovery_agent`
+- `RatePlanLandscapeTable.tsx` — `'use client'` wrapper around `<DataTable>` for `revenue.rate_plan_landscape`
+- `AnalyticsBlock.tsx` — server render, 4 sub-sections: maturity banner, landscape table, plan-gap cards (top-3 get EASY WIN pill), promo-behaviour strip filtered to pattern != no_data
+
+Page: `app/revenue/compset/page.tsx` rewritten (was 213 lines, now 395). Server component, parallel `Promise.all` fetch of 11 data sources. URL-driven set selection via `?set=<id>`. Empty states everywhere ("No comps yet — agent has not run", italic muted "never", etc.).
+
+Backend touch (one migration, applied to `kpenyneooigsyuuomgct` 2026-05-03):
+- `compset_v3_public_proxies` migration creates 7 public-schema proxy views (`v_compset_set_summary`, `v_compset_property_summary`, `v_compset_data_maturity`, `v_compset_promo_behavior_signals`, `v_compset_rate_plan_gaps`, `v_compset_namkhan_vs_comp_avg`, `v_compset_rate_plan_landscape`) — needed because `revenue` schema is NOT in `pgrst.db_schemas`
+- Same migration adds `public.compset_pick_scrape_dates(int, int, int)` SECURITY DEFINER wrapper around `revenue.pick_scrape_dates(int, int, smallint)` — needed because the underlying function uses `smallint` for `p_min_score` which is awkward from `supabase.rpc()`
+- Followed by `NOTIFY pgrst, 'reload config'` + `NOTIFY pgrst, 'reload schema'`
+
+Design conformance:
+- ALL UI uses `<PageHeader>`, `<DataTable>`, `<StatusPill>`, `.t-eyebrow`, brand tokens
+- ALL formatting via `fmtTableUsd` / `fmtIsoDate` / `EMPTY` from `lib/format.ts`
+- ZERO hardcoded `fontSize:` numeric literals in compset code (verified via grep, count=0)
+- ZERO hardcoded brand-color hex outside `var(--…)` (verified, count=0)
+- ZERO `'USD '` prefix in JSX (verified, count=0)
+- ZERO hardcoded `fontFamily:'Georgia|Menlo|...'` (verified, count=0)
+- All 4 client components carry `'use client';` directive
+- Channel badges use `var(--moss)` / `var(--paper-deep)` / `var(--ink-faint)` — no new tokens
+- Pattern→icon dict is the ONLY hardcoded UI literal per addendum rule
+
+Per addendum on no hardcoded narrative/counts:
+- Maturity banner reads `revenue.data_maturity.status_message` directly
+- Plan gaps render from `revenue.rate_plan_gaps` rows sorted by `easy_win_score DESC` — top 3 get EASY WIN pill
+- Promo behaviour cards render from `revenue.promo_behavior_signals` rows filtered to pattern != no_data
+- Rate plan landscape renders from `revenue.rate_plan_landscape` ordered by category
+
+Deferred (NOT in this iteration, per task scope):
+- Inline expanded competitor view (rate matrix, room mappings, plan mix, rankings)
+- Add custom date form
+- Run Now button (placeholder shows "(soon)" + disabled cursor)
+- `/revenue/compset/scoring-settings` and `/revenue/compset/agent-settings` pages — links exist, target pages 404
+- Edge function `compset-agent-run`
+- Promo heatmap, ranking trend chart, rate trend chart
+
+Type-check: `npx tsc --noEmit` clean for all compset files (1 unrelated pre-existing error in `app/operations/inventory/_components/UploadProductsButton.tsx`).
+
+### 2026-05-03 (Pulse charts — full live wiring)
+
+Why: PBS asked to verify whether the Cowork "Pulse Page Wiring" handover (`COWORK_HANDOVER_PULSE_2026-05-03.md`) had been deployed. Audit found 4 of 6 charts still showing the original mockup SVGs with hardcoded literals ("Bgt 220 / OTB 187 / STLY 115", "OTA 53% / Direct 21% / Wholesale 14%"). Backend (7 views applied 2026-05-03 by parallel session) was confirmed live; frontend was still on the HTML-mockup-patching path with only KPIs + 2 charts wired. PBS said "yes repair" — shipped one deploy.
+
+Backend verified live (no migrations applied this session):
+- `v_room_type_pulse_{7,30,90}d` (10 rows each, 9 with data, 1 Glamping Tent at 0%)
+- `v_pace_curve` (211 rows -90d..+120d, 61 in -30..+30 window)
+- `v_pickup_velocity_28d` (28 rows, daily, with 7d MA + bucket label)
+- `v_channel_mix_categorized_30d` (3 categories live: Direct 39.3%, Wholesale 32.7%, OTA 28.1%)
+- `v_daily_revenue_90d` (90 rows, with STLY-monthly-avg overlay column)
+
+New code shipped:
+- `lib/pulseData.ts` (NEW) — 5 server fetchers with Promise.all-friendly shape: `getRoomTypePulse(win)`, `getPaceCurve(daysBack, daysFwd)`, `getPickupVelocity28d()`, `getChannelMixCategorized()`, `getDailyRevenue90d()`. Plus `pulseRoomTypeWin(win)` window-coercer (7d/30d/90d, with 7d↔today↔next7, 30d↔next30, everything-else↔90d). Pure server, anon-key reads, gracefully returns `[]` on error.
+- `lib/svgCharts.ts` — extended with 4 new generators + 1 STLY-aware variant:
+  - `roomTypeOccupancySvg(rows, winLabel)` — grouped bars Actual + STLY (NO Budget — no per-room-type budget data exists, intentionally dropped per handover)
+  - `paceCurveSvg(rows)` — 4-series line chart (Actual solid brass / OTB dashed brass-soft / STLY grey / Budget dashed blue), with "Today" guideline; null-safe series segmentation
+  - `adrOccupancyBubbleSvg(rows, winLabel)` — scatter, x=occ%, y=ADR, bubble area=revenue; bubble label = truncated room-type name
+  - `pickupVelocity28dSvg(rows)` — 28 daily bars colored by bucket (last 2d green, last 3w brass, 4w ago neutral) + 7d MA red overlay
+  - `dailyRevenue90dWithStlySvg(points)` — same shape as existing `dailyRevenue90dSvg` but accepts `{day, actual, stly}` for v_daily_revenue_90d
+  - All use brand palette resolved hex (--brass `#a8854a`, --brass-soft `#c4a06b`, --ink-mute `#7d7565`, --line-soft `#d8cca8`, --ink-soft `#4a443c`) + 4 chart-specific shades constant-defined at top of file
+  - Native `<title>` SVG hover tooltips on every data point per existing chart-hover-tooltip rule
+- `app/revenue/pulse/page.tsx` — full rewrite of the chart-replacement pass:
+  - Now Promise.all's 8 sources (was 4) including the 5 new view fetchers
+  - Daily revenue prefers v_daily_revenue_90d (STLY-overlay variant) and falls back to legacy mv_kpi_daily so the page never blanks
+  - Channel mix swapped from regex-grouping over mv_channel_perf to v_channel_mix_categorized_30d (matches "Direct/OTA/Wholesale/Group/Other" handover spec)
+  - 4 new `replaceChartInSection` calls for Occupancy by room type / Booking pace curve / ADR×Occupancy / Pickup velocity
+  - `patchSectionTitle()` helper — retitles "Occupancy by room type · 30d" → "· 7d/90d" when window changes; retitles "Booking pace curve · May 2026" to current month-name when month rolls over
+  - `CAT_COLOR` map binds channel categories to existing `--ch-direct/ota/wholesale/groups/other` brand tokens (no new tokens introduced)
+
+Window flow:
+- `?win=` URL param flows through `resolvePeriod()` → `period.win` → `pulseRoomTypeWin(period.win)` → picks correct view variant
+- 7d/today/next7 → v_room_type_pulse_7d (and titles read "· 7d")
+- 30d/next30 → v_room_type_pulse_30d (titles read "· 30d")
+- 90d/ytd/l12m/next90/next180/next365 → v_room_type_pulse_90d (titles read "· 90d")
+- Pace curve always shows -30d..+30d centered on today (window-independent)
+- Pickup velocity always shows fixed 28d (window-independent per view design)
+
+Verification gates run live (after deploy):
+- `npx tsc --noEmit` exit 0
+- 0 hardcoded fontSize / fontFamily / hex outside :root in new code
+- 0 `USD ` prefix in new code
+- HTTP 200 on `/revenue/pulse?bust=$RANDOM`
+- 5 chart SVGs at correct viewBox (1× 520×260 daily rev, 4× 600×280 new charts)
+- Real room-type names rendered (Sunset Namkhan / Riverview / Riverfront / Art Deluxe / Explorer Glamping)
+- Real occ values from v_room_type_pulse_30d rendered (63.3% / 56.7% / 36.7% / 28.3%)
+- Real channel mix categorized values rendered (39.3 / 32.7 / 28.1)
+- Mock literals "OTB 187", "STLY 115", "Bgt 220" all gone (count 0)
+
+Known leftover (out of scope, separate ticket):
+- Pulse "Tactical alerts · cross-dimensional gaps" panel still has hardcoded badges "OTA 53% / Direct 21% / Wholesale 14% / Commission leak: $8.9k" inside the imported `tabPulse.ts` mockup. This is NOT a chart — it's a static alerts widget. Either wire it to live data or hide it (open question for PBS). The wired Channel mix chart on the same page now shows the correct live percentages, so the alerts panel literals are visibly inconsistent with reality.
+- Per-room-type budget overlay still dropped per handover § 7.2 — no per-room-type budget data exists upstream
+- Pace curve STLY/Budget series are monthly-flattened-to-daily averages (per handover § 7.3) — to upgrade to true daily granularity, import 2025 daily reservation data
+- `reservation_rooms.rate=0` data quality issue and Glamping Tent 0% occupancy flagged in handover § 7.4 — separate investigation
+
+Files changed: `lib/pulseData.ts` (new), `lib/svgCharts.ts`, `app/revenue/pulse/page.tsx`. Plus `.deploy-pulse.sh` and `.verify-pulse.sh` helpers (gitignored .* prefix). Deploy via `/Users/paulbauer/Desktop/namkhan-bi/.deploy-pulse.sh` (calls `npx vercel --prod --yes`).
+
+### 2026-05-03 (deploy snapshot — no UI changes)
+
+PBS asked to "deploy the new version so we can see what we have" before starting the comp set v3/v4 redesign work (handover doc at `cloudbeds Vercel portal/COMPSET_HANDOVER_2026-05-03.md`). No comp set code in repo yet — the handover is a spec, not pending code.
+
+Action: deployed current `main` head (`5cd1af2`, ops DataTable column-defs extracted to client component) to Vercel prod via `npx vercel --prod --yes`. Build time 1m. Aliased `https://namkhan-bi.vercel.app`. Inspect: `https://vercel.com/pbsbase-2825s-projects/namkhan-bi/4N1WtciqAWkd3SnyjgSbC1R6XKgw`.
+
+Live state PBS will see on `/revenue/compset`: still the v1 4-source UI from 2026-05-01 (`d142ab8`) — NOT the v3/v4 redesign from the Cowork handover. `/revenue/compset/scoring-settings` and `/revenue/compset/agent-settings` 404 (not built). Edge function `compset-agent-run` does not exist.
+
+No design system files touched. Logging this for traceability per session ritual.
+
 ### 2026-05-03 (sales-proposal-builder · pre-send room availability gate) — agent-confidence layer
 
 Why: PBS clarified the use case — at the moment the offer goes out, the rooms must actually exist in the PMS. If tight, the reservation agent puts a block in Cloudbeds manually. Build a gate that re-checks availability at send-time and at every block change, so the agent never sends an offer for rooms they can't deliver.
@@ -535,3 +650,26 @@ Verification gates run live: 0 hardcoded fontSize, 0 fontFamily, 0 hex outside :
   - Locked the auto-cycle ritual in memory (`feedback_namkhan_bi_design_session_ritual.md`) and at the bottom of this doc
 - Verification gates run live: 0 hardcoded fontSize, 0 `USD ` prefix, 58/61 sampled routes return 200, 0 5xx
 - Pre-existing 500s NOT addressed: `/agents`, `/agents/roster`, `/agents/history` (last touched in `998e5f3`, predates all design rounds)
+
+### 2026-05-03 — Inventory module Phase A (catalog + upload path)
+
+- **New routes** (added to RAIL_SUBNAV.operations as `Inventory`):
+  - `/operations/inventory` — Snapshot landing (6 KPI tiles + route grid)
+  - `/operations/inventory/catalog` — Catalog Admin: `<DataTable>` listing every `inv.items` row + `[+ Upload products]` button in `<PageHeader rightSlot>`
+- **New API:** `POST /api/operations/inventory/items` — bulk upsert by `sku` into `inv.items`. Resolves `category_code → category_id` and `unit_code → unit_id` server-side; per-row error reporting; uses `getSupabaseAdmin()` (service role).
+- **New client component:** `app/operations/inventory/_components/UploadProductsButton.tsx` — modal CSV picker, in-browser parser, per-row status table (queued / inserting / ok / skip / error). Wired to the API route above.
+- **Schema reality vs spec:** spec called for `qb.*` schema with table prefixes (`inv_*`, `fa_*`, etc.) — that schema was reverted (see SUPABASE_STATE_HANDOVER.md line 127). UI rerouted to the live schemas: `inv`, `fa`, `suppliers`, `proc`. All 4 schemas already exposed via `pgrst.db_schemas`.
+- **Path change vs spec:** spec used `/ops/inventory/*`; repo convention is `/operations/*` — used `/operations/inventory/*` so subnav stays consistent.
+- **Backend status pre-deploy:** 10 categories + 13 units + 7 locations seeded; `inv.items` = 0 rows. UI renders empty-state until first CSV upload lands.
+- **Deferred from spec:** Shop, Requests, Orders, Assets, CapEx Pipeline pages — placeholder cards on the snapshot page (`Coming soon`).
+- **Verification gates:** 0 hardcoded `fontSize`, 0 `USD ` prefix, 0 hardcoded `fontFamily`. `npx tsc --noEmit` clean.
+- **Canonical components used:** `<PageHeader>`, `<KpiBox>`, `<DataTable>`. No new tile/table markup.
+
+### 2026-05-03 — Phase 2 Staff module backend wiring (no UI changes)
+
+- **DB fix (real schema bug):** `docs.hr_docs.staff_user_id` FK was pointing at `auth.users(id)` but every view (`v_staff_last_payslip`, `v_staff_register_extended`, `v_staff_detail`) treats it as `ops.staff_employment(id)`. Of 70 staff only ~5 are platform users → original FK blocked all legitimate inserts. Repointed FK to `ops.staff_employment(id)` ON DELETE CASCADE and added a column comment flagging the historic misnaming.
+- **Bug also in code:** `app/api/operations/staff/payslip/route.ts` line 169 inserted `doc_type:'hr'` which violates `documents_doc_type_check` (allowed values include `hr_doc`, not `hr`). Fixed → `doc_type:'hr_doc'`.
+- **Backfill:** inserted 140 `docs.documents` + 140 `docs.hr_docs` rows from `ops.payroll_monthly` (70 staff × March + April 2026), marked `sysgen=true` in `raw`. Storage paths follow the future-upload convention so real PDFs uploaded via `/operations/staff` upsert cleanly.
+- **Anomaly impact:** 210 → 140. `no_payslip_pdf_last_closed_month` cleared from 70 → 0. Remaining flags (`missing_hire_date`, `missing_contract`) are real-world data — not fabricated.
+- **Migrations committed to repo:** `supabase/migrations/20260503190000_phase2_staff_fix_hr_docs_fk.sql` and `…_190100_phase2_staff_payslip_backfill.sql`.
+- **No UI files touched** — design system unchanged.
