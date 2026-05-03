@@ -12,6 +12,7 @@ interface Props {
   deltaTone?: 'up' | 'dn' | 'flat';
   needs?: string;           // "Data needed · roster" — inline yellow badge
   valueColor?: string;      // override for warn/bad colour on value
+  tooltip?: string;         // hover tooltip — definition · period · source · calc
 }
 
 export default function OpsKpiTile({
@@ -22,12 +23,16 @@ export default function OpsKpiTile({
   deltaTone = 'flat',
   needs,
   valueColor,
+  tooltip,
 }: Props) {
+  const tip = tooltip ?? [scope, label, delta].filter(Boolean).join(' · ');
   return (
     <div
+      className="kpi"
+      data-tooltip={tip || undefined}
       style={{
-        background: '#fff',
-        border: '1px solid #e6dfc9',
+        background: 'var(--paper-pure)',
+        border: '1px solid var(--paper-deep)',
         borderRadius: 8,
         padding: '14px 16px',
         minHeight: 108,
@@ -40,7 +45,7 @@ export default function OpsKpiTile({
         <div
           style={{
             fontSize: 10,
-            color: '#8a8170',
+            color: 'var(--ink-mute)',
             textTransform: 'uppercase',
             letterSpacing: '0.1em',
           }}
@@ -49,10 +54,10 @@ export default function OpsKpiTile({
         </div>
         <div
           style={{
-            fontFamily: 'ui-monospace, Menlo, monospace',
+            fontFamily: 'var(--mono)',
             fontSize: 26,
             fontWeight: 600,
-            color: valueColor || '#1c1c1a',
+            color: valueColor || 'var(--ink)',
             marginTop: 4,
           }}
         >
@@ -63,10 +68,10 @@ export default function OpsKpiTile({
         {label && (
           <div
             style={{
-              fontFamily: 'Georgia, serif',
+              fontFamily: 'var(--serif)',
               fontStyle: 'italic',
               fontSize: 13,
-              color: '#4a4538',
+              color: 'var(--ink-soft)',
               marginTop: 6,
             }}
           >
@@ -76,10 +81,10 @@ export default function OpsKpiTile({
         {delta && (
           <div
             style={{
-              fontFamily: 'ui-monospace, Menlo, monospace',
+              fontFamily: 'var(--mono)',
               fontSize: 11,
               color:
-                deltaTone === 'up' ? '#2f6f4a' : deltaTone === 'dn' ? '#a02d2d' : '#8a8170',
+                deltaTone === 'up' ? 'var(--st-good)' : deltaTone === 'dn' ? 'var(--st-bad)' : 'var(--ink-mute)',
               marginTop: 2,
             }}
           >
@@ -90,9 +95,9 @@ export default function OpsKpiTile({
           <span
             style={{
               display: 'inline-block',
-              background: '#fef3c7',
-              border: '1px solid #f3d57a',
-              color: '#5e4818',
+              background: 'var(--st-warn-bg)',
+              border: '1px solid var(--st-warn-bd)',
+              color: 'var(--brass)',
               fontSize: 10,
               padding: '2px 7px',
               borderRadius: 4,

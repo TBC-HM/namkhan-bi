@@ -9,9 +9,10 @@ type Props = {
   hint?: string;
   status?: 'good' | 'bad' | 'warn' | 'neutral';
   greyed?: boolean;
+  tooltip?: string; // hover tooltip (definition · period · source · calc)
 };
 
-export function Kpi({ label, value, kind='number', hint, status='neutral', greyed=false }: Props) {
+export function Kpi({ label, value, kind='number', hint, status='neutral', greyed=false, tooltip }: Props) {
   const { ccy } = useCcy();
   let display: string = '—';
   let secondary: string | null = null;
@@ -25,9 +26,10 @@ export function Kpi({ label, value, kind='number', hint, status='neutral', greye
   else if (typeof value === 'string') display = value;
 
   const cls = status === 'good' ? 'good' : status === 'bad' ? 'bad' : '';
+  const tip = tooltip ?? [label, hint].filter(Boolean).join(' · ');
 
   return (
-    <div className={`kpi ${cls} ${greyed ? 'greyed-out' : ''}`}>
+    <div className={`kpi ${cls} ${greyed ? 'greyed-out' : ''}`} data-tooltip={tip || undefined}>
       <div className="kpi-label">{label}</div>
       <div className="kpi-value">{display}</div>
       {secondary && <div className="kpi-value-secondary">{secondary}</div>}

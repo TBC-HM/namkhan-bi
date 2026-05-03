@@ -168,7 +168,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
           const href = `/revenue/pricing${params.toString() ? '?' + params.toString() : ''}`;
           return (
             <a key={g} href={href} style={{
-              padding: '4px 12px', borderRadius: 4, border: '1px solid #d9d2bc',
+              padding: '4px 12px', borderRadius: 4, border: '1px solid var(--line-soft)',
               background: active ? 'var(--ink-soft)' : '#fff', color: active ? '#fff' : 'var(--ink-soft)',
               fontSize: 12, textDecoration: 'none', textTransform: 'capitalize',
             }}>{g}</a>
@@ -185,8 +185,8 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
         <Kpi scope="Min-stay" value={minStayRows.toLocaleString()} sub="LOS restricted" />
       </div>
 
-      <div style={{ background: '#fff', border: '1px solid #e6dfc9', borderRadius: 8, marginBottom: 14, overflow: 'hidden' }}>
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid #e6dfc9' }}>
+      <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, marginBottom: 14, overflow: 'hidden' }}>
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--paper-deep)' }}>
           <h2 style={{ margin: 0, fontFamily: 'Georgia, serif', fontWeight: 500, fontSize: 17 }}>BAR ladder by room type</h2>
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
@@ -205,7 +205,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
           </thead>
           <tbody>
             {roomAggs.map((a) => (
-              <tr key={a.id} style={{ borderTop: '1px solid #f0eadb' }}>
+              <tr key={a.id} style={{ borderTop: '1px solid var(--paper-warm)' }}>
                 <td style={{ padding: '10px 12px', fontWeight: 500 }}>{a.rt}</td>
                 <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: 'var(--ink-mute)' }}>{a.count}</td>
                 <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>USD {a.avg.toFixed(0)}</td>
@@ -221,7 +221,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
         </table>
       </div>
 
-      <div style={{ background: '#fff', border: '1px solid #e6dfc9', borderRadius: 8, padding: '14px 16px', marginBottom: 14, overflowX: 'auto' }}>
+      <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px', marginBottom: 14, overflowX: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
           <h2 style={{ margin: 0, fontFamily: 'Georgia, serif', fontWeight: 500, fontSize: 17 }}>Rate calendar · room × {gran}</h2>
           <span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>Color = avg USD (terracotta=high, pale=low) · hover for details</span>
@@ -244,7 +244,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
                 {buckets.map((b) => {
                   const k = `${a.id}|${b}`;
                   const c = cellRates.get(k);
-                  if (!c) return <td key={b} style={{ padding: '4px', textAlign: 'center', color: '#bdb39a' }}>—</td>;
+                  if (!c) return <td key={b} style={{ padding: '4px', textAlign: 'center', color: 'var(--ink-faint)' }}>—</td>;
                   const avg = c.sum / c.count;
                   const bg = rateColor(avg, minRate, maxRate);
                   return (
@@ -263,8 +263,8 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
         </table>
       </div>
 
-      <div style={{ background: '#fff', border: '1px solid #e6dfc9', borderRadius: 8, overflow: 'hidden' }}>
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid #e6dfc9' }}>
+      <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--paper-deep)' }}>
           <h2 style={{ margin: 0, fontFamily: 'Georgia, serif', fontWeight: 500, fontSize: 17 }}>Rate plans active in window ({planAggs.length})</h2>
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
@@ -284,7 +284,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
               const deltaPct = avgRate > 0 ? ((p.avg - avgRate) / avgRate) * 100 : 0;
               const dColor = deltaPct < -10 ? 'var(--st-bad)' : deltaPct < 0 ? 'var(--brass)' : deltaPct > 10 ? 'var(--moss-glow)' : 'var(--ink-soft)';
               return (
-                <tr key={p.name} style={{ borderTop: '1px solid #f0eadb' }}>
+                <tr key={p.name} style={{ borderTop: '1px solid var(--paper-warm)' }}>
                   <td style={{ padding: '10px 12px', fontWeight: 500 }}>{p.name}</td>
                   <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontSize: 11.5 }}>{p.type ?? '—'}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>{p.count}</td>
@@ -300,7 +300,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
         {planAggs.length > 30 && <div style={{ padding: '8px 16px', fontSize: 11, color: 'var(--ink-mute)' }}>+ {planAggs.length - 30} more</div>}
       </div>
 
-      <div style={{ marginTop: 14, padding: '10px 14px', background: '#e6f4ec', border: '1px solid #aed6c0', borderRadius: 6, color: 'var(--moss)', fontSize: 11.5 }}>
+      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: 11.5 }}>
         <strong>✓ Wired.</strong> {totalInv.toLocaleString()} live inventory cells. KPIs · BAR ladder · heatmap · rate-plan breakdown all driven by URL <code>?win=</code> + <code>?gran=</code>.
       </div>
     </>
@@ -310,7 +310,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
 function Kpi({ scope, value, sub, tone = 'flat' }: { scope: string; value: string; sub: string; tone?: 'flat' | 'up' | 'warn' | 'bad' }) {
   const c = tone === 'up' ? 'var(--moss-glow)' : tone === 'warn' ? 'var(--brass)' : tone === 'bad' ? 'var(--st-bad)' : 'var(--ink-soft)';
   return (
-    <div style={{ background: '#fff', border: '1px solid #e6dfc9', borderRadius: 8, padding: '12px 14px' }}>
+    <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '12px 14px' }}>
       <div style={{ fontSize: 10.5, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{scope}</div>
       <div style={{ fontFamily: 'Georgia, serif', fontSize: 22, fontWeight: 500, color: c, margin: '2px 0' }}>{value}</div>
       <div style={{ fontSize: 11, color: 'var(--ink-mute)' }}>{sub}</div>

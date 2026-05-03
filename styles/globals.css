@@ -38,6 +38,66 @@
   --serif: 'Fraunces', Georgia, serif;
   --sans: 'Inter Tight', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* ===== Mockup-vocabulary aliases (cross-page bridge) =====
+   * Pages ported from external mockups use a generic token vocabulary
+   * (--card, --bad, --ok, --body, --num, --tan, --green …). Re-bind
+   * those names to the canonical brand palette here so any new page
+   * that uses them renders correctly without authoring a local bridge.
+   * If any page needs to override, scope it (e.g. .my-page { --card: … }).
+   * NOTE: re-applied 2026-05-03 after concurrent revert in commit 27e4126.
+   */
+  --body:        var(--ink-soft);
+  --muted:       var(--ink-mute);
+  --border:      var(--line-soft);
+  --border-hard: var(--line);
+  --card:        var(--paper-warm);
+  --bg-sub:      var(--paper-deep);
+  --num:         var(--mono);
+  --ok:          var(--st-good);
+  --bad:         var(--st-bad);
+  --amber:       var(--st-warn);
+  --gold:        var(--brass);
+  --tan:         var(--brass);
+  --tan-2:       var(--brass-soft);
+  --tan-deep:    var(--brass-soft);
+  --green:       var(--moss-glow);
+  --green-2:     var(--moss);
+  --green-deep:  var(--moss);
+  --warn-bg:     #fdf3d6;
+  --warn-bd:     #e3c97a;
+  --warn-tx:     #6b4f12;
+  --dot-running: var(--st-good);
+  --dot-idle:    var(--ink-faint);
+  --dot-paused:  var(--brass);
+  --dot-err:     var(--oxblood);
+
+  /* Status-tint backgrounds + borders for badges, cells, alerts.
+   * Use these instead of inline hex tints so the success/warn/bad
+   * vocabulary stays unified across pages. */
+  --st-good-bg: #e6f4ec;
+  --st-good-bd: #aed6c0;
+  --st-warn-bg: #fef3c7;
+  --st-warn-bd: #f3d57a;
+  --st-bad-bg:  #f7d9d9;
+  --st-bad-bd:  #e2a8a8;
+  --st-info-bg: #e7eef5;
+  --st-info-bd: #aac2db;
+  --st-info-tx: #2c4d70;
+
+  /* Page-shell helpers used by mockup ports — expose explicit white
+   * (paper-warm has a tan undertone that's too warm for pure cards). */
+  --paper-pure: #ffffff;
+
+  /* Channel / segment palette — distinct, accessible hues for charts.
+   * Used by revenue/pulse, channels, sales mix, etc. Adjust here only.
+   * Direct=moss-green, OTA=deep-blue, Wholesale=brass-amber, Other=mute. */
+  --ch-direct:    #1f6f43;
+  --ch-ota:       #2c4d70;
+  --ch-wholesale: #a8854a;
+  --ch-other:     #7d7565;
+  --ch-corporate: #6b1f1f;
+  --ch-groups:    #8e3a35;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -247,6 +307,72 @@ button { font-family: inherit; }
 .kpi-secondary {
   font-family: var(--mono); font-size: 10px;
   color: var(--ink-mute); margin-top: 2px; letter-spacing: 0.04em;
+}
+
+/* ===== KPI hover affordance + tooltip (global) =====
+ * Adds two cross-cutting behaviors per design rule:
+ *  1. .kpi and .kpi-card lift slightly on hover so users feel they're interactive.
+ *  2. Any element with [data-tooltip="text"] shows a styled hover tooltip.
+ *     Use on KPI tiles to surface definition / period / source / calculation.
+ *     Example:  <div className="kpi-card" data-tooltip="Total Revenue · MTD · Cloudbeds · sum(net_revenue)">
+ */
+.kpi, .kpi-card {
+  transition: box-shadow 140ms ease, transform 140ms ease, border-color 140ms ease;
+  position: relative;
+}
+.kpi:hover, .kpi-card:hover {
+  box-shadow: 0 6px 18px -8px rgba(28, 24, 21, 0.18);
+  border-color: var(--brass-soft);
+  transform: translateY(-1px);
+}
+[data-tooltip] { position: relative; }
+[data-tooltip]:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ink);
+  color: var(--paper-warm);
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  line-height: 1.45;
+  padding: 8px 12px;
+  border-radius: 4px;
+  white-space: pre-line;
+  max-width: 280px;
+  width: max-content;
+  z-index: 50;
+  pointer-events: none;
+  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.35);
+}
+[data-tooltip]:hover::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: var(--ink);
+  z-index: 50;
+  pointer-events: none;
+}
+
+/* ===== Chart hover dot (global) =====
+ * Generic .chart-dot for line/bar tooltips. Target with mouseover handlers. */
+.chart-tooltip {
+  position: absolute;
+  background: var(--ink);
+  color: var(--paper-warm);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  padding: 6px 10px;
+  border-radius: 3px;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 50;
+  box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.4);
 }
 
 /* ===== CARD GRIDS ===== */

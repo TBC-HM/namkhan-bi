@@ -72,7 +72,7 @@ export default async function PerformancePage() {
       <B2bSubNav />
       <B2bKpiStrip />
 
-      <div style={{ background: '#fff', border: '1px solid #e6dfc9', borderRadius: 8, overflow: 'hidden' }}>
+      <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
           <thead>
             <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -92,7 +92,7 @@ export default async function PerformancePage() {
               const adr = p.rns > 0 ? p.revenue / p.rns : 0;
               const share = totalRevenue > 0 ? (p.revenue / totalRevenue) * 100 : 0;
               return (
-                <tr key={p.source_name} style={{ borderTop: '1px solid #f0eadb' }}>
+                <tr key={p.source_name} style={{ borderTop: '1px solid var(--paper-warm)' }}>
                   <td style={{ padding: '10px 12px', fontFamily: 'Menlo, monospace', color: 'var(--ink-mute)' }}>{i + 1}</td>
                   <td style={{ padding: '10px 12px', fontWeight: 500 }}>{p.source_name}</td>
                   <td style={{ padding: '10px 12px' }}>
@@ -113,7 +113,7 @@ export default async function PerformancePage() {
                 </tr>
               );
             })}
-            <tr style={{ borderTop: '2px solid #e6dfc9', background: 'var(--paper-warm)', fontWeight: 600 }}>
+            <tr style={{ borderTop: '2px solid var(--paper-deep)', background: 'var(--paper-warm)', fontWeight: 600 }}>
               <td colSpan={3} style={{ padding: '10px 12px' }}>Total · {partners.length} sources</td>
               <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>{totalRes}</td>
               <td style={{ padding: '10px 12px' }}></td>
@@ -126,7 +126,7 @@ export default async function PerformancePage() {
         </table>
       </div>
 
-      <div style={{ marginTop: 14, padding: '10px 14px', background: '#e6f4ec', border: '1px solid #aed6c0', borderRadius: 6, color: 'var(--moss)', fontSize: 11.5 }}>
+      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: 11.5 }}>
         <strong>✓ Wired.</strong> Real revenue + RNs from {partners.length} sources on LPA rate plan. Sources without contracts = revenue at risk (no anti-publication clause / parity guard / payment terms enforced).
       </div>
     </>

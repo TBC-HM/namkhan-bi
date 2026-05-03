@@ -85,10 +85,10 @@ export default async function PulsePage({ searchParams }: Props) {
     const pct = (n: number) => (totalRev > 0 ? (n / totalRev) * 100 : 0);
 
     const slices = [
-      { label: 'Direct',    pct: pct(direct),    color: '#16a34a' },
-      { label: 'OTA',       pct: pct(ota),       color: '#2563eb' },
-      { label: 'Wholesale', pct: pct(wholesale), color: '#d97706' },
-      { label: 'Other',     pct: pct(other),     color: '#9ca3af' },
+      { label: 'Direct',    pct: pct(direct),    color: 'var(--ch-direct)' },
+      { label: 'OTA',       pct: pct(ota),       color: 'var(--ch-ota)' },
+      { label: 'Wholesale', pct: pct(wholesale), color: 'var(--ch-wholesale)' },
+      { label: 'Other',     pct: pct(other),     color: 'var(--ch-other)' },
     ].filter((s) => s.pct > 0);
 
     if (totalRev > 0 && slices.length > 0) {

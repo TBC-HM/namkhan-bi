@@ -12,10 +12,10 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 const STATUS_PILL: Record<string, { bg: string; bd: string; fg: string }> = {
-  confirmed:     { bg: '#e6f4ec', bd: '#aed6c0', fg: 'var(--moss-glow)' },
-  not_confirmed: { bg: '#fef3c7', bd: '#f3d57a', fg: 'var(--brass)' },
-  cancelled:     { bg: '#f7d9d9', bd: '#e2a8a8', fg: 'var(--st-bad)' },
-  checked_in:    { bg: '#e7eef5', bd: '#aac2db', fg: '#2c4d70' },
+  confirmed:     { bg: 'var(--st-good-bg)', bd: 'var(--st-good-bd)', fg: 'var(--moss-glow)' },
+  not_confirmed: { bg: 'var(--st-warn-bg)', bd: 'var(--st-warn-bd)', fg: 'var(--brass)' },
+  cancelled:     { bg: 'var(--st-bad-bg)', bd: 'var(--st-bad-bd)', fg: 'var(--st-bad)' },
+  checked_in:    { bg: 'var(--st-info-bg)', bd: 'var(--st-info-bd)', fg: 'var(--st-info-tx)' },
   checked_out:   { bg: '#eee',    bd: '#ccc',    fg: '#555'    },
 };
 
@@ -72,7 +72,7 @@ export default async function ReconciliationPage() {
       <B2bSubNav />
       <B2bKpiStrip />
 
-      <div style={{ background: '#fff', border: '1px solid #e6dfc9', borderRadius: 8, overflow: 'hidden' }}>
+      <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
             <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -90,15 +90,15 @@ export default async function ReconciliationPage() {
             {[...unconfirmed, ...confirmed].map((r) => {
               const pillKey = (r.status ?? 'not_confirmed').toLowerCase();
               const pill = STATUS_PILL[pillKey] ?? STATUS_PILL.not_confirmed;
-              const rowBg = r.confirmed ? '#f6faf6' : !r.matched_contract_id ? '#fffbf2' : '#fff';
+              const rowBg = r.confirmed ? 'var(--st-good-bg)' : !r.matched_contract_id ? 'var(--paper-warm)' : '#fff';
               return (
-                <tr key={r.reservation_id} style={{ borderTop: '1px solid #f0eadb', background: rowBg }}>
+                <tr key={r.reservation_id} style={{ borderTop: '1px solid var(--paper-warm)', background: rowBg }}>
                   <td style={{ padding: '6px 10px' }}>
                     <a
                       href={cloudbedsReservationUrl(r.reservation_id, PROPERTY_ID)}
                       target="_blank"
                       rel="noreferrer"
-                      style={{ fontFamily: 'Menlo, monospace', color: '#2c4d70', textDecoration: 'none', fontSize: 11 }}
+                      style={{ fontFamily: 'Menlo, monospace', color: 'var(--st-info-tx)', textDecoration: 'none', fontSize: 11 }}
                       title="Open in Cloudbeds"
                     >
                       {r.reservation_id} ↗
@@ -135,7 +135,7 @@ export default async function ReconciliationPage() {
         </table>
       </div>
 
-      <div style={{ marginTop: 14, padding: '10px 14px', background: '#e6f4ec', border: '1px solid #aed6c0', borderRadius: 6, color: 'var(--moss)', fontSize: 11.5 }}>
+      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: 11.5 }}>
         <strong>✓ Live.</strong> {reservations.length} LPA reservations · {confirmed.length} mapped · {unconfirmed.length} pending. Yellow rows = unmatched (no contract on file). Green rows = already confirmed. Click <strong>Confirm</strong> to persist to <code>governance.dmc_reservation_mapping</code>.
       </div>
     </>

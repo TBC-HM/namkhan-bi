@@ -13,12 +13,12 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
 const STATUS_PILL: Record<string, { bg: string; bd: string; fg: string; label: string }> = {
-  active:    { bg: '#e6f4ec', bd: '#aed6c0', fg: 'var(--moss-glow)', label: 'Active' },
-  expiring:  { bg: '#fef3c7', bd: '#f3d57a', fg: 'var(--brass)', label: 'Expiring' },
-  expired:   { bg: '#f7d9d9', bd: '#e2a8a8', fg: 'var(--st-bad)', label: 'Expired' },
+  active:    { bg: 'var(--st-good-bg)', bd: 'var(--st-good-bd)', fg: 'var(--moss-glow)', label: 'Active' },
+  expiring:  { bg: 'var(--st-warn-bg)', bd: 'var(--st-warn-bd)', fg: 'var(--brass)', label: 'Expiring' },
+  expired:   { bg: 'var(--st-bad-bg)', bd: 'var(--st-bad-bd)', fg: 'var(--st-bad)', label: 'Expired' },
   draft:     { bg: '#eee',    bd: '#ccc',    fg: '#555',    label: 'Draft' },
   suspended: { bg: '#eee',    bd: '#ccc',    fg: '#555',    label: 'Suspended' },
-  no_contract: { bg: '#f7d9d9', bd: '#e2a8a8', fg: 'var(--st-bad)', label: 'No contract' },
+  no_contract: { bg: 'var(--st-bad-bg)', bd: 'var(--st-bad-bd)', fg: 'var(--st-bad)', label: 'No contract' },
 };
 
 interface DisplayRow {
@@ -138,7 +138,7 @@ export default async function B2bDmcContractsPage() {
       <B2bSubNav />
       <B2bKpiStrip />
 
-      <div style={{ background: '#fff', border: '1px solid #e6dfc9', borderRadius: 8, overflow: 'hidden' }}>
+      <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
           <thead>
             <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -166,8 +166,8 @@ export default async function B2bDmcContractsPage() {
                 <tr
                   key={row.key}
                   style={{
-                    borderTop: '1px solid #f0eadb',
-                    background: isUncontracted ? '#fffbf2' : '#fff',
+                    borderTop: '1px solid var(--paper-warm)',
+                    background: isUncontracted ? 'var(--paper-warm)' : '#fff',
                   }}
                 >
                   <td style={{ padding: '10px 12px' }}>
@@ -207,7 +207,7 @@ export default async function B2bDmcContractsPage() {
         </table>
       </div>
 
-      <div style={{ marginTop: 14, padding: '10px 14px', background: '#e6f4ec', border: '1px solid #aed6c0', borderRadius: 6, color: 'var(--moss)', fontSize: 11.5 }}>
+      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: 11.5 }}>
         <strong>✓ Wired.</strong> {contractRows.length} contracts on file · {uncontractedRows.length} uncontracted sources sending LPA business. Yellow rows = revenue at risk — create contracts for them via Reconciliation queue.
       </div>
     </>

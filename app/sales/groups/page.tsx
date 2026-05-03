@@ -34,10 +34,10 @@ async function getGroups() {
 }
 
 const STATUS_PILL: Record<string, { bg: string; bd: string; fg: string }> = {
-  confirmed: { bg: '#e6f4ec', bd: '#aed6c0', fg: 'var(--moss-glow)' },
-  tentative: { bg: '#fef3c7', bd: '#f3d57a', fg: 'var(--brass)' },
-  cancelled: { bg: '#f7d9d9', bd: '#e2a8a8', fg: 'var(--st-bad)' },
-  open:      { bg: '#e7eef5', bd: '#aac2db', fg: '#2c4d70' },
+  confirmed: { bg: 'var(--st-good-bg)', bd: 'var(--st-good-bd)', fg: 'var(--moss-glow)' },
+  tentative: { bg: 'var(--st-warn-bg)', bd: 'var(--st-warn-bd)', fg: 'var(--brass)' },
+  cancelled: { bg: 'var(--st-bad-bg)', bd: 'var(--st-bad-bd)', fg: 'var(--st-bad)' },
+  open:      { bg: 'var(--st-info-bg)', bd: 'var(--st-info-bd)', fg: 'var(--st-info-tx)' },
 };
 
 export default async function GroupsPage() {
@@ -71,11 +71,11 @@ export default async function GroupsPage() {
       </div>
 
       {groups.length === 0 ? (
-        <div style={{ background: '#fff', border: '1px dashed #d9d2bc', borderRadius: 8, padding: '40px 20px', textAlign: 'center', color: 'var(--ink-mute)', fontSize: 13 }}>
+        <div style={{ background: '#fff', border: '1px dashed var(--line-soft)', borderRadius: 8, padding: '40px 20px', textAlign: 'center', color: 'var(--ink-mute)', fontSize: 13 }}>
           No group blocks in <code>public.groups</code>.
         </div>
       ) : (
-        <div style={{ background: '#fff', border: '1px solid #e6dfc9', borderRadius: 8, overflow: 'hidden' }}>
+        <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
             <thead>
               <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -95,7 +95,7 @@ export default async function GroupsPage() {
                 const pillKey = (g.status ?? 'open').toLowerCase();
                 const pill = STATUS_PILL[pillKey] ?? STATUS_PILL.open;
                 return (
-                  <tr key={g.group_id} style={{ borderTop: '1px solid #f0eadb' }}>
+                  <tr key={g.group_id} style={{ borderTop: '1px solid var(--paper-warm)' }}>
                     <td style={{ padding: '10px 12px', fontWeight: 500 }}>{g.group_name ?? '—'}</td>
                     <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontFamily: 'Menlo, monospace', fontSize: 11.5 }}>{g.arrival_date ?? '—'}</td>
                     <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontFamily: 'Menlo, monospace', fontSize: 11.5 }}>{g.departure_date ?? '—'}</td>
@@ -119,7 +119,7 @@ export default async function GroupsPage() {
         </div>
       )}
 
-      <div style={{ marginTop: 14, padding: '10px 14px', background: '#e6f4ec', border: '1px solid #aed6c0', borderRadius: 6, color: 'var(--moss)', fontSize: 11.5 }}>
+      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: 11.5 }}>
         <strong>✓ Wired.</strong> Reading from <code>public.groups</code> ({groups.length} rows). Margin floor requires revenue + cost join — pending.
       </div>
     </>
@@ -128,9 +128,9 @@ export default async function GroupsPage() {
 
 function Kpi({ scope, value, sub, lorem = false }: { scope: string; value: string; sub: string; lorem?: boolean }) {
   return (
-    <div style={{ background: '#fff', border: '1px solid #e6dfc9', borderRadius: 8, padding: '12px 14px' }}>
+    <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '12px 14px' }}>
       <div style={{ fontSize: 10.5, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{scope}</div>
-      <div style={{ fontFamily: 'Georgia, serif', fontSize: 22, fontWeight: 500, color: lorem ? '#c5b89a' : 'var(--ink-soft)', fontStyle: lorem ? 'italic' : 'normal', margin: '2px 0' }}>{value}</div>
+      <div style={{ fontFamily: 'Georgia, serif', fontSize: 22, fontWeight: 500, color: lorem ? 'var(--ink-faint)' : 'var(--ink-soft)', fontStyle: lorem ? 'italic' : 'normal', margin: '2px 0' }}>{value}</div>
       <div style={{ fontSize: 11, color: 'var(--ink-mute)' }}>{sub}</div>
     </div>
   );

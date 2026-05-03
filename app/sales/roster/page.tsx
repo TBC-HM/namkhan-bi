@@ -65,15 +65,15 @@ export default async function RosterPage() {
           { scope: 'Productivity',     value: 'lorem',                 sub: 'needs deal data',                       lorem: true  },
           { scope: 'Comp accruals',    value: 'lorem',                 sub: 'needs payroll_monthly join',            lorem: true  },
         ].map((k) => (
-          <div key={k.scope} style={{ background: '#fff', border: '1px solid #e6dfc9', borderRadius: 8, padding: '12px 14px' }}>
+          <div key={k.scope} style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '12px 14px' }}>
             <div style={{ fontSize: 10.5, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{k.scope}</div>
-            <div style={{ fontFamily: 'Georgia, serif', fontSize: 22, fontWeight: 500, color: k.lorem ? '#c5b89a' : 'var(--ink-soft)', fontStyle: k.lorem ? 'italic' : 'normal', margin: '2px 0' }}>{k.value}</div>
+            <div style={{ fontFamily: 'Georgia, serif', fontSize: 22, fontWeight: 500, color: k.lorem ? 'var(--ink-faint)' : 'var(--ink-soft)', fontStyle: k.lorem ? 'italic' : 'normal', margin: '2px 0' }}>{k.value}</div>
             <div style={{ fontSize: 11, color: 'var(--ink-mute)' }}>{k.sub}</div>
           </div>
         ))}
       </div>
 
-      <div style={{ background: '#fff', border: '1px solid #e6dfc9', borderRadius: 8, overflow: 'hidden' }}>
+      <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
           <thead>
             <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -89,7 +89,7 @@ export default async function RosterPage() {
           </thead>
           <tbody>
             {display.map((s) => (
-              <tr key={s.staff_id} style={{ borderTop: '1px solid #f0eadb' }}>
+              <tr key={s.staff_id} style={{ borderTop: '1px solid var(--paper-warm)' }}>
                 <td style={{ padding: '10px 12px', fontWeight: 500 }}>{s.full_name ?? '—'}</td>
                 <td style={{ padding: '10px 12px' }}>{s.position_title ?? '—'}</td>
                 <td style={{ padding: '10px 12px', color: 'var(--ink-mute)' }}>{s.dept_name ?? s.dept_code ?? '—'}</td>
@@ -106,7 +106,7 @@ export default async function RosterPage() {
         </table>
       </div>
 
-      <div style={{ marginTop: 14, padding: '10px 14px', background: '#e6f4ec', border: '1px solid #aed6c0', borderRadius: 6, color: 'var(--moss)', fontSize: 11.5 }}>
+      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: 11.5 }}>
         <strong>✓ Wired.</strong> Reading from <code>public.v_staff_register_extended</code> ({staff.length} active rows). Productivity &amp; comp metrics need deal/payroll join.
       </div>
     </>

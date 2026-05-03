@@ -268,7 +268,7 @@ export default async function ArrivalsPage() {
         <section
           style={{
             background: '#fff',
-            border: '1px solid #e6dfc9',
+            border: '1px solid var(--paper-deep)',
             borderRadius: 8,
             padding: 14,
             minHeight: 280,
@@ -291,7 +291,7 @@ export default async function ArrivalsPage() {
         <section
           style={{
             background: '#fff',
-            border: '1px solid #e6dfc9',
+            border: '1px solid var(--paper-deep)',
             borderRadius: 8,
             padding: 14,
             minHeight: 280,
@@ -316,7 +316,7 @@ export default async function ArrivalsPage() {
         <section
           style={{
             background: '#fff',
-            border: '1px solid #e6dfc9',
+            border: '1px solid var(--paper-deep)',
             borderRadius: 8,
             padding: 14,
             minHeight: 200,
@@ -337,7 +337,7 @@ export default async function ArrivalsPage() {
         <section
           style={{
             background: '#fff',
-            border: '1px solid #e6dfc9',
+            border: '1px solid var(--paper-deep)',
             borderRadius: 8,
             padding: 14,
             minHeight: 200,
@@ -358,7 +358,7 @@ export default async function ArrivalsPage() {
         <section
           style={{
             background: '#fff',
-            border: '1px solid #e6dfc9',
+            border: '1px solid var(--paper-deep)',
             borderRadius: 8,
             padding: 14,
             minHeight: 200,
@@ -380,7 +380,7 @@ export default async function ArrivalsPage() {
         <section
           style={{
             background: '#fff',
-            border: '1px solid #e6dfc9',
+            border: '1px solid var(--paper-deep)',
             borderRadius: 8,
             padding: 14,
             minHeight: 200,

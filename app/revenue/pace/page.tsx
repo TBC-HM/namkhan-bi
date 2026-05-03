@@ -148,7 +148,7 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
               style={{
                 padding: '4px 12px',
                 borderRadius: 4,
-                border: '1px solid #d9d2bc',
+                border: '1px solid var(--line-soft)',
                 background: active ? 'var(--ink-soft)' : '#fff',
                 color: active ? '#fff' : 'var(--ink-soft)',
                 fontSize: 12,
@@ -176,7 +176,7 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
       </div>
 
       {/* Chart: OTB by bucket */}
-      <div style={{ background: '#fff', border: '1px solid #e6dfc9', borderRadius: 8, padding: '14px 16px', marginBottom: 14 }}>
+      <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px', marginBottom: 14 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
           <h2 style={{ margin: 0, fontFamily: 'Georgia, serif', fontWeight: 500, fontSize: 17 }}>
             On-the-books by stay-{gran}
@@ -188,7 +188,7 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
             No on-the-books in this window.
           </div>
         ) : (
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, minHeight: 200, padding: '8px 0', borderBottom: '1px solid #e6dfc9' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, minHeight: 200, padding: '8px 0', borderBottom: '1px solid var(--paper-deep)' }}>
             {buckets.map((b) => {
               const h = (b.rns / maxRns) * 180;
               const adrB = b.rns > 0 ? b.rev / b.rns : 0;
@@ -203,7 +203,7 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
                     style={{
                       width: '100%',
                       height: h,
-                      background: 'linear-gradient(180deg, #a17a4f 0%, #d4b88e 100%)',
+                      background: 'linear-gradient(180deg, var(--brass) 0%, var(--brass-pale) 100%)',
                       borderRadius: '3px 3px 0 0',
                       minHeight: 2,
                     }}
@@ -225,7 +225,7 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
       </div>
 
       {/* Detail table */}
-      <div style={{ background: '#fff', border: '1px solid #e6dfc9', borderRadius: 8, overflow: 'hidden' }}>
+      <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
           <thead>
             <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -266,7 +266,7 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
               }
               const occB = cap > 0 ? (b.rns / cap) * 100 : 0;
               return (
-                <tr key={b.key} style={{ borderTop: '1px solid #f0eadb' }}>
+                <tr key={b.key} style={{ borderTop: '1px solid var(--paper-warm)' }}>
                   <td style={{ padding: '10px 12px', fontWeight: 500 }}>
                     {gran === 'month' ? fmtMonth(b.key) : b.key}
                   </td>
@@ -276,7 +276,7 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: 'var(--ink-mute)' }}>USD {adrB.toFixed(0)}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: occB > 70 ? 'var(--moss-glow)' : occB < 30 ? 'var(--st-bad)' : 'var(--ink-soft)' }}>{occB.toFixed(1)}%</td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: b.cxl > 0 ? 'var(--st-bad)' : 'var(--ink-mute)' }}>{b.cxl || '—'}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', color: '#c5b89a', fontStyle: 'italic' }}>lorem</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--ink-faint)', fontStyle: 'italic' }}>lorem</td>
                 </tr>
               );
             })}
@@ -284,7 +284,7 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
         </table>
       </div>
 
-      <div style={{ marginTop: 14, padding: '10px 14px', background: '#e6f4ec', border: '1px solid #aed6c0', borderRadius: 6, color: 'var(--moss)', fontSize: 11.5 }}>
+      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: 11.5 }}>
         <strong>✓ Wired.</strong> Real OTB pace from <code>public.v_otb_pace</code>. KPIs + chart + table all driven by URL <code>?win=</code> + <code>?gran=</code>. Forward windows: Next 7 / 30 / 90 / 180 / 365 (top filter strip). STLY column needs snapshot history table — pending.
       </div>
     </>
@@ -294,9 +294,9 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
 function Kpi({ scope, value, sub, tone = 'flat', lorem = false }: { scope: string; value: string; sub: string; tone?: 'flat' | 'up' | 'warn' | 'bad'; lorem?: boolean }) {
   const c = tone === 'up' ? 'var(--moss-glow)' : tone === 'warn' ? 'var(--brass)' : tone === 'bad' ? 'var(--st-bad)' : 'var(--ink-soft)';
   return (
-    <div style={{ background: '#fff', border: '1px solid #e6dfc9', borderRadius: 8, padding: '12px 14px' }}>
+    <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '12px 14px' }}>
       <div style={{ fontSize: 10.5, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{scope}</div>
-      <div style={{ fontFamily: 'Georgia, serif', fontSize: 22, fontWeight: 500, color: lorem ? '#c5b89a' : c, fontStyle: lorem ? 'italic' : 'normal', margin: '2px 0' }}>{value}</div>
+      <div style={{ fontFamily: 'Georgia, serif', fontSize: 22, fontWeight: 500, color: lorem ? 'var(--ink-faint)' : c, fontStyle: lorem ? 'italic' : 'normal', margin: '2px 0' }}>{value}</div>
       <div style={{ fontSize: 11, color: 'var(--ink-mute)' }}>{sub}</div>
     </div>
   );

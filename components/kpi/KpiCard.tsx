@@ -32,6 +32,13 @@ interface Props {
    * "Never multiply USD by a hardcoded number to fake LAK."
    */
   valueLak?: number | null;
+  /**
+   * Tooltip shown on hover. Per the design rule, KPI tiles should surface
+   * definition · period · source · calculation. Pass a single string with
+   * those four facets separated by ` · ` (or use \n for line breaks).
+   * If omitted, an auto-tooltip is built from `label` + `hint`/`delta`.
+   */
+  tooltip?: string;
 }
 
 export default function KpiCard({
@@ -39,6 +46,7 @@ export default function KpiCard({
   delta, deltaTone, hint, greyed = false,
   showSecondaryCurrency = true,
   valueLak,
+  tooltip,
 }: Props) {
   const { ccy } = useCcy();
   let display = '—';
@@ -74,8 +82,14 @@ export default function KpiCard({
 
   const numCls = greyed ? 'greyed' : tone;
 
+  // Auto-tooltip: if no explicit tooltip is provided, build one from the
+  // label + delta/hint so every KPI tile has *some* hover affordance.
+  const tip =
+    tooltip ??
+    [label, delta, hint].filter(Boolean).join(' · ');
+
   return (
-    <div className="kpi-card">
+    <div className="kpi-card" data-tooltip={tip || undefined}>
       <div className={`kpi-num ${numCls}`}>{display}</div>
       <div className="kpi-lbl">{label}</div>
       {secondary && <div className="kpi-secondary">{secondary}</div>}

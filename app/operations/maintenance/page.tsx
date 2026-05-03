@@ -143,7 +143,7 @@ export default async function MaintenancePage() {
           marginTop: 14,
           padding: '10px 12px',
           background: 'var(--paper-warm)',
-          border: '1px solid #e6dfc9',
+          border: '1px solid var(--paper-deep)',
           borderRadius: 8,
         }}
       >
@@ -277,7 +277,7 @@ const pill: React.CSSProperties = {
   alignItems: 'center',
   gap: 6,
   padding: '5px 10px',
-  border: '1px solid #e6dfc9',
+  border: '1px solid var(--paper-deep)',
   borderRadius: 6,
   background: '#fff',
   fontSize: 12,
