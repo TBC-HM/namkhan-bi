@@ -15,19 +15,40 @@ export function MonthlyByDeptChart({ rows }: { rows: any[] }) {
     grouped[m][dept] = (grouped[m][dept] || 0) + Number(r.revenue || 0);
   });
   const series = Object.values(grouped).sort((a: any, b: any) => a.month.localeCompare(b.month));
+  // Brand-palette resolved hex (recharts can't read CSS vars).
+  const c = {
+    grid:   '#d8cca8', // --line-soft
+    axis:   '#7d7565', // --ink-mute
+    bg:     '#1c1815', // --ink
+    border: '#4a443c', // --ink-soft
+    label:  '#c4a06b', // --brass-soft
+    rooms:  '#a8854a', // --brass
+    fnb:    '#6b9379', // --moss-glow
+    other:  '#d9bf8e', // --brass-pale
+    retail: '#8e3a35', // --st-bad
+  };
   return (
     <ResponsiveContainer width="100%" height={320}>
-      <BarChart data={series}>
-        <CartesianGrid stroke="#2a2a2a" strokeDasharray="3 3" vertical={false} />
-        <XAxis dataKey="month" stroke="#7a7670" fontSize={10} tickFormatter={(m) => m?.slice(0, 7)} />
-        <YAxis stroke="#7a7670" fontSize={10} tickFormatter={(v) => fmtMoney(v, 'USD')} />
-        <Tooltip contentStyle={{ background: '#161616', border: '1px solid #2a2a2a', fontSize: 12 }}
-                 formatter={(v: any) => fmtMoney(Number(v), 'USD')} />
+      <BarChart data={series} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+        <CartesianGrid stroke={c.grid} strokeDasharray="3 3" vertical={false} />
+        <XAxis dataKey="month" stroke={c.axis} fontSize={10} tickFormatter={(m) => m?.slice(0, 7)} />
+        <YAxis stroke={c.axis} fontSize={10} tickFormatter={(v) => fmtMoney(v, 'USD')} />
+        <Tooltip
+          cursor={{ fill: 'rgba(196, 160, 107, 0.08)' }}
+          contentStyle={{
+            background: c.bg, border: `1px solid ${c.border}`,
+            fontSize: 11.5, fontFamily: 'JetBrains Mono, ui-monospace, monospace',
+            color: '#f4ecd8', borderRadius: 4, padding: '8px 12px',
+          }}
+          labelStyle={{ color: c.label, marginBottom: 4, fontWeight: 600 }}
+          labelFormatter={(m: string) => `${m?.slice(0, 7)} · USD · USALI`}
+          formatter={(v: any, name: string) => [fmtMoney(Number(v), 'USD'), name]}
+        />
         <Legend wrapperStyle={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase' }} />
-        <Bar dataKey="Rooms" stackId="a" fill="#bfa980" />
-        <Bar dataKey="F&B" stackId="a" fill="#7a9b6a" />
-        <Bar dataKey="Other Operated" stackId="a" fill="#d4a96a" />
-        <Bar dataKey="Retail" stackId="a" fill="#c25450" />
+        <Bar dataKey="Rooms"          stackId="a" fill={c.rooms} />
+        <Bar dataKey="F&B"            stackId="a" fill={c.fnb} />
+        <Bar dataKey="Other Operated" stackId="a" fill={c.other} />
+        <Bar dataKey="Retail"         stackId="a" fill={c.retail} />
       </BarChart>
     </ResponsiveContainer>
   );

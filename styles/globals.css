@@ -98,6 +98,25 @@
   --ch-other:     #7d7565;
   --ch-corporate: #6b1f1f;
   --ch-groups:    #8e3a35;
+
+  /* Typography scale — modular 8-step ramp.
+   * Use these tokens (or the .t-* utility classes below) instead of ad-hoc
+   * fontSize: 11.5 / 12.5 / 13 / 15 etc. that drift across pages.
+   * Audit 2026-05-03: 25+ distinct font-sizes were in use. Pick one of these. */
+  --t-xs:   10px;   /* eyebrow labels, microcopy, table cell sub */
+  --t-sm:   12px;   /* table body, small UI text */
+  --t-base: 13px;   /* default body */
+  --t-md:   16px;   /* card subheadings */
+  --t-lg:   20px;   /* h3 / section titles */
+  --t-xl:   24px;   /* h2 */
+  --t-2xl:  30px;   /* page titles */
+  --t-num:  26px;   /* big KPI value numerals */
+
+  /* Letter-spacing scale for the brand voice (eyebrow / mono labels / titles). */
+  --ls-tight:  -0.01em; /* page titles */
+  --ls-normal: 0;
+  --ls-loose:  0.06em;  /* small caps body */
+  --ls-extra:  0.18em;  /* mono eyebrows / banners */
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -366,13 +385,54 @@ button { font-family: inherit; }
   background: var(--ink);
   color: var(--paper-warm);
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: var(--t-xs);
   padding: 6px 10px;
   border-radius: 3px;
   pointer-events: none;
   white-space: nowrap;
   z-index: 50;
   box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.4);
+}
+
+/* ===== Typography utility classes =====
+ * Use instead of inline fontSize literals so the type ramp stays unified.
+ *  .t-xs / .t-sm / .t-base / .t-md / .t-lg / .t-xl / .t-2xl / .t-num
+ *  .t-eyebrow  — small mono uppercase eyebrow above a section
+ *  .t-label    — small mono uppercase label above a value
+ *  .t-num-display — italic serif for big numerics (KPI values, hero numbers)
+ */
+.t-xs   { font-size: var(--t-xs); }
+.t-sm   { font-size: var(--t-sm); }
+.t-base { font-size: var(--t-base); }
+.t-md   { font-size: var(--t-md); }
+.t-lg   { font-size: var(--t-lg); }
+.t-xl   { font-size: var(--t-xl); }
+.t-2xl  { font-size: var(--t-2xl); }
+.t-num  { font-size: var(--t-num); font-family: var(--mono); }
+.t-eyebrow {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  letter-spacing: var(--ls-extra);
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  font-weight: 600;
+}
+.t-label {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: var(--ls-extra);
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+.t-num-display {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: var(--t-num);
+  letter-spacing: var(--ls-tight);
+  line-height: 1;
+  color: var(--ink);
 }
 
 /* ===== CARD GRIDS ===== */
@@ -382,6 +442,48 @@ button { font-family: inherit; }
 .card-grid-5  { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 18px; }
 .card-grid-6  { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 18px; }
 .card-grid-12 { display: grid; grid-template-columns: 1fr 2fr; gap: 18px; margin-bottom: 22px; }
+
+/* ===== Responsive collapse for card/kpi grids =====
+ * 6-col / 5-col / 4-col KPI strips collapse to 3-col on tablet, 2-col on phone.
+ * 2-col card grids collapse to 1-col stack on phone. */
+@media (max-width: 1100px) {
+  .card-grid-6,
+  .card-grid-5,
+  .kpi-strip.cols-6,
+  .kpi-strip.cols-5 { grid-template-columns: repeat(3, 1fr); }
+  .pnl-page .kpi-row { grid-template-columns: repeat(3, 1fr); }
+  .pnl-page .kpi-row.secondary { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 760px) {
+  .card-grid-2,
+  .card-grid-3,
+  .card-grid-12 { grid-template-columns: 1fr; }
+  .card-grid-4,
+  .card-grid-5,
+  .card-grid-6,
+  .kpi-strip.cols-3,
+  .kpi-strip.cols-4,
+  .kpi-strip.cols-5,
+  .kpi-strip.cols-6 { grid-template-columns: repeat(2, 1fr); }
+  .pnl-page { padding: 18px 16px; }
+  .pnl-page .kpi-row,
+  .pnl-page .kpi-row.secondary,
+  .pnl-page .panels { grid-template-columns: 1fr; }
+  .pnl-page .alerts { grid-template-columns: 1fr; }
+  .banner { padding: 16px 18px; }
+  .banner-title { font-size: 22px; }
+  body { font-size: 13px; }
+}
+@media (max-width: 480px) {
+  .card-grid-4,
+  .card-grid-5,
+  .card-grid-6,
+  .kpi-strip.cols-2,
+  .kpi-strip.cols-3,
+  .kpi-strip.cols-4,
+  .kpi-strip.cols-5,
+  .kpi-strip.cols-6 { grid-template-columns: 1fr; }
+}
 
 /* ===== CARD ===== */
 .card {

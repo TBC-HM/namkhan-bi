@@ -17,21 +17,45 @@ export function DailyRevenueChart({ data }: { data: any[] }) {
     activity: Number(r.activity_revenue || 0),
     occ: Number(r.occupancy_pct || 0)
   }));
+  // Color values are the resolved brand palette hex (recharts can't read CSS vars).
+  // Source: styles/globals.css :root.
+  const c = {
+    grid:     '#d8cca8',  // --line-soft
+    axis:     '#7d7565',  // --ink-mute
+    bg:       '#1c1815',  // --ink
+    border:   '#4a443c',  // --ink-soft
+    label:    '#c4a06b',  // --brass-soft
+    rooms:    '#a8854a',  // --brass
+    fnb:      '#6b9379',  // --moss-glow
+    spa:      '#8a9d83',  // --sage
+    activity: '#d9bf8e',  // --brass-pale
+  };
+  const fmtDate = (d: string) => {
+    if (!d) return '';
+    const [y, m, day] = d.split('-');
+    return `${day}/${m}/${y}`;
+  };
   return (
     <ResponsiveContainer width="100%" height={300}>
-      <AreaChart data={series}>
-        <CartesianGrid stroke="#2a2a2a" strokeDasharray="3 3" vertical={false} />
-        <XAxis dataKey="date" stroke="#7a7670" fontSize={10} tickFormatter={(d) => d?.slice(5)} />
-        <YAxis stroke="#7a7670" fontSize={10} tickFormatter={(v) => fmtMoney(v, 'USD')} />
+      <AreaChart data={series} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+        <CartesianGrid stroke={c.grid} strokeDasharray="3 3" vertical={false} />
+        <XAxis dataKey="date" stroke={c.axis} fontSize={10} tickFormatter={(d) => d?.slice(5)} />
+        <YAxis stroke={c.axis} fontSize={10} tickFormatter={(v) => fmtMoney(v, 'USD')} />
         <Tooltip
-          contentStyle={{ background: '#161616', border: '1px solid #2a2a2a', fontSize: 12 }}
-          labelStyle={{ color: '#bfa980' }}
-          formatter={(v: any) => fmtMoney(Number(v), 'USD')}
+          cursor={{ stroke: c.label, strokeWidth: 1, strokeDasharray: '2 2' }}
+          contentStyle={{
+            background: c.bg, border: `1px solid ${c.border}`,
+            fontSize: 11.5, fontFamily: 'JetBrains Mono, ui-monospace, monospace',
+            color: '#f4ecd8', borderRadius: 4, padding: '8px 12px',
+          }}
+          labelStyle={{ color: c.label, marginBottom: 4, fontWeight: 600 }}
+          labelFormatter={(d: string) => `${fmtDate(d)} · USD · cloudbeds`}
+          formatter={(v: any, name: string) => [fmtMoney(Number(v), 'USD'), name]}
         />
-        <Area type="monotone" dataKey="rooms" stackId="1" stroke="#bfa980" fill="rgba(191,169,128,0.45)" name="Rooms" />
-        <Area type="monotone" dataKey="fnb" stackId="1" stroke="#7a9b6a" fill="rgba(122,155,106,0.4)" name="F&B" />
-        <Area type="monotone" dataKey="spa" stackId="1" stroke="#9a8866" fill="rgba(154,136,102,0.35)" name="Spa" />
-        <Area type="monotone" dataKey="activity" stackId="1" stroke="#d4a96a" fill="rgba(212,169,106,0.3)" name="Activity" />
+        <Area type="monotone" dataKey="rooms"    stackId="1" stroke={c.rooms}    fill={c.rooms}    fillOpacity={0.45} name="Rooms" />
+        <Area type="monotone" dataKey="fnb"      stackId="1" stroke={c.fnb}      fill={c.fnb}      fillOpacity={0.4}  name="F&B" />
+        <Area type="monotone" dataKey="spa"      stackId="1" stroke={c.spa}      fill={c.spa}      fillOpacity={0.35} name="Spa" />
+        <Area type="monotone" dataKey="activity" stackId="1" stroke={c.activity} fill={c.activity} fillOpacity={0.3}  name="Activity" />
       </AreaChart>
     </ResponsiveContainer>
   );
