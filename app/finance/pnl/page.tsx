@@ -13,6 +13,7 @@ import {
   getBudgetByPeriod, getBudgetVsActual,
   getLyLinesByPeriod, getForecastLinesByPeriod,
   getDriversByPeriod, getFreshnessSummary, getMaterialityThreshold,
+  getDqSummary, getPayrollByPeriod, getDemandSummary,
 } from '../_data';
 import { priorPeriod, type PeriodWindow } from '@/lib/supabase-gl';
 import PageHeader from '@/components/layout/PageHeader';
@@ -146,7 +147,7 @@ export default async function PnLPage({ searchParams }: Props) {
   })();
   // 12-month panel needs all of FY2026 actuals + budgets
   const fy2026 = ['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06','2026-07','2026-08','2026-09','2026-10','2026-11','2026-12'];
-  const [lyTotalRev, lyByDept, lyByUsaliDept, deptByPeriods, budgetCur, twelveMonth, lyLines, forecastLines, drivers, freshness, materiality] = await Promise.all([
+  const [lyTotalRev, lyByDept, lyByUsaliDept, deptByPeriods, budgetCur, twelveMonth, lyLines, forecastLines, drivers, freshness, materiality, dqSummary, payrollMonth, demandFy] = await Promise.all([
     getLyTotalRevenue(cur),
     getLyByDept(cur),
     getLyByUsaliDept(cur),
@@ -158,6 +159,9 @@ export default async function PnLPage({ searchParams }: Props) {
     getDriversByPeriod(cur),       // plan.drivers — room_nights/occ%/ADR for cur period
     getFreshnessSummary(),         // kpi.freshness_log rollup
     getMaterialityThreshold(),     // gl.materiality_thresholds (drives alert thresholds)
+    getDqSummary(),                // dq.violations cross-pillar count
+    getPayrollByPeriod(cur),       // ops.payroll_monthly for cur period (cross-check)
+    getDemandSummary(fy2026),      // revenue.demand_calendar for FY2026
   ]);
 
   // Driver lookups: budget vs actuals from plan.drivers
@@ -362,6 +366,11 @@ export default async function PnLPage({ searchParams }: Props) {
             materiality: {materiality.pct}% AND ${materiality.abs_usd}
           </span>
         )}
+        {dqSummary && (
+          <span className="meta-token" style={{ color: dqSummary.open_critical > 0 ? '#b34939' : (dqSummary.open_warning > 0 ? '#a17a4f' : 'inherit') }} title={`dq.violations: ${dqSummary.open_critical} critical · ${dqSummary.open_warning} warning · ${dqSummary.open_info} info`}>
+            DQ: {dqSummary.open_total} open ({dqSummary.open_critical} crit · {dqSummary.open_warning} warn)
+          </span>
+        )}
       </div>
 
       {/* ============== BLOCK 2.5 — Driver strip (room nights / occ% / ADR) ============== */}
@@ -509,6 +518,16 @@ export default async function PnLPage({ searchParams }: Props) {
             <div className="deltas"><span className="neu">DQ-04-UNMAPPED open</span></div>
             <div className="lbl">USALI mapping gaps</div>
           </div>
+          {payrollMonth && (
+            <div className="kpi secondary">
+              <div className="scope">HR</div>
+              <div className="val">{payrollMonth.staff_count}</div>
+              <div className="deltas">
+                <span className="neu">${(Number(payrollMonth.gross_payroll_usd) / 1000).toFixed(1)}k gross · {payrollMonth.total_days_worked} days</span>
+              </div>
+              <div className="lbl">Payroll · staff on roll</div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -991,7 +1010,7 @@ export default async function PnLPage({ searchParams }: Props) {
       </div>
 
       {/* ============== BLOCK 10 — 12-month rollup ============== */}
-      <TwelveMonthPanel rows={twelveMonth} fy={fy2026} />
+      <TwelveMonthPanel rows={twelveMonth} fy={fy2026} demand={demandFy} />
 
       <div className="legend-foot">
         <div style={{ marginBottom: 8 }}><b>WIRED (real numbers from gl.* + governance.*):</b></div>

@@ -17,9 +17,19 @@ export interface TwelveMonthRow {
   variance_pct: number | null;
 }
 
+export interface DemandRow {
+  period_yyyymm: string;
+  days: number;
+  peak_days: number;
+  lunar_days: number;
+  avg_dow_score: number | null;
+  avg_event_score: number | null;
+}
+
 interface Props {
   rows: TwelveMonthRow[];
   fy: string[]; // e.g. ['2026-01', ..., '2026-12']
+  demand?: DemandRow[];
 }
 
 function fmtK(n: number | null | undefined): string {
@@ -71,11 +81,12 @@ function aggregateMonth(rows: TwelveMonthRow[], period: string) {
   };
 }
 
-export default function TwelveMonthPanel({ rows, fy }: Props) {
+export default function TwelveMonthPanel({ rows, fy, demand = [] }: Props) {
   const [open, setOpen] = useState(false);
   const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
 
   const monthly = fy.map(p => ({ period: p, agg: aggregateMonth(rows, p) }));
+  const demandByPeriod = new Map(demand.map(d => [d.period_yyyymm, d]));
 
   // Rollup totals
   const ytdRevA = monthly.reduce((s, m) => s + m.agg.revA, 0);
@@ -195,6 +206,34 @@ export default function TwelveMonthPanel({ rows, fy }: Props) {
                 })}
                 <td className={`num ${ytdGopA - ytdGopB >= 0 ? 'var-green' : 'var-amber'}`}><strong>{ytdGopB ? fmtK(ytdGopA - ytdGopB) : '—'}</strong></td>
               </tr>
+              {demand.length > 0 && (
+                <>
+                  <tr style={{ borderTop: '1px solid var(--line)' }}>
+                    <td>Demand · peak days</td>
+                    {monthly.map(m => {
+                      const d = demandByPeriod.get(m.period);
+                      return <td key={m.period} className="num">{d ? `${d.peak_days}/${d.days}` : '—'}</td>;
+                    })}
+                    <td className="num">{demand.reduce((s, d) => s + (d.peak_days || 0), 0)}</td>
+                  </tr>
+                  <tr>
+                    <td>Demand · lunar days</td>
+                    {monthly.map(m => {
+                      const d = demandByPeriod.get(m.period);
+                      return <td key={m.period} className="num">{d ? d.lunar_days : '—'}</td>;
+                    })}
+                    <td className="num">{demand.reduce((s, d) => s + (d.lunar_days || 0), 0)}</td>
+                  </tr>
+                  <tr>
+                    <td>Demand · event score</td>
+                    {monthly.map(m => {
+                      const d = demandByPeriod.get(m.period);
+                      return <td key={m.period} className="num">{d && d.avg_event_score != null ? d.avg_event_score.toFixed(1) : '—'}</td>;
+                    })}
+                    <td className="num">—</td>
+                  </tr>
+                </>
+              )}
               <tr className="expand-row">
                 <td>Inspect month →</td>
                 {monthly.map(m => (

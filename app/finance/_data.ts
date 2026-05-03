@@ -385,6 +385,67 @@ export async function getBudgetByPeriod(period: string): Promise<Record<string, 
   return out;
 }
 
+// ----- DQ summary (cross-pillar) ------------------------------------------
+
+export interface DqSummary {
+  open_total: number;
+  open_critical: number;
+  open_warning: number;
+  open_info: number;
+  latest_open_at: string | null;
+}
+
+export async function getDqSummary(): Promise<DqSummary | null> {
+  const { data, error } = await supabaseGl
+    .from('v_dq_summary')
+    .select('*')
+    .single();
+  if (error || !data) return null;
+  return data as DqSummary;
+}
+
+// ----- Payroll monthly summary (ops.payroll_monthly) ----------------------
+
+export interface PayrollMonth {
+  period_yyyymm: string;
+  staff_count: number;
+  gross_payroll_usd: number;
+  net_payroll_usd: number;
+  total_days_worked: number;
+  days_off: number;
+}
+
+export async function getPayrollByPeriod(period: string): Promise<PayrollMonth | null> {
+  const { data, error } = await supabaseGl
+    .from('v_payroll_summary')
+    .select('*')
+    .eq('period_yyyymm', period)
+    .maybeSingle();
+  if (error || !data) return null;
+  return data as PayrollMonth;
+}
+
+// ----- Demand calendar summary (revenue.demand_calendar) ------------------
+
+export interface DemandMonth {
+  period_yyyymm: string;
+  days: number;
+  peak_days: number;
+  lunar_days: number;
+  avg_dow_score: number | null;
+  avg_event_score: number | null;
+}
+
+export async function getDemandSummary(periods: string[]): Promise<DemandMonth[]> {
+  if (periods.length === 0) return [];
+  const { data, error } = await supabaseGl
+    .from('v_demand_summary')
+    .select('*')
+    .in('period_yyyymm', periods);
+  if (error || !data) return [];
+  return data as DemandMonth[];
+}
+
 // ----- Plan drivers (volume metrics: room_nights / occ% / ADR) ------------
 
 export interface DriverRow {
