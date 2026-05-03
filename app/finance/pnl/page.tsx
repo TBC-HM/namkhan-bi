@@ -14,6 +14,7 @@ import {
 } from '../_data';
 import { priorPeriod, type PeriodWindow } from '@/lib/supabase-gl';
 import PageHeader from '@/components/layout/PageHeader';
+import TwelveMonthPanel from './TwelveMonthPanel';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -849,6 +850,9 @@ export default async function PnLPage({ searchParams }: Props) {
         explicit human approval. After validation, only Tier-1 actions (defined criteria, ≥85% confidence,
         audit-logged) move to auto. <b>P&amp;L policy: Tier-1 auto disabled — financial reporting always Tier-2.</b>
       </div>
+
+      {/* ============== BLOCK 10 — 12-month rollup ============== */}
+      <TwelveMonthPanel rows={twelveMonth} fy={fy2026} />
 
       <div className="legend-foot">
         <div style={{ marginBottom: 8 }}><b>WIRED (real numbers from gl.* + governance.*):</b></div>

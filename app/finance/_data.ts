@@ -296,6 +296,45 @@ export async function getLyByUsaliDept(period: string): Promise<Record<string, {
   return out;
 }
 
+// ----- Budget vs Actual (gl.budgets + gl.v_budget_vs_actual) ---------------
+
+export interface BudgetActualRow {
+  period_yyyymm: string;
+  usali_subcategory: string;
+  usali_department: string; // '' when undistributed
+  actual_usd: number;
+  budget_usd: number;
+  variance_usd: number;
+  variance_pct: number | null;
+}
+
+/** Pull budget × actual rows for a list of periods. */
+export async function getBudgetVsActual(periods: string[]): Promise<BudgetActualRow[]> {
+  if (periods.length === 0) return [];
+  const { data, error } = await supabaseGl
+    .from('v_budget_vs_actual')
+    .select('*')
+    .in('period_yyyymm', periods);
+  if (error) { console.error('[gl] getBudgetVsActual', error); return []; }
+  return (data ?? []) as BudgetActualRow[];
+}
+
+/** All budget rows for one period — used by USALI grid Budget column. */
+export async function getBudgetByPeriod(period: string): Promise<Record<string, number>> {
+  const { data, error } = await supabaseGl
+    .from('budgets')
+    .select('usali_subcategory, usali_department, amount_usd')
+    .eq('period_yyyymm', period);
+  if (error || !data) return {};
+  const out: Record<string, number> = {};
+  for (const r of data as { usali_subcategory: string; usali_department: string; amount_usd: number }[]) {
+    // Keyed by subcategory + dept (dept can be '')
+    const k = `${r.usali_subcategory}||${r.usali_department || ''}`;
+    out[k] = (out[k] ?? 0) + Number(r.amount_usd || 0);
+  }
+  return out;
+}
+
 /**
  * Per-dept actuals for a list of periods — used by heatmap. Returns
  * a flat array of { period, dept, revenue, expense, dept_profit }.
