@@ -7,7 +7,7 @@
 
 import PageHeader from '@/components/layout/PageHeader';
 import DataTable, { Column } from '@/components/ui/DataTable';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { fmtUSD, EMPTY } from '@/lib/format';
 import UploadProductsButton from '../_components/UploadProductsButton';
 
@@ -29,15 +29,23 @@ interface ItemRow {
 }
 
 async function getItems(): Promise<ItemRow[]> {
-  // Three parallel queries + JS join. PostgREST embed across .schema() is
-  // unreliable in some scenarios — the lookup tables are tiny (10 cats, 13
-  // units), so the JS join is fine and avoids embed surprises.
+  // Use service-role client because anon has no grants on inv.* tables.
+  // Same model as /api/marketing/upload and /api/operations/inventory/items.
+  // Dashboard is password-gated at the frontend per single-owner v1 model.
+  let admin;
+  try {
+    admin = getSupabaseAdmin();
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('[inventory/catalog] supabaseAdmin', e);
+    return [];
+  }
   const [itemsRes, catsRes, unitsRes] = await Promise.all([
-    supabase.schema('inv').from('items').select(
+    admin.schema('inv').from('items').select(
       'sku, item_name, category_id, uom_id, last_unit_cost_usd, gl_account_code, is_perishable, catalog_status, is_active, updated_at'
     ).order('item_name', { ascending: true }).limit(500),
-    supabase.schema('inv').from('categories').select('category_id, code, name'),
-    supabase.schema('inv').from('units').select('unit_id, code'),
+    admin.schema('inv').from('categories').select('category_id, code, name'),
+    admin.schema('inv').from('units').select('unit_id, code'),
   ]);
 
   if (itemsRes.error) {

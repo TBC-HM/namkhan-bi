@@ -15,7 +15,7 @@
 import Link from 'next/link';
 import PageHeader from '@/components/layout/PageHeader';
 import KpiBox from '@/components/kpi/KpiBox';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -30,17 +30,26 @@ interface InvSnapshot {
 }
 
 async function getSnapshot(): Promise<InvSnapshot> {
+  const empty: InvSnapshot = { itemsTotal: 0, itemsActive: 0, locations: 0, suppliers: 0, pendingPos: 0, capexProposed: 0 };
+  let admin;
+  try {
+    admin = getSupabaseAdmin();
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('[inventory/snapshot] supabaseAdmin', e);
+    return empty;
+  }
   const safe = async <T,>(p: PromiseLike<T>, fallback: T): Promise<T> => {
     try { return await Promise.resolve(p); } catch { return fallback; }
   };
 
   const [itemsAll, itemsActive, locs, sups, pos, capex] = await Promise.all([
-    safe(supabase.schema('inv').from('items').select('*', { count: 'exact', head: true }).then(r => r.count ?? 0), 0),
-    safe(supabase.schema('inv').from('items').select('*', { count: 'exact', head: true }).eq('is_active', true).then(r => r.count ?? 0), 0),
-    safe(supabase.schema('inv').from('locations').select('*', { count: 'exact', head: true }).eq('is_active', true).then(r => r.count ?? 0), 0),
-    safe(supabase.schema('suppliers').from('suppliers').select('*', { count: 'exact', head: true }).then(r => r.count ?? 0), 0),
-    safe(supabase.schema('proc').from('purchase_orders').select('*', { count: 'exact', head: true }).then(r => r.count ?? 0), 0),
-    safe(supabase.schema('fa').from('capex_pipeline').select('*', { count: 'exact', head: true }).then(r => r.count ?? 0), 0),
+    safe(admin.schema('inv').from('items').select('*', { count: 'exact', head: true }).then(r => r.count ?? 0), 0),
+    safe(admin.schema('inv').from('items').select('*', { count: 'exact', head: true }).eq('is_active', true).then(r => r.count ?? 0), 0),
+    safe(admin.schema('inv').from('locations').select('*', { count: 'exact', head: true }).eq('is_active', true).then(r => r.count ?? 0), 0),
+    safe(admin.schema('suppliers').from('suppliers').select('*', { count: 'exact', head: true }).then(r => r.count ?? 0), 0),
+    safe(admin.schema('proc').from('purchase_orders').select('*', { count: 'exact', head: true }).then(r => r.count ?? 0), 0),
+    safe(admin.schema('fa').from('capex_pipeline').select('*', { count: 'exact', head: true }).then(r => r.count ?? 0), 0),
   ]);
 
   return {
