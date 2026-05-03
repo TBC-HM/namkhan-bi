@@ -2601,3 +2601,75 @@ body:has(.public-prop-bg) .rail {
 body:has(.public-prop-bg) .main {
   width: 100% !important;
 }
+
+/* Pre-send room availability banner — composer */
+.avail-banner {
+  margin: 14px 0 0;
+  padding: 12px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--line-soft);
+  background: var(--paper-warm);
+}
+.avail-banner.avail-green {
+  background: var(--st-good-bg);
+  border-color: var(--st-good-bd);
+}
+.avail-banner.avail-yellow {
+  background: var(--st-warn-bg);
+  border-color: var(--st-warn-bd);
+}
+.avail-banner.avail-red {
+  background: var(--st-bad-bg);
+  border-color: var(--st-bad-bd);
+}
+.avail-banner-head {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.avail-banner-icon {
+  font-family: var(--mono);
+  font-size: var(--t-md);
+}
+.avail-green .avail-banner-icon { color: var(--moss-glow); }
+.avail-yellow .avail-banner-icon { color: var(--brass); }
+.avail-red .avail-banner-icon { color: var(--st-bad); }
+.avail-banner-msg {
+  font-size: var(--t-sm);
+  color: var(--ink-soft);
+  flex: 1;
+  min-width: 200px;
+}
+.avail-banner-list {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.avail-banner-list li {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line-soft);
+  font-size: var(--t-sm);
+}
+.avail-room-pill {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  letter-spacing: var(--ls-loose);
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.avail-room-pill.avail-yellow {
+  background: var(--st-warn-bg);
+  color: var(--brass);
+  border: 1px solid var(--st-warn-bd);
+}
+.avail-room-pill.avail-red {
+  background: var(--st-bad-bg);
+  color: var(--st-bad);
+  border: 1px solid var(--st-bad-bd);
+}
+.avail-room-msg {
+  color: var(--ink-soft);
+  flex: 1;
+}

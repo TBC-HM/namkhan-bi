@@ -10,6 +10,7 @@ import {
   getPlSections, getUsaliHouse, getUsaliDept, getUsaliPlBySubcat,
   getDqUnmappedCount, getPendingDecisions, periodsForWindow, currentPeriod, pickSection, pickPeriod,
   getLyTotalRevenue, getLyByDept, getLyByUsaliDept, getDeptByPeriods,
+  getBudgetByPeriod, getBudgetVsActual,
 } from '../_data';
 import { priorPeriod, type PeriodWindow } from '@/lib/supabase-gl';
 import PageHeader from '@/components/layout/PageHeader';
@@ -140,11 +141,15 @@ export default async function PnLPage({ searchParams }: Props) {
     }
     return out;
   })();
-  const [lyTotalRev, lyByDept, lyByUsaliDept, deptByPeriods] = await Promise.all([
+  // 12-month panel needs all of FY2026 actuals + budgets
+  const fy2026 = ['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06','2026-07','2026-08','2026-09','2026-10','2026-11','2026-12'];
+  const [lyTotalRev, lyByDept, lyByUsaliDept, deptByPeriods, budgetCur, twelveMonth] = await Promise.all([
     getLyTotalRevenue(cur),
     getLyByDept(cur),
     getLyByUsaliDept(cur),
     getDeptByPeriods(heatmapPeriods),
+    getBudgetByPeriod(cur),
+    getBudgetVsActual(fy2026),
   ]);
   const lyRevBySubcat = new Map(lyByDept.map(r => [r.usali_subcategory, r.revenue]));
   const revVsLyPct = (lyTotalRev != null && lyTotalRev !== 0)
@@ -532,28 +537,41 @@ export default async function PnLPage({ searchParams }: Props) {
                   const priorR = deptPriorMap.get(r.name);
                   const priorRev = priorR ? Number(priorR.revenue || 0) : null;
                   const momPct = priorRev && priorRev !== 0 ? ((r.val - priorRev) / Math.abs(priorRev)) * 100 : null;
+                  const budget = budgetCur[`Revenue||${r.name}`] ?? null;
+                  const dBgt = budget != null ? r.val - budget : null;
+                  const flowPct = budget != null && budget !== 0 ? ((r.val - budget) / Math.abs(budget)) * 100 : null;
                   return (
                   <tr key={r.name}>
                     <td>{r.name}</td>
                     <td>{fmtK(r.val)}</td>
-                    <td title="needs gl.budgets table">xx</td>
+                    <td title={budget != null ? `gl.budgets · Revenue · ${r.name}` : 'no budget row uploaded'}>{budget != null ? fmtK(budget) : <span title="upload at /finance/budget">xx</span>}</td>
                     <td title={ly ? `LY same-month from gl.pnl_snapshot, dept inferred via gl_entries class` : 'no LY rows'}>{lyRev != null && lyRev > 0 ? fmtK(lyRev) : <span title="no LY rows">xx</span>}</td>
-                    <td title="needs gl.budgets table">xx</td>
+                    <td className={dBgt == null ? '' : (dBgt >= 0 ? 'var-green' : 'var-amber')}>{dBgt != null ? fmtK(dBgt) : <span title="no budget row">xx</span>}</td>
                     <td title={priorRev != null ? `${prior} dept rev: $${(priorRev/1000).toFixed(1)}k` : 'no prior-mo dept row'} className={momPct == null ? '' : (momPct >= 0 ? 'var-green' : 'var-amber')}>{momPct != null ? fmtPctV(momPct) : <span title="no prior-mo data">xx</span>}</td>
-                    <td title="needs gl.budgets + LY">xx</td>
+                    <td className={flowPct == null ? '' : (flowPct >= 0 ? 'var-green' : 'var-amber')} title="vs Budget %">{flowPct != null ? fmtPctV(flowPct) : <span title="no budget">xx</span>}</td>
                   </tr>
                   );
                 });
               })()}
-              <tr className="subtotal">
-                <td>Total Revenue</td>
-                <td>{fmtK(totalRev)}</td>
-                <td title="needs gl.budgets table">xx</td>
-                <td>{lyTotalRev != null ? fmtK(lyTotalRev) : <span title="no pnl_snapshot row for this period">xx</span>}</td>
-                <td title="needs gl.budgets table">xx</td>
-                <td className={revVsPriorPct >= 0 ? 'var-green' : 'var-amber'}>{fmtPctV(revVsPriorPct)}</td>
-                <td title="needs gl.budgets table">xx</td>
-              </tr>
+              {(() => {
+                // Total revenue budget = sum of all Revenue||* rows for cur period
+                const revBudget = Object.entries(budgetCur)
+                  .filter(([k]) => k.startsWith('Revenue||'))
+                  .reduce((s, [, v]) => s + Number(v || 0), 0);
+                const dBgt = revBudget > 0 ? totalRev - revBudget : null;
+                const flowPct = revBudget > 0 ? ((totalRev - revBudget) / Math.abs(revBudget)) * 100 : null;
+                return (
+                  <tr className="subtotal">
+                    <td>Total Revenue</td>
+                    <td>{fmtK(totalRev)}</td>
+                    <td title={revBudget > 0 ? 'sum of all Revenue subcat rows' : 'no budget rows'}>{revBudget > 0 ? fmtK(revBudget) : <span>xx</span>}</td>
+                    <td>{lyTotalRev != null ? fmtK(lyTotalRev) : <span title="no pnl_snapshot row for this period">xx</span>}</td>
+                    <td className={dBgt == null ? '' : (dBgt >= 0 ? 'var-green' : 'var-amber')}>{dBgt != null ? fmtK(dBgt) : <span>xx</span>}</td>
+                    <td className={revVsPriorPct >= 0 ? 'var-green' : 'var-amber'}>{fmtPctV(revVsPriorPct)}</td>
+                    <td className={flowPct == null ? '' : (flowPct >= 0 ? 'var-green' : 'var-amber')}>{flowPct != null ? fmtPctV(flowPct) : <span>xx</span>}</td>
+                  </tr>
+                );
+              })()}
 
               <tr className="section"><td colSpan={7}>Departmental Expenses (USALI · live from <code>gl.v_usali_dept_summary</code>)</td></tr>
               {(() => {
@@ -580,15 +598,21 @@ export default async function PnLPage({ searchParams }: Props) {
                   const priorR = deptPriorMap.get(r.name);
                   const priorExp = priorR ? Number(priorR.cost_of_sales || 0) + Number(priorR.payroll || 0) + Number(priorR.other_op_exp || 0) : null;
                   const momPct = priorExp && priorExp !== 0 ? ((r.val - priorExp) / Math.abs(priorExp)) * 100 : null;
+                  const expBudget = (budgetCur[`Cost of Sales||${r.name}`] ?? 0)
+                    + (budgetCur[`Payroll & Related||${r.name}`] ?? 0)
+                    + (budgetCur[`Other Operating Expenses||${r.name}`] ?? 0);
+                  const hasBudget = expBudget > 0;
+                  const dBgt = hasBudget ? r.val - expBudget : null;
+                  const flowPct = hasBudget ? ((r.val - expBudget) / Math.abs(expBudget)) * 100 : null;
                   return (
                   <tr key={r.name}>
                     <td>{r.name}</td>
                     <td>{fmtK(r.val)}</td>
-                    <td title="needs gl.budgets table">xx</td>
+                    <td title={hasBudget ? `sum expense subcats for ${r.name}` : 'no expense budget rows'}>{hasBudget ? fmtK(expBudget) : <span title="upload at /finance/budget">xx</span>}</td>
                     <td title={ly ? `LY expenses from pnl_snapshot, dept inferred` : 'no LY rows'}>{lyExp != null && lyExp > 0 ? fmtK(lyExp) : <span title="no LY rows">xx</span>}</td>
-                    <td title="needs gl.budgets table">xx</td>
+                    <td className={dBgt == null ? '' : (dBgt <= 0 ? 'var-green' : 'var-amber')}>{dBgt != null ? fmtK(dBgt) : <span>xx</span>}</td>
                     <td title={priorExp != null ? `${prior} dept expense: $${(priorExp/1000).toFixed(1)}k` : 'no prior-mo dept row'} className={momPct == null ? '' : (momPct <= 0 ? 'var-green' : 'var-amber')}>{momPct != null ? fmtPctV(momPct) : <span title="no prior-mo data">xx</span>}</td>
-                    <td title="needs gl.budgets + LY">xx</td>
+                    <td className={flowPct == null ? '' : (flowPct <= 0 ? 'var-green' : 'var-amber')} title="vs Budget %">{flowPct != null ? fmtPctV(flowPct) : <span>xx</span>}</td>
                   </tr>
                   );
                 });
@@ -604,6 +628,21 @@ export default async function PnLPage({ searchParams }: Props) {
                   const cls = (betterDown ? pct <= 0 : pct >= 0) ? 'var-green' : 'var-amber';
                   return <td title={`prior ${prior}: $${(prior_/1000).toFixed(1)}k`} className={cls}>{fmtPctV(pct)}</td>;
                 }
+                // Undistributed budget lookups (subcat||'' since dept is empty)
+                function bg(subcat: string): number | null {
+                  const v = budgetCur[`${subcat}||`];
+                  return v != null && v !== 0 ? v : null;
+                }
+                function BudgetCells({ actual, subcat, betterDown = false }: { actual: number | null; subcat: string; betterDown?: boolean }) {
+                  const b = bg(subcat);
+                  const dBgt = (actual != null && b != null) ? actual - b : null;
+                  const flowPct = (actual != null && b != null && b !== 0) ? ((actual - b) / Math.abs(b)) * 100 : null;
+                  return (<>
+                    <td title={b != null ? `gl.budgets · ${subcat}` : 'no budget row'}>{b != null ? fmtK(b) : <span>xx</span>}</td>
+                    <td title="LY undistributed breakdown not in pnl_snapshot">xx</td>
+                    <td className={dBgt == null ? '' : ((betterDown ? dBgt <= 0 : dBgt >= 0) ? 'var-green' : 'var-amber')}>{dBgt != null ? fmtK(dBgt) : <span>xx</span>}</td>
+                  </>);
+                }
                 const priorDeptProfit = priorH ? Number(priorH.total_dept_profit ?? 0) : null;
                 const priorAg = priorH ? Number(priorH.ag_total ?? 0) : null;
                 const priorSm = priorH ? Number(priorH.sales_marketing ?? 0) : null;
@@ -617,78 +656,68 @@ export default async function PnLPage({ searchParams }: Props) {
                     <tr className="gop">
                       <td>Departmental Profit</td>
                       <td>{fmtK(houseCur?.total_dept_profit ?? null)}</td>
-                      <td title="needs gl.budgets table">xx</td>
-                      <td title="needs LY GOP — pnl_snapshot lacks class breakdown for GOP">xx</td>
-                      <td title="needs gl.budgets table">xx</td>
+                      <td title="GOP-level budget — needs aggregate computation">xx</td>
+                      <td title="needs LY GOP">xx</td>
+                      <td title="GOP-level budget — needs aggregate">xx</td>
                       <MomCell cur_={houseCur?.total_dept_profit ?? null} prior_={priorDeptProfit} />
-                      <td title="needs gl.budgets + LY">xx</td>
+                      <td title="needs budget aggregate">xx</td>
                     </tr>
 
                     <tr className="section"><td colSpan={7}>Undistributed Operating Expenses (live from <code>gl.v_usali_house_summary</code>)</td></tr>
                     <tr>
                       <td>A&amp;G</td>
                       <td>{fmtK(houseCur?.ag_total ?? null)}</td>
-                      <td title="needs gl.budgets table">xx</td>
-                      <td title="LY undistributed breakdown not in pnl_snapshot">xx</td>
-                      <td title="needs gl.budgets table">xx</td>
+                      <BudgetCells actual={houseCur?.ag_total ?? null} subcat="A&G" betterDown />
                       <MomCell cur_={houseCur?.ag_total ?? null} prior_={priorAg} betterDown />
-                      <td title="needs gl.budgets + LY">xx</td>
+                      <td title="vs Budget %">{(() => { const b = bg('A&G'); const a = houseCur?.ag_total ?? null; if (b == null || a == null || b === 0) return <span>xx</span>; const p = ((a - b) / Math.abs(b)) * 100; return <span className={p <= 0 ? 'var-green' : 'var-amber'}>{fmtPctV(p)}</span>; })()}</td>
                     </tr>
                     <tr>
                       <td>Sales &amp; Marketing</td>
                       <td>{fmtK(houseCur?.sales_marketing ?? null)}</td>
-                      <td title="needs gl.budgets table">xx</td>
-                      <td title="LY undistributed breakdown not in pnl_snapshot">xx</td>
-                      <td title="needs gl.budgets table">xx</td>
+                      <BudgetCells actual={houseCur?.sales_marketing ?? null} subcat="Sales & Marketing" betterDown />
                       <MomCell cur_={houseCur?.sales_marketing ?? null} prior_={priorSm} betterDown />
-                      <td title="needs gl.budgets + LY">xx</td>
+                      <td title="vs Budget %">{(() => { const b = bg('Sales & Marketing'); const a = houseCur?.sales_marketing ?? null; if (b == null || a == null || b === 0) return <span>xx</span>; const p = ((a - b) / Math.abs(b)) * 100; return <span className={p <= 0 ? 'var-green' : 'var-amber'}>{fmtPctV(p)}</span>; })()}</td>
                     </tr>
                     <tr>
                       <td>POM</td>
                       <td>{fmtK(houseCur?.pom ?? null)}</td>
-                      <td title="needs gl.budgets table">xx</td>
-                      <td title="LY undistributed breakdown not in pnl_snapshot">xx</td>
-                      <td title="needs gl.budgets table">xx</td>
+                      <BudgetCells actual={houseCur?.pom ?? null} subcat="POM" betterDown />
                       <MomCell cur_={houseCur?.pom ?? null} prior_={priorPom} betterDown />
-                      <td title="needs gl.budgets + LY">xx</td>
+                      <td title="vs Budget %">{(() => { const b = bg('POM'); const a = houseCur?.pom ?? null; if (b == null || a == null || b === 0) return <span>xx</span>; const p = ((a - b) / Math.abs(b)) * 100; return <span className={p <= 0 ? 'var-green' : 'var-amber'}>{fmtPctV(p)}</span>; })()}</td>
                     </tr>
                     <tr>
                       <td>Utilities</td>
                       <td>{fmtK(houseCur?.utilities ?? null)}</td>
-                      <td title="needs gl.budgets table">xx</td>
-                      <td title="LY undistributed breakdown not in pnl_snapshot">xx</td>
-                      <td title="needs gl.budgets table">xx</td>
+                      <BudgetCells actual={houseCur?.utilities ?? null} subcat="Utilities" betterDown />
                       <MomCell cur_={houseCur?.utilities ?? null} prior_={priorUtil} betterDown />
-                      <td title="needs gl.budgets + LY">xx</td>
+                      <td title="vs Budget %">{(() => { const b = bg('Utilities'); const a = houseCur?.utilities ?? null; if (b == null || a == null || b === 0) return <span>xx</span>; const p = ((a - b) / Math.abs(b)) * 100; return <span className={p <= 0 ? 'var-green' : 'var-amber'}>{fmtPctV(p)}</span>; })()}</td>
                     </tr>
                     <tr>
                       <td>Mgmt Fees</td>
                       <td>{fmtK(houseCur?.mgmt_fees ?? null)}</td>
-                      <td title="needs gl.budgets table">xx</td>
-                      <td title="LY undistributed breakdown not in pnl_snapshot">xx</td>
-                      <td title="needs gl.budgets table">xx</td>
+                      <BudgetCells actual={houseCur?.mgmt_fees ?? null} subcat="Mgmt Fees" betterDown />
                       <MomCell cur_={houseCur?.mgmt_fees ?? null} prior_={priorMgmt} betterDown />
-                      <td title="needs gl.budgets + LY">xx</td>
+                      <td title="vs Budget %">{(() => { const b = bg('Mgmt Fees'); const a = houseCur?.mgmt_fees ?? null; if (b == null || a == null || b === 0) return <span>xx</span>; const p = ((a - b) / Math.abs(b)) * 100; return <span className={p <= 0 ? 'var-green' : 'var-amber'}>{fmtPctV(p)}</span>; })()}</td>
                     </tr>
 
                     <tr className="gop">
                       <td>GOP after Undistributed</td>
                       <td>{fmtK(houseCur?.gop ?? null)}</td>
-                      <td title="needs gl.budgets table">xx</td>
-                      <td title="LY GOP composite — needs class join">xx</td>
-                      <td title="needs gl.budgets table">xx</td>
+                      <td title="GOP composite — needs aggregate budget">xx</td>
+                      <td title="LY GOP composite">xx</td>
+                      <td title="GOP composite">xx</td>
                       <MomCell cur_={houseCur?.gop ?? null} prior_={priorGop} />
-                      <td title="needs gl.budgets + LY">xx</td>
+                      <td title="needs aggregate budget">xx</td>
                     </tr>
 
                     <tr className="ebitda">
                       <td>EBITDA</td>
                       <td>{fmtK(ebitda)}</td>
-                      <td title="needs gl.budgets table">xx</td>
-                      <td title="LY EBITDA composite — needs class join">xx</td>
-                      <td title="needs gl.budgets table">xx</td>
+                      <td title="EBITDA composite — needs aggregate budget">xx</td>
+                      <td title="LY EBITDA composite">xx</td>
+                      <td title="EBITDA composite">xx</td>
                       <MomCell cur_={ebitda} prior_={priorEbitda} />
-                      <td title="needs gl.budgets + LY">xx</td>
+                      <td title="needs aggregate budget">xx</td>
                     </tr>
                   </>
                 );

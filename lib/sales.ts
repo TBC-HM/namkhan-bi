@@ -327,3 +327,148 @@ export async function logAgentRun(row: {
   const sb = getSupabaseAdmin();
   await sb.schema('sales').from('agent_runs').insert(row);
 }
+
+// ---------- pre-send room availability gate ----------
+// At send time we re-check rate_inventory for every room block on the proposal.
+// HARD BLOCK if any room has 0 nights available or min_avail < qty.
+// WARN if rate_inventory is stale (>60min) or if min_avail == qty (no buffer).
+// GREEN if every room has min_avail > qty AND inventory is fresh.
+
+export interface RoomCheckRow {
+  block_id: string;
+  room_type_id: number;
+  label: string;
+  qty: number;
+  nights_requested: number;
+  nights_available: number;     // 0 = sold out for at least one night in range
+  min_avail_in_range: number;
+  status: 'green' | 'yellow' | 'red';
+  message: string;
+}
+
+export interface ProposalCheck {
+  proposal_id: string;
+  date_in: string | null;
+  date_out: string | null;
+  inventory_freshness_min: number;
+  status: 'green' | 'yellow' | 'red' | 'no_rooms';
+  message: string;
+  rooms: RoomCheckRow[];
+}
+
+export async function checkProposalRoomsAvail(proposalId: string): Promise<ProposalCheck | null> {
+  const sb = getSupabaseAdmin();
+  const { data: proposal } = await sb
+    .schema('sales').from('proposals')
+    .select('id, property_id, date_in_snapshot, date_out_snapshot')
+    .eq('id', proposalId).maybeSingle();
+  if (!proposal) return null;
+
+  const dateIn = (proposal as any).date_in_snapshot as string | null;
+  const dateOut = (proposal as any).date_out_snapshot as string | null;
+  const propertyId = (proposal as any).property_id as number;
+
+  const { data: blocks } = await sb
+    .schema('sales').from('proposal_blocks')
+    .select('id, block_type, ref_id, label, qty')
+    .eq('proposal_id', proposalId)
+    .eq('block_type', 'room');
+
+  const roomBlocks = ((blocks ?? []) as Array<{ id: string; ref_id: string | null; label: string; qty: number }>);
+
+  const freshness = await getInventoryFreshnessMin(propertyId);
+
+  if (!dateIn || !dateOut) {
+    return {
+      proposal_id: proposalId,
+      date_in: dateIn, date_out: dateOut,
+      inventory_freshness_min: freshness,
+      status: 'red',
+      message: 'Proposal has no dates. Set date_in_snapshot and date_out_snapshot before sending.',
+      rooms: [],
+    };
+  }
+
+  if (roomBlocks.length === 0) {
+    // No rooms on proposal — that is a YELLOW (some proposals are activity-only,
+    // but if you intend to send it without rooms, double-check).
+    return {
+      proposal_id: proposalId,
+      date_in: dateIn, date_out: dateOut,
+      inventory_freshness_min: freshness,
+      status: freshness > 60 ? 'yellow' : 'no_rooms',
+      message: roomBlocks.length === 0
+        ? 'No room blocks on this proposal. Send anyway only if this is intentionally activities-only.'
+        : '',
+      rooms: [],
+    };
+  }
+
+  const avail = await getAvailableRooms(dateIn, dateOut, propertyId);
+  // Map by room_type_id for O(1) lookup
+  const availMap = new Map<number, typeof avail[number]>();
+  avail.forEach(r => availMap.set(Number(r.room_type_id), r));
+
+  type WorstStatus = 'green' | 'yellow' | 'red';
+
+  const rows: RoomCheckRow[] = roomBlocks.map((b) => {
+    const refId = Number(b.ref_id);
+    const a = availMap.get(refId);
+    const nightsRequested = a?.nights_requested ?? 1;
+    const nightsAvailable = a?.nights_available ?? 0;
+    const minAvail = a?.min_avail_in_range ?? 0;
+
+    let status: WorstStatus = 'green';
+    let message = 'Available across the full date range.';
+
+    if (!a || nightsAvailable < nightsRequested) {
+      status = 'red';
+      message = `SOLD OUT for at least one night between ${dateIn} and ${dateOut}. Open Cloudbeds → Calendar → ${b.label} to add a block, then re-check.`;
+    } else if (minAvail < b.qty) {
+      status = 'red';
+      message = `Only ${minAvail} room(s) free on the tightest night, you asked for ${b.qty}. Open Cloudbeds to add a block, then re-check.`;
+    } else if (minAvail === b.qty) {
+      status = 'yellow';
+      message = `Tight: exactly ${minAvail} room(s) free on the tightest night, matches qty (${b.qty}). Consider holding a block before sending.`;
+    } else if (minAvail <= b.qty + 1) {
+      status = 'yellow';
+      message = `Tight: ${minAvail} room(s) free, qty ${b.qty}. Recommend a Cloudbeds hold so the guest doesn't double-book a parallel inquiry.`;
+    }
+
+    return {
+      block_id: b.id,
+      room_type_id: refId,
+      label: b.label,
+      qty: b.qty,
+      nights_requested: Number(nightsRequested),
+      nights_available: Number(nightsAvailable),
+      min_avail_in_range: Number(minAvail),
+      status, message,
+    };
+  });
+
+  // Worst-status reduction in a single pass — TS narrows correctly with reduce.
+  const statuses: WorstStatus[] = rows.map(r => r.status);
+  let worst: WorstStatus =
+    statuses.includes('red') ? 'red' :
+    statuses.includes('yellow') ? 'yellow' :
+    'green';
+
+  // Stale inventory pulls overall to yellow if otherwise green
+  if (freshness > 60 && worst === 'green') worst = 'yellow';
+
+  const overall =
+    worst === 'red' ? 'Send is BLOCKED — see the red rooms below.' :
+    worst === 'yellow' ? `Send allowed but tight or stale (rate_inventory last synced ${freshness}m ago).` :
+    `All rooms confirmed available. rate_inventory fresh (${freshness}m old).`;
+
+  return {
+    proposal_id: proposalId,
+    date_in: dateIn,
+    date_out: dateOut,
+    inventory_freshness_min: freshness,
+    status: worst,
+    message: overall,
+    rooms: rows,
+  };
+}

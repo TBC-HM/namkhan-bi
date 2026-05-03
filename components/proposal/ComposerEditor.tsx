@@ -2,7 +2,7 @@
 // The composer screen — block list (left) + live email preview (right) + tabs to email editor.
 // Uses canonical .panel + KpiBox + StatusPill. All format via lib/format.
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import RoomPickerDrawer from './RoomPickerDrawer';
 import ActivityCatalogDrawer from './ActivityCatalogDrawer';
 import EmailEditor from './EmailEditor';
@@ -37,6 +37,25 @@ export default function ComposerEditor({ proposalId, initialBlocks, initialEmail
   const [showActivities, setShowActivities] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [sentToken, setSentToken] = useState<string | null>(proposal.public_token);
+
+  // Pre-send availability gate state.
+  // status: 'green' (fresh + buffer) | 'yellow' (tight or stale) | 'red' (sold out / under-qty) | null (loading)
+  const [check, setCheck] = useState<{
+    status: 'green' | 'yellow' | 'red' | 'no_rooms';
+    message: string;
+    inventory_freshness_min: number;
+    rooms: Array<{ block_id: string; label: string; status: 'green' | 'yellow' | 'red'; message: string; min_avail_in_range: number; qty: number }>;
+  } | null>(null);
+
+  const refreshCheck = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/sales/proposals/${proposalId}/check`, { cache: 'no-store' });
+      if (r.ok) setCheck(await r.json());
+    } catch { /* swallow */ }
+  }, [proposalId]);
+
+  // Run check on mount and after every block change
+  useEffect(() => { refreshCheck(); }, [refreshCheck, blocks.length]);
 
   const totalLak = blocks.reduce((s, b) => s + Number(b.total_lak ?? 0), 0);
   const totalUsd = totalLak / FX_LAK_PER_USD;
@@ -78,12 +97,23 @@ export default function ComposerEditor({ proposalId, initialBlocks, initialEmail
     setBusy(null);
   }
 
-  async function sendProposal() {
+  async function sendProposal(opts: { force?: boolean } = {}) {
     setBusy('send');
-    const r = await fetch(`/api/sales/proposals/${proposalId}/send`, { method: 'POST' });
+    const url = opts.force
+      ? `/api/sales/proposals/${proposalId}/send?force=1`
+      : `/api/sales/proposals/${proposalId}/send`;
+    const r = await fetch(url, { method: 'POST' });
     const j = await r.json();
+    if (r.status === 409) {
+      // Refresh check so the banner shows the current state
+      if (j.check) setCheck(j.check);
+      setBusy(null);
+      return;
+    }
     if (j.token) {
       setSentToken(j.token);
+      // Re-render check (status now sent)
+      refreshCheck();
     }
     setBusy(null);
   }
@@ -126,11 +156,48 @@ export default function ComposerEditor({ proposalId, initialBlocks, initialEmail
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => setTab('blocks')} className={`btn${tab === 'blocks' ? ' btn-primary' : ''}`}>1 · Blocks</button>
           <button onClick={() => setTab('email')} className={`btn${tab === 'email' ? ' btn-primary' : ''}`}>2 · Email</button>
-          <button onClick={sendProposal} disabled={busy === 'send' || blocks.length === 0} className="btn btn-primary">
+          <button
+            onClick={() => sendProposal()}
+            disabled={busy === 'send' || blocks.length === 0 || check?.status === 'red'}
+            className="btn btn-primary"
+            title={check?.status === 'red' ? 'Send blocked — fix availability first' : undefined}
+          >
             {busy === 'send' ? 'Sending…' : sentToken ? 'Re-send →' : 'Send to guest →'}
           </button>
         </div>
       </header>
+
+      {check && check.status !== 'no_rooms' && (
+        <div className={`avail-banner avail-${check.status}`}>
+          <div className="avail-banner-head">
+            <span className="avail-banner-icon">
+              {check.status === 'green' ? '●' : check.status === 'yellow' ? '◐' : '⚠'}
+            </span>
+            <strong>
+              {check.status === 'green' ? 'Rooms available'
+                : check.status === 'yellow' ? 'Tight or stale'
+                : 'Send blocked — rooms unavailable'}
+            </strong>
+            <span className="avail-banner-msg">{check.message}</span>
+            {check.status === 'red' && (
+              <button onClick={() => sendProposal({ force: true })} disabled={busy === 'send'} className="btn">
+                Force-send anyway
+              </button>
+            )}
+            <button onClick={refreshCheck} className="btn">↻ Re-check</button>
+          </div>
+          {check.rooms.filter(r => r.status !== 'green').length > 0 && (
+            <ul className="avail-banner-list">
+              {check.rooms.filter(r => r.status !== 'green').map(r => (
+                <li key={r.block_id}>
+                  <span className={`avail-room-pill avail-${r.status}`}>{r.label}</span>
+                  <span className="avail-room-msg">{r.message}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {tab === 'blocks' && (
         <div className="composer-grid">
