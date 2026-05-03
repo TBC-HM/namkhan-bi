@@ -385,6 +385,63 @@ export async function getBudgetByPeriod(period: string): Promise<Record<string, 
   return out;
 }
 
+// ----- Plan drivers (volume metrics: room_nights / occ% / ADR) ------------
+
+export interface DriverRow {
+  scenario_name: string;
+  scenario_type: string;
+  driver_key: string;
+  value_numeric: number;
+}
+
+export async function getDriversByPeriod(period: string): Promise<DriverRow[]> {
+  const { data, error } = await supabaseGl
+    .from('v_drivers_stack')
+    .select('scenario_name, scenario_type, driver_key, value_numeric')
+    .eq('period_yyyymm', period);
+  if (error || !data) return [];
+  return data as DriverRow[];
+}
+
+// ----- Freshness summary --------------------------------------------------
+
+export interface FreshnessSummary {
+  matview_count: number;
+  stale_count: number;
+  latest_refresh_at: string | null;
+  freshest_minutes: number;
+  stalest_minutes: number;
+}
+
+export async function getFreshnessSummary(): Promise<FreshnessSummary | null> {
+  const { data, error } = await supabaseGl
+    .from('v_freshness_summary')
+    .select('*')
+    .single();
+  if (error || !data) return null;
+  return data as FreshnessSummary;
+}
+
+// ----- Materiality thresholds ---------------------------------------------
+
+export interface MaterialityThreshold {
+  pct: number;
+  abs_usd: number;
+}
+
+export async function getMaterialityThreshold(): Promise<MaterialityThreshold | null> {
+  const { data, error } = await supabaseGl
+    .from('materiality_thresholds')
+    .select('pct_threshold, abs_threshold_usd')
+    .eq('scope', 'global')
+    .single();
+  if (error || !data) return null;
+  return {
+    pct: Number((data as any).pct_threshold || 5),
+    abs_usd: Number((data as any).abs_threshold_usd || 1000),
+  };
+}
+
 /**
  * Per-dept actuals for a list of periods — used by heatmap. Returns
  * a flat array of { period, dept, revenue, expense, dept_profit }.

@@ -12,6 +12,7 @@ import {
   getLyTotalRevenue, getLyByDept, getLyByUsaliDept, getDeptByPeriods,
   getBudgetByPeriod, getBudgetVsActual,
   getLyLinesByPeriod, getForecastLinesByPeriod,
+  getDriversByPeriod, getFreshnessSummary, getMaterialityThreshold,
 } from '../_data';
 import { priorPeriod, type PeriodWindow } from '@/lib/supabase-gl';
 import PageHeader from '@/components/layout/PageHeader';
@@ -145,7 +146,7 @@ export default async function PnLPage({ searchParams }: Props) {
   })();
   // 12-month panel needs all of FY2026 actuals + budgets
   const fy2026 = ['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06','2026-07','2026-08','2026-09','2026-10','2026-11','2026-12'];
-  const [lyTotalRev, lyByDept, lyByUsaliDept, deptByPeriods, budgetCur, twelveMonth, lyLines, forecastLines] = await Promise.all([
+  const [lyTotalRev, lyByDept, lyByUsaliDept, deptByPeriods, budgetCur, twelveMonth, lyLines, forecastLines, drivers, freshness, materiality] = await Promise.all([
     getLyTotalRevenue(cur),
     getLyByDept(cur),
     getLyByUsaliDept(cur),
@@ -154,7 +155,25 @@ export default async function PnLPage({ searchParams }: Props) {
     getBudgetVsActual(fy2026),
     getLyLinesByPeriod(cur),       // Actuals 2025 same-month, keyed `${subcat}||${dept}`
     getForecastLinesByPeriod(cur), // Conservative 2026 cur-month
+    getDriversByPeriod(cur),       // plan.drivers — room_nights/occ%/ADR for cur period
+    getFreshnessSummary(),         // kpi.freshness_log rollup
+    getMaterialityThreshold(),     // gl.materiality_thresholds (drives alert thresholds)
   ]);
+
+  // Driver lookups: budget vs actuals from plan.drivers
+  function pickDriver(scenario: string, key: string): number | null {
+    const r = drivers.find(d => d.scenario_name === scenario && d.driver_key === key);
+    return r ? Number(r.value_numeric) : null;
+  }
+  const budgetRoomNights = pickDriver('Budget 2026 v1', 'room_nights');
+  const budgetOccPct     = pickDriver('Budget 2026 v1', 'occupancy_pct');
+  const budgetAdr        = pickDriver('Budget 2026 v1', 'adr_usd');
+  const ytdRoomNights    = pickDriver('Actuals 2026 YTD', 'room_nights');
+  const ytdOccPct        = pickDriver('Actuals 2026 YTD', 'occupancy_pct');
+  const ytdAdr           = pickDriver('Actuals 2026 YTD', 'adr_usd');
+  // Materiality drives tactical alert breach thresholds (replaces hardcoded constants)
+  const matPct  = materiality?.pct ?? 5;
+  const matAbs  = materiality?.abs_usd ?? 1000;
   const lyRevBySubcat = new Map(lyByDept.map(r => [r.usali_subcategory, r.revenue]));
   const revVsLyPct = (lyTotalRev != null && lyTotalRev !== 0)
     ? ((totalRev - lyTotalRev) / lyTotalRev) * 100
@@ -268,7 +287,7 @@ export default async function PnLPage({ searchParams }: Props) {
   if (agTotalWindow > 0 && agPrior > 0) {
     const delta = agTotalWindow - agPrior;
     const pct = (delta / agPrior) * 100;
-    if (Math.abs(pct) > 15) {
+    if (Math.abs(pct) > matPct * 3) {
       alerts.push({
         sev: Math.abs(pct) > 30 ? 'hi' : 'med',
         title: <>A&amp;G {pct >= 0 ? '+' : ''}{pct.toFixed(0)}% MoM (${(delta/1000).toFixed(1)}k)</>,
@@ -286,7 +305,7 @@ export default async function PnLPage({ searchParams }: Props) {
   if (utilCur > 0 && utilPrior > 0) {
     const delta = utilCur - utilPrior;
     const pct = (delta / utilPrior) * 100;
-    if (Math.abs(pct) > 15) {
+    if (Math.abs(pct) > matPct * 3) {
       alerts.push({
         sev: Math.abs(pct) > 30 ? 'med' : 'low',
         title: <>Utilities {pct >= 0 ? '+' : ''}{pct.toFixed(0)}% MoM</>,
@@ -333,7 +352,73 @@ export default async function PnLPage({ searchParams }: Props) {
         <span className="meta-token">
           win={period.win} · cmp={period.cmp} · ccy=usd · seg={period.seg}
         </span>
+        {freshness && (
+          <span className="meta-token" title={`${freshness.matview_count} matviews tracked · ${freshness.stale_count} stale · most-fresh ${Math.round(freshness.freshest_minutes)}m ago`}>
+            data: {freshness.stale_count}/{freshness.matview_count} stale · last refresh {freshness.latest_refresh_at ? new Date(freshness.latest_refresh_at).toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' }) : '—'}
+          </span>
+        )}
+        {materiality && (
+          <span className="meta-token" title="gl.materiality_thresholds — drives tactical alert thresholds + variance highlighting">
+            materiality: {materiality.pct}% AND ${materiality.abs_usd}
+          </span>
+        )}
       </div>
+
+      {/* ============== BLOCK 2.5 — Driver strip (room nights / occ% / ADR) ============== */}
+      {(budgetRoomNights != null || ytdRoomNights != null) && (
+        <div className="kpi-section">
+          <div className="kpi-row">
+            <div className="kpi">
+              <div className="scope">Volume</div>
+              <div className="val">{budgetRoomNights != null ? budgetRoomNights.toFixed(0) : 'xx'}</div>
+              <div className="deltas"><span className="neu">plan.drivers · room_nights</span></div>
+              <div className="lbl">Budget room nights ({monthLabel})</div>
+            </div>
+            <div className="kpi">
+              <div className="scope">Volume</div>
+              <div className="val">{ytdRoomNights != null ? ytdRoomNights.toFixed(0) : 'xx'}</div>
+              <div className="deltas">
+                <span className={(ytdRoomNights != null && budgetRoomNights != null && ytdRoomNights >= budgetRoomNights) ? 'pos' : 'neg'}>
+                  {(ytdRoomNights != null && budgetRoomNights != null) ? `${(((ytdRoomNights - budgetRoomNights) / budgetRoomNights) * 100).toFixed(1)}% vs budget` : '—'}
+                </span>
+              </div>
+              <div className="lbl">Actual YTD room nights</div>
+            </div>
+            <div className="kpi">
+              <div className="scope">Mix</div>
+              <div className="val">{budgetOccPct != null ? `${budgetOccPct.toFixed(1)}%` : 'xx'}</div>
+              <div className="deltas"><span className="neu">budget · occupancy_pct</span></div>
+              <div className="lbl">Budget occupancy</div>
+            </div>
+            <div className="kpi">
+              <div className="scope">Mix</div>
+              <div className="val">{ytdOccPct != null ? `${ytdOccPct.toFixed(1)}%` : 'xx'}</div>
+              <div className="deltas">
+                <span className={(ytdOccPct != null && budgetOccPct != null && ytdOccPct >= budgetOccPct) ? 'pos' : 'neg'}>
+                  {(ytdOccPct != null && budgetOccPct != null) ? `${(ytdOccPct - budgetOccPct).toFixed(1)} pp vs bgt` : '—'}
+                </span>
+              </div>
+              <div className="lbl">Actual YTD occupancy</div>
+            </div>
+            <div className="kpi">
+              <div className="scope">Rate</div>
+              <div className="val">{budgetAdr != null ? `$${budgetAdr.toFixed(0)}` : 'xx'}</div>
+              <div className="deltas"><span className="neu">budget · adr_usd</span></div>
+              <div className="lbl">Budget ADR</div>
+            </div>
+            <div className="kpi">
+              <div className="scope">Rate</div>
+              <div className="val">{ytdAdr != null ? `$${ytdAdr.toFixed(0)}` : 'xx'}</div>
+              <div className="deltas">
+                <span className={(ytdAdr != null && budgetAdr != null && ytdAdr >= budgetAdr) ? 'pos' : 'neg'}>
+                  {(ytdAdr != null && budgetAdr != null) ? `${(((ytdAdr - budgetAdr) / budgetAdr) * 100).toFixed(1)}% vs bgt` : '—'}
+                </span>
+              </div>
+              <div className="lbl">Actual YTD ADR</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="warn-banner">
         ⚠ <b>Cloudbeds write policy — pilot phase.</b>{' '}
@@ -479,7 +564,7 @@ export default async function PnLPage({ searchParams }: Props) {
         <h3>Tactical <em>alerts</em></h3>
         <span className="meta">
           Computed from <code>v_usali_dept_summary</code> + <code>v_usali_house_summary</code> · period={cur}.
-          Thresholds: F&amp;B cost &gt; 32% · Labour &gt; 35% · A&amp;G or Utilities MoM &gt; ±15%.
+          Thresholds: F&amp;B cost &gt; 32% · Labour &gt; 35% · A&amp;G or Utilities MoM &gt; ±{(matPct * 3).toFixed(0)}% (3× materiality from <code>gl.materiality_thresholds</code>).
           {alerts.length === 0 ? ' All within bounds.' : ` ${alerts.length} breach${alerts.length > 1 ? 'es' : ''}.`}
         </span>
       </div>
