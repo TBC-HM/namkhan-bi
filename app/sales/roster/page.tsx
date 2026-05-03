@@ -4,6 +4,7 @@
 
 import { supabase } from '@/lib/supabase';
 import PageHeader from '@/components/layout/PageHeader';
+import RosterTable, { type StaffRow as StaffRowT } from './_components/RosterTable';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -71,38 +72,7 @@ export default async function RosterPage() {
         ))}
       </div>
 
-      <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: "var(--t-base)" }}>
-          <thead>
-            <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              <th style={{ padding: '10px 12px' }}>Name</th>
-              <th style={{ padding: '10px 12px' }}>Position</th>
-              <th style={{ padding: '10px 12px' }}>Department</th>
-              <th style={{ padding: '10px 12px' }}>Type</th>
-              <th style={{ padding: '10px 12px' }}>Hired</th>
-              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Hrs/wk</th>
-              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Salary</th>
-              <th style={{ padding: '10px 12px' }}>Skills</th>
-            </tr>
-          </thead>
-          <tbody>
-            {display.map((s) => (
-              <tr key={s.staff_id} style={{ borderTop: '1px solid var(--paper-warm)' }}>
-                <td style={{ padding: '10px 12px', fontWeight: 500 }}>{s.full_name ?? '—'}</td>
-                <td style={{ padding: '10px 12px' }}>{s.position_title ?? '—'}</td>
-                <td style={{ padding: '10px 12px', color: 'var(--ink-mute)' }}>{s.dept_name ?? s.dept_code ?? '—'}</td>
-                <td style={{ padding: '10px 12px', fontSize: "var(--t-sm)" }}>{s.employment_type ?? '—'}</td>
-                <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontFamily: 'var(--mono)', fontSize: "var(--t-sm)" }}>{s.hire_date ?? '—'}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{s.contract_hours_pw ?? '—'}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{fmtSalary(s.monthly_salary, s.salary_currency)}</td>
-                <td style={{ padding: '10px 12px', fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>
-                  {s.skills && s.skills.length > 0 ? s.skills.slice(0, 3).join(', ') + (s.skills.length > 3 ? '…' : '') : '—'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <RosterTable rows={display as StaffRowT[]} />
 
       <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: "var(--t-sm)" }}>
         <strong>✓ Wired.</strong> Reading from <code>public.v_staff_register_extended</code> ({staff.length} active rows). Productivity &amp; comp metrics need deal/payroll join.

@@ -2,9 +2,9 @@
 // Sales › B2B/DMC › Performance scorecard.
 // WIRED: aggregates real LPA reservations grouped by source_name + matches against contracts.
 
-import Link from 'next/link';
 import B2bSubNav from '../_components/B2bSubNav';
 import B2bKpiStrip from '../_components/B2bKpiStrip';
+import B2bPerformanceTable, { type PerfRow } from '../_components/B2bPerformanceTable';
 import { getLpaReservations, getDmcContracts, matchSourceToContract } from '@/lib/dmc';
 import PageHeader from '@/components/layout/PageHeader';
 
@@ -70,59 +70,7 @@ export default async function PerformancePage() {
       <B2bSubNav />
       <B2bKpiStrip />
 
-      <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: "var(--t-base)" }}>
-          <thead>
-            <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              <th style={{ padding: '10px 12px' }}>#</th>
-              <th style={{ padding: '10px 12px' }}>Source (Cloudbeds)</th>
-              <th style={{ padding: '10px 12px' }}>Matched contract</th>
-              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Bookings</th>
-              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Cxl</th>
-              <th style={{ padding: '10px 12px', textAlign: 'right' }}>RNs</th>
-              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Revenue</th>
-              <th style={{ padding: '10px 12px', textAlign: 'right' }}>ADR</th>
-              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Share</th>
-            </tr>
-          </thead>
-          <tbody>
-            {partners.map((p, i) => {
-              const adr = p.rns > 0 ? p.revenue / p.rns : 0;
-              const share = totalRevenue > 0 ? (p.revenue / totalRevenue) * 100 : 0;
-              return (
-                <tr key={p.source_name} style={{ borderTop: '1px solid var(--paper-warm)' }}>
-                  <td style={{ padding: '10px 12px', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>{i + 1}</td>
-                  <td style={{ padding: '10px 12px', fontWeight: 500 }}>{p.source_name}</td>
-                  <td style={{ padding: '10px 12px' }}>
-                    {p.matched_contract_id ? (
-                      <Link href={`/sales/b2b/partner/${p.matched_contract_id}`} style={{ color: 'var(--moss-glow)', textDecoration: 'none', fontWeight: 500 }}>
-                        ✓ {p.matched_partner}
-                      </Link>
-                    ) : (
-                      <span style={{ color: 'var(--st-bad)', fontStyle: 'italic', fontSize: "var(--t-sm)" }}>no contract on file</span>
-                    )}
-                  </td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{p.reservation_count}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: p.cancelled_count > 0 ? 'var(--st-bad)' : 'var(--ink-mute)' }}>{p.cancelled_count || '—'}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{p.rns}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>${p.revenue.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>${adr.toFixed(0)}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{share.toFixed(1)}%</td>
-                </tr>
-              );
-            })}
-            <tr style={{ borderTop: '2px solid var(--paper-deep)', background: 'var(--paper-warm)', fontWeight: 600 }}>
-              <td colSpan={3} style={{ padding: '10px 12px' }}>Total · {partners.length} sources</td>
-              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{totalRes}</td>
-              <td style={{ padding: '10px 12px' }}></td>
-              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{totalRns}</td>
-              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>${totalRevenue.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
-              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>${totalRns > 0 ? (totalRevenue / totalRns).toFixed(0) : 0}</td>
-              <td style={{ padding: '10px 12px', textAlign: 'right' }}>100%</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <B2bPerformanceTable rows={partners as PerfRow[]} />
 
       <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: "var(--t-sm)" }}>
         <strong>✓ Wired.</strong> Real revenue + RNs from {partners.length} sources on LPA rate plan. Sources without contracts = revenue at risk (no anti-publication clause / parity guard / payment terms enforced).

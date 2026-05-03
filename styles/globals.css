@@ -406,6 +406,73 @@ button { font-family: inherit; }
   box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.4);
 }
 
+/* ===== Force-align ALL legacy tables to .data-table aesthetics =====
+ * User spec 2026-05-03 — every table in the app shares ONE look. Pages
+ * still using inline <table> markup (without .data-table wrapper) get
+ * their headers / cells / borders forced via these rules.
+ *
+ * Targets:
+ *   .panel table          — guest/directory, finance/ledger, etc.
+ *   .pnl-page table.usali — /finance/pnl USALI grid
+ *   .bc-redesign table    — /revenue/* legacy mockup tables
+ *   table within any page wrapper that doesn't have .data-table-wrap
+ */
+/* Aggressive: every <table> on the site that's NOT a .data-table inherits
+ * the canonical look. We exclude .data-table because it has its own scoped
+ * rules; everything else (legacy inline <table>, .pnl-page table, .panel
+ * table, .bc-redesign table, raw <table> in pages) gets the brand voice. */
+table:not(.data-table) {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--sans);
+  font-size: var(--t-base);
+  color: var(--ink);
+}
+table:not(.data-table) thead th,
+table:not(.data-table) th {
+  font-family: var(--mono) !important;
+  font-weight: 600 !important;
+  font-size: var(--t-xs) !important;
+  letter-spacing: var(--ls-extra) !important;
+  text-transform: uppercase !important;
+  color: var(--brass) !important;
+  background: var(--paper-warm) !important;
+  padding: 12px 14px !important;
+  border-bottom: 1px solid var(--paper-deep) !important;
+  white-space: nowrap;
+  text-align: left;
+}
+table:not(.data-table) tbody td,
+table:not(.data-table) td {
+  padding: 10px 14px !important;
+  border-bottom: 1px solid var(--paper-deep) !important;
+  font-size: var(--t-base) !important;
+  color: var(--ink) !important;
+  vertical-align: middle;
+}
+table:not(.data-table) tbody tr:hover td {
+  background: var(--paper-deep) !important;
+}
+.bc-redesign table tr:hover td {
+  background: var(--paper-deep) !important;
+}
+.pnl-page table.usali tr.section td {
+  background: var(--paper-deep) !important;
+  font-family: var(--mono) !important;
+  font-weight: 700 !important;
+  font-size: var(--t-xs) !important;
+  text-transform: uppercase !important;
+  letter-spacing: var(--ls-extra) !important;
+  color: var(--brass) !important;
+}
+.pnl-page table.usali tr.gop td,
+.pnl-page table.usali tr.ebitda td {
+  font-weight: 700 !important;
+  background: var(--paper-warm) !important;
+  border-top: 2px solid var(--paper-deep) !important;
+  border-bottom: 2px solid var(--paper-deep) !important;
+}
+
 /* ===== Canonical Status Pill =====
  * Locked shape/padding/radius for every status indicator across the app
  * (B2B contracts, rate plans, agents, reservations, guest profiles, ...).
