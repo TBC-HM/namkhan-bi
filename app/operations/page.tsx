@@ -10,13 +10,13 @@
 
 import PageHeader from '@/components/layout/PageHeader';
 import KpiBox from '@/components/kpi/KpiBox';
-import DataTable, { type Column } from '@/components/ui/DataTable';
 import StatusPill from '@/components/ui/StatusPill';
 import ActionCard, { ActionStack } from '@/components/sections/ActionCard';
 import { supabaseGl } from '@/lib/supabase-gl';
 import { supabase } from '@/lib/supabase';
 import { getKpiToday, getDqIssues, getCaptureRates } from '@/lib/data';
-import { fmtTableUsd, fmtKpi, EMPTY } from '@/lib/format';
+import { fmtTableUsd, EMPTY } from '@/lib/format';
+import DeptHealthTable, { type DeptPayrollRow } from './_components/DeptHealthTable';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -32,14 +32,7 @@ interface OpsSnapshot {
   ops_decisions_pending: number;
 }
 
-interface DeptPayroll {
-  period_month: string;
-  dept_code: string | null;
-  dept_name: string | null;
-  headcount: number | null;
-  total_days_worked: number | null;
-  total_grand_usd: number | null;
-}
+type DeptPayroll = DeptPayrollRow;
 
 async function getOpsSnapshot(): Promise<OpsSnapshot | null> {
   const { data, error } = await supabaseGl
@@ -139,51 +132,6 @@ export default async function OperationsSnapshotPage() {
     });
   }
 
-  // Dept health table
-  const cols: Column<DeptPayroll>[] = [
-    {
-      key: 'dept', header: 'Department',
-      render: (r) => <strong>{r.dept_name || r.dept_code || EMPTY}</strong>,
-      sortValue: (r) => (r.dept_name || r.dept_code || '') as string,
-    },
-    {
-      key: 'headcount', header: 'Headcount', align: 'right',
-      render: (r) => r.headcount ?? EMPTY,
-      sortValue: (r) => Number(r.headcount || 0),
-    },
-    {
-      key: 'days', header: 'Days worked', align: 'right',
-      render: (r) => r.total_days_worked ?? EMPTY,
-      sortValue: (r) => Number(r.total_days_worked || 0),
-    },
-    {
-      key: 'usd', header: 'Payroll', align: 'right',
-      render: (r) => fmtTableUsd(r.total_grand_usd),
-      sortValue: (r) => Number(r.total_grand_usd || 0),
-    },
-    {
-      key: 'usd_per_head', header: '$ / staff', align: 'right',
-      render: (r) => {
-        const v = (r.headcount && Number(r.headcount) > 0)
-          ? Number(r.total_grand_usd || 0) / Number(r.headcount)
-          : null;
-        return fmtTableUsd(v);
-      },
-      sortValue: (r) => {
-        if (!r.headcount || Number(r.headcount) === 0) return 0;
-        return Number(r.total_grand_usd || 0) / Number(r.headcount);
-      },
-    },
-    {
-      key: 'share', header: 'Share', align: 'right',
-      render: (r) => {
-        if (totalPayrollUsd <= 0) return EMPTY;
-        return `${(Number(r.total_grand_usd || 0) / totalPayrollUsd * 100).toFixed(1)}%`;
-      },
-      sortValue: (r) => Number(r.total_grand_usd || 0),
-    },
-  ];
-
   // Sub-page tiles
   const subPages = [
     { href: '/operations/today',          label: 'Today',          desc: 'arrivals · departures · in-house', color: 'var(--green-2)' },
@@ -279,12 +227,7 @@ export default async function OperationsSnapshotPage() {
             No payroll rows yet for any closed period.
           </div>
         ) : (
-          <DataTable<DeptPayroll>
-            rows={deptPayroll}
-            columns={cols}
-            rowKey={(r) => r.dept_code || r.dept_name || ''}
-            defaultSort={{ key: 'usd', dir: 'desc' }}
-          />
+          <DeptHealthTable rows={deptPayroll} />
         )}
       </section>
 
