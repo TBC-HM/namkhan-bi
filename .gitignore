@@ -28,3 +28,6 @@ to vercel production/
 *.command
 migration_phase2_*.sql
 
+# macOS Finder zombie file handles (added 2026-05-03)
+.fuse_hidden*
+
