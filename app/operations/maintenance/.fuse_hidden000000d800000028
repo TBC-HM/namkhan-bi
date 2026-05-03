@@ -7,7 +7,6 @@ import DecisionQueue, { type DecisionRow } from '@/components/ops/DecisionQueue'
 import TacticalAlerts, { type TacticalAlert } from '@/components/ops/TacticalAlerts';
 import GuardrailsBanner from '@/components/ops/GuardrailsBanner';
 import DataNeededOverlay from '@/components/ops/DataNeededOverlay';
-import PageHeader from '@/components/layout/PageHeader';
 
 import TicketQueue from './_components/TicketQueue';
 import AssetHeatMap from './_components/AssetHeatMap';
@@ -109,12 +108,30 @@ export default async function MaintenancePage() {
   return (
     <>
       {/* BLOCK 1 */}
-      <PageHeader
-        pillar="Operations"
-        tab="Maintenance"
-        title={<>Maintenance · before it <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>breaks</em>.</>}
-        lede="Tickets, assets, energy, and CapEx — predict, fix, then plan."
-      />
+      <div
+        style={{
+          fontSize: 11,
+          color: 'var(--ink-mute)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.08em',
+          marginTop: 14,
+        }}
+      >
+        <strong style={{ color: 'var(--ink-soft)' }}>Operations</strong> › Maintenance
+      </div>
+      <h1
+        style={{
+          margin: '4px 0 2px',
+          fontFamily: 'Georgia, serif',
+          fontWeight: 500,
+          fontSize: 30,
+        }}
+      >
+        Maintenance · before it <em style={{ color: 'var(--brass)' }}>breaks</em>.
+      </h1>
+      <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
+        Tickets, assets, energy, and CapEx — predict, fix, then plan.
+      </div>
 
       {/* BLOCK 2 */}
       <div
@@ -126,7 +143,7 @@ export default async function MaintenancePage() {
           marginTop: 14,
           padding: '10px 12px',
           background: 'var(--paper-warm)',
-          border: '1px solid var(--paper-deep)',
+          border: '1px solid #e6dfc9',
           borderRadius: 8,
         }}
       >
@@ -260,7 +277,7 @@ const pill: React.CSSProperties = {
   alignItems: 'center',
   gap: 6,
   padding: '5px 10px',
-  border: '1px solid var(--paper-deep)',
+  border: '1px solid #e6dfc9',
   borderRadius: 6,
   background: '#fff',
   fontSize: 12,
