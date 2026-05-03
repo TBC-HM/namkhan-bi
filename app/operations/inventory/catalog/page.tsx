@@ -29,45 +29,43 @@ interface ItemRow {
 }
 
 async function getItems(): Promise<ItemRow[]> {
-  // category + unit are FK lookups — embed via PostgREST relation syntax.
-  // inv.items.category_id → inv.categories(category_id)
-  // inv.items.uom_id → inv.units(unit_id)
-  const { data, error } = await supabase
-    .schema('inv')
-    .from('items')
-    .select(`
-      sku,
-      item_name,
-      last_unit_cost_usd,
-      gl_account_code,
-      is_perishable,
-      catalog_status,
-      is_active,
-      updated_at,
-      categories:category_id ( code, name ),
-      units:uom_id ( code )
-    `)
-    .order('item_name', { ascending: true })
-    .limit(500);
+  // Three parallel queries + JS join. PostgREST embed across .schema() is
+  // unreliable in some scenarios — the lookup tables are tiny (10 cats, 13
+  // units), so the JS join is fine and avoids embed surprises.
+  const [itemsRes, catsRes, unitsRes] = await Promise.all([
+    supabase.schema('inv').from('items').select(
+      'sku, item_name, category_id, uom_id, last_unit_cost_usd, gl_account_code, is_perishable, catalog_status, is_active, updated_at'
+    ).order('item_name', { ascending: true }).limit(500),
+    supabase.schema('inv').from('categories').select('category_id, code, name'),
+    supabase.schema('inv').from('units').select('unit_id, code'),
+  ]);
 
-  if (error) {
+  if (itemsRes.error) {
     // eslint-disable-next-line no-console
-    console.error('[inventory/catalog] getItems', error);
+    console.error('[inventory/catalog] getItems items', itemsRes.error);
     return [];
   }
-  return (data ?? []).map((r: any) => ({
-    sku: r.sku,
-    item_name: r.item_name,
-    category_code: r.categories?.code ?? null,
-    category_name: r.categories?.name ?? null,
-    unit_code: r.units?.code ?? null,
-    last_unit_cost_usd: r.last_unit_cost_usd != null ? Number(r.last_unit_cost_usd) : null,
-    gl_account_code: r.gl_account_code,
-    is_perishable: !!r.is_perishable,
-    catalog_status: r.catalog_status,
-    is_active: !!r.is_active,
-    updated_at: r.updated_at,
-  }));
+  const catMap = new Map<number, { code: string; name: string }>();
+  (catsRes.data ?? []).forEach((c: any) => { catMap.set(c.category_id, { code: c.code, name: c.name }); });
+  const unitMap = new Map<number, string>();
+  (unitsRes.data ?? []).forEach((u: any) => { unitMap.set(u.unit_id, u.code); });
+
+  return (itemsRes.data ?? []).map((r: any) => {
+    const cat = catMap.get(r.category_id);
+    return {
+      sku: r.sku,
+      item_name: r.item_name,
+      category_code: cat?.code ?? null,
+      category_name: cat?.name ?? null,
+      unit_code: unitMap.get(r.uom_id) ?? null,
+      last_unit_cost_usd: r.last_unit_cost_usd != null ? Number(r.last_unit_cost_usd) : null,
+      gl_account_code: r.gl_account_code,
+      is_perishable: !!r.is_perishable,
+      catalog_status: r.catalog_status,
+      is_active: !!r.is_active,
+      updated_at: r.updated_at,
+    };
+  });
 }
 
 export default async function CatalogAdminPage() {
