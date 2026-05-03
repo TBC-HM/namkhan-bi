@@ -124,9 +124,17 @@ DEFER cases (wiring correct, source data missing or schema migration required):
 | `/marketing` layout | FilterStrip | rendered globally — bled into `/library`, `/influencers`, `/taxonomy`, `/upload`, `/agents`, `/media` (all static lists) | layout no longer renders FilterStrip; no marketing page actually consumes `?win=` so no inline restoration needed | FIXED |
 | `/sales/roster` | tile values | reads `public.v_staff_register_extended` | YES — verified | OK |
 
-## Final pillar smoke test (50/50 pages = HTTP 200)
+## Final pillar smoke test (66/66 pages = HTTP 200)
 
 Every page in the left nav + every sub-tab returns 200. The two earlier 404s (`/operations/inventory`, `/settings/platform-map`) are: platform-map FIXED; inventory deferred (Phase 2.5 inventory pages not yet pushed to main).
+
+## DB cron failures fixed (Cowork audit 2026-05-03)
+
+| Cron | Was failing with | Fix | Status |
+|------|------------------|-----|--------|
+| `kpi-freshness-check` (every 30 min) | `column "severity" of relation "sent" does not exist` (function wrote to wrong cols) | Rewrote `kpi.check_freshness()` to insert into real `alerts.sent` columns (`channel_id, message, violation_count, sent_at`) | FIXED |
+| `agent-snapshot_agent` / `pricing` / `variance` / `cashflow` / `forecast` (hourly) | `agent_runs_status_check` rejected `'queued'` | Added `'queued'` to the CHECK constraint (was: `running/success/partial/failed/timeout`) | FIXED |
+| `dq-engine-run` (every 4h) | `column a.account_code does not exist` in R-021/R-022 (gl.accounts uses `account_id`) | Updated `dq.run_all()` JOIN clauses to use `a.account_id = ps/pl.account_code` | FIXED |
 
 | `public.v_dq_open` | view | did not exist | created — joins `dq.violations` + `dq.rules`, returns full row list incl. severity/title/description/category. Granted SELECT to anon/authenticated/service_role | FIXED |
 
