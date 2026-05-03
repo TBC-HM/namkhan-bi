@@ -11,6 +11,7 @@
 import PageHeader from '@/components/layout/PageHeader';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import UploadProductsButton from '../_components/UploadProductsButton';
+import SyncCloudbedsButton from '../_components/SyncCloudbedsButton';
 import CatalogTableClient, { type CatalogRow } from './_CatalogTableClient';
 
 export const revalidate = 0;
@@ -74,7 +75,7 @@ export default async function CatalogAdminPage() {
         tab="Inventory · Catalog"
         title={<>Item <em style={{ color: 'var(--brass)' }}>catalog</em></>}
         lede={<>Source of truth for every product the property buys, sells, or stocks. Bulk-load via CSV; rows with existing SKU are updated, new SKUs are inserted.</>}
-        rightSlot={<UploadProductsButton />}
+        rightSlot={<><SyncCloudbedsButton /><UploadProductsButton /></>}
       />
 
       <div style={{ marginTop: 18 }}>

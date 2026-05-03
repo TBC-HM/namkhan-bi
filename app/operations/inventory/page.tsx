@@ -27,12 +27,14 @@ export const revalidate = 60;
 export const dynamic = 'force-dynamic';
 
 const QUICK_LINKS: Array<{ href: string; label: string; description: string; status: 'live' | 'planned' }> = [
-  { href: '/operations/inventory/catalog',  label: 'Catalog Admin',   description: 'Manage items, bulk-upload from Cloudbeds CSV', status: 'live' },
-  { href: '/operations/inventory/orders',   label: 'Orders',          description: 'Purchase orders + receiving',                  status: 'live' },
-  { href: '/operations/inventory/requests', label: 'Requests',        description: 'Department PR queue + approvals',              status: 'live' },
-  { href: '/operations/inventory/assets',   label: 'Assets',          description: 'Fixed assets register (FF&E, plant, IT)',      status: 'live' },
-  { href: '/operations/inventory/capex',    label: 'CapEx Pipeline',  description: 'Proposed → approved capital projects',         status: 'live' },
-  { href: '/operations/inventory/shop',     label: 'Shop',            description: 'HOD product browser + cart',                   status: 'planned' },
+  { href: '/operations/inventory/stock',     label: 'Stock',           description: 'On-hand · days of cover · slow movers · expiring', status: 'live' },
+  { href: '/operations/inventory/par',       label: 'Par levels',      description: 'Items below par + reorder $ value',               status: 'live' },
+  { href: '/operations/inventory/suppliers', label: 'Suppliers',       description: 'Vendor register + contacts + price history',       status: 'live' },
+  { href: '/operations/inventory/catalog',   label: 'Catalog admin',   description: 'Item master + bulk CSV upload',                    status: 'live' },
+  { href: '/operations/inventory/orders',    label: 'Purchase orders', description: 'PO list + receiving (Phase 2.5b)',                 status: 'planned' },
+  { href: '/operations/inventory/requests',  label: 'Requests',        description: 'Department PR queue + approvals (Phase 2.5b)',     status: 'planned' },
+  { href: '/operations/inventory/assets',    label: 'Fixed assets',    description: 'FF&E register + depreciation (Phase 2.5b)',        status: 'planned' },
+  { href: '/operations/inventory/capex',     label: 'CapEx pipeline',  description: 'Proposed → approved capital (Phase 2.5b)',         status: 'planned' },
 ];
 
 const STATUS_COLORS: Record<string, { bg: string; fg: string }> = {

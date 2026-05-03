@@ -76,7 +76,7 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/operations/activities',       label: 'Activities' },
     { href: '/operations/housekeeping',     label: 'Housekeeping',  isNew: true },
     { href: '/operations/maintenance',      label: 'Maintenance',   isNew: true },
-    { href: '/operations/inventory',        label: 'Inventory',     isNew: true },
+    { href: '/operations/inventory',        label: 'Inventory & Suppliers', isNew: true },
     { href: '/operations/agents',           label: 'Agents' },
     { href: '/operations/staff',            label: 'Staff',         isNew: true },
   ],

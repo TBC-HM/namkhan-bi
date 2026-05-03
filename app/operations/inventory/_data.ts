@@ -372,3 +372,445 @@ export async function getSuppliers(): Promise<SupplierRow[]> {
     payment_terms_days: s.payment_terms_days,
   }));
 }
+
+// ============================================================================
+// /operations/inventory/stock — Stock-on-hand · Days of cover · Slow movers
+// ============================================================================
+
+export interface StockOnHandRow {
+  item_id: string;
+  sku: string;
+  item_name: string;
+  category_id: number | null;
+  category_name: string | null;
+  total_on_hand: number;
+  value_usd_estimate: number | null;
+  locations_with_stock: number;
+  last_movement_at: string | null;
+  last_count_at: string | null;
+}
+
+export async function getStockOnHand(): Promise<StockOnHandRow[]> {
+  let admin;
+  try { admin = getSupabaseAdmin(); } catch { return []; }
+  const { data } = await safe(
+    admin.schema('inv').from('v_inv_stock_on_hand')
+      .select('item_id, sku, item_name, category_id, category_name, total_on_hand, value_usd_estimate, locations_with_stock, last_movement_at, last_count_at')
+      .order('value_usd_estimate', { ascending: false, nullsFirst: false }),
+    { data: [] as any[] }
+  );
+  return (data ?? []).map((r: any) => ({
+    item_id: r.item_id,
+    sku: r.sku,
+    item_name: r.item_name,
+    category_id: r.category_id,
+    category_name: r.category_name,
+    total_on_hand: Number(r.total_on_hand ?? 0),
+    value_usd_estimate: r.value_usd_estimate != null ? Number(r.value_usd_estimate) : null,
+    locations_with_stock: Number(r.locations_with_stock ?? 0),
+    last_movement_at: r.last_movement_at,
+    last_count_at: r.last_count_at,
+  }));
+}
+
+export interface DaysOfCoverRow {
+  item_id: string;
+  sku: string;
+  item_name: string;
+  on_hand: number;
+  burn_per_day: number | null;
+  days_of_cover: number | null;
+  par_quantity: number | null;
+  days_until_par: number | null;
+  reorder_point: number | null;
+  days_until_reorder: number | null;
+}
+
+export async function getDaysOfCover(): Promise<DaysOfCoverRow[]> {
+  let admin;
+  try { admin = getSupabaseAdmin(); } catch { return []; }
+  const { data } = await safe(
+    admin.schema('inv').from('v_inv_days_of_cover')
+      .select('item_id, sku, item_name, on_hand, burn_per_day, days_of_cover, par_quantity, days_until_par, reorder_point, days_until_reorder')
+      .order('days_of_cover', { ascending: true, nullsFirst: false }),
+    { data: [] as any[] }
+  );
+  return (data ?? []).map((r: any) => ({
+    item_id: r.item_id,
+    sku: r.sku,
+    item_name: r.item_name,
+    on_hand: Number(r.on_hand ?? 0),
+    burn_per_day: r.burn_per_day != null ? Number(r.burn_per_day) : null,
+    days_of_cover: r.days_of_cover != null ? Number(r.days_of_cover) : null,
+    par_quantity: r.par_quantity != null ? Number(r.par_quantity) : null,
+    days_until_par: r.days_until_par != null ? Number(r.days_until_par) : null,
+    reorder_point: r.reorder_point != null ? Number(r.reorder_point) : null,
+    days_until_reorder: r.days_until_reorder != null ? Number(r.days_until_reorder) : null,
+  }));
+}
+
+export interface SlowMoverRow {
+  item_id: string;
+  sku: string;
+  item_name: string;
+  category_name: string | null;
+  units_90d: number;
+  units_per_day: number | null;
+  units_per_week: number | null;
+  last_unit_cost_usd: number | null;
+  total_on_hand: number;
+  value_usd_estimate: number | null;
+}
+
+export async function getSlowMovers(): Promise<SlowMoverRow[]> {
+  let admin;
+  try { admin = getSupabaseAdmin(); } catch { return []; }
+  const { data } = await safe(
+    admin.schema('inv').from('v_inv_slow_movers')
+      .select('item_id, sku, item_name, category_name, units_90d, units_per_day, units_per_week, last_unit_cost_usd, total_on_hand, value_usd_estimate')
+      .order('value_usd_estimate', { ascending: false, nullsFirst: false }),
+    { data: [] as any[] }
+  );
+  return (data ?? []).map((r: any) => ({
+    item_id: r.item_id,
+    sku: r.sku,
+    item_name: r.item_name,
+    category_name: r.category_name,
+    units_90d: Number(r.units_90d ?? 0),
+    units_per_day: r.units_per_day != null ? Number(r.units_per_day) : null,
+    units_per_week: r.units_per_week != null ? Number(r.units_per_week) : null,
+    last_unit_cost_usd: r.last_unit_cost_usd != null ? Number(r.last_unit_cost_usd) : null,
+    total_on_hand: Number(r.total_on_hand ?? 0),
+    value_usd_estimate: r.value_usd_estimate != null ? Number(r.value_usd_estimate) : null,
+  }));
+}
+
+export interface ExpiringRow {
+  item_id: string;
+  sku: string;
+  item_name: string;
+  location_name: string | null;
+  batch_code: string | null;
+  expiry_date: string | null;
+  days_until_expiry: number | null;
+  current_on_hand: number;
+  at_risk_value_usd: number | null;
+}
+
+export async function getExpiringSoon(): Promise<ExpiringRow[]> {
+  let admin;
+  try { admin = getSupabaseAdmin(); } catch { return []; }
+  const { data } = await safe(
+    admin.schema('inv').from('v_inv_expiring_soon')
+      .select('item_id, sku, item_name, location_name, batch_code, expiry_date, days_until_expiry, current_on_hand, at_risk_value_usd')
+      .order('days_until_expiry', { ascending: true, nullsFirst: false }),
+    { data: [] as any[] }
+  );
+  return (data ?? []).map((r: any) => ({
+    item_id: r.item_id,
+    sku: r.sku,
+    item_name: r.item_name,
+    location_name: r.location_name,
+    batch_code: r.batch_code,
+    expiry_date: r.expiry_date,
+    days_until_expiry: r.days_until_expiry != null ? Number(r.days_until_expiry) : null,
+    current_on_hand: Number(r.current_on_hand ?? 0),
+    at_risk_value_usd: r.at_risk_value_usd != null ? Number(r.at_risk_value_usd) : null,
+  }));
+}
+
+// ============================================================================
+// /operations/inventory/par — Par status grid
+// ============================================================================
+
+export interface ParStatusRow {
+  item_id: string;
+  sku: string;
+  item_name: string;
+  location_id: number;
+  location_name: string;
+  par_quantity: number;
+  effective_min: number | null;
+  effective_max: number | null;
+  on_hand: number;
+  par_status: string; // 'ok' | 'below_min' | 'below_par' | 'over_max' | etc.
+  pct_of_par: number | null;
+  short_quantity: number | null;
+  last_unit_cost_usd: number | null;
+  reorder_value_usd: number | null;
+  primary_vendor_id: string | null;
+  primary_vendor_name: string | null;
+}
+
+export async function getParStatus(): Promise<ParStatusRow[]> {
+  let admin;
+  try { admin = getSupabaseAdmin(); } catch { return []; }
+  const [parsRes, supsRes] = await Promise.all([
+    safe(admin.schema('inv').from('v_inv_par_status')
+      .select('item_id, sku, item_name, location_id, location_name, par_quantity, effective_min, effective_max, on_hand, par_status, pct_of_par, short_quantity, last_unit_cost_usd, reorder_value_usd, primary_vendor_id')
+      .order('pct_of_par', { ascending: true, nullsFirst: true }),
+      { data: [] as any[] }),
+    safe(admin.schema('suppliers').from('suppliers').select('supplier_id, name'),
+      { data: [] as any[] }),
+  ]);
+  const supMap = new Map<string, string>();
+  (supsRes.data ?? []).forEach((s: any) => supMap.set(s.supplier_id, s.name));
+  return (parsRes.data ?? []).map((r: any) => ({
+    item_id: r.item_id,
+    sku: r.sku,
+    item_name: r.item_name,
+    location_id: Number(r.location_id),
+    location_name: r.location_name,
+    par_quantity: Number(r.par_quantity ?? 0),
+    effective_min: r.effective_min != null ? Number(r.effective_min) : null,
+    effective_max: r.effective_max != null ? Number(r.effective_max) : null,
+    on_hand: Number(r.on_hand ?? 0),
+    par_status: r.par_status ?? 'unknown',
+    pct_of_par: r.pct_of_par != null ? Number(r.pct_of_par) : null,
+    short_quantity: r.short_quantity != null ? Number(r.short_quantity) : null,
+    last_unit_cost_usd: r.last_unit_cost_usd != null ? Number(r.last_unit_cost_usd) : null,
+    reorder_value_usd: r.reorder_value_usd != null ? Number(r.reorder_value_usd) : null,
+    primary_vendor_id: r.primary_vendor_id,
+    primary_vendor_name: r.primary_vendor_id ? (supMap.get(r.primary_vendor_id) ?? null) : null,
+  }));
+}
+
+// ============================================================================
+// /operations/inventory/suppliers — Supplier register
+// ============================================================================
+
+export interface SupplierSummaryRow {
+  supplier_id: string;
+  code: string;
+  name: string;
+  legal_name: string | null;
+  supplier_type: string | null;
+  country: string;
+  city: string | null;
+  distance_km: number | null;
+  is_local_sourcing: boolean;
+  email: string | null;
+  phone: string | null;
+  website: string | null;
+  payment_terms_days: number | null;
+  currency: string;
+  lead_time_days: number | null;
+  reliability_score: number | null;
+  quality_score: number | null;
+  sustainability_score: number | null;
+  status: string;
+  contact_count: number;
+  items_supplied: number;
+  last_price_update: string | null;
+  alternate_count: number;
+}
+
+export async function getSupplierSummaries(): Promise<SupplierSummaryRow[]> {
+  let admin;
+  try { admin = getSupabaseAdmin(); } catch { return []; }
+  const { data } = await safe(
+    admin.schema('suppliers').from('v_supplier_summary')
+      .select('supplier_id, code, name, legal_name, supplier_type, country, city, distance_km, is_local_sourcing, email, phone, website, payment_terms_days, currency, lead_time_days, reliability_score, quality_score, sustainability_score, status, contact_count, items_supplied, last_price_update, alternate_count')
+      .order('reliability_score', { ascending: false, nullsFirst: false }),
+    { data: [] as any[] }
+  );
+  return (data ?? []).map((s: any) => ({
+    supplier_id: s.supplier_id,
+    code: s.code,
+    name: s.name,
+    legal_name: s.legal_name,
+    supplier_type: s.supplier_type,
+    country: s.country,
+    city: s.city,
+    distance_km: s.distance_km != null ? Number(s.distance_km) : null,
+    is_local_sourcing: !!s.is_local_sourcing,
+    email: s.email,
+    phone: s.phone,
+    website: s.website,
+    payment_terms_days: s.payment_terms_days,
+    currency: s.currency,
+    lead_time_days: s.lead_time_days,
+    reliability_score: s.reliability_score != null ? Number(s.reliability_score) : null,
+    quality_score: s.quality_score != null ? Number(s.quality_score) : null,
+    sustainability_score: s.sustainability_score != null ? Number(s.sustainability_score) : null,
+    status: s.status,
+    contact_count: Number(s.contact_count ?? 0),
+    items_supplied: Number(s.items_supplied ?? 0),
+    last_price_update: s.last_price_update,
+    alternate_count: Number(s.alternate_count ?? 0),
+  }));
+}
+
+export interface LocalSourcingRow {
+  local_supplier_count: number;
+  total_supplier_count: number;
+  local_supplier_pct: number;
+}
+
+export async function getLocalSourcing(): Promise<LocalSourcingRow> {
+  const empty: LocalSourcingRow = { local_supplier_count: 0, total_supplier_count: 0, local_supplier_pct: 0 };
+  let admin;
+  try { admin = getSupabaseAdmin(); } catch { return empty; }
+  const { data } = await safe(
+    admin.schema('suppliers').from('v_local_sourcing_pct').select('*').limit(1).single(),
+    { data: null as any }
+  );
+  if (!data) return empty;
+  return {
+    local_supplier_count: Number(data.local_supplier_count ?? 0),
+    total_supplier_count: Number(data.total_supplier_count ?? 0),
+    local_supplier_pct: Number(data.local_supplier_pct ?? 0),
+  };
+}
+
+// ============================================================================
+// /operations/inventory/suppliers/[id] — Supplier detail
+// ============================================================================
+
+export interface SupplierContact {
+  contact_id: number;
+  name: string;
+  title: string | null;
+  email: string | null;
+  phone: string | null;
+  whatsapp: string | null;
+  is_primary: boolean;
+  notes: string | null;
+}
+
+export interface SupplierPriceRow {
+  price_id: number;
+  effective_date: string;
+  inv_sku: string | null;
+  unit_price_usd: number | null;
+  unit_price_lak: number | null;
+  min_order_qty: number | null;
+  source: string | null;
+  source_ref: string | null;
+  notes: string | null;
+}
+
+export interface SupplierAlternateRow {
+  alt_id: number;
+  alternate_supplier_id: string;
+  alternate_code: string;
+  alternate_name: string;
+  preference_rank: number;
+  notes: string | null;
+}
+
+export interface SupplierItemRow {
+  item_id: string;
+  sku: string;
+  item_name: string;
+  category_name: string | null;
+  last_unit_cost_usd: number | null;
+  is_primary: boolean;
+}
+
+export interface SupplierDetailBundle {
+  supplier: SupplierSummaryRow | null;
+  contacts: SupplierContact[];
+  price_history: SupplierPriceRow[];
+  alternates: SupplierAlternateRow[];
+  items_supplied: SupplierItemRow[];
+}
+
+export async function getSupplierDetail(supplierId: string): Promise<SupplierDetailBundle> {
+  const empty: SupplierDetailBundle = { supplier: null, contacts: [], price_history: [], alternates: [], items_supplied: [] };
+  let admin;
+  try { admin = getSupabaseAdmin(); } catch { return empty; }
+
+  const [summaryRes, contactsRes, pricesRes, altsRes, itemsRes, catsRes, allSupsRes] = await Promise.all([
+    safe(admin.schema('suppliers').from('v_supplier_summary').select('*').eq('supplier_id', supplierId).limit(1).maybeSingle(),
+      { data: null as any }),
+    safe(admin.schema('suppliers').from('contacts').select('contact_id, name, title, email, phone, whatsapp, is_primary, notes').eq('supplier_id', supplierId).order('is_primary', { ascending: false }).order('name'),
+      { data: [] as any[] }),
+    safe(admin.schema('suppliers').from('price_history').select('price_id, effective_date, inv_sku, unit_price_usd, unit_price_lak, min_order_qty, source, source_ref, notes').eq('supplier_id', supplierId).order('effective_date', { ascending: false }).limit(200),
+      { data: [] as any[] }),
+    safe(admin.schema('suppliers').from('alternates').select('alt_id, alternate_supplier_id, preference_rank, notes').eq('primary_supplier_id', supplierId).order('preference_rank'),
+      { data: [] as any[] }),
+    safe(admin.schema('inv').from('items').select('item_id, sku, item_name, category_id, last_unit_cost_usd, primary_vendor_id, alternate_vendor_id').or(`primary_vendor_id.eq.${supplierId},alternate_vendor_id.eq.${supplierId}`),
+      { data: [] as any[] }),
+    safe(admin.schema('inv').from('categories').select('category_id, name'), { data: [] as any[] }),
+    safe(admin.schema('suppliers').from('suppliers').select('supplier_id, code, name'), { data: [] as any[] }),
+  ]);
+
+  const summary = summaryRes.data ?? null;
+  const supplier: SupplierSummaryRow | null = summary ? {
+    supplier_id: summary.supplier_id,
+    code: summary.code,
+    name: summary.name,
+    legal_name: summary.legal_name,
+    supplier_type: summary.supplier_type,
+    country: summary.country,
+    city: summary.city,
+    distance_km: summary.distance_km != null ? Number(summary.distance_km) : null,
+    is_local_sourcing: !!summary.is_local_sourcing,
+    email: summary.email,
+    phone: summary.phone,
+    website: summary.website,
+    payment_terms_days: summary.payment_terms_days,
+    currency: summary.currency,
+    lead_time_days: summary.lead_time_days,
+    reliability_score: summary.reliability_score != null ? Number(summary.reliability_score) : null,
+    quality_score: summary.quality_score != null ? Number(summary.quality_score) : null,
+    sustainability_score: summary.sustainability_score != null ? Number(summary.sustainability_score) : null,
+    status: summary.status,
+    contact_count: Number(summary.contact_count ?? 0),
+    items_supplied: Number(summary.items_supplied ?? 0),
+    last_price_update: summary.last_price_update,
+    alternate_count: Number(summary.alternate_count ?? 0),
+  } : null;
+
+  const catMap = new Map<number, string>();
+  (catsRes.data ?? []).forEach((c: any) => catMap.set(c.category_id, c.name));
+  const supMap = new Map<string, { code: string; name: string }>();
+  (allSupsRes.data ?? []).forEach((s: any) => supMap.set(s.supplier_id, { code: s.code, name: s.name }));
+
+  const contacts: SupplierContact[] = (contactsRes.data ?? []).map((r: any) => ({
+    contact_id: Number(r.contact_id),
+    name: r.name,
+    title: r.title,
+    email: r.email,
+    phone: r.phone,
+    whatsapp: r.whatsapp,
+    is_primary: !!r.is_primary,
+    notes: r.notes,
+  }));
+
+  const price_history: SupplierPriceRow[] = (pricesRes.data ?? []).map((r: any) => ({
+    price_id: Number(r.price_id),
+    effective_date: r.effective_date,
+    inv_sku: r.inv_sku,
+    unit_price_usd: r.unit_price_usd != null ? Number(r.unit_price_usd) : null,
+    unit_price_lak: r.unit_price_lak != null ? Number(r.unit_price_lak) : null,
+    min_order_qty: r.min_order_qty != null ? Number(r.min_order_qty) : null,
+    source: r.source,
+    source_ref: r.source_ref,
+    notes: r.notes,
+  }));
+
+  const alternates: SupplierAlternateRow[] = (altsRes.data ?? []).map((r: any) => {
+    const alt = supMap.get(r.alternate_supplier_id);
+    return {
+      alt_id: Number(r.alt_id),
+      alternate_supplier_id: r.alternate_supplier_id,
+      alternate_code: alt?.code ?? '—',
+      alternate_name: alt?.name ?? '—',
+      preference_rank: Number(r.preference_rank ?? 0),
+      notes: r.notes,
+    };
+  });
+
+  const items_supplied: SupplierItemRow[] = (itemsRes.data ?? []).map((r: any) => ({
+    item_id: r.item_id,
+    sku: r.sku,
+    item_name: r.item_name,
+    category_name: r.category_id != null ? (catMap.get(r.category_id) ?? null) : null,
+    last_unit_cost_usd: r.last_unit_cost_usd != null ? Number(r.last_unit_cost_usd) : null,
+    is_primary: r.primary_vendor_id === supplierId,
+  }));
+
+  return { supplier, contacts, price_history, alternates, items_supplied };
+}
