@@ -15,7 +15,7 @@ const mono: React.CSSProperties = { fontFamily: 'var(--mono)', fontSize: 'var(--
 export default function GlVendorsTableClient({ rows }: { rows: GlVendorOverviewRow[] }) {
   const cols: Column<GlVendorOverviewRow>[] = [
     {
-      key: 'vendor_name', header: 'Vendor',
+      key: 'vendor_name', header: 'Vendor (QB Name)',
       render: (r) => (
         <Link
           href={`/operations/inventory/suppliers/${encodeURIComponent(r.vendor_name)}`}
@@ -25,28 +25,24 @@ export default function GlVendorsTableClient({ rows }: { rows: GlVendorOverviewR
       sortValue: (r) => r.vendor_name,
     },
     {
-      key: 'category', header: 'Category', width: '160px',
-      render: (r) => r.category ?? EMPTY, sortValue: (r) => r.category ?? '',
-    },
-    {
       key: 'currency', header: 'Curr', width: '70px', align: 'center',
-      render: (r) => <span style={mono}>{r.currency_guess ?? r.vendor_is_active === null ? EMPTY : (r.currency_guess ?? EMPTY)}</span>,
+      render: (r) => <span style={mono}>{r.currency_guess ?? EMPTY}</span>,
       sortValue: (r) => r.currency_guess ?? '',
     },
     {
-      key: 'gross', header: 'Gross spend', numeric: true, width: '120px',
+      key: 'gross', header: 'Gross spend', numeric: true, width: '130px',
       render: (r) => fmtTableUsd(r.gross_spend_usd), sortValue: (r) => r.gross_spend_usd,
     },
     {
-      key: 'net', header: 'Net', numeric: true, width: '110px',
+      key: 'net', header: 'Net', numeric: true, width: '120px',
       render: (r) => fmtTableUsd(r.net_amount_usd), sortValue: (r) => r.net_amount_usd,
     },
     {
-      key: 'lines', header: 'Lines', numeric: true, width: '70px',
+      key: 'lines', header: 'Lines', numeric: true, width: '80px',
       render: (r) => <span style={mono}>{r.line_count}</span>, sortValue: (r) => r.line_count,
     },
     {
-      key: 'accts', header: 'Accts', numeric: true, width: '70px',
+      key: 'accts', header: 'GL accts', numeric: true, width: '90px',
       render: (r) => <span style={mono}>{r.distinct_accounts}</span>, sortValue: (r) => r.distinct_accounts,
     },
     {
@@ -64,11 +60,6 @@ export default function GlVendorsTableClient({ rows }: { rows: GlVendorOverviewR
       sortValue: (r) => r.last_txn_date ?? '',
     },
     {
-      key: 'terms', header: 'Terms', width: '100px',
-      render: (r) => r.terms ? <span style={mono}>{r.terms}</span> : EMPTY,
-      sortValue: (r) => r.terms ?? '',
-    },
-    {
       key: 'status', header: 'Active', align: 'center', width: '100px',
       render: (r) => r.is_active_recent
         ? <StatusPill tone="active">Recent</StatusPill>
@@ -82,7 +73,7 @@ export default function GlVendorsTableClient({ rows }: { rows: GlVendorOverviewR
       rows={rows}
       rowKey={(r) => r.vendor_name}
       defaultSort={{ key: 'gross', dir: 'desc' }}
-      emptyState="No vendor activity in gl.v_supplier_overview yet."
+      emptyState="No vendors with 2026 activity yet."
     />
   );
 }

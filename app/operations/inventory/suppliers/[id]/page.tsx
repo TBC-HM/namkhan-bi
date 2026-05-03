@@ -77,11 +77,10 @@ export default async function VendorDetailPage({ params }: { params: { id: strin
         title={<><em style={{ color: 'var(--brass)' }}>{ov.vendor_name}</em></>}
         lede={
           <>
-            {ov.category ?? 'Uncategorised'}
-            {' · '}
-            {ov.currency_guess ? <span style={{ fontFamily: 'var(--mono)' }}>{ov.currency_guess}</span> : 'currency unknown'}
+            <span style={{ fontFamily: 'var(--mono)' }}>{ov.currency_guess ?? 'currency unknown'}</span>
             {' · '}
             {ov.is_active_recent ? <StatusPill tone="active">Recent</StatusPill> : <StatusPill tone="inactive">Dormant</StatusPill>}
+            {' · raw QB Name — clean later'}
           </>
         }
         rightSlot={
@@ -116,27 +115,9 @@ export default async function VendorDetailPage({ params }: { params: { id: strin
         <KpiBox value={ov.active_periods} unit="count" label="Active periods" tooltip="Distinct YYYY-MM with activity" />
       </div>
 
-      {/* Meta strip */}
-      <h2 style={sectionH}>Profile</h2>
+      {/* Meta strip — only fields derived from transactions (no fake master joins) */}
+      <h2 style={sectionH}>Activity window</h2>
       <div style={metaRow}>
-        <div>
-          <div style={metaLabel}>Vendor master active</div>
-          <div>{ov.vendor_is_active === null ? EMPTY : (ov.vendor_is_active ? 'Yes' : 'No')}</div>
-        </div>
-        <div>
-          <div style={metaLabel}>Terms</div>
-          <div style={{ fontFamily: 'var(--mono)' }}>{ov.terms ?? EMPTY}</div>
-        </div>
-        <div>
-          <div style={metaLabel}>Email</div>
-          <div style={{ fontFamily: 'var(--mono)' }}>
-            {ov.email ? <a href={`mailto:${ov.email}`} style={{ color: 'var(--brass)' }}>{ov.email}</a> : EMPTY}
-          </div>
-        </div>
-        <div>
-          <div style={metaLabel}>Phone</div>
-          <div style={{ fontFamily: 'var(--mono)' }}>{ov.phone ?? EMPTY}</div>
-        </div>
         <div>
           <div style={metaLabel}>First txn</div>
           <div style={{ fontFamily: 'var(--mono)' }}>{fmtIsoDate(ov.first_txn_date)}</div>
@@ -184,11 +165,12 @@ export default async function VendorDetailPage({ params }: { params: { id: strin
           fontSize: 'var(--t-xs)',
           marginBottom: 6,
         }}>Data lineage</div>
-        Vendor master: <code style={{ fontFamily: 'var(--mono)' }}>gl.vendors</code>.
+        Vendor name = raw <code style={{ fontFamily: 'var(--mono)' }}>gl.gl_entries.customer_name</code> (QB transaction Name field).
         Aggregates: <code style={{ fontFamily: 'var(--mono)' }}>gl.v_supplier_overview</code>.
         Splits: <code style={{ fontFamily: 'var(--mono)' }}>gl.v_supplier_vendor_account</code>.
-        Anomalies: <code style={{ fontFamily: 'var(--mono)' }}>gl.v_supplier_account_anomalies</code> (vendor × account combos with unusual share).
+        Anomalies: <code style={{ fontFamily: 'var(--mono)' }}>gl.v_supplier_account_anomalies</code>.
         Lines: <code style={{ fontFamily: 'var(--mono)' }}>gl.v_supplier_transactions</code> (last 500 by date).
+        No <code style={{ fontFamily: 'var(--mono)' }}>gl.vendors</code> master join (it's empty). Curated attributes (contacts/terms/lead time) → <code style={{ fontFamily: 'var(--mono)' }}>suppliers.*</code> Phase 2.5b.
       </div>
     </>
   );

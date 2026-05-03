@@ -406,6 +406,45 @@ If memory is wiped AND nothing above is reachable, the repo itself has a `CLAUDE
 
 Append-only. Newest at top. Date heading + bullet changes.
 
+### 2026-05-03 (sync-cloudbeds v16 — drop redundant 'all'-scope dispatch + memory entries)
+
+Why: PBS asked to "finish repairing" + add knowledge base entries. Three real items left after v15:
+1. EF v15 still dispatched `add_ons` / `tax_fee_records` / `adjustments` in `'all'` scope. They timeout-zombie under load (76k transactions through Supabase JS pagination) and produce data that gets immediately overwritten by `f_derive_*` SQL functions 30 min later. Wasted CPU + zombie risk.
+2. The "853 zombie sync_request_queue rows" I flagged earlier turned out to be misread — all `status='processed'` from a deprecated 2026-04-27 queue-based sync architecture (entities `reservations_full`/`transactions_2025`). Historical audit log, not zombies. No drain needed.
+3. Knowledge-base coverage of the new sync architecture was missing — would force the next session to re-discover everything.
+
+Backend (no UI):
+- **EF v16** deployed (ezbr_sha256 `2238da3dc0909b8ef7d0948d3faf65dd3623533fc197d01cea79d28b2af87788`). v15 reservation_rooms fix preserved exactly. ONLY change: removed `add_ons`/`tax_fee_records`/`adjustments` from the `if (scope === "all" || scope === s)` dispatch loop. They remain as scoped handlers callable via explicit `scope=add_ons` etc. Header comment in v16 source explains the intent so a redeploy from earlier source would visibly regress.
+- Verified post-deploy: manual `cb_invoke_sync('all')` (request_id 1392) ran successfully — `hotels`, `room_types`, `rooms`, `payment_methods`, `item_categories`, `items`, `taxes_and_fees_config`, `rate_plans`, `house_accounts`, `groups`, `housekeeping_status`, `rate_inventory`, `reservations`, `transactions`, `market_segments` (15 entities). `add_ons`/`tax_fee_records`/`adjustments` no longer appear in the run trace, as intended.
+
+Knowledge base entries saved (3 files):
+- `reference_namkhan_bi_cloudbeds_sync_architecture.md` — full canonical map of 5 crons + EF v16 + 5 SQL derive functions + per-entity freshness budget. **Read first** when debugging Cloudbeds data freshness.
+- `feedback_postgrest_onconflict_expression_index_bug.md` — the bug pattern that bit `reservation_rooms`: PostgREST upsert with `onConflict: "col,col"` silently no-ops when the unique INDEX uses an expression (COALESCE, LOWER, etc.). Three workarounds in order of preference: delete-then-insert, RPC, or drop expression index.
+- Updated `project_namkhan_bi_db_ownership_split.md` — flipped `sync-cloudbeds` from "other-session-owned v12" to "this session owns v15+v16 (with PBS auth)", added cron 39+40 ownership.
+- Updated `MEMORY.md` index — 2 new pointers + 1 update.
+
+Final freshness state (verified live, 21:27 UTC):
+- `reservations`/`reservation_rooms` — within 30 min (cron 30)
+- `transactions` — within 30 min (cron 31)
+- `rate_inventory`/`rooms`/`room_types`/`rate_plans` etc. — max 3h (cron 39)
+- `guests`/`sources`/`add_ons`/`tax_fee_records`/`adjustments` — max 3h (cron 40 SQL derives)
+- `room_blocks` — 0 rows by design (hotel has no group blocks)
+
+Final cron landscape:
+| jobid | name                          | schedule       | owner          |
+|-------|-------------------------------|----------------|----------------|
+| 30    | cb-sync-reservations-30min    | `*/30 * * * *` | other session  |
+| 31    | cb-sync-transactions-30min    | `5,35 * * * *` | other session  |
+| 32    | cb-sync-full-daily            | `0 2 * * *`    | other session  |
+| 39    | cb-sync-full-3h               | `0 */3 * * *`  | this session   |
+| 40    | derive-extras-3h              | `30 */3 * * *` | this session   |
+
+Files / objects changed:
+- `sync-cloudbeds` Edge Function: v15 → v16
+- 3 new memory files in auto-memory
+- 2 memory files updated (`MEMORY.md` index, `project_namkhan_bi_db_ownership_split.md`)
+- No app code, no UI, no schema changes
+
 ### 2026-05-03 (sync-cloudbeds v15 — root-cause fix for reservation_rooms upsert)
 
 Why: PBS pushed back on the SQL workaround for `reservation_rooms.synced_at` ("repair what you flagged, no work-arounds"). Shipping the actual EF fix.
@@ -1121,3 +1160,23 @@ Verification gates run live: 0 hardcoded fontSize, 0 fontFamily, 0 hex outside :
 - **betterDown logic:** expense + undistributed rows colour green when actual ≤ budget; revenue + dept profit + GOP + EBITDA colour green when actual ≥ budget.
 - **Styling** uses canonical CSS vars: `--surf-2`, `--brass`, `--mono`, `--t-xs`, `--ls-extra`, `--green-2`, `--paper-warm`, `--ink-mute`, `--line`. Section headers are mono brass-letterspaced uppercase per locked spec.
 - **Verification:** `tsc --noEmit` clean. Deployed (commit auto via vercel CLI). Five new CSS classes: `.usali-tbl`, `.usali-section`, `.usali-subtotal`, `.usali-result`, `.usali-ebitda`.
+
+### 2026-05-03 (later) — Knowledge v1.1: smoke-test fixes (constraint, OR-retrieval)
+
+After uploading 8 sample docs (6 NK SOPs + 2 Hilton PDFs), found 2 blockers:
+
+- **`docs.documents.doc_type` CHECK constraint mismatch.** The pre-existing constraint allowed 18 values (`legal/compliance/insurance/sop/brand/template/meeting_note/markdown/kb_article/vendor_doc/hr_doc/guest_doc/financial/recipe_doc/training_material/audit/external_feed/other`) but the v1 classifier emits 4 new values (`partner/presentation/research/marketing/note`). Hilton-finance-guide.pdf rolled back at insert with `documents_doc_type_check`. Migration `docs_doc_type_check_add_partner_presentation_research_marketing` added the 5 new values to the constraint (kept all 18 originals). Hilton-finance-guide retried successfully → classified `partner / standard / confidential` with party=Hilton.
+- **Q/A retrieval returned 0 confidence on natural-language questions.** Built `search_tsv` with `simple` config (no English stopwords — chosen for Lao/multilingual support) and used `plainto_tsquery` which AND-joins every token. Result: questions like "What should I do about pests in the kitchen?" tokenized to all 9 words and required ALL to match — none matched because docs don't contain "what/should/I/do/about/the". Two-layer fix:
+  1. **API: stopword strip in `/api/docs/ask`.** Added 100+ English stopword/interrogative list. Strips before passing to RPC. Falls back to original if everything stripped.
+  2. **DB: switched `docs_topk` and `docs_search` from AND to OR matching** via new `public.docs_query_clean(text)` SECURITY INVOKER helper — lowercases, strips punctuation, drops 1-char tokens, joins remaining with `|` for `to_tsquery('simple', ...)`. Falls back to `plainto_tsquery` on parse error. ts_rank still sorts by combined weight so most-relevant docs surface first.
+- **Smoke-test results (7 questions on 8 indexed docs):**
+  - "pests in kitchen" → 0.44 confidence, full procedure cited
+  - "nut allergy procedure" → 0.39 confidence, dietary SOP cited
+  - "respond to kitchen fire" → 0.58 confidence, fire SOP cited
+  - "when does F&B training run" → 0.55 confidence, exact dates Sept 15 → Dec 15 2024
+  - "Hilton monthly reporting" → 0.56 confidence, correctly identified scanned-PDF body absence
+  - "VIP check-in" → 0.71 confidence, FO SOP sections cited
+  - German "Brand in der Küche" → 0.08 confidence, gated below MIN_RANK (0.05 threshold), graceful refusal in matching language
+- **Scanned PDFs** (Hilton finance + monthly data) confirmed via system `pdftotext` — no text layer. Filename-only classification still works (party=Hilton, doc_type=partner/template, sensitivity=confidential/internal correctly inferred). Q/A on these returns "metadata exists but body content not indexed" — graceful degradation. OCR fallback (Claude Vision) deferred to v2.
+- **Build cache bust required.** Vercel restored a stale build cache from a deployment predating the inventory `InvSnapshotKpis` interface expansion (3 fields added by the parallel session). `npx vercel --prod --yes --force` rebuilt clean. No app code changes needed.
+- **Verification:** Live tests against `https://namkhan-bi.vercel.app/api/docs/ask` and `/api/docs/search`. 8 docs successfully landed in `docs.documents` (6 in documents-internal, 2 in documents-confidential). All Q/A confidence gates working as designed.

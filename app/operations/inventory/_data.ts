@@ -853,7 +853,18 @@ export async function getSupplierDetail(supplierId: string): Promise<SupplierDet
 // ============================================================================
 // Wired from gl.v_supplier_overview / v_supplier_transactions /
 // v_supplier_account_anomalies / v_supplier_vendor_account / v_top_suppliers_*.
-// Vendor identity = vendor_name (text, unique). gl.vendors holds master record.
+//
+// Source-of-truth: `gl.gl_entries.customer_name` (the QB transaction Name field
+// on every line — QB combines customers/vendors/employees into one column).
+// `v_supplier_overview` filters to qb_txn_type IN
+//   ('Bill', 'Bill Payment (Cheque)', 'Cheque', 'Expense', 'Vendor Credit', 'Refund')
+// — payable-side only — so it's effectively the "vendors we paid" list.
+//
+// We DO NOT join gl.vendors anymore (master is empty: 0 with email/category/terms).
+// We DO filter to vendors active in 2026 (per PBS — "suppliers we worked with in 2026").
+// Vendor routing key = vendor_name (URL-encoded).
+
+const FILTER_YEAR_FROM = '2026-01-01';
 
 export interface GlVendorOverviewRow {
   vendor_name: string;
@@ -867,49 +878,31 @@ export interface GlVendorOverviewRow {
   distinct_classes: number;
   currency_guess: string | null;
   is_active_recent: boolean;
-  // Joined from gl.vendors
-  category: string | null;
-  email: string | null;
-  phone: string | null;
-  terms: string | null;
-  vendor_is_active: boolean | null;
 }
 
 export async function getGlVendorOverview(): Promise<GlVendorOverviewRow[]> {
   let admin;
   try { admin = getSupabaseAdmin(); } catch { return []; }
-  const [overviewRes, vendorsRes] = await Promise.all([
-    safe(admin.schema('gl').from('v_supplier_overview')
+  const { data } = await safe(
+    admin.schema('gl').from('v_supplier_overview')
       .select('vendor_name, line_count, active_periods, first_txn_date, last_txn_date, gross_spend_usd, net_amount_usd, distinct_accounts, distinct_classes, currency_guess, is_active_recent')
+      .gte('last_txn_date', FILTER_YEAR_FROM)
       .order('gross_spend_usd', { ascending: false, nullsFirst: false }),
-      { data: [] as any[] }),
-    safe(admin.schema('gl').from('vendors')
-      .select('vendor_name, category, email, phone, terms, is_active'),
-      { data: [] as any[] }),
-  ]);
-  const vMap = new Map<string, any>();
-  (vendorsRes.data ?? []).forEach((v: any) => vMap.set(v.vendor_name, v));
-  return (overviewRes.data ?? []).map((r: any) => {
-    const v = vMap.get(r.vendor_name);
-    return {
-      vendor_name: r.vendor_name,
-      line_count: Number(r.line_count ?? 0),
-      active_periods: Number(r.active_periods ?? 0),
-      first_txn_date: r.first_txn_date,
-      last_txn_date: r.last_txn_date,
-      gross_spend_usd: Number(r.gross_spend_usd ?? 0),
-      net_amount_usd: Number(r.net_amount_usd ?? 0),
-      distinct_accounts: Number(r.distinct_accounts ?? 0),
-      distinct_classes: Number(r.distinct_classes ?? 0),
-      currency_guess: r.currency_guess,
-      is_active_recent: !!r.is_active_recent,
-      category: v?.category ?? null,
-      email: v?.email ?? null,
-      phone: v?.phone ?? null,
-      terms: v?.terms ?? null,
-      vendor_is_active: v ? !!v.is_active : null,
-    };
-  });
+    { data: [] as any[] }
+  );
+  return (data ?? []).map((r: any) => ({
+    vendor_name: r.vendor_name,
+    line_count: Number(r.line_count ?? 0),
+    active_periods: Number(r.active_periods ?? 0),
+    first_txn_date: r.first_txn_date,
+    last_txn_date: r.last_txn_date,
+    gross_spend_usd: Number(r.gross_spend_usd ?? 0),
+    net_amount_usd: Number(r.net_amount_usd ?? 0),
+    distinct_accounts: Number(r.distinct_accounts ?? 0),
+    distinct_classes: Number(r.distinct_classes ?? 0),
+    currency_guess: r.currency_guess,
+    is_active_recent: !!r.is_active_recent,
+  }));
 }
 
 export interface GlSupplierKpisRow {
@@ -929,8 +922,11 @@ export async function getGlSupplierKpis(): Promise<GlSupplierKpisRow> {
   };
   let admin;
   try { admin = getSupabaseAdmin(); } catch { return empty; }
+  // Filter to 2026-active vendors (PBS: "suppliers we worked with in 2026")
   const [overview, ytdTop, mtdAll, anom] = await Promise.all([
-    safe(admin.schema('gl').from('v_supplier_overview').select('vendor_name, gross_spend_usd, is_active_recent'),
+    safe(admin.schema('gl').from('v_supplier_overview')
+      .select('vendor_name, gross_spend_usd, is_active_recent')
+      .gte('last_txn_date', FILTER_YEAR_FROM),
       { data: [] as any[] }),
     safe(admin.schema('gl').from('v_top_suppliers_ytd').select('vendor_name, gross_spend_usd, rank_ytd').order('rank_ytd').limit(1),
       { data: [] as any[] }),
@@ -1009,13 +1005,9 @@ export async function getGlVendorDetail(vendorName: string): Promise<GlVendorDet
   let admin;
   try { admin = getSupabaseAdmin(); } catch { return empty; }
 
-  const [ovRes, vRes, txRes, splitRes, anomRes] = await Promise.all([
+  const [ovRes, txRes, splitRes, anomRes] = await Promise.all([
     safe(admin.schema('gl').from('v_supplier_overview')
       .select('vendor_name, line_count, active_periods, first_txn_date, last_txn_date, gross_spend_usd, net_amount_usd, distinct_accounts, distinct_classes, currency_guess, is_active_recent')
-      .eq('vendor_name', vendorName).limit(1).maybeSingle(),
-      { data: null as any }),
-    safe(admin.schema('gl').from('vendors')
-      .select('vendor_name, category, email, phone, terms, is_active')
       .eq('vendor_name', vendorName).limit(1).maybeSingle(),
       { data: null as any }),
     safe(admin.schema('gl').from('v_supplier_transactions')
@@ -1033,7 +1025,6 @@ export async function getGlVendorDetail(vendorName: string): Promise<GlVendorDet
   ]);
 
   const ov = ovRes.data;
-  const v = vRes.data;
   const overview: GlVendorOverviewRow | null = ov ? {
     vendor_name: ov.vendor_name,
     line_count: Number(ov.line_count ?? 0),
@@ -1046,11 +1037,6 @@ export async function getGlVendorDetail(vendorName: string): Promise<GlVendorDet
     distinct_classes: Number(ov.distinct_classes ?? 0),
     currency_guess: ov.currency_guess,
     is_active_recent: !!ov.is_active_recent,
-    category: v?.category ?? null,
-    email: v?.email ?? null,
-    phone: v?.phone ?? null,
-    terms: v?.terms ?? null,
-    vendor_is_active: v ? !!v.is_active : null,
   } : null;
 
   return {

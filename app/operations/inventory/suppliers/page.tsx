@@ -26,8 +26,8 @@ export default async function SuppliersListPage() {
       <PageHeader
         pillar="Operations"
         tab="Inventory · Suppliers"
-        title={<>Vendor <em style={{ color: 'var(--brass)' }}>register</em></>}
-        lede={<>Live from QuickBooks GL · {rows.length} vendors · {kpis.active_recent_count} active in last 90d. Click a row for full transaction history.</>}
+        title={<>Vendor <em style={{ color: 'var(--brass)' }}>register · 2026</em></>}
+        lede={<>Derived from QB transaction lines · {rows.length} vendors with activity since 2026-01-01 · {kpis.active_recent_count} active in last 90d. Names are raw QB Name field — clean later. Click a row for full transaction history.</>}
       />
 
       {/* KPIs */}
@@ -66,8 +66,8 @@ export default async function SuppliersListPage() {
           color: 'var(--brass)',
           fontSize: 'var(--t-xs)',
           marginBottom: 6,
-        }}>Data source</div>
-        Live from <code style={{ fontFamily: 'var(--mono)' }}>gl.v_supplier_overview</code> + <code style={{ fontFamily: 'var(--mono)' }}>gl.vendors</code>. Refreshes when QB upload runs (see <code style={{ fontFamily: 'var(--mono)' }}>gl.qb_import_staging</code>). For curated procurement records (reliability scores, contacts, alternates), use the <code style={{ fontFamily: 'var(--mono)' }}>suppliers.*</code> schema — currently empty, to be populated via Phase 2.5b workflow.
+        }}>Data lineage · 2026 YTD</div>
+        Source: <code style={{ fontFamily: 'var(--mono)' }}>gl.gl_entries.customer_name</code> (raw QB transaction Name field) WHERE <code style={{ fontFamily: 'var(--mono)' }}>qb_txn_type IN ('Bill', 'Bill Payment (Cheque)', 'Cheque', 'Expense', 'Vendor Credit', 'Refund')</code>, surfaced via <code style={{ fontFamily: 'var(--mono)' }}>gl.v_supplier_overview</code>, filtered to <code style={{ fontFamily: 'var(--mono)' }}>last_txn_date &gt;= 2026-01-01</code>. No join to <code style={{ fontFamily: 'var(--mono)' }}>gl.vendors</code> (that master is empty — 0 emails, 0 categories, 0 terms). Curated supplier attributes (reliability, contacts, alternates, lead time) will live in <code style={{ fontFamily: 'var(--mono)' }}>suppliers.*</code> when the procurement workflow ships (Phase 2.5b).
       </div>
     </>
   );
