@@ -14,6 +14,7 @@ import DataTable, { type Column } from '@/components/ui/DataTable';
 import StatusPill from '@/components/ui/StatusPill';
 import ActionCard, { ActionStack } from '@/components/sections/ActionCard';
 import { supabaseGl } from '@/lib/supabase-gl';
+import { supabase } from '@/lib/supabase';
 import { getKpiToday, getDqIssues, getCaptureRates } from '@/lib/data';
 import { fmtTableUsd, fmtKpi, EMPTY } from '@/lib/format';
 
@@ -50,21 +51,23 @@ async function getOpsSnapshot(): Promise<OpsSnapshot | null> {
 }
 
 async function getDeptPayroll(): Promise<DeptPayroll[]> {
-  // ops schema now exposed via PostgREST
-  const opsClient = (await import('@supabase/supabase-js')).createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { db: { schema: 'ops' }, auth: { persistSession: false } },
-  );
-  const { data, error } = await opsClient
+  // ops schema is now exposed via PostgREST (added 2026-05-03). Use the
+  // shared `supabase` client with .schema() override — avoids dynamic
+  // imports which fail under Next.js server runtime.
+  const { data, error } = await supabase
+    .schema('ops')
     .from('v_payroll_dept_monthly')
     .select('period_month, dept_code, dept_name, headcount, total_days_worked, total_grand_usd')
     .order('period_month', { ascending: false })
     .order('total_grand_usd', { ascending: false })
     .limit(40);
-  if (error || !data) return [];
-  // Keep latest closed period only
-  const latest = data[0]?.period_month;
+  if (error) {
+    // eslint-disable-next-line no-console
+    console.error('[ops/page] getDeptPayroll', error);
+    return [];
+  }
+  if (!data) return [];
+  const latest = (data as DeptPayroll[])[0]?.period_month;
   return (data as DeptPayroll[]).filter(r => r.period_month === latest);
 }
 
