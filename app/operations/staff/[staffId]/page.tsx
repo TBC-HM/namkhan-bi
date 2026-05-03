@@ -6,7 +6,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { fmtMoney, FX_LAK_PER_USD } from '@/lib/format';
+import { fmtMoney } from '@/lib/format';
 import { AttendanceCalendar } from '../_components/AttendanceCalendar';
 import { PayrollHistory } from '../_components/PayrollHistory';
 import { AvailabilityGrid } from '../_components/AvailabilityGrid';
@@ -96,8 +96,13 @@ export default async function StaffDetailPage({
   if (error || !data) return notFound();
   const d = data as unknown as Detail;
 
+  // Live FX rate per Cowork audit 2026-05-03 (was hardcoded FX_LAK_PER_USD).
+  // public.fx_usd_to_lak() reads the latest from gl.fx_rates.
+  const { data: fxRow } = await supabase.rpc('fx_usd_to_lak');
+  const fx = Number(fxRow ?? 21800) || 21800; // last-resort fallback if FX feed is down
+
   const annualLak = (d.monthly_salary || 0) * 12;
-  const annualUsdEquiv = annualLak / FX_LAK_PER_USD;
+  const annualUsdEquiv = annualLak / fx;
 
   return (
     <div className="space-y-8 px-8 py-6">
@@ -149,7 +154,7 @@ export default async function StaffDetailPage({
         <Kpi
           label="Monthly cost"
           value={fmtMoney(d.monthly_salary, 'LAK')}
-          sub={`≈ ${fmtMoney((d.monthly_salary || 0) / FX_LAK_PER_USD, 'USD')}`}
+          sub={`≈ ${fmtMoney((d.monthly_salary || 0) / fx, 'USD')}`}
         />
         <Kpi
           label="Annual cost"
