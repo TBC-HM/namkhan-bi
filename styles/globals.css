@@ -1756,6 +1756,104 @@ td.num   { text-align: right; font-family: var(--mono); font-size: 11px; color: 
 /* Local-token mapping: the .pnl-page rules below were authored against a different
    design system. Re-bind those tokens to the site's brand palette so all child
    `var(--xxx)` references resolve. Without this block the whole page renders unstyled. */
+
+/* ===== Force-align /finance/pnl legacy KPI markup to canonical .kpi-box =====
+ * The .pnl-page page uses its own legacy .kpi / .scope / .val / .lbl markup.
+ * Override the legacy CSS so rendered tiles match .kpi-box exactly: italic
+ * Fraunces value, mono brass scope/lbl, paper-warm bg + paper-deep border,
+ * hover lift. User spec 2026-05-03 — every KPI in the app shares one rule. */
+.pnl-page .kpi {
+  background: var(--paper-warm) !important;
+  border: 1px solid var(--paper-deep) !important;
+  border-radius: 8px !important;
+  padding: 14px 16px !important;
+  min-height: 108px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  box-shadow: none !important;
+  transition: box-shadow 140ms ease, transform 140ms ease, border-color 140ms ease !important;
+  position: relative !important;
+}
+.pnl-page .kpi:hover {
+  box-shadow: 0 6px 18px -8px rgba(28, 24, 21, 0.18) !important;
+  border-color: var(--brass-soft) !important;
+  transform: translateY(-1px) !important;
+}
+.pnl-page .kpi.dim {
+  background: var(--paper-deep) !important;
+  border-style: dashed !important;
+}
+.pnl-page .kpi .scope {
+  font-family: var(--mono) !important;
+  font-size: var(--t-xs) !important;
+  letter-spacing: var(--ls-extra) !important;
+  text-transform: uppercase !important;
+  color: var(--ink-mute) !important;
+  font-weight: 600 !important;
+  order: 1 !important;
+}
+.pnl-page .kpi .deltas {
+  font-family: var(--sans) !important;
+  font-size: var(--t-xs) !important;
+  color: var(--ink-mute) !important;
+  letter-spacing: 0.02em !important;
+  order: 2 !important;
+}
+.pnl-page .kpi .deltas .pos { color: var(--moss) !important; }
+.pnl-page .kpi .deltas .neg { color: var(--st-bad) !important; }
+.pnl-page .kpi .deltas .neu { color: var(--ink-mute) !important; }
+.pnl-page .kpi .val {
+  font-family: var(--serif) !important;
+  font-style: italic !important;
+  font-weight: 500 !important;
+  font-size: var(--t-2xl) !important;
+  letter-spacing: var(--ls-tight) !important;
+  line-height: 1.1 !important;
+  color: var(--ink) !important;
+  margin: 4px 0 !important;
+  order: 3 !important;
+  background: transparent !important;
+}
+.pnl-page .kpi.dim .val { color: var(--ink-faint) !important; }
+.pnl-page .kpi .lbl {
+  font-family: var(--serif) !important;
+  font-style: italic !important;
+  font-size: var(--t-md) !important;
+  color: var(--ink-soft) !important;
+  margin-top: 2px !important;
+  font-weight: 400 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  order: 4 !important;
+}
+.pnl-page .kpi .needs {
+  position: absolute !important;
+  bottom: 10px !important;
+  right: 12px !important;
+  background: var(--st-warn-bg) !important;
+  border: 1px solid var(--st-warn-bd) !important;
+  color: var(--brass) !important;
+  font-family: var(--mono) !important;
+  font-size: 9px !important;
+  letter-spacing: var(--ls-extra) !important;
+  font-weight: 600 !important;
+  padding: 2px 8px !important;
+  border-radius: 999px !important;
+  text-transform: uppercase !important;
+  margin: 0 !important;
+  order: 99 !important;
+}
+.pnl-page .kpi-row {
+  display: grid !important;
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+  margin-top: 14px !important;
+}
+.pnl-page .kpi-row.secondary {
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  margin-top: 10px !important;
+}
 .pnl-page {
   --body: var(--ink-soft);
   --muted: var(--ink-mute);
