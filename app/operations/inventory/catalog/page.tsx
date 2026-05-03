@@ -12,6 +12,7 @@ import PageHeader from '@/components/layout/PageHeader';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import UploadProductsButton from '../_components/UploadProductsButton';
 import SyncCloudbedsButton from '../_components/SyncCloudbedsButton';
+import SyncPosterPosButton from '../_components/SyncPosterPosButton';
 import CatalogTableClient, { type CatalogRow } from './_CatalogTableClient';
 
 export const revalidate = 0;
@@ -32,7 +33,7 @@ async function getItems(): Promise<CatalogRow[]> {
   const [itemsRes, catsRes, unitsRes] = await Promise.all([
     admin.schema('inv').from('items').select(
       'sku, item_name, category_id, uom_id, last_unit_cost_usd, gl_account_code, is_perishable, catalog_status, is_active, updated_at'
-    ).order('item_name', { ascending: true }).limit(500),
+    ).order('item_name', { ascending: true }).limit(2500),
     admin.schema('inv').from('categories').select('category_id, code, name'),
     admin.schema('inv').from('units').select('unit_id, code'),
   ]);
@@ -75,7 +76,7 @@ export default async function CatalogAdminPage() {
         tab="Inventory · Catalog"
         title={<>Item <em style={{ color: 'var(--brass)' }}>catalog</em></>}
         lede={<>Source of truth for every product the property buys, sells, or stocks. Bulk-load via CSV; rows with existing SKU are updated, new SKUs are inserted.</>}
-        rightSlot={<><SyncCloudbedsButton /><UploadProductsButton /></>}
+        rightSlot={<><SyncPosterPosButton /><SyncCloudbedsButton /><UploadProductsButton /></>}
       />
 
       <div style={{ marginTop: 18 }}>
