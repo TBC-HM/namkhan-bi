@@ -406,6 +406,106 @@ If memory is wiped AND nothing above is reachable, the repo itself has a `CLAUDE
 
 Append-only. Newest at top. Date heading + bullet changes.
 
+### 2026-05-03 (Inventory & Suppliers — IA rename + sub-page convergence + status-enum fix)
+
+Why: PBS asked "I thought we deployed a batch yesterday regarding suppliers — but I can't see anything." Investigation found the schemas were live (4 schemas: `suppliers`, `inv`, `proc`, `fa`) but the UI work was split across two parallel sessions. This session and a parallel session converged on the same set of pages — by the end of the run all sub-pages exist as canonical routes.
+
+IA decision (locked): `Inventory` → `Inventory & Suppliers`. Sub-pages live UNDER `/operations/inventory/*` (not a separate `/suppliers` pillar). Mental-model rationale: at The Roots scale (~$60k F&B/mo), the dominant verb is "do we have enough X" — that's an inventory question, suppliers are a peer attribute, not the parent.
+
+Subnav change:
+- `components/nav/subnavConfig.ts` — operations row: `Inventory` → `Inventory & Suppliers` (single-line label)
+
+Internal sub-tab strip (NEW):
+- `app/operations/inventory/layout.tsx` — wraps every `/operations/inventory/*` page with `<InventorySubnav>`
+- `app/operations/inventory/_components/InventorySubnav.tsx` — `'use client'` pill-tab strip: Snapshot · Stock · Par · Suppliers · Catalog. Active pill = `var(--paper-warm)` bg + `var(--brass-soft)` border + `var(--brass)` text. Mono uppercase brass-letterspaced per design system.
+
+Live sub-pages (all use canonical `<KpiBox>`, `<DataTable>`, `<StatusPill>`, `<PageHeader>`, `lib/format.ts` helpers):
+- `/operations/inventory` — Snapshot (12 KPIs + heatmap + 3-up tables for POs/requests/capex + suppliers strip + quick-links). Built earlier today, unchanged this session.
+- `/operations/inventory/stock` — On-hand · Days of cover · Slow movers · Expiring (4 KPIs + 4 DataTables). Source: `inv.v_inv_stock_on_hand`, `v_inv_days_of_cover`, `v_inv_slow_movers`, `v_inv_expiring_soon`.
+- `/operations/inventory/par` — Par status grid (5 KPIs + 1 DataTable). Source: `inv.v_inv_par_status` joined to `suppliers.suppliers` for vendor name. Status pills: `out_of_stock`/`below_min` → expired, `below_par` → pending, `at_par`/`ok` → active, `over_max`/`overstocked` → info.
+- `/operations/inventory/suppliers` — Register list (6 KPIs + DataTable). Each row is a `<Link>` to `/operations/inventory/suppliers/[id]`. Source: `suppliers.v_supplier_summary` + `v_local_sourcing_pct`. Header right-slot: `<UploadSuppliersButton>` for CSV bulk-load.
+- `/operations/inventory/suppliers/[id]` — Detail (6 KPIs + Profile meta strip + 4 DataTables: Contacts · Items supplied · Alternates · Price history) + inline `<PriceForm>` to add a new `suppliers.price_history` row. Source: 7-way parallel fetch via `getSupplierDetail()`.
+- `/operations/inventory/catalog` — Item master + CSV bulk upload. Built earlier today, unchanged.
+
+New API routes:
+- `POST /api/operations/suppliers/upload` (built by parallel session) — bulk-upserts `suppliers.suppliers` from CSV body `{ suppliers: [...] }`. Validates against DB constraints (`supplier_type IN (manufacturer|wholesaler|distributor|local_market|service|contractor|other)`, `status IN (active|suspended|terminated|prospect)`). Service-role client.
+- `POST /api/operations/suppliers/price-history` (THIS SESSION) — single-row insert into `suppliers.price_history`. Validates UUID + date format + at least one of `unit_price_usd`/`unit_price_lak`. Optionally resolves `inv_sku → inv_item_id` so downstream joins work. Service-role client.
+
+Bug fix shipped this session:
+- `app/operations/inventory/suppliers/_SuppliersTableClient.tsx` + `app/operations/inventory/suppliers/[id]/page.tsx` — `statusToPill()` had the wrong enum (`inactive`/`pending`/`blocked` — none exist in DB). Fixed to match actual DB CHECK constraint `(active | suspended | terminated | prospect)`. `prospect` → pending tone, `terminated` → inactive tone, `suspended` → expired tone. Will save the next session a "why is every supplier showing 'unknown' tone" rabbit hole.
+
+`_data.ts` extensions (THIS SESSION, may overlap with parallel session writes):
+- `getStockOnHand()`, `getDaysOfCover()`, `getSlowMovers()`, `getExpiringSoon()` — read the four `inv.v_inv_*` views with proper null-handling on `value_usd_estimate` / `days_of_cover` / `at_risk_value_usd`.
+- `getParStatus()` — joins `inv.v_inv_par_status` with `suppliers.suppliers` for primary-vendor name.
+- `getSupplierSummaries()`, `getLocalSourcing()` — register-list data + local-sourcing percentage.
+- `getSupplierDetail(id)` — 7-way parallel fetch (summary + contacts + price_history + alternates + items via `OR(primary_vendor_id.eq.${id},alternate_vendor_id.eq.${id})` + categories + supplier-name lookup for alternates).
+
+Quick-links grid on `/operations/inventory` (Snapshot) updated to:
+- LIVE: Stock · Par levels · Suppliers · Catalog admin
+- PLANNED (Phase 2.5b): Purchase orders · Requests · Fixed assets · CapEx pipeline (sub-pages exist as stubs but transactional tables are empty — need write workflow before they're useful)
+
+DB ground truth captured (verified via `information_schema` 2026-05-03):
+- 8 suppliers, 36 items, 36 par_levels, 36 stock_balance rows, 12 fa.assets, 1 inv.count
+- ZERO transactional rows: `proc.purchase_orders`, `proc.requests`, `inv.movements`, `suppliers.contacts`, `suppliers.price_history`, `suppliers.alternates`, `fa.capex_pipeline`, `fa.maintenance_log`
+- Pages render the empty state correctly via `<DataTable emptyState={…}>` strings that explain how to populate
+
+Schemas live on `kpenyneooigsyuuomgct` (Supabase project "namkhan-pms" — namkhan-bi BI portal reads from the PMS DB; both production and BI use the same Postgres). Confirmed via env: `NEXT_PUBLIC_SUPABASE_URL=https://kpenyneooigsyuuomgct.supabase.co`.
+
+Multi-session race observation:
+- Parallel session shipped commits `8626298` (full snapshot + 4 sub-pages) and `ae13ab8` (cloudbeds sync + supplier upload + 3 new live routes) earlier today. By the time THIS session ran its Writes, almost every file already existed with matching content — `git diff` showed only 2 modified files (the statusToPill enum fix). Convergence happened naturally because both sessions read the same `_data.ts` shape and same canonical components.
+- Lesson: when starting an inventory/UI session, run `git log --oneline -5 -- app/operations/inventory/` BEFORE writing anything. Saves 30 min of rebuilding.
+
+Verification gates passed:
+- `npx tsc --noEmit` — clean (exit 0)
+- New pages all use canonical components — ZERO new inline `fontSize:` numeric literals, ZERO `USD ` prefix, ZERO hardcoded brand-color hex outside `var(--…)` fallbacks
+- Empty states handled on every DataTable
+
+Out of scope (Phase 2.5b):
+- PO write workflow (request → PO → receive → movement) — UI scaffolds exist but no forms yet
+- Stocktake (`inv.counts` + `count_lines`) — stub page, no entry form
+- FA register edit + capex approval flow
+- Supplier contacts add/edit form — currently CSV-only
+- Auto-reorder agent (par status → draft PO when below_min)
+
+### 2026-05-03 (compset PropertyTable — inline row-expand deep view)
+
+Why: Compset main page only showed surface KPIs per property. Editing per-property attributes, channel URLs, room mappings, rate plans, rankings, and the rate matrix all required a separate /admin sub-page that didn't exist. Need an in-page deep-dive on row click.
+
+Files added:
+- `app/revenue/compset/_components/property-detail/PropertyDetailCard.tsx` — Section 1 left: name (italic Fraunces gold), star rating, rooms, location, target room type, scrape priority. EDIT button visible but disabled (lands with settings sub-pages).
+- `app/revenue/compset/_components/property-detail/ChannelUrlsCard.tsx` — Section 1 right: 5-channel URL grid (BDC/Agoda/Expedia/Trip/Direct) with `<StatusPill>` LIVE/MISSING + URL preview + OPEN ↗.
+- `app/revenue/compset/_components/property-detail/RoomMappingsTable.tsx` — Section 2: canonical `<DataTable>`, columns CHANNEL/COMPETITOR ROOM NAME/SIZE/MAX OCC/BEDS/OUR ROOM TIER/TARGET (StatusPill). Empty: "No room mappings yet — Agent will populate after first deep scrape."
+- `app/revenue/compset/_components/property-detail/RankingsGrid.tsx` — Section 3: 2×3 cards for (BDC × {recommended, price_asc, rating}, Agoda × {recommended, price_asc}, Expedia × recommended). Each card: eyebrow + sort label + italic serif `var(--t-2xl)` position "#N", "of N total" subtext, ▲/▼/→ movement chip, last shop date. Empty cards render `—` + "Not yet shopped".
+- `app/revenue/compset/_components/property-detail/RatePlansMatrixTable.tsx` — Section 4: pivots `competitor_rate_plan_mix` rows to one row per (taxonomy_code × plan_name); columns CATEGORY/PLAN NAME/BDC/AGODA/EXPEDIA/TRIP/DIRECT (✓/—) and AVG RATE (`fmtTableUsd`). Empty: "Rate plans not yet captured — needs deeper Nimble parser pass."
+- `app/revenue/compset/_components/property-detail/RateMatrixCard.tsx` — Section 5: bespoke wide table (8 most-recent stay dates × 5 channels + MIN). Stay date as `fmtIsoDate` + uppercase day-of-week tag. Cheapest channel cell tinted `var(--st-good-bg)` + `var(--moss)`. Empty cells = `—`. Whole-table empty: "No rate observations yet for this property…"
+- `app/revenue/compset/_components/property-detail/DeepViewPanel.tsx` — container: 2-col card row + 4 stacked sections, "← BACK TO SET" close button, brass top-rule for visual anchor.
+
+Files extended:
+- `app/revenue/compset/_components/types.ts` — added 6 new row types (`CompetitorPropertyDetailRow`, `CompetitorRoomMappingRow`, `CompetitorRatePlanMixRow`, `CompetitorRateMatrixRow`, `RankingLatestRow`, `CompetitorReviewsSummaryRow`) + bundled `CompetitorDeepData` + `DEEP_VIEW_CHANNELS` + `DEEP_VIEW_RANKING_CONTEXTS` constant arrays.
+- `app/revenue/compset/_components/PropertyTable.tsx` — added `useState<string | null>(expandedCompId)`, new chevron column with `data-comp-id` marker (rotates 90° on expand), parent `onClick` delegate that ignores clicks on links/buttons/pills and toggles via `closest('tr.data-table-row')`, renders `<DeepViewPanel>` below the table, `<style jsx global>` for cursor-pointer + `.row-expanded { background: var(--paper-deep) }`.
+- `app/revenue/compset/page.tsx` — added per-set parallel fetch of all 6 deep-view sources keyed by `comp_id` (one Promise.all over `.in('comp_id', compIds)` queries — payload bounded by ~11 properties), assembles `Record<comp_id, CompetitorDeepData>` and passes to `<PropertyTable>`.
+
+DB:
+- Migration `compset_deep_view_proxies` applied — added 6 public proxy views (`v_compset_competitor_property_detail`, `v_compset_competitor_room_mapping`, `v_compset_competitor_rate_plan_mix`, `v_compset_competitor_rate_matrix`, `v_compset_ranking_latest`, `v_compset_competitor_reviews_summary`) with SELECT to anon/authenticated/service_role. Avoids exposing the `revenue` schema in `pgrst.db_schemas`. The `v_compset_ranking_latest` view LEFT-JOINs `revenue.ranking_movement` so the deep-view ranking cards can render the ▲/▼ chip from one query.
+
+Empty-state coverage (most data is currently empty: 14 competitor_property rows, 1 rate_matrix row, 0 room_mappings, 0 rate_plan_mix, 0 ranking_latest):
+- Every section renders a labelled empty state. The grid still SHAPES (6 cards always present, table still has its header rendered, channel URL grid still shows all 5 rows with MISSING pills). Page never looks broken because data is sparse.
+
+Hard-rule conformance:
+- 0 hardcoded `fontSize:` literals (all `var(--t-xs|sm|base|xl|2xl)`).
+- 0 hardcoded fontFamily literals (all `var(--mono|serif)`).
+- 0 hardcoded brand-color hex (uses `var(--brass)`, `var(--moss)`, `var(--moss-glow)`, `var(--ink-mute)`, `var(--ink-faint)`, `var(--ink-soft)`, `var(--paper-warm)`, `var(--paper-deep)`, `var(--st-bad)`, `var(--st-good-bg)`).
+- 0 `USD ` prefixes (all currency via `fmtTableUsd`).
+- All dates via `fmtIsoDate`.
+- Empty cells → `EMPTY` constant `—`.
+
+Verified: `npx tsc --noEmit` clean. Verification greps clean.
+
+Deferred:
+- EDIT buttons in PropertyDetailCard + ChannelUrlsCard render but are no-op (disabled `<button>`s) until the settings sub-pages ship inline editors.
+- Reviews summary is fetched + bundled into `CompetitorDeepData` but the deep-view doesn't yet render a reviews section — leaving the data plumbed for the next pass once the design is decided (mockup v3 doesn't show a reviews section).
+- Per-property deep-view fetch is server-side eager for ALL properties in the selected set (n~=11). If a future set grows past ~50 properties, switch to client-fetch via RPC on expand.
+
 ### 2026-05-03 (Cloudbeds sync — SQL derives for 6 stuck entities, fixes EF v14 bugs)
 
 Why: PBS asked "ok repair those findings" after the prior session showed 6 entities stuck (`guests`, `sources`, `add_ons`, `tax_fee_records`, `adjustments`, `reservation_rooms.synced_at`). Investigation of `sync-cloudbeds` Edge Function v14 source revealed:
@@ -865,3 +965,57 @@ Verification gates run live: 0 hardcoded fontSize, 0 fontFamily, 0 hex outside :
 - **Shared data layer:** `app/operations/inventory/_data.ts` — 7 server-side helpers (getInventorySnapshot, getStockHeatmap, getCapexPipeline, getAssetRegister, getOpenPOs, getOpenRequests, getSuppliers). All use service-role admin client because anon has no grants on inv/fa/suppliers/proc.
 - **Heatmap component** (`_components/Heatmap.tsx`): pure markup, no event handlers, server-component-safe.
 - **Verification gates:** 0 hardcoded fontSize, 0 `USD ` prefix, 0 hardcoded fontFamily. `tsc --noEmit` clean. All 6 routes return 200.
+
+### 2026-05-03 (F&B + Spa wiring fix + Restaurant 7-tile mock alignment)
+- **Capture-rate KPI tiles fixed** (silent 0% bug). `mv_capture_rates` is long-format (1 row per dept) but `lib/data.getCaptureRates` did `.single()` and the page read wide keys (`fnb_capture_pct`, `spa_per_occ_room`, etc.) that don't exist — every capture/per-occ tile on `/operations`, `/operations/restaurant`, `/operations/spa`, `/operations/activities` was rendering 0.
+- Pivot now happens in `getCaptureRates`: returns `{fnb_capture_pct, fnb_per_occ_room, spa_capture_pct, spa_per_occ_room, activity_capture_pct, activity_per_occ_room, retail_capture_pct, retail_per_occ_room, total_resv, _byDept}`. Real values now: F&B capture 55.3% / $17.16, Spa 20.1% / $13.79.
+- **Wine-in-Spa misclassification fixed.** `usali_category_map.id=87` had regex `\mspa` (start-of-word only) which matched both "Spa" AND "Sparkling" inside item_category_name `"Wine & Sparkling"`. Same priority (30) tied with rule 109 `\msparkling`, but tie broken by ascending id → 87 won. Result: ~673 wine line items leaked into Spa department (top "spa" sellers were Sileni Sauvignon Blanc, Tavernello Bianco, Tavernello Organic Red).
+- Anchored the rule to whole-word: `\mspa\M`. Refreshed `mv_classified_transactions`. Verified post-fix: 0 wine in Spa, 500 wine lines / $6,708 correctly in F&B/Beverage. Spa top sellers now 100% massage / facial / ritual items.
+- **`/operations/restaurant` rebuilt to 7-tile mock spec** (user reference 2026-05-03). Top grid uses canonical `<KpiBox>`:
+  - Revenue (USD) — wired from `mv_kpi_daily.fnb_revenue` (period-aware)
+  - Labor Cost % — wired from `ops.v_payroll_dept_monthly` (kitchen+roots_service ÷ F&B revenue, latest closed month)
+  - Food Cost % — `data-needed`, needs F&B COGS feed (purchases by inv.category)
+  - Beverage Cost % — `data-needed`, same source needed
+  - Covers — `data-needed`, needs POS cover/PAX field
+  - Avg Check — `data-needed`, depends on covers
+  - Guest Sat — `data-needed`, `marketing.reviews` is empty (0 rows for property)
+- Secondary row preserves USALI capture metrics (F&B/Occ Rn, F&B Capture %, Food Rev, Bev Rev) with legacy `<KpiCard>` until full canonical refactor.
+- **Verification gates:** `tsc --noEmit` clean. No new hardcoded fontSize/fontFamily. No `USD ` prefix used. Empty/data-needed states render `—` with amber `DATA NEEDED` pill per locked spec.
+
+### 2026-05-03 (later) — /finance/pnl month dropdown + budget wiring fix
+- **Month picker added** (`app/finance/pnl/MonthDropdown.tsx`, client component). Reads/writes `?month=YYYY-MM` URL param; options are Jan 2026 → latest closed month. Server page now overrides the auto-detected `cur` when the param is valid (matches `/^2026-(0[1-9]|1[0-2])$/`); falls back to existing latest-closed-month logic otherwise. `prior` always derived via `priorPeriod(cur)`.
+- **Budget wiring root-cause fix in `gl.v_budget_lines`.** `plan.account_map.usali_dept` legacy-tags above-the-line subcats with operating dept names (OTA commissions in Sales & Marketing tagged `Rooms`, vehicle maintenance in POM tagged `Other Operated`). Page reads undistributed budgets via key `${subcat}||` (empty dept) so mis-tagged rows were silently excluded. Apr 2026 evidence: S&M total $10,133 → page only saw $4,232; POM total $4,042 → page only saw $3,042.
+  - Patched view forces `usali_department='Undistributed'` for every row whose `usali_subcategory` is in `('A&G','Sales & Marketing','POM','Utilities','Mgmt Fees','Depreciation','Interest','Income Tax','FX Gain/Loss','Non-Operating')`. Operating-dept rows (Rooms/F&B/Spa/Activities/Mekong Cruise/Other Operated) keep `gl.normalize_plan_dept(...)` behaviour unchanged.
+  - Migration: `fix_v_budget_lines_force_undistributed`. Verified post-patch: Apr S&M $10.1k, POM $4.0k, A&G $3.1k, Utilities $3.7k all under Undistributed.
+- **Known data gap (NOT a wiring bug):** `plan.lines` has zero Budget 2026 v1 rows for Spa, Activities, Mekong Cruise depts → these rows correctly render `xx`. Add later via plan.lines load (out of scope for this session).
+- **Verification:** `npx tsc --noEmit` clean. `grep -rE "fontSize:\s*[0-9]"` 0 hits. Dropdown styled via existing CSS vars (`--mono`, `--t-xs`, `--ls-extra`, `--brass`, `--surf-2`, `--rule`, `--ink`, `--sans`, `--t-sm`).
+
+### 2026-05-03 (later still) — Spa/Activities/Mekong Cruise budget mapping fix
+- **Root cause:** 9 account_codes in `plan.account_map.usali_dept` were tagged 'Other Operated' instead of their real USALI dept. Result: Spa/Activities/Mekong Cruise rows on /finance/pnl rendered `xx` while $155k of FY2026 budget collapsed silently into Other Operated ($248k total).
+- **Re-tag applied via migration `fix_plan_account_map_spa_activities_mekong`:**
+  - **Spa** ← 708070 (REVENUE-SPA TREATMENT, $28.7k FY26), 631103 (BASIC SALARY - SPA, $12.0k), 606103 (COST OF SPA TREATMENT, $3.5k), 606300 (SPA PRODUCTTION COST, $0.5k)
+  - **Activities** ← 708040 (REVENUE ACTIVITIES, $23.6k), 631104 (BASIC SALARY - FARM & ACTIVITES, $56.0k — farm tours roll into Activities), 606102 (COST OF ACTIVITIES, $4.5k)
+  - **Mekong Cruise** ← 708050 (REVENUE-I-MEKONG CRUISE, $16.3k), 631105 (BASIC SALARY - I-MEKONG, $10.0k)
+- **`gl.v_budget_lines` change:** none (view re-renders automatically because depts come from `plan.account_map.usali_dept`).
+- **No app code change.** No deploy needed (page is `force-dynamic`).
+- **Verification (Apr 2026, live):** Spa Rev $2.0k / Exp $1.3k · Activities Rev $1.6k / Exp $5.0k · Mekong Cruise Rev $1.1k / Exp $0.8k · Other Operated Rev $6.0k / Exp $0.6k. All four depts now have own budget rows.
+- **Related issue not addressed:** account 631104 ("FARM & ACTIVITES") covers both farm staff and activity guides — single budget line. Tagged Activities for now since farm experiences are part of the Activities USALI bucket at this property. Split later if granular farm P&L is wanted.
+
+### 2026-05-03 (later) — Knowledge v1: upload + classify + search + Q/A
+
+- **`/knowledge` rebuilt** from Phase-2 stub into a 3-tab workspace (`🔎 Search · 💬 Ask · ⬆ Upload`). Single client component (`app/knowledge/_components/KnowledgeApp.tsx`); page shell remains server-component using existing `Banner` + `SubNav`.
+- **Upload pipeline (`/api/docs/ingest`, Node runtime):** drag-drop multi-file → `pdf-parse` v2 (PDFParse class API) / `mammoth` text extraction → Claude Haiku classifier with full schema (14 doc_types incl. `marketing`, 5 importance tiers, per-type fields: `external_party`, `valid_from/until`, `parties`, `reference_number`, `amount`, `period_year`, `sensitivity`, rich `keywords[]`/`tags[]`/`summary`) → atomic upload to right bucket (sensitivity-based: documents-public/internal/confidential/restricted) + INSERT INTO `docs.documents`. Rolls back storage on insert failure. Stores `body_markdown` only for editable types (sop, template, kb_article, research, note, presentation).
+- **Q/A pipeline (`/api/docs/ask`, Node runtime):** keyword retrieval via `public.docs_topk(q, 8)` RPC (no embeddings — relies on rich keyword extraction) → Claude Sonnet 4.6 synthesis with `[#N]` citation tokens. Confidence gate: top rank < 0.05 → `"I don't have a clear answer in your indexed docs."` Returns answer + citations[] + chunks_used[] + confidence so UI can render clickable citation chips.
+- **Search pipeline (`/api/docs/search`):** thin wrapper over `public.docs_search(q, type, importance, party, year, lim)` RPC. Filters: doc_type, importance, party (ILIKE), year (matches valid_from/until/period_year). Order: `ts_rank DESC, valid_from DESC, created_at DESC`.
+- **DB migration `docs_knowledge_v1_indexes_importance_search`:**
+  - Added `docs` to `pgrst.db_schemas` (MERGE — kept existing public/marketing/governance/guest/gl/suppliers/fa/inv/proc/sales/ops/plan/dq/kpi).
+  - Added `docs.documents.importance` text NOT NULL DEFAULT 'standard' with check constraint (`critical|standard|note|research|reference`).
+  - GIN indexes on `search_tsv`, `keywords`, `tags` + b-tree on `doc_type`, `importance`, `external_party`, partial on `valid_until WHERE NOT NULL`.
+  - `docs.tsv_build()` trigger auto-rebuilds `search_tsv` from title + title_lo + title_fr + external_party (weight A) + keywords + tags (weight B) + summary (weight C) + first 8k chars of body_markdown (weight D). Uses `simple` config (avoids English stemmer breaking on Lao/multilingual content). Backfilled all 185 existing rows.
+  - 2 SECURITY INVOKER RPCs in `public` schema: `docs_search()` returns 13-col ranked list; `docs_topk()` returns top-k with `ts_headline`-extracted body excerpts for synthesis. Both granted to `authenticated, anon`.
+- **Doc-viewer signed URLs (`/api/docs/signed-url`):** 10-minute TTL signed URLs from private buckets. Used by both Search (Open button) and Ask (citation click).
+- **Sensitivity-based bucket routing in ingest:** `restricted → documents-restricted | confidential → documents-confidential | public → documents-public | internal → documents-internal`. Path convention: `{doc_type}/{year}/{subtype-slug}/{title-slug}-{ts36}{ext}`.
+- **Packages added:** `pdf-parse@^2.4.5`, `mammoth@^1.12.0`. Note: pdf-parse v2 uses class API (`new PDFParse({data}).getText()`), not the v1 default-function. PPTX/XLSX text extraction deferred to v2 — current handler returns `''` and classifier falls back to filename-only (still produces useful classification for visual-heavy formats).
+- **Auth pattern:** all `/api/docs/*` routes use `getSupabaseAdmin()` (service-role) since portal runs anon-only behind a password gate. RLS still enforced on `docs.documents` for any direct anon-key reads.
+- **Verification gates:** `npx tsc --noEmit` exit 0. Zero hardcoded `fontSize` literals in new code. Zero `USD ` prefix usage. All inline styles resolve through existing CSS vars (`--moss`, `--paper-pure`, `--ink`, `--brass`, `--mono`, `--serif`, `--t-*`, `--ls-extra`, `--st-*-bg/bd/tx`).
+- **What's intentionally deferred to v2:** OpenAI embeddings + `docs.chunks` table (semantic recall), OCR fallback for scanned PDFs (Claude Vision), MD conversion for SOP/template (currently full text in body_markdown), per-doc edit/override of AI classification, multilingual auto-translation of titles, partner directory view, expiry alert cron, WhatsApp chat surface for staff Q/A.

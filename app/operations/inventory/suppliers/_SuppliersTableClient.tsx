@@ -12,13 +12,13 @@ import type { SupplierSummaryRow } from '../_data';
 const mono: React.CSSProperties = { fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' };
 
 function statusToPill(s: string) {
+  // DB constraint: active | suspended | terminated | prospect
   switch (s) {
-    case 'active':   return <StatusPill tone="active">Active</StatusPill>;
-    case 'inactive': return <StatusPill tone="inactive">Inactive</StatusPill>;
-    case 'pending':  return <StatusPill tone="pending">Pending</StatusPill>;
-    case 'suspended':
-    case 'blocked':  return <StatusPill tone="expired">{s}</StatusPill>;
-    default:         return <StatusPill tone="info">{s}</StatusPill>;
+    case 'active':     return <StatusPill tone="active">Active</StatusPill>;
+    case 'prospect':   return <StatusPill tone="pending">Prospect</StatusPill>;
+    case 'suspended':  return <StatusPill tone="expired">Suspended</StatusPill>;
+    case 'terminated': return <StatusPill tone="inactive">Terminated</StatusPill>;
+    default:           return <StatusPill tone="info">{s}</StatusPill>;
   }
 }
 
