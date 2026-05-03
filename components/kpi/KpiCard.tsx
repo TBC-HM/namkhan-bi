@@ -88,13 +88,20 @@ export default function KpiCard({
     tooltip ??
     [label, delta, hint].filter(Boolean).join(' · ');
 
+  // Render into the canonical .kpi-box layout so KpiCard matches OpsKpiTile,
+  // KpiBox, and inline tiles. Same delta-top / value / label / sub structure.
+  const deltaCls = deltaTone === 'pos' ? 'pos' : deltaTone === 'neg' ? 'neg' : 'flat';
   return (
-    <div className="kpi-card" data-tooltip={tip || undefined}>
-      <div className={`kpi-num ${numCls}`}>{display}</div>
-      <div className="kpi-lbl">{label}</div>
-      {secondary && <div className="kpi-secondary">{secondary}</div>}
-      {delta && <div className={`kpi-delta ${deltaTone || 'neutral'}`}>{delta}</div>}
-      {hint && !delta && <div className="kpi-secondary">{hint}</div>}
+    <div className="kpi-box" data-tooltip={tip || undefined} data-state={greyed ? 'data-needed' : 'live'}>
+      {delta && (
+        <div className="kpi-box-deltas">
+          <span className={`kpi-box-delta ${deltaCls}`}>{delta}</span>
+        </div>
+      )}
+      <div className={`kpi-box-value ${numCls === 'greyed' ? 'lorem' : numCls}`}>{display}</div>
+      <div className="kpi-tile-scope">{label}</div>
+      {secondary && <div className="kpi-tile-sub">{secondary}</div>}
+      {hint && !delta && <div className="kpi-tile-sub">{hint}</div>}
     </div>
   );
 }

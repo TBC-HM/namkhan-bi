@@ -33,9 +33,9 @@ export default async function B2bKpiStrip() {
       }}
     >
       {kpis.map((kp) => (
-        <div key={kp.scope} className="kpi-tile" data-tooltip={`${kp.scope} · ${kp.sub}`}>
+        <div key={kp.scope} className="kpi-box" data-tooltip={`${kp.scope} · ${kp.sub}`}>
           <div className="kpi-tile-scope">{kp.scope}</div>
-          <div className={`kpi-tile-value ${TONE_CLS[kp.tone] ?? ''}`.trim()}>{kp.value}</div>
+          <div className={`kpi-box-value ${TONE_CLS[kp.tone] ?? ''}`.trim()}>{kp.value}</div>
           <div className="kpi-tile-sub">{kp.sub}</div>
         </div>
       ))}

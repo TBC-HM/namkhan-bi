@@ -307,9 +307,9 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
 function Kpi({ scope, value, sub, tone = 'flat' }: { scope: string; value: string; sub: string; tone?: 'flat' | 'up' | 'warn' | 'bad' }) {
   const cls = tone === 'up' ? 'pos' : tone === 'warn' ? 'warn' : tone === 'bad' ? 'neg' : '';
   return (
-    <div className="kpi-tile" data-tooltip={`${scope} · ${sub}`}>
+    <div className="kpi-box" data-tooltip={`${scope} · ${sub}`}>
       <div className="kpi-tile-scope">{scope}</div>
-      <div className={`kpi-tile-value ${cls}`.trim()}>{value}</div>
+      <div className={`kpi-box-value ${cls}`.trim()}>{value}</div>
       <div className="kpi-tile-sub">{sub}</div>
     </div>
   );

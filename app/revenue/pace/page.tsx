@@ -290,9 +290,9 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
 function Kpi({ scope, value, sub, tone = 'flat', lorem = false }: { scope: string; value: string; sub: string; tone?: 'flat' | 'up' | 'warn' | 'bad'; lorem?: boolean }) {
   const cls = lorem ? 'lorem' : tone === 'up' ? 'pos' : tone === 'warn' ? 'warn' : tone === 'bad' ? 'neg' : '';
   return (
-    <div className="kpi-tile" data-tooltip={`${scope} · ${sub}`}>
+    <div className="kpi-box" data-tooltip={`${scope} · ${sub}`}>
       <div className="kpi-tile-scope">{scope}</div>
-      <div className={`kpi-tile-value ${cls}`.trim()}>{value}</div>
+      <div className={`kpi-box-value ${cls}`.trim()}>{value}</div>
       <div className="kpi-tile-sub">{sub}</div>
     </div>
   );

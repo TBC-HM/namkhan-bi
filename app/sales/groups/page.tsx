@@ -126,9 +126,9 @@ export default async function GroupsPage() {
 
 function Kpi({ scope, value, sub, lorem = false }: { scope: string; value: string; sub: string; lorem?: boolean }) {
   return (
-    <div className="kpi-tile" data-tooltip={`${scope} · ${sub}`}>
+    <div className="kpi-box" data-tooltip={`${scope} · ${sub}`}>
       <div className="kpi-tile-scope">{scope}</div>
-      <div className={`kpi-tile-value${lorem ? ' lorem' : ''}`}>{value}</div>
+      <div className={`kpi-box-value${lorem ? ' lorem' : ''}`}>{value}</div>
       <div className="kpi-tile-sub">{sub}</div>
     </div>
   );

@@ -21,17 +21,17 @@ export default function HistoryPage() {
   return (
     <>
       <div className="kpi-strip cols-4">
-        <div className="kpi-tile">
+        <div className="kpi-box">
           <div className="kpi-label">Runs (mock)</div>
           <div className="kpi-value">{totalRuns}</div>
           <div className="kpi-deltas">last 7 days</div>
         </div>
-        <div className="kpi-tile">
+        <div className="kpi-box">
           <div className="kpi-label">Total Cost</div>
           <div className="kpi-value">${totalCost.toFixed(2)}</div>
           <div className="kpi-deltas">across all agents</div>
         </div>
-        <div className="kpi-tile">
+        <div className="kpi-box">
           <div className="kpi-label">Avg Duration</div>
           <div className="kpi-value">{avgDuration.toFixed(1)}s</div>
           <div className="kpi-deltas">per run</div>

@@ -63,9 +63,9 @@ export default async function RosterPage() {
           { scope: 'Productivity',     value: 'lorem',                 sub: 'needs deal data',                       lorem: true  },
           { scope: 'Comp accruals',    value: 'lorem',                 sub: 'needs payroll_monthly join',            lorem: true  },
         ].map((k) => (
-          <div key={k.scope} className="kpi-tile" data-tooltip={`${k.scope} · ${k.sub}`}>
+          <div key={k.scope} className="kpi-box" data-tooltip={`${k.scope} · ${k.sub}`}>
             <div className="kpi-tile-scope">{k.scope}</div>
-            <div className={`kpi-tile-value${k.lorem ? ' lorem' : ''}`}>{k.value}</div>
+            <div className={`kpi-box-value${k.lorem ? ' lorem' : ''}`}>{k.value}</div>
             <div className="kpi-tile-sub">{k.sub}</div>
           </div>
         ))}

@@ -1,18 +1,21 @@
 // components/ops/OpsKpiTile.tsx
-// Block 4 — KPI tile for operations sub-tabs.
-// Larger format than KpiCard, allows inline "Data needed" badge per /revenue IA standard.
+//
+// Legacy shim that renders into the canonical .kpi-box CSS so OpsKpiTile,
+// KpiBox, KpiCard, and inline tiles all share one visual rule set.
+// New code should use <KpiBox/> from components/kpi/KpiBox directly —
+// the structured props give better tooltips and locked formatting.
 
 import { ReactNode } from 'react';
 
 interface Props {
-  scope: string;            // small uppercase eyebrow, e.g. "Rooms ready"
-  value: ReactNode;         // big numeric value or "—"
-  label?: string;           // italic serif sub-label
-  delta?: string;           // sub2 mono delta line
+  scope: string;
+  value: ReactNode;
+  label?: string;
+  delta?: string;
   deltaTone?: 'up' | 'dn' | 'flat';
-  needs?: string;           // "Data needed · roster" — inline yellow badge
-  valueColor?: string;      // override for warn/bad colour on value
-  tooltip?: string;         // hover tooltip — definition · period · source · calc
+  needs?: string;
+  valueColor?: string;
+  tooltip?: string;
 }
 
 export default function OpsKpiTile({
@@ -26,40 +29,24 @@ export default function OpsKpiTile({
   tooltip,
 }: Props) {
   const tip = tooltip ?? [scope, label, delta].filter(Boolean).join(' · ');
-  const deltaCls = deltaTone === 'up' ? 'pos' : deltaTone === 'dn' ? 'neg' : 'neu';
+  const deltaCls = deltaTone === 'up' ? 'pos' : deltaTone === 'dn' ? 'neg' : 'flat';
+  const dataNeeded = !!needs;
   return (
-    <div className="kpi-tile" data-tooltip={tip || undefined}>
-      <div>
-        <div className="kpi-tile-scope">{scope}</div>
-        <div
-          className="kpi-tile-value"
-          style={valueColor ? { color: valueColor } : undefined}
-        >
-          {value}
+    <div className="kpi-box" data-tooltip={tip || undefined} data-state={dataNeeded ? 'data-needed' : 'live'}>
+      {delta && (
+        <div className="kpi-box-deltas">
+          <span className={`kpi-box-delta ${deltaCls}`}>{delta}</span>
         </div>
+      )}
+      <div
+        className={`kpi-box-value${dataNeeded ? ' lorem' : ''}`}
+        style={valueColor && !dataNeeded ? { color: valueColor } : undefined}
+      >
+        {value}
       </div>
-      <div>
-        {label && <div className="kpi-tile-sub" style={{ fontStyle: 'italic', fontFamily: 'var(--serif)', fontSize: "var(--t-md)", color: 'var(--ink-soft)', marginTop: 6 }}>{label}</div>}
-        {delta && <div className={`kpi-tile-delta ${deltaCls}`} style={{ marginTop: 2 }}>{delta}</div>}
-        {needs && (
-          <span style={{
-            display: 'inline-block',
-            background: 'var(--st-warn-bg)',
-            border: '1px solid var(--st-warn-bd)',
-            color: 'var(--brass)',
-            fontSize: 'var(--t-xs)',
-            padding: '2px 7px',
-            borderRadius: 4,
-            textTransform: 'uppercase',
-            letterSpacing: 'var(--ls-loose)',
-            marginTop: 4,
-            fontFamily: 'var(--mono)',
-            fontWeight: 600,
-          }}>
-            {needs}
-          </span>
-        )}
-      </div>
+      <div className="kpi-tile-scope">{scope}</div>
+      {label && <div className="kpi-box-sub-label">{label}</div>}
+      {dataNeeded && <span className="kpi-box-pill">{needs}</span>}
     </div>
   );
 }

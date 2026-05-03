@@ -35,7 +35,7 @@ export default function LoremPage({ pillar, tab, lede, kpis, sections, dataSourc
         {kpis.map((k) => (
           <div
             key={k.scope}
-            className="kpi-tile"
+            className="kpi-box"
             data-tooltip={`${k.scope} · ${k.sub ?? 'awaiting data'}`}
           >
             <div className="kpi-tile-scope">{k.scope}</div>

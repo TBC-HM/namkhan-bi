@@ -25,15 +25,15 @@ export function Kpi({ label, value, kind='number', hint, status='neutral', greye
   else if (kind === 'number' && typeof value === 'number') display = fmtNumber(value);
   else if (typeof value === 'string') display = value;
 
-  const cls = status === 'good' ? 'good' : status === 'bad' ? 'bad' : '';
+  const cls = status === 'good' ? 'pos' : status === 'bad' ? 'neg' : status === 'warn' ? 'warn' : '';
   const tip = tooltip ?? [label, hint].filter(Boolean).join(' · ');
 
   return (
-    <div className={`kpi ${cls} ${greyed ? 'greyed-out' : ''}`} data-tooltip={tip || undefined}>
-      <div className="kpi-label">{label}</div>
-      <div className="kpi-value">{display}</div>
-      {secondary && <div className="kpi-value-secondary">{secondary}</div>}
-      {hint && <div className="kpi-value-secondary">{hint}</div>}
+    <div className="kpi-box" data-tooltip={tip || undefined} data-state={greyed ? 'data-needed' : 'live'}>
+      <div className={`kpi-box-value ${greyed ? 'lorem' : cls}`}>{display}</div>
+      <div className="kpi-tile-scope">{label}</div>
+      {secondary && <div className="kpi-tile-sub">{secondary}</div>}
+      {hint && <div className="kpi-tile-sub">{hint}</div>}
     </div>
   );
 }

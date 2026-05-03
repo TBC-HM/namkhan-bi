@@ -406,6 +406,114 @@ button { font-family: inherit; }
   box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.4);
 }
 
+/* ===== Canonical KpiBox =====
+ * THE locked KPI box for every pillar (user spec 2026-05-03,
+ * docs/11_BRAND_AND_UI_STANDARDS.md).
+ *
+ * Layout:
+ *    delta row    (top, sans small muted, ▲ +5.2pp STLY  ▼ −3.1pp Bgt)
+ *    primary value(center, italic Fraunces large)
+ *    label        (mono uppercase letterspaced small)
+ *    needs pill   (bottom-right, amber DATA NEEDED, only when state="data-needed")
+ *
+ * Hover: 1px lift + brass-soft border + soft shadow (consistent with .kpi-tile).
+ */
+.kpi-box {
+  position: relative;
+  background: var(--paper-warm);
+  border: 1px solid var(--paper-deep);
+  border-radius: 8px;
+  padding: 14px 16px;
+  min-height: 108px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: box-shadow 140ms ease, transform 140ms ease, border-color 140ms ease;
+}
+.kpi-box:hover {
+  box-shadow: 0 6px 18px -8px rgba(28, 24, 21, 0.18);
+  border-color: var(--brass-soft);
+  transform: translateY(-1px);
+}
+.kpi-box[data-state="data-needed"] {
+  background: var(--paper-deep);
+  border-style: dashed;
+}
+.kpi-box-deltas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-family: var(--sans);
+  font-size: var(--t-xs);
+  color: var(--ink-mute);
+  letter-spacing: 0.02em;
+}
+.kpi-box-delta { white-space: nowrap; }
+.kpi-box-delta.pos { color: var(--moss); }
+.kpi-box-delta.neg { color: var(--st-bad); }
+.kpi-box-delta.flat { color: var(--ink-mute); }
+
+/* Primary value + label — KpiBox uses .kpi-tile-value + .kpi-tile-scope so
+ * existing .kpi-tile rules apply. Override layout only: value above label,
+ * tighter spacing, no margin-top on value. */
+.kpi-box .kpi-tile-value { margin-top: 4px; }
+.kpi-box .kpi-tile-scope { margin-top: 0; }
+
+/* Alias .kpi-box-value to .kpi-tile-value so both class names render identically.
+ * (Some legacy callers + the linter use .kpi-box-value; the canonical class is
+ * .kpi-tile-value but both must produce the same italic-serif treatment.) */
+.kpi-box-value {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: var(--t-2xl);
+  letter-spacing: var(--ls-tight);
+  line-height: 1.1;
+  color: var(--ink);
+  margin-top: 4px;
+}
+.kpi-box-value.lorem,
+.kpi-box-value.greyed { color: var(--ink-faint); }
+.kpi-box-value.pos    { color: var(--moss); }
+.kpi-box-value.neg    { color: var(--st-bad); }
+.kpi-box-value.warn   { color: var(--brass); }
+
+.kpi-box-needs {
+  font-family: var(--sans);
+  font-size: var(--t-xs);
+  color: var(--ink-mute);
+  font-style: italic;
+  margin-top: auto;
+  line-height: 1.4;
+}
+.kpi-box-pill {
+  position: absolute;
+  bottom: 10px;
+  right: 12px;
+  background: var(--st-warn-bg);
+  border: 1px solid var(--st-warn-bd);
+  color: var(--brass);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: var(--ls-extra);
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  max-width: 60%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kpi-box-sub-label {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: var(--t-md);
+  color: var(--ink-soft);
+  margin-top: 2px;
+  line-height: 1.3;
+}
+
 /* ===== Canonical KPI tile + canonical panel =====
  * The "Soho House" container language. Use .kpi-tile on every KPI tile and
  * .panel on every page-level container instead of inline-styled divs so every

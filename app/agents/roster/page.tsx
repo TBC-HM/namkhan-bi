@@ -77,7 +77,7 @@ export default function RosterPage() {
   return (
     <>
       <div className="kpi-strip cols-4">
-        <div className="kpi-tile">
+        <div className="kpi-box">
           <div className="kpi-label">Total Agents</div>
           <div className="kpi-value">{totals.total}</div>
           <div className="kpi-deltas">configured</div>
@@ -92,7 +92,7 @@ export default function RosterPage() {
           <div className="kpi-value">{totals.draft}</div>
           <div className="kpi-deltas">awaiting deployment</div>
         </div>
-        <div className="kpi-tile">
+        <div className="kpi-box">
           <div className="kpi-label">Scheduled</div>
           <div className="kpi-value">{totals.scheduled}</div>
           <div className="kpi-deltas">cron-triggered</div>
