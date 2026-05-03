@@ -1,17 +1,18 @@
 'use client';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
-import { useCcy } from '@/components/ui/CurrencyToggle';
-import { fmtMoney, FX_LAK_PER_USD } from '@/lib/format';
+import { fmtMoney } from '@/lib/format';
 
+// Pinned to USD per Cowork audit 2026-05-03 currency rule.
+// `mv_revenue_by_usali_dept.revenue` is stored USD-only — no paired *_lak — so
+// we don't synthesize LAK via hardcoded FX. To enable LAK, add `revenue_lak`
+// to the source matview first.
 export function MonthlyByDeptChart({ rows }: { rows: any[] }) {
-  const { ccy } = useCcy();
-  const conv = ccy === 'USD' ? 1 : FX_LAK_PER_USD;
   const grouped: Record<string, any> = {};
   rows.forEach(r => {
     const m = r.month;
     if (!grouped[m]) grouped[m] = { month: m, Rooms: 0, 'F&B': 0, 'Other Operated': 0, Retail: 0 };
     const dept = r.usali_dept;
-    grouped[m][dept] = (grouped[m][dept] || 0) + Number(r.revenue || 0) * conv;
+    grouped[m][dept] = (grouped[m][dept] || 0) + Number(r.revenue || 0);
   });
   const series = Object.values(grouped).sort((a: any, b: any) => a.month.localeCompare(b.month));
   return (
@@ -19,9 +20,9 @@ export function MonthlyByDeptChart({ rows }: { rows: any[] }) {
       <BarChart data={series}>
         <CartesianGrid stroke="#2a2a2a" strokeDasharray="3 3" vertical={false} />
         <XAxis dataKey="month" stroke="#7a7670" fontSize={10} tickFormatter={(m) => m?.slice(0, 7)} />
-        <YAxis stroke="#7a7670" fontSize={10} tickFormatter={(v) => fmtMoney(v / conv, ccy)} />
+        <YAxis stroke="#7a7670" fontSize={10} tickFormatter={(v) => fmtMoney(v, 'USD')} />
         <Tooltip contentStyle={{ background: '#161616', border: '1px solid #2a2a2a', fontSize: 12 }}
-                 formatter={(v: any) => fmtMoney(Number(v) / conv, ccy)} />
+                 formatter={(v: any) => fmtMoney(Number(v), 'USD')} />
         <Legend wrapperStyle={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase' }} />
         <Bar dataKey="Rooms" stackId="a" fill="#bfa980" />
         <Bar dataKey="F&B" stackId="a" fill="#7a9b6a" />
