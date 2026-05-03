@@ -493,13 +493,17 @@ export interface MaterialityThreshold {
 export async function getMaterialityThreshold(): Promise<MaterialityThreshold | null> {
   const { data, error } = await supabaseGl
     .from('materiality_thresholds')
-    .select('pct_threshold, abs_threshold_usd')
-    .eq('scope', 'global')
-    .single();
-  if (error || !data) return null;
+    .select('pct_threshold, abs_threshold_usd, scope')
+    .limit(5);
+  if (error || !data || data.length === 0) {
+    if (error) console.error('[gl] getMaterialityThreshold', error);
+    return null;
+  }
+  // Prefer global scope, otherwise take first row
+  const pick = (data as any[]).find(r => r.scope === 'global') ?? data[0];
   return {
-    pct: Number((data as any).pct_threshold || 5),
-    abs_usd: Number((data as any).abs_threshold_usd || 1000),
+    pct: Number(pick.pct_threshold || 5),
+    abs_usd: Number(pick.abs_threshold_usd || 1000),
   };
 }
 
