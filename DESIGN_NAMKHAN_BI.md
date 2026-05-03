@@ -297,3 +297,79 @@ These pre-date all design rounds and need their own engineering work:
 4. **Don't introduce new fontSize / color hex literals** — use tokens
 5. **Don't introduce new tile or table markup** — wrap an existing canonical component
 6. If a legacy scope (`.bc-redesign` / `.pnl-page`) ever pops up again, the fix is `!important` CSS overrides, not refactoring 1500 lines of mockup CSS
+
+---
+
+## Mandatory session ritual (locked 2026-05-03)
+
+**EVERY** session that touches Namkhan BI UI / design / components / styles MUST follow this loop. This is non-negotiable per user instruction.
+
+### At session START
+1. Read this file (`DESIGN_NAMKHAN_BI.md`) end-to-end
+2. Read `docs/11_BRAND_AND_UI_STANDARDS.md` if a new component spec is being defined
+3. Spot-check 1-2 canonical imports are still present (`grep -l 'from .@/components/kpi/KpiBox'` etc.)
+4. If the doc says a verification grep should run, run it before claiming the codebase is consistent
+
+### At session END (before declaring work done)
+1. Run `bash date +%Y-%m-%d` to get today's date — never invent it
+2. Append an entry to the "Update history" section at the bottom of THIS file with:
+   - Today's date as a `### YYYY-MM-DD` heading
+   - Bullet list of what changed (new components, new tokens, new pages migrated, new !important overrides, new format helpers)
+   - Any new verification grep that future sessions should run
+   - Any new known-debt item or NEW pages that bypass the canonical pattern
+3. If a NEW canonical component was added: also append a section to `docs/11_BRAND_AND_UI_STANDARDS.md`
+4. Commit the doc update with the deploy commit (don't leave it floating uncommitted)
+5. Update memory entries that became stale, but keep this doc as primary source of truth
+
+### Why this is locked
+Without the ritual, design rules drift across sessions. One session ships a new component but the next session doesn't know it's canonical and rebuilds from scratch (or worse, breaks the rule). The user explicitly called this an "auto cycle" 2026-05-03. The doc-update closes the loop.
+
+The auto-memory pointer at `reference_namkhan_bi_design_system.md` always lists this doc first; the ritual memory at `feedback_namkhan_bi_design_session_ritual.md` mandates the read+update behavior. Both load every session via `MEMORY.md`.
+
+---
+
+## Update history
+
+Append-only. Newest at top. Date heading + bullet changes.
+
+### 2026-05-03 — initial canonical lockdown (this session)
+- New components shipped (canonical):
+  - `components/kpi/KpiBox.tsx` — locked spec, auto-formatters, structured deltas, data-needed state
+  - `components/ui/DataTable.tsx` — sortable, columns + rows API, brass-mono header voice
+  - `components/ui/StatusPill.tsx` — 5-tone locked palette
+  - `components/layout/PageHeader.tsx` — eyebrow + h1 + lede + rightSlot
+- Legacy components refactored to render canonical markup:
+  - `KpiCard`, `Kpi`, `OpsKpiTile` — all now emit `.kpi-box` markup
+- 4 sales tables migrated to `<DataTable>` via client-component wrappers:
+  - `B2bContractsTable`, `B2bPerformanceTable`, `GroupsTable`, `RosterTable`
+- Format helpers added to `lib/format.ts`:
+  - `fmtKpi(n, unit, dp?)`, `fmtDelta(n, unit, period?, opts?)`, `fmtTableUsd`, `fmtIsoDate`, `fmtCountry`, `fmtBool`, `EMPTY`
+- Token additions to `:root`:
+  - 8-step type scale (`--t-xs` 10px → `--t-3xl` 30px)
+  - Letter-spacing scale (`--ls-tight`, `--ls-loose`, `--ls-extra`)
+  - Status tints (`--st-good-bg/bd`, `--st-warn-bg/bd`, `--st-bad-bg/bd`, `--st-info-bg/bd/tx`)
+  - Channel palette (`--ch-direct/ota/wholesale/other/corporate/groups`)
+  - Mockup-vocab aliases (`--card`, `--bad`, `--ok`, `--body`, `--num`, `--tan`, `--green`, `--green-2`, `--tan-2`, etc.)
+  - `--paper-pure` for explicit white surfaces
+- `!important` overrides shipped:
+  - `table:not(.data-table)` — every legacy `<table>` inherits canonical brass-mono header + paper-warm bg
+  - `.pnl-page .kpi *` — `/finance/pnl` legacy markup matches `.kpi-box` typography
+  - `.bc-redesign *` — `/revenue/*` mockup CSS re-bound to brand palette via `app/revenue/_redesign/overrideCss.ts`
+- App-wide sweeps:
+  - `USD ` prefix → `$` (every JSX text literal and template literal)
+  - 529 hardcoded `fontSize` literals → token references
+  - 392 hardcoded brand-color hex → CSS variables
+  - 53 `'Georgia, serif'` → `var(--serif)`
+  - 47 `'Menlo, monospace'` → `var(--mono)`
+  - Em-dash (`—`) for empty cells everywhere
+  - ISO `YYYY-MM-DD` for every date
+- Hidden site-wide: `.design-note`, `.write-banner`, `.warn-banner`, `.gr-sim-banner`, `.data-source-line`, `.period-banner` (dev-callout boxes; not for end-user UX)
+- Hover affordance shipped: `.kpi-box:hover` + `[data-tooltip]:hover::after` (12px AAA-contrast tooltip with 320px max-width and 120ms fade-in)
+- Mobile responsive: 3-tier collapse for `.card-grid-*` and `.kpi-strip.cols-*` at 1100/760/480 breakpoints
+- Chart hover tooltips: `<title>` SVG elements on every data point in `lib/svgCharts.ts` + Recharts `labelFormatter` showing `value · period · source`
+- Doc + spec:
+  - Created this file (`DESIGN_NAMKHAN_BI.md`, 350+ lines)
+  - Appended ~120 lines to `docs/11_BRAND_AND_UI_STANDARDS.md` (KpiBox + DataTable specs)
+  - Locked the auto-cycle ritual in memory (`feedback_namkhan_bi_design_session_ritual.md`) and at the bottom of this doc
+- Verification gates run live: 0 hardcoded fontSize, 0 `USD ` prefix, 58/61 sampled routes return 200, 0 5xx
+- Pre-existing 500s NOT addressed: `/agents`, `/agents/roster`, `/agents/history` (last touched in `998e5f3`, predates all design rounds)
