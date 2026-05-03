@@ -1,0 +1,49 @@
+{
+  "name": "sales-proposal-builder · proposal-sent",
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": { "hook": "{{WEBHOOK_URL_PLACEHOLDER}}" },
+      "metadata": {
+        "comment": "POST from /api/sales/proposals/[id]/send. Payload: proposal_id, public_token, public_url, recipient_email, recipient_phone, guest_name, date_in, date_out, total_lak, email_subject, email_intro_md, email_outro_md, email_ps_md, blocks[]"
+      }
+    },
+    {
+      "id": 2,
+      "module": "google-email:ActionSendEmail",
+      "version": 4,
+      "parameters": { "__IMTCONN__": "{{CONNECTION_GMAIL}}" },
+      "mapper": {
+        "to": "{{1.recipient_email}}",
+        "cc": "sebastian@thenamkhan.com",
+        "subject": "{{1.email_subject}}",
+        "html": "<div style=\"font-family:Georgia,serif;max-width:640px;margin:0 auto;padding:24px\"><div style=\"background:linear-gradient(135deg,#1a2e21,#1c1815);color:#efe6d3;padding:60px 24px;text-align:center;border-radius:8px 8px 0 0\"><div style=\"font-size:11px;letter-spacing:0.3em;text-transform:uppercase;color:#b3a888\">The Namkhan</div><h1 style=\"font-size:32px;margin:12px 0 4px;font-weight:400;font-style:italic\">{{1.guest_name}}</h1><div style=\"color:#e6daC0;font-style:italic\">{{1.date_in}} — {{1.date_out}}</div></div><div style=\"padding:32px 24px;background:#f4ecd8;border-radius:0 0 8px 8px\"><div style=\"font-size:15px;line-height:1.65;white-space:pre-wrap;color:#1c1815\">{{1.email_intro_md}}</div><p style=\"text-align:center;margin:32px 0\"><a href=\"{{1.public_url}}\" style=\"background:#1a2e21;color:#efe6d3;padding:14px 28px;border-radius:6px;text-decoration:none;font-size:15px\">View your stay →</a></p><div style=\"font-size:15px;line-height:1.65;white-space:pre-wrap;color:#1c1815\">{{1.email_outro_md}}</div><div style=\"font-style:italic;color:#4a443c;margin-top:16px;font-size:14px\">{{1.email_ps_md}}</div><hr style=\"border:none;border-top:1px solid #d8cca8;margin:24px 0\"/><p style=\"font-size:11px;color:#7d7565;text-align:center\">The Namkhan, Luang Prabang · sebastian@thenamkhan.com</p></div></div>"
+      },
+      "metadata": { "comment": "Send branded HTML email" }
+    },
+    {
+      "id": 3,
+      "module": "twilio:sendMessage",
+      "version": 4,
+      "parameters": { "__IMTCONN__": "{{CONNECTION_TWILIO}}" },
+      "mapper": {
+        "from": "whatsapp:+14155238886",
+        "to": "whatsapp:{{1.recipient_phone}}",
+        "body": "Your stay drawn up — {{1.public_url}}\n\nSebastian, on behalf of the Namkhan team."
+      },
+      "filter": {
+        "name": "Has phone number",
+        "conditions": [[{"a":"{{1.recipient_phone}}","b":"","o":"text:notequal"}]]
+      },
+      "metadata": { "comment": "WhatsApp parallel — only if phone present" }
+    }
+  ],
+  "metadata": {
+    "version": 1,
+    "scenario": { "roundtrips": 1, "maxErrors": 3, "autoCommit": true, "autoCommitTriggerLast": true },
+    "designer": { "orphans": [] },
+    "notes": "Generated 2026-05-03 by Cowork. Reconnect Gmail + Twilio connections before activating. Replace WEBHOOK_URL_PLACEHOLDER with the URL Make assigns after import."
+  }
+}
