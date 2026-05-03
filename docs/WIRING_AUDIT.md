@@ -113,5 +113,22 @@ DEFER cases (wiring correct, source data missing or schema migration required):
 | `lib/data.ts` | `getDqIssues()` | `dq_known_issues.*` | `v_dq_open` with severity shim (`CRITICAL→high`, `WARNING→medium`, `INFO→low`) so existing UI buckets keep working | FIXED |
 | `gl.gl_entries` | data load | empty | 2,924 unique rows (`upload_id 0884da5d-c9d7...`); deduplicated post-load (Edge Function ran twice) | FIXED |
 | `gl.mv_usali_pl_monthly` | matview | stale | refreshed | FIXED |
+| `gl.mv_usali_pl_monthly` | refresh schedule | none — manual only | `cron.job` 37 every 4h at xx:20 (`refresh-gl-mv-usali-pl-monthly`) | FIXED |
+| `public.v_dq_open` | view | did not exist | created — joins `dq.violations` + `dq.rules`, returns full row list incl. severity/title/description/category. Granted SELECT to anon/authenticated/service_role | FIXED |
+
+## DQ inspection (the 17 action-required rules)
+
+What's open right now (verified 2026-05-03 via `public.v_dq_open WHERE severity IN (CRITICAL, WARNING)`):
+
+| Severity | Rule | Count | Auto-fix? | Note |
+|----------|------|-------|-----------|------|
+| CRITICAL | Cloudbeds vs QB rooms gap > 15% (VAT-adj) | 9 | NO | Reconciliation rule — needs operator review per period |
+| CRITICAL | Revenue drop > 50% MoM | 2 | NO | Triggered by Lao low-season swing (Feb→Mar). Real business signal, not a bug |
+| CRITICAL | Negative room rate | 1 | NO | Single misposted reservation — needs Cloudbeds correction |
+| WARNING | Daily occupancy = 0% on weekday | 4 | NO | 4 specific shoulder-season weekdays — real signal |
+| WARNING | Cancellation rate > 25% | 1 | NO | Currently 23.02%; threshold may need tuning |
+
+None of the 17 are auto-fixable from the wiring layer. They're correctly surfaced; resolution is operator workflow (review → resolve via `dq.violations.resolved_at`).
+
 
 
