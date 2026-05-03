@@ -19,23 +19,33 @@ interface Props {
 
 export default async function FinanceSnapshotPage({ searchParams }: Props) {
   const period = resolvePeriod(searchParams);
-  const cur = currentPeriod();
-  const prior = priorPeriod(cur);
 
-  const [plAll, houseRows, deptCur, aged] = await Promise.all([
+  // First pull every period of pl_section_monthly so we can locate the latest
+  // CLOSED month (calendar-current month often has $0 — audit fix 2026-05-03).
+  const [plAll, aged] = await Promise.all([
     getPlSectionsAll(),
-    getUsaliHouse([cur, prior]),
-    getUsaliDept([cur]),
     getAgedAr().catch(() => []),
   ]);
 
-  // Revenue from pl_section_monthly (income section)
   const incomeByPeriod = new Map<string, number>();
   const netByPeriod = new Map<string, number>();
   for (const r of plAll) {
     if (r.section === 'income') incomeByPeriod.set(r.period_yyyymm, Number(r.amount_usd || 0));
     if (r.section === 'net_earnings') netByPeriod.set(r.period_yyyymm, Number(r.amount_usd || 0));
   }
+  const periodsWithRev = Array.from(incomeByPeriod.entries())
+    .filter(([, v]) => v > 0)
+    .map(([k]) => k)
+    .sort()
+    .reverse();
+  const cur = periodsWithRev[0] || currentPeriod();
+  const prior = periodsWithRev[1] || priorPeriod(cur);
+
+  const [houseRows, deptCur] = await Promise.all([
+    getUsaliHouse([cur, prior]),
+    getUsaliDept([cur]),
+  ]);
+
   const totalRev = incomeByPeriod.get(cur) ?? 0;
   const priorTotal = incomeByPeriod.get(prior) ?? 0;
   const monthDelta = priorTotal ? ((totalRev - priorTotal) / priorTotal) * 100 : 0;

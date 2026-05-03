@@ -38,18 +38,27 @@ function fmtPctV(n: number | null | undefined, dp = 1): string {
 export default async function PnLPage({ searchParams }: Props) {
   const period = resolvePeriod(searchParams);
 
-  // Window selector (TODAY/7D/30D/90D/YTD) → period_yyyymm filter on gl.* tables
+  // Window selector (TODAY/7D/30D/90D/YTD) → period_yyyymm filter on gl.* tables.
+  // Always pull a 12-month look-back so we can locate the latest CLOSED month
+  // even when the calendar-current month has zero data (audit fix 2026-05-03).
   const win = ((searchParams.win as string) || '30D').toUpperCase() as PeriodWindow;
   const winPeriods = periodsForWindow(['TODAY','7D','30D','90D','YTD'].includes(win) ? win : '30D');
-  const cur = currentPeriod();
-  const prior = priorPeriod(cur);
+  const lookbackPeriods = (() => {
+    const out: string[] = [];
+    const today = new Date();
+    for (let i = 0; i < 13; i++) {
+      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    }
+    return out;
+  })();
+  const fetchPeriods = Array.from(new Set([...winPeriods, ...lookbackPeriods]));
 
   // Parallel fetch: gl.* + legacy daily KPI
-  const [plSections, plPrior, houseRows, deptRows, agSubcat, payrollSubcat, fbDeptOnly, otaCommissions, dqUnmapped, decisions, daily] = await Promise.all([
-    getPlSections(winPeriods),
-    getPlSections([prior]),
-    getUsaliHouse(winPeriods),
-    getUsaliDept(winPeriods),
+  const [plSections, houseRows, deptRows, agSubcat, payrollSubcat, fbDeptOnly, otaCommissions, dqUnmapped, decisions, daily] = await Promise.all([
+    getPlSections(fetchPeriods),
+    getUsaliHouse(fetchPeriods),
+    getUsaliDept(fetchPeriods),
     getUsaliPlBySubcat(winPeriods, 'A&G'),
     getUsaliPlBySubcat(winPeriods, 'Payroll & Related'),
     getUsaliDept(winPeriods).then(rs => rs.filter(r => r.usali_department === 'F&B')),
@@ -60,7 +69,15 @@ export default async function PnLPage({ searchParams }: Props) {
   ]);
   const agg = aggregateDaily(daily, period.capacityMode);
 
-  // KPI calculations from gl.* (use current period only for primary tiles)
+  // Pick the latest period that has actual revenue (skip current empty month).
+  const periodsWithRev = Array.from(new Set(
+    plSections.filter(r => r.section === 'income' && Number(r.amount_usd) > 0).map(r => r.period_yyyymm)
+  )).sort().reverse();
+  const cur = periodsWithRev[0] || currentPeriod();
+  const prior = periodsWithRev[1] || priorPeriod(cur);
+  const plPrior = plSections.filter(r => r.period_yyyymm === prior);
+
+  // KPI calculations from gl.* — `cur` is the latest closed month with revenue
   const totalRev = pickSection(plSections.filter(r => r.period_yyyymm === cur), 'income');
   const priorTotalRev = pickSection(plPrior, 'income');
   const revVsPriorPct = priorTotalRev ? ((totalRev - priorTotalRev) / priorTotalRev) * 100 : 0;
