@@ -24,7 +24,7 @@ import SourceMix from './_components/SourceMix';
 import LostReasonTape from './_components/LostReasonTape';
 
 import { getKpiDaily, aggregateDaily } from '@/lib/data';
-import { listInquiries, createProposalFromInquiry } from '@/lib/sales';
+import { listInquiries, createProposalFromInquiry, getSalesInquiriesKpis, getSalesTacticalAlerts } from '@/lib/sales';
 import { fmtMoney } from '@/lib/format';
 
 import { inquiryTriager } from '@/lib/agents/sales/inquiryTriager';
@@ -55,8 +55,12 @@ export default async function InquiriesPage() {
   // Exception: total hotel revenue MTD is wired via existing kpi.* helpers
   // (every booking flows through the inquiry/quote funnel by definition,
   // so until sales.quotes attribution exists, total revenue MTD = sales MTD).
-  // Live inquiries from sales schema. Falls back to mock if empty.
-  const liveInquiries = await listInquiries(260955, 30).catch(() => []);
+  // Live inquiries + KPI strip + tactical alerts in parallel
+  const [liveInquiries, kpis, derivedAlerts] = await Promise.all([
+    listInquiries(260955, 30).catch(() => []),
+    getSalesInquiriesKpis(260955).catch(() => null),
+    getSalesTacticalAlerts(260955).catch(() => []),
+  ]);
   const SCHEMA_LIVE = liveInquiries.length > 0;
   const liveDecisions: DecisionRow[] = liveInquiries.map((inq) => {
     const nights = inq.date_in && inq.date_out
@@ -164,7 +168,9 @@ export default async function InquiriesPage() {
         },
       ];
 
-  const alerts: TacticalAlert[] = [
+  // Live alerts derived from sales.* (SLA breaches, group rooming-list, stale, agent runs)
+  // Fallback to the original mock 9 only when no derived alerts exist AND schema is empty.
+  const mockAlerts: TacticalAlert[] = SCHEMA_LIVE ? [] : [
     {
       id: 'sa-vip-fit',
       severity: 'hi',
@@ -287,6 +293,9 @@ export default async function InquiriesPage() {
     },
   ];
 
+  // Final alert list: derived from real data when available, mock fallback otherwise.
+  const alerts: TacticalAlert[] = derivedAlerts.length > 0 ? derivedAlerts : mockAlerts;
+
   const dataNeed = SCHEMA_LIVE ? undefined : 'Data needed · sales schema';
 
   return (
@@ -326,7 +335,7 @@ export default async function InquiriesPage() {
         </span>
       </div>
 
-      {/* BLOCK 4: KPI row — 6 tiles */}
+      {/* BLOCK 4: KPI row — 6 tiles (5 wired from sales.* + 1 from kpi_daily) */}
       <div
         style={{
           display: 'grid',
@@ -337,35 +346,40 @@ export default async function InquiriesPage() {
       >
         <OpsKpiTile
           scope="Open inq · SLA at risk"
-          value="18 / 4"
-          label="4 past 1h target"
-          needs={dataNeed}
-          valueColor="var(--st-bad)"
+          value={kpis?.open_sla_at_risk.value ?? '— / —'}
+          label={kpis?.open_sla_at_risk.label ?? 'sales schema offline'}
+          needs={kpis?.open_sla_at_risk.live ? undefined : 'Data needed · sales.inquiries'}
+          valueColor={
+            kpis?.open_sla_at_risk.tone === 'bad'  ? 'var(--st-bad)'  :
+            kpis?.open_sla_at_risk.tone === 'warn' ? 'var(--brass)'   :
+            kpis?.open_sla_at_risk.tone === 'good' ? 'var(--moss-glow)' :
+            undefined
+          }
         />
         <OpsKpiTile
           scope="Median time to first reply"
-          value="2h 14m"
-          label="target 1h · LM −18m"
-          needs={dataNeed}
+          value={kpis?.median_first_reply.value ?? '—'}
+          label={kpis?.median_first_reply.label ?? 'sales schema offline'}
+          needs={kpis?.median_first_reply.live ? undefined : 'Data needed · sales.proposals'}
         />
         <OpsKpiTile
           scope="Auto-offer hit rate"
-          value="61%"
-          label="sent without edit · target 75%"
-          needs={dataNeed}
+          value={kpis?.auto_offer_hit_rate.value ?? '—'}
+          label={kpis?.auto_offer_hit_rate.label ?? 'sales schema offline'}
+          needs={kpis?.auto_offer_hit_rate.live ? undefined : 'Data needed · sales.proposals'}
           valueColor="var(--brass)"
         />
         <OpsKpiTile
           scope="Quote → Booking conv"
-          value="27%"
-          label="weighted 90d · LY +4 pts"
-          needs={dataNeed}
+          value={kpis?.quote_to_booking_conv.value ?? '—'}
+          label={kpis?.quote_to_booking_conv.label ?? 'sales schema offline'}
+          needs={kpis?.quote_to_booking_conv.live ? undefined : 'Data needed · sales.proposals'}
         />
         <OpsKpiTile
           scope="Open pipeline value"
-          value="$48,200"
-          label="18 open quotes · weighted"
-          needs={dataNeed}
+          value={kpis?.open_pipeline_value.value ?? '$—'}
+          label={kpis?.open_pipeline_value.label ?? 'sales schema offline'}
+          needs={kpis?.open_pipeline_value.live ? undefined : 'Data needed · sales.proposals'}
         />
         <OpsKpiTile
           scope="Sales revenue MTD"

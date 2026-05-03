@@ -472,3 +472,280 @@ export async function checkProposalRoomsAvail(proposalId: string): Promise<Propo
     rooms: rows,
   };
 }
+
+// ---------- /sales/inquiries KPI strip ----------
+// Single round-trip helper that returns all 6 KPI tiles + per-tile live flag.
+// Tiles whose underlying data isn't yet flowing (no proposals, no agent_runs)
+// return live=false so the page can show the data-needed pill.
+
+export type InqKpi = { value: string; label: string; live: boolean; tone?: 'good' | 'warn' | 'bad' | 'brass' };
+
+export interface SalesInquiriesKpis {
+  open_sla_at_risk: InqKpi;        // count(new) / count(new past 1h)
+  median_first_reply: InqKpi;      // proxy: proposals.created_at − inquiries.created_at
+  auto_offer_hit_rate: InqKpi;     // % proposals where brand_voice_check_passed AND no edits
+  quote_to_booking_conv: InqKpi;   // % proposals.cb_reservation_id / proposals.sent_at (90d)
+  open_pipeline_value: InqKpi;     // sum(total_usd) where status in (draft,sent,viewed)
+  sales_revenue_mtd: InqKpi;       // wired separately on page (kpi_daily aggregate)
+}
+
+export async function getSalesInquiriesKpis(propertyId: number = PROPERTY_ID): Promise<SalesInquiriesKpis> {
+  const sb = getSupabaseAdmin();
+
+  // 1) Open inquiries + SLA at risk
+  const { data: inqRows } = await sb
+    .schema('sales')
+    .from('inquiries')
+    .select('id,status,created_at')
+    .eq('property_id', propertyId);
+  const inqs = (inqRows ?? []) as { status: string; created_at: string }[];
+  const openCount = inqs.filter(r => r.status === 'new' || r.status === 'drafted').length;
+  const oneHourAgo = Date.now() - 60 * 60 * 1000;
+  const slaAtRisk = inqs.filter(r => (r.status === 'new' || r.status === 'drafted') && new Date(r.created_at).getTime() < oneHourAgo).length;
+
+  // 2/3/4/5) Proposals (one query, 90d window)
+  const ninetyDaysAgo = new Date(Date.now() - 90 * 86400000).toISOString();
+  const { data: propRows } = await sb
+    .schema('sales')
+    .from('proposals')
+    .select('id,status,total_usd,sent_at,signed_at,cb_reservation_id,created_at,updated_at')
+    .eq('property_id', propertyId)
+    .gte('created_at', ninetyDaysAgo);
+  const props = (propRows ?? []) as Array<{
+    status: string; total_usd: number | null; sent_at: string | null;
+    signed_at: string | null; cb_reservation_id: string | null;
+    created_at: string; updated_at: string;
+  }>;
+
+  const sentProps = props.filter(p => p.sent_at);
+  const wonProps = sentProps.filter(p => p.cb_reservation_id);
+  const conv = sentProps.length > 0 ? Math.round((wonProps.length / sentProps.length) * 100) : 0;
+
+  // Auto-offer hit rate: proxy = sent_at within 5 minutes of created_at (≈ no manual edit)
+  const autoOfferHits = sentProps.filter(p => {
+    if (!p.sent_at) return false;
+    const dt = new Date(p.sent_at).getTime() - new Date(p.created_at).getTime();
+    return dt < 5 * 60 * 1000;
+  });
+  const autoHitRate = sentProps.length > 0 ? Math.round((autoOfferHits.length / sentProps.length) * 100) : 0;
+
+  // Open pipeline value
+  const openProps = props.filter(p => ['draft','sent','viewed','approved'].includes(p.status));
+  const pipelineUsd = openProps.reduce((s, p) => s + Number(p.total_usd ?? 0), 0);
+
+  // Median time to first reply (proxy: minutes between inquiry created and FIRST proposal created)
+  let medianFirstReplyMin = 0;
+  let medianHasData = false;
+  if (props.length > 0) {
+    // Get inquiry timestamps for proposals that have inquiry_id
+    const inqIds = props.map(p => (p as any).inquiry_id).filter(Boolean) as string[];
+    if (inqIds.length > 0) {
+      const { data: inqTs } = await sb
+        .schema('sales')
+        .from('inquiries')
+        .select('id,created_at')
+        .in('id', inqIds);
+      const inqMap = new Map<string, number>(
+        ((inqTs ?? []) as { id: string; created_at: string }[]).map(r => [r.id, new Date(r.created_at).getTime()])
+      );
+      const deltas = props
+        .map(p => {
+          const iid = (p as any).inquiry_id as string | null;
+          if (!iid) return null;
+          const inqAt = inqMap.get(iid);
+          if (!inqAt) return null;
+          return (new Date(p.created_at).getTime() - inqAt) / 60000;
+        })
+        .filter((v): v is number => typeof v === 'number' && v >= 0)
+        .sort((a, b) => a - b);
+      if (deltas.length > 0) {
+        medianFirstReplyMin = Math.round(deltas[Math.floor(deltas.length / 2)]);
+        medianHasData = true;
+      }
+    }
+  }
+
+  return {
+    open_sla_at_risk: {
+      value: `${openCount} / ${slaAtRisk}`,
+      label: slaAtRisk > 0 ? `${slaAtRisk} past 1h target` : 'all within 1h target',
+      live: inqs.length > 0,
+      tone: slaAtRisk > 0 ? 'bad' : (openCount > 0 ? 'warn' : 'good'),
+    },
+    median_first_reply: {
+      value: medianHasData
+        ? (medianFirstReplyMin >= 60
+            ? `${Math.floor(medianFirstReplyMin / 60)}h ${medianFirstReplyMin % 60}m`
+            : `${medianFirstReplyMin}m`)
+        : '—',
+      label: medianHasData ? 'target 1h · proposal-create proxy' : 'no proposals yet',
+      live: medianHasData,
+    },
+    auto_offer_hit_rate: {
+      value: sentProps.length > 0 ? `${autoHitRate}%` : '—',
+      label: sentProps.length > 0 ? `sent without edit · target 75%` : '0 sent · last 90d',
+      live: sentProps.length > 0,
+      tone: 'brass',
+    },
+    quote_to_booking_conv: {
+      value: sentProps.length > 0 ? `${conv}%` : '—',
+      label: sentProps.length > 0 ? `${wonProps.length}/${sentProps.length} sent · last 90d` : '0 sent · last 90d',
+      live: sentProps.length > 0,
+    },
+    open_pipeline_value: {
+      value: openProps.length > 0 ? '$' + Math.round(pipelineUsd).toLocaleString('en-US') : '$—',
+      label: openProps.length > 0 ? `${openProps.length} open quote${openProps.length === 1 ? '' : 's'}` : '0 open quotes',
+      live: openProps.length > 0,
+    },
+    sales_revenue_mtd: {
+      value: '',  // wired by page (kpi_daily aggregate, separate code path)
+      label: '',
+      live: false,
+    },
+  };
+}
+
+// ---------- /sales/inquiries Tactical Alerts ----------
+// Derives real alerts from sales.inquiries + sales.proposals + sales.agent_runs.
+// Empty list → page renders data-needed banner instead of the alerts grid.
+
+export interface DerivedAlert {
+  id: string;
+  severity: 'hi' | 'med' | 'low';
+  title: string;
+  severityLabel: string;
+  dims: string;
+  reason: string;
+  handoffs: { label: string; writesExternal?: boolean; stampLabel?: string }[];
+}
+
+export async function getSalesTacticalAlerts(propertyId: number = PROPERTY_ID): Promise<DerivedAlert[]> {
+  const sb = getSupabaseAdmin();
+  const alerts: DerivedAlert[] = [];
+
+  // 1) SLA breaches — open inquiries (status=new) older than 1h
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const { data: slaRows } = await sb
+    .schema('sales')
+    .from('inquiries')
+    .select('id,guest_name,source,country,triage_kind,triage_conf,party_adults,party_children,date_in,date_out,created_at')
+    .eq('property_id', propertyId)
+    .eq('status', 'new')
+    .lt('created_at', oneHourAgo)
+    .order('created_at', { ascending: true })
+    .limit(20);
+  const slaInqs = (slaRows ?? []) as Array<{
+    id: string; guest_name: string|null; source: string; country: string|null;
+    triage_kind: string|null; triage_conf: number|null; party_adults: number|null; party_children: number|null;
+    date_in: string|null; date_out: string|null; created_at: string;
+  }>;
+
+  for (const inq of slaInqs.slice(0, 4)) {
+    const ageMin = Math.round((Date.now() - new Date(inq.created_at).getTime()) / 60000);
+    const ageH = Math.floor(ageMin / 60);
+    const ageStr = ageH > 0 ? `${ageH}h ${ageMin % 60}m` : `${ageMin}m`;
+    const conf = inq.triage_conf ? Number(inq.triage_conf).toFixed(2) : '—';
+    const pax = (inq.party_adults ?? 0) + (inq.party_children ?? 0);
+    alerts.push({
+      id: `sla-${inq.id.slice(0,8)}`,
+      severity: ageMin > 180 ? 'hi' : 'med',
+      severityLabel: ageMin > 180 ? 'SLA HIGH' : 'SLA MED',
+      title: `${inq.guest_name ?? 'Unknown'} · ${inq.source} · ${pax}pax · ${inq.date_in ?? '—'} → ${inq.date_out ?? '—'}`,
+      dims: `triage_kind × age × source × triage_conf`,
+      reason: `Open inquiry sitting ${ageStr} past 1h SLA target. Triage: ${inq.triage_kind ?? 'fit'} (${conf}). Compose draft now or escalate.`,
+      handoffs: [
+        { label: 'Open inquiry' },
+        { label: 'Send to: Auto-Offer Composer' },
+      ],
+    });
+  }
+
+  // 2) Group / retreat inquiries needing rooming-list lock
+  const { data: groupRows } = await sb
+    .schema('sales')
+    .from('inquiries')
+    .select('id,guest_name,date_in,date_out,party_adults,party_children,triage_conf')
+    .eq('property_id', propertyId)
+    .in('triage_kind', ['group', 'retreat', 'wedding'])
+    .eq('status', 'new')
+    .order('date_in', { ascending: true, nullsFirst: false })
+    .limit(5);
+  const groupInqs = (groupRows ?? []) as Array<{
+    id: string; guest_name: string|null; date_in: string|null; date_out: string|null;
+    party_adults: number|null; party_children: number|null; triage_conf: number|null;
+  }>;
+
+  for (const inq of groupInqs.slice(0, 3)) {
+    const conf = inq.triage_conf ? Number(inq.triage_conf).toFixed(2) : '—';
+    const pax = (inq.party_adults ?? 0) + (inq.party_children ?? 0);
+    const daysOut = inq.date_in ? Math.round((new Date(inq.date_in).getTime() - Date.now()) / 86400000) : null;
+    const sev: 'hi' | 'med' | 'low' = daysOut !== null && daysOut < 21 ? 'hi' : 'med';
+    alerts.push({
+      id: `grp-${inq.id.slice(0,8)}`,
+      severity: sev,
+      severityLabel: sev === 'hi' ? 'GROUP HIGH' : 'GROUP MED',
+      title: `Group · ${inq.guest_name ?? 'Unknown'} · ${pax}pax · ${inq.date_in ?? '—'} → ${inq.date_out ?? '—'}`,
+      dims: `triage_kind × stay_window × group_size × confidence`,
+      reason: daysOut !== null && daysOut < 21
+        ? `Stay window in ${daysOut}d — hold rooming list before BAR competition tightens. Strategist confidence ${conf}.`
+        : `Group inquiry needs rooming-list confirmation. Strategist confidence ${conf}.`,
+      handoffs: [
+        { label: 'Open inquiry' },
+        { label: 'Send to: Group Quote Strategist' },
+        { label: 'Cloudbeds room block', writesExternal: true, stampLabel: 'writes Cloudbeds · approval req' },
+      ],
+    });
+  }
+
+  // 3) Stale inquiries — inquiries >24h with no proposal
+  const { data: staleRows } = await sb
+    .schema('sales')
+    .from('inquiries')
+    .select('id,guest_name,source,created_at,triage_kind')
+    .eq('property_id', propertyId)
+    .lt('created_at', new Date(Date.now() - 24*3600*1000).toISOString())
+    .in('status', ['new', 'drafted'])
+    .order('created_at', { ascending: true })
+    .limit(10);
+  const staleInqs = ((staleRows ?? []) as Array<{ id: string; guest_name: string|null; source: string; created_at: string; triage_kind: string|null }>);
+  if (staleInqs.length >= 3) {
+    alerts.push({
+      id: 'stale-cluster',
+      severity: 'med',
+      severityLabel: 'STALE MED',
+      title: `${staleInqs.length} inquiries × no proposal × >24h old`,
+      dims: `age_hours × status × proposal_count`,
+      reason: `${staleInqs.length} inquiries sitting open without a proposal for over 24h. Decay risk on conversion. Run Follow-up Watcher or auto-archive.`,
+      handoffs: [
+        { label: 'Send to: Follow-up Watcher' },
+        { label: 'Open inquiry feed' },
+      ],
+    });
+  }
+
+  // 4) Agent runs cost — sum cost_eur today (info / low alert)
+  const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+  const { data: runRows } = await sb
+    .schema('sales')
+    .from('agent_runs')
+    .select('cost_eur,status')
+    .gte('created_at', todayStart.toISOString());
+  const runs = (runRows ?? []) as Array<{ cost_eur: number|null; status: string }>;
+  if (runs.length > 0) {
+    const totalCost = runs.reduce((s, r) => s + Number(r.cost_eur ?? 0), 0);
+    const errors = runs.filter(r => r.status === 'error').length;
+    alerts.push({
+      id: 'agent-runs-today',
+      severity: errors > 0 ? 'med' : 'low',
+      severityLabel: errors > 0 ? 'AGENTS MED' : 'AGENTS LOW',
+      title: `${runs.length} agent runs today · €${totalCost.toFixed(2)} cost · ${errors} errors`,
+      dims: `agent_name × cost_eur × status`,
+      reason: errors > 0
+        ? `${errors} agent run${errors === 1 ? '' : 's'} errored today. Open agent log to review.`
+        : `Sales agents nominal. Cost in budget.`,
+      handoffs: [{ label: 'Open agent log' }],
+    });
+  }
+
+  return alerts;
+}

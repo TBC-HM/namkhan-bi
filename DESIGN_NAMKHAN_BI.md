@@ -406,6 +406,61 @@ If memory is wiped AND nothing above is reachable, the repo itself has a `CLAUDE
 
 Append-only. Newest at top. Date heading + bullet changes.
 
+### 2026-05-03 (STLY comparison wired across revenue pages)
+
+Why: PBS asked to "repair the STLY comparison on all revenue pages where it makes sense, make sure it appears properly in KPI boxes and is in correlation with the time checker". Audit showed:
+- Pulse fetched the f_overview_kpis compare row but never displayed it (mockup hardcoded `+5.2pp STLY` / `-3.1pp Bgt`)
+- Pace had STLY tile + table column hardcoded as `lorem` with the comment "needs snapshot history" — but actually only needed `mv_kpi_daily` shifted by 1 year (no snapshots required)
+- Channels had STLY plumbing wired (`cmpPeriod` + `deltaHint`) but `mv_channel_economics` is keyed by fixed `window_days`, so the cmp call returned the SAME current aggregate → all deltas showed `0% vs Same time last year`
+
+Skipped (STLY not meaningful or no data):
+- Pricing — forward-looking rate strategy, no historical rate snapshots
+- Rateplans — rate-plan inventory; STLY less actionable
+- Compset — already a property-vs-competitor comparison; double-comparison adds confusion
+
+Pulse — `app/revenue/pulse/page.tsx`:
+- Replaced `getPulseExtendedKpis` with new `getPulseExtendedKpisWithCompare` (in `lib/pulseExtended.ts`) that runs the 4 reservation-derived KPIs over both current and compare ranges in parallel
+- New helpers `fmtCmpDelta()` + `patchKpiSub()` rewrite the `<div class="kpi-sub">` block per tile
+- 8 tiles wired: Occupancy / ADR / RevPAR / TRevPAR (from `f_overview_kpis(cmp='YOY')` compare row) + Cancel% / No-Show% / Lead Time / ALOS (from `getPulseExtendedKpisWithCompare`)
+- KPI_META declares each metric's `unit` ('pct'|'usd'|'d'|'nights') and `good` direction ('higher_better'|'lower_better') so deltas color correctly: Cancel% UP = red, ADR UP = green, etc.
+- "Bgt" deltas always stripped (no per-tile budget data exists). Mockup's static "+12 Bgt" mock numbers gone.
+- When `?cmp=none` → kpi-sub becomes empty (no fake deltas). When `?cmp=stly` → real deltas render. When `?cmp=pp` → label flips to "PP".
+
+Pace — `app/revenue/pace/page.tsx`:
+- Pace is forward-looking; `v_otb_pace` has no historical OTB-snapshot rows. STLY here = "what we actually did at those calendar dates last year", read from `mv_kpi_daily` (column is `rooms_sold`, not `room_nights` — caught that on first deploy).
+- New `getPaceStly(fromDate, toDate)` queries mv_kpi_daily with a -365 day shift on both bounds.
+- "STLY delta" tile (was `lorem`) → "STLY pace" tile showing `OTB now / STLY actuals × 100%`, e.g. `47% — OTB 196 RN vs STLY 415 actuals`. Tone: green ≥100%, neutral 70-99%, warn <70% (real pickup-gap signal).
+- Table "STLY" column (was `lorem` in every row) → real per-bucket STLY actuals via `stlyForBucket()` which respects gran (month/week/day) when matching last-year dates.
+- Existing 4 OTB tiles (RN / revenue / ADR / occ) now show an STLY sub-line when `?cmp=stly` is active.
+- Lede banner updated from "STLY column needs snapshot history table — pending" to "✓ Wired ... STLY actuals from mv_kpi_daily".
+
+Channels — `app/revenue/channels/page.tsx`:
+- Backend gap: `mv_channel_economics` is a one-shot aggregate keyed by fixed `window_days ∈ {1,7,30,60,90,365,...}`. There's no historical date-range capability. The page's `getChannelEconomics(cmpPeriod)` call returned the SAME aggregate as current → 0% delta always.
+- New SQL: `public.f_channel_econ_for_range(p_from date, p_to date)` — `LANGUAGE sql STABLE SECURITY DEFINER`, aggregates from `public.reservations` directly. Returns same row shape as `mv_channel_economics`. Commission columns return 0 (per-source commission rates not applied in date-range mode; channel-mix deltas use `gross_revenue` so safe).
+- New TS: `getChannelEconomicsForRange(fromDate, toDate)` in `lib/data-channels.ts` — calls the RPC and shapes rows.
+- Page change: when `cmp != 'none'`, cmp fetch hits `getChannelEconomicsForRange(period.compareFrom, period.compareTo)` instead of `getChannelEconomics(cmpPeriod)`. All `deltaHint(now, prior, suffix)` logic unchanged — deltas just stop being zero.
+
+Verified live with `?cmp=stly`:
+- Pulse: `Occupancy 27.6% ▼ −2.3pp STLY` (red), `ADR $207 ▲ +$63 STLY` (green), all 8 tiles correct
+- Pace: STLY pace `47%` warn — "OTB 196 RN vs STLY 415 actuals", per-bucket samples `168 RN`, `113 RN`, `134 RN`
+- Channels: `Direct mix 44.7% ▼ 22% vs Same time last year`, `OTA mix 23.7% ▼ 12% vs Same time last year`
+- `?cmp=none` on Pulse: empty `<div class="kpi-sub"></div>` — no fake deltas
+
+Build issue worked through:
+- First Vercel deploy attempt failed with `Type error: Property 'fx_lak_usd' does not exist on type 'PayrollRow'` in `app/operations/staff/_components/CompBreakdown.tsx`. Local `tsc --noEmit` passed and the type IS defined on the parent file (line 84). Stale Vercel cache. `--force` alone didn't clear it; `touch`-ing the 4 staff files plus `--force` worked. Successful deploy: `namkhan-o53most2w`.
+
+Files changed:
+- `lib/pulseExtended.ts` — added `computeRange()`, `getPulseExtendedKpisWithCompare()`
+- `app/revenue/pulse/page.tsx` — KPI_META, fmtCmpDelta, patchKpiSub, 8 KPI patches
+- `app/revenue/pace/page.tsx` — getPaceStly, stlyForBucket, STLY pace tile, table column, Kpi component extended
+- `lib/data-channels.ts` — getChannelEconomicsForRange
+- `app/revenue/channels/page.tsx` — cmp fetch routed to date-range RPC
+- New migration `add_f_channel_econ_for_range_v2` — `public.f_channel_econ_for_range(date, date)`
+
+Out-of-scope (intentional):
+- Pricing / Rateplans / Compset STLY: skip per audit
+- Channels commission_usd STLY delta: returns 0 because per-source commission rates aren't applied in date-range mode. Wiring it would require joining `sources.commission_pct` per source per date — separate ticket if needed.
+
 ### 2026-05-03 (sync-cloudbeds v16 — drop redundant 'all'-scope dispatch + memory entries)
 
 Why: PBS asked to "finish repairing" + add knowledge base entries. Three real items left after v15:
@@ -1227,6 +1282,14 @@ After live bulk-test (~50 docs across 4 batches), found 2 categories of failures
 - **Subnav** (`components/nav/subnavConfig.ts`) — added Transactions and POS entries between Ledger and Account mapping. Both flagged `isNew`.
 - **Verification:** `tsc --noEmit` clean. All 4 finance routes return 200. Deposits tiles render real values. Transactions $12.8k sales / $14.0k payments / $1.1k tax in last 30d window.
 
+### 2026-05-04 (/sales/inquiries — wire 5 KPIs + tactical alerts to real sales schema)
+- **`lib/sales.ts`** — added `getSalesInquiriesKpis(propertyId)` returning typed `SalesInquiriesKpis` shape with one `InqKpi { value, label, live, tone? }` per tile. Computes from `sales.inquiries` + `sales.proposals` (90d window): open SLA breach count vs total open, median first-reply (proxy = inquiry-create → proposal-create), auto-offer hit rate (proxy = sent within 5 min of created), quote→booking conv (proposals with `cb_reservation_id` ÷ proposals sent), open pipeline value (sum `total_usd` for non-closed proposals). Each tile carries `live: boolean` so the page only flips to `data-needed` for the genuinely-empty ones (currently 4 of 5 — only Open SLA is live since proposals haven't been sent yet).
+- **`lib/sales.ts`** — added `getSalesTacticalAlerts(propertyId)` returning typed `DerivedAlert[]`. Pulls real signals: SLA breaches (open inquiries past 1h, capped at 4), group/retreat/wedding rooming-list reminders (sorted by stay window, capped at 3), stale cluster (≥3 inquiries >24h with no proposal → single rolled-up alert), today's `agent_runs` cost + error count. When nothing real exists AND `SCHEMA_LIVE === false`, page falls back to the original 9 hardcoded mock alerts so the visual block still renders during dev.
+- **`app/sales/inquiries/page.tsx`** — single `Promise.all` round-trip for `listInquiries` + `getSalesInquiriesKpis` + `getSalesTacticalAlerts`. KPI strip now reads `kpis?.<tile>.{value,label,live,tone}`; data-needed pill is per-tile, not global. Alerts pick `derivedAlerts.length > 0 ? derivedAlerts : mockAlerts`.
+- **Composer flow already complete (no work needed)**: `/sales/proposals/[id]/edit` + `ComposerEditor` + 9 API routes (`/blocks` POST/PATCH/DELETE, `/email` GET/PATCH, `/email/regenerate` POST, `/check` GET, `/send` POST, sub-routes for `/rooms` + `/activities` catalogs). Verified by reading source — RoomPickerDrawer, ActivityCatalogDrawer, EmailEditor, availability gate all wired. Today's earlier patch only needed to *expose the entry point* via the Compose button.
+- **Verification**: `tsc --noEmit` clean. 0 hardcoded `fontSize` literals introduced. 0 `USD ` prefixes. The pre-existing `Georgia` reference in `PageHeader.tsx:11` is still a code comment (unchanged).
+- **DB state at deploy time** (verified via Supabase MCP): `sales.inquiries` = 5 rows (4 new), `sales.proposals` = 0, `sales.proposal_blocks` = 0, `sales.proposal_emails` = 0, `sales.agent_runs` = 0. So Open-SLA tile lights up immediately; the other 4 tiles + tactical alerts will start populating as soon as Compose is clicked once and proposals start flowing through the funnel.
+
 ### 2026-05-04 (/sales/inquiries — wire View + Compose actions in DecisionQueue)
 - **`components/ops/DecisionQueue.tsx` extended**: row gains optional `inquiryId?: string` (full UUID); component prop `composeAction?: (formData: FormData) => void | Promise<void>` accepts a server action. When `inquiryId` present → render `<Link>` to `/sales/inquiries/[id]` (View) + `<form action={composeAction}>` with hidden inquiry_id (Compose, brass primary button). When absent (mockup mode `sq-1`…`sq-9`) → render `MOCK` mono-uppercase eyebrow instead of broken buttons. Replaces the previous static `Approve / Send back / Snooze / Detail` row that did nothing.
 - **`app/sales/inquiries/page.tsx`**: imported `createProposalFromInquiry` + `redirect`; defined `composeFromInquiryAction` server action that calls the lib helper and redirects to `/sales/proposals/[id]/edit`. Live decision rows now pass `inq.id` (full UUID) as both `id` and `inquiryId` (was previously truncated via `.slice(0,8)` for display only).
@@ -1290,3 +1353,33 @@ Three stacked fixes addressing "give me the paragraph not the doc" + "answer my 
 - KPI source is `kpi.daily_snapshots` table, not the long-rumored `kpi.mv_kpi_daily` matview (which doesn't exist). Updated catalog with full column list (snapshot_date, occupancy_pct, adr_usd, revpar_usd, rooms_revenue_usd, fnb/spa/activity_revenue_usd, etc.).
 
 **Verification:** `npx tsc --noEmit` exit 0. Vercel Hobby deploys (~60s build, ~1m alias). All fix paths confirmed via live curl. Anthropic spend tonight: ~$0.50 across ~60 ingests + ~10 Q/A calls.
+
+### 2026-05-03 (final batch 3) — Manual entries feed into P&L actuals
+- **`gl.v_pl_monthly_combined` view added** — UNIONs `mv_usali_pl_monthly` (QB-derived) + `gl.manual_entries` with synthesised `account_id='MANUAL'`, `usali_section`, `fiscal_year` from period.
+- **Downstream views rebuilt** to read from `v_pl_monthly_combined` instead of the matview directly:
+  - `gl.v_usali_dept_summary`
+  - `gl.v_usali_house_summary`
+  - `gl.v_usali_undistributed`
+  - `gl.v_budget_vs_actual`
+  - `gl.v_scenario_stack`
+  - `gl.v_actuals_with_manual` (kept for API compat — same shape as before)
+- **Effect:** Any row inserted via /settings/manual-entries appears immediately on /finance/pnl actual columns. No matview refresh, no ETL. Tested: inserted $2,500 Apr 2026 Mgmt Fee → `v_usali_house_summary.mgmt_fees` jumped from $0 to $2,500, GOP shifted -$12.8k → -$15.3k. Deleted test row, GOP restored.
+- **Migration:** `feed_manual_entries_into_pl`. CASCADE drop + recreate of 6 views in one transaction.
+- **No app code change** — views are the integration point. No deploy required.
+
+### 2026-05-04 (continued) — /operations/staff/[staffId] HR-meaningful redesign + USD-primary everywhere
+- **Critical bug fixed**: detail page rendered `₭468.70B` for a 21.5M LAK monthly salary because `fmtMoney(rawLakValue, 'LAK')` treats input as USD and multiplies by FX. Replaced every site of that pattern in `app/operations/staff/**` with the new `<UsdLak>` component. New helper `fmtUsdFromLak()` added to `lib/format.ts` for plain-text contexts.
+- **New presentation component `<UsdLak>`** (`app/operations/staff/_components/UsdLak.tsx`): renders `$X (₭Y)` with USD primary in normal text + LAK in mute mono small. Tones: default / pos / neg / mute. Uses each row's per-period `fx_lak_usd` where supplied, falls back to FX 21500.
+- **Detail page rebuilt** (`app/operations/staff/[staffId]/page.tsx`):
+  - Canonical `<PageHeader pillar="Operations" tab="Staff · {emp_id}" .../>` with brass-accent last-name italics
+  - 5-tile `<KpiBox>` strip USD-primary: Monthly cost · Annual cost · Hourly cost · vs dept median · Tenure (data-needed if hire_date null)
+  - Skills row + DQ flags inline
+  - **YTD summary** block (4 tiles): Total earned across N runs · Benefits accrued · Tax+SSO paid · Days W/Off/AL/PH/Sick + payroll-runs-on-track flag
+  - **Compensation breakdown** (last paid month): two-column Earnings vs Deductions panels with line-by-line `<UsdLak>` cells (Base · OT 1.5× · OT 2× · Service charge · Gasoline · Internet · Other allow ↔ SSO · Tax · Special deduction · Adjustment), gross + total deductions subtotals, "of which benefits" subtotal in earnings col, big moss-green Net pay panel at the bottom (italic serif USD primary, LAK in brass-tinted parens)
+  - Attendance · 90 days (kept) + Payroll · 12 months table (rewritten USD-primary using per-row FX)
+  - Right column: Weekly availability + Documents (each doc: `<StatusPill>` On file / Overdue / Missing)
+- **Peer comparison KpiBox**: computes dept-level median monthly_salary client-side from `v_staff_register_extended`, shows `+/−X%` vs median. Falls to data-needed when peers <2.
+- **Landing page propagation**: passed `fx` from `fx_usd_to_lak` RPC into `<DeptBreakdown>` and `<PayrollTrend>`, renamed dept-table columns from "LAK" labels to plain (Base / Overtime / Benefits / SSO / Tax / Net / Total cost USD), each cell is now `<UsdLak>`.
+- **Benefits & allowances KPI** on landing page now USD-primary (was the broken LAK formatting).
+- **StaffTable** (collapsed register) — same fix: monthly + hourly cost cells use `<UsdLak>` not `fmtMoney(.,'LAK')`.
+- **Verification**: `tsc --noEmit` clean. 0 hardcoded `fontSize` literals, 0 `USD ` prefixes, 0 `fmtMoney(.,'LAK')` calls remaining anywhere in `app/operations/staff/`.
