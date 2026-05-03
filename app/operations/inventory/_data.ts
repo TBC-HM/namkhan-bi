@@ -1,8 +1,18 @@
 // app/operations/inventory/_data.ts
 //
 // Shared server-side data helpers for the inventory module.
-// Uses service-role client because anon has no grants on inv/fa/suppliers/proc.
+// Uses service-role client because anon has no grants on inv/fa/suppliers/proc/gl.
 // Same pattern as /api/marketing/upload.
+//
+// LIVE WIRING NOTE 2026-05-03:
+// The /operations/inventory/suppliers list + detail pages now read from the
+// `gl.*` schema (real QuickBooks vendors, 135 rows; 1,799 transaction lines)
+// instead of the seeded `suppliers.*` tables. The seeded `suppliers.*` schema
+// is kept for future procurement-curated supplier records (with reliability/
+// quality scoring + contacts + alternates) but is no longer surfaced in the UI.
+//
+// Routing key for the gl-vendor detail page is `vendor_name` URL-encoded
+// (gl.* views don't expose vendor_id consistently; vendor_name is unique).
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
@@ -813,4 +823,252 @@ export async function getSupplierDetail(supplierId: string): Promise<SupplierDet
   }));
 
   return { supplier, contacts, price_history, alternates, items_supplied };
+}
+
+// ============================================================================
+// GL-DRIVEN SUPPLIERS (live from QuickBooks via gl.* schema)
+// ============================================================================
+// Wired from gl.v_supplier_overview / v_supplier_transactions /
+// v_supplier_account_anomalies / v_supplier_vendor_account / v_top_suppliers_*.
+// Vendor identity = vendor_name (text, unique). gl.vendors holds master record.
+
+export interface GlVendorOverviewRow {
+  vendor_name: string;
+  line_count: number;
+  active_periods: number;
+  first_txn_date: string | null;
+  last_txn_date: string | null;
+  gross_spend_usd: number;
+  net_amount_usd: number;
+  distinct_accounts: number;
+  distinct_classes: number;
+  currency_guess: string | null;
+  is_active_recent: boolean;
+  // Joined from gl.vendors
+  category: string | null;
+  email: string | null;
+  phone: string | null;
+  terms: string | null;
+  vendor_is_active: boolean | null;
+}
+
+export async function getGlVendorOverview(): Promise<GlVendorOverviewRow[]> {
+  let admin;
+  try { admin = getSupabaseAdmin(); } catch { return []; }
+  const [overviewRes, vendorsRes] = await Promise.all([
+    safe(admin.schema('gl').from('v_supplier_overview')
+      .select('vendor_name, line_count, active_periods, first_txn_date, last_txn_date, gross_spend_usd, net_amount_usd, distinct_accounts, distinct_classes, currency_guess, is_active_recent')
+      .order('gross_spend_usd', { ascending: false, nullsFirst: false }),
+      { data: [] as any[] }),
+    safe(admin.schema('gl').from('vendors')
+      .select('vendor_name, category, email, phone, terms, is_active'),
+      { data: [] as any[] }),
+  ]);
+  const vMap = new Map<string, any>();
+  (vendorsRes.data ?? []).forEach((v: any) => vMap.set(v.vendor_name, v));
+  return (overviewRes.data ?? []).map((r: any) => {
+    const v = vMap.get(r.vendor_name);
+    return {
+      vendor_name: r.vendor_name,
+      line_count: Number(r.line_count ?? 0),
+      active_periods: Number(r.active_periods ?? 0),
+      first_txn_date: r.first_txn_date,
+      last_txn_date: r.last_txn_date,
+      gross_spend_usd: Number(r.gross_spend_usd ?? 0),
+      net_amount_usd: Number(r.net_amount_usd ?? 0),
+      distinct_accounts: Number(r.distinct_accounts ?? 0),
+      distinct_classes: Number(r.distinct_classes ?? 0),
+      currency_guess: r.currency_guess,
+      is_active_recent: !!r.is_active_recent,
+      category: v?.category ?? null,
+      email: v?.email ?? null,
+      phone: v?.phone ?? null,
+      terms: v?.terms ?? null,
+      vendor_is_active: v ? !!v.is_active : null,
+    };
+  });
+}
+
+export interface GlSupplierKpisRow {
+  vendor_count: number;
+  active_recent_count: number;
+  ytd_gross_spend_usd: number;
+  current_month_gross_spend_usd: number;
+  anomaly_count: number;
+  top_vendor_share_pct: number | null;
+  top_vendor_name: string | null;
+}
+
+export async function getGlSupplierKpis(): Promise<GlSupplierKpisRow> {
+  const empty: GlSupplierKpisRow = {
+    vendor_count: 0, active_recent_count: 0, ytd_gross_spend_usd: 0,
+    current_month_gross_spend_usd: 0, anomaly_count: 0, top_vendor_share_pct: null, top_vendor_name: null,
+  };
+  let admin;
+  try { admin = getSupabaseAdmin(); } catch { return empty; }
+  const [overview, ytdTop, mtdAll, anom] = await Promise.all([
+    safe(admin.schema('gl').from('v_supplier_overview').select('vendor_name, gross_spend_usd, is_active_recent'),
+      { data: [] as any[] }),
+    safe(admin.schema('gl').from('v_top_suppliers_ytd').select('vendor_name, gross_spend_usd, rank_ytd').order('rank_ytd').limit(1),
+      { data: [] as any[] }),
+    safe(admin.schema('gl').from('v_top_suppliers_current_month').select('gross_spend_usd'),
+      { data: [] as any[] }),
+    safe(admin.schema('gl').from('v_supplier_account_anomalies').select('vendor_name'),
+      { data: [] as any[] }),
+  ]);
+  const ovRows = overview.data ?? [];
+  const ytdRows = ytdTop.data ?? [];
+  const mtdRows = mtdAll.data ?? [];
+  const anomRows = anom.data ?? [];
+  const ytdTotal = ovRows.reduce((s: number, r: any) => s + Number(r.gross_spend_usd ?? 0), 0);
+  const top = ytdRows[0];
+  return {
+    vendor_count: ovRows.length,
+    active_recent_count: ovRows.filter((r: any) => r.is_active_recent).length,
+    ytd_gross_spend_usd: ytdTotal,
+    current_month_gross_spend_usd: mtdRows.reduce((s: number, r: any) => s + Number(r.gross_spend_usd ?? 0), 0),
+    anomaly_count: anomRows.length,
+    top_vendor_share_pct: top && ytdTotal > 0 ? (Number(top.gross_spend_usd) / ytdTotal) * 100 : null,
+    top_vendor_name: top?.vendor_name ?? null,
+  };
+}
+
+export interface GlVendorTransaction {
+  entry_id: string;
+  txn_date: string;
+  period_yyyymm: string;
+  qb_txn_type: string | null;
+  qb_txn_number: string | null;
+  account_id: string | null;
+  account_name: string | null;
+  usali_subcategory: string | null;
+  usali_line_code: string | null;
+  usali_department: string | null;
+  class_id: string | null;
+  memo: string | null;
+  amount_usd: number;
+  txn_currency: string | null;
+  txn_amount_native: number | null;
+}
+
+export interface GlVendorAccountSplit {
+  period_yyyymm: string;
+  account_id: string | null;
+  account_name: string | null;
+  qb_type: string | null;
+  usali_subcategory: string | null;
+  usali_line_code: string | null;
+  usali_department: string | null;
+  class_id: string | null;
+  line_count: number;
+  gross_amount_usd: number;
+  net_amount_usd: number;
+  first_txn: string | null;
+  last_txn: string | null;
+}
+
+export interface GlVendorAnomaly {
+  account_id: string | null;
+  account_name: string | null;
+  gross_amount: number;
+  share_of_vendor_spend: number;
+}
+
+export interface GlVendorDetailBundle {
+  overview: GlVendorOverviewRow | null;
+  transactions: GlVendorTransaction[];
+  account_splits: GlVendorAccountSplit[];
+  anomalies: GlVendorAnomaly[];
+}
+
+export async function getGlVendorDetail(vendorName: string): Promise<GlVendorDetailBundle> {
+  const empty: GlVendorDetailBundle = { overview: null, transactions: [], account_splits: [], anomalies: [] };
+  let admin;
+  try { admin = getSupabaseAdmin(); } catch { return empty; }
+
+  const [ovRes, vRes, txRes, splitRes, anomRes] = await Promise.all([
+    safe(admin.schema('gl').from('v_supplier_overview')
+      .select('vendor_name, line_count, active_periods, first_txn_date, last_txn_date, gross_spend_usd, net_amount_usd, distinct_accounts, distinct_classes, currency_guess, is_active_recent')
+      .eq('vendor_name', vendorName).limit(1).maybeSingle(),
+      { data: null as any }),
+    safe(admin.schema('gl').from('vendors')
+      .select('vendor_name, category, email, phone, terms, is_active')
+      .eq('vendor_name', vendorName).limit(1).maybeSingle(),
+      { data: null as any }),
+    safe(admin.schema('gl').from('v_supplier_transactions')
+      .select('entry_id, txn_date, period_yyyymm, qb_txn_type, qb_txn_number, account_id, account_name, usali_subcategory, usali_line_code, usali_department, class_id, memo, amount_usd, txn_currency, txn_amount_native')
+      .eq('vendor_name', vendorName).order('txn_date', { ascending: false }).limit(500),
+      { data: [] as any[] }),
+    safe(admin.schema('gl').from('v_supplier_vendor_account')
+      .select('period_yyyymm, account_id, account_name, qb_type, usali_subcategory, usali_line_code, usali_department, class_id, line_count, gross_amount_usd, net_amount_usd, first_txn, last_txn')
+      .eq('vendor_name', vendorName).order('gross_amount_usd', { ascending: false, nullsFirst: false }),
+      { data: [] as any[] }),
+    safe(admin.schema('gl').from('v_supplier_account_anomalies')
+      .select('account_id, account_name, gross_amount, share_of_vendor_spend')
+      .eq('vendor_name', vendorName).order('share_of_vendor_spend', { ascending: false, nullsFirst: false }),
+      { data: [] as any[] }),
+  ]);
+
+  const ov = ovRes.data;
+  const v = vRes.data;
+  const overview: GlVendorOverviewRow | null = ov ? {
+    vendor_name: ov.vendor_name,
+    line_count: Number(ov.line_count ?? 0),
+    active_periods: Number(ov.active_periods ?? 0),
+    first_txn_date: ov.first_txn_date,
+    last_txn_date: ov.last_txn_date,
+    gross_spend_usd: Number(ov.gross_spend_usd ?? 0),
+    net_amount_usd: Number(ov.net_amount_usd ?? 0),
+    distinct_accounts: Number(ov.distinct_accounts ?? 0),
+    distinct_classes: Number(ov.distinct_classes ?? 0),
+    currency_guess: ov.currency_guess,
+    is_active_recent: !!ov.is_active_recent,
+    category: v?.category ?? null,
+    email: v?.email ?? null,
+    phone: v?.phone ?? null,
+    terms: v?.terms ?? null,
+    vendor_is_active: v ? !!v.is_active : null,
+  } : null;
+
+  return {
+    overview,
+    transactions: (txRes.data ?? []).map((r: any) => ({
+      entry_id: r.entry_id,
+      txn_date: r.txn_date,
+      period_yyyymm: r.period_yyyymm,
+      qb_txn_type: r.qb_txn_type,
+      qb_txn_number: r.qb_txn_number,
+      account_id: r.account_id,
+      account_name: r.account_name,
+      usali_subcategory: r.usali_subcategory,
+      usali_line_code: r.usali_line_code,
+      usali_department: r.usali_department,
+      class_id: r.class_id,
+      memo: r.memo,
+      amount_usd: Number(r.amount_usd ?? 0),
+      txn_currency: r.txn_currency,
+      txn_amount_native: r.txn_amount_native != null ? Number(r.txn_amount_native) : null,
+    })),
+    account_splits: (splitRes.data ?? []).map((r: any) => ({
+      period_yyyymm: r.period_yyyymm,
+      account_id: r.account_id,
+      account_name: r.account_name,
+      qb_type: r.qb_type,
+      usali_subcategory: r.usali_subcategory,
+      usali_line_code: r.usali_line_code,
+      usali_department: r.usali_department,
+      class_id: r.class_id,
+      line_count: Number(r.line_count ?? 0),
+      gross_amount_usd: Number(r.gross_amount_usd ?? 0),
+      net_amount_usd: Number(r.net_amount_usd ?? 0),
+      first_txn: r.first_txn,
+      last_txn: r.last_txn,
+    })),
+    anomalies: (anomRes.data ?? []).map((r: any) => ({
+      account_id: r.account_id,
+      account_name: r.account_name,
+      gross_amount: Number(r.gross_amount ?? 0),
+      share_of_vendor_spend: Number(r.share_of_vendor_spend ?? 0),
+    })),
+  };
 }

@@ -1,7 +1,9 @@
 // app/operations/inventory/suppliers/[id]/page.tsx
 //
-// Supplier detail — header + KPIs + 4 panels (contacts · items · alternates · price history)
-// + inline price-history form. Source: suppliers.* tables via getSupplierDetail().
+// Vendor detail — LIVE WIRED to gl.* schema.
+// Routing key is encodeURIComponent(vendor_name); we decodeURIComponent here.
+// Source: gl.v_supplier_overview + gl.vendors + gl.v_supplier_transactions
+//         + gl.v_supplier_vendor_account + gl.v_supplier_account_anomalies.
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -9,14 +11,12 @@ import PageHeader from '@/components/layout/PageHeader';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { fmtIsoDate, EMPTY } from '@/lib/format';
-import { getSupplierDetail } from '../../_data';
+import { getGlVendorDetail } from '../../_data';
 import {
-  ContactsTable,
-  ItemsSuppliedTable,
-  AlternatesTable,
-  PriceHistoryTable,
-} from './_DetailTablesClient';
-import PriceForm from './_PriceForm';
+  AccountSplitsTable,
+  AnomaliesTable,
+  TransactionsTable,
+} from './_GlDetailTablesClient';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -52,42 +52,36 @@ const metaLabel: React.CSSProperties = {
   marginBottom: 2,
 };
 
-function statusToPill(s: string) {
-  // DB constraint: active | suspended | terminated | prospect
-  switch (s) {
-    case 'active':     return <StatusPill tone="active">Active</StatusPill>;
-    case 'prospect':   return <StatusPill tone="pending">Prospect</StatusPill>;
-    case 'suspended':  return <StatusPill tone="expired">Suspended</StatusPill>;
-    case 'terminated': return <StatusPill tone="inactive">Terminated</StatusPill>;
-    default:           return <StatusPill tone="info">{s}</StatusPill>;
-  }
+function spanDays(first: string | null, last: string | null): number | null {
+  if (!first || !last) return null;
+  const a = new Date(first).getTime();
+  const b = new Date(last).getTime();
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+  return Math.max(1, Math.round((b - a) / (24 * 3600 * 1000)));
 }
 
-function pctScore(n: number | null | undefined): number | null {
-  if (n == null) return null;
-  return n <= 1 ? n * 100 : n;
-}
+export default async function VendorDetailPage({ params }: { params: { id: string } }) {
+  // [id] = URL-encoded vendor_name
+  const vendorName = decodeURIComponent(params.id);
+  const bundle = await getGlVendorDetail(vendorName);
+  const ov = bundle.overview;
+  if (!ov) notFound();
 
-export default async function SupplierDetailPage({ params }: { params: { id: string } }) {
-  const { id } = params;
-  const bundle = await getSupplierDetail(id);
-  const s = bundle.supplier;
-  if (!s) notFound();
+  const span = spanDays(ov.first_txn_date, ov.last_txn_date);
 
   return (
     <>
       <PageHeader
         pillar="Operations"
-        tab="Inventory · Suppliers · Detail"
-        title={<><em style={{ color: 'var(--brass)' }}>{s.name}</em></>}
+        tab="Inventory · Suppliers · Vendor"
+        title={<><em style={{ color: 'var(--brass)' }}>{ov.vendor_name}</em></>}
         lede={
           <>
-            <span style={{ fontFamily: 'var(--mono)' }}>{s.code}</span>
+            {ov.category ?? 'Uncategorised'}
             {' · '}
-            {s.city ? `${s.city}, ${s.country}` : s.country}
-            {s.is_local_sourcing && <span style={{ marginLeft: 8, fontFamily: 'var(--mono)', color: 'var(--moss-glow)' }}>· LOCAL SOURCING</span>}
+            {ov.currency_guess ? <span style={{ fontFamily: 'var(--mono)' }}>{ov.currency_guess}</span> : 'currency unknown'}
             {' · '}
-            {statusToPill(s.status)}
+            {ov.is_active_recent ? <StatusPill tone="active">Recent</StatusPill> : <StatusPill tone="inactive">Dormant</StatusPill>}
           </>
         }
         rightSlot={
@@ -103,7 +97,7 @@ export default async function SupplierDetailPage({ params }: { params: { id: str
               padding: '4px 10px',
               border: '1px solid var(--brass-soft, #c4a06b)',
             }}
-          >← Back to suppliers</Link>
+          >← Back to vendors</Link>
         }
       />
 
@@ -114,77 +108,88 @@ export default async function SupplierDetailPage({ params }: { params: { id: str
         gap: 12,
         marginTop: 18,
       }}>
-        <KpiBox value={s.lead_time_days} unit="d" label="Lead time" tooltip="Days from order to delivery"
-          state={s.lead_time_days == null ? 'data-needed' : 'live'} needs={s.lead_time_days == null ? 'lead_time_days field' : undefined} />
-        <KpiBox value={pctScore(s.reliability_score)} unit="pct" label="Reliability" dp={0}
-          state={s.reliability_score == null ? 'data-needed' : 'live'} needs={s.reliability_score == null ? 'reliability_score field' : undefined} />
-        <KpiBox value={pctScore(s.quality_score)} unit="pct" label="Quality" dp={0}
-          state={s.quality_score == null ? 'data-needed' : 'live'} needs={s.quality_score == null ? 'quality_score field' : undefined} />
-        <KpiBox value={s.items_supplied} unit="count" label="Items supplied" tooltip="Items where this supplier is primary or alternate vendor" />
-        <KpiBox value={s.contact_count} unit="count" label="Contacts" />
-        <KpiBox value={s.payment_terms_days} unit="d" label="Payment terms"
-          state={s.payment_terms_days == null ? 'data-needed' : 'live'} needs={s.payment_terms_days == null ? 'payment_terms_days field' : undefined} />
+        <KpiBox value={ov.gross_spend_usd} unit="usd" label="Gross spend" tooltip={`Sum of debit lines · ${ov.line_count} lines total`} />
+        <KpiBox value={ov.net_amount_usd} unit="usd" label="Net amount" tooltip="Gross minus credits / refunds" />
+        <KpiBox value={ov.line_count} unit="count" label="Lines" tooltip="Total GL entries for this vendor" />
+        <KpiBox value={ov.distinct_accounts} unit="count" label="Accounts" tooltip="Distinct GL account_ids hit by this vendor" />
+        <KpiBox value={ov.distinct_classes} unit="count" label="Classes" tooltip="Distinct QuickBooks classes (departments)" />
+        <KpiBox value={ov.active_periods} unit="count" label="Active periods" tooltip="Distinct YYYY-MM with activity" />
       </div>
 
       {/* Meta strip */}
       <h2 style={sectionH}>Profile</h2>
       <div style={metaRow}>
         <div>
-          <div style={metaLabel}>Legal name</div>
-          <div>{s.legal_name ?? EMPTY}</div>
+          <div style={metaLabel}>Vendor master active</div>
+          <div>{ov.vendor_is_active === null ? EMPTY : (ov.vendor_is_active ? 'Yes' : 'No')}</div>
         </div>
         <div>
-          <div style={metaLabel}>Type</div>
-          <div>{s.supplier_type ?? EMPTY}</div>
-        </div>
-        <div>
-          <div style={metaLabel}>Distance</div>
-          <div style={{ fontFamily: 'var(--mono)' }}>{s.distance_km != null ? `${s.distance_km} km` : EMPTY}</div>
-        </div>
-        <div>
-          <div style={metaLabel}>Currency</div>
-          <div style={{ fontFamily: 'var(--mono)' }}>{s.currency}</div>
+          <div style={metaLabel}>Terms</div>
+          <div style={{ fontFamily: 'var(--mono)' }}>{ov.terms ?? EMPTY}</div>
         </div>
         <div>
           <div style={metaLabel}>Email</div>
           <div style={{ fontFamily: 'var(--mono)' }}>
-            {s.email ? <a href={`mailto:${s.email}`} style={{ color: 'var(--brass)' }}>{s.email}</a> : EMPTY}
+            {ov.email ? <a href={`mailto:${ov.email}`} style={{ color: 'var(--brass)' }}>{ov.email}</a> : EMPTY}
           </div>
         </div>
         <div>
           <div style={metaLabel}>Phone</div>
-          <div style={{ fontFamily: 'var(--mono)' }}>{s.phone ?? EMPTY}</div>
+          <div style={{ fontFamily: 'var(--mono)' }}>{ov.phone ?? EMPTY}</div>
         </div>
         <div>
-          <div style={metaLabel}>Website</div>
-          <div style={{ fontFamily: 'var(--mono)' }}>
-            {s.website
-              ? <a href={s.website} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--brass)' }}>{s.website}</a>
-              : EMPTY}
-          </div>
+          <div style={metaLabel}>First txn</div>
+          <div style={{ fontFamily: 'var(--mono)' }}>{fmtIsoDate(ov.first_txn_date)}</div>
         </div>
         <div>
-          <div style={metaLabel}>Last price update</div>
-          <div style={{ fontFamily: 'var(--mono)' }}>{fmtIsoDate(s.last_price_update)}</div>
+          <div style={metaLabel}>Last txn</div>
+          <div style={{ fontFamily: 'var(--mono)' }}>{fmtIsoDate(ov.last_txn_date)}</div>
+        </div>
+        <div>
+          <div style={metaLabel}>Span</div>
+          <div style={{ fontFamily: 'var(--mono)' }}>{span != null ? `${span}d` : EMPTY}</div>
+        </div>
+        <div>
+          <div style={metaLabel}>Currency (guess)</div>
+          <div style={{ fontFamily: 'var(--mono)' }}>{ov.currency_guess ?? EMPTY}</div>
         </div>
       </div>
 
-      {/* Contacts */}
-      <h2 style={sectionH}>Contacts · {bundle.contacts.length}</h2>
-      <ContactsTable rows={bundle.contacts} />
+      {/* Account splits */}
+      <h2 style={sectionH}>Account split · {bundle.account_splits.length} period × account combos</h2>
+      <AccountSplitsTable rows={bundle.account_splits} />
 
-      {/* Items supplied */}
-      <h2 style={sectionH}>Items supplied · {bundle.items_supplied.length}</h2>
-      <ItemsSuppliedTable rows={bundle.items_supplied} />
+      {/* Anomalies */}
+      <h2 style={sectionH}>Anomalies · {bundle.anomalies.length} flagged</h2>
+      <AnomaliesTable rows={bundle.anomalies} />
 
-      {/* Alternates */}
-      <h2 style={sectionH}>Alternate suppliers · {bundle.alternates.length}</h2>
-      <AlternatesTable rows={bundle.alternates} />
+      {/* Recent transactions */}
+      <h2 style={sectionH}>Transactions · last {bundle.transactions.length} (cap 500)</h2>
+      <TransactionsTable rows={bundle.transactions} />
 
-      {/* Price history + form */}
-      <h2 style={sectionH}>Price history · last {bundle.price_history.length}</h2>
-      <PriceHistoryTable rows={bundle.price_history} />
-      <PriceForm supplierId={s.supplier_id} supplierName={s.name} />
+      <div style={{
+        marginTop: 18,
+        padding: '12px 14px',
+        background: 'var(--paper-deep, #f6f3ec)',
+        borderLeft: '2px solid var(--brass)',
+        fontSize: 'var(--t-xs)',
+        color: 'var(--ink-soft)',
+        lineHeight: 1.6,
+      }}>
+        <div style={{
+          fontFamily: 'var(--mono)',
+          textTransform: 'uppercase',
+          letterSpacing: 'var(--ls-extra)',
+          color: 'var(--brass)',
+          fontSize: 'var(--t-xs)',
+          marginBottom: 6,
+        }}>Data lineage</div>
+        Vendor master: <code style={{ fontFamily: 'var(--mono)' }}>gl.vendors</code>.
+        Aggregates: <code style={{ fontFamily: 'var(--mono)' }}>gl.v_supplier_overview</code>.
+        Splits: <code style={{ fontFamily: 'var(--mono)' }}>gl.v_supplier_vendor_account</code>.
+        Anomalies: <code style={{ fontFamily: 'var(--mono)' }}>gl.v_supplier_account_anomalies</code> (vendor × account combos with unusual share).
+        Lines: <code style={{ fontFamily: 'var(--mono)' }}>gl.v_supplier_transactions</code> (last 500 by date).
+      </div>
     </>
   );
 }

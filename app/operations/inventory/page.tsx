@@ -12,14 +12,14 @@
 import Link from 'next/link';
 import PageHeader from '@/components/layout/PageHeader';
 import KpiBox from '@/components/kpi/KpiBox';
-import { fmtMoney, fmtDateShort, fmtPct, EMPTY } from '@/lib/format';
+import { fmtMoney, EMPTY } from '@/lib/format';
 import {
   getInventorySnapshot,
   getStockHeatmap,
   getCapexPipeline,
   getOpenPOs,
   getOpenRequests,
-  getSuppliers,
+  getGlSupplierKpis,
 } from './_data';
 import Heatmap from './_components/Heatmap';
 
@@ -80,13 +80,13 @@ function StatusPill({ status }: { status: string }) {
 }
 
 export default async function InventoryOverviewPage() {
-  const [snap, heatmap, capex, pos, prs, sups] = await Promise.all([
+  const [snap, heatmap, capex, pos, prs, glKpis] = await Promise.all([
     getInventorySnapshot(),
     getStockHeatmap(),
     getCapexPipeline(),
     getOpenPOs(),
     getOpenRequests(),
-    getSuppliers(),
+    getGlSupplierKpis(),
   ]);
 
   return (
@@ -110,7 +110,9 @@ export default async function InventoryOverviewPage() {
         <KpiBox value={snap.slowMovers} unit="count" label="Slow movers" tooltip="No movement >60 days, qty > 0" />
         <KpiBox value={snap.openPosUsd} unit="usd" label="Open POs" tooltip={`${pos.filter(p => p.status !== 'received' && p.status !== 'closed').length} POs in flight`} />
         <KpiBox value={snap.pendingRequests} unit="count" label="Pending requests" tooltip="Requests awaiting GM/owner approval" />
-        <KpiBox value={snap.suppliersActive} unit="count" label="Suppliers" delta={{ value: snap.localSourcingPct, unit: 'pct', period: 'local' }} tooltip={`${Math.round(snap.localSourcingPct)}% local sourcing`} />
+        <KpiBox value={glKpis.vendor_count} unit="count" label="QB vendors" tooltip={`${glKpis.active_recent_count} active in last 90d · live from gl.v_supplier_overview`} />
+        <KpiBox value={glKpis.ytd_gross_spend_usd} unit="usd" label="Vendor spend YTD" tooltip={`Top vendor: ${glKpis.top_vendor_name ?? '—'} (${glKpis.top_vendor_share_pct?.toFixed(1) ?? '—'}% share)`} />
+        <KpiBox value={glKpis.anomaly_count} unit="count" label="Vendor anomalies" tooltip="Vendor × account combinations flagged in gl.v_supplier_account_anomalies" />
         <KpiBox value={snap.faNbvUsd} unit="usd" label="Fixed asset NBV" tooltip="Net book value, straight-line dep" />
         <KpiBox value={snap.capexApprovedUsd} unit="usd" label="CapEx approved" tooltip="Approved + not yet received" />
         <KpiBox value={snap.capexProposedUsd} unit="usd" label="CapEx proposed" tooltip="In pipeline, awaiting decision" />
@@ -250,46 +252,9 @@ export default async function InventoryOverviewPage() {
         </div>
       </div>
 
-      {/* === Suppliers strip === */}
-      <h2 style={{
-        marginTop: 28, marginBottom: 10,
-        fontFamily: 'var(--mono)',
-        fontSize: 'var(--t-xs)',
-        letterSpacing: 'var(--ls-extra)',
-        textTransform: 'uppercase',
-        color: 'var(--brass)',
-      }}>Suppliers · top {Math.min(sups.length, 5)} by reliability · {Math.round(snap.localSourcingPct)}% local</h2>
-      <div style={{ border: '1px solid var(--rule, #e3dfd3)', background: 'var(--paper, #fbf9f3)' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--t-sm)' }}>
-          <thead>
-            <tr style={{ background: 'var(--paper-deep, #f6f3ec)' }}>
-              <th style={{ padding: '8px 10px', textAlign: 'left',  fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 'var(--ls-extra)', color: 'var(--brass)', fontSize: 'var(--t-xs)', borderBottom: '1px solid var(--rule, #e3dfd3)' }}>Code</th>
-              <th style={{ padding: '8px 10px', textAlign: 'left',  fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 'var(--ls-extra)', color: 'var(--brass)', fontSize: 'var(--t-xs)', borderBottom: '1px solid var(--rule, #e3dfd3)' }}>Name</th>
-              <th style={{ padding: '8px 10px', textAlign: 'left',  fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 'var(--ls-extra)', color: 'var(--brass)', fontSize: 'var(--t-xs)', borderBottom: '1px solid var(--rule, #e3dfd3)' }}>Type</th>
-              <th style={{ padding: '8px 10px', textAlign: 'left',  fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 'var(--ls-extra)', color: 'var(--brass)', fontSize: 'var(--t-xs)', borderBottom: '1px solid var(--rule, #e3dfd3)' }}>Origin</th>
-              <th style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 'var(--ls-extra)', color: 'var(--brass)', fontSize: 'var(--t-xs)', borderBottom: '1px solid var(--rule, #e3dfd3)' }}>Lead</th>
-              <th style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 'var(--ls-extra)', color: 'var(--brass)', fontSize: 'var(--t-xs)', borderBottom: '1px solid var(--rule, #e3dfd3)' }}>Reliability</th>
-              <th style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 'var(--ls-extra)', color: 'var(--brass)', fontSize: 'var(--t-xs)', borderBottom: '1px solid var(--rule, #e3dfd3)' }}>Quality</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sups.slice(0, 8).map(s => (
-              <tr key={s.code} style={{ borderBottom: '1px solid var(--rule, #e3dfd3)' }}>
-                <td style={{ padding: '6px 10px', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>{s.code}</td>
-                <td style={{ padding: '6px 10px' }}>{s.name}</td>
-                <td style={{ padding: '6px 10px', color: 'var(--ink-soft)' }}>{s.supplier_type ?? EMPTY}</td>
-                <td style={{ padding: '6px 10px', color: 'var(--ink-soft)' }}>
-                  {s.city ? `${s.city}, ${s.country}` : s.country}
-                  {s.is_local && <span style={{ marginLeft: 6, color: '#2f6f3a', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>· LOCAL</span>}
-                </td>
-                <td style={{ padding: '6px 10px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>{s.lead_time_days != null ? `${s.lead_time_days}d` : EMPTY}</td>
-                <td style={{ padding: '6px 10px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>{s.reliability != null ? fmtPct(s.reliability * 100, 0) : EMPTY}</td>
-                <td style={{ padding: '6px 10px', textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>{s.quality != null ? fmtPct(s.quality * 100, 0) : EMPTY}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {/* === Suppliers strip removed 2026-05-03 — replaced by live gl-driven /suppliers page (135 vendors) ===
+          KPIs above show: QB vendors / Vendor spend YTD / Vendor anomalies (live from gl.*).
+          Click "Suppliers" in the sub-nav for the full vendor register + click-through detail. */}
 
       {/* === Quick links === */}
       <h2 style={{

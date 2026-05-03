@@ -406,6 +406,63 @@ If memory is wiped AND nothing above is reachable, the repo itself has a `CLAUDE
 
 Append-only. Newest at top. Date heading + bullet changes.
 
+### 2026-05-03 (Inventory & Suppliers — LIVE WIRED to gl.* QuickBooks vendor data)
+
+Why: PBS reviewed the just-shipped `/operations/inventory/suppliers` and said "I want all this supplier data live wired — no hanky panky data". The previous version showed 8 seeded rows from `suppliers.suppliers`. Real data lives in `gl.*` (135 QuickBooks vendors, 2,924 GL entries, 1,799 transaction lines, 140 account anomalies pre-flagged).
+
+What changed:
+- `app/operations/inventory/_data.ts` — added 4 gl-driven loaders + 4 type interfaces:
+  - `getGlVendorOverview()` — joins `gl.v_supplier_overview` with `gl.vendors` (category/email/phone/terms/is_active). Returns 135 rows sorted by gross_spend_usd desc.
+  - `getGlSupplierKpis()` — vendor count, active-recent count, YTD/MTD spend, top-1 vendor share, anomaly count. 4 parallel reads from `v_supplier_overview` + `v_top_suppliers_ytd` + `v_top_suppliers_current_month` + `v_supplier_account_anomalies`.
+  - `getGlVendorDetail(vendorName)` — 5 parallel reads (overview + vendor master + 500 transactions + account splits + anomalies).
+  - All loaders use `.schema('gl')` via service-role client. `gl` is already exposed via `pgrst.db_schemas` (verified). All 7 gl objects have SELECT for service_role (verified).
+
+- `/operations/inventory/suppliers` — REWRITTEN to read from gl.* :
+  - Header lede: "Live from QuickBooks GL · 135 vendors · N active in last 90d"
+  - 6 KPIs: Vendors on file · Active recent · YTD spend · MTD spend · Top-1 share · Account anomalies
+  - DataTable cols: Vendor (linked) · Category · Currency · Gross spend · Net · Lines · Accts · Periods · First/Last txn · Terms · Active pill (Recent/Dormant via `is_active_recent`)
+  - Routing key: `encodeURIComponent(vendor_name)` (gl.* views don't expose vendor_id; vendor_name is unique)
+  - New file: `_GlVendorsTableClient.tsx` (canonical `<DataTable>` wrapper)
+  - Removed: `<UploadSuppliersButton>` from header (uploads to `suppliers.suppliers` which is no longer the source of truth — confusing UX)
+  - Footer disclosure block: "Live from gl.v_supplier_overview + gl.vendors. For curated procurement records (reliability scoring/contacts/alternates), use suppliers.* schema — currently empty, Phase 2.5b workflow."
+
+- `/operations/inventory/suppliers/[id]` — REWRITTEN to read from gl.* :
+  - URL is `/operations/inventory/suppliers/<encoded-vendor-name>`. Page calls `decodeURIComponent(params.id)`.
+  - Header: vendor name (italic Fraunces gold) · category · currency · Recent/Dormant pill · Back link
+  - 6 KPIs: Gross spend · Net amount · Lines · Accounts · Classes · Active periods
+  - Profile meta strip (8 fields): Vendor master active · Terms · Email · Phone · First/Last txn · Span (days) · Currency guess
+  - 3 DataTables (new file `_GlDetailTablesClient.tsx`):
+    1. Account split (period × account, sorted by gross desc) — `gl.v_supplier_vendor_account`
+    2. Anomalies (StatusPill colored by `share_of_vendor_spend`: ≥50% expired, ≥25% pending, else info) — `gl.v_supplier_account_anomalies`
+    3. Recent transactions (last 500 by date desc) — `gl.v_supplier_transactions`
+  - Data lineage block at bottom listing all 5 source views
+
+- `/operations/inventory` (Snapshot) — added 3 gl-driven KPIs + removed seeded suppliers strip:
+  - Replaced "Suppliers" tile with: `QB vendors` · `Vendor spend YTD` · `Vendor anomalies`
+  - Removed bottom "Suppliers · top by reliability" strip (was reading 8 seeded rows from `suppliers.suppliers`); replaced with comment explaining the new path
+  - Imports cleaned: dropped `getSuppliers`, `fmtPct`, `fmtDateShort`
+
+Files no longer wired into the UI but kept for future suppliers.* curated workflow:
+- `app/operations/inventory/_components/UploadSuppliersButton.tsx` — keeps the bulk-load CSV path for when curated supplier records get added to suppliers.suppliers
+- `app/operations/inventory/suppliers/_SuppliersTableClient.tsx` — old client wrapper (suppliers.* shape) with the status-enum fix from earlier in the day
+- `app/operations/inventory/suppliers/[id]/_DetailTablesClient.tsx` + `_PriceForm.tsx` — wired to suppliers.* tables; will be re-mounted under a future `/operations/inventory/suppliers/curated` route or similar
+- `/api/operations/suppliers/upload` + `/api/operations/suppliers/price-history` — unchanged
+
+Why split (gl vs curated):
+- `gl.*` = source of truth for "who we paid + how much" (operational/financial).
+- `suppliers.*` = future source of truth for "what we know about them" (lead times, reliability, contacts, alternates, local-sourcing flag, sustainability). Procurement workflow (request → PO → receipt) writes here; UI surfaces both alongside each other when the workflow is built.
+
+Verification:
+- `npx tsc --noEmit` clean (exit 0)
+- All 7 gl objects: `service_role` SELECT confirmed
+- `pgrst.db_schemas` already includes `gl` (no migration needed)
+
+Out of scope (logged for later):
+- Join gl.vendor_name → suppliers.suppliers.code on a fuzzy/lookup basis so the same vendor can show both ledger spend AND curated procurement attributes (Phase 2.5b)
+- Vendor merge/split UI (handle "DCM Co.", "DCM Company", "DCM Co. Ltd" as duplicates)
+- Aged payables / outstanding balance per vendor (needs A/P data from gl.gl_entries with account class filter)
+- USALI department roll-up per vendor (data is in `gl.v_supplier_transactions.usali_department` — table cell already shows it; aggregate KPI not built)
+
 ### 2026-05-03 (Inventory & Suppliers — IA rename + sub-page convergence + status-enum fix)
 
 Why: PBS asked "I thought we deployed a batch yesterday regarding suppliers — but I can't see anything." Investigation found the schemas were live (4 schemas: `suppliers`, `inv`, `proc`, `fa`) but the UI work was split across two parallel sessions. This session and a parallel session converged on the same set of pages — by the end of the run all sub-pages exist as canonical routes.
@@ -1019,3 +1076,17 @@ Verification gates run live: 0 hardcoded fontSize, 0 fontFamily, 0 hex outside :
 - **Auth pattern:** all `/api/docs/*` routes use `getSupabaseAdmin()` (service-role) since portal runs anon-only behind a password gate. RLS still enforced on `docs.documents` for any direct anon-key reads.
 - **Verification gates:** `npx tsc --noEmit` exit 0. Zero hardcoded `fontSize` literals in new code. Zero `USD ` prefix usage. All inline styles resolve through existing CSS vars (`--moss`, `--paper-pure`, `--ink`, `--brass`, `--mono`, `--serif`, `--t-*`, `--ls-extra`, `--st-*-bg/bd/tx`).
 - **What's intentionally deferred to v2:** OpenAI embeddings + `docs.chunks` table (semantic recall), OCR fallback for scanned PDFs (Claude Vision), MD conversion for SOP/template (currently full text in body_markdown), per-doc edit/override of AI classification, multilingual auto-translation of titles, partner directory view, expiry alert cron, WhatsApp chat surface for staff Q/A.
+
+### 2026-05-03 (later still 2) — 12-month panel expand → full USALI schedule
+- **Rebuilt** `app/finance/pnl/TwelveMonthPanel.tsx` expand block. Was: flat list of every (subcat, dept) row sorted by absolute actual. Now: full USALI schedule for the selected month, mirroring the main grid:
+  - **Revenue** section header → 6 dept rows (Rooms, F&B, Spa, Activities, Mekong Cruise, Other Operated) → Total Revenue subtotal
+  - **Departmental Expenses** section header → 6 dept rows (each summing CoS + Payroll + Other Op Exp for that dept) → Total Dept Expenses subtotal
+  - **Departmental Profit** result row (brass border, bolded)
+  - **Undistributed Operating Expenses** section header → 5 rows (A&G, S&M, POM, Utilities, Mgmt Fees) → Total Undistributed subtotal
+  - **GOP after Undistributed** result row
+  - **Below GOP** section header (Depreciation, Interest, Tax, FX, Non-Op) — only renders when at least one row has actual or budget
+  - **EBITDA** result row, inverted (forest green fill, paper-warm text)
+- **Columns:** Line / Actual / Budget / Δ Bgt / Δ% (5 cols, simpler than main grid which has LY + Flow). Empty budget shows `xx`. Empty actual shows `—`.
+- **betterDown logic:** expense + undistributed rows colour green when actual ≤ budget; revenue + dept profit + GOP + EBITDA colour green when actual ≥ budget.
+- **Styling** uses canonical CSS vars: `--surf-2`, `--brass`, `--mono`, `--t-xs`, `--ls-extra`, `--green-2`, `--paper-warm`, `--ink-mute`, `--line`. Section headers are mono brass-letterspaced uppercase per locked spec.
+- **Verification:** `tsc --noEmit` clean. Deployed (commit auto via vercel CLI). Five new CSS classes: `.usali-tbl`, `.usali-section`, `.usali-subtotal`, `.usali-result`, `.usali-ebitda`.
