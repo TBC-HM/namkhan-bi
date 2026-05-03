@@ -264,13 +264,13 @@ export default async function InquiriesPage() {
       <div
         style={{
           fontSize: 11,
-          color: '#8a8170',
+          color: 'var(--ink-mute)',
           textTransform: 'uppercase',
           letterSpacing: '0.08em',
           marginTop: 14,
         }}
       >
-        <strong style={{ color: '#4a4538' }}>Sales</strong> › Inquiries
+        <strong style={{ color: 'var(--ink-soft)' }}>Sales</strong> › Inquiries
       </div>
       <h1
         style={{
@@ -280,9 +280,9 @@ export default async function InquiriesPage() {
           fontSize: 30,
         }}
       >
-        Every inquiry, an <em style={{ color: '#a17a4f' }}>answer</em> before lunch.
+        Every inquiry, an <em style={{ color: 'var(--brass)' }}>answer</em> before lunch.
       </h1>
-      <div style={{ fontSize: 13, color: '#4a4538' }}>
+      <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
         Triage, auto-quote, approve, send. The funnel starts here.
       </div>
 
@@ -295,7 +295,7 @@ export default async function InquiriesPage() {
           alignItems: 'center',
           marginTop: 14,
           padding: '10px 12px',
-          background: '#faf6ec',
+          background: 'var(--paper-warm)',
           border: '1px solid #e6dfc9',
           borderRadius: 8,
         }}
@@ -308,7 +308,7 @@ export default async function InquiriesPage() {
         <span style={pill}>Package</span>
         <span style={pill}>B2B / DMC</span>
         <span style={pill}>OTA pre-stay</span>
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: '#8a8170' }}>
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--ink-mute)' }}>
           Property + date + segment filters above (layout)
         </span>
       </div>
@@ -327,7 +327,7 @@ export default async function InquiriesPage() {
           value="18 / 4"
           label="4 past 1h target"
           needs={dataNeed}
-          valueColor="#a02d2d"
+          valueColor="var(--st-bad)"
         />
         <OpsKpiTile
           scope="Median time to first reply"
@@ -340,7 +340,7 @@ export default async function InquiriesPage() {
           value="61%"
           label="sent without edit · target 75%"
           needs={dataNeed}
-          valueColor="#a87024"
+          valueColor="var(--brass)"
         />
         <OpsKpiTile
           scope="Quote → Booking conv"
@@ -359,7 +359,7 @@ export default async function InquiriesPage() {
           value={mtdRevenueLabel}
           label={mtdLive ? 'mv_kpi_today · live · budget pending' : 'mockup · awaiting data'}
           needs={mtdLive ? 'Budget pending' : dataNeed}
-          valueColor={mtdLive ? undefined : '#a87024'}
+          valueColor={mtdLive ? undefined : 'var(--brass)'}
         />
       </div>
 
@@ -467,7 +467,7 @@ const pill: React.CSSProperties = {
 
 const pillActive: React.CSSProperties = {
   ...pill,
-  background: '#1f3d2e',
+  background: 'var(--moss-mid)',
   color: '#fff',
-  borderColor: '#1f3d2e',
+  borderColor: 'var(--moss-mid)',
 };

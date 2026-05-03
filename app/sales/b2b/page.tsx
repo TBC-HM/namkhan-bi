@@ -13,12 +13,12 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
 const STATUS_PILL: Record<string, { bg: string; bd: string; fg: string; label: string }> = {
-  active:    { bg: '#e6f4ec', bd: '#aed6c0', fg: '#1f6f43', label: 'Active' },
-  expiring:  { bg: '#fef3c7', bd: '#f3d57a', fg: '#5e4818', label: 'Expiring' },
-  expired:   { bg: '#f7d9d9', bd: '#e2a8a8', fg: '#7a1f1f', label: 'Expired' },
+  active:    { bg: '#e6f4ec', bd: '#aed6c0', fg: 'var(--moss-glow)', label: 'Active' },
+  expiring:  { bg: '#fef3c7', bd: '#f3d57a', fg: 'var(--brass)', label: 'Expiring' },
+  expired:   { bg: '#f7d9d9', bd: '#e2a8a8', fg: 'var(--st-bad)', label: 'Expired' },
   draft:     { bg: '#eee',    bd: '#ccc',    fg: '#555',    label: 'Draft' },
   suspended: { bg: '#eee',    bd: '#ccc',    fg: '#555',    label: 'Suspended' },
-  no_contract: { bg: '#f7d9d9', bd: '#e2a8a8', fg: '#7a1f1f', label: 'No contract' },
+  no_contract: { bg: '#f7d9d9', bd: '#e2a8a8', fg: 'var(--st-bad)', label: 'No contract' },
 };
 
 interface DisplayRow {
@@ -120,15 +120,15 @@ export default async function B2bDmcContractsPage() {
 
   return (
     <>
-      <div style={{ fontSize: 11, color: '#8a8170', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 14 }}>
-        <strong style={{ color: '#4a4538' }}>Sales</strong> › B2B / DMC › Partners
+      <div style={{ fontSize: 11, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 14 }}>
+        <strong style={{ color: 'var(--ink-soft)' }}>Sales</strong> › B2B / DMC › Partners
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16 }}>
         <div>
           <h1 style={{ margin: '4px 0 2px', fontFamily: 'Georgia, serif', fontWeight: 500, fontSize: 30 }}>
-            B2B / DMC · <em style={{ color: '#a17a4f' }}>{contracts.length} on file · {uncontractedRows.length} uncontracted</em>
+            B2B / DMC · <em style={{ color: 'var(--brass)' }}>{contracts.length} on file · {uncontractedRows.length} uncontracted</em>
           </h1>
-          <div style={{ fontSize: 13, color: '#4a4538' }}>
+          <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
             Every partner with a contract <strong>or</strong> sending business via the LPA rate plan. Uncontracted sources highlighted — that's revenue with no anti-publication clause / parity guard / payment terms.
           </div>
         </div>
@@ -141,7 +141,7 @@ export default async function B2bDmcContractsPage() {
       <div style={{ background: '#fff', border: '1px solid #e6dfc9', borderRadius: 8, overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
           <thead>
-            <tr style={{ background: '#f7f3e7', textAlign: 'left', color: '#8a8170', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               <th style={{ padding: '10px 12px' }}>Partner</th>
               <th style={{ padding: '10px 12px' }}>Country</th>
               <th style={{ padding: '10px 12px' }}>Type</th>
@@ -158,9 +158,9 @@ export default async function B2bDmcContractsPage() {
             {allRows.map((row) => {
               const pill = STATUS_PILL[row.status] ?? STATUS_PILL.draft;
               const dayColor =
-                row.daysToExpiry == null ? '#8a8170' :
-                row.daysToExpiry < 0 ? '#a83232' :
-                row.daysToExpiry < 90 ? '#a17a4f' : '#4a4538';
+                row.daysToExpiry == null ? 'var(--ink-mute)' :
+                row.daysToExpiry < 0 ? 'var(--st-bad)' :
+                row.daysToExpiry < 90 ? 'var(--brass)' : 'var(--ink-soft)';
               const isUncontracted = row.contract_id == null;
               return (
                 <tr
@@ -172,11 +172,11 @@ export default async function B2bDmcContractsPage() {
                 >
                   <td style={{ padding: '10px 12px' }}>
                     {row.contract_id ? (
-                      <Link href={`/sales/b2b/partner/${row.contract_id}`} style={{ color: '#4a4538', textDecoration: 'none', fontWeight: 500 }}>
+                      <Link href={`/sales/b2b/partner/${row.contract_id}`} style={{ color: 'var(--ink-soft)', textDecoration: 'none', fontWeight: 500 }}>
                         {row.partner_short_name}
                       </Link>
                     ) : (
-                      <span style={{ color: '#7a1f1f', fontWeight: 500 }}>{row.partner_short_name}</span>
+                      <span style={{ color: 'var(--st-bad)', fontWeight: 500 }}>{row.partner_short_name}</span>
                     )}
                   </td>
                   <td style={{ padding: '10px 12px' }}>{row.flag ?? ''} {row.country ?? '—'}</td>
@@ -186,8 +186,8 @@ export default async function B2bDmcContractsPage() {
                       {pill.label}
                     </span>
                   </td>
-                  <td style={{ padding: '10px 12px', color: '#8a8170', fontSize: 11.5 }}>{row.effective ?? '—'}</td>
-                  <td style={{ padding: '10px 12px', color: '#8a8170', fontSize: 11.5 }}>{row.expires ?? '—'}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontSize: 11.5 }}>{row.effective ?? '—'}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontSize: 11.5 }}>{row.expires ?? '—'}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: dayColor }}>
                     {row.daysToExpiry == null ? '—' :
                       row.daysToExpiry > 0 ? `${row.daysToExpiry}` :
@@ -197,7 +197,7 @@ export default async function B2bDmcContractsPage() {
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>
                     {row.revenue > 0 ? `USD ${row.revenue.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—'}
                   </td>
-                  <td style={{ padding: '10px 12px', textAlign: 'center', color: '#8a8170' }}>
+                  <td style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--ink-mute)' }}>
                     {row.autoRenew ? '✓' : '—'}
                   </td>
                 </tr>
@@ -207,7 +207,7 @@ export default async function B2bDmcContractsPage() {
         </table>
       </div>
 
-      <div style={{ marginTop: 14, padding: '10px 14px', background: '#e6f4ec', border: '1px solid #aed6c0', borderRadius: 6, color: '#1f5f3a', fontSize: 11.5 }}>
+      <div style={{ marginTop: 14, padding: '10px 14px', background: '#e6f4ec', border: '1px solid #aed6c0', borderRadius: 6, color: 'var(--moss)', fontSize: 11.5 }}>
         <strong>✓ Wired.</strong> {contractRows.length} contracts on file · {uncontractedRows.length} uncontracted sources sending LPA business. Yellow rows = revenue at risk — create contracts for them via Reconciliation queue.
       </div>
     </>

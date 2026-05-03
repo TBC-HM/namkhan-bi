@@ -26,7 +26,7 @@ function fmtMonth(yyyymm: string) {
 }
 
 function rateColor(rate: number, min: number, max: number): string {
-  if (max <= min) return '#e6dfc9';
+  if (max <= min) return 'var(--paper-deep)';
   const t = (rate - min) / (max - min);
   const hi = { r: 0xa1, g: 0x7a, b: 0x4f };
   const lo = { r: 0xf6, g: 0xf0, b: 0xe1 };
@@ -147,19 +147,19 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
         }
       `}</style>
 
-      <div style={{ fontSize: 11, color: '#8a8170', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 14 }}>
-        <strong style={{ color: '#4a4538' }}>Revenue</strong> › Pricing
+      <div style={{ fontSize: 11, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 14 }}>
+        <strong style={{ color: 'var(--ink-soft)' }}>Revenue</strong> › Pricing
       </div>
       <h1 style={{ margin: '4px 0 2px', fontFamily: 'Georgia, serif', fontWeight: 500, fontSize: 30 }}>
-        Pricing · <em style={{ color: '#a17a4f' }}>{winLabels[win]} · by {gran}</em>
+        Pricing · <em style={{ color: 'var(--brass)' }}>{winLabels[win]} · by {gran}</em>
       </h1>
-      <div style={{ fontSize: 13, color: '#4a4538' }}>
+      <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
         Forward inventory rates from <code>public.rate_inventory</code> ({totalInv.toLocaleString()} cells across {roomTypes.length} room types × {planAggs.length} rate plans).
-        <br /><span style={{ fontSize: 11, color: '#8a8170' }}>Backward chips greyed — pricing is forward-only.</span>
+        <br /><span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>Backward chips greyed — pricing is forward-only.</span>
       </div>
 
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 12, marginBottom: 10 }}>
-        <span style={{ fontSize: 11, color: '#8a8170', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Granularity</span>
+        <span style={{ fontSize: 11, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Granularity</span>
         {(['day', 'week', 'month'] as const).map((g) => {
           const active = g === gran;
           const params = new URLSearchParams();
@@ -169,7 +169,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
           return (
             <a key={g} href={href} style={{
               padding: '4px 12px', borderRadius: 4, border: '1px solid #d9d2bc',
-              background: active ? '#4a4538' : '#fff', color: active ? '#fff' : '#4a4538',
+              background: active ? 'var(--ink-soft)' : '#fff', color: active ? '#fff' : 'var(--ink-soft)',
               fontSize: 12, textDecoration: 'none', textTransform: 'capitalize',
             }}>{g}</a>
           );
@@ -191,7 +191,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
           <thead>
-            <tr style={{ background: '#f7f3e7', textAlign: 'left', color: '#8a8170', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               <th style={{ padding: '10px 12px' }}>Room type</th>
               <th style={{ padding: '10px 12px', textAlign: 'right' }}>Cells</th>
               <th style={{ padding: '10px 12px', textAlign: 'right' }}>Avg</th>
@@ -207,14 +207,14 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
             {roomAggs.map((a) => (
               <tr key={a.id} style={{ borderTop: '1px solid #f0eadb' }}>
                 <td style={{ padding: '10px 12px', fontWeight: 500 }}>{a.rt}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: '#8a8170' }}>{a.count}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: 'var(--ink-mute)' }}>{a.count}</td>
                 <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>USD {a.avg.toFixed(0)}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: '#1f6f43' }}>USD {a.min.toFixed(0)}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: '#a17a4f' }}>USD {a.max.toFixed(0)}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: '#8a8170' }}>USD {(a.max - a.min).toFixed(0)}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: a.stops > 0 ? '#a83232' : '#8a8170' }}>{a.stops || '—'}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: a.minStays > 0 ? '#a17a4f' : '#8a8170' }}>{a.minStays || '—'}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: '#8a8170' }}>{a.cta || 0}/{a.ctd || 0}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: 'var(--moss-glow)' }}>USD {a.min.toFixed(0)}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: 'var(--brass)' }}>USD {a.max.toFixed(0)}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: 'var(--ink-mute)' }}>USD {(a.max - a.min).toFixed(0)}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: a.stops > 0 ? 'var(--st-bad)' : 'var(--ink-mute)' }}>{a.stops || '—'}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: a.minStays > 0 ? 'var(--brass)' : 'var(--ink-mute)' }}>{a.minStays || '—'}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: 'var(--ink-mute)' }}>{a.cta || 0}/{a.ctd || 0}</td>
               </tr>
             ))}
           </tbody>
@@ -224,14 +224,14 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
       <div style={{ background: '#fff', border: '1px solid #e6dfc9', borderRadius: 8, padding: '14px 16px', marginBottom: 14, overflowX: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
           <h2 style={{ margin: 0, fontFamily: 'Georgia, serif', fontWeight: 500, fontSize: 17 }}>Rate calendar · room × {gran}</h2>
-          <span style={{ fontSize: 11, color: '#8a8170' }}>Color = avg USD (terracotta=high, pale=low) · hover for details</span>
+          <span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>Color = avg USD (terracotta=high, pale=low) · hover for details</span>
         </div>
         <table style={{ borderCollapse: 'collapse', fontSize: 11, minWidth: '100%' }}>
           <thead>
             <tr>
-              <th style={{ padding: '6px 10px', textAlign: 'left', color: '#8a8170', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Room</th>
+              <th style={{ padding: '6px 10px', textAlign: 'left', color: 'var(--ink-mute)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Room</th>
               {buckets.map((b) => (
-                <th key={b} style={{ padding: '6px 4px', textAlign: 'center', color: '#8a8170', fontSize: 10, fontWeight: 500, minWidth: 50 }}>
+                <th key={b} style={{ padding: '6px 4px', textAlign: 'center', color: 'var(--ink-mute)', fontSize: 10, fontWeight: 500, minWidth: 50 }}>
                   {gran === 'month' ? fmtMonth(b) : b.slice(5)}
                 </th>
               ))}
@@ -250,7 +250,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
                   return (
                     <td key={b} style={{
                       padding: '6px 4px', textAlign: 'center', background: bg,
-                      color: avg > avgRate * 1.2 ? '#fff' : '#4a4538',
+                      color: avg > avgRate * 1.2 ? '#fff' : 'var(--ink-soft)',
                       fontFamily: 'Menlo, monospace', fontSize: 10.5, border: '1px solid #fff',
                     }} title={`${a.rt} · ${b}\navg USD ${avg.toFixed(0)}\nmin USD ${c.min.toFixed(0)} · max USD ${c.max.toFixed(0)}${c.stops > 0 ? `\n${c.stops} stop-sell` : ''}`}>
                       {avg.toFixed(0)}
@@ -269,7 +269,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
           <thead>
-            <tr style={{ background: '#f7f3e7', textAlign: 'left', color: '#8a8170', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               <th style={{ padding: '10px 12px' }}>Rate plan</th>
               <th style={{ padding: '10px 12px' }}>Type</th>
               <th style={{ padding: '10px 12px', textAlign: 'right' }}>Cells</th>
@@ -282,25 +282,25 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
           <tbody>
             {planAggs.slice(0, 30).map((p) => {
               const deltaPct = avgRate > 0 ? ((p.avg - avgRate) / avgRate) * 100 : 0;
-              const dColor = deltaPct < -10 ? '#a83232' : deltaPct < 0 ? '#a17a4f' : deltaPct > 10 ? '#1f6f43' : '#4a4538';
+              const dColor = deltaPct < -10 ? 'var(--st-bad)' : deltaPct < 0 ? 'var(--brass)' : deltaPct > 10 ? 'var(--moss-glow)' : 'var(--ink-soft)';
               return (
                 <tr key={p.name} style={{ borderTop: '1px solid #f0eadb' }}>
                   <td style={{ padding: '10px 12px', fontWeight: 500 }}>{p.name}</td>
-                  <td style={{ padding: '10px 12px', color: '#8a8170', fontSize: 11.5 }}>{p.type ?? '—'}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontSize: 11.5 }}>{p.type ?? '—'}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>{p.count}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>USD {p.avg.toFixed(0)}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: '#8a8170' }}>USD {p.min.toFixed(0)}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: '#8a8170' }}>USD {p.max.toFixed(0)}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: 'var(--ink-mute)' }}>USD {p.min.toFixed(0)}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: 'var(--ink-mute)' }}>USD {p.max.toFixed(0)}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: dColor }}>{deltaPct >= 0 ? '+' : ''}{deltaPct.toFixed(0)}%</td>
                 </tr>
               );
             })}
           </tbody>
         </table>
-        {planAggs.length > 30 && <div style={{ padding: '8px 16px', fontSize: 11, color: '#8a8170' }}>+ {planAggs.length - 30} more</div>}
+        {planAggs.length > 30 && <div style={{ padding: '8px 16px', fontSize: 11, color: 'var(--ink-mute)' }}>+ {planAggs.length - 30} more</div>}
       </div>
 
-      <div style={{ marginTop: 14, padding: '10px 14px', background: '#e6f4ec', border: '1px solid #aed6c0', borderRadius: 6, color: '#1f5f3a', fontSize: 11.5 }}>
+      <div style={{ marginTop: 14, padding: '10px 14px', background: '#e6f4ec', border: '1px solid #aed6c0', borderRadius: 6, color: 'var(--moss)', fontSize: 11.5 }}>
         <strong>✓ Wired.</strong> {totalInv.toLocaleString()} live inventory cells. KPIs · BAR ladder · heatmap · rate-plan breakdown all driven by URL <code>?win=</code> + <code>?gran=</code>.
       </div>
     </>
@@ -308,12 +308,12 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
 }
 
 function Kpi({ scope, value, sub, tone = 'flat' }: { scope: string; value: string; sub: string; tone?: 'flat' | 'up' | 'warn' | 'bad' }) {
-  const c = tone === 'up' ? '#1f6f43' : tone === 'warn' ? '#a17a4f' : tone === 'bad' ? '#a83232' : '#4a4538';
+  const c = tone === 'up' ? 'var(--moss-glow)' : tone === 'warn' ? 'var(--brass)' : tone === 'bad' ? 'var(--st-bad)' : 'var(--ink-soft)';
   return (
     <div style={{ background: '#fff', border: '1px solid #e6dfc9', borderRadius: 8, padding: '12px 14px' }}>
-      <div style={{ fontSize: 10.5, color: '#8a8170', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{scope}</div>
+      <div style={{ fontSize: 10.5, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{scope}</div>
       <div style={{ fontFamily: 'Georgia, serif', fontSize: 22, fontWeight: 500, color: c, margin: '2px 0' }}>{value}</div>
-      <div style={{ fontSize: 11, color: '#8a8170' }}>{sub}</div>
+      <div style={{ fontSize: 11, color: 'var(--ink-mute)' }}>{sub}</div>
     </div>
   );
 }

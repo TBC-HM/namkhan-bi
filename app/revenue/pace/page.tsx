@@ -116,25 +116,25 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
         }
       `}</style>
 
-      <div style={{ fontSize: 11, color: '#8a8170', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 14 }}>
-        <strong style={{ color: '#4a4538' }}>Revenue</strong> › Pace
+      <div style={{ fontSize: 11, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 14 }}>
+        <strong style={{ color: 'var(--ink-soft)' }}>Revenue</strong> › Pace
       </div>
       <h1 style={{ margin: '4px 0 2px', fontFamily: 'Georgia, serif', fontWeight: 500, fontSize: 30 }}>
-        Pace · <em style={{ color: '#a17a4f' }}>{winLabels[win]} · by {granLabels[gran].toLowerCase()}</em>
+        Pace · <em style={{ color: 'var(--brass)' }}>{winLabels[win]} · by {granLabels[gran].toLowerCase()}</em>
       </h1>
-      <div style={{ fontSize: 13, color: '#4a4538' }}>
+      <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
         Forward on-the-books from <code>public.v_otb_pace</code>. Window <strong>{period.label}</strong> ({fromIso} → {toIso}, {period.days} nights, capacity = {capacityRn} RN
         {straddles ? <> · <em>flips {CAPACITY_PRE}→{CAPACITY_POST} on {CAPACITY_PIVOT}</em></> : null}
         ).
         <br />
-        <span style={{ fontSize: 11, color: '#8a8170' }}>
+        <span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>
           Backward chips greyed out — pace is forward-looking by definition.
         </span>
       </div>
 
       {/* Granularity chips */}
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 12, marginBottom: 10 }}>
-        <span style={{ fontSize: 11, color: '#8a8170', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Granularity</span>
+        <span style={{ fontSize: 11, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Granularity</span>
         {(['day', 'week', 'month'] as const).map((g) => {
           const active = g === gran;
           const params = new URLSearchParams();
@@ -149,8 +149,8 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
                 padding: '4px 12px',
                 borderRadius: 4,
                 border: '1px solid #d9d2bc',
-                background: active ? '#4a4538' : '#fff',
-                color: active ? '#fff' : '#4a4538',
+                background: active ? 'var(--ink-soft)' : '#fff',
+                color: active ? '#fff' : 'var(--ink-soft)',
                 fontSize: 12,
                 textDecoration: 'none',
                 textTransform: 'capitalize',
@@ -160,7 +160,7 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
             </a>
           );
         })}
-        <span style={{ marginLeft: 12, fontSize: 11, color: '#8a8170' }}>
+        <span style={{ marginLeft: 12, fontSize: 11, color: 'var(--ink-mute)' }}>
           Forward window selectors are at the top filter strip ↑
         </span>
       </div>
@@ -181,10 +181,10 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
           <h2 style={{ margin: 0, fontFamily: 'Georgia, serif', fontWeight: 500, fontSize: 17 }}>
             On-the-books by stay-{gran}
           </h2>
-          <span style={{ fontSize: 11, color: '#8a8170' }}>{buckets.length} bucket{buckets.length === 1 ? '' : 's'} · max {maxRns} RN</span>
+          <span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>{buckets.length} bucket{buckets.length === 1 ? '' : 's'} · max {maxRns} RN</span>
         </div>
         {buckets.length === 0 ? (
-          <div style={{ padding: '40px 0', textAlign: 'center', color: '#8a8170', fontSize: 12 }}>
+          <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-mute)', fontSize: 12 }}>
             No on-the-books in this window.
           </div>
         ) : (
@@ -198,7 +198,7 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
                   style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 0 }}
                   title={`${b.key} · ${b.rns} RN · USD ${b.rev.toFixed(0)} · ADR USD ${adrB.toFixed(0)}`}
                 >
-                  <span style={{ fontSize: 10, color: '#4a4538', marginBottom: 2 }}>{b.rns}</span>
+                  <span style={{ fontSize: 10, color: 'var(--ink-soft)', marginBottom: 2 }}>{b.rns}</span>
                   <div
                     style={{
                       width: '100%',
@@ -216,7 +216,7 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
         {buckets.length > 0 && (
           <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
             {buckets.map((b) => (
-              <div key={b.key} style={{ flex: 1, fontSize: 9.5, color: '#8a8170', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <div key={b.key} style={{ flex: 1, fontSize: 9.5, color: 'var(--ink-mute)', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {gran === 'month' ? fmtMonth(b.key) : b.key.slice(5)}
               </div>
             ))}
@@ -228,7 +228,7 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
       <div style={{ background: '#fff', border: '1px solid #e6dfc9', borderRadius: 8, overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
           <thead>
-            <tr style={{ background: '#f7f3e7', textAlign: 'left', color: '#8a8170', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               <th style={{ padding: '10px 12px' }}>{granLabels[gran]}</th>
               <th style={{ padding: '10px 12px', textAlign: 'right' }}>Days</th>
               <th style={{ padding: '10px 12px', textAlign: 'right' }}>OTB RN</th>
@@ -270,12 +270,12 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
                   <td style={{ padding: '10px 12px', fontWeight: 500 }}>
                     {gran === 'month' ? fmtMonth(b.key) : b.key}
                   </td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: '#8a8170' }}>{b.days}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: 'var(--ink-mute)' }}>{b.days}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>{b.rns}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>USD {b.rev.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: '#8a8170' }}>USD {adrB.toFixed(0)}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: occB > 70 ? '#1f6f43' : occB < 30 ? '#a83232' : '#4a4538' }}>{occB.toFixed(1)}%</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: b.cxl > 0 ? '#a83232' : '#8a8170' }}>{b.cxl || '—'}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: 'var(--ink-mute)' }}>USD {adrB.toFixed(0)}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: occB > 70 ? 'var(--moss-glow)' : occB < 30 ? 'var(--st-bad)' : 'var(--ink-soft)' }}>{occB.toFixed(1)}%</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: b.cxl > 0 ? 'var(--st-bad)' : 'var(--ink-mute)' }}>{b.cxl || '—'}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', color: '#c5b89a', fontStyle: 'italic' }}>lorem</td>
                 </tr>
               );
@@ -284,7 +284,7 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
         </table>
       </div>
 
-      <div style={{ marginTop: 14, padding: '10px 14px', background: '#e6f4ec', border: '1px solid #aed6c0', borderRadius: 6, color: '#1f5f3a', fontSize: 11.5 }}>
+      <div style={{ marginTop: 14, padding: '10px 14px', background: '#e6f4ec', border: '1px solid #aed6c0', borderRadius: 6, color: 'var(--moss)', fontSize: 11.5 }}>
         <strong>✓ Wired.</strong> Real OTB pace from <code>public.v_otb_pace</code>. KPIs + chart + table all driven by URL <code>?win=</code> + <code>?gran=</code>. Forward windows: Next 7 / 30 / 90 / 180 / 365 (top filter strip). STLY column needs snapshot history table — pending.
       </div>
     </>
@@ -292,12 +292,12 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
 }
 
 function Kpi({ scope, value, sub, tone = 'flat', lorem = false }: { scope: string; value: string; sub: string; tone?: 'flat' | 'up' | 'warn' | 'bad'; lorem?: boolean }) {
-  const c = tone === 'up' ? '#1f6f43' : tone === 'warn' ? '#a17a4f' : tone === 'bad' ? '#a83232' : '#4a4538';
+  const c = tone === 'up' ? 'var(--moss-glow)' : tone === 'warn' ? 'var(--brass)' : tone === 'bad' ? 'var(--st-bad)' : 'var(--ink-soft)';
   return (
     <div style={{ background: '#fff', border: '1px solid #e6dfc9', borderRadius: 8, padding: '12px 14px' }}>
-      <div style={{ fontSize: 10.5, color: '#8a8170', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{scope}</div>
+      <div style={{ fontSize: 10.5, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{scope}</div>
       <div style={{ fontFamily: 'Georgia, serif', fontSize: 22, fontWeight: 500, color: lorem ? '#c5b89a' : c, fontStyle: lorem ? 'italic' : 'normal', margin: '2px 0' }}>{value}</div>
-      <div style={{ fontSize: 11, color: '#8a8170' }}>{sub}</div>
+      <div style={{ fontSize: 11, color: 'var(--ink-mute)' }}>{sub}</div>
     </div>
   );
 }

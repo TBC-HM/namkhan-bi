@@ -34,9 +34,9 @@ async function getGroups() {
 }
 
 const STATUS_PILL: Record<string, { bg: string; bd: string; fg: string }> = {
-  confirmed: { bg: '#e6f4ec', bd: '#aed6c0', fg: '#1f6f43' },
-  tentative: { bg: '#fef3c7', bd: '#f3d57a', fg: '#5e4818' },
-  cancelled: { bg: '#f7d9d9', bd: '#e2a8a8', fg: '#7a1f1f' },
+  confirmed: { bg: '#e6f4ec', bd: '#aed6c0', fg: 'var(--moss-glow)' },
+  tentative: { bg: '#fef3c7', bd: '#f3d57a', fg: 'var(--brass)' },
+  cancelled: { bg: '#f7d9d9', bd: '#e2a8a8', fg: 'var(--st-bad)' },
   open:      { bg: '#e7eef5', bd: '#aac2db', fg: '#2c4d70' },
 };
 
@@ -52,13 +52,13 @@ export default async function GroupsPage() {
 
   return (
     <>
-      <div style={{ fontSize: 11, color: '#8a8170', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 14 }}>
-        <strong style={{ color: '#4a4538' }}>Sales</strong> › Groups
+      <div style={{ fontSize: 11, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 14 }}>
+        <strong style={{ color: 'var(--ink-soft)' }}>Sales</strong> › Groups
       </div>
       <h1 style={{ margin: '4px 0 2px', fontFamily: 'Georgia, serif', fontWeight: 500, fontSize: 30 }}>
-        Groups · <em style={{ color: '#a17a4f' }}>{groups.length} blocks</em>
+        Groups · <em style={{ color: 'var(--brass)' }}>{groups.length} blocks</em>
       </h1>
-      <div style={{ fontSize: 13, color: '#4a4538' }}>
+      <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
         Group bookings pipeline from Cloudbeds. MICE, weddings, retreats, family blocks. Strategist agent + margin floor + displacement check.
       </div>
 
@@ -71,14 +71,14 @@ export default async function GroupsPage() {
       </div>
 
       {groups.length === 0 ? (
-        <div style={{ background: '#fff', border: '1px dashed #d9d2bc', borderRadius: 8, padding: '40px 20px', textAlign: 'center', color: '#8a8170', fontSize: 13 }}>
+        <div style={{ background: '#fff', border: '1px dashed #d9d2bc', borderRadius: 8, padding: '40px 20px', textAlign: 'center', color: 'var(--ink-mute)', fontSize: 13 }}>
           No group blocks in <code>public.groups</code>.
         </div>
       ) : (
         <div style={{ background: '#fff', border: '1px solid #e6dfc9', borderRadius: 8, overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
             <thead>
-              <tr style={{ background: '#f7f3e7', textAlign: 'left', color: '#8a8170', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 <th style={{ padding: '10px 12px' }}>Group</th>
                 <th style={{ padding: '10px 12px' }}>Arrival</th>
                 <th style={{ padding: '10px 12px' }}>Departure</th>
@@ -97,14 +97,14 @@ export default async function GroupsPage() {
                 return (
                   <tr key={g.group_id} style={{ borderTop: '1px solid #f0eadb' }}>
                     <td style={{ padding: '10px 12px', fontWeight: 500 }}>{g.group_name ?? '—'}</td>
-                    <td style={{ padding: '10px 12px', color: '#8a8170', fontFamily: 'Menlo, monospace', fontSize: 11.5 }}>{g.arrival_date ?? '—'}</td>
-                    <td style={{ padding: '10px 12px', color: '#8a8170', fontFamily: 'Menlo, monospace', fontSize: 11.5 }}>{g.departure_date ?? '—'}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontFamily: 'Menlo, monospace', fontSize: 11.5 }}>{g.arrival_date ?? '—'}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontFamily: 'Menlo, monospace', fontSize: 11.5 }}>{g.departure_date ?? '—'}</td>
                     <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>{g.block_size ?? '—'}</td>
                     <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>{g.pickup ?? '—'}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: (Number(g.pickup_pct) ?? 0) >= 80 ? '#1f6f43' : (Number(g.pickup_pct) ?? 0) >= 50 ? '#a17a4f' : '#a83232' }}>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: (Number(g.pickup_pct) ?? 0) >= 80 ? 'var(--moss-glow)' : (Number(g.pickup_pct) ?? 0) >= 50 ? 'var(--brass)' : 'var(--st-bad)' }}>
                       {g.pickup_pct == null ? '—' : `${Number(g.pickup_pct).toFixed(0)}%`}
                     </td>
-                    <td style={{ padding: '10px 12px', color: '#8a8170', fontFamily: 'Menlo, monospace', fontSize: 11.5 }}>{g.cutoff_date ?? '—'}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontFamily: 'Menlo, monospace', fontSize: 11.5 }}>{g.cutoff_date ?? '—'}</td>
                     <td style={{ padding: '10px 12px', fontSize: 11.5 }}>{g.contact_name ?? '—'}</td>
                     <td style={{ padding: '10px 12px' }}>
                       <span style={{ background: pill.bg, border: `1px solid ${pill.bd}`, color: pill.fg, padding: '2px 8px', borderRadius: 10, fontSize: 10.5, fontWeight: 600, textTransform: 'capitalize' }}>
@@ -119,7 +119,7 @@ export default async function GroupsPage() {
         </div>
       )}
 
-      <div style={{ marginTop: 14, padding: '10px 14px', background: '#e6f4ec', border: '1px solid #aed6c0', borderRadius: 6, color: '#1f5f3a', fontSize: 11.5 }}>
+      <div style={{ marginTop: 14, padding: '10px 14px', background: '#e6f4ec', border: '1px solid #aed6c0', borderRadius: 6, color: 'var(--moss)', fontSize: 11.5 }}>
         <strong>✓ Wired.</strong> Reading from <code>public.groups</code> ({groups.length} rows). Margin floor requires revenue + cost join — pending.
       </div>
     </>
@@ -129,9 +129,9 @@ export default async function GroupsPage() {
 function Kpi({ scope, value, sub, lorem = false }: { scope: string; value: string; sub: string; lorem?: boolean }) {
   return (
     <div style={{ background: '#fff', border: '1px solid #e6dfc9', borderRadius: 8, padding: '12px 14px' }}>
-      <div style={{ fontSize: 10.5, color: '#8a8170', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{scope}</div>
-      <div style={{ fontFamily: 'Georgia, serif', fontSize: 22, fontWeight: 500, color: lorem ? '#c5b89a' : '#4a4538', fontStyle: lorem ? 'italic' : 'normal', margin: '2px 0' }}>{value}</div>
-      <div style={{ fontSize: 11, color: '#8a8170' }}>{sub}</div>
+      <div style={{ fontSize: 10.5, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{scope}</div>
+      <div style={{ fontFamily: 'Georgia, serif', fontSize: 22, fontWeight: 500, color: lorem ? '#c5b89a' : 'var(--ink-soft)', fontStyle: lorem ? 'italic' : 'normal', margin: '2px 0' }}>{value}</div>
+      <div style={{ fontSize: 11, color: 'var(--ink-mute)' }}>{sub}</div>
     </div>
   );
 }

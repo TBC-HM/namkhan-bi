@@ -84,7 +84,7 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
               const thumb = publicRenderUrl(a?.renders?.thumbnail) ?? publicRenderUrl(a?.renders?.web_2k);
               return (
                 <div key={s.slot_order} style={{ background: 'var(--paper)', border: '1px solid var(--line)', overflow: 'hidden' }}>
-                  <div style={{ aspectRatio: '4 / 3', background: '#1a1a1a', position: 'relative' }}>
+                  <div style={{ aspectRatio: '4 / 3', background: 'var(--ink)', position: 'relative' }}>
                     {thumb
                       // eslint-disable-next-line @next/next/no-img-element
                       ? <img src={thumb} alt={s.alt_text_per_slot ?? a?.alt_text ?? ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />

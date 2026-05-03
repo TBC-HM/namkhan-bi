@@ -522,7 +522,7 @@ export default async function PnLPage({ searchParams }: Props) {
               <div className="hm" style={{ background: '#cee4d3' }}>0.4</div>
               <div className="hm" style={{ background: '#cee4d3' }}>0.1</div>
               <div className="hm-lbl">F&amp;B</div>
-              <div className="hm" style={{ background: '#a02d2d', color: '#fff8eb' }}>3.6</div>
+              <div className="hm" style={{ background: 'var(--st-bad)', color: 'var(--paper-warm)' }}>3.6</div>
               <div className="hm" style={{ background: '#f0d9a3' }}>1.2</div>
               <div className="hm" style={{ background: '#cee4d3' }}>0.3</div>
               <div className="hm" style={{ background: '#f0d9a3' }}>0.9</div>
@@ -534,7 +534,7 @@ export default async function PnLPage({ searchParams }: Props) {
               <div className="hm" style={{ background: '#cee4d3' }}>0.2</div>
               <div className="hm" style={{ background: '#cee4d3' }}>0.3</div>
               <div className="hm-lbl">A&amp;G</div>
-              <div className="hm" style={{ background: '#a02d2d', color: '#fff8eb' }}>7.1</div>
+              <div className="hm" style={{ background: 'var(--st-bad)', color: 'var(--paper-warm)' }}>7.1</div>
               <div className="hm" style={{ background: '#f0d9a3' }}>1.1</div>
               <div className="hm" style={{ background: '#e8b9b3' }}>2.0</div>
               <div className="hm" style={{ background: '#cee4d3' }}>0.2</div>

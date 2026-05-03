@@ -12,9 +12,9 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 const STATUS_PILL: Record<string, { bg: string; bd: string; fg: string }> = {
-  confirmed:     { bg: '#e6f4ec', bd: '#aed6c0', fg: '#1f6f43' },
-  not_confirmed: { bg: '#fef3c7', bd: '#f3d57a', fg: '#5e4818' },
-  cancelled:     { bg: '#f7d9d9', bd: '#e2a8a8', fg: '#7a1f1f' },
+  confirmed:     { bg: '#e6f4ec', bd: '#aed6c0', fg: 'var(--moss-glow)' },
+  not_confirmed: { bg: '#fef3c7', bd: '#f3d57a', fg: 'var(--brass)' },
+  cancelled:     { bg: '#f7d9d9', bd: '#e2a8a8', fg: 'var(--st-bad)' },
   checked_in:    { bg: '#e7eef5', bd: '#aac2db', fg: '#2c4d70' },
   checked_out:   { bg: '#eee',    bd: '#ccc',    fg: '#555'    },
 };
@@ -59,13 +59,13 @@ export default async function ReconciliationPage() {
 
   return (
     <>
-      <div style={{ fontSize: 11, color: '#8a8170', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 14 }}>
-        <strong style={{ color: '#4a4538' }}>Sales</strong> › B2B / DMC › Reconciliation
+      <div style={{ fontSize: 11, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 14 }}>
+        <strong style={{ color: 'var(--ink-soft)' }}>Sales</strong> › B2B / DMC › Reconciliation
       </div>
       <h1 style={{ margin: '4px 0 2px', fontFamily: 'Georgia, serif', fontWeight: 500, fontSize: 30 }}>
-        Reconciliation queue · <em style={{ color: '#a17a4f' }}>{unconfirmed.length} pending · {confirmed.length} mapped</em>
+        Reconciliation queue · <em style={{ color: 'var(--brass)' }}>{unconfirmed.length} pending · {confirmed.length} mapped</em>
       </h1>
-      <div style={{ fontSize: 13, color: '#4a4538' }}>
+      <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
         All <code>Leisure Partnership Agreement</code> reservations. Pick a contract from the dropdown and click <strong>Confirm</strong> — saves to <code>governance.dmc_reservation_mapping</code>. Reservation IDs deeplink to Cloudbeds.
       </div>
 
@@ -75,7 +75,7 @@ export default async function ReconciliationPage() {
       <div style={{ background: '#fff', border: '1px solid #e6dfc9', borderRadius: 8, overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
-            <tr style={{ background: '#f7f3e7', textAlign: 'left', color: '#8a8170', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               <th style={{ padding: '10px 10px' }}>Cloudbeds ID</th>
               <th style={{ padding: '10px 10px' }}>Guest</th>
               <th style={{ padding: '10px 10px' }}>Source</th>
@@ -106,7 +106,7 @@ export default async function ReconciliationPage() {
                   </td>
                   <td style={{ padding: '6px 10px', fontSize: 11.5 }}>{r.guest_name ?? '—'}</td>
                   <td style={{ padding: '6px 10px', fontWeight: 500, fontSize: 11.5 }}>{r.source_name ?? '—'}</td>
-                  <td style={{ padding: '6px 10px', color: '#8a8170', fontFamily: 'Menlo, monospace', fontSize: 11 }}>{r.check_in_date ?? '—'}</td>
+                  <td style={{ padding: '6px 10px', color: 'var(--ink-mute)', fontFamily: 'Menlo, monospace', fontSize: 11 }}>{r.check_in_date ?? '—'}</td>
                   <td style={{ padding: '6px 10px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>{r.nights ?? '—'}</td>
                   <td style={{ padding: '6px 10px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>USD {Number(r.total_amount ?? 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
                   <td style={{ padding: '6px 10px' }}>
@@ -135,7 +135,7 @@ export default async function ReconciliationPage() {
         </table>
       </div>
 
-      <div style={{ marginTop: 14, padding: '10px 14px', background: '#e6f4ec', border: '1px solid #aed6c0', borderRadius: 6, color: '#1f5f3a', fontSize: 11.5 }}>
+      <div style={{ marginTop: 14, padding: '10px 14px', background: '#e6f4ec', border: '1px solid #aed6c0', borderRadius: 6, color: 'var(--moss)', fontSize: 11.5 }}>
         <strong>✓ Live.</strong> {reservations.length} LPA reservations · {confirmed.length} mapped · {unconfirmed.length} pending. Yellow rows = unmatched (no contract on file). Green rows = already confirmed. Click <strong>Confirm</strong> to persist to <code>governance.dmc_reservation_mapping</code>.
       </div>
     </>

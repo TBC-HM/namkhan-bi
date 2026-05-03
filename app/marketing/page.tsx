@@ -1,6 +1,7 @@
 // app/marketing/page.tsx
 // Marketing snapshot — review summary + social presence + recent campaigns.
 
+import Link from 'next/link';
 import PanelHero from '@/components/sections/PanelHero';
 import Card from '@/components/sections/Card';
 import KpiCard from '@/components/kpi/KpiCard';
@@ -9,6 +10,8 @@ import {
   getReviewSummary, getReviewStatsBySource, getSocialAccounts,
   getInfluencers, getMediaLinks,
 } from '@/lib/marketing';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { countPlaceholders, PROPERTY_ID } from '@/lib/settings';
 
 export const revalidate = 300;
 export const dynamic = 'force-dynamic';
@@ -23,13 +26,33 @@ const SOURCE_LABEL: Record<string, string> = {
   direct: 'Direct',
 };
 
+async function getProfileGaps(): Promise<{ placeholders: number; todos: number; total: number } | null> {
+  try {
+    const admin = getSupabaseAdmin();
+    const { data } = await admin
+      .schema('marketing')
+      .from('v_namkhan_factsheet')
+      .select('*')
+      .limit(1)
+      .maybeSingle();
+    if (!data) return null;
+    const placeholders = countPlaceholders(data);
+    const todos = Array.isArray((data as any).todos) ? (data as any).todos.length : 0;
+    return { placeholders, todos, total: placeholders + todos };
+  } catch {
+    // service-role missing or RPC error — render KPI as unknown
+    return null;
+  }
+}
+
 export default async function MarketingPage() {
-  const [summary, stats, socials, influencers, media] = await Promise.all([
+  const [summary, stats, socials, influencers, media, gaps] = await Promise.all([
     getReviewSummary(30),
     getReviewStatsBySource(90),
     getSocialAccounts(),
     getInfluencers({ limit: 5 }),
     getMediaLinks(),
+    getProfileGaps(),
   ]);
 
   const totalFollowers = socials.reduce((s, a) => s + (a.followers ?? 0), 0);
@@ -74,6 +97,19 @@ export default async function MarketingPage() {
               value={totalFollowers}
               hint={`${socials.length} channels · manual`}
             />
+            <Link href="/settings/property" style={{ display: 'block' }} title="Open Property Settings to fill gaps">
+              <KpiCard
+                label="Profile Gaps"
+                value={gaps == null ? '—' : gaps.total}
+                kind={gaps == null ? 'text' : 'number'}
+                tone={gaps == null ? 'neutral' : gaps.total === 0 ? 'pos' : gaps.total > 5 ? 'warn' : 'neutral'}
+                hint={
+                  gaps == null
+                    ? 'service-role key missing'
+                    : `${gaps.placeholders} LOREM · ${gaps.todos} todos · click to fix`
+                }
+              />
+            </Link>
           </>
         }
       />
