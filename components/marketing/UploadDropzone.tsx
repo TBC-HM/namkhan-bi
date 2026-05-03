@@ -285,10 +285,10 @@ export default function UploadDropzone() {
               <div className="card-sub">{items.length} file{items.length === 1 ? '' : 's'}</div>
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
-              {counts.ready > 0 && <span className="pill" style={{ background: 'var(--moss)', color: '#fff' }}>{counts.ready} ingested</span>}
-              {counts.duplicate > 0 && <span className="pill" style={{ background: 'var(--brass)', color: '#fff' }}>{counts.duplicate} duplicate</span>}
-              {counts.proc > 0 && <span className="pill" style={{ background: 'var(--brass)', color: '#fff' }}>{counts.proc} processing</span>}
-              {counts.rejected > 0 && <span className="pill" style={{ background: 'var(--oxblood)', color: '#fff' }}>{counts.rejected} rejected</span>}
+              {counts.ready > 0 && <span className="pill" style={{ background: 'var(--moss)', color: 'var(--paper-warm)' }}>{counts.ready} ingested</span>}
+              {counts.duplicate > 0 && <span className="pill" style={{ background: 'var(--brass)', color: 'var(--paper-warm)' }}>{counts.duplicate} duplicate</span>}
+              {counts.proc > 0 && <span className="pill" style={{ background: 'var(--brass)', color: 'var(--paper-warm)' }}>{counts.proc} processing</span>}
+              {counts.rejected > 0 && <span className="pill" style={{ background: 'var(--oxblood)', color: 'var(--paper-warm)' }}>{counts.rejected} rejected</span>}
             </div>
           </div>
           <table className="tbl">
@@ -313,7 +313,7 @@ export default function UploadDropzone() {
                     {i.status === 'uploading' ? `${i.progress ?? 0}%` : ''}
                   </td>
                   <td>
-                    <span className="pill" style={{ background: STATUS_COLOR[i.status], color: '#fff' }}>
+                    <span className="pill" style={{ background: STATUS_COLOR[i.status], color: 'var(--paper-warm)' }}>
                       {STATUS_LABEL[i.status]}
                     </span>
                   </td>
@@ -350,7 +350,7 @@ const fieldStyle: React.CSSProperties = {
   padding: '8px 10px',
   border: '1px solid var(--line)',
   borderRadius: 4,
-  background: '#fff',
+  background: 'var(--paper-warm)',
   fontFamily: 'var(--sans)',
 };
 

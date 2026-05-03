@@ -197,7 +197,7 @@ export default function MappingTable({ rows, classes, mode }: Props) {
         .override-hint { font-size: 10px; color: var(--ink-mute, #8a8170); margin-top: 4px; font-style: italic; }
         .map-table select, .map-table input[type=text] {
           padding: 6px 8px; border: 1px solid var(--line, #d6d0c2); border-radius: 4px;
-          font-size: 12px; min-width: 140px; background: #fff;
+          font-size: 12px; min-width: 140px; background: var(--paper-warm);
         }
         .map-table input[type=text] { min-width: 180px; }
         .save-btn {

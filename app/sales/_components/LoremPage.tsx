@@ -35,21 +35,20 @@ export default function LoremPage({ pillar, tab, lede, kpis, sections, dataSourc
         {kpis.map((k) => (
           <div
             key={k.scope}
-            className="kpi"
+            className="kpi-tile"
             data-tooltip={`${k.scope} · ${k.sub ?? 'awaiting data'}`}
-            style={{ background: 'var(--paper-pure)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '12px 14px' }}
           >
-            <div style={{ fontSize: 10.5, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{k.scope}</div>
-            <div style={{ fontFamily: 'var(--serif)', fontSize: 22, fontWeight: 500, color: 'var(--ink-faint)', fontStyle: 'italic', margin: '2px 0' }}>{k.value ?? 'lorem'}</div>
-            <div style={{ fontSize: 11, color: 'var(--ink-mute)' }}>{k.sub ?? '—'}</div>
+            <div className="kpi-tile-scope">{k.scope}</div>
+            <div className="kpi-tile-value lorem">{k.value ?? 'lorem'}</div>
+            <div className="kpi-tile-sub">{k.sub ?? '—'}</div>
           </div>
         ))}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
         {sections.map((s) => (
-          <div key={s.heading} style={{ background: 'var(--paper-pure)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px' }}>
-            <div style={{ fontSize: 10.5, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{s.heading}</div>
+          <div key={s.heading} className="panel">
+            <div className="kpi-tile-scope" style={{ marginBottom: 6 }}>{s.heading}</div>
             <div style={{ fontSize: 13, color: 'var(--ink-faint)', fontStyle: 'italic', lineHeight: 1.6 }}>{s.body}</div>
           </div>
         ))}

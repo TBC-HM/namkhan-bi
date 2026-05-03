@@ -70,7 +70,7 @@ export default async function PerformancePage() {
       <B2bSubNav />
       <B2bKpiStrip />
 
-      <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
+      <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
           <thead>
             <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -91,7 +91,7 @@ export default async function PerformancePage() {
               const share = totalRevenue > 0 ? (p.revenue / totalRevenue) * 100 : 0;
               return (
                 <tr key={p.source_name} style={{ borderTop: '1px solid var(--paper-warm)' }}>
-                  <td style={{ padding: '10px 12px', fontFamily: 'Menlo, monospace', color: 'var(--ink-mute)' }}>{i + 1}</td>
+                  <td style={{ padding: '10px 12px', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>{i + 1}</td>
                   <td style={{ padding: '10px 12px', fontWeight: 500 }}>{p.source_name}</td>
                   <td style={{ padding: '10px 12px' }}>
                     {p.matched_contract_id ? (
@@ -102,22 +102,22 @@ export default async function PerformancePage() {
                       <span style={{ color: 'var(--st-bad)', fontStyle: 'italic', fontSize: 11.5 }}>no contract on file</span>
                     )}
                   </td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>{p.reservation_count}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: p.cancelled_count > 0 ? 'var(--st-bad)' : 'var(--ink-mute)' }}>{p.cancelled_count || '—'}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>{p.rns}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>USD {p.revenue.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: 'var(--ink-mute)' }}>USD {adr.toFixed(0)}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>{share.toFixed(1)}%</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{p.reservation_count}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: p.cancelled_count > 0 ? 'var(--st-bad)' : 'var(--ink-mute)' }}>{p.cancelled_count || '—'}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{p.rns}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>USD {p.revenue.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>USD {adr.toFixed(0)}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{share.toFixed(1)}%</td>
                 </tr>
               );
             })}
             <tr style={{ borderTop: '2px solid var(--paper-deep)', background: 'var(--paper-warm)', fontWeight: 600 }}>
               <td colSpan={3} style={{ padding: '10px 12px' }}>Total · {partners.length} sources</td>
-              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>{totalRes}</td>
+              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{totalRes}</td>
               <td style={{ padding: '10px 12px' }}></td>
-              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>{totalRns}</td>
-              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>USD {totalRevenue.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
-              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: 'var(--ink-mute)' }}>USD {totalRns > 0 ? (totalRevenue / totalRns).toFixed(0) : 0}</td>
+              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{totalRns}</td>
+              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>USD {totalRevenue.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
+              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>USD {totalRns > 0 ? (totalRevenue / totalRns).toFixed(0) : 0}</td>
               <td style={{ padding: '10px 12px', textAlign: 'right' }}>100%</td>
             </tr>
           </tbody>

@@ -36,7 +36,7 @@ export default async function B2bKpiStrip() {
         <div
           key={kp.scope}
           style={{
-            background: '#fff',
+            background: 'var(--paper-warm)',
             border: '1px solid #e6dfc9',
             borderRadius: 8,
             padding: '12px 14px',
@@ -46,7 +46,7 @@ export default async function B2bKpiStrip() {
           <div style={{ fontSize: 10.5, color: '#8a8170', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
             {kp.scope}
           </div>
-          <div style={{ fontFamily: 'Georgia, serif', fontSize: 22, fontWeight: 500, color: TONE_COLOR[kp.tone] ?? '#4a4538', margin: '2px 0' }}>
+          <div style={{ fontFamily: 'var(--serif)', fontSize: 22, fontWeight: 500, color: TONE_COLOR[kp.tone] ?? '#4a4538', margin: '2px 0' }}>
             {kp.value}
           </div>
           <div style={{ fontSize: 11, color: '#8a8170' }}>{kp.sub}</div>

@@ -297,34 +297,39 @@ button { font-family: inherit; }
   color: rgba(245, 233, 207, 0.78); margin-top: 6px;
 }
 
-/* ===== KPI CARD ===== */
+/* ===== KPI CARD =====
+ * Aligned with .kpi-tile so every KPI surface in the portal renders identically.
+ * Same padding (14 16), same border (--paper-deep, 1px), same min-height (96),
+ * same value typography (italic serif 22px), same label typography (mono uppercase). */
 .kpi-card {
-  padding: 16px; background: var(--paper-warm); border: 1px solid var(--line);
+  padding: 14px 16px; background: var(--paper-warm); border: 1px solid var(--paper-deep);
+  border-radius: 8px;
   display: flex; flex-direction: column; justify-content: space-between;
-  min-height: 92px;
+  min-height: 96px;
 }
 .kpi-num {
   font-family: var(--serif); font-style: italic; font-weight: 500;
-  font-size: 26px; line-height: 1; color: var(--ink);
+  font-size: 22px; line-height: 1.1; letter-spacing: var(--ls-tight);
+  color: var(--ink);
 }
 .kpi-num.pos { color: var(--moss); }
-.kpi-num.neg { color: var(--oxblood); }
+.kpi-num.neg { color: var(--st-bad); }
 .kpi-num.warn { color: var(--brass); }
 .kpi-num.greyed { color: var(--ink-faint); }
 .kpi-lbl {
-  font-family: var(--mono); font-size: 9.5px;
-  letter-spacing: 0.22em; text-transform: uppercase;
-  color: var(--ink-soft); font-weight: 600; margin-top: 8px;
+  font-family: var(--mono); font-size: var(--t-xs);
+  letter-spacing: var(--ls-loose); text-transform: uppercase;
+  color: var(--ink-mute); font-weight: 600; margin-top: 8px;
 }
 .kpi-delta {
-  font-family: var(--mono); font-size: 10px;
+  font-family: var(--mono); font-size: var(--t-xs);
   letter-spacing: 0.04em; font-weight: 600;
   margin-top: 4px; color: var(--ink-mute);
 }
 .kpi-delta.pos { color: var(--moss); }
-.kpi-delta.neg { color: var(--oxblood); }
+.kpi-delta.neg { color: var(--st-bad); }
 .kpi-secondary {
-  font-family: var(--mono); font-size: 10px;
+  font-family: var(--mono); font-size: var(--t-xs);
   color: var(--ink-mute); margin-top: 2px; letter-spacing: 0.04em;
 }
 
@@ -399,6 +404,106 @@ button { font-family: inherit; }
   white-space: nowrap;
   z-index: 50;
   box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.4);
+}
+
+/* ===== Canonical KPI tile + canonical panel =====
+ * The "Soho House" container language. Use .kpi-tile on every KPI tile and
+ * .panel on every page-level container instead of inline-styled divs so every
+ * page renders the same hierarchy / padding / border / typography.
+ *
+ * Migration plan:
+ *   <div className="kpi-tile" data-tooltip="…">
+ *     <div className="kpi-tile-scope">{scope}</div>
+ *     <div className="kpi-tile-value">{value}</div>
+ *     <div className="kpi-tile-sub">{sub}</div>
+ *   </div>
+ */
+.kpi-tile {
+  background: var(--paper-warm);
+  border: 1px solid var(--paper-deep);
+  border-radius: 8px;
+  padding: 14px 16px;
+  min-height: 96px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 4px;
+  transition: box-shadow 140ms ease, transform 140ms ease, border-color 140ms ease;
+  position: relative;
+}
+.kpi-tile:hover {
+  box-shadow: 0 6px 18px -8px rgba(28, 24, 21, 0.18);
+  border-color: var(--brass-soft);
+  transform: translateY(-1px);
+}
+.kpi-tile-scope {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  letter-spacing: var(--ls-loose);
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  font-weight: 600;
+}
+.kpi-tile-value {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 22px;
+  letter-spacing: var(--ls-tight);
+  line-height: 1.1;
+  color: var(--ink);
+  margin-top: 2px;
+}
+.kpi-tile-value.lorem,
+.kpi-tile-value.greyed { color: var(--ink-faint); }
+.kpi-tile-value.pos    { color: var(--moss); }
+.kpi-tile-value.neg    { color: var(--st-bad); }
+.kpi-tile-value.warn   { color: var(--brass); }
+.kpi-tile-sub {
+  font-family: var(--sans);
+  font-size: 11px;
+  color: var(--ink-mute);
+  letter-spacing: 0.02em;
+}
+.kpi-tile-delta {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+.kpi-tile-delta.pos { color: var(--moss); }
+.kpi-tile-delta.neg { color: var(--st-bad); }
+.kpi-tile-delta.neu { color: var(--ink-mute); }
+
+/* Generic panel — unified container language for tables, charts, sections.
+ * Same border + padding + radius as kpi-tile. Drop-in replacement for the
+ * `style={{ background, border, borderRadius, padding }}` pattern that
+ * litters every page right now. */
+.panel {
+  background: var(--paper-warm);
+  border: 1px solid var(--paper-deep);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.panel.flush  { padding: 0; overflow: hidden; }      /* tables that go edge-to-edge */
+.panel.dashed { border-style: dashed; }
+.panel-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 12px; margin-bottom: 8px;
+}
+.panel-head-title {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: var(--t-md);
+  letter-spacing: var(--ls-tight);
+  color: var(--ink);
+}
+.panel-head-title em { color: var(--brass); font-style: italic; }
+.panel-head-meta {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  color: var(--ink-mute);
+  letter-spacing: 0.04em;
 }
 
 /* ===== Typography utility classes =====

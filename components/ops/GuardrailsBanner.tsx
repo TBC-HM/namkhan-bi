@@ -26,7 +26,7 @@ export default function GuardrailsBanner({ children }: Props) {
         style={{
           display: 'inline-block',
           fontSize: 10,
-          background: '#fff8eb',
+          background: 'var(--paper-warm)',
           border: '1px solid #f3d57a',
           color: '#5e4818',
           padding: '1px 6px',

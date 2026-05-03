@@ -145,8 +145,8 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
                 padding: '4px 12px',
                 borderRadius: 4,
                 border: '1px solid var(--line-soft)',
-                background: active ? 'var(--ink-soft)' : '#fff',
-                color: active ? '#fff' : 'var(--ink-soft)',
+                background: active ? 'var(--ink-soft)' : 'var(--paper-warm)',
+                color: active ? 'var(--paper-warm)' : 'var(--ink-soft)',
                 fontSize: 12,
                 textDecoration: 'none',
                 textTransform: 'capitalize',
@@ -172,9 +172,9 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
       </div>
 
       {/* Chart: OTB by bucket */}
-      <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px', marginBottom: 14 }}>
+      <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px', marginBottom: 14 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
-          <h2 style={{ margin: 0, fontFamily: 'Georgia, serif', fontWeight: 500, fontSize: 17 }}>
+          <h2 style={{ margin: 0, fontFamily: 'var(--serif)', fontWeight: 500, fontSize: 17 }}>
             On-the-books by stay-{gran}
           </h2>
           <span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>{buckets.length} bucket{buckets.length === 1 ? '' : 's'} · max {maxRns} RN</span>
@@ -221,7 +221,7 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
       </div>
 
       {/* Detail table */}
-      <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
+      <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
           <thead>
             <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -266,12 +266,12 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
                   <td style={{ padding: '10px 12px', fontWeight: 500 }}>
                     {gran === 'month' ? fmtMonth(b.key) : b.key}
                   </td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: 'var(--ink-mute)' }}>{b.days}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>{b.rns}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>USD {b.rev.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: 'var(--ink-mute)' }}>USD {adrB.toFixed(0)}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: occB > 70 ? 'var(--moss-glow)' : occB < 30 ? 'var(--st-bad)' : 'var(--ink-soft)' }}>{occB.toFixed(1)}%</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: b.cxl > 0 ? 'var(--st-bad)' : 'var(--ink-mute)' }}>{b.cxl || '—'}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>{b.days}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{b.rns}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>USD {b.rev.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>USD {adrB.toFixed(0)}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: occB > 70 ? 'var(--moss-glow)' : occB < 30 ? 'var(--st-bad)' : 'var(--ink-soft)' }}>{occB.toFixed(1)}%</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: b.cxl > 0 ? 'var(--st-bad)' : 'var(--ink-mute)' }}>{b.cxl || '—'}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--ink-faint)', fontStyle: 'italic' }}>lorem</td>
                 </tr>
               );
@@ -290,9 +290,9 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
 function Kpi({ scope, value, sub, tone = 'flat', lorem = false }: { scope: string; value: string; sub: string; tone?: 'flat' | 'up' | 'warn' | 'bad'; lorem?: boolean }) {
   const c = tone === 'up' ? 'var(--moss-glow)' : tone === 'warn' ? 'var(--brass)' : tone === 'bad' ? 'var(--st-bad)' : 'var(--ink-soft)';
   return (
-    <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '12px 14px' }}>
+    <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '12px 14px' }}>
       <div style={{ fontSize: 10.5, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{scope}</div>
-      <div style={{ fontFamily: 'Georgia, serif', fontSize: 22, fontWeight: 500, color: lorem ? 'var(--ink-faint)' : c, fontStyle: lorem ? 'italic' : 'normal', margin: '2px 0' }}>{value}</div>
+      <div style={{ fontFamily: 'var(--serif)', fontSize: 22, fontWeight: 500, color: lorem ? 'var(--ink-faint)' : c, fontStyle: lorem ? 'italic' : 'normal', margin: '2px 0' }}>{value}</div>
       <div style={{ fontSize: 11, color: 'var(--ink-mute)' }}>{sub}</div>
     </div>
   );

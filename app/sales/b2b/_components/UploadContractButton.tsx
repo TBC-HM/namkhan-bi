@@ -46,7 +46,7 @@ export default function UploadContractButton() {
         onClick={() => { setError(null); setOpen(true); }}
         style={{
           background: '#1f5f3a',
-          color: '#fff',
+          color: 'var(--paper-warm)',
           border: 'none',
           padding: '8px 14px',
           borderRadius: 4,
@@ -77,7 +77,7 @@ export default function UploadContractButton() {
             ref={formRef}
             onSubmit={onSubmit}
             style={{
-              background: '#fff',
+              background: 'var(--paper-warm)',
               borderRadius: 8,
               width: 'min(720px, 92vw)',
               maxHeight: '85vh',
@@ -89,7 +89,7 @@ export default function UploadContractButton() {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 18 }}>
-              <h2 style={{ margin: 0, fontFamily: 'Georgia, serif', fontWeight: 500, fontSize: 22 }}>
+              <h2 style={{ margin: 0, fontFamily: 'var(--serif)', fontWeight: 500, fontSize: 22 }}>
                 New <em style={{ color: '#a17a4f' }}>contract</em>
               </h2>
               <button
@@ -210,7 +210,7 @@ export default function UploadContractButton() {
               <button
                 type="submit"
                 disabled={busy}
-                style={{ background: '#1f5f3a', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: 4, fontSize: 12.5, fontWeight: 600, cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1 }}
+                style={{ background: '#1f5f3a', color: 'var(--paper-warm)', border: 'none', padding: '8px 18px', borderRadius: 4, fontSize: 12.5, fontWeight: 600, cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1 }}
               >
                 {busy ? 'Saving…' : 'Save contract'}
               </button>
@@ -228,7 +228,7 @@ const inp: React.CSSProperties = {
   padding: '7px 10px',
   border: '1px solid #e6dfc9',
   borderRadius: 4,
-  background: '#fff',
+  background: 'var(--paper-warm)',
   fontFamily: 'inherit',
   color: '#4a4538',
 };
@@ -236,7 +236,7 @@ const inp: React.CSSProperties = {
 function Field({ label, children, required }: { label: string; children: React.ReactNode; required?: boolean }) {
   return (
     <div>
-      <div style={{ fontSize: 10, fontFamily: 'Menlo, monospace', textTransform: 'uppercase', letterSpacing: 1.2, color: '#8a8170', marginBottom: 4, fontWeight: 600 }}>
+      <div style={{ fontSize: 10, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1.2, color: '#8a8170', marginBottom: 4, fontWeight: 600 }}>
         {label}
       </div>
       {children}

@@ -27,7 +27,7 @@ interface Props {
 const sevColor: Record<AlertSeverity, { left: string; bg: string; impColor: string }> = {
   hi: { left: '#a02d2d', bg: '#fdf3f0', impColor: '#a02d2d' },
   med: { left: '#a87024', bg: '#fdf6e7', impColor: '#a87024' },
-  low: { left: '#a89c80', bg: '#fff', impColor: '#8a8170' },
+  low: { left: '#a89c80', bg: 'var(--paper-warm)', impColor: '#8a8170' },
 };
 
 export default function TacticalAlerts({ alerts }: Props) {
@@ -43,7 +43,7 @@ export default function TacticalAlerts({ alerts }: Props) {
       >
         <h3
           style={{
-            fontFamily: 'Georgia, serif',
+            fontFamily: 'var(--serif)',
             fontSize: 18,
             fontWeight: 500,
             margin: 0,
@@ -73,7 +73,7 @@ export default function TacticalAlerts({ alerts }: Props) {
               <div
                 style={{
                   margin: '0 0 4px',
-                  fontFamily: 'Georgia, serif',
+                  fontFamily: 'var(--serif)',
                   fontSize: 15,
                   fontWeight: 600,
                   display: 'flex',
@@ -112,7 +112,7 @@ export default function TacticalAlerts({ alerts }: Props) {
                             padding: '6px 11px',
                             borderRadius: 5,
                             background: '#a17a4f',
-                            color: '#fff8eb',
+                            color: 'var(--paper-warm)',
                             border: '1px solid #a17a4f',
                             cursor: 'pointer',
                             textTransform: 'uppercase',
@@ -123,7 +123,7 @@ export default function TacticalAlerts({ alerts }: Props) {
                             fontSize: 11.5,
                             padding: '6px 11px',
                             borderRadius: 5,
-                            background: '#fff',
+                            background: 'var(--paper-warm)',
                             color: '#1c1c1a',
                             border: '1px solid #e6dfc9',
                             cursor: 'pointer',

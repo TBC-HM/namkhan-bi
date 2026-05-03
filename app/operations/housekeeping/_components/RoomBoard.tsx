@@ -18,7 +18,7 @@ const stateStyle: Record<
   inspect: { bg: '#dbeafe', bd: '#93c5fd' },
   ooo: { bg: '#e5e7eb', bd: '#cbd5e1', color: '#64748b' },
   dnd: { bg: '#fdf6e7', bd: '#f3d57a' },
-  inhouse: { bg: '#fff', bd: '#cdc0a0' },
+  inhouse: { bg: 'var(--paper-warm)', bd: '#cdc0a0' },
 };
 
 const legendItems: { state: RoomStatusValue; label: string }[] = [
@@ -34,7 +34,7 @@ export default function RoomBoard({ rooms }: Props) {
   return (
     <div
       style={{
-        background: '#fff',
+        background: 'var(--paper-warm)',
         border: '1px solid #e6dfc9',
         borderRadius: 8,
         padding: '14px 16px',
@@ -42,7 +42,7 @@ export default function RoomBoard({ rooms }: Props) {
     >
       <h3
         style={{
-          fontFamily: 'Georgia, serif',
+          fontFamily: 'var(--serif)',
           fontSize: 16,
           fontWeight: 500,
           margin: '0 0 8px',
@@ -99,7 +99,7 @@ export default function RoomBoard({ rooms }: Props) {
                       <span
                         style={{
                           background: '#1f3d2e',
-                          color: '#fff8eb',
+                          color: 'var(--paper-warm)',
                           padding: '1px 5px',
                           borderRadius: 3,
                           fontFamily: 'sans-serif',
@@ -114,7 +114,7 @@ export default function RoomBoard({ rooms }: Props) {
                       <span
                         style={{
                           background: '#a02d2d',
-                          color: '#fff8eb',
+                          color: 'var(--paper-warm)',
                           padding: '1px 5px',
                           borderRadius: 3,
                           fontFamily: 'sans-serif',

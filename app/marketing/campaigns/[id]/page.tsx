@@ -90,7 +90,7 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
                       ? <img src={thumb} alt={s.alt_text_per_slot ?? a?.alt_text ?? ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       : <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#888', fontFamily: 'var(--mono)', fontSize: 10 }}>—</div>
                     }
-                    <div style={{ position: 'absolute', top: 6, left: 6, background: 'rgba(0,0,0,0.7)', color: '#fff', fontFamily: 'var(--mono)', fontSize: 10, padding: '2px 6px' }}>slot {s.slot_order}</div>
+                    <div style={{ position: 'absolute', top: 6, left: 6, background: 'rgba(0,0,0,0.7)', color: 'var(--paper-warm)', fontFamily: 'var(--mono)', fontSize: 10, padding: '2px 6px' }}>slot {s.slot_order}</div>
                   </div>
                   <div style={{ padding: '8px 10px' }}>
                     <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 12, color: 'var(--ink)' }}>{s.caption_per_slot ?? a?.caption ?? '—'}</div>

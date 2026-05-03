@@ -37,7 +37,7 @@ export default function AgentStrip({ agents, pageScope }: Props) {
         style={{
           marginTop: 14,
           padding: '10px 14px',
-          background: '#fff',
+          background: 'var(--paper-warm)',
           border: '1px solid #e6dfc9',
           borderRadius: 8,
           display: 'flex',
@@ -83,7 +83,7 @@ export default function AgentStrip({ agents, pageScope }: Props) {
               padding: '5px 11px',
               border: '1px solid #e6dfc9',
               borderRadius: 999,
-              background: '#fff',
+              background: 'var(--paper-warm)',
               fontSize: 12,
               cursor: 'pointer',
               fontFamily: 'inherit',
@@ -113,7 +113,7 @@ export default function AgentStrip({ agents, pageScope }: Props) {
           style={{
             marginLeft: 'auto',
             background: '#1f3d2e',
-            color: '#fff8eb',
+            color: 'var(--paper-warm)',
             border: 0,
             padding: '6px 14px',
             borderRadius: 6,
@@ -145,7 +145,7 @@ export default function AgentStrip({ agents, pageScope }: Props) {
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: '#fff',
+              background: 'var(--paper-warm)',
               border: '1px solid #e6dfc9',
               borderRadius: 10,
               padding: 24,
@@ -167,7 +167,7 @@ export default function AgentStrip({ agents, pageScope }: Props) {
             <h3
               style={{
                 margin: '6px 0 8px',
-                fontFamily: 'Georgia, serif',
+                fontFamily: 'var(--serif)',
                 fontSize: 22,
                 fontWeight: 500,
               }}
@@ -211,7 +211,7 @@ export default function AgentStrip({ agents, pageScope }: Props) {
                 onClick={() => setActive(null)}
                 style={{
                   background: '#a17a4f',
-                  color: '#fff8eb',
+                  color: 'var(--paper-warm)',
                   border: 0,
                   padding: '7px 16px',
                   borderRadius: 6,

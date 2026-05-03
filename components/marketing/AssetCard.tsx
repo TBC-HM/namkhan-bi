@@ -65,7 +65,7 @@ export default function AssetCard({ asset, thumbUrl, selected, onSelectChange, r
         {tier && tier !== 'tier_internal' && (
           <div style={{
             position: 'absolute', top: 6, left: 6,
-            background: tierBg, color: '#fff',
+            background: tierBg, color: 'var(--paper-warm)',
             fontFamily: 'var(--mono)', fontSize: 9, fontWeight: 600,
             padding: '2px 6px', textTransform: 'uppercase', letterSpacing: '0.05em',
           }}>
@@ -76,7 +76,7 @@ export default function AssetCard({ asset, thumbUrl, selected, onSelectChange, r
         {asset.license_type && (
           <div style={{
             position: 'absolute', top: 6, right: 6,
-            background: 'rgba(0,0,0,0.6)', color: '#fff',
+            background: 'rgba(0,0,0,0.6)', color: 'var(--paper-warm)',
             fontFamily: 'var(--mono)', fontSize: 9,
             padding: '2px 6px',
           }}>
@@ -87,7 +87,7 @@ export default function AssetCard({ asset, thumbUrl, selected, onSelectChange, r
         {scoreLabel && (
           <div style={{
             position: 'absolute', bottom: 6, left: 6,
-            background: 'var(--brass)', color: '#fff',
+            background: 'var(--brass)', color: 'var(--paper-warm)',
             fontFamily: 'var(--mono)', fontSize: 10, fontWeight: 700,
             padding: '3px 8px',
           }}>
@@ -104,7 +104,7 @@ export default function AssetCard({ asset, thumbUrl, selected, onSelectChange, r
               width: 24, height: 24, borderRadius: '50%',
               border: 'none',
               background: selected ? 'var(--moss)' : 'rgba(255,255,255,0.85)',
-              color: selected ? '#fff' : 'var(--ink)',
+              color: selected ? 'var(--paper-warm)' : 'var(--ink)',
               cursor: 'pointer',
               fontSize: 14, fontWeight: 600,
             }}

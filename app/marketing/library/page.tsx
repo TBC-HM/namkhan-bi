@@ -81,8 +81,8 @@ export default async function LibraryPage({ searchParams }: SP) {
         source="marketing.v_media_ready"
         actions={
           <div style={{ display: 'flex', gap: 6 }}>
-            <Link href="/marketing/upload" className="btn" style={{ fontSize: 11, textDecoration: 'none', background: 'var(--brass)', color: '#fff', borderColor: 'var(--brass)' }}>upload ↗</Link>
-            <Link href="/marketing/campaigns/new" className="btn" style={{ fontSize: 11, textDecoration: 'none', background: 'var(--moss)', color: '#fff', borderColor: 'var(--moss)' }}>+ new campaign</Link>
+            <Link href="/marketing/upload" className="btn" style={{ fontSize: 11, textDecoration: 'none', background: 'var(--brass)', color: 'var(--paper-warm)', borderColor: 'var(--brass)' }}>upload ↗</Link>
+            <Link href="/marketing/campaigns/new" className="btn" style={{ fontSize: 11, textDecoration: 'none', background: 'var(--moss)', color: 'var(--paper-warm)', borderColor: 'var(--moss)' }}>+ new campaign</Link>
           </div>
         }
       >
@@ -104,8 +104,8 @@ export default async function LibraryPage({ searchParams }: SP) {
                 style={{
                   fontSize: 11,
                   textDecoration: 'none',
-                  background: active ? 'var(--moss)' : '#fff',
-                  color: active ? '#fff' : 'var(--ink)',
+                  background: active ? 'var(--moss)' : 'var(--paper-warm)',
+                  color: active ? 'var(--paper-warm)' : 'var(--ink)',
                   borderColor: active ? 'var(--moss)' : 'var(--line)',
                 }}
               >{t.label} <span style={{ fontFamily: 'var(--mono)', opacity: 0.7, marginLeft: 4 }}>{count}</span></Link>
@@ -127,7 +127,7 @@ export default async function LibraryPage({ searchParams }: SP) {
               padding: '8px 12px',
               border: '1px solid var(--line)',
               borderRadius: 4,
-              background: '#fff',
+              background: 'var(--paper-warm)',
               fontFamily: 'var(--sans)',
             }}
           />

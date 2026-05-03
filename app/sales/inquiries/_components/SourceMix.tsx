@@ -22,7 +22,7 @@ export default function SourceMix() {
   return (
     <div
       style={{
-        background: '#fff',
+        background: 'var(--paper-warm)',
         border: '1px solid #e6dfc9',
         borderRadius: 8,
         padding: '12px 14px',
@@ -39,7 +39,7 @@ export default function SourceMix() {
       >
         <h3
           style={{
-            fontFamily: 'Georgia, serif',
+            fontFamily: 'var(--serif)',
             fontSize: 18,
             fontWeight: 500,
             margin: 0,

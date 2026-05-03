@@ -26,86 +26,36 @@ export default function OpsKpiTile({
   tooltip,
 }: Props) {
   const tip = tooltip ?? [scope, label, delta].filter(Boolean).join(' · ');
+  const deltaCls = deltaTone === 'up' ? 'pos' : deltaTone === 'dn' ? 'neg' : 'neu';
   return (
-    <div
-      className="kpi"
-      data-tooltip={tip || undefined}
-      style={{
-        background: 'var(--paper-pure)',
-        border: '1px solid var(--paper-deep)',
-        borderRadius: 8,
-        padding: '14px 16px',
-        minHeight: 108,
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-      }}
-    >
+    <div className="kpi-tile" data-tooltip={tip || undefined}>
       <div>
+        <div className="kpi-tile-scope">{scope}</div>
         <div
-          style={{
-            fontSize: 10,
-            color: 'var(--ink-mute)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.1em',
-          }}
-        >
-          {scope}
-        </div>
-        <div
-          style={{
-            fontFamily: 'var(--mono)',
-            fontSize: 26,
-            fontWeight: 600,
-            color: valueColor || 'var(--ink)',
-            marginTop: 4,
-          }}
+          className="kpi-tile-value"
+          style={valueColor ? { color: valueColor } : undefined}
         >
           {value}
         </div>
       </div>
       <div>
-        {label && (
-          <div
-            style={{
-              fontFamily: 'var(--serif)',
-              fontStyle: 'italic',
-              fontSize: 13,
-              color: 'var(--ink-soft)',
-              marginTop: 6,
-            }}
-          >
-            {label}
-          </div>
-        )}
-        {delta && (
-          <div
-            style={{
-              fontFamily: 'var(--mono)',
-              fontSize: 11,
-              color:
-                deltaTone === 'up' ? 'var(--st-good)' : deltaTone === 'dn' ? 'var(--st-bad)' : 'var(--ink-mute)',
-              marginTop: 2,
-            }}
-          >
-            {delta}
-          </div>
-        )}
+        {label && <div className="kpi-tile-sub" style={{ fontStyle: 'italic', fontFamily: 'var(--serif)', fontSize: 13, color: 'var(--ink-soft)', marginTop: 6 }}>{label}</div>}
+        {delta && <div className={`kpi-tile-delta ${deltaCls}`} style={{ marginTop: 2 }}>{delta}</div>}
         {needs && (
-          <span
-            style={{
-              display: 'inline-block',
-              background: 'var(--st-warn-bg)',
-              border: '1px solid var(--st-warn-bd)',
-              color: 'var(--brass)',
-              fontSize: 10,
-              padding: '2px 7px',
-              borderRadius: 4,
-              textTransform: 'uppercase',
-              letterSpacing: '0.06em',
-              marginTop: 4,
-            }}
-          >
+          <span style={{
+            display: 'inline-block',
+            background: 'var(--st-warn-bg)',
+            border: '1px solid var(--st-warn-bd)',
+            color: 'var(--brass)',
+            fontSize: 'var(--t-xs)',
+            padding: '2px 7px',
+            borderRadius: 4,
+            textTransform: 'uppercase',
+            letterSpacing: 'var(--ls-loose)',
+            marginTop: 4,
+            fontFamily: 'var(--mono)',
+            fontWeight: 600,
+          }}>
             {needs}
           </span>
         )}

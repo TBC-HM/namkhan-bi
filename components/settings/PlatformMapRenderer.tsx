@@ -379,7 +379,7 @@ const css = `
 .pm-row {
   display: flex; align-items: flex-start; gap: 12px;
   padding: 10px 12px; margin-bottom: 4px;
-  background: #fff; border: 1px solid var(--line-soft);
+  background: var(--paper-warm); border: 1px solid var(--line-soft);
   border-radius: 2px;
 }
 .pm-row-text { flex: 1; min-width: 0; }

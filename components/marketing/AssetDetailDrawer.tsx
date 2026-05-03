@@ -143,12 +143,12 @@ export default function AssetDetailDrawer() {
               <Section label="usage tiers">
                 <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                   {asset.primary_tier && (
-                    <span className="pill" style={{ background: 'var(--moss)', color: '#fff' }}>
+                    <span className="pill" style={{ background: 'var(--moss)', color: 'var(--paper-warm)' }}>
                       primary · {TIER_LABEL[asset.primary_tier] ?? asset.primary_tier}
                     </span>
                   )}
                   {(asset.secondary_tiers ?? []).map(t => (
-                    <span key={t} className="pill" style={{ background: 'var(--brass)', color: '#fff' }}>
+                    <span key={t} className="pill" style={{ background: 'var(--brass)', color: 'var(--paper-warm)' }}>
                       {TIER_LABEL[t] ?? t}
                     </span>
                   ))}
@@ -180,7 +180,7 @@ export default function AssetDetailDrawer() {
                 <a
                   href={`/marketing/campaigns/new?asset=${encodeURIComponent(asset.asset_id)}`}
                   className="btn"
-                  style={{ textAlign: 'center', background: 'var(--moss)', color: '#fff', borderColor: 'var(--moss)', textDecoration: 'none', padding: '8px 14px' }}
+                  style={{ textAlign: 'center', background: 'var(--moss)', color: 'var(--paper-warm)', borderColor: 'var(--moss)', textDecoration: 'none', padding: '8px 14px' }}
                 >
                   use in new campaign →
                 </a>

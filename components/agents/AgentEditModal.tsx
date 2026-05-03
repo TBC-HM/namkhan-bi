@@ -349,7 +349,7 @@ export default function AgentEditModal() {
           <button className="btn" style={{
             fontSize: 11,
             background: 'var(--moss)',
-            color: '#fff',
+            color: 'var(--paper-warm)',
             borderColor: 'var(--moss)',
           }}>Save &amp; publish</button>
         </div>
@@ -367,7 +367,7 @@ function StatusPill({ status, reason }: { status: AgentStatus; reason?: string }
     'var(--oxblood)';
   return (
     <div style={{ textAlign: 'right' }}>
-      <span className="pill" style={{ background: color, color: '#fff', textTransform: 'capitalize' }}>{status}</span>
+      <span className="pill" style={{ background: color, color: 'var(--paper-warm)', textTransform: 'capitalize' }}>{status}</span>
       {reason && <div style={{ fontSize: 10, color: 'var(--ink-mute)', marginTop: 4, maxWidth: 220 }}>{reason}</div>}
     </div>
   );
@@ -389,7 +389,7 @@ function Overview({ agent }: { agent: AgentDef }) {
           {(['inherit', 'observe', 'review', 'auto-t1'] as AgentMode[]).map((m, i) => (
             <button key={m} className="btn" style={{
               fontSize: 11,
-              ...(i === 0 ? { background: 'var(--moss)', color: '#fff', borderColor: 'var(--moss)' } : {}),
+              ...(i === 0 ? { background: 'var(--moss)', color: 'var(--paper-warm)', borderColor: 'var(--moss)' } : {}),
             }}>{m === 'inherit' ? 'Inherit global' : m}</button>
           ))}
         </div>
@@ -414,7 +414,7 @@ function PromptEditor({ agent }: { agent: AgentDef }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span className="pill" style={{ background: 'var(--moss)', color: '#fff' }}>{agent.promptVersion} · current</span>
+        <span className="pill" style={{ background: 'var(--moss)', color: 'var(--paper-warm)' }}>{agent.promptVersion} · current</span>
         <span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>{agent.promptTokens} tokens · last edit 2h ago by Federico</span>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
           <button className="btn" style={{ fontSize: 11 }}>A/B vs previous</button>
@@ -512,7 +512,7 @@ function Triggers({ agent }: { agent: AgentDef }) {
               padding: '6px 10px',
               border: '1px solid var(--line-soft)',
               borderRadius: 4,
-              background: '#fff',
+              background: 'var(--paper-warm)',
             }}
           />
           <span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>LAK timezone</span>
@@ -607,7 +607,7 @@ function Tools({ agent }: { agent: AgentDef }) {
                     t.tier === 'read'  ? 'var(--ink-mute)' :
                     t.tier === 'write' ? 'var(--brass)'    :
                     'var(--oxblood)',
-                  color: '#fff',
+                  color: 'var(--paper-warm)',
                 }}>{t.tier}</span>
               </td>
               <td>
@@ -634,11 +634,11 @@ function Output({ agent }: { agent: AgentDef }) {
       <Section title="Delivery channel">
         <input
           defaultValue={agent.output.channel}
-          style={{ width: '100%', fontSize: 12, padding: '8px 10px', border: '1px solid var(--line-soft)', borderRadius: 4, background: '#fff' }}
+          style={{ width: '100%', fontSize: 12, padding: '8px 10px', border: '1px solid var(--line-soft)', borderRadius: 4, background: 'var(--paper-warm)' }}
         />
       </Section>
       <Section title="Output format">
-        <select defaultValue={agent.output.format} style={{ width: '100%', fontSize: 12, padding: '8px 10px', border: '1px solid var(--line-soft)', borderRadius: 4, background: '#fff' }}>
+        <select defaultValue={agent.output.format} style={{ width: '100%', fontSize: 12, padding: '8px 10px', border: '1px solid var(--line-soft)', borderRadius: 4, background: 'var(--paper-warm)' }}>
           <option>structured JSON + human summary</option>
           <option>structured JSON only</option>
           <option>markdown brief</option>
@@ -649,7 +649,7 @@ function Output({ agent }: { agent: AgentDef }) {
       <Section title="Recipients">
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {agent.output.recipients.map(r => (
-            <span key={r} className="pill" style={{ background: 'var(--moss)', color: '#fff' }}>{r} ×</span>
+            <span key={r} className="pill" style={{ background: 'var(--moss)', color: 'var(--paper-warm)' }}>{r} ×</span>
           ))}
           <button className="btn" style={{ fontSize: 11 }}>+ Add recipient</button>
         </div>
@@ -676,7 +676,7 @@ function Test({ agent: _agent }: { agent: AgentDef }) {
             <option>last 60 days</option>
             <option>last 90 days</option>
           </select>
-          <button className="btn" style={{ fontSize: 11, background: 'var(--moss)', color: '#fff', borderColor: 'var(--moss)' }}>
+          <button className="btn" style={{ fontSize: 11, background: 'var(--moss)', color: 'var(--paper-warm)', borderColor: 'var(--moss)' }}>
             Run backtest
           </button>
           <span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>Replays the agent against historical data with the current prompt + guardrails. Does not write.</span>
@@ -702,7 +702,7 @@ function Test({ agent: _agent }: { agent: AgentDef }) {
         <textarea
           rows={6}
           placeholder="Paste a hypothetical scenario (e.g. an inventory snapshot) and run the agent against it without touching live data..."
-          style={{ width: '100%', fontFamily: 'var(--mono)', fontSize: 12, padding: 10, border: '1px solid var(--line-soft)', borderRadius: 4, background: '#fff', boxSizing: 'border-box' }}
+          style={{ width: '100%', fontFamily: 'var(--mono)', fontSize: 12, padding: 10, border: '1px solid var(--line-soft)', borderRadius: 4, background: 'var(--paper-warm)', boxSizing: 'border-box' }}
         />
         <button className="btn" style={{ fontSize: 11, marginTop: 8 }}>Run sample</button>
       </Section>
@@ -796,7 +796,7 @@ function InputNum({ value, prefix, unit }: { value?: number; prefix?: string; un
         type="number"
         defaultValue={value ?? ''}
         placeholder="—"
-        style={{ width: 70, fontSize: 12, padding: '4px 6px', border: '1px solid var(--line-soft)', borderRadius: 4, background: '#fff' }}
+        style={{ width: 70, fontSize: 12, padding: '4px 6px', border: '1px solid var(--line-soft)', borderRadius: 4, background: 'var(--paper-warm)' }}
       />
       {unit && <span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>{unit}</span>}
     </div>

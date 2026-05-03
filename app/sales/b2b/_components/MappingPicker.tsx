@@ -80,7 +80,7 @@ export default function MappingPicker({
           borderRadius: 4,
           padding: '3px 6px',
           fontSize: 11,
-          background: isMapped ? '#f0eadb' : '#fff',
+          background: isMapped ? '#f0eadb' : 'var(--paper-warm)',
           color: '#4a4538',
           maxWidth: 160,
         }}
@@ -98,7 +98,7 @@ export default function MappingPicker({
           onClick={onUndo}
           disabled={pending}
           style={{
-            background: '#fff',
+            background: 'var(--paper-warm)',
             color: '#a83232',
             border: '1px solid #e2a8a8',
             borderRadius: 4,
@@ -116,7 +116,7 @@ export default function MappingPicker({
           disabled={pending || !selected}
           style={{
             background: pending || !selected ? '#bdb39a' : '#1f6f43',
-            color: '#fff',
+            color: 'var(--paper-warm)',
             border: 'none',
             borderRadius: 4,
             padding: '3px 9px',

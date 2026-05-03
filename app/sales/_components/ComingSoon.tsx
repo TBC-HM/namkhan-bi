@@ -23,7 +23,7 @@ export default function ComingSoon({ tab, proposalLine }: Props) {
       <h1
         style={{
           margin: '4px 0 2px',
-          fontFamily: 'Georgia, serif',
+          fontFamily: 'var(--serif)',
           fontWeight: 500,
           fontSize: 30,
         }}

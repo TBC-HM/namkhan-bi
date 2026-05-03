@@ -166,7 +166,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
           return (
             <a key={g} href={href} style={{
               padding: '4px 12px', borderRadius: 4, border: '1px solid var(--line-soft)',
-              background: active ? 'var(--ink-soft)' : '#fff', color: active ? '#fff' : 'var(--ink-soft)',
+              background: active ? 'var(--ink-soft)' : 'var(--paper-warm)', color: active ? 'var(--paper-warm)' : 'var(--ink-soft)',
               fontSize: 12, textDecoration: 'none', textTransform: 'capitalize',
             }}>{g}</a>
           );
@@ -182,9 +182,9 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
         <Kpi scope="Min-stay" value={minStayRows.toLocaleString()} sub="LOS restricted" />
       </div>
 
-      <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, marginBottom: 14, overflow: 'hidden' }}>
+      <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, marginBottom: 14, overflow: 'hidden' }}>
         <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--paper-deep)' }}>
-          <h2 style={{ margin: 0, fontFamily: 'Georgia, serif', fontWeight: 500, fontSize: 17 }}>BAR ladder by room type</h2>
+          <h2 style={{ margin: 0, fontFamily: 'var(--serif)', fontWeight: 500, fontSize: 17 }}>BAR ladder by room type</h2>
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
           <thead>
@@ -204,23 +204,23 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
             {roomAggs.map((a) => (
               <tr key={a.id} style={{ borderTop: '1px solid var(--paper-warm)' }}>
                 <td style={{ padding: '10px 12px', fontWeight: 500 }}>{a.rt}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: 'var(--ink-mute)' }}>{a.count}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>USD {a.avg.toFixed(0)}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: 'var(--moss-glow)' }}>USD {a.min.toFixed(0)}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: 'var(--brass)' }}>USD {a.max.toFixed(0)}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: 'var(--ink-mute)' }}>USD {(a.max - a.min).toFixed(0)}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: a.stops > 0 ? 'var(--st-bad)' : 'var(--ink-mute)' }}>{a.stops || '—'}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: a.minStays > 0 ? 'var(--brass)' : 'var(--ink-mute)' }}>{a.minStays || '—'}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: 'var(--ink-mute)' }}>{a.cta || 0}/{a.ctd || 0}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>{a.count}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>USD {a.avg.toFixed(0)}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--moss-glow)' }}>USD {a.min.toFixed(0)}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--brass)' }}>USD {a.max.toFixed(0)}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>USD {(a.max - a.min).toFixed(0)}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: a.stops > 0 ? 'var(--st-bad)' : 'var(--ink-mute)' }}>{a.stops || '—'}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: a.minStays > 0 ? 'var(--brass)' : 'var(--ink-mute)' }}>{a.minStays || '—'}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>{a.cta || 0}/{a.ctd || 0}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px', marginBottom: 14, overflowX: 'auto' }}>
+      <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px', marginBottom: 14, overflowX: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
-          <h2 style={{ margin: 0, fontFamily: 'Georgia, serif', fontWeight: 500, fontSize: 17 }}>Rate calendar · room × {gran}</h2>
+          <h2 style={{ margin: 0, fontFamily: 'var(--serif)', fontWeight: 500, fontSize: 17 }}>Rate calendar · room × {gran}</h2>
           <span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>Color = avg USD (terracotta=high, pale=low) · hover for details</span>
         </div>
         <table style={{ borderCollapse: 'collapse', fontSize: 11, minWidth: '100%' }}>
@@ -247,8 +247,8 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
                   return (
                     <td key={b} style={{
                       padding: '6px 4px', textAlign: 'center', background: bg,
-                      color: avg > avgRate * 1.2 ? '#fff' : 'var(--ink-soft)',
-                      fontFamily: 'Menlo, monospace', fontSize: 10.5, border: '1px solid #fff',
+                      color: avg > avgRate * 1.2 ? 'var(--paper-warm)' : 'var(--ink-soft)',
+                      fontFamily: 'var(--mono)', fontSize: 10.5, border: '1px solid #fff',
                     }} title={`${a.rt} · ${b}\navg USD ${avg.toFixed(0)}\nmin USD ${c.min.toFixed(0)} · max USD ${c.max.toFixed(0)}${c.stops > 0 ? `\n${c.stops} stop-sell` : ''}`}>
                       {avg.toFixed(0)}
                     </td>
@@ -260,9 +260,9 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
         </table>
       </div>
 
-      <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
+      <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
         <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--paper-deep)' }}>
-          <h2 style={{ margin: 0, fontFamily: 'Georgia, serif', fontWeight: 500, fontSize: 17 }}>Rate plans active in window ({planAggs.length})</h2>
+          <h2 style={{ margin: 0, fontFamily: 'var(--serif)', fontWeight: 500, fontSize: 17 }}>Rate plans active in window ({planAggs.length})</h2>
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
           <thead>
@@ -284,11 +284,11 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
                 <tr key={p.name} style={{ borderTop: '1px solid var(--paper-warm)' }}>
                   <td style={{ padding: '10px 12px', fontWeight: 500 }}>{p.name}</td>
                   <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontSize: 11.5 }}>{p.type ?? '—'}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>{p.count}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>USD {p.avg.toFixed(0)}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: 'var(--ink-mute)' }}>USD {p.min.toFixed(0)}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: 'var(--ink-mute)' }}>USD {p.max.toFixed(0)}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: dColor }}>{deltaPct >= 0 ? '+' : ''}{deltaPct.toFixed(0)}%</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{p.count}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>USD {p.avg.toFixed(0)}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>USD {p.min.toFixed(0)}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>USD {p.max.toFixed(0)}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: dColor }}>{deltaPct >= 0 ? '+' : ''}{deltaPct.toFixed(0)}%</td>
                 </tr>
               );
             })}
@@ -307,9 +307,9 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
 function Kpi({ scope, value, sub, tone = 'flat' }: { scope: string; value: string; sub: string; tone?: 'flat' | 'up' | 'warn' | 'bad' }) {
   const c = tone === 'up' ? 'var(--moss-glow)' : tone === 'warn' ? 'var(--brass)' : tone === 'bad' ? 'var(--st-bad)' : 'var(--ink-soft)';
   return (
-    <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '12px 14px' }}>
+    <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '12px 14px' }}>
       <div style={{ fontSize: 10.5, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{scope}</div>
-      <div style={{ fontFamily: 'Georgia, serif', fontSize: 22, fontWeight: 500, color: c, margin: '2px 0' }}>{value}</div>
+      <div style={{ fontFamily: 'var(--serif)', fontSize: 22, fontWeight: 500, color: c, margin: '2px 0' }}>{value}</div>
       <div style={{ fontSize: 11, color: 'var(--ink-mute)' }}>{sub}</div>
     </div>
   );

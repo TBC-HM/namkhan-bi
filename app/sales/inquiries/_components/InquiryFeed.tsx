@@ -129,7 +129,7 @@ export default function InquiryFeed({ overlay }: { overlay?: ReactNode }) {
   return (
     <div
       style={{
-        background: '#fff',
+        background: 'var(--paper-warm)',
         border: '1px solid #e6dfc9',
         borderRadius: 8,
         marginTop: 14,
@@ -157,7 +157,7 @@ export default function InquiryFeed({ overlay }: { overlay?: ReactNode }) {
           </div>
           <h3
             style={{
-              fontFamily: 'Georgia, serif',
+              fontFamily: 'var(--serif)',
               fontSize: 18,
               fontWeight: 500,
               margin: '2px 0 0',
@@ -200,7 +200,7 @@ export default function InquiryFeed({ overlay }: { overlay?: ReactNode }) {
               display: 'inline-block',
               padding: '2px 8px',
               borderRadius: 3,
-              background: '#fff8eb',
+              background: 'var(--paper-warm)',
               border: `1px solid ${typeColor[r.type]}`,
               color: typeColor[r.type],
               fontSize: 10.5,
@@ -221,7 +221,7 @@ export default function InquiryFeed({ overlay }: { overlay?: ReactNode }) {
                     marginLeft: 6,
                     fontSize: 9.5,
                     background: '#1f3d2e',
-                    color: '#fff8eb',
+                    color: 'var(--paper-warm)',
                     padding: '1px 5px',
                     borderRadius: 3,
                     letterSpacing: '0.04em',

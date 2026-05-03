@@ -35,7 +35,7 @@ export default async function PartnerDrilldownPage({ params }: { params: { id: s
         <strong style={{ color: 'var(--ink-soft)' }}>Sales</strong> › B2B / DMC › Partner
       </div>
 
-      <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '18px 22px', margin: '8px 0 14px' }}>
+      <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '18px 22px', margin: '8px 0 14px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14 }}>
           <div>
             <h1 style={{ margin: 0, fontFamily: 'var(--serif)', fontWeight: 500, fontSize: 'var(--t-xl)', letterSpacing: 'var(--ls-tight)' }}>
@@ -52,7 +52,7 @@ export default async function PartnerDrilldownPage({ params }: { params: { id: s
               </span>
             </div>
             <div style={{ marginTop: 8, fontSize: 12.5, color: 'var(--ink-soft)', lineHeight: 1.6 }}>
-              Type: <strong>{c.partner_type}</strong> · Country: {c.country_flag ?? ''} {c.country ?? '—'} · VAT: <code style={{ fontFamily: 'Menlo, monospace', fontSize: 11 }}>{c.vat_number ?? lorem('VAT')}</code>
+              Type: <strong>{c.partner_type}</strong> · Country: {c.country_flag ?? ''} {c.country ?? '—'} · VAT: <code style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>{c.vat_number ?? lorem('VAT')}</code>
               <br />
               Address: {c.address ?? lorem('address')}
               <br />
@@ -62,9 +62,9 @@ export default async function PartnerDrilldownPage({ params }: { params: { id: s
             </div>
           </div>
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-            <span style={{ background: 'var(--ink-soft)', color: '#fff', padding: '6px 12px', borderRadius: 4, fontSize: 12 }}>Edit</span>
-            <span style={{ background: '#fff', border: '1px solid var(--line-soft)', color: 'var(--ink-soft)', padding: '6px 12px', borderRadius: 4, fontSize: 12 }}>Renew</span>
-            <span style={{ background: '#fff', border: '1px solid var(--line-soft)', color: 'var(--ink-soft)', padding: '6px 10px', borderRadius: 4, fontSize: 12 }}>⋯</span>
+            <span style={{ background: 'var(--ink-soft)', color: 'var(--paper-warm)', padding: '6px 12px', borderRadius: 4, fontSize: 12 }}>Edit</span>
+            <span style={{ background: 'var(--paper-warm)', border: '1px solid var(--line-soft)', color: 'var(--ink-soft)', padding: '6px 12px', borderRadius: 4, fontSize: 12 }}>Renew</span>
+            <span style={{ background: 'var(--paper-warm)', border: '1px solid var(--line-soft)', color: 'var(--ink-soft)', padding: '6px 10px', borderRadius: 4, fontSize: 12 }}>⋯</span>
           </div>
         </div>
 
@@ -81,7 +81,7 @@ export default async function PartnerDrilldownPage({ params }: { params: { id: s
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
-        <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px' }}>
+        <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px' }}>
           <div style={{ fontSize: 10.5, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Contract status</div>
           <div style={{ fontSize: 14, color: 'var(--ink-soft)', lineHeight: 1.6 }}>
             <strong>{c.computed_status.charAt(0).toUpperCase() + c.computed_status.slice(1)}</strong>
@@ -97,21 +97,21 @@ export default async function PartnerDrilldownPage({ params }: { params: { id: s
             auto-renew {c.auto_renew ? <strong style={{ color: 'var(--moss-glow)' }}>YES</strong> : <strong style={{ color: 'var(--st-bad)' }}>NO</strong>}
           </div>
         </div>
-        <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px' }}>
+        <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px' }}>
           <div style={{ fontSize: 10.5, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Booking activity</div>
           <div style={{ fontSize: 14, color: 'var(--ink-soft)', lineHeight: 1.6 }}>
             {lorem('not yet wired — needs dmc_reservation_mapping table')}<br />
             <span style={{ fontSize: 11.5, color: 'var(--ink-mute)' }}>Will show: RNs YTD · Revenue · ADR · last booking</span>
           </div>
         </div>
-        <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px' }}>
+        <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px' }}>
           <div style={{ fontSize: 10.5, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Parity health</div>
           <div style={{ fontSize: 14, color: 'var(--ink-soft)', lineHeight: 1.6 }}>
             {lorem('parity scan not yet wired')}<br />
             <span style={{ fontSize: 11.5, color: 'var(--ink-mute)' }}>Will show: open violations + last scan timestamp</span>
           </div>
         </div>
-        <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px' }}>
+        <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px' }}>
           <div style={{ fontSize: 10.5, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Anti-publication clause</div>
           <div style={{ fontSize: 14, color: 'var(--ink-soft)', lineHeight: 1.6 }}>
             {c.anti_publication_clause
@@ -119,7 +119,7 @@ export default async function PartnerDrilldownPage({ params }: { params: { id: s
               : <>{lorem('clause text not yet captured')}</>}
           </div>
         </div>
-        <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px' }}>
+        <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px' }}>
           <div style={{ fontSize: 10.5, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Pricing posture</div>
           <div style={{ fontSize: 14, color: 'var(--ink-soft)', lineHeight: 1.6 }}>
             <strong>{c.pricing_model}</strong>
@@ -128,7 +128,7 @@ export default async function PartnerDrilldownPage({ params }: { params: { id: s
             {c.extra_bed_usd != null ? <><br />extra bed USD {c.extra_bed_usd}</> : null}
           </div>
         </div>
-        <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px' }}>
+        <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px' }}>
           <div style={{ fontSize: 10.5, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Renewal countdown</div>
           <div style={{ fontSize: 14, color: 'var(--ink-soft)', lineHeight: 1.6 }}>
             {c.days_to_expiry != null && c.days_to_expiry > 0 ? (
@@ -147,7 +147,7 @@ export default async function PartnerDrilldownPage({ params }: { params: { id: s
 
       <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: 11.5 }}>
         <strong>✓ Wired (Overview tab).</strong> Reading from <code>v_dmc_contracts</code>. Tabs 2-7 (Contract details, Bookings, Parity, Performance, Activity, Documents) need additional schema (<code>dmc_contract_rates</code>, <code>dmc_reservation_mapping</code>, <code>parity_violations</code>) — apply{' '}
-        <code style={{ background: '#fff', padding: '1px 5px', borderRadius: 3 }}>migration-draft.sql</code> to unlock.
+        <code style={{ background: 'var(--paper-warm)', padding: '1px 5px', borderRadius: 3 }}>migration-draft.sql</code> to unlock.
       </div>
     </>
   );

@@ -226,7 +226,7 @@ export default function AgentsHub({
             <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
               <strong>Auto-pause underperformers</strong> · if a tactic's actual CPA exceeds the per-channel limit, auto-pause and notify
             </span>
-            <span className="pill" style={{ marginLeft: 'auto', background: 'var(--moss)', color: '#fff' }}>enabled</span>
+            <span className="pill" style={{ marginLeft: 'auto', background: 'var(--moss)', color: 'var(--paper-warm)' }}>enabled</span>
           </div>
           <div style={{
             marginTop: 6,

@@ -69,11 +69,11 @@ export default async function GroupsPage() {
       </div>
 
       {groups.length === 0 ? (
-        <div style={{ background: '#fff', border: '1px dashed var(--line-soft)', borderRadius: 8, padding: '40px 20px', textAlign: 'center', color: 'var(--ink-mute)', fontSize: 13 }}>
+        <div style={{ background: 'var(--paper-warm)', border: '1px dashed var(--line-soft)', borderRadius: 8, padding: '40px 20px', textAlign: 'center', color: 'var(--ink-mute)', fontSize: 13 }}>
           No group blocks in <code>public.groups</code>.
         </div>
       ) : (
-        <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
+        <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
             <thead>
               <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -95,14 +95,14 @@ export default async function GroupsPage() {
                 return (
                   <tr key={g.group_id} style={{ borderTop: '1px solid var(--paper-warm)' }}>
                     <td style={{ padding: '10px 12px', fontWeight: 500 }}>{g.group_name ?? '—'}</td>
-                    <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontFamily: 'Menlo, monospace', fontSize: 11.5 }}>{g.arrival_date ?? '—'}</td>
-                    <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontFamily: 'Menlo, monospace', fontSize: 11.5 }}>{g.departure_date ?? '—'}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>{g.block_size ?? '—'}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>{g.pickup ?? '—'}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: (Number(g.pickup_pct) ?? 0) >= 80 ? 'var(--moss-glow)' : (Number(g.pickup_pct) ?? 0) >= 50 ? 'var(--brass)' : 'var(--st-bad)' }}>
+                    <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontFamily: 'var(--mono)', fontSize: 11.5 }}>{g.arrival_date ?? '—'}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontFamily: 'var(--mono)', fontSize: 11.5 }}>{g.departure_date ?? '—'}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{g.block_size ?? '—'}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{g.pickup ?? '—'}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: (Number(g.pickup_pct) ?? 0) >= 80 ? 'var(--moss-glow)' : (Number(g.pickup_pct) ?? 0) >= 50 ? 'var(--brass)' : 'var(--st-bad)' }}>
                       {g.pickup_pct == null ? '—' : `${Number(g.pickup_pct).toFixed(0)}%`}
                     </td>
-                    <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontFamily: 'Menlo, monospace', fontSize: 11.5 }}>{g.cutoff_date ?? '—'}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontFamily: 'var(--mono)', fontSize: 11.5 }}>{g.cutoff_date ?? '—'}</td>
                     <td style={{ padding: '10px 12px', fontSize: 11.5 }}>{g.contact_name ?? '—'}</td>
                     <td style={{ padding: '10px 12px' }}>
                       <span style={{ background: pill.bg, border: `1px solid ${pill.bd}`, color: pill.fg, padding: '2px 8px', borderRadius: 10, fontSize: 10.5, fontWeight: 600, textTransform: 'capitalize' }}>
@@ -126,10 +126,10 @@ export default async function GroupsPage() {
 
 function Kpi({ scope, value, sub, lorem = false }: { scope: string; value: string; sub: string; lorem?: boolean }) {
   return (
-    <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '12px 14px' }}>
-      <div style={{ fontSize: 10.5, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{scope}</div>
-      <div style={{ fontFamily: 'Georgia, serif', fontSize: 22, fontWeight: 500, color: lorem ? 'var(--ink-faint)' : 'var(--ink-soft)', fontStyle: lorem ? 'italic' : 'normal', margin: '2px 0' }}>{value}</div>
-      <div style={{ fontSize: 11, color: 'var(--ink-mute)' }}>{sub}</div>
+    <div className="kpi-tile" data-tooltip={`${scope} · ${sub}`}>
+      <div className="kpi-tile-scope">{scope}</div>
+      <div className={`kpi-tile-value${lorem ? ' lorem' : ''}`}>{value}</div>
+      <div className="kpi-tile-sub">{sub}</div>
     </div>
   );
 }

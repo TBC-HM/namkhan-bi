@@ -55,7 +55,7 @@ export default async function CampaignsPage({ searchParams }: SP) {
         sub={status ? `filtered by ${status}` : 'newest first'}
         source="marketing.v_campaign_calendar"
         actions={
-          <Link href="/marketing/campaigns/new" className="btn" style={{ fontSize: 11, textDecoration: 'none', background: 'var(--moss)', color: '#fff', borderColor: 'var(--moss)' }}>
+          <Link href="/marketing/campaigns/new" className="btn" style={{ fontSize: 11, textDecoration: 'none', background: 'var(--moss)', color: 'var(--paper-warm)', borderColor: 'var(--moss)' }}>
             + new campaign
           </Link>
         }
@@ -72,8 +72,8 @@ export default async function CampaignsPage({ searchParams }: SP) {
                 style={{
                   fontSize: 11,
                   textDecoration: 'none',
-                  background: active ? 'var(--moss)' : '#fff',
-                  color: active ? '#fff' : 'var(--ink)',
+                  background: active ? 'var(--moss)' : 'var(--paper-warm)',
+                  color: active ? 'var(--paper-warm)' : 'var(--ink)',
                   borderColor: active ? 'var(--moss)' : 'var(--line)',
                 }}
               >{t.label}</Link>
@@ -86,7 +86,7 @@ export default async function CampaignsPage({ searchParams }: SP) {
             <h3>No campaigns yet</h3>
             <p>Build your first campaign in 4 minutes — pick a channel, brief one sentence, AI proposes assets, you approve and download.</p>
             <p style={{ marginTop: 12 }}>
-              <Link href="/marketing/campaigns/new" className="btn" style={{ fontSize: 11, textDecoration: 'none', background: 'var(--moss)', color: '#fff', borderColor: 'var(--moss)' }}>
+              <Link href="/marketing/campaigns/new" className="btn" style={{ fontSize: 11, textDecoration: 'none', background: 'var(--moss)', color: 'var(--paper-warm)', borderColor: 'var(--moss)' }}>
                 start a campaign →
               </Link>
             </p>

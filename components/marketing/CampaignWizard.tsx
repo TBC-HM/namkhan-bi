@@ -107,7 +107,7 @@ export default function CampaignWizard({ templates, assetPool }: Props) {
                 padding: '6px 14px',
                 fontSize: 12,
                 fontWeight: active || done ? 600 : 500,
-                color: active ? '#fff' : done ? 'var(--moss)' : 'var(--ink-mute)',
+                color: active ? 'var(--paper-warm)' : done ? 'var(--moss)' : 'var(--ink-mute)',
                 background: active ? 'var(--moss)' : done ? 'rgba(31,53,40,0.10)' : 'transparent',
                 border: active ? '1px solid var(--moss)' : '1px solid var(--line)',
                 borderRadius: 4,
@@ -187,7 +187,7 @@ export default function CampaignWizard({ templates, assetPool }: Props) {
             style={{
               fontSize: 11,
               background: canContinue ? 'var(--moss)' : 'var(--ink-mute)',
-              color: '#fff',
+              color: 'var(--paper-warm)',
               borderColor: canContinue ? 'var(--moss)' : 'var(--ink-mute)',
               cursor: canContinue ? 'pointer' : 'not-allowed',
             }}
@@ -197,7 +197,7 @@ export default function CampaignWizard({ templates, assetPool }: Props) {
           <button
             onClick={() => setStep(5)}
             className="btn"
-            style={{ fontSize: 11, background: 'var(--moss)', color: '#fff', borderColor: 'var(--moss)' }}
+            style={{ fontSize: 11, background: 'var(--moss)', color: 'var(--paper-warm)', borderColor: 'var(--moss)' }}
           >✓ approve & schedule</button>
         )}
         {step === 5 && (
@@ -227,7 +227,7 @@ function Step1Brief({ brief, setBrief, templates }: { brief: Brief; setBrief: (b
                   textAlign: 'left',
                   padding: '12px 14px',
                   border: active ? '2px solid var(--moss)' : '1px solid var(--line)',
-                  background: active ? 'rgba(31,53,40,0.05)' : '#fff',
+                  background: active ? 'rgba(31,53,40,0.05)' : 'var(--paper-warm)',
                   borderRadius: 4,
                   cursor: 'pointer',
                   fontFamily: 'var(--sans)',
@@ -254,7 +254,7 @@ function Step1Brief({ brief, setBrief, templates }: { brief: Brief; setBrief: (b
             padding: '12px 14px',
             border: '1px solid var(--line)',
             borderRadius: 4,
-            background: '#fff',
+            background: 'var(--paper-warm)',
             fontFamily: 'var(--serif)',
             fontStyle: 'italic',
           }}
@@ -278,8 +278,8 @@ function Step1Brief({ brief, setBrief, templates }: { brief: Brief; setBrief: (b
                 className="btn"
                 style={{
                   fontSize: 11,
-                  background: active ? 'var(--moss)' : '#fff',
-                  color: active ? '#fff' : 'var(--ink)',
+                  background: active ? 'var(--moss)' : 'var(--paper-warm)',
+                  color: active ? 'var(--paper-warm)' : 'var(--ink)',
                   borderColor: active ? 'var(--moss)' : 'var(--line)',
                 }}
               >{opt.label}</button>
@@ -303,8 +303,8 @@ function Step1Brief({ brief, setBrief, templates }: { brief: Brief; setBrief: (b
                 style={{
                   fontSize: 11,
                   textTransform: 'capitalize',
-                  background: active ? 'var(--brass)' : '#fff',
-                  color: active ? '#fff' : 'var(--ink)',
+                  background: active ? 'var(--brass)' : 'var(--paper-warm)',
+                  color: active ? 'var(--paper-warm)' : 'var(--ink)',
                   borderColor: active ? 'var(--brass)' : 'var(--line)',
                 }}
               >{v}</button>
@@ -441,7 +441,7 @@ function ProposalCard({ asset, picked, score, reason, onToggle }: {
         }
         <div style={{
           position: 'absolute', top: 6, right: 6,
-          background: 'var(--brass)', color: '#fff',
+          background: 'var(--brass)', color: 'var(--paper-warm)',
           fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 700,
           padding: '3px 8px',
         }}>{score.toFixed(2)}</div>
@@ -449,7 +449,7 @@ function ProposalCard({ asset, picked, score, reason, onToggle }: {
           position: 'absolute', bottom: 6, right: 6,
           width: 28, height: 28, borderRadius: '50%',
           background: picked ? 'var(--moss)' : 'rgba(255,255,255,0.92)',
-          color: picked ? '#fff' : 'var(--ink)',
+          color: picked ? 'var(--paper-warm)' : 'var(--ink)',
           display: 'grid', placeItems: 'center',
           fontSize: 14, fontWeight: 700,
         }}>{picked ? '✓' : '+'}</div>
@@ -513,7 +513,7 @@ function Step3Compose({
             // eslint-disable-next-line @next/next/no-img-element
             ? <img src={slideUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             : <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#666', fontFamily: 'var(--mono)', fontSize: 11 }}>(no preview)</div>}
-          <div style={{ position: 'absolute', bottom: 12, right: 12, fontFamily: 'var(--mono)', fontSize: 9, color: '#fff', background: 'rgba(0,0,0,0.5)', padding: '2px 6px' }}>thenamkhan</div>
+          <div style={{ position: 'absolute', bottom: 12, right: 12, fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--paper-warm)', background: 'rgba(0,0,0,0.5)', padding: '2px 6px' }}>thenamkhan</div>
         </div>
         {slides.length > 1 && (
           <div style={{ display: 'flex', gap: 6, marginTop: 12, justifyContent: 'center', alignItems: 'center', fontSize: 11, color: 'var(--ink-mute)' }}>
@@ -539,7 +539,7 @@ function Step3Compose({
               padding: 12,
               border: '1px solid var(--line)',
               borderRadius: 4,
-              background: '#fff',
+              background: 'var(--paper-warm)',
               boxSizing: 'border-box',
               lineHeight: 1.5,
             }}
@@ -554,8 +554,8 @@ function Step3Compose({
                 className="btn"
                 style={{
                   fontSize: 10,
-                  background: tone === t.key ? 'var(--moss)' : '#fff',
-                  color: tone === t.key ? '#fff' : 'var(--ink)',
+                  background: tone === t.key ? 'var(--moss)' : 'var(--paper-warm)',
+                  color: tone === t.key ? 'var(--paper-warm)' : 'var(--ink)',
                   borderColor: tone === t.key ? 'var(--moss)' : 'var(--line)',
                 }}
               >{t.label}</button>
@@ -577,7 +577,7 @@ function Step3Compose({
 
         <Section title="Logo placement">
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <span className="pill" style={{ background: 'var(--moss)', color: '#fff' }}>{template?.logo_position ?? 'bottom-right'} (default)</span>
+            <span className="pill" style={{ background: 'var(--moss)', color: 'var(--paper-warm)' }}>{template?.logo_position ?? 'bottom-right'} (default)</span>
             <button className="btn" style={{ fontSize: 11 }}>change</button>
           </div>
         </Section>
@@ -645,7 +645,7 @@ function Step4Approve({ template, picked, assetPool, caption, hashtags, brief }:
 
       <div>
         <div style={{ fontSize: 11, fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1, color: 'var(--ink-mute)', marginBottom: 6 }}>approver</div>
-        <span className="pill" style={{ background: 'var(--moss)', color: '#fff' }}>Paul Bauer (Owner)</span>
+        <span className="pill" style={{ background: 'var(--moss)', color: 'var(--paper-warm)' }}>Paul Bauer (Owner)</span>
       </div>
     </div>
   );
@@ -699,7 +699,7 @@ function Row({ label, status }: { label: string; status: 'done' | 'scheduled' | 
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--line-soft)' }}>
       <span style={{ color: 'var(--ink-soft)' }}>{label}</span>
-      <span className="pill" style={{ background: color, color: '#fff' }}>{sym} {status}</span>
+      <span className="pill" style={{ background: color, color: 'var(--paper-warm)' }}>{sym} {status}</span>
     </div>
   );
 }

@@ -54,16 +54,16 @@ const DRAFTS: DraftRow[] = [
 
 const ctaColor = (cta: string) =>
   cta === 'Safe to send'
-    ? { bg: '#1f3d2e', fg: '#fff8eb' }
+    ? { bg: '#1f3d2e', fg: 'var(--paper-warm)' }
     : cta === 'Approve & send'
-    ? { bg: '#2f6f4a', fg: '#fff' }
-    : { bg: '#a87024', fg: '#fff8eb' };
+    ? { bg: '#2f6f4a', fg: 'var(--paper-warm)' }
+    : { bg: '#a87024', fg: 'var(--paper-warm)' };
 
 export default function AutoDraftTray({ overlay }: { overlay?: ReactNode }) {
   return (
     <div
       style={{
-        background: '#fff',
+        background: 'var(--paper-warm)',
         border: '1px solid #e6dfc9',
         borderRadius: 8,
         marginTop: 14,
@@ -87,7 +87,7 @@ export default function AutoDraftTray({ overlay }: { overlay?: ReactNode }) {
         </div>
         <h3
           style={{
-            fontFamily: 'Georgia, serif',
+            fontFamily: 'var(--serif)',
             fontSize: 18,
             fontWeight: 500,
             margin: '2px 0 0',

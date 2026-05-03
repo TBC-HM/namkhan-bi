@@ -70,7 +70,7 @@ export default async function ReconciliationPage() {
       <B2bSubNav />
       <B2bKpiStrip />
 
-      <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
+      <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
             <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -88,7 +88,7 @@ export default async function ReconciliationPage() {
             {[...unconfirmed, ...confirmed].map((r) => {
               const pillKey = (r.status ?? 'not_confirmed').toLowerCase();
               const pill = STATUS_PILL[pillKey] ?? STATUS_PILL.not_confirmed;
-              const rowBg = r.confirmed ? 'var(--st-good-bg)' : !r.matched_contract_id ? 'var(--paper-warm)' : '#fff';
+              const rowBg = r.confirmed ? 'var(--st-good-bg)' : !r.matched_contract_id ? 'var(--paper-warm)' : 'var(--paper-warm)';
               return (
                 <tr key={r.reservation_id} style={{ borderTop: '1px solid var(--paper-warm)', background: rowBg }}>
                   <td style={{ padding: '6px 10px' }}>
@@ -96,7 +96,7 @@ export default async function ReconciliationPage() {
                       href={cloudbedsReservationUrl(r.reservation_id, PROPERTY_ID)}
                       target="_blank"
                       rel="noreferrer"
-                      style={{ fontFamily: 'Menlo, monospace', color: 'var(--st-info-tx)', textDecoration: 'none', fontSize: 11 }}
+                      style={{ fontFamily: 'var(--mono)', color: 'var(--st-info-tx)', textDecoration: 'none', fontSize: 11 }}
                       title="Open in Cloudbeds"
                     >
                       {r.reservation_id} ↗
@@ -104,9 +104,9 @@ export default async function ReconciliationPage() {
                   </td>
                   <td style={{ padding: '6px 10px', fontSize: 11.5 }}>{r.guest_name ?? '—'}</td>
                   <td style={{ padding: '6px 10px', fontWeight: 500, fontSize: 11.5 }}>{r.source_name ?? '—'}</td>
-                  <td style={{ padding: '6px 10px', color: 'var(--ink-mute)', fontFamily: 'Menlo, monospace', fontSize: 11 }}>{r.check_in_date ?? '—'}</td>
-                  <td style={{ padding: '6px 10px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>{r.nights ?? '—'}</td>
-                  <td style={{ padding: '6px 10px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>USD {Number(r.total_amount ?? 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
+                  <td style={{ padding: '6px 10px', color: 'var(--ink-mute)', fontFamily: 'var(--mono)', fontSize: 11 }}>{r.check_in_date ?? '—'}</td>
+                  <td style={{ padding: '6px 10px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{r.nights ?? '—'}</td>
+                  <td style={{ padding: '6px 10px', textAlign: 'right', fontFamily: 'var(--mono)' }}>USD {Number(r.total_amount ?? 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
                   <td style={{ padding: '6px 10px' }}>
                     <span style={{ background: pill.bg, border: `1px solid ${pill.bd}`, color: pill.fg, padding: '2px 7px', borderRadius: 10, fontSize: 10, fontWeight: 600, textTransform: 'capitalize' }}>
                       {(r.status ?? 'pending').replace('_', ' ')}

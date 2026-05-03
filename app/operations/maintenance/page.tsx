@@ -262,13 +262,13 @@ const pill: React.CSSProperties = {
   padding: '5px 10px',
   border: '1px solid var(--paper-deep)',
   borderRadius: 6,
-  background: '#fff',
+  background: 'var(--paper-warm)',
   fontSize: 12,
 };
 
 const pillActive: React.CSSProperties = {
   ...pill,
   background: 'var(--moss-mid)',
-  color: '#fff',
+  color: 'var(--paper-warm)',
   borderColor: 'var(--moss-mid)',
 };

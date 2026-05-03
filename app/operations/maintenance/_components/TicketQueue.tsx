@@ -17,7 +17,7 @@ export default function TicketQueue({ rows }: Props) {
   return (
     <div
       style={{
-        background: '#fff',
+        background: 'var(--paper-warm)',
         border: '1px solid #e6dfc9',
         borderRadius: 8,
         padding: '14px 16px',
@@ -25,7 +25,7 @@ export default function TicketQueue({ rows }: Props) {
     >
       <h3
         style={{
-          fontFamily: 'Georgia, serif',
+          fontFamily: 'var(--serif)',
           fontSize: 16,
           fontWeight: 500,
           margin: '0 0 8px',

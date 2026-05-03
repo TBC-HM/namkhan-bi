@@ -132,7 +132,7 @@ export default async function B2bDmcContractsPage() {
       <B2bSubNav />
       <B2bKpiStrip />
 
-      <div style={{ background: '#fff', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
+      <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
           <thead>
             <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -161,7 +161,7 @@ export default async function B2bDmcContractsPage() {
                   key={row.key}
                   style={{
                     borderTop: '1px solid var(--paper-warm)',
-                    background: isUncontracted ? 'var(--paper-warm)' : '#fff',
+                    background: isUncontracted ? 'var(--paper-warm)' : 'var(--paper-warm)',
                   }}
                 >
                   <td style={{ padding: '10px 12px' }}>
@@ -182,13 +182,13 @@ export default async function B2bDmcContractsPage() {
                   </td>
                   <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontSize: 11.5 }}>{row.effective ?? '—'}</td>
                   <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontSize: 11.5 }}>{row.expires ?? '—'}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace', color: dayColor }}>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: dayColor }}>
                     {row.daysToExpiry == null ? '—' :
                       row.daysToExpiry > 0 ? `${row.daysToExpiry}` :
                       row.daysToExpiry === 0 ? 'today' : `${Math.abs(row.daysToExpiry)}d ago`}
                   </td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>{row.reservationCount || '—'}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'Menlo, monospace' }}>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{row.reservationCount || '—'}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>
                     {row.revenue > 0 ? `USD ${row.revenue.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—'}
                   </td>
                   <td style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--ink-mute)' }}>

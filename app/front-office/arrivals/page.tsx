@@ -244,7 +244,7 @@ export default async function ArrivalsPage() {
           >
             <h3
               style={{
-                fontFamily: 'Georgia, serif',
+                fontFamily: 'var(--serif)',
                 fontSize: 18,
                 fontWeight: 500,
                 margin: 0,
@@ -267,7 +267,7 @@ export default async function ArrivalsPage() {
         {/* Arrivals board */}
         <section
           style={{
-            background: '#fff',
+            background: 'var(--paper-warm)',
             border: '1px solid var(--paper-deep)',
             borderRadius: 8,
             padding: 14,
@@ -275,7 +275,7 @@ export default async function ArrivalsPage() {
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ fontFamily: 'Georgia, serif', fontSize: 16, fontWeight: 500, margin: 0 }}>
+            <h3 style={{ fontFamily: 'var(--serif)', fontSize: 16, fontWeight: 500, margin: 0 }}>
               Arrivals <em style={{ color: 'var(--brass)' }}>board</em>
             </h3>
             <span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>72h window · tier-sorted</span>
@@ -290,7 +290,7 @@ export default async function ArrivalsPage() {
         {/* Composer tray */}
         <section
           style={{
-            background: '#fff',
+            background: 'var(--paper-warm)',
             border: '1px solid var(--paper-deep)',
             borderRadius: 8,
             padding: 14,
@@ -298,7 +298,7 @@ export default async function ArrivalsPage() {
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ fontFamily: 'Georgia, serif', fontSize: 16, fontWeight: 500, margin: 0 }}>
+            <h3 style={{ fontFamily: 'var(--serif)', fontSize: 16, fontWeight: 500, margin: 0 }}>
               Composer <em style={{ color: 'var(--brass)' }}>tray</em>
             </h3>
             <span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>conf × $ × decay</span>
@@ -315,14 +315,14 @@ export default async function ArrivalsPage() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 14 }}>
         <section
           style={{
-            background: '#fff',
+            background: 'var(--paper-warm)',
             border: '1px solid var(--paper-deep)',
             borderRadius: 8,
             padding: 14,
             minHeight: 200,
           }}
         >
-          <h3 style={{ fontFamily: 'Georgia, serif', fontSize: 16, fontWeight: 500, margin: 0 }}>
+          <h3 style={{ fontFamily: 'var(--serif)', fontSize: 16, fontWeight: 500, margin: 0 }}>
             30d <em style={{ color: 'var(--brass)' }}>funnel</em>
           </h3>
           <p style={{ fontSize: 11, color: 'var(--ink-mute)', margin: '4px 0 8px' }}>
@@ -336,14 +336,14 @@ export default async function ArrivalsPage() {
 
         <section
           style={{
-            background: '#fff',
+            background: 'var(--paper-warm)',
             border: '1px solid var(--paper-deep)',
             borderRadius: 8,
             padding: 14,
             minHeight: 200,
           }}
         >
-          <h3 style={{ fontFamily: 'Georgia, serif', fontSize: 16, fontWeight: 500, margin: 0 }}>
+          <h3 style={{ fontFamily: 'var(--serif)', fontSize: 16, fontWeight: 500, margin: 0 }}>
             Upsell <em style={{ color: 'var(--brass)' }}>mix</em>
           </h3>
           <p style={{ fontSize: 11, color: 'var(--ink-mute)', margin: '4px 0 8px' }}>
@@ -357,14 +357,14 @@ export default async function ArrivalsPage() {
 
         <section
           style={{
-            background: '#fff',
+            background: 'var(--paper-warm)',
             border: '1px solid var(--paper-deep)',
             borderRadius: 8,
             padding: 14,
             minHeight: 200,
           }}
         >
-          <h3 style={{ fontFamily: 'Georgia, serif', fontSize: 16, fontWeight: 500, margin: 0 }}>
+          <h3 style={{ fontFamily: 'var(--serif)', fontSize: 16, fontWeight: 500, margin: 0 }}>
             VIP · <em style={{ color: 'var(--brass)' }}>next 14d</em>
           </h3>
           <p style={{ fontSize: 11, color: 'var(--ink-mute)', margin: '4px 0 8px' }}>
@@ -379,14 +379,14 @@ export default async function ArrivalsPage() {
 
         <section
           style={{
-            background: '#fff',
+            background: 'var(--paper-warm)',
             border: '1px solid var(--paper-deep)',
             borderRadius: 8,
             padding: 14,
             minHeight: 200,
           }}
         >
-          <h3 style={{ fontFamily: 'Georgia, serif', fontSize: 16, fontWeight: 500, margin: 0 }}>
+          <h3 style={{ fontFamily: 'var(--serif)', fontSize: 16, fontWeight: 500, margin: 0 }}>
             Group · <em style={{ color: 'var(--brass)' }}>next 30d</em>
           </h3>
           <p style={{ fontSize: 11, color: 'var(--ink-mute)', margin: '4px 0 8px' }}>

@@ -39,7 +39,7 @@ export default function DecisionQueue({ rows, meta, emptyOverlay }: Props) {
       >
         <h3
           style={{
-            fontFamily: 'Georgia, serif',
+            fontFamily: 'var(--serif)',
             fontSize: 18,
             fontWeight: 500,
             margin: 0,
@@ -57,7 +57,7 @@ export default function DecisionQueue({ rows, meta, emptyOverlay }: Props) {
       ) : (
         <div
           style={{
-            background: '#fff',
+            background: 'var(--paper-warm)',
             border: '1px solid #e6dfc9',
             borderRadius: 8,
           }}
@@ -119,7 +119,7 @@ const btnDefault: React.CSSProperties = {
   padding: '6px 11px',
   borderRadius: 5,
   border: '1px solid #e6dfc9',
-  background: '#fff',
+  background: 'var(--paper-warm)',
   color: '#1c1c1a',
   cursor: 'pointer',
   textTransform: 'uppercase',
@@ -130,6 +130,6 @@ const btnDefault: React.CSSProperties = {
 const btnPrimary: React.CSSProperties = {
   ...btnDefault,
   background: '#a17a4f',
-  color: '#fff8eb',
+  color: 'var(--paper-warm)',
   borderColor: '#a17a4f',
 };

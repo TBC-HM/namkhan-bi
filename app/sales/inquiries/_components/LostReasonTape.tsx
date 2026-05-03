@@ -22,7 +22,7 @@ export default function LostReasonTape() {
   return (
     <details
       style={{
-        background: '#fff',
+        background: 'var(--paper-warm)',
         border: '1px solid #e6dfc9',
         borderRadius: 8,
         padding: '10px 14px',
@@ -40,7 +40,7 @@ export default function LostReasonTape() {
         }}
       >
         <span>
-          <strong style={{ fontFamily: 'Georgia, serif', fontSize: 16 }}>
+          <strong style={{ fontFamily: 'var(--serif)', fontSize: 16 }}>
             Lost-reason tape
           </strong>
           <span style={{ color: '#8a8170', marginLeft: 8, fontSize: 11.5 }}>
@@ -71,7 +71,7 @@ export default function LostReasonTape() {
             <div
               style={{
                 fontSize: 22,
-                fontFamily: 'Georgia, serif',
+                fontFamily: 'var(--serif)',
                 color: '#1c1815',
               }}
             >

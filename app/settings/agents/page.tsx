@@ -114,11 +114,11 @@ export default function SettingsAgentsPage() {
           <table className="tbl">
             <thead><tr><th>Rule</th><th>Description</th><th className="num">Value</th><th>Status</th></tr></thead>
             <tbody>
-              <tr><td className="lbl"><strong>Confidence floor</strong></td><td>Don't surface alerts below this confidence level.</td><td className="num">70 %</td><td><span className="pill" style={{ background: 'var(--moss)', color: '#fff' }}>active</span></td></tr>
-              <tr><td className="lbl"><strong>Min impact threshold</strong></td><td>Don't fire alerts below this revenue impact.</td><td className="num">$1,000</td><td><span className="pill" style={{ background: 'var(--moss)', color: '#fff' }}>active</span></td></tr>
-              <tr><td className="lbl"><strong>Cooldown per dimension</strong></td><td>After firing on the same dimension combo, wait this long before firing again.</td><td className="num">6 hrs</td><td><span className="pill" style={{ background: 'var(--moss)', color: '#fff' }}>active</span></td></tr>
-              <tr><td className="lbl"><strong>Quiet hours</strong></td><td>No agent firings during these hours (LAK time).</td><td className="num">22:00 → 07:00</td><td><span className="pill" style={{ background: 'var(--moss)', color: '#fff' }}>active</span></td></tr>
-              <tr><td className="lbl"><strong>Sample size minimum</strong></td><td>Don't act on cube cells with fewer than this many historical data points.</td><td className="num">10 obs</td><td><span className="pill" style={{ background: 'var(--moss)', color: '#fff' }}>active</span></td></tr>
+              <tr><td className="lbl"><strong>Confidence floor</strong></td><td>Don't surface alerts below this confidence level.</td><td className="num">70 %</td><td><span className="pill" style={{ background: 'var(--moss)', color: 'var(--paper-warm)' }}>active</span></td></tr>
+              <tr><td className="lbl"><strong>Min impact threshold</strong></td><td>Don't fire alerts below this revenue impact.</td><td className="num">$1,000</td><td><span className="pill" style={{ background: 'var(--moss)', color: 'var(--paper-warm)' }}>active</span></td></tr>
+              <tr><td className="lbl"><strong>Cooldown per dimension</strong></td><td>After firing on the same dimension combo, wait this long before firing again.</td><td className="num">6 hrs</td><td><span className="pill" style={{ background: 'var(--moss)', color: 'var(--paper-warm)' }}>active</span></td></tr>
+              <tr><td className="lbl"><strong>Quiet hours</strong></td><td>No agent firings during these hours (LAK time).</td><td className="num">22:00 → 07:00</td><td><span className="pill" style={{ background: 'var(--moss)', color: 'var(--paper-warm)' }}>active</span></td></tr>
+              <tr><td className="lbl"><strong>Sample size minimum</strong></td><td>Don't act on cube cells with fewer than this many historical data points.</td><td className="num">10 obs</td><td><span className="pill" style={{ background: 'var(--moss)', color: 'var(--paper-warm)' }}>active</span></td></tr>
             </tbody>
           </table>
         </Card>
@@ -165,10 +165,10 @@ export default function SettingsAgentsPage() {
           <table className="tbl">
             <thead><tr><th>Rule</th><th>Description</th><th className="num">Value</th><th>Status</th></tr></thead>
             <tbody>
-              <tr><td className="lbl"><strong>Data freshness floor</strong></td><td>Don't fire if Cloudbeds sync is older than this.</td><td className="num">2 hrs</td><td><span className="pill" style={{ background: 'var(--moss)', color: '#fff' }}>active</span></td></tr>
-              <tr><td className="lbl"><strong>Comp-set scrape coverage</strong></td><td>Don't fire comp-set alerts if &lt; this fraction of properties scraped.</td><td className="num">80 %</td><td><span className="pill" style={{ background: 'var(--moss)', color: '#fff' }}>7/7 today</span></td></tr>
-              <tr><td className="lbl"><strong>Pause during PMS sync</strong></td><td>No firings during nightly Cloudbeds sync (01:00–02:30 LAK).</td><td className="num">enabled</td><td><span className="pill" style={{ background: 'var(--moss)', color: '#fff' }}>active</span></td></tr>
-              <tr><td className="lbl"><strong>Anomaly auto-disable</strong></td><td>Auto-disable agents if data anomaly detector flags suspicious data.</td><td className="num">enabled</td><td><span className="pill" style={{ background: 'var(--moss)', color: '#fff' }}>vigilant</span></td></tr>
+              <tr><td className="lbl"><strong>Data freshness floor</strong></td><td>Don't fire if Cloudbeds sync is older than this.</td><td className="num">2 hrs</td><td><span className="pill" style={{ background: 'var(--moss)', color: 'var(--paper-warm)' }}>active</span></td></tr>
+              <tr><td className="lbl"><strong>Comp-set scrape coverage</strong></td><td>Don't fire comp-set alerts if &lt; this fraction of properties scraped.</td><td className="num">80 %</td><td><span className="pill" style={{ background: 'var(--moss)', color: 'var(--paper-warm)' }}>7/7 today</span></td></tr>
+              <tr><td className="lbl"><strong>Pause during PMS sync</strong></td><td>No firings during nightly Cloudbeds sync (01:00–02:30 LAK).</td><td className="num">enabled</td><td><span className="pill" style={{ background: 'var(--moss)', color: 'var(--paper-warm)' }}>active</span></td></tr>
+              <tr><td className="lbl"><strong>Anomaly auto-disable</strong></td><td>Auto-disable agents if data anomaly detector flags suspicious data.</td><td className="num">enabled</td><td><span className="pill" style={{ background: 'var(--moss)', color: 'var(--paper-warm)' }}>vigilant</span></td></tr>
             </tbody>
           </table>
         </Card>
@@ -196,7 +196,7 @@ export default function SettingsAgentsPage() {
                     <td style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>{r.time}</td>
                     <td className="lbl"><strong>{r.agent}</strong></td>
                     <td style={{ fontSize: 12 }}>{r.action}</td>
-                    <td><span className="pill" style={{ background: decBg, color: '#fff' }}>{r.decided}</span></td>
+                    <td><span className="pill" style={{ background: decBg, color: 'var(--paper-warm)' }}>{r.decided}</span></td>
                     <td style={{ fontSize: 11, color: 'var(--moss)', cursor: 'pointer' }}>view</td>
                   </tr>
                 );
@@ -222,7 +222,7 @@ export default function SettingsAgentsPage() {
                   <td style={{ fontSize: 11, color: 'var(--ink-mute)' }}>{r.who}</td>
                   <td>
                     {r.tag === 'current'
-                      ? <span className="pill" style={{ background: 'var(--moss)', color: '#fff' }}>current</span>
+                      ? <span className="pill" style={{ background: 'var(--moss)', color: 'var(--paper-warm)' }}>current</span>
                       : <a style={{ fontSize: 11, color: 'var(--moss)', cursor: 'pointer' }}>view diff</a>
                     }
                   </td>
@@ -244,7 +244,7 @@ export default function SettingsAgentsPage() {
             </div>
             <button style={{
               background: 'var(--oxblood)',
-              color: '#fff',
+              color: 'var(--paper-warm)',
               border: 'none',
               borderRadius: 4,
               padding: '10px 20px',

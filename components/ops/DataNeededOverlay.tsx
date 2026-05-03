@@ -30,7 +30,7 @@ export default function DataNeededOverlay({ gap, table, reason, cta }: Props) {
         style={{
           display: 'inline-block',
           fontSize: 9.5,
-          background: '#fff8eb',
+          background: 'var(--paper-warm)',
           border: '1px solid #f3d57a',
           color: '#5e4818',
           padding: '1px 6px',
