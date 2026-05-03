@@ -1,25 +1,55 @@
 
+  /* ===================================================================
+   * BRAND OVERRIDE — re-bind .bc-redesign tokens to the Namkhan palette.
+   * Original mockup tokens were Linear-style admin (white panels, generic
+   * grey text). This block forces the cream/brown Soho House palette so
+   * every redesign-driven tab matches the rest of the portal.
+   * =================================================================== */
   .bc-redesign{
-    --bg: #ffffff;
-    --panel: #ffffff;
-    --panel-2: #f7f8fa;
-    --border: #e5e7eb;
-    --text: #111827;
-    --text-dim: #6b7280;
-    --text-faint: #9ca3af;
-    --accent: #b8854a;
-    --green: #16a34a;
-    --amber: #d97706;
-    --red: #dc2626;
-    --blue: #2563eb;
+    --bg:         var(--paper);          /* cream page background */
+    --panel:      var(--paper-warm);     /* brown card */
+    --panel-2:    var(--paper-deep);     /* secondary surface */
+    --border:     var(--line-soft);      /* tan border */
+    --text:       var(--ink);            /* near-black brand ink */
+    --text-dim:   var(--ink-soft);
+    --text-faint: var(--ink-mute);
+    --accent:     var(--brass);
+    --green:      var(--moss-glow);
+    --amber:      var(--brass);
+    --red:        var(--st-bad);
+    --blue:       var(--st-info-tx);
   }
   .bc-redesign *{ box-sizing: border-box; margin: 0; padding: 0; }
   .bc-redesign{
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: var(--sans);
     background: var(--bg);
     color: var(--text);
     font-size: 13px;
     line-height: 1.5;
+  }
+  /* Force redesign KPI tiles to match the global .kpi-tile typography:
+   * italic serif value (was bold sans 22px), mono uppercase label (was sans). */
+  .bc-redesign .kpi-card,
+  .bc-redesign .kpi {
+    background: var(--paper-warm) !important;
+    border: 1px solid var(--paper-deep) !important;
+    border-radius: 8px;
+  }
+  .bc-redesign .kpi-value {
+    font-family: var(--serif) !important;
+    font-style: italic !important;
+    font-weight: 500 !important;
+    font-size: 22px !important;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+  .bc-redesign .kpi-label {
+    font-family: var(--mono) !important;
+    font-size: 10px !important;
+    letter-spacing: 0.18em !important;
+    text-transform: uppercase;
+    color: var(--ink-mute) !important;
+    font-weight: 600;
   }
   .bc-redesign .app{ display: flex; min-height: 100vh; }
 

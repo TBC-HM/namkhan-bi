@@ -305,12 +305,12 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
 }
 
 function Kpi({ scope, value, sub, tone = 'flat' }: { scope: string; value: string; sub: string; tone?: 'flat' | 'up' | 'warn' | 'bad' }) {
-  const c = tone === 'up' ? 'var(--moss-glow)' : tone === 'warn' ? 'var(--brass)' : tone === 'bad' ? 'var(--st-bad)' : 'var(--ink-soft)';
+  const cls = tone === 'up' ? 'pos' : tone === 'warn' ? 'warn' : tone === 'bad' ? 'neg' : '';
   return (
-    <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '12px 14px' }}>
-      <div style={{ fontSize: 10.5, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{scope}</div>
-      <div style={{ fontFamily: 'var(--serif)', fontSize: 22, fontWeight: 500, color: c, margin: '2px 0' }}>{value}</div>
-      <div style={{ fontSize: 11, color: 'var(--ink-mute)' }}>{sub}</div>
+    <div className="kpi-tile" data-tooltip={`${scope} · ${sub}`}>
+      <div className="kpi-tile-scope">{scope}</div>
+      <div className={`kpi-tile-value ${cls}`.trim()}>{value}</div>
+      <div className="kpi-tile-sub">{sub}</div>
     </div>
   );
 }
