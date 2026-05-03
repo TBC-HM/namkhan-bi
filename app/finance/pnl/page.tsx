@@ -4,10 +4,13 @@
 // Wired tiles use Supabase data; unwired tiles render with "Data needed" badges
 // referencing the schema gap (1–8) blocking them. See deploy-doc-schema-finance-pnl-2026-04-30.md.
 
-import FilterStrip from '@/components/nav/FilterStrip';
-import { getRevenueByUsali, getKpiDaily, aggregateDaily } from '@/lib/data';
+import { getKpiDaily, aggregateDaily } from '@/lib/data';
 import { resolvePeriod } from '@/lib/period';
-import { fmtMoney } from '@/lib/format';
+import {
+  getPlSections, getUsaliHouse, getUsaliDept, getUsaliPlBySubcat,
+  getDqUnmappedCount, getPendingDecisions, periodsForWindow, currentPeriod, pickSection, pickPeriod,
+} from '../_data';
+import { priorPeriod, type PeriodWindow } from '@/lib/supabase-gl';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -16,20 +19,17 @@ interface Props {
   searchParams: Record<string, string | string[] | undefined>;
 }
 
-// Format money in compact $k notation matching mockup (e.g. $184k, $48.0k)
 function fmtK(n: number | null | undefined, dp = 1): string {
   if (n === null || n === undefined || !isFinite(n)) return '—';
   const v = n / 1000;
   return `$${v.toFixed(dp)}k`;
 }
 
-// Format percentage points
 function fmtPp(n: number | null | undefined, dp = 1): string {
   if (n === null || n === undefined || !isFinite(n)) return '—';
   return `${n >= 0 ? '+' : ''}${n.toFixed(dp)} pp`;
 }
 
-// Format pct
 function fmtPctV(n: number | null | undefined, dp = 1): string {
   if (n === null || n === undefined || !isFinite(n)) return '—';
   return `${n.toFixed(dp)}%`;
@@ -38,37 +38,63 @@ function fmtPctV(n: number | null | undefined, dp = 1): string {
 export default async function PnLPage({ searchParams }: Props) {
   const period = resolvePeriod(searchParams);
 
-  // Fetch wired data
-  const usali = await getRevenueByUsali(period).catch(() => []);
-  const daily = await getKpiDaily(period).catch(() => []);
+  // Window selector (TODAY/7D/30D/90D/YTD) → period_yyyymm filter on gl.* tables
+  const win = ((searchParams.win as string) || '30D').toUpperCase() as PeriodWindow;
+  const winPeriods = periodsForWindow(['TODAY','7D','30D','90D','YTD'].includes(win) ? win : '30D');
+  const cur = currentPeriod();
+  const prior = priorPeriod(cur);
+
+  // Parallel fetch: gl.* + legacy daily KPI
+  const [plSections, plPrior, houseRows, deptRows, agSubcat, payrollSubcat, fbDeptOnly, otaCommissions, dqUnmapped, decisions, daily] = await Promise.all([
+    getPlSections(winPeriods),
+    getPlSections([prior]),
+    getUsaliHouse(winPeriods),
+    getUsaliDept(winPeriods),
+    getUsaliPlBySubcat(winPeriods, 'A&G'),
+    getUsaliPlBySubcat(winPeriods, 'Payroll & Related'),
+    getUsaliDept(winPeriods).then(rs => rs.filter(r => r.usali_department === 'F&B')),
+    getUsaliPlBySubcat(winPeriods, 'Sales & Marketing'),
+    getDqUnmappedCount(),
+    getPendingDecisions(5),
+    getKpiDaily(period).catch(() => []),
+  ]);
   const agg = aggregateDaily(daily, period.capacityMode);
 
-  // Latest two months from USALI for current vs prior comparison
-  const months = Array.from(new Set(usali.map((r: any) => r.month))).sort().reverse() as string[];
-  const latestMonth = months[0];
-  const priorMonth = months[1];
-  const latestRows = usali.filter((r: any) => r.month === latestMonth);
-  const priorRows = usali.filter((r: any) => r.month === priorMonth);
-
-  const sumRev = (rows: any[]) => rows.reduce((s, r) => s + Number(r.revenue || 0), 0);
-  const totalRev = sumRev(latestRows);
-  const priorTotalRev = sumRev(priorRows);
+  // KPI calculations from gl.* (use current period only for primary tiles)
+  const totalRev = pickSection(plSections.filter(r => r.period_yyyymm === cur), 'income');
+  const priorTotalRev = pickSection(plPrior, 'income');
   const revVsPriorPct = priorTotalRev ? ((totalRev - priorTotalRev) / priorTotalRev) * 100 : 0;
 
-  // By department (USALI dept)
-  const byDept: Record<string, number> = {};
-  latestRows.forEach((r: any) => {
-    const k = r.usali_dept || 'Other';
-    byDept[k] = (byDept[k] || 0) + Number(r.revenue || 0);
-  });
+  const houseCur = pickPeriod(houseRows, cur);
+  const gop = houseCur?.gop ?? null;
+  const gopMargin = (gop != null && totalRev > 0) ? (gop / totalRev) * 100 : null;
+  const ebitda = (gop != null) ? gop - (houseCur?.depreciation || 0) - (houseCur?.interest || 0) - (houseCur?.income_tax || 0) : null;
 
-  // Departmental Profit proxy: USALI revenue side only — no expense data wired yet.
-  // We display revenue proxies per dept; GOP$ and margin show "data needed" until expense map ships.
-  const monthLabel = latestMonth ? new Date(String(latestMonth)).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : 'Apr 2026';
+  const totalRevWindow = winPeriods.reduce((s, p) => s + pickSection(plSections.filter(r => r.period_yyyymm === p), 'income'), 0);
+  const totalPayrollWindow = payrollSubcat.reduce((s, r) => s + Number(r.amount_usd || 0), 0);
+  const labourPct = totalRevWindow > 0 ? (totalPayrollWindow / totalRevWindow) * 100 : null;
+
+  const fbRevWindow = fbDeptOnly.reduce((s, r) => s + Number(r.revenue || 0), 0);
+  const fbPayrollWindow = payrollSubcat
+    .filter(r => r.usali_department === 'F&B')
+    .reduce((s, r) => s + Number(r.amount_usd || 0), 0);
+  const fbLabourPct = fbRevWindow > 0 ? (fbPayrollWindow / fbRevWindow) * 100 : null;
+
+  const otaCommWindow = otaCommissions
+    .filter(r => (r.usali_line_code || '').includes('OTA') || (r.account_id || '').startsWith('624'))
+    .reduce((s, r) => s + Number(r.amount_usd || 0), 0);
+  const channelsCommissionPct = totalRevWindow > 0 ? (otaCommWindow / totalRevWindow) * 100 : null;
+
+  const agTotalWindow = agSubcat.reduce((s, r) => s + Number(r.amount_usd || 0), 0);
+
+  // Dept rows for USALI table — current period only
+  const deptCurMap = new Map(deptRows.filter(r => r.period_yyyymm === cur).map(r => [r.usali_department, r]));
+  const months = Array.from(new Set(plSections.map(r => r.period_yyyymm))).sort().reverse();
+  const latestMonth = months[0] || cur;
+  const monthLabel = latestMonth ? new Date(latestMonth + '-01').toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : 'Apr 2026';
 
   return (
     <div className="pnl-page">
-      <FilterStrip showForward={false} showCompare showSegment={false} liveSource="USALI ledger · live" />
       {/* ============== BLOCK 1 — Title + breadcrumb ============== */}
       <div className="title-block" style={{ marginBottom: 12 }}>
         <div style={{ fontSize: 12, color: 'var(--ink-mute, #8a8170)', marginBottom: 4 }}>
@@ -114,33 +140,31 @@ export default async function PnLPage({ searchParams }: Props) {
             </div>
             <div className="lbl">Total Revenue</div>
           </div>
-          <div className="kpi dim">
+          <div className={'kpi ' + (gop == null ? 'dim' : '')}>
             <div className="scope">P&amp;L</div>
-            <div className="val">—</div>
-            <div className="deltas"><span className="neu">expense map missing</span></div>
+            <div className="val">{fmtK(gop)}</div>
+            <div className="deltas"><span className="neu">{gop == null ? 'awaiting gl_entries load' : 'gl.v_usali_house_summary.gop'}</span></div>
             <div className="lbl">GOP $</div>
-            <span className="needs" title="Gap 2 — gl.usali_expense_map">data needed · Gap 2</span>
+            {gop == null && <span className="needs" title="Run qb-deploy/gl_entries_load.sql">load gl_entries</span>}
           </div>
-          <div className="kpi dim">
+          <div className={'kpi ' + (gopMargin == null ? 'dim' : '')}>
             <div className="scope">P&amp;L</div>
-            <div className="val">—</div>
-            <div className="deltas"><span className="neu">expense map missing</span></div>
+            <div className="val">{fmtPctV(gopMargin)}</div>
+            <div className="deltas"><span className="neu">{gopMargin == null ? 'awaiting GOP$' : 'gop / total_revenue'}</span></div>
             <div className="lbl">GOP margin</div>
-            <span className="needs" title="Gap 2 — gl.usali_expense_map">data needed · Gap 2</span>
           </div>
           <div className="kpi dim">
             <div className="scope">Flow</div>
             <div className="val">—</div>
-            <div className="deltas"><span className="neu">target band 50–60%</span></div>
+            <div className="deltas"><span className="neu">needs LY data</span></div>
             <div className="lbl">Flow-through</div>
-            <span className="needs" title="Gap 7 — kpi.flow_through() depends on Gap 2">data needed · Gap 7</span>
+            <span className="needs" title="Phase 3 — needs LY P&amp;L import">deferred</span>
           </div>
-          <div className="kpi dim">
+          <div className={'kpi ' + (ebitda == null ? 'dim' : '')}>
             <div className="scope">P&amp;L</div>
-            <div className="val">—</div>
-            <div className="deltas"><span className="neu">depends on GOP</span></div>
+            <div className="val">{fmtK(ebitda)}</div>
+            <div className="deltas"><span className="neu">{ebitda == null ? 'awaiting GOP$' : 'gop − depr − interest − tax'}</span></div>
             <div className="lbl">EBITDA</div>
-            <span className="needs" title="Gap 2">data needed · Gap 2</span>
           </div>
           <div className="kpi dim">
             <div className="scope">Cash</div>
@@ -153,37 +177,34 @@ export default async function PnLPage({ searchParams }: Props) {
 
         {/* Secondary 5 */}
         <div className="kpi-row secondary">
-          <div className="kpi secondary dim">
+          <div className={'kpi secondary ' + (labourPct == null ? 'dim' : '')}>
             <div className="scope">Ops</div>
-            <div className="val">—</div>
-            <div className="deltas"><span className="neu">payroll daily missing</span></div>
+            <div className="val">{fmtPctV(labourPct)}</div>
+            <div className="deltas"><span className="neu">{labourPct == null ? 'awaiting gl_entries' : 'payroll ÷ revenue (window)'}</span></div>
             <div className="lbl">Labour cost %</div>
-            <span className="needs" title="Gap 1 — ops.payroll_daily">data needed · Gap 1</span>
           </div>
-          <div className="kpi secondary dim">
+          <div className={'kpi secondary ' + (fbLabourPct == null ? 'dim' : '')}>
             <div className="scope">F&amp;B</div>
-            <div className="val">—</div>
-            <div className="deltas"><span className="neu">payroll daily missing</span></div>
+            <div className="val">{fmtPctV(fbLabourPct)}</div>
+            <div className="deltas"><span className="neu">{fbLabourPct == null ? 'awaiting gl_entries' : 'F&B payroll ÷ F&B revenue'}</span></div>
             <div className="lbl">F&amp;B labour %</div>
-            <span className="needs" title="Gap 1 — ops.payroll_daily">data needed · Gap 1</span>
           </div>
-          <div className="kpi secondary">
+          <div className={'kpi secondary ' + (channelsCommissionPct == null && (!agg || agg.commission_pct == null) ? 'dim' : '')}>
             <div className="scope">Channels</div>
-            <div className="val">{agg && agg.commission_pct != null ? fmtPctV(agg.commission_pct as number) : '—'}</div>
-            <div className="deltas"><span className="neu">channels.commission_pct</span></div>
+            <div className="val">{channelsCommissionPct != null ? fmtPctV(channelsCommissionPct) : (agg && agg.commission_pct != null ? fmtPctV(agg.commission_pct as number) : '—')}</div>
+            <div className="deltas"><span className="neu">{channelsCommissionPct != null ? 'gl.account_id LIKE 624%' : 'channels.commission_pct (legacy)'}</span></div>
             <div className="lbl">Distribution cost %</div>
           </div>
-          <div className="kpi secondary dim">
+          <div className={'kpi secondary ' + (agTotalWindow === 0 ? 'dim' : '')}>
             <div className="scope">P&amp;L</div>
-            <div className="val">—</div>
-            <div className="deltas"><span className="neu">A&amp;G GL line missing</span></div>
+            <div className="val">{fmtK(agTotalWindow)}</div>
+            <div className="deltas"><span className="neu">{agTotalWindow === 0 ? 'awaiting gl_entries' : 'mv_usali_pl_monthly · A&G'}</span></div>
             <div className="lbl">A&amp;G $</div>
-            <span className="needs" title="Gap 2 — gl.usali_expense_map">data needed · Gap 2</span>
           </div>
           <div className="kpi secondary">
             <div className="scope">Audit</div>
-            <div className="val">{latestRows.filter((r: any) => !r.usali_subdept).length}</div>
-            <div className="deltas"><span className="neu">unmapped sub-dept rows</span></div>
+            <div className="val">{dqUnmapped}</div>
+            <div className="deltas"><span className="neu">DQ-04-UNMAPPED open</span></div>
             <div className="lbl">USALI mapping gaps</div>
           </div>
         </div>
@@ -205,33 +226,47 @@ export default async function PnLPage({ searchParams }: Props) {
         <span className="meta">5 actions · ranked by $ impact · <a href="#" style={{ color: 'var(--tan, #a17a4f)' }}>view all</a></span>
       </div>
       <div className="queue">
-        {[
-          { impact: '+$4,200', title: 'Renegotiate beverage supplier (Q2 cost +18% YoY)', meta: 'Top 3 SKUs · Lao Beverage Co · conf 72% · velocity: this week · Procurement Agent' },
-          { impact: '+$2,800', title: 'Cut Tuesday spa shift Apr–May (utilisation 31%)', meta: 'Spa · 8 weeks · cross-section → Operations RosterAgent · conf 84% · velocity: this week' },
-          { impact: '+$1,950', title: 'Approve revised energy mix (solar inverter), payback 14mo', meta: 'CapEx $27k · IRR 22% · conf 88% · velocity: this month · Maintenance Agent' },
-          { impact: '+$1,600', title: 'Reclassify Mar marketing accruals (mis-coded to Rooms OPEX)', meta: '12 entries · Controller Agent · conf 95%', stamp: 'writes GL · 4-eyes req' },
-          { impact: '+$1,400', title: 'Hire 1.0 FTE Front Office (offsets 0.5 OT + 0.5 contractor)', meta: 'manual review (HR) · conf 67% · velocity: this month' },
-        ].map((row, i) => (
-          <div className="qrow" key={i}>
-            <div className="impact pos">{row.impact}</div>
-            <div>
-              <div className="title">{row.title}</div>
-              <div className="meta-line">
-                {row.meta}
-                {row.stamp && <span className="stamp"> {row.stamp}</span>}
+        {(() => {
+          const sample = [
+            { impact: '+$4,200', title: 'Renegotiate beverage supplier (Q2 cost +18% YoY)', meta: 'Top 3 SKUs · Lao Beverage Co · conf 72% · velocity: this week · Procurement Agent' },
+            { impact: '+$2,800', title: 'Cut Tuesday spa shift Apr–May (utilisation 31%)', meta: 'Spa · 8 weeks · cross-section → Operations RosterAgent · conf 84% · velocity: this week' },
+            { impact: '+$1,950', title: 'Approve revised energy mix (solar inverter), payback 14mo', meta: 'CapEx $27k · IRR 22% · conf 88% · velocity: this month · Maintenance Agent' },
+            { impact: '+$1,600', title: 'Reclassify Mar marketing accruals (mis-coded to Rooms OPEX)', meta: '12 entries · Controller Agent · conf 95%', stamp: 'writes GL · 4-eyes req' },
+            { impact: '+$1,400', title: 'Hire 1.0 FTE Front Office (offsets 0.5 OT + 0.5 contractor)', meta: 'manual review (HR) · conf 67% · velocity: this month' },
+          ];
+          const rows = decisions.length > 0
+            ? decisions.map((d) => {
+                const impact = d.impact_usd_estimate != null ? `+$${Math.round(Number(d.impact_usd_estimate)).toLocaleString()}` : '—';
+                const title = String(d.title || (d as any).description || `Decision ${(d.id || '').toString().slice(0, 8)}`);
+                const meta = `governance.decision_queue · ${(d as any).agent_code || ''} · status=${d.status || ''}`;
+                return { impact, title, meta };
+              })
+            : sample;
+          return rows.map((row: any, i: number) => (
+            <div className="qrow" key={i}>
+              <div className="impact pos">{row.impact}</div>
+              <div>
+                <div className="title">{row.title}</div>
+                <div className="meta-line">
+                  {row.meta}
+                  {row.stamp && <span className="stamp"> {row.stamp}</span>}
+                </div>
+              </div>
+              <div className="actions">
+                <button type="button" className="btn primary" disabled>Approve</button>
+                <button type="button" className="btn" disabled>Send back</button>
+                <button type="button" className="btn" disabled>Snooze</button>
+                <button type="button" className="btn" disabled>Open</button>
               </div>
             </div>
-            <div className="actions">
-              <button type="button" className="btn primary" disabled>Approve</button>
-              <button type="button" className="btn" disabled>Send back</button>
-              <button type="button" className="btn" disabled>Snooze</button>
-              <button type="button" className="btn" disabled>Open</button>
-            </div>
-          </div>
-        ))}
+          ));
+        })()}
       </div>
       <div style={{ marginTop: 6, fontSize: 11, color: 'var(--ink-mute, #8a8170)' }}>
-        Persistent queue (Approve / Snooze) requires <b>Gap 8 — governance.decision_queue</b>. UI buttons are local-only until schema lands.
+        {decisions.length > 0
+          ? <>Live queue from <code>governance.decision_queue</code> · {decisions.length} pending. Action handlers (Approve/Snooze) require server actions wiring — defer to Phase 3.</>
+          : <>No pending items in <code>governance.decision_queue</code> · sample shown. Action handlers (Approve/Snooze) require server actions wiring — defer to Phase 3.</>
+        }
       </div>
 
       {/* ============== BLOCK 7 — Tactical alerts ============== */}
@@ -297,14 +332,20 @@ export default async function PnLPage({ searchParams }: Props) {
             <tbody>
               <tr className="section"><td colSpan={7}>Revenue</td></tr>
               {(() => {
-                // Build revenue rows from USALI data
-                const deptOrder = ['Rooms', 'F&B', 'Spa', 'Other Operated', 'Other'];
+                const deptOrder = ['Rooms', 'F&B', 'Spa', 'Activities', 'Mekong Cruise', 'Other Operated'];
                 const rows = deptOrder
-                  .map((d) => ({
-                    name: d,
-                    val: byDept[d] || latestRows.filter((r: any) => r.usali_dept === d).reduce((s: number, r: any) => s + Number(r.revenue || 0), 0),
-                  }))
+                  .map((d) => {
+                    const r = deptCurMap.get(d);
+                    return { name: d, val: r ? Number(r.revenue || 0) : 0 };
+                  })
                   .filter((r) => r.val > 0);
+                if (rows.length === 0) {
+                  return (
+                    <tr><td colSpan={7} style={{ color: 'var(--muted, #8a8170)', fontStyle: 'italic', textAlign: 'center' }}>
+                      No revenue rows for {cur} — awaiting <code>gl_entries</code> load (run <code>qb-deploy/gl_entries_load.sql</code>)
+                    </td></tr>
+                  );
+                }
                 return rows.map((r) => (
                   <tr key={r.name}>
                     <td>{r.name}</td>
@@ -327,17 +368,86 @@ export default async function PnLPage({ searchParams }: Props) {
                 <td>—</td>
               </tr>
 
-              <tr className="section"><td colSpan={7}>Departmental Expenses (Gap 2)</td></tr>
-              <tr><td colSpan={7} style={{ color: 'var(--muted, #8a8170)', fontStyle: 'italic', textAlign: 'center' }}>Awaiting <code>gl.usali_expense_map</code> migration · phase1_13</td></tr>
+              <tr className="section"><td colSpan={7}>Departmental Expenses (USALI · live from <code>gl.v_usali_dept_summary</code>)</td></tr>
+              {(() => {
+                const deptOrder = ['Rooms', 'F&B', 'Spa', 'Activities', 'Mekong Cruise', 'Other Operated'];
+                const rows = deptOrder
+                  .map((d) => {
+                    const r = deptCurMap.get(d);
+                    if (!r) return null;
+                    const exp = (Number(r.cost_of_sales || 0) + Number(r.payroll || 0) + Number(r.other_op_exp || 0));
+                    if (exp <= 0) return null;
+                    return { name: d, val: exp };
+                  })
+                  .filter(Boolean) as { name: string; val: number }[];
+                if (rows.length === 0) {
+                  return (
+                    <tr><td colSpan={7} style={{ color: 'var(--muted, #8a8170)', fontStyle: 'italic', textAlign: 'center' }}>
+                      No expense rows for {cur} — awaiting <code>gl_entries</code> load
+                    </td></tr>
+                  );
+                }
+                return rows.map((r) => (
+                  <tr key={r.name}>
+                    <td>{r.name}</td>
+                    <td>{fmtK(r.val)}</td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>—</td>
+                  </tr>
+                ));
+              })()}
 
-              <tr className="gop"><td>Departmental Profit</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+              <tr className="gop">
+                <td>Departmental Profit</td>
+                <td>{fmtK(houseCur?.total_dept_profit ?? null)}</td>
+                <td>—</td>
+                <td>—</td>
+                <td>—</td>
+                <td>—</td>
+                <td>—</td>
+              </tr>
 
-              <tr className="section"><td colSpan={7}>Undistributed Operating Expenses (Gap 2)</td></tr>
-              <tr><td colSpan={7} style={{ color: 'var(--muted, #8a8170)', fontStyle: 'italic', textAlign: 'center' }}>A&amp;G · S&amp;M · IT · POM · Utilities — awaiting migration phase1_13</td></tr>
+              <tr className="section"><td colSpan={7}>Undistributed Operating Expenses (live from <code>gl.v_usali_house_summary</code>)</td></tr>
+              <tr>
+                <td>A&amp;G</td>
+                <td>{fmtK(houseCur?.ag_total ?? null)}</td>
+                <td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>
+              </tr>
+              <tr>
+                <td>Sales &amp; Marketing</td>
+                <td>{fmtK(houseCur?.sales_marketing ?? null)}</td>
+                <td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>
+              </tr>
+              <tr>
+                <td>POM</td>
+                <td>{fmtK(houseCur?.pom ?? null)}</td>
+                <td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>
+              </tr>
+              <tr>
+                <td>Utilities</td>
+                <td>{fmtK(houseCur?.utilities ?? null)}</td>
+                <td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>
+              </tr>
+              <tr>
+                <td>Mgmt Fees</td>
+                <td>{fmtK(houseCur?.mgmt_fees ?? null)}</td>
+                <td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>
+              </tr>
 
-              <tr className="gop"><td>GOP after Undistributed</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+              <tr className="gop">
+                <td>GOP after Undistributed</td>
+                <td>{fmtK(houseCur?.gop ?? null)}</td>
+                <td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>
+              </tr>
 
-              <tr className="ebitda"><td>EBITDA</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+              <tr className="ebitda">
+                <td>EBITDA</td>
+                <td>{fmtK(ebitda)}</td>
+                <td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -431,8 +541,11 @@ export default async function PnLPage({ searchParams }: Props) {
 
       <div className="legend-foot">
         Block compliance: 1 ✓ · 2 ✓ · 3 ✓ · 4 ✓ (primary 6 + secondary 5) · 5 ✓ · 6 ✓ · 7 ✓ · 8 ✓ · 9 ✓.
-        Branded skin sampled from <code>/revenue/pulse</code>. Wired tiles: Total Revenue · Distribution % · USALI rev rows · mapping gaps.
-        Greyed tiles tagged with the schema gap (1–8) blocking them — see <code>deploy-doc-schema-finance-pnl-2026-04-30.md</code>.
+        Wired (gl.* schema, 2026-05-02): Total Revenue (<code>pl_section_monthly</code>) · GOP $ / margin / EBITDA (<code>v_usali_house_summary</code>) ·
+        Labour % / F&amp;B labour % / A&amp;G $ / channels commission % (<code>mv_usali_pl_monthly</code>) · USALI dept table (<code>v_usali_dept_summary</code>) ·
+        mapping gaps (<code>dq_findings</code> DQ-04) · decisions queue (<code>governance.decision_queue</code>).
+        Deferred: Flow-through (LY data) · Cash on hand (bank feed) · Top variances vs Budget (<code>gl.budgets</code> not in schema) · 13-week cash · Margin leak heatmap (sample) · Variance commentary draft (<code>gl.commentary_drafts</code>).
+        gl_entries-derived tiles render <code>—</code> until <code>qb-deploy/gl_entries_load.sql</code> is run via psql.
       </div>
     </div>
   );
