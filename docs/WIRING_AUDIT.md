@@ -62,3 +62,40 @@ Non-canonical UI windows (`l12m`, `next180`, `next365`) are unreachable from Fil
 | Revenue · Channels | Channel KPIs + commissions + OTA × Roomtype | `mv_channel_economics`, `mv_channel_x_roomtype` | same | YES | none | OK |
 | Revenue · Rates | BAR ladder / Min/Max | `mv_rate_inventory_calendar` via `getRateInventoryCalendar(period)` | same | YES (period-driven) | none | OK |
 
+## Sales / Marketing / Guest / Finance (Cowork audit 2026-05-03)
+
+| Page | Element | Source claimed | Source actual | Match? | Action | Status |
+|------|---------|----------------|---------------|--------|--------|--------|
+| Sales · Inquiries | KPI tiles ($48.2k MTD, $6.4k today, etc.) | mockup HTML inline | mockup — NO Supabase source | n/a | Wiring waits on `sales.inquiries` schema (not yet created) | DEFER (data not in Supabase) |
+| Sales · Revenue MTD tile | `mv_kpi_today.month_revenue` | same | YES | none | OK |
+| Sales · B2B / DMC | `dmc.contracts` + `dmc.lpa_sources` + `reservations` filtered DMC | same (5 contracts + 26 LPA + 101 reservations per memory) | YES | none | OK |
+| Sales · Packages / Pipeline / Roster / Calendar | mockup HTML | mockup | n/a | source schemas not built | DEFER |
+| Marketing · Snapshot | Reviews · social KPIs | `marketing.reviews` (count=0) + `marketing.social_accounts` (count=8) via `lib/marketing.ts` | same | PARTIAL (socials wired; reviews empty) | none — wiring correct, table empty | DEFER (data not in Supabase) |
+| Marketing · Library / Social / Reviews / Influencers / Campaigns / Taxonomy / Upload / Media | various marketing.* sources | reads `marketing.*` schema | YES — but most tables empty (campaigns=0, reviews=0) | none — wiring correct, awaiting content | DEFER (data not in Supabase) |
+| Guest · Snapshot | Avg rating / unanswered / response rate / followers | `marketing.reviews` (empty) + `marketing.social_accounts` | same | PARTIAL (followers wire; reviews empty) | none — page renders 0s honestly | DEFER (data not in Supabase) |
+| Guest · Directory | 5-filter directory + clickable KPIs | `guest.v_directory_facets` + `guest.v_guest_reservations` (4,111 real guests) | same | YES | none | OK |
+| Guest · Reviews / NPS / Recovery / Loyalty / Themes | guest.* tables | `guest.review_replies`=0, `guest.nps_responses`=0, `guest.loyalty_members`=0 | YES — wired but tables empty | none — wiring correct | DEFER (data not in Supabase) |
+| Finance · Snapshot | Revenue MTD / GOP MTD / Net MTD / AR 90+ | `lib/data.ts` + `mv_aged_ar` + `mv_revenue_by_usali_dept`. Branch reverted finance/page.tsx to origin/main version (Phase 2.5 GL views not yet on main) | same | YES (origin/main version) | rolled back to origin/main version because Phase 2.5 GL deps `./_data` and `lib/supabase-gl.ts` aren't pushed yet | OK (will re-merge once Phase 2.5 lands on main) |
+| Finance · P&L | USALI dept rows + GOP %, EBITDA | `getRevenueByUsali` + `getKpiDaily` (origin/main version) | same | PARTIAL (department rows render; GOP $/EBITDA show "—" awaiting `gl_entries` load) | none — `gl_entries_load.sql` from `qb-deploy/` is the unblocker | DEFER (Phase 2.5 GL load) |
+| Finance · Ledger | Aged AR + city ledger + missing-email DQ | `mv_aged_ar` (days_overdue>0) + `mv_kpi_today` + reservations missing-email count | same | YES | none | OK |
+| Finance · Budget | Annual target tile (greyed) | greyed | greyed | n/a | unchanged | OK |
+| Finance · Agents | configuration | n/a | n/a | n/a | none | OK |
+
+## Summary
+
+Pages with deployed wiring fixes verified live against Supabase ground truth:
+- `/overview` — IN-HOUSE 9 · DQ 17 · 30D ADR $205 / RevPAR $56 / TRevPAR $84 / Occupancy 27.4 %
+- `/revenue/pulse` — same 4 KPIs as `/overview` (reads `f_overview_kpis` directly)
+- `/operations` (snapshot), `/operations/restaurant`, `/operations/spa`, `/operations/activities` — selectors restored at page level
+- `/operations/today`, `/operations/housekeeping`, `/operations/maintenance`, `/operations/staff`, `/operations/inventory/*` — selectors removed (live snapshots)
+- `/front-office/*` — selectors removed (live next-72h)
+- `/finance/ledger` — selectors removed (AR aging is a snapshot)
+- `/finance`, `/finance/pnl` — selectors restored at page level
+- `/knowledge`, `/settings/*` — already had no selectors
+
+DEFER cases (wiring correct, source data missing or schema migration required):
+- `mv_kpi_daily` lacks paired `*_lak` columns → daily revenue chart pinned to USD until migration adds them
+- `f_overview_kpis` references schema `auth_ext` that anon doesn't have USAGE on → called via `service_role` server-side. `SECURITY DEFINER` is the proper long-term fix.
+- Sales (non-B2B), Marketing reviews, Guest reviews/NPS/loyalty: source tables exist but are empty
+- Finance P&L GOP/EBITDA: awaiting `gl_entries_load.sql` from `qb-deploy/`
+
