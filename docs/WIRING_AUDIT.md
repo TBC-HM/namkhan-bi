@@ -119,6 +119,15 @@ DEFER cases (wiring correct, source data missing or schema migration required):
 | `auth_ext` schema | grants | not exposed to anon | granted USAGE + EXECUTE on functions to anon/authenticated; `getOverviewKpis` continues using service_role for JWT-less server contexts | FIXED |
 | `/settings/platform-map` | page | 404 (Phase 2.5 file not on main) | brought forward `app/settings/platform-map/page.tsx` + `components/settings/PlatformMapRenderer.tsx` + `content/settings/platform-map.md` | FIXED |
 | `/finance/mapping` | page | wasn't on main | brought forward by parallel session — now live with `MappingTable` component | FIXED |
+| `public.f_overview_kpis(text,text,text)` | function | NOT `SECURITY DEFINER`, anon needed service-role workaround | `ALTER FUNCTION ... SECURITY DEFINER` + `SET search_path = public, pg_temp`. anon now calls directly. `getOverviewKpis` reverted to plain anon supabase client. | FIXED |
+| `app/operations/staff/[staffId]/page.tsx` | annual-LAK→USD subdisplay | `/ FX_LAK_PER_USD` (hardcoded 21800) | server-side `supabase.rpc('fx_usd_to_lak')` at request time | FIXED |
+| `/marketing` layout | FilterStrip | rendered globally — bled into `/library`, `/influencers`, `/taxonomy`, `/upload`, `/agents`, `/media` (all static lists) | layout no longer renders FilterStrip; no marketing page actually consumes `?win=` so no inline restoration needed | FIXED |
+| `/sales/roster` | tile values | reads `public.v_staff_register_extended` | YES — verified | OK |
+
+## Final pillar smoke test (50/50 pages = HTTP 200)
+
+Every page in the left nav + every sub-tab returns 200. The two earlier 404s (`/operations/inventory`, `/settings/platform-map`) are: platform-map FIXED; inventory deferred (Phase 2.5 inventory pages not yet pushed to main).
+
 | `public.v_dq_open` | view | did not exist | created — joins `dq.violations` + `dq.rules`, returns full row list incl. severity/title/description/category. Granted SELECT to anon/authenticated/service_role | FIXED |
 
 ## DQ inspection (the 17 action-required rules)
