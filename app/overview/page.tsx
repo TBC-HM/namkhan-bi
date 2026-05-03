@@ -77,10 +77,14 @@ export default async function OverviewPage({ searchParams }: Props) {
           sub="In-house, arriving, departing, on-the-books"
           kpis={
             <>
-              <KpiCard label="In-House"         value={live?.in_house         ?? 0} />
-              <KpiCard label="Arriving Today"   value={live?.arriving_today   ?? 0} />
-              <KpiCard label="Departing Today"  value={live?.departing_today  ?? 0} />
-              <KpiCard label="OTB Next 90d"     value={live?.otb_next_90d     ?? 0} />
+              <KpiCard label="In-House"         value={live?.in_house         ?? 0}
+                tooltip={`In-House · today · v_overview_live · count of reservations where check_in <= today < check_out`} />
+              <KpiCard label="Arriving Today"   value={live?.arriving_today   ?? 0}
+                tooltip={`Arriving Today · today · v_overview_live · count of reservations with check_in = today`} />
+              <KpiCard label="Departing Today"  value={live?.departing_today  ?? 0}
+                tooltip={`Departing Today · today · v_overview_live · count of reservations with check_out = today`} />
+              <KpiCard label="OTB Next 90d"     value={live?.otb_next_90d     ?? 0}
+                tooltip={`On-the-Books Next 90d · forward-looking · v_overview_live · sum of room nights from today through today+90`} />
             </>
           }
         />
@@ -91,39 +95,50 @@ export default async function OverviewPage({ searchParams }: Props) {
             label={`Occupancy (${period.label})`}
             value={Number(cur?.occupancy_pct ?? 0)}
             kind="pct"
+            tooltip={`Occupancy · ${period.label} · f_overview_kpis · room nights sold ÷ saleable room nights`}
           />
           <KpiCard
             label={`ADR (${period.label})`}
             value={Number(cur?.adr_usd ?? 0)}
             valueLak={Number(cur?.adr_lak ?? 0)}
             kind="money"
+            tooltip={`Average Daily Rate · ${period.label} · f_overview_kpis · rooms revenue ÷ room nights sold`}
           />
           <KpiCard
             label={`RevPAR (${period.label})`}
             value={Number(cur?.revpar_usd ?? 0)}
             valueLak={Number(cur?.revpar_lak ?? 0)}
             kind="money"
+            tooltip={`Revenue Per Available Room · ${period.label} · f_overview_kpis · ADR × Occupancy = rooms revenue ÷ saleable rooms`}
           />
           <KpiCard
             label={`TRevPAR (${period.label})`}
             value={Number(cur?.trevpar_usd ?? 0)}
             valueLak={Number(cur?.trevpar_lak ?? 0)}
             kind="money"
+            tooltip={`Total Revenue Per Available Room · ${period.label} · f_overview_kpis · (rooms + F&B + spa + activity) ÷ saleable rooms`}
           />
-          <KpiCard label="GOPPAR" value={null} greyed hint="Cost data needed" />
+          <KpiCard label="GOPPAR" value={null} greyed hint="Cost data needed"
+            tooltip={`Gross Operating Profit Per Available Room · BLOCKED · cost data not yet wired (USALI dept costs from gl.gl_entries) · target: TRevPAR − operating costs ÷ saleable rooms`} />
         </div>
 
         {/* Mix row — cancel/no-show from v_overview_live; capture rates from f_overview_kpis */}
         <div className="card-grid-6">
-          <KpiCard label="Cancellation %"    value={Number(live?.cancellation_pct ?? 0)} kind="pct" />
-          <KpiCard label="No-show %"         value={Number(live?.no_show_pct      ?? 0)} kind="pct" />
-          <KpiCard label="F&B / Occ Rn"      value={Number(cur?.fnb_per_occ_rn_usd      ?? 0)} kind="money" showSecondaryCurrency={false} />
-          <KpiCard label="Spa / Occ Rn"      value={Number(cur?.spa_per_occ_rn_usd      ?? 0)} kind="money" showSecondaryCurrency={false} />
-          <KpiCard label="Activity / Occ Rn" value={Number(cur?.activity_per_occ_rn_usd ?? 0)} kind="money" showSecondaryCurrency={false} />
+          <KpiCard label="Cancellation %"    value={Number(live?.cancellation_pct ?? 0)} kind="pct"
+            tooltip={`Cancellation rate · rolling · v_overview_live · cancelled reservations ÷ total reservations`} />
+          <KpiCard label="No-show %"         value={Number(live?.no_show_pct      ?? 0)} kind="pct"
+            tooltip={`No-show rate · rolling · v_overview_live · no-show reservations ÷ arrivals`} />
+          <KpiCard label="F&B / Occ Rn"      value={Number(cur?.fnb_per_occ_rn_usd      ?? 0)} kind="money" showSecondaryCurrency={false}
+            tooltip={`F&B revenue per occupied room night · ${period.label} · f_overview_kpis · F&B revenue ÷ room nights sold`} />
+          <KpiCard label="Spa / Occ Rn"      value={Number(cur?.spa_per_occ_rn_usd      ?? 0)} kind="money" showSecondaryCurrency={false}
+            tooltip={`Spa revenue per occupied room night · ${period.label} · f_overview_kpis · spa revenue ÷ room nights sold`} />
+          <KpiCard label="Activity / Occ Rn" value={Number(cur?.activity_per_occ_rn_usd ?? 0)} kind="money" showSecondaryCurrency={false}
+            tooltip={`Activity revenue per occupied room night · ${period.label} · f_overview_kpis · activity revenue ÷ room nights sold`} />
           <KpiCard
             label="Open DQ Issues"
             value={dqCount}
             tone={dqCount > 0 ? 'warn' : 'pos'}
+            tooltip={`Open data-quality issues · live · v_overview_dq → v_dq_open · count of unresolved data anomalies across all schemas`}
           />
         </div>
 

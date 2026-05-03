@@ -13,6 +13,7 @@ import DecisionQueue, { type DecisionRow } from '@/components/ops/DecisionQueue'
 import TacticalAlerts, { type TacticalAlert } from '@/components/ops/TacticalAlerts';
 import GuardrailsBanner from '@/components/ops/GuardrailsBanner';
 import DataNeededOverlay from '@/components/ops/DataNeededOverlay';
+import PageHeader from '@/components/layout/PageHeader';
 
 import InquiryFeed from './_components/InquiryFeed';
 import AutoDraftTray from './_components/AutoDraftTray';
@@ -261,30 +262,12 @@ export default async function InquiriesPage() {
   return (
     <>
       {/* BLOCK 1: Breadcrumb + Title */}
-      <div
-        style={{
-          fontSize: 11,
-          color: 'var(--ink-mute)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.08em',
-          marginTop: 14,
-        }}
-      >
-        <strong style={{ color: 'var(--ink-soft)' }}>Sales</strong> › Inquiries
-      </div>
-      <h1
-        style={{
-          margin: '4px 0 2px',
-          fontFamily: 'Georgia, serif',
-          fontWeight: 500,
-          fontSize: 30,
-        }}
-      >
-        Every inquiry, an <em style={{ color: 'var(--brass)' }}>answer</em> before lunch.
-      </h1>
-      <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
-        Triage, auto-quote, approve, send. The funnel starts here.
-      </div>
+      <PageHeader
+        pillar="Sales"
+        tab="Inquiries"
+        title={<>Every inquiry, an <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>answer</em> before lunch.</>}
+        lede="Triage, auto-quote, approve, send. The funnel starts here."
+      />
 
       {/* BLOCK 2: Status pills (sales-specific, on top of layout's FilterStrip) */}
       <div

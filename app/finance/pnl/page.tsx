@@ -11,6 +11,7 @@ import {
   getDqUnmappedCount, getPendingDecisions, periodsForWindow, currentPeriod, pickSection, pickPeriod,
 } from '../_data';
 import { priorPeriod, type PeriodWindow } from '@/lib/supabase-gl';
+import PageHeader from '@/components/layout/PageHeader';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -130,17 +131,12 @@ export default async function PnLPage({ searchParams }: Props) {
   return (
     <div className="pnl-page">
       {/* ============== BLOCK 1 — Title + breadcrumb ============== */}
-      <div className="title-block" style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 12, color: 'var(--ink-mute, #8a8170)', marginBottom: 4 }}>
-          Finance &nbsp;›&nbsp; <b>P&amp;L</b>
-        </div>
-        <h1 style={{ margin: 0, fontFamily: 'var(--serif, Georgia, serif)', fontSize: 28, fontWeight: 600 }}>
-          Profit &amp; loss · where the <em>margin</em> lives.
-        </h1>
-        <div className="subtitle" style={{ color: 'var(--ink-mute, #8a8170)', fontSize: 13, marginTop: 2 }}>
-          Where to act this week to defend GOP. USALI 11th ed.
-        </div>
-      </div>
+      <PageHeader
+        pillar="Finance"
+        tab="P&L"
+        title={<>Profit &amp; loss · where the <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>margin</em> lives.</>}
+        lede="Where to act this week to defend GOP. USALI 11th ed."
+      />
 
       {/* ============== BLOCK 2 — Period + write-policy banners ============== */}
       <div className="period-banner">
