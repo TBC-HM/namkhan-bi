@@ -110,6 +110,7 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/finance',                label: 'Snapshot' },
     { href: '/finance/pnl',            label: 'P&L' },
     { href: '/finance/ledger',         label: 'Ledger' },
+    { href: '/finance/mapping',        label: 'Mapping' },
     { href: '/finance/budget',         label: 'Budget',          coming: true },
     { href: '/finance/cashflow',       label: 'Cashflow',        coming: true },
     { href: '/finance/variance',       label: 'Variance',        coming: true },

@@ -3,7 +3,6 @@
 
 import { revalidatePath } from 'next/cache';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { FX_LAK_PER_USD } from '@/lib/format';
 
 type Payload = { comp_id: string; stay_date: string; rate_usd: number };
 
@@ -13,13 +12,24 @@ export async function saveRates(rows: Payload[]) {
   const sb = getSupabaseAdmin();
   const today = new Date().toISOString().slice(0, 10);
 
+  // Capture the LIVE FX rate at write time (Cowork audit 2026-05-03 — was
+  // hardcoded `FX_LAK_PER_USD`). `public.fx_usd_to_lak()` reads the latest
+  // row from `gl.fx_rates`. Single round-trip per save batch, not per row.
+  const { data: fxRow, error: fxErr } = await sb.rpc('fx_usd_to_lak');
+  if (fxErr) {
+    console.error('[saveRates] fx_usd_to_lak failed', fxErr);
+    throw new Error(fxErr.message);
+  }
+  const fx = Number(fxRow ?? 0);
+  if (!fx || !isFinite(fx)) throw new Error('fx_usd_to_lak() returned invalid rate');
+
   const upserts = rows.map((r) => ({
     comp_id: r.comp_id,
     stay_date: r.stay_date,
     shop_date: today,
     channel: 'booking.com',
     rate_usd: r.rate_usd,
-    rate_lak: Math.round(r.rate_usd * FX_LAK_PER_USD),
+    rate_lak: Math.round(r.rate_usd * fx),
     currency: 'USD',
     is_available: true,
     source: 'manual_owner_entry',
