@@ -225,6 +225,97 @@ export async function getLyTotalRevenue(period: string): Promise<number | null> 
   return ly.reduce((s, r) => s + (r.revenue || 0), 0);
 }
 
+/**
+ * LY by USALI department. We infer department from gl_entries class assignment
+ * (account_id → most-frequent class_id → classes.usali_department). Accounts not
+ * present in gl_entries get null department.
+ *
+ * Returns map: usali_department → { revenue, expense } summed for the same
+ * month last year.
+ */
+export async function getLyByUsaliDept(period: string): Promise<Record<string, { revenue: number; expense: number }>> {
+  const [yStr, mStr] = period.split('-');
+  const y = Number(yStr) - 1;
+  const m = Number(mStr);
+  if (!Number.isFinite(y) || !Number.isFinite(m)) return {};
+
+  const { data: snap, error } = await supabaseGl
+    .from('pnl_snapshot')
+    .select('account_code, amount_usd')
+    .eq('period_year', y)
+    .eq('period_month', m);
+  if (error || !snap || snap.length === 0) return {};
+
+  const ids = Array.from(new Set(snap.map((r: any) => r.account_code))).filter(Boolean);
+
+  // Build account_id → usali_department map via accounts + most-common class
+  // assignment in gl_entries.
+  const [{ data: accts }, { data: ents }] = await Promise.all([
+    supabaseGl.from('accounts').select('account_id, usali_subcategory').in('account_id', ids),
+    supabaseGl.from('gl_entries').select('account_id, class_id').in('account_id', ids),
+  ]);
+
+  // gl_entries.class_id → gl.classes.usali_department
+  const { data: classes } = await supabaseGl.from('classes').select('class_id, usali_department');
+  const deptByClass = new Map<string, string | null>();
+  for (const c of (classes ?? []) as { class_id: string; usali_department: string | null }[]) {
+    deptByClass.set(c.class_id, c.usali_department);
+  }
+
+  // Most-common class per account
+  const tally = new Map<string, Map<string, number>>();
+  for (const e of (ents ?? []) as { account_id: string; class_id: string }[]) {
+    if (!e.class_id) continue;
+    const m = tally.get(e.account_id) ?? new Map<string, number>();
+    m.set(e.class_id, (m.get(e.class_id) ?? 0) + 1);
+    tally.set(e.account_id, m);
+  }
+  const deptByAccount = new Map<string, string | null>();
+  for (const [acct, classCounts] of tally.entries()) {
+    let bestClass: string | null = null;
+    let bestN = 0;
+    for (const [cid, n] of classCounts) {
+      if (n > bestN) { bestClass = cid; bestN = n; }
+    }
+    deptByAccount.set(acct, bestClass ? deptByClass.get(bestClass) ?? null : null);
+  }
+  const subByAccount = new Map<string, string | null>();
+  for (const a of (accts ?? []) as { account_id: string; usali_subcategory: string | null }[]) {
+    subByAccount.set(a.account_id, a.usali_subcategory);
+  }
+
+  const out: Record<string, { revenue: number; expense: number }> = {};
+  for (const r of snap as { account_code: string; amount_usd: number }[]) {
+    const dept = deptByAccount.get(r.account_code) ?? 'Unmapped';
+    const sub = subByAccount.get(r.account_code) ?? '';
+    const amt = Number(r.amount_usd || 0);
+    if (!out[dept]) out[dept] = { revenue: 0, expense: 0 };
+    if (sub === 'Revenue') out[dept].revenue += -amt; // credit-side
+    else out[dept].expense += amt;
+  }
+  return out;
+}
+
+/**
+ * Per-dept actuals for a list of periods — used by heatmap. Returns
+ * a flat array of { period, dept, revenue, expense, dept_profit }.
+ */
+export async function getDeptByPeriods(periods: string[]): Promise<Array<{ period: string; dept: string; revenue: number; expense: number; dept_profit: number }>> {
+  if (periods.length === 0) return [];
+  const { data, error } = await supabaseGl
+    .from('v_usali_dept_summary')
+    .select('period_yyyymm, usali_department, revenue, cost_of_sales, payroll, other_op_exp, departmental_profit')
+    .in('period_yyyymm', periods);
+  if (error || !data) return [];
+  return (data as any[]).map(r => ({
+    period: r.period_yyyymm,
+    dept: r.usali_department,
+    revenue: Number(r.revenue || 0),
+    expense: Number(r.cost_of_sales || 0) + Number(r.payroll || 0) + Number(r.other_op_exp || 0),
+    dept_profit: Number(r.departmental_profit || 0),
+  }));
+}
+
 // ----- Decisions queue (cross-schema: governance) -------------------------
 export interface DecisionQueueItem {
   id?: string;
