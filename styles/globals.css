@@ -406,6 +406,108 @@ button { font-family: inherit; }
   box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.4);
 }
 
+/* ===== Canonical Status Pill =====
+ * Locked shape/padding/radius for every status indicator across the app
+ * (B2B contracts, rate plans, agents, reservations, guest profiles, ...).
+ */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.status-pill-icon { font-size: 9px; }
+.status-pill.pill-active   { background: var(--st-good-bg);  border-color: var(--st-good-bd);  color: var(--moss); }
+.status-pill.pill-pending  { background: var(--st-warn-bg);  border-color: var(--st-warn-bd);  color: var(--brass); }
+.status-pill.pill-expired  { background: var(--st-bad-bg);   border-color: var(--st-bad-bd);   color: var(--st-bad); }
+.status-pill.pill-inactive { background: var(--paper-deep);  border-color: var(--line-soft);   color: var(--ink-mute); }
+.status-pill.pill-info     { background: var(--st-info-bg);  border-color: var(--st-info-bd);  color: var(--st-info-tx); }
+
+/* ===== Canonical Data Table =====
+ * Locked spec per user 2026-05-03. Header bold mono uppercase letterspaced
+ * (matches tab nav voice); body sans regular; numeric columns tabular-nums
+ * + right-aligned; subtle bottom dividers, no full-grid lines; hover tint. */
+.data-table-wrap {
+  background: var(--paper-warm);
+  border: 1px solid var(--paper-deep);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--sans);
+  font-size: var(--t-base);
+  color: var(--ink);
+}
+.data-table-th {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: var(--t-xs);
+  letter-spacing: var(--ls-extra);
+  text-transform: uppercase;
+  color: var(--brass);
+  background: var(--paper-warm);
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--paper-deep);
+  white-space: nowrap;
+  user-select: none;
+}
+.data-table-th.sortable { cursor: pointer; transition: color 120ms ease; }
+.data-table-th.sortable:hover { color: var(--ink); }
+.data-table-th.active { color: var(--ink); }
+
+.data-table-td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--paper-deep);
+  font-size: var(--t-base);
+  color: var(--ink);
+  vertical-align: middle;
+}
+.data-table-td.tabular,
+.data-table-th.align-right + *,
+.data-table-th.align-right { font-variant-numeric: tabular-nums; }
+
+.data-table-row { transition: background 120ms ease; }
+.data-table-row:hover .data-table-td { background: var(--paper-deep); }
+.data-table tr:last-child .data-table-td { border-bottom: 0; }
+
+/* footer row (totals) */
+.data-table tfoot td {
+  padding: 12px 14px;
+  font-weight: 600;
+  border-top: 2px solid var(--paper-deep);
+  background: var(--paper-warm);
+}
+
+/* alignment classes */
+.align-left   { text-align: left; }
+.align-right  { text-align: right; }
+.align-center { text-align: center; }
+
+/* row variants */
+.data-table-row.row-warn .data-table-td { background: var(--st-warn-bg); }
+.data-table-row.row-bad  .data-table-td { background: var(--st-bad-bg); }
+.data-table-row.row-good .data-table-td { background: var(--st-good-bg); }
+
+.data-table-empty {
+  background: var(--paper-warm);
+  border: 1px dashed var(--line-soft);
+  border-radius: 8px;
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--ink-mute);
+  font-size: var(--t-md);
+}
+
 /* ===== Canonical KpiBox =====
  * THE locked KPI box for every pillar (user spec 2026-05-03,
  * docs/11_BRAND_AND_UI_STANDARDS.md).

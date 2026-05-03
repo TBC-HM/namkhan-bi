@@ -175,9 +175,9 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 10, marginBottom: 14 }}>
         <Kpi scope="Inventory cells" value={totalInv.toLocaleString()} sub={`${period.days}n × ${roomTypes.length}rt × ${planAggs.length}rp`} />
-        <Kpi scope="Avg rate" value={`USD ${avgRate.toFixed(0)}`} sub="across all cells" />
-        <Kpi scope="Floor (BAR)" value={`USD ${minRate.toFixed(0)}`} sub="lowest non-zero" />
-        <Kpi scope="Ceiling" value={`USD ${maxRate.toFixed(0)}`} sub="highest" />
+        <Kpi scope="Avg rate" value={`$${avgRate.toFixed(0)}`} sub="across all cells" />
+        <Kpi scope="Floor (BAR)" value={`$${minRate.toFixed(0)}`} sub="lowest non-zero" />
+        <Kpi scope="Ceiling" value={`$${maxRate.toFixed(0)}`} sub="highest" />
         <Kpi scope="Stop-sell" value={stopSells.toLocaleString()} sub="closed cells" tone={stopSells > 0 ? 'warn' : 'flat'} />
         <Kpi scope="Min-stay" value={minStayRows.toLocaleString()} sub="LOS restricted" />
       </div>
@@ -205,10 +205,10 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
               <tr key={a.id} style={{ borderTop: '1px solid var(--paper-warm)' }}>
                 <td style={{ padding: '10px 12px', fontWeight: 500 }}>{a.rt}</td>
                 <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>{a.count}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>USD {a.avg.toFixed(0)}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--moss-glow)' }}>USD {a.min.toFixed(0)}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--brass)' }}>USD {a.max.toFixed(0)}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>USD {(a.max - a.min).toFixed(0)}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>${a.avg.toFixed(0)}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--moss-glow)' }}>${a.min.toFixed(0)}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--brass)' }}>${a.max.toFixed(0)}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>${(a.max - a.min).toFixed(0)}</td>
                 <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: a.stops > 0 ? 'var(--st-bad)' : 'var(--ink-mute)' }}>{a.stops || '—'}</td>
                 <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: a.minStays > 0 ? 'var(--brass)' : 'var(--ink-mute)' }}>{a.minStays || '—'}</td>
                 <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>{a.cta || 0}/{a.ctd || 0}</td>
@@ -285,9 +285,9 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
                   <td style={{ padding: '10px 12px', fontWeight: 500 }}>{p.name}</td>
                   <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontSize: "var(--t-sm)" }}>{p.type ?? '—'}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{p.count}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>USD {p.avg.toFixed(0)}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>USD {p.min.toFixed(0)}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>USD {p.max.toFixed(0)}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>${p.avg.toFixed(0)}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>${p.min.toFixed(0)}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>${p.max.toFixed(0)}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: dColor }}>{deltaPct >= 0 ? '+' : ''}{deltaPct.toFixed(0)}%</td>
                 </tr>
               );

@@ -164,8 +164,8 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
       {/* KPI strip — 6 tiles */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 10, marginBottom: 14 }}>
         <Kpi scope="OTB room nights" value={totalRns.toLocaleString()} sub={`${period.days} nights window`} />
-        <Kpi scope="OTB revenue" value={`USD ${(totalRev / 1000).toFixed(1)}k`} sub={`${rows.length} active dates`} />
-        <Kpi scope="OTB ADR" value={`USD ${adr.toFixed(0)}`} sub="rev ÷ RNs" />
+        <Kpi scope="OTB revenue" value={`$${(totalRev / 1000).toFixed(1)}k`} sub={`${rows.length} active dates`} />
+        <Kpi scope="OTB ADR" value={`$${adr.toFixed(0)}`} sub="rev ÷ RNs" />
         <Kpi scope="OTB occupancy" value={`${occ.toFixed(1)}%`} sub={`vs ${capacityRn} capacity`} tone={occ > 70 ? 'up' : occ < 30 ? 'warn' : 'flat'} />
         <Kpi scope="Cancellation rate" value={`${cxlRate.toFixed(1)}%`} sub={`${totalCxl} cancelled RN`} tone={cxlRate > 10 ? 'warn' : 'flat'} />
         <Kpi scope="STLY delta" value="lorem" sub="needs snapshot history" lorem />
@@ -268,8 +268,8 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
                   </td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>{b.days}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{b.rns}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>USD {b.rev.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>USD {adrB.toFixed(0)}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>${b.rev.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>${adrB.toFixed(0)}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: occB > 70 ? 'var(--moss-glow)' : occB < 30 ? 'var(--st-bad)' : 'var(--ink-soft)' }}>{occB.toFixed(1)}%</td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: b.cxl > 0 ? 'var(--st-bad)' : 'var(--ink-mute)' }}>{b.cxl || '—'}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--ink-faint)', fontStyle: 'italic' }}>lorem</td>

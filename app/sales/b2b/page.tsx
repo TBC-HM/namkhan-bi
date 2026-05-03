@@ -9,17 +9,20 @@ import B2bKpiStrip from './_components/B2bKpiStrip';
 import UploadContractButton from './_components/UploadContractButton';
 import { getDmcContracts, getLpaReservations, matchSourceToContract } from '@/lib/dmc';
 import PageHeader from '@/components/layout/PageHeader';
+import DataTable, { type Column } from '@/components/ui/DataTable';
+import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
+import { fmtTableUsd, fmtIsoDate, fmtCountry, fmtBool, EMPTY } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
-const STATUS_PILL: Record<string, { bg: string; bd: string; fg: string; label: string }> = {
-  active:    { bg: 'var(--st-good-bg)', bd: 'var(--st-good-bd)', fg: 'var(--moss-glow)', label: 'Active' },
-  expiring:  { bg: 'var(--st-warn-bg)', bd: 'var(--st-warn-bd)', fg: 'var(--brass)', label: 'Expiring' },
-  expired:   { bg: 'var(--st-bad-bg)', bd: 'var(--st-bad-bd)', fg: 'var(--st-bad)', label: 'Expired' },
-  draft:     { bg: '#eee',    bd: '#ccc',    fg: '#555',    label: 'Draft' },
-  suspended: { bg: '#eee',    bd: '#ccc',    fg: '#555',    label: 'Suspended' },
-  no_contract: { bg: 'var(--st-bad-bg)', bd: 'var(--st-bad-bd)', fg: 'var(--st-bad)', label: 'No contract' },
+const STATUS_TONE: Record<string, { tone: StatusTone; label: string }> = {
+  active:      { tone: 'active',   label: 'Active' },
+  expiring:    { tone: 'pending',  label: 'Expiring' },
+  expired:     { tone: 'expired',  label: 'Expired' },
+  draft:       { tone: 'inactive', label: 'Draft' },
+  suspended:   { tone: 'inactive', label: 'Suspended' },
+  no_contract: { tone: 'expired',  label: 'No contract' },
 };
 
 interface DisplayRow {
@@ -132,74 +135,82 @@ export default async function B2bDmcContractsPage() {
       <B2bSubNav />
       <B2bKpiStrip />
 
-      <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: "var(--t-base)" }}>
-          <thead>
-            <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              <th style={{ padding: '10px 12px' }}>Partner</th>
-              <th style={{ padding: '10px 12px' }}>Country</th>
-              <th style={{ padding: '10px 12px' }}>Type</th>
-              <th style={{ padding: '10px 12px' }}>Status</th>
-              <th style={{ padding: '10px 12px' }}>Effective</th>
-              <th style={{ padding: '10px 12px' }}>Expires</th>
-              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Days</th>
-              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Bookings</th>
-              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Revenue</th>
-              <th style={{ padding: '10px 12px', textAlign: 'center' }}>Renew</th>
-            </tr>
-          </thead>
-          <tbody>
-            {allRows.map((row) => {
-              const pill = STATUS_PILL[row.status] ?? STATUS_PILL.draft;
-              const dayColor =
-                row.daysToExpiry == null ? 'var(--ink-mute)' :
-                row.daysToExpiry < 0 ? 'var(--st-bad)' :
-                row.daysToExpiry < 90 ? 'var(--brass)' : 'var(--ink-soft)';
-              const isUncontracted = row.contract_id == null;
-              return (
-                <tr
-                  key={row.key}
-                  style={{
-                    borderTop: '1px solid var(--paper-warm)',
-                    background: isUncontracted ? 'var(--paper-warm)' : 'var(--paper-warm)',
-                  }}
-                >
-                  <td style={{ padding: '10px 12px' }}>
-                    {row.contract_id ? (
-                      <Link href={`/sales/b2b/partner/${row.contract_id}`} style={{ color: 'var(--ink-soft)', textDecoration: 'none', fontWeight: 500 }}>
-                        {row.partner_short_name}
-                      </Link>
-                    ) : (
-                      <span style={{ color: 'var(--st-bad)', fontWeight: 500 }}>{row.partner_short_name}</span>
-                    )}
-                  </td>
-                  <td style={{ padding: '10px 12px' }}>{row.flag ?? ''} {row.country ?? '—'}</td>
-                  <td style={{ padding: '10px 12px' }}>{row.type}</td>
-                  <td style={{ padding: '10px 12px' }}>
-                    <span style={{ background: pill.bg, border: `1px solid ${pill.bd}`, color: pill.fg, padding: '2px 8px', borderRadius: 10, fontSize: "var(--t-xs)", fontWeight: 600 }}>
-                      {pill.label}
-                    </span>
-                  </td>
-                  <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontSize: "var(--t-sm)" }}>{row.effective ?? '—'}</td>
-                  <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontSize: "var(--t-sm)" }}>{row.expires ?? '—'}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: dayColor }}>
-                    {row.daysToExpiry == null ? '—' :
-                      row.daysToExpiry > 0 ? `${row.daysToExpiry}` :
-                      row.daysToExpiry === 0 ? 'today' : `${Math.abs(row.daysToExpiry)}d ago`}
-                  </td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{row.reservationCount || '—'}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>
-                    {row.revenue > 0 ? `USD ${row.revenue.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—'}
-                  </td>
-                  <td style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--ink-mute)' }}>
-                    {row.autoRenew ? '✓' : '—'}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      {(() => {
+        const columns: Column<DisplayRow>[] = [
+          {
+            key: 'partner',
+            header: 'PARTNER',
+            sortValue: (r) => r.partner_short_name.toLowerCase(),
+            render: (r) =>
+              r.contract_id ? (
+                <Link href={`/sales/b2b/partner/${r.contract_id}`} style={{ color: 'var(--ink-soft)', textDecoration: 'none', fontWeight: 500 }}>
+                  {r.partner_short_name}
+                </Link>
+              ) : (
+                <span style={{ color: 'var(--st-bad)', fontWeight: 500 }}>{r.partner_short_name}</span>
+              ),
+          },
+          {
+            key: 'country',
+            header: 'COUNTRY',
+            sortValue: (r) => r.country ?? '',
+            render: (r) => fmtCountry(r.flag, r.country),
+          },
+          { key: 'type',     header: 'TYPE',     sortValue: (r) => r.type, render: (r) => r.type },
+          {
+            key: 'status',
+            header: 'STATUS',
+            align: 'center',
+            sortValue: (r) => r.status,
+            render: (r) => {
+              const t = STATUS_TONE[r.status] ?? STATUS_TONE.draft;
+              return <StatusPill tone={t.tone}>{t.label}</StatusPill>;
+            },
+          },
+          { key: 'effective', header: 'EFFECTIVE', sortValue: (r) => r.effective ?? '', render: (r) => fmtIsoDate(r.effective) },
+          { key: 'expires',   header: 'EXPIRES',   sortValue: (r) => r.expires ?? '',   render: (r) => fmtIsoDate(r.expires) },
+          {
+            key: 'days',
+            header: 'DAYS',
+            numeric: true,
+            sortValue: (r) => r.daysToExpiry ?? Number.MAX_SAFE_INTEGER,
+            render: (r) =>
+              r.daysToExpiry == null ? EMPTY :
+              r.daysToExpiry > 0 ? `${r.daysToExpiry}` :
+              r.daysToExpiry === 0 ? 'today' : `${Math.abs(r.daysToExpiry)}d ago`,
+          },
+          {
+            key: 'bookings',
+            header: 'BOOKINGS',
+            numeric: true,
+            sortValue: (r) => r.reservationCount,
+            render: (r) => r.reservationCount > 0 ? r.reservationCount.toLocaleString('en-US') : EMPTY,
+          },
+          {
+            key: 'revenue',
+            header: 'REVENUE',
+            numeric: true,
+            sortValue: (r) => r.revenue,
+            render: (r) => r.revenue > 0 ? fmtTableUsd(r.revenue) : EMPTY,
+          },
+          {
+            key: 'renew',
+            header: 'RENEW',
+            align: 'center',
+            sortValue: (r) => r.autoRenew ? 1 : 0,
+            render: (r) => fmtBool(r.autoRenew),
+          },
+        ];
+        return (
+          <DataTable<DisplayRow>
+            columns={columns}
+            rows={allRows}
+            rowKey={(r) => r.key}
+            rowClassName={(r) => r.contract_id == null ? 'row-warn' : undefined}
+            emptyState="No partners on file."
+          />
+        );
+      })()}
 
       <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: "var(--t-sm)" }}>
         <strong>✓ Wired.</strong> {contractRows.length} contracts on file · {uncontractedRows.length} uncontracted sources sending LPA business. Yellow rows = revenue at risk — create contracts for them via Reconciliation queue.

@@ -125,7 +125,7 @@ export default async function PartnerDrilldownPage({ params }: { params: { id: s
             <strong>{c.pricing_model}</strong>
             {c.group_surcharge_pct != null ? <> · group surcharge +{c.group_surcharge_pct}%</> : null}
             {c.group_threshold != null ? <> ({c.group_threshold}+ keys)</> : null}
-            {c.extra_bed_usd != null ? <><br />extra bed USD {c.extra_bed_usd}</> : null}
+            {c.extra_bed_usd != null ? <><br />extra bed ${c.extra_bed_usd}</> : null}
           </div>
         </div>
         <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px' }}>

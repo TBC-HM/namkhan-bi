@@ -115,6 +115,48 @@ export function fmtKpi(n: number | null | undefined, unit: KpiUnit, dp = 1): str
   }
 }
 
+// =============================================================================
+// TABLE CELL FORMATTERS — locked rules per 11_BRAND_AND_UI_STANDARDS.md
+// =============================================================================
+// Replaces ad-hoc `USD ${n.toLocaleString()}` and mixed-format dates with a
+// single set of helpers. Empty/null always renders as em-dash, never N/A or 0.
+
+export const EMPTY = '—';
+
+/** Currency for tables/lists: $13,480 / $666 (no decimals, comma grouping). */
+export function fmtTableUsd(n: number | null | undefined): string {
+  if (n == null || isNaN(n as number)) return EMPTY;
+  const abs = Math.abs(n as number);
+  const sign = (n as number) < 0 ? '−' : '';
+  return `${sign}$${Math.round(abs).toLocaleString('en-US')}`;
+}
+
+/** ISO date YYYY-MM-DD for tables. Truncates ISO strings, formats Dates. */
+export function fmtIsoDate(d: string | Date | null | undefined): string {
+  if (!d) return EMPTY;
+  if (typeof d === 'string') {
+    return d.length >= 10 ? d.slice(0, 10) : EMPTY;
+  }
+  return d.toISOString().slice(0, 10);
+}
+
+/** Em-dash for any falsy value, used in table cells consistently. */
+export function fmtEmpty<T>(v: T | null | undefined, formatter?: (x: T) => string): string {
+  if (v == null || v === '') return EMPTY;
+  return formatter ? formatter(v) : String(v);
+}
+
+/** Country flag + name with consistent thin-space gap. */
+export function fmtCountry(flag: string | null | undefined, name: string | null | undefined): string {
+  if (!name) return EMPTY;
+  return flag ? `${flag} ${name}` : name;
+}
+
+/** Boolean as ✓ / — (no other variants). */
+export function fmtBool(v: boolean | null | undefined): string {
+  return v === true ? '✓' : EMPTY;
+}
+
 /** Format a delta value with arrow + period suffix.
  *  Output: "▲ +5.2pp STLY" / "▼ −3.1pp Bgt" / "→ stable" */
 export function fmtDelta(

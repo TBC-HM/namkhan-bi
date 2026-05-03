@@ -105,8 +105,8 @@ export default async function PerformancePage() {
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{p.reservation_count}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: p.cancelled_count > 0 ? 'var(--st-bad)' : 'var(--ink-mute)' }}>{p.cancelled_count || '—'}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{p.rns}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>USD {p.revenue.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>USD {adr.toFixed(0)}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>${p.revenue.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>${adr.toFixed(0)}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{share.toFixed(1)}%</td>
                 </tr>
               );
@@ -116,8 +116,8 @@ export default async function PerformancePage() {
               <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{totalRes}</td>
               <td style={{ padding: '10px 12px' }}></td>
               <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{totalRns}</td>
-              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>USD {totalRevenue.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
-              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>USD {totalRns > 0 ? (totalRevenue / totalRns).toFixed(0) : 0}</td>
+              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>${totalRevenue.toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
+              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>${totalRns > 0 ? (totalRevenue / totalRns).toFixed(0) : 0}</td>
               <td style={{ padding: '10px 12px', textAlign: 'right' }}>100%</td>
             </tr>
           </tbody>

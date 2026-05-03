@@ -106,7 +106,7 @@ export default async function ReconciliationPage() {
                   <td style={{ padding: '6px 10px', fontWeight: 500, fontSize: "var(--t-sm)" }}>{r.source_name ?? '—'}</td>
                   <td style={{ padding: '6px 10px', color: 'var(--ink-mute)', fontFamily: 'var(--mono)', fontSize: "var(--t-sm)" }}>{r.check_in_date ?? '—'}</td>
                   <td style={{ padding: '6px 10px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{r.nights ?? '—'}</td>
-                  <td style={{ padding: '6px 10px', textAlign: 'right', fontFamily: 'var(--mono)' }}>USD {Number(r.total_amount ?? 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
+                  <td style={{ padding: '6px 10px', textAlign: 'right', fontFamily: 'var(--mono)' }}>${Number(r.total_amount ?? 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
                   <td style={{ padding: '6px 10px' }}>
                     <span style={{ background: pill.bg, border: `1px solid ${pill.bd}`, color: pill.fg, padding: '2px 7px', borderRadius: 10, fontSize: "var(--t-xs)", fontWeight: 600, textTransform: 'capitalize' }}>
                       {(r.status ?? 'pending').replace('_', ' ')}
