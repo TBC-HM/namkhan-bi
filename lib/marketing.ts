@@ -243,8 +243,11 @@ export async function getMediaReady(opts: {
   limit?: number;
   tier?: string;
   tag?: string;
+  /** When true (default), excludes tier_archive (logos / decommissioned) from results
+   *  unless `tier === 'tier_archive'` is explicitly requested. */
+  excludeArchive?: boolean;
 } = {}): Promise<MediaAssetReady[]> {
-  const { limit = 200, tier, tag } = opts;
+  const { limit = 200, tier, tag, excludeArchive = true } = opts;
   let q = supabase
     .schema('marketing')
     .from('v_media_ready')
@@ -253,11 +256,30 @@ export async function getMediaReady(opts: {
     .limit(limit);
 
   if (tier) q = q.eq('primary_tier', tier);
+  else if (excludeArchive) q = q.neq('primary_tier', 'tier_archive');
   if (tag)  q = q.contains('tags', [tag]);
 
   const { data, error } = await q;
   if (error) {
     console.error('getMediaReady error', error);
+    return [];
+  }
+  return (data ?? []) as MediaAssetReady[];
+}
+
+/** Curator: top N photos by qc + ai_confidence (brand_fit), excludes logos & internal.
+ *  Powers the "Fresh & ready" widget on /marketing/library. */
+export async function getCuratorPicks(limit = 12): Promise<MediaAssetReady[]> {
+  const { data, error } = await supabase
+    .schema('marketing')
+    .from('v_media_ready')
+    .select('*')
+    .in('primary_tier', ['tier_ota_profile', 'tier_website_hero', 'tier_social_pool'])
+    .order('qc_score', { ascending: false, nullsFirst: false })
+    .order('ai_confidence', { ascending: false, nullsFirst: false })
+    .limit(limit);
+  if (error) {
+    console.error('getCuratorPicks error', error);
     return [];
   }
   return (data ?? []) as MediaAssetReady[];

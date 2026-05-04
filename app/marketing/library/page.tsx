@@ -8,7 +8,7 @@ import PanelHero from '@/components/sections/PanelHero';
 import Card from '@/components/sections/Card';
 import KpiCard from '@/components/kpi/KpiCard';
 import AssetGrid from '@/components/marketing/AssetGrid';
-import { getMediaReady, getMediaTierCounts, getTaxonomy, TIER_LABEL } from '@/lib/marketing';
+import { getMediaReady, getMediaTierCounts, getTaxonomy, getCuratorPicks, TIER_LABEL } from '@/lib/marketing';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -19,6 +19,7 @@ const TIERS = [
   { key: 'tier_website_hero', label: 'Website' },
   { key: 'tier_social_pool',  label: 'Social' },
   { key: 'tier_internal',     label: 'Internal' },
+  { key: 'tier_archive',      label: 'Logos' },
 ];
 
 interface SP { searchParams?: Record<string, string | string[] | undefined> }
@@ -28,13 +29,17 @@ export default async function LibraryPage({ searchParams }: SP) {
   const tag  = (typeof searchParams?.tag  === 'string' ? searchParams.tag  : '') as string;
   const q    = (typeof searchParams?.q    === 'string' ? searchParams.q    : '') as string;
 
-  const [assets, tierRows, taxonomy] = await Promise.all([
+  const [assets, tierRows, taxonomy, curatorPicks] = await Promise.all([
     getMediaReady({ limit: 80, tier: tier || undefined, tag: tag || undefined }),
     getMediaTierCounts(),
     getTaxonomy(),
+    getCuratorPicks(12),
   ]);
 
-  const totalReady   = tierRows.reduce((s, r) => s + Number(r.total ?? 0), 0);
+  // Total ready EXCLUDES tier_archive (logos / decommissioned) so the visible
+  // KPI matches the visible grid by default.
+  const archiveCount = Number(tierRows.find(r => r.primary_tier === 'tier_archive')?.total ?? 0);
+  const totalReady   = tierRows.reduce((s, r) => s + Number(r.total ?? 0), 0) - archiveCount;
   const otaCount     = tierRows.find(r => r.primary_tier === 'tier_ota_profile')?.total  ?? 0;
   const heroCount    = tierRows.find(r => r.primary_tier === 'tier_website_hero')?.total ?? 0;
   const socialCount  = tierRows.find(r => r.primary_tier === 'tier_social_pool')?.total  ?? 0;
@@ -73,6 +78,18 @@ export default async function LibraryPage({ searchParams }: SP) {
         }
       />
 
+      {/* Curator: Fresh & ready — top 12 by qc + brand-fit */}
+      {curatorPicks.length > 0 && !tier && !tag && !q && (
+        <Card
+          title="Fresh"
+          emphasis="& ready"
+          sub={`${curatorPicks.length} picks · highest qc + brand-fit · pull these for OTAs, hero, social`}
+          source="auto-tagger · vision · tier-classifier"
+        >
+          <AssetGrid assets={curatorPicks} minColPx={180} />
+        </Card>
+      )}
+
       {/* Tier-toggle pills + actions */}
       <Card
         title="Browse"
@@ -89,11 +106,14 @@ export default async function LibraryPage({ searchParams }: SP) {
         {/* Tier pills */}
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
           {TIERS.map(t => {
+            const internalCount = Number(tierRows.find(r => r.primary_tier === 'tier_internal')?.total ?? 0);
             const count =
               t.key === ''                    ? totalReady :
-              t.key === 'tier_ota_profile'    ? otaCount :
-              t.key === 'tier_website_hero'   ? heroCount :
-              t.key === 'tier_social_pool'    ? socialCount :
+              t.key === 'tier_ota_profile'    ? Number(otaCount) :
+              t.key === 'tier_website_hero'   ? Number(heroCount) :
+              t.key === 'tier_social_pool'    ? Number(socialCount) :
+              t.key === 'tier_internal'       ? internalCount :
+              t.key === 'tier_archive'        ? archiveCount :
               0;
             const active = tier === t.key;
             return (
