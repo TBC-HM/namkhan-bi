@@ -406,6 +406,181 @@ If memory is wiped AND nothing above is reachable, the repo itself has a `CLAUDE
 
 Append-only. Newest at top. Date heading + bullet changes.
 
+### 2026-05-04 (late evening — /marketing snapshot redesigned to canonical pattern)
+
+Why: User flagged the page looked bad. Audit showed underlying data is mostly empty (`marketing.reviews=0`, `social.followers=0`, `influencers=0`), so the prior `KpiCard`-based layout rendered as four em-dashes. Redesigned to lead with what's actually populated (factsheet content + photos + channel handles) and honestly mark scrape-dependent metrics as DATA NEEDED.
+
+**Files**
+- `app/marketing/page.tsx` — full rewrite. PageHeader + 5-tile `KpiBox` strip + 3-chart panel row + 2 full-width table sections.
+- `lib/marketingCharts.ts` — new. Three server-rendered SVG charts (`inventoryByTierSvg`, `categoryBarsSvg`, `channelMatrixSvg`) following the exact pattern of `lib/staffCharts.ts` (same hex constants, same fmt utilities, same xMidYMid viewBox).
+
+**KPI strip (cols-5)**
+1. Profile completeness % — derived from `(184 fields − todos − LOREM placeholders) / 184`. Live, ~85%.
+2. Photo library — `media_assets WHERE status='ingested'`. Live, 36.
+3. Channels claimed — `social_accounts.handle IS NOT NULL` count / 8 total. Live, 7/8.
+4. Reviews · last 30d — `marketing.reviews` 30d count. **DATA NEEDED** with explainer "wire BDC/Google/TripAdvisor agent".
+5. Open todos — `factsheet.todos[]` length. Live, 13. State `data-needed` so it surfaces as actionable.
+
+**3-chart row (panels)**
+1. Inventory by tier — horizontal bars, `premium / signature / entry` units (with room-type count tooltip).
+2. Facilities by category — vertical bars, `dining/wellness/sports/recreation/transport`.
+3. Channel presence matrix — handle-claimed dot vs follower-data dot per platform; failed cell = ST_BAD.
+
+**Tables**
+- Channel handles — every row from `marketing.social_accounts` with claimed/missing pill.
+- Profile gaps — `factsheet.todos[]` rows with smart routing back to `/settings/property/[section]`.
+
+**Verification (pre-deploy)**
+- `npx tsc --noEmit` exit 0.
+- Hardcoded `fontSize:` numerics in `app/marketing/page.tsx` + `lib/marketingCharts.ts` — 0.
+- `'USD '` prefix in JSX — 0.
+- Hardcoded `fontFamily:` literals — 0.
+
+**Smoke test (post-deploy)**
+- HTTP 200 on `/marketing`.
+- HTML contains `kpi-strip cols-5`, `kpi-tile-value`, `panel-head-title`, "Brand reach", "Profile completeness", "Photo library", "Channels claimed", "Open todos", "DATA NEEDED" (Reviews tile), "Inventory by tier", "Channel presence", "Activities catalogue", "Channel handles", "Profile gaps".
+- Tier names + channel handles rendered inside SVG (premium / signature / entry · booking / tiktok / tripadvisor).
+
+Commit `487510e` shipped at 2026-05-04 23:37 CEST. Next: extend the same pattern to other `/marketing/*` tabs (reviews, social, library) once underlying data lands.
+
+### 2026-05-04 (evening — BDC promo + 12-month reservations panels + 3-tab page)
+
+Why: PBS uploaded 3 more files (active promos, inactive promos, 12-month BDC check-in export). 3-tab structure (Now / Trends / Signals) added so the rev manager moves between latest-snapshot panels, history, and agent decisions.
+
+**3-layer architecture refactor**
+- Layer 1: `revenue.ota_uploads` (registry of every BDC export with parser_version + storage_path + period covered). Each fact row carries `upload_id` so we can replay parsing from a stored blob.
+- Layer 2: refactored facts (`bdc_*_v2` tables), TEXT date columns replaced with DATE, book window stored as structured `(window_min_days, window_max_days)`. + 2 new tables `bdc_promotions` + `bdc_reservations` + `bdc_alert_state`. Backfilled 2026-05-04 snapshot via synthetic upload row.
+- Layer 3: views — `_latest` / `_history` / `_change` (latest vs prior with deltas computed for agents).
+
+**New data loaded**
+- `bdc_promotions` — 48 rows (4 active + 44 inactive) over May 2025–May 2026.
+- `bdc_reservations` — 448 reservation-level rows for 12 months. Real cancel rate: 31.0% (139/448 — confirms BDC's 32% number).
+
+**5 new analytical views:** `v_bdc_promo_roi`, `v_bdc_country_real_12m`, `v_bdc_cancel_cohort_monthly`, `v_bdc_device_mix`, `v_bdc_purpose_mix`, `v_bdc_lead_time_buckets`.
+
+**3-tab landing — `/revenue/channels/Booking.com?bdc_tab=now|trend|signals`**
+- **Now**: AttentionCards → BdcPanels (PDF data) → BdcExtraPanels (PromotionROI, CountryReal12m, CancelCohort, LeadTimeRealCurve, Device+Purpose).
+- **Trend**: Snapshot history table.
+- **Signals**: governance.decision_queue scoped to Booking.com.
+
+**4 new attention rules:** promo_cancel_heavy, country_low_confirm, leadtime_bucket_cancel (real-data driven). Plus the 8 existing rules.
+
+**Files:** `lib/data-bdc-extra.ts` (new), `lib/data-bdc-attention.ts` (extended), `components/channels/BdcExtraPanels.tsx`, `BdcTrends.tsx`, `BdcSignals.tsx`, `BdcAttentionCards.tsx` (all new), `app/revenue/channels/[source]/page.tsx` (3-tab nav).
+
+**Insights from real data:** "International country rate" promo: 72 bookings, $46.6k revenue, 47.6% cancel — $9,325 revenue per discount-pp but cancels are killing realization. UK/US over-index more than BDC market data suggested.
+
+### 2026-05-04 (afternoon — Booking.com analytics block on /revenue/channels/Booking.com)
+
+Why: PBS uploaded a stack of Booking.com Extranet exports (4 PDFs + 1 CSV + 1 ranking screenshot) and asked to surface them on the BDC source detail page AND make them available for downstream agents. Empty placeholder cards on `/revenue/channels/[source]` for Booking.com replaced with 5 live analytics panels.
+
+**1. Schema + data — `revenue.bdc_*` (7 tables, all loaded for snapshot_date `2026-05-04`)**
+- `bdc_country_insights` (25 rows · top countries my-share vs market-share, ADR, LOS, lead time, cancel — Germany 13.5% vs market 8.65%, France 11.64% vs 16.09%, UK 11.42% vs 10.26%, US 8.89% vs 4.80%)
+- `bdc_book_window_insights` (8 windows · 0–1d 22% with 8.8% cancel, 91+d 17% with 6.0% cancel)
+- `bdc_genius_monthly` (4 months May–Aug 2025 · 87–100% Genius dependency)
+- `bdc_pace_monthly` (7 stay months · RN/ADR/Rev now vs LY)
+- `bdc_pace_room_rate` (20 room×rate combos)
+- `bdc_ranking_snapshot` (290,689 search views → 79,815 page views (27.46%) → 135 bookings (0.17%) · search score 58/375 · better than 84% of city · review 9.4 vs area 8.6 · cancel 32% vs area 24.3%)
+- `bdc_demand_insights` (empty, schema ready for next upload)
+
+**2. Public proxy views — `public.v_bdc_*` (revenue schema not in pgrst.db_schemas)**
+- 7 views, each filtered to the latest `snapshot_date` so the front end always reads the freshest export.
+- Migration: `add_public_bdc_proxy_views`.
+- Granted SELECT to authenticated/anon/service_role.
+
+**3. Readers — `lib/data-bdc.ts`**
+- `getBdcCountryInsights(limit)` — excludes the `_ALL_` aggregate row, sorts by my share desc, computes share-delta vs market in pp.
+- `getBdcBookWindowInsights()`, `getBdcGeniusMonthly()`, `getBdcPaceMonthly()`, `getBdcRankingSnapshot()`, `getBdcDemandInsights()`.
+- All return `[]` / `null` cleanly when the table is empty.
+
+**4. UI — `components/channels/BdcPanels.tsx`**
+- 5 server-component panels:
+  1. **Search funnel & ranking** — three-bar funnel (search → page → book) + scorecard (search score, conversion vs area avg, cancel vs area avg, review score vs area avg).
+  2. **Country mix vs market** — top-12 countries with my share, market share, Δ pp (color-coded), my ADR, lead time, cancel %, LOS.
+  3. **Book-window mix · cancel risk** — table with my share + bar, compset share, my ADR, my cancel %, compset cancel %. Cancels ≥ 6% rendered in bad-tone.
+  4. **Genius dependency · monthly** — per-month tile showing Genius % + bookings now vs LY mini-bars + YoY arrow. Footer reading explains the pricing risk if dependency >80%.
+  5. **Pace by stay-month vs LY** — RN now vs LY + RN Δ%, ADR now vs LY + Δ%, Revenue now vs LY + Δ% with color-coded arrows.
+- Each panel renders an empty-state with upload instructions instead of vanishing when its table is empty — operator always knows what to load to populate it.
+
+**5. Wiring — `app/revenue/channels/[source]/page.tsx`**
+- When `sourceName` matches `/Booking\.com/i` → renders `<BdcPanels />` (replaces the prior 4 empty placeholders for that one source).
+- Other OTAs still see the original 4 placeholders with text updated to clarify "Booking.com is wired — see above".
+
+**6. Verification (post-deploy)**
+- Looking for the 5 section titles on `https://namkhan-bi.vercel.app/revenue/channels/Booking.com`: "Search funnel", "Country mix vs market", "Book-window mix", "Genius dependency", "Pace by stay-month".
+
+Files changed: `lib/data-bdc.ts` (new), `components/channels/BdcPanels.tsx` (new), `app/revenue/channels/[source]/page.tsx` (BDC mount). Migrations: `create_bdc_analytics_schema`, `load_bdc_2026_05_04_snapshots`, `add_public_bdc_proxy_views`.
+
+Downstream agent hooks (next step, not in this deploy): `bdc_geo_marketing_agent` watches country share gaps, `bdc_rate_strategy_agent` watches ADR-vs-market deltas, `bdc_genius_dependency_agent` flags >80% dependency months, `bdc_pace_pickup_agent` watches month×room-type pickup vs LY.
+
+### 2026-05-04 (morning — pace snapshot fallback wiring + tactical alerts source rebalance)
+
+Two carry-overs from the night before, finished cleanly:
+
+**1. Pace page now uses `f_pace_stly_snapshot()` with fallback chain**
+- `getPaceStly(fromDate, toDate)` rewritten to try `public.f_pace_stly_snapshot(p_from, p_to)` first; returns `{rows, source}` discriminator (`'snapshot'` | `'actuals_proxy'`).
+- When snapshot returns rows → use them as TRUE OTB-as-of-then (1y ago) STLY.
+- When snapshot empty (current state — capture only started 2026-05-03) → fall back to `mv_kpi_daily` actuals at shifted dates.
+- Lede banner shows which mode is active. Currently reads "STLY source: `mv_kpi_daily` · last-year actuals proxy (snapshot table accumulating since 2026-05-03 · auto-switches once data covers the lead-time window)".
+- Page auto-switches to snapshot mode in ~April 2027 with no code change required.
+
+**2. `v_tactical_alerts_top` v3 — source-balanced**
+- v2 returned 8 CRITICAL DQ rows that crowded out other sources.
+- v3 caps each source at top-3 via `ROW_NUMBER() OVER (PARTITION BY source ORDER BY sev_rank, detected_at DESC) WHERE rn_in_source <= 3`, then global LIMIT 8.
+- Live: Pulse panel now shows 3 DQ + 3 GL + 2 Staff (mix). When CompSet promo signals reach the threshold, they'll surface in the top-8 too.
+
+Files changed: `app/revenue/pace/page.tsx`, migration `v_tactical_alerts_top_v3_balanced`. Deployed `namkhan-eagoq4cjf`.
+
+Out-of-scope from this morning: PBS flagged that per-room-type budget data they uploaded "is in the FORECAST area in Supabase". Cross-schema scan found no per-room-type rows anywhere — `plan.scenarios` "Budget 2026 v1" + "Conservative 2026" + `gl.v_forecast_lines` are all property-level / USALI-department-level, not room-type-keyed. Three options offered to PBS: (a) point me at the source file for an importer, (b) allocate property-level budget across rooms by capacity ratio, (c) enter via the new `/settings/budget/room-types` admin form. Awaiting decision.
+
+### 2026-05-03 (evening — five deferred items closed: commission STLY, compset sub-pages, budget overlay, OTB snapshots, tactical alerts)
+
+Why: PBS said "go all the way" + "lets work on the 5 points, do tactical agent last when we have the page together". One pass through every deferred item from the morning's STLY work.
+
+**1. Channels commission_usd STLY delta (was 0)**
+- `public.f_channel_econ_for_range(p_from, p_to)` v3 joins `public.sources` deduped by `MAX(commission_pct)` per `name`. Returns `commission_usd = gross_revenue × commission_pct / 100`.
+- Live: channels Commissions tile reads `8.8% of rev · ▼ 29% vs Same time last year`. Was `no prior` before.
+
+**2. /revenue/compset/scoring-settings + /agent-settings**
+- Already shipped by other Claude session. Both 200. Memory was stale ("404"). Closed without code changes.
+
+**3. Per-room-type budget overlay**
+- Schema already supported via `plan.drivers.room_type_id text`. No new schema.
+- Reader: `f_room_type_budget_occupancy(p_year, p_month)`. Writer RPC: `f_set_room_type_budget(...)` SECURITY DEFINER, delete-then-insert.
+- Admin form: `/settings/budget/room-types` — server page + `'use client'` `BudgetForm.tsx` with year/month picker.
+- Chart wiring: `roomTypeOccupancySvg` extended with optional `occupancy_pct_budget` — when ≥1 row has data, 3rd Budget bar (dashed blue) renders + legend extends. When 0 rows, drops gracefully.
+
+**4. Pace YoY OTB snapshot infrastructure**
+- `plan.otb_snapshots(snapshot_date, night_date, property_id, confirmed_rooms, confirmed_revenue, cancelled_rooms, captured_at)` PK `(snapshot_date, night_date, property_id)`.
+- Capture fn `f_capture_otb_snapshot()` upserts forward 365d from `v_otb_pace`.
+- Cron 41 `capture-otb-snapshot-daily` at `30 17 * * *` UTC (00:30 ICT).
+- Reader `f_pace_stly_snapshot(p_from, p_to)` returns OTB snapshot from exactly 365d ago.
+- Initial: 98 rows captured at deploy.
+- Page wiring deferred — `mv_kpi_daily`-shifted-actuals proxy stays load-bearing for year 1. Wire pace page in April 2027 to prefer snapshot.
+
+**5. Pulse Tactical alerts panel — wired live**
+- `public.v_tactical_alerts_top` unified view, top 8 by severity then recency. Sources: `dq.v_alerts_active`, `gl.v_supplier_account_anomalies`, `ops.v_staff_anomalies`, `public.v_compset_promo_behavior_signals`.
+- TS reader `getTacticalAlertsTop()` + `TacticalAlertRow` in `lib/pulseData.ts`.
+- `patchTacticalAlertsPanel()` in `pulse/page.tsx` walks section by div nesting, replaces the entire mockup panel with rendered cards (severity badge + source + age + title + description + entity dim).
+- Verified: 0 mock literals (`EU window closing`, `Asian short-LOS`, `Tactical Detector v2.1`). 8 real CRITICAL cards (Cloudbeds vs QB rooms-revenue gap by month + missing QB account_code).
+
+Out-of-scope (intentional or post-runway):
+- True OTB-as-of-then pace YoY — needs ~365 days of cron 41 capture
+- Per-room-type Budget bar visible — needs PBS data input via the new admin form
+- Tactical alerts will not be the AI Tactical Detector v2.1 with BDC/Google Ads/CRM feeds. The unified-signal-view is what's wireable today; new sources can be added as CTEs
+
+Build: Vercel `--force` deploy needed `touch` of staff component files (per `feedback_vercel_cache_survives_force.md`). Successful deploy: `namkhan-c26n91y0n`.
+
+Files changed:
+- `lib/pulseData.ts` — `TacticalAlertRow`, `getTacticalAlertsTop()`, `RoomTypeBudgetRow`, `getRoomTypeBudgetOccupancy()`
+- `lib/svgCharts.ts` — `RoomTypeOccRow.occupancy_pct_budget`, 3-series chart logic, dynamic legend
+- `lib/data-channels.ts` — n/a (commission fix landed in SQL only)
+- `app/revenue/pulse/page.tsx` — `patchTacticalAlertsPanel`, render-flow hook, budget map
+- `app/settings/budget/room-types/page.tsx` (NEW)
+- `app/settings/budget/room-types/BudgetForm.tsx` (NEW)
+- 4 new migrations: `f_channel_econ_for_range_v3_with_commission`, `add_f_room_type_budget_occupancy`, `add_plan_otb_snapshots_and_cron`, `add_v_tactical_alerts_top_v2`
+- 1 new cron (jobid 41)
+- 1 new memory entry `reference_namkhan_bi_tonight_2026_05_03_buildouts.md`
+
 ### 2026-05-03 (STLY comparison wired across revenue pages)
 
 Why: PBS asked to "repair the STLY comparison on all revenue pages where it makes sense, make sure it appears properly in KPI boxes and is in correlation with the time checker". Audit showed:
@@ -1282,6 +1457,66 @@ After live bulk-test (~50 docs across 4 batches), found 2 categories of failures
 - **Subnav** (`components/nav/subnavConfig.ts`) — added Transactions and POS entries between Ledger and Account mapping. Both flagged `isNew`.
 - **Verification:** `tsc --noEmit` clean. All 4 finance routes return 200. Deposits tiles render real values. Transactions $12.8k sales / $14.0k payments / $1.1k tax in last 30d window.
 
+### 2026-05-04 (Gmail OAuth — direct ingest, no Make.com)
+- **Pivot**: Make.com's HTTP body validator rejects `{{1.from.address}}` IML placeholders set via API — only the UI's variable picker writes the format Make accepts. Abandoned Make path; built native Vercel-side Gmail polling.
+- **DB schema additions**:
+  - `sales.gmail_connections` — one row per mailbox (email PK, refresh_token, last_history_id, last_synced_at, total_synced, paused).
+  - `sales.gmail_poll_runs` — per-tick visibility (status, seen/inserted/skipped, error_message).
+- **`lib/gmail.ts`**: full OAuth 2.0 helpers (`buildAuthUrl`, `exchangeCodeForTokens`, `refreshAccessToken`, `getUserEmail`, `upsertGmailConnection`, `listGmailConnections`) + Gmail API helpers (`listGmailMessages`, `getGmailMessage`, `getHeader`, `extractBodies` with base64url decode + recursive MIME walking).
+- **Routes**:
+  - `GET /api/auth/gmail/start?key=…` redirects to Google with `access_type=offline` + `prompt=consent` for refresh_token.
+  - `GET /api/auth/gmail/callback` — exchanges code, upserts into `gmail_connections`, redirects to admin.
+  - `GET /api/cron/poll-gmail?key=…` — for each non-paused connection: refresh access_token → list messages with `q=after:YYYY/MM/DD` since `last_synced_at` (or `2026-01-01` first run) → fetch full → insert into `sales.email_messages` (dedupe by message_id; reuses parser/triager from `/api/sales/email-ingest`). Logs every run.
+- **Admin page** `/admin/gmail-connect`: connected mailboxes table, Connect button (gated by CRON_SECRET URL key), recent poll-run table, manual trigger link with `?force_email=…&since=YYYY-MM-DD&limit=…`.
+- **`vercel.json`**: added `{ path: '/api/cron/poll-gmail', schedule: '*/15 * * * *' }`.
+- **Vercel env**: `CRON_SECRET` + `GOOGLE_OAUTH_REDIRECT_URI` set. Pending user: `GOOGLE_OAUTH_CLIENT_ID` + `GOOGLE_OAUTH_CLIENT_SECRET` (must be created in Google Cloud Console — guide at `make-blueprints/GMAIL_OAUTH_SETUP.md`).
+- **Verification**: `/api/cron/poll-gmail?key=…` returns `{ ok: true, message: 'no connections' }` (200). Auth works, schema in place, awaiting first OAuth grant. Make scenario `5573244` stopped permanently.
+
+### 2026-05-04 (Inbox UI · /inbox · auto-routing · thread view)
+- **Top banner**: new mail-icon `components/nav/InboxBadge.tsx` linking to `/inbox`, with red unread badge sourced from `countUnreadInquiries()` (status='new'). Wired into `Banner.tsx`.
+- **`/inbox` page** (new — `app/inbox/page.tsx`): Gmail-style 2-column. Left = thread list deduped by `thread_id`, sorted by latest. Right = chronological messages with full body. Inbound = moss-green left border, outbound = brass.
+- **Dynamic mailbox tabs**: `listInboxTabs()` reads distinct `intended_mailbox` from `sales.email_messages` and renders one chip per mailbox seen. Adding any new alias on Workspace appears here automatically. Two filter rows: by mailbox (`?box=`) and direction (`?dir=in|out`). URL-driven.
+- **Inquiry detail thread view**: `/sales/inquiries/[id]` rewritten — `<MessageCard>` rendering of the full thread from `getInquiryEmailThread()`. Falls back to `raw_payload.body` when no `email_messages` rows linked yet.
+- **DB schema additions**:
+  - New table `sales.email_messages` (in/out, gmail thread_id, message_id unique, full body, raw_payload, optional inquiry_id link). View `sales.v_email_thread` joins messages to inquiries.
+  - New column `sales.email_messages.intended_mailbox` — auto-routing target detected from To/Cc headers + body forward-headers, fall back to forwarder mailbox.
+- **`/api/sales/email-ingest`** (new POST endpoint): auth via `X-Make-Token` header. Dedupe by `(property_id, message_id)`. Accepts BOTH canonical and Gmail-native field names. Inbound: matches existing thread by `thread_id` OR creates a new `sales.inquiries` row with keyword triager. Outbound (auto-detected when sender domain ends `@thenamkhan.com`): linked to existing inquiry; orphan replies stored with `inquiry_id=null`.
+- **`lib/sales.ts` additions**: `listEmailThreads`, `getThreadMessages`, `getInquiryEmailThread`, `listInboxTabs`, `countUnreadInquiries`, `getLiveFxRate`, `getSalesInquiriesKpis`, `getSalesTacticalAlerts`, `listDraftProposals`.
+- **Make.com**: scenario `5573244` (`Namkhan BI · Gmail realtime watcher`) created with Watch Emails + HTTP modules, connected to `pb@thenamkhan.com`. Endpoint smoke-tested via curl + via Make API. Make's HTTP body IML templating (jsonString mode + `{{1.from.address}}` placeholders) repeatedly fails Make's "valid JSON" pre-validation despite matching the format of working scenarios in the same org — root cause not identified. **Scenario currently STOPPED** to avoid wasted credits. Manual fix path: open scenario in UI, paste body via Make UI (UI encodes IML correctly internally), save, run. Backfill blueprint at `make-blueprints/backfill-clean.json`.
+- **Vercel env**: `MAKE_INGEST_TOKEN = nk-bi-make-2026-Z3kT9pXqR7vL2NwY8mHsB4` set across Production / Preview / Development.
+- **Send-route alias fix**: `app/api/sales/proposals/[id]/send/route.ts` now hardcodes `https://namkhan-bi.vercel.app` as the public alias instead of `process.env.VERCEL_URL` (per-deployment hostname). Guest emails link to a stable URL.
+- **Verification**: tsc clean. `/inbox` HTTP 200 (25 KB). `/inbox?box=pb@thenamkhan.com` HTTP 200. `/sales/inquiries` HTTP 200 (138 KB). `/sales/inquiries/{uuid}` HTTP 200 with email thread panel rendering. Mail icon in banner. 2 test threads (smoke + API test) in `sales.email_messages` ready to be replaced when Make pipe goes live.
+
+### 2026-05-04 (Email ingest — Make.com Gmail → Vercel + sales.email_messages thread capture)
+- **DB migration `add_sales_email_messages`** — new table `sales.email_messages` (in/out direction, gmail thread_id, message_id unique, body, raw_payload, optional inquiry_id link). Indexes on (property, message_id), (thread_id), (inquiry_id), (received_at). New view `sales.v_email_thread` joins messages to inquiries for downstream displays.
+- **`app/api/sales/email-ingest/route.ts`** (new) — POST endpoint accepting `{direction, mailbox, from, to, cc, subject, body_text, body_html, received_at, message_id, thread_id, in_reply_to, gmail_msg_id, ingest_source}`. Auth via `X-Make-Token` header (env `MAKE_INGEST_TOKEN`). Inserts every message into `sales.email_messages`. For inbound: matches existing thread → links to that inquiry, OR creates a new `sales.inquiries` row (with keyword triager: FIT/Group/Wedding/Retreat/Package/B2B/OTA + confidence). For outbound: matches by thread_id and links; if no match → stored as orphan reply. Dedupe by (property_id, message_id).
+- **`make-blueprints/`** (new directory) — two reusable Make.com blueprints:
+  1. `01-realtime-watcher.json` — Gmail Watch Emails → Set Variables → HTTP POST. User imports + duplicates × 3 inboxes (book@, wm@, reservations@). Polls INBOX every N minutes.
+  2. `02-backfill-since-jan-2026.json` — Gmail Search Emails (`folder:ALL after:2026/01/01`) → Set Variables (auto-flips direction based on inbox match) → HTTP POST. One-time run per inbox to backfill all messages since Jan 1, 2026.
+- **`make-blueprints/README.md`** — step-by-step setup: Vercel env var, 3× Gmail OAuth connections in Make, run backfill once per inbox, enable realtime watchers, optional sent-folder watcher, curl test, volume + dedupe operational notes.
+- **Untracked compset PropertyTable.tsx fix**: stub `ratePlansLive: []` added to `EMPTY_DEEP_DATA` (parallel session created the type but didn't add a default — was blocking build).
+- **Verification**: `tsc --noEmit` clean. Schema applied. Endpoint added; awaiting `MAKE_INGEST_TOKEN` env var on Vercel + Gmail connections in Make to go live.
+
+### 2026-05-04 (Send route — public_url uses stable alias)
+- **`app/api/sales/proposals/[id]/send/route.ts`**: previously built `public_url` from `process.env.VERCEL_URL`, which Vercel sets to the per-deployment hostname (e.g. `namkhan-da62fmmup-pbsbase-2825s-projects.vercel.app`). Guest emails would have linked to a non-permanent URL. Now uses `NEXT_PUBLIC_SITE_URL` env var if set, falling back to the hardcoded production alias `https://namkhan-bi.vercel.app`. End-to-end test verified: send route returns the alias; `/p/[token]` resolves to a working public proposal page (HTTP 200, real guest blocks rendered).
+
+### 2026-05-04 (Composer FX wiring + InquiryFeed/AutoDraftTray live data)
+- **`lib/sales.ts`** — added `getLiveFxRate()` server helper that reads `gl.fx_rates` (most recent USD→LAK row), falling back to `process.env.NEXT_PUBLIC_FX_LAK_USD` if the query fails or returns 0. Eliminates the ~1% display drift between RPC-converted LAK values (using DB FX 21,617) and client-side division (using env-var 21,800).
+- **`lib/sales.ts`** — added `listDraftProposals()` returning recent `sales.proposals` (status in `draft|approved|sent`) — feeds the AutoDraftTray.
+- **Composer pages refactored to thread live FX**: `app/sales/proposals/[id]/edit/page.tsx` and `app/p/[token]/page.tsx` now `Promise.all` the data fetch with `getLiveFxRate()` and pass `fxLakPerUsd` as a prop to their client components.
+- **5 client components accept `fxLakPerUsd?: number` prop** with a graceful fallback to `FX_LAK_PER_USD` env constant: `ComposerEditor`, `RoomPickerDrawer`, `ActivityCatalogDrawer`, `EmailEditor`, `PublicProposalClient`. All `Number(x) / FX_LAK_PER_USD` divisions now use the threaded `fx` variable. Backwards-compatible — older callers still work.
+- **`InquiryFeed` rewritten**: extracted `InquiryRow` type as exported, accepts `rows?: InquiryRow[]` prop with mock fallback. Page builds live rows from `sales.inquiries` (age formatting, triage_kind→type mapping, status mapping, raw_payload.subject extraction).
+- **`AutoDraftTray` rewritten**: extracted `DraftRow` type as exported, accepts `rows?: DraftRow[]` prop with mock fallback. When rows present, renders an `Open in Composer` `<Link>` to `/sales/proposals/[id]/edit` instead of the disabled mock CTA button. Page builds live rows from `listDraftProposals()` with confidence proxies (sent=1.0, approved=0.95, draft=0.85). Empty state shows updated DataNeededOverlay (`sales.proposals` instead of `sales.quotes`).
+- **Verification**: `tsc --noEmit` clean. 0 hardcoded `fontSize` literals introduced. 0 `USD ` prefixes. Composer end-to-end now uses live DB FX → display values match RPC outputs to the cent.
+
+### 2026-05-04 (Composer RoomPicker — fix two latent Cloudbeds bridge bugs)
+- **`public.proposal_available_rooms` RPC patched twice** (DB-only migration, no code deploy needed):
+  1. **rate_type filter**: function joined `rate_plans` on `rate_type = 'BAR'`, but the Cloudbeds sync normalizes types as `'base' | 'derived' | 'standalone'` (no `'BAR'` exists → 0 rows always). Changed to `rate_type = 'base'` (the canonical BAR-equivalent — one base rate per room per night). Verified: 7 room types now return for next-week 3-night range (Art Deluxe Room through Sunset Namkhan River Villa).
+  2. **USD → LAK conversion**: `rate_inventory.rate` is stored in USD by the sync (e.g. `192.00` = $192/night), but the RPC labelled it `avg_nightly_lak` and the TS composer divides by `FX_LAK_PER_USD` (21800), so the picker rendered $0.0088 even after fix #1. Added FX lookup: `(SELECT rate FROM gl.fx_rates WHERE from_currency='USD' AND to_currency='LAK' ORDER BY rate_date DESC LIMIT 1)` × the USD rate, returned as proper LAK. Same conversion applied to `base_rate_lak` returned column. Round-trip USD via env var (21800) drifts ~1% from DB FX (21617) — acceptable.
+- **Live verification**: `/api/sales/proposals/rooms?from=2026-05-11&to=2026-05-14` returns 7 rooms · staleMinutes=43 · prices 3.46M LAK ($159) → 9.34M LAK ($428). Composer Add-room flow now operational end-to-end.
+- **Activities catalog probed**: `sales.activity_catalog` (30 active rows, 7 categories, 7 partners) has clean LAK values (0–3.5M LAK = $0–$160 USD). No fix needed there.
+- **Known follow-up**: `lib/format.ts` constant `FX_LAK_PER_USD = 21800` is hardcoded in the env. The DB has the actual current rate (21,617 today). Drift will grow over time — consider reading FX from `gl.fx_rates` server-side in `lib/sales.ts` for proposal totals so the gap closes. Out of scope for today.
+
 ### 2026-05-04 (/sales/inquiries — wire 5 KPIs + tactical alerts to real sales schema)
 - **`lib/sales.ts`** — added `getSalesInquiriesKpis(propertyId)` returning typed `SalesInquiriesKpis` shape with one `InqKpi { value, label, live, tone? }` per tile. Computes from `sales.inquiries` + `sales.proposals` (90d window): open SLA breach count vs total open, median first-reply (proxy = inquiry-create → proposal-create), auto-offer hit rate (proxy = sent within 5 min of created), quote→booking conv (proposals with `cb_reservation_id` ÷ proposals sent), open pipeline value (sum `total_usd` for non-closed proposals). Each tile carries `live: boolean` so the page only flips to `data-needed` for the genuinely-empty ones (currently 4 of 5 — only Open SLA is live since proposals haven't been sent yet).
 - **`lib/sales.ts`** — added `getSalesTacticalAlerts(propertyId)` returning typed `DerivedAlert[]`. Pulls real signals: SLA breaches (open inquiries past 1h, capped at 4), group/retreat/wedding rooming-list reminders (sorted by stay window, capped at 3), stale cluster (≥3 inquiries >24h with no proposal → single rolled-up alert), today's `agent_runs` cost + error count. When nothing real exists AND `SCHEMA_LIVE === false`, page falls back to the original 9 hardcoded mock alerts so the visual block still renders during dev.
@@ -1383,3 +1618,345 @@ Three stacked fixes addressing "give me the paragraph not the doc" + "answer my 
 - **Benefits & allowances KPI** on landing page now USD-primary (was the broken LAK formatting).
 - **StaffTable** (collapsed register) — same fix: monthly + hourly cost cells use `<UsdLak>` not `fmtMoney(.,'LAK')`.
 - **Verification**: `tsc --noEmit` clean. 0 hardcoded `fontSize` literals, 0 `USD ` prefixes, 0 `fmtMoney(.,'LAK')` calls remaining anywhere in `app/operations/staff/`.
+
+### 2026-05-04 (later) — payroll canonical columns + trigger lock
+- **Root-cause fix for `net_salary_lak` corruption.** DB audit showed 90% of 140 `ops.payroll_monthly` rows had `net_salary_lak` set to a wrong value (5 zeros, 126 mismatches), and `grand_total_usd` had inconsistent semantics (sometimes base only, sometimes gross-before-tax, sometimes gross-after-loan). Source: original XLSX importer no longer in this codebase.
+- **Migration `staff_canonical_payroll_views`**: rebuilt `ops.v_payroll_dept_monthly`, `ops.v_staff_register_extended`, `ops.v_staff_detail` with new computed columns:
+  - `total_canonical_net_lak` / `total_canonical_net_usd` — what employees actually receive
+  - `total_canonical_cost_lak` / `total_canonical_cost_usd` — what the company pays (gross before tax)
+  - `total_benefits_lak` — SC + gasoline + internet + other allowances
+  - Per-row `canonical_net_lak/usd`, `canonical_cost_lak/usd`, `benefits_lak` exposed inside `payroll_12m[]` JSONB on `v_staff_detail`
+  - `last_payroll_total_usd` on `v_staff_register_extended` rebound to `canonical_net_usd` (was `grand_total_usd`)
+  - Public proxies + grants restored on `anon`/`authenticated`/`service_role`
+- **Backfill**: `UPDATE ops.payroll_monthly` set `net_salary_lak` / `net_salary_usd` / `grand_total_usd` to canonical math. All 140 rows now satisfy `net_salary_lak ≈ canonical formula` (drift ≤ 1 LAK).
+- **Migration `staff_payroll_canonical_trigger`**: BEFORE INSERT/UPDATE trigger `ops.f_payroll_canonical()` recomputes the three legacy columns on every write, so any future ingest path (Edge Function, manual SQL, Make scenario, future XLSX importer) lands consistent values regardless.
+- **UI swapped to canonical fields**:
+  - `CompBreakdown` "Net pay" panel reads `canonical_net_lak/usd` from the row, not `grand_total_usd × fx`. Added a second line under net showing **company total cost** (gross before tax/SSO, brass-tinted) so HR sees both numbers.
+  - `PayrollHistory` "Net pay" col reads `canonical_net_lak/usd`.
+  - `YtdSummary` "Total cost" tile reads `canonical_cost_usd/lak` with sub-line showing net-to-employee.
+  - `DeptBreakdown` columns relabeled "Net to employees" + "Company cost (USD)", both reading canonical fields.
+  - Landing-page Payroll KPI tile relabeled `Company cost · {month}` reading `Σ canonical_cost_usd`.
+- **HR-meaningful effect**: dept totals shift up to 8% from previous values (Farm Garden Building was $3,876 → now $4,205 company cost). All 7 surfaces previously consuming the broken columns now consume canonical truth.
+- **Verification**: `tsc --noEmit` clean. 0 `fmtMoney(.,'LAK')`. Trigger validated via no-op UPDATE: PBS row → `net = ₭19.34M`, `cost_usd = $1,000` ✓.
+
+### 2026-05-04 (later) — Photo upload + master list wiring + Jan/Feb 2025 payroll
+- **Photo column added** to `ops.staff_employment.photo_path` (text). Public storage bucket `staff-photos` created with RLS: public read, authenticated/service_role write. SECURITY DEFINER RPC `public.set_staff_photo(uuid, text)` granted only to `service_role` so the API route can update the column from a normal client.
+- **Views rebuilt**: `ops.v_staff_register_extended` and `ops.v_staff_detail` now surface `photo_path`. Public proxies + grants restored.
+- **New components**:
+  - `app/operations/staff/_components/StaffPhoto.tsx` — circular avatar with click-to-upload (5 MB image cap). Falls back to brass-letter initials when no photo.
+  - `app/api/operations/staff/photo/route.ts` — multipart upload → `staff-photos` bucket → calls `set_staff_photo` RPC → returns `{ ok, photo_path }`.
+- **Detail-page hero rewired**: photo on the left of the `<PageHeader>`, hero now in a flex row.
+- **Landing register rows**: small 28px circular avatar before the name; falls back to initials.
+- **Master list wired**: 38 staff in `ops.staff_employment` updated from "Staff List & Salary 2024-2025-2026.xlsx" — `hire_date` filled in for all matched employees (PBS = 2018-01-01, Francisca = 2018-01-01, Carl Sladen = 2026-01-03, Lan Philakone = 2026-01-26, etc.). `position_title` enriched where it was empty. Backfill keyed off existing `staff_id` matched against the master list by uppercase full name (with MR./MS./MRS. prefixes stripped).
+- **Payroll 2025**: 100 rows loaded for Jan + Feb 2025 (54 + 46 staff). Remaining months **NOT loaded** — column layouts differ between files (`Local Employee` sheet C20/C21/C27 in some, different in March-Aug; the "Payroll Report" files use `Worksheet` sheet with different column ordering still). Bad data caught during sanity-check (March showed `tax_lak = 22M` for PBS, equal to base — wrong column index). Loader rolled back. Need a per-file column-map verification pass before re-running.
+- **Attendance is fake** — surfaced inline on the detail page header. `ops.staff_attendance` only has April 2026 stub data (70 staff × 30 days = 2,100 seed rows). Real attendance lives in each monthly XLSX `Time Sheet` (31 day-columns per employee with D/X/AL/PH/Sick codes). To extract: pending work for next session — needs same per-file column map as payroll.
+- **Verification**: `tsc --noEmit` clean. Photo upload tested locally via component flow.
+
+### 2026-05-04 (final) — All 2025 payroll wired + 35 archived staff + bank info
+- **Header-driven extractor** replaces fixed-column indices with regex header matching. Handles 5 distinct XLSX layouts: Format A (Jan-Sep `Local Employee` sheet, 3 sub-variants) + Format B (`Worksheet` sheet, 2 sub-variants for Sep–Feb 2026 with split OT 1.5×/2× columns).
+- **New migrations**: `payroll_loader_public_proxy` (public.payroll_load JSONB wrapper), `staff_bank_columns_and_archive_loader` + `staff_archive_loader_v2` (added `bank_name`, `bank_account_no`, `bank_account_name`, `phone`, `notes` to `ops.staff_employment` + UPSERT-by-emp_id RPC), `staff_views_with_bank_phone` (views surface bank/phone fields).
+- **New API routes**: `POST /api/operations/staff/payroll-load` and `/archive-historical` — service_role POST endpoints. Allowed bash to curl-load 879 payroll rows + 103 archive/bank rows in 5 calls instead of paste-loading.
+- **Data loaded**:
+  - **35 archived historical staff** added with last paid period as end_date estimate. `is_active=false`. Dept_code mapped from XLSX dept text. Notes: "Archived. Last paid: YYYY-MM. Source: payroll XLSX 2025."
+  - **68 active staff bank info updated** from `Employee Bank Acc` sheet (BFL LAK or BFL USD account numbers).
+  - **879 payroll rows** loaded across **15 months** (2025-01 through 2026-04, only **2026-01 missing** per user). 105 unique staff (70 active + 35 archived) in payroll history. Per-month row counts: Jan 74, Feb 70, Mar 68, Apr 69, May 67, Jun 68, Jul 76, Aug 66, Sep 62, Oct 60, Nov 66, Dec 67 (2025); Feb 70, Mar 70, Apr 70 (2026).
+  - **Sep 2025 FX correction**: incorrectly extracted as `8` (literal cell value); fixed to `21500`. Trigger auto-recomputed grand_total_usd.
+- **Phone/email NOT in Excel files** — confirmed across all 13 XLSX. Only bank account info available. Phone column on schema for future manual entry.
+- **Verification**: `tsc --noEmit` clean. PBS payroll history sane across all 15 months (base 22M Jan-Jul 2025 → 24M Aug → 21.5M Sep onward, FX shift 22000→21500).
+
+### 2026-05-04 (latest) — name-priority match + register dept groups + archived table
+- **PHOUVAN VONGSENA bug fixed** — she had 3 emp_ids over 2025 (TNK 907 → TNK 909 → TNK 703) due to renumbering, was missing 8 months because the matcher prioritized emp_id over name. Rewrote matcher to prefer **name match against active staff first** (catches renumbered persons across the year). Reloaded 583 rows via `/api/operations/staff/payroll-load`. PHOUVAN now has all 15 months Jan 2025 → Apr 2026 (Jan 2026 still missing per user — no source).
+- **Sep 2025 FX correction**: any row with fx<1000 forced to 21500 in the loader (Sep `Worksheet` cell 0/7 had literal `8` not the actual rate).
+- **Landing register redesigned** — `<StaffTable>` rewritten as collapsible department groups (moss-green banners with serif italic dept name + brass headcount + monthly cost USD/LAK total). Click header to collapse/expand. "Collapse all" / "Expand all" buttons. Search box now scans name/emp_id/position/dept across all groups. Active staff only.
+- **New `<ArchivedStaffTable>`** — separate "Not with us anymore" section under the active register. Shows ex-staff with end_date (red), hire_date, last salary, bank name + account number. Hidden behind a `<details>` toggle (red-letter "ARCHIVED" eyebrow). Clicking row goes to detail page (their full history is preserved).
+- **Verification**: tsc clean. Live page shows all 11 dept banners (Activities, Admin & General, Boat, Farm, Front Office, Housekeeping, Maintenance, Restaurant Kitchen, Roots, Security, Spa). 35 archived staff render with bank info. PHOUVAN's 15-month payroll history visible on detail page.
+
+### 2026-05-04 (latest 2) — 3 staff visualizations matching /revenue/channels pattern
+- **New `lib/staffCharts.ts`** with three server-rendered SVG functions (matches `lib/svgCharts.ts` style for `/revenue/channels`):
+  - `staffCostTrendSvg` — 12-month area chart of company cost USD with secondary headcount line (right axis, dashed moss). Tooltip on each datapoint.
+  - `staffCostPerDaySvg` — horizontal-bar chart of cost-per-worked-day per department for the last paid month, sorted desc. Color-coded by tertile: green ≤ p33, amber ≤ p66, red > p66 (efficiency signal).
+  - `staffTenureDistSvg` — bar chart of active staff bucketed by tenure (<1y, 1-2y, 2-5y, 5+y, unknown). Each bar shows count + monthly cost in bucket.
+- **Landing page rewired** with a 3-column chart row right under the KPI strip — same panel + panel-head visual language as the Pulse/Channels pages. Each panel has its own legend + source ref.
+- **Bug**: initial deploy showed `<svg>` count 1 of 3 because `total_days_worked` wasn't in the `v_payroll_dept_monthly` SELECT. Added it. Now 3 SVGs render.
+- **Verification**: tsc clean. Live `/operations/staff` shows the 3 charts. Cost trend hover reveals month + cost + headcount + source.
+
+### 2026-05-03 (final batch 4) — Forecast UI toggle in 12-month panel
+- **`/finance/pnl` 12-month rollup** now reads from `gl.v_scenario_stack` (was `gl.v_budget_vs_actual`). Same shape but adds `ly_usd` + `forecast_usd` columns. Helper `getScenarioStack(periods)` already added in `app/finance/_data.ts`.
+- **TwelveMonthPanel** extended:
+  - `TwelveMonthRow` interface now optionally includes `ly_usd` and `forecast_usd`.
+  - `aggregateMonth` returns 4 series per metric (Actual, Budget, Forecast, LY): `revA/B/F/L`, `cogsA/B/F/L`, `payA/B/F/L`, `opexA/B/F/L`, `undistA/B/F/L`, `deptProfitA/B/F/L`, `gopA/B/F/L`.
+  - `pickCompare(agg, mode)` selects which series to use for the comparison column based on user toggle.
+  - `pickAB(period, subcat, dept)` (used by month-expand USALI schedule) now returns the active comparison value as `b`, so existing `Row(label, a, b)` contract is unchanged — schedule auto-reflects toggle.
+- **Compare-mode toggle** rendered just inside the rollup body when expanded. Three buttons: Budget · Forecast · Last Year. Active button takes the green-2 fill. Sub-text describes the source (e.g., "Conservative 2026 scenario · plan.lines"). State held in `useState<CompareMode>('budget')`.
+- **Rollup rows** dynamically labelled `Revenue · {budget|forecast|last year}`, `GOP · {…}`, etc. Variance recomputed against selected series.
+- **Header summary bar** now shows e.g. `Revenue actual $X · forecast $Y · GOP actual $X · forecast $Y` — text follows the toggle.
+- **Month-expand schedule** header `vs Budget` swaps to `vs Forecast` / `vs Last Year`. Column header `Budget` / `Δ Bgt` updates accordingly.
+- **Verification:** `tsc --noEmit` clean. Build successful. All 4 routes return 200.
+
+### 2026-05-04 (Activities page wired · build fix · staging deploy)
+- **`/operations/activities` rebuilt to match restaurant/spa pattern.** KpiBox grid: Revenue (QB), Labor Cost %, GOP %, Capture %, Per-Occ Rn, Supplier Margin (data-needed). 12-month QB P&L grid below. Activities cleanup callout linking to `/operations/catalog-cleanup?dept=Other%20Operated`.
+- **`subnavConfig.ts` patched**: added `RAIL_SUBNAV.agents` and `PILLAR_HEADER.agents` keys (were missing — `app/agents/layout.tsx` reads them and was throwing at build).
+- **`force-dynamic` added to `/agents/*` and `/front-office`/etc pages** that were trying to statically pre-render but rely on Supabase reads.
+- **Lazy supabase client (`lib/supabase.ts`, `lib/supabase-gl.ts`)**: switched from eager `createClient()` at module-load to a Proxy that builds the client on first property access. Was the actual build-breaker — Vercel's "collect page data" phase loads route modules before runtime env vars resolve, so eager `createClient(undefined!, undefined!)` threw and cascaded `Failed to collect page data` across every route that touched these modules. Lazy + placeholder fallback URLs → module load is free, runtime queries still work normally.
+- **Staging deploy live**: `https://namkhan-6kbpmmjtr-pbsbase-2825s-projects.vercel.app`. Promote with `npx vercel promote <url>` after sanity check.
+
+### 2026-05-03 (final batch 5) — Compare toggle in main USALI grid + VAT-actual plumbing
+- **`/finance/pnl` main USALI grid** now respects `?compare=budget|forecast|ly` param. New client component `app/finance/pnl/CompareDropdown.tsx` renders next to `MonthDropdown` in the panel header. Server side picks `compareCur` from `{budgetCur, forecastLines, lyLines}` and uses it in every Budget-coded calc.
+- **Column headers + tooltips** are dynamic (`Budget` ↔ `Forecast` ↔ `Last Year`). `Δ Bgt` becomes `Δ Forecast` / `Δ Last Year`. Header shows "vs {Forecast/Budget/LY}" inline. Meta text shows source: `plan.lines · Conservative 2026` etc.
+- **All `budgetCur` references swapped to `compareCur`** in 7 call sites (revenue rows, total rev, expense rows, undistributed BudgetCells, GOP/EBITDA composites). `budgetCur` retained as the data-fetch destination but only `compareCur` is used in rendering.
+- **Compare toggle is independent from the 12-month rollup toggle** — both can be set to different scenarios. The main grid is server-rendered (URL param) so it's deep-linkable and book-markable. The rollup is client-side state.
+- **VAT applies_to='actual'/'both' wired through `gl.v_pl_monthly_combined`.** Migration `vat_strip_actuals_via_combined_view`. Both QB matview rows AND manual entries are LEFT-JOINed against `gl.vat_rates` filtered to `applies_to IN ('actual','both')` and divided by `(1 + rate/100)` when matched. Default seed has every rate as 'budget' or 'none' so this is a no-op until the user explicitly switches a subcat in /settings/vat-rates.
+- **Verification:** Live URLs confirmed:
+  - `/finance/pnl` → renders `<th>Budget</th>` (default)
+  - `/finance/pnl?compare=forecast` → renders `<th>Forecast</th>` + "Conservative 2026" source
+  - `/finance/pnl?compare=ly` → renders `<th>Last Year</th>` + "Actuals 2025" source
+- **All 21 tasks closed.**
+
+### 2026-05-04 — All 4 right-panels on /finance/pnl wired
+- **Margin leak heatmap** — expanded from 4 depts × 5 months → **7 rows × 12 months** (Rooms, F&B, Spa, Activities, Mekong Cruise, Other Operated + A&G overhead). CSS grid-template adjusted in `globals.css` (90px label + 12 fr columns, smaller font). Rendered with `<React.Fragment key>` to silence key warning.
+- **Top variances toggle** — new 4-state pill toggle (MOM | Budget | Forecast | LY) in panel header. Reads `?varBase=` param, defaults to active `?compare=` mode. Variance basis math:
+  - MoM → `dept_profit cur − dept_profit prior` (legacy behavior)
+  - Budget/Forecast/LY → `dept_profit actual − dept_profit {scenario}` computed from `v_scenario_stack` cur-period rows (rev − cogs − payroll − opex per dept).
+- **13-week cash forecast** — fully wired. New view `gl.v_cash_forecast_13w` derives:
+  - Inflows: confirmed reservation balances arriving each week (Cloudbeds OTB) + AR aging schedule (0-30 spread weeks 1-4, 31-60 weeks 5-8, 61-90 weeks 9-12, 90+ week 13).
+  - Outflows: monthly fixed budget (Payroll + Utilities + Mgmt Fees + A&G) ÷ 4.33 + 90d supplier average ÷ 13.
+  - Net per week + running position. `?cash0=` param sets starting cash (default 0).
+  - Live numbers Apr 2026: 13w net **−$130k** at $0 starting cash. Inflow $42k OTB+AR vs outflow $172k. Min position **−$130k** week 13. (Confirms hotel needs ~$130k bank cash to survive 13w at current OTB pace — owner action: stack May arrivals or top up.)
+  - New component `app/finance/pnl/CashForecastPanel.tsx` renders weekly bars with hover tooltips, dip-week flag, and legend (in / out / net 13w / min position / start).
+- **Variance commentary LLM rewrite** — wired end-to-end:
+  - Server action `app/finance/pnl/actions.ts → regenerateCommentary(formData)` builds a structured prompt with all key numbers (revenue, GOP, A&G, F&B labour/cogs %, utilities, occupancy, ADR, top dept variances), calls Anthropic Messages API (`claude-sonnet-4-5`, 800 tokens), inserts result into `gl.commentary_drafts` with status='draft' and tone_preset='owner_brief', then `revalidatePath('/finance/pnl')`.
+  - Client component `app/finance/pnl/CommentaryPanel.tsx` shows polished draft if `gl.commentary_drafts` has a row for `cur` period, else falls back to legacy template. Generate/Regenerate button submits the form. Disabled (and explains why) when `ANTHROPIC_API_KEY` env var is missing.
+  - Fail-safe: if API key missing or Claude call fails, the legacy template still renders. No regression.
+- **TODO for user** — set `ANTHROPIC_API_KEY` on Vercel (Project → Settings → Environment Variables → Production) to enable the LLM rewrite. Until then, the Generate button is disabled with a tooltip explaining.
+- **Verification:** All 4 panels return 200. Live HTML confirms `13-week`, `cash-strip`, `cash dip`, `Min position`, `Margin leak`, `last 12 months`, `Generate` button, and toggle pills all present.
+
+### 2026-05-04 — Restaurant page rewiring + GL detail card
+- **`/operations/restaurant` KPI tiles wired to FilterStrip period.** Food Cost / Beverage Cost / Labor Cost / GOP % tiles previously showed only "latest closed QB month" regardless of `?win=` — now they aggregate every QB month overlapping the user's period via new helper `lib/data.getFnbCostsForPeriod(from, to)` (returns `revenue, food_revenue, bev_revenue, food_cost, bev_cost, payroll, total_cost, gop, *_pct, months_used`). Falls back to latest closed month when window covers none.
+- **Food / Bev revenue split.** `DeptPlRow` now carries `food_revenue` and `bev_revenue` populated from QB lines `Food Revenue` / `Beverage Revenue`. `<PnlGrid>` renders three Revenue columns for F&B (Total / Food / Bev) instead of one. Other depts unchanged.
+- **`<PnlGrid>` is now collapsible.** Marked `'use client'`; shows latest 6 rows by default with a "Show full history (N months) ▾" toggle. F&B page now requests **16 months** of history so the expanded view goes back to Jan 25.
+- **New `<FnbGlBreakdown>` card.** Wide table (one row per `usali_subcategory + raw QB account_name`, one col per month) reading from `gl.v_gl_entries_enriched` via `lib/data.getFnbGlBreakdown(monthsBack=16)`. Surfaces accounts the USALI rollup hides — Staff Canteen Materials, Employee Meal, Animal Food, F&B Uniforms, F&B Utensil Equipment, Cleaning Supplies, Maintenance, Bank Fees, etc. Default 4 visible months + "Show full history" toggle.
+- **Labor cost drop diagnosed.** QB Wages & Benefits dropped Jan ($6.5k) → Apr ($4.3k) is real but mostly **Employee Meal stopped being booked** (was $2.0–2.3k Jan/Feb in Wages bucket, ≈$0 from Mar). Basic Salary F&B is steady ~$4.2–4.4k. Headcount 16 (10 kitchen + 6 service) unchanged. Gross payroll cross-check (`ops.v_payroll_dept_monthly`, kitchen + roots_service): Mar $6.3k, Apr $5.2k — QB still understates real cost by $0.9–2.1k/month. All of this is now captured in the Labor Cost tile tooltip.
+- **CB↔QB variance explained.** Tooltip + page note: Food: QB > CB by $0.6–2.8k/mo; Bev: CB > QB by $0–0.9k/mo. Net diff is small and mostly category mapping at the line level (POS items split differently between CB POS and QB GL classes), plus house accounts/comps booked in CB and reversed in QB.
+- **`<FilterStrip>` label `Window` → `Last`.** Reads more naturally with `Today · 7d · 30d · 90d · YTD` buttons.
+- **Files touched:** `lib/data.ts` (+`food_revenue`/`bev_revenue` on `DeptPlRow`, +`getFnbCostsForPeriod`, +`getFnbGlBreakdown`, +`FnbGlLine`/`FnbGlBreakdown` types), `components/pl/PnlGrid.tsx` (now `'use client'`, collapsible, 3-col Revenue for F&B), `components/pl/FnbGlBreakdown.tsx` (new), `components/nav/FilterStrip.tsx` (label rename), `app/operations/restaurant/page.tsx` (period-driven tiles, new card, 16mo grid).
+- **Verification:** `npx tsc --noEmit` ✅ EXIT=0. `fontSize:` numeric literal count = 0, `USD ` prefix count = 0. Live URL `https://namkhan-bi.vercel.app/operations/restaurant?bust=$RANDOM` returns HTTP 200 with `filter-label">Last`, `Food rev`, `Bev rev`, `Show full history`, `GL detail · F&amp;B accounts`, `P&amp;L · QB GL · USALI rollup`, `Staff Canteen`, `Employee Meal` all present in HTML.
+
+### 2026-05-04 (batch 2) — F&B page enrichment + USALI breakfast fix
+- **Restaurant tab renamed → F&B.** `components/nav/subnavConfig.ts` now reads `{ href: '/operations/restaurant', label: 'F&B' }`.
+- **Period-aware capture metrics.** New `lib/data.getFnbCaptureForPeriod(from, to)` reads `kpi.v_capture_rate_daily` directly (replacing the static 90-day `mv_capture_rates`). Tiles `F&B / Occ Rn` and `F&B Capture %` now respond to FilterStrip `?win=`.
+- **Staff Canteen tiles.** New `lib/data.getCanteenForPeriod()` aggregates raw QB accounts `EMPLOYEE MEAL` + `STAFF CANTEEN MATERIALS` across ALL departments, with `cost_per_occ_room`. Two new tiles render: `Staff Canteen $` and `Canteen / Occ Rn`. **CRITICAL FINDING:** Mar / Apr 2026 Employee Meal was reclassified F&B → Undistributed (not "savings" — same ~$2.4k/month total cost still booked, just under different dept). Now visible on the page.
+- **Breakfast allocation (USALI fix).** New `lib/data.getBreakfastAllocation(from, to, ratePerAdult=10, ratePerChild=5)`. Computes pax-nights (adults + children with 0.5 weight) by month from `reservations` (filters `is_cancelled=true`). Two new tiles: `Breakfast alloc (USALI)` (the $ to allocate Rooms→F&B) and `Effective F&B Rev` (= QB F&B rev + breakfast alloc). Configurable via `BREAKFAST_USD_ADULT` / `BREAKFAST_USD_CHILD` env vars. Page note recommends a monthly QB JE: `DR Rooms Revenue · CR Food Revenue` (zero P&L impact, USALI-clean). Jan 26 alloc ~$10.2k, Apr 26 alloc ~$4.7k. Note: assumes ALL stays include breakfast — needs rate-plan flagging if hotel ever sells RO rates.
+- **Top-seller trend (replaces deadfish table).** New `lib/data.getFnbTopSellerTrend(startIso='2026-01-01', topN=8)` + new client component `components/pl/FnbTopSellerTrend.tsx`. Renders inline SVG sparkline (4 months Jan→latest), total rev, POS-line count, and Δ% (first→latest with green/red tone). Old static "Top sellers" Card removed. **NB:** column called "POS lines" not "Units" — `mv_classified_transactions` rows are POS line totals; Cloudbeds rolls qty>1 into a single line ($16 = 4×$4). Cannot back out unit price without a POS-side qty field. Page note explains.
+- **Page condensed.** GL detail card and "Coming soon (outlet split / cover count)" pair are now wrapped in collapsible `<details>` summaries (closed by default). Top sellers wrapped open by default. P&L grid stays at 6-row default. Page is ~40% shorter on initial load while still drillable.
+- **Files touched:** `lib/data.ts` (+`getFnbCaptureForPeriod`, +`getCanteenForPeriod`, +`getBreakfastAllocation`, +`getFnbTopSellerTrend`), `components/pl/FnbTopSellerTrend.tsx` (new client component with SVG sparklines), `components/nav/subnavConfig.ts` (Restaurant→F&B), `app/operations/restaurant/page.tsx` (4 new tiles + breakfast note + collapsible sections + trend in place of static table).
+- **Verification:** `npx tsc --noEmit` ✅ EXIT=0. Live URL https://namkhan-bi.vercel.app/operations/restaurant returns HTTP 200 with `Staff Canteen $`, `Canteen / Occ Rn`, `Breakfast alloc`, `Effective F&B Rev`, `POS lines`, `Top sellers · trend` present.
+
+### 2026-05-04 (batch 3) — F&B Effective GOP + Spa page mirror
+- **Effective GOP / Labor% / Food% tiles on F&B.** Second KPI row added below the Staff Canteen row — `Effective GOP $`, `Effective GOP %`, `Effective Labor %`, `Effective Food %`, all computed against (QB F&B revenue + breakfast allocation). Tone-coloured against USALI targets.
+- **F&B Capture % no longer falls back to static cap.** Was reading `cap?.fnb_capture_pct` (90-day matview) when `getFnbCaptureForPeriod` returned null — which made the tile look "static" on short windows because `kpi.v_capture_rate_daily` lags ~7 days (latest data 2026-04-27). Now: shows 0 with `hint="no data in window — try 30d+"` — user immediately sees when the freshness budget runs out.
+- **Generic dept helpers in `lib/data.ts`** (extracted from F&B specialisations): `getDeptCaptureForPeriod`, `getDeptGlBreakdown`, `getDeptTopSellerTrend`, `getSpaCostsForPeriod`. Components `<FnbGlBreakdown>` and `<FnbTopSellerTrend>` are dept-agnostic in their data shape — names retained for back-compat but reused on Spa.
+- **`/operations/spa` mirror.** Same upgrades the F&B page got in batch 1+2:
+  - Spa Cost / Labor Cost / GOP tiles now period-aware (`getSpaCostsForPeriod`).
+  - Spa capture / Spa per Occ Rn now period-aware (`getDeptCaptureForPeriod` filtered to subdept=Spa).
+  - P&L grid uses 16 months back + collapsible 6-row default (Jan 25 reachable via toggle).
+  - New collapsible **GL detail · Spa accounts** card (every QB account class-tagged Spa: uniforms, fuel, supplies, equipment).
+  - Static "Top spa treatments" Card replaced with **Top spa treatments · trend since Jan 26** — sparkline + Δ first→latest %, "POS lines" caveat.
+  - Bottom "Coming soon" pair (Wellness packages / Therapist load) wrapped in collapsible `<details>`.
+  - Spa-page `captureRate` / `perOccRn` no longer fall back to static 90-day matview.
+- **Files touched:** `lib/data.ts` (+ generic helpers), `app/operations/restaurant/page.tsx` (drop static fallback + Effective GOP row), `app/operations/spa/page.tsx` (period-aware tiles + GL detail + trend + collapsibles).
+- **Verification:** `npx tsc --noEmit` ✅ EXIT=0. Live URLs:
+  - https://namkhan-bi.vercel.app/operations/restaurant returns HTTP 200 with `Effective GOP`, `Effective Labor`, `Effective Food` present.
+  - https://namkhan-bi.vercel.app/operations/spa returns HTTP 200 with `GL detail · Spa accounts`, `Top spa treatments · trend`, `POS lines`, `filter-label">Last` present.
+
+### 2026-05-04 (batch 4) — Compact KpiStrip pattern + page condensation
+- **New `<KpiStrip>` component** at `components/kpi/KpiStrip.tsx`. Single-row grid of compact tiles, ~52px tall (vs canonical `<KpiCard>` at min-height 96px). Brass-mono label above italic-serif value with optional small hint. Uses CSS variables only — no hardcoded fontSize literals or hex colours. Default min tile width 150px, auto-fits to row width. Use this when 5–8 KPIs need to live on one line and the page should feel modern, not "1982 spreadsheet".
+- **`/revenue/channels` rebuilt above the fold:**
+  - Replaced `<PanelHero kpis={...}>` (whose CSS grid is `1.5fr repeat(4, 1fr)` and was wrapping 6 KpiCards onto 2 rows) with a slim full-width hero strip (eyebrow + headline + sub on one moss block, `marginBottom: 12`) followed by a 6-up `<KpiStrip>`.
+  - Chart row padding reduced `12px 14px → 10px 12px`, gap `10 → 8`, marginBottom `14 → 12`.
+  - Net: ~120px shorter top of page; 6 KPIs visible in one line; charts and table now visible without scroll on a 1080p screen.
+- **`/operations/restaurant` consolidated:** the 3 separate KPI rows (capture / canteen / effective USALI) collapsed into 2 `<KpiStrip>` rows (Operating + USALI Effective view). Same numbers, ~50% less vertical space. Old `KpiCard` import dropped.
+- **Files touched:** `components/kpi/KpiStrip.tsx` (new), `app/revenue/channels/page.tsx` (slim hero + strip + tighter chart row, dropped PanelHero + KpiCard imports), `app/operations/restaurant/page.tsx` (2 strips replace 3 rows).
+- **Verification:** `npx tsc --noEmit` ✅ EXIT=0. `fontSize:` numeric-literal count = 0. Live URLs:
+  - https://namkhan-bi.vercel.app/revenue/channels HTTP 200, `aria-label="KPI strip"` + all 6 labels present.
+  - https://namkhan-bi.vercel.app/operations/restaurant HTTP 200, `aria-label="KPI strip"` + `Capture %` / `Eff Labor` / `Eff Food` present.
+
+### 2026-05-04 (batch 5) — F&B explainer cards (replaces text wall)
+- **3-up explainer card row on F&B**, replacing the previous 9-line paragraph below the KPI strips:
+  1. **Staff canteen** — current $ + by-dept breakdown + red "Watch" callout flagging the F&B → Undistributed reclassification.
+  2. **Breakfast allocation · USALI** — current $ to move + pax-night math + "Effect: Labor% drops X→Y if JE applied" + green "Action" callout with the JE wording.
+  3. **Menu engineering** (coming soon, dashed border) — Stars / Plowhorses / Puzzles / Dogs preview, "Needs POS qty + recipes" gating note, brass "Next" callout with the unblocking step.
+- Layout: `repeat(auto-fit, minmax(260px, 1fr))` so the 3 cards reflow to 2-up or 1-up on narrow screens. Each card uses the canonical paper/brass palette + a coloured accent strip (red/green/brass) at the bottom for the callout.
+- **File touched:** `app/operations/restaurant/page.tsx` (text-wall block replaced with 3-card grid).
+- **Verification:** `npx tsc --noEmit` ✅ EXIT=0. Live URL HTTP 200 with all 3 card titles (`Staff canteen`, `Breakfast allocation · USALI`, `Menu engineering`) + `Stars · Plowhorses` + `DR Rooms Rev` + `Coming soon` pill present.
+
+### 2026-05-04 (batch 6) — Top-seller enrichment + searchable POS transactions list
+- **Top-seller trend table enriched** with 3 new columns: `Avg / mo` (revenue ÷ active months), `Last sold` (yyyy-mm-dd of latest line), `Months active` (count of months with ≥1 line). Plus a `Margin %` placeholder column rendering `—` until `inv.recipes` is seeded — keeps the column slot visible so users see the gap.
+- **`TopSellerTrend` interface** in `lib/data.ts` extended with `last_sold`, `active_months`, `avg_rev_per_active_month`. Generic `getDeptTopSellerTrend()` now populates them in one pass; deprecated F&B-specific `getFnbTopSellerTrend()` delegates to it (no more dual maintenance).
+- **New searchable raw POS transactions list** below the trend (collapsible). Loads most-recent 2000 F&B charges from `mv_classified_transactions` server-side, then filters client-side by item / reservation ID / poster / date / subdept (Food vs Beverage). Pagination 200 rows at a time. Sticky table header. Negative amounts shown red as refunds. **Purpose:** PosterPOS reconciliation — when Poster imports start landing, every Poster line should match a row here.
+- **New helper** `lib/data.getFnbRawTransactions(limit)` returns `FnbRawTxn[]` with date/desc/amount/currency/category/item_category_name/user_name/usali_subdept.
+- **New client component** `components/pl/FnbRawTransactions.tsx` (search input + subdept dropdown + scrollable virtual-style table with sticky header + Show next 200 pagination).
+- **Files touched:** `lib/data.ts` (+ `last_sold`/`active_months`/`avg_rev_per_active_month` on TopSellerTrend, + `getFnbRawTransactions` + `FnbRawTxn` type, F&B trend delegates to generic), `components/pl/FnbTopSellerTrend.tsx` (3 new cols + Margin % placeholder), `components/pl/FnbRawTransactions.tsx` (new), `app/operations/restaurant/page.tsx` (mount the new searchable list).
+- **Page weight note:** /operations/restaurant HTML grew from ~122KB → ~700KB because the 2000 POS rows are shipped to the client for instant filtering. Acceptable on the desk, painful on mobile — if mobile use shows up in analytics, switch to server-paginated fetch.
+- **Verification:** `npx tsc --noEmit` ✅ EXIT=0. Live URL HTTP 200 with `All POS transactions`, `Avg / mo`, `Last sold`, `Months active`, `Margin %`, `Search item`, `Show next 200` all present.
+
+### 2026-05-04 (batch 7) — F&B page concept rolled to Spa + Activities
+- **`/operations/spa` and `/operations/activities` upgraded to the full F&B pattern.** Both pages now have, in order: slim moss hero → 2 KpiStrip rows (Operating + QB-side P&L) → 3 explainer cards → P&L grid (16 months, collapsible 6-row default) → collapsible GL detail card → top-seller trend (sparkline + Last sold / Avg/mo / Months active / POS lines / Margin% placeholder / Δ %) → searchable raw POS transactions list (2000 most-recent rows, client-side filter, pagination).
+- **Spa explainer cards:** Therapist productivity (treatments/day with red/amber/green watch flag), Capture & package attach (action callout based on capture rate band), Scheduler integration (coming soon — Booker / Mindbody / Treatwell route).
+- **Activities explainer cards:** External booking leakage (Mekong / Kuang Si / elephant — capture-rate-band watch flag), Transport revenue (separate Other Operated · Transportation subdept, with COA-fix note), Supplier ledger (coming soon — third-party margin attribution).
+- **New helpers in `lib/data.ts`:**
+  - `getDeptRawTransactions(filter, limit)` — generic raw POS list (any usali_dept + optional subdept). `getFnbRawTransactions` delegates to it.
+  - `getActivitiesCostsForPeriod(from, to)` — period-aware QB GL aggregator returning `revenue / cogs / payroll / total_cost / gop` and `cogs_pct / labor_cost_pct / gop_pct`. Mirrors `getSpaCostsForPeriod`.
+  - New `ActivitiesCostsForPeriod` type.
+- **Files touched:** `lib/data.ts` (+`getDeptRawTransactions`, +`getActivitiesCostsForPeriod`, +`ActivitiesCostsForPeriod`), `app/operations/spa/page.tsx` (PanelHero+KpiCard tiles → slim hero + 2 KpiStrip rows + 3 explainer cards + raw POS list), `app/operations/activities/page.tsx` (full rewrite mirroring F&B/Spa pattern).
+- **Verification:** `npx tsc --noEmit` ✅ EXIT=0. Live:
+  - https://namkhan-bi.vercel.app/operations/spa HTTP 200 — `Therapist productivity`, `Capture & package attach`, `Scheduler integration`, `All POS transactions`, `aria-label="KPI strip"` present.
+  - https://namkhan-bi.vercel.app/operations/activities HTTP 200 — `External booking leakage`, `Transport revenue`, `Supplier ledger`, `All POS transactions`, `GL detail · Activities`, `Top activities · trend`, `aria-label="KPI strip"` present.
+
+### 2026-05-04 (batch 8) — /operations/today redesigned
+- **Replaced 2 rows of 8 bulky `<KpiCard>` tiles with 1 `<KpiStrip>` of 6 wired tiles.** Every tile is real-data-backed:
+  - **In-house** — `mv_kpi_today.in_house`, with `occupied_tonight` in hint + `warn` tone if mismatch.
+  - **Arrivals today** — `mv_kpi_today.arrivals_today`, hint shows `expected_arrivals_today − arrivals_today` still-to-come (or "all in").
+  - **Departures** — `mv_kpi_today.departures_today`.
+  - **Available** — `total_rooms − in_house`, with `total_rooms` in hint.
+  - **Open balance** — sum of in-house + today's arrivals balances from `mv_arrivals_departures_today`. `warn` tone if > 0.
+  - **POS today** — live `mv_classified_transactions` SUM filtered to `transaction_date::date = CURRENT_DATE`, with line count + F&B / Spa split in hint. Replaces nothing — this is new and previously absent.
+- **3 explainer cards** (same pattern as F&B / Spa / Activities):
+  - **Pickup pace · 90d** — OTB next 90d + cancellation 90d + no-show 90d, with red/amber/green watch flag tied to `cxlPct90d > 25 / > 18 / else`.
+  - **Open balances** — total un-collected today split by in-house vs arrivals; absorbs the previous DQ insight (in-house ≠ occupied tonight) when it triggers.
+  - **Housekeeping board** (coming soon, dashed border) — flags OOO / OOS / clean / dirty as future feature; route via Cloudbeds housekeeping API → `frontoffice.room_status`.
+- **Three tables retained** (Arrivals / Departures / In-house) but Arrivals now exposes the **Balance** column too (not previously shown). Money formatted `$X,XXX` with rounded numbers.
+- **New helper** `getTodayPosTotal()` (page-local, not in `lib/data.ts`) — `mv_classified_transactions` doesn't lag like `mv_kpi_daily.fnb_revenue` does during the day, so today's POS totals are read live from there.
+- **Dropped:** `<PanelHero>` import + 2nd `card-grid-4` row + standalone `<Insight>` block. Dead `OOO / OOS` greyed tile removed.
+- **Files touched:** `app/operations/today/page.tsx` (full rewrite — slim hero + 1 strip + 3 cards + tables; PanelHero/KpiCard imports dropped).
+- **Verification:** `npx tsc --noEmit` ✅ EXIT=0. Live URL HTTP 200 with `In-house`, `Arrivals today`, `Departures`, `Available`, `Open balance`, `POS today`, `Pickup pace`, `Open balances`, `Housekeeping board`, `aria-label="KPI strip"` all present.
+
+### 2026-05-04 (batch 9) — Today: in-house ledger + reach buttons
+- **In-house section split into 2 columns** (`grid-template-columns: 2.2fr 1fr`): compact In-house table on the left, new **In-house ledger** card on the right. Table columns trimmed to Guest (with country code) · Room · Out · Spent · Balance · Reach. Source column dropped — already shown in Arrivals/Departures.
+- **In-house ledger card** shows real numbers (no placeholders):
+  - Total folio, Paid, Balance owed (red when > 0)
+  - POS today (sum of `mv_classified_transactions` for today × in-house reservation_ids)
+  - POS this stay (same source, full window)
+  - Pax (adults + children)
+  - Avg nights left (computed from `check_out_date − today`)
+  - Footer note explaining the Reach button icons.
+- **Reach column on Arrivals + Departures + In-house tables.** Compact 22×22 button cluster:
+  - **CB** — opens `https://hotels.cloudbeds.com/connect/{property_id}#/reservations/{reservation_id}` in new tab. Always works.
+  - **@** — `mailto:` if `guest_email` is populated; greyed (35% opacity, `cursor: not-allowed`, tooltip "needs /getGuests sync") otherwise.
+  - **W** — WhatsApp; **always greyed today** because `reservations.raw` doesn't carry phone numbers (Cloudbeds keeps that data behind `/getGuests`, which we don't sync). Tooltip explains.
+- **Real data check:** Spent column reads per-reservation POS roll-up via new `getPosByReservation(ids[])` helper. Spent tooltip shows `Today $X · Stay $Y` split.
+- **The honest gap:** Email is null for 100% of today's reservations (we found Cloudbeds passes neither email nor phone in the `/reservations` payload — only `guestID` and `guestName`). To make the reach buttons actually fire today, the Cloudbeds Edge Function needs a separate `/getGuests` round-trip per `guestID` and persist `email/phone` on `public.guests` so the page can join. Footer note in the ledger card flags this.
+- **Files touched:** `app/operations/today/page.tsx` (added `ReachCell` component, `getPosByReservation` helper, ledger computations, 2-col In-house grid, Reach column on all 3 tables).
+- **Verification:** `npx tsc --noEmit` ✅ EXIT=0. Live URL HTTP 200 (76kB, up from 45kB pre-ledger) with `In-house ledger`, `total folio`, `Balance owed`, `POS this stay`, `Avg nights left`, `Reach buttons`, `hotels.cloudbeds.com` all present.
+
+### 2026-05-04 (batch 10) — In-house: CB res ID + clickable folio popover
+- **CB reservation ID surfaced** under each guest name on the In-house table (`res 4483230440196` in mono brass-tinted small text). Same pattern can be rolled to Arrivals + Departures later.
+- **Spent column is now a clickable folio popover.** Clicking the amount opens a modal showing the guest's full folio: header (res ID + guest + country + room + check-in/out), 6-up summary strip (Total folio · Paid · Balance · POS today · POS stay · Lines), action row (Open in PMS button + email mailto when present), then a scrollable table of every POS line for that reservation (Date · Item · Dept/Subdept · Amount), sorted newest first.
+- **All data live-wired.** New page-local `getFolioLines(ids[])` pulls every `mv_classified_transactions` row for the in-house reservation_ids in one batched query, groups by reservation_id, and ships the array into `<FolioPopover>` props at SSR time. Refunds (negative amounts) shown red. No client-side fetch — the modal opens instantly because data is pre-loaded.
+- **Modal a11y:** `role="dialog"`, `aria-modal="true"`, Escape closes, body-scroll locked while open, click-on-overlay closes, click-on-content does not propagate. Close button top-right.
+- **New component:** `components/today/FolioPopover.tsx` (client). Exports `FolioPopover` + `FolioLine` type. ~210 lines, no external deps.
+- **Files touched:** `components/today/FolioPopover.tsx` (new), `app/operations/today/page.tsx` (added `getFolioLines` helper, parallel fetch with `getPosByReservation`, FolioPopover wired into Spent column, CB res ID added under guest name).
+- **Verification:** `npx tsc --noEmit` ✅ EXIT=0. Live URL HTTP 200 (88kB up from 76kB — folio lines for ~5 in-house guests). 9 distinct CB reservation deep-link URLs in the HTML. `In-house ledger`, `Open folio`, `hotels.cloudbeds.com` present.
+
+### 2026-05-04 (batch 12) — Catalog cleanup redesign + HK/Maintenance hidden
+- **`/operations/catalog-cleanup` rebuilt to SlimHero + KpiStrip pattern.** Old `<PageHeader>` + 7 KpiBox grid replaced by:
+  - `<SlimHero>` ("Operations · Catalog cleanup" / "Cloudbeds cleanup queue")
+  - Strip 1 — Queue status: Open undecided · Decided · Departments hit · Total revenue touched
+  - Strip 2 — Flag types: Unclassified · Multi-price · No duration · LAK-converted · Bad name / cat · Need rules
+  - Department roll-up cards + master cleanup queue table kept.
+- **Housekeeping + Maintenance hidden from operations subnav.** Routes still resolve (no redirect, no broken links) but no tab — pages are stub-only and shouldn't waste tab real estate until real content lands.
+- **Sub-page launcher updated** on /operations: dropped Housekeeping + Maintenance, added Catalog cleanup tile.
+- **Snapshot's third explainer card** swapped from "Housekeeping board · coming soon" to a **Catalog cleanup** card that links into the queue.
+- **Files touched:** `app/operations/catalog-cleanup/page.tsx`, `components/nav/subnavConfig.ts`, `app/operations/page.tsx`.
+- **Verification:** `npx tsc --noEmit` ✅ EXIT=0. Live: `/operations/catalog-cleanup` HTTP 200 with `aria-label="KPI strip"` + `Open · undecided` + `Need rules` present. `/operations` HTTP 200 with `Catalog cleanup` + `Dirty SKUs queue` present, **no `/operations/housekeeping` or `/operations/maintenance` URLs in rendered HTML**.
+
+### 2026-05-04 (batch 11) — Snapshot + Today merged
+- **`/operations` Snapshot and `/operations/today` are now one page.** User wanted a single place answering both "what's happening right now?" (live arrivals / departures / in-house / open balance / POS today) and "how is operations as a function?" (DQ, tasks, payroll, headcount, dept health, action queue).
+- **`/operations/today` returns 307 → `/operations`.** Old bookmarks keep working. The Today tab was removed from `RAIL_SUBNAV.operations`.
+- **Page layout (top → bottom):** `<SlimHero>` → KpiStrip #1 LIVE (In-house · Arrivals · Departures · Available · Open balance · POS today) → KpiStrip #2 STRATEGIC (Open decisions · DQ critical · Tasks 7d · Maint open · Active staff · Payroll) → 3 explainer cards (Pickup pace 90d · Open balances + DQ · Housekeeping coming soon) → conditional ActionStack → Arrivals + Departures tables (Reach column) → In-house compact table + ledger box (2-col grid, FolioPopover on Spent) → Department health table → Sub-page launcher.
+- **Dropped redundancies:** the old "Live: X in-house · Y arrivals" link in PageHeader (duplicated by Strip #1), the F&B capture KPI tile (action card surfaces it when below benchmark), the Today tile in sub-page launcher, the standalone DQ Insight block (folded into Open balances card), the greyed OOO/OOS tile (replaced by Housekeeping coming-soon card).
+- **Pre-existing ESLint blocker fixed:** `lib/gmail.ts` had an `eslint-disable @typescript-eslint/no-explicit-any` directive but that rule isn't loaded in the eslint config — Vercel was failing on it. Removed the unnecessary directive.
+- **Files touched:** `app/operations/page.tsx` (full rewrite — merged), `app/operations/today/page.tsx` (now `redirect('/operations')`), `components/nav/subnavConfig.ts` (Today removed from operations subnav), `lib/gmail.ts` (dropped stale eslint-disable directive).
+- **Verification:** `npx tsc --noEmit` ✅ EXIT=0 (after `rm -rf .next` to clear stale type cache). Live: `/operations` HTTP 200 117kB with `Open decisions` / `Tasks due 7d` / `In-house ledger` / `Department health` / `Drill into` present. `/operations/today` HTTP 307 → /operations.
+
+### 2026-05-04 — Stock-on-hand table: added Sold YTD + Sold 30d columns
+- **`/operations/inventory/stock` Stock-on-hand table** now has two new numeric columns inserted between **Item** and **Category**: `Sold YTD` and `Sold 30d`. Units sold derived from `inv.movements` filtered to `movement_type IN ('consume','issue')` and aggregated by `item_id` for the two windows (`>= YYYY-01-01` and `>= today − 30d`).
+- **`StockOnHandRow` interface** in `app/operations/inventory/_data.ts` extended with `sold_ytd: number | null` and `sold_30d: number | null`. `getStockOnHand()` now does a parallel `inv.movements` fetch and merges aggregates into each stock row. Items with no movements get `null` → renders `—` per design system rule #4.
+- **Quantities** are `Math.abs()`'d so signed-vs-unsigned movement conventions both display as positive units sold.
+- **Current state**: `inv.movements` is empty (0 rows), so every cell renders `—` today. Wiring is live for when POS-driven consumption / issue movements start landing (POS→inventory deduction not yet implemented end-to-end).
+- **Verification:** `tsc --noEmit` clean. Grep gates: 0 hardcoded fontSize, 0 `USD ` prefix, 0 hardcoded fontFamily literals in the changed files.
+
+### 2026-05-04 — Catalog table: added Last sale + YTD sales columns
+- **`/operations/inventory/catalog` Item Catalog table** now has two new columns inserted after **Last cost**: `Last sale` (ISO date) and `YTD sales` ($ revenue).
+- **New view `public.v_inv_item_sales`** aggregates `public.transactions` (the Cloudbeds/Poster POS feed, all USD, ~63k lines) by lowercased trimmed `description`. Returns `desc_key, last_sold_at, ytd_usd, ytd_qty, ytd_lines, lines_total`. Excludes the same tax/fee/payment/room-rate blacklist as `sync-poster-pos/route.ts` so service charges and VAT lines don't get attributed as product sales. Migration: `create_v_inv_item_sales`.
+- **`CatalogRow` interface** in `_CatalogTableClient.tsx` extended with `last_sold_at` and `ytd_sales_usd`. `getItems()` in `catalog/page.tsx` now fetches the view in parallel and joins by `item_name.toLowerCase().trim()` ↔ `desc_key`.
+- **Match coverage**: 728 / 1,876 catalog items match a sale (45% of POS-* SKUs, 19% of CB-* SKUs). The 1,148 unmatched rows are mostly Cloudbeds package/service SKUs that never transact as line items, plus aging POS items. Visible em-dash on those is intentional — surfaces dead catalog rows for cleanup.
+- **Verification:** `tsc --noEmit` clean. Grep gates: 0 hardcoded fontSize, 0 `USD ` prefix, 0 hardcoded fontFamily literals.
+
+### 2026-05-04 — Commentary read-path RLS fix
+- **Root cause** of empty Generate→Regenerate state on first load: `gl.commentary_drafts` had RLS policies for `authenticated` only. The `supabaseGl` client uses the anon key → blocked.
+- **Fix:** migration `commentary_drafts_anon_read` adds `CREATE POLICY commentary_drafts_anon_read ON gl.commentary_drafts FOR SELECT TO anon USING (true)`. Insert/update remain `authenticated` and `service_role` only.
+- **Verified end-to-end:**
+  - Inserted synthetic draft for Apr 2026 via SQL.
+  - Within 30 seconds (Vercel ISR window) the live page swapped "⚡ Generate" → "↻ Regenerate" and rendered the body.
+  - Smoke test row cleaned up.
+- **Final state:** `ANTHROPIC_API_KEY` confirmed picked up by Vercel runtime (`hasApiKey=true` on rendered page → button enabled with green-2 fill, `cursor:pointer`, "Call Claude to rewrite" tooltip).
+
+### 2026-05-04
+- **Compset IA cleanup — run history relocated**:
+  - Removed `<AgentRunHistoryTable>` block from `/revenue/compset` (analytics page).
+  - Added it to `/revenue/compset/agent-settings` filtered by selected agent (`?agent=compset_agent` or `comp_discovery_agent`), last 20 runs.
+  - New summary row above table: success / failed counts + total cost (USD).
+  - Rationale: main compset page = analytics only; settings sub-pages own audit/run/cost content. Aligns with how `/revenue/compset/scoring-settings` already owns LIVE PREVIEW + VERSION HISTORY.
+- **Files touched**:
+  - `app/revenue/compset/page.tsx` — removed import, query (`runsP`/`runsR`), destructure entry, JSX block, header comment.
+  - `app/revenue/compset/agent-settings/page.tsx` — added `loadRunsForAgent()`, run-history panel under MandateBlock with empty state.
+- **Verification**: `npx tsc --noEmit` clean. Hardcoded fontSize / USD prefix grep = 0 in touched files.
+
+### 2026-05-04 (PM)
+- **Data agent — P/L format + coverage gaps fixed**:
+  - `lib/data/schemaCatalog.ts`: added `public.rooms`, `public.room_types`, `public.room_blocks`, `public.v_room_type_pulse_30d`, `public.app_users`, plus full agent-governance block (`governance.agents`, `governance.v_agent_health`, `governance.agent_run_summary`, `governance.agent_settings_for_rm`).
+  - Added 9 new EXAMPLES covering room types, arrivals, in-house, agent health, agent runs, app users, app_settings.
+  - Added a star ★ P/L example: `SELECT usali_subcategory, SUM(amount_usd) ... ORDER BY CASE ...` that returns ~10 canonical rows for the answer renderer to format.
+  - `prompts/data-agent/answer-formatting.md`: rewrote the USALI section with explicit math rules (compute Dept GOP / GOP / Net Income from rows), mandatory bold totals, period header line, and dept-level + variance variants.
+- **Why**: user reported P/L output still not in good format and questions about settings/reservations were unanswered. Root cause: catalog was missing the relevant tables; SQL example for "P/L" used `usali_line_label` (gives 90 detail rows) instead of `usali_subcategory` (gives 10 hierarchical rows).
+
+### 2026-05-04 — `<SlimHero>` rolled out across F&B / Spa / Activities / Inventory
+- **Problem**: `/operations/restaurant` (Roots) used the old `<PanelHero>` block (taller, paper-warm bg, different metric stacking) while `/operations/spa` and `/operations/activities` used a slim moss-banner pattern. `/operations/inventory/*` pages used `<PageHeader>` (paper bg with no brass border). Three visual languages on sibling pages.
+- **Fix**: extracted the spa/activities banner into a shared `components/sections/SlimHero.tsx` component, added an optional `rightSlot` prop for action buttons, then routed every relevant page through it.
+- **Pages migrated**:
+  - `/operations/restaurant` (was `PanelHero`)
+  - `/operations/spa`, `/operations/activities` (refactored from inline divs to component — no visual change, just deduplication)
+  - `/operations/inventory` (Snapshot)
+  - `/operations/inventory/stock`
+  - `/operations/inventory/par`
+  - `/operations/inventory/suppliers`
+  - `/operations/inventory/suppliers/[id]` (preserved Back-to-vendors button via rightSlot)
+  - `/operations/inventory/catalog` (preserved Sync Poster / Cloudbeds / Upload buttons via rightSlot)
+  - `/operations/inventory/requests`, `/orders`, `/capex`, `/assets`
+- **Component contract**: `<SlimHero eyebrow title emphasis? sub? rightSlot? />`. Eyebrow is mono-uppercase brass. Title is plain serif paper-warm; emphasis is italic brass. Sub is a tail italic at `--t-xs`. Right slot is flex end-aligned, gap-6, doesn't shrink.
+- **Verification**: `tsc --noEmit` clean. `grep -rln PageHeader app/operations/{inventory,restaurant,spa,activities}` returns nothing — full migration.
+
+### 2026-05-04 — `/finance/ledger` deposits rewired to canonical view
+- **Problem** flagged by user: deposits tile was wrong. Old logic summed `reservations.paid_amount` across all confirmed future-arrival reservations — captured payments made AT or AFTER arrival as "deposits" too.
+- **Canonical definition (locked):** a deposit is a payment transaction where `transaction_date < check_in_date`. Anything on or after arrival is regular settlement, not a deposit.
+- **DB layer**: two new public views.
+  - `public.v_deposits_canonical` — one row per qualifying payment transaction. Columns: `transaction_id, reservation_id, payment_date, arrival_date, days_in_advance, amount, currency, method, user_name, reservation_status, arrival_bucket` (past_arrival · arr_le_7d · arr_le_30d · arr_le_90d · arr_gt_90d · no_arrival_date).
+  - `public.v_deposits_summary` — aggregate roll-up: `total_held_future_usd`, `reservations_with_deposit`, `deposits_arriving_30d_usd`, `deposits_arriving_7d_usd`, `reservations_arriving_7d`.
+  - Both: anon/authenticated/service_role can SELECT. PostgREST schema cache reloaded.
+- **Page rewire** (`app/finance/ledger/page.tsx`): replaced the `reservations.paid_amount`/`balance` query with `v_deposits_summary` + a 30-day collected-flow query against `v_deposits_canonical` + a "future 30d w/o deposit" risk metric.
+- **Tile changes** (5 tiles in deposits card, was 4):
+  - **Deposits Held (future)** — sum of qualifying payments for upcoming arrivals.
+  - **Arriving ≤30d (deposit)** — already-paid deposits for arrivals in next 30d.
+  - **Collected (last 30d)** — cash-flow lens.
+  - **Future 30d · no deposit** — collection risk count (replaces "Overdue Deposits" which was an unworkable proxy).
+  - **Cancellations 30d** — unchanged.
+- **Numbers shifted on first run**: held went from $16,280 (80 res, old logic) → $17,876 (10 res, new logic). Future 30d no-deposit = 18 of 21 confirmed arrivals next 30 days — operational signal that deposit collection is patchy.
+- **Verification**: `tsc --noEmit` clean.
+
+### 2026-05-04 (PM, follow-up)
+- **Catalog drift fixed — guests/reservations real schema**:
+  - Discovered: catalog had wrong column names for `public.guests` (no `total_revenue_usd` / no `vip_tier` / no `source` / no `first_stay_date`) and `public.reservations` (no `guest_id` — it's `cb_guest_id`; no `total_revenue_usd` — it's `total_amount`; no `source_channel` — it's `source` + `source_name`; no `no_show` — it's `is_cancelled` BOOL).
+  - Replaced with introspected real columns. Added explicit notes about the embedded `guest_name` field (simplest path for "reservations of <person>").
+  - New examples: "show me reservations of Siegfried Nehls" (verified live — 3 stays Jan 2026, $8k total) and "guest profile of Siegfried Nehls" (with cb_guest_id JOIN to public.guests for aggregate stats).
+  - Fixed the broken arrival/in-house examples that referenced non-existent columns.
+- **Verification**: `tsc --noEmit` clean. Direct SQL run via Supabase MCP returned 3 rows for Nehls.
