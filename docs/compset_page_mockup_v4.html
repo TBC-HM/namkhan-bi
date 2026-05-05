@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>06 Comp Set v4 — Rate plans + Rankings + Analytics</title>
+<style>
+  :root {
+    --bg: #f5f1e8;
+    --bg-card: #faf6ed;
+    --bg-expand: #f0ebde;
+    --ink: #1a2b1f;
+    --ink-2: #4a5a4f;
+    --ink-3: #6b7a70;
+    --accent: #1f3a2e;
+    --gold: #b8954a;
+    --green: #2d5a3d;
+    --green-soft: rgba(45, 90, 61, 0.08);
+    --amber: #c87d2e;
+    --amber-soft: rgba(200, 125, 46, 0.08);
+    --red: #8b3a3a;
+    --red-soft: rgba(139, 58, 58, 0.08);
+    --gray-pill: rgba(107, 122, 112, 0.15);
+    --line: rgba(26, 43, 31, 0.12);
+    --line-strong: rgba(26, 43, 31, 0.25);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: 'EB Garamond', Georgia, 'Times New Roman', serif;
+    font-size: 15px; line-height: 1.5; padding: 32px 48px;
+  }
+  .serif { font-family: 'EB Garamond', Georgia, serif; }
+  .mono { font-family: 'JetBrains Mono', Menlo, monospace; font-size: 11px; letter-spacing: 0.5px; }
+  .label { font-family: 'JetBrains Mono', Menlo, monospace; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--ink-3); }
+  .h2 { font-size: 22px; font-weight: 400; }
+  .h3 { font-size: 16px; font-weight: 600; letter-spacing: 0.3px; }
+  .h4 { font-size: 13px; font-weight: 600; }
+  .num { font-family: 'JetBrains Mono', Menlo, monospace; font-variant-numeric: tabular-nums; }
+  
+  .tabs { display: flex; gap: 32px; padding: 16px 0 24px; border-bottom: 1px solid var(--line); margin-bottom: 24px; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 11px; letter-spacing: 2px; }
+  .tab { color: var(--ink-3); padding-bottom: 4px; }
+  .tab.active { color: var(--ink); border-bottom: 2px solid var(--gold); padding-bottom: 4px; font-weight: 600; }
+  
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 12px; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; font-weight: 600; }
+  .pill .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .pill-green { background: var(--green-soft); color: var(--green); }
+  .pill-green .dot { background: var(--green); }
+  .pill-amber { background: var(--amber-soft); color: var(--amber); }
+  .pill-amber .dot { background: var(--amber); }
+  .pill-red { background: var(--red-soft); color: var(--red); }
+  .pill-red .dot { background: var(--red); }
+  .pill-gray { background: var(--gray-pill); color: var(--ink-3); }
+  .pill-gray .dot { background: var(--ink-3); }
+  
+  .run-btn { display: inline-flex; align-items: center; gap: 10px; background: var(--accent); color: var(--bg); border: none; padding: 10px 16px; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; border-radius: 2px; }
+  .run-btn-secondary { background: transparent; color: var(--ink-2); border: 1px solid var(--line-strong); }
+  .run-btn-link { background: transparent; color: var(--ink-2); border: none; padding: 6px 10px; text-decoration: underline; cursor: pointer; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; }
+  
+  .card { background: var(--bg-card); border: 1px solid var(--line); border-radius: 4px; padding: 22px 24px; margin-bottom: 24px; }
+  .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .card-header .desc { color: var(--ink-3); font-size: 13px; margin-top: 4px; max-width: 720px; }
+  
+  .deep-expand { padding: 20px 24px; background: var(--bg-expand); border-top: 2px solid var(--gold); }
+  .deep-section { background: var(--bg-card); border: 1px solid var(--line); border-radius: 4px; padding: 16px 18px; margin-bottom: 16px; }
+  .deep-section h4 { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .deep-section h4 .edit-link { margin-left: auto; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 10px; letter-spacing: 1px; color: var(--ink-3); cursor: pointer; text-decoration: underline; }
+  
+  /* RATE PLAN MATRIX */
+  table.plan-matrix { width: 100%; border-collapse: collapse; }
+  table.plan-matrix th, table.plan-matrix td { padding: 6px 10px; border: 1px solid var(--line); font-size: 11px; text-align: center; background: var(--bg-card); }
+  table.plan-matrix th { background: rgba(26, 43, 31, 0.04); font-family: 'JetBrains Mono', Menlo, monospace; font-size: 9px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--ink-3); font-weight: 500; padding: 8px 10px; }
+  table.plan-matrix th:first-child, table.plan-matrix td:first-child { text-align: left; padding-left: 12px; min-width: 160px; }
+  table.plan-matrix td.has-plan { background: rgba(45, 90, 61, 0.08); }
+  table.plan-matrix td.no-plan { color: var(--ink-3); opacity: 0.4; }
+  table.plan-matrix td.promo { background: rgba(200, 125, 46, 0.12); color: var(--amber); font-weight: 700; }
+  table.plan-matrix td.member { background: rgba(184, 149, 74, 0.12); color: var(--gold); font-weight: 700; }
+  table.plan-matrix td.our-row { background: rgba(184, 149, 74, 0.06); }
+  table.plan-matrix td.our-row:first-child { font-weight: 700; }
+  table.plan-matrix td .price { display: block; font-family: 'JetBrains Mono', Menlo, monospace; font-weight: 600; font-size: 11px; color: var(--ink); }
+  table.plan-matrix td .price-sub { display: block; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 9px; color: var(--ink-3); margin-top: 2px; }
+  table.plan-matrix .channel-tag { display: inline-block; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 8px; padding: 1px 4px; border-radius: 2px; background: var(--accent); color: var(--bg); }
+  
+  .plan-category-row td { background: rgba(26, 43, 31, 0.05); font-family: 'JetBrains Mono', Menlo, monospace; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--ink-3); font-weight: 600; padding: 8px 12px !important; text-align: left !important; }
+  
+  /* RANKING SECTION */
+  .ranking-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .ranking-card { background: var(--bg-card); border: 1px solid var(--line); border-radius: 3px; padding: 14px 16px; }
+  .ranking-card .ranking-context { font-family: 'JetBrains Mono', Menlo, monospace; font-size: 10px; color: var(--ink-3); margin-bottom: 8px; letter-spacing: 0.5px; }
+  .ranking-card .ranking-position { display: flex; align-items: baseline; gap: 8px; }
+  .ranking-card .position-num { font-family: 'JetBrains Mono', Menlo, monospace; font-size: 28px; font-weight: 600; color: var(--accent); }
+  .ranking-card .position-of { font-family: 'JetBrains Mono', Menlo, monospace; font-size: 12px; color: var(--ink-3); }
+  .ranking-card .position-meta { font-size: 11px; color: var(--ink-2); margin-top: 4px; }
+  .ranking-card .position-change { font-family: 'JetBrains Mono', Menlo, monospace; font-size: 11px; margin-top: 6px; }
+  .ranking-card .change-up { color: var(--green); }
+  .ranking-card .change-down { color: var(--red); }
+  .ranking-card .change-flat { color: var(--ink-3); }
+  .ranking-card .badges { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
+  
+  /* PLAN TAGS */
+  .plan-tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 10px; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 9px; letter-spacing: 0.5px; text-transform: uppercase; font-weight: 600; margin: 1px; }
+  .plan-tag.flex { background: rgba(45, 90, 61, 0.12); color: var(--green); }
+  .plan-tag.nonref { background: rgba(139, 58, 58, 0.10); color: var(--red); }
+  .plan-tag.promo { background: rgba(200, 125, 46, 0.15); color: var(--amber); }
+  .plan-tag.member { background: rgba(184, 149, 74, 0.18); color: var(--gold); }
+  .plan-tag.package { background: rgba(31, 58, 46, 0.12); color: var(--accent); }
+  
+  /* ============================================================ */
+  /* ANALYTICS SECTION (NEW) */
+  /* ============================================================ */
+  .analytics-header { display: flex; align-items: center; justify-content: space-between; margin: 40px 0 16px; padding-top: 24px; border-top: 2px solid var(--gold); }
+  .analytics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .analytics-grid.full { grid-template-columns: 1fr; }
+  
+  /* RATE PLAN LANDSCAPE */
+  table.landscape { width: 100%; border-collapse: collapse; }
+  table.landscape th { padding: 8px 10px; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--ink-3); font-weight: 500; background: rgba(26, 43, 31, 0.02); border-bottom: 1px solid var(--line); text-align: left; }
+  table.landscape td { padding: 10px; border-bottom: 1px solid var(--line); font-size: 13px; }
+  table.landscape .we-have { color: var(--green); font-weight: 700; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 12px; }
+  table.landscape .we-dont { color: var(--red); font-weight: 700; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 12px; }
+  table.landscape .gap-flag { background: rgba(139, 58, 58, 0.04); }
+  table.landscape .coverage-bar { display: flex; align-items: center; gap: 6px; }
+  table.landscape .cbar { flex: 1; height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; }
+  table.landscape .cbar-fill { height: 100%; background: var(--gold); }
+  
+  /* CHART CONTAINERS */
+  .chart-container { background: var(--bg-card); border: 1px solid var(--line); border-radius: 4px; padding: 18px 20px; }
+  .chart-header { display: flex; justify-content: space-between; margin-bottom: 14px; align-items: flex-start; }
+  .chart-title { font-size: 14px; font-weight: 600; }
+  .chart-sub { font-size: 11px; color: var(--ink-3); margin-top: 2px; }
+  .chart-controls { display: flex; gap: 4px; }
+  .chart-toggle { padding: 4px 10px; border: 1px solid var(--line); background: var(--bg); border-radius: 2px; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 10px; letter-spacing: 0.5px; cursor: pointer; color: var(--ink-3); }
+  .chart-toggle.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  
+  .chart-svg { width: 100%; height: 220px; }
+  
+  /* DATA STATUS BANNER */
+  .data-status { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--amber-soft); border-left: 3px solid var(--amber); border-radius: 2px; font-size: 13px; color: var(--ink-2); margin-bottom: 24px; }
+  
+  /* PROMO ACTIVITY HEATMAP */
+  .promo-heatmap { display: grid; grid-template-columns: 130px repeat(30, 1fr); gap: 2px; align-items: center; }
+  .promo-heatmap .row-label { font-size: 11px; color: var(--ink-2); padding-right: 8px; }
+  .promo-heatmap .heatmap-cell { aspect-ratio: 1; border-radius: 1px; }
+  .heatmap-cell.h-0 { background: rgba(31, 58, 46, 0.05); }
+  .heatmap-cell.h-1 { background: rgba(184, 149, 74, 0.25); }
+  .heatmap-cell.h-2 { background: rgba(184, 149, 74, 0.55); }
+  .heatmap-cell.h-3 { background: rgba(184, 149, 74, 0.85); }
+  .heatmap-cell.h-4 { background: var(--gold); }
+  
+  .heatmap-axis { display: grid; grid-template-columns: 130px repeat(30, 1fr); gap: 2px; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 8px; color: var(--ink-3); margin-top: 4px; }
+  .heatmap-axis .day-label { text-align: center; }
+  
+  .row { display: flex; align-items: center; gap: 12px; }
+  .grow { flex: 1; }
+  .muted { color: var(--ink-3); }
+  .small { font-size: 12px; }
+  .mt-8 { margin-top: 8px; }
+  .mt-16 { margin-top: 16px; }
+  .mb-8 { margin-bottom: 8px; }
+</style>
+</head>
+<body>
+
+<div class="tabs">
+  <span class="tab">01 PULSE</span>
+  <span class="tab">02 PACE</span>
+  <span class="tab">03 CHANNELS</span>
+  <span class="tab">04 RATE PLANS</span>
+  <span class="tab">05 PRICING</span>
+  <span class="tab active">06 COMP SET</span>
+  <span class="tab">07 AGENTS</span>
+</div>
+
+<div class="row mb-8">
+  <span class="label">06 Comp Set</span>
+  <span class="muted small">→ showing v4 with rate plans + rankings + analytics</span>
+  <span class="grow"></span>
+  <button class="run-btn run-btn-link">VIEW MAIN OPS PAGE</button>
+</div>
+
+<!-- Showing only the relevant new sections, top page chrome trimmed for clarity -->
+
+<!-- ============================================================ -->
+<!-- DEEP EXPAND for Sofitel — now with RATE PLANS + RANKINGS -->
+<!-- ============================================================ -->
+<div class="card" style="padding:0;overflow:hidden;">
+  <div style="padding: 18px 24px; background: var(--bg-card); border-bottom: 1px solid var(--line);">
+    <div class="row">
+      <span class="h3">Sofitel Luang Prabang</span>
+      <span class="pill pill-amber"><span class="dot"></span>EXPANDED</span>
+      <span class="muted small">★★★★★ · 25 rooms · 9.3/10 (2,891 reviews) · last shop 2h ago</span>
+      <span class="grow"></span>
+      <button class="run-btn run-btn-link">↑ COLLAPSE</button>
+    </div>
+  </div>
+  
+  <div class="deep-expand">
+    
+    <!-- TODO: showing only the NEW sections — property details, room mappings already covered in v3 -->
+    
+    <!-- ============================================================ -->
+    <!-- NEW: PLATFORM RANKINGS SECTION -->
+    <!-- ============================================================ -->
+    <div class="deep-section">
+      <h4>
+        Platform rankings
+        <span class="muted small" style="font-weight:400;margin-left:8px;">— position on OTA search results · weekly capture</span>
+        <span class="edit-link">EDIT SEARCH CONTEXTS →</span>
+      </h4>
+      <div class="muted small mb-8">Rankings are <strong>context-bound</strong>: same hotel can be #3 by "recommended" but #18 by "price low to high". Comparisons valid only within same context.</div>
+      
+      <div class="ranking-grid">
+        <!-- Booking.com ranking -->
+        <div class="ranking-card">
+          <div class="ranking-context">BDC · "LUANG PRABANG" · RECOMMENDED</div>
+          <div class="ranking-position">
+            <span class="position-num">3</span>
+            <span class="position-of">/ 142 results</span>
+          </div>
+          <div class="position-meta">Page 1 · Above fold ✓</div>
+          <div class="position-change change-up">▲ +2 positions vs 7d ago (was #5)</div>
+          <div class="badges">
+            <span class="pill pill-amber"><span class="dot"></span>GENIUS</span>
+            <span class="pill pill-gray"><span class="dot"></span>PREFERRED</span>
+          </div>
+        </div>
+        
+        <!-- Agoda ranking -->
+        <div class="ranking-card">
+          <div class="ranking-context">AGODA · "LUANG PRABANG" · POPULARITY</div>
+          <div class="ranking-position">
+            <span class="position-num">5</span>
+            <span class="position-of">/ 187 results</span>
+          </div>
+          <div class="position-meta">Page 1 · Above fold ✓</div>
+          <div class="position-change change-down">▼ −1 position vs 7d ago (was #4)</div>
+          <div class="badges">
+            <span class="pill pill-gray"><span class="dot"></span>NO BADGES</span>
+          </div>
+        </div>
+        
+        <!-- Trip.com ranking -->
+        <div class="ranking-card">
+          <div class="ranking-context">TRIP · "LUANG PRABANG" · RECOMMENDED</div>
+          <div class="ranking-position">
+            <span class="position-num">7</span>
+            <span class="position-of">/ 98 results</span>
+          </div>
+          <div class="position-meta">Page 1 · Above fold ✗</div>
+          <div class="position-change change-flat">— unchanged vs 7d ago</div>
+          <div class="badges">
+            <span class="pill pill-amber"><span class="dot"></span>SPONSORED</span>
+          </div>
+        </div>
+        
+        <!-- BDC price-asc ranking -->
+        <div class="ranking-card">
+          <div class="ranking-context">BDC · 5★ FILTER · PRICE LOW→HIGH</div>
+          <div class="ranking-position">
+            <span class="position-num">2</span>
+            <span class="position-of">/ 8 results</span>
+          </div>
+          <div class="position-meta">Of 5-star properties only · Page 1</div>
+          <div class="position-change change-flat">— unchanged</div>
+        </div>
+        
+        <!-- Agoda rating sort -->
+        <div class="ranking-card">
+          <div class="ranking-context">AGODA · "LUANG PRABANG" · RATING</div>
+          <div class="ranking-position">
+            <span class="position-num">2</span>
+            <span class="position-of">/ 187 results</span>
+          </div>
+          <div class="position-meta">Page 1 · Above fold ✓</div>
+          <div class="position-change change-up">▲ +1 vs 7d ago (was #3)</div>
+        </div>
+        
+        <!-- Last context with action -->
+        <div class="ranking-card" style="background:var(--bg-expand); border-style:dashed;">
+          <div class="ranking-context">+ ADD SEARCH CONTEXT</div>
+          <div class="muted small mt-8">Track ranking under different filters — e.g. "river view", "spa filter", price band</div>
+          <button class="run-btn run-btn-secondary mt-8" style="font-size:9px; padding:6px 10px;">+ NEW CONTEXT</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- ============================================================ -->
+    <!-- NEW: RATE PLANS OFFERED MATRIX -->
+    <!-- ============================================================ -->
+    <div class="deep-section">
+      <h4>
+        Rate plans offered
+        <span class="muted small" style="font-weight:400;margin-left:8px;">— per channel · stay date Sat 16 May (peak)</span>
+      </h4>
+      <div class="muted small mb-8">Shows which rate plans Sofitel sells across channels. ✓ = offered. <span class="plan-tag promo" style="margin:0;">PROMO</span> shows current discount %. <span class="plan-tag member" style="margin:0;">MEMBER</span> = loyalty-locked.</div>
+      
+      <table class="plan-matrix">
+        <thead>
+          <tr>
+            <th>Rate plan</th>
+            <th>Booking</th>
+            <th>Agoda</th>
+            <th>Expedia</th>
+            <th>Trip.com</th>
+            <th>Direct</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="plan-category-row"><td colspan="6">FLEX / STANDARD</td></tr>
+          <tr>
+            <td>Flexible / Standard</td>
+            <td class="has-plan"><span class="price">$465</span><span class="price-sub">free cancel 48h</span></td>
+            <td class="has-plan"><span class="price">$460</span><span class="price-sub">free cancel 48h</span></td>
+            <td class="no-plan">—</td>
+            <td class="has-plan"><span class="price">$470</span><span class="price-sub">free cancel 24h</span></td>
+            <td class="has-plan"><span class="price">$420</span><span class="price-sub">free cancel 72h</span></td>
+          </tr>
+          <tr>
+            <td>Pay at property</td>
+            <td class="has-plan"><span class="price">$465</span></td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+            <td class="has-plan"><span class="price">$420</span></td>
+          </tr>
+          
+          <tr class="plan-category-row"><td colspan="6">NON-REFUNDABLE</td></tr>
+          <tr>
+            <td>Non-refundable</td>
+            <td class="has-plan"><span class="price">$418</span><span class="price-sub">−10% off flex</span></td>
+            <td class="has-plan"><span class="price">$405</span><span class="price-sub">−12% off flex</span></td>
+            <td class="no-plan">—</td>
+            <td class="has-plan"><span class="price">$415</span><span class="price-sub">−12% off flex</span></td>
+            <td class="has-plan"><span class="price">$378</span><span class="price-sub">−10% off flex</span></td>
+          </tr>
+          <tr>
+            <td>Non-ref + Advance Purchase 30d</td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+            <td class="has-plan promo"><span class="price">$355</span><span class="price-sub">−15% advance</span></td>
+          </tr>
+          
+          <tr class="plan-category-row"><td colspan="6">PROMOTIONS</td></tr>
+          <tr>
+            <td>Early Bird (60+ days)</td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+            <td class="has-plan promo"><span class="price">$395</span><span class="price-sub">book 60d ahead</span></td>
+          </tr>
+          <tr>
+            <td>Length of Stay 3+</td>
+            <td class="has-plan promo"><span class="price">$418</span><span class="price-sub">−10% if 3+ nights</span></td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+            <td class="has-plan promo"><span class="price">$378</span><span class="price-sub">−10% if 3+ nights</span></td>
+          </tr>
+          <tr>
+            <td>Seasonal Promotion</td>
+            <td class="no-plan">—</td>
+            <td class="has-plan promo"><span class="price">$391</span><span class="price-sub">"Summer Escape −15%"</span></td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+          </tr>
+          <tr>
+            <td>Last Minute</td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+          </tr>
+          
+          <tr class="plan-category-row"><td colspan="6">MEMBER / LOYALTY</td></tr>
+          <tr>
+            <td>Booking Genius</td>
+            <td class="has-plan member"><span class="price">$442</span><span class="price-sub">−5% Genius L1</span></td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+          </tr>
+          <tr>
+            <td>AgodaCash / Member Exclusive</td>
+            <td class="no-plan">—</td>
+            <td class="has-plan member"><span class="price">$437</span><span class="price-sub">−5% member</span></td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+          </tr>
+          <tr>
+            <td>Direct Member (ALL Accor)</td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+            <td class="has-plan member"><span class="price">$378</span><span class="price-sub">−10% ALL members</span></td>
+          </tr>
+          
+          <tr class="plan-category-row"><td colspan="6">PACKAGES</td></tr>
+          <tr>
+            <td>Room + Breakfast</td>
+            <td class="has-plan"><span class="price">$495</span><span class="price-sub">+$30 bkfst</span></td>
+            <td class="has-plan"><span class="price">$490</span></td>
+            <td class="no-plan">—</td>
+            <td class="has-plan"><span class="price">$500</span></td>
+            <td class="has-plan"><span class="price">$455</span></td>
+          </tr>
+          <tr>
+            <td>Half Board</td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+            <td class="has-plan"><span class="price">$525</span><span class="price-sub">+$105 dinner</span></td>
+          </tr>
+          <tr>
+            <td>Romance / Honeymoon</td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+            <td class="no-plan">—</td>
+            <td class="has-plan"><span class="price">$575</span><span class="price-sub">champagne, spa, late checkout</span></td>
+          </tr>
+        </tbody>
+      </table>
+      
+      <div class="muted small mt-16" style="padding:10px 14px;background:rgba(45, 90, 61, 0.04);border-left:3px solid var(--green);border-radius:2px;">
+        <strong>Insight:</strong> Sofitel sells 13 distinct rate plans, 5 of which are direct-only. Their direct site is most aggressive — Early Bird, Half Board, Romance package not available on any OTA. Pattern: drive direct via richer plan mix, not lower BAR.
+      </div>
+    </div>
+    
+    <!-- (Rate matrix from v3 still here — not duplicated for brevity) -->
+    
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- ANALYTICS BLOCK at bottom of compset page -->
+<!-- ============================================================ -->
+<div class="analytics-header">
+  <div>
+    <span class="label">PAGE-WIDE ANALYTICS</span>
+    <h2 class="h2 serif mt-8">Comp set analytics — landscape & trends</h2>
+    <div class="muted small mt-8">Cross-property views. Charts populate as scrape data accumulates.</div>
+  </div>
+  <div>
+    <button class="run-btn run-btn-secondary">EXPORT REPORT</button>
+  </div>
+</div>
+
+<div class="data-status">
+  <span class="pill pill-amber"><span class="dot"></span>BUILDING</span>
+  <span><strong>Day 4 of 30</strong> — collecting baseline data. Charts show meaningful trends after ~14 days. Anomaly detection active after ~30 days.</span>
+  <span class="grow"></span>
+  <span class="muted small mono">128 obs · 4 days</span>
+</div>
+
+<!-- ============================================================ -->
+<!-- ANALYTICS 1: RATE PLAN LANDSCAPE -->
+<!-- ============================================================ -->
+<div class="card">
+  <div class="card-header">
+    <div>
+      <div class="h3">Rate plan landscape</div>
+      <div class="desc">Which rate plans does the comp set offer? Where is The Namkhan competitive vs. has gaps? <span class="we-have">Green</span> = we offer it. <span class="we-dont">Red</span> = comps offer, we don't.</div>
+    </div>
+    <div class="row">
+      <button class="chart-toggle active">ALL CHANNELS</button>
+      <button class="chart-toggle">BDC</button>
+      <button class="chart-toggle">AGD</button>
+      <button class="chart-toggle">DIR</button>
+    </div>
+  </div>
+  
+  <table class="landscape">
+    <thead>
+      <tr>
+        <th>Rate plan</th>
+        <th style="width:130px;">Comp coverage</th>
+        <th style="width:80px;">Comps offering</th>
+        <th style="width:120px;">Avg rate (USD)</th>
+        <th style="width:100px;">Avg discount</th>
+        <th style="width:110px;">We offer?</th>
+        <th>Comps offering it</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td colspan="7" class="plan-category-row" style="background:rgba(26, 43, 31, 0.05);font-family:'JetBrains Mono',Menlo,monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-3);font-weight:600;">FLEX / STANDARD</td></tr>
+      <tr>
+        <td>Flexible / Standard</td>
+        <td><div class="coverage-bar"><div class="cbar"><div class="cbar-fill" style="width:100%"></div></div><span class="num small">100%</span></div></td>
+        <td class="num">10 / 10</td>
+        <td class="num">$245</td>
+        <td class="muted small">—</td>
+        <td><span class="we-have">✓ YES</span></td>
+        <td class="muted small">All competitors</td>
+      </tr>
+      <tr>
+        <td>Pay at property</td>
+        <td><div class="coverage-bar"><div class="cbar"><div class="cbar-fill" style="width:60%"></div></div><span class="num small">60%</span></div></td>
+        <td class="num">6 / 10</td>
+        <td class="num">$248</td>
+        <td class="muted small">—</td>
+        <td><span class="we-have">✓ YES</span></td>
+        <td class="muted small">Sofitel, Grand, Satri, +3</td>
+      </tr>
+      
+      <tr><td colspan="7" class="plan-category-row" style="background:rgba(26, 43, 31, 0.05);font-family:'JetBrains Mono',Menlo,monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-3);font-weight:600;">NON-REFUNDABLE</td></tr>
+      <tr>
+        <td>Non-refundable</td>
+        <td><div class="coverage-bar"><div class="cbar"><div class="cbar-fill" style="width:90%"></div></div><span class="num small">90%</span></div></td>
+        <td class="num">9 / 10</td>
+        <td class="num">$220</td>
+        <td class="num">−11.2%</td>
+        <td><span class="we-have">✓ YES</span></td>
+        <td class="muted small">All except Belle Rive</td>
+      </tr>
+      <tr class="gap-flag">
+        <td>Non-ref + Advance Purchase 30d</td>
+        <td><div class="coverage-bar"><div class="cbar"><div class="cbar-fill" style="width:50%"></div></div><span class="num small">50%</span></div></td>
+        <td class="num">5 / 10</td>
+        <td class="num">$208</td>
+        <td class="num">−16.8%</td>
+        <td><span class="we-dont">✗ NO</span></td>
+        <td class="muted small">Sofitel, Grand, Satri, 3 Nagas, Burasari</td>
+      </tr>
+      
+      <tr><td colspan="7" class="plan-category-row" style="background:rgba(26, 43, 31, 0.05);font-family:'JetBrains Mono',Menlo,monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-3);font-weight:600;">PROMOTIONS</td></tr>
+      <tr class="gap-flag">
+        <td>Early Bird (60+ days)</td>
+        <td><div class="coverage-bar"><div class="cbar"><div class="cbar-fill" style="width:40%"></div></div><span class="num small">40%</span></div></td>
+        <td class="num">4 / 10</td>
+        <td class="num">$215</td>
+        <td class="num">−18.4%</td>
+        <td><span class="we-dont">✗ NO</span></td>
+        <td class="muted small">Sofitel, Grand, Burasari, Maison D.</td>
+      </tr>
+      <tr>
+        <td>Length of Stay 3+</td>
+        <td><div class="coverage-bar"><div class="cbar"><div class="cbar-fill" style="width:70%"></div></div><span class="num small">70%</span></div></td>
+        <td class="num">7 / 10</td>
+        <td class="num">$235</td>
+        <td class="num">−9.5%</td>
+        <td><span class="we-have">✓ YES</span></td>
+        <td class="muted small">7 of 10 comps</td>
+      </tr>
+      <tr>
+        <td>Seasonal Promotion</td>
+        <td><div class="coverage-bar"><div class="cbar"><div class="cbar-fill" style="width:30%"></div></div><span class="num small">30%</span></div></td>
+        <td class="num">3 / 10</td>
+        <td class="num">$208</td>
+        <td class="num">−14.5%</td>
+        <td><span class="we-have">✓ YES</span></td>
+        <td class="muted small">Sofitel, Satri, Belle Rive</td>
+      </tr>
+      <tr class="gap-flag">
+        <td>Last Minute</td>
+        <td><div class="coverage-bar"><div class="cbar"><div class="cbar-fill" style="width:20%"></div></div><span class="num small">20%</span></div></td>
+        <td class="num">2 / 10</td>
+        <td class="num">$192</td>
+        <td class="num">−22.0%</td>
+        <td><span class="we-dont">✗ NO</span></td>
+        <td class="muted small">Maison Dalabua, Belle Rive</td>
+      </tr>
+      
+      <tr><td colspan="7" class="plan-category-row" style="background:rgba(26, 43, 31, 0.05);font-family:'JetBrains Mono',Menlo,monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-3);font-weight:600;">MEMBER / LOYALTY</td></tr>
+      <tr>
+        <td>Booking Genius</td>
+        <td><div class="coverage-bar"><div class="cbar"><div class="cbar-fill" style="width:80%"></div></div><span class="num small">80%</span></div></td>
+        <td class="num">8 / 10</td>
+        <td class="num">$233</td>
+        <td class="num">−5.0%</td>
+        <td><span class="we-have">✓ YES</span></td>
+        <td class="muted small">8 of 10 comps</td>
+      </tr>
+      
+      <tr><td colspan="7" class="plan-category-row" style="background:rgba(26, 43, 31, 0.05);font-family:'JetBrains Mono',Menlo,monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-3);font-weight:600;">PACKAGES</td></tr>
+      <tr>
+        <td>Room + Breakfast</td>
+        <td><div class="coverage-bar"><div class="cbar"><div class="cbar-fill" style="width:90%"></div></div><span class="num small">90%</span></div></td>
+        <td class="num">9 / 10</td>
+        <td class="num">$272</td>
+        <td class="muted small">—</td>
+        <td><span class="we-have">✓ YES</span></td>
+        <td class="muted small">9 of 10 comps</td>
+      </tr>
+      <tr class="gap-flag">
+        <td>Half Board</td>
+        <td><div class="coverage-bar"><div class="cbar"><div class="cbar-fill" style="width:30%"></div></div><span class="num small">30%</span></div></td>
+        <td class="num">3 / 10</td>
+        <td class="num">$315</td>
+        <td class="muted small">—</td>
+        <td><span class="we-dont">✗ NO</span></td>
+        <td class="muted small">Sofitel, Grand, Belmond</td>
+      </tr>
+      <tr class="gap-flag">
+        <td>Romance / Honeymoon</td>
+        <td><div class="coverage-bar"><div class="cbar"><div class="cbar-fill" style="width:50%"></div></div><span class="num small">50%</span></div></td>
+        <td class="num">5 / 10</td>
+        <td class="num">$345</td>
+        <td class="muted small">—</td>
+        <td><span class="we-dont">✗ NO</span></td>
+        <td class="muted small">Sofitel, Grand, Satri, Belle Rive, +1</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  <div class="muted small mt-16" style="padding:10px 14px;background:var(--red-soft);border-left:3px solid var(--red);border-radius:2px;">
+    <strong>Gaps to address:</strong> 5 plan types are offered by competitors but not by The Namkhan: Non-Ref Advance Purchase, Early Bird, Last Minute, Half Board, Romance package. Easiest wins: Early Bird (90-day advance, easy to set up, 40% comp coverage already) and Romance package (50% coverage, high ADR uplift).
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- ANALYTICS 2: PROMO ACTIVITY HEATMAP (30 days × competitors) -->
+<!-- ============================================================ -->
+<div class="card">
+  <div class="card-header">
+    <div>
+      <div class="h3">Promo activity — last 30 days</div>
+      <div class="desc">Each cell = one day. Darker = more aggressive discount that day. Spot patterns: who runs sustained promos vs flash sales, which competitors react to which dates.</div>
+    </div>
+  </div>
+  
+  <div class="muted small mb-8" style="display:flex;gap:16px;align-items:center;">
+    <span><strong>Legend:</strong></span>
+    <span style="display:flex;gap:4px;align-items:center;"><span class="heatmap-cell h-0" style="width:14px;height:14px;display:inline-block;"></span>none</span>
+    <span style="display:flex;gap:4px;align-items:center;"><span class="heatmap-cell h-1" style="width:14px;height:14px;display:inline-block;"></span>0–10%</span>
+    <span style="display:flex;gap:4px;align-items:center;"><span class="heatmap-cell h-2" style="width:14px;height:14px;display:inline-block;"></span>10–15%</span>
+    <span style="display:flex;gap:4px;align-items:center;"><span class="heatmap-cell h-3" style="width:14px;height:14px;display:inline-block;"></span>15–20%</span>
+    <span style="display:flex;gap:4px;align-items:center;"><span class="heatmap-cell h-4" style="width:14px;height:14px;display:inline-block;"></span>20%+</span>
+  </div>
+  
+  <div class="promo-heatmap">
+    <span class="row-label"><strong>★ The Namkhan</strong></span>
+    <div class="heatmap-cell h-0"></div><div class="heatmap-cell h-0"></div><div class="heatmap-cell h-0"></div><div class="heatmap-cell h-0"></div>
+    <div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div><div class="heatmap-cell h-0"></div>
+    <div class="heatmap-cell h-0"></div><div class="heatmap-cell h-0"></div><div class="heatmap-cell h-0"></div><div class="heatmap-cell h-0"></div>
+    <div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div><div class="heatmap-cell h-0"></div><div class="heatmap-cell h-0"></div>
+    <div class="heatmap-cell h-0"></div><div class="heatmap-cell h-0"></div><div class="heatmap-cell h-0"></div><div class="heatmap-cell h-0"></div>
+    <div class="heatmap-cell h-0"></div><div class="heatmap-cell h-0"></div><div class="heatmap-cell h-0"></div><div class="heatmap-cell h-0"></div>
+    <div class="heatmap-cell h-0"></div><div class="heatmap-cell h-0"></div><div class="heatmap-cell h-0"></div><div class="heatmap-cell h-0"></div>
+    <div class="heatmap-cell h-0"></div><div class="heatmap-cell h-0"></div>
+    
+    <span class="row-label">Sofitel</span>
+    <div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-3"></div><div class="heatmap-cell h-3"></div>
+    <div class="heatmap-cell h-3"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div>
+    <div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div>
+    <div class="heatmap-cell h-3"></div><div class="heatmap-cell h-3"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div>
+    <div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-3"></div><div class="heatmap-cell h-3"></div>
+    <div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-3"></div><div class="heatmap-cell h-3"></div>
+    <div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-3"></div>
+    <div class="heatmap-cell h-3"></div><div class="heatmap-cell h-2"></div>
+    
+    <span class="row-label">Grand Meliá</span>
+    <div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div>
+    <div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div>
+    <div class="heatmap-cell h-3"></div><div class="heatmap-cell h-3"></div><div class="heatmap-cell h-3"></div><div class="heatmap-cell h-2"></div>
+    <div class="heatmap-cell h-2"></div><div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div>
+    <div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div>
+    <div class="heatmap-cell h-2"></div><div class="heatmap-cell h-3"></div><div class="heatmap-cell h-4"></div><div class="heatmap-cell h-4"></div>
+    <div class="heatmap-cell h-3"></div><div class="heatmap-cell h-3"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div>
+    <div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div>
+    
+    <span class="row-label">3 Nagas MGallery</span>
+    <div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div>
+    <div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div>
+    <div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div>
+    <div class="heatmap-cell h-2"></div><div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div>
+    <div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div>
+    <div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div>
+    <div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div>
+    <div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div>
+    
+    <span class="row-label">Satri House</span>
+    <div class="heatmap-cell h-0"></div><div class="heatmap-cell h-0"></div><div class="heatmap-cell h-0"></div><div class="heatmap-cell h-0"></div>
+    <div class="heatmap-cell h-0"></div><div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div>
+    <div class="heatmap-cell h-1"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-3"></div><div class="heatmap-cell h-4"></div>
+    <div class="heatmap-cell h-4"></div><div class="heatmap-cell h-4"></div><div class="heatmap-cell h-3"></div><div class="heatmap-cell h-2"></div>
+    <div class="heatmap-cell h-1"></div><div class="heatmap-cell h-1"></div><div class="heatmap-cell h-0"></div><div class="heatmap-cell h-0"></div>
+    <div class="heatmap-cell h-0"></div><div class="heatmap-cell h-0"></div><div class="heatmap-cell h-0"></div><div class="heatmap-cell h-0"></div>
+    <div class="heatmap-cell h-0"></div><div class="heatmap-cell h-0"></div><div class="heatmap-cell h-0"></div><div class="heatmap-cell h-0"></div>
+    <div class="heatmap-cell h-0"></div><div class="heatmap-cell h-0"></div>
+    
+    <span class="row-label">Burasari</span>
+    <div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div>
+    <div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div>
+    <div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div>
+    <div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div>
+    <div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div>
+    <div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div>
+    <div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div>
+    <div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div>
+    
+    <span class="row-label">Maison Dalabua</span>
+    <div class="heatmap-cell h-3"></div><div class="heatmap-cell h-3"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div>
+    <div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-3"></div>
+    <div class="heatmap-cell h-3"></div><div class="heatmap-cell h-4"></div><div class="heatmap-cell h-4"></div><div class="heatmap-cell h-3"></div>
+    <div class="heatmap-cell h-3"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div>
+    <div class="heatmap-cell h-3"></div><div class="heatmap-cell h-3"></div><div class="heatmap-cell h-3"></div><div class="heatmap-cell h-3"></div>
+    <div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div>
+    <div class="heatmap-cell h-3"></div><div class="heatmap-cell h-3"></div><div class="heatmap-cell h-3"></div><div class="heatmap-cell h-2"></div>
+    <div class="heatmap-cell h-2"></div><div class="heatmap-cell h-2"></div>
+  </div>
+  <div class="heatmap-axis">
+    <span></span>
+    <span class="day-label">04</span><span class="day-label">06</span><span class="day-label">08</span><span class="day-label">10</span>
+    <span class="day-label">12</span><span class="day-label">14</span><span class="day-label">16</span><span class="day-label">18</span>
+    <span class="day-label">20</span><span class="day-label">22</span><span class="day-label">24</span><span class="day-label">26</span>
+    <span class="day-label">28</span><span class="day-label">30</span><span class="day-label">02</span><span class="day-label">04</span>
+    <span class="day-label">06</span><span class="day-label">08</span><span class="day-label">10</span><span class="day-label">12</span>
+    <span class="day-label">14</span><span class="day-label">16</span><span class="day-label">18</span><span class="day-label">20</span>
+    <span class="day-label">22</span><span class="day-label">24</span><span class="day-label">26</span><span class="day-label">28</span>
+    <span class="day-label">30</span><span class="day-label">02</span>
+  </div>
+  
+  <div class="muted small mt-16" style="padding:10px 14px;background:rgba(45, 90, 61, 0.04);border-left:3px solid var(--green);border-radius:2px;">
+    <strong>Patterns visible:</strong> Sofitel runs sustained 10-15% promos every day (member rate). Satri ran a 7-day flash 20%+ promo around Apr 25-May 2 (likely Pi Mai shoulder). Maison Dalabua promotes most aggressively — consistent 15-20% across weeks. The Namkhan has near-zero promo activity — gap to address.
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- ANALYTICS 3: RANKING TREND CHART -->
+<!-- ============================================================ -->
+<div class="analytics-grid">
+  <div class="card chart-container">
+    <div class="chart-header">
+      <div>
+        <div class="chart-title">Platform ranking — 30 day trend</div>
+        <div class="chart-sub">BDC · "Luang Prabang" · sorted by Recommended · weekly capture</div>
+      </div>
+      <div class="chart-controls">
+        <button class="chart-toggle active">BDC</button>
+        <button class="chart-toggle">AGD</button>
+        <button class="chart-toggle">TRP</button>
+      </div>
+    </div>
+    
+    <svg class="chart-svg" viewBox="0 0 600 220" xmlns="http://www.w3.org/2000/svg">
+      <!-- Y-axis (rank 1 at top, 20 at bottom — inverted for "lower number = better") -->
+      <line x1="40" y1="20" x2="40" y2="180" stroke="rgba(26,43,31,0.15)" stroke-width="1"/>
+      <line x1="40" y1="180" x2="580" y2="180" stroke="rgba(26,43,31,0.15)" stroke-width="1"/>
+      
+      <!-- Y labels -->
+      <text x="32" y="25" text-anchor="end" font-family="monospace" font-size="10" fill="#6b7a70">#1</text>
+      <text x="32" y="65" text-anchor="end" font-family="monospace" font-size="10" fill="#6b7a70">#5</text>
+      <text x="32" y="105" text-anchor="end" font-family="monospace" font-size="10" fill="#6b7a70">#10</text>
+      <text x="32" y="145" text-anchor="end" font-family="monospace" font-size="10" fill="#6b7a70">#15</text>
+      <text x="32" y="185" text-anchor="end" font-family="monospace" font-size="10" fill="#6b7a70">#20</text>
+      
+      <!-- Grid lines -->
+      <line x1="40" y1="65" x2="580" y2="65" stroke="rgba(26,43,31,0.06)" stroke-dasharray="2,3"/>
+      <line x1="40" y1="105" x2="580" y2="105" stroke="rgba(26,43,31,0.06)" stroke-dasharray="2,3"/>
+      <line x1="40" y1="145" x2="580" y2="145" stroke="rgba(26,43,31,0.06)" stroke-dasharray="2,3"/>
+      
+      <!-- X axis labels (5 weeks) -->
+      <text x="60" y="200" text-anchor="middle" font-family="monospace" font-size="9" fill="#6b7a70">Apr 4</text>
+      <text x="190" y="200" text-anchor="middle" font-family="monospace" font-size="9" fill="#6b7a70">Apr 11</text>
+      <text x="320" y="200" text-anchor="middle" font-family="monospace" font-size="9" fill="#6b7a70">Apr 18</text>
+      <text x="450" y="200" text-anchor="middle" font-family="monospace" font-size="9" fill="#6b7a70">Apr 25</text>
+      <text x="565" y="200" text-anchor="middle" font-family="monospace" font-size="9" fill="#6b7a70">May 2</text>
+      
+      <!-- The Namkhan line (gold, prominent) -->
+      <polyline points="60,73 190,65 320,57 450,57 565,49" fill="none" stroke="#b8954a" stroke-width="2.5"/>
+      <circle cx="60" cy="73" r="4" fill="#b8954a"/>
+      <circle cx="190" cy="65" r="4" fill="#b8954a"/>
+      <circle cx="320" cy="57" r="4" fill="#b8954a"/>
+      <circle cx="450" cy="57" r="4" fill="#b8954a"/>
+      <circle cx="565" cy="49" r="5" fill="#b8954a" stroke="#1a2b1f" stroke-width="1.5"/>
+      <text x="565" y="42" text-anchor="middle" font-family="monospace" font-size="10" fill="#b8954a" font-weight="700">#4</text>
+      
+      <!-- Sofitel line -->
+      <polyline points="60,49 190,57 320,41 450,49 565,41" fill="none" stroke="#2d5a3d" stroke-width="1.5"/>
+      <circle cx="60" cy="49" r="3" fill="#2d5a3d"/>
+      <circle cx="565" cy="41" r="3" fill="#2d5a3d"/>
+      
+      <!-- Grand Meliá -->
+      <polyline points="60,33 190,33 320,33 450,41 565,33" fill="none" stroke="#1f3a2e" stroke-width="1.5"/>
+      <circle cx="565" cy="33" r="3" fill="#1f3a2e"/>
+      
+      <!-- 3 Nagas -->
+      <polyline points="60,89 190,97 320,89 450,81 565,89" fill="none" stroke="#c87d2e" stroke-width="1.5" stroke-dasharray="3,2"/>
+      <circle cx="565" cy="89" r="3" fill="#c87d2e"/>
+      
+      <!-- Satri House -->
+      <polyline points="60,113 190,105 320,105 450,97 565,105" fill="none" stroke="#8b3a3a" stroke-width="1.5" stroke-dasharray="3,2"/>
+      <circle cx="565" cy="105" r="3" fill="#8b3a3a"/>
+      
+      <!-- Pi Mai annotation -->
+      <line x1="190" y1="20" x2="190" y2="180" stroke="rgba(184,149,74,0.4)" stroke-width="1" stroke-dasharray="2,3"/>
+      <text x="195" y="30" font-family="monospace" font-size="9" fill="#b8954a">Pi Mai</text>
+    </svg>
+    
+    <div class="row mt-8" style="font-size:11px;font-family:'JetBrains Mono',Menlo,monospace;flex-wrap:wrap;gap:14px;">
+      <span style="color:#b8954a;">━━ ★ The Namkhan</span>
+      <span style="color:#2d5a3d;">━━ Sofitel</span>
+      <span style="color:#1f3a2e;">━━ Grand Meliá</span>
+      <span style="color:#c87d2e;">┄┄ 3 Nagas</span>
+      <span style="color:#8b3a3a;">┄┄ Satri House</span>
+    </div>
+  </div>
+  
+  <!-- ============================================================ -->
+  <!-- ANALYTICS 4: RATE TREND BY PLAN TYPE -->
+  <!-- ============================================================ -->
+  <div class="card chart-container">
+    <div class="chart-header">
+      <div>
+        <div class="chart-title">Avg comp rate by plan type — 30 day trend</div>
+        <div class="chart-sub">Stay date Sat 16 May · all comps avg · USD</div>
+      </div>
+      <div class="chart-controls">
+        <button class="chart-toggle active">SAT 16 MAY</button>
+        <button class="chart-toggle">SAT 22 MAY</button>
+        <button class="chart-toggle">SAT 30 MAY</button>
+      </div>
+    </div>
+    
+    <svg class="chart-svg" viewBox="0 0 600 220" xmlns="http://www.w3.org/2000/svg">
+      <line x1="50" y1="20" x2="50" y2="180" stroke="rgba(26,43,31,0.15)"/>
+      <line x1="50" y1="180" x2="580" y2="180" stroke="rgba(26,43,31,0.15)"/>
+      
+      <text x="44" y="25" text-anchor="end" font-family="monospace" font-size="10" fill="#6b7a70">$300</text>
+      <text x="44" y="65" text-anchor="end" font-family="monospace" font-size="10" fill="#6b7a70">$260</text>
+      <text x="44" y="105" text-anchor="end" font-family="monospace" font-size="10" fill="#6b7a70">$220</text>
+      <text x="44" y="145" text-anchor="end" font-family="monospace" font-size="10" fill="#6b7a70">$180</text>
+      <text x="44" y="185" text-anchor="end" font-family="monospace" font-size="10" fill="#6b7a70">$140</text>
+      
+      <line x1="50" y1="65" x2="580" y2="65" stroke="rgba(26,43,31,0.06)" stroke-dasharray="2,3"/>
+      <line x1="50" y1="105" x2="580" y2="105" stroke="rgba(26,43,31,0.06)" stroke-dasharray="2,3"/>
+      <line x1="50" y1="145" x2="580" y2="145" stroke="rgba(26,43,31,0.06)" stroke-dasharray="2,3"/>
+      
+      <text x="70" y="200" text-anchor="middle" font-family="monospace" font-size="9" fill="#6b7a70">Apr 4</text>
+      <text x="195" y="200" text-anchor="middle" font-family="monospace" font-size="9" fill="#6b7a70">Apr 11</text>
+      <text x="325" y="200" text-anchor="middle" font-family="monospace" font-size="9" fill="#6b7a70">Apr 18</text>
+      <text x="450" y="200" text-anchor="middle" font-family="monospace" font-size="9" fill="#6b7a70">Apr 25</text>
+      <text x="565" y="200" text-anchor="middle" font-family="monospace" font-size="9" fill="#6b7a70">May 2</text>
+      
+      <!-- Flex line -->
+      <polyline points="70,55 195,52 325,48 450,45 565,48" fill="none" stroke="#2d5a3d" stroke-width="2.5"/>
+      <text x="568" y="50" font-family="monospace" font-size="10" fill="#2d5a3d" font-weight="700">Flex</text>
+      
+      <!-- Non-Ref -->
+      <polyline points="70,90 195,86 325,82 450,80 565,82" fill="none" stroke="#8b3a3a" stroke-width="2"/>
+      <text x="568" y="84" font-family="monospace" font-size="10" fill="#8b3a3a" font-weight="700">Non-Ref</text>
+      
+      <!-- Early Bird -->
+      <polyline points="70,98 195,96 325,90 450,88 565,90" fill="none" stroke="#c87d2e" stroke-width="2"/>
+      <text x="568" y="92" font-family="monospace" font-size="10" fill="#c87d2e" font-weight="700">Early Bird</text>
+      
+      <!-- Member -->
+      <polyline points="70,82 195,78 325,74 450,72 565,74" fill="none" stroke="#b8954a" stroke-width="2"/>
+      <text x="568" y="76" font-family="monospace" font-size="10" fill="#b8954a" font-weight="700">Member</text>
+      
+      <!-- Pi Mai annotation -->
+      <line x1="195" y1="20" x2="195" y2="180" stroke="rgba(184,149,74,0.3)" stroke-width="1" stroke-dasharray="2,3"/>
+      
+      <!-- The Namkhan flex (compare) -->
+      <polyline points="70,75 195,73 325,68 450,65 565,68" fill="none" stroke="#1f3a2e" stroke-width="2.5" stroke-dasharray="4,2"/>
+      <text x="568" y="70" font-family="monospace" font-size="10" fill="#1f3a2e" font-weight="700">★ Us (Flex)</text>
+    </svg>
+    
+    <div class="muted small mt-8" style="line-height:1.5;">
+      Rates dipped early-mid Apr (post-Pi Mai shoulder), recovering toward May. Member rate stays consistently 8-12% below flex. Early Bird pulls 15-20% below flex. <strong>The Namkhan flex tracks ~$15 above comp avg flex</strong> — investigate if intentional or rate-leakage.
+    </div>
+  </div>
+</div>
+
+<div class="muted small mt-16" style="padding:14px 16px;background:var(--bg-card);border:1px solid var(--line);border-radius:3px;">
+  <strong>Note:</strong> Charts use mock data for visual approval. Real charts populate from <code class="mono">revenue.ranking_history_30d</code> and <code class="mono">revenue.rate_plan_history_30d</code> views once 14+ days of scrapes complete. Cowork should use Recharts (already in stack) for production.
+</div>
+
+</body>
+</html>

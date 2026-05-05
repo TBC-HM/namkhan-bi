@@ -1,0 +1,53 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "pnpm build",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "outputDirectory": ".next",
+  "framework": "nextjs",
+  "regions": ["sin1"],
+  "functions": {
+    "app/api/compiler/runs/[id]/render/route.ts": { "memory": 1024, "maxDuration": 60 },
+    "app/api/compiler/runs/[id]/build/route.ts": { "memory": 1024, "maxDuration": 60 },
+    "app/api/compiler/runs/[id]/deploy/route.ts": { "memory": 512, "maxDuration": 30 },
+    "app/api/checkout/webhook/route.ts": { "memory": 256, "maxDuration": 15 },
+    "app/api/checkout/balance-webhook/route.ts": { "memory": 256, "maxDuration": 15 },
+    "app/api/cb/reconcile/route.ts": { "memory": 512, "maxDuration": 60 },
+    "app/api/r/[slug]/quote/route.ts": { "memory": 256, "maxDuration": 5 },
+    "app/api/lead/capture/route.ts": { "memory": 128, "maxDuration": 5 }
+  },
+  "crons": [
+    { "path": "/api/cb/reconcile",      "schedule": "0 19 * * *" },
+    { "path": "/api/cron/balance-charge","schedule": "0 20 * * *" },
+    { "path": "/api/cron/rate-recheck", "schedule": "*/30 * * * *" },
+    { "path": "/api/cron/fx-lock",      "schedule": "0 21 * * *" },
+    { "path": "/api/cron/lunar-alert",  "schedule": "0 22 * * 1" },
+    { "path": "/api/cron/sheet-sync",   "schedule": "0 18 * * *" }
+  ],
+  "headers": [
+    {
+      "source": "/_next/static/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+    },
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, max-age=0" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+      ]
+    },
+    {
+      "source": "/r/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "s-maxage=300, stale-while-revalidate=86400" }]
+    }
+  ],
+  "redirects": [
+    { "source": "/www", "destination": "/", "permanent": true }
+  ],
+  "rewrites": [
+    { "source": "/sitemap.xml", "destination": "/api/system/sitemap.xml" },
+    { "source": "/robots.txt",  "destination": "/api/system/robots.txt" },
+    { "source": "/rss.xml",     "destination": "/api/system/rss.xml" }
+  ]
+}

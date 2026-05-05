@@ -1,0 +1,8 @@
+{
+  "name": "sales-proposal-builder · proposal-viewed",
+  "flow": [
+    { "id": 1, "module": "gateway:CustomWebHook", "version": 1, "parameters": { "hook": "{{WEBHOOK_URL_PLACEHOLDER}}" }, "metadata": { "comment": "POST from /api/p/[token]/view. Payload: proposal_id, first_view (bool), event_type" } },
+    { "id": 2, "module": "slack:CreateMessage", "version": 7, "parameters": { "__IMTCONN__": "{{CONNECTION_SLACK}}" }, "mapper": { "channel": "C0SALES", "text": ":eyes: Proposal {{1.proposal_id}} just opened by guest. Status auto-updated to viewed." }, "filter": { "name": "First view only", "conditions": [[{"a":"{{1.first_view}}","b":"true","o":"text:equal"}]] }, "metadata": { "comment": "Slack DM to sales channel — first open only" } }
+  ],
+  "metadata": { "version": 1, "scenario": { "roundtrips": 1, "maxErrors": 3, "autoCommit": true }, "notes": "Generated 2026-05-03. Reconnect Slack before activating." }
+}

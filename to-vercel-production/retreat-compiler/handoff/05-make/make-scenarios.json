@@ -1,0 +1,259 @@
+{
+  "_meta": {
+    "feature": "retreat-compiler",
+    "version": "rev-1",
+    "approved": "2026-05-04",
+    "import_instructions": "Import each scenario one at a time via Make UI (Scenarios → Import Blueprint). After import, configure connections (Cloudbeds OAuth, Klaviyo, Stripe, Slack), then activate. NEVER auto-import — per SKILL.md.",
+    "shared_secret_env": "MAKE_WEBHOOK_SECRET",
+    "hmac_header": "X-Make-Signature",
+    "hmac_algo": "HMAC-SHA256 hex",
+    "verify_in_make": "Compare sha256(secret + JSON.stringify(body)) to incoming X-Make-Signature header. Reject if mismatch."
+  },
+  "scenarios": [
+    {
+      "name": "compiler.run_complete",
+      "description": "Slack ping operator + email link when compiler finishes rendering",
+      "trigger": {
+        "module": "webhook",
+        "url": "{MAKE_WEBHOOK_BASE}/compiler-run-complete",
+        "method": "POST",
+        "expected_body": {
+          "run_id": "uuid",
+          "operator_id": "uuid",
+          "operator_email": "string",
+          "prompt": "string",
+          "variants_count": "int",
+          "cost_eur": "number",
+          "preview_url": "string",
+          "timestamp": "iso8601"
+        }
+      },
+      "actions": [
+        {
+          "module": "verify_hmac",
+          "input": "X-Make-Signature header vs JSON body"
+        },
+        {
+          "module": "slack",
+          "channel": "#retreat-compiler",
+          "text": "🧭 Compile ready · {{prompt}} · {{variants_count}} variants · {{cost_eur}}€\n→ Open: {{preview_url}}",
+          "fallback_channel": "#alerts"
+        },
+        {
+          "module": "resend",
+          "to": "{{operator_email}}",
+          "from": "compiler@thenamkhan.com",
+          "subject": "Your retreat compile is ready",
+          "html_template": "templates/compiler-run-complete.html"
+        }
+      ]
+    },
+    {
+      "name": "compiler.deploy",
+      "description": "Vercel deploy hook + Cloudflare cache purge + Slack on retreat publish",
+      "trigger": {
+        "module": "webhook",
+        "url": "{MAKE_WEBHOOK_BASE}/compiler-deploy",
+        "method": "POST",
+        "expected_body": {
+          "deploy_id": "uuid",
+          "run_id": "uuid",
+          "subdomain": "string",
+          "vercel_deployment_id": "string",
+          "design_variant": "A|B|C",
+          "operator_email": "string",
+          "timestamp": "iso8601"
+        }
+      },
+      "actions": [
+        { "module": "verify_hmac" },
+        {
+          "module": "vercel_alias",
+          "endpoint": "POST https://api.vercel.com/v2/deployments/{{vercel_deployment_id}}/aliases",
+          "headers": { "Authorization": "Bearer {{VERCEL_TOKEN}}" },
+          "body": { "alias": "{{subdomain}}.thenamkhan.com" }
+        },
+        {
+          "module": "cloudflare_purge",
+          "endpoint": "POST https://api.cloudflare.com/client/v4/zones/{{CLOUDFLARE_ZONE_ID}}/purge_cache",
+          "headers": { "Authorization": "Bearer {{CLOUDFLARE_API_TOKEN}}" },
+          "body": { "files": ["https://{{subdomain}}.thenamkhan.com/*"] }
+        },
+        {
+          "module": "slack",
+          "channel": "#retreat-compiler",
+          "text": "🚀 Deployed · https://{{subdomain}}.thenamkhan.com · design {{design_variant}}"
+        }
+      ]
+    },
+    {
+      "name": "lead.captured",
+      "description": "Klaviyo profile + list + Slack desk notification on lead capture",
+      "trigger": {
+        "module": "webhook",
+        "url": "{MAKE_WEBHOOK_BASE}/lead-captured",
+        "method": "POST",
+        "expected_body": {
+          "subscriber_id": "uuid",
+          "email": "string",
+          "first_name": "string?",
+          "country": "string?",
+          "interest_series": ["string"],
+          "source_page_id": "uuid?",
+          "source_campaign_id": "uuid?",
+          "utm": "object",
+          "is_eu": "boolean",
+          "double_opt_in_required": "boolean",
+          "timestamp": "iso8601"
+        }
+      },
+      "actions": [
+        { "module": "verify_hmac" },
+        {
+          "module": "klaviyo_profile_create_or_update",
+          "endpoint": "POST https://a.klaviyo.com/api/profiles/",
+          "headers": {
+            "Authorization": "Klaviyo-API-Key {{KLAVIYO_PRIVATE_KEY}}",
+            "revision": "2024-10-15"
+          },
+          "body": {
+            "data": {
+              "type": "profile",
+              "attributes": {
+                "email": "{{email}}",
+                "first_name": "{{first_name}}",
+                "location": { "country": "{{country}}" },
+                "properties": {
+                  "interest_series": "{{interest_series}}",
+                  "source_campaign_id": "{{source_campaign_id}}",
+                  "lifecycle_stage": "new",
+                  "utm": "{{utm}}"
+                }
+              }
+            }
+          }
+        },
+        {
+          "module": "klaviyo_list_add",
+          "branch_on": "interest_series",
+          "branches": [
+            { "if": "mindfulness in interest_series", "list_id": "{{KL_LIST_MINDFULNESS}}" },
+            { "if": "river-tales in interest_series", "list_id": "{{KL_LIST_RIVER_TALES}}" },
+            { "if": "retreat-life in interest_series", "list_id": "{{KL_LIST_RETREAT_LIFE}}" },
+            { "if": "detox in interest_series", "list_id": "{{KL_LIST_DETOX}}" }
+          ]
+        },
+        {
+          "module": "slack",
+          "channel": "#sales-leads",
+          "text": "📩 New lead · {{email}} · {{country}} · interested in {{interest_series}}",
+          "skip_if": "double_opt_in_required == true"
+        }
+      ]
+    },
+    {
+      "name": "booking.deposit_paid",
+      "description": "Cloudbeds reserve + Slack owner ping + Klaviyo Booked event on Stripe success",
+      "trigger": {
+        "module": "webhook",
+        "url": "{MAKE_WEBHOOK_BASE}/booking-deposit-paid",
+        "method": "POST",
+        "expected_body": {
+          "booking_id": "uuid",
+          "retreat_slug": "string",
+          "guest_email": "string",
+          "guest_name": "string",
+          "arrival_date": "date",
+          "departure_date": "date",
+          "party_size": "int",
+          "config_jsonb": "object",
+          "total_usd": "number",
+          "deposit_usd": "number",
+          "balance_usd": "number",
+          "balance_due_date": "date",
+          "stripe_session_id": "string",
+          "timestamp": "iso8601"
+        }
+      },
+      "actions": [
+        { "module": "verify_hmac" },
+        {
+          "module": "cloudbeds_reservation_create",
+          "endpoint": "POST {{CLOUDBEDS_API_BASE}}/postReservation",
+          "headers": { "Authorization": "Bearer {{CLOUDBEDS_OAUTH_TOKEN}}" },
+          "body_mapping": "see runbooks/cloudbeds-mapping.md"
+        },
+        {
+          "module": "supabase_update",
+          "table": "book.bookings",
+          "match": { "id": "{{booking_id}}" },
+          "set": { "cloudbeds_reservation_id": "{{cb_reservation_id}}", "status": "deposit_paid" }
+        },
+        {
+          "module": "klaviyo_event",
+          "metric": "Booked Retreat",
+          "profile": { "email": "{{guest_email}}" },
+          "properties": {
+            "retreat_slug": "{{retreat_slug}}",
+            "arrival_date": "{{arrival_date}}",
+            "party_size": "{{party_size}}",
+            "total_usd": "{{total_usd}}",
+            "deposit_usd": "{{deposit_usd}}",
+            "balance_due_date": "{{balance_due_date}}"
+          }
+        },
+        {
+          "module": "slack",
+          "channel": "#bookings",
+          "text": "💰 Booked · {{retreat_slug}} · {{guest_name}} · {{party_size}}p · ${{total_usd}} · arr {{arrival_date}}\nDeposit ${{deposit_usd}} paid · balance ${{balance_usd}} due {{balance_due_date}}"
+        }
+      ]
+    },
+    {
+      "name": "booking.balance_due",
+      "description": "Cron 30 days pre-arrival — auto-charge 70% balance + reminder email",
+      "trigger": {
+        "module": "schedule",
+        "cron": "0 14 * * *",
+        "comment": "Runs 14:00 UTC = 21:00 Asia/Vientiane"
+      },
+      "actions": [
+        {
+          "module": "supabase_query",
+          "query": "SELECT id, guest_email, guest_name, balance_usd, stripe_customer_id, retreat_slug, arrival_date FROM book.bookings WHERE balance_due_date = CURRENT_DATE AND balance_paid_usd < balance_usd AND status='deposit_paid'"
+        },
+        {
+          "module": "iterator",
+          "for_each": "row",
+          "actions": [
+            {
+              "module": "stripe_payment_intent",
+              "endpoint": "POST https://api.stripe.com/v1/payment_intents",
+              "headers": { "Authorization": "Bearer {{STRIPE_SECRET_KEY}}" },
+              "body": {
+                "amount": "{{balance_usd * 100}}",
+                "currency": "usd",
+                "customer": "{{stripe_customer_id}}",
+                "off_session": true,
+                "confirm": true,
+                "metadata": { "booking_id": "{{id}}", "type": "balance" }
+              }
+            },
+            {
+              "module": "resend",
+              "to": "{{guest_email}}",
+              "from": "bookings@thenamkhan.com",
+              "subject": "Your balance is paid · {{retreat_slug}}",
+              "html_template": "templates/balance-paid.html"
+            },
+            {
+              "module": "slack",
+              "channel": "#bookings",
+              "text": "💸 Balance charged · booking {{id}} · ${{balance_usd}}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

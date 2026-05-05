@@ -1,0 +1,84 @@
+{
+  "_meta": {
+    "feature": "retreat-compiler",
+    "stripe_account_topology": "single account, property metadata (per Stage 2 approval)",
+    "create_in": "Stripe Dashboard → Products (or via Stripe CLI)",
+    "comment": "Use dynamic price_data per Checkout Session — these are anchor products only. Each booking creates a Session with custom price."
+  },
+  "products": [
+    {
+      "name": "Retreat Booking — Deposit",
+      "description": "30% deposit for a Namkhan retreat booking",
+      "metadata": { "property": "namkhan", "type": "deposit" },
+      "active": true,
+      "shippable": false,
+      "tax_code": "txcd_30060006",
+      "default_price_data": null
+    },
+    {
+      "name": "Retreat Booking — Balance",
+      "description": "70% balance for a Namkhan retreat booking, charged 30 days pre-arrival",
+      "metadata": { "property": "namkhan", "type": "balance" },
+      "active": true,
+      "shippable": false,
+      "tax_code": "txcd_30060006"
+    },
+    {
+      "name": "Retreat Add-on",
+      "description": "Additional purchase for a Namkhan retreat (spa pack, photographer, extra night)",
+      "metadata": { "property": "namkhan", "type": "addon" },
+      "active": true,
+      "shippable": false
+    },
+    {
+      "name": "Retreat Refund",
+      "description": "Refund tracking for cancelled retreat bookings",
+      "metadata": { "property": "namkhan", "type": "refund" },
+      "active": true,
+      "shippable": false
+    }
+  ],
+  "webhooks": [
+    {
+      "endpoint": "https://thenamkhan.com/api/checkout/webhook",
+      "events": [
+        "checkout.session.completed",
+        "checkout.session.expired",
+        "payment_intent.succeeded",
+        "payment_intent.payment_failed",
+        "charge.refunded",
+        "charge.dispute.created"
+      ],
+      "description": "Main booking lifecycle"
+    },
+    {
+      "endpoint": "https://thenamkhan.com/api/checkout/balance-webhook",
+      "events": [
+        "invoice.paid",
+        "invoice.payment_failed",
+        "invoice.payment_action_required"
+      ],
+      "description": "70% balance charge cycle (cron-driven payment_intents)"
+    }
+  ],
+  "tax_settings": {
+    "automatic_tax": true,
+    "tax_id_collection": false,
+    "registered_in": ["LA"],
+    "comment": "VAT not collected for Lao residents under threshold. Confirm with finance."
+  },
+  "customer_portal": {
+    "enabled": true,
+    "features": ["payment_method_update", "invoice_history"],
+    "branding": "Namkhan logo + Soho House typography"
+  },
+  "post_setup_checklist": [
+    "Test mode keys in staging Vercel env",
+    "Live mode keys in production Vercel env (only)",
+    "Webhook endpoints created and signing secrets pasted into env",
+    "Test charge with 4242 4242 4242 4242 → verify booking flow",
+    "Test 3DS card 4000 0027 6000 3184 → verify SCA fallback",
+    "Test refund flow",
+    "Confirm metadata appears in Stripe dashboard for filtering"
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "name": "sales-proposal-builder · proposal-signed",
+  "flow": [
+    { "id": 1, "module": "gateway:CustomWebHook", "version": 1, "parameters": { "hook": "{{WEBHOOK_URL_PLACEHOLDER}}" }, "metadata": { "comment": "POST from /api/p/[token]/sign. Payload: proposal_id, signed_by_name, signed_by_email" } },
+    {
+      "id": 2,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {},
+      "mapper": {
+        "method": "POST",
+        "url": "https://api.cloudbeds.com/api/v1.2/postReservation",
+        "headers": [
+          { "name": "Authorization", "value": "Bearer {{CLOUDBEDS_API_KEY}}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ],
+        "body": "{\"propertyID\": 260955, \"guestFirstName\": \"{{1.signed_by_name}}\", \"guestEmail\": \"{{1.signed_by_email}}\", \"sourceName\": \"Direct (BI Portal Proposal {{1.proposal_id}})\"}"
+      },
+      "metadata": { "comment": "Push to Cloudbeds. Adjust payload per Cloudbeds docs at https://hotels.cloudbeds.com/api/v1.2/" }
+    },
+    { "id": 3, "module": "slack:CreateMessage", "version": 7, "parameters": { "__IMTCONN__": "{{CONNECTION_SLACK}}" }, "mapper": { "channel": "C0SALES", "text": ":tada: WON · proposal {{1.proposal_id}} signed by {{1.signed_by_name}} ({{1.signed_by_email}}). Cloudbeds booking ref: {{2.id}}" }, "metadata": { "comment": "Slack #sales celebration" } }
+  ],
+  "metadata": { "version": 1, "scenario": { "roundtrips": 1, "maxErrors": 3, "autoCommit": true }, "notes": "Generated 2026-05-03. Cloudbeds payload is placeholder — adjust to real API per docs. Make sure CLOUDBEDS_API_KEY is set as Make env var." }
+}

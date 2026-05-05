@@ -1,0 +1,104 @@
+{
+  "name": "Namkhan BI · Backfill Gmail since 2026-01-01 (run once per inbox)",
+  "flow": [
+    {
+      "id": 1,
+      "module": "google-email:ActionSearchEmails",
+      "version": 2,
+      "parameters": {
+        "__IMTCONN__": "REPLACE_WITH_YOUR_GMAIL_CONNECTION_ID"
+      },
+      "mapper": {
+        "folder": "ALL",
+        "query": "after:2026/01/01",
+        "limit": 5000
+      },
+      "metadata": {
+        "designer": { "x": 0, "y": 0 },
+        "restore": {
+          "parameters": {
+            "__IMTCONN__": { "label": "REPLACE WITH MAILBOX (book@/wm@/reservations@)" }
+          }
+        },
+        "expect": [
+          { "name": "folder", "type": "folder", "label": "Folder", "value": "ALL" },
+          { "name": "query", "type": "text", "label": "Gmail search query" },
+          { "name": "limit", "type": "uinteger", "label": "Limit", "value": 5000 }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "module": "util:FunctionSetVariables",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "variables": [
+          { "name": "to_list",      "value": "{{join(map(1.to;'address');',')}}" },
+          { "name": "cc_list",      "value": "{{join(map(1.cc;'address');',')}}" },
+          { "name": "from_addr",    "value": "{{1.from.address}}" },
+          { "name": "mailbox",      "value": "REPLACE_WITH_INBOX_EMAIL" },
+          { "name": "direction",    "value": "{{if(lower(1.from.address) = 'REPLACE_WITH_INBOX_EMAIL'; 'outbound'; 'inbound')}}" },
+          { "name": "msg_id_hdr",   "value": "{{1.messageId}}" },
+          { "name": "thread_id",    "value": "{{1.threadId}}" },
+          { "name": "in_reply",     "value": "{{1.inReplyTo}}" },
+          { "name": "received_at",  "value": "{{formatDate(1.date; 'YYYY-MM-DDTHH:mm:ssZ')}}" }
+        ]
+      },
+      "metadata": {
+        "designer": { "x": 300, "y": 0 },
+        "expect": [
+          { "name": "variables", "type": "array", "label": "Variables to set",
+            "spec": [
+              { "name": "name", "type": "text", "label": "Name" },
+              { "name": "value", "type": "text", "label": "Value" }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": true, "useNewZLibDeCompress": true },
+      "mapper": {
+        "url": "https://namkhan-bi.vercel.app/api/sales/email-ingest",
+        "serializeUrl": false,
+        "method": "post",
+        "headers": [
+          { "name": "X-Make-Token", "value": "REPLACE_WITH_MAKE_INGEST_TOKEN" },
+          { "name": "Content-Type", "value": "application/json" }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "rejectUnauthorized": true,
+        "gzip": true,
+        "contentType": "application/json",
+        "data": "{\n  \"direction\":     \"{{2.direction}}\",\n  \"mailbox\":       \"{{2.mailbox}}\",\n  \"from\":          \"{{1.from.address}}\",\n  \"to\":            \"{{2.to_list}}\",\n  \"cc\":            \"{{2.cc_list}}\",\n  \"subject\":       \"{{replace(1.subject;'\\\"';'\\\\\\\"')}}\",\n  \"body_text\":     \"{{replace(1.text;'\\\"';'\\\\\\\"')}}\",\n  \"body_html\":     \"{{replace(1.html;'\\\"';'\\\\\\\"')}}\",\n  \"received_at\":   \"{{2.received_at}}\",\n  \"message_id\":    \"{{2.msg_id_hdr}}\",\n  \"thread_id\":     \"{{2.thread_id}}\",\n  \"in_reply_to\":   \"{{2.in_reply}}\",\n  \"gmail_msg_id\":  \"{{1.id}}\",\n  \"ingest_source\": \"backfill\"\n}"
+      },
+      "metadata": {
+        "designer": { "x": 600, "y": 0 }
+      }
+    }
+  ],
+  "metadata": {
+    "instant": false,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 5,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": true,
+      "slots": null,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false,
+      "freshVariables": false
+    },
+    "designer": { "orphans": [] },
+    "zone": "eu2.make.com"
+  }
+}

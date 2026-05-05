@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>06 Comp Set — Redesigned v2</title>
+<style>
+  :root {
+    --bg: #f5f1e8;
+    --bg-card: #faf6ed;
+    --bg-expand: #f0ebde;
+    --ink: #1a2b1f;
+    --ink-2: #4a5a4f;
+    --ink-3: #6b7a70;
+    --accent: #1f3a2e;
+    --gold: #b8954a;
+    --gold-soft: #d4b876;
+    --green: #2d5a3d;
+    --green-soft: rgba(45, 90, 61, 0.08);
+    --amber: #c87d2e;
+    --amber-soft: rgba(200, 125, 46, 0.08);
+    --red: #8b3a3a;
+    --red-soft: rgba(139, 58, 58, 0.08);
+    --gray-pill: rgba(107, 122, 112, 0.15);
+    --line: rgba(26, 43, 31, 0.12);
+    --line-strong: rgba(26, 43, 31, 0.25);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'EB Garamond', Georgia, 'Times New Roman', serif;
+    font-size: 15px;
+    line-height: 1.5;
+    padding: 32px 48px;
+  }
+  
+  .serif { font-family: 'EB Garamond', Georgia, serif; }
+  .mono { font-family: 'JetBrains Mono', Menlo, monospace; font-size: 11px; letter-spacing: 0.5px; }
+  .label { font-family: 'JetBrains Mono', Menlo, monospace; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--ink-3); }
+  .h2 { font-size: 22px; font-weight: 400; }
+  .h3 { font-size: 16px; font-weight: 600; letter-spacing: 0.3px; }
+  .num { font-family: 'JetBrains Mono', Menlo, monospace; font-variant-numeric: tabular-nums; }
+  
+  .tabs { display: flex; gap: 32px; padding: 16px 0 24px; border-bottom: 1px solid var(--line); margin-bottom: 24px; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 11px; letter-spacing: 2px; }
+  .tab { color: var(--ink-3); padding-bottom: 4px; }
+  .tab.active { color: var(--ink); border-bottom: 2px solid var(--gold); padding-bottom: 4px; font-weight: 600; }
+  
+  /* TOP STRIP */
+  .top-strip {
+    display: grid;
+    grid-template-columns: 2fr 1.2fr 1.2fr 1.2fr;
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    margin-bottom: 24px;
+  }
+  .strip-cell { padding: 18px 20px; border-right: 1px solid var(--line); }
+  .strip-cell:last-child { border-right: none; }
+  
+  .run-btn {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: var(--accent); color: var(--bg);
+    border: none; padding: 12px 20px;
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase;
+    cursor: pointer; border-radius: 2px; margin-top: 4px;
+  }
+  .run-btn:hover { background: var(--green); }
+  .run-btn-secondary { background: transparent; color: var(--ink-2); border: 1px solid var(--line-strong); margin-left: 8px; }
+  
+  /* PILLS */
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 12px; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; font-weight: 600; }
+  .pill .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .pill-green { background: var(--green-soft); color: var(--green); }
+  .pill-green .dot { background: var(--green); }
+  .pill-amber { background: var(--amber-soft); color: var(--amber); }
+  .pill-amber .dot { background: var(--amber); }
+  .pill-red { background: var(--red-soft); color: var(--red); }
+  .pill-red .dot { background: var(--red); }
+  .pill-gray { background: var(--gray-pill); color: var(--ink-3); }
+  .pill-gray .dot { background: var(--ink-3); }
+  
+  /* PREVIEW */
+  .preview { background: var(--bg-card); border: 1px solid var(--line); border-radius: 4px; padding: 22px 24px; margin-bottom: 24px; }
+  .preview-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+  .preview-title { font-size: 18px; font-weight: 500; }
+  .preview-sub { color: var(--ink-3); font-size: 13px; margin-top: 4px; }
+  .date-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .date-card { background: var(--bg); border: 1px solid var(--line); border-left: 3px solid var(--gold); padding: 12px 14px; border-radius: 2px; }
+  .date-card.high { border-left-color: var(--green); }
+  .date-card.med { border-left-color: var(--gold); }
+  .date-day { font-family: 'JetBrains Mono', Menlo, monospace; font-size: 12px; font-weight: 600; }
+  .date-score { font-family: 'JetBrains Mono', Menlo, monospace; font-size: 10px; color: var(--ink-3); float: right; }
+  .date-event-tag { display: inline-block; padding: 1px 6px; background: rgba(184, 149, 74, 0.15); color: var(--gold); border-radius: 2px; font-size: 10px; margin-right: 4px; font-family: 'JetBrains Mono', Menlo, monospace; margin-top: 4px; }
+  
+  /* EVENTS HORIZON */
+  .events-strip { display: flex; gap: 12px; padding: 14px 0; margin-bottom: 24px; overflow-x: auto; }
+  .event-chip { flex: 0 0 auto; background: var(--bg-card); border: 1px solid var(--line); border-radius: 4px; padding: 10px 14px; min-width: 200px; }
+  .event-chip.live { border-left: 3px solid var(--green); }
+  .event-chip.buildup { border-left: 3px solid var(--amber); }
+  .event-chip.horizon { border-left: 3px solid var(--ink-3); }
+  .event-name { font-size: 13px; font-weight: 500; margin-bottom: 2px; }
+  .event-meta { font-size: 11px; color: var(--ink-3); font-family: 'JetBrains Mono', Menlo, monospace; }
+  
+  /* SET TABS */
+  .set-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
+  .set-tab { padding: 12px 18px; border: 1px solid var(--line); border-bottom: none; border-radius: 4px 4px 0 0; background: var(--bg); color: var(--ink-3); font-size: 13px; display: flex; align-items: center; gap: 8px; }
+  .set-tab.active { background: var(--bg-card); color: var(--ink); font-weight: 600; }
+  .set-tab .count { font-family: 'JetBrains Mono', Menlo, monospace; font-size: 10px; color: var(--ink-3); }
+  .set-tab .star { color: var(--gold); }
+  
+  /* TABLE */
+  .table-wrap { background: var(--bg-card); border: 1px solid var(--line); border-radius: 0 4px 4px 4px; overflow: hidden; }
+  .table-header { display: flex; justify-content: space-between; align-items: center; padding: 18px 24px; border-bottom: 1px solid var(--line); }
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    text-align: left; padding: 10px 14px;
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase;
+    color: var(--ink-3); font-weight: 500;
+    border-bottom: 1px solid var(--line); background: rgba(26, 43, 31, 0.02);
+  }
+  td { padding: 12px 14px; border-bottom: 1px solid var(--line); font-size: 14px; vertical-align: middle; }
+  tr.expandable td:first-child { cursor: pointer; }
+  tr.self-row { background: rgba(184, 149, 74, 0.06); }
+  tr.expanded { background: var(--bg-expand); }
+  tr.detail-row td { padding: 0; border-bottom: 1px solid var(--line-strong); }
+  td.num { font-family: 'JetBrains Mono', Menlo, monospace; font-variant-numeric: tabular-nums; }
+  td.empty { color: var(--ink-3); }
+  td.never { color: var(--ink-3); font-size: 12px; font-style: italic; }
+  
+  /* PROPERTY LINK */
+  .prop-name {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  }
+  .prop-name a {
+    color: var(--ink); text-decoration: none; font-weight: 500; border-bottom: 1px dashed var(--line-strong); padding-bottom: 1px;
+  }
+  .prop-name a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  .prop-name .expand-arrow { color: var(--ink-3); font-size: 11px; transition: transform 0.15s; margin-right: 4px; }
+  tr.expanded .expand-arrow { transform: rotate(90deg); }
+  .star-icon { color: var(--gold); }
+  
+  /* CHANNEL BADGES (clickable mini-icons next to name) */
+  .channel-badges { display: inline-flex; gap: 3px; margin-left: 4px; }
+  .ch-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px; border-radius: 3px;
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    font-size: 8px; font-weight: 700; letter-spacing: 0.3px;
+    text-decoration: none;
+    border: 1px solid var(--line);
+  }
+  .ch-badge.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .ch-badge.active:hover { background: var(--green); }
+  .ch-badge.inactive { background: transparent; color: var(--ink-3); opacity: 0.4; cursor: not-allowed; }
+  
+  /* REVIEW SCORE */
+  .review-score {
+    display: inline-flex; flex-direction: column; align-items: flex-start;
+    line-height: 1.2;
+  }
+  .review-score .score-num {
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    font-size: 14px; font-weight: 600;
+    color: var(--green);
+  }
+  .review-score .score-num.medium { color: var(--amber); }
+  .review-score .score-num.low { color: var(--red); }
+  .review-score .review-count {
+    font-size: 10px; color: var(--ink-3); font-family: 'JetBrains Mono', Menlo, monospace;
+  }
+  
+  /* EXPANDED ROW: rate matrix */
+  .matrix-wrap { padding: 18px 24px 24px; background: var(--bg-expand); }
+  .matrix-meta { display: flex; gap: 24px; margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--line); align-items: center; flex-wrap: wrap; }
+  .matrix-meta-item { font-size: 12px; }
+  .matrix-meta-item .label { display: block; margin-bottom: 2px; }
+  .matrix-meta-item .value { font-family: 'JetBrains Mono', Menlo, monospace; font-size: 13px; color: var(--ink); }
+  
+  table.matrix { width: auto; }
+  table.matrix th, table.matrix td { padding: 6px 10px; border: 1px solid var(--line); font-size: 12px; text-align: right; background: var(--bg-card); }
+  table.matrix th:first-child, table.matrix td:first-child { text-align: left; padding-left: 12px; min-width: 130px; }
+  table.matrix th { background: rgba(26, 43, 31, 0.04); }
+  table.matrix td.rate { font-family: 'JetBrains Mono', Menlo, monospace; font-weight: 600; }
+  table.matrix td.rate.cheapest { background: rgba(45, 90, 61, 0.12); color: var(--green); }
+  table.matrix td.rate.dim { color: var(--ink-3); font-weight: 400; }
+  table.matrix td.event-row { background: rgba(184, 149, 74, 0.08); }
+  table.matrix .matrix-event-tag { display: inline-block; font-size: 9px; color: var(--gold); margin-left: 4px; font-family: 'JetBrains Mono', Menlo, monospace; }
+  
+  /* RUN HISTORY */
+  .history { background: var(--bg-card); border: 1px solid var(--line); border-radius: 4px; padding: 22px 24px; margin-top: 24px; }
+  .history-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  
+  table.runs { width: 100%; }
+  table.runs th { padding: 8px 12px; }
+  table.runs td { padding: 12px; border-bottom: 1px solid var(--line); font-size: 13px; }
+  table.runs td.expand-cell { width: 22px; padding-right: 4px; color: var(--ink-3); cursor: pointer; }
+  table.runs tr.run-detail td { background: var(--bg-expand); padding: 14px 24px; border-bottom: 1px solid var(--line-strong); }
+  table.runs tr.run-detail .detail-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; font-size: 12px; }
+  table.runs tr.run-detail .detail-grid .label { display: block; }
+  
+  /* UTILS */
+  .row { display: flex; align-items: center; gap: 12px; }
+  .grow { flex: 1; }
+  .muted { color: var(--ink-3); }
+  .small { font-size: 12px; }
+  .mt-8 { margin-top: 8px; }
+  .mb-8 { margin-bottom: 8px; }
+  .progress { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; margin-top: 8px; }
+  .progress-bar { height: 100%; background: var(--gold); }
+</style>
+</head>
+<body>
+
+<!-- TAB NAV -->
+<div class="tabs">
+  <span class="tab">01 PULSE</span>
+  <span class="tab">02 PACE</span>
+  <span class="tab">03 CHANNELS</span>
+  <span class="tab">04 RATE PLANS</span>
+  <span class="tab">05 PRICING</span>
+  <span class="tab active">06 COMP SET</span>
+  <span class="tab">07 AGENTS</span>
+</div>
+
+<!-- TOP STRIP -->
+<div class="top-strip">
+  <div class="strip-cell">
+    <div class="label">COMP SET AGENT</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:6px;">
+      <span class="pill pill-amber"><span class="dot"></span>BETA</span>
+      <span class="muted small">claude-sonnet-4-6</span>
+    </div>
+    <button class="run-btn">▶ RUN NOW <span>→</span></button>
+    <button class="run-btn run-btn-secondary">DEEP SHOP</button>
+    <div class="muted small mt-8">Smart picker · 8 dates · ~132 reqs · ~$0.40</div>
+  </div>
+  <div class="strip-cell">
+    <div class="label">LAST RUN</div>
+    <div class="h2 mt-8 mono" style="font-size:18px;">2h 14m ago</div>
+    <div class="muted small"><span class="pill pill-green" style="margin-right:4px;"><span class="dot"></span>SUCCESS</span> 128 of 132 succeeded</div>
+  </div>
+  <div class="strip-cell">
+    <div class="label">MTD COST</div>
+    <div class="h2 mt-8 mono" style="font-size:18px;">$12.40 <span class="muted" style="font-size:13px;">/ $150</span></div>
+    <div class="progress"><div class="progress-bar" style="width:8%"></div></div>
+    <div class="muted small mt-8">8% of monthly cap</div>
+  </div>
+  <div class="strip-cell">
+    <div class="label">NEXT MAJOR EVENT</div>
+    <div class="h2 mt-8" style="font-size:18px;">Vesak</div>
+    <div class="muted small mono">19 days · score 65 · TH/LK/MM/SG</div>
+  </div>
+</div>
+
+<!-- EVENTS STRIP -->
+<div class="row mb-8">
+  <span class="label">UPCOMING DEMAND EVENTS</span>
+  <span class="grow"></span>
+  <a href="#" class="muted small" style="text-decoration:underline;">View full marketing calendar →</a>
+</div>
+<div class="events-strip">
+  <div class="event-chip live">
+    <div class="event-name">Golden Week JP</div>
+    <div class="event-meta"><span class="pill pill-green" style="margin-right:6px;"><span class="dot"></span>LIVE</span> ends in 3d</div>
+  </div>
+  <div class="event-chip live">
+    <div class="event-name">TH Labor Day Weekend</div>
+    <div class="event-meta"><span class="pill pill-green" style="margin-right:6px;"><span class="dot"></span>LIVE</span> ends in 1d</div>
+  </div>
+  <div class="event-chip buildup">
+    <div class="event-name">Vesak 2026</div>
+    <div class="event-meta"><span class="pill pill-amber" style="margin-right:6px;"><span class="dot"></span>BUILDUP</span> 19d · score 65</div>
+  </div>
+  <div class="event-chip buildup">
+    <div class="event-name">Full Moon May 31</div>
+    <div class="event-meta"><span class="pill pill-amber" style="margin-right:6px;"><span class="dot"></span>IMMINENT</span> 28d · score 55</div>
+  </div>
+  <div class="event-chip horizon">
+    <div class="event-name">Western Summer 2026</div>
+    <div class="event-meta"><span class="pill pill-gray" style="margin-right:6px;"><span class="dot"></span>HORIZON</span> 59d · score 60</div>
+  </div>
+  <div class="event-chip horizon">
+    <div class="event-name">Boun Ok Phansa</div>
+    <div class="event-meta"><span class="pill pill-gray" style="margin-right:6px;"><span class="dot"></span>HORIZON</span> 176d · score 90</div>
+  </div>
+</div>
+
+<!-- SCRAPE PREVIEW -->
+<div class="preview">
+  <div class="preview-header">
+    <div>
+      <div class="preview-title serif">Next run will shop these 8 dates</div>
+      <div class="preview-sub">Smart picker · weighted by day-of-week, calendar events, lead time, peak season</div>
+    </div>
+    <div class="muted small mono" style="text-align:right;">
+      Mode: DAILY_LEAN<br>
+      Horizon: 120d · floor: 40
+    </div>
+  </div>
+  <div class="date-grid">
+    <div class="date-card high"><span class="date-day">Sat 16 May</span><span class="date-score">72</span><div><span class="date-event-tag">vesak</span><span class="date-event-tag">summer</span></div></div>
+    <div class="date-card high"><span class="date-day">Fri 15 May</span><span class="date-score">71</span><div><span class="date-event-tag">vesak</span><span class="date-event-tag">summer</span></div></div>
+    <div class="date-card high"><span class="date-day">Fri 22 May</span><span class="date-score">70</span><div><span class="date-event-tag">full_moon</span><span class="date-event-tag">vesak</span></div></div>
+    <div class="date-card med"><span class="date-day">Sat 09 May</span><span class="date-score">69</span><div><span class="date-event-tag">vesak</span><span class="date-event-tag">summer</span></div></div>
+    <div class="date-card med"><span class="date-day">Fri 08 May</span><span class="date-score">67</span><div><span class="date-event-tag">vesak</span><span class="date-event-tag">summer</span></div></div>
+    <div class="date-card med"><span class="date-day">Thu 14 May</span><span class="date-score">65</span><div><span class="date-event-tag">vesak</span><span class="date-event-tag">summer</span></div></div>
+    <div class="date-card med"><span class="date-day">Sat 30 May</span><span class="date-score">65</span><div><span class="date-event-tag">full_moon</span><span class="date-event-tag">summer</span></div></div>
+    <div class="date-card med"><span class="date-day">Sun 17 May</span><span class="date-score">63</span><div><span class="date-event-tag">full_moon</span><span class="date-event-tag">vesak</span></div></div>
+  </div>
+</div>
+
+<!-- SET TABS -->
+<div class="set-tabs">
+  <div class="set-tab active"><span class="star">★</span><span>Local — manual</span><span class="count">11 props · ● fresh</span></div>
+  <div class="set-tab"><span>Local — AI proposed</span><span class="count">0 props · phase 2</span></div>
+  <div class="set-tab"><span>Regional — manual</span><span class="count">0 props · empty</span></div>
+  <div class="set-tab"><span>Regional — AI proposed</span><span class="count">0 props · phase 2</span></div>
+</div>
+
+<!-- TABLE -->
+<div class="table-wrap">
+  <div class="table-header">
+    <div>
+      <div class="h3">Local — manual (Luang Prabang)</div>
+      <div class="muted small mt-8">11 properties · last shop: 2h 14m ago · click row to expand rate matrix</div>
+    </div>
+    <button class="run-btn run-btn-secondary">EDIT COMPS</button>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th style="padding-left:24px;">Property</th>
+        <th>★ / Reviews</th>
+        <th>Rooms</th>
+        <th>Best Rate</th>
+        <th>30D Avg</th>
+        <th>Range</th>
+        <th>Obs.</th>
+        <th>Last Shop</th>
+        <th>vs. Median</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- The Namkhan SELF -->
+      <tr class="self-row expandable expanded">
+        <td style="padding-left:24px;">
+          <div class="prop-name">
+            <span class="expand-arrow">▶</span>
+            <span class="star-icon">★</span>
+            <a href="https://thenamkhan.com" target="_blank">The Namkhan</a>
+            <span class="channel-badges">
+              <a class="ch-badge active" href="https://www.booking.com/hotel/la/namkhan-ecolodge.html" target="_blank" title="Booking.com">B</a>
+              <a class="ch-badge active" href="https://www.agoda.com/namkhan-ecolodge" target="_blank" title="Agoda">A</a>
+              <a class="ch-badge active" href="https://www.expedia.com/h39493734" target="_blank" title="Expedia">E</a>
+              <a class="ch-badge active" href="https://www.trip.com/hotels/113620175" target="_blank" title="Trip.com">T</a>
+              <a class="ch-badge active" href="https://thenamkhan.com" target="_blank" title="Direct">D</a>
+            </span>
+          </div>
+        </td>
+        <td>
+          <div class="review-score">
+            <span class="score-num">9.2</span>
+            <span class="review-count">★ 4 · 487 reviews</span>
+          </div>
+        </td>
+        <td class="num">20</td>
+        <td class="num"><strong>$165</strong> <span class="muted small">DIR</span></td>
+        <td class="num">$172</td>
+        <td class="num muted small">$148–$210</td>
+        <td class="num">38</td>
+        <td><span class="pill pill-green"><span class="dot"></span>2H AGO</span></td>
+        <td class="num muted">self</td>
+      </tr>
+      <!-- EXPANDED ROW: rate matrix -->
+      <tr class="detail-row">
+        <td colspan="9">
+          <div class="matrix-wrap">
+            <div class="matrix-meta">
+              <div class="matrix-meta-item">
+                <span class="label">Last shop</span>
+                <span class="value">2026-05-03 14:18 UTC</span>
+              </div>
+              <div class="matrix-meta-item">
+                <span class="label">Run ID</span>
+                <span class="value">a4c8…91f2</span>
+              </div>
+              <div class="matrix-meta-item">
+                <span class="label">Refundable rates</span>
+                <span class="value">7 of 8 dates</span>
+              </div>
+              <div class="matrix-meta-item">
+                <span class="label">Cheapest channel</span>
+                <span class="value" style="color:var(--green);">Direct</span>
+              </div>
+              <div style="margin-left:auto;">
+                <button class="run-btn run-btn-secondary" style="margin-left:0;">SHOP MORE DATES</button>
+              </div>
+            </div>
+            <table class="matrix">
+              <thead>
+                <tr>
+                  <th>Stay date</th>
+                  <th>Booking</th>
+                  <th>Agoda</th>
+                  <th>Expedia</th>
+                  <th>Trip.com</th>
+                  <th>Direct</th>
+                  <th>Min</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="event-row">
+                  <td>Fri 08 May<span class="matrix-event-tag">vesak·summer</span></td>
+                  <td class="rate">$172</td>
+                  <td class="rate">$169</td>
+                  <td class="rate dim">$185</td>
+                  <td class="rate">$175</td>
+                  <td class="rate cheapest">$148</td>
+                  <td class="rate cheapest">$148</td>
+                </tr>
+                <tr class="event-row">
+                  <td>Sat 09 May<span class="matrix-event-tag">vesak·summer</span></td>
+                  <td class="rate">$185</td>
+                  <td class="rate">$179</td>
+                  <td class="rate dim">$199</td>
+                  <td class="rate">$189</td>
+                  <td class="rate cheapest">$159</td>
+                  <td class="rate cheapest">$159</td>
+                </tr>
+                <tr class="event-row">
+                  <td>Thu 14 May<span class="matrix-event-tag">vesak</span></td>
+                  <td class="rate">$172</td>
+                  <td class="rate">$169</td>
+                  <td class="rate dim">$185</td>
+                  <td class="rate">$175</td>
+                  <td class="rate cheapest">$148</td>
+                  <td class="rate cheapest">$148</td>
+                </tr>
+                <tr class="event-row">
+                  <td>Fri 15 May<span class="matrix-event-tag">vesak·summer</span></td>
+                  <td class="rate">$185</td>
+                  <td class="rate">$179</td>
+                  <td class="rate dim">—</td>
+                  <td class="rate">$189</td>
+                  <td class="rate cheapest">$159</td>
+                  <td class="rate cheapest">$159</td>
+                </tr>
+                <tr class="event-row">
+                  <td>Sat 16 May<span class="matrix-event-tag">vesak·summer</span></td>
+                  <td class="rate">$210</td>
+                  <td class="rate">$205</td>
+                  <td class="rate dim">$225</td>
+                  <td class="rate">$215</td>
+                  <td class="rate cheapest">$185</td>
+                  <td class="rate cheapest">$185</td>
+                </tr>
+                <tr class="event-row">
+                  <td>Sun 17 May<span class="matrix-event-tag">full_moon</span></td>
+                  <td class="rate">$172</td>
+                  <td class="rate">$169</td>
+                  <td class="rate dim">$185</td>
+                  <td class="rate">$175</td>
+                  <td class="rate cheapest">$148</td>
+                  <td class="rate cheapest">$148</td>
+                </tr>
+                <tr class="event-row">
+                  <td>Fri 22 May<span class="matrix-event-tag">full_moon·vesak</span></td>
+                  <td class="rate">$185</td>
+                  <td class="rate">$179</td>
+                  <td class="rate dim">$195</td>
+                  <td class="rate">$189</td>
+                  <td class="rate cheapest">$159</td>
+                  <td class="rate cheapest">$159</td>
+                </tr>
+                <tr class="event-row">
+                  <td>Sat 30 May<span class="matrix-event-tag">full_moon·summer</span></td>
+                  <td class="rate">$195</td>
+                  <td class="rate">$189</td>
+                  <td class="rate dim">$210</td>
+                  <td class="rate">$199</td>
+                  <td class="rate cheapest">$165</td>
+                  <td class="rate cheapest">$165</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </td>
+      </tr>
+      
+      <!-- 3 Nagas - collapsed -->
+      <tr class="expandable">
+        <td style="padding-left:24px;">
+          <div class="prop-name">
+            <span class="expand-arrow">▶</span>
+            <a href="https://www.booking.com/hotel/la/3-nagas-luang-prabang-by-accor.html" target="_blank">3 Nagas Luang Prabang — MGallery</a>
+            <span class="channel-badges">
+              <a class="ch-badge active" href="https://www.booking.com/hotel/la/3-nagas-luang-prabang-by-accor.html" target="_blank">B</a>
+              <a class="ch-badge active" href="https://www.agoda.com" target="_blank">A</a>
+              <span class="ch-badge inactive" title="Not on Expedia">E</span>
+              <a class="ch-badge active" href="https://trip.com/hotels/753894" target="_blank">T</a>
+              <a class="ch-badge active" href="https://all.accor.com/hotel/9641/index.en.shtml" target="_blank">D</a>
+            </span>
+          </div>
+        </td>
+        <td><div class="review-score"><span class="score-num">8.9</span><span class="review-count">★ 4 · 1,243 reviews</span></div></td>
+        <td class="num">15</td>
+        <td class="num">$245 <span class="muted small">BDC</span></td>
+        <td class="num">$258</td>
+        <td class="num muted small">$220–$310</td>
+        <td class="num">32</td>
+        <td><span class="pill pill-green"><span class="dot"></span>2H AGO</span></td>
+        <td class="num" style="color:var(--red)">+19.8%</td>
+      </tr>
+      
+      <tr class="expandable">
+        <td style="padding-left:24px;">
+          <div class="prop-name">
+            <span class="expand-arrow">▶</span>
+            <a href="https://www.booking.com/hotel/la/sofitel-luang-prabang.html" target="_blank">Sofitel Luang Prabang</a>
+            <span class="channel-badges">
+              <a class="ch-badge active" href="https://www.booking.com/hotel/la/sofitel-luang-prabang.html" target="_blank">B</a>
+              <a class="ch-badge active" href="https://www.agoda.com" target="_blank">A</a>
+              <span class="ch-badge inactive" title="Not on Expedia">E</span>
+              <a class="ch-badge active" href="https://trip.com/hotels/1521185" target="_blank">T</a>
+              <a class="ch-badge active" href="https://sofitel-luangprabang.com" target="_blank">D</a>
+            </span>
+          </div>
+        </td>
+        <td><div class="review-score"><span class="score-num">9.3</span><span class="review-count">★ 5 · 2,891 reviews</span></div></td>
+        <td class="num">25</td>
+        <td class="num">$420 <span class="muted small">DIR</span></td>
+        <td class="num">$445</td>
+        <td class="num muted small">$385–$520</td>
+        <td class="num">38</td>
+        <td><span class="pill pill-green"><span class="dot"></span>2H AGO</span></td>
+        <td class="num" style="color:var(--red)">+105.4%</td>
+      </tr>
+      
+      <tr class="expandable">
+        <td style="padding-left:24px;">
+          <div class="prop-name">
+            <span class="expand-arrow">▶</span>
+            <a href="https://www.booking.com/hotel/la/the-grand-luang-prabang.html" target="_blank">The Grand Luang Prabang — Meliá</a>
+            <span class="channel-badges">
+              <a class="ch-badge active" href="#" target="_blank">B</a><a class="ch-badge active" href="#" target="_blank">A</a>
+              <a class="ch-badge active" href="#" target="_blank">E</a><a class="ch-badge active" href="#" target="_blank">T</a><a class="ch-badge active" href="#" target="_blank">D</a>
+            </span>
+          </div>
+        </td>
+        <td><div class="review-score"><span class="score-num">8.7</span><span class="review-count">★ 5 · 1,587 reviews</span></div></td>
+        <td class="num muted">—</td>
+        <td class="num">$305 <span class="muted small">AGD</span></td>
+        <td class="num">$318</td>
+        <td class="num muted small">$280–$365</td>
+        <td class="num">36</td>
+        <td><span class="pill pill-green"><span class="dot"></span>2H AGO</span></td>
+        <td class="num" style="color:var(--red)">+49.0%</td>
+      </tr>
+      
+      <tr class="expandable">
+        <td style="padding-left:24px;">
+          <div class="prop-name">
+            <span class="expand-arrow">▶</span>
+            <a href="https://www.booking.com/hotel/la/satri-house.html" target="_blank">Satri House</a>
+            <span class="channel-badges">
+              <a class="ch-badge active" href="#" target="_blank">B</a><a class="ch-badge active" href="#" target="_blank">A</a>
+              <a class="ch-badge active" href="#" target="_blank">E</a><a class="ch-badge active" href="#" target="_blank">T</a><a class="ch-badge active" href="#" target="_blank">D</a>
+            </span>
+          </div>
+        </td>
+        <td><div class="review-score"><span class="score-num">9.1</span><span class="review-count">★ 4 · 982 reviews</span></div></td>
+        <td class="num">31</td>
+        <td class="num">$180 <span class="muted small">BDC</span></td>
+        <td class="num">$192</td>
+        <td class="num muted small">$165–$235</td>
+        <td class="num">38</td>
+        <td><span class="pill pill-green"><span class="dot"></span>2H AGO</span></td>
+        <td class="num" style="color:var(--green)">-12.1%</td>
+      </tr>
+      
+      <tr class="expandable">
+        <td style="padding-left:24px;">
+          <div class="prop-name">
+            <span class="expand-arrow">▶</span>
+            <a href="https://www.booking.com/hotel/la/burasari-heritage.html" target="_blank">Burasari Heritage Luang Prabang</a>
+            <span class="channel-badges">
+              <a class="ch-badge active" href="#" target="_blank">B</a><a class="ch-badge active" href="#" target="_blank">A</a>
+              <a class="ch-badge active" href="#" target="_blank">E</a><a class="ch-badge active" href="#" target="_blank">T</a><a class="ch-badge active" href="#" target="_blank">D</a>
+            </span>
+          </div>
+        </td>
+        <td><div class="review-score"><span class="score-num score-num medium">8.4</span><span class="review-count">★ 4 · 624 reviews</span></div></td>
+        <td class="num muted">—</td>
+        <td class="num">$155 <span class="muted small">DIR</span></td>
+        <td class="num">$162</td>
+        <td class="num muted small">$140–$185</td>
+        <td class="num">35</td>
+        <td><span class="pill pill-green"><span class="dot"></span>2H AGO</span></td>
+        <td class="num" style="color:var(--green)">-24.3%</td>
+      </tr>
+      
+      <tr class="expandable">
+        <td style="padding-left:24px;">
+          <div class="prop-name">
+            <span class="expand-arrow">▶</span>
+            <a href="https://www.booking.com/hotel/la/maison-dalabua.html" target="_blank">Maison Dalabua</a>
+            <span class="channel-badges">
+              <a class="ch-badge active" href="#" target="_blank">B</a><a class="ch-badge active" href="#" target="_blank">A</a>
+              <a class="ch-badge active" href="#" target="_blank">E</a><a class="ch-badge active" href="#" target="_blank">T</a><a class="ch-badge active" href="#" target="_blank">D</a>
+            </span>
+          </div>
+        </td>
+        <td><div class="review-score"><span class="score-num">8.8</span><span class="review-count">★ 4 · 891 reviews</span></div></td>
+        <td class="num muted">—</td>
+        <td class="num">$135 <span class="muted small">DIR</span></td>
+        <td class="num">$142</td>
+        <td class="num muted small">$120–$170</td>
+        <td class="num">38</td>
+        <td><span class="pill pill-green"><span class="dot"></span>2H AGO</span></td>
+        <td class="num" style="color:var(--green)">-34.1%</td>
+      </tr>
+      
+      <tr class="expandable">
+        <td style="padding-left:24px;">
+          <div class="prop-name">
+            <span class="expand-arrow">▶</span>
+            <a href="https://www.booking.com/hotel/la/maison-souvannaphoum.html" target="_blank">Homm Souvannaphoum</a>
+            <span class="channel-badges">
+              <a class="ch-badge active" href="#" target="_blank">B</a><a class="ch-badge active" href="#" target="_blank">A</a>
+              <a class="ch-badge active" href="#" target="_blank">E</a><a class="ch-badge active" href="#" target="_blank">T</a><a class="ch-badge active" href="#" target="_blank">D</a>
+            </span>
+          </div>
+        </td>
+        <td><div class="review-score"><span class="score-num">8.6</span><span class="review-count">★ 4 · 1,124 reviews</span></div></td>
+        <td class="num muted">—</td>
+        <td class="num">$210 <span class="muted small">BDC</span></td>
+        <td class="num">$219</td>
+        <td class="num muted small">$190–$260</td>
+        <td class="num">36</td>
+        <td><span class="pill pill-green"><span class="dot"></span>2H AGO</span></td>
+        <td class="num" style="color:var(--red)">+2.6%</td>
+      </tr>
+      
+      <tr class="expandable">
+        <td style="padding-left:24px;">
+          <div class="prop-name">
+            <span class="expand-arrow">▶</span>
+            <a href="https://www.booking.com/hotel/la/u-luang-prabang.html" target="_blank">U Luang Prabang</a>
+            <span class="channel-badges">
+              <a class="ch-badge active" href="#" target="_blank">B</a><a class="ch-badge active" href="#" target="_blank">A</a>
+              <span class="ch-badge inactive" title="Not on Expedia">E</span>
+              <a class="ch-badge active" href="#" target="_blank">T</a><a class="ch-badge active" href="#" target="_blank">D</a>
+            </span>
+          </div>
+        </td>
+        <td><div class="review-score"><span class="score-num">8.9</span><span class="review-count">★ 4 · 745 reviews</span></div></td>
+        <td class="num muted">—</td>
+        <td class="num">$225 <span class="muted small">DIR</span></td>
+        <td class="num">$235</td>
+        <td class="num muted small">$200–$275</td>
+        <td class="num">32</td>
+        <td><span class="pill pill-green"><span class="dot"></span>2H AGO</span></td>
+        <td class="num" style="color:var(--red)">+9.9%</td>
+      </tr>
+      
+      <tr class="expandable">
+        <td style="padding-left:24px;">
+          <div class="prop-name">
+            <span class="expand-arrow">▶</span>
+            <a href="https://www.booking.com/hotel/la/the-belle-rive.html" target="_blank">The Belle Rive Boutique Hotel</a>
+            <span class="channel-badges">
+              <a class="ch-badge active" href="#" target="_blank">B</a><a class="ch-badge active" href="#" target="_blank">A</a>
+              <a class="ch-badge active" href="#" target="_blank">E</a><a class="ch-badge active" href="#" target="_blank">T</a><a class="ch-badge active" href="#" target="_blank">D</a>
+            </span>
+          </div>
+        </td>
+        <td><div class="review-score"><span class="score-num">8.7</span><span class="review-count">★ 4 · 412 reviews</span></div></td>
+        <td class="num muted">—</td>
+        <td class="num">$125 <span class="muted small">DIR</span></td>
+        <td class="num">$132</td>
+        <td class="num muted small">$110–$160</td>
+        <td class="num">38</td>
+        <td><span class="pill pill-green"><span class="dot"></span>2H AGO</span></td>
+        <td class="num" style="color:var(--green)">-39.0%</td>
+      </tr>
+      
+      <tr class="expandable">
+        <td style="padding-left:24px;">
+          <div class="prop-name">
+            <span class="expand-arrow">▶</span>
+            <a href="https://www.booking.com/hotel/la/the-luang-say-residence.html" target="_blank">The Luang Say Residence</a>
+            <span class="channel-badges">
+              <a class="ch-badge active" href="#" target="_blank">B</a><a class="ch-badge active" href="#" target="_blank">A</a>
+              <a class="ch-badge active" href="#" target="_blank">E</a><a class="ch-badge active" href="#" target="_blank">T</a><a class="ch-badge active" href="#" target="_blank">D</a>
+            </span>
+          </div>
+        </td>
+        <td><div class="review-score"><span class="score-num">8.5</span><span class="review-count">★ 4 · 568 reviews</span></div></td>
+        <td class="num muted">—</td>
+        <td class="num">$148 <span class="muted small">BDC</span></td>
+        <td class="num">$155</td>
+        <td class="num muted small">$130–$180</td>
+        <td class="num">36</td>
+        <td><span class="pill pill-green"><span class="dot"></span>2H AGO</span></td>
+        <td class="num" style="color:var(--green)">-27.8%</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- AGENT RUN HISTORY -->
+<div class="history">
+  <div class="history-header">
+    <div>
+      <span class="label">AGENT RUN HISTORY</span>
+      <div class="muted small mt-8">Last 10 runs across compset_agent + comp_discovery_agent · click row for details</div>
+    </div>
+    <div>
+      <button class="run-btn run-btn-secondary" style="margin-left:0;">EXPORT CSV</button>
+    </div>
+  </div>
+  <table class="runs">
+    <thead>
+      <tr>
+        <th style="width:18px;"></th>
+        <th>Started</th>
+        <th>Agent</th>
+        <th>Status</th>
+        <th>Duration</th>
+        <th>Cost</th>
+        <th>Obs.</th>
+        <th>Trigger</th>
+        <th>Run ID</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="expand-cell">▶</td>
+        <td class="num">2h 14m ago</td>
+        <td>compset_agent</td>
+        <td><span class="pill pill-green"><span class="dot"></span>SUCCESS</span></td>
+        <td class="num">2m 41s</td>
+        <td class="num">$0.42</td>
+        <td class="num">128 / 132</td>
+        <td><span class="pill pill-gray"><span class="dot"></span>MANUAL</span></td>
+        <td class="num muted">a4c8…91f2</td>
+      </tr>
+      <tr>
+        <td class="expand-cell">▶</td>
+        <td class="num">yesterday</td>
+        <td>compset_agent</td>
+        <td><span class="pill pill-green"><span class="dot"></span>SUCCESS</span></td>
+        <td class="num">2m 33s</td>
+        <td class="num">$0.39</td>
+        <td class="num">130 / 132</td>
+        <td><span class="pill pill-gray"><span class="dot"></span>CRON</span></td>
+        <td class="num muted">7e1d…3a4b</td>
+      </tr>
+      <tr>
+        <td class="expand-cell">▶</td>
+        <td class="num">2 days ago</td>
+        <td>compset_agent</td>
+        <td><span class="pill pill-amber"><span class="dot"></span>PARTIAL</span></td>
+        <td class="num">3m 12s</td>
+        <td class="num">$0.45</td>
+        <td class="num">118 / 132</td>
+        <td><span class="pill pill-gray"><span class="dot"></span>CRON</span></td>
+        <td class="num muted">2c5b…f8d1</td>
+      </tr>
+      <tr class="run-detail">
+        <td colspan="9">
+          <div class="detail-grid">
+            <div>
+              <span class="label">FAILURES</span>
+              <div class="mt-8 small">14 of 132 requests failed:</div>
+              <ul class="small muted mt-8" style="padding-left:18px;">
+                <li>Sofitel · Agoda · 4 dates — Cloudflare challenge</li>
+                <li>U Luang Prabang · Trip.com · 5 dates — 404 (URL changed?)</li>
+                <li>Homm · Booking · 5 dates — geo block from US proxy</li>
+              </ul>
+            </div>
+            <div>
+              <span class="label">TOKEN USAGE</span>
+              <div class="mt-8 small mono">In: 12,440 · Out: 1,820</div>
+              <span class="label" style="display:block;margin-top:12px;">CHANNELS HIT</span>
+              <div class="mt-8 small mono">BDC 33 · AGD 22 · EXP 24 · TRP 22 · DIR 17</div>
+            </div>
+            <div>
+              <span class="label">DATES SHOPPED</span>
+              <div class="mt-8 small">Sat 16 May, Fri 15 May, Fri 22 May, Sat 09 May, Fri 08 May, Thu 14 May, Sat 30 May, Sun 17 May</div>
+              <button class="run-btn run-btn-secondary" style="margin-top:12px;margin-left:0;font-size:9px;padding:6px 12px;">VIEW FULL LOG →</button>
+            </div>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td class="expand-cell">▶</td>
+        <td class="num">3 days ago</td>
+        <td>compset_agent</td>
+        <td><span class="pill pill-green"><span class="dot"></span>SUCCESS</span></td>
+        <td class="num">2m 28s</td>
+        <td class="num">$0.41</td>
+        <td class="num">131 / 132</td>
+        <td><span class="pill pill-gray"><span class="dot"></span>CRON</span></td>
+        <td class="num muted">9f3a…b5c7</td>
+      </tr>
+      <tr>
+        <td class="expand-cell">▶</td>
+        <td class="num">4 days ago</td>
+        <td>compset_agent</td>
+        <td><span class="pill pill-red"><span class="dot"></span>FAILED</span></td>
+        <td class="num">0m 48s</td>
+        <td class="num">$0.04</td>
+        <td class="num">8 / 132</td>
+        <td><span class="pill pill-gray"><span class="dot"></span>CRON</span></td>
+        <td class="num muted">6e2c…d913</td>
+      </tr>
+      <tr>
+        <td class="expand-cell">▶</td>
+        <td class="num">5 days ago</td>
+        <td>compset_agent</td>
+        <td><span class="pill pill-green"><span class="dot"></span>SUCCESS</span></td>
+        <td class="num">2m 51s</td>
+        <td class="num">$0.43</td>
+        <td class="num">129 / 132</td>
+        <td><span class="pill pill-gray"><span class="dot"></span>MANUAL</span></td>
+        <td class="num muted">1b8d…4e6a</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+</body>
+</html>

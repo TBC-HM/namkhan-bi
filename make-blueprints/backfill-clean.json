@@ -1,0 +1,61 @@
+{
+  "name": "Namkhan BI · Gmail backfill since 2026-01-01 (template)",
+  "flow": [
+    {
+      "id": 1,
+      "module": "google-email:ActionSearchEmails",
+      "version": 4,
+      "parameters": {},
+      "mapper": {
+        "folder": "ALL",
+        "query": "after:2026/01/01",
+        "limit": 5000,
+        "markSeen": false
+      },
+      "metadata": {
+        "designer": { "x": 0, "y": 0 }
+      }
+    },
+    {
+      "id": 2,
+      "module": "http:MakeRequest",
+      "version": 4,
+      "parameters": { "handleErrors": true, "useNewZLibDeCompress": true },
+      "mapper": {
+        "url": "https://namkhan-bi.vercel.app/api/sales/email-ingest",
+        "method": "post",
+        "headers": [
+          { "name": "X-Make-Token", "value": "REPLACE_WITH_MAKE_INGEST_TOKEN" },
+          { "name": "Content-Type", "value": "application/json" }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "rejectUnauthorized": true,
+        "gzip": true,
+        "contentType": "application/json",
+        "data": "{\n  \"direction\": \"{{if(lower(1.from.address) = 'REPLACE_WITH_INBOX@thenamkhan.com'; 'outbound'; 'inbound')}}\",\n  \"mailbox\": \"REPLACE_WITH_INBOX@thenamkhan.com\",\n  \"from\": \"{{1.from.address}}\",\n  \"to\": \"{{join(map(1.to;'address');',')}}\",\n  \"cc\": \"{{join(map(1.cc;'address');',')}}\",\n  \"subject\": \"{{1.subject}}\",\n  \"body_text\": \"{{1.text}}\",\n  \"body_html\": \"{{1.html}}\",\n  \"received_at\": \"{{formatDate(1.date; 'YYYY-MM-DDTHH:mm:ssZ')}}\",\n  \"message_id\": \"{{1.messageId}}\",\n  \"thread_id\": \"{{1.threadId}}\",\n  \"in_reply_to\": \"{{1.inReplyTo}}\",\n  \"gmail_msg_id\": \"{{1.id}}\",\n  \"ingest_source\": \"backfill\"\n}"
+      },
+      "metadata": {
+        "designer": { "x": 300, "y": 0 }
+      }
+    }
+  ],
+  "metadata": {
+    "instant": false,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 5,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": true,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false,
+      "freshVariables": false
+    },
+    "designer": { "orphans": [] },
+    "zone": "eu1.make.com"
+  }
+}

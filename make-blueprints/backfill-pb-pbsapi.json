@@ -1,0 +1,88 @@
+{
+  "name": "Namkhan BI · Backfill pb@ since 2026-01-01 (API)",
+  "flow": [
+    {
+      "id": 1,
+      "module": "google-email:ActionSearchEmails",
+      "version": 4,
+      "parameters": {
+        "__IMTCONN__": 7146027
+      },
+      "mapper": {
+        "folder": "[Gmail]/All Mail",
+        "query": "after:2026/01/01",
+        "limit": 1000,
+        "markSeen": false
+      },
+      "metadata": {
+        "designer": { "x": 0, "y": 0 },
+        "restore": {
+          "expect": {
+            "folder": { "label": "[Gmail]/All Mail" }
+          },
+          "parameters": {
+            "__IMTCONN__": { "label": "pb@thenamkhan.com (Gmail)" }
+          }
+        },
+        "expect": [
+          { "name": "folder", "type": "folder", "label": "Folder" },
+          { "name": "query", "type": "text", "label": "Gmail search query" },
+          { "name": "limit", "type": "uinteger", "label": "Limit" },
+          { "name": "markSeen", "type": "boolean", "label": "Mark seen" }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "module": "http:MakeRequest",
+      "version": 4,
+      "parameters": { "handleErrors": true, "useNewZLibDeCompress": true },
+      "mapper": {
+        "url": "https://namkhan-bi.vercel.app/api/sales/email-ingest",
+        "method": "post",
+        "headers": [
+          { "name": "X-Make-Token", "value": "nk-bi-make-2026-Z3kT9pXqR7vL2NwY8mHsB4" },
+          { "name": "Content-Type", "value": "application/json" }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "rejectUnauthorized": true,
+        "gzip": true,
+        "contentType": "application/json",
+        "timeout": "",
+        "shareCookies": false,
+        "ca": "",
+        "useMtls": false,
+        "followRedirect": true,
+        "useQuerystring": false,
+        "data": "{\"direction\":\"{{if(lower(1.from.address) = \\\"pb@thenamkhan.com\\\"; \\\"outbound\\\"; \\\"inbound\\\")}}\",\"mailbox\":\"pb@thenamkhan.com\",\"from\":\"{{1.from.address}}\",\"to\":\"{{join(map(1.to;\\\"address\\\");\\\",\\\")}}\",\"cc\":\"{{join(map(1.cc;\\\"address\\\");\\\",\\\")}}\",\"subject\":\"{{1.subject}}\",\"body_text\":\"{{1.text}}\",\"body_html\":\"{{1.html}}\",\"received_at\":\"{{formatDate(1.date; \\\"YYYY-MM-DDTHH:mm:ssZ\\\")}}\",\"message_id\":\"{{1.messageId}}\",\"thread_id\":\"{{1.threadId}}\",\"in_reply_to\":\"{{1.inReplyTo}}\",\"gmail_msg_id\":\"{{1.id}}\",\"ingest_source\":\"backfill\"}"
+      },
+      "metadata": {
+        "designer": { "x": 300, "y": 0 },
+        "expect": [
+          { "name": "url", "type": "url", "label": "URL" },
+          { "name": "method", "type": "select", "label": "Method" },
+          { "name": "data", "type": "buffer", "label": "Body" }
+        ]
+      }
+    }
+  ],
+  "metadata": {
+    "instant": false,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 5,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": true,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false,
+      "freshVariables": false
+    },
+    "designer": { "orphans": [] },
+    "zone": "eu1.make.com"
+  }
+}

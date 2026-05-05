@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prototype: retreat-compiler</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#efe6d3;--paper-2:#f5edd9;--paper-3:#e3d7bd;
+    --moss:#1a2e21;--moss-2:#2a4632;--moss-3:#456752;
+    --brass:#a8854a;--brass-2:#c9a567;--brass-3:#e8d4a8;
+    --oxblood:#6b1f1f;--ink:#0a0a0a;--cream:#fbf6e9;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:'Inter Tight',system-ui,sans-serif;background:var(--paper);color:var(--moss);font-size:14px;line-height:1.5}
+  .serif{font-family:'Fraunces',serif}
+  .serif-it{font-family:'Fraunces',serif;font-style:italic}
+  .mono{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.02em}
+  .bg-paper{background:var(--paper)}.bg-paper-2{background:var(--paper-2)}.bg-paper-3{background:var(--paper-3)}
+  .bg-moss{background:var(--moss)}.bg-moss-2{background:var(--moss-2)}
+  .bg-brass{background:var(--brass)}.bg-brass-3{background:var(--brass-3)}
+  .bg-oxblood{background:var(--oxblood)}.bg-cream{background:var(--cream)}
+  .text-moss{color:var(--moss)}.text-moss-3{color:var(--moss-3)}.text-brass{color:var(--brass)}
+  .text-paper{color:var(--paper)}.text-cream{color:var(--cream)}.text-oxblood{color:var(--oxblood)}
+  .border-moss{border-color:var(--moss)}.border-brass{border-color:var(--brass)}.border-paper-3{border-color:var(--paper-3)}
+  .banner{position:fixed;bottom:0;left:0;right:0;background:var(--oxblood);color:var(--cream);text-align:center;padding:6px 12px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;z-index:50;font-weight:500}
+  .topbar{position:sticky;top:0;background:var(--moss);color:var(--cream);padding:10px 16px;display:flex;align-items:center;gap:12px;z-index:40;border-bottom:1px solid var(--brass)}
+  .topbar a,.topbar button{color:var(--cream);text-decoration:none;padding:4px 8px;border-radius:4px;font-size:12px;cursor:pointer;background:transparent;border:1px solid transparent}
+  .topbar a:hover,.topbar button:hover{background:var(--moss-2);border-color:var(--brass)}
+  .crumb{flex:1;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--brass-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .crumb b{color:var(--cream);font-weight:500}
+  .container-x{max-width:1080px;margin:0 auto;padding:24px 16px 80px}
+  .pill{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:500;letter-spacing:.02em;border:1px solid currentColor}
+  .pill-moss{color:var(--moss);background:var(--paper-2)}.pill-brass{color:#7a5d2f;background:var(--brass-3)}
+  .pill-oxblood{color:var(--oxblood);background:#f5d8d8}.pill-green{color:#1a4d2e;background:#cce6d5}
+  .card{background:var(--cream);border:1px solid var(--paper-3);border-radius:6px;padding:18px;transition:all .15s}
+  .card:hover{border-color:var(--brass);transform:translateY(-1px)}
+  .card-flat{background:var(--cream);border:1px solid var(--paper-3);border-radius:6px;padding:18px}
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:4px;font-size:13px;font-weight:500;cursor:pointer;border:1px solid;transition:all .15s;text-decoration:none}
+  .btn-moss{background:var(--moss);color:var(--cream);border-color:var(--moss)}
+  .btn-moss:hover{background:var(--moss-2)}
+  .btn-brass{background:var(--brass);color:var(--cream);border-color:var(--brass)}
+  .btn-brass:hover{background:#8e6f3a}
+  .btn-out{background:transparent;color:var(--moss);border-color:var(--moss)}
+  .btn-out:hover{background:var(--moss);color:var(--cream)}
+  .btn-ghost{background:transparent;color:var(--moss);border-color:transparent}
+  .btn-ghost:hover{background:var(--paper-3)}
+  .input{width:100%;padding:10px 12px;border:1px solid var(--paper-3);border-radius:4px;background:var(--cream);font-family:inherit;font-size:14px;color:var(--moss)}
+  .input:focus{outline:none;border-color:var(--brass);box-shadow:0 0 0 3px rgba(168,133,74,.2)}
+  textarea.input{min-height:60px;resize:vertical;font-family:'JetBrains Mono',monospace;font-size:13px}
+  .h1{font-family:'Fraunces',serif;font-size:32px;line-height:1.1;font-weight:500;letter-spacing:-.01em}
+  .h1 em{font-style:italic;color:var(--brass)}
+  .h2{font-family:'Fraunces',serif;font-size:22px;line-height:1.2;font-weight:500}
+  .h3{font-family:'Inter Tight',sans-serif;font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--moss-3)}
+  .lbl{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--moss-3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}
+  .grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+  .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+  @media(max-width:768px){.grid-3,.grid-2{grid-template-columns:1fr}}
+  .day-row{display:grid;grid-template-columns:60px 1fr;gap:16px;padding:14px 0;border-bottom:1px solid var(--paper-3)}
+  .day-row:last-child{border-bottom:none}
+  .day-num{font-family:'Fraunces',serif;font-size:28px;font-weight:500;color:var(--brass);line-height:1}
+  .slot{display:grid;grid-template-columns:80px 1fr;gap:8px;font-size:13px;margin-top:4px}
+  .slot b{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--moss-3);text-transform:uppercase;letter-spacing:.06em;font-weight:500}
+  .progress{height:3px;background:var(--paper-3);border-radius:2px;overflow:hidden;margin:8px 0 16px}
+  .progress-bar{height:100%;background:var(--brass);transition:width .3s}
+  .step{display:flex;align-items:center;gap:10px;padding:8px 0;color:var(--moss-3)}
+  .step.active{color:var(--moss)}.step.done{color:var(--moss-3)}
+  .step-dot{width:18px;height:18px;border-radius:50%;border:2px solid currentColor;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;font-weight:600}
+  .step.done .step-dot{background:currentColor;color:var(--cream)}
+  .step.active .step-dot{background:var(--brass);color:var(--cream);border-color:var(--brass)}
+  .tab-bar{display:flex;border-bottom:1px solid var(--paper-3);gap:0;margin-bottom:16px}
+  .tab{padding:10px 16px;cursor:pointer;font-size:13px;color:var(--moss-3);border-bottom:2px solid transparent;background:transparent;border-top:none;border-left:none;border-right:none;font-family:inherit}
+  .tab.active{color:var(--moss);border-bottom-color:var(--brass);font-weight:500}
+  .pdf-frame{background:var(--cream);border:1px solid var(--paper-3);min-height:380px;padding:24px;position:relative;overflow:hidden;border-radius:2px}
+  .pdf-frame::before{content:'PAGE 1 OF 9';position:absolute;top:8px;right:12px;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--moss-3);letter-spacing:.1em}
+  .funnel-frame{background:var(--cream);border:1px solid var(--paper-3);min-height:380px;border-radius:6px;overflow:hidden}
+  .design-tile{cursor:pointer;border:2px solid var(--paper-3);border-radius:6px;padding:14px;background:var(--cream);transition:all .2s}
+  .design-tile.selected{border-color:var(--brass);background:var(--paper-2)}
+  .design-tile:hover{border-color:var(--brass-2)}
+  .lunar{display:inline-block;width:14px;height:14px;border-radius:50%;background:radial-gradient(circle at 30% 30%,#fbf6e9 0%,#d6c89a 100%);box-shadow:0 0 0 1px var(--brass);vertical-align:middle;margin-right:4px}
+  .err{background:#f5d8d8;border:1px solid var(--oxblood);color:var(--oxblood);padding:10px 14px;border-radius:4px;font-size:13px}
+  .ok{background:#cce6d5;border:1px solid #1a4d2e;color:#1a4d2e;padding:10px 14px;border-radius:4px;font-size:13px}
+  .recent{display:grid;grid-template-columns:120px 1fr 100px 120px;gap:12px;padding:10px 12px;border-bottom:1px solid var(--paper-3);font-size:13px;align-items:center;cursor:pointer}
+  .recent:hover{background:var(--paper-2)}
+  .recent .ridx{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--brass)}
+  .table{width:100%;border-collapse:collapse;font-size:13px}
+  .table th,.table td{padding:8px 12px;text-align:left;border-bottom:1px solid var(--paper-3)}
+  .table th{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--moss-3);text-transform:uppercase;letter-spacing:.06em;font-weight:500;background:var(--paper-2)}
+  .glyph{font-family:'Fraunces',serif;font-style:italic;color:var(--brass)}
+  .qr{width:80px;height:80px;background:repeating-linear-gradient(0deg,var(--moss) 0 4px,transparent 4px 8px),repeating-linear-gradient(90deg,var(--moss) 0 4px,transparent 4px 8px);background-color:var(--cream);border:1px solid var(--moss)}
+  .num{font-family:'Fraunces',serif;font-size:22px;font-weight:500;color:var(--moss)}
+  .num-lg{font-family:'Fraunces',serif;font-size:32px;font-weight:500;color:var(--moss);line-height:1}
+  .num-xl{font-family:'Fraunces',serif;font-size:48px;font-weight:500;color:var(--moss);line-height:1}
+  .ribbon{position:absolute;top:12px;right:12px;background:var(--brass);color:var(--cream);padding:3px 10px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;border-radius:2px;font-weight:500}
+  .check-list{list-style:none;padding:0;margin:0}
+  .check-list li{position:relative;padding-left:20px;font-size:13px;line-height:1.6}
+  .check-list li::before{content:'✓';position:absolute;left:0;color:var(--brass);font-weight:600}
+  .x-list li::before{content:'×';color:var(--oxblood)}
+  .stripe{background:repeating-linear-gradient(135deg,var(--paper-2) 0 8px,var(--paper-3) 8px 16px)}
+  .deploy-shell{background:#0d1810;color:#9bd3a6;font-family:'JetBrains Mono',monospace;font-size:11px;padding:14px;border-radius:4px;line-height:1.7}
+  .blink{animation:blink 1.2s infinite}
+  @keyframes blink{50%{opacity:.3}}
+  .skel{background:linear-gradient(90deg,var(--paper-2) 0%,var(--paper-3) 50%,var(--paper-2) 100%);background-size:200% 100%;animation:skel 1.4s infinite;height:14px;border-radius:2px}
+  @keyframes skel{0%{background-position:200% 0}100%{background-position:-200% 0}}
+  .public-hero{height:280px;background:linear-gradient(rgba(26,46,33,.55),rgba(26,46,33,.75)),url('https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=1200');background-size:cover;background-position:center;display:flex;align-items:flex-end;padding:24px;color:var(--cream)}
+  .toggle-row{display:flex;gap:8px;align-items:center;padding:6px 0}
+  .toggle{width:32px;height:18px;background:var(--paper-3);border-radius:9px;position:relative;cursor:pointer;transition:all .2s}
+  .toggle.on{background:var(--brass)}
+  .toggle::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;background:var(--cream);border-radius:50%;transition:all .2s}
+  .toggle.on::after{left:16px}
+  details summary{cursor:pointer;list-style:none;padding:8px 0}
+  details summary::-webkit-details-marker{display:none}
+  details[open] summary{border-bottom:1px solid var(--paper-3);margin-bottom:8px}
+  .badge-rec{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:var(--moss);color:var(--cream);font-size:10px;letter-spacing:.06em;text-transform:uppercase;border-radius:2px;font-weight:500}
+  .logo{font-family:'Fraunces',serif;font-style:italic;font-size:14px;font-weight:500}
+  .slh{font-family:'Inter Tight';font-size:9px;letter-spacing:.2em;color:var(--brass-2)}
+  .form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+  @media(max-width:768px){.form-grid{grid-template-columns:1fr}}
+  .pricing-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px}
+  .pricing-grid > div{padding:8px 0;border-bottom:1px solid var(--paper-3)}
+  .pricing-grid > div:nth-child(2n){text-align:right;font-family:'JetBrains Mono',monospace}
+</style>
+</head>
+<body class="bg-paper">
+  <nav class="topbar">
+    <a href="#/" class="logo">Namkhan <span class="slh">/ COMPILER</span></a>
+    <button onclick="history.back()">← back</button>
+    <div class="crumb" id="crumb"></div>
+    <button onclick="resetProto()">reset</button>
+  </nav>
+  <main id="app"></main>
+  <div class="banner">PROTOTYPE — not real data — testing only</div>
+
+<script>
+const STATE_KEY='proto_retreat_compiler_v1';
+const getState=()=>JSON.parse(localStorage.getItem(STATE_KEY)||'{}');
+const setState=s=>localStorage.setItem(STATE_KEY,JSON.stringify(s));
+const update=p=>{const s=getState();setState({...s,...p})};
+function resetProto(){if(confirm('Reset all prototype data?')){localStorage.removeItem(STATE_KEY);location.hash='';location.reload()}}
+function getQuery(){const h=location.hash.split('?')[1]||'';const o={};h.split('&').filter(Boolean).forEach(p=>{const[k,v]=p.split('=');o[k]=decodeURIComponent(v||'')});return o}
+function nav(h){location.hash=h}
+function fmt$(n){return '$'+n.toLocaleString('en-US')}
+function setCrumb(parts){document.getElementById('crumb').innerHTML=parts.map((p,i)=>i===parts.length-1?'<b>'+p+'</b>':p).join(' / ')}
+
+// MOCK DATA
+const MOCK_RUNS=[
+  {id:'R-001',prompt:'5 day mindfulness retreat — lux only — green season — 8 pax',status:'ready',created:'2026-05-03 09:14',cost:0.18},
+  {id:'R-000',prompt:'3 day river folklore — mid + lux — dry season — 12 pax',status:'deployed',created:'2026-04-28 15:22',cost:0.42,subdomain:'river-folklore-dry.thenamkhan.com'},
+  {id:'R-002',prompt:'7 day detox + meditation — 3 tiers — full year — couples',status:'rendering',created:'2026-05-03 09:31',cost:0.31},
+  {id:'R-003',prompt:'4 day retreat life — lux — full moon Oct 2026 — 6 pax',status:'draft',created:'2026-05-03 10:02',cost:0.12}
+];
+const VARIANTS={
+ 'R-001':[
+  {id:'A',label:'Garden View',total:15120,perPax:1890,marginPct:32,occ:'8 of 10 rooms',room:'Garden Room ×4',activities:'Group',fnb:'Half Board',addons:'Spa pack +$240/pax'},
+  {id:'B',label:'River View',total:18320,perPax:2290,marginPct:38,occ:'8 of 10 rooms',room:'River Suite ×4',activities:'Mixed (group + private)',fnb:'Full Board',recommended:true,addons:'Spa + photographer +$420/pax'},
+  {id:'C',label:'River Villa',total:23120,perPax:2890,marginPct:41,occ:'4 villas',room:'River Villa ×4 (2pax/villa)',activities:'Private',fnb:'All-inclusive',addons:'Private chef + helicopter +$890/pax'}
+ ]
+};
+const DAY_STRUCT={
+ 'R-001-B':[
+  {day:1,title:'Arrival & Welcome',morning:'Cloudbeds airport transfer · meet & greet',afternoon:'Welcome ceremony with Sebastian · room handover',evening:'Sunset meditation on river deck · light dinner at The Roots',sku:['NMK-TRN-001','NMK-CER-014','NMK-FNB-022']},
+  {day:2,title:'Sacred Waters',morning:'Kuang Si Falls — private guide, MandaLao partner',afternoon:'Lunch at Tat Sae village · leisure',evening:'90-min sound bath · spa ritual',sku:['NMK-EXC-007','NMK-SPA-019']},
+  {day:3,title:'Full Moon Lunar Alignment',morning:'Alms ceremony 6am · river breakfast',afternoon:'Free time · optional spa',evening:'Full moon meditation · 5-course Lao chef dinner',sku:['NMK-CER-002','NMK-FNB-031'],lunar:true},
+  {day:4,title:'River Tales',morning:'River cruise with elder storyteller',afternoon:'Hand-weaving workshop · Ock Pop Tok partner',evening:'Private dinner at The Roots',sku:['NMK-EXC-011','NMK-EXC-022','NMK-FNB-040']},
+  {day:5,title:'Departure',morning:'Closing meditation · gift bag',afternoon:'Cloudbeds airport transfer',evening:'',sku:['NMK-CER-008','NMK-TRN-001']}
+ ]
+};
+
+// ROUTES
+const routes={
+ '':renderHome,'/':renderHome,
+ '/compile':renderCompile,'/result':renderResult,'/variant':renderVariant,
+ '/edit':renderEdit,'/preview':renderPreview,'/deploy':renderDeploy,'/success':renderSuccess,
+ '/funnel/lead':renderFunnelLead,'/funnel/detail':renderFunnelDetail,
+ '/funnel/checkout':renderFunnelCheckout,'/funnel/booked':renderFunnelBooked,
+ '/empty':renderEmpty,'/error':renderError
+};
+function router(){
+ const path=location.hash.slice(1).split('?')[0]||'';
+ const h=routes[path]||renderNotFound;
+ h();
+}
+window.addEventListener('hashchange',router);
+window.addEventListener('load',router);
+
+// SCREENS
+function renderHome(){
+ setCrumb(['compiler','home']);
+ const s=getState();
+ const hasRuns=true; // toggle to false to test empty
+ document.getElementById('app').innerHTML=`
+  <div class="container-x">
+   <div class="mb-6">
+    <div class="lbl">Step 1 · enter prompt</div>
+    <h1 class="h1">Compile a <em>retreat package</em></h1>
+    <p class="text-moss-3 mt-2 max-w-xl">One line. Duration · theme · tier · season · group size.<br>The compiler does the math, builds the PDF, ships the funnel.</p>
+   </div>
+
+   <div class="card-flat mb-6">
+    <div class="lbl">prompt</div>
+    <textarea class="input" id="prompt" placeholder="5 day mindfulness retreat — lux only — green season — 8 pax">${s.prompt||''}</textarea>
+    <div class="flex gap-2 mt-2 flex-wrap text-xs">
+     <button class="pill pill-moss" onclick="setPrompt('5 day mindfulness retreat — lux only — green season — 8 pax')">mindfulness 5D lux</button>
+     <button class="pill pill-moss" onclick="setPrompt('3 day river folklore — mid + lux — dry season — 12 pax')">river folklore 3D</button>
+     <button class="pill pill-moss" onclick="setPrompt('7 day detox + meditation — 3 tiers — full year — couples')">detox 7D 3-tier</button>
+     <button class="pill pill-moss" onclick="setPrompt('4 day retreat life — lux — full moon Oct 2026 — 6 pax')">retreat life full moon</button>
+    </div>
+    <div class="flex justify-between items-center mt-4">
+     <span class="mono text-moss-3">parser will resolve: duration · theme · tier · season · pax · lunar</span>
+     <button class="btn btn-moss" onclick="startCompile()">compile →</button>
+    </div>
+   </div>
+
+   <div class="flex justify-between items-center mb-3">
+    <h2 class="h3">recent runs · ${MOCK_RUNS.length}</h2>
+    <a href="#/empty" class="mono text-moss-3 hover:underline">view empty state →</a>
+   </div>
+   <div class="card-flat" style="padding:0">
+    ${hasRuns?MOCK_RUNS.map(r=>`
+     <div class="recent" onclick="openRun('${r.id}')">
+      <span class="ridx">${r.id}</span>
+      <div>
+       <div class="text-moss">${r.prompt}</div>
+       <div class="mono text-moss-3 mt-1">${r.created} · €${r.cost.toFixed(2)}</div>
+      </div>
+      <span class="pill ${r.status==='deployed'?'pill-green':r.status==='ready'?'pill-brass':r.status==='rendering'?'pill-moss':'pill-moss'}">${r.status}</span>
+      <span class="mono text-moss-3 text-right">${r.subdomain||'—'}</span>
+     </div>`).join(''):''}
+   </div>
+
+   <div class="mt-8 grid-3">
+    <div class="card-flat">
+     <div class="lbl">data sources</div>
+     <ul class="check-list mt-2">
+      <li>Cloudbeds rooms + rates</li>
+      <li>Supabase pricelist</li>
+      <li>Lunar calendar JSON</li>
+      <li>Series taxonomy</li>
+     </ul>
+    </div>
+    <div class="card-flat">
+     <div class="lbl">margin floors</div>
+     <ul class="check-list mt-2">
+      <li>Activities · 35%</li>
+      <li>Rooms · 60%</li>
+      <li>F&amp;B · 70%</li>
+      <li class="text-oxblood">Breach = halt + flag</li>
+     </ul>
+    </div>
+    <div class="card-flat">
+     <div class="lbl">output</div>
+     <ul class="check-list mt-2">
+      <li>9-page branded PDF</li>
+      <li>3-page funnel (lead · detail · checkout)</li>
+      <li>Vercel deploy + subdomain</li>
+      <li>2–3 design variants</li>
+     </ul>
+    </div>
+   </div>
+  </div>`;
+}
+
+function setPrompt(p){document.getElementById('prompt').value=p;update({prompt:p})}
+function startCompile(){
+ const p=document.getElementById('prompt').value.trim();
+ if(!p){alert('Type a prompt or pick a preset');return}
+ update({prompt:p,activeRun:'R-001'});
+ nav('/compile?run=R-001');
+}
+function openRun(id){
+ update({activeRun:id});
+ const r=MOCK_RUNS.find(x=>x.id===id);
+ if(r.status==='draft')nav('/compile?run='+id);
+ else if(r.status==='deployed')nav('/funnel/detail?slug='+(r.subdomain||'sample').split('.')[0]);
+ else nav('/result?run='+id);
+}
+
+function renderCompile(){
+ setCrumb(['compiler','compile']);
+ const q=getQuery();const runId=q.run||'R-001';
+ document.getElementById('app').innerHTML=`
+  <div class="container-x" style="max-width:680px">
+   <div class="lbl">compiling · ${runId}</div>
+   <h1 class="h1 mb-1">Building your <em>retreat</em></h1>
+   <p class="text-moss-3 text-sm">~12 seconds. No data is invented — every price traces to Cloudbeds, Supabase, or Sheet.</p>
+
+   <div class="card-flat mt-6">
+    <div id="steps">
+     <div class="step done"><span class="step-dot">1</span><span>Parsed prompt → duration 5 · theme Mindfulness · tier Lux · season Green · 8 pax · lunar auto-attached</span></div>
+     <div class="step done"><span class="step-dot">2</span><span>Cloudbeds availability checked · 4 River Suites + 1 Villa available across window</span></div>
+     <div class="step done"><span class="step-dot">3</span><span>Pricelist queried · 47 SKUs matched theme + tier + season</span></div>
+     <div class="step active"><span class="step-dot">4</span><span>Cost-stacking variants &amp; checking margin floors <span class="blink">·</span></span></div>
+     <div class="step"><span class="step-dot">5</span><span>USALI mapping</span></div>
+     <div class="step"><span class="step-dot">6</span><span>Lunar alignment · full moon Sept 27, 2026 + Oct 26, 2026</span></div>
+    </div>
+    <div class="progress mt-6"><div class="progress-bar" id="bar" style="width:55%"></div></div>
+    <div class="mono text-moss-3" id="logs">cb_avail.OK · pricelist.scan(47) · margin.check(activities 38% rooms 64% fnb 72%) ▍</div>
+   </div>
+
+   <div class="mt-4 mono text-moss-3 text-xs">
+    cost so far: €0.11 / cap €0.20 · model claude-sonnet-4-6 · agent retreatPackager
+   </div>
+  </div>`;
+ // animate progress
+ let pct=55;
+ const iv=setInterval(()=>{
+  pct+=8;
+  if(pct>=100){clearInterval(iv);setTimeout(()=>nav('/result?run='+runId),300);return}
+  const bar=document.getElementById('bar');if(bar)bar.style.width=pct+'%';
+ },280);
+}
+
+function renderResult(){
+ const q=getQuery();const runId=q.run||'R-001';
+ setCrumb(['compiler',runId,'variants']);
+ const variants=VARIANTS[runId]||VARIANTS['R-001'];
+ document.getElementById('app').innerHTML=`
+  <div class="container-x">
+   <div class="flex items-start justify-between mb-4 flex-wrap gap-3">
+    <div>
+     <div class="lbl">${runId} · ready</div>
+     <h1 class="h1">3 variants <em>compiled</em></h1>
+     <p class="text-moss-3 text-sm mt-1 mono">5 day mindfulness retreat · lux · green season · 8 pax · full moon Sept 27</p>
+    </div>
+    <div class="flex gap-2">
+     <button class="btn btn-ghost" onclick="nav('/error')">trigger error</button>
+     <button class="btn btn-out" onclick="nav('/')">new prompt</button>
+    </div>
+   </div>
+
+   <div class="grid-3">
+    ${variants.map(v=>`
+    <div class="card" style="position:relative;cursor:pointer" onclick="pickVariant('${runId}','${v.id}')">
+     ${v.recommended?'<span class="ribbon">Recommended</span>':''}
+     <div class="lbl">variant ${v.id}</div>
+     <h2 class="h2 mb-1">${v.label}</h2>
+     <div class="num-xl mt-2">${fmt$(v.total)}</div>
+     <div class="mono text-moss-3 text-xs">${fmt$(v.perPax)} per pax · ${v.marginPct}% margin</div>
+     <div class="my-3 border-t border-paper-3"></div>
+     <div class="text-xs space-y-1">
+      <div><span class="lbl" style="display:inline">Room</span> ${v.room}</div>
+      <div><span class="lbl" style="display:inline">Activities</span> ${v.activities}</div>
+      <div><span class="lbl" style="display:inline">F&amp;B</span> ${v.fnb}</div>
+      <div><span class="lbl" style="display:inline">Add-ons</span> ${v.addons}</div>
+      <div><span class="lbl" style="display:inline">Occupancy</span> ${v.occ}</div>
+     </div>
+     <button class="btn btn-moss mt-4" style="width:100%;justify-content:center" onclick="event.stopPropagation();pickVariant('${runId}','${v.id}')">open variant ${v.id} →</button>
+    </div>`).join('')}
+   </div>
+
+   <div class="mt-6 card-flat">
+    <div class="h3">USALI revenue split · variant B</div>
+    <table class="table mt-2">
+     <tr><th>Department</th><th style="text-align:right">USD</th><th style="text-align:right">% mix</th></tr>
+     <tr><td>Rooms</td><td style="text-align:right" class="mono">$10,560</td><td style="text-align:right" class="mono">58%</td></tr>
+     <tr><td>F&amp;B</td><td style="text-align:right" class="mono">$3,120</td><td style="text-align:right" class="mono">17%</td></tr>
+     <tr><td>Activities (Other Operated)</td><td style="text-align:right" class="mono">$3,440</td><td style="text-align:right" class="mono">19%</td></tr>
+     <tr><td>Spa</td><td style="text-align:right" class="mono">$1,200</td><td style="text-align:right" class="mono">6%</td></tr>
+     <tr style="font-weight:600;background:var(--paper-2)"><td>Total</td><td style="text-align:right" class="mono">$18,320</td><td style="text-align:right" class="mono">100%</td></tr>
+    </table>
+   </div>
+  </div>`;
+}
+function pickVariant(run,v){update({pickedVariant:run+'-'+v});nav('/variant?run='+run+'&v='+v)}
+
+function renderVariant(){
+ const q=getQuery();const run=q.run||'R-001';const vid=q.v||'B';
+ setCrumb(['compiler',run,'variant '+vid]);
+ const variants=VARIANTS[run]||VARIANTS['R-001'];
+ const v=variants.find(x=>x.id===vid)||variants[1];
+ const days=DAY_STRUCT[run+'-'+vid]||DAY_STRUCT['R-001-B'];
+ document.getElementById('app').innerHTML=`
+  <div class="container-x">
+   <div class="flex items-start justify-between mb-4 flex-wrap gap-3">
+    <div>
+     <div class="lbl">variant ${vid} · ${v.label}</div>
+     <h1 class="h1">Mindfulness · <em>5 days</em> · lux</h1>
+    </div>
+    <div class="flex gap-2">
+     <button class="btn btn-out" onclick="nav('/result?run='+'${run}')">← variants</button>
+     <button class="btn btn-out" onclick="nav('/edit?run='+'${run}'+'&v='+'${vid}')">edit itinerary</button>
+     <button class="btn btn-moss" onclick="nav('/preview?run='+'${run}'+'&v='+'${vid}')">render PDF + funnel →</button>
+    </div>
+   </div>
+
+   <div class="grid-2">
+    <div class="card-flat">
+     <div class="h3 mb-3">day-by-day</div>
+     ${days.map(d=>`
+      <div class="day-row">
+       <div class="day-num">${d.day}</div>
+       <div>
+        <div class="serif text-base font-medium">${d.title} ${d.lunar?'<span class="lunar"></span><span class="mono text-brass">FULL MOON</span>':''}</div>
+        ${d.morning?`<div class="slot"><b>am</b><span>${d.morning}</span></div>`:''}
+        ${d.afternoon?`<div class="slot"><b>pm</b><span>${d.afternoon}</span></div>`:''}
+        ${d.evening?`<div class="slot"><b>eve</b><span>${d.evening}</span></div>`:''}
+        ${d.sku?`<div class="slot"><b>sku</b><span class="mono text-moss-3">${d.sku.join(' · ')}</span></div>`:''}
+       </div>
+      </div>`).join('')}
+    </div>
+
+    <div>
+     <div class="card-flat mb-3">
+      <div class="h3 mb-2">pricing</div>
+      <div class="pricing-grid">
+       <div>Room (River Suite ×4 · 5n)</div><div>$10,560</div>
+       <div>Activities</div><div>$3,440</div>
+       <div>F&amp;B (Full Board)</div><div>$3,120</div>
+       <div>Spa</div><div>$1,200</div>
+       <div style="font-weight:600">Total · 8 pax</div><div style="font-weight:600">$18,320</div>
+       <div class="text-moss-3">Per pax</div><div class="text-moss-3">$2,290</div>
+       <div class="text-moss-3">Per night per pax</div><div class="text-moss-3">$458</div>
+      </div>
+      <div class="mt-3 ok">All margin floors cleared · activities 38% · rooms 64% · F&amp;B 72%</div>
+     </div>
+
+     <div class="card-flat mb-3">
+      <div class="h3 mb-2">currency lock</div>
+      <div class="pricing-grid">
+       <div>Base currency</div><div>LAK</div>
+       <div>Display currency</div><div>USD</div>
+       <div>FX rate</div><div>20,850 LAK / USD</div>
+       <div>Locked until</div><div>2026-05-10</div>
+      </div>
+     </div>
+
+     <div class="card-flat">
+      <div class="h3 mb-2">deposit & cancellation</div>
+      <ul class="check-list">
+       <li>30% deposit at booking ($687/pax)</li>
+       <li>70% balance 30 days pre-arrival</li>
+       <li>Full refund 60+ days</li>
+       <li>50% refund 30–59 days</li>
+       <li>No refund &lt;30 days</li>
+      </ul>
+     </div>
+    </div>
+   </div>
+  </div>`;
+}
+
+function renderEdit(){
+ const q=getQuery();const run=q.run||'R-001';const vid=q.v||'B';
+ setCrumb(['compiler',run,'variant '+vid,'edit']);
+ const days=DAY_STRUCT[run+'-'+vid]||DAY_STRUCT['R-001-B'];
+ const s=getState();const edits=s.edits||{};
+ document.getElementById('app').innerHTML=`
+  <div class="container-x">
+   <div class="flex items-start justify-between mb-4 flex-wrap gap-3">
+    <div>
+     <div class="lbl">edit · ${run} · variant ${vid}</div>
+     <h1 class="h1">Tweak the <em>itinerary</em></h1>
+     <p class="text-moss-3 text-sm">Drag activities, swap rooms, mark opt-outs. Total recalcs live.</p>
+    </div>
+    <div class="flex gap-2">
+     <button class="btn btn-out" onclick="nav('/variant?run='+'${run}'+'&v='+'${vid}')">cancel</button>
+     <button class="btn btn-moss" onclick="saveEdit('${run}','${vid}')">save &amp; preview →</button>
+    </div>
+   </div>
+
+   <div class="grid-2">
+    <div class="card-flat">
+     ${days.map(d=>`
+      <details ${d.day===2?'open':''}>
+       <summary class="flex justify-between items-center"><span class="serif font-medium">Day ${d.day} · ${d.title}</span><span class="text-brass">edit</span></summary>
+       <div class="space-y-2 pt-2">
+        <div><div class="lbl">am</div><input class="input" value="${d.morning}"/></div>
+        <div><div class="lbl">pm</div><input class="input" value="${d.afternoon}"/></div>
+        <div><div class="lbl">eve</div><input class="input" value="${d.evening||''}"/></div>
+        <div class="toggle-row"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="text-xs">Include this day in PDF</span></div>
+       </div>
+      </details>`).join('')}
+    </div>
+
+    <div>
+     <div class="card-flat mb-3">
+      <div class="h3 mb-2">live recalc</div>
+      <div class="num-lg">$18,320</div>
+      <div class="mono text-moss-3 text-xs mb-2">$2,290 per pax · 38% margin · all floors clear</div>
+      <div class="text-xs ok">No margin breaches detected.</div>
+     </div>
+     <div class="card-flat mb-3">
+      <div class="h3 mb-2">swap inventory</div>
+      <div class="text-xs space-y-2">
+       <div class="flex justify-between"><span>Rooms · River Suite</span><button class="btn btn-ghost text-xs" style="padding:2px 8px">change</button></div>
+       <div class="flex justify-between"><span>Activity · Sound Bath</span><button class="btn btn-ghost text-xs" style="padding:2px 8px">swap</button></div>
+       <div class="flex justify-between"><span>F&amp;B · Full Board</span><button class="btn btn-ghost text-xs" style="padding:2px 8px">change</button></div>
+      </div>
+     </div>
+     <div class="card-flat">
+      <div class="h3 mb-2">brand checks</div>
+      <ul class="check-list">
+       <li>No horses, no stables in copy</li>
+       <li>Lunar logic auto-attached (Mindfulness)</li>
+       <li>USALI categories mapped</li>
+       <li>Margin floors clear</li>
+      </ul>
+     </div>
+    </div>
+   </div>
+  </div>`;
+}
+function saveEdit(run,v){update({edits:{savedAt:Date.now()}});nav('/preview?run='+run+'&v='+v)}
+
+function renderPreview(){
+ const q=getQuery();const run=q.run||'R-001';const vid=q.v||'B';
+ setCrumb(['compiler',run,'variant '+vid,'preview']);
+ const s=getState();const tab=s.previewTab||'pdf';
+ document.getElementById('app').innerHTML=`
+  <div class="container-x">
+   <div class="flex items-start justify-between mb-4 flex-wrap gap-3">
+    <div>
+     <div class="lbl">preview · ${run} · variant ${vid}</div>
+     <h1 class="h1">PDF + <em>3-page funnel</em></h1>
+    </div>
+    <div class="flex gap-2">
+     <button class="btn btn-out" onclick="nav('/variant?run='+'${run}'+'&v='+'${vid}')">← back</button>
+     <button class="btn btn-moss" onclick="nav('/deploy?run='+'${run}'+'&v='+'${vid}')">pick design + deploy →</button>
+    </div>
+   </div>
+
+   <div class="tab-bar">
+    <button class="tab ${tab==='pdf'?'active':''}" onclick="setTab('pdf')">9-page PDF</button>
+    <button class="tab ${tab==='lead'?'active':''}" onclick="setTab('lead')">Funnel · 1 lead magnet</button>
+    <button class="tab ${tab==='detail'?'active':''}" onclick="setTab('detail')">Funnel · 2 retreat detail</button>
+    <button class="tab ${tab==='checkout'?'active':''}" onclick="setTab('checkout')">Funnel · 3 checkout</button>
+   </div>
+
+   <div id="tabContent">${renderPreviewTab(tab,run,vid)}</div>
+  </div>`;
+}
+function setTab(t){update({previewTab:t});const q=getQuery();document.getElementById('tabContent').innerHTML=renderPreviewTab(t,q.run||'R-001',q.v||'B');document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active',['pdf','lead','detail','checkout'][i]===t))}
+
+function renderPreviewTab(tab,run,vid){
+ if(tab==='pdf')return `
+  <div class="grid-2">
+   <div class="pdf-frame" style="min-height:500px">
+    <div class="flex justify-between items-start">
+     <span class="logo">Namkhan</span>
+     <span class="slh">SLH</span>
+    </div>
+    <div style="height:120px;margin:24px -24px;background:linear-gradient(rgba(26,46,33,.4),rgba(26,46,33,.6)),url('https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=800');background-size:cover;background-position:center;display:flex;align-items:flex-end;padding:14px;color:var(--cream)">
+     <span class="serif-it text-xl">a mindful river retreat</span>
+    </div>
+    <h2 class="h1 mt-4"><em>Five days</em> on the Namkhan</h2>
+    <p class="text-moss-3 text-sm mt-2">Sept 25–29, 2026 · Full moon · 8 guests · River Suite</p>
+    <div class="mt-6 mono text-xs text-moss-3">Cover · what's included · day-by-day (×2) · accommodation · F&amp;B · pricing · booking · about Namkhan</div>
+   </div>
+   <div class="space-y-2">
+    <div class="lbl">page list</div>
+    ${["Cover · hero + dates","What's included · table","Day-by-day · 1–3","Day-by-day · 4–5","Accommodation · River Suite","F&amp;B · The Roots menu","Pricing · variant B","Booking · QR + T&Cs","About Namkhan + SLH"].map((p,i)=>`<div class="recent" style="grid-template-columns:30px 1fr;padding:6px 12px;cursor:default"><span class="ridx">${(i+1).toString().padStart(2,'0')}</span><span class="text-xs">${p}</span></div>`).join('')}
+    <div class="ok mt-3">PDF rendered · 3.2 MB · Puppeteer 287ms cached · saved to /output/pdfs/</div>
+    <div class="card-flat mt-3">
+     <div class="h3 mb-2">filename</div>
+     <div class="mono text-xs">Namkhan_Mindfulness_Lux_Green_20260925.pdf</div>
+    </div>
+   </div>
+  </div>`;
+ if(tab==='lead')return `
+  <div class="funnel-frame">
+   <div class="public-hero">
+    <div>
+     <span class="mono text-xs" style="color:var(--brass-3)">FREE GUIDE · 7 days · audio + PDF</span>
+     <div class="h1 text-cream mt-2"><em>The Mindful River</em></div>
+     <div class="text-cream/80 text-sm mt-1">A 7-day mindfulness audio + retreat preview, sent to your inbox.</div>
+    </div>
+   </div>
+   <div style="padding:24px;max-width:480px;margin:0 auto">
+    <div class="lbl">email · double opt-in</div>
+    <input class="input" placeholder="you@example.com"/>
+    <button class="btn btn-moss mt-3" style="width:100%;justify-content:center">Send me the guide</button>
+    <div class="mono text-xs text-moss-3 mt-3">GDPR consent · double opt-in for EU · Klaviyo automation triggers on confirmation</div>
+   </div>
+  </div>
+  <div class="card-flat mt-3"><div class="h3 mb-1">tracking</div><div class="text-xs space-y-1"><div>UTM source/medium/campaign</div><div>Meta Pixel · GA4</div><div>Supabase leads insert + Make webhook</div></div></div>`;
+ if(tab==='detail')return `
+  <div class="funnel-frame">
+   <div class="public-hero">
+    <div>
+     <span class="mono text-xs" style="color:var(--brass-3)">SEPT 25–29 · 8 GUESTS · LUX</span>
+     <div class="h1 text-cream mt-2">Mindfulness · <em>Five days</em> on the river</div>
+     <div class="text-cream/80 text-sm mt-1">Lunar-aligned with the Sept 27 full moon. Sebastian hosts.</div>
+    </div>
+   </div>
+   <div style="padding:24px">
+    <div class="grid-2">
+     <div>
+      <div class="h3 mb-2">what you get</div>
+      <ul class="check-list text-sm">
+       <li>4 nights · River Suite (single occupancy upgrade option)</li>
+       <li>Daily meditation with Sebastian + visiting teacher</li>
+       <li>Kuang Si private guide · sound bath · Lao chef dinner</li>
+       <li>Full moon ceremony Sept 27</li>
+       <li>All meals · airport transfers · gift bag</li>
+      </ul>
+     </div>
+     <div class="card-flat" style="background:var(--paper-2)">
+      <div class="lbl">from</div>
+      <div class="num-xl">$2,290</div>
+      <div class="mono text-xs text-moss-3">per guest · 30% deposit · payment plan</div>
+      <button class="btn btn-moss mt-3" style="width:100%;justify-content:center" onclick="nav('/funnel/checkout?slug=mindfulness-summer')">Reserve your spot →</button>
+     </div>
+    </div>
+    <div class="mt-6">
+     <div class="h3 mb-2">FAQ</div>
+     <details><summary class="text-sm">What's included in the price?</summary><div class="text-sm text-moss-3 pl-4 pb-2">All accommodation, meals, activities, transfers, and gift bag. Not included: international flights, insurance, optional spa add-ons.</div></details>
+     <details><summary class="text-sm">Can I extend my stay?</summary><div class="text-sm text-moss-3 pl-4 pb-2">Yes — extra nights at retreat rate available before and after, subject to availability.</div></details>
+     <details><summary class="text-sm">What's the cancellation policy?</summary><div class="text-sm text-moss-3 pl-4 pb-2">Full refund 60+ days, 50% 30–59 days, no refund under 30 days.</div></details>
+    </div>
+   </div>
+  </div>`;
+ if(tab==='checkout')return `
+  <div class="funnel-frame" style="padding:24px">
+   <div class="lbl">checkout · mindfulness 5D Lux</div>
+   <h2 class="h2 mb-3">Reserve your spot</h2>
+   <div class="grid-2">
+    <div>
+     <div class="form-grid">
+      <div><div class="lbl">first name</div><input class="input" placeholder="Sarah"/></div>
+      <div><div class="lbl">last name</div><input class="input" placeholder="Lin"/></div>
+     </div>
+     <div class="mt-2"><div class="lbl">email</div><input class="input" placeholder="sarah@example.com"/></div>
+     <div class="mt-2 form-grid">
+      <div><div class="lbl">arrival date</div><input class="input" value="Sept 25, 2026" readonly/></div>
+      <div><div class="lbl">guests</div><input class="input" type="number" value="2"/></div>
+     </div>
+     <div class="mt-2"><div class="lbl">add-ons</div>
+      <div class="toggle-row"><div class="toggle on"></div><span class="text-xs">Spa pack +$240/pax</span></div>
+      <div class="toggle-row"><div class="toggle"></div><span class="text-xs">Photographer +$180/pax</span></div>
+      <div class="toggle-row"><div class="toggle"></div><span class="text-xs">Extra night before/after +$420/night</span></div>
+     </div>
+     <div class="mt-3 mono text-xs text-moss-3">Cloudbeds availability live · River Suite ×4 still open</div>
+    </div>
+    <div class="card-flat" style="background:var(--paper-2);position:sticky;top:80px">
+     <div class="h3 mb-2">your booking</div>
+     <div class="pricing-grid text-xs">
+      <div>2 × Mindfulness 5D · River</div><div>$4,580</div>
+      <div>Spa pack ×2</div><div>$480</div>
+      <div>Total</div><div style="font-weight:600">$5,060</div>
+      <div class="text-brass">Deposit (30%)</div><div class="text-brass" style="font-weight:600">$1,518</div>
+      <div class="text-moss-3">Balance · due Aug 26, 2026</div><div class="text-moss-3">$3,542</div>
+     </div>
+     <button class="btn btn-moss mt-3" style="width:100%;justify-content:center" onclick="nav('/funnel/booked?slug=mindfulness-summer')">Pay $1,518 deposit →</button>
+     <div class="mono text-xs text-moss-3 mt-2">Stripe secure · 30/70 plan · cancel free 60+ days</div>
+    </div>
+   </div>
+  </div>`;
+}
+
+function renderDeploy(){
+ const q=getQuery();const run=q.run||'R-001';const vid=q.v||'B';
+ setCrumb(['compiler',run,'deploy']);
+ const s=getState();const design=s.design||'A';const subdomain=s.subdomain||'mindfulness-summer';
+ document.getElementById('app').innerHTML=`
+  <div class="container-x" style="max-width:880px">
+   <div class="flex items-start justify-between mb-4 flex-wrap gap-3">
+    <div>
+     <div class="lbl">deploy · ${run} · variant ${vid}</div>
+     <h1 class="h1">Pick design <em>variant</em>, then ship</h1>
+    </div>
+    <button class="btn btn-out" onclick="nav('/preview?run='+'${run}'+'&v='+'${vid}')">← preview</button>
+   </div>
+
+   <div class="grid-3 mb-6">
+    <div class="design-tile ${design==='A'?'selected':''}" onclick="setDesign('A')">
+     <div class="lbl">design A</div>
+     <h3 class="serif text-lg">Editorial</h3>
+     <p class="text-xs text-moss-3 mb-3">Soho House · serif headlines · paper texture · long-form copy</p>
+     <div style="height:80px;background:linear-gradient(135deg,#efe6d3 0%,#e3d7bd 100%);border-radius:2px;display:flex;align-items:center;justify-content:center"><span class="serif-it text-brass">Mindful</span></div>
+    </div>
+    <div class="design-tile ${design==='B'?'selected':''}" onclick="setDesign('B')">
+     <div class="lbl">design B</div>
+     <h3 class="serif text-lg">Minimalist</h3>
+     <p class="text-xs text-moss-3 mb-3">Aman-style · sans-serif · whitespace · single hero · short copy</p>
+     <div style="height:80px;background:#fbf6e9;border-radius:2px;border:1px solid #e3d7bd;display:flex;align-items:center;justify-content:center"><span class="text-moss font-medium tracking-widest text-xs">RETREAT</span></div>
+    </div>
+    <div class="design-tile ${design==='C'?'selected':''}" onclick="setDesign('C')">
+     <div class="lbl">design C</div>
+     <h3 class="serif text-lg">Conversion</h3>
+     <p class="text-xs text-moss-3 mb-3">Bold · big CTA · social proof above fold · countdown</p>
+     <div style="height:80px;background:linear-gradient(135deg,#1a2e21 0%,#2a4632 100%);border-radius:2px;display:flex;align-items:center;justify-content:center;color:var(--cream)"><span class="font-bold tracking-wide text-sm">RESERVE NOW</span></div>
+    </div>
+   </div>
+
+   <div class="card-flat mb-4">
+    <div class="lbl mb-2">subdomain</div>
+    <div class="flex items-center gap-2">
+     <input class="input" id="subdomain" value="${subdomain}" style="font-family:'JetBrains Mono',monospace"/>
+     <span class="mono text-moss-3">.thenamkhan.com</span>
+    </div>
+    <div class="mono text-xs text-moss-3 mt-2">Cloudflare DNS · auto SSL · CDN cache · 5 min provisioning window</div>
+   </div>
+
+   <div class="card-flat mb-4">
+    <div class="h3 mb-2">deploy bundle</div>
+    <ul class="check-list text-sm">
+     <li>3 funnel pages (lead · detail · checkout) — design ${design}</li>
+     <li>1 PDF (variant ${vid})</li>
+     <li>Vercel project config + env.example (Cloudbeds, Stripe, Supabase keys)</li>
+     <li>Make scenarios (lead.captured · booking.deposit_paid · booking.balance_due)</li>
+     <li>vercel.json + DNS map</li>
+    </ul>
+   </div>
+
+   <div class="flex justify-between items-center">
+    <div class="mono text-xs text-moss-3">est. cost: €0.00 deploy · ~€0.30/mo runtime at projected traffic</div>
+    <button class="btn btn-moss" onclick="deploy()">Ship it →</button>
+   </div>
+  </div>`;
+}
+function setDesign(d){update({design:d});const q=getQuery();renderDeploy()}
+function deploy(){
+ const sd=document.getElementById('subdomain').value.trim();
+ if(!sd){alert('Pick a subdomain');return}
+ update({subdomain:sd,deployedAt:Date.now()});
+ const q=getQuery();
+ nav('/success?run='+(q.run||'R-001')+'&v='+(q.v||'B'));
+}
+
+function renderSuccess(){
+ const q=getQuery();const run=q.run||'R-001';const vid=q.v||'B';
+ setCrumb(['compiler',run,'deployed']);
+ const s=getState();const subdomain=s.subdomain||'mindfulness-summer';
+ document.getElementById('app').innerHTML=`
+  <div class="container-x" style="max-width:680px">
+   <div class="ok mb-4">Deployed · ${subdomain}.thenamkhan.com is live</div>
+   <h1 class="h1">Your retreat <em>is shipping</em></h1>
+   <p class="text-moss-3 text-sm">Funnel pages live, PDF in /output/, Make scenarios queued.</p>
+
+   <div class="deploy-shell mt-4">
+    <div>$ vercel --prod</div>
+    <div>✓ Building... done in 14s</div>
+    <div>✓ Deploying... ${subdomain}.thenamkhan.com</div>
+    <div>✓ Cloudflare DNS · CNAME mapped</div>
+    <div>✓ SSL · provisioning (typically &lt; 5 min)</div>
+    <div>✓ Make scenarios imported (3): lead.captured, booking.deposit_paid, booking.balance_due</div>
+    <div>✓ Stripe products created · 30/70 plan</div>
+    <div>✓ Klaviyo automation triggered · 8-touch series</div>
+    <div class="text-brass mt-2">Done. Live link: https://${subdomain}.thenamkhan.com</div>
+   </div>
+
+   <div class="grid-2 mt-6">
+    <div class="card-flat">
+     <div class="h3 mb-2">live links</div>
+     <div class="text-sm space-y-1">
+      <div><a class="text-brass underline" href="#/funnel/lead?slug=${subdomain}">/lead</a> — lead magnet</div>
+      <div><a class="text-brass underline" href="#/funnel/detail?slug=${subdomain}">/r/${subdomain}</a> — retreat detail</div>
+      <div><a class="text-brass underline" href="#/funnel/checkout?slug=${subdomain}">/r/${subdomain}/checkout</a> — checkout</div>
+     </div>
+    </div>
+    <div class="card-flat">
+     <div class="h3 mb-2">next</div>
+     <ul class="check-list text-sm">
+      <li>Klaviyo email automation auto-triggered on first lead</li>
+      <li>Cron will recheck Cloudbeds rates every 30 min</li>
+      <li>Slack ping on first booking</li>
+      <li>USALI report rolls into nightly batch</li>
+     </ul>
+    </div>
+   </div>
+
+   <div class="flex gap-2 mt-6">
+    <button class="btn btn-out" onclick="nav('/')">compile another</button>
+    <button class="btn btn-moss" onclick="nav('/funnel/detail?slug='+'${subdomain}')">view live retreat page →</button>
+   </div>
+  </div>`;
+}
+
+function renderFunnelLead(){
+ const q=getQuery();const slug=q.slug||'mindfulness-summer';
+ setCrumb(['live · '+slug,'lead magnet']);
+ document.getElementById('app').innerHTML=`
+  <div class="public-hero" style="height:340px">
+   <div>
+    <span class="mono text-xs" style="color:var(--brass-3)">FREE · 7-DAY GUIDE · AUDIO + PDF</span>
+    <div class="h1 text-cream mt-2" style="font-size:42px"><em>The Mindful River</em></div>
+    <div class="text-cream/80 text-sm mt-2">A 7-day mindfulness audio + retreat preview, sent to your inbox.</div>
+   </div>
+  </div>
+  <div class="container-x" style="max-width:520px">
+   <div class="card-flat">
+    <div class="lbl">email · double opt-in</div>
+    <input class="input" placeholder="you@example.com" id="leadEmail"/>
+    <div class="mt-2 toggle-row"><div class="toggle on"></div><span class="text-xs">I agree to receive emails from Namkhan (GDPR)</span></div>
+    <button class="btn btn-moss mt-3" style="width:100%;justify-content:center" onclick="captureLead()">Send me the guide</button>
+   </div>
+   <div class="mono text-xs text-moss-3 mt-3 text-center">Your data stays with Namkhan · unsubscribe anytime</div>
+  </div>`;
+}
+function captureLead(){
+ const e=document.getElementById('leadEmail').value;
+ if(!e||!e.includes('@')){alert('Enter a valid email');return}
+ alert('✓ Confirmation email sent. Klaviyo automation triggered.');
+}
+
+function renderFunnelDetail(){
+ const q=getQuery();const slug=q.slug||'mindfulness-summer';
+ setCrumb(['live · '+slug,'retreat detail']);
+ document.getElementById('app').innerHTML=`
+  <div class="public-hero" style="height:340px">
+   <div>
+    <span class="mono text-xs" style="color:var(--brass-3)">SEPT 25–29, 2026 · 8 GUESTS · LUX · LUNAR ALIGNED</span>
+    <div class="h1 text-cream mt-2" style="font-size:42px">Mindfulness · <em>Five days</em> on the river</div>
+    <div class="text-cream/80 text-sm mt-2">Sept 27 full moon · Sebastian hosts · River Suite</div>
+   </div>
+  </div>
+  <div class="container-x">
+   <div class="grid-2">
+    <div>
+     <div class="h3 mb-2">your retreat</div>
+     <p class="text-sm leading-relaxed">Four nights on the Namkhan, anchored to the September full moon. Daily meditation, a Kuang Si private guide, sound bath, Lao chef dinner. No agenda after sunset on the lunar night.</p>
+     <div class="mt-4 h3 mb-2">included</div>
+     <ul class="check-list text-sm">
+      <li>4 nights · River Suite</li>
+      <li>Daily meditation · Sebastian + visiting teacher</li>
+      <li>Kuang Si Falls private guide · sound bath · Lao chef dinner</li>
+      <li>Full moon ceremony · Sept 27</li>
+      <li>All meals · airport transfers · gift bag</li>
+     </ul>
+     <div class="mt-4 h3 mb-2">not included</div>
+     <ul class="check-list x-list text-sm">
+      <li>International flights</li>
+      <li>Travel insurance</li>
+      <li>Optional spa upgrades</li>
+     </ul>
+     <div class="mt-6 h3 mb-2">what guests say</div>
+     <div class="card-flat" style="background:var(--paper-2)">
+      <p class="serif-it text-base">"The pace is the point. We came back changed."</p>
+      <div class="mono text-xs text-moss-3 mt-2">— Anya, Singapore · April 2026</div>
+     </div>
+    </div>
+    <div>
+     <div class="card-flat" style="background:var(--paper-2);position:sticky;top:80px">
+      <div class="lbl">from</div>
+      <div class="num-xl">$2,290</div>
+      <div class="mono text-xs text-moss-3 mb-3">per guest · 30% deposit · 70% 30 days pre-arrival</div>
+      <button class="btn btn-moss" style="width:100%;justify-content:center" onclick="nav('/funnel/checkout?slug='+'${slug}')">Reserve your spot →</button>
+      <div class="mt-4 text-xs space-y-1">
+       <div class="flex justify-between"><span class="text-moss-3">Group size</span><span>8 max</span></div>
+       <div class="flex justify-between"><span class="text-moss-3">Spots left</span><span class="text-brass">4</span></div>
+       <div class="flex justify-between"><span class="text-moss-3">Lunar event</span><span><span class="lunar"></span>Sept 27</span></div>
+       <div class="flex justify-between"><span class="text-moss-3">Cancellation</span><span>Full 60+ days</span></div>
+      </div>
+     </div>
+     <div class="card-flat mt-3">
+      <div class="h3 mb-2">FAQ</div>
+      <details><summary class="text-sm">Cancellation policy</summary><div class="text-sm text-moss-3 pl-4 pb-2">Full 60+ days · 50% 30–59 · none under 30.</div></details>
+      <details><summary class="text-sm">Travel insurance</summary><div class="text-sm text-moss-3 pl-4 pb-2">Strongly recommended. We don't sell insurance — book your own.</div></details>
+      <details><summary class="text-sm">Single occupancy</summary><div class="text-sm text-moss-3 pl-4 pb-2">+$520 supplement for the full retreat.</div></details>
+     </div>
+    </div>
+   </div>
+  </div>`;
+}
+
+function renderFunnelCheckout(){
+ const q=getQuery();const slug=q.slug||'mindfulness-summer';
+ setCrumb(['live · '+slug,'checkout']);
+ document.getElementById('app').innerHTML=`
+  <div class="container-x" style="max-width:880px;padding-top:24px">
+   <div class="lbl">checkout · ${slug}</div>
+   <h1 class="h1 mb-4">Reserve your <em>spot</em></h1>
+   <div class="grid-2">
+    <form onsubmit="event.preventDefault();nav('/funnel/booked?slug='+'${slug}')">
+     <div class="form-grid">
+      <div><div class="lbl">first name *</div><input class="input" required placeholder="Sarah"/></div>
+      <div><div class="lbl">last name *</div><input class="input" required placeholder="Lin"/></div>
+     </div>
+     <div class="mt-2"><div class="lbl">email *</div><input class="input" type="email" required placeholder="sarah@example.com"/></div>
+     <div class="mt-2"><div class="lbl">phone (whatsapp)</div><input class="input" placeholder="+65 9123 4567"/></div>
+     <div class="mt-2 form-grid">
+      <div><div class="lbl">arrival</div><input class="input" value="Sept 25, 2026" readonly/></div>
+      <div><div class="lbl">guests *</div><input class="input" type="number" value="2" min="1" max="8"/></div>
+     </div>
+     <div class="mt-3"><div class="lbl">add-ons</div>
+      <div class="toggle-row"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="text-xs">Spa pack +$240/pax</span></div>
+      <div class="toggle-row"><div class="toggle" onclick="this.classList.toggle('on')"></div><span class="text-xs">Photographer +$180/pax</span></div>
+      <div class="toggle-row"><div class="toggle" onclick="this.classList.toggle('on')"></div><span class="text-xs">Extra night before +$420</span></div>
+      <div class="toggle-row"><div class="toggle" onclick="this.classList.toggle('on')"></div><span class="text-xs">Extra night after +$420</span></div>
+     </div>
+     <div class="mt-4"><div class="lbl">special requests</div><textarea class="input" placeholder="Dietary needs, accessibility, anything we should know."></textarea></div>
+     <div class="mt-3 toggle-row"><div class="toggle on" onclick="this.classList.toggle('on')"></div><span class="text-xs">I agree to the cancellation policy &amp; waiver</span></div>
+     <button class="btn btn-moss mt-4" style="width:100%;justify-content:center" type="submit">Pay $1,518 deposit · Stripe →</button>
+     <div class="mono text-xs text-moss-3 mt-2">Secure · 30/70 plan · cancel free 60+ days · waiver + insurance disclaimer reviewed</div>
+    </form>
+    <div class="card-flat" style="background:var(--paper-2);position:sticky;top:80px;height:fit-content">
+     <div class="h3 mb-2">your booking</div>
+     <div class="pricing-grid text-xs">
+      <div>2 × Mindfulness 5D · River Suite</div><div>$4,580</div>
+      <div>Spa pack ×2</div><div>$480</div>
+      <div style="font-weight:600">Total</div><div style="font-weight:600">$5,060</div>
+      <div class="text-brass">Deposit · 30%</div><div class="text-brass" style="font-weight:600">$1,518</div>
+      <div class="text-moss-3">Balance · due Aug 26, 2026</div><div class="text-moss-3">$3,542</div>
+     </div>
+     <div class="mt-3 mono text-xs text-moss-3">Cloudbeds confirmed · River Suite ×2 held for 15 min</div>
+    </div>
+   </div>
+  </div>`;
+}
+
+function renderFunnelBooked(){
+ const q=getQuery();const slug=q.slug||'mindfulness-summer';
+ setCrumb(['live · '+slug,'booked']);
+ document.getElementById('app').innerHTML=`
+  <div class="container-x" style="max-width:560px;padding-top:48px;text-align:center">
+   <div style="font-size:48px" class="glyph">✓</div>
+   <h1 class="h1 mt-2"><em>You're in.</em></h1>
+   <p class="text-moss-3 mt-2">Reservation NMK-2026-0427 · River Suite · Sept 25–29, 2026</p>
+   <div class="card-flat mt-4 text-left">
+    <div class="pricing-grid text-xs">
+     <div>Stripe payment</div><div>$1,518 charged</div>
+     <div>Balance due</div><div>$3,542 · Aug 26, 2026</div>
+     <div>Cloudbeds reservation</div><div>NMK-2026-0427</div>
+     <div>Confirmation</div><div>sent to sarah@example.com</div>
+    </div>
+   </div>
+   <div class="mt-4 text-xs text-moss-3">PDF itinerary auto-attached · Klaviyo welcome series triggered · WhatsApp opt-in pending</div>
+   <div class="qr mt-6 mx-auto" style="margin-left:auto;margin-right:auto"></div>
+   <div class="mono text-xs text-moss-3 mt-2">Save this · QR opens your booking</div>
+  </div>`;
+}
+
+function renderEmpty(){
+ setCrumb(['compiler','empty state']);
+ document.getElementById('app').innerHTML=`
+  <div class="container-x" style="max-width:520px;text-align:center;padding-top:64px">
+   <div class="glyph" style="font-size:48px">~</div>
+   <h1 class="h1 mt-2">No <em>runs</em> yet</h1>
+   <p class="text-moss-3 text-sm mt-2">Type a prompt above to compile your first retreat.</p>
+   <button class="btn btn-moss mt-4" onclick="nav('/')">start a compile →</button>
+  </div>`;
+}
+function renderError(){
+ setCrumb(['compiler','error']);
+ document.getElementById('app').innerHTML=`
+  <div class="container-x" style="max-width:560px;padding-top:48px">
+   <div class="err mb-4"><b>Compile halted · margin floor breached</b><br>F&amp;B margin 64% (floor 70%) on variant C — Lao chef dinner cost-stack inflated by FX drift.</div>
+   <div class="card-flat">
+    <div class="h3 mb-2">why this halted</div>
+    <ul class="check-list text-sm">
+     <li>FX rate locked 7 days · LAK weakened 4.2%</li>
+     <li>Variant C uses chef + private outlet · cost basis higher</li>
+     <li>Margin floor (70%) is a hard rule — no auto-override</li>
+    </ul>
+   </div>
+   <div class="card-flat mt-3">
+    <div class="h3 mb-2">options</div>
+    <div class="space-y-2 text-sm">
+     <div class="flex justify-between items-center"><span>Re-price F&amp;B at +6%</span><button class="btn btn-out text-xs" style="padding:4px 10px">apply</button></div>
+     <div class="flex justify-between items-center"><span>Drop variant C, keep A + B</span><button class="btn btn-out text-xs" style="padding:4px 10px">apply</button></div>
+     <div class="flex justify-between items-center"><span>RM override (logged · audit trail)</span><button class="btn btn-out text-xs" style="padding:4px 10px">override</button></div>
+    </div>
+   </div>
+   <button class="btn btn-out mt-4" onclick="nav('/result?run=R-001')">← back to variants</button>
+  </div>`;
+}
+function renderNotFound(){
+ setCrumb(['404']);
+ document.getElementById('app').innerHTML=`<div class="container-x" style="text-align:center;padding-top:64px"><div class="glyph" style="font-size:48px">?</div><h1 class="h1">Route not found</h1><button class="btn btn-moss mt-3" onclick="nav('/')">home</button></div>`;
+}
+</script>
+</body>
+</html>
