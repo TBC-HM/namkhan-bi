@@ -342,3 +342,17 @@ Vercel project facts captured:
 - Production deployment at time of phase: `dpl_HAKrSX8TCjCcdidkDLTpTv8UyGzm` (Ready)
 - `vercel.json` left unchanged on this branch (`{ regions: ["fra1"], framework: "nextjs" }`).
 
+### Phase 4 follow-up — best-effort blueprint for scenario 04 (22:05)
+
+PBS asked for an importable blueprint + a list of what to do. Wrote:
+
+- `cockpit/make-blueprints/04-weekly-audit-mailer.blueprint.json` — best-effort Make.com blueprint with 5 HTTP-only modules (webhook → 2× Supabase GET → Anthropic POST → Supabase POST upsert). Gmail Send module deliberately omitted because Gmail connectors require OAuth inside Make's UI and can't ship in a portable blueprint JSON.
+- `cockpit/make-blueprints/README.md` — 7-step import + setup checklist (import → activate webhook → replace REPLACE_WITH_* tokens → add Gmail module in UI → test → activate → end-to-end verify via GitHub workflow_dispatch).
+
+Caveats called out in the README:
+- Make's blueprint JSON format isn't fully publicly documented — import may fail, succeed silently, or succeed with quirks.
+- If import fails, fallback is to build from scratch in Make UI using the spec at `cockpit/make-scenarios/04-weekly-audit-mailer.json` (already committed Phase 4).
+- All 3 buildable scenarios (04, 01, 05) get same treatment if 04 imports cleanly. 02 and 03 remain deferred.
+
+Tokens use `REPLACE_WITH_*` placeholders (Supabase service_role, Anthropic API key, full DIGEST_PROMPT system prompt). Better-practice note in the README points to Make's Custom Variables feature so keys don't end up in any future re-export.
+

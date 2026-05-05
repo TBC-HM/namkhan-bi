@@ -1,0 +1,229 @@
+{
+  "name": "04 Weekly Audit Mailer (Cockpit)",
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": {
+        "hook": null,
+        "maxResults": 1
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0,
+          "name": "Webhook: weekly-audit-in"
+        },
+        "restore": {
+          "parameters": {
+            "hook": {
+              "data": { "editable": "true" },
+              "label": "weekly-audit-in"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "hook",
+            "type": "hook:gateway-webhook",
+            "label": "Webhook",
+            "required": true
+          },
+          {
+            "name": "maxResults",
+            "type": "number",
+            "label": "Maximum number of results"
+          }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": false,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "https://kpenyneooigsyuuomgct.supabase.co/rest/v1/cockpit_kpi_snapshots?select=*&date=gt.{{formatDate(addDays(now;-7);\"YYYY-MM-DD\")}}&order=date.desc",
+        "method": "GET",
+        "headers": [
+          { "name": "apikey", "value": "REPLACE_WITH_SUPABASE_SERVICE_KEY" },
+          { "name": "Authorization", "value": "Bearer REPLACE_WITH_SUPABASE_SERVICE_KEY" },
+          { "name": "Accept", "value": "application/json" }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "authPass": "",
+        "authUser": "",
+        "timeout": "",
+        "shareCookies": false,
+        "ca": "",
+        "rejectUnauthorized": true,
+        "followRedirect": true,
+        "useQuerystring": false,
+        "gzip": true,
+        "useMtls": false,
+        "contentType": "application/json"
+      },
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0,
+          "name": "Supabase: kpi_snapshots last 7d"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": false,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "https://kpenyneooigsyuuomgct.supabase.co/rest/v1/cockpit_incidents?select=*&detected_at=gt.{{formatDate(addDays(now;-7);\"YYYY-MM-DDTHH:mm:ssZ\")}}&order=severity",
+        "method": "GET",
+        "headers": [
+          { "name": "apikey", "value": "REPLACE_WITH_SUPABASE_SERVICE_KEY" },
+          { "name": "Authorization", "value": "Bearer REPLACE_WITH_SUPABASE_SERVICE_KEY" },
+          { "name": "Accept", "value": "application/json" }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "authPass": "",
+        "authUser": "",
+        "timeout": "",
+        "shareCookies": false,
+        "ca": "",
+        "rejectUnauthorized": true,
+        "followRedirect": true,
+        "useQuerystring": false,
+        "gzip": true,
+        "useMtls": false,
+        "contentType": "application/json"
+      },
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 0,
+          "name": "Supabase: incidents last 7d"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": false,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": [
+          { "name": "x-api-key", "value": "REPLACE_WITH_ANTHROPIC_API_KEY" },
+          { "name": "anthropic-version", "value": "2023-06-01" },
+          { "name": "Content-Type", "value": "application/json" }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "authPass": "",
+        "authUser": "",
+        "timeout": "",
+        "shareCookies": false,
+        "ca": "",
+        "rejectUnauthorized": true,
+        "followRedirect": true,
+        "useQuerystring": false,
+        "gzip": true,
+        "useMtls": false,
+        "contentType": "application/json",
+        "data": "{\"model\":\"claude-opus-4-7\",\"max_tokens\":2048,\"system\":\"REPLACE_WITH_DIGEST_PROMPT_FROM_SPEC_FILE\",\"messages\":[{\"role\":\"user\",\"content\":\"Compose this week's audit digest. Inputs follow.\\n\\n=== Webhook payload (audit-report.md from GitHub Action) ===\\n{{1.`__IMTAUX__`.body}}\\n\\n=== KPI snapshots (last 7d) ===\\n{{2.data}}\\n\\n=== Incidents (last 7d) ===\\n{{3.data}}\"}]}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 900,
+          "y": 0,
+          "name": "Anthropic: compose digest"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": false,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "https://kpenyneooigsyuuomgct.supabase.co/rest/v1/cockpit_kpi_snapshots",
+        "method": "POST",
+        "headers": [
+          { "name": "apikey", "value": "REPLACE_WITH_SUPABASE_SERVICE_KEY" },
+          { "name": "Authorization", "value": "Bearer REPLACE_WITH_SUPABASE_SERVICE_KEY" },
+          { "name": "Content-Type", "value": "application/json" },
+          { "name": "Prefer", "value": "resolution=merge-duplicates,return=minimal" }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "authPass": "",
+        "authUser": "",
+        "timeout": "",
+        "shareCookies": false,
+        "ca": "",
+        "rejectUnauthorized": true,
+        "followRedirect": true,
+        "useQuerystring": false,
+        "gzip": true,
+        "useMtls": false,
+        "contentType": "application/json",
+        "data": "{\"date\":\"{{formatDate(now;\\\"YYYY-MM-DD\\\")}}\",\"raw_data\":{\"audit_report\":\"{{1.`__IMTAUX__`.body}}\",\"digest\":\"{{4.content[].text}}\"}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 1200,
+          "y": 0,
+          "name": "Supabase: upsert today's kpi_snapshot"
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false,
+      "freshVariables": false
+    },
+    "designer": {
+      "orphans": []
+    },
+    "notes": [
+      "Cockpit Phase 4 — scenario 04 — Weekly Audit Mailer.",
+      "BEFORE ACTIVATING:",
+      "1. Replace REPLACE_WITH_SUPABASE_SERVICE_KEY in modules 2, 3, 5 with your Supabase service_role key (or use Make 'Custom Variables' / connection).",
+      "2. Replace REPLACE_WITH_ANTHROPIC_API_KEY in module 4.",
+      "3. Replace REPLACE_WITH_DIGEST_PROMPT_FROM_SPEC_FILE in module 4 'system' with the full DIGEST_PROMPT from cockpit/make-scenarios/04-weekly-audit-mailer.json.",
+      "4. Add a Gmail 'Send an email' module BETWEEN module 4 and module 5 — this blueprint omits it because Gmail OAuth must happen inside the Make UI.",
+      "5. Activate the webhook (module 1) → copy URL → paste into GitHub Settings → Secrets → MAKE_AUDIT_WEBHOOK."
+    ]
+  }
+}
