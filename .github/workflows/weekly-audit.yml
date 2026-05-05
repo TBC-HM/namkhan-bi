@@ -1,0 +1,103 @@
+name: Weekly Audit
+
+# Cockpit Health Arm — Monday 06:00 UTC.
+# Runs npm audit + Lighthouse + Supabase advisor checks against the deployed
+# namkhan-bi.vercel.app surface. Results are uploaded as artifacts and (if
+# MAKE_AUDIT_WEBHOOK is set) POSTed to a Make.com scenario for digest mail.
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Monday 06:00 UTC
+  workflow_dispatch:      # Allow manual trigger
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run npm audit
+        id: npm-audit
+        continue-on-error: true
+        run: |
+          npm audit --json > audit-result.json || true
+          HIGH=$(jq '.metadata.vulnerabilities.high // 0' audit-result.json)
+          CRIT=$(jq '.metadata.vulnerabilities.critical // 0' audit-result.json)
+          MOD=$(jq '.metadata.vulnerabilities.moderate // 0' audit-result.json)
+          echo "high=$HIGH" >> $GITHUB_OUTPUT
+          echo "critical=$CRIT" >> $GITHUB_OUTPUT
+          echo "moderate=$MOD" >> $GITHUB_OUTPUT
+
+      - name: Lighthouse CI
+        id: lighthouse
+        continue-on-error: true
+        uses: treosh/lighthouse-ci-action@v11
+        with:
+          urls: |
+            https://namkhan-bi.vercel.app
+          configPath: '.github/lighthouserc.json'
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+
+      - name: Check Supabase Advisors
+        id: supabase
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          # Pull security advisor results
+          curl -s -H "apikey: $SUPABASE_SERVICE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_KEY" \
+            "$SUPABASE_URL/rest/v1/rpc/get_advisor_status" > advisor-result.json || echo '{}' > advisor-result.json
+
+      - name: Compose audit report
+        run: |
+          cat <<EOF > audit-report.md
+          # Weekly Audit — $(date +%Y-%m-%d)
+
+          ## Dependencies
+          - Critical vulns: ${{ steps.npm-audit.outputs.critical }}
+          - High vulns: ${{ steps.npm-audit.outputs.high }}
+          - Moderate vulns: ${{ steps.npm-audit.outputs.moderate }}
+
+          ## Lighthouse
+          See artifacts.
+
+          ## Supabase
+          See artifacts (advisor-result.json).
+
+          ## Action items
+          (filled by Health Arm in Make.com after this completes)
+          EOF
+          cat audit-report.md
+
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-audit-report
+          path: |
+            audit-report.md
+            audit-result.json
+            advisor-result.json
+          retention-days: 90
+
+      - name: Notify Make.com webhook
+        if: env.MAKE_AUDIT_WEBHOOK != ''
+        env:
+          MAKE_AUDIT_WEBHOOK: ${{ secrets.MAKE_AUDIT_WEBHOOK }}
+        run: |
+          curl -X POST "$MAKE_AUDIT_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d @audit-report.md || true

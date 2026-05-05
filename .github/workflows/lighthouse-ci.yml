@@ -1,0 +1,32 @@
+name: Lighthouse on PR
+
+# Cockpit Control Arm — runs Lighthouse against the Vercel preview for every PR.
+# Thresholds in .github/lighthouserc.json are set to "warn" (not "error") so
+# preview cold-start variance doesn't randomly block merges; the report is still
+# surfaced as a temporary-public-storage artifact for review.
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+jobs:
+  lighthouse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for Vercel preview
+        id: preview
+        uses: patrickedqvist/wait-for-vercel-preview@v1.3.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          max_timeout: 600
+
+      - name: Lighthouse
+        uses: treosh/lighthouse-ci-action@v11
+        with:
+          urls: ${{ steps.preview.outputs.url }}
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+          configPath: '.github/lighthouserc.json'

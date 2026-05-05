@@ -103,4 +103,83 @@ User chose option A: re-create Phase 1 commit on `chore/cockpit-foundation` from
 4. Restored Phase 1 files from `/tmp/phase1-cockpit-backup/`: CLAUDE.md (175 lines), cockpit/ (16 files), .claude/agents/ (5 files). Total 22.
 5. Updated this log with the surgery + interference + recovery story.
 6. About to `git add CLAUDE.md cockpit .claude/agents` and commit with the original approved message.
+7. Phase 1 commit landed: `f9b0b11 chore(cockpit): add foundation — CLAUDE.md cockpit section, cockpit/, .claude/agents/` (22 files, 1900 insertions, 0 deletions). Not pushed.
+8. Verified `chore/sync-cloud-schema` switchback works: applied `stash@{2}` cleanly (113 file mods restored), then re-stashed and switched back. User can resume that branch with `git checkout chore/sync-cloud-schema && git stash pop stash@{2}`.
+
+### Phase 2 — Supabase setup (21:10)
+
+Target project: `namkhan-pms` (ref `kpenyneooigsyuuomgct`).
+
+Pre-flight analysis flagged that **`02-readonly-role.sql` as-written is unsafe** — it grants `SELECT ON ALL TABLES IN SCHEMA public TO research_agent`, which would include `guests` (4,135 PII rows), `transactions` (76,553 financial rows), `house_accounts`, `reservations`, `app_users`, `payment_methods`, `add_ons`, `tax_fee_records`, etc. The file's own comments suggest uncommenting REVOKEs for sensitive tables, but they're all commented out by default.
+
+User approved my recommendation: **apply 01-tables.sql + RLS, skip 02 and 03 entirely** (defer until the Research Arm is actually being built and we can co-design grants/views).
+
+Applied via Supabase MCP `apply_migration` (name: `cockpit_foundation_tables_with_rls`):
+
+| Table | Columns | Indexes | RLS | Comment |
+|---|---|---|---|---|
+| `cockpit_tickets`       | 16 | 4 | ✅ | every email/voice/cron/webhook request |
+| `cockpit_decisions`     | 10 | 3 | ✅ | ADRs and significant agent choices |
+| `cockpit_incidents`     | 13 | 4 | ✅ | production incidents (severity 1-4) |
+| `cockpit_kpi_snapshots` | 16 | 2 | ✅ | daily uptime/perf/security KPI rollup |
+| `cockpit_audit_log`     |  9 | 3 | ✅ | who/what/when for every agent action |
+
+Plus:
+- Trigger function `cockpit_set_updated_at()` and trigger `cockpit_tickets_updated_at` on `BEFORE UPDATE` of `cockpit_tickets`.
+- Foreign keys: `cockpit_decisions.ticket_id`, `cockpit_decisions.superseded_by`, `cockpit_audit_log.ticket_id` → `cockpit_tickets.id` / `cockpit_decisions.id`.
+- All 5 tables have RLS enabled with **no policies** — service_role bypasses RLS by default in Supabase, so API routes will work; anon and authenticated correctly get nothing (matches the project's existing security posture where anon SELECT was revoked from `guests` and `transactions` on 2026-05-05).
+
+Verification:
+- `SELECT count(*) FROM cockpit_tickets` → `0` (table exists, empty as expected)
+- Trigger `cockpit_tickets_updated_at` and function `cockpit_set_updated_at` both present.
+
+**Skipped, marked TODO:**
+- `02-readonly-role.sql` — defer until Research Arm consumer exists; co-design grants then with explicit REVOKEs for PII/financial tables.
+- `03-views.sql` — defer; will need bespoke anonymized views for `reservations` / `transactions` / `guests` when Research Arm is built (the example views in the source file reference a non-existent `bookings` table).
+
+No password set for `research_agent` because the role wasn't created.
+
+### Phase 3 — GitHub Actions (21:30)
+
+User chose option A: copy 3 workflows + lighthouserc.json with scrubs/softens; skip `pr-checks.yml` (overlaps existing `ci.yml` and would fail until tests + Playwright exist).
+
+Existing repo workflows preserved, untouched:
+- `ci.yml` — lint + typecheck + build on PR & push-to-main
+- `design-doc-check.yml` — soft-warn for UI changes without `DESIGN_NAMKHAN_BI.md` update
+- `supabase-diff.yml` — PR-only, path-filtered to `supabase/`
+
+New workflows added (4 files, no collisions):
+
+| File | Trigger | Purpose | Adjustments |
+|---|---|---|---|
+| `.github/workflows/weekly-audit.yml` | cron Monday 06:00 UTC + manual dispatch | Health Arm — npm audit + Lighthouse + Supabase advisor → audit-report.md artifact + optional Make.com webhook | URLs scrubbed: `thedonnaportals.com` + `thenamkhan.com` removed; only `https://namkhan-bi.vercel.app` audited |
+| `.github/workflows/dependency-check.yml` | cron daily 05:00 UTC + manual | Daily `npm audit --audit-level=high` + `npm outdated` informational | none |
+| `.github/workflows/lighthouse-ci.yml` | every PR to main | Wait for Vercel preview → Lighthouse → temporary-public-storage artifact | none (uses softened thresholds via lighthouserc.json) |
+| `.github/lighthouserc.json` | (config) | Lighthouse thresholds for both PR + weekly | perf/a11y/seo/best-practices changed from `error` → `warn` so cold-start variance on Vercel previews doesn't randomly block PRs |
+
+**Skipped — TODO for a later phase:**
+- `pr-checks.yml` — runs lint + typecheck + `npm test` + Playwright e2e on every PR. Skipped because:
+  - lint/typecheck/build are already covered by existing `ci.yml`
+  - `npm test` script doesn't exist → would fail every PR
+  - Playwright not installed → e2e job would fail
+- **Re-enable when:** the Tester agent (`.claude/agents/tester.md`) has populated unit tests + a `playwright.config.ts` is in the repo. At that point, add a focused `tests.yml` (don't re-introduce `pr-checks.yml` as-written — it duplicates `ci.yml` work).
+
+#### GitHub secrets — TO ADD MANUALLY by PBS
+
+Settings → Secrets and variables → Actions → New repository secret. Add the following:
+
+| Secret | Used by | Required? | How to get value |
+|---|---|---|---|
+| `SUPABASE_URL` | `weekly-audit.yml` (advisor query) | **Required** for weekly audit to succeed | `https://kpenyneooigsyuuomgct.supabase.co` |
+| `SUPABASE_SERVICE_KEY` | `weekly-audit.yml` (advisor query) | **Required** for weekly audit to succeed | Supabase Dashboard → Project Settings → API → `service_role` key (secret — paste only into GitHub Secrets, never into a file) |
+| `MAKE_AUDIT_WEBHOOK` | `weekly-audit.yml` (notify Make scenario) | Optional now, **required after Phase 4 scenario `04-weekly-audit-mailer`** | Webhook URL from Make.com when that scenario is built |
+| `LHCI_GITHUB_APP_TOKEN` | `lighthouse-ci.yml` (status comments) | Optional | Install Lighthouse CI GitHub App on the repo, copy the per-repo token |
+| `VERCEL_TOKEN` | (none of these 3 workflows directly) | Optional in Phase 3; will be needed in Phase 4/5 for deploy-watcher + speed insights | https://vercel.com/account/tokens |
+
+Note: the runbook also lists `SUPABASE_ANON_KEY` and `NEXT_PUBLIC_*` secrets but those were only referenced by the skipped `pr-checks.yml`. Don't add them yet.
+
+#### Verification path (after PBS adds the required secrets)
+1. GitHub → Actions → "Weekly Audit" → "Run workflow" (manual dispatch) — should succeed end-to-end with green steps; `audit-report.md` artifact attached.
+2. GitHub → Actions → "Dependency Check" → "Run workflow" — should succeed (or fail with a clear `npm audit` finding).
+3. Open any test PR against main — "Lighthouse on PR" should fire after the Vercel preview is ready (≤10 min).
 
