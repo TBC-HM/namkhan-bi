@@ -285,6 +285,133 @@ export async function getCuratorPicks(limit = 12): Promise<MediaAssetReady[]> {
   return (data ?? []) as MediaAssetReady[];
 }
 
+// ===== By-room + OTA Pack helpers =====
+
+/** Locked room-type taxonomy. Slugs match marketing.media_taxonomy.tag_slug rows
+ *  in category='room_type'. Order = how the OTA carousel surfaces them. */
+export const ROOM_TYPE_SLUGS: Array<{ slug: string; label: string }> = [
+  { slug: 'sunset_namkhan_river_villa',  label: 'Sunset Namkhan River Villa' },
+  { slug: 'sunset_luang_prabang_villa',  label: 'Sunset Luang Prabang Villa' },
+  { slug: 'riverfront_suite',            label: 'Riverfront Suite' },
+  { slug: 'riverview_suite',             label: 'Riverview Suite' },
+  { slug: 'art_deluxe_suite',            label: 'Art Deluxe Suite' },
+  { slug: 'art_deluxe_room',             label: 'Art Deluxe Room' },
+  { slug: 'art_deluxe_family_room',      label: 'Art Deluxe Family Room' },
+  { slug: 'riverfront_glamping',         label: 'Riverfront Glamping' },
+  { slug: 'namkhan_glamping_tent',       label: 'Namkhan Glamping Tent' },
+  { slug: 'explorer_glamping',           label: 'Explorer Glamping' },
+];
+
+export interface RoomTypeBucket {
+  slug: string;
+  label: string;
+  count: number;
+  /** True when count < 5 (target minimum for OTA listing). */
+  under_target: boolean;
+  /** Up to 5 sample assets, qc_score DESC. */
+  samples: MediaAssetReady[];
+}
+
+/** Returns one bucket per room_type tag, with sample photos + count.
+ *  Used by the by-room widget on /marketing/library. */
+export async function getRoomTypeBuckets(): Promise<RoomTypeBucket[]> {
+  const buckets: RoomTypeBucket[] = [];
+  for (const rt of ROOM_TYPE_SLUGS) {
+    const { data, error } = await supabase
+      .schema('marketing')
+      .from('v_media_ready')
+      .select('*')
+      .contains('tags', [rt.slug])
+      .neq('primary_tier', 'tier_archive')
+      .order('qc_score', { ascending: false, nullsFirst: false })
+      .order('ai_confidence', { ascending: false, nullsFirst: false })
+      .limit(5);
+    if (error) {
+      console.error(`getRoomTypeBuckets error for ${rt.slug}`, error);
+      buckets.push({ slug: rt.slug, label: rt.label, count: 0, under_target: true, samples: [] });
+      continue;
+    }
+    // Get total count separately (Supabase JS doesn't return count in select with limit easily)
+    const { count: cnt } = await supabase
+      .schema('marketing')
+      .from('v_media_ready')
+      .select('*', { count: 'exact', head: true })
+      .contains('tags', [rt.slug])
+      .neq('primary_tier', 'tier_archive');
+    const count = Number(cnt ?? 0);
+    buckets.push({
+      slug: rt.slug,
+      label: rt.label,
+      count,
+      under_target: count < 5,
+      samples: (data ?? []) as MediaAssetReady[],
+    });
+  }
+  return buckets;
+}
+
+/** Canonical 50-photo OTA carousel template for Booking.com / Expedia / SLH.
+ *  Each slot has a target count and a tag filter. */
+export const OTA_PACK_SLOTS: Array<{
+  slot: string;
+  label: string;
+  min_count: number;
+  // Tags: photo qualifies if it has ANY of these tag slugs
+  any_tags: string[];
+  // Style filter: prefer these style tags
+  style_tags?: string[];
+}> = [
+  { slot: 'hero',        label: 'Hero / cover',        min_count: 2,  any_tags: ['river_namkhan', 'river_mekong', 'river_confluence', 'riverbank', 'riverside'], style_tags: ['wide_environmental', 'editorial', 'drone_aerial_style'] },
+  { slot: 'exterior',    label: 'Exterior / property', min_count: 5,  any_tags: ['exterior_facade', 'garden', 'rooftop', 'tuk_tuk_lounge'] },
+  { slot: 'pool_spa',    label: 'Pool & spa',          min_count: 5,  any_tags: ['pool_area', 'spa_jungle', 'infinity_pool', 'outdoor_bath'] },
+  { slot: 'dining',      label: 'Dining',              min_count: 6,  any_tags: ['roots_restaurant', 'riverside', 'bbq_grill', 'tasting_menu', 'set_menu', 'breakfast_basket', 'wine_pairing', 'plated_dish', 'food_flatlay'] },
+  { slot: 'lifestyle',   label: 'Lifestyle / activity', min_count: 8, any_tags: ['kayaking', 'sunset_cruise', 'yoga', 'meditation', 'lao_cooking_class', 'spa_massage', 'almsgiving', 'temple_tour'] },
+  { slot: 'rooms',       label: 'Rooms (mix across types)', min_count: 8, any_tags: ['canopy_bed', 'mosquito_net', 'balcony', 'terrace', 'daybed', 'outdoor_bath', 'hammock'] },
+];
+
+export interface OtaPackSlot {
+  slot: string;
+  label: string;
+  min_count: number;
+  found: number;
+  gap: number;
+  samples: MediaAssetReady[];
+}
+
+/** Returns one entry per OTA pack slot with current counts + 5 samples each.
+ *  All samples filtered to qc_score >= 70 + brand_fit >= 0.7 + no logos. */
+export async function getOtaPack(): Promise<OtaPackSlot[]> {
+  const out: OtaPackSlot[] = [];
+  for (const slot of OTA_PACK_SLOTS) {
+    let q = supabase
+      .schema('marketing')
+      .from('v_media_ready')
+      .select('*', { count: 'exact' })
+      .neq('primary_tier', 'tier_archive')
+      .gte('qc_score', 70)
+      .gte('ai_confidence', 0.7)
+      .overlaps('tags', slot.any_tags)
+      .order('qc_score', { ascending: false, nullsFirst: false })
+      .limit(slot.min_count);
+    const { data, count, error } = await q;
+    if (error) {
+      console.error(`getOtaPack error for ${slot.slot}`, error);
+      out.push({ slot: slot.slot, label: slot.label, min_count: slot.min_count, found: 0, gap: slot.min_count, samples: [] });
+      continue;
+    }
+    const found = Number(count ?? 0);
+    out.push({
+      slot: slot.slot,
+      label: slot.label,
+      min_count: slot.min_count,
+      found,
+      gap: Math.max(0, slot.min_count - found),
+      samples: (data ?? []) as MediaAssetReady[],
+    });
+  }
+  return out;
+}
+
 export async function getMediaTierCounts(): Promise<Array<{
   primary_tier: string | null;
   total: number;

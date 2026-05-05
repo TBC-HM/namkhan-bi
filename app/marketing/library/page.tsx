@@ -8,7 +8,7 @@ import PanelHero from '@/components/sections/PanelHero';
 import Card from '@/components/sections/Card';
 import KpiCard from '@/components/kpi/KpiCard';
 import AssetGrid from '@/components/marketing/AssetGrid';
-import { getMediaReady, getMediaTierCounts, getTaxonomy, getCuratorPicks, TIER_LABEL } from '@/lib/marketing';
+import { getMediaReady, getMediaTierCounts, getTaxonomy, getCuratorPicks, getRoomTypeBuckets, getOtaPack, TIER_LABEL } from '@/lib/marketing';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -29,12 +29,19 @@ export default async function LibraryPage({ searchParams }: SP) {
   const tag  = (typeof searchParams?.tag  === 'string' ? searchParams.tag  : '') as string;
   const q    = (typeof searchParams?.q    === 'string' ? searchParams.q    : '') as string;
 
-  const [assets, tierRows, taxonomy, curatorPicks] = await Promise.all([
+  const [assets, tierRows, taxonomy, curatorPicks, roomBuckets, otaPack] = await Promise.all([
     getMediaReady({ limit: 80, tier: tier || undefined, tag: tag || undefined }),
     getMediaTierCounts(),
     getTaxonomy(),
     getCuratorPicks(12),
+    getRoomTypeBuckets(),
+    getOtaPack(),
   ]);
+
+  const otaTotalFound = otaPack.reduce((s, sl) => s + sl.found, 0);
+  const otaTotalTarget = otaPack.reduce((s, sl) => s + sl.min_count, 0);
+  const otaTotalGap = otaPack.reduce((s, sl) => s + sl.gap, 0);
+  const roomsUnderTarget = roomBuckets.filter(b => b.under_target).length;
 
   // Total ready EXCLUDES tier_archive (logos / decommissioned) so the visible
   // KPI matches the visible grid by default.
@@ -87,6 +94,91 @@ export default async function LibraryPage({ searchParams }: SP) {
           source="auto-tagger · vision · tier-classifier"
         >
           <AssetGrid assets={curatorPicks} minColPx={180} />
+        </Card>
+      )}
+
+      {/* OTA Pack: 50-photo carousel template */}
+      {!tier && !tag && !q && (
+        <Card
+          title="OTA"
+          emphasis="pack"
+          sub={`${otaTotalFound} of ${otaTotalTarget} slots filled${otaTotalGap > 0 ? ` · ${otaTotalGap} photos still needed` : ' · ready to publish'}`}
+          source="canonical Booking.com / Expedia / SLH carousel"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {otaPack.map(slot => (
+              <div key={slot.slot}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 6 }}>
+                  <h4 style={{
+                    fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
+                    letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase',
+                    color: 'var(--ink)', margin: 0, fontWeight: 700,
+                  }}>{slot.label}</h4>
+                  <span style={{
+                    fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
+                    color: slot.gap > 0 ? 'var(--st-bad)' : 'var(--moss-glow)',
+                  }}>
+                    {slot.found}/{slot.min_count}{slot.gap > 0 ? ` · ${slot.gap} short` : ' · ✓'}
+                  </span>
+                </div>
+                {slot.samples.length > 0 ? (
+                  <AssetGrid assets={slot.samples} minColPx={150} />
+                ) : (
+                  <div style={{
+                    padding: '12px 14px', background: 'var(--st-bad-bg)',
+                    border: '1px dashed var(--st-bad-bd)', borderRadius: 4,
+                    fontSize: 'var(--t-sm)', color: 'var(--st-bad)',
+                  }}>
+                    No qualifying photos for {slot.label.toLowerCase()}. Need {slot.min_count} with qc≥70 + brand-fit≥0.7.
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* By-Room: 10 room types, 5+ photos each, gap warnings */}
+      {!tier && !tag && !q && (
+        <Card
+          title="By"
+          emphasis="room"
+          sub={`${roomBuckets.length} room types · ${roomsUnderTarget > 0 ? `${roomsUnderTarget} below 5-photo target` : 'all rooms covered'}`}
+          source="marketing.media_taxonomy.room_type"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {roomBuckets.map(b => (
+              <div key={b.slug}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 6 }}>
+                  <h4 style={{
+                    fontFamily: 'var(--serif)', fontSize: 'var(--t-md)',
+                    color: 'var(--ink)', margin: 0,
+                  }}>{b.label}</h4>
+                  <Link
+                    href={`/marketing/library?tag=${encodeURIComponent(b.slug)}`}
+                    style={{
+                      fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
+                      color: b.under_target ? 'var(--st-bad)' : 'var(--moss-glow)',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    {b.count} photo{b.count === 1 ? '' : 's'}{b.under_target ? ` · need ${5 - b.count} more` : ' · ✓'} →
+                  </Link>
+                </div>
+                {b.samples.length > 0 ? (
+                  <AssetGrid assets={b.samples} minColPx={150} />
+                ) : (
+                  <div style={{
+                    padding: '12px 14px', background: 'var(--st-bad-bg)',
+                    border: '1px dashed var(--st-bad-bd)', borderRadius: 4,
+                    fontSize: 'var(--t-sm)', color: 'var(--st-bad)',
+                  }}>
+                    No photos tagged <code>{b.slug}</code>. Either no shots taken yet, or photos exist but the auto-tagger missed the room link — open one and add the tag manually.
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </Card>
       )}
 
