@@ -1,0 +1,84 @@
+{
+  "name": "02 — Uptime Watcher (S1 alerts)",
+  "description": "Receives uptime monitor webhook (Better Stack or alt). On site down: pages PBS via email, triggers Vercel rollback if recent deploy.",
+  "modules_overview": [
+    {
+      "step": 1,
+      "type": "webhook",
+      "purpose": "Receive uptime monitor alert webhook",
+      "config_notes": "Better Stack: Heartbeat → Webhook integration. URL goes in Better Stack."
+    },
+    {
+      "step": 2,
+      "type": "http_request",
+      "purpose": "Vercel API: check most recent deployment",
+      "config_notes": "GET /v6/deployments?target=production&limit=1. Check if created < 30min ago."
+    },
+    {
+      "step": 3,
+      "type": "router",
+      "purpose": "Branch on recent deploy or not",
+      "config_notes": "Route A: deploy <30min ago → trigger rollback. Route B: no recent deploy → just alert."
+    },
+    {
+      "step": 4,
+      "type": "http_request",
+      "purpose": "Vercel API: rollback (Route A only)",
+      "config_notes": "POST /v13/deployments/{prev}/promote"
+    },
+    {
+      "step": 5,
+      "type": "supabase_insert",
+      "table": "cockpit_incidents",
+      "purpose": "Log S1 incident",
+      "config_notes": "severity=1, symptom='site unreachable', source='uptime-monitor', auto-fields"
+    },
+    {
+      "step": 6,
+      "type": "gmail_send",
+      "purpose": "Email PBS",
+      "config_notes": "Subject: 🚨 SITE DOWN — {{site}}. Body: time detected, what auto-action taken, current status, link to runbook."
+    },
+    {
+      "step": 7,
+      "type": "delay",
+      "purpose": "Wait 5 min, then check again",
+      "config_notes": "Sleep 300s"
+    },
+    {
+      "step": 8,
+      "type": "http_request",
+      "purpose": "Re-check site status",
+      "config_notes": "GET https://{{site}}/api/health (or homepage). If up → close incident. If still down → escalate."
+    },
+    {
+      "step": 9,
+      "type": "supabase_update",
+      "table": "cockpit_incidents",
+      "purpose": "Mark resolved or escalate",
+      "config_notes": "If up: set resolved_at=NOW(), mttr_minutes=delta. If down: send escalation email."
+    }
+  ],
+  "secrets_needed": [
+    "BETTER_STACK_TOKEN (or alt monitor)",
+    "VERCEL_TOKEN",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "GMAIL_OAUTH"
+  ],
+  "manual_setup_steps": [
+    "1. Sign up Better Stack free tier",
+    "2. Add monitor for the namkhan-bi production URL (namkhan-bi.vercel.app — replace with custom domain when assigned)",
+    "3. Configure monitor: HTTPS, every 1 min, 2 retries before alert",
+    "4. Create Make.com scenario, add Custom Webhook",
+    "5. In Better Stack monitor → Integrations → add Webhook with Make.com URL",
+    "6. Test: pause one monitor → trigger alert → verify Make.com fires",
+    "7. Build out remaining steps",
+    "8. Activate"
+  ],
+  "guardrails": [
+    "Only 1 escalation email per incident (not flood)",
+    "Auto-close incident if site recovers within 5 min",
+    "Skip rollback if no previous deployment exists",
+    "Skip rollback if previous was also failed"
+  ]
+}

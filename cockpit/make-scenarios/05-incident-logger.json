@@ -1,0 +1,39 @@
+{
+  "name": "05 — Incident Logger (Vercel/Supabase events → Supabase)",
+  "description": "Single source of truth for non-S1 incidents. Receives webhooks from Vercel monitoring, Supabase alerts. Logs to cockpit_incidents.",
+  "modules_overview": [
+    {
+      "step": 1,
+      "type": "webhook",
+      "purpose": "Receive event payload (from Vercel monitoring rules, Supabase Database Webhooks, etc.)"
+    },
+    {
+      "step": 2,
+      "type": "router",
+      "purpose": "Classify by source",
+      "config_notes": "Source determines severity mapping: vercel_error_spike → S2, supabase_advisor_red → S2, dependency_high_vuln → S3"
+    },
+    {
+      "step": 3,
+      "type": "supabase_insert",
+      "table": "cockpit_incidents",
+      "purpose": "Insert incident record with appropriate severity"
+    },
+    {
+      "step": 4,
+      "type": "router",
+      "purpose": "If S2 → also create GitHub issue",
+      "config_notes": "S2 = degraded but not down. Open issue for Dev Arm to triage."
+    },
+    {
+      "step": 5,
+      "type": "http_request",
+      "purpose": "GitHub: create issue",
+      "config_notes": "Labels: 'incident', 'auto-created', severity label"
+    }
+  ],
+  "secrets_needed": [
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "GITHUB_TOKEN"
+  ]
+}

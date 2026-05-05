@@ -1,0 +1,59 @@
+{
+  "name": "04 — Weekly Audit Mailer (Monday digest)",
+  "description": "Receives audit data from GitHub Actions weekly workflow. Pulls Supabase + Vercel KPIs. Composes digest. Emails PBS Monday morning.",
+  "modules_overview": [
+    {
+      "step": 1,
+      "type": "webhook",
+      "purpose": "Receives audit payload from GitHub Action (weekly-audit.yml)",
+      "config_notes": "Custom Webhook. URL goes into GitHub Action MAKE_AUDIT_WEBHOOK secret."
+    },
+    {
+      "step": 2,
+      "type": "http_request",
+      "purpose": "Pull Vercel analytics for last 7 days",
+      "config_notes": "GET https://api.vercel.com/v1/insights/* with VERCEL_TOKEN"
+    },
+    {
+      "step": 3,
+      "type": "supabase_query",
+      "purpose": "Pull cockpit_kpi_snapshots last 7 days",
+      "config_notes": "SELECT * FROM cockpit_kpi_snapshots WHERE date > NOW() - INTERVAL '7 days' ORDER BY date DESC"
+    },
+    {
+      "step": 4,
+      "type": "supabase_query",
+      "purpose": "Pull incidents last 7 days",
+      "config_notes": "SELECT * FROM cockpit_incidents WHERE detected_at > NOW() - INTERVAL '7 days' ORDER BY severity"
+    },
+    {
+      "step": 5,
+      "type": "anthropic_messages",
+      "purpose": "Compose digest with Claude",
+      "config_notes": "Model: claude-opus-4-7. System prompt: see DIGEST_PROMPT. Input: all data from steps 1-4. Output: markdown email body.",
+      "system_prompt_ref": "DIGEST_PROMPT"
+    },
+    {
+      "step": 6,
+      "type": "gmail_send",
+      "purpose": "Send to PBS",
+      "config_notes": "Subject: 📊 Weekly Cockpit Audit — {{date}}. Body: rendered HTML from markdown."
+    },
+    {
+      "step": 7,
+      "type": "supabase_insert",
+      "table": "cockpit_kpi_snapshots",
+      "purpose": "Save today's snapshot",
+      "config_notes": "Daily KPI capture for trend analysis"
+    }
+  ],
+  "DIGEST_PROMPT": "You are composing a weekly audit email for PBS, a hospitality data analyst running an autonomous IT cockpit. Tone: direct, structured, no fluff. Use bullets and tables. Lead with anything red. Include action items.\n\nStructure:\n1. **🟢/🟡/🔴 Status traffic light** for each: Site, Performance, Security, Database, Deploys\n2. **Numbers table** — uptime %, avg LCP, error rate, lighthouse scores, security advisor counts\n3. **What broke this week** — incidents from cockpit_incidents (S1+S2 only)\n4. **What shipped** — merged PRs from GitHub data\n5. **What needs decision** — open questions, stale tickets >48h\n6. **Top 3 actions for next week** — only the ones PBS must do personally\n\nRules:\n- Lead with red items, not green\n- Show trend (vs last week) where possible\n- No motivational language\n- Max 400 words total\n- End with: link to dashboard, link to GitHub PR queue\n",
+  "secrets_needed": [
+    "VERCEL_TOKEN",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "ANTHROPIC_API_KEY",
+    "GMAIL_OAUTH",
+    "PBS_EMAIL"
+  ],
+  "schedule": "Triggered by GitHub Action cron (Mondays 06:00 UTC). Audit ready ~30 min after."
+}

@@ -183,3 +183,134 @@ Note: the runbook also lists `SUPABASE_ANON_KEY` and `NEXT_PUBLIC_*` secrets but
 2. GitHub → Actions → "Dependency Check" → "Run workflow" — should succeed (or fail with a clear `npm audit` finding).
 3. Open any test PR against main — "Lighthouse on PR" should fire after the Vercel preview is ready (≤10 min).
 
+### Phase 4 — Make.com scenarios (21:40)
+
+User chose option A: copy 5 specs into `cockpit/make-scenarios/`, scrub Donna refs, walk through buildable scenarios in priority order, defer the two with hard blockers.
+
+**Important:** the 5 JSON files in `cockpit-setup/make-scenarios/` are scenario *specs* (high-level step descriptions), **not importable Make.com blueprints**. Build each scenario manually in the Make.com UI using the spec as a guide.
+
+Donna scrubs applied before copy:
+- `02-uptime-watcher.json` step 2 — replaced `thedonnaportals.com, thenamkhan.com, pbsbase.com` with `namkhan-bi.vercel.app`
+- `03-email-intake.json` step 1 + setup step 1 — replaced `dev@thedonnaportals.com` with TBD-alias placeholder
+- `03-email-intake.json` PARSE_INTENT_PROMPT — `target: (Namkhan / Donna / PBS Base / unknown)` → `target: (Namkhan / unknown)`
+
+#### Buildability matrix
+
+| # | Scenario | Status | Reason |
+|---|---|---|---|
+| 04 | Weekly Audit Mailer | **Build first** | All deps available; pairs directly with `weekly-audit.yml` (Phase 3) |
+| 01 | Deploy Watcher | **Build second** | All deps available; high-value (auto-rollback on failed deploy) |
+| 05 | Incident Logger | Build third (optional) | Light deps; useful for telemetry |
+| 02 | Uptime Watcher | **Defer** | Better Stack / uptime monitor not yet chosen (PBS answer #8) |
+| 03 | Email Intake | **Defer** | (a) `dev@` alias not provisioned (PBS answer #5); (b) Claude Code Web trigger endpoint marked TBD in spec — needs Anthropic docs confirmation |
+
+#### Walkthrough — 04 Weekly Audit Mailer (build first)
+
+**What it does:** receives a webhook POST from `weekly-audit.yml` (every Monday 06:00 UTC after that workflow finishes). Pulls 7 days of Vercel insights + cockpit_kpi_snapshots + cockpit_incidents from Supabase. Composes a digest with Claude. Emails PBS at `data@thedonnaportals.com`.
+
+**Connections you create in Make.com first (before building modules):**
+1. **Custom webhook** — Make creates a unique URL when you add the module
+2. **HTTP** — generic, no connection needed; uses `VERCEL_TOKEN` as bearer header
+3. **Supabase** — Make has a Supabase app; connect to project `namkhan-pms` with the service_role key (separate connection — store as Make connection, NOT in spec files)
+4. **Anthropic** — Make has Anthropic app; paste your `ANTHROPIC_API_KEY`
+5. **Gmail** — OAuth into the Google account that owns `data@thedonnaportals.com`
+
+**Build steps in Make.com (use the spec at `cockpit/make-scenarios/04-weekly-audit-mailer.json` as the canonical reference):**
+1. Create new scenario, name it "04 Weekly Audit Mailer"
+2. Add **Custom Webhook** → "Add" → name "weekly-audit-in" → save → **copy the URL** (looks like `https://hook.us2.make.com/abc123…`)
+3. Add **HTTP "Make a request"** → method GET, URL `https://api.vercel.com/v1/insights/...` (TBD — Vercel insights API path; spec says `/v1/insights/*`, choose the relevant endpoint when configuring)
+   - Headers: `Authorization: Bearer {{VERCEL_TOKEN}}`
+4. Add **Supabase "Run SQL query"** (or REST) → `SELECT * FROM cockpit_kpi_snapshots WHERE date > NOW() - INTERVAL '7 days' ORDER BY date DESC`
+5. Add another **Supabase "Run SQL query"** → `SELECT * FROM cockpit_incidents WHERE detected_at > NOW() - INTERVAL '7 days' ORDER BY severity`
+6. Add **Anthropic "Create a message"** → model `claude-opus-4-7` → system prompt = `DIGEST_PROMPT` from the spec → user message = JSON-stringified concat of steps 1-4
+7. Add **Gmail "Send an email"** → To `data@thedonnaportals.com` → Subject `📊 Weekly Cockpit Audit — {{formatDate(now; YYYY-MM-DD)}}` → Body = step 6 output (HTML-rendered from markdown)
+8. Add **Supabase "Insert a row"** → table `cockpit_kpi_snapshots` → fields = today's snapshot (date, uptime_pct, error_rate, lighthouse_perf, security_red, security_warn, performance_warn, open_incidents, raw_data = full webhook payload)
+9. **Activate** the scenario (toggle ON)
+
+**Paste back to GitHub Secrets:** the webhook URL from step 2 → `MAKE_AUDIT_WEBHOOK` secret in `Settings → Secrets and variables → Actions`. (`weekly-audit.yml` will POST the audit-report to it.)
+
+**Test path after build:**
+1. GitHub → Actions → Weekly Audit → Run workflow (manual dispatch). Should POST to your Make webhook.
+2. Make.com → scenario history → confirm the run fired and all 8 modules succeeded.
+3. Check inbox for the digest email.
+
+#### Walkthrough — 01 Deploy Watcher (build second)
+
+**What it does:** Vercel sends a webhook on `deployment.error` / `deployment.canceled` / `deployment.succeeded`. If error → fetch last 2 production deployments, promote the previous one (auto-rollback), log to `cockpit_incidents`, email PBS.
+
+**Connections needed:** Custom Webhook, HTTP (uses `VERCEL_TOKEN`), Supabase, Gmail.
+
+**Build steps (spec: `cockpit/make-scenarios/01-deploy-watcher.json`):**
+1. Create scenario "01 Deploy Watcher"
+2. Add Custom Webhook → copy URL
+3. Add Router → 3 routes filtered on `{{1.type}}`: `error`, `canceled`, `succeeded`
+4. **Error route:** HTTP GET `https://api.vercel.com/v6/deployments?projectId=prj_be5AGzi7cB5HnkTEvOWTzUv3YCAl&target=production&limit=2` → extract previous deployment id → HTTP POST `https://api.vercel.com/v13/deployments/{{prev_id}}/promote` → Supabase insert into `cockpit_incidents` (severity=1, symptom='deploy failed', auto_resolved=true, fix=`rolled back to {{prev_id}}`) → Gmail send `🚨 Deploy failed — auto-rollback to {{prev_id}}`
+5. **Canceled route:** Supabase insert (severity=3, symptom='deploy canceled') → Gmail (low priority)
+6. **Succeeded route:** Supabase insert into `cockpit_audit_log` (informational; agent='vercel', action='deploy_succeeded')
+7. **Guardrails (per spec):** add a Make "Set variable" or filter — only auto-rollback if previous deployment exists AND was successful AND <3 auto-rollbacks in last 24h
+8. Activate
+
+**Paste back to Vercel:** the webhook URL from step 2 → Vercel Dashboard → Project `namkhan-bi` → Settings → Git → **Deploy Hooks** (outbound webhooks). Subscribe to `deployment.error`, `deployment.canceled`, `deployment.succeeded`.
+
+**Test path:** push a deliberately broken commit to a branch with Vercel preview enabled — let it fail — confirm Make scenario fires; on succeeded, confirm the audit log row is created.
+
+#### Walkthrough — 05 Incident Logger (build third, optional)
+
+**What it does:** receives misc webhooks (Vercel monitoring rules → error rate spikes; Supabase Database Webhooks → advisor results; cron-driven npm audit results). Maps source → severity, logs to `cockpit_incidents`. If S2 → also opens a GitHub issue tagged `incident, auto-created, severity-2`.
+
+**Connections:** Custom Webhook, Supabase, GitHub (PAT or App).
+
+**Build steps (spec: `cockpit/make-scenarios/05-incident-logger.json`):**
+1. Create scenario "05 Incident Logger"
+2. Custom Webhook → copy URL (this is the one you'll paste into multiple sources)
+3. Router on `{{1.source}}`:
+   - `vercel_error_spike` → severity=2
+   - `supabase_advisor_red` → severity=2
+   - `dependency_high_vuln` → severity=3
+   - default → severity=4
+4. Supabase insert → `cockpit_incidents` (severity, source, symptom, metadata=full payload)
+5. Filter: severity ≤ 2 → continue; else stop
+6. HTTP POST `https://api.github.com/repos/TBC-HM/namkhan-bi/issues` → labels `incident, auto-created, severity-{{n}}` → Authorization: `Bearer {{GITHUB_TOKEN}}`
+7. Activate
+
+**Paste back to:** the webhook URL goes into:
+- Vercel monitoring rules (when you create them in Phase 5)
+- Supabase Dashboard → Database → Webhooks (when configured for advisor changes)
+
+#### Deferred — 02 Uptime Watcher
+
+Spec at `cockpit/make-scenarios/02-uptime-watcher.json`. Build when:
+- An uptime monitor is chosen (Better Stack free tier, UptimeRobot, etc. — TBD)
+- That monitor is configured to monitor `https://namkhan-bi.vercel.app` (or custom domain when assigned)
+- Then the Make scenario consumes the monitor's webhook
+
+Action item: pick monitor → configure namkhan-bi.vercel.app → build scenario.
+
+#### Deferred — 03 Email Intake (Dev Arm)
+
+Spec at `cockpit/make-scenarios/03-email-intake.json`. **Two hard blockers:**
+1. `dev@` alias not yet provisioned. Decide: which Gmail account hosts the alias? Forward to PBS's main inbox? Custom domain (when chosen) or Google-hosted?
+2. The spec says `CLAUDE_CODE_WEB_TRIGGER (TBD)` — confirm with Anthropic docs how to programmatically trigger Claude Code Web from a webhook. (As of this setup: Claude Code is primarily a CLI / IDE tool; "Claude Code Web" trigger endpoint is unconfirmed — may require the Claude Agent SDK or a bespoke runner.)
+
+Until both blockers are resolved, the Dev Arm cannot pick up tickets automatically. Workaround: PBS triggers Claude Code locally / via Claude desktop, references the ticket created by an alternative shorter intake path.
+
+Action items:
+- [ ] Set up dev intake alias (Google Workspace alias or Gmail+forward)
+- [ ] Confirm Claude Code Web trigger mechanism with Anthropic docs
+- [ ] Then build scenario 03
+
+#### Files added to repo
+
+```
+cockpit/make-scenarios/
+├── 01-deploy-watcher.json     (spec, 66 lines)
+├── 02-uptime-watcher.json     (spec, 84 lines, scrubbed)
+├── 03-email-intake.json       (spec, 83 lines, scrubbed)
+├── 04-weekly-audit-mailer.json (spec, 59 lines)
+└── 05-incident-logger.json    (spec, 39 lines)
+```
+
+#### Phase 4 stop point
+
+About to commit specs + this log update on `chore/cockpit-foundation`. Not pushing.
+

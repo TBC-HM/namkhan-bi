@@ -1,0 +1,83 @@
+{
+  "name": "03 — Email Intake (dev@ → ticket → Claude Code)",
+  "description": "Watches dev@ inbox. Parses email with Claude. Creates ticket in Supabase + GitHub issue. Triggers Claude Code Web with structured prompt.",
+  "modules_overview": [
+    {
+      "step": 1,
+      "type": "gmail_watch_emails",
+      "purpose": "Watch dev intake inbox (TBD — alias not yet provisioned for namkhan-bi; defer until set)",
+      "config_notes": "Connect Gmail. Filter: only emails from PBS's own address (sender allowlist)."
+    },
+    {
+      "step": 2,
+      "type": "router",
+      "purpose": "Branch on attachment type",
+      "config_notes": "Route 1: text only. Route 2: voice attachment (.m4a, .mp3). Route 3: image attachment."
+    },
+    {
+      "step": 3,
+      "type": "openai_whisper",
+      "purpose": "Transcribe voice attachments (if route 2)",
+      "config_notes": "OpenAI Whisper API. Append transcription to email body."
+    },
+    {
+      "step": 4,
+      "type": "anthropic_messages",
+      "purpose": "Parse intent with Claude",
+      "config_notes": "Model: claude-opus-4-7. System prompt: see PARSE_INTENT_PROMPT below. Input: email subject + body. Output: JSON {arm, intent, summary, clarifying_questions: []}.",
+      "system_prompt_ref": "PARSE_INTENT_PROMPT"
+    },
+    {
+      "step": 5,
+      "type": "router",
+      "purpose": "Branch on parsed intent",
+      "config_notes": "Route A: clarifying_questions.length > 0 → reply with questions. Route B: arm='research' → trigger Research Arm. Route C: arm='dev' → trigger Dev Arm."
+    },
+    {
+      "step": 6,
+      "type": "supabase_insert",
+      "table": "cockpit_tickets",
+      "purpose": "Create ticket record",
+      "config_notes": "Insert with status='clarifying' or 'in_progress' depending on route"
+    },
+    {
+      "step": 7,
+      "type": "http_request",
+      "purpose": "Create GitHub issue (for dev tickets)",
+      "config_notes": "POST https://api.github.com/repos/{owner}/{repo}/issues with parsed summary as title + body"
+    },
+    {
+      "step": 8,
+      "type": "http_request",
+      "purpose": "Trigger Claude Code Web (for dev tickets)",
+      "config_notes": "POST to Claude Code Web webhook (TBD — confirm endpoint with Anthropic docs) with prompt referencing the GitHub issue and CLAUDE.md context"
+    },
+    {
+      "step": 9,
+      "type": "gmail_send",
+      "purpose": "Auto-reply to PBS with ticket # and status",
+      "config_notes": "Reply-all to original email. Subject: Re: [original]. Body: ticket #, what's being done, ETA."
+    }
+  ],
+  "secrets_needed": [
+    "GMAIL_OAUTH (Make.com Gmail connection)",
+    "OPENAI_API_KEY (for Whisper)",
+    "ANTHROPIC_API_KEY (for Claude parsing)",
+    "GITHUB_TOKEN (issue creation)",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "CLAUDE_CODE_WEB_TRIGGER (TBD)"
+  ],
+  "manual_setup_steps": [
+    "1. Set up a dev intake alias forwarding to PBS Gmail (alias address TBD for namkhan-bi)",
+    "2. Create Make.com scenario, add Gmail trigger",
+    "3. Add sender allowlist filter (only PBS's address)",
+    "4. Add Anthropic module with PARSE_INTENT_PROMPT",
+    "5. Add routes for each arm",
+    "6. Add Supabase insert + GitHub issue creation",
+    "7. Add Claude Code Web trigger (when API confirmed)",
+    "8. Add auto-reply email",
+    "9. Test by emailing dev@: 'Test ticket — change footer color to red' (don't actually run)",
+    "10. Verify ticket created, auto-reply received, no actual code changes"
+  ],
+  "PARSE_INTENT_PROMPT": "You are an intent parser for a hotel/hospitality dev pipeline. Read the email and return JSON only.\n\nFields:\n- arm: one of 'dev' | 'research' | 'fix' | 'decide' (NOT clear → set 'dev' if user explicitly says 'build/add/change', else 'research')\n- intent: 'build' | 'investigate' | 'fix' | 'decide'\n- summary: 1-2 sentence rephrase of the request\n- target: which project/site (Namkhan / unknown) — namkhan-bi repo only\n- clarifying_questions: array of strings — only include if confidence <80% on what they want. Max 3 questions.\n- estimated_complexity: 'small' | 'medium' | 'large' (small = <2h, medium = 2-8h, large = full day+)\n- requires_approval: true | false (true if touches auth/payment/booking-write/schema)\n\nRules:\n- If email mentions 'check / why / what's wrong / how to / better / compare' → arm='research'\n- If email mentions 'build / add / change / create' → arm='dev'\n- If email mentions 'broken / error / not working' → arm='fix'\n- If email asks 'should we / which' → arm='decide'\n- If user provides a URL or specific page reference, include in summary\n- Output ONLY valid JSON, no markdown, no preamble"
+}
