@@ -16,10 +16,18 @@
 
 import { NextResponse } from 'next/server';
 import crypto from 'node:crypto';
+import sharp from 'sharp';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+// Render-media Edge Function MAX_BYTES=4MB. Resize photos to fit under 3.5MB
+// so the cron picks them up immediately. Originals over MAX_BYTES were the
+// reason 120 assets got stuck in needs_review on 2026-05-03.
+const RESIZE_TARGET_BYTES = 3_500_000;
+const RESIZE_LONG_EDGE = 2400;
+const PHOTO_MIMES = new Set(['image/jpeg', 'image/png', 'image/heic', 'image/heif', 'image/webp']);
 
 const ALLOWED_MIME = new Set([
   'image/jpeg',
@@ -48,6 +56,39 @@ function inferAssetType(mime: string): 'photo' | 'video' | 'raw_dng' {
   if (mime === 'image/x-adobe-dng') return 'raw_dng';
   if (mime.startsWith('video/')) return 'video';
   return 'photo';
+}
+
+/** Resize a photo so the encoded JPEG fits under RESIZE_TARGET_BYTES.
+ *  Returns { buffer, width, height, mime: 'image/jpeg' } on success, or null
+ *  if the file is not a photo (RAW / video / unknown). */
+async function resizeForIngest(input: Buffer, mime: string): Promise<{ buffer: Buffer; width: number; height: number; mime: string } | null> {
+  if (!PHOTO_MIMES.has(mime)) return null;
+  // Quality ladder: try 85 → 78 → 70. Longer edge stays at 2400 unless the
+  // 70-quality pass still exceeds target, then drop to 1800.
+  const attempts: Array<{ longEdge: number; quality: number }> = [
+    { longEdge: RESIZE_LONG_EDGE, quality: 85 },
+    { longEdge: RESIZE_LONG_EDGE, quality: 78 },
+    { longEdge: RESIZE_LONG_EDGE, quality: 70 },
+    { longEdge: 1800,             quality: 78 },
+    { longEdge: 1800,             quality: 70 },
+  ];
+  for (const a of attempts) {
+    const pipeline = sharp(input, { failOn: 'none' })
+      .rotate() // honor EXIF orientation
+      .resize({ width: a.longEdge, height: a.longEdge, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: a.quality, mozjpeg: true, chromaSubsampling: '4:4:4' });
+    const { data, info } = await pipeline.toBuffer({ resolveWithObject: true });
+    if (data.byteLength <= RESIZE_TARGET_BYTES) {
+      return { buffer: data, width: info.width, height: info.height, mime: 'image/jpeg' };
+    }
+  }
+  // Last-resort: aggressive — 1400 long edge, q=65
+  const last = await sharp(input, { failOn: 'none' })
+    .rotate()
+    .resize({ width: 1400, height: 1400, fit: 'inside', withoutEnlargement: true })
+    .jpeg({ quality: 65, mozjpeg: true })
+    .toBuffer({ resolveWithObject: true });
+  return { buffer: last.data, width: last.info.width, height: last.info.height, mime: 'image/jpeg' };
 }
 
 export async function POST(req: Request) {
@@ -93,15 +134,37 @@ export async function POST(req: Request) {
         continue;
       }
 
-      const buffer = Buffer.from(await file.arrayBuffer());
-      const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
-      const path = `${yyyy}/${mm}/${sha256.slice(0, 8)}__${safeName(file.name)}`;
+      const originalBuffer = Buffer.from(await file.arrayBuffer());
+      const sha256 = crypto.createHash('sha256').update(originalBuffer).digest('hex');
+
+      // Resize photos so they fit under render-media MAX_BYTES (4MB).
+      // RAW / video / unknown mimes pass through untouched.
+      let storedBuffer: Buffer = originalBuffer;
+      let storedMime: string = file.type;
+      let storedExt: string = safeName(file.name);
+      let widthPx: number | null = null;
+      let heightPx: number | null = null;
+
+      const resized = await resizeForIngest(originalBuffer, file.type).catch((e) => {
+        console.error('sharp resize failed', file.name, e);
+        return null;
+      });
+      if (resized) {
+        storedBuffer = resized.buffer;
+        storedMime = resized.mime;
+        widthPx = resized.width;
+        heightPx = resized.height;
+        // Force .jpg extension on resized file to match the new mime
+        storedExt = safeName(file.name.replace(/\.(jpe?g|png|heic|heif|webp)$/i, '')) + '.jpg';
+      }
+
+      const path = `${yyyy}/${mm}/${sha256.slice(0, 8)}__${storedExt}`;
 
       // Upload to media-raw bucket
       const { error: upErr } = await admin.storage
         .from('media-raw')
-        .upload(path, buffer, {
-          contentType: file.type,
+        .upload(path, storedBuffer, {
+          contentType: storedMime,
           upsert: false,
         });
 
@@ -111,7 +174,9 @@ export async function POST(req: Request) {
         continue;
       }
 
-      // Insert media_assets row (skip if duplicate sha — DB has unique idx)
+      // Insert media_assets row (skip if duplicate sha — DB has unique idx).
+      // file_size_bytes reflects the STORED file (post-resize), so render-media's
+      // .lte('file_size_bytes', MAX_BYTES) filter accepts it.
       const { data: ins, error: insErr } = await admin
         .schema('marketing')
         .from('media_assets')
@@ -119,9 +184,11 @@ export async function POST(req: Request) {
           sha256,
           original_filename: file.name,
           asset_type: inferAssetType(file.type),
-          mime_type: file.type,
+          mime_type: storedMime,
           raw_path: path,
-          file_size_bytes: file.size,
+          file_size_bytes: storedBuffer.byteLength,
+          width_px: widthPx,
+          height_px: heightPx,
           photographer: photographer || null,
           license_type: license || 'owned',
           status: 'ingested',
