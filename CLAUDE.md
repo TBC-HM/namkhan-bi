@@ -80,3 +80,96 @@ Another session is running schema/data work on this repo. Once it silently rever
 ## If memory entries are missing or stale
 
 If the AI session can't find the design system memory entries (`reference_namkhan_bi_design_system.md` or `feedback_namkhan_bi_design_session_ritual.md`), recreate them from `DESIGN_NAMKHAN_BI.md` § "Bootstrap if memory is wiped". The doc is the recovery source of truth.
+
+---
+
+## Cockpit operating rules (added 2026-05-05)
+
+This repo is wired into the **IT Department Cockpit** runbook (`cockpit/` folder, `.claude/agents/`, `.github/workflows/`, Make.com scenarios, Supabase ops tables). The rules below apply on top of the design-system rules above. They are scoped to operational/agent behavior — they never override anything in the sections above.
+
+### Operator
+PBS — self-employed hospitality data analyst, Spain. Communication: direct, short, structured. Bullets and tables over prose. Push back when logic is weak.
+
+### What this repo is
+The Namkhan BI app — business intelligence surface for The Namkhan boutique hotel (Laos, SLH-affiliated). Sole revenue source: Cloudbeds PMS. Production URL: `namkhan-bi.vercel.app` (custom domain TBD).
+
+### Stack (authoritative)
+| Layer | Tech |
+|---|---|
+| Frontend | Next.js / React |
+| Hosting | Vercel (Pro) — `namkhan-bi` on team `pbsbase-2825s-projects` |
+| Database | Supabase (Pro) — project `namkhan-pms` |
+| PMS | Cloudbeds (TODO: cockpit wiring) |
+| CI/CD | GitHub Actions + Vercel CLI deploys (auto-deploy OFF) |
+| Monitoring | Vercel Speed Insights, Web Analytics, Vercel Agent |
+| Automation | Make.com (Pro) |
+| AI orchestration | Claude Code + Agent Teams (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`) |
+
+Do not introduce new tools without an ADR in `cockpit/decisions/`.
+
+### Reading order for any task
+1. This file end-to-end
+2. `DESIGN_NAMKHAN_BI.md` (repo root) — canonical design system, rules above
+3. `cockpit/glossary.md` — what terms mean
+4. `cockpit/constraints.md` — what you cannot do
+5. `cockpit/standards/` — task-specific standard (`brand-namkhan.md`, `usali.md`, `hotel-rules.md`, `security.md`, `code.md`)
+6. `cockpit/decisions/` — recent ADRs
+7. The actual code
+
+`cockpit/standards/design-tokens.md` defers to `DESIGN_NAMKHAN_BI.md` for this repo. The locked design rules in the sections above win on any conflict.
+
+### Hard constraints (never violate)
+- Never push directly to `main` — always PR.
+- Never modify production database schema without approval.
+- Never touch payment, auth, or booking-write code without approval.
+- Never commit secrets or `.env` files.
+- Never invent data — if Supabase or Cloudbeds doesn't return it, say so.
+- Never disable tests to make a PR green.
+- Never auto-merge PRs touching: `/auth/`, `/payment/`, `/booking/`, `/api/admin/`, schema migrations.
+- Always include a rollback plan in PR description.
+
+### Hotel/business rules
+- Follow USALI for any accounting/reporting (see `cockpit/standards/usali.md`).
+- Cloudbeds is the sole revenue source for Namkhan — never propose changes that bypass it.
+- Currency: LAK base, USD reporting. Prefix `$` for USD, `₭` for LAK (matches design rules above).
+- Prioritize occupancy without rate erosion or distribution-control loss.
+- Direct booking growth is a primary KPI — never reduce it.
+- Never invent room counts, prices, or guest data — query Cloudbeds or Supabase.
+
+### Brand
+- Active brand for this repo: **Namkhan** — see `cockpit/standards/brand-namkhan.md` and the locked rules in `DESIGN_NAMKHAN_BI.md`.
+- `cockpit/standards/brand-donna.md` is parked in the folder for future cross-repo reuse but is NOT active here.
+
+### Output format when responding to PBS
+- Bullets and tables, not paragraphs.
+- Lead with the answer, not the reasoning.
+- If something in PBS's idea is wrong, say so directly with reasoning.
+- Never apologize unnecessarily or add filler.
+- Show 2–3 alternatives when relevant.
+
+### Agent roles (when running as a team)
+| Role | Owns | Cannot do |
+|---|---|---|
+| Lead | Decomposition, synthesis, final PR | Direct code (delegates) |
+| Frontend | UI, components, styling | Backend logic, schema |
+| Backend | API routes, business logic | UI, schema migrations without approval |
+| Designer (read-only) | Design-token + brand enforcement | Modify code — flags only |
+| Tester | Playwright, unit tests, regression | Modify production code |
+| Reviewer | Security, deps, perf, correctness | Modify code — flags only |
+| Researcher | Investigation, analysis | Modify code |
+
+### Email / ticket conventions (Dev Arm)
+- Tickets are created from email (intake address: TODO — `dev@` alias not yet set).
+- Digest / alert email: `data@thedonnaportals.com`.
+- If ticket intent is unclear, ask 1–3 clarifying questions before building.
+- Always ship a preview URL, never auto-merge to production for non-trivial changes.
+- Reply format: brief summary → what was done → preview link → what PBS needs to decide.
+
+### When you're stuck
+1. Re-read this file and `cockpit/glossary.md`.
+2. Check `cockpit/decisions/` for prior similar work.
+3. Query Supabase `cockpit_tickets` for related past tickets.
+4. Still stuck: stop, document the blocker in the ticket, escalate via email — don't guess.
+
+### Updating this file
+Append updates with a date heading at the bottom of the relevant section and a reason. Don't rewrite history. Major changes need an ADR in `cockpit/decisions/`.
