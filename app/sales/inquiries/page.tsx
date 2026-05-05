@@ -20,6 +20,8 @@ import AutoDraftTray from './_components/AutoDraftTray';
 import FunnelSnapshot from './_components/FunnelSnapshot';
 import SourceMix from './_components/SourceMix';
 import LostReasonTape from './_components/LostReasonTape';
+import EmailCockpit from './_components/EmailCockpit';
+import type { CockpitStatus, CockpitDirection, CockpitCategory, CockpitSince } from '@/lib/sales-cockpit';
 
 import { getKpiDaily, aggregateDaily } from '@/lib/data';
 import { listInquiries } from '@/lib/sales';
@@ -37,7 +39,22 @@ import { conversionCoach } from '@/lib/agents/sales/conversionCoach';
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
 
-export default async function InquiriesPage() {
+export default async function InquiriesPage({
+  searchParams,
+}: {
+  searchParams?: { scope?: string; status?: string; cat?: string; since?: string; dir?: string; q?: string; page?: string; thread?: string };
+}) {
+  const cockpitScope = searchParams?.scope ?? 'all';
+  const cockpitStatus = (['all','unanswered','drafted','sent_today'].includes(searchParams?.status ?? '')
+    ? (searchParams!.status as CockpitStatus) : 'unanswered') as CockpitStatus;
+  const cockpitDirection = (searchParams?.dir === 'in' ? 'in' : searchParams?.dir === 'out' ? 'out' : 'all') as CockpitDirection;
+  const cockpitCategory = (searchParams?.cat ?? 'people') as CockpitCategory;
+  const cockpitSince = (['7d','30d','90d','365d','all'].includes(searchParams?.since ?? '')
+    ? (searchParams!.since as CockpitSince) : '90d') as CockpitSince;
+  const cockpitSearch = searchParams?.q;
+  const cockpitPage = Math.max(0, parseInt(searchParams?.page ?? '0', 10) || 0);
+  const cockpitThread = searchParams?.thread;
+
   // sales schema not yet deployed → all blocks render with mockup data
   // and a 'Data needed · sales.*' tag where a live source would live.
   // Exception: total hotel revenue MTD is wired via existing kpi.* helpers
@@ -312,6 +329,18 @@ export default async function InquiriesPage() {
           Property + date + segment filters above (layout)
         </span>
       </div>
+
+      {/* BLOCK 3.5: Email cockpit — search, filter, AI draft, compose */}
+      <EmailCockpit
+        scope={cockpitScope}
+        status={cockpitStatus}
+        direction={cockpitDirection}
+        category={cockpitCategory}
+        since={cockpitSince}
+        search={cockpitSearch}
+        page={cockpitPage}
+        thread={cockpitThread}
+      />
 
       {/* BLOCK 4: KPI row — 6 tiles */}
       <div

@@ -3,6 +3,7 @@
 // Each page renders its own <Banner>, <SubNav>, <FilterStrip>, <main className="panel">.
 
 import type { Metadata } from 'next';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 import './../styles/globals.css';
 import LeftRail from '@/components/nav/LeftRail';
 import CapacityResetOnPillarChange from '@/components/nav/CapacityResetOnPillarChange';
@@ -24,6 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="main">{children}</div>
         </div>
         <AgentEditModal />
+        <SpeedInsights />
       </body>
     </html>
   );
