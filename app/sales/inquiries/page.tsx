@@ -7,8 +7,6 @@
 // Mockup-data mode: sales schema not yet deployed. KPI tiles + tray + feed all
 // carry "data needed" tags pointing at the email-ingest webhook + sales.* tables.
 
-import { redirect } from 'next/navigation';
-
 import OpsKpiTile from '@/components/ops/OpsKpiTile';
 import AgentStrip from '@/components/ops/AgentStrip';
 import DecisionQueue, { type DecisionRow } from '@/components/ops/DecisionQueue';
@@ -22,9 +20,11 @@ import AutoDraftTray from './_components/AutoDraftTray';
 import FunnelSnapshot from './_components/FunnelSnapshot';
 import SourceMix from './_components/SourceMix';
 import LostReasonTape from './_components/LostReasonTape';
+import EmailCockpit from './_components/EmailCockpit';
+import type { CockpitStatus, CockpitDirection, CockpitCategory, CockpitSince } from '@/lib/sales-cockpit';
 
 import { getKpiDaily, aggregateDaily } from '@/lib/data';
-import { listInquiries, createProposalFromInquiry, getSalesInquiriesKpis, getSalesTacticalAlerts } from '@/lib/sales';
+import { listInquiries } from '@/lib/sales';
 import { fmtMoney } from '@/lib/format';
 
 import { inquiryTriager } from '@/lib/agents/sales/inquiryTriager';
@@ -39,28 +39,29 @@ import { conversionCoach } from '@/lib/agents/sales/conversionCoach';
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
 
-// Server action — Compose button on a Decision row creates a draft proposal
-// from the inquiry and routes the user into the composer.
-async function composeFromInquiryAction(formData: FormData) {
-  'use server';
-  const id = formData.get('inquiry_id');
-  if (typeof id !== 'string' || !id) return;
-  const created = await createProposalFromInquiry(id);
-  if (created?.id) redirect(`/sales/proposals/${created.id}/edit`);
-}
+export default async function InquiriesPage({
+  searchParams,
+}: {
+  searchParams?: { scope?: string; status?: string; cat?: string; since?: string; dir?: string; q?: string; page?: string; thread?: string };
+}) {
+  const cockpitScope = searchParams?.scope ?? 'all';
+  const cockpitStatus = (['all','unanswered','drafted','sent_today'].includes(searchParams?.status ?? '')
+    ? (searchParams!.status as CockpitStatus) : 'unanswered') as CockpitStatus;
+  const cockpitDirection = (searchParams?.dir === 'in' ? 'in' : searchParams?.dir === 'out' ? 'out' : 'all') as CockpitDirection;
+  const cockpitCategory = (searchParams?.cat ?? 'people') as CockpitCategory;
+  const cockpitSince = (['7d','30d','90d','365d','all'].includes(searchParams?.since ?? '')
+    ? (searchParams!.since as CockpitSince) : '90d') as CockpitSince;
+  const cockpitSearch = searchParams?.q;
+  const cockpitPage = Math.max(0, parseInt(searchParams?.page ?? '0', 10) || 0);
+  const cockpitThread = searchParams?.thread;
 
-export default async function InquiriesPage() {
   // sales schema not yet deployed → all blocks render with mockup data
   // and a 'Data needed · sales.*' tag where a live source would live.
   // Exception: total hotel revenue MTD is wired via existing kpi.* helpers
   // (every booking flows through the inquiry/quote funnel by definition,
   // so until sales.quotes attribution exists, total revenue MTD = sales MTD).
-  // Live inquiries + KPI strip + tactical alerts in parallel
-  const [liveInquiries, kpis, derivedAlerts] = await Promise.all([
-    listInquiries(260955, 30).catch(() => []),
-    getSalesInquiriesKpis(260955).catch(() => null),
-    getSalesTacticalAlerts(260955).catch(() => []),
-  ]);
+  // Live inquiries from sales schema. Falls back to mock if empty.
+  const liveInquiries = await listInquiries(260955, 30).catch(() => []);
   const SCHEMA_LIVE = liveInquiries.length > 0;
   const liveDecisions: DecisionRow[] = liveInquiries.map((inq) => {
     const nights = inq.date_in && inq.date_out
@@ -69,8 +70,7 @@ export default async function InquiriesPage() {
     const pax = (inq.party_adults ?? 0) + (inq.party_children ?? 0);
     const dollars = pax > 0 ? nights * pax * 280 : 0;
     return {
-      id: inq.id,
-      inquiryId: inq.id,
+      id: inq.id.slice(0, 8),
       impact: dollars > 0 ? '$' + dollars.toLocaleString('en-US') : '$—',
       urgency: (inq.triage_kind === 'group' || inq.triage_kind === 'retreat' ? 'urg' : 'med') as 'urg' | 'med' | 'neu',
       title: (inq.guest_name ?? 'Unknown') + ' · ' + inq.source + ' · ' + (inq.party_adults ?? '?') + 'A' + (inq.party_children ? '+' + inq.party_children + 'C' : '') + ' · ' + inq.date_in + ' → ' + inq.date_out,
@@ -168,9 +168,7 @@ export default async function InquiriesPage() {
         },
       ];
 
-  // Live alerts derived from sales.* (SLA breaches, group rooming-list, stale, agent runs)
-  // Fallback to the original mock 9 only when no derived alerts exist AND schema is empty.
-  const mockAlerts: TacticalAlert[] = SCHEMA_LIVE ? [] : [
+  const alerts: TacticalAlert[] = [
     {
       id: 'sa-vip-fit',
       severity: 'hi',
@@ -293,9 +291,6 @@ export default async function InquiriesPage() {
     },
   ];
 
-  // Final alert list: derived from real data when available, mock fallback otherwise.
-  const alerts: TacticalAlert[] = derivedAlerts.length > 0 ? derivedAlerts : mockAlerts;
-
   const dataNeed = SCHEMA_LIVE ? undefined : 'Data needed · sales schema';
 
   return (
@@ -335,7 +330,19 @@ export default async function InquiriesPage() {
         </span>
       </div>
 
-      {/* BLOCK 4: KPI row — 6 tiles (5 wired from sales.* + 1 from kpi_daily) */}
+      {/* BLOCK 3.5: Email cockpit — search, filter, AI draft, compose */}
+      <EmailCockpit
+        scope={cockpitScope}
+        status={cockpitStatus}
+        direction={cockpitDirection}
+        category={cockpitCategory}
+        since={cockpitSince}
+        search={cockpitSearch}
+        page={cockpitPage}
+        thread={cockpitThread}
+      />
+
+      {/* BLOCK 4: KPI row — 6 tiles */}
       <div
         style={{
           display: 'grid',
@@ -346,40 +353,35 @@ export default async function InquiriesPage() {
       >
         <OpsKpiTile
           scope="Open inq · SLA at risk"
-          value={kpis?.open_sla_at_risk.value ?? '— / —'}
-          label={kpis?.open_sla_at_risk.label ?? 'sales schema offline'}
-          needs={kpis?.open_sla_at_risk.live ? undefined : 'Data needed · sales.inquiries'}
-          valueColor={
-            kpis?.open_sla_at_risk.tone === 'bad'  ? 'var(--st-bad)'  :
-            kpis?.open_sla_at_risk.tone === 'warn' ? 'var(--brass)'   :
-            kpis?.open_sla_at_risk.tone === 'good' ? 'var(--moss-glow)' :
-            undefined
-          }
+          value="18 / 4"
+          label="4 past 1h target"
+          needs={dataNeed}
+          valueColor="var(--st-bad)"
         />
         <OpsKpiTile
           scope="Median time to first reply"
-          value={kpis?.median_first_reply.value ?? '—'}
-          label={kpis?.median_first_reply.label ?? 'sales schema offline'}
-          needs={kpis?.median_first_reply.live ? undefined : 'Data needed · sales.proposals'}
+          value="2h 14m"
+          label="target 1h · LM −18m"
+          needs={dataNeed}
         />
         <OpsKpiTile
           scope="Auto-offer hit rate"
-          value={kpis?.auto_offer_hit_rate.value ?? '—'}
-          label={kpis?.auto_offer_hit_rate.label ?? 'sales schema offline'}
-          needs={kpis?.auto_offer_hit_rate.live ? undefined : 'Data needed · sales.proposals'}
+          value="61%"
+          label="sent without edit · target 75%"
+          needs={dataNeed}
           valueColor="var(--brass)"
         />
         <OpsKpiTile
           scope="Quote → Booking conv"
-          value={kpis?.quote_to_booking_conv.value ?? '—'}
-          label={kpis?.quote_to_booking_conv.label ?? 'sales schema offline'}
-          needs={kpis?.quote_to_booking_conv.live ? undefined : 'Data needed · sales.proposals'}
+          value="27%"
+          label="weighted 90d · LY +4 pts"
+          needs={dataNeed}
         />
         <OpsKpiTile
           scope="Open pipeline value"
-          value={kpis?.open_pipeline_value.value ?? '$—'}
-          label={kpis?.open_pipeline_value.label ?? 'sales schema offline'}
-          needs={kpis?.open_pipeline_value.live ? undefined : 'Data needed · sales.proposals'}
+          value="$48,200"
+          label="18 open quotes · weighted"
+          needs={dataNeed}
         />
         <OpsKpiTile
           scope="Sales revenue MTD"
@@ -409,7 +411,6 @@ export default async function InquiriesPage() {
       <DecisionQueue
         rows={decisions}
         meta="ranked $ × decay × confidence · today"
-        composeAction={composeFromInquiryAction}
         emptyOverlay={
           <DataNeededOverlay
             gap="sales.queue_rank"

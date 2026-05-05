@@ -43,6 +43,7 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
   // until each section's IA proposal is approved + shipped.
   sales: [
     { href: '/sales/inquiries',  label: 'Inquiries', isNew: true },
+    { href: '/sales/leads',      label: 'Leads',     isNew: true },
     { href: '/sales/groups',     label: 'Groups',    coming: true },
     { href: '/sales/fit',        label: 'FIT',       coming: true },
     { href: '/sales/packages',   label: 'Packages',  isNew: true },
