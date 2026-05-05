@@ -314,3 +314,31 @@ cockpit/make-scenarios/
 
 About to commit specs + this log update on `chore/cockpit-foundation`. Not pushing.
 
+### Phase 5 — Vercel hardening (21:55)
+
+PBS approved (response: "ok ok ok") all three pre-flight defaults:
+- **Spending cap: €30/month hard limit**
+- **Firewall: rate-limit `/api/*` to 60 req/min per IP + block obvious-attack paths**
+- **Walk through dashboard URLs now**
+
+Branch-divergence note: `feat/leads-and-cockpit-redo` already has `@vercel/speed-insights` + `<SpeedInsights />` rendered. So the client-side instrumentation lives there. To avoid merge conflicts, **no client-side Speed Insights/Analytics installs were added on `chore/cockpit-foundation`** — the runbook directs PBS to add `@vercel/analytics` on the prod branch when convenient.
+
+Files added:
+- `cockpit/runbooks/vercel-hardening.md` — full dashboard checklist + URLs + rule definitions + verification cheat sheet
+
+Six-step plan in the runbook:
+1. Spending cap (€30/month hard) — Team → Billing
+2. Speed Insights — enable on dashboard (client side already on `feat/leads-and-cockpit-redo`)
+3. Web Analytics — enable on dashboard; defer client install to prod branch
+4. Firewall — 2 custom rules (rate-limit /api/* + block-attack-paths regex); optional 3rd geo-allowlist rule documented but not recommended unless abuse seen
+5. Vercel Agent — manual beta-access confirmation
+6. Log Drain — **skipped** (Better Stack TODO; revisit when uptime monitor chosen)
+
+PBS to execute the dashboard steps. I cannot click in the dashboard from here. The CLI subcommands `vercel speed-insights enable` / `vercel analytics enable` from old runbook docs are no longer current — Vercel deprecated them in favor of the dashboard toggles.
+
+Vercel project facts captured:
+- Project ID `prj_be5AGzi7cB5HnkTEvOWTzUv3YCAl`, Org ID `team_vKod3ZYFgteGCHsam7IG8tEb`
+- Region: `fra1` (Frankfurt)
+- Production deployment at time of phase: `dpl_HAKrSX8TCjCcdidkDLTpTv8UyGzm` (Ready)
+- `vercel.json` left unchanged on this branch (`{ regions: ["fra1"], framework: "nextjs" }`).
+
