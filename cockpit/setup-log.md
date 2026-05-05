@@ -356,3 +356,35 @@ Caveats called out in the README:
 
 Tokens use `REPLACE_WITH_*` placeholders (Supabase service_role, Anthropic API key, full DIGEST_PROMPT system prompt). Better-practice note in the README points to Make's Custom Variables feature so keys don't end up in any future re-export.
 
+### Phase 4 pivot — Make.com retired in favor of GitHub-Actions-only digest (22:30)
+
+PBS imported the blueprint, replaced API keys, added Gmail send module, ran a test fire. Webhook accepted (200), all 5 modules turned green, BUT:
+- Email did not arrive at `data@thedonnaportals.com`
+- `cockpit_kpi_snapshots` row was never inserted (verified via Supabase: 0 rows)
+- "Green" in HTTP modules meant 2xx response only — silent downstream failures couldn't be detected without clicking each module's Bundles tab
+
+Diagnosing required PBS to click around the Make canvas. PBS's stated preference is "I want to do nothing" / "you do what you can". Make.com is the wrong tool for that ergonomic — every fix loop requires manual clicks.
+
+**Decision:** retire the Make.com path for the weekly digest entirely. Replace with a single self-contained GitHub Actions workflow.
+
+Rewrote `.github/workflows/weekly-audit.yml`:
+- Step 1 (existing): npm audit
+- Step 2 (existing): Lighthouse on `namkhan-bi.vercel.app`
+- Step 3 (new): pull `cockpit_incidents` + `cockpit_kpi_snapshots` from Supabase REST (last 7d)
+- Step 4 (new): call Anthropic `/v1/messages` directly with the DIGEST_PROMPT, get markdown digest
+- Step 5 (new): `gh issue create` with the digest as body — delivered to PBS's inbox via GitHub's native email notifications (no SMTP / Resend / Gmail OAuth needed)
+- Step 6 (new): upsert today's row into `cockpit_kpi_snapshots`
+- Step 7 (existing): upload artifacts
+
+Permissions: `issues: write` added so the workflow can create the digest issue.
+
+GitHub secrets state:
+- ✅ `SUPABASE_URL` set (non-secret value, set by Claude)
+- ✅ `MAKE_AUDIT_WEBHOOK` set (no longer used by this workflow but harmless; can be removed later)
+- ❌ `SUPABASE_SERVICE_KEY` — pending PBS paste
+- ❌ `ANTHROPIC_API_KEY` — pending PBS paste
+
+Make.com scenario 04: **deprecated.** PBS to delete the imported scenario in Make whenever convenient. Spec at `cockpit/make-scenarios/04-weekly-audit-mailer.json` and blueprint at `cockpit/make-blueprints/04-weekly-audit-mailer.blueprint.json` retained as historical artifacts; both are now unused.
+
+Once PBS pastes the 2 remaining secrets, Claude triggers `gh workflow run weekly-audit.yml`, watches logs, and reports outcome — no more Make.com clicking.
+

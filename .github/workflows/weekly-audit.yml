@@ -1,103 +1,214 @@
-name: Weekly Audit
+name: Weekly Audit + Digest
 
-# Cockpit Health Arm — Monday 06:00 UTC.
-# Runs npm audit + Lighthouse + Supabase advisor checks against the deployed
-# namkhan-bi.vercel.app surface. Results are uploaded as artifacts and (if
-# MAKE_AUDIT_WEBHOOK is set) POSTed to a Make.com scenario for digest mail.
+# Cockpit Health Arm — Monday 06:00 UTC + manual dispatch.
+# Self-contained pipeline: npm audit → Lighthouse → pull Supabase data
+# → compose digest with Anthropic → open GitHub Issue (delivers via email
+# notifications) → upsert today's row in cockpit_kpi_snapshots.
+#
+# Replaces the previous Make.com handoff (scenario 04). All steps run in
+# this workflow; no external scenario service required.
 
 on:
   schedule:
     - cron: '0 6 * * 1'  # Monday 06:00 UTC
-  workflow_dispatch:      # Allow manual trigger
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write   # so the workflow can create the digest issue
 
 jobs:
   audit:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install dependencies
-        run: npm ci
+      - run: npm ci
 
-      - name: Run npm audit
-        id: npm-audit
+      - name: npm audit
+        id: npm_audit
         continue-on-error: true
         run: |
           npm audit --json > audit-result.json || true
-          HIGH=$(jq '.metadata.vulnerabilities.high // 0' audit-result.json)
-          CRIT=$(jq '.metadata.vulnerabilities.critical // 0' audit-result.json)
-          MOD=$(jq '.metadata.vulnerabilities.moderate // 0' audit-result.json)
-          echo "high=$HIGH" >> $GITHUB_OUTPUT
-          echo "critical=$CRIT" >> $GITHUB_OUTPUT
-          echo "moderate=$MOD" >> $GITHUB_OUTPUT
+          for k in critical high moderate low; do
+            v=$(jq ".metadata.vulnerabilities.$k // 0" audit-result.json)
+            echo "$k=$v" >> $GITHUB_OUTPUT
+          done
 
-      - name: Lighthouse CI
-        id: lighthouse
+      - name: Lighthouse
+        id: lh
         continue-on-error: true
         uses: treosh/lighthouse-ci-action@v11
         with:
-          urls: |
-            https://namkhan-bi.vercel.app
+          urls: https://namkhan-bi.vercel.app
           configPath: '.github/lighthouserc.json'
           uploadArtifacts: true
           temporaryPublicStorage: true
 
-      - name: Check Supabase Advisors
-        id: supabase
-        continue-on-error: true
+      - name: Pull Supabase incidents + kpi (last 7d)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        continue-on-error: true
         run: |
-          # Pull security advisor results
-          curl -s -H "apikey: $SUPABASE_SERVICE_KEY" \
-            -H "Authorization: Bearer $SUPABASE_SERVICE_KEY" \
-            "$SUPABASE_URL/rest/v1/rpc/get_advisor_status" > advisor-result.json || echo '{}' > advisor-result.json
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
+            echo "Supabase secrets missing — skipping reads"
+            echo '[]' > incidents.json
+            echo '[]' > kpi.json
+            exit 0
+          fi
+          SINCE_TS=$(date -u -d '7 days ago' +%Y-%m-%dT%H:%M:%SZ)
+          SINCE_DATE=$(date -u -d '7 days ago' +%Y-%m-%d)
+          curl -fsS \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY" \
+            "$SUPABASE_URL/rest/v1/cockpit_incidents?select=*&detected_at=gt.$SINCE_TS&order=severity" \
+            > incidents.json || echo '[]' > incidents.json
+          curl -fsS \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY" \
+            "$SUPABASE_URL/rest/v1/cockpit_kpi_snapshots?select=*&date=gt.$SINCE_DATE&order=date.desc" \
+            > kpi.json || echo '[]' > kpi.json
 
-      - name: Compose audit report
-        run: |
-          cat <<EOF > audit-report.md
-          # Weekly Audit — $(date +%Y-%m-%d)
-
-          ## Dependencies
-          - Critical vulns: ${{ steps.npm-audit.outputs.critical }}
-          - High vulns: ${{ steps.npm-audit.outputs.high }}
-          - Moderate vulns: ${{ steps.npm-audit.outputs.moderate }}
-
-          ## Lighthouse
-          See artifacts.
-
-          ## Supabase
-          See artifacts (advisor-result.json).
-
-          ## Action items
-          (filled by Health Arm in Make.com after this completes)
-          EOF
-          cat audit-report.md
-
-      - name: Upload report
-        uses: actions/upload-artifact@v4
-        with:
-          name: weekly-audit-report
-          path: |
-            audit-report.md
-            audit-result.json
-            advisor-result.json
-          retention-days: 90
-
-      - name: Notify Make.com webhook
-        if: env.MAKE_AUDIT_WEBHOOK != ''
+      - name: Compose digest with Anthropic
         env:
-          MAKE_AUDIT_WEBHOOK: ${{ secrets.MAKE_AUDIT_WEBHOOK }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CRIT: ${{ steps.npm_audit.outputs.critical }}
+          HIGH: ${{ steps.npm_audit.outputs.high }}
+          MOD: ${{ steps.npm_audit.outputs.moderate }}
+          LOW: ${{ steps.npm_audit.outputs.low }}
         run: |
-          curl -X POST "$MAKE_AUDIT_WEBHOOK" \
+          DATE=$(date +%Y-%m-%d)
+
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "ANTHROPIC_API_KEY missing — writing fallback digest"
+            cat > digest.md <<EOF
+          # Weekly Audit — $DATE
+
+          ⚠️ \`ANTHROPIC_API_KEY\` not set in GitHub Secrets — auto-digest skipped.
+
+          ## Raw inputs
+
+          **Dependencies (npm audit):** ${CRIT:-?} critical · ${HIGH:-?} high · ${MOD:-?} moderate · ${LOW:-?} low
+
+          **Incidents (last 7d):** see attached \`incidents.json\` artifact
+          **KPI snapshots (last 7d):** see attached \`kpi.json\` artifact
+
+          To enable: \`gh secret set ANTHROPIC_API_KEY --repo \${GITHUB_REPOSITORY:-TBC-HM/namkhan-bi}\`
+          EOF
+            exit 0
+          fi
+
+          # Build the Anthropic request as JSON via jq (handles all escaping)
+          jq -n \
+            --arg sys 'You are composing a weekly audit email for PBS, a hospitality data analyst running an autonomous IT cockpit. Tone: direct, structured, no fluff. Use bullets and tables. Lead with anything red. Include action items.
+
+          Structure:
+          1. **🟢/🟡/🔴 Status traffic light** for each: Site, Performance, Security, Database, Deploys
+          2. **Numbers table** — uptime %, avg LCP, error rate, lighthouse scores, security advisor counts
+          3. **What broke this week** — incidents from cockpit_incidents (S1+S2 only)
+          4. **What shipped** — merged PRs from GitHub data
+          5. **What needs decision** — open questions, stale tickets >48h
+          6. **Top 3 actions for next week** — only the ones PBS must do personally
+
+          Rules:
+          - Lead with red items, not green
+          - Show trend (vs last week) where possible
+          - No motivational language
+          - Max 400 words total
+          - End with: link to dashboard, link to GitHub PR queue' \
+            --arg msg "Weekly audit data for namkhan-bi (date: $DATE):
+
+          **Dependencies (npm audit):**
+          - Critical: $CRIT
+          - High: $HIGH
+          - Moderate: $MOD
+          - Low: $LOW
+
+          **Incidents (last 7d, JSON from cockpit_incidents):**
+          $(cat incidents.json)
+
+          **KPI snapshots (last 7d, JSON from cockpit_kpi_snapshots):**
+          $(cat kpi.json)
+
+          Compose the digest now." \
+            '{model:"claude-opus-4-7",max_tokens:2048,system:$sys,messages:[{role:"user",content:$msg}]}' \
+            > anthropic-request.json
+
+          curl -sS https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d @anthropic-request.json > anthropic-response.json
+
+          # Extract digest. If error, write the error message.
+          jq -r '.content[0].text // ("⚠️ Anthropic error:\n```\n" + (.error.message // tostring) + "\n```")' \
+            anthropic-response.json > digest.md
+
+      - name: Open GitHub Issue with the digest (delivers via email notifications)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DATE=$(date +%Y-%m-%d)
+          gh issue create \
+            --title "📊 Weekly Cockpit Audit — $DATE" \
+            --body-file digest.md \
+            --repo "${{ github.repository }}"
+
+      - name: Upsert today's kpi_snapshot
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          CRIT: ${{ steps.npm_audit.outputs.critical }}
+          HIGH: ${{ steps.npm_audit.outputs.high }}
+          MOD: ${{ steps.npm_audit.outputs.moderate }}
+        continue-on-error: true
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
+            echo "Supabase secrets missing — skipping kpi insert"
+            exit 0
+          fi
+          jq -n \
+            --arg date "$(date +%Y-%m-%d)" \
+            --argjson crit "${CRIT:-0}" \
+            --argjson high "${HIGH:-0}" \
+            --argjson mod "${MOD:-0}" \
+            --arg digest "$(cat digest.md)" \
+            '{
+              date: $date,
+              security_red: $crit,
+              security_warn: ($high + $mod),
+              raw_data: {
+                npm_audit: {critical: $crit, high: $high, moderate: $mod},
+                digest: $digest
+              }
+            }' > kpi-snapshot.json
+
+          curl -fsS -X POST "$SUPABASE_URL/rest/v1/cockpit_kpi_snapshots" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY" \
             -H "Content-Type: application/json" \
-            -d @audit-report.md || true
+            -H "Prefer: resolution=merge-duplicates,return=minimal" \
+            -d @kpi-snapshot.json
+          echo "kpi snapshot upserted for $(date +%Y-%m-%d)"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: weekly-audit-${{ github.run_id }}
+          path: |
+            audit-result.json
+            incidents.json
+            kpi.json
+            digest.md
+            anthropic-response.json
+            anthropic-request.json
+            kpi-snapshot.json
+          retention-days: 90
+          if-no-files-found: ignore
