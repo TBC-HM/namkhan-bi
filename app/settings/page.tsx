@@ -112,6 +112,25 @@ export default function SettingsPage() {
             </div>
           </Card>
         </div>
+
+        <div className="card-grid-2" style={{ marginTop: 22 }}>
+          <Card title="IT" emphasis="cockpit" sub="Autonomous health · weekly audit · runbooks" source="new">
+            <div className="stub" style={{ padding: 32 }}>
+              <h3>Autonomous IT department</h3>
+              <p>
+                4-arm cockpit: Health (uptime + audits) · Dev (PR pipeline) ·
+                Control (CI + Lighthouse) · Design (token enforcement). Weekly
+                audit fires every Monday 06:00 UTC and lands as a GitHub Issue
+                with a Claude-composed digest. State is in Supabase{' '}
+                <code>cockpit_*</code> tables. Setup runbook + handoff doc
+                live at <code>cockpit/</code> in the repo.
+              </p>
+              <p style={{ marginTop: 10 }}>
+                <a href="/settings/cockpit" style={{ color: 'var(--moss)', fontWeight: 600 }}>Open Cockpit →</a>
+              </p>
+            </div>
+          </Card>
+        </div>
       </div>
     </>
   );

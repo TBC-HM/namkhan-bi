@@ -139,6 +139,7 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/settings/reports',        label: 'Reports' },
     { href: '/settings/dq',             label: 'DQ engine' },
     { href: '/settings/agents',         label: 'Agent guardrails', isNew: true },
+    { href: '/settings/cockpit',        label: 'Cockpit',          isNew: true },
   ],
 };
 

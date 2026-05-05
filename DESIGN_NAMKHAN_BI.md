@@ -1960,3 +1960,10 @@ Three stacked fixes addressing "give me the paragraph not the doc" + "answer my 
   - New examples: "show me reservations of Siegfried Nehls" (verified live — 3 stays Jan 2026, $8k total) and "guest profile of Siegfried Nehls" (with cb_guest_id JOIN to public.guests for aggregate stats).
   - Fixed the broken arrival/in-house examples that referenced non-existent columns.
 - **Verification**: `tsc --noEmit` clean. Direct SQL run via Supabase MCP returned 3 rows for Nehls.
+
+### 2026-05-05 — `/settings/cockpit` page added (Phase 7 follow-up)
+- **New surface**: `app/settings/cockpit/page.tsx` — server component that surfaces the IT Cockpit's live state (recent `cockpit_kpi_snapshots` + `cockpit_incidents`) and links out to GitHub runbooks, Audit Issues, GH Actions, Supabase + Vercel dashboards, GitHub Secrets.
+- **Hooks into**: existing canonical components — `Banner`, `SubNav`, `PanelHero`, `Card`, `KpiCard`. Uses `getSupabaseAdmin()` server-side. No new design tokens introduced; small scoped `<style>` block uses `var(--t-xs)`, `var(--t-sm)`, `var(--brass)`, `var(--moss)`, `var(--line)`, `var(--ink-muted)` — no hardcoded fontSize / hex / fontFamily.
+- **Sub-nav**: added `{ href: '/settings/cockpit', label: 'Cockpit', isNew: true }` to `RAIL_SUBNAV.settings`.
+- **Snapshot card**: added on `/settings` (next to Platform map) linking through to `/settings/cockpit`.
+- **Verification**: design gates — 0 hardcoded `fontSize`, 0 `USD ` prefix, 0 hardcoded `fontFamily`, 0 hardcoded brand-color hex (greps clean against the new files). `tsc --noEmit` for the new files alone is clean; pre-existing TS errors in `app/finance/pnl/`, `app/revenue/channels/`, `app/sales/inquiries/`, `components/pl/` are unrelated to this page (see `cockpit/setup-log.md` for traceability).
