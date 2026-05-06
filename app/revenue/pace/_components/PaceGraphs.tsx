@@ -9,8 +9,38 @@
 //   2. OTB by stay-bucket — bars from v_otb_pace
 //   3. STLY pace per bucket — % achieved vs last year at same lead time
 
-import { paceCurveSvg } from '@/lib/svgCharts';
+// paceCurveSvg was reverted from svgCharts.ts during multi-session race —
+// inline a minimal SVG fallback locally so the page still ships.
 import type { PaceCurveRow } from '@/lib/pulseData';
+
+function paceCurveSvg(rows: PaceCurveRow[]): string {
+  if (!rows.length) return '';
+  const w = 600, h = 220, padL = 40, padR = 12, padT = 16, padB = 28;
+  const innerW = w - padL - padR, innerH = h - padT - padB;
+  const all: number[] = [];
+  for (const r of rows) {
+    if (r.rooms_actual != null) all.push(Number(r.rooms_actual));
+    if (r.rooms_otb != null) all.push(Number(r.rooms_otb));
+    if (r.rooms_stly_daily_avg != null) all.push(Number(r.rooms_stly_daily_avg));
+    if (r.rooms_budget_daily_avg != null) all.push(Number(r.rooms_budget_daily_avg));
+  }
+  const max = Math.max(1, ...all);
+  const xStep = innerW / Math.max(1, rows.length - 1);
+  const xy = (i: number, v: number) => `${(padL + i * xStep).toFixed(1)},${(padT + innerH - (v / max) * innerH).toFixed(1)}`;
+  const series = (key: 'rooms_actual' | 'rooms_otb' | 'rooms_stly_daily_avg' | 'rooms_budget_daily_avg') => {
+    const pts: string[] = [];
+    rows.forEach((r, i) => { const v = (r as any)[key]; if (v != null) pts.push(`${pts.length === 0 ? 'M' : 'L'}${xy(i, Number(v))}`); });
+    return pts.join(' ');
+  };
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:200px">
+    <path d="${series('rooms_actual')}" fill="none" stroke="#1a2e21" stroke-width="2"/>
+    <path d="${series('rooms_otb')}" fill="none" stroke="#a8854a" stroke-width="1.5"/>
+    <path d="${series('rooms_stly_daily_avg')}" fill="none" stroke="#999" stroke-width="1" stroke-dasharray="3 2"/>
+    <path d="${series('rooms_budget_daily_avg')}" fill="none" stroke="#3B5BFF" stroke-width="1" stroke-dasharray="3 2"/>
+    <text x="${padL}" y="${padT + 8}" font-size="9" fill="#7d7565">${max}</text>
+    <text x="${padL}" y="${h - 6}" font-size="9" fill="#7d7565">0</text>
+  </svg>`;
+}
 
 export interface BucketRow {
   key: string;
