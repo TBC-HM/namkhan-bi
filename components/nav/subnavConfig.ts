@@ -57,12 +57,13 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
   // Marketing pillar owns reviews/social/influencers/media (existing /marketing/* routes).
   marketing: [
     { href: '/marketing',              label: 'Snapshot' },
-    { href: '/marketing/library',      label: 'Library',    isNew: true },
-    { href: '/marketing/campaigns',    label: 'Campaigns',  isNew: true },
-    { href: '/marketing/reviews',      label: 'Reviews' },
+    { href: '/marketing/audiences',    label: 'Audiences',  isNew: true },
+    { href: '/marketing/library',      label: 'Library' },
+    { href: '/marketing/campaigns',    label: 'Campaigns' },
+    { href: '/marketing/compiler',     label: 'Compiler',   isNew: true },
     { href: '/marketing/social',       label: 'Social' },
     { href: '/marketing/influencers',  label: 'Influencers' },
-    { href: '/marketing/taxonomy',     label: 'Taxonomy',   isNew: true },
+    { href: '/marketing/taxonomy',     label: 'Taxonomy' },
     { href: '/marketing/agents',       label: 'Agents' },
   ],
 
@@ -70,16 +71,15 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
   // Note: Front Office unfolded to its own top-level pillar 2026-05-01 (sibling of Sales/Marketing/Ops).
   // Old /operations/frontoffice placeholder removed; redirect set in next.config.js.
   operations: [
+    { href: '/operations/staff',            label: 'Staff' },
     { href: '/operations',                  label: 'Snapshot' },
-    { href: '/operations/today',            label: 'Today' },
-    { href: '/operations/restaurant',       label: 'Restaurant' },
+    // Today merged into /operations 2026-05-04 — /operations/today now 307-redirects.
+    { href: '/operations/restaurant',       label: 'F&B' },
     { href: '/operations/spa',              label: 'Spa' },
     { href: '/operations/activities',       label: 'Activities' },
-    { href: '/operations/housekeeping',     label: 'Housekeeping',  isNew: true },
-    { href: '/operations/maintenance',      label: 'Maintenance',   isNew: true },
-    { href: '/operations/inventory',        label: 'Inventory & Suppliers', isNew: true },
-    { href: '/operations/agents',           label: 'Agents' },
-    { href: '/operations/staff',            label: 'Staff',         isNew: true },
+    // Housekeeping + Maintenance hidden — stub-only, hide until real content lands.
+    { href: '/operations/inventory',        label: 'Inventory & Suppliers' },
+    { href: '/operations/catalog-cleanup',  label: 'Catalog cleanup' },
   ],
 
   // ===== 04b Front Office (added 2026-05-01) =====
@@ -101,23 +101,28 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
   guest: [
     { href: '/guest',                  label: 'Snapshot' },
     { href: '/guest/directory',        label: 'Directory' },
-    { href: '/guest/reputation',       label: 'Reputation',  coming: true },
-    { href: '/guest/journey',          label: 'Journey',     coming: true },
-    { href: '/guest/loyalty',          label: 'Loyalty',     coming: true },
+    { href: '/guest/reputation',       label: 'Reputation',  isNew: true },
+    { href: '/guest/journey',          label: 'Journey',     isNew: true },
+    { href: '/guest/loyalty',          label: 'Loyalty',     isNew: true },
+    { href: '/guest/messy-data',       label: 'Messy data',  isNew: true },
+    { href: '/guest/findings',         label: 'Findings',    isNew: true },
     { href: '/guest/agents',           label: 'Agents' },
   ],
 
   // ===== 04 Finance =====
   finance: [
-    { href: '/finance',                label: 'Snapshot' },
-    { href: '/finance/pnl',            label: 'P&L' },
-    { href: '/finance/ledger',         label: 'Ledger' },
-    { href: '/finance/mapping',        label: 'Mapping' },
-    { href: '/finance/budget',         label: 'Budget' },
-    { href: '/finance/cashflow',       label: 'Cashflow',        coming: true },
-    { href: '/finance/variance',       label: 'Variance',        coming: true },
-    { href: '/finance/apar',           label: 'AP / AR',         coming: true },
-    { href: '/finance/agents',         label: 'Agents' },
+    { href: '/finance',                  label: 'Snapshot' },
+    { href: '/finance/pnl',              label: 'P&L' },
+    { href: '/finance/ledger',           label: 'Ledger' },
+    { href: '/finance/transactions',     label: 'Transactions' },
+    { href: '/finance/pos-transactions', label: 'POS' },
+    { href: '/finance/poster',           label: 'POS · Poster',    isNew: true },
+    { href: '/finance/mapping',          label: 'Mapping' },
+    { href: '/finance/budget',           label: 'Budget' },
+    { href: '/finance/cashflow',         label: 'Cashflow',        coming: true },
+    { href: '/finance/variance',         label: 'Variance',        coming: true },
+    { href: '/finance/apar',             label: 'AP / AR',         coming: true },
+    { href: '/finance/agents',           label: 'Agents' },
   ],
 
   // ===== Knowledge (utility) =====
@@ -129,18 +134,20 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/agents/settings',    label: 'Agents · Settings' },
   ],
 
-  // ===== Settings (utility) — v1.3 =====
+  // ===== Settings (utility) — 2026-05-05 cleanup =====
+  // Removed: Budget (duplicate of /finance/budget), Agent guardrails (theatre).
+  // Agents are controlled 1:1 on each pillar's /agents page.
   settings: [
     { href: '/settings',                label: 'Snapshot' },
     { href: '/settings/property',       label: 'Property' },
     { href: '/settings/users',          label: 'Users & roles' },
-    { href: '/settings/budget',         label: 'Budget' },
+    { href: '/settings/vat-rates',      label: 'VAT rates' },
+    { href: '/settings/manual-entries', label: 'Manual entries' },
     { href: '/settings/integrations',   label: 'Integrations' },
     { href: '/settings/notifications',  label: 'Notifications' },
     { href: '/settings/reports',        label: 'Reports' },
     { href: '/settings/dq',             label: 'DQ engine' },
-    { href: '/settings/agents',         label: 'Agent guardrails', isNew: true },
-    { href: '/settings/cockpit',        label: 'Cockpit',          isNew: true },
+    { href: '/settings/cockpit',        label: 'Cockpit',  isNew: true },
   ],
 };
 
