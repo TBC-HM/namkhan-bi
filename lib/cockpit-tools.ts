@@ -649,7 +649,77 @@ async function web_fetch(args: { url?: string }): Promise<ToolResult> {
   }
 }
 
+// Anti-fantasy guardrail: agents asking "who's on the team" must call this
+// to get real names from cockpit_agent_identity. Verified against ticket #25
+// hallucination (Olive invented "Backend Boris" / "Frontend Faye" / etc).
+async function list_team_members(args: { include_archived?: boolean }): Promise<ToolResult> {
+  const { include_archived = false } = args;
+  const { data: identities, error: idErr } = await supabase
+    .from("cockpit_agent_identity")
+    .select("role, display_name, avatar, tagline, color")
+    .order("display_name");
+  if (idErr) return { ok: false, error: `cockpit_agent_identity: ${idErr.message}` };
+
+  const { data: prompts, error: pErr } = await supabase
+    .from("cockpit_agent_prompts")
+    .select("role, version, active, status, archived_at, archived_reason");
+  if (pErr) return { ok: false, error: `cockpit_agent_prompts: ${pErr.message}` };
+
+  type PromptRow = {
+    role: string;
+    version: number;
+    active: boolean;
+    status: string;
+    archived_at: string | null;
+    archived_reason: string | null;
+  };
+  const promptByRole: Record<string, PromptRow[]> = {};
+  for (const row of (prompts ?? []) as PromptRow[]) {
+    (promptByRole[row.role] ??= []).push(row);
+  }
+
+  type AgentRow = {
+    role: string;
+    display_name: string;
+    avatar: string;
+    tagline: string;
+    active_prompt_version: number | null;
+    archived: boolean;
+    archived_reason: string | null;
+  };
+
+  const roster: AgentRow[] = [];
+  for (const id of (identities ?? []) as Array<{
+    role: string; display_name: string; avatar: string; tagline: string; color: string;
+  }>) {
+    const versions = promptByRole[id.role] ?? [];
+    const activeOne = versions.find((v) => v.active);
+    const allArchived =
+      versions.length > 0 && versions.every((v) => v.status === "archived");
+    if (allArchived && !include_archived) continue;
+    roster.push({
+      role: id.role,
+      display_name: id.display_name,
+      avatar: id.avatar,
+      tagline: id.tagline,
+      active_prompt_version: activeOne?.version ?? null,
+      archived: allArchived,
+      archived_reason: versions.find((v) => v.status === "archived")?.archived_reason ?? null,
+    });
+  }
+
+  return {
+    ok: true,
+    result: {
+      total: roster.length,
+      authoritative_source: "cockpit_agent_identity (DO NOT INVENT — these names are the only valid ones)",
+      roster,
+    },
+  };
+}
+
 const HANDLERS: Record<string, (args: Record<string, unknown>) => Promise<ToolResult>> = {
+  list_team_members: (a) => list_team_members(a as Parameters<typeof list_team_members>[0]),
   query_supabase_view: (a) => query_supabase_view(a as Parameters<typeof query_supabase_view>[0]),
   read_audit_log: (a) => read_audit_log(a as Parameters<typeof read_audit_log>[0]),
   read_design_doc: (a) => read_design_doc(a as Parameters<typeof read_design_doc>[0]),
