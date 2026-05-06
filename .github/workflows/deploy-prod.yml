@@ -98,16 +98,14 @@ jobs:
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
 
-      - name: Pull Vercel env
-        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
-
-      - name: Build
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
-
-      - name: Deploy
+      - name: Deploy (server-side build via Vercel)
         id: deploy
+        # Server-side build avoids the `vercel pull` env-var redaction issue:
+        # production secrets are not retrievable client-side, so any local
+        # build that needs them fails. `vercel deploy --prod` ships the
+        # source and lets Vercel build it server-side with full env access.
         run: |
-          DEPLOY_URL=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
+          DEPLOY_URL=$(vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }})
           echo "url=$DEPLOY_URL" >> $GITHUB_OUTPUT
           echo "Deployed: $DEPLOY_URL"
 
