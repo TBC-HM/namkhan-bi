@@ -755,10 +755,106 @@ async function propose_department(args: Record<string, unknown>): Promise<ToolRe
   };
 }
 
+// HoD-level skills (Smart Office 2026-05-07).
+async function create_subticket(args: { worker_role?: string; task?: string; due?: string }): Promise<ToolResult> {
+  const role = (args.worker_role ?? "").toString();
+  const task = (args.task ?? "").toString();
+  if (!role || !task) return { ok: false, error: "worker_role + task required" };
+  const { data, error } = await supabase
+    .from("cockpit_tickets")
+    .insert({
+      source: "hod_subticket",
+      arm: "dev",
+      intent: "build",
+      status: "triaged",
+      email_subject: `[${role}] ${task.slice(0, 80)}`,
+      parsed_summary: task + (args.due ? `\n\nDue: ${args.due}` : ""),
+      notes: `Spawned by HoD via create_subticket. Assigned to ${role}.`,
+    })
+    .select("id")
+    .single();
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, result: { ticket_id: data?.id, assigned_to: role } };
+}
+
+async function request_peer_consult(args: { peer_role?: string; question?: string }): Promise<ToolResult> {
+  const peer = (args.peer_role ?? "").toString();
+  const q = (args.question ?? "").toString();
+  if (!peer || !q) return { ok: false, error: "peer_role + question required" };
+  const { data, error } = await supabase
+    .from("cockpit_tickets")
+    .insert({
+      source: "hod_peer_consult",
+      arm: "dev",
+      intent: "decide",
+      status: "triaged",
+      email_subject: `[peer-consult → ${peer}]`,
+      parsed_summary: q,
+      notes: "Cross-dept consult between HoDs.",
+    })
+    .select("id")
+    .single();
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, result: { ticket_id: data?.id, peer } };
+}
+
+async function open_pbs_ticket(args: { topic?: string; decision_required?: string; context?: string }): Promise<ToolResult> {
+  const t = (args.topic ?? "").toString();
+  const d = (args.decision_required ?? "").toString();
+  if (!t || !d) return { ok: false, error: "topic + decision_required required" };
+  const { data, error } = await supabase
+    .from("cockpit_tickets")
+    .insert({
+      source: "hod_pbs_escalation",
+      arm: "ops",
+      intent: "decide",
+      status: "awaits_user",
+      email_subject: `[PBS] ${t}`,
+      parsed_summary: `**Decision required:** ${d}\n\n${args.context ?? ""}`,
+      notes: "HoD escalation to PBS.",
+    })
+    .select("id")
+    .single();
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, result: { ticket_id: data?.id } };
+}
+
+async function propose_kpi_target(args: { kpi?: string; proposed_threshold?: string; rationale?: string }): Promise<ToolResult> {
+  if (!args.kpi || !args.proposed_threshold) return { ok: false, error: "kpi + proposed_threshold required" };
+  await supabase.from("cockpit_audit_log").insert({
+    agent: "hod",
+    action: "kpi_target_proposed",
+    target: args.kpi,
+    success: true,
+    metadata: { proposed: args.proposed_threshold, rationale: args.rationale ?? null },
+    reasoning: "HoD proposes KPI threshold change for PBS review.",
+  });
+  return { ok: true, result: { logged: true, kpi: args.kpi } };
+}
+
+async function route_ticket_to_dept(args: { ticket_id?: number }): Promise<ToolResult> {
+  if (!args.ticket_id) return { ok: false, error: "ticket_id required" };
+  // Simple acknowledgement — Captain Kit assigns via recommended_agent already.
+  await supabase.from("cockpit_audit_log").insert({
+    agent: "hod",
+    action: "ticket_received",
+    target: `ticket ${args.ticket_id}`,
+    success: true,
+    metadata: { ticket_id: args.ticket_id },
+    reasoning: "HoD acknowledged routing from Captain Kit.",
+  });
+  return { ok: true, result: { acknowledged: args.ticket_id } };
+}
+
 const HANDLERS: Record<string, (args: Record<string, unknown>) => Promise<ToolResult>> = {
   list_team_members: (a) => list_team_members(a as Parameters<typeof list_team_members>[0]),
   check_founder_brief: (a) => check_founder_brief(a as Parameters<typeof check_founder_brief>[0]),
   propose_department: (a) => propose_department(a),
+  create_subticket: (a) => create_subticket(a as Parameters<typeof create_subticket>[0]),
+  request_peer_consult: (a) => request_peer_consult(a as Parameters<typeof request_peer_consult>[0]),
+  open_pbs_ticket: (a) => open_pbs_ticket(a as Parameters<typeof open_pbs_ticket>[0]),
+  propose_kpi_target: (a) => propose_kpi_target(a as Parameters<typeof propose_kpi_target>[0]),
+  route_ticket_to_dept: (a) => route_ticket_to_dept(a as Parameters<typeof route_ticket_to_dept>[0]),
   query_supabase_view: (a) => query_supabase_view(a as Parameters<typeof query_supabase_view>[0]),
   read_audit_log: (a) => read_audit_log(a as Parameters<typeof read_audit_log>[0]),
   read_design_doc: (a) => read_design_doc(a as Parameters<typeof read_design_doc>[0]),
