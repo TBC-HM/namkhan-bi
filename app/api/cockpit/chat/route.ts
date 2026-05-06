@@ -666,7 +666,62 @@ export async function POST(req: Request) {
         triage,
       });
     } else {
-      // Anthropic failed → mark ticket and surface error.
+      // Triage parse failed. Defensive fallback: if the model produced a
+      // substantive markdown answer (Captain Kit answered the user directly
+      // instead of emitting JSON triage), wrap it as a direct-answer ticket
+      // with the markdown surfaced via parsed_summary so the user sees the
+      // actual response — a 502 hides a perfectly good answer.
+      const fallbackText = (debug.lastText ?? "").trim();
+      const looksLikeAnswer =
+        fallbackText.length >= 120 &&
+        (/^#{1,6}\s/m.test(fallbackText) ||      // markdown headings
+          /^\s*[-*]\s/m.test(fallbackText) ||    // bullets
+          /\|.*\|/.test(fallbackText));          // tables
+
+      if (looksLikeAnswer) {
+        const fakeTriage: Triage = {
+          arm: "ops",
+          intent: "decide",
+          urgency: "low",
+          summary: "Direct answer (model emitted markdown, not triage JSON).",
+          plan: ["Direct answer rendered below."],
+          recommended_agent: "none",
+          blockers: [],
+          estimated_minutes: 0,
+        };
+        const fallbackSummary = `**Request**: ${message}\n\n${fallbackText}`;
+        await supabase
+          .from("cockpit_tickets")
+          .update({
+            arm: "ops",
+            intent: "decide",
+            status: "triaged",
+            parsed_summary: fallbackSummary,
+            notes: JSON.stringify({ kind: "direct_answer_fallback", debug }),
+          })
+          .eq("id", inserted.id);
+        const milliCost = Math.round((debug.tokens_in * 3 + debug.tokens_out * 15) / 1000);
+        await supabase.from("cockpit_audit_log").insert({
+          ticket_id: inserted.id,
+          agent: "it_manager",
+          action: "triage_fallback_markdown",
+          target: `ticket:${inserted.id}`,
+          success: true,
+          metadata: { kind: "direct_answer_fallback", debug },
+          reasoning: "Model returned markdown instead of triage JSON. Treated text as direct answer.",
+          input_tokens: debug.tokens_in,
+          output_tokens: debug.tokens_out,
+          cost_usd_milli: milliCost,
+          duration_ms: debug.duration_ms,
+        });
+        return NextResponse.json({
+          ticket: { ...inserted, ...fakeTriage, status: "triaged", parsed_summary: fallbackSummary },
+          triage: fakeTriage,
+          fallback: "direct_answer_markdown",
+        });
+      }
+
+      // True triage failure (no answer, no JSON) → mark + 502.
       await supabase
         .from("cockpit_tickets")
         .update({
