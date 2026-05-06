@@ -1,0 +1,149 @@
+{
+  "name": "02 Uptime Watcher (Cockpit)",
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": { "hook": null, "maxResults": 1 },
+      "mapper": {},
+      "metadata": {
+        "designer": { "x": 0, "y": 0, "name": "Webhook: uptime-monitor" },
+        "restore": { "parameters": { "hook": { "data": { "editable": "true" }, "label": "uptime-monitor" } } }
+      }
+    },
+    {
+      "id": 2,
+      "module": "builtin:BasicRouter",
+      "version": 1,
+      "mapper": null,
+      "metadata": { "designer": { "x": 300, "y": 0, "name": "Route by alert type" } },
+      "routes": [
+        {
+          "flow": [
+            {
+              "id": 3,
+              "module": "builtin:BasicFilter",
+              "version": 1,
+              "filter": {
+                "name": "site_down",
+                "conditions": [[{ "a": "{{1.alertType}}", "b": "down", "o": "text:equal" }]]
+              }
+            },
+            {
+              "id": 4,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "parameters": { "handleErrors": false },
+              "mapper": {
+                "url": "https://namkhan-bi.vercel.app/?bust={{timestamp}}",
+                "method": "GET",
+                "headers": [{ "name": "User-Agent", "value": "Make-UptimeRecheck/1.0" }],
+                "parseResponse": false,
+                "timeout": "10",
+                "followRedirect": true
+              },
+              "metadata": { "designer": { "x": 600, "y": -200, "name": "Recheck: GET namkhan-bi.vercel.app" } }
+            },
+            {
+              "id": 5,
+              "module": "builtin:BasicFilter",
+              "version": 1,
+              "filter": {
+                "name": "still down",
+                "conditions": [[{ "a": "{{4.statusCode}}", "b": "200", "o": "number:notequal" }]]
+              }
+            },
+            {
+              "id": 6,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "parameters": { "handleErrors": false },
+              "mapper": {
+                "url": "https://kpenyneooigsyuuomgct.supabase.co/rest/v1/cockpit_incidents",
+                "method": "POST",
+                "headers": [
+                  { "name": "apikey", "value": "REPLACE_WITH_SUPABASE_SERVICE_KEY" },
+                  { "name": "Authorization", "value": "Bearer REPLACE_WITH_SUPABASE_SERVICE_KEY" },
+                  { "name": "Content-Type", "value": "application/json" },
+                  { "name": "Prefer", "value": "return=minimal" }
+                ],
+                "bodyType": "raw",
+                "data": "{\"severity\":1,\"symptom\":\"site down\",\"source\":\"uptime-monitor\",\"metadata\":{\"url\":\"{{1.url}}\",\"recheck_status\":{{4.statusCode}},\"monitor\":\"{{1.monitor}}\"}}",
+                "parseResponse": false
+              },
+              "metadata": { "designer": { "x": 900, "y": -200, "name": "Supabase: log site-down (severity 1)" } }
+            },
+            {
+              "id": 7,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "parameters": { "handleErrors": false },
+              "mapper": {
+                "url": "https://api.github.com/repos/TBC-HM/namkhan-bi/dispatches",
+                "method": "POST",
+                "headers": [
+                  { "name": "Authorization", "value": "Bearer REPLACE_WITH_GITHUB_PAT" },
+                  { "name": "Accept", "value": "application/vnd.github+json" },
+                  { "name": "Content-Type", "value": "application/json" }
+                ],
+                "bodyType": "raw",
+                "data": "{\"event_type\":\"uptime_alert\",\"client_payload\":{\"url\":\"{{1.url}}\",\"status\":{{4.statusCode}}}}",
+                "parseResponse": false
+              },
+              "metadata": { "designer": { "x": 1200, "y": -200, "name": "GitHub: repository_dispatch (alert)" } }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 8,
+              "module": "builtin:BasicFilter",
+              "version": 1,
+              "filter": {
+                "name": "site_up_recovery",
+                "conditions": [[{ "a": "{{1.alertType}}", "b": "up", "o": "text:equal" }]]
+              }
+            },
+            {
+              "id": 9,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "parameters": { "handleErrors": false },
+              "mapper": {
+                "url": "https://kpenyneooigsyuuomgct.supabase.co/rest/v1/cockpit_incidents?source=eq.uptime-monitor&resolved_at=is.null&order=detected_at.desc&limit=1",
+                "method": "PATCH",
+                "headers": [
+                  { "name": "apikey", "value": "REPLACE_WITH_SUPABASE_SERVICE_KEY" },
+                  { "name": "Authorization", "value": "Bearer REPLACE_WITH_SUPABASE_SERVICE_KEY" },
+                  { "name": "Content-Type", "value": "application/json" },
+                  { "name": "Prefer", "value": "return=minimal" }
+                ],
+                "bodyType": "raw",
+                "data": "{\"resolved_at\":\"{{formatDate(now;\\\"YYYY-MM-DDTHH:mm:ssZ\\\")}}\",\"auto_resolved\":true,\"fix\":\"site recovered\"}",
+                "parseResponse": false
+              },
+              "metadata": { "designer": { "x": 600, "y": 200, "name": "Supabase: mark resolved" } }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false
+    },
+    "designer": { "orphans": [] }
+  }
+}

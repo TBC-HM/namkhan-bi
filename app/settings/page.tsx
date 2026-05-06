@@ -93,6 +93,42 @@ export default async function SettingsSnapshotPage() {
         <KpiBox value={dqOpenCount ?? 0} unit="count" label="DQ open" />
       </div>
       <div style={{ marginTop: 18 }}>
+        <SectionHead title="Reference" emphasis="& architecture" sub="Owner-maintained platform map + live architecture diagram" source="content/settings/platform-map.md" />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
+          <Link href="/settings/platform-map"
+            style={{
+              background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)',
+              borderRadius: 8, padding: '12px 14px', textDecoration: 'none', color: 'inherit',
+              display: 'flex', flexDirection: 'column', gap: 4, minHeight: 90,
+            }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontWeight: 500, fontSize: 'var(--t-md)' }}>Platform map</div>
+              <StatusPill tone="active">md</StatusPill>
+            </div>
+            <div style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-soft)', lineHeight: 1.4 }}>Sources · ingest · DB · agents · frontend — sorted Gap → Live</div>
+            <div style={{ marginTop: 'auto', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', color: 'var(--ink-mute)', letterSpacing: 'var(--ls-loose)' }}>
+              /settings/platform-map
+            </div>
+          </Link>
+          <a href="/platform-map-v5.html" target="_blank" rel="noopener noreferrer"
+            style={{
+              background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)',
+              borderRadius: 8, padding: '12px 14px', textDecoration: 'none', color: 'inherit',
+              display: 'flex', flexDirection: 'column', gap: 4, minHeight: 90,
+            }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontWeight: 500, fontSize: 'var(--t-md)' }}>Architecture diagram</div>
+              <StatusPill tone="active">v5</StatusPill>
+            </div>
+            <div style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-soft)', lineHeight: 1.4 }}>Layered visual map · 27 schemas · 160+ tables · opens new tab</div>
+            <div style={{ marginTop: 'auto', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', color: 'var(--ink-mute)', letterSpacing: 'var(--ls-loose)' }}>
+              /platform-map-v5.html ↗
+            </div>
+          </a>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 18 }}>
         <SectionHead title="Property sections" emphasis={`${sectionsList.length} editable`} sub="Click to edit · placeholder count flags incomplete" source="marketing.v_settings_sections_live" />
         {sectionsList.length === 0 ? (
           <div style={{ padding: 32, background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, textAlign: 'center', color: 'var(--ink-mute)', fontStyle: 'italic' }}>

@@ -1,0 +1,2237 @@
+// app/cockpit/page.tsx
+// Cockpit — IT Department UI
+// Reads everything live from Supabase. No hardcoded data.
+// Deps: @supabase/supabase-js (already installed in namkhan-bi)
+//
+// Required env vars (already exist in your Vercel project):
+//   NEXT_PUBLIC_SUPABASE_URL
+//   NEXT_PUBLIC_SUPABASE_ANON_KEY  (read-only client access; server uses service role)
+//   SUPABASE_SERVICE_ROLE_KEY      (server-only, for admin ops on cockpit tables)
+//
+// To deploy:
+//   1. Save this file as app/cockpit/page.tsx
+//   2. Save the API routes (see end of file for separate route files)
+//   3. git add . && git commit -m "feat: cockpit UI" && git push
+//   4. Vercel auto-deploys
+
+"use client";
+
+import { useEffect, useState, useRef, useCallback } from "react";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+type Tab = "chat" | "schedule" | "team" | "logs" | "data" | "knowledge" | "tools" | "cost" | "activity" | "docs";
+
+type Ticket = {
+  id: number;
+  created_at: string;
+  arm: string;
+  intent: string;
+  status: string;
+  parsed_summary: string | null;
+  pr_url: string | null;
+  github_issue_url: string | null;
+  iterations: number;
+};
+
+type AuditLog = {
+  id: number;
+  created_at: string;
+  job: string;
+  arms: string[] | null;
+  skills: string[] | null;
+  status: string;
+  trigger: string | null;
+  duration_ms: number | null;
+  output: string | null;
+  cost_usd: number | null;
+  pr_url: string | null;
+};
+
+type Incident = {
+  id: number;
+  created_at: string;
+  severity: string;
+  title: string;
+  body: string | null;
+  resolved_at: string | null;
+};
+
+type KpiSnapshot = {
+  id: number;
+  taken_at: string;
+  metric: string;
+  value: number;
+  unit: string | null;
+  source: string | null;
+};
+
+type SchemaTable = {
+  schema: string;
+  name: string;
+  row_count: number;
+  size_bytes: number;
+  has_rls: boolean;
+  is_view: boolean;
+};
+
+type Agent = {
+  name: string;
+  display_name?: string;
+  avatar?: string;
+  tagline?: string;
+  color?: string | null;
+  department?: string;
+  role: string;
+  skills: string[] | { id: number; name: string; description: string }[];
+  workers: number;
+  state: "idle" | "active" | "attention";
+  is_chief?: boolean;
+  version?: number;
+  prompt_source?: string;
+  last_updated?: string | null;
+  runs_24h?: number;
+  success_rate?: number | null;
+  last_run_at?: string | null;
+  active_ticket_ids?: number[];
+  cost_24h_usd?: string;
+};
+
+// Human-friendly titles for the team (org chart + cards).
+const AGENT_TITLES: Record<string, string> = {
+  it_manager: "Chief · IT Manager",
+  lead: "Senior Engineer · decomposes features",
+  frontend: "Frontend Engineer · UI specialist",
+  backend: "Backend Engineer · schema + API",
+  designer: "Designer · brand & design system",
+  researcher: "Research Analyst · data + investigation",
+  reviewer: "Code Reviewer · risks + must-have tests",
+  tester: "QA Lead · test plans",
+  documentarian: "Technical Writer · docs + ADRs",
+  ops_lead: "Operations Lead · external handoff",
+  code_spec_writer: "Spec Writer · GH-issue-ready specs",
+  skill_creator: "Skill Architect · designs new tools",
+  none: "Generalist · fallback dispatcher",
+};
+const friendlyTitle = (key: string) => AGENT_TITLES[key] ?? key.replace(/_/g, " ");
+const friendlySkill = (key: string) =>
+  key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+export default function CockpitPage() {
+  const [tab, setTab] = useState<Tab>("chat");
+  const [orgOpen, setOrgOpen] = useState(false);
+  const [systemHealth, setSystemHealth] = useState<"green" | "yellow" | "red">("green");
+  const [counts, setCounts] = useState({ schedule: 0, team: 0, logs: 0, data: 0 });
+
+  // Top-level health probe — refreshed every 30s
+  useEffect(() => {
+    const probe = async () => {
+      const { data } = await supabase
+        .from("cockpit_incidents")
+        .select("severity")
+        .is("resolved_at", null);
+      if (!data || data.length === 0) return setSystemHealth("green");
+      if (data.some((i) => i.severity === "critical")) return setSystemHealth("red");
+      return setSystemHealth("yellow");
+    };
+    probe();
+    const id = setInterval(probe, 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Tab counts — single batch read on mount
+  useEffect(() => {
+    (async () => {
+      const [logsCount, tablesCount] = await Promise.all([
+        supabase.from("cockpit_audit_log").select("id", { count: "exact", head: true }),
+        fetch("/api/cockpit/schema/tables").then((r) => r.json()).catch(() => ({ tables: [] })),
+      ]);
+      setCounts({
+        schedule: 0, // populated by schedule tab itself
+        team: 0,
+        logs: logsCount.count ?? 0,
+        data: tablesCount.tables?.length ?? 0,
+      });
+    })();
+  }, []);
+
+  return (
+    <div className="cockpit">
+      <TopBar
+        tab={tab}
+        setTab={setTab}
+        counts={counts}
+        systemHealth={systemHealth}
+        onOrg={() => setOrgOpen(true)}
+      />
+
+      <div className="content">
+        {tab === "chat" && <ChatTab />}
+        {tab === "knowledge" && <KnowledgeTab />}
+        {tab === "tools" && <ToolsTab />}
+        {tab === "cost" && <CostTab />}
+        {tab === "activity" && <ActivityTab />}
+        {tab === "docs" && <DocsTab />}
+        {tab === "schedule" && <ScheduleTab onCount={(n) => setCounts((c) => ({ ...c, schedule: n }))} />}
+        {tab === "team" && <TeamTab onCount={(n) => setCounts((c) => ({ ...c, team: n }))} />}
+        {tab === "logs" && <LogsTab />}
+        {tab === "data" && <DataTab />}
+      </div>
+
+      {orgOpen && <OrgOverlay onClose={() => setOrgOpen(false)} />}
+
+      <style jsx global>{`
+        :root {
+          --bg-0: #0a0e1a;
+          --bg-1: #131826;
+          --bg-2: #1a2030;
+          --bg-3: #232b3d;
+          --border: #1f2937;
+          --border-2: #2a3447;
+          --text-0: #f3f4f6;
+          --text-1: #cbd5e0;
+          --text-2: #8b95a7;
+          --text-3: #64748b;
+          --green: #22c55e;
+          --green-bg: rgba(34, 197, 94, 0.12);
+          --yellow: #f59e0b;
+          --yellow-bg: rgba(245, 158, 11, 0.12);
+          --red: #ef4444;
+          --red-bg: rgba(239, 68, 68, 0.12);
+          --blue: #60a5fa;
+          --blue-bg: rgba(96, 165, 250, 0.12);
+          --purple: #a855f7;
+          --purple-bg: rgba(168, 85, 247, 0.12);
+          --cyan: #22d3ee;
+          --cyan-bg: rgba(34, 211, 238, 0.12);
+          --pink: #ec4899;
+          --pink-bg: rgba(236, 72, 153, 0.12);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+          background: var(--bg-0);
+          color: var(--text-0);
+          font-size: 13px;
+          line-height: 1.4;
+        }
+        .cockpit {
+          height: 100vh;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+        }
+        .content { flex: 1; overflow: hidden; }
+        ::-webkit-scrollbar { width: 7px; height: 7px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--border-2); }
+      `}</style>
+    </div>
+  );
+}
+
+// ============================================================================
+// TOP BAR
+// ============================================================================
+function TopBar({
+  tab,
+  setTab,
+  counts,
+  systemHealth,
+  onOrg,
+}: {
+  tab: Tab;
+  setTab: (t: Tab) => void;
+  counts: { schedule: number; team: number; logs: number; data: number };
+  systemHealth: "green" | "yellow" | "red";
+  onOrg: () => void;
+}) {
+  const healthColor = { green: "var(--green)", yellow: "var(--yellow)", red: "var(--red)" }[systemHealth];
+  const healthLabel = { green: "All operational", yellow: "Attention", red: "Critical" }[systemHealth];
+
+  return (
+    <div className="topbar">
+      <div className="logo">
+        <div className="logo-dot" style={{ background: healthColor, boxShadow: `0 0 8px ${healthColor}` }} />
+        Cockpit
+      </div>
+      <div className="topbar-sub">namkhan-bi</div>
+
+      <div className="tabs">
+        <Tab name="💬 Chat" active={tab === "chat"} onClick={() => setTab("chat")} />
+        <Tab name="📊 Activity" active={tab === "activity"} onClick={() => setTab("activity")} />
+        <Tab name="👥 Team" active={tab === "team"} onClick={() => setTab("team")} count={counts.team} />
+        <Tab name="🧠 Knowledge" active={tab === "knowledge"} onClick={() => setTab("knowledge")} />
+        <Tab name="📄 Docs" active={tab === "docs"} onClick={() => setTab("docs")} />
+        <Tab name="📅 Schedule" active={tab === "schedule"} onClick={() => setTab("schedule")} count={counts.schedule} />
+        <Tab name="📜 Logs" active={tab === "logs"} onClick={() => setTab("logs")} count={counts.logs} />
+        <Tab name="🗄 Data" active={tab === "data"} onClick={() => setTab("data")} count={counts.data} />
+        <Tab name="💰 Cost" active={tab === "cost"} onClick={() => setTab("cost")} />
+        <Tab name="🔗 Tools" active={tab === "tools"} onClick={() => setTab("tools")} />
+      </div>
+
+      <div className="topbar-right">
+        <a className="org-btn" href="https://vercel.com/pbsbase-2825s-projects/namkhan-bi/deployments" target="_blank" rel="noreferrer" title="Latest preview deploys (staging-first env coming via standing task)">🌐 Preview</a>
+        <a className="org-btn" href="/" target="_blank" rel="noreferrer" title="Open the live BI app in a new tab">↗ App</a>
+        <button className="org-btn" onClick={onOrg}>🗂 Org Chart</button>
+        <div className="system-pulse" style={{ background: `${healthColor}20`, borderColor: `${healthColor}50`, color: healthColor }}>
+          <div className="pulse-dot" style={{ background: healthColor }} />
+          <span>{healthLabel}</span>
+        </div>
+        <div className="user-avatar">PB</div>
+      </div>
+
+      <style jsx>{`
+        .topbar {
+          height: 48px;
+          background: var(--bg-1);
+          border-bottom: 1px solid var(--border);
+          display: flex;
+          align-items: center;
+          padding: 0 20px;
+          gap: 14px;
+          flex-shrink: 0;
+        }
+        .logo { font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+        .logo-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .topbar-sub { font-size: 11px; color: var(--text-3); }
+        .tabs { display: flex; margin-left: 6px; }
+        .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+        .org-btn {
+          background: var(--bg-2);
+          border: 1px solid var(--border-2);
+          color: var(--text-1);
+          border-radius: 6px;
+          padding: 6px 11px;
+          font-size: 11px;
+          cursor: pointer;
+        }
+        .org-btn:hover { border-color: var(--blue); color: var(--blue); }
+        .system-pulse {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 4px 11px;
+          border: 1px solid;
+          border-radius: 14px;
+          font-size: 11px;
+        }
+        .pulse-dot { width: 6px; height: 6px; border-radius: 50%; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .user-avatar {
+          width: 28px; height: 28px;
+          background: var(--bg-2); border: 1px solid var(--border-2);
+          border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 11px; color: var(--text-1); font-weight: 600;
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function Tab({ name, active, onClick, count }: { name: string; active: boolean; onClick: () => void; count?: number }) {
+  return (
+    <div className={`tab ${active ? "active" : ""}`} onClick={onClick}>
+      {name}
+      {count !== undefined && count > 0 && <span className="tab-count">{count > 999 ? `${Math.floor(count / 1000)}k` : count}</span>}
+      <style jsx>{`
+        .tab {
+          padding: 0 13px; height: 48px;
+          display: flex; align-items: center; gap: 6px;
+          font-size: 12px; color: var(--text-2);
+          cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+        }
+        .tab.active { color: var(--text-0); border-bottom-color: var(--blue); }
+        .tab:hover:not(.active) { color: var(--text-1); }
+        .tab-count {
+          font-size: 9.5px; background: var(--bg-2);
+          padding: 1px 5px; border-radius: 8px; color: var(--text-2);
+        }
+        .tab.active .tab-count { background: var(--blue-bg); color: var(--blue); }
+      `}</style>
+    </div>
+  );
+}
+
+// ============================================================================
+// CHAT TAB
+// ============================================================================
+type Filter = "open" | "waiting" | "done" | "failed" | "all";
+
+const FILTER_GROUPS: Record<Filter, string[]> = {
+  open: ["new", "triaging", "triaged", "working"],
+  waiting: ["awaits_user"],
+  done: ["completed"],
+  failed: ["triage_failed", "blocked"],
+  all: [],
+};
+
+function ChatTab() {
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const [filter, setFilter] = useState<Filter>("open");
+  const [search, setSearch] = useState("");
+  const listEnd = useRef<HTMLDivElement>(null);
+
+  const loadTickets = useCallback(async () => {
+    const { data } = await supabase
+      .from("cockpit_tickets")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (data) setTickets(data);
+  }, []);
+
+  useEffect(() => {
+    loadTickets();
+    const channel = supabase
+      .channel("cockpit_tickets_realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "cockpit_tickets" }, () => loadTickets())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [loadTickets]);
+
+  useEffect(() => { listEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [tickets]);
+
+  const send = async (override?: string) => {
+    const msg = (override ?? input).trim();
+    if (!msg || sending) return;
+    setSending(true);
+    try {
+      const res = await fetch("/api/cockpit/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: msg }),
+      });
+      if (!res.ok) throw new Error("Send failed");
+      if (!override) setInput("");
+      await loadTickets();
+    } catch (e) {
+      alert(`Error: ${e instanceof Error ? e.message : "unknown"}`);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const requestMagicLink = async () => {
+    try {
+      const res = await fetch("/api/cockpit/auth/magic-link");
+      if (!res.ok) throw new Error("magic link failed");
+      const json = await res.json();
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(json.url)}`;
+      const w = window.open("", "_blank", "width=400,height=500");
+      if (w) {
+        w.document.write(`<html><body style='font-family:system-ui;text-align:center;padding:20px'><h3>Scan with phone</h3><img src='${qrUrl}' /><p style='font-size:11px;word-break:break-all'>${json.url}</p><p style='color:#888;font-size:11px'>Expires in 10 min · single use · sets 30-day cookie</p></body></html>`);
+      } else {
+        alert(`Magic link (10 min):\n${json.url}`);
+      }
+    } catch (e) {
+      alert(`Magic link error: ${e instanceof Error ? e.message : "unknown"}`);
+    }
+  };
+
+  return (
+    <div className="chat-tab">
+      <div className="chat-list">
+        <div className="chat-list-header">
+          <span>Tickets</span>
+          <button onClick={requestMagicLink} className="chat-magic-btn" title="Get a 10-min QR code to log in on phone">📱</button>
+        </div>
+        <div className="chat-filters">
+          {(["open", "waiting", "done", "failed", "all"] as Filter[]).map((f) => {
+            const count =
+              f === "all"
+                ? tickets.length
+                : tickets.filter((t) => FILTER_GROUPS[f].includes(t.status)).length;
+            return (
+              <button
+                key={f}
+                className={`chat-filter-pill ${filter === f ? "active" : ""}`}
+                onClick={() => setFilter(f)}
+              >
+                {f} {count > 0 && <span className="cf-count">{count}</span>}
+              </button>
+            );
+          })}
+        </div>
+        <input
+          className="chat-search"
+          placeholder="Search summary…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        {(() => {
+          const filtered = tickets.filter((t) => {
+            const passFilter = filter === "all" || FILTER_GROUPS[filter].includes(t.status);
+            const passSearch =
+              !search.trim() ||
+              (t.parsed_summary ?? "").toLowerCase().includes(search.toLowerCase()) ||
+              t.arm?.toLowerCase().includes(search.toLowerCase()) ||
+              t.intent?.toLowerCase().includes(search.toLowerCase());
+            return passFilter && passSearch;
+          });
+          if (filtered.length === 0) {
+            return <div className="chat-empty">No tickets match · {filter} {search ? `· "${search}"` : ""}</div>;
+          }
+          return filtered.map((t) => (
+            <div
+              key={t.id}
+              className={`chat-list-item ${activeTicket?.id === t.id ? "active" : ""}`}
+              onClick={() => setActiveTicket(t)}
+            >
+              <div className="cli-top">
+                <span className={`cli-arm cli-arm-${t.arm}`}>{t.arm}</span>
+                <span className="cli-status" data-status={t.status}>{t.status}</span>
+                <span className="cli-time">{relTime(t.created_at)}</span>
+              </div>
+              <div className="cli-summary">{t.parsed_summary || `#${t.id} · ${t.intent}`}</div>
+            </div>
+          ));
+        })()}
+      </div>
+
+      <div className="chat-main">
+        <div className="chat-thread">
+          {!activeTicket && tickets.length > 0 && (
+            <div className="chat-empty">Select a ticket on the left to view details, or type below to start a new conversation.</div>
+          )}
+          {!activeTicket && tickets.length === 0 && (
+            <div className="chat-empty">No conversations yet. Type below to dispatch your first ticket to the IT Manager.</div>
+          )}
+          {activeTicket && (
+            <div className="chat-ticket-detail">
+              <div className="ctd-header">
+                <h2>#{activeTicket.id} · {activeTicket.intent}</h2>
+                <div className="ctd-meta">
+                  <span className={`cli-arm cli-arm-${activeTicket.arm}`}>{activeTicket.arm}</span>
+                  <span className="cli-status" data-status={activeTicket.status}>{activeTicket.status}</span>
+                  <span className="cli-time">{absTime(activeTicket.created_at)}</span>
+                  {activeTicket.iterations > 0 && <span className="cli-time">{activeTicket.iterations} iterations</span>}
+                </div>
+              </div>
+              <div className="ctd-body">
+                {activeTicket.parsed_summary || <i>No summary parsed yet.</i>}
+              </div>
+              {activeTicket.status === "awaits_user" && (
+                <div className="ctd-approve">
+                  <button
+                    onClick={() => send("approve")}
+                    disabled={sending}
+                    className="ctd-approve-btn ctd-approve-yes"
+                  >
+                    {sending ? "Applying…" : "✅ Approve"}
+                  </button>
+                  <button
+                    onClick={() => send("reject")}
+                    disabled={sending}
+                    className="ctd-approve-btn ctd-approve-no"
+                  >
+                    Reject
+                  </button>
+                  <span className="ctd-approve-hint">Or type your own follow-up below.</span>
+                </div>
+              )}
+              {activeTicket.pr_url && (
+                <a className="ctd-link" href={activeTicket.pr_url} target="_blank" rel="noreferrer">
+                  View PR ↗
+                </a>
+              )}
+              {activeTicket.github_issue_url && (
+                <a className="ctd-link" href={activeTicket.github_issue_url} target="_blank" rel="noreferrer">
+                  View GitHub Issue ↗
+                </a>
+              )}
+            </div>
+          )}
+          <div ref={listEnd} />
+        </div>
+
+        <div className="chat-input-wrap">
+          <textarea
+            className="chat-input"
+            value={input}
+            placeholder="Ask the IT Manager: build, fix, investigate, decide..."
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send();
+            }}
+            disabled={sending}
+            rows={3}
+          />
+          <button className="chat-send" onClick={() => send()} disabled={sending || !input.trim()}>
+            {sending ? "Sending..." : "Send · ⌘↵"}
+          </button>
+        </div>
+      </div>
+
+      <style jsx>{`
+        .chat-tab { height: 100%; display: grid; grid-template-columns: 280px 1fr; }
+        .chat-list { background: var(--bg-1); border-right: 1px solid var(--border); overflow-y: auto; }
+        .chat-list-header {
+          padding: 14px 16px 8px;
+          font-size: 10px; color: var(--text-3);
+          text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600;
+          display: flex; align-items: center; justify-content: space-between;
+        }
+        .chat-filters {
+          display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 12px 8px;
+          border-bottom: 1px solid var(--border);
+        }
+        .chat-filter-pill {
+          padding: 3px 9px; border-radius: 99px; cursor: pointer;
+          font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px;
+          font-weight: 600; background: transparent; color: var(--text-3);
+          border: 1px solid var(--border);
+        }
+        .chat-filter-pill.active {
+          background: var(--text-1); color: var(--bg-0);
+          border-color: var(--text-1);
+        }
+        .cf-count { font-weight: 400; opacity: 0.7; margin-left: 3px; }
+        .chat-search {
+          width: calc(100% - 24px); margin: 8px 12px;
+          padding: 6px 8px; border-radius: 4px;
+          border: 1px solid var(--border); background: var(--bg-2);
+          color: var(--text-1); font-size: 11px;
+        }
+        .chat-search:focus { outline: 1px solid var(--cyan); }
+        .chat-magic-btn {
+          background: none; border: none; cursor: pointer; padding: 0 4px;
+          font-size: 14px; line-height: 1;
+        }
+        .chat-magic-btn:hover { opacity: 0.7; }
+        .ctd-approve {
+          margin-top: 16px; padding: 14px; border-radius: 8px;
+          background: var(--yellow-bg); border: 1px solid var(--yellow);
+          display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+        }
+        .ctd-approve-btn {
+          padding: 8px 16px; border-radius: 6px; cursor: pointer;
+          font-size: 13px; font-weight: 600; border: 1px solid transparent;
+        }
+        .ctd-approve-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .ctd-approve-yes {
+          background: var(--green); color: white; border-color: var(--green);
+        }
+        .ctd-approve-no {
+          background: transparent; color: var(--text-1); border-color: var(--border);
+        }
+        .ctd-approve-hint { font-size: 11px; color: var(--text-3); }
+        .chat-empty {
+          padding: 30px 20px; text-align: center;
+          color: var(--text-3); font-size: 12px;
+        }
+        .chat-list-item {
+          padding: 10px 16px; border-bottom: 1px solid var(--border);
+          cursor: pointer;
+        }
+        .chat-list-item:hover { background: var(--bg-2); }
+        .chat-list-item.active { background: var(--bg-2); border-left: 2px solid var(--blue); padding-left: 14px; }
+        .cli-top { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+        .cli-arm {
+          font-size: 9.5px; padding: 1px 6px; border-radius: 3px;
+          text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600;
+          background: var(--bg-3); color: var(--text-2);
+        }
+        .cli-arm-health { background: var(--green-bg); color: var(--green); }
+        .cli-arm-dev { background: var(--cyan-bg); color: var(--cyan); }
+        .cli-arm-research { background: var(--purple-bg); color: var(--purple); }
+        .cli-arm-control { background: var(--yellow-bg); color: var(--yellow); }
+        .cli-arm-design { background: var(--pink-bg); color: var(--pink); }
+        .cli-status {
+          font-size: 9.5px; padding: 1px 6px; border-radius: 3px;
+          text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600;
+        }
+        .cli-status[data-status="merged"], .cli-status[data-status="closed"] { background: var(--green-bg); color: var(--green); }
+        .cli-status[data-status="in_progress"] { background: var(--cyan-bg); color: var(--cyan); }
+        .cli-status[data-status="awaits_user"] { background: var(--yellow-bg); color: var(--yellow); }
+        .cli-status[data-status="failed"], .cli-status[data-status="cancelled"] { background: var(--red-bg); color: var(--red); }
+        .cli-time { margin-left: auto; font-size: 10px; color: var(--text-3); font-family: ui-monospace, monospace; }
+        .cli-summary { font-size: 12px; color: var(--text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .chat-main { display: flex; flex-direction: column; overflow: hidden; }
+        .chat-thread { flex: 1; overflow-y: auto; padding: 24px; }
+        .chat-ticket-detail h2 { font-size: 16px; margin-bottom: 8px; }
+        .ctd-meta { display: flex; gap: 8px; margin-bottom: 14px; }
+        .ctd-body {
+          background: var(--bg-1); border: 1px solid var(--border);
+          border-radius: 8px; padding: 14px 16px;
+          font-size: 13px; color: var(--text-1); line-height: 1.6;
+          white-space: pre-wrap;
+        }
+        .ctd-link {
+          display: inline-block; margin-top: 12px;
+          padding: 6px 12px; background: var(--bg-2); border: 1px solid var(--border-2);
+          border-radius: 5px; color: var(--blue); text-decoration: none; font-size: 12px;
+        }
+        .ctd-link:hover { border-color: var(--blue); }
+        .chat-input-wrap {
+          padding: 14px 24px; border-top: 1px solid var(--border);
+          display: flex; gap: 10px; background: var(--bg-1);
+        }
+        .chat-input {
+          flex: 1; resize: none;
+          background: var(--bg-2); border: 1px solid var(--border-2); color: var(--text-0);
+          border-radius: 7px; padding: 10px 14px; font-size: 13px;
+          font-family: inherit; outline: none;
+        }
+        .chat-input:focus { border-color: var(--blue); }
+        .chat-input:disabled { opacity: 0.5; }
+        .chat-send {
+          background: var(--blue); border: none; color: white;
+          border-radius: 7px; padding: 0 16px; font-size: 12px; font-weight: 600;
+          cursor: pointer; align-self: flex-end; height: 38px;
+        }
+        .chat-send:disabled { opacity: 0.4; cursor: not-allowed; }
+      `}</style>
+    </div>
+  );
+}
+
+// ============================================================================
+// SCHEDULE TAB — reads from /api/cockpit/schedule which lists GitHub Actions + Make.com scenarios
+// ============================================================================
+function ScheduleTab({ onCount }: { onCount: (n: number) => void }) {
+  const [items, setItems] = useState<Array<{ name: string; cron: string; source: string; nextRun: string | null; lastStatus: string | null }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/cockpit/schedule")
+      .then((r) => r.json())
+      .then((d) => { setItems(d.items ?? []); onCount(d.items?.length ?? 0); })
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false));
+  }, [onCount]);
+
+  return (
+    <div className="schedule-tab">
+      <div className="page-header">
+        <h1>Schedule</h1>
+        <span className="page-sub">All scheduled jobs (GitHub Actions + Make.com)</span>
+      </div>
+      {loading && <div className="empty">Loading schedule...</div>}
+      {!loading && items.length === 0 && <div className="empty">No scheduled jobs found. Check /api/cockpit/schedule.</div>}
+      {!loading && items.length > 0 && (
+        <table className="sched-table">
+          <thead>
+            <tr><th>Job</th><th>Cron</th><th>Source</th><th>Next run</th><th>Last status</th></tr>
+          </thead>
+          <tbody>
+            {items.map((it, i) => (
+              <tr key={i}>
+                <td>{it.name}</td>
+                <td><code>{it.cron}</code></td>
+                <td><span className="src-pill" data-src={it.source}>{it.source}</span></td>
+                <td>{it.nextRun ?? "—"}</td>
+                <td>{it.lastStatus ?? "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <style jsx>{`
+        .schedule-tab { padding: 24px; height: 100%; overflow-y: auto; }
+        .page-header { margin-bottom: 16px; }
+        .page-header h1 { font-size: 18px; font-weight: 600; }
+        .page-sub { font-size: 12px; color: var(--text-3); }
+        .empty { padding: 40px; text-align: center; color: var(--text-3); }
+        .sched-table { width: 100%; border-collapse: collapse; background: var(--bg-1); border-radius: 8px; overflow: hidden; }
+        th { background: var(--bg-2); padding: 10px 14px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-3); }
+        td { padding: 10px 14px; border-top: 1px solid var(--border); font-size: 12px; }
+        code { font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--cyan); }
+        .src-pill { font-size: 10px; padding: 2px 7px; border-radius: 3px; text-transform: uppercase; }
+        .src-pill[data-src="github"] { background: var(--bg-3); color: var(--text-1); }
+        .src-pill[data-src="make"] { background: var(--purple-bg); color: var(--purple); }
+      `}</style>
+    </div>
+  );
+}
+
+// ============================================================================
+// TEAM TAB — reads agent definitions from /api/cockpit/team
+// ============================================================================
+function TeamTab({ onCount }: { onCount: (n: number) => void }) {
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    const tick = () => {
+      fetch("/api/cockpit/team")
+        .then((r) => r.json())
+        .then((d) => {
+          if (!alive) return;
+          setAgents(d.agents ?? []);
+          onCount(d.agents?.length ?? 0);
+        })
+        .catch(() => alive && setAgents([]))
+        .finally(() => alive && setLoading(false));
+    };
+    tick();
+    const id = setInterval(tick, 15_000); // live worker indicator refreshes
+    return () => { alive = false; clearInterval(id); };
+  }, [onCount]);
+
+  const chief = agents.find((a) => a.is_chief);
+  const workers = agents.filter((a) => !a.is_chief);
+
+  const skillName = (s: Agent["skills"][number]): string =>
+    typeof s === "string" ? s : s.name;
+  const skillDesc = (s: Agent["skills"][number]): string =>
+    typeof s === "string" ? "" : s.description;
+
+  return (
+    <div className="team-tab">
+      <div className="page-header">
+        <h1>Team</h1>
+        <span className="page-sub">
+          Source of truth: <code>cockpit_agent_prompts</code> + <code>cockpit_agent_skills</code> in Postgres.
+          To refine an agent, talk to the IT Manager in Chat — type the change, click Approve.
+        </span>
+      </div>
+      {loading && <div className="empty">Loading team...</div>}
+      {!loading && agents.length === 0 && <div className="empty">No agents found. Run the cockpit_agent_prompts migration.</div>}
+      {!loading && chief && (
+        <div className="chief-card" style={{ borderLeftColor: chief.color ?? "var(--cyan)" }}>
+          <div className="chief-row">
+            <div className="chief-avatar" style={{ background: chief.color ?? "var(--cyan)" }}>{chief.avatar ?? "🧭"}</div>
+            <div className="chief-text">
+              <div className="chief-badge">CHIEF · {(chief.department ?? "it").toUpperCase()}</div>
+              <div className="chief-name">{chief.display_name ?? friendlyTitle(chief.name)}</div>
+              <div className="chief-role">{chief.tagline ?? chief.role}</div>
+            </div>
+          </div>
+          <div className="chief-stats">
+            <span>v{chief.version}</span>
+            <span>·</span>
+            <span>{chief.skills.length} skills</span>
+            <span>·</span>
+            <span>{chief.runs_24h ?? 0} runs / 24h</span>
+            {chief.success_rate !== null && chief.success_rate !== undefined && (
+              <>
+                <span>·</span>
+                <span>{chief.success_rate}% ok</span>
+              </>
+            )}
+            {chief.cost_24h_usd && Number(chief.cost_24h_usd) > 0 && (
+              <>
+                <span>·</span>
+                <span>${chief.cost_24h_usd}</span>
+              </>
+            )}
+            <span>·</span>
+            <span className={`agent-state agent-state-${chief.state}`}>
+              {chief.active_ticket_ids && chief.active_ticket_ids.length > 0 ? `working · #${chief.active_ticket_ids[0]}` : chief.state}
+            </span>
+          </div>
+          <div className="agent-skills">
+            {chief.skills.map((s) => (
+              <span key={skillName(s)} className="skill-pill" title={skillDesc(s)}>{friendlySkill(skillName(s))}</span>
+            ))}
+          </div>
+        </div>
+      )}
+      {!loading && workers.length > 0 && (() => {
+        // Group by department.
+        const byDept: Record<string, Agent[]> = {};
+        for (const w of workers) {
+          const d = w.department ?? "it";
+          if (!byDept[d]) byDept[d] = [];
+          byDept[d].push(w);
+        }
+        const deptOrder = ["it", ...Object.keys(byDept).filter((d) => d !== "it").sort()];
+        return deptOrder.filter((d) => byDept[d]).map((dept) => (
+          <div key={dept} className="dept-group">
+            <h2 className="dept-heading">{dept === "it" ? "IT Department · Workers" : dept.toUpperCase() + " Department"}</h2>
+            <div className="agents-grid">
+              {byDept[dept].map((a) => (
+                <div key={a.name} className="agent-card" style={{ borderTopColor: a.color ?? "var(--text-2)" }}>
+                  <div className="agent-card-top">
+                    <div className="agent-avatar-row">
+                      <div className="agent-avatar" style={{ background: a.color ?? "var(--bg-2)" }}>{a.avatar ?? "🤖"}</div>
+                      <div>
+                        <div className="agent-name">{a.display_name ?? friendlyTitle(a.name)}</div>
+                        <div className="agent-handle">{a.name}</div>
+                      </div>
+                    </div>
+                    <span className={`agent-state agent-state-${a.state}`}>
+                      {a.active_ticket_ids && a.active_ticket_ids.length > 0 ? `▶ #${a.active_ticket_ids[0]}` : a.state}
+                    </span>
+                  </div>
+                  <div className="agent-role">{a.tagline ?? a.role}</div>
+                  <div className="agent-stats">
+                    <div><strong>v{a.version ?? 1}</strong></div>
+                    <div><strong>{a.skills.length}</strong> skills</div>
+                    <div><strong>{a.runs_24h ?? 0}</strong> runs</div>
+                    {a.success_rate !== null && a.success_rate !== undefined && <div><strong>{a.success_rate}%</strong> ok</div>}
+                    {a.cost_24h_usd && Number(a.cost_24h_usd) > 0 && <div><strong>${a.cost_24h_usd}</strong></div>}
+                  </div>
+                  <div className="agent-skills">
+                    {a.skills.length === 0 && <i className="agent-no-skills">no skills assigned</i>}
+                    {a.skills.map((s) => (
+                      <span key={skillName(s)} className="skill-pill" title={skillDesc(s)}>{friendlySkill(skillName(s))}</span>
+                    ))}
+                  </div>
+                  {a.prompt_source && a.prompt_source !== "seed" && (
+                    <div className="agent-source">prompt updated via <strong>{a.prompt_source}</strong></div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ));
+      })()}
+      <style jsx>{`
+        .team-tab { padding: 24px; height: 100%; overflow-y: auto; }
+        .page-header { margin-bottom: 16px; }
+        .page-header h1 { font-size: 18px; font-weight: 600; }
+        .page-sub { font-size: 12px; color: var(--text-3); }
+        .page-sub code { background: var(--bg-3); padding: 1px 6px; border-radius: 4px; font-size: 11px; }
+        .empty { padding: 40px; text-align: center; color: var(--text-3); }
+        .chief-card {
+          margin-bottom: 24px;
+          padding: 18px 22px;
+          background: linear-gradient(135deg, var(--bg-1) 0%, var(--cyan-bg) 100%);
+          border: 1px solid var(--cyan); border-radius: 12px;
+          border-left: 6px solid var(--cyan);
+        }
+        .chief-row { display: flex; gap: 14px; align-items: center; margin-bottom: 8px; }
+        .chief-avatar { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0; }
+        .chief-text { flex: 1; min-width: 0; }
+        .agent-avatar-row { display: flex; gap: 10px; align-items: center; flex: 1; min-width: 0; }
+        .agent-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+        .agent-handle { font-size: 10px; color: var(--text-3); font-family: ui-monospace, Menlo, monospace; margin-top: 1px; }
+        .dept-group { margin-bottom: 28px; }
+        .dept-heading { font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-3); font-weight: 600; margin: 18px 0 10px 0; }
+        .chief-badge {
+          display: inline-block; font-size: 9.5px; letter-spacing: 0.6px;
+          color: var(--cyan); text-transform: uppercase; font-weight: 700;
+          margin-bottom: 6px;
+        }
+        .chief-name { font-size: 16px; font-weight: 600; margin-bottom: 2px; }
+        .chief-role { font-size: 12px; color: var(--text-2); margin-bottom: 10px; }
+        .chief-stats {
+          display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+          font-size: 11px; color: var(--text-2); margin-bottom: 12px;
+        }
+        .agent-card-top { display: flex; justify-content: space-between; align-items: center; }
+        .agent-source { margin-top: 8px; font-size: 10px; color: var(--text-3); font-style: italic; }
+        .agent-source strong { color: var(--text-1); }
+        .agents-grid {
+          display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+          gap: 14px;
+        }
+        .agent-card {
+          background: var(--bg-1); border: 1px solid var(--border-2);
+          border-radius: 10px; padding: 14px 16px;
+          border-top: 3px solid var(--text-2);
+        }
+        .agent-card.agent-health { border-top-color: var(--green); }
+        .agent-card.agent-dev, .agent-card.agent-development { border-top-color: var(--cyan); }
+        .agent-card.agent-research, .agent-card.agent-researcher { border-top-color: var(--purple); }
+        .agent-card.agent-control, .agent-card.agent-tester { border-top-color: var(--yellow); }
+        .agent-card.agent-design, .agent-card.agent-designer { border-top-color: var(--pink); }
+        .agent-name { font-size: 13px; font-weight: 600; }
+        .agent-role { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 10px; }
+        .agent-stats { display: flex; gap: 14px; font-size: 11px; color: var(--text-2); margin-bottom: 10px; }
+        .agent-stats strong { color: var(--text-0); }
+        .agent-state { padding: 1px 7px; border-radius: 3px; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.4px; }
+        .agent-state-idle { background: var(--bg-3); color: var(--text-3); }
+        .agent-state-active { background: var(--cyan-bg); color: var(--cyan); }
+        .agent-state-attention { background: var(--yellow-bg); color: var(--yellow); }
+        .agent-skills { display: flex; flex-wrap: wrap; gap: 4px; }
+        .agent-no-skills { font-size: 11px; color: var(--text-3); }
+        .skill-pill {
+          background: var(--bg-2); border: 1px solid var(--border);
+          font-size: 10.5px; padding: 2px 7px; border-radius: 3px; color: var(--text-1);
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// ============================================================================
+// LOGS TAB — cockpit_audit_log with filters
+// ============================================================================
+function LogsTab() {
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [filter, setFilter] = useState<"all" | "success" | "partial" | "failed" | "today">("all");
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let q = supabase.from("cockpit_audit_log").select("*").order("created_at", { ascending: false }).limit(200);
+    if (filter === "success") q = q.eq("status", "success");
+    if (filter === "partial") q = q.eq("status", "partial");
+    if (filter === "failed") q = q.in("status", ["failed", "skipped"]);
+    if (filter === "today") {
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      q = q.gte("created_at", today.toISOString());
+    }
+    setLoading(true);
+    q.then(({ data }) => { setLogs(data ?? []); setLoading(false); });
+  }, [filter]);
+
+  const filtered = search
+    ? logs.filter((l) =>
+        l.job?.toLowerCase().includes(search.toLowerCase()) ||
+        l.output?.toLowerCase().includes(search.toLowerCase()) ||
+        l.arms?.some((a) => a.toLowerCase().includes(search.toLowerCase()))
+      )
+    : logs;
+
+  return (
+    <div className="logs-tab">
+      <div className="logs-toolbar">
+        <input
+          className="logs-search"
+          placeholder="Search logs by job, arm, output..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <div className="logs-filter">
+          {(["all", "success", "partial", "failed", "today"] as const).map((f) => (
+            <span key={f} className={`filter-pill ${filter === f ? "active" : ""}`} onClick={() => setFilter(f)}>
+              {f}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="logs-list">
+        {loading && <div className="empty">Loading logs...</div>}
+        {!loading && filtered.length === 0 && <div className="empty">No logs match. Check cockpit_audit_log table.</div>}
+        {filtered.map((log) => (
+          <div key={log.id} className={`log-row log-${log.status}`}>
+            <div className="log-row-header">
+              <div className="log-time">{absTime(log.created_at)}</div>
+              <div className="log-job">{log.job}</div>
+              <div className={`log-status log-${log.status}`}>{log.status}</div>
+              {log.trigger && <div className="log-trigger">{log.trigger}</div>}
+              {log.duration_ms != null && <div className="log-duration">{formatDuration(log.duration_ms)}</div>}
+            </div>
+            <div className="log-meta">
+              {log.arms && log.arms.length > 0 && <div><span className="meta-label">arms:</span> {log.arms.join(", ")}</div>}
+              {log.skills && log.skills.length > 0 && <div><span className="meta-label">skills:</span> {log.skills.join(", ")}</div>}
+              {log.cost_usd != null && <div><span className="meta-label">cost:</span> ${log.cost_usd.toFixed(2)}</div>}
+            </div>
+            {log.output && <div className="log-output">{log.output}</div>}
+            {log.pr_url && (
+              <a className="log-action" href={log.pr_url} target="_blank" rel="noreferrer">View PR ↗</a>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <style jsx>{`
+        .logs-tab { height: 100%; display: flex; flex-direction: column; }
+        .logs-toolbar {
+          background: var(--bg-1); border-bottom: 1px solid var(--border);
+          padding: 14px 24px; display: flex; align-items: center; gap: 12px;
+        }
+        .logs-search {
+          flex: 1; background: var(--bg-2); border: 1px solid var(--border-2);
+          color: var(--text-0); border-radius: 6px; padding: 7px 12px;
+          font-size: 12px; outline: none; font-family: inherit;
+        }
+        .logs-search:focus { border-color: var(--blue); }
+        .logs-filter { display: flex; gap: 4px; }
+        .filter-pill {
+          font-size: 11px; padding: 6px 11px;
+          background: var(--bg-2); border: 1px solid var(--border-2);
+          border-radius: 5px; color: var(--text-2); cursor: pointer;
+          text-transform: capitalize;
+        }
+        .filter-pill:hover { color: var(--text-0); }
+        .filter-pill.active { background: var(--blue-bg); border-color: var(--blue); color: var(--blue); }
+        .logs-list { flex: 1; overflow-y: auto; padding: 0 24px 24px; }
+        .empty { padding: 40px; text-align: center; color: var(--text-3); }
+        .log-row {
+          background: var(--bg-1); border: 1px solid var(--border);
+          border-radius: 7px; padding: 12px 14px; margin-top: 8px;
+          border-left: 3px solid var(--text-3);
+        }
+        .log-row.log-success { border-left-color: var(--green); }
+        .log-row.log-partial { border-left-color: var(--yellow); }
+        .log-row.log-failed, .log-row.log-skipped { border-left-color: var(--red); }
+        .log-row-header { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; flex-wrap: wrap; }
+        .log-time { font-family: ui-monospace, monospace; font-size: 11px; color: var(--text-3); }
+        .log-job { font-size: 12.5px; font-weight: 600; }
+        .log-status {
+          font-size: 9.5px; padding: 1px 7px; border-radius: 3px;
+          text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600;
+        }
+        .log-status.log-success { background: var(--green-bg); color: var(--green); }
+        .log-status.log-partial { background: var(--yellow-bg); color: var(--yellow); }
+        .log-status.log-failed, .log-status.log-skipped { background: var(--red-bg); color: var(--red); }
+        .log-trigger { font-size: 10px; color: var(--text-3); background: var(--bg-2); padding: 1px 7px; border-radius: 3px; text-transform: uppercase; }
+        .log-duration { margin-left: auto; font-size: 11px; color: var(--text-3); font-family: ui-monospace, monospace; }
+        .log-meta { display: flex; gap: 14px; font-size: 11px; color: var(--text-2); margin-top: 5px; flex-wrap: wrap; }
+        .meta-label { color: var(--text-3); font-size: 10px; text-transform: uppercase; letter-spacing: 0.3px; }
+        .log-output {
+          margin-top: 8px; padding: 8px 11px; background: var(--bg-2); border-radius: 5px;
+          font-size: 11.5px; color: var(--text-1); line-height: 1.5;
+        }
+        .log-action {
+          display: inline-block; margin-top: 8px; font-size: 10.5px;
+          padding: 4px 9px; background: var(--bg-2); border: 1px solid var(--border-2);
+          border-radius: 4px; color: var(--blue); text-decoration: none;
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// ============================================================================
+// DATA TAB — Supabase schema browser
+// ============================================================================
+function DataTab() {
+  const [tables, setTables] = useState<SchemaTable[]>([]);
+  const [activeTable, setActiveTable] = useState<string | null>(null);
+  const [rows, setRows] = useState<Array<Record<string, unknown>>>([]);
+  const [columns, setColumns] = useState<Array<{ name: string; type: string }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    fetch("/api/cockpit/schema/tables")
+      .then((r) => r.json())
+      .then((d) => {
+        setTables(d.tables ?? []);
+        if (d.tables?.[0]) setActiveTable(`${d.tables[0].schema}.${d.tables[0].name}`);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (!activeTable) return;
+    fetch(`/api/cockpit/schema/rows?table=${encodeURIComponent(activeTable)}&limit=50`)
+      .then((r) => r.json())
+      .then((d) => { setRows(d.rows ?? []); setColumns(d.columns ?? []); });
+  }, [activeTable]);
+
+  const grouped: Record<string, SchemaTable[]> = {};
+  for (const t of tables) {
+    const visible = !search || t.name.toLowerCase().includes(search.toLowerCase());
+    if (!visible) continue;
+    const key = t.name.startsWith("cockpit_") ? "Cockpit" : t.schema === "auth" ? "Auth" : t.schema === "storage" ? "Storage" : "Hotel BI";
+    grouped[key] = grouped[key] || [];
+    grouped[key].push(t);
+  }
+
+  const activeMeta = tables.find((t) => `${t.schema}.${t.name}` === activeTable);
+
+  return (
+    <div className="data-tab">
+      <div className="tables-sidebar">
+        <input
+          className="tables-search"
+          placeholder="Search tables..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        {loading && <div className="empty">Loading schema...</div>}
+        {!loading && Object.keys(grouped).length === 0 && <div className="empty">No tables found.</div>}
+        {Object.entries(grouped).map(([section, tabs]) => (
+          <div key={section} className="tables-section">
+            <div className="tables-section-label">{section} · {tabs.length}</div>
+            {tabs.map((t) => (
+              <div
+                key={`${t.schema}.${t.name}`}
+                className={`table-item ${activeTable === `${t.schema}.${t.name}` ? "active" : ""} ${t.is_view ? "view" : ""}`}
+                onClick={() => setActiveTable(`${t.schema}.${t.name}`)}
+              >
+                <span className="table-item-icon">{t.is_view ? "▶" : "⊞"}</span>
+                <span className="table-item-name">{t.name}</span>
+                <span className="table-item-rows">{formatRowCount(t.row_count)}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+
+      <div className="table-main">
+        {!activeTable && <div className="empty">Select a table.</div>}
+        {activeTable && activeMeta && (
+          <>
+            <div className="table-header">
+              <div className="table-name">{activeMeta.schema}.{activeMeta.name}</div>
+              <div className="table-meta">
+                <span><strong>{activeMeta.row_count}</strong> rows</span>
+                <span><strong>{columns.length}</strong> columns</span>
+                <span>{formatBytes(activeMeta.size_bytes)}</span>
+                {activeMeta.has_rls && <span className="rls-pill">RLS</span>}
+                {activeMeta.is_view && <span className="view-pill">VIEW</span>}
+              </div>
+            </div>
+            <div className="table-scroll">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    {columns.map((c) => (
+                      <th key={c.name}>{c.name} <span className="col-type">{c.type}</span></th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.length === 0 && <tr><td colSpan={columns.length} className="empty-row">No rows</td></tr>}
+                  {rows.map((r, i) => (
+                    <tr key={i}>
+                      {columns.map((c) => (
+                        <td key={c.name}>{formatCell(r[c.name])}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="table-footer">
+              Showing {rows.length} of {activeMeta.row_count} · read-only
+            </div>
+          </>
+        )}
+      </div>
+
+      <style jsx>{`
+        .data-tab { height: 100%; display: grid; grid-template-columns: 280px 1fr; }
+        .tables-sidebar { background: var(--bg-1); border-right: 1px solid var(--border); overflow-y: auto; padding: 14px 0; }
+        .tables-search {
+          margin: 0 12px 14px; width: calc(100% - 24px);
+          background: var(--bg-2); border: 1px solid var(--border-2); color: var(--text-0);
+          border-radius: 6px; padding: 7px 11px; font-size: 12px; outline: none; font-family: inherit;
+        }
+        .tables-section { margin-bottom: 16px; }
+        .tables-section-label {
+          font-size: 10px; color: var(--text-3); text-transform: uppercase;
+          letter-spacing: 0.6px; padding: 0 16px 6px; font-weight: 600;
+        }
+        .table-item {
+          padding: 7px 16px; font-size: 12px; color: var(--text-1);
+          cursor: pointer; display: flex; align-items: center; gap: 7px;
+          border-left: 2px solid transparent;
+        }
+        .table-item:hover { background: var(--bg-2); }
+        .table-item.active { background: var(--bg-2); border-left-color: var(--blue); color: var(--text-0); }
+        .table-item-icon { color: var(--text-3); font-size: 12px; }
+        .table-item.view .table-item-icon { color: var(--purple); }
+        .table-item-name { flex: 1; font-family: ui-monospace, monospace; font-size: 11.5px; }
+        .table-item-rows { font-size: 10px; color: var(--text-3); }
+        .table-main { display: flex; flex-direction: column; overflow: hidden; }
+        .empty { padding: 40px; text-align: center; color: var(--text-3); }
+        .table-header { background: var(--bg-1); border-bottom: 1px solid var(--border); padding: 14px 20px; }
+        .table-name { font-size: 14px; font-weight: 600; font-family: ui-monospace, monospace; margin-bottom: 6px; }
+        .table-meta { display: flex; gap: 12px; font-size: 11px; color: var(--text-3); }
+        .table-meta strong { color: var(--text-1); }
+        .rls-pill, .view-pill { padding: 1px 6px; border-radius: 3px; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.4px; }
+        .rls-pill { background: var(--green-bg); color: var(--green); }
+        .view-pill { background: var(--purple-bg); color: var(--purple); }
+        .table-scroll { flex: 1; overflow: auto; }
+        .data-table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: ui-monospace, monospace; }
+        .data-table thead th {
+          background: var(--bg-1); color: var(--text-3); font-size: 10.5px;
+          text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600;
+          text-align: left; padding: 8px 14px;
+          border-bottom: 1px solid var(--border); border-right: 1px solid var(--border);
+          position: sticky; top: 0; white-space: nowrap;
+        }
+        .col-type { color: var(--text-3); font-size: 9.5px; margin-left: 4px; text-transform: lowercase; font-weight: 400; }
+        .data-table tbody td {
+          padding: 8px 14px; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border);
+          color: var(--text-1); white-space: nowrap; max-width: 250px; overflow: hidden; text-overflow: ellipsis;
+        }
+        .data-table tbody tr:hover td { background: var(--bg-2); }
+        .empty-row { text-align: center; color: var(--text-3); padding: 30px !important; }
+        .table-footer {
+          background: var(--bg-1); border-top: 1px solid var(--border);
+          padding: 9px 20px; font-size: 11px; color: var(--text-3);
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// ============================================================================
+// ORG CHART OVERLAY — reads from /api/cockpit/team
+// ============================================================================
+function OrgOverlay({ onClose }: { onClose: () => void }) {
+  const [agents, setAgents] = useState<Agent[]>([]);
+
+  useEffect(() => {
+    fetch("/api/cockpit/team").then((r) => r.json()).then((d) => setAgents(d.agents ?? []));
+    const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, [onClose]);
+
+  return (
+    <div className="overlay">
+      <div className="overlay-header">
+        <div>
+          <div className="overlay-title">IT Department · Org Chart</div>
+          <div className="overlay-sub">All arms with their skills · click ESC to close</div>
+        </div>
+        <button className="overlay-close" onClick={onClose}>×</button>
+      </div>
+      <div className="org-chart">
+        <div className="org-level">
+          {(() => {
+            const chiefNode = agents.find((a) => a.is_chief);
+            const totalSkills = agents.reduce((s, a) => s + a.skills.length, 0);
+            return (
+              <div className="org-node manager">
+                <div className="org-node-title">{chiefNode ? friendlyTitle(chiefNode.name) : "Chief · IT Manager"}</div>
+                <div className="org-node-role">{chiefNode?.role ?? "routes everything"}</div>
+                <div className="org-node-stats">
+                  <div><strong>{agents.length - (chiefNode ? 1 : 0)}</strong> reports</div>
+                  <div><strong>{totalSkills}</strong> total skills</div>
+                </div>
+                {chiefNode && chiefNode.active_ticket_ids && chiefNode.active_ticket_ids.length > 0 && (
+                  <div className="org-node-state state-active">▶ working · #{chiefNode.active_ticket_ids[0]}</div>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+        <div className="org-arrows"><div className="org-arrow-trunk" /></div>
+        <div className="org-level">
+          {agents.filter((a) => !a.is_chief).map((a) => (
+            <div key={a.name} className={`org-node org-${a.name.toLowerCase()}`}>
+              <div className="org-node-title">{friendlyTitle(a.name)}</div>
+              <div className="org-node-role">{a.role}</div>
+              <div className="org-node-stats">
+                <div><strong>{a.skills.length}</strong> skills</div>
+                <div><strong>{a.runs_24h ?? 0}</strong> runs/24h</div>
+              </div>
+              <div className={`org-node-state state-${a.state}`}>
+                {a.active_ticket_ids && a.active_ticket_ids.length > 0 ? `▶ #${a.active_ticket_ids[0]}` : a.state}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="skills-grid-all">
+          {agents.map((a) => {
+            const skillItems = a.skills as ({ id: number; name: string; description: string }[] | string[]);
+            return (
+              <div key={a.name} className={`arm-skills-panel arm-${a.name.toLowerCase()}`}>
+                <div className="arm-panel-header">
+                  <span className="arm-name">{friendlyTitle(a.name)}</span>
+                  <span className="arm-count">{a.skills.length} skills</span>
+                </div>
+                <div className="arm-skills">
+                  {a.skills.length === 0 && <i className="no-skills">no skills assigned</i>}
+                  {skillItems.map((s) => {
+                    const sname = typeof s === "string" ? s : s.name;
+                    const sdesc = typeof s === "string" ? "" : s.description;
+                    return <span key={sname} className="skill-pill" title={sdesc}>{friendlySkill(sname)}</span>;
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <style jsx>{`
+        .overlay {
+          position: fixed; inset: 0;
+          background: rgba(10, 14, 26, 0.92); backdrop-filter: blur(6px);
+          z-index: 100; padding: 26px; overflow: auto;
+        }
+        .overlay-header { display: flex; align-items: center; margin-bottom: 20px; max-width: 1200px; margin-left: auto; margin-right: auto; }
+        .overlay-title { font-size: 16px; font-weight: 600; }
+        .overlay-sub { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+        .overlay-close {
+          margin-left: auto; background: var(--bg-2); border: 1px solid var(--border-2);
+          color: var(--text-1); width: 32px; height: 32px; border-radius: 6px;
+          font-size: 14px; cursor: pointer;
+        }
+        .org-chart { max-width: 1200px; margin: 0 auto; }
+        .org-level { display: flex; justify-content: center; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+        .org-arrows { height: 22px; margin-bottom: 6px; position: relative; }
+        .org-arrow-trunk { position: absolute; top: 0; left: 50%; width: 1px; height: 100%; background: var(--border-2); }
+        .org-node {
+          background: var(--bg-1); border: 1px solid var(--border-2);
+          border-radius: 10px; padding: 12px 14px; min-width: 158px;
+          text-align: center; border-top: 3px solid var(--text-2);
+        }
+        .org-node.manager { border-top-color: var(--blue); min-width: 220px; }
+        .org-node.org-health { border-top-color: var(--green); }
+        .org-node.org-dev, .org-node.org-development { border-top-color: var(--cyan); }
+        .org-node.org-research, .org-node.org-researcher { border-top-color: var(--purple); }
+        .org-node.org-control, .org-node.org-tester { border-top-color: var(--yellow); }
+        .org-node.org-design, .org-node.org-designer { border-top-color: var(--pink); }
+        .org-node-title { font-size: 13px; font-weight: 600; }
+        .org-node-role { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 8px; }
+        .org-node-stats { display: flex; gap: 10px; justify-content: center; font-size: 10.5px; color: var(--text-2); }
+        .org-node-stats strong { color: var(--text-0); font-size: 13px; display: block; }
+        .org-node-state { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.3px; margin-top: 7px; color: var(--text-3); }
+        .org-node-state.state-active { color: var(--cyan); }
+        .org-node-state.state-attention { color: var(--yellow); }
+        .skills-grid-all {
+          max-width: 1200px; margin: 24px auto 0;
+          display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px;
+        }
+        .arm-skills-panel {
+          background: var(--bg-1); border: 1px solid var(--border);
+          border-radius: 10px; padding: 14px 16px; border-left: 3px solid;
+        }
+        .arm-skills-panel.arm-health { border-left-color: var(--green); }
+        .arm-skills-panel.arm-dev, .arm-skills-panel.arm-development { border-left-color: var(--cyan); }
+        .arm-skills-panel.arm-research, .arm-skills-panel.arm-researcher { border-left-color: var(--purple); }
+        .arm-skills-panel.arm-control, .arm-skills-panel.arm-tester { border-left-color: var(--yellow); }
+        .arm-skills-panel.arm-design, .arm-skills-panel.arm-designer { border-left-color: var(--pink); }
+        .arm-panel-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .arm-name { font-size: 13px; font-weight: 600; }
+        .arm-count { margin-left: auto; font-size: 10.5px; color: var(--text-3); }
+        .arm-skills { display: flex; flex-wrap: wrap; gap: 4px; }
+        .no-skills { font-size: 11px; color: var(--text-3); }
+        .skill-pill {
+          background: var(--bg-2); border: 1px solid var(--border);
+          font-size: 10.5px; padding: 2px 7px; border-radius: 3px; color: var(--text-1);
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+function relTime(iso: string): string {
+  const d = new Date(iso); const now = new Date(); const ms = now.getTime() - d.getTime();
+  const m = Math.floor(ms / 60000); const h = Math.floor(m / 60); const days = Math.floor(h / 24);
+  if (days > 0) return `${days}d ago`; if (h > 0) return `${h}h ago`; if (m > 0) return `${m}m ago`; return "now";
+}
+function absTime(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleString("en-GB", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "short" });
+}
+function formatDuration(ms: number): string {
+  const s = Math.floor(ms / 1000); if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60); if (m < 60) return `${m}m ${s % 60}s`;
+  const h = Math.floor(m / 60); return `${h}h ${m % 60}m`;
+}
+function formatBytes(b: number): string {
+  if (b < 1024) return `${b} B`; if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+  return `${(b / 1024 / 1024).toFixed(1)} MB`;
+}
+function formatRowCount(n: number): string {
+  if (n < 1000) return `${n}`; if (n < 1_000_000) return `${(n / 1000).toFixed(1)}k`;
+  return `${(n / 1_000_000).toFixed(1)}M`;
+}
+function formatCell(v: unknown): string {
+  if (v === null || v === undefined) return "—";
+  if (typeof v === "object") return JSON.stringify(v);
+  return String(v);
+}
+
+// ============================================================================
+// KNOWLEDGE TAB — browse + add team learnings
+// ============================================================================
+type KbEntry = {
+  id: number; topic: string; key_fact: string; scope: string;
+  source: string; source_ticket_id: number | null; confidence: string;
+  active: boolean; created_at: string; updated_at: string;
+};
+
+function KnowledgeTab() {
+  const [entries, setEntries] = useState<KbEntry[]>([]);
+  const [search, setSearch] = useState("");
+  const [scope, setScope] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [newTopic, setNewTopic] = useState("");
+  const [newFact, setNewFact] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const params = new URLSearchParams();
+    if (search) params.set("q", search);
+    if (scope) params.set("scope", scope);
+    const r = await fetch(`/api/cockpit/knowledge?${params}`);
+    const d = await r.json();
+    setEntries(d.entries ?? []);
+    setLoading(false);
+  }, [search, scope]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const addEntry = async () => {
+    if (!newTopic.trim() || !newFact.trim()) return;
+    await fetch("/api/cockpit/knowledge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic: newTopic.trim(), key_fact: newFact.trim(), scope: scope || "global" }),
+    });
+    setNewTopic(""); setNewFact(""); setAdding(false);
+    load();
+  };
+
+  const scopes = Array.from(new Set(entries.map((e) => e.scope))).sort();
+
+  return (
+    <div className="kb-tab">
+      <div className="page-header">
+        <h1>Team Knowledge Base</h1>
+        <span className="page-sub">
+          Persistent facts the team carries between tickets. Stored in <code>cockpit_knowledge_base</code>.
+          Agents read this via the <code>read_knowledge_base</code> skill.
+        </span>
+      </div>
+      <div className="kb-toolbar">
+        <input placeholder="Search topic or fact…" value={search} onChange={(e) => setSearch(e.target.value)} className="kb-search" />
+        <select value={scope} onChange={(e) => setScope(e.target.value)} className="kb-scope">
+          <option value="">all scopes</option>
+          {scopes.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <button onClick={() => setAdding(!adding)} className="kb-add-btn">{adding ? "✕ Cancel" : "+ Add fact"}</button>
+      </div>
+      {adding && (
+        <div className="kb-add-form">
+          <input placeholder="Topic (kebab-case)" value={newTopic} onChange={(e) => setNewTopic(e.target.value)} className="kb-input" />
+          <textarea placeholder="The fact — 1-3 sentences. Include why it matters." value={newFact} onChange={(e) => setNewFact(e.target.value)} className="kb-textarea" rows={3} />
+          <button onClick={addEntry} className="kb-save-btn">Save</button>
+        </div>
+      )}
+      {loading && <div className="empty">Loading knowledge base...</div>}
+      {!loading && entries.length === 0 && <div className="empty">No entries match.</div>}
+      {!loading && entries.length > 0 && (
+        <div className="kb-grid">
+          {entries.map((e) => (
+            <div key={e.id} className={`kb-card kb-conf-${e.confidence}`}>
+              <div className="kb-card-top">
+                <span className="kb-topic">{e.topic}</span>
+                <span className={`kb-scope-pill kb-scope-${e.scope}`}>{e.scope}</span>
+              </div>
+              <div className="kb-fact">{e.key_fact}</div>
+              <div className="kb-meta">
+                <span>{e.source}</span>
+                <span>·</span>
+                <span>{e.confidence} confidence</span>
+                <span>·</span>
+                <span>{absTime(e.updated_at)}</span>
+                {e.source_ticket_id && <><span>·</span><span>from ticket #{e.source_ticket_id}</span></>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <style jsx>{`
+        .kb-tab { padding: 24px; height: 100%; overflow-y: auto; }
+        .page-header { margin-bottom: 16px; }
+        .page-header h1 { font-size: 18px; font-weight: 600; }
+        .page-sub { font-size: 12px; color: var(--text-3); }
+        .page-sub code { background: var(--bg-3); padding: 1px 6px; border-radius: 4px; font-size: 11px; }
+        .empty { padding: 40px; text-align: center; color: var(--text-3); }
+        .kb-toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+        .kb-search, .kb-scope, .kb-input { padding: 6px 10px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text-1); border-radius: 4px; font-size: 12px; }
+        .kb-search { flex: 1; min-width: 200px; }
+        .kb-scope { min-width: 130px; }
+        .kb-add-btn, .kb-save-btn { padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; background: var(--cyan); color: var(--bg-0); border: none; }
+        .kb-save-btn { background: var(--green); }
+        .kb-add-form { display: flex; flex-direction: column; gap: 8px; padding: 12px; background: var(--bg-1); border: 1px solid var(--cyan); border-radius: 6px; margin-bottom: 16px; }
+        .kb-textarea { padding: 8px 10px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text-1); border-radius: 4px; font-family: inherit; font-size: 12px; resize: vertical; }
+        .kb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
+        .kb-card { background: var(--bg-1); border: 1px solid var(--border); border-radius: 8px; padding: 14px; border-left: 3px solid var(--text-3); }
+        .kb-card.kb-conf-high { border-left-color: var(--green); }
+        .kb-card.kb-conf-medium { border-left-color: var(--yellow); }
+        .kb-card.kb-conf-low { border-left-color: var(--red); }
+        .kb-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; }
+        .kb-topic { font-size: 12px; font-weight: 600; color: var(--text-0); }
+        .kb-scope-pill { font-size: 9px; padding: 2px 7px; border-radius: 99px; background: var(--bg-3); color: var(--text-2); text-transform: uppercase; letter-spacing: 0.4px; }
+        .kb-fact { font-size: 12.5px; line-height: 1.45; color: var(--text-1); margin-bottom: 8px; }
+        .kb-meta { display: flex; gap: 5px; flex-wrap: wrap; font-size: 10px; color: var(--text-3); }
+      `}</style>
+    </div>
+  );
+}
+
+// ============================================================================
+// ACTIVITY TAB — live boxes, pipeline funnel, 7-day chart, recent timeline
+// ============================================================================
+type ActivityData = {
+  funnel: Record<string, number>;
+  live_working: Array<{ ticket_id: number; status: string; agent_role: string; display_name: string; avatar: string; color: string | null; summary: string; elapsed_ms: number }>;
+  timeline: Array<{ id: number; ticket_id: number | null; agent: string; display_name: string; avatar: string; color: string | null; action: string; success: boolean; created_at: string; cost_usd: string | null; duration_ms: number | null; reasoning: string }>;
+  days_buckets: { tickets_by_day: { day: string; count: number }[]; cost_by_day: { day: string; cost_usd: number }[] };
+  summary: { tickets_7d: number; events_1h: number; working_now: number };
+};
+
+function ActivityTab() {
+  const [data, setData] = useState<ActivityData | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let alive = true;
+    const tick = () => {
+      fetch("/api/cockpit/activity").then((r) => r.json()).then((d) => alive && setData(d)).finally(() => alive && setLoading(false));
+    };
+    tick();
+    const id = setInterval(tick, 8000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
+  if (loading) return <div className="act-tab"><div className="empty">Loading activity…</div></div>;
+  if (!data) return <div className="act-tab"><div className="empty">No data.</div></div>;
+
+  const funnelOrder: Array<{ key: string; label: string; color: string }> = [
+    { key: "new", label: "New", color: "var(--text-3)" },
+    { key: "triaging", label: "Triaging", color: "var(--cyan)" },
+    { key: "triaged", label: "Triaged", color: "var(--cyan)" },
+    { key: "working", label: "Working", color: "var(--purple)" },
+    { key: "awaits_user", label: "Awaits User", color: "var(--yellow)" },
+    { key: "completed", label: "Completed", color: "var(--green)" },
+    { key: "failed", label: "Failed", color: "var(--red)" },
+  ];
+  const maxCost = Math.max(0.0001, ...data.days_buckets.cost_by_day.map((d) => d.cost_usd));
+  const maxTickets = Math.max(1, ...data.days_buckets.tickets_by_day.map((d) => d.count));
+
+  return (
+    <div className="act-tab">
+      <div className="page-header">
+        <h1>Live Activity</h1>
+        <span className="page-sub">Pipeline funnel · who&apos;s working right now · 7-day cost · recent timeline. Auto-refreshes every 8s.</span>
+      </div>
+
+      {/* Live working boxes */}
+      <div className="act-section">
+        <h3>Working right now ({data.live_working.length})</h3>
+        {data.live_working.length === 0 ? (
+          <div className="act-empty">No agent is currently working. Send a chat message to dispatch one.</div>
+        ) : (
+          <div className="act-live-grid">
+            {data.live_working.map((w) => (
+              <div key={w.ticket_id} className="act-live-box" style={{ borderLeftColor: w.color ?? "var(--cyan)" }}>
+                <div className="act-live-top">
+                  <div className="act-avatar" style={{ background: w.color ?? "var(--cyan)" }}>{w.avatar}</div>
+                  <div className="act-live-meta">
+                    <div className="act-live-name">{w.display_name}</div>
+                    <div className="act-live-handle">working on #{w.ticket_id} · {Math.round(w.elapsed_ms / 1000)}s elapsed</div>
+                  </div>
+                  <div className="act-pulse">●</div>
+                </div>
+                <div className="act-live-summary">{w.summary || "(no summary)"}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Pipeline funnel */}
+      <div className="act-section">
+        <h3>Pipeline · last 7 days ({data.summary.tickets_7d} tickets)</h3>
+        <div className="act-funnel">
+          {funnelOrder.map((f) => (
+            <div key={f.key} className="act-funnel-cell" style={{ borderTopColor: f.color }}>
+              <div className="act-funnel-count">{data.funnel[f.key] ?? 0}</div>
+              <div className="act-funnel-label">{f.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 7-day cost + ticket charts */}
+      <div className="act-charts">
+        <div className="act-chart-card">
+          <h3>Cost · last 7 days</h3>
+          <div className="act-bars">
+            {data.days_buckets.cost_by_day.map((d) => (
+              <div key={d.day} className="act-bar-col" title={`${d.day}: $${d.cost_usd.toFixed(4)}`}>
+                <div className="act-bar" style={{ height: `${(d.cost_usd / maxCost) * 100}%`, background: "var(--cyan)" }} />
+                <div className="act-bar-label">{d.day.slice(5)}</div>
+                <div className="act-bar-value">${d.cost_usd.toFixed(2)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="act-chart-card">
+          <h3>Tickets · last 7 days</h3>
+          <div className="act-bars">
+            {data.days_buckets.tickets_by_day.map((d) => (
+              <div key={d.day} className="act-bar-col" title={`${d.day}: ${d.count} tickets`}>
+                <div className="act-bar" style={{ height: `${(d.count / maxTickets) * 100}%`, background: "var(--purple)" }} />
+                <div className="act-bar-label">{d.day.slice(5)}</div>
+                <div className="act-bar-value">{d.count}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Recent timeline */}
+      <div className="act-section">
+        <h3>Recent · last hour ({data.timeline.length} events)</h3>
+        {data.timeline.length === 0 ? (
+          <div className="act-empty">No agent activity in the last hour.</div>
+        ) : (
+          <div className="act-timeline">
+            {data.timeline.map((e) => (
+              <div key={e.id} className={`act-event ${e.success ? "" : "act-event-fail"}`}>
+                <div className="act-avatar small" style={{ background: e.color ?? "var(--bg-3)" }}>{e.avatar}</div>
+                <div className="act-event-body">
+                  <div className="act-event-top">
+                    <span className="act-event-name">{e.display_name}</span>
+                    <span className="act-event-action">{e.action}</span>
+                    {e.ticket_id && <span className="act-event-ticket">#{e.ticket_id}</span>}
+                    {e.cost_usd && <span className="act-event-cost">${e.cost_usd}</span>}
+                    {e.duration_ms && <span className="act-event-dur">{(e.duration_ms / 1000).toFixed(1)}s</span>}
+                    <span className="act-event-time">{new Date(e.created_at).toLocaleTimeString()}</span>
+                  </div>
+                  {e.reasoning && <div className="act-event-reason">{e.reasoning}</div>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <style jsx>{`
+        .act-tab { padding: 24px; height: 100%; overflow-y: auto; }
+        .page-header { margin-bottom: 16px; }
+        .page-header h1 { font-size: 18px; font-weight: 600; }
+        .page-sub { font-size: 12px; color: var(--text-3); }
+        .empty, .act-empty { padding: 30px; text-align: center; color: var(--text-3); font-size: 12px; }
+        .act-empty { padding: 14px; background: var(--bg-1); border: 1px dashed var(--border); border-radius: 6px; }
+        .act-section { margin-bottom: 24px; }
+        .act-section h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-3); font-weight: 600; margin-bottom: 8px; }
+        .act-live-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
+        .act-live-box { background: var(--bg-1); border: 1px solid var(--border); border-left: 4px solid; border-radius: 8px; padding: 12px 14px; }
+        .act-live-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+        .act-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+        .act-avatar.small { width: 24px; height: 24px; font-size: 12px; }
+        .act-live-meta { flex: 1; min-width: 0; }
+        .act-live-name { font-size: 12.5px; font-weight: 600; }
+        .act-live-handle { font-size: 10.5px; color: var(--text-3); }
+        .act-pulse { color: var(--green); animation: pulse 1.4s ease-in-out infinite; font-size: 14px; }
+        @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+        .act-live-summary { font-size: 12px; color: var(--text-1); line-height: 1.4; }
+        .act-funnel { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+        .act-funnel-cell { background: var(--bg-1); border: 1px solid var(--border); border-top: 3px solid; border-radius: 6px; padding: 10px 8px; text-align: center; }
+        .act-funnel-count { font-family: Fraunces, Georgia, serif; font-style: italic; font-size: 22px; line-height: 1; }
+        .act-funnel-label { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--text-3); margin-top: 4px; font-weight: 600; }
+        .act-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 24px; }
+        .act-chart-card { background: var(--bg-1); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+        .act-chart-card h3 { margin-bottom: 12px; }
+        .act-bars { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; height: 130px; align-items: end; }
+        .act-bar-col { display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: end; }
+        .act-bar { width: 100%; min-height: 2px; border-radius: 4px 4px 0 0; }
+        .act-bar-label { font-size: 9.5px; color: var(--text-3); margin-top: 4px; }
+        .act-bar-value { font-size: 10px; font-weight: 600; color: var(--text-1); }
+        .act-timeline { display: flex; flex-direction: column; gap: 4px; }
+        .act-event { display: flex; gap: 10px; padding: 8px 12px; background: var(--bg-1); border-radius: 6px; border-left: 2px solid var(--border); }
+        .act-event-fail { border-left-color: var(--red); }
+        .act-event-body { flex: 1; min-width: 0; }
+        .act-event-top { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 11px; }
+        .act-event-name { font-weight: 600; color: var(--text-0); }
+        .act-event-action { background: var(--bg-3); padding: 1px 7px; border-radius: 99px; font-size: 9.5px; text-transform: uppercase; color: var(--text-2); letter-spacing: 0.3px; }
+        .act-event-ticket { font-family: ui-monospace, Menlo, monospace; font-size: 10px; color: var(--text-3); }
+        .act-event-cost, .act-event-dur { font-size: 10px; color: var(--text-2); }
+        .act-event-time { font-size: 10px; color: var(--text-3); margin-left: auto; }
+        .act-event-reason { font-size: 11.5px; color: var(--text-2); margin-top: 3px; line-height: 1.4; }
+      `}</style>
+    </div>
+  );
+}
+
+// ============================================================================
+// DOCS TAB — 7-doc governance: Live, Staging, Activity, Backup
+// ============================================================================
+type DocSummary = {
+  doc_type: string; title: string; requires_approval: boolean;
+  staging: { version: number; status: string; last_updated_at: string; last_updated_by: string | null; locked_by: string | null; locked_at: string | null } | null;
+  production: { version: number; status: string; last_updated_at: string; last_updated_by: string | null; auto_promoted: boolean; auto_promoted_at: string | null; recently_auto_promoted: boolean } | null;
+  pending_approval: boolean;
+};
+type DocDetail = {
+  doc_type: string;
+  staging: { id: string; doc_type: string; title: string; content_md: string; version: number; status: string; locked_by: string | null; requires_approval: boolean } | null;
+  production: { id: string; doc_type: string; title: string; content_md: string; version: number; status: string; auto_promoted: boolean; auto_promoted_at: string | null } | null;
+  staging_versions: Array<{ version: number; change_summary: string | null; created_by: string; created_at: string }>;
+  production_versions: Array<{ version: number; change_summary: string | null; created_by: string; created_at: string; content_md: string }>;
+};
+
+const DOC_LABELS: Record<string, string> = {
+  vision_roadmap: "Vision & Roadmap",
+  prd: "PRD",
+  architecture: "Architecture",
+  data_model: "Data Model",
+  api: "API",
+  security: "Security & Multi-tenancy",
+  integration: "Integration & Deployment",
+};
+
+function DocsTab() {
+  type SubView = "live" | "staging" | "activity" | "backup";
+  const [view, setView] = useState<SubView>("live");
+  const [list, setList] = useState<DocSummary[]>([]);
+  const [pending, setPending] = useState(0);
+  const [activeDoc, setActiveDoc] = useState<string | null>(null);
+  const [detail, setDetail] = useState<DocDetail | null>(null);
+  const [activity, setActivity] = useState<{ recent_promotions: Array<{ document_id: string; staging_version: number; production_version: number; promoted_by: string; promoted_at: string; promotion_type: string }>; recent_rollbacks: Array<{ rolled_back_from_version: number; rolled_back_to_version: number; rolled_back_by: string; reason: string; rolled_back_at: string }>; recent_approvals: Array<{ staging_version: number; status: string; approver: string | null; approved_at: string | null; created_at: string }> } | null>(null);
+  const [backup, setBackup] = useState<{ last_success: { backup_type: string; status: string; completed_at: string | null; size_bytes: number | null } | null; last_failure: { backup_type: string; error_message: string | null; completed_at: string | null } | null; recent: Array<{ id: string; backup_type: string; status: string; started_at: string; completed_at: string | null; size_bytes: number | null }> } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const loadList = useCallback(async () => {
+    const r = await fetch("/api/cockpit/docs");
+    const d = await r.json();
+    setList(d.docs ?? []);
+    setPending(d.pending_approvals_count ?? 0);
+    setActivity({
+      recent_promotions: d.recent_promotions ?? [],
+      recent_rollbacks: d.recent_rollbacks ?? [],
+      recent_approvals: d.recent_approvals ?? [],
+    });
+  }, []);
+  const loadDetail = useCallback(async (docType: string) => {
+    const r = await fetch(`/api/cockpit/docs/detail?doc_type=${docType}`);
+    setDetail(await r.json());
+  }, []);
+  const loadBackup = useCallback(async () => {
+    const r = await fetch("/api/cockpit/docs/backup");
+    setBackup(await r.json());
+  }, []);
+
+  useEffect(() => { loadList(); }, [loadList]);
+  useEffect(() => { if (activeDoc) loadDetail(activeDoc); }, [activeDoc, loadDetail]);
+  useEffect(() => { if (view === "backup") loadBackup(); }, [view, loadBackup]);
+
+  const decide = async (action: "approve" | "reject" | "request_changes") => {
+    if (!detail || !detail.staging) return;
+    const notes = action === "approve" ? "approved via cockpit" : window.prompt("Notes?") ?? "";
+    setBusy(true);
+    try {
+      await fetch("/api/cockpit/docs/promote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ doc_type: detail.doc_type, action, notes, staging_version: detail.staging.version }),
+      });
+      await loadList();
+      if (activeDoc) await loadDetail(activeDoc);
+    } finally { setBusy(false); }
+  };
+
+  const rollback = async (toVersion: number) => {
+    if (!detail) return;
+    const reason = window.prompt(`Rollback ${DOC_LABELS[detail.doc_type] ?? detail.doc_type} to v${toVersion}. Reason (min 5 chars)?`);
+    if (!reason || reason.trim().length < 5) return;
+    setBusy(true);
+    try {
+      await fetch("/api/cockpit/docs/rollback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ doc_type: detail.doc_type, to_version: toVersion, reason }),
+      });
+      await loadList();
+      if (activeDoc) await loadDetail(activeDoc);
+    } finally { setBusy(false); }
+  };
+
+  const triggerBackup = async () => {
+    setBusy(true);
+    try {
+      await fetch("/api/cockpit/docs/backup", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      await loadBackup();
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="docs-tab">
+      <div className="page-header">
+        <h1>Documentation</h1>
+        <span className="page-sub">
+          7-doc governance · staging → owner approval / auto-promote → production · ADR 0003
+          {pending > 0 && <span className="docs-pending"> · {pending} pending approval{pending > 1 ? "s" : ""}</span>}
+        </span>
+      </div>
+      <div className="docs-subnav">
+        {(["live", "staging", "activity", "backup"] as SubView[]).map((v) => (
+          <button key={v} className={`docs-pill ${view === v ? "active" : ""}`} onClick={() => setView(v)}>
+            {v === "live" && "📜 Live"}
+            {v === "staging" && `📝 Staging${pending > 0 ? ` (${pending})` : ""}`}
+            {v === "activity" && "📊 Activity"}
+            {v === "backup" && "💾 Backup"}
+          </button>
+        ))}
+      </div>
+
+      {(view === "live" || view === "staging") && (
+        <div className="docs-grid">
+          <div className="docs-list">
+            {list.map((d) => {
+              const v = view === "live" ? d.production : d.staging;
+              return (
+                <div key={d.doc_type} className={`docs-row ${activeDoc === d.doc_type ? "active" : ""}`} onClick={() => setActiveDoc(d.doc_type)}>
+                  <div className="docs-row-top">
+                    <span className="docs-title">{DOC_LABELS[d.doc_type]}</span>
+                    {d.requires_approval ? <span className="docs-pill-tag manual">manual</span> : <span className="docs-pill-tag auto">auto</span>}
+                  </div>
+                  <div className="docs-row-meta">
+                    v{v?.version ?? "—"} · {v?.status ?? "—"}
+                    {view === "live" && d.production?.recently_auto_promoted && <span className="docs-banner">⚡ auto-promoted (48h)</span>}
+                    {view === "staging" && d.pending_approval && <span className="docs-banner pending">⏳ pending approval</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="docs-detail">
+            {!activeDoc && <div className="docs-empty">Pick a doc on the left.</div>}
+            {activeDoc && detail && (
+              <div>
+                <div className="docs-detail-head">
+                  <h2>{DOC_LABELS[detail.doc_type]}</h2>
+                  <div className="docs-detail-meta">
+                    {view === "live" && detail.production && (
+                      <>
+                        <span>v{detail.production.version}</span>
+                        <span>·</span>
+                        <span>{detail.production.status}</span>
+                        {detail.production.auto_promoted && <><span>·</span><span>auto-promoted</span></>}
+                      </>
+                    )}
+                    {view === "staging" && detail.staging && (
+                      <>
+                        <span>staging v{detail.staging.version}</span>
+                        <span>·</span>
+                        <span>prod v{detail.production?.version ?? 0}</span>
+                        <span>·</span>
+                        <span>{detail.staging.status}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {view === "staging" && detail.staging?.status === "pending_approval" && (
+                  <div className="docs-approve-row">
+                    <button disabled={busy} onClick={() => decide("approve")} className="docs-btn ok">✅ Approve & promote</button>
+                    <button disabled={busy} onClick={() => decide("request_changes")} className="docs-btn warn">↺ Request changes</button>
+                    <button disabled={busy} onClick={() => decide("reject")} className="docs-btn danger">✕ Reject</button>
+                  </div>
+                )}
+
+                {view === "staging" && (
+                  <div className="docs-diff">
+                    <div className="docs-diff-col">
+                      <div className="docs-diff-head">PRODUCTION (v{detail.production?.version ?? 0})</div>
+                      <pre className="docs-content">{detail.production?.content_md ?? "(empty)"}</pre>
+                    </div>
+                    <div className="docs-diff-col">
+                      <div className="docs-diff-head">STAGING (v{detail.staging?.version ?? 0})</div>
+                      <pre className="docs-content">{detail.staging?.content_md ?? "(empty)"}</pre>
+                    </div>
+                  </div>
+                )}
+
+                {view === "live" && (
+                  <>
+                    <pre className="docs-content single">{detail.production?.content_md ?? "(no content yet — agent must write to staging then promote)"}</pre>
+                    <h3>Version history</h3>
+                    <table className="docs-table">
+                      <thead><tr><th>v</th><th>Change</th><th>By</th><th>When</th><th></th></tr></thead>
+                      <tbody>
+                        {detail.production_versions.map((v) => (
+                          <tr key={v.version}>
+                            <td>v{v.version}</td>
+                            <td>{v.change_summary ?? "—"}</td>
+                            <td>{v.created_by}</td>
+                            <td>{absTime(v.created_at)}</td>
+                            <td><button disabled={busy} className="docs-btn small" onClick={() => rollback(v.version)}>Rollback</button></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {view === "activity" && activity && (
+        <div className="docs-activity">
+          <h3>Recent promotions</h3>
+          {activity.recent_promotions.length === 0 ? <div className="docs-empty">No promotions yet.</div> : (
+            <table className="docs-table">
+              <thead><tr><th>Doc</th><th>Staging→Prod</th><th>Type</th><th>By</th><th>When</th></tr></thead>
+              <tbody>{activity.recent_promotions.map((p, i) => (<tr key={i}><td>—</td><td>v{p.staging_version} → v{p.production_version}</td><td>{p.promotion_type}</td><td>{p.promoted_by}</td><td>{absTime(p.promoted_at)}</td></tr>))}</tbody>
+            </table>
+          )}
+          <h3>Recent rollbacks</h3>
+          {activity.recent_rollbacks.length === 0 ? <div className="docs-empty">None.</div> : (
+            <table className="docs-table">
+              <thead><tr><th>Doc</th><th>Versions</th><th>By</th><th>Reason</th><th>When</th></tr></thead>
+              <tbody>{activity.recent_rollbacks.map((r, i) => (<tr key={i}><td>—</td><td>v{r.rolled_back_from_version} → v{r.rolled_back_to_version}</td><td>{r.rolled_back_by}</td><td>{r.reason}</td><td>{absTime(r.rolled_back_at)}</td></tr>))}</tbody>
+            </table>
+          )}
+          <h3>Recent approvals</h3>
+          {activity.recent_approvals.length === 0 ? <div className="docs-empty">None.</div> : (
+            <table className="docs-table">
+              <thead><tr><th>Doc</th><th>Staging v</th><th>Status</th><th>Approver</th><th>When</th></tr></thead>
+              <tbody>{activity.recent_approvals.map((a, i) => (<tr key={i}><td>—</td><td>v{a.staging_version}</td><td>{a.status}</td><td>{a.approver ?? "—"}</td><td>{absTime(a.approved_at ?? a.created_at)}</td></tr>))}</tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {view === "backup" && (
+        <div className="docs-backup">
+          <div className="docs-backup-grid">
+            <div className="docs-backup-card">
+              <div className="docs-backup-label">Last successful backup</div>
+              <div className="docs-backup-value">
+                {backup?.last_success ? <>{backup.last_success.backup_type} · {(backup.last_success.size_bytes ?? 0) > 0 ? `${((backup.last_success.size_bytes ?? 0) / 1024).toFixed(1)}KB` : "—"} · {absTime(backup.last_success.completed_at ?? "")}</> : "—"}
+              </div>
+            </div>
+            <div className="docs-backup-card">
+              <div className="docs-backup-label">Last failed backup</div>
+              <div className="docs-backup-value">{backup?.last_failure ? backup.last_failure.error_message ?? "(no error msg)" : "none ✓"}</div>
+            </div>
+            <div className="docs-backup-card">
+              <div className="docs-backup-label">Manual</div>
+              <button disabled={busy} className="docs-btn ok" onClick={triggerBackup}>{busy ? "Backing up…" : "💾 Backup Now"}</button>
+            </div>
+          </div>
+          <h3>Recent backups</h3>
+          {(!backup?.recent || backup.recent.length === 0) ? <div className="docs-empty">No backups yet. Daily cron runs at 03:00 UTC.</div> : (
+            <table className="docs-table">
+              <thead><tr><th>Type</th><th>Status</th><th>Started</th><th>Completed</th><th>Size</th></tr></thead>
+              <tbody>{backup.recent.map((b) => (<tr key={b.id}><td>{b.backup_type}</td><td>{b.status}</td><td>{absTime(b.started_at)}</td><td>{b.completed_at ? absTime(b.completed_at) : "—"}</td><td>{b.size_bytes ? `${(b.size_bytes / 1024).toFixed(1)}KB` : "—"}</td></tr>))}</tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      <style jsx>{`
+        .docs-tab { padding: 24px; height: 100%; overflow-y: auto; }
+        .page-header { margin-bottom: 16px; }
+        .page-header h1 { font-size: 18px; font-weight: 600; }
+        .page-sub { font-size: 12px; color: var(--text-3); }
+        .docs-pending { color: var(--yellow); font-weight: 600; }
+        .docs-subnav { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+        .docs-pill { background: transparent; border: 1px solid var(--border); color: var(--text-2); padding: 4px 10px; border-radius: 99px; font-size: 11px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600; }
+        .docs-pill.active { background: var(--text-1); color: var(--bg-0); border-color: var(--text-1); }
+        .docs-grid { display: grid; grid-template-columns: 280px 1fr; gap: 14px; }
+        .docs-list { display: flex; flex-direction: column; gap: 4px; }
+        .docs-row { padding: 10px 12px; background: var(--bg-1); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; }
+        .docs-row.active { border-color: var(--cyan); }
+        .docs-row-top { display: flex; justify-content: space-between; gap: 8px; }
+        .docs-title { font-size: 12px; font-weight: 600; }
+        .docs-pill-tag { font-size: 9px; padding: 1px 6px; border-radius: 99px; text-transform: uppercase; letter-spacing: 0.3px; }
+        .docs-pill-tag.manual { background: var(--yellow-bg); color: var(--yellow); }
+        .docs-pill-tag.auto { background: var(--green-bg); color: var(--green); }
+        .docs-row-meta { font-size: 10.5px; color: var(--text-3); margin-top: 4px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+        .docs-banner { background: var(--yellow-bg); color: var(--yellow); padding: 1px 7px; border-radius: 99px; font-size: 9.5px; }
+        .docs-banner.pending { background: var(--cyan-bg); color: var(--cyan); }
+        .docs-detail { background: var(--bg-1); border: 1px solid var(--border); border-radius: 8px; padding: 16px; min-height: 400px; }
+        .docs-detail-head { margin-bottom: 12px; }
+        .docs-detail-head h2 { font-size: 16px; font-weight: 600; }
+        .docs-detail-meta { font-size: 11px; color: var(--text-3); display: flex; gap: 6px; margin-top: 4px; }
+        .docs-empty { padding: 30px; text-align: center; color: var(--text-3); font-size: 12px; }
+        .docs-approve-row { display: flex; gap: 8px; padding: 12px; background: var(--yellow-bg); border-radius: 6px; margin-bottom: 12px; }
+        .docs-btn { padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; border: 1px solid transparent; }
+        .docs-btn.small { padding: 3px 8px; font-size: 10.5px; }
+        .docs-btn.ok { background: var(--green); color: white; }
+        .docs-btn.warn { background: var(--yellow); color: var(--bg-0); }
+        .docs-btn.danger { background: var(--red); color: white; }
+        .docs-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .docs-diff { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .docs-diff-col { background: var(--bg-2); border-radius: 4px; }
+        .docs-diff-head { padding: 6px 10px; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-3); border-bottom: 1px solid var(--border); }
+        .docs-content { padding: 12px; font-size: 11.5px; font-family: ui-monospace, Menlo, monospace; white-space: pre-wrap; word-break: break-word; max-height: 500px; overflow-y: auto; }
+        .docs-content.single { background: var(--bg-2); border-radius: 4px; }
+        .docs-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 18px; }
+        .docs-table th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); color: var(--text-3); font-weight: 500; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
+        .docs-table td { padding: 7px 8px; border-bottom: 1px solid var(--border); color: var(--text-1); }
+        .docs-activity h3, .docs-backup h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-3); margin-top: 14px; margin-bottom: 8px; }
+        .docs-backup-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; }
+        .docs-backup-card { background: var(--bg-1); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+        .docs-backup-label { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-3); margin-bottom: 6px; }
+        .docs-backup-value { font-size: 12px; color: var(--text-1); }
+      `}</style>
+    </div>
+  );
+}
+
+// ============================================================================
+// COST TAB — agent spend across windows
+// ============================================================================
+type CostBucket = { cost_usd: string; runs: number; tokens_in: number; tokens_out: number };
+type TopTicket = { ticket_id: number; cost_usd: string; runs: number; agents: string[] };
+type TopAgent = { agent: string; cost_usd: string; runs: number; avg_cost_usd: string; avg_duration_ms: number; tokens_in: number; tokens_out: number };
+
+function CostTab() {
+  const [data, setData] = useState<{ totals: Record<"24h" | "7d" | "30d", CostBucket>; top_tickets_24h: TopTicket[]; top_agents_7d: TopAgent[] } | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    fetch("/api/cockpit/cost").then((r) => r.json()).then((d) => setData(d)).finally(() => setLoading(false));
+  }, []);
+  if (loading) return <div className="cost-tab"><div className="empty">Loading cost…</div></div>;
+  if (!data) return <div className="cost-tab"><div className="empty">No cost data.</div></div>;
+  return (
+    <div className="cost-tab">
+      <div className="page-header">
+        <h1>Cost Tracker</h1>
+        <span className="page-sub">
+          Anthropic spend per window. Pricing: <code>$3/Mtok input, $15/Mtok output</code> (Sonnet-4-6).
+          Captured per agent run in <code>cockpit_audit_log.cost_usd_milli</code>.
+        </span>
+      </div>
+      <div className="cost-grid-3">
+        {(["24h", "7d", "30d"] as const).map((w) => {
+          const b = data.totals[w];
+          return (
+            <div key={w} className="cost-card">
+              <div className="cost-window">{w}</div>
+              <div className="cost-amount">${b.cost_usd}</div>
+              <div className="cost-meta">
+                {b.runs} runs · {(b.tokens_in / 1000).toFixed(1)}k in · {(b.tokens_out / 1000).toFixed(1)}k out
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="cost-section">
+        <h3>Top tickets · last 24h</h3>
+        {data.top_tickets_24h.length === 0 ? (
+          <div className="empty-small">No ticket spend in the last 24h.</div>
+        ) : (
+          <table className="cost-table">
+            <thead><tr><th>Ticket</th><th>Cost</th><th>Runs</th><th>Agents involved</th></tr></thead>
+            <tbody>{data.top_tickets_24h.map((t) => (
+              <tr key={t.ticket_id}>
+                <td>#{t.ticket_id}</td>
+                <td>${t.cost_usd}</td>
+                <td>{t.runs}</td>
+                <td>{t.agents.join(", ")}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        )}
+      </div>
+      <div className="cost-section">
+        <h3>Top agents · last 7 days</h3>
+        {data.top_agents_7d.length === 0 ? (
+          <div className="empty-small">No agent spend in the last 7d.</div>
+        ) : (
+          <table className="cost-table">
+            <thead><tr><th>Agent</th><th>Total</th><th>Runs</th><th>Avg cost</th><th>Avg ms</th><th>Tok in/out</th></tr></thead>
+            <tbody>{data.top_agents_7d.map((a) => (
+              <tr key={a.agent}>
+                <td>{a.agent}</td>
+                <td>${a.cost_usd}</td>
+                <td>{a.runs}</td>
+                <td>${a.avg_cost_usd}</td>
+                <td>{a.avg_duration_ms}</td>
+                <td>{(a.tokens_in / 1000).toFixed(1)}k / {(a.tokens_out / 1000).toFixed(1)}k</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        )}
+      </div>
+      <style jsx>{`
+        .cost-tab { padding: 24px; height: 100%; overflow-y: auto; }
+        .page-header { margin-bottom: 16px; }
+        .page-header h1 { font-size: 18px; font-weight: 600; }
+        .page-sub { font-size: 12px; color: var(--text-3); }
+        .page-sub code { background: var(--bg-3); padding: 1px 6px; border-radius: 4px; font-size: 11px; }
+        .empty, .empty-small { padding: 30px; text-align: center; color: var(--text-3); }
+        .empty-small { padding: 14px; font-size: 12px; }
+        .cost-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
+        .cost-card { background: var(--bg-1); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+        .cost-window { font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-3); font-weight: 600; }
+        .cost-amount { font-family: Fraunces, Georgia, serif; font-style: italic; font-size: 28px; line-height: 1.1; margin: 4px 0; }
+        .cost-meta { font-size: 11px; color: var(--text-3); }
+        .cost-section { margin-bottom: 24px; }
+        .cost-section h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-3); font-weight: 600; margin-bottom: 8px; }
+        .cost-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .cost-table th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); color: var(--text-3); font-weight: 500; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
+        .cost-table td { padding: 7px 8px; border-bottom: 1px solid var(--border); color: var(--text-1); }
+      `}</style>
+    </div>
+  );
+}
+
+// ============================================================================
+// TOOLS TAB — quick links to external tools
+// ============================================================================
+function ToolsTab() {
+  const links = [
+    { group: "App", items: [
+      { name: "Production app", url: "https://namkhan-bi.vercel.app", note: "namkhan-bi.vercel.app" },
+      { name: "Overview / Pulse", url: "https://namkhan-bi.vercel.app/overview", note: "live KPIs" },
+      { name: "Sales · Inquiries", url: "https://namkhan-bi.vercel.app/sales/inquiries", note: "reference design page" },
+      { name: "Revenue · Compset", url: "https://namkhan-bi.vercel.app/revenue/compset", note: "OTA rate intelligence" },
+      { name: "Revenue · Parity", url: "https://namkhan-bi.vercel.app/revenue/parity", note: "rate-parity watchdog" },
+      { name: "Settings · Cockpit (status page)", url: "https://namkhan-bi.vercel.app/settings/cockpit", note: "site-design status view" },
+    ]},
+    { group: "Infra", items: [
+      { name: "Vercel project", url: "https://vercel.com/pbsbase-2825s-projects/namkhan-bi", note: "deploys, env, firewall" },
+      { name: "Vercel deploys", url: "https://vercel.com/pbsbase-2825s-projects/namkhan-bi/deployments", note: "history + rollback" },
+      { name: "Vercel speed insights", url: "https://vercel.com/pbsbase-2825s-projects/namkhan-bi/speed-insights", note: "CWV" },
+      { name: "Vercel firewall", url: "https://vercel.com/pbsbase-2825s-projects/namkhan-bi/firewall", note: "rate limits + blocks" },
+      { name: "Vercel billing", url: "https://vercel.com/teams/pbsbase-2825s-projects/settings/billing", note: "spending cap" },
+      { name: "Supabase project", url: "https://supabase.com/dashboard/project/kpenyneooigsyuuomgct", note: "namkhan-pms" },
+      { name: "Supabase SQL editor", url: "https://supabase.com/dashboard/project/kpenyneooigsyuuomgct/sql/new", note: "ad-hoc queries" },
+      { name: "Supabase logs", url: "https://supabase.com/dashboard/project/kpenyneooigsyuuomgct/logs/explorer", note: "all DB activity" },
+      { name: "Supabase advisor", url: "https://supabase.com/dashboard/project/kpenyneooigsyuuomgct/advisors/security", note: "security + perf" },
+      { name: "Supabase webhooks", url: "https://supabase.com/dashboard/project/kpenyneooigsyuuomgct/integrations/database-webhooks", note: "outbound" },
+    ]},
+    { group: "Code", items: [
+      { name: "GitHub repo", url: "https://github.com/TBC-HM/namkhan-bi", note: "TBC-HM/namkhan-bi" },
+      { name: "Open issues", url: "https://github.com/TBC-HM/namkhan-bi/issues?q=is%3Aopen", note: "auto-spec + incidents land here" },
+      { name: "PRs", url: "https://github.com/TBC-HM/namkhan-bi/pulls", note: "review queue" },
+      { name: "Actions runs", url: "https://github.com/TBC-HM/namkhan-bi/actions", note: "weekly audit + lighthouse" },
+    ]},
+    { group: "Automation", items: [
+      { name: "Make.com scenarios", url: "https://eu2.make.com/scenarios", note: "if you import the blueprints" },
+      { name: "Anthropic Console", url: "https://console.anthropic.com/settings/billing", note: "track spend" },
+      { name: "Claude Docs (tool use)", url: "https://docs.claude.com/en/docs/agents-and-tools/tool-use/overview", note: "agent capabilities" },
+    ]},
+    { group: "Hospitality", items: [
+      { name: "Cloudbeds login", url: "https://hotels.cloudbeds.com/", note: "PMS — sole revenue source" },
+      { name: "SLH portal", url: "https://www.slh.com/", note: "Small Luxury Hotels" },
+    ]},
+  ];
+
+  return (
+    <div className="tools-tab">
+      <div className="page-header">
+        <h1>Quick Tools</h1>
+        <span className="page-sub">External dashboards + the cockpit&apos;s upstream services. All open in a new tab.</span>
+      </div>
+      {links.map((g) => (
+        <div key={g.group} className="tools-group">
+          <h3 className="tools-group-title">{g.group}</h3>
+          <div className="tools-grid">
+            {g.items.map((it) => (
+              <a key={it.url} href={it.url} target="_blank" rel="noreferrer" className="tools-card">
+                <div className="tools-name">{it.name} ↗</div>
+                <div className="tools-note">{it.note}</div>
+              </a>
+            ))}
+          </div>
+        </div>
+      ))}
+      <style jsx>{`
+        .tools-tab { padding: 24px; height: 100%; overflow-y: auto; }
+        .page-header { margin-bottom: 24px; }
+        .page-header h1 { font-size: 18px; font-weight: 600; }
+        .page-sub { font-size: 12px; color: var(--text-3); }
+        .tools-group { margin-bottom: 24px; }
+        .tools-group-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-3); font-weight: 600; margin-bottom: 8px; }
+        .tools-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
+        .tools-card { display: block; padding: 10px 12px; background: var(--bg-1); border: 1px solid var(--border); border-radius: 6px; text-decoration: none; color: inherit; }
+        .tools-card:hover { border-color: var(--cyan); }
+        .tools-name { font-size: 12.5px; font-weight: 500; color: var(--text-0); margin-bottom: 2px; }
+        .tools-note { font-size: 11px; color: var(--text-3); }
+      `}</style>
+    </div>
+  );
+}

@@ -72,6 +72,21 @@ export default async function LedgerPage({ searchParams }: Props) {
     .filter((r: any) => r.check_in_date && r.check_in_date <= in7 && Number(r.balance) > 0)
     .length;
 
+  // Future arrivals with NO deposit (collection risk)
+  const futureNoDeposit30d = (futureConfirmed ?? [])
+    .filter((r: any) => r.check_in_date && r.check_in_date <= in30 && Number(r.paid_amount || 0) === 0)
+    .length;
+
+  // City ledger — house_accounts (companies, agencies)
+  const { data: houseAccounts } = await supabase
+    .from('house_accounts')
+    .select('account_id, account_name, account_type, balance, last_activity_date, status')
+    .eq('property_id', PROPERTY_ID)
+    .order('balance', { ascending: false })
+    .limit(20);
+  const cityLedgerActive = (houseAccounts ?? []).filter((r: any) => r.status === 'active').length;
+  const cityLedgerTotal = (houseAccounts ?? []).reduce((s: number, r: any) => s + Number(r.balance || 0), 0);
+
   const { count: cancellations30d } = await supabase
     .from('reservations')
     .select('reservation_id', { count: 'exact', head: true })
@@ -89,10 +104,13 @@ export default async function LedgerPage({ searchParams }: Props) {
           <StatusCell label="SOURCE"><StatusPill tone="active">reservations · mv_aged_ar</StatusPill></StatusCell>
           <StatusCell label="IN-HOUSE"><span style={metaStrong}>{inHouseCount}</span><span style={metaDim}>{fmtMoney(inHouseBalance, 'USD')} balance</span></StatusCell>
           <StatusCell label="HIGH-BAL"><StatusPill tone={highBalFlags > 0 ? 'pending' : 'inactive'}>{highBalFlags}</StatusPill><span style={metaDim}>&gt; $1k</span></StatusCell>
+          <StatusCell label="DEPOSITS HELD"><span style={metaStrong}>{fmtMoney(depositsHeld, 'USD')}</span><span style={metaDim}>{(futureConfirmed ?? []).length} resv</span></StatusCell>
           <span style={{ flex: 1 }} />
         </>}
         bottom={<>
           <StatusCell label="AR HEALTH"><StatusPill tone={arHealth as any}>{ar90 > 0 ? 'OVERDUE' : Number(buckets['61_90'] || 0) > 0 ? 'WATCH' : 'CLEAN'}</StatusPill><span style={metaDim}>{fmtMoney(totalAr, 'USD')} open</span></StatusCell>
+          <StatusCell label="FUT 30D · NO DEPOSIT"><StatusPill tone={futureNoDeposit30d > 0 ? 'pending' : 'inactive'}>{futureNoDeposit30d}</StatusPill><span style={metaDim}>collection risk</span></StatusCell>
+          <StatusCell label="CANCELLATIONS 30D"><span style={metaStrong}>{cancellations30d ?? 0}</span></StatusCell>
           <span style={{ flex: 1 }} />
         </>}
       />
@@ -110,6 +128,32 @@ export default async function LedgerPage({ searchParams }: Props) {
       <div style={{ marginTop: 18 }}>
         <SectionHead title="Aged receivables" emphasis={`${aged.length} resv`} sub={`Total open: ${fmtMoney(totalAr, 'USD')} · sortable`} source="mv_aged_ar" />
         <AgedArTable rows={aged as AgedRow[]} />
+      </div>
+
+      <div style={{ marginTop: 18 }}>
+        <SectionHead title="City ledger" emphasis={`${cityLedgerActive} active`} sub="House accounts · companies · agencies · house_accounts" source="house_accounts" />
+        {(houseAccounts ?? []).length === 0 ? (
+          <div className="panel dashed" style={{ padding: 20, color: 'var(--ink-mute)', fontStyle: 'italic', textAlign: 'center' }}>
+            No active house accounts. Showing first 20 of {(houseAccounts ?? []).length}.
+          </div>
+        ) : (
+          <table className="tbl" style={{ width: '100%', fontSize: 13 }}>
+            <thead>
+              <tr><th>Account</th><th>Type</th><th>Status</th><th className="num">Balance</th><th>Last activity</th></tr>
+            </thead>
+            <tbody>
+              {(houseAccounts ?? []).map((a: any) => (
+                <tr key={a.account_id}>
+                  <td className="lbl"><strong>{a.account_name || '—'}</strong></td>
+                  <td className="lbl text-mute">{a.account_type || '—'}</td>
+                  <td><StatusPill tone={a.status === 'active' ? 'active' : 'inactive'}>{a.status || '—'}</StatusPill></td>
+                  <td className="num" style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(Number(a.balance || 0), 'USD')}</td>
+                  <td className="lbl text-mute">{a.last_activity_date ? new Date(a.last_activity_date).toISOString().slice(0, 10) : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       <div style={{ marginTop: 18 }}>

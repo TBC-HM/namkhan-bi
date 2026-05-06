@@ -1960,3 +1960,149 @@ Three stacked fixes addressing "give me the paragraph not the doc" + "answer my 
   - New examples: "show me reservations of Siegfried Nehls" (verified live — 3 stays Jan 2026, $8k total) and "guest profile of Siegfried Nehls" (with cb_guest_id JOIN to public.guests for aggregate stats).
   - Fixed the broken arrival/in-house examples that referenced non-existent columns.
 - **Verification**: `tsc --noEmit` clean. Direct SQL run via Supabase MCP returned 3 rows for Nehls.
+
+### 2026-05-06 — Recovery deploy of WIP across all pillars
+- **Why**: User reported `/revenue/compset` and `/revenue/parity` "wiped and gone" from prod. Investigation: files present on `chore/cockpit-foundation` branch + `origin/main`, but 35+ uncommitted local edits across finance/guest/marketing/operations/revenue/settings/sales had never been committed or deployed. Last successful prod deploy was missing ~2 days of WIP.
+- **Action**: Created `deploy-recover-2026-05-06.command` (double-clickable) that:
+  1. Removes stale `.git/index.lock` (sandbox could not unlink it)
+  2. Stages all modified `app/`, `components/`, `lib/`, `make-blueprints/` files (skips `.claude/settings.local.json`)
+  3. Commits with full pillar-by-pillar message
+  4. Pushes to `origin/chore/cockpit-foundation`
+  5. Runs `npx vercel --prod --yes`
+  6. Verifies all 7 compset+parity URLs return 200
+- **Compset surface confirmed present in tree**: `/revenue/compset` (page + 25 components), `/manual`, `/agent-settings`, `/scoring-settings`, plus `app/api/compset/{run,run/status,scoring/draft,scoring/activate,agent-runtime}`.
+- **Parity surface confirmed present in tree**: `/revenue/parity` (page + 3 components), `/agent-settings`, `/scoring-settings`, plus `app/api/parity/run`.
+- **Branch deployed from**: `chore/cockpit-foundation` (1 commit ahead of `origin/main` before this run — `38e267f` inventory work).
+- **Sandbox limitation**: Workspace bash could not run `git commit` due to `.git/index.lock` permission error on the mounted folder; deploy had to be packaged as a `.command` script for the user to execute.
+
+### 2026-05-06 — `/revenue/compset` page-level wiring restored (v3 components)
+- **Why**: After the recovery commit, `app/revenue/compset/page.tsx` still pointed to the old v1 stub (213 lines, `SourceCard` + `CompsetTable` only). The v3 components (`CompactAgentHeader`, `CompsetGraphs`, `SetTabs`, `PropertyTable`, `AgentRunHistoryTable`, `AnalyticsBlock`, `DeepViewPanel`) were already on disk under `_components/` but unused.
+- **Action**: Rewrote `app/revenue/compset/page.tsx` as a server component that wires every v3 component:
+  1. `<PageHeader>` — Revenue › Comp Set, italic brass accent (`see who is moving the price line`).
+  2. `<CompactAgentHeader>` — agent status, last run, MTD cost, next event, scrape-date pills, RUN NOW + scoring/agent settings links.
+  3. `<CompsetGraphs>` — calendar / DoW / promo-intensity (calendar+dow derived from `v_compset_competitor_rate_matrix`; tiles passed through).
+  4. `<SetTabs>` — `?set=<set_id>` URL-driven, defaults to `is_primary` set.
+  5. `<PropertyTable>` — set-filtered rows + `deepDataMap: Record<comp_id, CompetitorDeepData>` assembled server-side from 7 deep-view proxies + Namkhan rate-matrix overlay.
+  6. `<AgentRunHistoryTable>` — last 10 runs across `compset_agent` + `comp_discovery_agent` from `governance.agent_run_summary`.
+  7. `<AnalyticsBlock>` — maturity banner, rate-plan landscape, plan gaps, promo tiles.
+- **Data sources** (all verified live via Supabase MCP):
+  - `public.v_compset_set_summary`, `v_compset_property_summary` — main rows.
+  - `public.v_compset_competitor_{property_detail,rate_matrix,rate_plan_mix,room_mapping,reviews_summary}`, `v_compset_ranking_latest`, `v_compset_rate_plans_latest` — deep view.
+  - `public.v_compset_{data_maturity,promo_behavior_signals,promo_tiles,rate_plan_gaps,rate_plan_landscape}` — analytics.
+  - `public.v_compset_agent_settings` (lifts `monthly_budget_usd` + `month_to_date_cost_usd` out of `locked_by_mandate` JSONB into the flat `AgentRow` shape `CompactAgentHeader` expects).
+  - `governance.agent_run_summary` (via `supabase.schema('governance')`).
+  - `marketing.upcoming_events` (via `supabase.schema('marketing')`).
+  - `public.compset_pick_scrape_dates(8, 120, 40)` RPC for next-shop pills.
+- **Empty-state coverage**: every section falls back to `[]`/`null` on view miss; SetTabs hides + emits a dashed empty card when `orderedSets.length === 0`; CompsetGraphs / PropertyTable / AnalyticsBlock all render their own empty states.
+- **Verification**: `tsc --noEmit` clean for compset (4 pre-existing staff `fx_lak_usd` errors unaffected). Zero hardcoded `fontSize` literals, zero `USD ` prefix, zero hardcoded `fontFamily` in the new file. Component import grep returns 23 hits across the 6 v3 components.
+- **Files touched**: `app/revenue/compset/page.tsx` (full rewrite) + this changelog. No component edits, no API/route changes, no schema edits.
+
+### 2026-05-06 — Cockpit UI shipped (`/cockpit` + 5 API routes)
+- **Why**: 9am cockpit demo. 6-file drop from external bundle (`COCKPIT-INSTALL.md`).
+- **Added (no deletions)**:
+  - `app/cockpit/page.tsx` — 5-tab cockpit (Chat / Schedule / Team / Logs / Data) + Org Chart overlay + system health pulse, real-time Supabase subscriptions on `cockpit_tickets`.
+  - `app/api/cockpit/chat/route.ts` — POST creates `cockpit_tickets` row (service-role).
+  - `app/api/cockpit/schedule/route.ts` — reads `.github/workflows/*.yml` cron triggers.
+  - `app/api/cockpit/team/route.ts` — reads `.claude/agents/*.md` frontmatter (5 agents found).
+  - `app/api/cockpit/schema/tables/route.ts` — hardcoded table list (introspection RPC TODO).
+  - `app/api/cockpit/schema/rows/route.ts` — read-only row browser via service-role.
+- **Edits to existing files (additive only)**:
+  - `app/api/cockpit/team/route.ts` — cast `parseFrontmatter` `unknown` returns to `string` (TS2322 fix during install).
+  - `app/operations/staff/[staffId]/page.tsx` — added optional `fx_lak_usd?: number | null` to `PayrollRow` type. Closed pre-existing `CompBreakdown.tsx` + `YtdSummary.tsx` TS2339 error blocking the build (column already returned by `ops.payroll_monthly` view per `20260503190100` migration).
+- **Verification**:
+  - `npx tsc --noEmit` → clean.
+  - `grep fontSize:[0-9]` in new files → 0.
+  - `grep 'USD ' prefix` in new files → 0.
+  - Smoke: `GET /cockpit` → 200, `GET /api/cockpit/team` → 200 (cache-busted).
+- **Deploy**: `npx vercel --prod --yes` → `https://namkhan-bi.vercel.app` (alias). Build cache restored, 27s build.
+- **Branch**: still on `chore/cockpit-foundation` (not on `main`). User previously authorized standing deploy authority for namkhan-bi (`feedback_namkhan_bi_deploy_authority.md`).
+- **Known follow-ups (not blockers)**: chat doesn't yet dispatch to IT Manager (no Make scenario), schedule `nextRun` always null (needs `cron-parser`), schema table list hardcoded, `/cockpit` has no auth gate.
+
+### 2026-05-06 — Agent Network v1 shipped (autonomous orchestration)
+- **Why**: PBS's 2-hour push to make `/cockpit` actually do work, not just create dead tickets.
+- **Pipeline now end-to-end**: chat OR email → IT Manager triage (Anthropic) → role agent (Anthropic) → status flips to `completed`/`awaits_user`. Realtime updates in `/cockpit` UI. pg_cron drainer at 1 min as safety net.
+- **Routes added**:
+  - `app/api/cockpit/agent/run/route.ts` — agent worker (handles `new`/`triaging`/`triaged` queue states, role-specific prompts: researcher / designer / documentarian / reviewer / tester / ops_lead / none).
+  - `app/api/cockpit/webhooks/vercel/route.ts` — Vercel deploy webhook with auto-rollback on `deployment.error` (replaces Make scenario 01).
+  - `app/api/cockpit/webhooks/uptime/route.ts` — UptimeRobot/Better Stack receiver with re-check + auto-resolution (replaces Make 02).
+  - `app/api/cockpit/webhooks/incident/route.ts` — generic incident receiver with severity-based GH issue creation (replaces Make 05).
+- **Auth**:
+  - `middleware.ts` — Basic Auth on `/cockpit/*` + `/api/cockpit/*`. Webhooks + agent worker bypass via shared-secret headers.
+  - `COCKPIT_USERNAME`, `COCKPIT_PASSWORD`, `COCKPIT_AGENT_TOKEN`, `COCKPIT_WEBHOOK_SECRET`, `VERCEL_TOKEN`, `GITHUB_TOKEN` set on Vercel production.
+- **DB changes (`namkhan-pms`)**:
+  - Migration `cockpit_email_intake_trigger` — `public.cockpit_email_to_ticket()` + AFTER INSERT trigger on `sales.email_messages`. Subjects `[cockpit] *` or recipients in intake list (`pbsbase+cockpit@gmail.com` etc.) → auto-create `cockpit_tickets` row with status='new'. Existing email ingest path untouched.
+  - Migration `cockpit_agent_worker_cron` — pg_cron job 53 (`cockpit-agent-worker`, every minute) drains the queue.
+- **Make.com blueprints (delivered, not auto-deployed)**: `cockpit/make-blueprints/01-deploy-watcher.blueprint.json`, `02-uptime-watcher.blueprint.json`, `03-email-intake.blueprint.json`, `05-incident-logger.blueprint.json` + `INSTALL_01_02_03_05.md`. PBS can install if he wants the Make-side observability; Vercel routes already cover the same functionality.
+- **Smoke tests passed**:
+  - Vercel webhook GET → 200 schema info
+  - Incident webhook S2 + secret → DB row + GH issue auto-opened
+  - Webhook without secret → 401
+  - Chat tab → ticket #2 fully pipelined: triage → tester role → status=completed (test plan in notes)
+  - Chat tab → ticket #3 fully pipelined: triage → designer-equivalent → status=awaits_user (correctly flagged blocking questions)
+  - Smoke-test rows deleted to leave clean cockpit.
+- **Verification**:
+  - `npx tsc --noEmit` → clean
+  - 5-min build, 47s build, deployed to namkhan-bi.vercel.app
+  - All env vars confirmed via `vercel env ls`
+- **Files touched**: 4 new API routes + 1 middleware + agent network doc + 4 Make blueprints + Vercel hardening runbook + this changelog. Existing chat route enhanced with synchronous Anthropic triage. Two non-destructive Postgres migrations.
+- **Standing-deploy authority** invoked per `feedback_namkhan_bi_deploy_authority.md`. Branch still `chore/cockpit-foundation`.
+
+### 2026-05-06 — Agent Network v1.1 (DB-backed prompts + meta-mode + 7-piece refinement pass)
+- **Why**: PBS wants to refine agents by talking only to the IT Manager — no code edits, no deploys. Plus 6 follow-on refinements.
+- **DB-backed prompts (#2 prep)**: New table `public.cockpit_agent_prompts` (versioned, active flag, source: seed/manual/meta_update). Seeded 12 active prompts (it_manager v2 + 11 worker roles).
+- **Meta-mode (talk-to-orchestrator)**: chat route runs a meta-detection pass first; if the user message is an instruction ABOUT the agents (e.g. "the researcher should always cite the migration file"), IT Manager proposes a structured patch as JSON, ticket goes `awaits_user`. Reply `approve`/`yes`/`apply` → `applyPendingMetaPatch()` deactivates the old prompt row and inserts the new version. Researcher prompt was successfully refined this way during testing (v1 → v2, source=meta_update).
+- **Refinement pass — all 7 questions answered**:
+  1. **Email intake** — kept Gmail aliases (`pbsbase+cockpit@gmail.com`, `pbsbase+dev@gmail.com`); custom domains (`dev@thedonnaportals.com`, `dev@thenamkhan.com`, `cockpit@thenamkhan.com`) pre-wired in trigger for when Workspace lands.
+  2. **3 new agents** — `lead`, `frontend`, `backend` prompts seeded in DB; `AgentRole` type union extended; `pickRole()` falls back to `lead` when arm=dev with no specialist; IT Manager prompt (v2) updated to recommend the new roles.
+  3. **PR-on-approve flow** — added `code_spec_writer` agent + `approveWorkTicket()` in chat route. When user types `approve`/`yes`/`apply`/`ship it` on an `awaits_user` work ticket, fires the spec-writer with full pipeline context, generates GH-issue-ready markdown spec, opens issue with `auto-spec`/`cockpit`/`arm-{x}` labels, links back to ticket.
+  4. **S1 alerts** — incident webhook now drops a `cockpit_tickets` row alongside the GH issue when severity=1, so the IT Manager triages the incident into the same chat queue. Verified: S1 test → incident #2 + GH Issue #3 + cockpit ticket #6.
+  5. **VERCEL_TOKEN permanent** — runbook `cockpit/runbooks/PIECE_5_VERCEL_TOKEN.md` written; PBS clicks once at https://vercel.com/account/tokens, runs 1 CLI command, redeploys. Current token is the CLI session token (expires 2026 fall) — works fine until then.
+  6. **Mobile magic-link** — new routes `app/api/cockpit/auth/magic-link` (GET, generates one-time token, audited) + `app/api/cockpit/auth/redeem` (GET, public, validates token, sets `cockpit_magic` httpOnly+secure+sameSite cookie for 30d, redirects to /cockpit). Middleware accepts the cookie in lieu of Basic Auth. Verified: magic link generation → redeem with valid token → 307 redirect.
+  7. **Approve button** — `/cockpit` chat detail panel shows a yellow approve/reject panel when `status=awaits_user`. Clicking ✅ Approve sends the message "approve" to the chat endpoint, which runs the meta-or-work approval flow. `Ticket` type extended with `github_issue_url` so the auto-spec link is rendered.
+- **New routes**: `/api/cockpit/auth/magic-link/route.ts`, `/api/cockpit/auth/redeem/route.ts`, `/api/cockpit/agent/prompts/route.ts`. Modified: chat route, agent worker, middleware, /cockpit page, incident webhook.
+- **DB migrations applied**: `cockpit_agent_prompts` (table + index + RLS + trigger), seed of 8 prompts, then 3 more prompts (lead/frontend/backend), it_manager v2, code_spec_writer.
+- **Verification**:
+  - `npx tsc --noEmit` clean
+  - 48s build, deployed
+  - Meta refinement: ticket #4 → researcher prompt v2 (audit chain `meta_propose` → `meta_apply` intact)
+  - Magic link issue + redeem returned 307 to /cockpit
+  - S1 incident → DB row + GH issue + cockpit ticket all created
+  - Test rows cleaned; cockpit_tickets count = 1 (the only remaining is the meta-refinement ticket #4 which is real audit history)
+- **Files touched**: 8 new/modified routes + 1 middleware + DB schema + 5 docs (DESIGN_NAMKHAN_BI.md, AGENT_NETWORK.md, PIECE_2/5 runbooks, INSTALL_01_02_03_05.md). No design rule violations.
+
+### 2026-05-06 — Agent Network v2 (skills, knowledge base, cost tracking, team self-update)
+- **Why**: PBS pushed for real superpowers, persistent learnings, live worker visibility, and a knowledge base he can browse from /cockpit. Goal: he never works in Cowork again — everything happens via the chat in /cockpit.
+- **DB additions**:
+  - `cockpit_agent_skills` + `cockpit_agent_role_skills` — 11 skills total. 4 read-only (query_supabase_view, read_audit_log, read_design_doc, list_recent_tickets), 5 superpowers (read_repo_file, search_repo, list_vercel_deploys, read_github_issue, web_fetch), 2 KB (read_knowledge_base, add_knowledge_base_entry).
+  - `cockpit_knowledge_base` — versioned facts the team carries between tickets. Seeded with 9 system entries (communication style, hotel context, design rules, repo locations, deploy procedure, pipeline state, agent decisions, output discipline, cron jobs).
+  - Audit log extended with `input_tokens`, `output_tokens`, `cost_usd_milli`, `tool_trace`, `duration_ms`.
+- **3 new agents**: `lead`, `frontend`, `backend` (Senior Engineer / UI / Schema). Plus `code_spec_writer` (auto-fires on user approval) and `skill_creator` (designs new skill specs from chat). All 12 active.
+- **IT Manager v5** — KB-first: now MUST call `read_knowledge_base` before triaging, plus knows about all 12 agents and routes pure-UI to frontend, pure-backend to backend, mixed to lead, "I need a new tool" to skill_creator.
+- **Worker prompts** — all prepended with "CONTEXT-FIRST: call `read_knowledge_base` first" + strict OUTPUT DISCIPLINE block ("respond with single JSON object, no prose, no fences, no preface").
+- **Real tool-use loop** — agent worker now passes role's skills as `tools` to Anthropic, dispatches `tool_use` blocks back to internal handlers, loops up to 8 iterations. Captures every tool invocation in `tool_trace`, sums `usage.input_tokens` + `output_tokens`, computes cost via Sonnet pricing (3/15 per Mtok). Ticket detail shows trace summary like: ``Tools called: search_repo, list_vercel_deploys · 4500ms · 1200+450 tok · $0.0103``.
+- **Allowlist enforcement** — `query_supabase_view` only lets agents read 13 specific public views. SSRF guards on `web_fetch`. Path-traversal blocks on `read_repo_file`. Shell-injection-safe regex check on `search_repo` pattern.
+- **/cockpit UI additions**:
+  - **Filter chips** at top of chat list (Open / Waiting / Done / Failed / All) + search box.
+  - **Approve / Reject buttons** on `awaits_user` tickets.
+  - **Mobile magic-link button** (📱) in chat header — generates QR code in popup, scan from phone, 30-day cookie.
+  - **Knowledge tab** (`/cockpit` → 🧠 Knowledge) — browse + add KB entries with topic search + scope filter.
+  - **Tools tab** (🔗 Tools) — quick links to Vercel project, Supabase dashboard, GitHub repo, Make.com, Cloudbeds, app pages.
+  - **Team tab** rewritten — reads from DB, shows chief on top, friendly titles ("Senior Engineer", "Frontend Engineer", etc.), live "▶ working · #N" badge when an agent has an in-flight ticket, 24h cost per agent, prompt source ("seed", "manual", "meta_update"). Auto-refreshes every 15s.
+  - **Org chart overlay** — pulls real chief from data, friendly titles, live indicators.
+- **/settings/cockpit (status page)** — refreshed: KPI tiles now show Active agents, Tickets/24h, Agent runs/24h + spend, Open incidents. Prominent "Open cockpit →" CTA at top.
+- **8 new cron jobs** added 2026-05-06 (in addition to existing 49+):
+  - 53 `cockpit-agent-worker` (every min — drains triage/agent queue)
+  - `cockpit-stale-ticket-reaper` (every 5 min — recovers stuck `working` tickets)
+  - `cockpit-deploy-health-hourly` (every hour — pings prod URL, logs incident if down)
+  - `cockpit-daily-incident-review` (08:00 UTC — IT Manager scans last 24h)
+  - `cockpit-daily-prompt-changelog` (07:00 UTC — opens incident if any prompt changed)
+  - `cockpit-weekly-team-summary` (Monday 09:00 UTC — IT Manager reviews the week)
+  - `cockpit-weekly-cost-report` (Sunday 23:00 UTC — sums tokens/spend)
+  - `cockpit-daily-kb-curate` (06:00 UTC — KB review for dupes/stale entries)
+  - `cockpit-daily-deep-health` (06:10 UTC — multi-page web_fetch sanity check)
+- **Verification (latest deploy in flight at write time)**:
+  - `npx tsc --noEmit` clean (multiple times during refactor)
+  - 12 active prompts, 11 active skills, 9 KB entries, 8 cockpit cron jobs
+  - End-to-end tool use confirmed: ticket triggered researcher → called `query_supabase_view('v_dq_open')` → returned data
+  - End-to-end meta-mode confirmed: researcher prompt v1 → v2 via chat approval (audit chain `meta_propose` → `meta_apply`)
+- **Branch**: `chore/cockpit-foundation` (production also fast-forwarded to main earlier today). Standing-deploy authority invoked.

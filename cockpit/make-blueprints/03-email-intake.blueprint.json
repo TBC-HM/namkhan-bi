@@ -1,0 +1,91 @@
+{
+  "name": "03 Email Intake → Cockpit Ticket (Cockpit)",
+  "flow": [
+    {
+      "id": 1,
+      "module": "google-email:TriggerWatchEmails",
+      "version": 2,
+      "parameters": {
+        "__IMTCONN__": "REPLACE_WITH_GMAIL_CONNECTION",
+        "folder": "INBOX",
+        "criteria": "all",
+        "markSeen": true,
+        "maxResults": 10
+      },
+      "mapper": {
+        "query": "to:(REPLACE_WITH_DEV_INTAKE_EMAIL) is:unread"
+      },
+      "metadata": {
+        "designer": { "x": 0, "y": 0, "name": "Gmail: watch dev intake inbox" }
+      }
+    },
+    {
+      "id": 2,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": false },
+      "mapper": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": [
+          { "name": "x-api-key", "value": "REPLACE_WITH_ANTHROPIC_API_KEY" },
+          { "name": "anthropic-version", "value": "2023-06-01" },
+          { "name": "Content-Type", "value": "application/json" }
+        ],
+        "bodyType": "raw",
+        "data": "{\"model\":\"claude-sonnet-4-6\",\"max_tokens\":600,\"system\":\"You are the IT Manager triaging an email request for a Next.js + Supabase app. Output ONLY a JSON object with shape: {\\\"arm\\\":\\\"health|dev|control|design|research|ops\\\",\\\"intent\\\":\\\"build|fix|investigate|decide|monitor|document\\\",\\\"urgency\\\":\\\"low|medium|high|critical\\\",\\\"summary\\\":\\\"1-2 sentences\\\",\\\"plan\\\":[\\\"step1\\\",\\\"step2\\\"]}.\",\"messages\":[{\"role\":\"user\",\"content\":\"Subject: {{1.subject}}\\n\\nFrom: {{1.from.address}}\\n\\nBody:\\n{{1.text}}\"}]}",
+        "parseResponse": true,
+        "contentType": "application/json"
+      },
+      "metadata": { "designer": { "x": 300, "y": 0, "name": "Anthropic: triage email" } }
+    },
+    {
+      "id": 3,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": false },
+      "mapper": {
+        "url": "https://kpenyneooigsyuuomgct.supabase.co/rest/v1/cockpit_tickets",
+        "method": "POST",
+        "headers": [
+          { "name": "apikey", "value": "REPLACE_WITH_SUPABASE_SERVICE_KEY" },
+          { "name": "Authorization", "value": "Bearer REPLACE_WITH_SUPABASE_SERVICE_KEY" },
+          { "name": "Content-Type", "value": "application/json" },
+          { "name": "Prefer", "value": "return=representation" }
+        ],
+        "bodyType": "raw",
+        "data": "{\"source\":\"email\",\"arm\":\"triaging\",\"intent\":\"triage\",\"status\":\"triaging\",\"email_subject\":\"{{1.subject}}\",\"email_body\":\"{{1.text}}\",\"parsed_summary\":\"{{2.content[].text}}\",\"notes\":\"{{2.content[].text}}\",\"iterations\":0}",
+        "parseResponse": true
+      },
+      "metadata": { "designer": { "x": 600, "y": 0, "name": "Supabase: insert cockpit_ticket" } }
+    },
+    {
+      "id": 4,
+      "module": "google-email:ActionSendEmail",
+      "version": 2,
+      "parameters": { "__IMTCONN__": "REPLACE_WITH_GMAIL_CONNECTION" },
+      "mapper": {
+        "to": "{{1.from.address}}",
+        "subject": "Re: {{1.subject}} — ticket #{{3[].id}} received",
+        "html": "<p>Thanks — your request was received as cockpit ticket <b>#{{3[].id}}</b>.</p><p>You'll get a follow-up when the IT department picks it up.</p><p>— Namkhan BI Cockpit</p>"
+      },
+      "metadata": { "designer": { "x": 900, "y": 0, "name": "Gmail: ack reply to sender" } }
+    }
+  ],
+  "metadata": {
+    "instant": false,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false,
+      "interval": 5
+    },
+    "designer": { "orphans": [] }
+  }
+}

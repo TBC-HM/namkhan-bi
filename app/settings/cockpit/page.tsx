@@ -34,7 +34,8 @@ interface IncidentRow {
 async function loadCockpit() {
   try {
     const sb = getSupabaseAdmin();
-    const [kpiRes, incRes] = await Promise.all([
+    const since24h = new Date(Date.now() - 86400_000).toISOString();
+    const [kpiRes, incRes, ticketsRes, agentRunsRes, agentsRes, kbRes] = await Promise.all([
       sb
         .from('cockpit_kpi_snapshots')
         .select('date, security_red, security_warn')
@@ -45,17 +46,48 @@ async function loadCockpit() {
         .select('id, severity, symptom, detected_at, resolved_at')
         .order('detected_at', { ascending: false })
         .limit(5),
+      sb
+        .from('cockpit_tickets')
+        .select('id, status')
+        .gte('created_at', since24h),
+      sb
+        .from('cockpit_audit_log')
+        .select('agent, success, cost_usd_milli')
+        .gte('created_at', since24h),
+      sb
+        .from('cockpit_agent_prompts')
+        .select('role', { count: 'exact', head: true })
+        .eq('active', true),
+      sb
+        .from('cockpit_knowledge_base')
+        .select('id', { count: 'exact', head: true })
+        .eq('active', true),
     ]);
+    const tickets = (ticketsRes.data ?? []) as { id: number; status: string }[];
+    const runs = (agentRunsRes.data ?? []) as { agent: string; success: boolean; cost_usd_milli: number | null }[];
+    const totalCostMilli = runs.reduce((s, r) => s + (r.cost_usd_milli ?? 0), 0);
     return {
       kpi: (kpiRes.data ?? []) as KpiRow[],
       incidents: (incRes.data ?? []) as IncidentRow[],
       err: kpiRes.error?.message || incRes.error?.message || null,
+      tickets24h: tickets.length,
+      ticketsAwaiting: tickets.filter((t) => ['awaits_user', 'new', 'triaging', 'triaged', 'working'].includes(t.status)).length,
+      runs24h: runs.length,
+      cost24hUsd: (totalCostMilli / 1000).toFixed(4),
+      agentCount: agentsRes.count ?? 0,
+      kbCount: kbRes.count ?? 0,
     };
   } catch (e) {
     return {
       kpi: [] as KpiRow[],
       incidents: [] as IncidentRow[],
       err: e instanceof Error ? e.message : 'unknown',
+      tickets24h: 0,
+      ticketsAwaiting: 0,
+      runs24h: 0,
+      cost24hUsd: '0.0000',
+      agentCount: 0,
+      kbCount: 0,
     };
   }
 }
@@ -64,7 +96,8 @@ const EMPTY = '—'; // em-dash
 
 export default async function CockpitSettingsPage() {
   const h = PILLAR_HEADER.settings;
-  const { kpi, incidents, err } = await loadCockpit();
+  const data = await loadCockpit();
+  const { kpi, incidents, err, tickets24h, ticketsAwaiting, runs24h, cost24hUsd, agentCount, kbCount } = data;
   const latest = kpi[0];
   const openIncidents = incidents.filter((i) => !i.resolved_at).length;
 
@@ -82,6 +115,13 @@ export default async function CockpitSettingsPage() {
       />
       <SubNav items={RAIL_SUBNAV.settings} />
       <div className="panel">
+        <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderLeft: '3px solid var(--brass)', borderRadius: 8, padding: '14px 18px', marginBottom: 18, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 'var(--t-xs)', color: 'var(--brass)', textTransform: 'uppercase', letterSpacing: 'var(--ls-extra)', fontWeight: 600 }}>Cockpit · live workspace</div>
+            <div style={{ fontSize: 'var(--t-md)', marginTop: 4 }}>This is the <em>status page</em>. The live chat-driven cockpit (where you talk to the IT Manager) is at <a href="/cockpit" style={{ color: 'var(--brass)' }}>/cockpit</a>.</div>
+          </div>
+          <a href="/cockpit" style={{ background: 'var(--brass)', color: 'white', padding: '8px 16px', borderRadius: 6, textDecoration: 'none', fontSize: 'var(--t-sm)', fontWeight: 600, whiteSpace: 'nowrap' }}>Open cockpit →</a>
+        </div>
         <PanelHero
           eyebrow="Settings · Cockpit"
           title="IT Department"
@@ -90,29 +130,29 @@ export default async function CockpitSettingsPage() {
           kpis={
             <>
               <KpiCard
-                label="Last audit"
-                value={latest?.date ?? EMPTY}
-                kind="text"
-                hint={kpi.length ? `${kpi.length} on file` : 'no data yet'}
+                label="Active agents"
+                value={agentCount}
+                hint={`${kbCount} knowledge entries`}
+                tone="neutral"
               />
               <KpiCard
-                label="Security red"
-                value={latest?.security_red ?? EMPTY}
-                hint="critical npm vulns"
-                tone={(latest?.security_red ?? 0) > 0 ? 'neg' : 'neutral'}
+                label="Tickets / 24h"
+                value={tickets24h}
+                hint={ticketsAwaiting > 0 ? `${ticketsAwaiting} awaiting` : 'queue clear'}
+                tone={ticketsAwaiting > 0 ? 'warn' : 'neutral'}
               />
               <KpiCard
-                label="Security warn"
-                value={latest?.security_warn ?? EMPTY}
-                hint="high + moderate"
-                tone={(latest?.security_warn ?? 0) > 3 ? 'warn' : 'neutral'}
+                label="Agent runs / 24h"
+                value={runs24h}
+                hint={`$${cost24hUsd} spend`}
+                tone="neutral"
               />
               <KpiCard
                 label="Open incidents"
                 value={openIncidents}
                 hint={
                   incidents.length
-                    ? `${incidents.length} tracked`
+                    ? `${incidents.length} tracked · last ${latest?.date ?? EMPTY}`
                     : 'logger pending'
                 }
                 tone={openIncidents > 0 ? 'warn' : 'neutral'}

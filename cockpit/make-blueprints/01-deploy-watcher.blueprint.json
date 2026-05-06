@@ -1,0 +1,174 @@
+{
+  "name": "01 Deploy Watcher (Cockpit)",
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": { "hook": null, "maxResults": 1 },
+      "mapper": {},
+      "metadata": {
+        "designer": { "x": 0, "y": 0, "name": "Webhook: vercel-deploy-event" },
+        "restore": { "parameters": { "hook": { "data": { "editable": "true" }, "label": "vercel-deploy-event" } } }
+      }
+    },
+    {
+      "id": 2,
+      "module": "builtin:BasicRouter",
+      "version": 1,
+      "mapper": null,
+      "metadata": { "designer": { "x": 300, "y": 0, "name": "Route by event type" } },
+      "routes": [
+        {
+          "flow": [
+            {
+              "id": 3,
+              "module": "builtin:BasicFilter",
+              "version": 1,
+              "filter": {
+                "name": "deployment.error",
+                "conditions": [[{ "a": "{{1.type}}", "b": "deployment.error", "o": "text:equal" }]]
+              }
+            },
+            {
+              "id": 4,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "parameters": { "handleErrors": false },
+              "mapper": {
+                "url": "https://api.vercel.com/v6/deployments?projectId=prj_be5AGzi7cB5HnkTEvOWTzUv3YCAl&target=production&limit=2&state=READY",
+                "method": "GET",
+                "headers": [
+                  { "name": "Authorization", "value": "Bearer REPLACE_WITH_VERCEL_TOKEN" },
+                  { "name": "Accept", "value": "application/json" }
+                ],
+                "parseResponse": true,
+                "contentType": "application/json"
+              },
+              "metadata": { "designer": { "x": 600, "y": -200, "name": "Vercel: list last 2 prod deploys" } }
+            },
+            {
+              "id": 5,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "parameters": { "handleErrors": false },
+              "mapper": {
+                "url": "https://api.vercel.com/v13/deployments/{{4.deployments[1].uid}}/promote?teamId=team_vKod3ZYFgteGCHsam7IG8tEb",
+                "method": "POST",
+                "headers": [
+                  { "name": "Authorization", "value": "Bearer REPLACE_WITH_VERCEL_TOKEN" },
+                  { "name": "Content-Type", "value": "application/json" }
+                ],
+                "bodyType": "raw",
+                "data": "{}",
+                "parseResponse": true
+              },
+              "metadata": { "designer": { "x": 900, "y": -200, "name": "Vercel: promote previous (auto-rollback)" } }
+            },
+            {
+              "id": 6,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "parameters": { "handleErrors": false },
+              "mapper": {
+                "url": "https://kpenyneooigsyuuomgct.supabase.co/rest/v1/cockpit_incidents",
+                "method": "POST",
+                "headers": [
+                  { "name": "apikey", "value": "REPLACE_WITH_SUPABASE_SERVICE_KEY" },
+                  { "name": "Authorization", "value": "Bearer REPLACE_WITH_SUPABASE_SERVICE_KEY" },
+                  { "name": "Content-Type", "value": "application/json" },
+                  { "name": "Prefer", "value": "return=minimal" }
+                ],
+                "bodyType": "raw",
+                "data": "{\"severity\":1,\"symptom\":\"deploy failed\",\"source\":\"vercel\",\"auto_resolved\":true,\"rollback_attempted\":true,\"fix\":\"auto-promoted previous deployment {{4.deployments[1].uid}}\",\"metadata\":{\"failed_deployment\":\"{{1.payload.deployment.id}}\",\"project\":\"{{1.payload.deployment.name}}\",\"error\":\"{{1.payload.deployment.errorMessage}}\"}}",
+                "parseResponse": false
+              },
+              "metadata": { "designer": { "x": 1200, "y": -200, "name": "Supabase: log incident (severity 1)" } }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 7,
+              "module": "builtin:BasicFilter",
+              "version": 1,
+              "filter": {
+                "name": "deployment.canceled",
+                "conditions": [[{ "a": "{{1.type}}", "b": "deployment.canceled", "o": "text:equal" }]]
+              }
+            },
+            {
+              "id": 8,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "parameters": { "handleErrors": false },
+              "mapper": {
+                "url": "https://kpenyneooigsyuuomgct.supabase.co/rest/v1/cockpit_incidents",
+                "method": "POST",
+                "headers": [
+                  { "name": "apikey", "value": "REPLACE_WITH_SUPABASE_SERVICE_KEY" },
+                  { "name": "Authorization", "value": "Bearer REPLACE_WITH_SUPABASE_SERVICE_KEY" },
+                  { "name": "Content-Type", "value": "application/json" },
+                  { "name": "Prefer", "value": "return=minimal" }
+                ],
+                "bodyType": "raw",
+                "data": "{\"severity\":3,\"symptom\":\"deploy canceled\",\"source\":\"vercel\",\"auto_resolved\":true,\"metadata\":{\"deployment\":\"{{1.payload.deployment.id}}\"}}",
+                "parseResponse": false
+              },
+              "metadata": { "designer": { "x": 600, "y": 0, "name": "Supabase: log canceled (severity 3)" } }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 9,
+              "module": "builtin:BasicFilter",
+              "version": 1,
+              "filter": {
+                "name": "deployment.succeeded",
+                "conditions": [[{ "a": "{{1.type}}", "b": "deployment.succeeded", "o": "text:equal" }]]
+              }
+            },
+            {
+              "id": 10,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "parameters": { "handleErrors": false },
+              "mapper": {
+                "url": "https://kpenyneooigsyuuomgct.supabase.co/rest/v1/cockpit_audit_log",
+                "method": "POST",
+                "headers": [
+                  { "name": "apikey", "value": "REPLACE_WITH_SUPABASE_SERVICE_KEY" },
+                  { "name": "Authorization", "value": "Bearer REPLACE_WITH_SUPABASE_SERVICE_KEY" },
+                  { "name": "Content-Type", "value": "application/json" },
+                  { "name": "Prefer", "value": "return=minimal" }
+                ],
+                "bodyType": "raw",
+                "data": "{\"agent\":\"vercel\",\"action\":\"deploy_succeeded\",\"target\":\"{{1.payload.deployment.url}}\",\"success\":true,\"metadata\":{\"deployment\":\"{{1.payload.deployment.id}}\",\"name\":\"{{1.payload.deployment.name}}\"}}",
+                "parseResponse": false
+              },
+              "metadata": { "designer": { "x": 600, "y": 200, "name": "Supabase: audit success" } }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false
+    },
+    "designer": { "orphans": [] }
+  }
+}

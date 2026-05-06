@@ -1,0 +1,116 @@
+{
+  "name": "05 Incident Logger (Cockpit)",
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": { "hook": null, "maxResults": 1 },
+      "mapper": {},
+      "metadata": {
+        "designer": { "x": 0, "y": 0, "name": "Webhook: incident-in" },
+        "restore": { "parameters": { "hook": { "data": { "editable": "true" }, "label": "incident-in" } } }
+      }
+    },
+    {
+      "id": 2,
+      "module": "builtin:SetVariables",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "variables": [
+          {
+            "name": "severity",
+            "value": "{{if(1.source = \"vercel_error_spike\"; 2; if(1.source = \"supabase_advisor_red\"; 2; if(1.source = \"dependency_high_vuln\"; 3; 4)))}}"
+          }
+        ],
+        "scope": "roundtrip"
+      },
+      "metadata": { "designer": { "x": 300, "y": 0, "name": "Map source → severity" } }
+    },
+    {
+      "id": 3,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": false },
+      "mapper": {
+        "url": "https://kpenyneooigsyuuomgct.supabase.co/rest/v1/cockpit_incidents",
+        "method": "POST",
+        "headers": [
+          { "name": "apikey", "value": "REPLACE_WITH_SUPABASE_SERVICE_KEY" },
+          { "name": "Authorization", "value": "Bearer REPLACE_WITH_SUPABASE_SERVICE_KEY" },
+          { "name": "Content-Type", "value": "application/json" },
+          { "name": "Prefer", "value": "return=representation" }
+        ],
+        "bodyType": "raw",
+        "data": "{\"severity\":{{2.severity}},\"symptom\":\"{{1.symptom}}\",\"source\":\"{{1.source}}\",\"metadata\":{{1}}}",
+        "parseResponse": true
+      },
+      "metadata": { "designer": { "x": 600, "y": 0, "name": "Supabase: insert cockpit_incident" } }
+    },
+    {
+      "id": 4,
+      "module": "builtin:BasicFilter",
+      "version": 1,
+      "filter": {
+        "name": "severity ≤ 2",
+        "conditions": [[{ "a": "{{2.severity}}", "b": "2", "o": "number:lessorequal" }]]
+      },
+      "metadata": { "designer": { "x": 900, "y": 0, "name": "Filter S1/S2 only" } }
+    },
+    {
+      "id": 5,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": false },
+      "mapper": {
+        "url": "https://api.github.com/repos/TBC-HM/namkhan-bi/issues",
+        "method": "POST",
+        "headers": [
+          { "name": "Authorization", "value": "Bearer REPLACE_WITH_GITHUB_PAT" },
+          { "name": "Accept", "value": "application/vnd.github+json" },
+          { "name": "Content-Type", "value": "application/json" }
+        ],
+        "bodyType": "raw",
+        "data": "{\"title\":\"🚨 [S{{2.severity}}] {{1.symptom}} ({{1.source}})\",\"body\":\"Auto-created from cockpit incident #{{3[].id}}\\n\\nSource: {{1.source}}\\nSymptom: {{1.symptom}}\\n\\nFull payload:\\n```json\\n{{1}}\\n```\",\"labels\":[\"incident\",\"auto-created\",\"severity-{{2.severity}}\"]}",
+        "parseResponse": true
+      },
+      "metadata": { "designer": { "x": 1200, "y": 0, "name": "GitHub: open issue" } }
+    },
+    {
+      "id": 6,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": false },
+      "mapper": {
+        "url": "https://kpenyneooigsyuuomgct.supabase.co/rest/v1/cockpit_incidents?id=eq.{{3[].id}}",
+        "method": "PATCH",
+        "headers": [
+          { "name": "apikey", "value": "REPLACE_WITH_SUPABASE_SERVICE_KEY" },
+          { "name": "Authorization", "value": "Bearer REPLACE_WITH_SUPABASE_SERVICE_KEY" },
+          { "name": "Content-Type", "value": "application/json" },
+          { "name": "Prefer", "value": "return=minimal" }
+        ],
+        "bodyType": "raw",
+        "data": "{\"notified_at\":\"{{formatDate(now;\\\"YYYY-MM-DDTHH:mm:ssZ\\\")}}\",\"metadata\":{\"github_issue_url\":\"{{5.html_url}}\"}}",
+        "parseResponse": false
+      },
+      "metadata": { "designer": { "x": 1500, "y": 0, "name": "Supabase: backfill issue URL" } }
+    }
+  ],
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false
+    },
+    "designer": { "orphans": [] }
+  }
+}

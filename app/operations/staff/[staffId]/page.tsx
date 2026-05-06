@@ -11,6 +11,8 @@ import { AttendanceCalendar } from '../_components/AttendanceCalendar';
 import { PayrollHistory } from '../_components/PayrollHistory';
 import { AvailabilityGrid } from '../_components/AvailabilityGrid';
 import { DqStrip } from '../_components/DqStrip';
+import CompBreakdown from '../_components/CompBreakdown';
+import YtdSummary from '../_components/YtdSummary';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -64,6 +66,7 @@ export type PayrollRow = {
   net_salary_lak: number;
   net_salary_usd: number;
   grand_total_usd: number;
+  fx_lak_usd?: number | null;
 };
 
 export type AttendanceRow = {
@@ -172,6 +175,16 @@ export default async function StaffDetailPage({
           sub={d.hire_date ?? 'Backfill required'}
         />
       </section>
+
+      {/* YTD summary */}
+      <Panel title="Year-to-date" sub="Earnings + days · auto-derived from payroll history.">
+        <YtdSummary rows={d.payroll_12m ?? []} lastPeriod={d.last_payroll_period} />
+      </Panel>
+
+      {/* Last-month comp breakdown */}
+      <Panel title="Compensation · last paid month" sub="Earnings + deductions for the most recent payroll row.">
+        <CompBreakdown row={(d.payroll_12m && d.payroll_12m[0]) || null} />
+      </Panel>
 
       {/* Two-column body */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

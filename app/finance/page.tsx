@@ -38,7 +38,25 @@ export default async function FinanceSnapshotPage({ searchParams }: Props) {
   const cur = periodsWithRev[0] || calCur;
   const prior = periodsWithRev[1] || priorPeriod(cur);
 
-  const [houseRows, deptCur] = await Promise.all([getUsaliHouse([cur, prior]), getUsaliDept([cur])]);
+  const [houseRows, deptCur, deptPrior] = await Promise.all([
+    getUsaliHouse([cur, prior]),
+    getUsaliDept([cur]),
+    getUsaliDept([prior]),
+  ]);
+
+  // MoM dept profit waterfall
+  const profMap = (rows: any[], p: string) => new Map(
+    rows.filter((r: any) => r.period_yyyymm === p)
+        .map((r: any) => [r.usali_department, Number(r.departmental_profit ?? 0)]),
+  );
+  const curProf = profMap(deptCur as any[], cur);
+  const priorProf = profMap(deptPrior as any[], prior);
+  const variances = Array.from(new Set([...curProf.keys(), ...priorProf.keys()]))
+    .map(d => ({ dept: d, delta: (curProf.get(d) ?? 0) - (priorProf.get(d) ?? 0) }))
+    .filter(v => Math.abs(v.delta) > 1)
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+    .slice(0, 6);
+  const maxAbsVar = Math.max(...variances.map(v => Math.abs(v.delta)), 1);
   const totalRev = incomeByPeriod.get(cur) ?? 0;
   const priorTotal = incomeByPeriod.get(prior) ?? 0;
   const monthDeltaPct = priorTotal ? ((totalRev - priorTotal) / priorTotal) * 100 : null;
@@ -72,6 +90,16 @@ export default async function FinanceSnapshotPage({ searchParams }: Props) {
       impact: 'Cash', impactSub: 'AR cleanup',
     });
   }
+  // Budget · Variance Agent — surface only when no budget data exists
+  cards.push({
+    pillar: 'fin' as const, pillarLabel: 'Finance · Budget', agentLabel: '· Variance Agent',
+    priority: 'med' as const, priorityLabel: 'Medium · setup',
+    headline: <>Budget data not yet provided.<br /><em>Variance tracking blocked.</em></>,
+    conclusion: <>Without an annual budget by USALI line, GOP / variance / pace-to-target cannot render. Owner action: provide CSV with monthly figures by USALI dept.</>,
+    verdict: [{ label: 'Effort · 1-2h' }, { label: 'Unblocks · 4 KPIs' }, { label: 'One-time' }],
+    primaryAction: 'Get template', secondaryAction: 'Schedule', tertiaryAction: 'Defer',
+    impact: '4 KPIs', impactSub: 'unlocked',
+  });
   if (ar6190 > 1000) {
     cards.push({
       pillar: 'fin' as const, pillarLabel: 'Finance · AR', agentLabel: '· Collections',
@@ -120,6 +148,28 @@ export default async function FinanceSnapshotPage({ searchParams }: Props) {
         <KpiBox value={netEarnings ?? null} unit="usd" label={`Net · ${cur}`} state={netEarnings == null ? 'data-needed' : 'live'} />
         <KpiBox value={ar90Plus} unit="usd" label="AR 90+" />
       </div>
+      {variances.length > 0 && (
+        <div style={{ marginTop: 18 }}>
+          <SectionHead title="Top variances" emphasis="MoM dept profit" sub={`${cur} vs ${prior} · departmental_profit per v_usali_dept_summary`} source="gl.v_usali_dept_summary" />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 12, background: 'var(--paper-pure)', border: '1px solid var(--line-soft)', borderRadius: 4 }}>
+            {variances.map(v => {
+              const pct = (Math.abs(v.delta) / maxAbsVar) * 100;
+              const pos = v.delta >= 0;
+              return (
+                <div key={v.dept} style={{ display: 'grid', gridTemplateColumns: '160px 1fr 100px', gap: 12, alignItems: 'center', fontSize: 13 }}>
+                  <div style={{ color: 'var(--ink)' }}>{v.dept}</div>
+                  <div style={{ height: 8, background: 'var(--surf-2)', borderRadius: 2, overflow: 'hidden' }}>
+                    <div style={{ width: `${pct.toFixed(0)}%`, height: '100%', background: pos ? 'var(--st-good)' : 'var(--st-bad)' }} />
+                  </div>
+                  <div style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: pos ? 'var(--st-good)' : 'var(--st-bad)' }}>
+                    {pos ? '+' : '−'}${(Math.abs(v.delta) / 1000).toFixed(1)}k
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       {cards.length > 0 && (
         <div style={{ marginTop: 18 }}>
           <SectionHead title="Reconciliations" emphasis="awaiting attention" sub={`${cards.length} card${cards.length === 1 ? '' : 's'}`} />
