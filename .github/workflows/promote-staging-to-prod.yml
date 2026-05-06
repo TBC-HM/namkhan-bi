@@ -1,0 +1,136 @@
+# .github/workflows/promote-staging-to-prod.yml
+#
+# PROMOTION PIPELINE — staging → main → prod
+#
+# Trigger: manual (workflow_dispatch) or cockpit "Promote" button (REST POST).
+# Flow:
+#   1. Checkout `staging` branch
+#   2. Type-check + build (must pass)
+#   3. Smoke test against namkhan-bi-staging.vercel.app
+#   4. Verify Supabase backup is < 24h old (calls Part 6 deploy workflow)
+#   5. Fast-forward merge staging → main (no force push)
+#   6. Push main → triggers `deploy-prod.yml` (Part 6)
+#
+# Author: PBS via Claude (Cowork) · 2026-05-06
+
+name: Promote staging → prod
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Why is this promotion happening (1-line, required for audit)"
+        required: true
+        type: string
+      skip_smoke_test:
+        description: "Skip staging smoke test (NOT recommended)"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout staging
+        uses: actions/checkout@v4
+        with:
+          ref: staging
+          fetch-depth: 0
+          token: ${{ secrets.PROMOTE_PAT }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npx next build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+
+      - name: Smoke test staging
+        if: ${{ github.event.inputs.skip_smoke_test != 'true' }}
+        run: |
+          set -e
+          STAGING_URL="https://namkhan-bi-staging.vercel.app"
+          for path in "/" "/cockpit" "/api/cockpit/team" "/overview"; do
+            echo "GET $STAGING_URL$path"
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$STAGING_URL$path?bust=$RANDOM")
+            if [ "$STATUS" != "200" ] && [ "$STATUS" != "401" ]; then
+              echo "FAIL: $path returned $STATUS"
+              exit 1
+            fi
+            echo "  → $STATUS"
+          done
+
+      - name: Verify recent Supabase backup (< 24h)
+        run: |
+          set -e
+          # Calls cockpit endpoint that returns last successful backup timestamp.
+          # Fails the job if last backup > 24h ago.
+          LAST_BACKUP=$(curl -s "https://namkhan-bi.vercel.app/api/cockpit/backup/status" \
+            -H "Authorization: Bearer ${{ secrets.COCKPIT_AGENT_TOKEN }}" \
+            | jq -r '.last_success_at // empty')
+          if [ -z "$LAST_BACKUP" ]; then
+            echo "No backup status returned — endpoint or auth issue"
+            exit 1
+          fi
+          AGE_HOURS=$(( ( $(date -u +%s) - $(date -u -d "$LAST_BACKUP" +%s) ) / 3600 ))
+          echo "Last backup: $LAST_BACKUP ($AGE_HOURS hours ago)"
+          if [ $AGE_HOURS -gt 24 ]; then
+            echo "FAIL: backup is $AGE_HOURS hours old (threshold: 24)"
+            exit 1
+          fi
+
+      - name: Fast-forward merge staging → main
+        run: |
+          set -e
+          git config user.name "cockpit-bot"
+          git config user.email "cockpit@thenamkhan.com"
+          git fetch origin main
+          git checkout main
+          # Refuse if main has commits staging doesn't have (would need rebase, not FF)
+          if ! git merge --ff-only staging; then
+            echo "FAIL: main has diverged from staging — manual rebase required"
+            exit 1
+          fi
+          git push origin main
+
+      - name: Log promotion to cockpit
+        run: |
+          curl -X POST "https://namkhan-bi.vercel.app/api/cockpit/audit-log" \
+            -H "Authorization: Bearer ${{ secrets.COCKPIT_AGENT_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"agent\": \"promote-workflow\",
+              \"action\": \"promote_staging_to_prod\",
+              \"target\": \"main\",
+              \"success\": true,
+              \"metadata\": {
+                \"reason\": \"${{ github.event.inputs.reason }}\",
+                \"actor\": \"${{ github.actor }}\",
+                \"workflow_run\": \"${{ github.run_id }}\"
+              }
+            }"
+
+      - name: Trigger prod deploy
+        run: |
+          curl -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.PROMOTE_PAT }}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/deploy-prod.yml/dispatches" \
+            -d '{"ref":"main","inputs":{"trigger":"promotion","run_id":"${{ github.run_id }}"}}'
