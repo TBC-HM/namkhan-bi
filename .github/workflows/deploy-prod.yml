@@ -63,11 +63,9 @@ jobs:
       - name: Type-check
         run: npx tsc --noEmit
 
-      - name: Build (smoke)
-        run: npx next build
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      # Smoke build removed — `vercel build` in the deploy job below uses
+      # Vercel-side env vars (incl. SUPABASE_SERVICE_ROLE_KEY which we cannot
+      # safely expose as a GH Actions secret). tsc alone is the syntactic gate.
 
       - name: Trigger Supabase pre-deploy backup
         id: backup
