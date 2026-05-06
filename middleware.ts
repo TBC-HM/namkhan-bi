@@ -52,13 +52,16 @@ function notFound() {
 export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
 
-  // Bypasses
+  // OPEN MODE — auth gate disabled per PBS 2026-05-07 "dnt waste time is a
+  // page withut nbrs". Single-user system. Re-enable by setting
+  // COCKPIT_AUTH_GATE=on in env.
+  const gateOn = process.env.COCKPIT_AUTH_GATE === "on";
+  if (!gateOn) return NextResponse.next();
+
+  // Bypasses (only consulted if gate is on)
   if (path.startsWith("/api/cockpit/webhooks/")) return NextResponse.next();
   if (path.startsWith("/api/cockpit/agent/run")) return NextResponse.next();
   if (path.startsWith("/api/cockpit/auth/redeem")) return NextResponse.next();
-  // Routes that accept Bearer COCKPIT_AGENT_TOKEN (workflows + smoke tests)
-  // self-check inside the route. Middleware bypass lets the auth header
-  // through unmolested.
   if (path.startsWith("/api/cockpit/audit-log") ||
       path.startsWith("/api/cockpit/backup/status") ||
       path.startsWith("/api/cockpit/deploy/rollback") ||
@@ -76,7 +79,6 @@ export async function middleware(req: NextRequest) {
   }
 
   if (!user) {
-    // No valid session
     if (path.startsWith("/api/")) return notFound();
     const url = req.nextUrl.clone();
     url.pathname = "/login";
@@ -84,12 +86,10 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Owner-only paths
   if (path.startsWith("/cockpit/users")) {
     if (!user.is_owner) return notFound();
   }
 
-  // Department-gated paths
   for (const { prefix, flag } of DEPT_PREFIXES) {
     if (path.startsWith(prefix)) {
       const allowed = user.is_owner || (user as Record<string, unknown>)[flag];

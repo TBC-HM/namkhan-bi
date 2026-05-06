@@ -489,9 +489,10 @@ function renderTriageMarkdown(t: Triage, originalMessage: string): string {
 }
 
 function isAuthorized(req: Request): boolean {
-  // Either valid workspace_session cookie OR Bearer COCKPIT_AGENT_TOKEN.
+  // OPEN MODE — auth gate disabled per PBS. Re-enable with COCKPIT_AUTH_GATE=on.
+  if (process.env.COCKPIT_AUTH_GATE !== "on") return true;
   const cookie = req.headers.get("cookie") ?? "";
-  if (/workspace_session=/.test(cookie)) return true; // middleware would already enforce, but allow self-pass for tests
+  if (/workspace_session=/.test(cookie)) return true;
   const auth = req.headers.get("authorization") ?? "";
   const expected = process.env.COCKPIT_AGENT_TOKEN;
   if (expected && auth === `Bearer ${expected}`) return true;
