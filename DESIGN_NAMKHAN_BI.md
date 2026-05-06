@@ -2106,3 +2106,24 @@ Three stacked fixes addressing "give me the paragraph not the doc" + "answer my 
   - End-to-end tool use confirmed: ticket triggered researcher → called `query_supabase_view('v_dq_open')` → returned data
   - End-to-end meta-mode confirmed: researcher prompt v1 → v2 via chat approval (audit chain `meta_propose` → `meta_apply`)
 - **Branch**: `chore/cockpit-foundation` (production also fast-forwarded to main earlier today). Standing-deploy authority invoked.
+
+### 2026-05-06 — Phase 3 Engine Stage 1 token reconciliation (Option 3 selected)
+
+**PBS picked Option 3 (Cowork autonomous default):** Two design systems explicitly documented + clear front-of-house / back-of-house split.
+
+**Cockpit theme — back-of-house** (this doc, current canonical, unchanged):
+- Brass accents, Fraunces serif italic for KPI values, mono uppercase letterspaced headers
+- `--bg-0`, `--bg-1`, `--bg-2`, `--brass`, `--text-0..3`, `--border` etc.
+- Used at: `/cockpit/*`, `/settings/*`, all 23 existing dashboard pages
+
+**Workspace theme — front-of-house Engine** (new, scoped to `/revenue`, `/sales`, etc.):
+- Dark premium, warm gold accent, Cooper-style serif fallback
+- `--bg: #0a0a0b`, `--panel: #15151a`, `--accent: #c79a6b`
+- `--serif: "Cooper", "Source Serif Pro", Georgia, serif`
+- Engine-specific tokens defined in `app/(engine)/_layout.tsx` scoped CSS — never leaks into cockpit
+- Same hard rules apply: $ for USD, ₭ for LAK, ISO dates, em-dash empty cells, true minus for negatives
+
+**Routing convention:** any page under `/cockpit/*` or `/settings/*` uses Cockpit theme. Any page under `/revenue`, `/sales`, `/marketing`, `/operations`, `/finance` (the Engine front-of-house) uses Workspace theme.
+
+**Why Option 3:** preserves both design intents, no reskin work needed, gives users a psychological cue (front-stage = premium dark, back-stage = brass functional). Long-term cost = 2 systems to maintain — accepted.
+

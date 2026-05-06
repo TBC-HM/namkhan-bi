@@ -718,8 +718,47 @@ async function list_team_members(args: { include_archived?: boolean }): Promise<
   };
 }
 
+// Architect hard-precondition check (ZIP 3 founder interview).
+async function check_founder_brief(args: { dept?: string }): Promise<ToolResult> {
+  const { count, error } = await supabase
+    .from("cockpit_knowledge_base")
+    .select("id", { count: "exact", head: true })
+    .like("topic", "architect_brief_%")
+    .eq("active", true);
+  if (error) return { ok: false, error: `cockpit_knowledge_base: ${error.message}` };
+  const c = count ?? 0;
+  const expected = 47;
+  return {
+    ok: true,
+    result: {
+      brief_rows_present: c,
+      brief_rows_expected: expected,
+      halt: c < expected,
+      reason: c < expected
+        ? `founder_interview_incomplete (${c}/${expected} architect_brief_* rows)`
+        : "ok",
+      dept_checked: args.dept ?? null,
+    },
+  };
+}
+
+// propose_department — read-only stub. Architect emits the proposal in JSON output;
+// this skill exists so the prompt can claim the capability without DB writes.
+async function propose_department(args: Record<string, unknown>): Promise<ToolResult> {
+  return {
+    ok: true,
+    result: {
+      action: "noop",
+      message: "propose_department is read-only. Embed the proposal in your JSON output (department_proposal field). Cowork executes via apply_migration after PBS approves.",
+      received: args,
+    },
+  };
+}
+
 const HANDLERS: Record<string, (args: Record<string, unknown>) => Promise<ToolResult>> = {
   list_team_members: (a) => list_team_members(a as Parameters<typeof list_team_members>[0]),
+  check_founder_brief: (a) => check_founder_brief(a as Parameters<typeof check_founder_brief>[0]),
+  propose_department: (a) => propose_department(a),
   query_supabase_view: (a) => query_supabase_view(a as Parameters<typeof query_supabase_view>[0]),
   read_audit_log: (a) => read_audit_log(a as Parameters<typeof read_audit_log>[0]),
   read_design_doc: (a) => read_design_doc(a as Parameters<typeof read_design_doc>[0]),
