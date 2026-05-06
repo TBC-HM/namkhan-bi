@@ -23,7 +23,7 @@ import { createClient } from "@supabase/supabase-js";
 import { loadSkillsForRole, dispatchSkill, dispatchSkillGated, type AgentToolDef } from "@/lib/cockpit-tools";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;  // Vercel Pro max — long-task survival per it_only_window_v2 4.4
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 export const revalidate = 0;
