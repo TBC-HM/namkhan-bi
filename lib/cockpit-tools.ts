@@ -598,6 +598,61 @@ async function read_knowledge_base(args: { topic?: string; scope?: string; limit
   return { ok: true, result: data ?? [] };
 }
 
+async function read_knowledge_base_semantic(args: {
+  query?: string;
+  limit?: number;
+  scope?: string;
+  min_similarity?: number;
+}): Promise<ToolResult> {
+  const query = (args.query ?? "").toString().trim();
+  if (!query) return { ok: false, error: "query required" };
+  const limit = Math.min(Math.max(args.limit ?? 5, 1), 20);
+  const minSim = typeof args.min_similarity === "number" ? args.min_similarity : 0.5;
+  const scope = args.scope ?? null;
+
+  // 1. Embed the query via the embed-kb edge function (gte-small, 384-dim).
+  const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supaKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  const embRes = await fetch(`${supaUrl}/functions/v1/embed-kb`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${supaKey}`,
+    },
+    body: JSON.stringify({ mode: "embed_query", query }),
+  });
+  if (!embRes.ok) {
+    return { ok: false, error: `embed-kb ${embRes.status}: ${await embRes.text().then((t) => t.slice(0, 200))}` };
+  }
+  const embJson = (await embRes.json()) as { embedding?: number[]; error?: string };
+  if (!embJson.embedding) {
+    return { ok: false, error: `embed failed: ${embJson.error ?? "no embedding returned"}` };
+  }
+
+  // 2. Call the SQL semantic search function with the query vector.
+  // Pass the vector as a Postgres array literal string — pgvector accepts the
+  // `[a,b,c]` text form when cast to vector.
+  const vecLiteral = `[${embJson.embedding.join(",")}]`;
+  const { data, error } = await supabase.rpc("read_knowledge_base_semantic", {
+    p_query_embedding: vecLiteral,
+    p_limit: limit,
+    p_scope: scope,
+    p_min_similarity: minSim,
+  });
+  if (error) return { ok: false, error: error.message };
+  return {
+    ok: true,
+    result: {
+      query,
+      limit,
+      scope,
+      min_similarity: minSim,
+      hits: data ?? [],
+      model: "gte-small",
+    },
+  };
+}
+
 async function add_knowledge_base_entry(args: {
   topic?: string;
   key_fact?: string;
@@ -865,6 +920,7 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => Promise<ToolRe
   read_github_issue: (a) => read_github_issue(a as Parameters<typeof read_github_issue>[0]),
   web_fetch: (a) => web_fetch(a as Parameters<typeof web_fetch>[0]),
   read_knowledge_base: (a) => read_knowledge_base(a as Parameters<typeof read_knowledge_base>[0]),
+  read_knowledge_base_semantic: (a) => read_knowledge_base_semantic(a as Parameters<typeof read_knowledge_base_semantic>[0]),
   add_knowledge_base_entry: (a) => add_knowledge_base_entry(a as Parameters<typeof add_knowledge_base_entry>[0]),
   create_department: (a) => create_department(a as Parameters<typeof create_department>[0]),
   read_property_settings: (a) => read_property_settings(a as Parameters<typeof read_property_settings>[0]),
