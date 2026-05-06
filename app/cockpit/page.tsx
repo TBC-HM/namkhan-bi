@@ -437,20 +437,84 @@ function extractJsonBlocks(md: string): { jsons: unknown[]; stripped: string } {
 }
 
 // Build a clean human-readable markdown summary from agent JSON output.
-// Preference order: summary_markdown (agent's own render) → known fields
-// (BRIEFING, plan, blocking_questions, …) → raw JSON bullets.
+// Preference order:
+//   1. summary_markdown (agent's own pre-rendered output — Olive v3, Felix v2 etc.)
+//   2. Known structured fields (next_action, plan, findings, team_roster_if_relevant, …)
+//   3. Recursive walk of nested objects (BRIEFING, table arrays, …) — last resort
+//      so older agents (Olive v2 / pre-summary_markdown) still render readably.
+function walkObjectAsMarkdown(o: Record<string, unknown>, depth = 0): string {
+  // Skip noise keys + already-handled keys
+  const SKIP = new Set([
+    "mode", "owner", "deps", "estimated_minutes", "needs_human_decision",
+    "interpretations_if_ambiguous", "blocking_questions", "next_action",
+    "summary", "summary_markdown", "plan", "findings", "team_roster_if_relevant",
+    "recommendation", "result_summary", "tasks", "critical_path", "parallel_safe",
+    "rollout_plan", "__skill_calls",
+  ]);
+  const lines: string[] = [];
+  for (const [k, v] of Object.entries(o)) {
+    if (SKIP.has(k)) continue;
+    const heading = depth === 0 ? `### ${k}` : `**${k}**`;
+    if (Array.isArray(v)) {
+      if (v.length === 0) continue;
+      // Array of objects with consistent shape → markdown table
+      const allObjs = v.every((x) => x && typeof x === "object" && !Array.isArray(x));
+      if (allObjs && v.length > 1) {
+        const cols = Array.from(new Set(v.flatMap((x) => Object.keys(x as object))));
+        if (cols.length > 0 && cols.length <= 6) {
+          lines.push(heading);
+          lines.push("| " + cols.join(" | ") + " |");
+          lines.push("| " + cols.map(() => "---").join(" | ") + " |");
+          for (const row of v as Array<Record<string, unknown>>) {
+            lines.push("| " + cols.map((c) => {
+              const cell = row[c];
+              if (cell === null || cell === undefined) return "—";
+              return typeof cell === "string" ? cell : JSON.stringify(cell);
+            }).join(" | ") + " |");
+          }
+          continue;
+        }
+      }
+      lines.push(heading);
+      for (const item of v) {
+        if (item && typeof item === "object") {
+          lines.push("- " + JSON.stringify(item));
+        } else {
+          lines.push(`- ${item}`);
+        }
+      }
+    } else if (v && typeof v === "object") {
+      lines.push(heading);
+      lines.push(walkObjectAsMarkdown(v as Record<string, unknown>, depth + 1));
+    } else if (v !== null && v !== undefined && v !== "") {
+      lines.push(`**${k}:** ${v}`);
+    }
+  }
+  return lines.join("\n\n");
+}
+
 function agentJsonToMarkdown(j: unknown): string {
   if (!j || typeof j !== "object") return "";
   const o = j as Record<string, unknown>;
+  // 1. Agent-supplied pre-rendered markdown wins
   if (typeof o.summary_markdown === "string" && o.summary_markdown.trim().length > 0) {
     return o.summary_markdown.trim();
   }
+  // 2. Known structured fields
   const lines: string[] = [];
   if (typeof o.next_action === "string") lines.push(`**Next:** ${o.next_action}`);
   if (typeof o.summary === "string") lines.push(o.summary);
   if (Array.isArray(o.plan) && o.plan.length > 0) {
     lines.push("**Plan**");
     o.plan.forEach((p) => lines.push(`- ${typeof p === "string" ? p : JSON.stringify(p)}`));
+  }
+  if (Array.isArray(o.tasks) && o.tasks.length > 0) {
+    lines.push("**Tasks**");
+    lines.push("| # | Owner | Title | Est. min |");
+    lines.push("|---|---|---|---|");
+    (o.tasks as Array<Record<string, unknown>>).forEach((t, i) =>
+      lines.push(`| ${t.order ?? i + 1} | ${t.owner ?? "—"} | ${t.title ?? "—"} | ${t.estimated_minutes ?? "—"} |`)
+    );
   }
   if (Array.isArray(o.findings) && o.findings.length > 0) {
     lines.push("**Findings**");
@@ -470,6 +534,17 @@ function agentJsonToMarkdown(j: unknown): string {
   }
   if (typeof o.recommendation === "string") lines.push(`**Recommendation:** ${o.recommendation}`);
   if (typeof o.result_summary === "string") lines.push(o.result_summary);
+  if (typeof o.rollout_plan === "string") lines.push(`**Rollout:** ${o.rollout_plan}`);
+  // 3. If nothing structured matched, walk the rest of the object (handles legacy
+  // BRIEFING-style payloads from Olive v2 ticket #25 etc.)
+  if (lines.length === 0) {
+    const walked = walkObjectAsMarkdown(o, 0);
+    if (walked.trim().length > 0) return walked;
+  } else {
+    // Append any unhandled keys at the bottom (don't repeat known ones)
+    const walked = walkObjectAsMarkdown(o, 0);
+    if (walked.trim().length > 0) lines.push(walked);
+  }
   return lines.join("\n\n");
 }
 
@@ -502,8 +577,19 @@ function ChatTab() {
       .channel("cockpit_tickets_realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "cockpit_tickets" }, () => loadTickets())
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    // Belt-and-braces poll every 15s in case realtime drops (Bug 3 — DB and UI got out of sync)
+    const poll = setInterval(loadTickets, 15_000);
+    return () => { supabase.removeChannel(channel); clearInterval(poll); };
   }, [loadTickets]);
+
+  // Keep activeTicket in sync with the latest list (status updates from agents arrive after selection)
+  useEffect(() => {
+    if (!activeTicket) return;
+    const fresh = tickets.find((t) => t.id === activeTicket.id);
+    if (fresh && (fresh.status !== activeTicket.status || fresh.parsed_summary !== activeTicket.parsed_summary)) {
+      setActiveTicket(fresh);
+    }
+  }, [tickets, activeTicket]);
 
   useEffect(() => { listEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [tickets]);
 
@@ -593,7 +679,10 @@ function ChatTab() {
       <div className="chat-list">
         <div className="chat-list-header">
           <span>Tickets</span>
-          <button onClick={requestMagicLink} className="chat-magic-btn" title="Get a 10-min QR code to log in on phone">📱</button>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={loadTickets} className="chat-magic-btn" title="Refresh ticket list">🔄</button>
+            <button onClick={requestMagicLink} className="chat-magic-btn" title="Get a 10-min QR code to log in on phone">📱</button>
+          </div>
         </div>
         <div className="chat-filters">
           {(["open", "waiting", "done", "failed", "all"] as Filter[]).map((f) => {
