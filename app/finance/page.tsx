@@ -1,31 +1,29 @@
-// app/finance/page.tsx
-// Finance · Snapshot — period-aware (?win=, ?cmp=, ?seg=).
-
-import PanelHero from '@/components/sections/PanelHero';
-import KpiCard from '@/components/kpi/KpiCard';
+// app/finance/page.tsx — REDESIGN 2026-05-05 (recovery)
+import PageHeader from '@/components/layout/PageHeader';
+import KpiBox from '@/components/kpi/KpiBox';
+import StatusPill from '@/components/ui/StatusPill';
 import ActionCard, { ActionStack } from '@/components/sections/ActionCard';
 import { getAgedAr } from '@/lib/data';
 import { resolvePeriod } from '@/lib/period';
 import { fmtMoney } from '@/lib/format';
 import { getPlSectionsAll, getUsaliHouse, getUsaliDept, currentPeriod, pickPeriod } from './_data';
 import { priorPeriod } from '@/lib/supabase-gl';
+import {
+  FinanceStatusHeader, StatusCell, SectionHead,
+  metaSm, metaStrong, metaDim,
+} from './_components/FinanceShell';
+import FinanceTrendChart from './_components/FinanceTrendChart';
+import AgedArChart from './_components/AgedArChart';
+import DeptMixChart from './_components/DeptMixChart';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
 
-interface Props {
-  searchParams: Record<string, string | string[] | undefined>;
-}
+interface Props { searchParams: Record<string, string | string[] | undefined>; }
 
 export default async function FinanceSnapshotPage({ searchParams }: Props) {
   const period = resolvePeriod(searchParams);
-
-  // First pull every period of pl_section_monthly so we can locate the latest
-  // CLOSED month (calendar-current month often has $0 — audit fix 2026-05-03).
-  const [plAll, aged] = await Promise.all([
-    getPlSectionsAll(),
-    getAgedAr().catch(() => []),
-  ]);
+  const [plAll, aged] = await Promise.all([getPlSectionsAll(), getAgedAr().catch(() => [])]);
 
   const incomeByPeriod = new Map<string, number>();
   const netByPeriod = new Map<string, number>();
@@ -35,161 +33,100 @@ export default async function FinanceSnapshotPage({ searchParams }: Props) {
   }
   const calCur = currentPeriod();
   const periodsWithRev = Array.from(incomeByPeriod.entries())
-    .filter(([k, v]) => v >= 1000 && k !== calCur) // skip in-progress month + stray pennies
-    .map(([k]) => k)
-    .sort()
-    .reverse();
+    .filter(([k, v]) => v >= 1000 && k !== calCur)
+    .map(([k]) => k).sort().reverse();
   const cur = periodsWithRev[0] || calCur;
   const prior = periodsWithRev[1] || priorPeriod(cur);
 
-  const [houseRows, deptCur] = await Promise.all([
-    getUsaliHouse([cur, prior]),
-    getUsaliDept([cur]),
-  ]);
-
+  const [houseRows, deptCur] = await Promise.all([getUsaliHouse([cur, prior]), getUsaliDept([cur])]);
   const totalRev = incomeByPeriod.get(cur) ?? 0;
   const priorTotal = incomeByPeriod.get(prior) ?? 0;
-  const monthDelta = priorTotal ? ((totalRev - priorTotal) / priorTotal) * 100 : 0;
+  const monthDeltaPct = priorTotal ? ((totalRev - priorTotal) / priorTotal) * 100 : null;
   const netEarnings = netByPeriod.get(cur);
   const houseCur = pickPeriod(houseRows, cur);
   const gop = houseCur?.gop ?? null;
-
   const totalAr = aged.reduce((s: number, r: any) => s + Number(r.open_balance || 0), 0);
-  const ar90Plus = aged
-    .filter((r: any) => r.bucket === '90_plus')
-    .reduce((s: number, r: any) => s + Number(r.open_balance || 0), 0);
-  const ar6190 = aged
-    .filter((r: any) => r.bucket === '61_90')
-    .reduce((s: number, r: any) => s + Number(r.open_balance || 0), 0);
+  const ar90Plus = aged.filter((r: any) => r.bucket === '90_plus').reduce((s: number, r: any) => s + Number(r.open_balance || 0), 0);
+  const ar6190 = aged.filter((r: any) => r.bucket === '61_90').reduce((s: number, r: any) => s + Number(r.open_balance || 0), 0);
 
-  // For trend label
-  const months = Array.from(incomeByPeriod.keys()).sort();
-  const latestMonth = months[months.length - 1] || cur;
+  const periods = Array.from(new Set([...incomeByPeriod.keys(), ...netByPeriod.keys()])).sort();
+  const trendRows = periods.map((p) => ({
+    period: p,
+    income: incomeByPeriod.get(p) ?? 0,
+    net: netByPeriod.has(p) ? Number(netByPeriod.get(p)) : null,
+    gop: null as number | null,
+  }));
+
+  const closedMonths = periodsWithRev.length;
+  const arHealth = ar90Plus > 0 ? 'expired' : ar6190 > 0 ? 'pending' : 'active';
 
   const cards: any[] = [];
-
   if (ar90Plus > 0) {
     cards.push({
-      pillar: 'fin' as const,
-      pillarLabel: 'Finance · AR',
-      agentLabel: '· Collections Agent',
-      priority: 'high' as const,
-      priorityLabel: 'High priority · cash',
-      headline: <>{fmtMoney(ar90Plus, 'USD')} stuck <em>past 90 days</em>.<br />Likely write-off territory.</>,
-      conclusion: <>
-        Reservations with open balance over 90 days have <strong>~50% recovery rate</strong>.
-        Owner action: review each line, escalate commercial accounts to legal letter, write off
-        uncollectibles.
-      </>,
-      verdict: [
-        { label: `90+ · ${fmtMoney(ar90Plus, 'USD')}`, tone: 'bad' as const },
-        { label: `Total AR · ${fmtMoney(totalAr, 'USD')}` },
-        { label: 'Recovery · ~50%' },
-      ],
-      primaryAction: 'Review aging',
-      secondaryAction: 'Send letters',
-      tertiaryAction: 'Defer',
-      impact: 'Cash',
-      impactSub: 'AR cleanup',
+      pillar: 'fin' as const, pillarLabel: 'Finance · AR', agentLabel: '· Collections',
+      priority: 'high' as const, priorityLabel: 'High · cash',
+      headline: <>{fmtMoney(ar90Plus, 'USD')} stuck <em>past 90 days</em>.</>,
+      conclusion: <>Reservations with open balance over 90 days have ~50% recovery rate. Review each line.</>,
+      verdict: [{ label: `90+ · ${fmtMoney(ar90Plus, 'USD')}`, tone: 'bad' as const }, { label: `Total · ${fmtMoney(totalAr, 'USD')}` }],
+      primaryAction: 'Review aging', secondaryAction: 'Send letters', tertiaryAction: 'Defer',
+      impact: 'Cash', impactSub: 'AR cleanup',
     });
   }
-
-  cards.push({
-    pillar: 'fin' as const,
-    pillarLabel: 'Finance · Budget',
-    agentLabel: '· Variance Agent',
-    priority: 'med' as const,
-    priorityLabel: 'Medium · setup',
-    headline: <>Budget data <em>not yet provided</em>.<br />Variance tracking blocked.</>,
-    conclusion: <>
-      Without an annual budget by USALI line, GOP / variance / pace-to-target cannot render.
-      Owner action: provide CSV with monthly figures by USALI dept.
-    </>,
-    verdict: [
-      { label: 'Effort · 1-2h', tone: 'good' as const },
-      { label: 'Unblocks · 4 KPIs' },
-      { label: 'One-time' },
-    ],
-    primaryAction: 'Get template',
-    secondaryAction: 'Schedule',
-    tertiaryAction: 'Defer',
-    impact: '4 KPIs',
-    impactSub: 'unlocked',
-  });
-
   if (ar6190 > 1000) {
     cards.push({
-      pillar: 'fin' as const,
-      pillarLabel: 'Finance · AR',
-      agentLabel: '· Collections Agent',
-      priority: 'med' as const,
-      priorityLabel: 'Medium · escalating',
-      headline: <>{fmtMoney(ar6190, 'USD')} in <em>61-90 day bucket</em>.<br />Send second reminder.</>,
-      conclusion: <>
-        At risk of escalating to 90+. Send second reminder at 60d, third at 75d, escalate to legal at 90d+.
-      </>,
-      verdict: [
-        { label: `61-90 · ${fmtMoney(ar6190, 'USD')}`, tone: 'warn' as const },
-        { label: 'Window · 30d to 90+' },
-      ],
-      primaryAction: 'Send reminders',
-      secondaryAction: 'Review',
-      tertiaryAction: 'Defer',
-      impact: 'Prevention',
-      impactSub: 'before 90+',
+      pillar: 'fin' as const, pillarLabel: 'Finance · AR', agentLabel: '· Collections',
+      priority: 'med' as const, priorityLabel: 'Medium · escalating',
+      headline: <>{fmtMoney(ar6190, 'USD')} in <em>61-90 day bucket</em>.</>,
+      conclusion: <>At risk of escalating to 90+. Send second reminder.</>,
+      verdict: [{ label: `61-90 · ${fmtMoney(ar6190, 'USD')}`, tone: 'warn' as const }],
+      primaryAction: 'Send reminders', secondaryAction: 'Review', tertiaryAction: 'Defer',
+      impact: 'Prevention', impactSub: 'before 90+',
     });
   }
 
   return (
     <>
-      <PanelHero
-        eyebrow={`Finance · Snapshot · ${latestMonth ? String(latestMonth).slice(0, 7) : '—'}${period.seg !== 'all' ? ` · ${period.segLabel}` : ''}`}
-        title="USALI"
-        emphasis="ledger"
-        sub={`${period.rangeLabel} · revenue side · AR · expense side awaiting cost upload${period.cmp !== 'none' ? ` · ${period.cmpLabel}` : ''}`}
-        kpis={
-          <>
-            <KpiCard
-              label="Revenue MTD"
-              value={totalRev}
-              kind="money"
-              delta={priorTotal ? `${monthDelta >= 0 ? '+' : ''}${monthDelta.toFixed(1)}% vs prior` : undefined}
-              deltaTone={monthDelta >= 0 ? 'pos' : 'neg'}
-            />
-            <KpiCard
-              label="GOP MTD"
-              value={gop}
-              kind="money"
-              greyed={gop == null}
-              hint={gop == null ? 'awaiting gl_entries load' : undefined}
-            />
-            <KpiCard
-              label="Net Earnings MTD"
-              value={netEarnings ?? null}
-              kind="money"
-              greyed={netEarnings == null}
-              tone={netEarnings != null && netEarnings < 0 ? 'neg' : 'neutral'}
-              hint={netEarnings == null ? 'pl_section_monthly net_earnings' : undefined}
-            />
-            <KpiCard
-              label="AR 90+"
-              value={ar90Plus}
-              kind="money"
-              tone={ar90Plus > 0 ? 'neg' : 'pos'}
-              hint={ar90Plus > 0 ? 'Write-off risk' : 'Clean'}
-            />
-          </>
-        }
+      <PageHeader pillar="Finance" tab="Snapshot"
+        title={<>Where the money <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>is</em> — and where it's stuck.</>}
+        lede={`Latest closed: ${cur} · ${closedMonths} closed period${closedMonths === 1 ? '' : 's'}`} />
+      <FinanceStatusHeader
+        top={<>
+          <StatusCell label="SOURCE">
+            <StatusPill tone="active">gl.pl_section_monthly</StatusPill>
+            <span style={metaDim}>· v_usali_house_summary · mv_aged_ar</span>
+          </StatusCell>
+          <StatusCell label="LATEST"><span style={metaSm}>{cur}</span><span style={metaDim}>· prior {prior}</span></StatusCell>
+          <StatusCell label="MONTHS"><span style={metaStrong}>{closedMonths}</span><span style={metaDim}>closed</span></StatusCell>
+          <span style={{ flex: 1 }} />
+          {monthDeltaPct != null && <span style={metaDim}>MoM {monthDeltaPct >= 0 ? '+' : ''}{monthDeltaPct.toFixed(1)}%</span>}
+        </>}
+        bottom={<>
+          <StatusCell label="AR HEALTH">
+            <StatusPill tone={arHealth as any}>{ar90Plus > 0 ? 'OVERDUE' : ar6190 > 0 ? 'WATCH' : 'CLEAN'}</StatusPill>
+            <span style={metaDim}>{fmtMoney(totalAr, 'USD')} open</span>
+          </StatusCell>
+          <span style={{ flex: 1 }} />
+          <span style={metaDim}>GOP {gop != null ? fmtMoney(gop, 'USD') : '—'} · NET {netEarnings != null ? fmtMoney(netEarnings, 'USD') : '—'}</span>
+        </>}
       />
-
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12, marginTop: 14 }}>
+        <FinanceTrendChart rows={trendRows} title="Income & net earnings" sub="Every closed period · gl.pl_section_monthly" />
+        <DeptMixChart rows={deptCur as any} title={`Department mix · ${cur}`} sub="USALI dept revenue + profit" />
+        <AgedArChart rows={aged as any} title="AR aging" sub="Open balance by bucket · mv_aged_ar" />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
+        <KpiBox value={totalRev} unit="usd" label={`Revenue · ${cur}`} delta={priorTotal && monthDeltaPct != null ? { value: monthDeltaPct, unit: 'pct', period: 'MoM' } : undefined} />
+        <KpiBox value={gop} unit="usd" label={`GOP · ${cur}`} state={gop == null ? 'data-needed' : 'live'} needs={gop == null ? 'awaiting gl_entries close' : undefined} />
+        <KpiBox value={netEarnings ?? null} unit="usd" label={`Net · ${cur}`} state={netEarnings == null ? 'data-needed' : 'live'} />
+        <KpiBox value={ar90Plus} unit="usd" label="AR 90+" />
+      </div>
       {cards.length > 0 && (
-        <ActionStack
-          title={<><em>The reconciliations</em><br />awaiting attention.</>}
-          count={cards.length}
-          meta={`${cards.length} awaiting · finance pillar`}
-        >
-          {cards.map((c, i) => <ActionCard key={i} num={i + 1} {...c} />)}
-        </ActionStack>
+        <div style={{ marginTop: 18 }}>
+          <SectionHead title="Reconciliations" emphasis="awaiting attention" sub={`${cards.length} card${cards.length === 1 ? '' : 's'}`} />
+          <ActionStack title={<></>} count={cards.length} meta={`${cards.length} awaiting`}>
+            {cards.map((c, i) => <ActionCard key={i} num={i + 1} {...c} />)}
+          </ActionStack>
+        </div>
       )}
     </>
   );

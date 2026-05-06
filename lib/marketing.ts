@@ -23,18 +23,36 @@ export interface Review {
   is_verified: boolean;
 }
 
+export type MetricKind = 'followers' | 'subscribers' | 'reviews' | 'impressions';
+
 export interface SocialAccount {
   id: number;
   platform: string;
   handle: string | null;
   url: string | null;
   display_name: string | null;
+  /** What metric_value / secondary_value represent. Populated by social-followers-sync EF. */
+  metric_kind?: MetricKind;
+  /** Primary count: followers / subscribers / review count. */
+  metric_value?: number;
+  /** Secondary scalar: avg_rating when metric_kind === 'reviews'. */
+  secondary_value?: number | null;
+  /** Legacy alias — equals metric_value when metric_kind in (followers, subscribers), else 0. */
   followers: number;
   following: number;
   posts: number;
   last_synced_at: string | null;
+  last_sync_status?: 'ok' | 'error' | 'skipped' | null;
+  last_sync_error?: string | null;
   active: boolean;
 }
+
+export const METRIC_LABEL: Record<MetricKind, { primary: string; secondary?: string }> = {
+  followers:   { primary: 'followers' },
+  subscribers: { primary: 'subscribers' },
+  reviews:     { primary: 'reviews', secondary: 'avg rating' },
+  impressions: { primary: 'impressions' },
+};
 
 export interface Influencer {
   id: number;

@@ -13,8 +13,12 @@ export interface TwelveMonthRow {
   usali_department: string;
   actual_usd: number;
   budget_usd: number;
-  variance_usd: number;
-  variance_pct: number | null;
+  /** Optional — present when sourced from gl.v_scenario_stack (forecast + LY). */
+  ly_usd?: number;
+  forecast_usd?: number;
+  /** Legacy fields (gl.v_budget_vs_actual). */
+  variance_usd?: number;
+  variance_pct?: number | null;
 }
 
 export interface DemandRow {

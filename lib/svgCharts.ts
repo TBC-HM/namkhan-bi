@@ -164,3 +164,146 @@ export function paceOtbStlySvg(rows: PaceMonthRow[]): string {
     <text x="${padL + 60}" y="${H - 12}" font-size="10" fill="${MUTE}" font-weight="600">■ STLY</text>
   </svg>`;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 4) Channel mix · weekly trend (Channels index — mini chart 1)
+//    Stacked-area or stacked-bar of category share over weeks.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ChannelMixWeekRow { week_start: string; category: string; share_pct: number; gross_revenue: number; }
+
+const CAT_COLOR: Record<string, string> = {
+  Direct: '#2f6b4d',
+  OTA: '#a8854a',
+  Wholesale: '#6e4c8e',
+  Other: '#7d7565',
+};
+
+export function channelMixTrendSvg(rows: ChannelMixWeekRow[]): string {
+  if (!rows.length) return '';
+  const W = 360, H = 180;
+  const padL = 32, padR = 8, padT = 12, padB = 22;
+  const innerW = W - padL - padR;
+  const innerH = H - padT - padB;
+
+  const weeks = Array.from(new Set(rows.map((r) => r.week_start))).sort();
+  const cats = ['Direct', 'OTA', 'Wholesale', 'Other'];
+  const lookup: Record<string, number> = {};
+  for (const r of rows) lookup[`${r.week_start}|${r.category}`] = r.share_pct;
+
+  const xStep = innerW / Math.max(1, weeks.length - 1);
+  const segments = cats.map((cat, ci) => {
+    let cumPrev = new Array(weeks.length).fill(0);
+    for (let pi = 0; pi < ci; pi++) cumPrev = cumPrev.map((v, i) => v + (lookup[`${weeks[i]}|${cats[pi]}`] ?? 0));
+    const cumThis = cumPrev.map((v, i) => v + (lookup[`${weeks[i]}|${cat}`] ?? 0));
+    const top = cumThis.map((v, i) => `${(padL + i * xStep).toFixed(1)},${(padT + innerH - (v / 100) * innerH).toFixed(1)}`).join(' ');
+    const bot = cumPrev.slice().reverse().map((v, j) => {
+      const i = cumPrev.length - 1 - j;
+      return `${(padL + i * xStep).toFixed(1)},${(padT + innerH - (v / 100) * innerH).toFixed(1)}`;
+    }).join(' ');
+    return `<polygon points="${top} ${bot}" fill="${CAT_COLOR[cat] ?? MUTE}" opacity="0.85"/>`;
+  }).join('');
+
+  const xLbls = [0, Math.floor(weeks.length / 2), weeks.length - 1].map((i) => {
+    const x = padL + i * xStep;
+    let lbl = weeks[i]?.slice(5) ?? '';
+    return `<text x="${x.toFixed(1)}" y="${H - 6}" text-anchor="middle" font-size="9" fill="${MUTE}">${lbl}</text>`;
+  }).join('');
+
+  const legend = cats.map((c, i) => `
+    <rect x="${padL + i * 70}" y="${padT - 6}" width="8" height="8" fill="${CAT_COLOR[c]}"/>
+    <text x="${padL + i * 70 + 12}" y="${padT + 1}" font-size="9" fill="${TEXT_DIM}">${c}</text>`).join('');
+
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:180px;">
+    ${segments}
+    <line x1="${padL}" y1="${padT + innerH}" x2="${W - padR}" y2="${padT + innerH}" stroke="${MUTE}" opacity="0.6"/>
+    ${xLbls}
+    <text x="${padL - 4}" y="${padT + 6}" text-anchor="end" font-size="9" fill="${MUTE}">100%</text>
+    <text x="${padL - 4}" y="${padT + innerH - 2}" text-anchor="end" font-size="9" fill="${MUTE}">0%</text>
+    ${legend}
+  </svg>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 5) Net $/booking · cancel-adjusted (Channels index — mini chart 2)
+//    Horizontal bars per source ranked by net value per booking.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ChannelNetValueBarRow { source_name: string; net_value_per_booking: number; bookings: number; cancel_pct: number; commission_pct: number; }
+
+export function channelNetValueBarsSvg(rows: ChannelNetValueBarRow[]): string {
+  if (!rows.length) return '';
+  const filtered = rows.filter((r) => r.bookings > 0).slice(0, 8);
+  if (!filtered.length) return '';
+  const W = 360, H = 180;
+  const padL = 90, padR = 28, padT = 8, padB = 20;
+  const innerW = W - padL - padR;
+  const innerH = H - padT - padB;
+  const max = Math.max(...filtered.map((r) => r.net_value_per_booking), 1);
+  const niceMax = Math.ceil(max / 50) * 50;
+  const barH = Math.max(8, (innerH - (filtered.length - 1) * 4) / filtered.length);
+
+  const bars = filtered.map((r, i) => {
+    const y = padT + i * (barH + 4);
+    const w = (r.net_value_per_booking / niceMax) * innerW;
+    const isHotCancel = r.cancel_pct >= 25;
+    return `
+      <text x="${padL - 4}" y="${(y + barH / 2 + 3).toFixed(1)}" text-anchor="end" font-size="9" fill="${TEXT_DIM}">${r.source_name.slice(0, 14)}</text>
+      <rect x="${padL}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${barH.toFixed(1)}" fill="${isHotCancel ? '#b03826' : ACCENT}" opacity="0.85">
+        <title>${r.source_name} · $${r.net_value_per_booking.toFixed(0)}/booking · ${r.bookings} bkg · cancel ${r.cancel_pct.toFixed(1)}%</title>
+      </rect>
+      <text x="${(padL + w + 3).toFixed(1)}" y="${(y + barH / 2 + 3).toFixed(1)}" font-size="9" fill="${TEXT_DIM}">$${r.net_value_per_booking.toFixed(0)}</text>`;
+  }).join('');
+
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:180px;">${bars}
+    <text x="${W - padR}" y="${H - 6}" text-anchor="end" font-size="8" fill="${MUTE}">red bar = cancel ≥ 25%</text>
+  </svg>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6) Booking velocity · 28d by category (Channels index — mini chart 3)
+//    3-line chart: Direct / OTA / Wholesale daily new bookings.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ChannelVelocityLineRow { day: string; category: string; bookings: number; }
+
+export function channelVelocity3LineSvg(rows: ChannelVelocityLineRow[]): string {
+  if (!rows.length) return '';
+  const W = 360, H = 180;
+  const padL = 28, padR = 8, padT = 14, padB = 22;
+  const innerW = W - padL - padR;
+  const innerH = H - padT - padB;
+  const days = Array.from(new Set(rows.map((r) => r.day))).sort();
+  const cats = ['Direct', 'OTA', 'Wholesale'];
+  const lookup: Record<string, number> = {};
+  for (const r of rows) lookup[`${r.day}|${r.category}`] = r.bookings;
+  const max = Math.max(1, ...rows.map((r) => r.bookings));
+  const niceMax = Math.max(2, Math.ceil(max / 2) * 2);
+  const xStep = innerW / Math.max(1, days.length - 1);
+
+  const lines = cats.map((cat) => {
+    const pts = days.map((d, i) => {
+      const v = lookup[`${d}|${cat}`] ?? 0;
+      return `${(padL + i * xStep).toFixed(1)},${(padT + innerH - (v / niceMax) * innerH).toFixed(1)}`;
+    }).join(' ');
+    return `<polyline points="${pts}" fill="none" stroke="${CAT_COLOR[cat] ?? MUTE}" stroke-width="1.5"/>`;
+  }).join('');
+
+  const xLbls = [0, Math.floor(days.length / 2), days.length - 1].map((i) => {
+    const x = padL + i * xStep;
+    return `<text x="${x.toFixed(1)}" y="${H - 6}" text-anchor="middle" font-size="9" fill="${MUTE}">${days[i]?.slice(5) ?? ''}</text>`;
+  }).join('');
+
+  const legend = cats.map((c, i) => `
+    <rect x="${padL + i * 80}" y="${padT - 8}" width="8" height="2" fill="${CAT_COLOR[c]}"/>
+    <text x="${padL + i * 80 + 12}" y="${padT - 4}" font-size="9" fill="${TEXT_DIM}">${c}</text>`).join('');
+
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:180px;">
+    <line x1="${padL}" y1="${padT + innerH}" x2="${W - padR}" y2="${padT + innerH}" stroke="${MUTE}" opacity="0.6"/>
+    <text x="${padL - 4}" y="${padT + 6}" text-anchor="end" font-size="9" fill="${MUTE}">${niceMax}</text>
+    <text x="${padL - 4}" y="${padT + innerH - 2}" text-anchor="end" font-size="9" fill="${MUTE}">0</text>
+    ${lines}
+    ${xLbls}
+    ${legend}
+  </svg>`;
+}

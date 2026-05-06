@@ -153,3 +153,101 @@ export function pivotChannelXRoom(rows: ChannelXRoomRow[]) {
 
   return { sources, roomTypes, cells, sourceTotals, roomTotals };
 }
+
+// ─── Restored 2026-05-06 — readers for /revenue/channels mini graphs and per-OTA detail page ──────
+
+export interface ChannelMixWeeklyRow { week_start: string; category: string; gross_revenue: number; share_pct: number; }
+export interface ChannelNetValueRow { source_name: string; bookings: number; net_value_per_booking: number; gross_revenue: number; commission_pct: number; cancel_pct: number; }
+export interface ChannelVelocityRow { day: string; category: string; bookings: number; }
+export interface ChannelDailyRow { day: string; bookings: number; room_nights: number; gross_revenue: number; }
+export interface ChannelRoomMixRow { room_type_name: string; bookings: number; room_nights: number; gross_revenue: number; share_pct: number; }
+
+/** Per-source channel economics for an arbitrary date range. Backed by `f_channel_econ_for_range`. */
+export async function getChannelEconomicsForRange(fromDate: string, toDate: string): Promise<ChannelEconRow[]> {
+  const { data, error } = await supabase.rpc('f_channel_econ_for_range', { p_from: fromDate, p_to: toDate });
+  if (error) { console.error('getChannelEconomicsForRange error', error); return []; }
+  return ((data ?? []) as any[]).map((r) => ({
+    property_id: Number(r.property_id ?? PROPERTY_ID),
+    source_name: String(r.source_name),
+    window_days: Number(r.window_days ?? 0),
+    bookings: Number(r.bookings ?? 0),
+    canceled: Number(r.canceled ?? 0),
+    gross_revenue: Number(r.gross_revenue ?? 0),
+    roomnights: Number(r.roomnights ?? 0),
+    commission_pct: Number(r.commission_pct ?? 0),
+    commission_usd: Number(r.commission_usd ?? 0),
+    net_revenue: Number(r.net_revenue ?? 0),
+    adr: Number(r.adr ?? 0),
+    cancel_pct: Number(r.cancel_pct ?? 0),
+    avg_lead_days: Number(r.avg_lead_days ?? 0),
+    avg_los: Number(r.avg_los ?? 0),
+  }));
+}
+
+export async function getChannelMixWeeklyTrend(fromDate: string, toDate: string): Promise<ChannelMixWeeklyRow[]> {
+  const { data, error } = await supabase.rpc('f_channel_mix_weekly_trend', { p_from: fromDate, p_to: toDate });
+  if (error) return [];
+  return ((data ?? []) as any[]).map((r) => ({
+    week_start: String(r.week_start),
+    category: String(r.category),
+    gross_revenue: Number(r.gross_revenue ?? 0),
+    share_pct: Number(r.share_pct ?? 0),
+  }));
+}
+
+export async function getChannelNetValueForRange(fromDate: string, toDate: string): Promise<ChannelNetValueRow[]> {
+  const { data, error } = await supabase.rpc('f_channel_net_value_for_range', { p_from: fromDate, p_to: toDate });
+  if (error) return [];
+  return ((data ?? []) as any[]).map((r) => ({
+    source_name: String(r.source_name),
+    bookings: Number(r.bookings ?? 0),
+    net_value_per_booking: Number(r.net_value_per_booking ?? 0),
+    gross_revenue: Number(r.gross_revenue ?? 0),
+    commission_pct: Number(r.commission_pct ?? 0),
+    cancel_pct: Number(r.cancel_pct ?? 0),
+  }));
+}
+
+export async function getChannelVelocity28dByCat(): Promise<ChannelVelocityRow[]> {
+  const { data, error } = await supabase.rpc('f_channel_velocity_28d_by_cat');
+  if (error) return [];
+  return ((data ?? []) as any[]).map((r) => ({
+    day: String(r.day),
+    category: String(r.category),
+    bookings: Number(r.bookings ?? 0),
+  }));
+}
+
+export async function getChannelDailyForRange(sourceName: string, fromDate: string, toDate: string): Promise<ChannelDailyRow[]> {
+  const { data, error } = await supabase.rpc('f_channel_daily_for_range', { p_source_name: sourceName, p_from: fromDate, p_to: toDate });
+  if (error) return [];
+  return ((data ?? []) as any[]).map((r) => ({
+    day: String(r.day),
+    bookings: Number(r.bookings ?? 0),
+    room_nights: Number(r.room_nights ?? 0),
+    gross_revenue: Number(r.gross_revenue ?? 0),
+  }));
+}
+
+export async function getChannelRoomMixForRange(sourceName: string, fromDate: string, toDate: string): Promise<ChannelRoomMixRow[]> {
+  const { data, error } = await supabase.rpc('f_channel_room_mix_for_range', { p_source_name: sourceName, p_from: fromDate, p_to: toDate });
+  if (error) return [];
+  return ((data ?? []) as any[]).map((r) => ({
+    room_type_name: String(r.room_type_name ?? '—'),
+    bookings: Number(r.bookings ?? 0),
+    room_nights: Number(r.room_nights ?? 0),
+    gross_revenue: Number(r.gross_revenue ?? 0),
+    share_pct: Number(r.share_pct ?? 0),
+  }));
+}
+
+export async function getChannelPickupForSource(sourceName: string, lookbackDays = 28): Promise<ChannelDailyRow[]> {
+  const { data, error } = await supabase.rpc('f_channel_pickup_for_source', { p_source_name: sourceName, p_lookback_days: lookbackDays });
+  if (error) return [];
+  return ((data ?? []) as any[]).map((r) => ({
+    day: String(r.day),
+    bookings: Number(r.bookings ?? 0),
+    room_nights: 0,
+    gross_revenue: 0,
+  }));
+}

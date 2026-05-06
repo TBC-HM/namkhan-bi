@@ -35,6 +35,7 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/revenue/rateplans',   label: 'Rate Plans' },
     { href: '/revenue/pricing',     label: 'Pricing' },
     { href: '/revenue/compset',     label: 'Comp Set' },
+    { href: '/revenue/parity',      label: 'Parity',     isNew: true },
     { href: '/revenue/agents',      label: 'Agents' },
   ],
 
@@ -128,6 +129,7 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
   // ===== Knowledge (utility) =====
   knowledge: [
     { href: '/knowledge',          label: 'Snapshot' },
+    { href: '/knowledge/alerts',   label: 'Alerts',          isNew: true },
     { href: '/agents/roster',      label: 'Agents · Roster' },
     { href: '/agents/run',         label: 'Agents · Run' },
     { href: '/agents/history',     label: 'Agents · History' },
