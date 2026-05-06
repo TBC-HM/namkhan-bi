@@ -18,10 +18,10 @@ const admin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-function ownerOnly(req: Request): { ok: true; email: string } | { ok: false; res: Response } {
+async function ownerOnly(req: Request): Promise<{ ok: true; email: string } | { ok: false; res: Response }> {
   const cookie = req.headers.get("cookie") ?? "";
   const m = cookie.match(/workspace_session=([^;]+)/);
-  const user = m ? verifyWorkspaceCookie(decodeURIComponent(m[1])) : null;
+  const user = m ? await verifyWorkspaceCookie(decodeURIComponent(m[1])) : null;
   if (!user || !user.is_owner) {
     return { ok: false, res: NextResponse.json({ error: "Not Found" }, { status: 404 }) };
   }
@@ -30,7 +30,7 @@ function ownerOnly(req: Request): { ok: true; email: string } | { ok: false; res
 
 export async function GET(req: Request) {
   noStore();
-  const auth = ownerOnly(req);
+  const auth = await ownerOnly(req);
   if (auth.ok === false) return auth.res;
 
   const { data, error } = await admin
@@ -44,7 +44,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   noStore();
-  const auth = ownerOnly(req);
+  const auth = await ownerOnly(req);
   if (auth.ok === false) return auth.res;
 
   const body = await req.json().catch(() => ({}));

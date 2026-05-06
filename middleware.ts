@@ -49,7 +49,7 @@ function notFound() {
   return new NextResponse("Not Found", { status: 404 });
 }
 
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
 
   // Bypasses
@@ -68,7 +68,7 @@ export function middleware(req: NextRequest) {
   const cookie = req.cookies.get("workspace_session")?.value;
   let user;
   try {
-    user = verifyWorkspaceCookie(cookie);
+    user = await verifyWorkspaceCookie(cookie);
   } catch {
     user = null;
   }

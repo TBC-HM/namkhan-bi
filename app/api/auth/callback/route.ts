@@ -57,7 +57,7 @@ export async function GET(req: Request) {
     .eq("email", email);
 
   // Sign the access bundle into the cookie payload (single DB lookup per session)
-  const cookie = signWorkspaceCookie({
+  const cookie = await signWorkspaceCookie({
     email,
     is_owner: !!user.is_owner,
     access_revenue: !!user.is_owner || !!user.access_revenue,
