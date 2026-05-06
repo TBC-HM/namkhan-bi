@@ -18,6 +18,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
+import NotificationsBar from "@/components/cockpit/NotificationsBar";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -161,6 +162,7 @@ export default function CockpitPage() {
 
   return (
     <div className="cockpit">
+      <NotificationsBar />
       <TopBar
         tab={tab}
         setTab={setTab}

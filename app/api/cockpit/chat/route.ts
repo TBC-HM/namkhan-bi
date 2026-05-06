@@ -419,7 +419,32 @@ async function triageMessage(message: string, debug: { iterations: number; lastE
     }
     try {
       debug.duration_ms = Date.now() - t0;
-      return JSON.parse(cleaned) as Triage;
+      const parsed = JSON.parse(cleaned) as Record<string, unknown>;
+
+      // v12+ contract: { summary_markdown, triage:{arm,intent,urgency,recommended_role}, needs_human_decision, blocking_questions }
+      // Detect by presence of nested triage + summary_markdown.
+      if (parsed && typeof parsed === "object" && parsed.triage && typeof parsed.triage === "object" && typeof parsed.summary_markdown === "string") {
+        const inner = parsed.triage as Record<string, unknown>;
+        const sm = parsed.summary_markdown as string;
+        const blocking = Array.isArray(parsed.blocking_questions) ? (parsed.blocking_questions as string[]) : [];
+        const t: Triage = {
+          arm: typeof inner.arm === "string" ? inner.arm : "ops",
+          intent: typeof inner.intent === "string" ? inner.intent : "decide",
+          urgency: typeof inner.urgency === "string" ? inner.urgency : "low",
+          summary: sm.split("\n").find((l) => l.trim().length > 0)?.slice(0, 240) ?? "Captain Kit answer",
+          plan: ["Direct answer rendered in summary_markdown."],
+          recommended_agent: typeof inner.recommended_role === "string" ? inner.recommended_role : "none",
+          blockers: blocking,
+          estimated_minutes: 0,
+        };
+        // Stash full markdown so renderer surfaces it.
+        (t as Triage & { summary_markdown?: string }).summary_markdown = sm;
+        (t as Triage & { needs_human_decision?: boolean }).needs_human_decision = !!parsed.needs_human_decision;
+        return t;
+      }
+
+      // Legacy contract — pass through.
+      return parsed as unknown as Triage;
     } catch (e) {
       debug.lastError = `parse err: ${e instanceof Error ? e.message : "unknown"} | text: ${text.slice(0, 300)}`;
       console.error(debug.lastError);
@@ -433,12 +458,26 @@ async function triageMessage(message: string, debug: { iterations: number; lastE
 }
 
 function renderTriageMarkdown(t: Triage, originalMessage: string): string {
+  // v12+ Kit contract: summary_markdown is the full answer — render it directly,
+  // append a one-line triage trailer for transparency.
+  const sm = (t as Triage & { summary_markdown?: string }).summary_markdown;
+  if (sm && sm.trim().length > 0) {
+    const blockerLines = (t.blockers ?? []).filter(Boolean).map((s) => `- ${s}`).join("\n");
+    return [
+      `**Request**: ${originalMessage}`,
+      "",
+      sm.trim(),
+      blockerLines ? `\n**Blocking questions**\n${blockerLines}` : "",
+      `\n_— ${t.arm} · ${t.intent} · urgency ${t.urgency} · → ${t.recommended_agent}_`,
+    ].join("\n");
+  }
+  // Legacy contract (Kit ≤v11) — preserve original triage layout.
   const planLines = t.plan.map((s, i) => `${i + 1}. ${s}`).join("\n");
   const blockerLines = (t.blockers ?? []).filter(Boolean).map((s) => `- ${s}`).join("\n");
   return [
     `**Request**: ${originalMessage}`,
     "",
-    `**Triage** — ${t.arm} · ${t.intent} · urgency ${t.urgency} · ~${t.estimated_minutes} min`,
+    `**Triage** — ${t.arm} · ${t.intent} · urgency ${t.urgency}`,
     "",
     t.summary,
     "",
