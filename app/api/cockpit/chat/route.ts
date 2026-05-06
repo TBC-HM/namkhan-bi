@@ -9,7 +9,7 @@
 import { NextResponse } from "next/server";
 import { unstable_noStore as noStore } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
-import { loadSkillsForRole, dispatchSkill } from "@/lib/cockpit-tools";
+import { loadSkillsForRole, dispatchSkill, dispatchSkillGated } from "@/lib/cockpit-tools";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -396,7 +396,9 @@ async function triageMessage(message: string, debug: { iterations: number; lastE
         if (!handler) {
           resultText = JSON.stringify({ ok: false, error: `unknown skill: ${tu.name}` });
         } else {
-          const r = await dispatchSkill(handler, tu.input ?? {});
+          // Phase 1.2: gate every skill call through call_skill / complete_skill_call.
+          // Triage runs as it_manager; ticket_id not available here yet (chat creates it post-triage).
+          const r = await dispatchSkillGated("it_manager", tu.name ?? "", handler, tu.input ?? {}, null);
           resultText = JSON.stringify(r).slice(0, 4000);
         }
         results.push({ type: "tool_result", tool_use_id: tu.id ?? "", content: resultText });

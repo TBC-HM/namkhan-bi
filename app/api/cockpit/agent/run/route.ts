@@ -20,7 +20,7 @@
 import { NextResponse } from "next/server";
 import { unstable_noStore as noStore } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
-import { loadSkillsForRole, dispatchSkill, type AgentToolDef } from "@/lib/cockpit-tools";
+import { loadSkillsForRole, dispatchSkill, dispatchSkillGated, type AgentToolDef } from "@/lib/cockpit-tools";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -177,7 +177,7 @@ function calcMilliCost(inTok: number, outTok: number): number {
   return Math.round((inTok * 3 + outTok * 15) / 1000);
 }
 
-async function callRoleAgent(role: AgentRole, triage: Triage, originalMessage: string): Promise<{
+async function callRoleAgent(role: AgentRole, triage: Triage, originalMessage: string, ticketId: number | null = null): Promise<{
   result: Record<string, unknown>;
   trace: Array<{ tool: string; input: Record<string, unknown>; ok: boolean }>;
   tokens_in: number;
@@ -260,7 +260,8 @@ ${originalMessage}`;
         if (!handler) {
           resultText = JSON.stringify({ ok: false, error: `unknown skill: ${tu.name}` });
         } else {
-          const r = await dispatchSkill(handler, tu.input ?? {});
+          // Phase 1.2: gate every skill call through call_skill / complete_skill_call.
+          const r = await dispatchSkillGated(role, tu.name ?? "", handler, tu.input ?? {}, ticketId);
           ok = r.ok;
           resultText = JSON.stringify(r).slice(0, 6000);
         }
@@ -494,7 +495,7 @@ async function processTicket(ticketId: number) {
 
   let runOutcome: Awaited<ReturnType<typeof callRoleAgent>>;
   try {
-    runOutcome = await callRoleAgent(role, triage, originalMessage);
+    runOutcome = await callRoleAgent(role, triage, originalMessage, ticketId);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await supabase

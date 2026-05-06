@@ -884,6 +884,72 @@ export async function dispatchSkill(handler: string, args: Record<string, unknow
   }
 }
 
+/**
+ * Phase 1.2 — wrap a skill invocation with cockpit.call_skill / complete_skill_call.
+ * Authorizes via SQL dispatcher (logs unauthorized attempts to cockpit_skill_calls
+ * with status=rejected_*), executes the handler, then closes the call row with
+ * output/error/duration. Falls back to raw dispatchSkill if the SQL gate isn't
+ * available (e.g. migration not yet applied) so production never hard-breaks.
+ *
+ * skill_name + role are the cockpit_agent_skills.name + cockpit_agent_prompts.role
+ * the agent runner is currently executing as. ticket_id is optional for tying the
+ * skill call back to the originating ticket.
+ */
+export async function dispatchSkillGated(
+  role: string,
+  skillName: string,
+  handler: string,
+  args: Record<string, unknown>,
+  ticketId: number | null = null,
+): Promise<ToolResult> {
+  const t0 = Date.now();
+  // 1. Authorization gate.
+  const { data: authData, error: authErr } = await supabase.rpc("call_skill", {
+    p_role: role,
+    p_skill_name: skillName,
+    p_input: args as never,
+    p_dry_run: false,
+    p_approval_id: null,
+    p_ticket_id: ticketId,
+  });
+  if (authErr) {
+    // SQL gate unavailable — fall through to ungated dispatch (back-compat).
+    return dispatchSkill(handler, args);
+  }
+  const auth = authData as { authorized?: boolean; reason?: string; call_id?: number };
+  if (!auth?.authorized) {
+    return { ok: false, error: `skill_gated: ${auth?.reason ?? "unauthorized"}` };
+  }
+  const callId = auth.call_id ?? null;
+  // 2. Execute the handler.
+  let result: ToolResult;
+  let status: "succeeded" | "failed" = "succeeded";
+  let errPayload: Record<string, unknown> | null = null;
+  try {
+    result = await dispatchSkill(handler, args);
+    if (!result.ok) {
+      status = "failed";
+      errPayload = { error: (result as { ok: false; error: string }).error };
+    }
+  } catch (e) {
+    status = "failed";
+    errPayload = { error: e instanceof Error ? e.message : "handler crashed" };
+    result = { ok: false, error: errPayload.error as string };
+  }
+  // 3. Close the call row.
+  if (callId !== null) {
+    await supabase.rpc("complete_skill_call", {
+      p_call_id: callId,
+      p_status: status,
+      p_output: status === "succeeded" ? (result as never) : null,
+      p_error: errPayload as never,
+      p_cost_usd_milli: 0,
+      p_duration_ms: Date.now() - t0,
+    });
+  }
+  return result;
+}
+
 export type AgentToolDef = {
   name: string;
   description: string;
