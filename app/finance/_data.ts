@@ -361,6 +361,75 @@ export async function getBudgetVsActual(periods: string[]): Promise<BudgetActual
   return (data ?? []) as BudgetActualRow[];
 }
 
+export interface ScenarioStackRow {
+  period_yyyymm: string;
+  usali_subcategory: string;
+  usali_department: string;
+  actual_usd: number;
+  budget_usd: number;
+  ly_usd: number;
+  forecast_usd: number;
+}
+
+export async function getScenarioStack(periods: string[]): Promise<ScenarioStackRow[]> {
+  if (periods.length === 0) return [];
+  const { data, error } = await supabaseGl
+    .from('v_scenario_stack')
+    .select('*')
+    .in('period_yyyymm', periods);
+  if (error) { console.error('[gl] getScenarioStack', error); return []; }
+  return (data ?? []) as ScenarioStackRow[];
+}
+
+export interface CashForecastRow {
+  week_start: string;
+  week_idx: number;
+  iso_week: string;
+  otb_inflow: number;
+  ar_inflow: number;
+  fixed_outflow: number;
+  supplier_outflow: number;
+  net_cash_flow: number;
+}
+
+export async function getCashForecast13w(): Promise<CashForecastRow[]> {
+  const { data, error } = await supabaseGl
+    .from('v_cash_forecast_13w')
+    .select('*')
+    .order('week_idx');
+  if (error) { console.error('[gl] getCashForecast13w', error); return []; }
+  return (data ?? []).map((r: any) => ({
+    ...r,
+    otb_inflow: Number(r.otb_inflow || 0),
+    ar_inflow: Number(r.ar_inflow || 0),
+    fixed_outflow: Number(r.fixed_outflow || 0),
+    supplier_outflow: Number(r.supplier_outflow || 0),
+    net_cash_flow: Number(r.net_cash_flow || 0),
+  })) as CashForecastRow[];
+}
+
+export interface CommentaryDraft {
+  draft_id: string;
+  period_start: string;
+  period_end: string;
+  body: string;
+  status: string;
+  created_at: string;
+}
+
+export async function getLatestCommentary(periodYyyymm: string): Promise<CommentaryDraft | null> {
+  const periodStart = `${periodYyyymm}-01`;
+  const { data, error } = await supabaseGl
+    .from('commentary_drafts')
+    .select('draft_id, period_start, period_end, body, status, created_at')
+    .eq('period_start', periodStart)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  return data as CommentaryDraft;
+}
+
 /**
  * All budget rows for one period — used by USALI grid Budget column.
  * Reads from gl.v_budget_lines (sourced from plan.lines · Budget 2026 v1)

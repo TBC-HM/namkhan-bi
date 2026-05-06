@@ -12,13 +12,18 @@
 //
 // Required SQL: sql/02_channel_economics_window.sql must be applied first.
 
+import Link from 'next/link';
 import PanelHero from '@/components/sections/PanelHero';
 import Card from '@/components/sections/Card';
 import KpiCard from '@/components/kpi/KpiCard';
 import Insight from '@/components/sections/Insight';
 import { resolvePeriod } from '@/lib/period';
-import { getChannelEconomics, getChannelXRoomtype, pivotChannelXRoom } from '@/lib/data-channels';
+import {
+  getChannelEconomics, getChannelXRoomtype, pivotChannelXRoom,
+  getChannelMixWeeklyTrend, getChannelNetValueForRange, getChannelVelocity28dByCat,
+} from '@/lib/data-channels';
 import { fmtMoney } from '@/lib/format';
+import { channelMixTrendSvg, channelNetValueBarsSvg, channelVelocity3LineSvg } from '@/lib/svgCharts';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -53,10 +58,13 @@ export default async function ChannelsPage({ searchParams }: Props) {
     ? { ...period, from: period.compareFrom, to: period.compareTo, cmp: 'none' as const }
     : null;
 
-  const [channelsRaw, matrixRaw, channelsCmp] = await Promise.all([
+  const [channelsRaw, matrixRaw, channelsCmp, mixWeekly, netValue, velocity] = await Promise.all([
     getChannelEconomics(period).catch(() => [] as Awaited<ReturnType<typeof getChannelEconomics>>),
     getChannelXRoomtype(period).catch(() => [] as Awaited<ReturnType<typeof getChannelXRoomtype>>),
     cmpPeriod ? getChannelEconomics(cmpPeriod).catch(() => []) : Promise.resolve([] as any[]),
+    getChannelMixWeeklyTrend(period.from, period.to).catch(() => []),
+    getChannelNetValueForRange(period.from, period.to).catch(() => []),
+    getChannelVelocity28dByCat().catch(() => []),
   ]);
   const channels = channelsRaw;
   const matrix = matrixRaw;
@@ -167,10 +175,43 @@ export default async function ChannelsPage({ searchParams }: Props) {
         }
       />
 
+      {/* 3 mini graphs · channel mix weekly · net $/booking · booking velocity 28d */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginTop: 12, marginBottom: 14 }}>
+        <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '12px 14px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+            <h3 style={{ margin: 0, fontFamily: 'var(--serif)', fontWeight: 500, fontSize: 'var(--t-md)' }}>Channel mix · <em style={{ color: 'var(--brass)' }}>weekly trend</em></h3>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>{period.label}</span>
+          </div>
+          {mixWeekly.length > 0
+            ? <div dangerouslySetInnerHTML={{ __html: channelMixTrendSvg(mixWeekly) }} />
+            : <div style={{ padding: 24, textAlign: 'center', color: 'var(--ink-mute)', fontSize: 'var(--t-sm)' }}>No mix data in window.</div>}
+        </div>
+
+        <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '12px 14px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+            <h3 style={{ margin: 0, fontFamily: 'var(--serif)', fontWeight: 500, fontSize: 'var(--t-md)' }}>Net $/booking · <em style={{ color: 'var(--brass)' }}>cancel-adjusted</em></h3>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>{period.label}</span>
+          </div>
+          {netValue.length > 0
+            ? <div dangerouslySetInnerHTML={{ __html: channelNetValueBarsSvg(netValue) }} />
+            : <div style={{ padding: 24, textAlign: 'center', color: 'var(--ink-mute)', fontSize: 'var(--t-sm)' }}>No net value data in window.</div>}
+        </div>
+
+        <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '12px 14px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+            <h3 style={{ margin: 0, fontFamily: 'var(--serif)', fontWeight: 500, fontSize: 'var(--t-md)' }}>Booking velocity · <em style={{ color: 'var(--brass)' }}>28d</em></h3>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>by category</span>
+          </div>
+          {velocity.length > 0
+            ? <div dangerouslySetInnerHTML={{ __html: channelVelocity3LineSvg(velocity) }} />
+            : <div style={{ padding: 24, textAlign: 'center', color: 'var(--ink-mute)', fontSize: 'var(--t-sm)' }}>No velocity data in last 28 days.</div>}
+        </div>
+      </div>
+
       <Card
         title="Channel performance"
         emphasis={period.label}
-        sub={`Source ranked by gross revenue · ${channels.length} active`}
+        sub={`Source ranked by gross revenue · ${channels.length} active · click source to drill in`}
         source="mv_channel_economics"
       >
         {channels.length === 0 ? (
@@ -199,7 +240,7 @@ export default async function ChannelsPage({ searchParams }: Props) {
                 const pill = healthPill(c);
                 return (
                   <tr key={c.source_name}>
-                    <td className="lbl"><strong>{c.source_name}</strong></td>
+                    <td className="lbl"><Link href={`/revenue/channels/${encodeURIComponent(c.source_name)}`} style={{ color: 'var(--brass)', textDecoration: 'none' }}><strong>{c.source_name}</strong></Link></td>
                     <td className="num">{c.bookings}</td>
                     <td className="num">{fmtMoney(Number(c.gross_revenue), 'USD')}</td>
                     <td className="num">{fmtMoney(Number(c.adr), 'USD')}</td>

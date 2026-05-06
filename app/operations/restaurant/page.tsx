@@ -1,121 +1,162 @@
 // app/operations/restaurant/page.tsx
-// Operations · Restaurant (F&B). Period-aware (?win= ?cap=) per Cowork handoff 2026-05-01.
+// Operations · F&B — re-restored 2026-05-05 after parallel-session wipe.
+// SlimHero · 2 KpiStrip rows (Operating + USALI Effective) · 3 explainer cards
+// (Staff Canteen · Breakfast allocation · Menu engineering coming-soon) · P&L grid
+// · GL detail (collapsed) · Top-seller trend · raw POS list.
 
 import FilterStrip from '@/components/nav/FilterStrip';
-import PanelHero from '@/components/sections/PanelHero';
-import Card from '@/components/sections/Card';
-import KpiCard from '@/components/kpi/KpiCard';
-import { getCaptureRates, getKpiDaily, aggregateDaily } from '@/lib/data';
+import SlimHero from '@/components/sections/SlimHero';
+import KpiStrip, { type KpiStripItem } from '@/components/kpi/KpiStrip';
+import PnlGrid from '@/components/pl/PnlGrid';
+import DeptTrendChart from '@/components/pl/DeptTrendChart';
+import FnbGlBreakdown from '@/components/pl/FnbGlBreakdown';
+import FnbTopSellerTrend from '@/components/pl/FnbTopSellerTrend';
+import FnbRawTransactions from '@/components/pl/FnbRawTransactions';
+import {
+  getKpiDaily, aggregateDaily, getDeptPl, getFnbCovers,
+  getFnbCostsForPeriod, getFnbCaptureForPeriod, getCanteenForPeriod,
+  getFnbGlBreakdown, getFnbTopSellerTrend, getBreakfastAllocation, getFnbRawTransactions,
+} from '@/lib/data';
 import { resolvePeriod } from '@/lib/period';
-import { supabase, PROPERTY_ID } from '@/lib/supabase';
-import { fmtMoney } from '@/lib/format';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
 
 interface Props { searchParams: Record<string, string | string[] | undefined>; }
 
-export default async function RootsPage({ searchParams }: Props) {
+export default async function FnbPage({ searchParams }: Props) {
   const period = resolvePeriod(searchParams);
-  const daily = await getKpiDaily(period.from, period.to).catch(() => []);
+  const [daily, pl, periodCosts, captureP, canteen, glBreakdown, topTrend, rawTxns, bkfst, covers] = await Promise.all([
+    getKpiDaily(period.from, period.to).catch(() => []),
+    getDeptPl('fnb', 16).catch(() => []),
+    getFnbCostsForPeriod(period.from, period.to).catch(() => null),
+    getFnbCaptureForPeriod(period.from, period.to).catch(() => null),
+    getCanteenForPeriod(period.from, period.to).catch(() => null),
+    getFnbGlBreakdown(16).catch(() => ({ periods: [], lines: [] })),
+    getFnbTopSellerTrend('2026-01-01', 8).catch(() => ({ periods: [], items: [] })),
+    getFnbRawTransactions(2000).catch(() => []),
+    getBreakfastAllocation(period.from, period.to).catch(() => null),
+    getFnbCovers(period.from, period.to).catch(() => null),
+  ]);
   const a30 = aggregateDaily(daily, period.capacityMode);
-  const cap = await getCaptureRates().catch(() => null);
-
-  const { data: topSellers } = await supabase
-    .from('mv_classified_transactions')
-    .select('description, amount')
-    .eq('property_id', PROPERTY_ID)
-    .eq('usali_dept', 'F&B')
-    .gte('transaction_date', period.from)
-    .lte('transaction_date', period.to);
-
-  const sellerMap: Record<string, { count: number; revenue: number }> = {};
-  (topSellers ?? []).forEach((t: any) => {
-    const k = t.description || 'Unknown item';
-    if (!sellerMap[k]) sellerMap[k] = { count: 0, revenue: 0 };
-    sellerMap[k].count += 1;
-    sellerMap[k].revenue += Number(t.amount || 0);
-  });
-  const sellers = Object.entries(sellerMap)
-    .map(([name, x]) => ({ name, ...x }))
-    .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, 12);
+  const plLatest = pl.find(r => r.revenue > 0) ?? null;
+  const tileSrc = periodCosts ?? (plLatest ? {
+    revenue: plLatest.revenue, food_revenue: plLatest.food_revenue, bev_revenue: plLatest.bev_revenue,
+    food_cost: plLatest.food_cost, bev_cost: plLatest.bev_cost, payroll: plLatest.payroll,
+    total_cost: plLatest.total_cost, gop: plLatest.gop,
+    food_cost_pct: plLatest.food_cost_pct, bev_cost_pct: plLatest.bev_cost_pct,
+    labor_cost_pct: plLatest.labor_cost_pct, gop_pct: plLatest.gop_pct,
+    months_used: [plLatest.period],
+  } : null);
+  const effectiveFnbRev = (tileSrc?.revenue ?? 0) + (bkfst?.total_alloc_usd ?? 0);
+  const effectiveLaborPct = effectiveFnbRev > 0 && tileSrc ? (tileSrc.payroll / effectiveFnbRev) * 100 : null;
+  const effectiveGopUsd = tileSrc ? (effectiveFnbRev - tileSrc.total_cost) : null;
+  const effectiveGopPct = effectiveFnbRev > 0 && effectiveGopUsd != null ? (effectiveGopUsd / effectiveFnbRev) * 100 : null;
 
   return (
     <>
       <FilterStrip showForward={false} showCompare={false} showSegment={false} liveSource="Cloudbeds · live" />
-      <PanelHero
-        eyebrow={`Roots · F&B · ${period.label}`}
-        title="Roots"
-        emphasis="restaurant"
-        sub="Food · beverage · capture · per-occupied-roomnight"
-        kpis={
-          <>
-            <KpiCard label="F&B Total" value={a30?.fnb_revenue ?? 0} kind="money" />
-            <KpiCard label="Food" value={a30?.fnb_food_revenue ?? 0} kind="money" />
-            <KpiCard label="Beverage" value={a30?.fnb_beverage_revenue ?? 0} kind="money" />
-            <KpiCard
-              label="F&B / Occ Rn"
-              value={Number(cap?.fnb_per_occ_room ?? 0)}
-              kind="money"
-              tone="pos"
-            />
-          </>
-        }
-      />
+      <SlimHero eyebrow={`F&B · ${period.label}`} title="Roots" emphasis="restaurant" sub="revenue · cost ratios · covers · guest sat" />
 
-      <div className="card-grid-4">
-        <KpiCard
-          label="F&B Capture %"
-          value={Number(cap?.fnb_capture_pct ?? 0)}
-          kind="pct"
-        />
-        <KpiCard label="Minibar Rev" value={a30?.fnb_minibar_revenue ?? 0} kind="money" />
-        <KpiCard label="Avg Cover" value={null} greyed hint="POS schedule pending" />
-        <KpiCard label="Cover Count" value={null} greyed hint="POS schedule pending" />
+      {/* Row 1 — Operating snapshot */}
+      <KpiStrip items={[
+        { label: 'F&B / Occ Rn',  value: captureP ? Number(captureP.spend_per_occ) : 0, kind: 'money', tone: 'pos', hint: captureP ? period.label : 'no data — try 30d+' },
+        { label: 'Capture %',     value: captureP ? Number(captureP.capture_pct)   : 0, kind: 'pct', hint: captureP ? `${captureP.res_with_purchase}/${captureP.res_in_house} res` : 'no data' },
+        { label: 'Food Rev',      value: Number(a30?.fnb_food_revenue ?? 0), kind: 'money' },
+        { label: 'Beverage Rev',  value: Number(a30?.fnb_beverage_revenue ?? 0), kind: 'money' },
+        { label: 'Staff Canteen', value: Number(canteen?.total_usd ?? 0), kind: 'money' },
+        { label: 'Canteen / Occ', value: Number(canteen?.cost_per_occ_room ?? 0), kind: 'money' },
+      ] satisfies KpiStripItem[]} />
+
+      {/* Row 2 — USALI Effective view */}
+      <KpiStrip items={[
+        { label: 'Breakfast alloc',    value: Number(bkfst?.total_alloc_usd ?? 0), kind: 'money', hint: 'USALI fair value' },
+        { label: 'Effective F&B Rev',  value: effectiveFnbRev, kind: 'money', tone: 'pos' },
+        { label: 'Effective GOP $',    value: Number(effectiveGopUsd ?? 0), kind: 'money',
+          tone: effectiveGopUsd != null && effectiveGopUsd > 0 ? 'pos' : 'neg' },
+        { label: 'Effective GOP %',    value: Number(effectiveGopPct ?? 0), kind: 'pct',
+          tone: effectiveGopPct != null && effectiveGopPct >= 25 ? 'pos' : 'warn', hint: 'target ≥ 25%' },
+        { label: 'Eff Labor %',        value: Number(effectiveLaborPct ?? 0), kind: 'pct', hint: 'target ≤ 35%' },
+        { label: 'Eff Food %',         value: effectiveFnbRev > 0 && tileSrc ? (tileSrc.food_cost / effectiveFnbRev) * 100 : 0, kind: 'pct', hint: 'target ≤ 30%' },
+      ] satisfies KpiStripItem[]} />
+
+      {/* 3 explainer cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10, marginTop: 12 }}>
+        <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>Staff canteen</div>
+          <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-lg)', lineHeight: 1.15 }}>
+            ${canteen ? Math.round(canteen.total_usd).toLocaleString() : '—'} <span style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-soft)', fontStyle: 'normal' }}>· {period.label}</span>
+          </div>
+          <div style={{ fontSize: 'var(--t-sm)', color: 'var(--ink)', lineHeight: 1.4 }}>
+            <code style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>EMPLOYEE MEAL</code> + <code style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>STAFF CANTEEN MATERIALS</code> across all depts.
+          </div>
+          {canteen && canteen.by_dept.length > 0 && (
+            <div style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-soft)' }}>
+              By dept: {canteen.by_dept.map(d => `${d.dept} $${Math.round(d.usd).toLocaleString()}`).join(' · ')}
+            </div>
+          )}
+          <div style={{ fontSize: 'var(--t-xs)', color: 'var(--bad, #b53a2a)', background: 'rgba(181, 58, 42, 0.08)', padding: '6px 8px', borderLeft: '2px solid var(--bad, #b53a2a)', marginTop: 'auto' }}>
+            <strong>Watch:</strong> Mar / Apr 2026 reclassified F&amp;B → Undistributed. The &quot;labor drop&quot; is a posting reclass, not a real saving.
+          </div>
+        </div>
+
+        <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>Breakfast allocation · USALI</div>
+          <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-lg)', lineHeight: 1.15 }}>
+            ${bkfst ? Math.round(bkfst.total_alloc_usd).toLocaleString() : '—'} <span style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-soft)', fontStyle: 'normal' }}>· to move Rooms → F&amp;B</span>
+          </div>
+          <div style={{ fontSize: 'var(--t-sm)', color: 'var(--ink)', lineHeight: 1.4 }}>
+            {bkfst ? <>{bkfst.adult_nights} adult-nights × $10 + {bkfst.child_nights} child-nights × $5 (fair value).</> : 'Pax-nights × $10/adult + $5/child.'}
+            {' '}Configurable via <code style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>BREAKFAST_USD_ADULT</code>.
+          </div>
+          {effectiveLaborPct != null && tileSrc && (
+            <div style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-soft)' }}>
+              Labor% drops {tileSrc.labor_cost_pct.toFixed(1)}% → {effectiveLaborPct.toFixed(1)}% if JE applied.
+            </div>
+          )}
+          <div style={{ fontSize: 'var(--t-xs)', color: 'var(--good, #2c7a4b)', background: 'rgba(44, 122, 75, 0.08)', padding: '6px 8px', borderLeft: '2px solid var(--good, #2c7a4b)', marginTop: 'auto' }}>
+            <strong>Action:</strong> Monthly QB JE — <code style={{ fontFamily: 'var(--mono)' }}>DR Rooms Rev · CR Food Rev</code>. Zero P&amp;L impact, USALI-clean.
+          </div>
+        </div>
+
+        <div style={{ background: 'var(--paper-warm)', border: '1px dashed var(--paper-deep)', borderRadius: 8, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8, opacity: 0.85 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>Menu engineering</div>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)', border: '1px solid var(--brass)', padding: '1px 6px', borderRadius: 999 }}>Coming soon</span>
+          </div>
+          <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-lg)', lineHeight: 1.15 }}>Stars · Plowhorses · Puzzles · Dogs</div>
+          <div style={{ fontSize: 'var(--t-sm)', color: 'var(--ink)', lineHeight: 1.4 }}>
+            Each dish on popularity × profitability. Needs POS qty + recipe sheets in <code style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>inv.recipes</code>.
+          </div>
+        </div>
       </div>
 
-      <Card title="Top sellers" emphasis={period.label} sub={`${sellers.length} items · ranked by revenue`} source="mv_classified_transactions">
-        {sellers.length === 0 ? (
-          <div style={{ padding: 24, color: 'var(--ink-mute)', fontStyle: 'italic' }}>No F&B transactions in window.</div>
-        ) : (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Item</th>
-                <th className="num">Sold</th>
-                <th className="num">Revenue</th>
-                <th className="num">Avg Ticket</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sellers.map((s) => (
-                <tr key={s.name}>
-                  <td className="lbl"><strong>{s.name}</strong></td>
-                  <td className="num">{s.count}</td>
-                  <td className="num">{fmtMoney(s.revenue, 'USD')}</td>
-                  <td className="num text-mute">{fmtMoney(s.revenue / s.count, 'USD')}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </Card>
+      <h2 style={{ marginTop: 28, marginBottom: 6, fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>Monthly trend · revenue · costs · GOP %</h2>
+      <DeptTrendChart rows={pl} dept="fnb" />
 
-      <div className="card-grid-2" style={{ marginTop: 22 }}>
-        <Card title="Outlet split" sub="Single outlet today; split needs POS extension" source="grey">
-          <div className="stub" style={{ padding: 32 }}>
-            <h3>Coming soon</h3>
-            <p>Roots is currently a single outlet. Multi-outlet split arrives when POS exposes the outlet field.</p>
-          </div>
-        </Card>
-        <Card title="Average cover" sub="Cover count not tracked in PMS" source="grey">
-          <div className="stub" style={{ padding: 32 }}>
-            <h3>Coming soon</h3>
-            <p>Approximation via guests/day possible; awaiting confirmed cover field from POS.</p>
-          </div>
-        </Card>
-      </div>
+      <h2 style={{ marginTop: 28, marginBottom: 6, fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>P&amp;L · QB GL · USALI rollup</h2>
+      <PnlGrid rows={pl} dept="fnb" targets={{ food_cost_pct: 30, bev_cost_pct: 25, labor_cost_pct: 35, gop_pct: 25 }} defaultRows={6} />
+
+      <details style={{ marginTop: 24 }}>
+        <summary style={{ cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)', padding: '8px 0' }}>
+          GL detail · F&amp;B accounts (every QB line) ▾
+        </summary>
+        <FnbGlBreakdown data={glBreakdown} defaultMonths={4} />
+      </details>
+
+      <details style={{ marginTop: 24 }} open>
+        <summary style={{ cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)', padding: '8px 0' }}>
+          Top sellers · trend since Jan 26 ▾
+        </summary>
+        <FnbTopSellerTrend data={topTrend} />
+      </details>
+
+      <details style={{ marginTop: 24 }}>
+        <summary style={{ cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)', padding: '8px 0' }}>
+          All POS transactions · search &amp; reconcile ▾  <span style={{ color: 'var(--ink-soft)', textTransform: 'none', letterSpacing: 'normal' }}>({rawTxns.length} most recent)</span>
+        </summary>
+        <FnbRawTransactions data={rawTxns} pageSize={200} />
+      </details>
     </>
   );
 }

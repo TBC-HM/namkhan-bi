@@ -1,21 +1,16 @@
 // app/operations/page.tsx
-// Operations · Pillar entry — strategic snapshot, NOT a duplicate of /today.
-//
-// Today's headcount/arrivals/departures live on /operations/today. This page
-// answers the question "how is operations doing as a function?" — open
-// decisions, DQ critical, tasks due this week, dept payroll/headcount,
-// agent action queue.
-//
-// No FilterStrip — every tile here is "now" or "this week" by definition.
+// Re-restored 2026-05-05 — Snapshot + Today merged into single pillar entry.
+// SlimHero + Today KpiStrip + Arrivals/Departures/In-house tables +
+// strategic block (DQ, payroll, action cards, sub-page launcher).
 
-import PageHeader from '@/components/layout/PageHeader';
-import KpiBox from '@/components/kpi/KpiBox';
+import SlimHero from '@/components/sections/SlimHero';
+import KpiStrip, { type KpiStripItem } from '@/components/kpi/KpiStrip';
 import StatusPill from '@/components/ui/StatusPill';
 import ActionCard, { ActionStack } from '@/components/sections/ActionCard';
 import { supabaseGl } from '@/lib/supabase-gl';
 import { supabase } from '@/lib/supabase';
-import { getKpiToday, getDqIssues, getCaptureRates } from '@/lib/data';
-import { fmtTableUsd, EMPTY } from '@/lib/format';
+import { getKpiToday, getDqIssues, getCaptureRates, getArrivalsDeparturesToday } from '@/lib/data';
+import { fmtDateShort } from '@/lib/format';
 import DeptHealthTable, { type DeptPayrollRow } from './_components/DeptHealthTable';
 
 export const revalidate = 60;
@@ -35,18 +30,12 @@ interface OpsSnapshot {
 type DeptPayroll = DeptPayrollRow;
 
 async function getOpsSnapshot(): Promise<OpsSnapshot | null> {
-  const { data, error } = await supabaseGl
-    .from('v_ops_snapshot')
-    .select('*')
-    .limit(1);
+  const { data, error } = await supabaseGl.from('v_ops_snapshot').select('*').limit(1);
   if (error || !data || data.length === 0) return null;
   return data[0] as OpsSnapshot;
 }
 
 async function getDeptPayroll(): Promise<DeptPayroll[]> {
-  // ops schema is now exposed via PostgREST (added 2026-05-03). Use the
-  // shared `supabase` client with .schema() override — avoids dynamic
-  // imports which fail under Next.js server runtime.
   const { data, error } = await supabase
     .schema('ops')
     .from('v_payroll_dept_monthly')
@@ -64,22 +53,30 @@ async function getDeptPayroll(): Promise<DeptPayroll[]> {
   return (data as DeptPayroll[]).filter(r => r.period_month === latest);
 }
 
-export default async function OperationsSnapshotPage() {
-  const [snap, deptPayroll, today, dq, cap] = await Promise.all([
+export default async function OperationsPage() {
+  const [snap, deptPayroll, today, list, dq, cap] = await Promise.all([
     getOpsSnapshot(),
     getDeptPayroll(),
     getKpiToday().catch(() => null),
+    getArrivalsDeparturesToday().catch(() => []),
     getDqIssues().catch(() => []),
     getCaptureRates().catch(() => null),
   ]);
+
+  const arrivals = list.filter((r: any) => r.today_role === 'arrival');
+  const departures = list.filter((r: any) => r.today_role === 'departure');
+  const inhouse = list.filter((r: any) => r.today_role === 'in_house');
+
+  const inHouseCount = today?.in_house ?? 0;
+  const totalRooms = today?.total_rooms ?? 0;
+  const available = totalRooms - inHouseCount;
 
   const totalHeadcount = deptPayroll.reduce((s, r) => s + Number(r.headcount || 0), 0);
   const totalPayrollUsd = deptPayroll.reduce((s, r) => s + Number(r.total_grand_usd || 0), 0);
   const latestPeriod = deptPayroll[0]?.period_month
     ? new Date(deptPayroll[0].period_month).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
-    : EMPTY;
+    : '—';
 
-  // Action cards — keep the existing 3 conditional ones, they're real
   const fnbCap = Number(cap?.fnb_capture_pct ?? 0);
   const fnbRevPerOccRn = Number(cap?.fnb_per_occ_room ?? 0);
   const cards: any[] = [];
@@ -93,7 +90,7 @@ export default async function OperationsSnapshotPage() {
       priority: 'high' as const,
       priorityLabel: 'High priority',
       headline: <>Housekeeping API <em>scope-blocked</em>.<br />OOO/OOS rooms invisible.</>,
-      conclusion: <>Cloudbeds <strong>getHousekeepingStatus</strong> returns 403. Front-desk relying on whiteboard. Open ticket with Cloudbeds support requesting <strong>housekeeping:read</strong> scope.</>,
+      conclusion: <>Cloudbeds <strong>getHousekeepingStatus</strong> returns 403. Open ticket with Cloudbeds support requesting <strong>housekeeping:read</strong> scope.</>,
       verdict: [{ label: 'Confidence · 100%' }, { label: 'Blocker · severity high', tone: 'bad' as const }, { label: 'External · Cloudbeds' }],
       primaryAction: 'Open ticket', secondaryAction: 'Defer', tertiaryAction: 'Mark as known',
       impact: 'Visibility', impactSub: 'OOO/OOS unblocked',
@@ -132,96 +129,155 @@ export default async function OperationsSnapshotPage() {
     });
   }
 
-  // Sub-page tiles
   const subPages = [
-    { href: '/operations/today',          label: 'Today',          desc: 'arrivals · departures · in-house', color: 'var(--green-2)' },
-    { href: '/operations/restaurant',     label: 'Restaurant',     desc: 'F&B capture · POS · cost' },
-    { href: '/operations/spa',            label: 'Spa',            desc: 'utilisation · upsell' },
-    { href: '/operations/activities',     label: 'Activities',     desc: 'bookings · revenue mix' },
-    { href: '/operations/housekeeping',   label: 'Housekeeping',   desc: 'OOO/OOS · turn time', isNew: true },
-    { href: '/operations/maintenance',    label: 'Maintenance',    desc: 'open tickets · preventive', isNew: true },
-    { href: '/operations/staff',          label: 'Staff',          desc: 'register · roster · attendance', isNew: true },
-    { href: '/operations/agents',         label: 'Agents',         desc: 'roster + last runs' },
+    { href: '/operations/staff',        label: 'Staff',        desc: 'register · roster · attendance' },
+    { href: '/operations/restaurant',   label: 'F&B',          desc: 'capture · POS · USALI cost' },
+    { href: '/operations/spa',          label: 'Spa',          desc: 'treatments · capture · cost' },
+    { href: '/operations/activities',   label: 'Activities',   desc: 'bookings · transport · supplier margin' },
+    { href: '/operations/inventory',    label: 'Inventory',    desc: 'stock · par · suppliers' },
+    { href: '/operations/catalog-cleanup', label: 'Catalog cleanup', desc: 'duplicate codes · taxonomy' },
+    { href: '/operations/agents',       label: 'Agents',       desc: 'roster + last runs' },
   ];
 
   return (
     <>
-      <PageHeader
-        pillar="Operations"
-        tab="Pillar entry"
-        title={<>The <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>property</em> as a function — health across departments.</>}
-        lede="Open work · DQ · staffing · cost. Strategic view, not the live arrivals board (that's the Today tab)."
-        rightSlot={
-          <a href="/operations/today" style={{ fontSize: 'var(--t-sm)', color: 'var(--brass)', textDecoration: 'underline' }}>
-            → Live: {today?.in_house ?? 0} in-house · {today?.arrivals_today ?? 0} arrivals · {today?.departures_today ?? 0} departures
-          </a>
-        }
+      <SlimHero
+        eyebrow="Operations · live"
+        title="The"
+        emphasis="property"
+        sub="arrivals · in-house · departures · health · payroll"
       />
 
-      {/* Strategic KPI strip — work-in-flight + audit signals + payroll envelope */}
-      <div className="kpi-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginTop: 18 }}>
-        <KpiBox
-          label="Open ops decisions"
-          value={snap?.ops_decisions_pending ?? 0}
-          unit="count"
-          state={(snap?.ops_decisions_pending ?? 0) === 0 ? 'data-needed' : 'live'}
-          needs="queue empty · agents idle"
-        />
-        <KpiBox
-          label="DQ critical open"
-          value={snap?.dq_critical ?? 0}
-          unit="count"
-        />
-        <KpiBox
-          label="Tasks due 7d"
-          value={snap?.tasks_due_7d ?? 0}
-          unit="count"
-        />
-        <KpiBox
-          label="Maintenance open"
-          value={snap?.maint_open ?? 0}
-          unit="count"
-          state={(snap?.maint_open ?? 0) === 0 ? 'data-needed' : 'live'}
-          needs="no open tickets"
-        />
+      {/* Today KPIs */}
+      <KpiStrip items={[
+        { label: 'In-House',        value: inHouseCount, kind: 'count' },
+        { label: 'Arrivals',        value: today?.arrivals_today ?? 0, kind: 'count' },
+        { label: 'Departures',      value: today?.departures_today ?? 0, kind: 'count' },
+        { label: 'Available',       value: available, kind: 'count', hint: `${totalRooms} active rooms` },
+        { label: 'OTB next 90d',    value: today?.otb_next_90d ?? 0, kind: 'count' },
+        { label: 'F&B capture · 30d', value: fnbCap > 0 ? fnbCap : 0, kind: 'pct', tone: fnbCap >= 70 ? 'pos' : fnbCap > 0 ? 'warn' : 'neg', hint: 'benchmark 70%+' },
+      ] satisfies KpiStripItem[]} />
+
+      {/* Strategic KPIs */}
+      <KpiStrip items={[
+        { label: 'Open ops decisions',   value: snap?.ops_decisions_pending ?? 0, kind: 'count' },
+        { label: 'DQ critical',          value: snap?.dq_critical ?? 0, kind: 'count', tone: (snap?.dq_critical ?? 0) > 0 ? 'neg' : 'pos' },
+        { label: 'Tasks due 7d',         value: snap?.tasks_due_7d ?? 0, kind: 'count' },
+        { label: 'Maintenance open',     value: snap?.maint_open ?? 0, kind: 'count' },
+        { label: 'Active staff',         value: snap?.staff_active ?? totalHeadcount, kind: 'count' },
+        { label: `Payroll ${latestPeriod}`, value: totalPayrollUsd, kind: 'money' },
+      ] satisfies KpiStripItem[]} />
+
+      {/* Today tables */}
+      <h2 style={{ marginTop: 28, marginBottom: 6, fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>
+        Today · arrivals · departures · in-house
+      </h2>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 18, marginTop: 12 }}>
+        <section>
+          <h3 style={{ fontSize: 'var(--t-sm)', fontWeight: 500, marginBottom: 6 }}>
+            Arrivals <span style={{ color: 'var(--ink-soft)' }}>· {arrivals.length}</span>
+          </h3>
+          {arrivals.length === 0 ? (
+            <div style={{ padding: 16, color: 'var(--ink-mute)', fontStyle: 'italic' }}>No arrivals today.</div>
+          ) : (
+            <table className="tbl">
+              <thead>
+                <tr><th>Guest</th><th>Source</th><th>Room Type</th><th className="num">Nights</th></tr>
+              </thead>
+              <tbody>
+                {arrivals.map((r: any) => (
+                  <tr key={r.reservation_id}>
+                    <td className="lbl"><strong>{r.guest_name || '—'}</strong></td>
+                    <td className="lbl text-mute">{r.source_name || '—'}</td>
+                    <td className="lbl">{r.room_type_name || '—'}</td>
+                    <td className="num">{r.nights}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+
+        <section>
+          <h3 style={{ fontSize: 'var(--t-sm)', fontWeight: 500, marginBottom: 6 }}>
+            Departures <span style={{ color: 'var(--ink-soft)' }}>· {departures.length}</span>
+          </h3>
+          {departures.length === 0 ? (
+            <div style={{ padding: 16, color: 'var(--ink-mute)', fontStyle: 'italic' }}>No departures today.</div>
+          ) : (
+            <table className="tbl">
+              <thead>
+                <tr><th>Guest</th><th>Source</th><th>Room Type</th><th className="num">Balance</th></tr>
+              </thead>
+              <tbody>
+                {departures.map((r: any) => {
+                  const bal = Number(r.balance || 0);
+                  return (
+                    <tr key={r.reservation_id}>
+                      <td className="lbl"><strong>{r.guest_name || '—'}</strong></td>
+                      <td className="lbl text-mute">{r.source_name || '—'}</td>
+                      <td className="lbl">{r.room_type_name || '—'}</td>
+                      <td className={`num ${bal > 0 ? 'text-bad' : ''}`}>{bal > 0 ? `$${bal.toFixed(0)}` : '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </section>
       </div>
 
-      <div className="kpi-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginTop: 12 }}>
-        <KpiBox
-          label="Active staff"
-          value={snap?.staff_active ?? totalHeadcount}
-          unit="count"
-        />
-        <KpiBox
-          label={`Payroll ${latestPeriod}`}
-          value={totalPayrollUsd}
-          unit="usd"
-        />
-        <KpiBox
-          label="Shifts last 7d"
-          value={snap?.shifts_last_7d ?? 0}
-          unit="count"
-          state={(snap?.shifts_last_7d ?? 0) === 0 ? 'data-needed' : 'live'}
-          needs="no rosters logged"
-        />
-        <KpiBox
-          label="F&B capture · 30d"
-          value={fnbCap > 0 ? fnbCap : null}
-          unit="pct"
-          state={fnbCap > 0 ? 'live' : 'data-needed'}
-          needs="no capture data"
-        />
-      </div>
+      <section style={{ marginTop: 22 }}>
+        <h3 style={{ fontSize: 'var(--t-sm)', fontWeight: 500, marginBottom: 6 }}>
+          In-House <span style={{ color: 'var(--ink-soft)' }}>· {inhouse.length} guests</span>
+        </h3>
+        {inhouse.length === 0 ? (
+          <div style={{ padding: 16, color: 'var(--ink-mute)', fontStyle: 'italic' }}>No in-house guests.</div>
+        ) : (
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Guest</th>
+                <th>CB ID</th>
+                <th>Source</th>
+                <th>Room Type</th>
+                <th>Check-in</th>
+                <th>Check-out</th>
+                <th className="num">Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {inhouse.map((r: any) => {
+                const bal = Number(r.balance || 0);
+                return (
+                  <tr key={r.reservation_id}>
+                    <td className="lbl"><strong>{r.guest_name || '—'}</strong></td>
+                    <td className="lbl text-mute">
+                      <a href={`https://hotels.cloudbeds.com/connect/reservations#/edit/${r.reservation_id}`}
+                         target="_blank" rel="noopener noreferrer"
+                         style={{ color: 'var(--brass)', textDecoration: 'underline' }}>
+                        {r.reservation_id}
+                      </a>
+                    </td>
+                    <td className="lbl text-mute">{r.source_name || '—'}</td>
+                    <td className="lbl">{r.room_type_name || '—'}</td>
+                    <td className="lbl">{fmtDateShort(r.check_in_date)}</td>
+                    <td className="lbl">{fmtDateShort(r.check_out_date)}</td>
+                    <td className={`num ${bal > 0 ? 'text-bad' : ''}`}>{bal > 0 ? `$${bal.toFixed(0)}` : '—'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </section>
 
       {/* Department health */}
       <section style={{ marginTop: 28 }}>
-        <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 'var(--t-lg)', marginBottom: 6 }}>
-          Department <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>health</em>
+        <h2 style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)', marginBottom: 6 }}>
+          Department health · payroll {latestPeriod}
         </h2>
-        <p style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-mute, #8a8170)', margin: '0 0 12px' }}>
-          Latest closed payroll period · {latestPeriod} · headcount × days × USD per <code>ops.v_payroll_dept_monthly</code>.
-          Click a row name for the dept sub-page.
-        </p>
         {deptPayroll.length === 0 ? (
           <div style={{ padding: 16, color: 'var(--ink-mute)', fontStyle: 'italic', textAlign: 'center' }}>
             No payroll rows yet for any closed period.
@@ -244,28 +300,14 @@ export default async function OperationsSnapshotPage() {
 
       {/* Sub-page launcher */}
       <section style={{ marginTop: 32 }}>
-        <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 'var(--t-lg)', marginBottom: 12 }}>
-          Drill <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>into</em> a department
+        <h2 style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)', marginBottom: 12 }}>
+          Drill into a department
         </h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
           {subPages.map(p => (
-            <a
-              key={p.href}
-              href={p.href}
-              style={{
-                display: 'block',
-                padding: '14px 16px',
-                background: 'var(--card, #fff)',
-                border: '1px solid var(--line, #e7e2d8)',
-                borderRadius: 8,
-                textDecoration: 'none',
-                color: 'var(--ink, #2a2620)',
-                transition: 'border-color .15s ease, transform .1s ease',
-              }}
-            >
+            <a key={p.href} href={p.href} style={{ display: 'block', padding: '14px 16px', background: 'var(--card, #fff)', border: '1px solid var(--line, #e7e2d8)', borderRadius: 8, textDecoration: 'none', color: 'var(--ink, #2a2620)' }}>
               <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 4 }}>
                 <strong style={{ fontSize: 'var(--t-md)' }}>{p.label}</strong>
-                {p.isNew && <StatusPill tone="info">new</StatusPill>}
               </div>
               <div style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute, #8a8170)' }}>{p.desc}</div>
             </a>

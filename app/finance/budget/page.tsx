@@ -1,10 +1,13 @@
-// app/finance/budget/page.tsx
-// Finance · Budget — upload + view annual USALI budget.
-// Reads gl.budgets aggregated by period × subcategory.
-// Writes via /api/finance/budget/upload (CSV) which calls gl.upsert_budget_rows.
-
+// app/finance/budget/page.tsx — REDESIGN 2026-05-05 (recovery)
+import PageHeader from '@/components/layout/PageHeader';
+import KpiBox from '@/components/kpi/KpiBox';
+import StatusPill from '@/components/ui/StatusPill';
 import { supabaseGl } from '@/lib/supabase-gl';
 import BudgetUpload from './BudgetUpload';
+import {
+  FinanceStatusHeader, StatusCell, SectionHead,
+  metaSm, metaStrong, metaDim,
+} from '../_components/FinanceShell';
 
 export const revalidate = 0;
 export const dynamic = 'force-dynamic';
@@ -13,29 +16,11 @@ interface BudgetRow {
   period_yyyymm: string;
   usali_subcategory: string;
   amount_usd: number;
+  uploaded_at?: string | null;
 }
 
-const SUBCAT_ORDER = [
-  'Revenue',
-  'Cost of Sales',
-  'Payroll & Related',
-  'Other Operating Expenses',
-  'A&G',
-  'Sales & Marketing',
-  'POM',
-  'Utilities',
-  'Mgmt Fees',
-  'Depreciation',
-  'Interest',
-  'Income Tax',
-  'FX Gain/Loss',
-  'Non-Operating',
-];
-
-const MONTHS_2026 = [
-  '2026-01','2026-02','2026-03','2026-04','2026-05','2026-06',
-  '2026-07','2026-08','2026-09','2026-10','2026-11','2026-12',
-];
+const SUBCAT_ORDER = ['Revenue', 'Cost of Sales', 'Payroll & Related', 'Other Operating Expenses', 'A&G', 'Sales & Marketing', 'POM', 'Utilities', 'Mgmt Fees', 'Depreciation', 'Interest', 'Income Tax', 'FX Gain/Loss', 'Non-Operating'];
+const MONTHS_2026 = ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12'];
 
 function fmtK(n: number | null | undefined): string {
   if (n == null || !isFinite(n) || n === 0) return '—';
@@ -43,19 +28,12 @@ function fmtK(n: number | null | undefined): string {
 }
 
 export default async function BudgetPage() {
-  const { data: rows, error } = await supabaseGl
+  const { data: rows } = await supabaseGl
     .from('v_budget_lines')
-    .select('period_yyyymm, usali_subcategory, amount_usd');
-
-  if (error) {
-    // eslint-disable-next-line no-console
-    console.error('[budget] fetch', error);
-  }
+    .select('period_yyyymm, usali_subcategory, amount_usd, uploaded_at');
 
   const allRows = (rows ?? []) as BudgetRow[];
   const totalRows = allRows.length;
-
-  // Aggregate to period × subcategory map
   const cell = new Map<string, number>();
   for (const r of allRows) {
     const k = `${r.period_yyyymm}|${r.usali_subcategory}`;
@@ -72,87 +50,70 @@ export default async function BudgetPage() {
       grand += v;
     }
   }
-
-  const lastUpload = allRows
-    .map((r: any) => r.uploaded_at)
-    .filter(Boolean)
-    .sort()
-    .reverse()[0];
+  const monthsCovered = MONTHS_2026.filter((m) => (colSum.get(m) ?? 0) > 0).length;
+  const subcatsCovered = SUBCAT_ORDER.filter((s) => (rowSum.get(s) ?? 0) > 0).length;
+  const lastUpload = allRows.map((r) => r.uploaded_at).filter((d): d is string => !!d).sort().reverse()[0] ?? null;
 
   return (
-    <div className="page">
-      <header className="page-head">
-        <div className="eyebrow">Finance · Budget · 2026</div>
-        <h1>USALI annual budget</h1>
-        <p className="lead">
-          Source: <code>plan.lines</code> · scenario <strong>Budget 2026 v1</strong> · 900 rows imported.
-          Numbers below feed <a href="/finance/pnl">/finance/pnl</a> Budget / Δ Bgt / Flow columns + the 12-month bottom panel.
-          To replace this budget, upload a new CSV (creates a new plan scenario) or edit <code>plan.lines</code> directly.
-        </p>
-      </header>
-
-      <section className="kpi-strip">
-        <div className="kpi"><div className="lbl">Budget rows in DB</div><div className="val">{totalRows}</div><div className="deltas neu">{totalRows === 0 ? 'no rows yet' : 'gl.budgets'}</div></div>
-        <div className="kpi"><div className="lbl">Annual budget total</div><div className="val">{grand > 0 ? `$${(grand / 1000).toFixed(0)}k` : 'xx'}</div><div className="deltas neu">{grand > 0 ? 'sum of all rows' : 'awaiting upload'}</div></div>
-        <div className="kpi"><div className="lbl">Months covered</div><div className="val">{MONTHS_2026.filter(m => (colSum.get(m) ?? 0) > 0).length} / 12</div><div className="deltas neu">2026</div></div>
-        <div className="kpi"><div className="lbl">Subcats covered</div><div className="val">{SUBCAT_ORDER.filter(s => (rowSum.get(s) ?? 0) > 0).length} / {SUBCAT_ORDER.length}</div><div className="deltas neu">USALI</div></div>
-      </section>
-
-      <BudgetUpload lastUploadAt={lastUpload ?? null} />
-
-      <section className="table-section">
-        <h2>Current budget grid</h2>
-        <p className="hint">Subcategory rows × month columns. 0 / blank = no row uploaded for that cell.</p>
-        <div className="map-table-wrap">
-          <table className="map-table">
+    <>
+      <PageHeader pillar="Finance" tab="Budget"
+        title={<>The number you <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>committed to</em> — every USALI line, every month.</>}
+        lede={`USALI annual budget · ${totalRows} rows loaded · ${monthsCovered}/12 months · ${subcatsCovered}/${SUBCAT_ORDER.length} subcategories`} />
+      <FinanceStatusHeader
+        top={<>
+          <StatusCell label="SOURCE"><StatusPill tone="active">plan.lines · v_budget_lines</StatusPill><span style={metaDim}>· "Budget 2026 v1"</span></StatusCell>
+          <StatusCell label="ROWS"><span style={metaStrong}>{totalRows}</span></StatusCell>
+          <StatusCell label="COVERAGE"><span style={metaSm}>{monthsCovered}/12</span><span style={metaDim}>months · {subcatsCovered}/{SUBCAT_ORDER.length} subcats</span></StatusCell>
+          <span style={{ flex: 1 }} />
+        </>}
+        bottom={<>
+          <StatusCell label="ANNUAL"><span style={metaStrong}>{grand > 0 ? `$${(grand / 1000).toFixed(0)}k` : '—'}</span></StatusCell>
+          {lastUpload && <StatusCell label="LAST UPLOAD"><span style={metaDim}>{String(lastUpload).slice(0, 10)}</span></StatusCell>}
+          <span style={{ flex: 1 }} />
+          <span style={metaDim}>feeds /finance/pnl Budget · Δ Bgt · Flow columns</span>
+        </>}
+      />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
+        <KpiBox value={totalRows} unit="count" label="Budget rows" />
+        <KpiBox value={grand} unit="usd" label="Annual total" state={grand > 0 ? 'live' : 'data-needed'} needs={grand === 0 ? 'awaiting upload' : undefined} />
+        <KpiBox value={null} unit="text" valueText={`${monthsCovered}/12`} label="Months covered" />
+        <KpiBox value={null} unit="text" valueText={`${subcatsCovered}/${SUBCAT_ORDER.length}`} label="Subcats covered" />
+      </div>
+      <BudgetUpload lastUploadAt={lastUpload} />
+      <div style={{ marginTop: 18 }}>
+        <SectionHead title="Budget grid" emphasis="2026 · monthly" sub="Subcategory rows × month columns" source="plan.lines" />
+        <div style={{ overflowX: 'auto', border: '1px solid var(--paper-deep)', borderRadius: 8, background: 'var(--paper-warm)' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr>
-                <th>USALI subcategory</th>
-                {MONTHS_2026.map(m => <th key={m} className="num">{m.slice(5)}</th>)}
-                <th className="num">FY total</th>
+                <th style={th}>USALI subcategory</th>
+                {MONTHS_2026.map((m) => <th key={m} style={{ ...th, textAlign: 'right' }}>{m.slice(5)}</th>)}
+                <th style={{ ...th, textAlign: 'right' }}>FY total</th>
               </tr>
             </thead>
             <tbody>
-              {SUBCAT_ORDER.map(s => (
+              {SUBCAT_ORDER.map((s) => (
                 <tr key={s}>
-                  <td><strong>{s}</strong></td>
-                  {MONTHS_2026.map(m => {
+                  <td style={td}><strong>{s}</strong></td>
+                  {MONTHS_2026.map((m) => {
                     const v = cell.get(`${m}|${s}`) ?? 0;
-                    return <td key={m} className="num" style={v === 0 ? { color: 'var(--ink-mute, #8a8170)' } : {}}>{fmtK(v)}</td>;
+                    return <td key={m} style={{ ...td, textAlign: 'right', color: v === 0 ? 'var(--ink-mute)' : undefined }}>{fmtK(v)}</td>;
                   })}
-                  <td className="num"><strong>{fmtK(rowSum.get(s) ?? 0)}</strong></td>
+                  <td style={{ ...td, textAlign: 'right' }}><strong>{fmtK(rowSum.get(s) ?? 0)}</strong></td>
                 </tr>
               ))}
-              <tr style={{ borderTop: '2px solid var(--line)' }}>
-                <td><strong>Monthly total</strong></td>
-                {MONTHS_2026.map(m => <td key={m} className="num"><strong>{fmtK(colSum.get(m) ?? 0)}</strong></td>)}
-                <td className="num"><strong>{fmtK(grand)}</strong></td>
+              <tr style={{ borderTop: '2px solid var(--paper-deep)' }}>
+                <td style={td}><strong>Monthly total</strong></td>
+                {MONTHS_2026.map((m) => <td key={m} style={{ ...td, textAlign: 'right' }}><strong>{fmtK(colSum.get(m) ?? 0)}</strong></td>)}
+                <td style={{ ...td, textAlign: 'right' }}><strong>{fmtK(grand)}</strong></td>
               </tr>
             </tbody>
           </table>
         </div>
-      </section>
-
-      <style>{`
-        .page { padding: 24px 28px 80px; max-width: 1480px; }
-        .eyebrow { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--ink-mute, #8a8170); }
-        h1 { margin: 4px 0 8px; font-family: var(--font-display, 'Playfair Display', serif); font-weight: 500; font-size: 28px; }
-        .lead { font-size: 14px; color: var(--ink-mute, #6a6353); max-width: 720px; line-height: 1.5; }
-        .lead a { color: var(--green-2, #2e4a36); text-decoration: underline; }
-        .kpi-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 24px 0; }
-        .kpi { background: var(--card, #fff); border: 1px solid var(--line, #e7e2d8); border-radius: 8px; padding: 14px 16px; }
-        .kpi .lbl { font-size: 11px; color: var(--ink-mute, #8a8170); text-transform: uppercase; letter-spacing: .5px; }
-        .kpi .val { font-size: 24px; font-weight: 600; margin: 4px 0 2px; }
-        .kpi .deltas.neu { font-size: 12px; color: var(--ink-mute, #8a8170); }
-        .table-section { margin: 32px 0; }
-        .table-section h2 { font-family: var(--font-display); font-weight: 500; font-size: 20px; margin-bottom: 4px; }
-        .table-section .hint { font-size: 13px; color: var(--ink-mute); margin: 0 0 12px; }
-        .map-table-wrap { overflow-x: auto; border: 1px solid var(--line, #e7e2d8); border-radius: 8px; background: var(--card, #fff); }
-        .map-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-        .map-table th { text-align: left; padding: 8px 10px; background: var(--surf-2, #f5f1e7); border-bottom: 1px solid var(--line, #e7e2d8); font-weight: 500; color: var(--ink-mute, #6a6353); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
-        .map-table td { padding: 6px 10px; border-bottom: 1px solid var(--line-soft, #efeae0); }
-        .map-table .num { text-align: right; font-variant-numeric: tabular-nums; }
-      `}</style>
-    </div>
+      </div>
+    </>
   );
 }
+
+const th: React.CSSProperties = { textAlign: 'left', padding: '8px 10px', background: 'var(--paper-deep)', borderBottom: '1px solid var(--paper-deep)', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)', fontWeight: 600 };
+const td: React.CSSProperties = { padding: '6px 10px', borderBottom: '1px solid var(--paper-deep)', fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--ink)', fontVariantNumeric: 'tabular-nums' };

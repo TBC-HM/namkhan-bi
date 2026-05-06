@@ -1,16 +1,21 @@
 // app/operations/activities/page.tsx
-// Operations · Activities — excursions, experiences, transport.
-// Body-only page (layout provides Banner + SubNav + FilterStrip).
+// Re-restored 2026-05-05 — SlimHero · 2 KpiStrips · 3 cards · P&L grid · GL detail · trend · raw POS.
 
 import FilterStrip from '@/components/nav/FilterStrip';
-import PanelHero from '@/components/sections/PanelHero';
-import Card from '@/components/sections/Card';
-import KpiCard from '@/components/kpi/KpiCard';
-import Insight from '@/components/sections/Insight';
-import { getCaptureRates, getKpiDaily, aggregateDaily } from '@/lib/data';
+import SlimHero from '@/components/sections/SlimHero';
+import KpiStrip, { type KpiStripItem } from '@/components/kpi/KpiStrip';
+import PnlGrid from '@/components/pl/PnlGrid';
+import DeptTrendChart from '@/components/pl/DeptTrendChart';
+import FnbGlBreakdown from '@/components/pl/FnbGlBreakdown';
+import FnbTopSellerTrend from '@/components/pl/FnbTopSellerTrend';
+import FnbRawTransactions from '@/components/pl/FnbRawTransactions';
+import {
+  getKpiDaily, aggregateDaily, getDeptPl,
+  getDeptCaptureForPeriod, getActivitiesCostsForPeriod,
+  getDeptGlBreakdown, getDeptTopSellerTrend, getDeptRawTransactions,
+} from '@/lib/data';
 import { resolvePeriod } from '@/lib/period';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
-import { fmtMoney } from '@/lib/format';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -19,136 +24,86 @@ interface Props { searchParams: Record<string, string | string[] | undefined>; }
 
 export default async function ActivitiesPage({ searchParams }: Props) {
   const period = resolvePeriod(searchParams);
-  const daily = await getKpiDaily(period.from, period.to).catch(() => []);
+
+  const [daily, pl, periodCosts, captureP, glBreakdown, topTrend, rawTxns, transportRow] = await Promise.all([
+    getKpiDaily(period.from, period.to).catch(() => []),
+    getDeptPl('activities', 16).catch(() => []),
+    getActivitiesCostsForPeriod(period.from, period.to).catch(() => null),
+    getDeptCaptureForPeriod({ usali_dept: 'Other Operated', usali_subdept: 'Activities' }, period.from, period.to).catch(() => null),
+    getDeptGlBreakdown('Activities', 16).catch(() => ({ periods: [], lines: [] })),
+    getDeptTopSellerTrend({ usali_dept: 'Other Operated', usali_subdept: 'Activities' }, '2026-01-01', 8).catch(() => ({ periods: [], items: [] })),
+    getDeptRawTransactions({ usali_dept: 'Other Operated', usali_subdept: 'Activities' }, 2000).catch(() => []),
+    supabase
+      .from('mv_classified_transactions')
+      .select('amount')
+      .eq('property_id', PROPERTY_ID)
+      .eq('usali_dept', 'Other Operated')
+      .eq('usali_subdept', 'Transportation')
+      .gte('transaction_date', period.from)
+      .lte('transaction_date', period.to)
+      .then(r => ({ data: r.data ?? [] })),
+  ]);
+
   const a30 = aggregateDaily(daily, period.capacityMode);
-  const cap = await getCaptureRates().catch(() => null);
-
-  const { data: actItems } = await supabase
-    .from('mv_classified_transactions')
-    .select('description, amount, transaction_date, reservation_id')
-    .eq('property_id', PROPERTY_ID)
-    .eq('usali_dept', 'Other Operated')
-    .eq('usali_subdept', 'Activities')
-    .gte('transaction_date', period.from)
-    .lte('transaction_date', period.to);
-
-  // Transport (separate sub-dept inside Other Operated)
-  const { data: transportItems } = await supabase
-    .from('mv_classified_transactions')
-    .select('description, amount')
-    .eq('property_id', PROPERTY_ID)
-    .eq('usali_dept', 'Other Operated')
-    .eq('usali_subdept', 'Transportation')
-    .gte('transaction_date', period.from)
-    .lte('transaction_date', period.to);
-
-  const map: Record<string, { count: number; revenue: number }> = {};
-  (actItems ?? []).forEach((t: any) => {
-    const k = t.description || 'Unknown';
-    if (!map[k]) map[k] = { count: 0, revenue: 0 };
-    map[k].count += 1;
-    map[k].revenue += Number(t.amount || 0);
-  });
-  const topAct = Object.entries(map)
-    .map(([name, x]) => ({ name, ...x }))
-    .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, 12);
-
-  const transportRevenue = (transportItems ?? []).reduce((s: number, t: any) => s + Number(t.amount || 0), 0);
-  const totalActResv = new Set((actItems ?? []).map((t: any) => t.reservation_id)).size;
-  const captureRate = Number(cap?.activity_capture_pct ?? 0);
-  const perOccRn = Number(cap?.activity_per_occ_room ?? 0);
+  const plLatest = pl.find(r => r.revenue > 0) ?? null;
+  const tileSrc = periodCosts ?? (plLatest ? {
+    revenue: plLatest.revenue, total_cost: plLatest.total_cost, payroll: plLatest.payroll,
+    gop: plLatest.gop, labor_cost_pct: plLatest.labor_cost_pct, gop_pct: plLatest.gop_pct,
+    months_used: [plLatest.period],
+  } : null);
+  const captureRate = captureP ? Number(captureP.capture_pct) : 0;
+  const perOccRn = captureP ? Number(captureP.spend_per_occ) : 0;
+  const transportRev = (transportRow.data ?? []).reduce((s: number, t: any) => s + Number(t.amount || 0), 0);
 
   return (
     <>
       <FilterStrip showForward={false} showCompare={false} showSegment={false} liveSource="Cloudbeds · live" />
-      <PanelHero
-        eyebrow={`Activities · ${period.label}`}
-        title="Excursions"
-        emphasis="& experiences"
-        sub="Bookings · capture · per-occupied-roomnight · transport"
-        kpis={
-          <>
-            <KpiCard label="Activity Revenue" value={a30?.activity_revenue ?? 0} kind="money" />
-            <KpiCard label="Bookings" value={topAct.reduce((s, t) => s + t.count, 0)} hint={`line items ${period.label}`} />
-            <KpiCard label="Reservations" value={totalActResv} hint="with at least 1 activity" />
-            <KpiCard label="Transport Revenue" value={transportRevenue} kind="money" hint="airport · transfers" />
-          </>
-        }
-      />
+      <SlimHero eyebrow={`Activities · ${period.label}`} title="Excursions" emphasis="& experiences" sub="bookings · capture · per-occupied-roomnight · transport" />
 
-      <div className="card-grid-3">
-        <KpiCard
-          label="Capture Rate"
-          value={captureRate}
-          kind="pct"
-          tone={captureRate >= 30 ? 'pos' : captureRate >= 15 ? 'warn' : 'neg'}
-          hint="benchmark 30%+"
-        />
-        <KpiCard
-          label="Activity / Occ Rn"
-          value={perOccRn}
-          kind="money"
-          tone={perOccRn >= 20 ? 'pos' : 'neutral'}
-          hint="benchmark $20-35"
-        />
-        <KpiCard label="Supplier Margin" value={null} greyed hint="Supplier P&L not yet integrated" />
-      </div>
+      <KpiStrip items={[
+        { label: 'Activity Revenue', value: Number(a30?.activity_revenue ?? 0), kind: 'money', tone: 'pos' },
+        { label: 'Activity / Occ Rn', value: perOccRn, kind: 'money', tone: perOccRn >= 20 ? 'pos' : 'warn', hint: 'benchmark $20-35' },
+        { label: 'Capture %', value: captureRate, kind: 'pct', tone: captureRate >= 30 ? 'pos' : captureRate >= 15 ? 'warn' : 'neg', hint: 'benchmark 30%+' },
+        { label: 'Transport Revenue', value: transportRev, kind: 'money', hint: 'airport · transfers' },
+        { label: 'Months', value: tileSrc ? tileSrc.months_used.length : 0, kind: 'count', hint: tileSrc ? tileSrc.months_used[0] : '—' },
+        { label: 'Supplier margin', value: 0, kind: 'pct', hint: 'supplier ledger not synced' },
+      ] satisfies KpiStripItem[]} />
 
-      <Card title="Top activities" emphasis={period.label} sub={`${topAct.length} activities · ranked by revenue`} source="mv_classified_transactions">
-        {topAct.length === 0 ? (
-          <div style={{ padding: 24, color: 'var(--ink-mute)', fontStyle: 'italic' }}>
-            No activity transactions in window.
-          </div>
-        ) : (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Activity</th>
-                <th className="num">Sold</th>
-                <th className="num">Revenue</th>
-                <th className="num">Avg Ticket</th>
-              </tr>
-            </thead>
-            <tbody>
-              {topAct.map((s) => (
-                <tr key={s.name}>
-                  <td className="lbl"><strong>{s.name}</strong></td>
-                  <td className="num">{s.count}</td>
-                  <td className="num">{fmtMoney(s.revenue, 'USD')}</td>
-                  <td className="num text-mute">{fmtMoney(s.revenue / s.count, 'USD')}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </Card>
+      <KpiStrip items={[
+        { label: 'Labor %', value: tileSrc ? tileSrc.labor_cost_pct : 0, kind: 'pct', tone: tileSrc && tileSrc.labor_cost_pct <= 35 ? 'pos' : 'neg', hint: 'target ≤ 35%' },
+        { label: 'GOP %', value: tileSrc ? tileSrc.gop_pct : 0, kind: 'pct', tone: tileSrc && tileSrc.gop_pct >= 50 ? 'pos' : tileSrc && tileSrc.gop_pct >= 0 ? 'warn' : 'neg', hint: 'target ≥ 50%' },
+        { label: 'Revenue (QB)', value: tileSrc ? tileSrc.revenue : 0, kind: 'money', hint: tileSrc ? `${tileSrc.months_used.length} mo` : '—' },
+        { label: 'Total cost', value: tileSrc ? tileSrc.total_cost : 0, kind: 'money' },
+        { label: 'Payroll', value: tileSrc ? tileSrc.payroll : 0, kind: 'money' },
+        { label: 'GOP', value: tileSrc ? tileSrc.gop : 0, kind: 'money', tone: tileSrc && tileSrc.gop >= 0 ? 'pos' : 'neg' },
+      ] satisfies KpiStripItem[]} />
 
-      <div className="card-grid-2" style={{ marginTop: 22 }}>
-        <Card title="Supplier ledger" sub="Margin tracking · supplier P&L" source="grey">
-          <div className="stub" style={{ padding: 32 }}>
-            <h3>Coming soon</h3>
-            <p>Supplier-level margin attribution. Activity bookings live outside Cloudbeds —
-            requires a supplier ledger schema.</p>
-          </div>
-        </Card>
-        <Card title="Booking lead time" sub="Pre-arrival vs in-stay split" source="grey">
-          <div className="stub" style={{ padding: 32 }}>
-            <h3>Coming soon</h3>
-            <p>Lead-time analysis identifies upsell opportunities. Pre-arrival emails get higher
-            attach rates than in-stay walk-up bookings.</p>
-          </div>
-        </Card>
-      </div>
+      <h2 style={{ marginTop: 28, marginBottom: 6, fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>Monthly trend · revenue · costs · GOP %</h2>
+      <DeptTrendChart rows={pl} dept="activities" />
 
-      {captureRate < 20 && captureRate > 0 && (
-        <Insight tone="warn" eye="Activity capture">
-          <strong>Capture rate {captureRate.toFixed(1)}%</strong> is below the 30% benchmark.
-          Activity bookings off-property are likely happening (Mekong cruises, kuang si,
-          elephant sanctuaries) but not posting to the room. Investigate concierge workflow:
-          are bookings made via the property and posted back to the folio?
-        </Insight>
-      )}
+      <h2 style={{ marginTop: 28, marginBottom: 6, fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>P&amp;L · QB GL · USALI rollup</h2>
+      <PnlGrid rows={pl} dept="activities" targets={{ labor_cost_pct: 35, gop_pct: 50 }} defaultRows={6} />
+
+      <details style={{ marginTop: 24 }}>
+        <summary style={{ cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)', padding: '8px 0' }}>
+          GL detail · Activities accounts ▾
+        </summary>
+        <FnbGlBreakdown data={glBreakdown} defaultMonths={4} />
+      </details>
+
+      <details style={{ marginTop: 24 }} open>
+        <summary style={{ cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)', padding: '8px 0' }}>
+          Top activities · trend since Jan 26 ▾
+        </summary>
+        <FnbTopSellerTrend data={topTrend} />
+      </details>
+
+      <details style={{ marginTop: 24 }}>
+        <summary style={{ cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)', padding: '8px 0' }}>
+          All POS transactions · search &amp; reconcile ▾  <span style={{ color: 'var(--ink-soft)', textTransform: 'none', letterSpacing: 'normal' }}>({rawTxns.length} most recent)</span>
+        </summary>
+        <FnbRawTransactions data={rawTxns} pageSize={200} />
+      </details>
     </>
   );
 }
