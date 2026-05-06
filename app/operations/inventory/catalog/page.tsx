@@ -30,12 +30,15 @@ async function getItems(): Promise<CatalogRow[]> {
     console.error('[inventory/catalog] supabaseAdmin', e);
     return [];
   }
-  const [itemsRes, catsRes, unitsRes] = await Promise.all([
+  const [itemsRes, catsRes, unitsRes, salesRes] = await Promise.all([
     admin.schema('inv').from('items').select(
       'sku, item_name, category_id, uom_id, last_unit_cost_usd, gl_account_code, is_perishable, catalog_status, is_active, updated_at'
     ).order('item_name', { ascending: true }).limit(2500),
     admin.schema('inv').from('categories').select('category_id, code, name'),
     admin.schema('inv').from('units').select('unit_id, code'),
+    // Per-item sales aggregates from public.transactions (Cloudbeds/Poster POS feed).
+    // View matches by lowercased trimmed description ↔ item_name.
+    admin.from('v_inv_item_sales').select('desc_key, last_sold_at, ytd_usd'),
   ]);
 
   if (itemsRes.error) {
@@ -47,9 +50,17 @@ async function getItems(): Promise<CatalogRow[]> {
   (catsRes.data ?? []).forEach((c: any) => { catMap.set(c.category_id, { code: c.code, name: c.name }); });
   const unitMap = new Map<number, string>();
   (unitsRes.data ?? []).forEach((u: any) => { unitMap.set(u.unit_id, u.code); });
+  const salesMap = new Map<string, { last_sold_at: string | null; ytd_usd: number | null }>();
+  (salesRes.data ?? []).forEach((s: any) => {
+    salesMap.set(s.desc_key, {
+      last_sold_at: s.last_sold_at,
+      ytd_usd: s.ytd_usd != null ? Number(s.ytd_usd) : null,
+    });
+  });
 
   return (itemsRes.data ?? []).map((r: any) => {
     const cat = catMap.get(r.category_id);
+    const sale = salesMap.get(String(r.item_name ?? '').trim().toLowerCase());
     return {
       sku: r.sku,
       item_name: r.item_name,
@@ -62,6 +73,8 @@ async function getItems(): Promise<CatalogRow[]> {
       catalog_status: r.catalog_status,
       is_active: !!r.is_active,
       updated_at: r.updated_at,
+      last_sold_at: sale?.last_sold_at ?? null,
+      ytd_sales_usd: sale?.ytd_usd ?? null,
     };
   });
 }

@@ -421,18 +421,47 @@ export interface StockOnHandRow {
   locations_with_stock: number;
   last_movement_at: string | null;
   last_count_at: string | null;
+  // Units sold (consume + issue) windowed. null = no movements yet → renders "—".
+  sold_ytd: number | null;
+  sold_30d: number | null;
 }
 
 export async function getStockOnHand(): Promise<StockOnHandRow[]> {
   let admin;
   try { admin = getSupabaseAdmin(); } catch { return []; }
-  const { data } = await safe(
-    admin.schema('inv').from('v_inv_stock_on_hand')
-      .select('item_id, sku, item_name, category_id, category_name, total_on_hand, value_usd_estimate, locations_with_stock, last_movement_at, last_count_at')
-      .order('value_usd_estimate', { ascending: false, nullsFirst: false }),
-    { data: [] as any[] }
-  );
-  return (data ?? []).map((r: any) => ({
+
+  const today = new Date();
+  const ytdStartIso = `${today.getUTCFullYear()}-01-01`;
+  const thirtyDaysAgoIso = new Date(today.getTime() - 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+
+  const [stockRes, mvRes] = await Promise.all([
+    safe(
+      admin.schema('inv').from('v_inv_stock_on_hand')
+        .select('item_id, sku, item_name, category_id, category_name, total_on_hand, value_usd_estimate, locations_with_stock, last_movement_at, last_count_at')
+        .order('value_usd_estimate', { ascending: false, nullsFirst: false }),
+      { data: [] as any[] }
+    ),
+    safe(
+      admin.schema('inv').from('movements')
+        .select('item_id, quantity, movement_date')
+        .in('movement_type', ['consume', 'issue'])
+        .gte('movement_date', ytdStartIso),
+      { data: [] as any[] }
+    ),
+  ]);
+
+  const ytdByItem = new Map<string, number>();
+  const last30ByItem = new Map<string, number>();
+  (mvRes.data ?? []).forEach((m: any) => {
+    const qty = Math.abs(Number(m.quantity ?? 0));
+    if (!Number.isFinite(qty) || qty === 0) return;
+    ytdByItem.set(m.item_id, (ytdByItem.get(m.item_id) ?? 0) + qty);
+    if (m.movement_date && m.movement_date >= thirtyDaysAgoIso) {
+      last30ByItem.set(m.item_id, (last30ByItem.get(m.item_id) ?? 0) + qty);
+    }
+  });
+
+  return (stockRes.data ?? []).map((r: any) => ({
     item_id: r.item_id,
     sku: r.sku,
     item_name: r.item_name,
@@ -443,6 +472,8 @@ export async function getStockOnHand(): Promise<StockOnHandRow[]> {
     locations_with_stock: Number(r.locations_with_stock ?? 0),
     last_movement_at: r.last_movement_at,
     last_count_at: r.last_count_at,
+    sold_ytd: ytdByItem.has(r.item_id) ? ytdByItem.get(r.item_id) ?? null : null,
+    sold_30d: last30ByItem.has(r.item_id) ? last30ByItem.get(r.item_id) ?? null : null,
   }));
 }
 
