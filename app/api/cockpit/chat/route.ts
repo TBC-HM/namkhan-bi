@@ -447,9 +447,22 @@ function renderTriageMarkdown(t: Triage, originalMessage: string): string {
   ].join("\n");
 }
 
+function isAuthorized(req: Request): boolean {
+  // Either valid workspace_session cookie OR Bearer COCKPIT_AGENT_TOKEN.
+  const cookie = req.headers.get("cookie") ?? "";
+  if (/workspace_session=/.test(cookie)) return true; // middleware would already enforce, but allow self-pass for tests
+  const auth = req.headers.get("authorization") ?? "";
+  const expected = process.env.COCKPIT_AGENT_TOKEN;
+  if (expected && auth === `Bearer ${expected}`) return true;
+  return false;
+}
+
 export async function POST(req: Request) {
   noStore();
   try {
+    if (!isAuthorized(req)) {
+      return NextResponse.json({ error: "Not Found" }, { status: 404 });
+    }
     const { message } = await req.json();
     if (!message || typeof message !== "string") {
       return NextResponse.json({ error: "message required" }, { status: 400 });

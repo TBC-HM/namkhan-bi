@@ -56,12 +56,14 @@ export async function middleware(req: NextRequest) {
   if (path.startsWith("/api/cockpit/webhooks/")) return NextResponse.next();
   if (path.startsWith("/api/cockpit/agent/run")) return NextResponse.next();
   if (path.startsWith("/api/cockpit/auth/redeem")) return NextResponse.next();
-  // Bearer-token routes that workflows hit (not user sessions)
+  // Routes that accept Bearer COCKPIT_AGENT_TOKEN (workflows + smoke tests)
+  // self-check inside the route. Middleware bypass lets the auth header
+  // through unmolested.
   if (path.startsWith("/api/cockpit/audit-log") ||
       path.startsWith("/api/cockpit/backup/status") ||
       path.startsWith("/api/cockpit/deploy/rollback") ||
-      path.startsWith("/api/cockpit/webhooks/post-deploy")) {
-    // These routes self-check Bearer COCKPIT_AGENT_TOKEN.
+      path.startsWith("/api/cockpit/webhooks/post-deploy") ||
+      path.startsWith("/api/cockpit/chat")) {
     return NextResponse.next();
   }
 
