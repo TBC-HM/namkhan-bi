@@ -31,3 +31,6 @@ migration_phase2_*.sql
 # macOS Finder zombie file handles (added 2026-05-03)
 .fuse_hidden*
 
+
+# Phase 0 closure secrets — local only, never commit
+cockpit/PHASE_0_CLOSURE_GH_SECRETS.md

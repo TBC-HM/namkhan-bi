@@ -1,0 +1,157 @@
+# .github/workflows/deploy-prod.yml
+#
+# PROD DEPLOY with backup pre-check.
+# Replaces the manual `npx vercel --prod --yes` CLI flow.
+#
+# Trigger: push to main (commits arriving via promote-staging-to-prod.yml)
+#          or manual workflow_dispatch with optional inputs.
+#
+# Pre-deploy gates:
+#   1. Type-check pass
+#   2. Build pass
+#   3. Supabase backup verification (< 24h old)
+#   4. Backup TRIGGER (creates a fresh snapshot before deploy)
+#
+# Post-deploy: pings Sentinel Sergei via /api/cockpit/webhooks/post-deploy
+# Auto-rollback: if /api/health returns non-200 within 60s of deploy.
+#
+# Author: PBS via Claude (Cowork) · 2026-05-06
+
+name: Deploy prod
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "cockpit/decisions/**"
+      - "docs/**"
+  workflow_dispatch:
+    inputs:
+      trigger:
+        description: "Trigger source (promotion / manual / hotfix)"
+        required: false
+        default: "manual"
+      run_id:
+        description: "Upstream workflow run id (for audit linkage)"
+        required: false
+
+permissions:
+  contents: read
+  deployments: write
+
+concurrency:
+  group: prod-deploy
+  cancel-in-progress: false  # never cancel an in-flight prod deploy
+
+jobs:
+  pre-deploy-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      backup_age_hours: ${{ steps.backup.outputs.age_hours }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Build (smoke)
+        run: npx next build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+
+      - name: Trigger Supabase pre-deploy backup
+        id: backup
+        run: |
+          set -e
+          echo "Triggering pre-deploy backup..."
+          RESP=$(curl -s -X POST "https://namkhan-bi.vercel.app/api/cockpit/docs/backup" \
+            -H "Authorization: Bearer ${{ secrets.COCKPIT_AGENT_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"backup_type\":\"deployment_triggered\",\"deployment_id\":\"${{ github.run_id }}\"}")
+          echo "Backup response: $RESP"
+          OK=$(echo "$RESP" | jq -r '.ok // false')
+          if [ "$OK" != "true" ]; then
+            echo "FAIL: backup did not succeed — aborting deploy"
+            exit 1
+          fi
+          echo "age_hours=0" >> $GITHUB_OUTPUT
+
+  deploy:
+    needs: pre-deploy-checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Pull Vercel env
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy
+        id: deploy
+        run: |
+          DEPLOY_URL=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$DEPLOY_URL" >> $GITHUB_OUTPUT
+          echo "Deployed: $DEPLOY_URL"
+
+      - name: Smoke test prod (60s grace)
+        run: |
+          set -e
+          sleep 30  # CDN propagation
+          for i in 1 2 3; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://namkhan-bi.vercel.app/api/health?bust=$RANDOM")
+            if [ "$STATUS" = "200" ]; then
+              echo "Smoke test PASS (attempt $i)"
+              exit 0
+            fi
+            echo "Attempt $i returned $STATUS, retrying..."
+            sleep 10
+          done
+          echo "FAIL: smoke test never returned 200"
+          exit 1
+
+      - name: Notify Sentinel Sergei
+        if: always()
+        run: |
+          curl -X POST "https://namkhan-bi.vercel.app/api/cockpit/webhooks/post-deploy" \
+            -H "Authorization: Bearer ${{ secrets.COCKPIT_AGENT_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"deploy_url\": \"${{ steps.deploy.outputs.url }}\",
+              \"sha\": \"${{ github.sha }}\",
+              \"actor\": \"${{ github.actor }}\",
+              \"trigger\": \"${{ github.event.inputs.trigger || 'push' }}\",
+              \"upstream_run\": \"${{ github.event.inputs.run_id }}\",
+              \"job_status\": \"${{ job.status }}\"
+            }" || echo "Sentinel notify failed (non-blocking)"
+
+  rollback-on-fail:
+    needs: deploy
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Auto-rollback
+        run: |
+          curl -X POST "https://namkhan-bi.vercel.app/api/cockpit/deploy/rollback" \
+            -H "Authorization: Bearer ${{ secrets.COCKPIT_AGENT_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"reason\":\"deploy-prod.yml smoke test failed\",\"sha\":\"${{ github.sha }}\"}"

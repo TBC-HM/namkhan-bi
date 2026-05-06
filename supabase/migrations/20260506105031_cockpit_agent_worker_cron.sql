@@ -8,6 +8,11 @@
 -- Note:    Token rotation requires UPDATE cron.job SET command=... when needed.
 -- Author:  PBS via Claude (Cowork) · 2026-05-06
 -- Applied via Supabase MCP on 2026-05-06 (migration: cockpit_agent_worker_cron).
+-- Self-contained extensions setup (idempotent — prod already has these enabled,
+-- shadow DB needs them before cron.schedule() resolves).
+
+CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA extensions;
+CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA extensions;
 
 SELECT cron.schedule(
   'cockpit-agent-worker',
