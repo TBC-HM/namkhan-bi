@@ -3,12 +3,58 @@
 // the `handler` column in cockpit_agent_skills and is dispatched from the
 // agent worker when Anthropic emits a tool_use block.
 //
-// All handlers run with the SUPABASE_SERVICE_ROLE_KEY but are explicitly
-// scoped to read-only public views/tables. No DDL, no writes, no deletes.
+// ENVIRONMENT ROUTING (Phase 4c — Phase 0 spec):
+// - Production project ref: kpenyneooigsyuuomgct (NEXT_PUBLIC_SUPABASE_URL points here on namkhan-bi)
+// - Staging project ref:    hutnvqqdumjdnetkkajd (NEXT_PUBLIC_SUPABASE_URL points here on namkhan-bi-staging)
+// - The supabase client always points at whichever project this Vercel app
+//   is deployed against (i.e. NEXT_PUBLIC_SUPABASE_URL). No cross-project
+//   write paths exist in this file.
+//
+// Production-write skills check `isProductionEnvironment()` before executing
+// destructive operations. The default is to refuse production writes unless
+// the COCKPIT_PROD_WRITE_TOKEN env var is set in the request context (PBS-only
+// approval token, one-shot, expires).
 
 import { createClient } from "@supabase/supabase-js";
 import fs from "fs/promises";
 import path from "path";
+
+const PROD_PROJECT_REF = "kpenyneooigsyuuomgct";
+const STAGING_PROJECT_REF = "hutnvqqdumjdnetkkajd";
+
+function isProductionEnvironment(): boolean {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  return url.includes(PROD_PROJECT_REF);
+}
+
+function isStagingEnvironment(): boolean {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  return url.includes(STAGING_PROJECT_REF);
+}
+
+function currentEnvironmentLabel(): "production" | "staging" | "unknown" {
+  if (isProductionEnvironment()) return "production";
+  if (isStagingEnvironment()) return "staging";
+  return "unknown";
+}
+
+// Re-exports for use by other server routes (chat/triage, agent worker, etc.)
+// so every audit-log insert can stamp its environment.
+export const ENVIRONMENT = currentEnvironmentLabel();
+export { isProductionEnvironment, isStagingEnvironment, requireProdWriteApproval };
+
+// Production-write guard. Throws if invoked in production without the
+// approval token. Staging operations bypass this check.
+function requireProdWriteApproval(skillName: string): void {
+  if (!isProductionEnvironment()) return;
+  const token = process.env.COCKPIT_PROD_WRITE_TOKEN;
+  if (!token) {
+    throw new Error(
+      `[${skillName}] production write blocked — environment is production and COCKPIT_PROD_WRITE_TOKEN not set. ` +
+      `AI agents must work in staging by default. PBS-only override.`
+    );
+  }
+}
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
