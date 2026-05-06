@@ -56,11 +56,10 @@ jobs:
       - name: Type-check
         run: npx tsc --noEmit
 
-      - name: Build
-        run: npx next build
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      # Build step removed — duplicates the vercel build that runs inside
+      # deploy-prod.yml, and would require service_role key here too. tsc
+      # alone is sufficient as a syntactic gate; deploy-prod.yml does the
+      # full build with Vercel's env-var injection.
 
       - name: Smoke test staging
         if: ${{ github.event.inputs.skip_smoke_test != 'true' }}
