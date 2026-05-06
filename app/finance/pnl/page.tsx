@@ -4,20 +4,26 @@
 // Wired tiles use Supabase data; unwired tiles render with "Data needed" badges
 // referencing the schema gap (1–8) blocking them. See deploy-doc-schema-finance-pnl-2026-04-30.md.
 
+import React from 'react';
 import { getKpiDaily, aggregateDaily } from '@/lib/data';
 import { resolvePeriod } from '@/lib/period';
 import {
   getPlSections, getUsaliHouse, getUsaliDept, getUsaliPlBySubcat,
   getDqUnmappedCount, getPendingDecisions, periodsForWindow, currentPeriod, pickSection, pickPeriod,
   getLyTotalRevenue, getLyByDept, getLyByUsaliDept, getDeptByPeriods,
-  getBudgetByPeriod, getBudgetVsActual,
+  getBudgetByPeriod, getBudgetVsActual, getScenarioStack,
   getLyLinesByPeriod, getForecastLinesByPeriod,
   getDriversByPeriod, getFreshnessSummary, getMaterialityThreshold,
   getDqSummary, getPayrollByPeriod, getDemandSummary,
+  getCashForecast13w, getLatestCommentary,
 } from '../_data';
 import { priorPeriod, type PeriodWindow } from '@/lib/supabase-gl';
 import PageHeader from '@/components/layout/PageHeader';
 import TwelveMonthPanel from './TwelveMonthPanel';
+import MonthDropdown from './MonthDropdown';
+import CompareDropdown, { type CompareMode } from './CompareDropdown';
+import CashForecastPanel from './CashForecastPanel';
+import CommentaryPanel from './CommentaryPanel';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -90,8 +96,25 @@ export default async function PnLPage({ searchParams }: Props) {
       .filter(r => r.section === 'income' && Number(r.amount_usd) >= 1000 && r.period_yyyymm !== calCur)
       .map(r => r.period_yyyymm)
   )).sort().reverse();
-  const cur = periodsWithRev[0] || calCur;
-  const prior = periodsWithRev[1] || priorPeriod(cur);
+  const autoCur = periodsWithRev[0] || calCur;
+
+  // Manual override: ?month=YYYY-MM (FY2026 only). Falls back to auto-detect when invalid/missing.
+  const monthParam = (searchParams.month as string | undefined) || '';
+  const monthValid = /^2026-(0[1-9]|1[0-2])$/.test(monthParam);
+  const cur = monthValid ? monthParam : autoCur;
+  const prior = priorPeriod(cur);
+
+  // Dropdown options: Jan 2026 → latest closed month (auto). Always include
+  // through the auto-detected latest so the user can flip back to "current".
+  const monthOptions = (() => {
+    const months: string[] = [];
+    const [endY, endM] = autoCur.split('-').map(Number);
+    for (let y = 2026, m = 1; (y < endY) || (y === endY && m <= endM); m += 1) {
+      months.push(`${y}-${String(m).padStart(2, '0')}`);
+      if (m === 12) { y += 1; m = 0; }
+    }
+    return months;
+  })();
   const plPrior = plSections.filter(r => r.period_yyyymm === prior);
 
   // KPI calculations from gl.* — `cur` is the latest closed month with revenue
@@ -139,7 +162,8 @@ export default async function PnLPage({ searchParams }: Props) {
   const heatmapPeriods = (() => {
     const out: string[] = [];
     const [yy, mm] = cur.split('-').map(Number);
-    for (let i = 0; i < 5; i++) {
+    // 12 months ending in `cur` so heatmap covers a full FY at a glance.
+    for (let i = 0; i < 12; i++) {
       const d = new Date(yy, mm - 1 - i, 1);
       out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
     }
@@ -153,7 +177,7 @@ export default async function PnLPage({ searchParams }: Props) {
     getLyByUsaliDept(cur),
     getDeptByPeriods(heatmapPeriods),
     getBudgetByPeriod(cur),
-    getBudgetVsActual(fy2026),
+    getScenarioStack(fy2026),
     getLyLinesByPeriod(cur),       // Actuals 2025 same-month, keyed `${subcat}||${dept}`
     getForecastLinesByPeriod(cur), // Conservative 2026 cur-month
     getDriversByPeriod(cur),       // plan.drivers — room_nights/occ%/ADR for cur period
@@ -163,6 +187,29 @@ export default async function PnLPage({ searchParams }: Props) {
     getPayrollByPeriod(cur),       // ops.payroll_monthly for cur period (cross-check)
     getDemandSummary(fy2026),      // revenue.demand_calendar for FY2026
   ]);
+
+  // Cash forecast (13-week) + latest LLM commentary draft for cur period
+  const [cashForecast, latestCommentary] = await Promise.all([
+    getCashForecast13w(),
+    getLatestCommentary(cur),
+  ]);
+  const cashStartParam = Number((searchParams.cash0 as string | undefined) ?? '0');
+  const cashStart = isFinite(cashStartParam) ? cashStartParam : 0;
+
+  // Comparison mode (?compare=budget|forecast|ly) — controls which scenario
+  // populates the "Budget"-coded columns in the main USALI grid + Δ math.
+  const compareParam = (searchParams.compare as string | undefined) || 'budget';
+  const compareMode: CompareMode = (compareParam === 'forecast' || compareParam === 'ly')
+    ? compareParam : 'budget';
+  const compareLabel = compareMode === 'forecast' ? 'Forecast'
+                     : compareMode === 'ly'       ? 'Last Year'
+                     : 'Budget';
+  const compareSource = compareMode === 'forecast' ? 'plan.lines · Conservative 2026'
+                      : compareMode === 'ly'       ? 'plan.lines · Actuals 2025'
+                      : 'plan.lines · Budget 2026 v1';
+  const compareCur: Record<string, number> = compareMode === 'forecast' ? forecastLines
+                                            : compareMode === 'ly'      ? lyLines
+                                            : budgetCur;
 
   // Driver lookups: budget vs actuals from plan.drivers
   function pickDriver(scenario: string, key: string): number | null {
@@ -200,15 +247,49 @@ export default async function PnLPage({ searchParams }: Props) {
   // For each dept: cur dept_profit − prior dept_profit. Top 6 by absolute
   // magnitude. Bar widths are scaled to the largest absolute value in the set.
   const deptOrderForVariance = ['Rooms', 'F&B', 'Spa', 'Activities', 'Mekong Cruise', 'Other Operated'];
+  // Top variances per dept — basis follows ?varBase= or active compareMode.
+  const varianceBaseParam = (searchParams.varBase as string | undefined) ?? compareMode;
+  const varianceBase: 'mom' | 'budget' | 'forecast' | 'ly' =
+    (['mom','budget','forecast','ly'] as const).includes(varianceBaseParam as any)
+      ? (varianceBaseParam as 'mom' | 'budget' | 'forecast' | 'ly') : 'mom';
+
+  // Aggregate scenario_stack rows into dept-level departmental_profit for cur.
+  const scenarioCur = (twelveMonth as any[]).filter(r => r.period_yyyymm === cur);
+  function dpFromScenario(d: string, scenarioField: 'actual_usd' | 'budget_usd' | 'forecast_usd' | 'ly_usd'): number {
+    let rev = 0, cogs = 0, pay = 0, opex = 0;
+    for (const row of scenarioCur) {
+      if ((row.usali_department || 'Undistributed') !== d) continue;
+      const v = Number(row[scenarioField] || 0);
+      if (row.usali_subcategory === 'Revenue')                    rev  += Math.abs(v);
+      else if (row.usali_subcategory === 'Cost of Sales')         cogs += v;
+      else if (row.usali_subcategory === 'Payroll & Related')     pay  += v;
+      else if (row.usali_subcategory === 'Other Operating Expenses') opex += v;
+    }
+    return rev - cogs - pay - opex;
+  }
+
+  const VAR_LABEL: Record<typeof varianceBase, string> = {
+    mom:      `${prior} → ${cur}`,
+    budget:   'vs Budget',
+    forecast: 'vs Forecast',
+    ly:       'vs Last Year',
+  };
   const variances = deptOrderForVariance
     .map(d => {
       const cur_ = deptCurMap.get(d);
-      const prior_ = deptPriorMap.get(d);
-      if (!cur_ && !prior_) return null;
+      if (!cur_) return null;
       const curProfit = Number(cur_?.departmental_profit ?? 0);
-      const priorProfit = Number(prior_?.departmental_profit ?? 0);
-      const delta = curProfit - priorProfit;
-      return { dept: d, delta, curProfit, priorProfit };
+      let baseProfit: number;
+      if (varianceBase === 'mom') {
+        baseProfit = Number(deptPriorMap.get(d)?.departmental_profit ?? 0);
+      } else if (varianceBase === 'budget') {
+        baseProfit = dpFromScenario(d, 'budget_usd');
+      } else if (varianceBase === 'forecast') {
+        baseProfit = dpFromScenario(d, 'forecast_usd');
+      } else {
+        baseProfit = dpFromScenario(d, 'ly_usd');
+      }
+      return { dept: d, delta: curProfit - baseProfit, curProfit, priorProfit: baseProfit };
     })
     .filter(Boolean) as { dept: string; delta: number; curProfit: number; priorProfit: number }[];
   variances.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
@@ -216,7 +297,8 @@ export default async function PnLPage({ searchParams }: Props) {
 
   // === Heatmap: dept × last-5-months departmental_profit (in $k) =============
   const heatmapPeriodsRev = [...heatmapPeriods].reverse(); // oldest → newest
-  const heatmapDepts = ['Rooms', 'F&B', 'Spa', 'A&G' /* synthetic — only for label */];
+  // 6 operating depts + A&G overhead row.
+  const heatmapDepts = ['Rooms', 'F&B', 'Spa', 'Activities', 'Mekong Cruise', 'Other Operated', 'A&G'] as const;
   const dpByKey = new Map<string, number>();
   for (const r of deptByPeriods) dpByKey.set(`${r.period}|${r.dept}`, r.dept_profit);
   // A&G isn't a dept in v_usali_dept_summary — we'll use ag_total from houseRows instead.
@@ -611,15 +693,21 @@ export default async function PnLPage({ searchParams }: Props) {
       <div className="panels" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 12, marginTop: 24 }}>
         {/* LEFT — USALI grid */}
         <div className="panel">
-          <h3>USALI department <em>schedule</em> · {monthLabel} (MTD)</h3>
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 4, flexWrap: 'wrap' }}>
+            <h3 style={{ margin: 0 }}>USALI department <em>schedule</em> · {monthLabel} (MTD) <span style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-mute)', fontStyle: 'normal', marginLeft: 6 }}>vs {compareLabel}</span></h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+              <CompareDropdown value={compareMode} />
+              <MonthDropdown value={cur} options={monthOptions} />
+            </div>
+          </div>
           <div className="meta">
             Materiality: 5% AND $1,000. Coloring — green ≤5% · amber 5–10% · red &gt;10% AND &gt;$1k.
-            Expense rows tagged <b>Gap 2</b> until <code>gl.usali_expense_map</code> ships.
+            Expense rows tagged <b>Gap 2</b> until <code>gl.usali_expense_map</code> ships. Comparison source: <code>{compareSource}</code>.
           </div>
           <table className="usali">
             <thead>
               <tr>
-                <th>Line</th><th>Actual</th><th>Budget</th><th>LY</th><th>Δ Bgt</th><th>Δ%</th><th>Flow</th>
+                <th>Line</th><th>Actual</th><th>{compareLabel}</th><th>LY</th><th>Δ {compareLabel}</th><th>Δ%</th><th>Flow</th>
               </tr>
             </thead>
             <tbody>
@@ -645,7 +733,7 @@ export default async function PnLPage({ searchParams }: Props) {
                   const priorR = deptPriorMap.get(r.name);
                   const priorRev = priorR ? Number(priorR.revenue || 0) : null;
                   const momPct = priorRev && priorRev !== 0 ? ((r.val - priorRev) / Math.abs(priorRev)) * 100 : null;
-                  const budget = budgetCur[`Revenue||${r.name}`] ?? null;
+                  const budget = compareCur[`Revenue||${r.name}`] ?? null;
                   const dBgt = budget != null ? r.val - budget : null;
                   const flowPct = budget != null && budget !== 0 ? ((r.val - budget) / Math.abs(budget)) * 100 : null;
                   return (
@@ -663,7 +751,7 @@ export default async function PnLPage({ searchParams }: Props) {
               })()}
               {(() => {
                 // Total revenue budget = sum of all Revenue||* rows for cur period
-                const revBudget = Object.entries(budgetCur)
+                const revBudget = Object.entries(compareCur)
                   .filter(([k]) => k.startsWith('Revenue||'))
                   .reduce((s, [, v]) => s + Number(v || 0), 0);
                 const dBgt = revBudget > 0 ? totalRev - revBudget : null;
@@ -709,9 +797,9 @@ export default async function PnLPage({ searchParams }: Props) {
                   const priorR = deptPriorMap.get(r.name);
                   const priorExp = priorR ? Number(priorR.cost_of_sales || 0) + Number(priorR.payroll || 0) + Number(priorR.other_op_exp || 0) : null;
                   const momPct = priorExp && priorExp !== 0 ? ((r.val - priorExp) / Math.abs(priorExp)) * 100 : null;
-                  const expBudget = (budgetCur[`Cost of Sales||${r.name}`] ?? 0)
-                    + (budgetCur[`Payroll & Related||${r.name}`] ?? 0)
-                    + (budgetCur[`Other Operating Expenses||${r.name}`] ?? 0);
+                  const expBudget = (compareCur[`Cost of Sales||${r.name}`] ?? 0)
+                    + (compareCur[`Payroll & Related||${r.name}`] ?? 0)
+                    + (compareCur[`Other Operating Expenses||${r.name}`] ?? 0);
                   const hasBudget = expBudget > 0;
                   const dBgt = hasBudget ? r.val - expBudget : null;
                   const flowPct = hasBudget ? ((r.val - expBudget) / Math.abs(expBudget)) * 100 : null;
@@ -741,7 +829,7 @@ export default async function PnLPage({ searchParams }: Props) {
                 }
                 // Undistributed budget + LY lookups (subcat||'' since dept is empty)
                 function bg(subcat: string): number | null {
-                  const v = budgetCur[`${subcat}||`];
+                  const v = compareCur[`${subcat}||`];
                   return v != null && v !== 0 ? v : null;
                 }
                 function ly(subcat: string): number | null {
@@ -782,10 +870,10 @@ export default async function PnLPage({ searchParams }: Props) {
                 const UNDIST_SC = (sc: string) => ['A&G','Sales & Marketing','POM','Utilities','Mgmt Fees'].includes(sc);
                 const BELOW_GOP_SC = (sc: string) => ['Depreciation','Interest','Income Tax','FX Gain/Loss','Non-Operating'].includes(sc);
 
-                const budgetRev    = sumKeys(budgetCur, REV_SC);
-                const budgetDeptExp = sumKeys(budgetCur, DEPT_EXP_SC);
-                const budgetUndist = sumKeys(budgetCur, UNDIST_SC);
-                const budgetBelowGop = sumKeys(budgetCur, BELOW_GOP_SC);
+                const budgetRev    = sumKeys(compareCur, REV_SC);
+                const budgetDeptExp = sumKeys(compareCur, DEPT_EXP_SC);
+                const budgetUndist = sumKeys(compareCur, UNDIST_SC);
+                const budgetBelowGop = sumKeys(compareCur, BELOW_GOP_SC);
                 const budgetDeptProfit = budgetRev - budgetDeptExp;
                 const budgetGop = budgetDeptProfit - budgetUndist;
                 const budgetEbitda = budgetGop - budgetBelowGop; // simple proxy
@@ -910,21 +998,21 @@ export default async function PnLPage({ searchParams }: Props) {
           </div>
 
           <div className="panel" style={{ marginTop: 10 }}>
-            <h3>13-week <em>cash</em> forecast <span className="needs" style={{ marginLeft: 8 }}>not wired</span></h3>
-            <div className="meta"><code>gl.cash_forecast_weekly</code> exists but has 0 rows — needs bank feed import.</div>
-            <div className="cash-strip">
-              <div className="flag">cash dip Wxx–Wxx</div>
-              <div className="legend">$ position · weekly buckets · xx (placeholder)</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+              <h3 style={{ margin: 0 }}>13-week <em>cash</em> forecast</h3>
+              <span className="meta" style={{ fontSize: 'var(--t-xs)' }}>source: <code>gl.v_cash_forecast_13w</code></span>
             </div>
+            <div className="meta">OTB reservations + AR aging schedule − fixed costs (payroll/utilities/A&G) − supplier estimate. Override starting cash via <code>?cash0=</code>.</div>
+            <CashForecastPanel rows={cashForecast} startingCash={cashStart} />
           </div>
 
           <div className="panel" style={{ marginTop: 10 }}>
             <h3>Margin leak <em>heatmap</em></h3>
-            <div className="meta">$k departmental_profit · dept × month · last 5 closed months · {heatmapPeriodsRev[0]} → {cur}. Source: <code>v_usali_dept_summary</code> (A&amp;G from <code>v_usali_house_summary</code>).</div>
+            <div className="meta">$k departmental_profit · dept × month · last 12 months · {heatmapPeriodsRev[0]} → {cur}. Source: <code>v_usali_dept_summary</code> (A&amp;G from <code>v_usali_house_summary</code>).</div>
             <div className="heatmap">
               {heatmapDepts.map(dept => (
-                <>
-                  <div className="hm-lbl" key={`lbl-${dept}`}>{dept}</div>
+                <React.Fragment key={`row-${dept}`}>
+                  <div className="hm-lbl">{dept}</div>
                   {heatmapPeriodsRev.map(p => {
                     const c = heatmapCell(dept, p);
                     const display = c.val == null ? '—' : `${c.val < 0 ? '-' : ''}${(Math.abs(c.val)/1000).toFixed(1)}`;
@@ -939,63 +1027,73 @@ export default async function PnLPage({ searchParams }: Props) {
                       </div>
                     );
                   })}
-                </>
+                </React.Fragment>
               ))}
             </div>
           </div>
 
           <div className="panel" style={{ marginTop: 10 }}>
-            <h3>Variance <em>commentary</em> · auto-draft</h3>
-            <div className="meta">Template-based · numbers from gl.* · LLM rewrite pending. Source: this period vs prior.</div>
-            <div className="comm">
-              <h4>Headline</h4>
-              <p>
-                {monthLabel} closes with revenue {totalRev > priorTotalRev ? 'up' : 'down'}{' '}
-                <strong>{Math.abs(revVsPriorPct).toFixed(1)}%</strong> vs {priorLabel} (${(totalRev/1000).toFixed(1)}k vs ${(priorTotalRev/1000).toFixed(1)}k).{' '}
-                {gop != null ? <>GOP $${(gop/1000).toFixed(1)}k {gopMomDelta != null && gopMomPct != null && (
-                  <>({gopMomDelta >= 0 ? '+' : '−'}${Math.abs(gopMomDelta/1000).toFixed(1)}k MoM, {gopMomPct >= 0 ? '+' : ''}{gopMomPct.toFixed(0)}%)</>
-                )}.</> : <>GOP awaiting expense load.</>}
-                {' '}{revVsLyPct != null ? <>vs LY same month: <strong>{revVsLyPct >= 0 ? '+' : ''}{revVsLyPct.toFixed(1)}%</strong>.</> : <>No LY comparable yet.</>}
-              </p>
-              {topAg > 0 && (
+            <h3>Variance <em>commentary</em> · {latestCommentary ? 'LLM' : 'auto-draft'}</h3>
+            <CommentaryPanel
+              period={cur}
+              draftBody={latestCommentary?.body ?? null}
+              draftCreatedAt={latestCommentary?.created_at ?? null}
+              hasApiKey={Boolean(process.env.ANTHROPIC_API_KEY)}
+              payload={{
+                monthLabel,
+                totalRev,
+                priorTotalRev,
+                revVsPriorPct,
+                gop,
+                gopMomDelta,
+                gopMomPct,
+                revVsLyPct,
+                agTotal: topAg,
+                agPrior,
+                fbLabour,
+                fbRev: fbRevWindow,
+                fbLabourPct,
+                fbCogsPct: fbCur && Number(fbCur.revenue) > 0 ? (Number(fbCur.cost_of_sales) / Number(fbCur.revenue)) * 100 : null,
+                utilCur,
+                utilPrior,
+                occPct: ytdOccPct,
+                adr: ytdAdr,
+                topVariances: variances.slice(0, 4).map(v => ({ dept: v.dept, delta: v.delta })),
+              }}
+              fallback={
                 <>
-                  <h4>A&amp;G</h4>
+                  <h4>Headline</h4>
                   <p>
-                    A&amp;G ran <strong>${(topAg/1000).toFixed(1)}k</strong> this month (
-                    {agPrior > 0 ? <>{topAg > agPrior ? 'up' : 'down'} {Math.abs(((topAg - agPrior)/agPrior)*100).toFixed(0)}% vs ${(agPrior/1000).toFixed(1)}k prior</> : 'no prior comparable'}
-                    ). Top accounts driving the line are visible in <a href="/finance/mapping">/finance/mapping</a>.
+                    {monthLabel} closes with revenue {totalRev > priorTotalRev ? 'up' : 'down'}{' '}
+                    <strong>{Math.abs(revVsPriorPct).toFixed(1)}%</strong> vs {priorLabel} (${(totalRev/1000).toFixed(1)}k vs ${(priorTotalRev/1000).toFixed(1)}k).{' '}
+                    {gop != null ? <>GOP $${(gop/1000).toFixed(1)}k {gopMomDelta != null && gopMomPct != null && (
+                      <>({gopMomDelta >= 0 ? '+' : '−'}${Math.abs(gopMomDelta/1000).toFixed(1)}k MoM, {gopMomPct >= 0 ? '+' : ''}{gopMomPct.toFixed(0)}%)</>
+                    )}.</> : <>GOP awaiting expense load.</>}
+                    {' '}{revVsLyPct != null ? <>vs LY same month: <strong>{revVsLyPct >= 0 ? '+' : ''}{revVsLyPct.toFixed(1)}%</strong>.</> : <>No LY comparable yet.</>}
                   </p>
+                  {topAg > 0 && (
+                    <>
+                      <h4>A&amp;G</h4>
+                      <p>
+                        A&amp;G ran <strong>${(topAg/1000).toFixed(1)}k</strong> this month (
+                        {agPrior > 0 ? <>{topAg > agPrior ? 'up' : 'down'} {Math.abs(((topAg - agPrior)/agPrior)*100).toFixed(0)}% vs ${(agPrior/1000).toFixed(1)}k prior</> : 'no prior comparable'}
+                        ). Top accounts in <a href="/finance/mapping">/finance/mapping</a>.
+                      </p>
+                    </>
+                  )}
+                  {fbCur && Number(fbCur.revenue) > 0 && (
+                    <>
+                      <h4>F&amp;B</h4>
+                      <p>
+                        F&amp;B labour <strong>${(fbLabour/1000).toFixed(1)}k</strong> vs revenue ${(fbRevWindow/1000).toFixed(1)}k → ratio{' '}
+                        <strong>{fbLabourPct != null ? fbLabourPct.toFixed(1) : '—'}%</strong>{' '}
+                        {fbLabourPct != null && (fbLabourPct > 35 ? '(above 28–32% norm)' : '(within 28–32% norm)')}.
+                      </p>
+                    </>
+                  )}
                 </>
-              )}
-              {fbCur && Number(fbCur.revenue) > 0 && (
-                <>
-                  <h4>F&amp;B</h4>
-                  <p>
-                    F&amp;B labour <strong>${(fbLabour/1000).toFixed(1)}k</strong> vs revenue ${(fbRevWindow/1000).toFixed(1)}k → ratio{' '}
-                    <strong>{fbLabourPct != null ? fbLabourPct.toFixed(1) : '—'}%</strong>{' '}
-                    {fbLabourPct != null && (fbLabourPct > 35 ? '(above 28–32% norm — Margin Leak Sentinel: yes)' : '(within 28–32% norm)')}.
-                    Cost of sales ${(Number(fbCur.cost_of_sales)/1000).toFixed(1)}k = {((Number(fbCur.cost_of_sales)/Number(fbCur.revenue))*100).toFixed(1)}% of F&amp;B revenue.
-                  </p>
-                </>
-              )}
-              {utilCur > 0 && (
-                <>
-                  <h4>Utilities</h4>
-                  <p>
-                    Utilities <strong>${(utilCur/1000).toFixed(1)}k</strong>
-                    {utilPrior > 0 && (
-                      <> vs ${(utilPrior/1000).toFixed(1)}k prior — {utilCur >= utilPrior ? '+' : ''}{(((utilCur - utilPrior)/utilPrior)*100).toFixed(0)}% MoM.</>
-                    )}{' '}
-                    {Math.abs(((utilCur - utilPrior)/Math.max(utilPrior, 1))*100) > 15 ? 'Material change — energy audit recommended.' : 'Within normal range.'}
-                  </p>
-                </>
-              )}
-            </div>
-            <div className="comm-foot">
-              <button type="button" className="btn primary" disabled>Save draft</button>
-              <button type="button" className="btn" disabled>Approve &amp; publish to Audit Trail</button>
-              <button type="button" className="btn" disabled>Email to owner (queue)</button>
-            </div>
+              }
+            />
           </div>
         </div>
       </div>

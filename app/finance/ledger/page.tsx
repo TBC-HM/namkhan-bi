@@ -1,40 +1,26 @@
-// app/finance/ledger/page.tsx
-// Finance · Ledger — in-house balance + aged AR + city ledger.
-// Missing-email DQ tile is window-scoped (?win=) per Cowork handoff 2026-05-01.
-
-import PanelHero from '@/components/sections/PanelHero';
-import Card from '@/components/sections/Card';
-import KpiCard from '@/components/kpi/KpiCard';
-import Insight from '@/components/sections/Insight';
-import { getAgedAr, getKpiToday } from '@/lib/data';
+// app/finance/ledger/page.tsx — REDESIGN 2026-05-05 (recovery)
+import PageHeader from '@/components/layout/PageHeader';
+import KpiBox from '@/components/kpi/KpiBox';
+import StatusPill from '@/components/ui/StatusPill';
+import { getAgedAr } from '@/lib/data';
 import { resolvePeriod } from '@/lib/period';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import { fmtMoney } from '@/lib/format';
+import {
+  FinanceStatusHeader, StatusCell, SectionHead,
+  metaSm, metaStrong, metaDim,
+} from '../_components/FinanceShell';
+import AgedArChart from '../_components/AgedArChart';
+import AgedArTable, { type AgedRow } from './_components/AgedArTableClient';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
-
-const bucketLabel: Record<string, string> = {
-  '0_30': '0–30',
-  '31_60': '31–60',
-  '61_90': '61–90',
-  '90_plus': '90+',
-};
-
-const bucketTone: Record<string, 'good' | 'warn' | 'bad' | ''> = {
-  '0_30': 'good',
-  '31_60': 'warn',
-  '61_90': 'warn',
-  '90_plus': 'bad',
-};
 
 interface Props { searchParams: Record<string, string | string[] | undefined>; }
 
 export default async function LedgerPage({ searchParams }: Props) {
   const period = resolvePeriod(searchParams);
-  const today = await getKpiToday().catch(() => null);
   const aged = await getAgedAr().catch(() => []);
-
   const totalAr = aged.reduce((s: number, r: any) => s + Number(r.open_balance || 0), 0);
   const buckets = aged.reduce((b: any, r: any) => {
     const k = r.bucket || 'unknown';
@@ -42,14 +28,17 @@ export default async function LedgerPage({ searchParams }: Props) {
     return b;
   }, {} as Record<string, number>);
 
-  const { data: houseAccounts, count: haCount } = await supabase
-    .from('house_accounts')
-    .select('house_account_id, account_name, is_active', { count: 'exact' })
+  const { data: inHouseRows } = await supabase
+    .from('reservations')
+    .select('reservation_id, balance, guest_email')
     .eq('property_id', PROPERTY_ID)
-    .eq('is_active', true)
-    .limit(20);
+    .eq('status', 'checked_in');
+  const inHouseCount = (inHouseRows ?? []).length;
+  const inHouseBalance = (inHouseRows ?? []).reduce((s: number, r: any) => s + Number(r.balance || 0), 0);
+  const inHouseHighBal = (inHouseRows ?? []).filter((r: any) => Number(r.balance || 0) > 1000).length;
+  const checkedOutHighBal = aged.filter((r: any) => Number(r.open_balance || 0) > 1000).length;
+  const highBalFlags = inHouseHighBal + checkedOutHighBal;
 
-  // Window-scoped per ?win= (was hardcoded last-90d arrivals)
   const { count: missingEmailCount } = await supabase
     .from('reservations')
     .select('reservation_id', { count: 'exact', head: true })
@@ -58,164 +47,124 @@ export default async function LedgerPage({ searchParams }: Props) {
     .gte('check_in_date', period.from)
     .lte('check_in_date', period.to);
 
-  const { data: inHouse } = await supabase
-    .from('mv_arrivals_departures_today')
-    .select('balance')
-    .eq('property_id', PROPERTY_ID)
-    .eq('today_role', 'in_house');
+  const ar90 = Number(buckets['90_plus'] || 0);
+  const arHealth = ar90 > 0 ? 'expired' : (Number(buckets['61_90'] || 0) > 0 ? 'pending' : 'active');
 
-  const inHouseBalance = (inHouse ?? []).reduce((s: number, r: any) => s + Number(r.balance || 0), 0);
-  const highBalance = (inHouse ?? []).filter((r: any) => Number(r.balance || 0) > 1000).length;
+  // ---- Deposits — sourced from reservations.paid_amount + balance ----
+  const today = new Date().toISOString().slice(0, 10);
+  const in7  = new Date(Date.now() + 7  * 86400000).toISOString().slice(0, 10);
+  const in30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+
+  const { data: futureConfirmed } = await supabase
+    .from('reservations')
+    .select('reservation_id, paid_amount, balance, check_in_date')
+    .eq('property_id', PROPERTY_ID)
+    .eq('status', 'confirmed')
+    .gte('check_in_date', today);
+
+  const depositsHeld = (futureConfirmed ?? []).reduce(
+    (s: number, r: any) => s + Number(r.paid_amount || 0), 0
+  );
+  const depositsDue30 = (futureConfirmed ?? [])
+    .filter((r: any) => r.check_in_date && r.check_in_date <= in30 && Number(r.balance) > 0)
+    .reduce((s: number, r: any) => s + Number(r.balance || 0), 0);
+  const overdueDeposits = (futureConfirmed ?? [])
+    .filter((r: any) => r.check_in_date && r.check_in_date <= in7 && Number(r.balance) > 0)
+    .length;
+
+  // Future arrivals with NO deposit (collection risk)
+  const futureNoDeposit30d = (futureConfirmed ?? [])
+    .filter((r: any) => r.check_in_date && r.check_in_date <= in30 && Number(r.paid_amount || 0) === 0)
+    .length;
+
+  // City ledger — house_accounts (companies, agencies)
+  const { data: houseAccounts } = await supabase
+    .from('house_accounts')
+    .select('account_id, account_name, account_type, balance, last_activity_date, status')
+    .eq('property_id', PROPERTY_ID)
+    .order('balance', { ascending: false })
+    .limit(20);
+  const cityLedgerActive = (houseAccounts ?? []).filter((r: any) => r.status === 'active').length;
+  const cityLedgerTotal = (houseAccounts ?? []).reduce((s: number, r: any) => s + Number(r.balance || 0), 0);
+
+  const { count: cancellations30d } = await supabase
+    .from('reservations')
+    .select('reservation_id', { count: 'exact', head: true })
+    .eq('property_id', PROPERTY_ID)
+    .eq('status', 'canceled')
+    .gte('cancellation_date', new Date(Date.now() - 30 * 86400000).toISOString());
 
   return (
     <>
-      <PanelHero
-        eyebrow="Ledger · live"
-        title="Guest"
-        emphasis="ledger"
-        sub="In-house balance · aged AR · city ledger"
-        kpis={
-          <>
-            <KpiCard label="In-House Guests" value={today?.in_house ?? 0} />
-            <KpiCard
-              label="In-House Balance"
-              value={inHouseBalance}
-              kind="money"
-              tone={inHouseBalance > 5000 ? 'warn' : 'neutral'}
-            />
-            <KpiCard
-              label="High-Balance Flags"
-              value={highBalance}
-              tone={highBalance > 0 ? 'warn' : 'pos'}
-              hint="> $1,000"
-            />
-            <KpiCard
-              label={`Missing Email (${period.label})`}
-              value={missingEmailCount ?? 0}
-              tone={(missingEmailCount ?? 0) > 5 ? 'warn' : 'neutral'}
-              hint={`${period.rangeLabel} arrivals`}
-            />
-          </>
-        }
+      <PageHeader pillar="Finance" tab="Ledger"
+        title={<>Who <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>owes</em> you, and who's about to.</>}
+        lede={`In-house ${inHouseCount} guest${inHouseCount === 1 ? '' : 's'} · ${aged.length} aged`} />
+      <FinanceStatusHeader
+        top={<>
+          <StatusCell label="SOURCE"><StatusPill tone="active">reservations · mv_aged_ar</StatusPill></StatusCell>
+          <StatusCell label="IN-HOUSE"><span style={metaStrong}>{inHouseCount}</span><span style={metaDim}>{fmtMoney(inHouseBalance, 'USD')} balance</span></StatusCell>
+          <StatusCell label="HIGH-BAL"><StatusPill tone={highBalFlags > 0 ? 'pending' : 'inactive'}>{highBalFlags}</StatusPill><span style={metaDim}>&gt; $1k</span></StatusCell>
+          <StatusCell label="DEPOSITS HELD"><span style={metaStrong}>{fmtMoney(depositsHeld, 'USD')}</span><span style={metaDim}>{(futureConfirmed ?? []).length} resv</span></StatusCell>
+          <span style={{ flex: 1 }} />
+        </>}
+        bottom={<>
+          <StatusCell label="AR HEALTH"><StatusPill tone={arHealth as any}>{ar90 > 0 ? 'OVERDUE' : Number(buckets['61_90'] || 0) > 0 ? 'WATCH' : 'CLEAN'}</StatusPill><span style={metaDim}>{fmtMoney(totalAr, 'USD')} open</span></StatusCell>
+          <StatusCell label="FUT 30D · NO DEPOSIT"><StatusPill tone={futureNoDeposit30d > 0 ? 'pending' : 'inactive'}>{futureNoDeposit30d}</StatusPill><span style={metaDim}>collection risk</span></StatusCell>
+          <StatusCell label="CANCELLATIONS 30D"><span style={metaStrong}>{cancellations30d ?? 0}</span></StatusCell>
+          <span style={{ flex: 1 }} />
+        </>}
       />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 12, marginTop: 14 }}>
+        <AgedArChart rows={aged as any} title="AR aging" sub="Open balance per bucket · mv_aged_ar" />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
+        <KpiBox value={inHouseCount} unit="count" label="In-house guests" />
+        <KpiBox value={inHouseBalance} unit="usd" label="In-house balance" />
+        <KpiBox value={aged.length} unit="count" label="Checked-out unpaid" />
+        <KpiBox value={totalAr} unit="usd" label="Checked-out unpaid $" />
+        <KpiBox value={highBalFlags} unit="count" label="High-balance flags" />
+        <KpiBox value={missingEmailCount ?? 0} unit="count" label={`Missing email · ${period.label}`} />
+      </div>
+      <div style={{ marginTop: 18 }}>
+        <SectionHead title="Aged receivables" emphasis={`${aged.length} resv`} sub={`Total open: ${fmtMoney(totalAr, 'USD')} · sortable`} source="mv_aged_ar" />
+        <AgedArTable rows={aged as AgedRow[]} />
+      </div>
 
-      <Card
-        title="Aged receivables"
-        emphasis={`· ${aged.length} resv`}
-        sub={`Total open: ${fmtMoney(totalAr, 'USD')}`}
-        source="mv_aged_ar"
-      >
-        <div className="card-grid-5">
-          <KpiCard label="Total AR" value={totalAr} kind="money" />
-          <KpiCard label="0–30 days" value={Number(buckets['0_30'] || 0)} kind="money" tone="pos" />
-          <KpiCard
-            label="31–60 days"
-            value={Number(buckets['31_60'] || 0)}
-            kind="money"
-            tone={Number(buckets['31_60'] || 0) > 0 ? 'warn' : 'neutral'}
-          />
-          <KpiCard
-            label="61–90 days"
-            value={Number(buckets['61_90'] || 0)}
-            kind="money"
-            tone={Number(buckets['61_90'] || 0) > 0 ? 'warn' : 'neutral'}
-          />
-          <KpiCard
-            label="90+ days"
-            value={Number(buckets['90_plus'] || 0)}
-            kind="money"
-            tone={Number(buckets['90_plus'] || 0) > 0 ? 'neg' : 'neutral'}
-          />
-        </div>
-
-        {aged.length > 0 ? (
-          <table className="tbl">
+      <div style={{ marginTop: 18 }}>
+        <SectionHead title="City ledger" emphasis={`${cityLedgerActive} active`} sub="House accounts · companies · agencies · house_accounts" source="house_accounts" />
+        {(houseAccounts ?? []).length === 0 ? (
+          <div className="panel dashed" style={{ padding: 20, color: 'var(--ink-mute)', fontStyle: 'italic', textAlign: 'center' }}>
+            No active house accounts. Showing first 20 of {(houseAccounts ?? []).length}.
+          </div>
+        ) : (
+          <table className="tbl" style={{ width: '100%', fontSize: 13 }}>
             <thead>
-              <tr>
-                <th>Guest</th>
-                <th>Source</th>
-                <th>Check-out</th>
-                <th className="num">Balance</th>
-                <th className="num">Days Overdue</th>
-                <th>Bucket</th>
-              </tr>
+              <tr><th>Account</th><th>Type</th><th>Status</th><th className="num">Balance</th><th>Last activity</th></tr>
             </thead>
             <tbody>
-              {aged.slice(0, 50).map((r: any) => (
-                <tr key={r.reservation_id}>
-                  <td className="lbl"><strong>{r.guest_name || '—'}</strong></td>
-                  <td className="lbl text-mute">{r.source_name || '—'}</td>
-                  <td className="lbl">{r.check_out_date || '—'}</td>
-                  <td className="num">{fmtMoney(Number(r.open_balance), 'USD')}</td>
-                  <td className="num">{r.days_overdue ?? '—'}</td>
-                  <td>
-                    <span className={`pill ${bucketTone[r.bucket] || ''}`}>
-                      {bucketLabel[r.bucket] || r.bucket}
-                    </span>
-                  </td>
+              {(houseAccounts ?? []).map((a: any) => (
+                <tr key={a.account_id}>
+                  <td className="lbl"><strong>{a.account_name || '—'}</strong></td>
+                  <td className="lbl text-mute">{a.account_type || '—'}</td>
+                  <td><StatusPill tone={a.status === 'active' ? 'active' : 'inactive'}>{a.status || '—'}</StatusPill></td>
+                  <td className="num" style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(Number(a.balance || 0), 'USD')}</td>
+                  <td className="lbl text-mute">{a.last_activity_date ? new Date(a.last_activity_date).toISOString().slice(0, 10) : '—'}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-        ) : (
-          <div style={{ padding: 24, color: 'var(--ink-mute)', fontStyle: 'italic' }}>
-            No aged receivables.
-          </div>
         )}
-      </Card>
-
-      <div className="card-grid-2" style={{ marginTop: 22 }}>
-        <Card
-          title="City ledger"
-          emphasis={`· ${haCount ?? 0} active`}
-          sub="House accounts · companies · agencies"
-          source="house_accounts"
-        >
-          {(houseAccounts ?? []).length === 0 ? (
-            <div style={{ padding: 24, color: 'var(--ink-mute)', fontStyle: 'italic' }}>
-              No active accounts.
-            </div>
-          ) : (
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>Account</th>
-                  <th>ID</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(houseAccounts ?? []).map((h: any) => (
-                  <tr key={h.house_account_id}>
-                    <td className="lbl"><strong>{h.account_name || '—'}</strong></td>
-                    <td className="lbl text-mute text-mono">{h.house_account_id}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          <div className="card-sub" style={{ marginTop: 12 }}>
-            Showing first 20 of {haCount}.
-          </div>
-        </Card>
-
-        <Card
-          title="Deposits held / due"
-          sub="Deposit logic awaiting definition vs Cloudbeds payment flow"
-          source="grey"
-        >
-          <div className="stub" style={{ padding: 32 }}>
-            <h3>Coming soon</h3>
-            <p>Total deposits held · deposits due (next 30d) · overdue deposits.</p>
-          </div>
-        </Card>
       </div>
 
-      {Number(buckets['90_plus'] || 0) > 0 && (
-        <Insight tone="alert" eye="AR alert">
-          <strong>{fmtMoney(Number(buckets['90_plus']), 'USD')}</strong> outstanding in 90+ day
-          bucket. Owner action: review collection workflow, escalate to legal if commercial accounts.
-        </Insight>
-      )}
+      <div style={{ marginTop: 18 }}>
+        <SectionHead title="Deposits & cancellations" sub="Confirmed future arrivals · paid_amount + balance · 30d window" source="reservations" />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+          <KpiBox label="Deposits Held" unit="usd" value={depositsHeld} tooltip={`Σ paid_amount for ${(futureConfirmed ?? []).length} confirmed future-arrival reservations`} />
+          <KpiBox label="Deposits Due (30d)" unit="usd" value={depositsDue30} tooltip="Σ balance for confirmed reservations checking in within 30 days" />
+          <KpiBox label="Overdue Deposits" unit="count" value={overdueDeposits} tooltip="Confirmed reservations arriving in ≤7 days with balance > 0" />
+          <KpiBox label="Cancellations 30d" unit="count" value={cancellations30d ?? 0} tooltip="Reservations canceled in the last 30 days" />
+        </div>
+      </div>
     </>
   );
 }

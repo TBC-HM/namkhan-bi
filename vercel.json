@@ -1,4 +1,9 @@
 {
   "regions": ["fra1"],
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "functions": {
+    "app/api/marketing/upload/route.ts": {
+      "maxDuration": 60
+    }
+  }
 }

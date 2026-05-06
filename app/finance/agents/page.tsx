@@ -1,97 +1,77 @@
-// app/finance/agents/page.tsx
-// Finance · Agents — pillar agent governance hub.
-
-import AgentsHub from '@/components/agents/AgentsHub';
-import type { AgentChipDef } from '@/components/ops/AgentStrip';
-
-const varianceHunter: AgentChipDef = {
-  name: 'Variance Hunter',
-  cadence: 'daily 03:00',
-  status: 'idle',
-  description: 'Decomposes USALI department variances vs. budget + LY into volume / rate / mix drivers; flags lines > 5% off plan.',
-  guardrails: ['Read-only', 'Confidence floor 80%', 'Min impact $500'],
-};
-
-const cashflowForecaster: AgentChipDef = {
-  name: 'Cashflow Forecaster',
-  cadence: 'daily 06:00',
-  status: 'idle',
-  description: '13-week rolling cashflow projection from OTB pace, AR aging, AP schedule, and seasonal patterns; flags liquidity gaps.',
-  guardrails: ['Recommend only · no payment scheduling', 'Confidence interval published'],
-};
-
-const arAgingChaser: AgentChipDef = {
-  name: 'AR Aging Chaser',
-  cadence: 'weekly · Tue 09:00',
-  status: 'idle',
-  description: 'Drafts dunning emails for AR > 30/60/90d; routes by customer tier; escalates to credit hold + GM at 90d.',
-  guardrails: ['Approval-required send', 'No credit-hold without GM', 'No legal language without finance lead'],
-};
-
-const apDuplicateDetector: AgentChipDef = {
-  name: 'AP Duplicate Detector',
-  cadence: 'on invoice ingest',
-  status: 'idle',
-  description: 'Cross-references new vendor invoices against PO + prior payments by amount + date + reference; blocks duplicates.',
-  guardrails: ['Block + alert · no auto-pay', '3-way match enforced'],
-};
-
-const budgetPaceAgent: AgentChipDef = {
-  name: 'Budget Pace',
-  cadence: 'daily',
-  status: 'idle',
-  description: 'Tracks revenue, COGS, payroll, and variable costs vs. month-pace; projects EOM landing with confidence band.',
-  guardrails: ['Recommend only', 'Pace model retrained monthly'],
-};
-
-const fxExposureAgent: AgentChipDef = {
-  name: 'FX Exposure',
-  cadence: 'daily 02:00',
-  status: 'idle',
-  description: 'Tracks USD/LAK/THB/EUR exposure across receivables, payables, and forward bookings; flags unhedged positions > $50k.',
-  guardrails: ['Recommend only · no auto-hedge', 'Owner approval required for any FX action'],
-};
-
-const expenseAnomaly: AgentChipDef = {
-  name: 'Expense Anomaly',
-  cadence: 'daily',
-  status: 'idle',
-  description: 'Detects outlier expense lines (vendor / category / amount / per-occupied-room) vs. 90d trailing baseline.',
-  guardrails: ['Confidence floor 75%', 'Min variance $300', 'Alert only · no journal mutation'],
-};
-
-const monthEndCloseRunner: AgentChipDef = {
-  name: 'Month-End Close Runner',
-  cadence: 'monthly · WD-3 to WD+2',
-  status: 'idle',
-  description: 'Sequences close tasks (accruals · prepaid · depreciation · revenue rec · variance commentary), tracks owner + status, flags overdue.',
-  guardrails: ['No journal posting · GL-read only', 'Owner check-in mandatory'],
-};
+// app/finance/agents/page.tsx — REDESIGN 2026-05-05 (recovery)
+import PageHeader from '@/components/layout/PageHeader';
+import KpiBox from '@/components/kpi/KpiBox';
+import StatusPill from '@/components/ui/StatusPill';
+import { supabase } from '@/lib/supabase';
+import AgentsTable, { type AgentRow } from '@/app/revenue/agents/_components/AgentsTableClient';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 60;
 
-export default function FinanceAgentsPage() {
+export default async function FinanceAgentsPage() {
+  const { data: agentsR } = await supabase
+    .schema('governance')
+    .from('agents')
+    .select('agent_id, code, name, status, schedule_human, monthly_budget_usd, month_to_date_cost_usd, last_run_at, pillar')
+    .order('status', { ascending: true })
+    .order('name', { ascending: true });
+  const allAgents = (agentsR ?? []) as any[];
+  const FIN_RX = /finance|gl|usali|ledger|variance|cashflow|ar |ap |budget|expense|fx |close|payroll/i;
+  const agents = allAgents.filter((a) => (a.pillar ?? '').toLowerCase() === 'finance' || FIN_RX.test(a.code) || FIN_RX.test(a.name));
+
+  const codes = agents.map((a) => a.code);
+  const lastRunByCode = new Map<string, any>();
+  if (codes.length > 0) {
+    const { data: runsR } = await supabase
+      .schema('governance')
+      .from('agent_run_summary')
+      .select('agent_code, status, started_at')
+      .in('agent_code', codes)
+      .order('started_at', { ascending: false });
+    for (const row of (runsR ?? []) as any[]) {
+      if (!lastRunByCode.has(row.agent_code)) lastRunByCode.set(row.agent_code, row);
+    }
+  }
+
+  const rows: AgentRow[] = agents.map((a) => {
+    const lr = lastRunByCode.get(a.code) ?? null;
+    return {
+      agent_id: a.agent_id, code: a.code, name: a.name, status: a.status,
+      schedule_human: a.schedule_human,
+      monthly_budget_usd: a.monthly_budget_usd != null ? Number(a.monthly_budget_usd) : null,
+      month_to_date_cost_usd: a.month_to_date_cost_usd != null ? Number(a.month_to_date_cost_usd) : null,
+      last_run_at: a.last_run_at ?? lr?.started_at ?? null,
+      last_run_status: lr?.status ?? null,
+      settings_href: null,
+    };
+  });
+
+  const total = rows.length;
+  const active = rows.filter((r) => (r.status ?? '').toLowerCase() === 'active').length;
+  const failed = rows.filter((r) => (r.last_run_status ?? '').toLowerCase() === 'failed').length;
+  const totalBudget = rows.reduce((s, r) => s + (r.monthly_budget_usd ?? 0), 0);
+  const totalSpent = rows.reduce((s, r) => s + (r.month_to_date_cost_usd ?? 0), 0);
+
   return (
-    <AgentsHub
-      pillarKey="finance"
-      pillarLabel="Finance"
-      intro="USALI ledger agents across variance, cashflow, AR/AP, FX, anomaly detection, and close. Idle until finance.* schemas + GL connector ship."
-      agents={[
-        varianceHunter,
-        cashflowForecaster,
-        arAgingChaser,
-        apDuplicateDetector,
-        budgetPaceAgent,
-        fxExposureAgent,
-        expenseAnomaly,
-        monthEndCloseRunner,
-      ]}
-      brandRules={[
-        'No journal entry posting · all agents are GL-read only',
-        'No payment scheduling · cashflow recommendations only',
-        'No FX hedge execution · owner-approved only',
-        'Two-person rule on AR write-offs > $1,000',
-      ]}
-    />
+    <>
+      <PageHeader pillar="Finance" tab="Agents"
+        title={<>Finance <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>watchers</em> — variance, AR/AP, cash, close.</>}
+        lede={`${total} registered · ${active} active · MTD $${Math.round(totalSpent).toLocaleString()} of $${Math.round(totalBudget).toLocaleString()}`} />
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'center', padding: '10px 16px', background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, marginTop: 14 }}>
+        <span className="t-eyebrow">SOURCE</span>
+        <StatusPill tone="active">governance.agents</StatusPill>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>· pillar=finance · {active} active · {failed} failed runs</span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
+        <KpiBox value={total} unit="count" label="Agents registered" />
+        <KpiBox value={active} unit="count" label="Active" />
+        <KpiBox value={totalSpent} unit="usd" label="MTD spend" />
+        <KpiBox value={totalBudget} unit="usd" label="Monthly budget" />
+      </div>
+      <div style={{ marginTop: 18 }}>
+        <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-xl)', fontWeight: 500, marginBottom: 6 }}>Agents</div>
+        <AgentsTable rows={rows} />
+      </div>
+    </>
   );
 }

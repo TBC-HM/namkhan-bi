@@ -27,7 +27,8 @@ import BdcProfileTab from '@/components/channels/BdcProfileTab';
 import ChannelContactCard from '@/components/channels/ChannelContactCard';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 60;
+export const revalidate = 0;
+// 2026-05-06 cache-bust marker after RLS fix
 
 interface Props {
   params: { source: string };

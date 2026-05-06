@@ -749,3 +749,245 @@ export async function getSalesTacticalAlerts(propertyId: number = PROPERTY_ID): 
 
   return alerts;
 }
+
+// ============================================================================
+// EMAIL / INBOX HELPERS — re-added 2026-05-05 after parallel session wipe
+// ============================================================================
+
+export interface ThreadSummary {
+  thread_id: string;
+  property_id: number;
+  msg_count: number;
+  last_received_at: string;
+  last_subject: string | null;
+  last_from_email: string | null;
+  last_from_name: string | null;
+  last_direction: 'inbound' | 'outbound';
+  last_mailbox: string;
+  intended_mailbox: string | null;
+  inquiry_id: string | null;
+  inquiry_status: string | null;
+  triage_kind: string | null;
+}
+
+export interface InboxTab {
+  intended_mailbox: string;
+  total: number;
+  unread: number;
+  inbound: number;
+  outbound: number;
+}
+
+export async function listInboxTabs(propertyId: number = PROPERTY_ID): Promise<InboxTab[]> {
+  const sb = getSupabaseAdmin();
+  const { data } = await sb.schema('sales').from('email_messages')
+    .select('intended_mailbox,direction,inquiry_id').eq('property_id', propertyId);
+  const rows = (data ?? []) as { intended_mailbox: string | null; direction: 'inbound'|'outbound'; inquiry_id: string | null }[];
+  const inqIds = Array.from(new Set(rows.map(r => r.inquiry_id).filter(Boolean) as string[]));
+  let newInqIds = new Set<string>();
+  if (inqIds.length > 0) {
+    const { data: inqs } = await sb.schema('sales').from('inquiries').select('id,status').in('id', inqIds);
+    newInqIds = new Set(((inqs ?? []) as { id: string; status: string }[]).filter(i => i.status === 'new').map(i => i.id));
+  }
+  const map = new Map<string, InboxTab>();
+  for (const r of rows) {
+    const key = r.intended_mailbox || 'unknown';
+    const t = map.get(key) ?? { intended_mailbox: key, total: 0, unread: 0, inbound: 0, outbound: 0 };
+    t.total += 1;
+    if (r.direction === 'inbound') t.inbound += 1;
+    else t.outbound += 1;
+    if (r.inquiry_id && newInqIds.has(r.inquiry_id)) t.unread += 1;
+    map.set(key, t);
+  }
+  return Array.from(map.values()).sort((a, b) => b.total - a.total);
+}
+
+export async function listEmailThreads(propertyId: number = PROPERTY_ID, limit = 200, filter?: { intendedMailbox?: string; direction?: 'inbound'|'outbound' }): Promise<ThreadSummary[]> {
+  const sb = getSupabaseAdmin();
+  let q = sb.schema('sales').from('email_messages')
+    .select('thread_id,message_id,subject,from_email,from_name,direction,mailbox,intended_mailbox,received_at,inquiry_id,property_id')
+    .eq('property_id', propertyId).order('received_at', { ascending: false }).limit(limit * 5);
+  if (filter?.intendedMailbox) q = q.eq('intended_mailbox', filter.intendedMailbox);
+  if (filter?.direction) q = q.eq('direction', filter.direction);
+  const { data } = await q;
+  const rows = (data ?? []) as Array<{
+    thread_id: string | null; message_id: string; subject: string | null;
+    from_email: string | null; from_name: string | null;
+    direction: 'inbound'|'outbound'; mailbox: string;
+    intended_mailbox: string | null;
+    received_at: string; inquiry_id: string | null; property_id: number;
+  }>;
+  const byThread = new Map<string, ThreadSummary>();
+  const counts = new Map<string, number>();
+  for (const r of rows) {
+    const key = r.thread_id || r.message_id;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+    const existing = byThread.get(key);
+    if (!existing) {
+      byThread.set(key, {
+        thread_id: key, property_id: r.property_id, msg_count: 1,
+        last_received_at: r.received_at, last_subject: r.subject,
+        last_from_email: r.from_email, last_from_name: r.from_name,
+        last_direction: r.direction, last_mailbox: r.mailbox,
+        intended_mailbox: r.intended_mailbox,
+        inquiry_id: r.inquiry_id, inquiry_status: null, triage_kind: null,
+      });
+    } else if (!existing.inquiry_id && r.inquiry_id) existing.inquiry_id = r.inquiry_id;
+  }
+  for (const [k, t] of byThread) t.msg_count = counts.get(k) ?? 1;
+  const inqIds = Array.from(byThread.values()).map(t => t.inquiry_id).filter(Boolean) as string[];
+  if (inqIds.length > 0) {
+    const { data: inqs } = await sb.schema('sales').from('inquiries').select('id,status,triage_kind').in('id', inqIds);
+    const inqMap = new Map(((inqs ?? []) as { id: string; status: string; triage_kind: string|null }[]).map(i => [i.id, i]));
+    for (const t of byThread.values()) {
+      if (t.inquiry_id) {
+        const i = inqMap.get(t.inquiry_id);
+        if (i) { t.inquiry_status = i.status; t.triage_kind = i.triage_kind; }
+      }
+    }
+  }
+  return Array.from(byThread.values())
+    .sort((a, b) => +new Date(b.last_received_at) - +new Date(a.last_received_at))
+    .slice(0, limit);
+}
+
+export interface ThreadMessage {
+  id: string; message_id: string; thread_id: string | null; in_reply_to: string | null;
+  direction: 'inbound' | 'outbound'; mailbox: string;
+  from_email: string | null; from_name: string | null;
+  to_emails: string[]; cc_emails: string[];
+  subject: string | null; body_text: string | null; body_html: string | null;
+  received_at: string; inquiry_id: string | null;
+}
+
+export async function getThreadMessages(threadId: string, propertyId: number = PROPERTY_ID): Promise<ThreadMessage[]> {
+  const sb = getSupabaseAdmin();
+  const { data: byThread } = await sb.schema('sales').from('email_messages').select('*')
+    .eq('property_id', propertyId).eq('thread_id', threadId).order('received_at', { ascending: true });
+  if (byThread && byThread.length > 0) return byThread as ThreadMessage[];
+  const { data: byMsg } = await sb.schema('sales').from('email_messages').select('*')
+    .eq('property_id', propertyId).eq('message_id', threadId).order('received_at', { ascending: true });
+  return (byMsg ?? []) as ThreadMessage[];
+}
+
+export async function getInquiryEmailThread(inquiryId: string, propertyId: number = PROPERTY_ID): Promise<ThreadMessage[]> {
+  const sb = getSupabaseAdmin();
+  const { data } = await sb.schema('sales').from('email_messages').select('*')
+    .eq('property_id', propertyId).eq('inquiry_id', inquiryId).order('received_at', { ascending: true });
+  return (data ?? []) as ThreadMessage[];
+}
+
+export async function countUnreadInquiries(propertyId: number = PROPERTY_ID): Promise<number> {
+  const sb = getSupabaseAdmin();
+  const { count } = await sb.schema('sales').from('inquiries')
+    .select('*', { count: 'exact', head: true }).eq('property_id', propertyId).eq('status', 'new');
+  return count ?? 0;
+}
+
+export interface MailboxStats {
+  intended_mailbox: string; msgs: number; threads: number;
+  inbound: number; outbound: number;
+  spam: number; important: number; starred: number; bulk_category: number;
+  median_response_min: number | null; p95_response_min: number | null;
+  unanswered: number;
+}
+export async function getMailboxStats(propertyId: number = PROPERTY_ID): Promise<MailboxStats[]> {
+  const sb = getSupabaseAdmin();
+  const { data } = await sb.schema('sales').from('v_mailbox_stats')
+    .select('*').eq('property_id', propertyId).order('msgs', { ascending: false });
+  return ((data ?? []) as Array<MailboxStats & { property_id: number }>).map(r => ({
+    intended_mailbox: r.intended_mailbox, msgs: r.msgs, threads: r.threads,
+    inbound: r.inbound, outbound: r.outbound,
+    spam: r.spam, important: r.important, starred: r.starred, bulk_category: r.bulk_category,
+    median_response_min: r.median_response_min, p95_response_min: r.p95_response_min,
+    unanswered: r.unanswered,
+  }));
+}
+
+export async function getThreadResponseTime(threadId: string, propertyId: number = PROPERTY_ID): Promise<number | null> {
+  const sb = getSupabaseAdmin();
+  const { data } = await sb.schema('sales').from('v_thread_response')
+    .select('response_minutes').eq('property_id', propertyId).eq('thread_id', threadId).maybeSingle();
+  return (data as { response_minutes: number | null } | null)?.response_minutes ?? null;
+}
+
+export async function getThreadResponseMap(threadIds: string[], propertyId: number = PROPERTY_ID): Promise<Map<string, number | null>> {
+  if (threadIds.length === 0) return new Map();
+  const sb = getSupabaseAdmin();
+  const { data } = await sb.schema('sales').from('v_thread_response')
+    .select('thread_id,response_minutes').eq('property_id', propertyId).in('thread_id', threadIds);
+  const m = new Map<string, number | null>();
+  for (const r of (data ?? []) as Array<{ thread_id: string; response_minutes: number | null }>) {
+    m.set(r.thread_id, r.response_minutes);
+  }
+  return m;
+}
+
+export async function getInboxVolumeByDay(propertyId: number = PROPERTY_ID, days = 30): Promise<Array<{ date: string; inbound: number; outbound: number }>> {
+  const sb = getSupabaseAdmin();
+  const since = new Date(Date.now() - days * 86400000).toISOString();
+  const { data } = await sb.schema('sales').from('email_messages')
+    .select('received_at,direction').eq('property_id', propertyId).gte('received_at', since);
+  const buckets = new Map<string, { inbound: number; outbound: number }>();
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+    buckets.set(d, { inbound: 0, outbound: 0 });
+  }
+  for (const r of (data ?? []) as Array<{ received_at: string; direction: 'inbound'|'outbound' }>) {
+    const d = r.received_at.slice(0, 10);
+    if (buckets.has(d)) buckets.get(d)![r.direction]++;
+  }
+  return Array.from(buckets, ([date, v]) => ({ date, ...v }));
+}
+
+export async function getResponseTimeHistogram(propertyId: number = PROPERTY_ID): Promise<Array<{ bucket: string; threads: number }>> {
+  const sb = getSupabaseAdmin();
+  const { data } = await sb.schema('sales').from('v_thread_response')
+    .select('response_minutes').eq('property_id', propertyId).not('response_minutes', 'is', null);
+  const counts: Record<string, number> = { '<1h': 0, '1-4h': 0, '4-12h': 0, '12-24h': 0, '1-3d': 0, '3d+': 0 };
+  for (const r of (data ?? []) as Array<{ response_minutes: number }>) {
+    const m = r.response_minutes;
+    if (m < 60) counts['<1h']++;
+    else if (m < 240) counts['1-4h']++;
+    else if (m < 720) counts['4-12h']++;
+    else if (m < 1440) counts['12-24h']++;
+    else if (m < 4320) counts['1-3d']++;
+    else counts['3d+']++;
+  }
+  return Object.entries(counts).map(([bucket, threads]) => ({ bucket, threads }));
+}
+
+export async function getLiveFxRate(): Promise<number> {
+  const sb = getSupabaseAdmin();
+  const { data } = await sb.schema('gl').from('fx_rates').select('rate')
+    .eq('from_currency', 'USD').eq('to_currency', 'LAK')
+    .order('rate_date', { ascending: false }).limit(1).maybeSingle();
+  if (!data) return Number(process.env.NEXT_PUBLIC_FX_LAK_USD || 21800);
+  const r = Number((data as { rate: number | string }).rate);
+  return r > 0 ? r : Number(process.env.NEXT_PUBLIC_FX_LAK_USD || 21800);
+}
+
+export interface DraftSummary {
+  id: string; guest_name: string | null;
+  date_in: string | null; date_out: string | null;
+  total_lak: number | null; total_usd: number | null;
+  status: string; created_at: string;
+}
+export async function listDraftProposals(propertyId: number = PROPERTY_ID, limit = 6): Promise<DraftSummary[]> {
+  const sb = getSupabaseAdmin();
+  const { data } = await sb.schema('sales').from('proposals')
+    .select('id,guest_name_snapshot,date_in_snapshot,date_out_snapshot,total_lak,total_usd,status,created_at')
+    .eq('property_id', propertyId).in('status', ['draft','approved','sent'])
+    .order('created_at', { ascending: false }).limit(limit);
+  return ((data ?? []) as Array<{
+    id: string; guest_name_snapshot: string | null;
+    date_in_snapshot: string | null; date_out_snapshot: string | null;
+    total_lak: number | null; total_usd: number | null;
+    status: string; created_at: string;
+  }>).map(r => ({
+    id: r.id, guest_name: r.guest_name_snapshot,
+    date_in: r.date_in_snapshot, date_out: r.date_out_snapshot,
+    total_lak: r.total_lak, total_usd: r.total_usd,
+    status: r.status, created_at: r.created_at,
+  }));
+}

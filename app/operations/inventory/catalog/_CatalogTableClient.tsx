@@ -6,7 +6,7 @@
 // in a 'use client' file. Server page passes only plain JSON rows.
 
 import DataTable, { Column } from '@/components/ui/DataTable';
-import { fmtUSD, EMPTY } from '@/lib/format';
+import { fmtUSD, fmtTableUsd, fmtIsoDate, EMPTY } from '@/lib/format';
 
 export interface CatalogRow {
   sku: string;
@@ -20,6 +20,8 @@ export interface CatalogRow {
   catalog_status: string;
   is_active: boolean;
   updated_at: string | null;
+  last_sold_at: string | null;
+  ytd_sales_usd: number | null;
 }
 
 export default function CatalogTableClient({ rows }: { rows: CatalogRow[] }) {
@@ -64,6 +66,22 @@ export default function CatalogTableClient({ rows }: { rows: CatalogRow[] }) {
       numeric: true,
       render: (r) => r.last_unit_cost_usd != null ? fmtUSD(r.last_unit_cost_usd) : EMPTY,
       sortValue: (r) => r.last_unit_cost_usd ?? -1,
+    },
+    {
+      key: 'last_sold',
+      header: 'Last sale',
+      width: '110px',
+      render: (r) => <span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>{fmtIsoDate(r.last_sold_at)}</span>,
+      sortValue: (r) => r.last_sold_at ?? '',
+    },
+    {
+      key: 'ytd_sales',
+      header: 'YTD sales',
+      width: '110px',
+      align: 'right',
+      numeric: true,
+      render: (r) => fmtTableUsd(r.ytd_sales_usd),
+      sortValue: (r) => r.ytd_sales_usd ?? -1,
     },
     {
       key: 'gl',

@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Namkhan BI — Platform Architecture v5 (live crawl)</title>
+<style>
+  :root{
+    --bg:#f6f3ee;--ink:#1a1a1a;--muted:#6b6b6b;
+    --green:#1f3a2e;--green-bg:#e6efe8;--green-line:#2d6a4f;
+    --red:#8a2c20;--red-bg:#f5e3df;--red-line:#a13c2f;
+    --orange:#a06020;--orange-bg:#f7ead4;--orange-line:#c8893a;
+    --gold:#a87b3a;--line:#cfc8bd;--card:#ffffff;--grey-bg:#f1ede5;
+    --blue:#2c4a6b;--blue-bg:#e2eaf3;--blue-line:#3a5d85;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:'Inter','Helvetica Neue',Arial,sans-serif;padding:32px 36px;line-height:1.4}
+  h1{font-family:'Georgia',serif;font-weight:400;font-size:30px;letter-spacing:0.5px;margin-bottom:6px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:24px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;background:var(--card);border:1px solid var(--line);padding:12px 18px;margin-bottom:24px;font-size:11.5px}
+  .legend-item{display:flex;align-items:center;gap:8px}
+  .swatch{width:18px;height:18px;border-radius:3px}
+  .swatch.g{background:var(--green-bg);border-left:4px solid var(--green-line)}
+  .swatch.r{background:var(--red-bg);border-left:4px solid var(--red-line)}
+  .swatch.o{background:var(--orange-bg);border-left:4px solid var(--orange-line)}
+  .swatch.p{background:var(--grey-bg);border-left:4px solid var(--gold)}
+  .layer{background:var(--card);border:1px solid var(--line);padding:18px 22px 22px 22px;margin-bottom:14px}
+  .layer-label{font-family:'Georgia',serif;font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--gold);margin-bottom:14px;border-bottom:1px solid var(--line);padding-bottom:8px}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .grid-5{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+  @media(max-width:1100px){.grid-3,.grid-4,.grid-5{grid-template-columns:1fr 1fr}}
+  @media(max-width:700px){.grid-2,.grid-3,.grid-4,.grid-5{grid-template-columns:1fr}}
+  .box{border:1px solid var(--line);padding:11px 13px;background:#fff;font-size:12px;position:relative}
+  .box h3{font-family:'Georgia',serif;font-weight:400;font-size:13px;margin-bottom:4px;color:var(--ink)}
+  .box .meta{font-size:9.5px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:4px}
+  .box ul{list-style:none;font-size:10.5px;color:#333}
+  .box ul li{padding:1px 0}
+  .box ul li::before{content:"— ";color:var(--muted)}
+  .box .gap{font-size:10px;color:var(--red);font-style:italic;margin-top:4px;line-height:1.3}
+  .have{background:var(--green-bg);border-left:4px solid var(--green-line)}
+  .have h3{color:var(--green)}
+  .miss{background:var(--red-bg);border-left:4px solid var(--red-line)}
+  .miss h3{color:var(--red)}
+  .next{background:var(--orange-bg);border-left:4px solid var(--orange-line)}
+  .next h3{color:var(--orange)}
+  .partial{background:var(--grey-bg);border-left:4px solid var(--gold)}
+  .partial h3{color:var(--gold)}
+  .arrow{text-align:center;color:var(--muted);font-size:18px;margin:6px 0;letter-spacing:8px}
+  .tag{display:inline-block;font-size:9px;padding:1px 6px;border-radius:8px;margin-left:4px;letter-spacing:0.5px;vertical-align:middle}
+  .tag.g{background:var(--green-line);color:#fff}
+  .tag.r{background:var(--red-line);color:#fff}
+  .tag.o{background:var(--orange-line);color:#fff}
+  .tag.p{background:var(--gold);color:#fff}
+  .footer{margin-top:24px;padding:16px 20px;border:1px dashed var(--line);background:var(--card);font-size:12px;color:#333}
+  .footer h4{font-family:'Georgia',serif;font-weight:400;font-size:14px;margin-bottom:8px;color:var(--green)}
+  .footer ol{margin-left:18px;margin-bottom:10px}
+  .footer li{padding:2px 0}
+  .scorecard{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px}
+  .score{background:var(--card);border:1px solid var(--line);padding:14px 16px;text-align:center}
+  .score .n{font-family:'Georgia',serif;font-size:30px;line-height:1;color:var(--green);margin-bottom:4px}
+  .score .n.r{color:var(--red)}
+  .score .n.o{color:var(--orange)}
+  .score .l{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted)}
+  .group-title{font-size:11px;color:var(--muted);margin-bottom:6px;letter-spacing:1px;text-transform:uppercase;margin-top:10px}
+</style>
+</head>
+<body>
+
+<h1>The Namkhan — Platform Map (v5 · live crawl)</h1>
+<div class="sub">02 May 2026 · crawled from Supabase project kpenyneooigsyuuomgct + namkhan-bi.vercel.app · 27 schemas · 160+ tables · QB GL already loaded (2,924 entries) · order: red first, orange second</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="swatch r"></div><strong>RED — TIER 1</strong> · build first</div>
+  <div class="legend-item"><div class="swatch o"></div><strong>ORANGE — TIER 2</strong> · build after red</div>
+  <div class="legend-item"><div class="swatch p"></div><strong>PARTIAL</strong> · schema exists, blocked</div>
+  <div class="legend-item"><div class="swatch g"></div><strong>LIVE / READY</strong> · wired today</div>
+</div>
+
+<div class="scorecard">
+  <div class="score"><div class="n">27</div><div class="l">Schemas live in DB</div></div>
+  <div class="score"><div class="n">160+</div><div class="l">Tables across all schemas</div></div>
+  <div class="score"><div class="n r">13</div><div class="l">Red items — Tier 1</div></div>
+  <div class="score"><div class="n o">17</div><div class="l">Orange items — Tier 2</div></div>
+</div>
+
+<!-- LAYER 1: SOURCES -->
+<div class="layer">
+  <div class="layer-label">1 · Source systems · what feeds the database</div>
+
+  <div class="group-title">Operations & guest journey · RED</div>
+  <div class="grid-4" style="margin-bottom:10px">
+    <div class="box miss"><div class="meta">F&B POS</div><h3>The Roots POS<span class="tag r">RED</span></h3>
+      <ul><li>Covers, items, food cost</li></ul>
+      <p class="gap">no integration · POS not selected · fb.* schema ready, 0 rows</p></div>
+    <div class="box miss"><div class="meta">Spa</div><h3>Spa booking<span class="tag r">RED</span></h3>
+      <ul><li>Therapist schedule · treatments</li></ul>
+      <p class="gap">no SaaS booked · spa.* schema ready (5 tables, 0 rows) · upload path needed</p></div>
+    <div class="box miss"><div class="meta">Activities</div><h3>Activities + pricelists<span class="tag r">RED</span></h3>
+      <ul><li>Tours, classes, equipment</li></ul>
+      <p class="gap">activities.* schema ready (6 tables, 0 rows) · upload path on app needed</p></div>
+    <div class="box miss"><div class="meta">Reviews</div><h3>Email-based reviews<span class="tag r">RED</span></h3>
+      <ul><li>BCom · TA · Google · SLH · Expedia · Agoda</li><li>All in one inbox</li></ul>
+      <p class="gap">no parser built · marketing.reviews 0 rows · 1 day work</p></div>
+  </div>
+
+  <div class="group-title">Cloudbeds & QuickBooks · LIVE</div>
+  <div class="grid-4" style="margin-bottom:10px">
+    <div class="box have"><div class="meta">PMS · LIVE</div><h3>Cloudbeds<span class="tag g">LIVE</span></h3>
+      <ul><li>4,762 reservations · 76,345 transactions</li><li>88,863 rate inventory rows · 15-min sync v12</li></ul></div>
+    <div class="box partial"><div class="meta">PMS</div><h3>Cloudbeds housekeeping API<span class="tag r">RED</span></h3>
+      <ul><li>getHousekeepingStatus 403</li></ul>
+      <p class="gap">Cloudbeds support ticket needed for housekeeping:read scope</p></div>
+    <div class="box have"><div class="meta">Finance · LIVE</div><h3>QuickBooks GL<span class="tag g">LIVE</span></h3>
+      <ul><li>gl.gl_entries 2,924 rows</li><li>gl.vendors 135 · gl.accounts 247</li><li>qb-bulk-gl-load Edge Function v3</li></ul></div>
+    <div class="box have"><div class="meta">Whistle</div><h3>Whistle (guest msg)<span class="tag g">OUT</span></h3>
+      <ul><li>No public API · out of scope</li></ul></div>
+  </div>
+
+  <div class="group-title">Marketing acquisition · RED</div>
+  <div class="grid-4" style="margin-bottom:10px">
+    <div class="box miss"><div class="meta">SEO</div><h3>Google Search Console<span class="tag r">RED</span></h3>
+      <ul><li>Keywords · CTR · indexing</li></ul>
+      <p class="gap">seo.* schema ready (4 tables, 0 rows) · GSC OAuth + ingest needed</p></div>
+    <div class="box miss"><div class="meta">Paid</div><h3>Google Ads<span class="tag r">RED</span></h3>
+      <ul><li>Spend · CPC · conversions</li></ul>
+      <p class="gap">no schema · need marketing.paid_campaigns + Google Ads OAuth</p></div>
+    <div class="box miss"><div class="meta">Paid</div><h3>Meta Ads (FB/IG)<span class="tag r">RED</span></h3>
+      <ul><li>Spend · reach · CPL</li></ul>
+      <p class="gap">no schema · same paid_campaigns table · Meta API OAuth</p></div>
+    <div class="box miss"><div class="meta">Analytics</div><h3>GA4 + GTM<span class="tag r">RED</span></h3>
+      <ul><li>Direct vs OTA attribution</li></ul>
+      <p class="gap">no schema · need marketing.web_analytics + GA4 Data API OAuth</p></div>
+  </div>
+
+  <div class="group-title">Marketing channels · ORANGE</div>
+  <div class="grid-4" style="margin-bottom:10px">
+    <div class="box next"><div class="meta">Email</div><h3>Email platform<span class="tag o">ORANGE</span></h3>
+      <ul><li>Mailchimp / Klaviyo</li></ul>
+      <p class="gap">platform not selected · no schema · Phase 2</p></div>
+    <div class="box next"><div class="meta">SEO</div><h3>Keyword research<span class="tag o">ORANGE</span></h3>
+      <ul><li>Ahrefs / Semrush</li></ul>
+      <p class="gap">seo.queries_daily can absorb · API key + ingest path needed</p></div>
+    <div class="box next"><div class="meta">Social</div><h3>IG/FB organic stats<span class="tag o">ORANGE</span></h3>
+      <ul><li>Reach · engagement · followers</li></ul>
+      <p class="gap">marketing.social_accounts 7 manual rows · API not built</p></div>
+    <div class="box next"><div class="meta">Influencers</div><h3>Influencer / PR<span class="tag o">ORANGE</span></h3>
+      <ul><li>Coverage value · attribution</li></ul>
+      <p class="gap">marketing.influencers 0 rows · UI to log manually first</p></div>
+  </div>
+  <div class="grid-4" style="margin-bottom:10px">
+    <div class="box have"><div class="meta">Media · LIVE</div><h3>Media library<span class="tag g">LIVE</span></h3>
+      <ul><li>media-ingest + media-tag Edge Functions</li><li>marketing.media_assets 7 · taxonomy 198</li><li>campaign_templates 17</li></ul></div>
+    <div class="box partial"><div class="meta">Compset</div><h3>Compset rates<span class="tag o">ORANGE</span></h3>
+      <ul><li>revenue.competitor_set 4 · property 12</li><li>competitor_rates 0 (scraper not built)</li></ul></div>
+    <div class="box have"><div class="meta">DMC · LIVE</div><h3>DMC contracts<span class="tag g">LIVE</span></h3>
+      <ul><li>governance.dmc_contracts 5 rows</li><li>PDF upload path live</li></ul></div>
+    <div class="box next"><div class="meta">DMC metadata</div><h3>DMC rate-card depth<span class="tag o">ORANGE</span></h3>
+      <ul><li>governance.dmc_reservation_mapping 0 rows</li></ul>
+      <p class="gap">header level only · full rate-card not built · RLS hardening needed</p></div>
+  </div>
+
+  <div class="group-title">Sales & front-office · RED+ORANGE</div>
+  <div class="grid-4" style="margin-bottom:10px">
+    <div class="box miss"><div class="meta">Sales</div><h3>Inbound inquiry parser<span class="tag r">RED</span></h3>
+      <ul><li>Email → triage → quote draft</li></ul>
+      <p class="gap">no sales.* schema · no inbox watcher · /sales/inquiries page is mocked</p></div>
+    <div class="box partial"><div class="meta">Front office</div><h3>frontoffice.* ingest<span class="tag o">ORANGE</span></h3>
+      <ul><li>8 tables ready · 0 rows · brand_voice 1</li></ul>
+      <p class="gap">cloudbeds.reservations join not wired · refresh_arrivals_board cron needed</p></div>
+    <div class="box next"><div class="meta">Demand signal</div><h3>Flight schedule LPQ<span class="tag o">ORANGE</span></h3>
+      <ul><li>Lao Airlines · Bangkok Air</li></ul>
+      <p class="gap">no API integration · sources unidentified</p></div>
+    <div class="box next"><div class="meta">Channel</div><h3>WhatsApp pre-arrival<span class="tag o">ORANGE</span></h3>
+      <ul><li>Composer agents send drafts</li></ul>
+      <p class="gap">no channel integration · platform unselected</p></div>
+  </div>
+
+  <div class="group-title">External signals · ORANGE</div>
+  <div class="grid-4" style="margin-bottom:10px">
+    <div class="box next"><div class="meta">Demand</div><h3>Weather forecast<span class="tag o">ORANGE</span></h3>
+      <ul><li>Open-Meteo free tier</li></ul>
+      <p class="gap">no signals.* schema yet</p></div>
+    <div class="box next"><div class="meta">Demand</div><h3>Lao public holidays<span class="tag o">ORANGE</span></h3>
+      <ul><li>Pi Mai · Boun · regional</li></ul>
+      <p class="gap">static seed table acceptable</p></div>
+    <div class="box partial"><div class="meta">FX</div><h3>FX feed<span class="tag o">ORANGE</span></h3>
+      <ul><li>gl.fx_rates 20 manual rows</li></ul>
+      <p class="gap">no auto-refresh · breaks USD comms on stale rate</p></div>
+    <div class="box next"><div class="meta">Demand</div><h3>Tourism arrivals<span class="tag o">ORANGE</span></h3>
+      <ul><li>Lao gov stats</li></ul>
+      <p class="gap">signals.tourism_monthly does not exist</p></div>
+  </div>
+
+  <div class="group-title">Sustainability · Travel Life · RED</div>
+  <div class="grid-4" style="margin-bottom:10px">
+    <div class="box miss"><div class="meta">Audit</div><h3>Travel Life checklist<span class="tag r">RED</span></h3>
+      <ul><li>Owner action: obtain template</li></ul>
+      <p class="gap">required before sustainability.* is written</p></div>
+    <div class="box miss"><div class="meta">Manual upload</div><h3>Meter readings<span class="tag r">RED</span></h3>
+      <ul><li>Water · electricity · gas · fuel</li></ul>
+      <p class="gap">no schema · no upload UI · monthly</p></div>
+    <div class="box miss"><div class="meta">Manual upload</div><h3>Waste streams<span class="tag r">RED</span></h3>
+      <ul><li>Recycle · compost · landfill</li></ul>
+      <p class="gap">no schema · no upload UI</p></div>
+    <div class="box next"><div class="meta">From QB + suppliers</div><h3>Local sourcing %<span class="tag o">ORANGE</span></h3>
+      <ul><li>Derivable once suppliers populated</li></ul>
+      <p class="gap">view exists · supplier table empty</p></div>
+  </div>
+
+  <div class="group-title">HR & people · LIVE</div>
+  <div class="grid-4">
+    <div class="box have"><div class="meta">Live</div><h3>Staff register + attendance<span class="tag g">LIVE</span></h3>
+      <ul><li>staff_employment 70 · attendance 2,100</li><li>availability 490 · payroll_monthly 70</li></ul></div>
+    <div class="box miss"><div class="meta">Daily payroll</div><h3>ops.payroll_daily<span class="tag r">RED</span></h3>
+      <ul><li>0 rows · 70 monthly rows only</li></ul>
+      <p class="gap">manual CSV upload path not built · Phase1_15 gap 1</p></div>
+    <div class="box partial"><div class="meta">Skills</div><h3>Skills + competencies<span class="tag o">ORANGE</span></h3>
+      <ul><li>ops.skills 28 · training.competencies 0</li></ul>
+      <p class="gap">training content not loaded</p></div>
+    <div class="box next"><div class="meta">Training</div><h3>Training modules + certs<span class="tag o">ORANGE</span></h3>
+      <ul><li>5 tables · 0 rows everywhere</li></ul>
+      <p class="gap">content not loaded</p></div>
+  </div>
+</div>
+
+<div class="arrow">↓</div>
+
+<!-- LAYER 2: INGESTION -->
+<div class="layer">
+  <div class="layer-label">2 · Ingestion · pipelines</div>
+  <div class="grid-3" style="margin-bottom:10px">
+    <div class="box miss"><div class="meta">Edge Function</div><h3>Email-review parser<span class="tag r">RED</span></h3>
+      <ul><li>Inbox → LLM → marketing.reviews</li></ul>
+      <p class="gap">~1 day work</p></div>
+    <div class="box miss"><div class="meta">Edge Function</div><h3>Webhook receiver<span class="tag r">RED</span></h3>
+      <ul><li>Cloudbeds reservation_modifications</li></ul>
+      <p class="gap">15-min poll only · table 0 rows</p></div>
+    <div class="box miss"><div class="meta">Edge Function</div><h3>Generic CSV upload UI<span class="tag r">RED</span></h3>
+      <ul><li>Budget · payroll daily · meters</li></ul>
+      <p class="gap">no Edge Function · no Vercel page</p></div>
+  </div>
+  <div class="grid-3" style="margin-bottom:10px">
+    <div class="box miss"><div class="meta">Edge Function · F1</div><h3>agent_runner<span class="tag r">RED</span></h3>
+      <ul><li>5 cron jobs queue · nothing dequeues</li><li>governance.agent_runs 0 rows</li></ul>
+      <p class="gap">~2h · waits on Anthropic key in Vault</p></div>
+    <div class="box miss"><div class="meta">Vault</div><h3>Anthropic API key<span class="tag r">RED</span></h3>
+      <ul><li>Required for agent_runner</li></ul>
+      <p class="gap">not in Supabase Vault</p></div>
+    <div class="box next"><div class="meta">Manual</div><h3>Meter-reading UI<span class="tag o">ORANGE</span></h3>
+      <ul><li>Travel Life monthly</li></ul>
+      <p class="gap">waits on schema definition</p></div>
+  </div>
+  <div class="grid-4">
+    <div class="box have"><div class="meta">v12 · LIVE</div><h3>sync-cloudbeds<span class="tag g">LIVE</span></h3>
+      <ul><li>14 entities · 167 successful runs</li></ul></div>
+    <div class="box have"><div class="meta">v3 · LIVE</div><h3>qb-bulk-gl-load<span class="tag g">LIVE</span></h3>
+      <ul><li>2,924 GL entries loaded</li></ul></div>
+    <div class="box have"><div class="meta">v1 · LIVE</div><h3>media-ingest + media-tag<span class="tag g">LIVE</span></h3>
+      <ul><li>Drive watcher → storage → tag</li></ul></div>
+    <div class="box have"><div class="meta">LIVE</div><h3>DMC contract upload path<span class="tag g">LIVE</span></h3>
+      <ul><li>5 contracts in storage</li></ul></div>
+  </div>
+</div>
+
+<div class="arrow">↓</div>
+
+<!-- LAYER 3: DATABASE -->
+<div class="layer">
+  <div class="layer-label">3 · Database · 27 schemas · 160+ tables · live crawl</div>
+
+  <div class="group-title">Live & rich (data flowing)</div>
+  <div class="grid-4" style="margin-bottom:10px">
+    <div class="box have"><div class="meta">public · 290k+ rows</div><h3>Cloudbeds mirror<span class="tag g">LIVE</span></h3>
+      <ul><li>reservations · transactions · rate_inventory · guests · sources · items</li></ul></div>
+    <div class="box have"><div class="meta">gl · QB-fed</div><h3>USALI ledger<span class="tag g">LIVE</span></h3>
+      <ul><li>2,924 entries · 247 accts · 135 vendors · 348 P&L months · 455 DQ findings</li></ul></div>
+    <div class="box have"><div class="meta">kpi · 14 mat views</div><h3>BI marts<span class="tag g">LIVE</span></h3>
+      <ul><li>mv_kpi_today · mv_pace_otb · mv_aged_ar · mv_capture_rates · mv_guest_profiles</li></ul></div>
+    <div class="box have"><div class="meta">docs · 17 tables</div><h3>Documents + KB<span class="tag g">LIVE</span></h3>
+      <ul><li>documents 45 · compliance_meta 11 · expiry alerts cron</li></ul></div>
+  </div>
+
+  <div class="grid-4" style="margin-bottom:10px">
+    <div class="box have"><div class="meta">governance</div><h3>Agents + mandates<span class="tag g">LIVE</span></h3>
+      <ul><li>27 agents · 7 prompts · 23 mandate rules · 6 authority limits</li></ul></div>
+    <div class="box have"><div class="meta">ops</div><h3>HR + departments<span class="tag g">LIVE</span></h3>
+      <ul><li>departments 16 · staff 70 · attendance 2,100 · skills 28</li></ul></div>
+    <div class="box have"><div class="meta">dq</div><h3>Data quality engine<span class="tag g">LIVE</span></h3>
+      <ul><li>33 rules · 1,527 violations · 37 runs</li></ul></div>
+    <div class="box have"><div class="meta">app</div><h3>Auth + roles<span class="tag g">LIVE</span></h3>
+      <ul><li>roles 8 · permissions 34 · profiles 1 user · audit_log empty</li></ul></div>
+  </div>
+
+  <div class="group-title">Schemas live but partial / 0 rows (waiting on source)</div>
+  <div class="grid-4" style="margin-bottom:10px">
+    <div class="box partial"><div class="meta">plan · 3,064 rows</div><h3>Budget tables<span class="tag r">RED upload</span></h3>
+      <ul><li>Schema ready · no upload UI</li></ul></div>
+    <div class="box partial"><div class="meta">marketing · partial</div><h3>Marketing<span class="tag o">ORANGE</span></h3>
+      <ul><li>media 7 · taxonomy 198 · campaigns 0 · reviews 0</li></ul></div>
+    <div class="box partial"><div class="meta">knowledge · 21 SOPs</div><h3>SOP library + brand voice<span class="tag o">ORANGE</span></h3>
+      <ul><li>sop_meta 21 · brand_voice 0 · qa_audits 0</li></ul></div>
+    <div class="box partial"><div class="meta">revenue · partial</div><h3>Compset<span class="tag o">ORANGE</span></h3>
+      <ul><li>set 4 · property 12 · rates 0</li></ul></div>
+  </div>
+  <div class="grid-4" style="margin-bottom:10px">
+    <div class="box partial"><div class="meta">fb · partial</div><h3>F&B<span class="tag r">RED</span></h3>
+      <ul><li>outlets 4 · allergens 14 · recipes/wastage 0</li></ul></div>
+    <div class="box partial"><div class="meta">spa · empty</div><h3>Spa<span class="tag r">RED</span></h3>
+      <ul><li>5 tables · 0 rows</li></ul></div>
+    <div class="box partial"><div class="meta">activities · empty</div><h3>Activities<span class="tag r">RED</span></h3>
+      <ul><li>6 tables · 0 rows</li></ul></div>
+    <div class="box partial"><div class="meta">guest · empty</div><h3>Guest journey<span class="tag r">RED</span></h3>
+      <ul><li>6 tables · 0 rows · waits on parser</li></ul></div>
+  </div>
+  <div class="grid-4" style="margin-bottom:10px">
+    <div class="box partial"><div class="meta">frontoffice · empty</div><h3>Front office<span class="tag o">ORANGE</span></h3>
+      <ul><li>8 tables · 0 rows · brand_voice 1</li></ul></div>
+    <div class="box partial"><div class="meta">seo · empty</div><h3>SEO<span class="tag r">RED</span></h3>
+      <ul><li>4 tables · 0 rows · Search Console pending</li></ul></div>
+    <div class="box partial"><div class="meta">training · empty</div><h3>Training<span class="tag o">ORANGE</span></h3>
+      <ul><li>5 tables · 0 rows · content load</li></ul></div>
+    <div class="box partial"><div class="meta">suppliers · already exists</div><h3>Suppliers<span class="tag o">ORANGE</span></h3>
+      <ul><li>4 tables · 0 rows · UI not built</li></ul></div>
+  </div>
+
+  <div class="group-title">Schemas not yet created</div>
+  <div class="grid-4" style="margin-bottom:10px">
+    <div class="box miss"><div class="meta">handover sent</div><h3>assets.* (FF&E + OS&E)<span class="tag r">RED</span></h3>
+      <ul><li>Cowork PR pending</li><li>17 tables, 4 views, 34 RLS</li></ul></div>
+    <div class="box miss"><div class="meta">handover sent</div><h3>inventory.* (par stock)<span class="tag r">RED</span></h3>
+      <ul><li>Cowork PR pending</li><li>NB: orphan inv.* function exists, ignore</li></ul></div>
+    <div class="box miss"><div class="meta">missing</div><h3>sustainability.*<span class="tag r">RED</span></h3>
+      <ul><li>Travel Life</li></ul>
+      <p class="gap">waits on owner-supplied checklist</p></div>
+    <div class="box next"><div class="meta">missing</div><h3>contracts.* (full)<span class="tag o">ORANGE</span></h3>
+      <ul><li>Beyond DMC: insurance · employment · vendor · B2B</li></ul></div>
+  </div>
+  <div class="grid-4" style="margin-bottom:10px">
+    <div class="box next"><div class="meta">missing</div><h3>signals.*<span class="tag o">ORANGE</span></h3>
+      <ul><li>Flights · weather · holidays · tourism</li></ul></div>
+    <div class="box next"><div class="meta">missing</div><h3>sales.*<span class="tag r">RED</span></h3>
+      <ul><li>Inbound inquiry pipeline</li><li>UI exists, schema doesn't</li></ul></div>
+    <div class="box have"><div class="meta">storage · 15 buckets</div><h3>Storage<span class="tag g">LIVE</span></h3>
+      <ul><li>media · documents-confidential · sop-visuals · branding · etc.</li></ul></div>
+    <div class="box have"><div class="meta">archived</div><h3>hr.* — not needed<span class="tag g">DROPPED</span></h3>
+      <ul><li>QB owns payroll · ops.* owns roster</li></ul></div>
+  </div>
+
+  <div class="group-title">Security debts (Supabase advisor flagged)</div>
+  <div class="grid-2">
+    <div class="box miss"><div class="meta">RLS</div><h3>3 public tables without RLS + 4 anon-callable RPCs<span class="tag r">RED</span></h3>
+      <ul><li>app_users · app_settings · action_decisions exposed</li><li>cb_invoke_sync · cb_sync_now · refresh_bi_views · save_competitor_rates</li><li>40+ SECURITY DEFINER views in public</li><li>media-renders bucket allows listing</li></ul>
+      <p class="gap">fix before any second user · before public traffic</p></div>
+    <div class="box next"><div class="meta">Hardening</div><h3>20+ docs.* tables · RLS on, 0 policies<span class="tag o">ORANGE</span></h3>
+      <ul><li>Effectively service-role only</li><li>80+ functions with mutable search_path</li><li>3 extensions in public · pg_net · citext · pg_trgm</li><li>Auth leaked-password protection off</li></ul></div>
+  </div>
+</div>
+
+<div class="arrow">↓</div>
+
+<!-- LAYER 4: AGENTS -->
+<div class="layer">
+  <div class="layer-label">4 · AI · agents · recommendations</div>
+  <div class="grid-3">
+    <div class="box miss"><div class="meta">Blocking</div><h3>agent_runner Edge Function<span class="tag r">RED</span></h3>
+      <ul><li>5 cron jobs queue runs into governance.agent_runs (0 rows)</li><li>27 agents · 7 prompts ready</li><li>Awaits Anthropic key + ~2h work</li></ul></div>
+    <div class="box partial"><div class="meta">Ready</div><h3>27 agents configured · 7 active prompts<span class="tag g">READY</span></h3>
+      <ul><li>snapshot · pricing · forecast · lead_scoring · review · variance · cashflow</li><li>20 in draft (sales + front-office not in DB yet)</li></ul></div>
+    <div class="box next"><div class="meta">Phase 4</div><h3>Vertex AI<span class="tag o">ORANGE</span></h3>
+      <ul><li>Forecast · AutoML no-show · anomaly</li><li>Needs ≥6mo clean data</li></ul></div>
+  </div>
+</div>
+
+<div class="arrow">↓</div>
+
+<!-- LAYER 5: FRONTEND -->
+<div class="layer">
+  <div class="layer-label">5 · Frontend · namkhan-bi.vercel.app · 9 top-level pillars</div>
+
+  <div class="group-title">Pillars deployed (verified live)</div>
+  <div class="grid-4" style="margin-bottom:10px">
+    <div class="box have"><h3>/overview<span class="tag g">LIVE</span></h3><ul><li>Right Now KPIs · 30d trend</li><li>GOPPAR pending QB tonight</li></ul></div>
+    <div class="box have"><h3>/revenue<span class="tag g">LIVE</span></h3><ul><li>Pulse · demand · channels · rates</li></ul></div>
+    <div class="box partial"><h3>/sales/inquiries<span class="tag r">RED</span></h3><ul><li>UI built · sales.* schema missing</li><li>"Data needed · sales schema" everywhere</li></ul></div>
+    <div class="box partial"><h3>/marketing<span class="tag r">RED</span></h3><ul><li>5 sub-tabs · all "0 reviews" / "no data"</li></ul></div>
+  </div>
+  <div class="grid-4" style="margin-bottom:10px">
+    <div class="box partial"><h3>/operations<span class="tag o">ORANGE</span></h3><ul><li>7 sub-tabs · DQ alerts inline</li><li>Restaurant/Spa/Activities partial</li></ul></div>
+    <div class="box partial"><h3>/front-office/arrivals<span class="tag o">ORANGE</span></h3><ul><li>UI built · 8 KPIs all "Data needed"</li><li>frontoffice.* ingest pending</li></ul></div>
+    <div class="box partial"><h3>/guest<span class="tag r">RED</span></h3><ul><li>mv_guest_profiles ready</li><li>Reviews/NPS pending parser</li></ul></div>
+    <div class="box have"><h3>/finance<span class="tag g">LIVE</span></h3><ul><li>Snapshot + P&L + Ledger live</li><li>Budget/Cashflow/Variance "soon"</li></ul></div>
+  </div>
+  <div class="grid-2" style="margin-bottom:10px">
+    <div class="box partial"><h3>/knowledge<span class="tag o">ORANGE</span></h3><ul><li>4 Agents sub-tabs · 10 agents · 0 live</li></ul></div>
+    <div class="box partial"><h3>/settings (8 sub-tabs)<span class="tag o">ORANGE</span></h3><ul><li>Snapshot · Property · Users · Budget · Integrations · Notifications · Reports · DQ</li><li>Most "Coming Phase 2"</li></ul></div>
+  </div>
+
+  <div class="group-title">Settings sub-tabs · status</div>
+  <div class="grid-4" style="margin-bottom:10px">
+    <div class="box have"><h3>Snapshot<span class="tag g">LIVE</span></h3></div>
+    <div class="box next"><h3>Property<span class="tag o">ORANGE</span></h3><ul><li>Hard-coded · move to app_settings</li></ul></div>
+    <div class="box miss"><h3>Users & roles<span class="tag r">RED</span></h3><ul><li>Password gate only</li></ul></div>
+    <div class="box miss"><h3>Budget<span class="tag r">RED</span></h3><ul><li>plan.lines 3,064 · upload UI not built</li></ul></div>
+    <div class="box partial"><h3>Integrations<span class="tag o">ORANGE</span></h3><ul><li>Cloudbeds + Supabase + QB live</li></ul></div>
+    <div class="box next"><h3>Notifications<span class="tag o">ORANGE</span></h3><ul><li>Mandate alerts · digest</li></ul></div>
+    <div class="box next"><h3>Reports<span class="tag o">ORANGE</span></h3><ul><li>Owner monthly · investor · SLH</li></ul></div>
+    <div class="box partial"><h3>DQ engine<span class="tag o">ORANGE</span></h3><ul><li>1,527 violations · UI not surfaced</li></ul></div>
+  </div>
+
+  <div class="group-title">Pages spec'd in mockup but not built</div>
+  <div class="grid-4">
+    <div class="box miss"><h3>Sustainability page<span class="tag r">RED</span></h3><ul><li>Waits on schema + checklist</li></ul></div>
+    <div class="box next"><h3>Asset Register<span class="tag o">ORANGE</span></h3><ul><li>After Cowork PR</li></ul></div>
+    <div class="box next"><h3>Inventory + Stocktake<span class="tag o">ORANGE</span></h3><ul><li>After Cowork PR</li></ul></div>
+    <div class="box next"><h3>Supplier Base<span class="tag o">ORANGE</span></h3><ul><li>Schema exists · UI not built</li></ul></div>
+    <div class="box next"><h3>DMC contracts dashboard<span class="tag o">ORANGE</span></h3><ul><li>Renewal alerts · rate compare</li></ul></div>
+    <div class="box next"><h3>Marketing paid dashboard<span class="tag o">ORANGE</span></h3><ul><li>GSC + Ads + Meta + GA4</li></ul></div>
+    <div class="box next"><h3>SOP visual library<span class="tag o">ORANGE</span></h3><ul><li>21 SOPs no UI</li></ul></div>
+    <div class="box have"><h3>Settings → Platform Map<span class="tag g">THIS PAGE</span></h3><ul><li>MD-driven custom statuses</li></ul></div>
+  </div>
+</div>
+
+<div class="footer">
+
+<h4>Status mechanism — owner can flip rows manually</h4>
+<p>Every row in the matching markdown doc carries a <code>[STATUS:xxx]</code> tag. Edit the tag in <code>/content/settings/platform-map.md</code> in the repo and the rendered colour changes on next deploy. Allowed values: <code>LIVE · READY · PARTIAL · NEXT · GAP · OUT · DONE</code>.</p>
+
+<h4>Red list — Tier 1 (build first · 13 items)</h4>
+<ol>
+  <li><strong>Anthropic API key + agent_runner Edge Function</strong> — 2h · unlocks 7 agents + decision queue UX</li>
+  <li><strong>Email-review parser</strong> — 1d · unlocks marketing.reviews, review_agent, reputation</li>
+  <li><strong>Roots POS integration</strong> — biggest ops blind spot · F&B cost % stays fake until done</li>
+  <li><strong>Travel Life checklist</strong> — owner action · obtain template before sustainability.* schema</li>
+  <li><strong>Search Console + Google Ads + Meta Ads + GA4 OAuth + ingest</strong> — marketing is a black box without these</li>
+  <li><strong>Sales inbox parser + sales.* schema</strong> — /sales/inquiries page is mocked</li>
+  <li><strong>Cloudbeds webhook receiver</strong> — real-time over 15-min poll</li>
+  <li><strong>Generic CSV upload UI</strong> — budget · payroll daily · meter readings</li>
+  <li><strong>Spa + Activities pricelists upload + booking source</strong> — schemas ready, no source</li>
+  <li><strong>Security advisor cleanup</strong> — RLS on 3 public tables · revoke anon EXECUTE on 4 RPCs · lock down media-renders bucket</li>
+  <li><strong>DMC mapping RLS hardening</strong> — USING (true) policy · fix before multi-tenant</li>
+  <li><strong>Settings → Budget upload UI</strong> — schema there, just need ingest + version history</li>
+  <li><strong>ops.payroll_daily upload path</strong> — 0 rows · breaks dept × day labour analytics</li>
+</ol>
+
+<h4>Orange list — Tier 2 (after the red list · 17 items)</h4>
+<ol start="14">
+  <li>Front-office ingest (flight, WhatsApp, ETA agent runs)</li>
+  <li>Compset rate scraper</li>
+  <li>DMC contract metadata (full rate-card decomposition)</li>
+  <li>assets.* + inventory.* Vercel UI (after Cowork PR)</li>
+  <li>Supplier UI + populate suppliers.* (4 empty tables)</li>
+  <li>SOP visual library page</li>
+  <li>Marketing paid-channel dashboard</li>
+  <li>Email platform (Mailchimp / Klaviyo) integration</li>
+  <li>Influencer / PR coverage tracker</li>
+  <li>Training content load + competencies surface</li>
+  <li>External signals — weather, holidays, tourism arrivals</li>
+  <li>Search Console keyword research deep-dive</li>
+  <li>Vertex AI Phase 4 (≥6 months clean data)</li>
+  <li>Function search_path cleanup, leaked-password protection</li>
+  <li>CI/CD + branch protection</li>
+  <li>Cashflow rolling 13-week forecast (gl.cash_forecast_weekly ready)</li>
+  <li>Variance commentary publishing flow (gl.commentary_drafts ready)</li>
+</ol>
+
+<h4>Open decisions on owner's desk</h4>
+<ol>
+  <li>Travel Life checklist — obtain official audit template</li>
+  <li>Roots POS selection — pick the source before integration scope</li>
+  <li>Spa + Activities booking system selection</li>
+  <li>Email platform — Mailchimp vs Klaviyo</li>
+  <li>DMC contract granularity — header-only or full rate-card</li>
+  <li>assets.locations seed strategy — mirror public.rooms or fresh inventory</li>
+  <li>Inventory cost-flow — FIFO or moving-average</li>
+  <li>Auth strategy — keep password gate or Supabase Auth before second user (forced)</li>
+</ol>
+
+</div>
+
+</body>
+</html>
