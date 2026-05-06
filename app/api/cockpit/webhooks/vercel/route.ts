@@ -15,6 +15,7 @@
 
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import crypto from "node:crypto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,13 +28,29 @@ const supabase = createClient(
 const VERCEL_PROJECT_ID = "prj_be5AGzi7cB5HnkTEvOWTzUv3YCAl";
 const VERCEL_TEAM_ID = "team_vKod3ZYFgteGCHsam7IG8tEb";
 
-function checkSecret(req: Request): boolean {
-  const expected = process.env.COCKPIT_WEBHOOK_SECRET;
-  if (!expected) return false;
-  const url = new URL(req.url);
-  const fromQuery = url.searchParams.get("secret");
-  const fromHeader = req.headers.get("x-cockpit-secret");
-  return fromQuery === expected || fromHeader === expected;
+// Accept either:
+//  (a) Vercel account-level webhook with HMAC-SHA1 signature in x-vercel-signature
+//      verified against VERCEL_WEBHOOK_SECRET (Vercel-generated).
+//  (b) Legacy Deploy Hook with ?secret=/x-cockpit-secret query param matched to
+//      COCKPIT_WEBHOOK_SECRET.
+function checkAuth(req: Request, rawBody: string): boolean {
+  const sig = req.headers.get("x-vercel-signature");
+  const vwSecret = process.env.VERCEL_WEBHOOK_SECRET;
+  if (sig && vwSecret) {
+    const expected = crypto.createHmac("sha1", vwSecret).update(rawBody).digest("hex");
+    if (sig.length === expected.length) {
+      try {
+        if (crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return true;
+      } catch { /* fall through */ }
+    }
+  }
+  const cwSecret = process.env.COCKPIT_WEBHOOK_SECRET;
+  if (cwSecret) {
+    const url = new URL(req.url);
+    if (url.searchParams.get("secret") === cwSecret) return true;
+    if (req.headers.get("x-cockpit-secret") === cwSecret) return true;
+  }
+  return false;
 }
 
 async function rollback(failedDeploymentId: string, failedDeploymentName: string, errorMessage: string) {
@@ -92,13 +109,14 @@ async function rollback(failedDeploymentId: string, failedDeploymentName: string
 }
 
 export async function POST(req: Request) {
-  if (!checkSecret(req)) {
+  const rawBody = await req.text();
+  if (!checkAuth(req, rawBody)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
   let payload: Record<string, unknown> = {};
   try {
-    payload = await req.json();
+    payload = JSON.parse(rawBody);
   } catch {
     return NextResponse.json({ error: "invalid json" }, { status: 400 });
   }
