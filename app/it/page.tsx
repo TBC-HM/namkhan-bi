@@ -5,17 +5,17 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
 const LINKS = [
-  { label: 'Pulse',      href: '/revenue/pulse',      desc: 'Daily OCC · ADR · RevPAR snapshot' },
-  { label: 'Compset',    href: '/revenue/compset',     desc: 'Competitive rate benchmarking' },
-  { label: 'Parity',     href: '/revenue/parity',      desc: 'Channel rate parity monitoring' },
-  { label: 'Forecast',   href: '/revenue/forecast',    desc: 'Pick-up & demand forecasting' },
+  { label: 'Systems',    href: '/it/systems',     desc: 'PMS, POS, CB & integration health' },
+  { label: 'Incidents',  href: '/it/incidents',   desc: 'Open issues, SLA & resolution log' },
+  { label: 'Cockpit',    href: '/it/cockpit',     desc: 'Agent activity, tickets & audit trail' },
+  { label: 'Data Quality', href: '/it/dq',        desc: 'Open DQ flags & mismatch tracker' },
 ];
 
-export default function RevenuePage() {
+export default function ItPage() {
   return (
     <main style={{ padding: '32px 40px', maxWidth: 1200 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8 }}>
-        <PageHeader pillar="Revenue" tab="" title="Revenue" lede="Occupancy, rate, and channel performance at a glance." />
+        <PageHeader pillar="IT" tab="" title="IT" lede="Systems, integrations, and agent health." />
         <DeptDropdown />
       </div>
 
@@ -27,7 +27,6 @@ export default function RevenuePage() {
               border: '1px solid var(--border)',
               borderRadius: 10,
               padding: '20px 24px',
-              transition: 'box-shadow .15s',
             }}>
               <div style={{ fontFamily: 'var(--serif)', fontSize: 'var(--t-xl)', fontStyle: 'italic', color: 'var(--brass)', marginBottom: 6 }}>
                 {l.label}

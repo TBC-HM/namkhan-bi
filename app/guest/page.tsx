@@ -1,78 +1,43 @@
-// app/guest/page.tsx — REDESIGN 2026-05-05 (recovery)
 import PageHeader from '@/components/layout/PageHeader';
-import KpiBox from '@/components/kpi/KpiBox';
-import StatusPill from '@/components/ui/StatusPill';
-import { getReviewSummary, getReviewStatsBySource, getSocialAccounts } from '@/lib/marketing';
-import { resolvePeriod } from '@/lib/period';
-import { supabase, PROPERTY_ID } from '@/lib/supabase';
-import {
-  GuestStatusHeader, StatusCell, SectionHead,
-  metaSm, metaStrong, metaDim,
-} from './_components/GuestShell';
-import AgentTopRow from './_components/AgentTopRow';
-import Reachable, { countReachable } from './_components/Reachable';
+import DeptDropdown from '@/components/nav/DeptDropdown';
 
-export const revalidate = 300;
 export const dynamic = 'force-dynamic';
+export const revalidate = 60;
 
-interface Props { searchParams: Record<string, string | string[] | undefined>; }
+const LINKS = [
+  { label: 'Reviews',    href: '/guest/reviews',    desc: 'TripAdvisor, Google & Booking scores' },
+  { label: 'Sentiment',  href: '/guest/sentiment',  desc: 'NLP theme & tone analysis' },
+  { label: 'Profiles',   href: '/guest/profiles',   desc: 'Repeat guests & preferences' },
+  { label: 'Feedback',   href: '/guest/feedback',   desc: 'In-stay & post-stay survey results' },
+];
 
-export default async function GuestSnapshotPage({ searchParams }: Props) {
-  const period = resolvePeriod(searchParams);
-  const [summary, stats, socials, profilesR] = await Promise.all([
-    getReviewSummary(period.days),
-    getReviewStatsBySource(Math.max(period.days, 90)),
-    getSocialAccounts(),
-    supabase
-      .schema('guest')
-      .from('mv_guest_profile')
-      .select('email, phone, country, lifetime_revenue, stays_count')
-      .eq('property_id', PROPERTY_ID)
-      .limit(10000),
-  ]);
-
-  const profiles = (profilesR.data ?? []) as { email: string | null; phone: string | null; country: string | null; lifetime_revenue: number; stays_count: number }[];
-  const reach = countReachable(profiles);
-  const totalGuests = profiles.length;
-  const repeatGuests = profiles.filter((p) => p.stays_count >= 2).length;
-  const totalFollowers = socials.reduce((s: number, a: any) => s + (a.followers ?? 0), 0);
-  const unanswered = summary.unanswered ?? 0;
-  const responseRate = summary.response_rate ?? 0;
-  const avgRating = Number(summary.avg_rating ?? 0);
-  const totalReviews = summary.total ?? 0;
-
+export default function GuestPage() {
   return (
-    <>
-      <PageHeader pillar="Guest" tab="Snapshot"
-        title={<>The voice <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>of the house</em> — and who's reachable.</>}
-        lede={`${totalGuests} guests · ${repeatGuests} repeat · ${totalReviews} reviews ${period.label} · ${(responseRate * 100).toFixed(0)}% response`} />
-      <GuestStatusHeader
-        top={<>
-          <AgentTopRow code="review_agent" fallbackName="Review Agent" />
-          <span style={{ flex: 1 }} />
-          <StatusCell label="SOURCE"><StatusPill tone="active">guest.mv_guest_profile</StatusPill><span style={metaDim}>· marketing.reviews</span></StatusCell>
-        </>}
-        bottom={<>
-          <StatusCell label="WINDOW"><span style={metaSm}>{period.label}</span></StatusCell>
-          <StatusCell label="REPLY QUEUE">
-            <StatusPill tone={unanswered > 5 ? 'expired' : unanswered > 0 ? 'pending' : 'active'}>{unanswered}</StatusPill>
-            <span style={metaDim}>{(responseRate * 100).toFixed(0)}% rate</span>
-          </StatusCell>
-          <StatusCell label="SOCIAL"><span style={metaSm}>{totalFollowers.toLocaleString()}</span><span style={metaDim}>· {socials.length} channels</span></StatusCell>
-          <span style={{ flex: 1 }} />
-        </>}
-      />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12, marginTop: 14 }}>
-        <Reachable total={reach.total} withEmail={reach.withEmail} withPhone={reach.withPhone} withWhatsapp={reach.withWhatsapp} />
+    <main style={{ padding: '32px 40px', maxWidth: 1200 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8 }}>
+        <PageHeader pillar="Guest" tab="" title="Guest Experience" lede="Every score, every comment, every stay." />
+        <DeptDropdown />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
-        <KpiBox value={totalGuests} unit="count" label="Guest profiles" />
-        <KpiBox value={repeatGuests} unit="count" label="Repeat guests" />
-        <KpiBox value={totalReviews} unit="count" label={`Reviews · ${period.label}`} />
-        <KpiBox value={avgRating} unit="nights" dp={2} label="Avg rating /5" />
-        <KpiBox value={(responseRate * 100)} unit="pct" label="Response rate" />
-        <KpiBox value={totalFollowers} unit="count" label="Social followers" />
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16, marginTop: 32 }}>
+        {LINKS.map(l => (
+          <a key={l.href} href={l.href} style={{ textDecoration: 'none' }}>
+            <div style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 10,
+              padding: '20px 24px',
+            }}>
+              <div style={{ fontFamily: 'var(--serif)', fontSize: 'var(--t-xl)', fontStyle: 'italic', color: 'var(--brass)', marginBottom: 6 }}>
+                {l.label}
+              </div>
+              <div style={{ fontFamily: 'var(--sans)', fontSize: 'var(--t-sm)', color: 'var(--muted)' }}>
+                {l.desc}
+              </div>
+            </div>
+          </a>
+        ))}
       </div>
-    </>
+    </main>
   );
 }
