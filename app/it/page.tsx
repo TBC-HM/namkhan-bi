@@ -9,6 +9,29 @@ import ItAskBox from './components/ItAskBox';
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
+// Mirrors the shape expected by ItTeamGrid.
+interface AgentRow {
+  agent_id: number;
+  role?: string;
+  department?: string;
+  health_state?: string;
+  active?: boolean;
+  recent_calls?: number;
+  recent_failures?: number;
+  minutes_since_last_call?: number | null;
+}
+
+// Mirrors the shape expected by ItAttentionPanel.
+interface AlertRow {
+  id?: number | string;
+  title?: string;
+  message?: string;
+  severity?: string;
+  arm?: string;
+  created_at?: string;
+  [key: string]: unknown;
+}
+
 export default async function ItPage() {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,10 +43,8 @@ export default async function ItPage() {
     .from('v_agent_health')
     .select('*')
     .limit(100);
-  const agents = agentRows ?? [];
-  const activeAgents = agents.filter(
-    (a: Record<string, unknown>) => a['health_state'] === 'healthy',
-  ).length;
+  const agents = (agentRows ?? []) as AgentRow[];
+  const activeAgents = agents.filter((a) => a.health_state === 'healthy').length;
   const allAgents = agents.length;
 
   // ── tickets in-flight ────────────────────────────────────────────────────
@@ -39,7 +60,7 @@ export default async function ItPage() {
     .from('v_it_weekly_digest')
     .select('*')
     .limit(1);
-  const digest = digestRows?.[0] ?? null;
+  const digest = (digestRows?.[0] ?? null) as Record<string, unknown> | null;
   const costUsd24h =
     typeof digest?.cost_usd === 'number' ? (digest.cost_usd as number) : 0;
   const ticketsShipped24h =
@@ -52,7 +73,7 @@ export default async function ItPage() {
     .from('v_kit_performance')
     .select('*')
     .limit(1);
-  const kit = kitRows?.[0] ?? null;
+  const kit = (kitRows?.[0] ?? null) as Record<string, unknown> | null;
   const kitDoneClean: number | null =
     typeof kit?.done_clean === 'number' ? (kit.done_clean as number) : null;
   const kitFailureRate: number | null =
@@ -66,7 +87,7 @@ export default async function ItPage() {
     .from('v_tactical_alerts_top')
     .select('*')
     .limit(10);
-  const alerts = alertRows ?? [];
+  const alerts = (alertRows ?? []) as AlertRow[];
 
   return (
     <main
