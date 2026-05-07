@@ -1117,6 +1117,67 @@ function ChatTab() {
 // ============================================================================
 // SCHEDULE TAB — reads from /api/cockpit/schedule which lists GitHub Actions + Make.com scenarios
 // ============================================================================
+type Mismatch = {
+  id: number; detected_at: string; source: string; agent_or_target: string | null;
+  ticket_id: number | null; category: string; what_machine_said: string;
+  what_reality_is: string; fix_applied: string | null; fixed_at: string | null; active: boolean;
+};
+
+function MismatchPanel() {
+  const [items, setItems] = useState<Mismatch[]>([]);
+  const [showResolved, setShowResolved] = useState(false);
+  useEffect(() => {
+    const tick = async () => {
+      const q = supabase.from("cockpit_mismatches").select("*").order("id", { ascending: false }).limit(50);
+      const { data } = showResolved ? await q : await q.eq("active", true);
+      setItems((data as Mismatch[]) ?? []);
+    };
+    tick();
+    const id = setInterval(tick, 15_000);
+    return () => clearInterval(id);
+  }, [showResolved]);
+  const resolve = async (id: number) => {
+    await supabase.from("cockpit_mismatches").update({ active: false, fixed_at: new Date().toISOString() }).eq("id", id);
+    const t = await supabase.from("cockpit_mismatches").select("*").order("id", { ascending: false }).limit(50);
+    setItems((t.data as Mismatch[]) ?? []);
+  };
+  return (
+    <div style={{ background: "var(--bg-2)", border: "1px solid var(--border-1)", borderRadius: 8, padding: 14, marginBottom: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <div style={{ fontSize: 11, color: "var(--bad, #b3261e)", textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 600 }}>
+          🚨 Where the machine did not work · {items.filter((i) => i.active).length} active
+        </div>
+        <label style={{ fontSize: 11, color: "var(--text-3)", cursor: "pointer" }}>
+          <input type="checkbox" checked={showResolved} onChange={(e) => setShowResolved(e.target.checked)} style={{ marginRight: 4 }} />
+          show resolved
+        </label>
+      </div>
+      {items.length === 0 ? (
+        <div style={{ color: "var(--text-3)", fontSize: 12, padding: 8 }}>— no mismatches recorded —</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {items.map((m) => (
+            <div key={m.id} style={{ background: "var(--bg-1)", border: `1px solid ${m.active ? "var(--bad, #b3261e)" : "var(--border-2)"}`, borderRadius: 6, padding: 10, fontSize: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <div>
+                  <span style={{ background: "var(--bad, #b3261e)", color: "#fff", padding: "1px 6px", borderRadius: 3, fontSize: 9, fontWeight: 700, textTransform: "uppercase" }}>{m.category}</span>
+                  <span style={{ marginLeft: 8, color: "var(--text-3)", fontSize: 11 }}>{m.agent_or_target ?? "—"} · {new Date(m.detected_at).toISOString().slice(0, 16).replace("T", " ")}</span>
+                </div>
+                {m.active && (
+                  <button onClick={() => resolve(m.id)} style={{ background: "transparent", color: "var(--good, #2a7d2e)", border: "1px solid var(--good, #2a7d2e)", borderRadius: 4, padding: "2px 8px", fontSize: 10, cursor: "pointer" }}>mark resolved</button>
+                )}
+              </div>
+              <div style={{ marginBottom: 4 }}><span style={{ color: "var(--text-3)" }}>Machine said:</span> {m.what_machine_said}</div>
+              <div style={{ marginBottom: 4 }}><span style={{ color: "var(--good, #2a7d2e)" }}>Reality:</span> {m.what_reality_is}</div>
+              {m.fix_applied && <div style={{ color: "var(--brass)", fontSize: 11 }}>Fix: {m.fix_applied}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 type CronJob = { jobid: number; jobname: string; schedule: string; command: string; active: boolean; username: string };
 type CronRun = { runid: number; jobid: number; jobname: string; status: string; return_message: string | null; start_time: string; end_time: string | null; duration_sec: number | null };
 
@@ -2177,6 +2238,8 @@ function ActivityTab() {
         <h1>Live Activity</h1>
         <span className="page-sub">Pipeline funnel · who&apos;s working right now · 7-day cost · recent timeline. Auto-refreshes every 8s.</span>
       </div>
+
+      <MismatchPanel />
 
       {/* Live working boxes */}
       <div className="act-section">
