@@ -120,18 +120,18 @@ export default async function CompsetPage() {
       >
         <KpiBox
           label="NK Rate (USD)"
-          value={fmtUsd(namkhanRow?.rate_usd as number | null | undefined)}
+          value={fmtUsd(namkhanRow?.rate_usd as number | null)}
         />
         <KpiBox
-          label="Comp Avg Rate"
+          label="Compset Avg Rate"
           value={fmtUsd(avgCompRate)}
         />
         <KpiBox
           label="NK OCC %"
-          value={fmtPct(namkhanRow?.occupancy_pct as number | null | undefined)}
+          value={fmtPct(namkhanRow?.occupancy_pct as number | null)}
         />
         <KpiBox
-          label="Comp Avg OCC"
+          label="Compset Avg OCC %"
           value={fmtPct(avgCompOcc)}
         />
       </div>
@@ -140,16 +140,16 @@ export default async function CompsetPage() {
       <DataTable columns={columns} rows={tableRows} />
 
       {rows.length === 0 && !error && (
-        <div
+        <p
           style={{
-            marginTop: 48,
-            textAlign: 'center',
             color: 'var(--muted)',
+            textAlign: 'center',
+            marginTop: 48,
             fontSize: 14,
           }}
         >
           No compset data available yet. Populate via the compset ingestion pipeline.
-        </div>
+        </p>
       )}
     </main>
   );
