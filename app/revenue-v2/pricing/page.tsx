@@ -8,9 +8,9 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
 interface BarLadderRow {
-  rate_category?: string;
-  room_type?: string;
-  bar_level?: string | number;
+  rate_category?: string | null;
+  room_type?: string | null;
+  bar_level?: string | number | null;
   rate_usd?: number | null;
   rate_lak?: number | null;
   min_stay?: number | null;
@@ -30,7 +30,7 @@ export default async function Page() {
   const { data, error } = await supabase
     .from('v_bar_ladder')
     .select('*')
-    .limit(100);
+    .limit(120);
 
   if (error) {
     console.error('[pricing] v_bar_ladder fetch error:', error.message);
@@ -38,7 +38,6 @@ export default async function Page() {
 
   const rows: BarLadderRow[] = data ?? [];
 
-  // Derive summary KPIs
   const activeRates = rows.filter((r) => r.is_active !== false);
   const rateCount = activeRates.length;
   const avgRateUsd =
@@ -48,14 +47,33 @@ export default async function Page() {
   const roomTypes = new Set(rows.map((r) => r.room_type).filter(Boolean)).size;
   const barLevels = new Set(rows.map((r) => r.bar_level).filter(Boolean)).size;
 
-  const formatUsd = (v: number | null) =>
-    v != null ? `$${v.toFixed(2)}` : '—';
+  const fmtUsd = (v: number | null | undefined): string =>
+    v != null ? `$${v.toFixed(2)}` : '\u2014';
+
+  const tableRows = rows.map((r) => ({
+    rate_category: r.rate_category ?? '\u2014',
+    room_type: r.room_type ?? '\u2014',
+    bar_level: r.bar_level ?? '\u2014',
+    rate_usd:
+      r.rate_usd != null
+        ? `$${Number(r.rate_usd).toFixed(2)}`
+        : '\u2014',
+    rate_lak:
+      r.rate_lak != null
+        ? `\u20ADK${Number(r.rate_lak).toLocaleString()}`
+        : '\u2014',
+    min_stay: r.min_stay != null ? `${r.min_stay}n` : '\u2014',
+    effective_date: r.effective_date ?? '\u2014',
+    expiry_date: r.expiry_date ?? '\u2014',
+    channel: r.channel ?? '\u2014',
+    is_active:
+      r.is_active === true ? 'Yes' : r.is_active === false ? 'No' : '\u2014',
+  }));
 
   return (
     <main style={{ padding: '24px 32px' }}>
       <PageHeader pillar="Revenue" tab="Pricing" title="BAR Ladder" />
 
-      {/* KPI summary row */}
       <div
         style={{
           display: 'grid',
@@ -64,13 +82,24 @@ export default async function Page() {
           marginBottom: 32,
         }}
       >
-        <KpiBox label="Active Rates" value={rateCount > 0 ? String(rateCount) : '—'} />
-        <KpiBox label="Avg BAR (USD)" value={formatUsd(avgRateUsd)} />
-        <KpiBox label="Room Types" value={roomTypes > 0 ? String(roomTypes) : '—'} />
-        <KpiBox label="BAR Levels" value={barLevels > 0 ? String(barLevels) : '—'} />
+        <KpiBox
+          label="Active Rates"
+          value={rateCount > 0 ? String(rateCount) : '\u2014'}
+        />
+        <KpiBox
+          label="Avg BAR (USD)"
+          value={fmtUsd(avgRateUsd)}
+        />
+        <KpiBox
+          label="Room Types"
+          value={roomTypes > 0 ? String(roomTypes) : '\u2014'}
+        />
+        <KpiBox
+          label="BAR Levels"
+          value={barLevels > 0 ? String(barLevels) : '\u2014'}
+        />
       </div>
 
-      {/* Main table */}
       <DataTable
         columns={[
           { key: 'rate_category', header: 'Category' },
@@ -80,23 +109,11 @@ export default async function Page() {
           { key: 'rate_lak',      header: 'Rate (LAK)' },
           { key: 'channel',       header: 'Channel' },
           { key: 'min_stay',      header: 'Min Stay' },
-          { key: 'effective_date', header: 'Effective' },
+          { key: 'effective_date',header: 'Effective' },
           { key: 'expiry_date',   header: 'Expires' },
           { key: 'is_active',     header: 'Active' },
         ]}
-        rows={rows.map((r) => ({
-          ...r,
-          rate_usd:       r.rate_usd      != null ? `$${Number(r.rate_usd).toFixed(2)}`      : '—',
-          rate_lak:       r.rate_lak      != null ? `₭${Number(r.rate_lak).toLocaleString()}` : '—',
-          min_stay:       r.min_stay      != null ? `${r.min_stay}n`                          : '—',
-          effective_date: r.effective_date ?? '—',
-          expiry_date:    r.expiry_date   ?? '—',
-          rate_category:  r.rate_category ?? '—',
-          room_type:      r.room_type     ?? '—',
-          bar_level:      r.bar_level     ?? '—',
-          channel:        r.channel       ?? '—',
-          is_active:      r.is_active === true ? 'Yes' : r.is_active === false ? 'No' : '—',
-        }))}
+        rows={tableRows}
       />
     </main>
   );
