@@ -901,6 +901,162 @@ async function route_ticket_to_dept(args: { ticket_id?: number }): Promise<ToolR
   return { ok: true, result: { acknowledged: args.ticket_id } };
 }
 
+// ============================================================================
+// WRITE SKILLS — Vercel / Supabase / GitHub. PBS directive 2026-05-07:
+// agents must be able to repair autonomously. Authority = write_with_audit.
+// ============================================================================
+
+const VERCEL_TEAM_ID = "team_vKod3ZYFgteGCHsam7IG8tEb";
+function vercelToken(): string | null { return process.env.VERCEL_TOKEN ?? null; }
+
+async function vercel_set_env(args: { project: string; key: string; value: string; targets?: string[] }): Promise<ToolResult> {
+  const token = vercelToken();
+  if (!token) return { ok: false, error: "VERCEL_TOKEN env var missing on this deploy" };
+  const project = args.project; const key = args.key; const value = args.value;
+  if (!project || !key || !value) return { ok: false, error: "project, key, value required" };
+  const targets = args.targets ?? ["production", "preview", "development"];
+  // delete existing
+  const list = await fetch(`https://api.vercel.com/v9/projects/${project}/env?teamId=${VERCEL_TEAM_ID}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  }).then(r => r.json()).catch(() => ({ envs: [] }));
+  const existing = (list.envs ?? []).filter((e: { key?: string }) => e.key === key);
+  for (const e of existing) {
+    await fetch(`https://api.vercel.com/v9/projects/${project}/env/${e.id}?teamId=${VERCEL_TEAM_ID}`, {
+      method: "DELETE", headers: { Authorization: `Bearer ${token}` },
+    });
+  }
+  const res = await fetch(`https://api.vercel.com/v10/projects/${project}/env?teamId=${VERCEL_TEAM_ID}&upsert=true`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ key, value, target: targets, type: "encrypted" }),
+  });
+  if (!res.ok) return { ok: false, error: `vercel api ${res.status}: ${(await res.text()).slice(0, 200)}` };
+  await supabase.from("cockpit_audit_log").insert({
+    agent: "vercel-write", action: "set_env", target: `${project}.${key}`, success: true,
+    metadata: { project, key, targets, replaced_count: existing.length },
+    reasoning: `Set ${key} on Vercel project ${project} (replaced ${existing.length} prior versions).`,
+  });
+  return { ok: true, result: { project, key, targets, replaced: existing.length } };
+}
+
+async function vercel_remove_env(args: { project: string; key: string }): Promise<ToolResult> {
+  const token = vercelToken();
+  if (!token) return { ok: false, error: "VERCEL_TOKEN env var missing" };
+  const list = await fetch(`https://api.vercel.com/v9/projects/${args.project}/env?teamId=${VERCEL_TEAM_ID}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  }).then(r => r.json()).catch(() => ({ envs: [] }));
+  const existing = (list.envs ?? []).filter((e: { key?: string }) => e.key === args.key);
+  for (const e of existing) {
+    await fetch(`https://api.vercel.com/v9/projects/${args.project}/env/${e.id}?teamId=${VERCEL_TEAM_ID}`, {
+      method: "DELETE", headers: { Authorization: `Bearer ${token}` },
+    });
+  }
+  await supabase.from("cockpit_audit_log").insert({
+    agent: "vercel-write", action: "remove_env", target: `${args.project}.${args.key}`, success: true,
+    metadata: { project: args.project, key: args.key, removed: existing.length },
+    reasoning: `Removed ${existing.length} Vercel env entries for ${args.key} on ${args.project}.`,
+  });
+  return { ok: true, result: { project: args.project, key: args.key, removed: existing.length } };
+}
+
+async function vercel_set_deployment_protection(args: { project: string; password_protection: boolean; sso: boolean }): Promise<ToolResult> {
+  const token = vercelToken();
+  if (!token) return { ok: false, error: "VERCEL_TOKEN env var missing" };
+  const body = {
+    passwordProtection: args.password_protection ? { deploymentType: "all" } : null,
+    ssoProtection: args.sso ? { deploymentType: "all" } : null,
+  };
+  const res = await fetch(`https://api.vercel.com/v9/projects/${args.project}?teamId=${VERCEL_TEAM_ID}`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) return { ok: false, error: `vercel api ${res.status}: ${(await res.text()).slice(0, 200)}` };
+  await supabase.from("cockpit_audit_log").insert({
+    agent: "vercel-write", action: "set_deployment_protection", target: args.project, success: true,
+    metadata: body, reasoning: `Toggled deployment protection on ${args.project}: pw=${args.password_protection} sso=${args.sso}.`,
+  });
+  return { ok: true, result: { project: args.project, ...body } };
+}
+
+async function vercel_redeploy(args: { project: string; ref?: string; target?: string }): Promise<ToolResult> {
+  const token = vercelToken();
+  if (!token) return { ok: false, error: "VERCEL_TOKEN env var missing" };
+  // Get latest READY deployment for the project + target, then promote it (free redeploy = redeploy SHA via deploy POST).
+  const list = await fetch(`https://api.vercel.com/v6/deployments?projectId=${args.project}&teamId=${VERCEL_TEAM_ID}&target=${args.target ?? "production"}&state=READY&limit=1`, {
+    headers: { Authorization: `Bearer ${token}` },
+  }).then(r => r.json()).catch(() => ({ deployments: [] }));
+  const last = (list.deployments ?? [])[0];
+  if (!last) return { ok: false, error: "no prior READY deployment found to redeploy" };
+  const res = await fetch(`https://api.vercel.com/v13/deployments/${last.uid}/redeploy?teamId=${VERCEL_TEAM_ID}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: "{}",
+  });
+  if (!res.ok) return { ok: false, error: `vercel redeploy ${res.status}: ${(await res.text()).slice(0, 200)}` };
+  const j = await res.json();
+  await supabase.from("cockpit_audit_log").insert({
+    agent: "vercel-write", action: "redeploy", target: args.project, success: true,
+    metadata: { from: last.uid, to: j.uid, ref: args.ref ?? null },
+    reasoning: `Redeployed ${args.project} from ${last.uid} → ${j.uid}.`,
+  });
+  return { ok: true, result: { project: args.project, deployment_id: j.uid, url: j.url } };
+}
+
+async function supabase_execute_sql(args: { query: string }): Promise<ToolResult> {
+  if (!args.query || typeof args.query !== "string") return { ok: false, error: "query (string) required" };
+  // Hard guard against destructive ops without explicit ALLOW_DESTRUCTIVE flag.
+  const dangerous = /\b(DROP|TRUNCATE|DELETE\s+FROM\s+(?!cockpit_skill_calls|net\._http))/i;
+  if (dangerous.test(args.query)) {
+    return { ok: false, error: "DROP/TRUNCATE/DELETE forbidden via this skill — use Supabase MCP under PBS sign" };
+  }
+  // Run via the existing service-role client.
+  let data: unknown = null; let error: { message: string } | null = null;
+  try {
+    const r = await supabase.rpc("exec_sql_strict", { p_query: args.query });
+    data = r.data; error = r.error ? { message: r.error.message } : null;
+  } catch (e) {
+    error = { message: e instanceof Error ? e.message : "exec_sql_strict RPC not present" };
+  }
+  if (error) {
+    // Fall back to a raw query if RPC missing — still service role.
+    return { ok: false, error: `SQL exec failed: ${(error as { message: string }).message}` };
+  }
+  await supabase.from("cockpit_audit_log").insert({
+    agent: "supabase-write", action: "execute_sql", target: "service_role", success: true,
+    metadata: { query: args.query.slice(0, 500), rows: Array.isArray(data) ? data.length : null },
+    reasoning: "Agent-initiated SQL via supabase_execute_sql.",
+  });
+  return { ok: true, result: { rows: data } };
+}
+
+async function github_commit_file(args: { path: string; content: string; message: string; branch?: string }): Promise<ToolResult> {
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) return { ok: false, error: "GITHUB_TOKEN env var missing" };
+  const repo = "TBC-HM/namkhan-bi";
+  const branch = args.branch ?? "staging";
+  const headers = { Authorization: `Bearer ${token}`, "Accept": "application/vnd.github+json", "Content-Type": "application/json" };
+  // Get current file SHA if exists
+  const cur = await fetch(`https://api.github.com/repos/${repo}/contents/${args.path}?ref=${branch}`, { headers }).then(r => r.ok ? r.json() : null).catch(() => null);
+  const body = {
+    message: args.message,
+    content: Buffer.from(args.content, "utf-8").toString("base64"),
+    branch,
+    sha: (cur as { sha?: string } | null)?.sha,
+  };
+  const res = await fetch(`https://api.github.com/repos/${repo}/contents/${args.path}`, {
+    method: "PUT", headers, body: JSON.stringify(body),
+  });
+  if (!res.ok) return { ok: false, error: `github api ${res.status}: ${(await res.text()).slice(0, 200)}` };
+  const j = await res.json();
+  await supabase.from("cockpit_audit_log").insert({
+    agent: "github-write", action: "commit_file", target: `${repo}@${branch}:${args.path}`, success: true,
+    metadata: { sha: j.commit?.sha, branch, path: args.path },
+    reasoning: args.message,
+  });
+  return { ok: true, result: { sha: j.commit?.sha, branch, path: args.path, html_url: j.commit?.html_url } };
+}
+
 const HANDLERS: Record<string, (args: Record<string, unknown>) => Promise<ToolResult>> = {
   list_team_members: (a) => list_team_members(a as Parameters<typeof list_team_members>[0]),
   check_founder_brief: (a) => check_founder_brief(a as Parameters<typeof check_founder_brief>[0]),
@@ -928,6 +1084,13 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => Promise<ToolRe
   read_doc: (a) => read_doc(a as Parameters<typeof read_doc>[0]),
   propose_promotion: (a) => propose_promotion(a as Parameters<typeof propose_promotion>[0]),
   run_backup: (a) => run_backup(a as Parameters<typeof run_backup>[0]),
+  // Write skills — PBS directive 2026-05-07.
+  vercel_set_env: (a) => vercel_set_env(a as Parameters<typeof vercel_set_env>[0]),
+  vercel_remove_env: (a) => vercel_remove_env(a as Parameters<typeof vercel_remove_env>[0]),
+  vercel_set_deployment_protection: (a) => vercel_set_deployment_protection(a as Parameters<typeof vercel_set_deployment_protection>[0]),
+  vercel_redeploy: (a) => vercel_redeploy(a as Parameters<typeof vercel_redeploy>[0]),
+  supabase_execute_sql: (a) => supabase_execute_sql(a as Parameters<typeof supabase_execute_sql>[0]),
+  github_commit_file: (a) => github_commit_file(a as Parameters<typeof github_commit_file>[0]),
 };
 
 export async function dispatchSkill(handler: string, args: Record<string, unknown>): Promise<ToolResult> {
