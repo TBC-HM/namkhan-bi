@@ -1,183 +1,330 @@
-// app/finance/page.tsx — REDESIGN 2026-05-05 (recovery)
-import PageHeader from '@/components/layout/PageHeader';
-import KpiBox from '@/components/kpi/KpiBox';
-import StatusPill from '@/components/ui/StatusPill';
-import ActionCard, { ActionStack } from '@/components/sections/ActionCard';
-import { getAgedAr } from '@/lib/data';
-import { resolvePeriod } from '@/lib/period';
-import { fmtMoney } from '@/lib/format';
-import { getPlSectionsAll, getUsaliHouse, getUsaliDept, currentPeriod, pickPeriod } from './_data';
-import { priorPeriod } from '@/lib/supabase-gl';
-import {
-  FinanceStatusHeader, StatusCell, SectionHead,
-  metaSm, metaStrong, metaDim,
-} from './_components/FinanceShell';
-import FinanceTrendChart from './_components/FinanceTrendChart';
-import AgedArChart from './_components/AgedArChart';
-import DeptMixChart from './_components/DeptMixChart';
+'use client';
 
-export const revalidate = 60;
-export const dynamic = 'force-dynamic';
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
 
-interface Props { searchParams: Record<string, string | string[] | undefined>; }
+/* ─── types ─────────────────────────────────────────── */
+interface ListItem { id: string; text: string; done: boolean }
 
-export default async function FinanceSnapshotPage({ searchParams }: Props) {
-  const period = resolvePeriod(searchParams);
-  const [plAll, aged] = await Promise.all([getPlSectionsAll(), getAgedAr().catch(() => [])]);
+/* ─── constants ──────────────────────────────────────── */
+const DEPT_CHIPS = [
+  { label: 'Revenue',    href: '/revenue' },
+  { label: 'Sales',      href: '/sales' },
+  { label: 'Marketing',  href: '/marketing' },
+  { label: 'Operations', href: '/operations' },
+  { label: 'Guest',      href: '/guest' },
+  { label: 'Finance',    href: '/finance' },
+  { label: 'IT',         href: '/it' },
+];
 
-  const incomeByPeriod = new Map<string, number>();
-  const netByPeriod = new Map<string, number>();
-  for (const r of plAll) {
-    if (r.section === 'income') incomeByPeriod.set(r.period_yyyymm, Number(r.amount_usd || 0));
-    if (r.section === 'net_earnings') netByPeriod.set(r.period_yyyymm, Number(r.amount_usd || 0));
+const FINANCE_CHIPS = [
+  { label: 'P&L',          href: '/finance/pl' },
+  { label: 'Cash Flow',     href: '/finance/cash-flow' },
+  { label: 'Accounts',      href: '/finance/accounts' },
+  { label: 'Budget',        href: '/finance/budget' },
+  { label: 'Payroll',       href: '/finance/payroll' },
+  { label: 'GL Entries',    href: '/finance/gl' },
+];
+
+const ATTENTION_STUBS = [
+  { id: '1', label: 'Month-end close due in 3 days', dept: 'Finance', severity: 'high' },
+  { id: '2', label: 'Unpaid supplier invoices: 4 items pending > 30 days', dept: 'Finance', severity: 'medium' },
+  { id: '3', label: 'Payroll run scheduled for tomorrow — review hours', dept: 'Finance', severity: 'medium' },
+];
+
+const DOCS_KEY  = 'nk.entry.docs.finance.v1';
+const TASKS_KEY = 'nk.entry.tasks.finance.v1';
+
+/* ─── helpers ────────────────────────────────────────── */
+function loadList(key: string, defaults: ListItem[]): ListItem[] {
+  if (typeof window === 'undefined') return defaults;
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as ListItem[]) : defaults;
+  } catch {
+    return defaults;
   }
-  const calCur = currentPeriod();
-  const periodsWithRev = Array.from(incomeByPeriod.entries())
-    .filter(([k, v]) => v >= 1000 && k !== calCur)
-    .map(([k]) => k).sort().reverse();
-  const cur = periodsWithRev[0] || calCur;
-  const prior = periodsWithRev[1] || priorPeriod(cur);
+}
 
-  const [houseRows, deptCur, deptPrior] = await Promise.all([
-    getUsaliHouse([cur, prior]),
-    getUsaliDept([cur]),
-    getUsaliDept([prior]),
-  ]);
+function saveList(key: string, items: ListItem[]): void {
+  try { localStorage.setItem(key, JSON.stringify(items)); } catch { /* ignore */ }
+}
 
-  // MoM dept profit waterfall
-  const profMap = (rows: any[], p: string) => new Map(
-    rows.filter((r: any) => r.period_yyyymm === p)
-        .map((r: any) => [r.usali_department, Number(r.departmental_profit ?? 0)]),
-  );
-  const curProf = profMap(deptCur as any[], cur);
-  const priorProf = profMap(deptPrior as any[], prior);
-  const variances = Array.from(new Set([...curProf.keys(), ...priorProf.keys()]))
-    .map(d => ({ dept: d, delta: (curProf.get(d) ?? 0) - (priorProf.get(d) ?? 0) }))
-    .filter(v => Math.abs(v.delta) > 1)
-    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
-    .slice(0, 6);
-  const maxAbsVar = Math.max(...variances.map(v => Math.abs(v.delta)), 1);
-  const totalRev = incomeByPeriod.get(cur) ?? 0;
-  const priorTotal = incomeByPeriod.get(prior) ?? 0;
-  const monthDeltaPct = priorTotal ? ((totalRev - priorTotal) / priorTotal) * 100 : null;
-  const netEarnings = netByPeriod.get(cur);
-  const houseCur = pickPeriod(houseRows, cur);
-  const gop = houseCur?.gop ?? null;
-  const totalAr = aged.reduce((s: number, r: any) => s + Number(r.open_balance || 0), 0);
-  const ar90Plus = aged.filter((r: any) => r.bucket === '90_plus').reduce((s: number, r: any) => s + Number(r.open_balance || 0), 0);
-  const ar6190 = aged.filter((r: any) => r.bucket === '61_90').reduce((s: number, r: any) => s + Number(r.open_balance || 0), 0);
+/* ─── sub-components ─────────────────────────────────── */
+function EditableList({
+  storageKey,
+  defaults,
+  placeholder,
+}: {
+  storageKey: string;
+  defaults: ListItem[];
+  placeholder: string;
+}) {
+  const [items, setItems] = useState<ListItem[]>([]);
+  const [draft,  setDraft]  = useState('');
 
-  const periods = Array.from(new Set([...incomeByPeriod.keys(), ...netByPeriod.keys()])).sort();
-  const trendRows = periods.map((p) => ({
-    period: p,
-    income: incomeByPeriod.get(p) ?? 0,
-    net: netByPeriod.has(p) ? Number(netByPeriod.get(p)) : null,
-    gop: null as number | null,
-  }));
+  useEffect(() => {
+    setItems(loadList(storageKey, defaults));
+  }, [storageKey, defaults]);
 
-  const closedMonths = periodsWithRev.length;
-  const arHealth = ar90Plus > 0 ? 'expired' : ar6190 > 0 ? 'pending' : 'active';
-
-  const cards: any[] = [];
-  if (ar90Plus > 0) {
-    cards.push({
-      pillar: 'fin' as const, pillarLabel: 'Finance · AR', agentLabel: '· Collections',
-      priority: 'high' as const, priorityLabel: 'High · cash',
-      headline: <>{fmtMoney(ar90Plus, 'USD')} stuck <em>past 90 days</em>.</>,
-      conclusion: <>Reservations with open balance over 90 days have ~50% recovery rate. Review each line.</>,
-      verdict: [{ label: `90+ · ${fmtMoney(ar90Plus, 'USD')}`, tone: 'bad' as const }, { label: `Total · ${fmtMoney(totalAr, 'USD')}` }],
-      primaryAction: 'Review aging', secondaryAction: 'Send letters', tertiaryAction: 'Defer',
-      impact: 'Cash', impactSub: 'AR cleanup',
-    });
+  function persist(next: ListItem[]) {
+    setItems(next);
+    saveList(storageKey, next);
   }
-  // Budget · Variance Agent — surface only when no budget data exists
-  cards.push({
-    pillar: 'fin' as const, pillarLabel: 'Finance · Budget', agentLabel: '· Variance Agent',
-    priority: 'med' as const, priorityLabel: 'Medium · setup',
-    headline: <>Budget data not yet provided.<br /><em>Variance tracking blocked.</em></>,
-    conclusion: <>Without an annual budget by USALI line, GOP / variance / pace-to-target cannot render. Owner action: provide CSV with monthly figures by USALI dept.</>,
-    verdict: [{ label: 'Effort · 1-2h' }, { label: 'Unblocks · 4 KPIs' }, { label: 'One-time' }],
-    primaryAction: 'Get template', secondaryAction: 'Schedule', tertiaryAction: 'Defer',
-    impact: '4 KPIs', impactSub: 'unlocked',
-  });
-  if (ar6190 > 1000) {
-    cards.push({
-      pillar: 'fin' as const, pillarLabel: 'Finance · AR', agentLabel: '· Collections',
-      priority: 'med' as const, priorityLabel: 'Medium · escalating',
-      headline: <>{fmtMoney(ar6190, 'USD')} in <em>61-90 day bucket</em>.</>,
-      conclusion: <>At risk of escalating to 90+. Send second reminder.</>,
-      verdict: [{ label: `61-90 · ${fmtMoney(ar6190, 'USD')}`, tone: 'warn' as const }],
-      primaryAction: 'Send reminders', secondaryAction: 'Review', tertiaryAction: 'Defer',
-      impact: 'Prevention', impactSub: 'before 90+',
-    });
+
+  function add() {
+    const text = draft.trim();
+    if (!text) return;
+    persist([...items, { id: Date.now().toString(), text, done: false }]);
+    setDraft('');
+  }
+
+  function toggle(id: string) {
+    persist(items.map(i => i.id === id ? { ...i, done: !i.done } : i));
+  }
+
+  function remove(id: string) {
+    persist(items.filter(i => i.id !== id));
   }
 
   return (
-    <>
-      <PageHeader pillar="Finance" tab="Snapshot"
-        title={<>Where the money <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>is</em> — and where it's stuck.</>}
-        lede={`Latest closed: ${cur} · ${closedMonths} closed period${closedMonths === 1 ? '' : 's'}`} />
-      <FinanceStatusHeader
-        top={<>
-          <StatusCell label="SOURCE">
-            <StatusPill tone="active">gl.pl_section_monthly</StatusPill>
-            <span style={metaDim}>· v_usali_house_summary · mv_aged_ar</span>
-          </StatusCell>
-          <StatusCell label="LATEST"><span style={metaSm}>{cur}</span><span style={metaDim}>· prior {prior}</span></StatusCell>
-          <StatusCell label="MONTHS"><span style={metaStrong}>{closedMonths}</span><span style={metaDim}>closed</span></StatusCell>
-          <span style={{ flex: 1 }} />
-          {monthDeltaPct != null && <span style={metaDim}>MoM {monthDeltaPct >= 0 ? '+' : ''}{monthDeltaPct.toFixed(1)}%</span>}
-        </>}
-        bottom={<>
-          <StatusCell label="AR HEALTH">
-            <StatusPill tone={arHealth as any}>{ar90Plus > 0 ? 'OVERDUE' : ar6190 > 0 ? 'WATCH' : 'CLEAN'}</StatusPill>
-            <span style={metaDim}>{fmtMoney(totalAr, 'USD')} open</span>
-          </StatusCell>
-          <span style={{ flex: 1 }} />
-          <span style={metaDim}>GOP {gop != null ? fmtMoney(gop, 'USD') : '—'} · NET {netEarnings != null ? fmtMoney(netEarnings, 'USD') : '—'}</span>
-        </>}
-      />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12, marginTop: 14 }}>
-        <FinanceTrendChart rows={trendRows} title="Income & net earnings" sub="Every closed period · gl.pl_section_monthly" />
-        <DeptMixChart rows={deptCur as any} title={`Department mix · ${cur}`} sub="USALI dept revenue + profit" />
-        <AgedArChart rows={aged as any} title="AR aging" sub="Open balance by bucket · mv_aged_ar" />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {items.map(item => (
+        <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <input
+            type="checkbox"
+            checked={item.done}
+            onChange={() => toggle(item.id)}
+            style={{ accentColor: '#d4af37', cursor: 'pointer' }}
+          />
+          <span style={{
+            flex: 1,
+            fontSize: 13,
+            color: item.done ? '#555' : '#e0e0e0',
+            textDecoration: item.done ? 'line-through' : 'none',
+          }}>
+            {item.text}
+          </span>
+          <button
+            onClick={() => remove(item.id)}
+            style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}
+            aria-label="Remove"
+          >×</button>
+        </div>
+      ))}
+      <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+        <input
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && add()}
+          placeholder={placeholder}
+          style={{
+            flex: 1, background: '#111', border: '1px solid #333', borderRadius: 6,
+            color: '#ccc', fontSize: 13, padding: '6px 10px',
+          }}
+        />
+        <button
+          onClick={add}
+          style={{
+            background: '#d4af37', border: 'none', borderRadius: 6,
+            color: '#000', fontWeight: 700, fontSize: 13, padding: '6px 12px', cursor: 'pointer',
+          }}
+        >+</button>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
-        <KpiBox value={totalRev} unit="usd" label={`Revenue · ${cur}`} delta={priorTotal && monthDeltaPct != null ? { value: monthDeltaPct, unit: 'pct', period: 'MoM' } : undefined} />
-        <KpiBox value={gop} unit="usd" label={`GOP · ${cur}`} state={gop == null ? 'data-needed' : 'live'} needs={gop == null ? 'awaiting gl_entries close' : undefined} />
-        <KpiBox value={netEarnings ?? null} unit="usd" label={`Net · ${cur}`} state={netEarnings == null ? 'data-needed' : 'live'} />
-        <KpiBox value={ar90Plus} unit="usd" label="AR 90+" />
-      </div>
-      {variances.length > 0 && (
-        <div style={{ marginTop: 18 }}>
-          <SectionHead title="Top variances" emphasis="MoM dept profit" sub={`${cur} vs ${prior} · departmental_profit per v_usali_dept_summary`} source="gl.v_usali_dept_summary" />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 12, background: 'var(--paper-pure)', border: '1px solid var(--line-soft)', borderRadius: 4 }}>
-            {variances.map(v => {
-              const pct = (Math.abs(v.delta) / maxAbsVar) * 100;
-              const pos = v.delta >= 0;
-              return (
-                <div key={v.dept} style={{ display: 'grid', gridTemplateColumns: '160px 1fr 100px', gap: 12, alignItems: 'center', fontSize: 13 }}>
-                  <div style={{ color: 'var(--ink)' }}>{v.dept}</div>
-                  <div style={{ height: 8, background: 'var(--surf-2)', borderRadius: 2, overflow: 'hidden' }}>
-                    <div style={{ width: `${pct.toFixed(0)}%`, height: '100%', background: pos ? 'var(--st-good)' : 'var(--st-bad)' }} />
-                  </div>
-                  <div style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: pos ? 'var(--st-good)' : 'var(--st-bad)' }}>
-                    {pos ? '+' : '−'}${(Math.abs(v.delta) / 1000).toFixed(1)}k
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+    </div>
+  );
+}
+
+/* ─── dept dropdown ──────────────────────────────────── */
+function DeptDropdown() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ position: 'relative', display: 'inline-block' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          background: '#111', border: '1px solid #333', borderRadius: 8,
+          color: '#ccc', fontSize: 13, padding: '8px 14px', cursor: 'pointer',
+        }}
+      >
+        Departments ▾
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '110%', left: 0, background: '#111',
+          border: '1px solid #333', borderRadius: 8, zIndex: 50,
+          minWidth: 160, boxShadow: '0 4px 24px rgba(0,0,0,0.6)',
+        }}>
+          {DEPT_CHIPS.map(d => (
+            <Link
+              key={d.href}
+              href={d.href}
+              onClick={() => setOpen(false)}
+              style={{
+                display: 'block', padding: '10px 16px', color: '#ccc',
+                fontSize: 13, textDecoration: 'none',
+              }}
+            >
+              {d.label}
+            </Link>
+          ))}
         </div>
       )}
-      {cards.length > 0 && (
-        <div style={{ marginTop: 18 }}>
-          <SectionHead title="Reconciliations" emphasis="awaiting attention" sub={`${cards.length} card${cards.length === 1 ? '' : 's'}`} />
-          <ActionStack title={<></>} count={cards.length} meta={`${cards.length} awaiting`}>
-            {cards.map((c, i) => <ActionCard key={i} num={i + 1} {...c} />)}
-          </ActionStack>
+    </div>
+  );
+}
+
+/* ─── page ───────────────────────────────────────────── */
+export default function FinanceEntryPage() {
+  const [chatDraft, setChatDraft] = useState('');
+
+  function handleChatSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const q = chatDraft.trim();
+    if (!q) return;
+    window.location.href = `/cockpit?role=finance&q=${encodeURIComponent(q)}`;
+  }
+
+  return (
+    <main style={{
+      minHeight: '100vh',
+      background: '#000',
+      color: '#e0e0e0',
+      fontFamily: 'Inter, system-ui, sans-serif',
+      padding: '48px 40px 80px',
+      maxWidth: 1100,
+      margin: '0 auto',
+    }}>
+
+      {/* ── greeting ── */}
+      <p style={{
+        fontFamily: 'Fraunces, Georgia, serif',
+        fontStyle: 'italic',
+        fontSize: 28,
+        color: '#f5f5f5',
+        marginBottom: 32,
+        fontWeight: 300,
+      }}>
+        Good morning, Boss (Paul Bauer).
+      </p>
+
+      {/* ── chat box ── */}
+      <form onSubmit={handleChatSubmit} style={{ marginBottom: 36 }}>
+        <div style={{ display: 'flex', gap: 10, maxWidth: 680 }}>
+          <input
+            value={chatDraft}
+            onChange={e => setChatDraft(e.target.value)}
+            placeholder="Ask anything about Finance…"
+            style={{
+              flex: 1, background: '#0d0d0d', border: '1px solid #2a2a2a',
+              borderRadius: 10, color: '#e0e0e0', fontSize: 15,
+              padding: '12px 16px', outline: 'none',
+            }}
+          />
+          <button
+            type="submit"
+            style={{
+              background: '#d4af37', border: 'none', borderRadius: 10,
+              color: '#000', fontWeight: 700, fontSize: 14,
+              padding: '12px 20px', cursor: 'pointer', whiteSpace: 'nowrap',
+            }}
+          >
+            Ask →
+          </button>
         </div>
-      )}
-    </>
+      </form>
+
+      {/* ── quick-page chips (Finance sub-pages) ── */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 32 }}>
+        {FINANCE_CHIPS.map(chip => (
+          <Link
+            key={chip.href}
+            href={chip.href}
+            style={{
+              background: '#111', border: '1px solid #2a2a2a', borderRadius: 20,
+              color: '#ccc', fontSize: 13, padding: '7px 16px',
+              textDecoration: 'none', transition: 'border-color 0.15s',
+            }}
+          >
+            {chip.label}
+          </Link>
+        ))}
+      </div>
+
+      {/* ── My Docs + My Tasks (two-column) ── */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: 24,
+        marginBottom: 36,
+      }}>
+        {/* My Docs */}
+        <section style={{
+          background: '#0d0d0d', border: '1px solid #1e1e1e',
+          borderRadius: 12, padding: 24,
+        }}>
+          <h2 style={{ fontSize: 14, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16 }}>
+            My Docs
+          </h2>
+          <EditableList
+            storageKey={DOCS_KEY}
+            defaults={[
+              { id: 'd1', text: 'Q1 P&L Report', done: false },
+              { id: 'd2', text: 'Annual Budget 2025', done: false },
+              { id: 'd3', text: 'Cash Flow Projection', done: false },
+            ]}
+            placeholder="Add document…"
+          />
+        </section>
+
+        {/* My Tasks */}
+        <section style={{
+          background: '#0d0d0d', border: '1px solid #1e1e1e',
+          borderRadius: 12, padding: 24,
+        }}>
+          <h2 style={{ fontSize: 14, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16 }}>
+            My Tasks
+          </h2>
+          <EditableList
+            storageKey={TASKS_KEY}
+            defaults={[
+              { id: 't1', text: 'Review month-end close checklist', done: false },
+              { id: 't2', text: 'Approve supplier payment batch', done: false },
+              { id: 't3', text: 'Sign off payroll', done: false },
+            ]}
+            placeholder="Add task…"
+          />
+        </section>
+      </div>
+
+      {/* ── Needs Your Attention ── */}
+      <section style={{
+        background: '#0d0d0d', border: '1px solid #1e1e1e',
+        borderRadius: 12, padding: 24, marginBottom: 32,
+      }}>
+        <h2 style={{ fontSize: 14, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16 }}>
+          Needs Your Attention
+        </h2>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {ATTENTION_STUBS.map(item => (
+            <div key={item.id} style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: '12px 16px', background: '#111', borderRadius: 8,
+              border: `1px solid ${item.severity === 'high' ? '#5c2a2a' : '#2a2a1e'}`,
+            }}>
+              <span style={{
+                width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                background: item.severity === 'high' ? '#e05252' : '#d4af37',
+              }} />
+              <span style={{ flex: 1, fontSize: 14, color: '#ddd' }}>{item.label}</span>
+              <span style={{ fontSize: 11, color: '#555', flexShrink: 0 }}>{item.dept}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── dept dropdown ── */}
+      <DeptDropdown />
+    </main>
   );
 }
