@@ -581,16 +581,28 @@ function ChatTab() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const listEnd = useRef<HTMLDivElement>(null);
 
+  const [threadStart, setThreadStart] = useState<string>(() => {
+    if (typeof window === "undefined") return new Date(Date.now() - 7 * 24 * 3600_000).toISOString();
+    return localStorage.getItem("kit_cockpit_thread_start") ?? new Date(Date.now() - 7 * 24 * 3600_000).toISOString();
+  });
+  const startNewChat = () => {
+    const now = new Date().toISOString();
+    localStorage.setItem("kit_cockpit_thread_start", now);
+    setThreadStart(now);
+    setActiveTicket(null);
+    setInput("");
+  };
   const loadTickets = useCallback(async () => {
     const { data } = await supabase
       .from("cockpit_tickets")
       .select("*")
       // Hide cron/scheduled tickets — they live in the Schedule tab now (PBS 2026-05-07)
       .not("source", "ilike", "cron_%")
+      .gte("created_at", threadStart)
       .order("created_at", { ascending: false })
       .limit(50);
     if (data) setTickets(data);
-  }, []);
+  }, [threadStart]);
 
   useEffect(() => {
     loadTickets();
@@ -699,8 +711,9 @@ function ChatTab() {
     <div className="chat-tab">
       <div className="chat-list">
         <div className="chat-list-header">
-          <span>Tickets</span>
+          <span>Conversation</span>
           <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={startNewChat} className="chat-magic-btn" title="Start a new conversation — hides previous tickets" style={{ background: "var(--brass)", color: "#0a0a0b", fontWeight: 600 }}>＋ New</button>
             <button onClick={loadTickets} className="chat-magic-btn" title="Refresh ticket list">🔄</button>
             <button onClick={requestMagicLink} className="chat-magic-btn" title="Get a 10-min QR code to log in on phone">📱</button>
           </div>
