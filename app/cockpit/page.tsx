@@ -737,7 +737,7 @@ function ChatTab() {
         <div className="chat-list-header">
           <span>Conversation</span>
           <div style={{ display: "flex", gap: 6 }}>
-            <button onClick={startNewChat} className="chat-magic-btn" title="Start a new conversation — hides previous tickets" style={{ background: "var(--brass)", color: "#0a0a0b", fontWeight: 600 }}>＋ New</button>
+            <button onClick={startNewChat} className="chat-magic-btn" title="Start a new conversation — hides previous tickets">＋ New</button>
             <button onClick={loadTickets} className="chat-magic-btn" title="Refresh ticket list">🔄</button>
             <button onClick={requestMagicLink} className="chat-magic-btn" title="Get a 10-min QR code to log in on phone">📱</button>
           </div>
