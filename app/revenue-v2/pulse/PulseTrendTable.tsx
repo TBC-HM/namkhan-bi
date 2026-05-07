@@ -3,18 +3,19 @@
 /**
  * PulseTrendTable — client component
  * Wraps <DataTable> so that render/sortValue fns don't cross the RSC boundary.
- * Rows come from mv_kpi_daily, fetched in the server page.
+ * Rows come from v_overview_kpis, fetched in the server page.
  */
 
-import { DataTable, type Column } from '@/components/ui/DataTable'
-import { EMPTY } from '@/lib/format'
+import DataTable from '@/components/ui/DataTable'
+import type { Column } from '@/components/ui/DataTable'
 import type { KpiDailyRow } from './page'
 
-// ─── Formatters ───────────────────────────────────────────────────────────────
+const EMPTY = '—'
+
+// ─── Formatters ──────────────────────────────────────────────────────────────
 
 function fmtDate(v: string | null | undefined): string {
   if (!v) return EMPTY
-  // ISO → DD MMM YY
   const d = new Date(v)
   if (isNaN(d.getTime())) return v
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })
@@ -35,7 +36,7 @@ function fmtCount(v: number | null | undefined): string {
   return v.toLocaleString('en-US')
 }
 
-// ─── Column definitions ───────────────────────────────────────────────────────
+// ─── Column definitions ──────────────────────────────────────────────────────
 
 const columns: Column<KpiDailyRow>[] = [
   {
@@ -81,7 +82,7 @@ const columns: Column<KpiDailyRow>[] = [
   },
 ]
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// ─── Component ───────────────────────────────────────────────────────────────
 
 interface Props {
   rows: KpiDailyRow[]
@@ -93,7 +94,7 @@ export function PulseTrendTable({ rows }: Props) {
       columns={columns}
       rows={rows}
       rowKey={(r) => r.night_date}
-      emptyState="No daily KPI data in range — mv_kpi_daily returned 0 rows."
+      emptyState="No daily KPI data in range — v_overview_kpis returned 0 rows."
     />
   )
 }
