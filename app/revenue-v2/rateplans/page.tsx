@@ -21,6 +21,15 @@ interface RateplanRow {
   [key: string]: unknown;
 }
 
+const fmtUsd = (v: number | null | undefined): string =>
+  v == null ? '—' : `$${v.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+
+const fmtPct = (v: number | null | undefined): string =>
+  v == null ? '—' : `${Number(v).toFixed(1)}%`;
+
+const fmtNum = (v: number | null | undefined): string =>
+  v == null ? '—' : v.toLocaleString('en-US');
+
 export default async function RateplansPage() {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -35,128 +44,119 @@ export default async function RateplansPage() {
 
   const rows: RateplanRow[] = data ?? [];
 
-  // Aggregate KPIs from the dataset
   const totalRN = rows.reduce((s, r) => s + (r.room_nights ?? 0), 0);
   const totalRev = rows.reduce((s, r) => s + (r.revenue_usd ?? 0), 0);
-  const avgAdr = totalRN > 0 ? totalRev / totalRN : null;
+  const blendedAdr = totalRN > 0 ? totalRev / totalRN : null;
   const avgOcc =
     rows.length > 0
       ? rows.reduce((s, r) => s + (r.occupancy_pct ?? 0), 0) / rows.length
       : null;
+  const avgCxl =
+    rows.length > 0
+      ? rows.reduce((s, r) => s + (r.cancellation_pct ?? 0), 0) / rows.length
+      : null;
+  const avgLos =
+    rows.length > 0
+      ? rows.reduce((s, r) => s + (r.avg_los ?? 0), 0) / rows.length
+      : null;
+  const uniqueChannels = new Set(rows.map((r) => r.channel).filter(Boolean)).size;
 
-  const fmtUsd = (v: number | null) =>
-    v == null ? '—' : `$${v.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
-  const fmtPct = (v: number | null) =>
-    v == null ? '—' : `${v.toFixed(1)}%`;
+  const tableColumns = [
+    { key: 'rateplan_code', header: 'Code' },
+    { key: 'rateplan_name', header: 'Rate Plan' },
+    { key: 'channel', header: 'Channel' },
+    { key: 'stay_month', header: 'Month' },
+    { key: 'room_nights', header: 'Room Nights' },
+    { key: 'revenue_usd', header: 'Revenue' },
+    { key: 'adr_usd', header: 'ADR' },
+    { key: 'occupancy_pct', header: 'OCC %' },
+    { key: 'cancellation_pct', header: 'CXL %' },
+    { key: 'avg_los', header: 'Avg LOS' },
+  ];
+
+  const tableRows = rows.map((r) => ({
+    rateplan_code: r.rateplan_code ?? '—',
+    rateplan_name: r.rateplan_name ?? '—',
+    channel: r.channel ?? '—',
+    stay_month: r.stay_month ?? '—',
+    room_nights: fmtNum(r.room_nights),
+    revenue_usd: fmtUsd(r.revenue_usd),
+    adr_usd: fmtUsd(r.adr_usd),
+    occupancy_pct: fmtPct(r.occupancy_pct),
+    cancellation_pct: fmtPct(r.cancellation_pct),
+    avg_los: r.avg_los != null ? Number(r.avg_los).toFixed(1) : '—',
+  }));
 
   return (
-    <main style={{ padding: '24px 32px' }}>
+    <main style={{ padding: 24 }}>
       <PageHeader pillar="Revenue" tab="Rate Plans" title="Rate Plan Performance" />
 
       {error && (
         <div
           style={{
-            background: '#FEF2F2',
-            border: '1px solid #FECACA',
-            borderRadius: 8,
+            background: '#fff1f0',
+            border: '1px solid #ffccc7',
+            borderRadius: 6,
             padding: '12px 16px',
-            marginBottom: 24,
-            color: '#991B1B',
-            fontSize: 13,
+            marginBottom: 16,
+            color: '#a8071a',
           }}
         >
-          ⚠️ Data load error: {error.message}
+          ⚠️ Supabase error: {error.message}
         </div>
       )}
 
-      {/* KPI summary strip */}
+      {/* KPI strip — row 1 */}
       <div
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(4, 1fr)',
           gap: 16,
-          marginBottom: 32,
+          marginBottom: 16,
         }}
       >
         <KpiBox label="Rate Plans" value={rows.length > 0 ? String(rows.length) : '—'} />
-        <KpiBox label="Total Room Nights" value={totalRN > 0 ? totalRN.toLocaleString('en-US') : '—'} />
-        <KpiBox label="Total Revenue" value={fmtUsd(totalRev > 0 ? totalRev : null)} />
-        <KpiBox label="Blended ADR" value={fmtUsd(avgAdr)} />
+        <KpiBox label="Room Nights" value={totalRN > 0 ? fmtNum(totalRN) : '—'} />
+        <KpiBox label="Total Revenue" value={totalRev > 0 ? fmtUsd(totalRev) : '—'} />
+        <KpiBox label="Blended ADR" value={fmtUsd(blendedAdr)} />
       </div>
 
-      {/* Secondary KPI strip */}
+      {/* KPI strip — row 2 */}
       <div
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(4, 1fr)',
           gap: 16,
-          marginBottom: 32,
+          marginBottom: 24,
         }}
       >
-        <KpiBox label="Avg Occupancy" value={fmtPct(avgOcc)} />
-        <KpiBox
-          label="Avg Cancellation"
-          value={fmtPct(
-            rows.length > 0
-              ? rows.reduce((s, r) => s + (r.cancellation_pct ?? 0), 0) / rows.length
-              : null
-          )}
-        />
-        <KpiBox
-          label="Avg LOS"
-          value={
-            rows.length > 0
-              ? (rows.reduce((s, r) => s + (r.avg_los ?? 0), 0) / rows.length).toFixed(1)
-              : '—'
-          }
-        />
-        <KpiBox label="Channels" value={rows.length > 0 ? String(new Set(rows.map((r) => r.channel).filter(Boolean)).size) : '—'} />
+        <KpiBox label="Avg OCC %" value={fmtPct(avgOcc)} />
+        <KpiBox label="Avg CXL %" value={fmtPct(avgCxl)} />
+        <KpiBox label="Avg LOS (nights)" value={avgLos != null ? Number(avgLos).toFixed(1) : '—'} />
+        <KpiBox label="Channels" value={uniqueChannels > 0 ? String(uniqueChannels) : '—'} />
       </div>
 
-      {/* Main table */}
       {rows.length === 0 ? (
         <div
           style={{
-            background: '#F9FAFB',
-            border: '1px dashed #D1D5DB',
-            borderRadius: 8,
-            padding: '48px 24px',
             textAlign: 'center',
-            color: '#6B7280',
+            padding: '48px 24px',
+            color: '#888',
+            border: '1px dashed #d9d9d9',
+            borderRadius: 8,
           }}
         >
-          <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>No rate plan data available</p>
+          <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>
+            No rate plan data available
+          </p>
           <p style={{ fontSize: 13 }}>
-            Ensure <code>public.v_rateplan_performance</code> is populated and accessible via service role.
+            {error
+              ? 'Check Supabase service-role access to public.v_rateplan_performance'
+              : 'View public.v_rateplan_performance returned 0 rows — ensure ETL has run.'}
           </p>
         </div>
       ) : (
-        <DataTable
-          columns={[
-            { key: 'rateplan_code', header: 'Code' },
-            { key: 'rateplan_name', header: 'Rate Plan' },
-            { key: 'channel', header: 'Channel' },
-            { key: 'stay_month', header: 'Stay Month' },
-            { key: 'room_nights', header: 'Room Nights' },
-            { key: 'adr_usd', header: 'ADR (USD)' },
-            { key: 'revenue_usd', header: 'Revenue (USD)' },
-            { key: 'occupancy_pct', header: 'Occ %' },
-            { key: 'cancellation_pct', header: 'Cancel %' },
-            { key: 'avg_los', header: 'Avg LOS' },
-          ]}
-          rows={rows.map((r) => ({
-            ...r,
-            adr_usd: r.adr_usd != null ? fmtUsd(r.adr_usd) : '—',
-            revenue_usd: r.revenue_usd != null ? fmtUsd(r.revenue_usd) : '—',
-            occupancy_pct: r.occupancy_pct != null ? fmtPct(r.occupancy_pct) : '—',
-            cancellation_pct: r.cancellation_pct != null ? fmtPct(r.cancellation_pct) : '—',
-            avg_los: r.avg_los != null ? Number(r.avg_los).toFixed(1) : '—',
-            stay_month: r.stay_month ?? '—',
-            rateplan_code: r.rateplan_code ?? '—',
-            rateplan_name: r.rateplan_name ?? '—',
-            channel: r.channel ?? '—',
-          }))}
-        />
+        <DataTable columns={tableColumns} rows={tableRows} />
       )}
     </main>
   );
