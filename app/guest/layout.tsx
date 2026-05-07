@@ -1,26 +1,38 @@
-// app/guest/layout.tsx
-import Banner from '@/components/nav/Banner';
-import SubNav from '@/components/nav/SubNav';
-import FilterStrip from '@/components/nav/FilterStrip';
-import { RAIL_SUBNAV, PILLAR_HEADER } from '@/components/nav/subnavConfig';
+import type { Metadata } from 'next';
 
-export default function GuestLayout({ children }: { children: React.ReactNode }) {
-  const h = PILLAR_HEADER.guest;
-  const t = new Date().toLocaleTimeString('en-GB', {
-    hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Vientiane',
-  });
+/**
+ * /guest — Standalone layout.
+ * Deliberately omits <AppShell> / <Sidebar> so the black entry screen
+ * renders full-viewport with zero extra chrome.
+ *
+ * Font declarations are inherited from the root layout's <html> element;
+ * no duplicate font loading needed here.
+ */
+export const metadata: Metadata = {
+  title: 'Guest Intelligence — Namkhan BI',
+  description: 'Real-time property insights curated for partners and guests of Nam Khan River Lodge.',
+  robots: { index: false, follow: false },   // internal tool — no indexing
+};
+
+export default function GuestLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <>
-      <Banner
-        eyebrow={h.eyebrow}
-        title={h.title}
-        titleEmphasis={h.emphasis}
-        meta={<><strong>Voice of the house</strong><br />Refreshed {t} ICT</>}
-      />
-      <SubNav items={RAIL_SUBNAV.guest} />
-      {/* Guest pages use back-only windows; segment is highly relevant */}
-      <FilterStrip showForward={false} showCompare showSegment liveSource="Reviews + social · live" />
-      <div className="panel">{children}</div>
-    </>
+    // Wrap in a minimal div that resets any inherited padding/margin from
+    // the root layout body, while still living inside <html> for font inheritance.
+    <div
+      style={{
+        minHeight: '100dvh',
+        width: '100%',
+        margin: 0,
+        padding: 0,
+        backgroundColor: '#0a0a0a',
+        isolation: 'isolate',            // new stacking context — no sidebar bleeds through
+      }}
+    >
+      {children}
+    </div>
   );
 }
