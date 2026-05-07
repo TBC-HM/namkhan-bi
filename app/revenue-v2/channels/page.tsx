@@ -7,18 +7,61 @@ import PageHeader from '@/components/layout/PageHeader';
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 interface ChannelRow {
-  channel_name: string;
-  room_nights: number | null;
-  revenue_usd: number | null;
-  adr_usd: number | null;
-  commission_pct: number | null;
-  net_revenue_usd: number | null;
-  revenue_share_pct: number | null;
-  cancellation_rate_pct: number | null;
+  channel_name?: string | null;
+  channel_code?: string | null;
+  room_nights?: number | null;
+  gross_revenue?: number | null;
+  net_revenue?: number | null;
+  adr?: number | null;
+  commission_pct?: number | null;
+  commission_amount?: number | null;
+  revenue_share_pct?: number | null;
+  reservations?: number | null;
+  cancellations?: number | null;
+  period_label?: string | null;
+  [key: string]: unknown;
 }
 
-export default async function Page() {
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function fmt$( v: number | null | undefined ): string {
+  if (v == null) return '—';
+  return `$${v.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+}
+
+function fmtPct( v: number | null | undefined ): string {
+  if (v == null) return '—';
+  return `${(v * (Math.abs(v) <= 1 ? 100 : 1)).toFixed(1)}%`;
+}
+
+function fmtN( v: number | null | undefined ): string {
+  if (v == null) return '—';
+  return v.toLocaleString('en-US');
+}
+
+function totalRevenue( rows: ChannelRow[] ): number {
+  return rows.reduce((s, r) => s + (r.gross_revenue ?? 0), 0);
+}
+
+function totalNights( rows: ChannelRow[] ): number {
+  return rows.reduce((s, r) => s + (r.room_nights ?? 0), 0);
+}
+
+function blendedADR( rows: ChannelRow[] ): string {
+  const nights = totalNights(rows);
+  if (nights === 0) return '—';
+  return fmt$(totalRevenue(rows) / nights);
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+export default async function ChannelsPage() {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -27,97 +70,77 @@ export default async function Page() {
   const { data, error } = await supabase
     .from('mv_channel_economics')
     .select('*')
-    .order('revenue_usd', { ascending: false })
-    .limit(50);
+    .order('gross_revenue', { ascending: false })
+    .limit(100);
 
   const rows: ChannelRow[] = data ?? [];
 
-  // Aggregate KPI totals
-  const totalRevenue = rows.reduce((s, r) => s + (r.revenue_usd ?? 0), 0);
-  const totalNights = rows.reduce((s, r) => s + (r.room_nights ?? 0), 0);
-  const totalNetRevenue = rows.reduce((s, r) => s + (r.net_revenue_usd ?? 0), 0);
-  const blendedADR = totalNights > 0 ? totalRevenue / totalNights : null;
-  const commissionLoad =
-    totalRevenue > 0
-      ? ((totalRevenue - totalNetRevenue) / totalRevenue) * 100
-      : null;
-
-  const fmt = (n: number | null, prefix = '') =>
-    n != null ? `${prefix}${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—';
-  const fmtPct = (n: number | null) => (n != null ? `${n.toFixed(1)}%` : '—');
+  // Surface the most-recent period label from data if present
+  const periodLabel: string = rows[0]?.period_label ?? 'Current Period';
 
   return (
     <main className="p-6 space-y-6">
       <PageHeader pillar="Revenue" tab="Channels" title="Channel Economics" />
 
       {error && (
-        <p className="text-sm text-red-500 bg-red-50 border border-red-200 rounded px-4 py-2">
+        <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
           Data unavailable: {error.message}
-        </p>
+        </div>
       )}
 
-      {/* KPI Summary Strip */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: 16,
-        }}
-      >
-        <KpiBox label="Total Revenue" value={fmt(totalRevenue, '$')} />
-        <KpiBox label="Net Revenue" value={fmt(totalNetRevenue, '$')} />
-        <KpiBox label="Blended ADR" value={fmt(blendedADR, '$')} />
-        <KpiBox label="Commission Load" value={fmtPct(commissionLoad)} />
+      {/* KPI Summary Row */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <KpiBox
+          label="Gross Revenue"
+          value={fmt$(totalRevenue(rows))}
+          sub={periodLabel}
+        />
+        <KpiBox
+          label="Room Nights"
+          value={fmtN(totalNights(rows))}
+          sub={periodLabel}
+        />
+        <KpiBox
+          label="Blended ADR"
+          value={blendedADR(rows)}
+          sub="across channels"
+        />
+        <KpiBox
+          label="Active Channels"
+          value={rows.length > 0 ? String(rows.length) : '—'}
+          sub="by booking source"
+        />
       </div>
 
-      {/* Channel Mix Table */}
+      {/* Channel breakdown table */}
       <DataTable
         columns={[
-          { key: 'channel_name', header: 'Channel' },
-          {
-            key: 'room_nights',
-            header: 'Room Nights',
-            render: (v: unknown) => fmt(v as number | null),
-          },
-          {
-            key: 'revenue_usd',
-            header: 'Revenue (USD)',
-            render: (v: unknown) => fmt(v as number | null, '$'),
-          },
-          {
-            key: 'adr_usd',
-            header: 'ADR',
-            render: (v: unknown) => fmt(v as number | null, '$'),
-          },
-          {
-            key: 'commission_pct',
-            header: 'Commission',
-            render: (v: unknown) => fmtPct(v as number | null),
-          },
-          {
-            key: 'net_revenue_usd',
-            header: 'Net Revenue',
-            render: (v: unknown) => fmt(v as number | null, '$'),
-          },
-          {
-            key: 'revenue_share_pct',
-            header: 'Mix %',
-            render: (v: unknown) => fmtPct(v as number | null),
-          },
-          {
-            key: 'cancellation_rate_pct',
-            header: 'Cancel Rate',
-            render: (v: unknown) => fmtPct(v as number | null),
-          },
+          { key: 'channel_name',      header: 'Channel'         },
+          { key: 'channel_code',      header: 'Code'            },
+          { key: 'room_nights',       header: 'Room Nights'     },
+          { key: 'reservations',      header: 'Reservations'    },
+          { key: 'cancellations',     header: 'Cancellations'   },
+          { key: 'adr',               header: 'ADR'             },
+          { key: 'gross_revenue',     header: 'Gross Revenue'   },
+          { key: 'net_revenue',       header: 'Net Revenue'     },
+          { key: 'commission_pct',    header: 'Commission %'    },
+          { key: 'commission_amount', header: 'Commission $'    },
+          { key: 'revenue_share_pct', header: 'Rev Share %'     },
         ]}
-        rows={rows}
+        rows={rows.map((r) => ({
+          channel_name:      r.channel_name      ?? '—',
+          channel_code:      r.channel_code      ?? '—',
+          room_nights:       fmtN(r.room_nights),
+          reservations:      fmtN(r.reservations),
+          cancellations:     fmtN(r.cancellations),
+          adr:               fmt$(r.adr),
+          gross_revenue:     fmt$(r.gross_revenue),
+          net_revenue:       fmt$(r.net_revenue),
+          commission_pct:    fmtPct(r.commission_pct),
+          commission_amount: fmt$(r.commission_amount),
+          revenue_share_pct: fmtPct(r.revenue_share_pct),
+        }))}
       />
-
-      {rows.length === 0 && !error && (
-        <p className="text-sm text-muted-foreground text-center py-8">
-          No channel data available — mv_channel_economics may need a refresh.
-        </p>
-      )}
     </main>
   );
 }
