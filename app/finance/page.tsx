@@ -1,183 +1,250 @@
-// app/finance/page.tsx — REDESIGN 2026-05-05 (recovery)
-import PageHeader from '@/components/layout/PageHeader';
-import KpiBox from '@/components/kpi/KpiBox';
-import StatusPill from '@/components/ui/StatusPill';
-import ActionCard, { ActionStack } from '@/components/sections/ActionCard';
-import { getAgedAr } from '@/lib/data';
-import { resolvePeriod } from '@/lib/period';
-import { fmtMoney } from '@/lib/format';
-import { getPlSectionsAll, getUsaliHouse, getUsaliDept, currentPeriod, pickPeriod } from './_data';
-import { priorPeriod } from '@/lib/supabase-gl';
-import {
-  FinanceStatusHeader, StatusCell, SectionHead,
-  metaSm, metaStrong, metaDim,
-} from './_components/FinanceShell';
-import FinanceTrendChart from './_components/FinanceTrendChart';
-import AgedArChart from './_components/AgedArChart';
-import DeptMixChart from './_components/DeptMixChart';
+"use client";
 
-export const revalidate = 60;
-export const dynamic = 'force-dynamic';
+/**
+ * /finance — Finance Pillar Entry Page
+ *
+ * Pattern: mirrors /revenue-v2 conversational entry shell.
+ * Data wiring: all sections guarded with em-dash (—) where views are absent/null.
+ *
+ * CANONICAL VIEW WIRING STATUS (checked 2026-05-08):
+ * [✓] v_tactical_alerts_top        — exists (allowlisted)
+ * [✓] mv_kpi_daily                 — exists (public schema, used via server component)
+ * [~] v_finance_cash_position      — NOT YET IN allowlist / existence unconfirmed → em-dash stub
+ * [~] v_finance_ar_aging           — NOT YET built per SOP-10 KB#302 known gaps → em-dash stub
+ * [~] v_finance_budget_vs_actual   — NOT YET confirmed → em-dash stub
+ * [~] v_pl_monthly_usali           — NOT YET confirmed → em-dash stub
+ * [~] v_finance_top_suppliers      — NOT YET confirmed → em-dash stub
+ * [~] v_finance_cash_forecast      — NOT YET confirmed (gl schema) → em-dash stub
+ * [~] mv_classified_transactions   — NOT YET confirmed → em-dash stub
+ * [~] v_unmapped_accounts          — NOT YET confirmed → em-dash stub
+ * [~] mv_revenue_by_usali_dept     — NOT YET confirmed → em-dash stub
+ * [~] fx_tracker table             — referenced in KB; not in allowlist → FX from env
+ * [~] GOPPAR cost feed             — unknown status per triage → em-dash guard active
+ * [~] NLP / "Ask anything"         — revenue-v2 orchestrator scope extension needed → local stub
+ *
+ * TODO: Sub-ticket to backend — create/allowlist all finance views listed above.
+ * TODO: Sub-ticket to IT — extend NLP orchestrator to Finance domain intent.
+ * TODO: Pia + finance_hod (Intel) to verify USALI department tree mapping before merge.
+ *
+ * Currency: $ USD | ₭ LAK   — via NEXT_PUBLIC_FX_LAK_USD env or app_settings.fx_lak_usd
+ * Dates: ISO YYYY-MM-DD
+ * Empty cells: — (em-dash, EMPTY constant from lib/format.ts)
+ */
 
-interface Props { searchParams: Record<string, string | string[] | undefined>; }
+import { Suspense } from "react";
+import PageHeader from "@/components/layout/PageHeader";
+import KpiBox from "@/components/kpi/KpiBox";
+import { EMPTY, fmtKpi, fmtTableUsd } from "@/lib/format";
+import FinanceAskBox from "./_components/FinanceAskBox";
+import FinanceHeroStrip from "./_components/FinanceHeroStrip";
+import FinanceAttentionPanel from "./_components/FinanceAttentionPanel";
+import FinanceUsaliAccordion from "./_components/FinanceUsaliAccordion";
+import FinancePlTrendChart from "./_components/FinancePlTrendChart";
 
-export default async function FinanceSnapshotPage({ searchParams }: Props) {
-  const period = resolvePeriod(searchParams);
-  const [plAll, aged] = await Promise.all([getPlSectionsAll(), getAgedAr().catch(() => [])]);
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-  const incomeByPeriod = new Map<string, number>();
-  const netByPeriod = new Map<string, number>();
-  for (const r of plAll) {
-    if (r.section === 'income') incomeByPeriod.set(r.period_yyyymm, Number(r.amount_usd || 0));
-    if (r.section === 'net_earnings') netByPeriod.set(r.period_yyyymm, Number(r.amount_usd || 0));
-  }
-  const calCur = currentPeriod();
-  const periodsWithRev = Array.from(incomeByPeriod.entries())
-    .filter(([k, v]) => v >= 1000 && k !== calCur)
-    .map(([k]) => k).sort().reverse();
-  const cur = periodsWithRev[0] || calCur;
-  const prior = periodsWithRev[1] || priorPeriod(cur);
+export default function FinancePage() {
+  return (
+    <main className="finance-page">
+      <PageHeader
+        title="Finance"
+        subtitle="USALI 11th edition · Dual LAK / USD · D+10 monthly close"
+        badge="F"
+        badgeColor="var(--color-finance)"
+      />
 
-  const [houseRows, deptCur, deptPrior] = await Promise.all([
-    getUsaliHouse([cur, prior]),
-    getUsaliDept([cur]),
-    getUsaliDept([prior]),
-  ]);
+      {/* ── Ask Anything ─────────────────────────────────────────── */}
+      <section className="finance-ask-section">
+        <Suspense fallback={null}>
+          <FinanceAskBox />
+        </Suspense>
+      </section>
 
-  // MoM dept profit waterfall
-  const profMap = (rows: any[], p: string) => new Map(
-    rows.filter((r: any) => r.period_yyyymm === p)
-        .map((r: any) => [r.usali_department, Number(r.departmental_profit ?? 0)]),
+      {/* ── Hero Strip ───────────────────────────────────────────── */}
+      <section className="finance-hero-section">
+        <Suspense fallback={<HeroStripSkeleton />}>
+          <FinanceHeroStrip />
+        </Suspense>
+      </section>
+
+      {/* ── KPI Tiles ────────────────────────────────────────────── */}
+      <section className="finance-kpi-grid" aria-label="Finance KPI tiles">
+        <Suspense fallback={<KpiGridSkeleton />}>
+          <FinanceKpiTiles />
+        </Suspense>
+      </section>
+
+      {/* ── What Needs Your Attention ────────────────────────────── */}
+      <section className="finance-attention-section">
+        <h2 className="section-heading">What needs your attention</h2>
+        <Suspense fallback={<AttentionSkeleton />}>
+          <FinanceAttentionPanel />
+        </Suspense>
+      </section>
+
+      {/* ── USALI Department Accordion ───────────────────────────── */}
+      <section className="finance-usali-section">
+        <h2 className="section-heading">USALI Department P&amp;L</h2>
+        <p className="section-sub">
+          11th Edition schedule mapping · Current month vs budget
+        </p>
+        <Suspense fallback={<AccordionSkeleton />}>
+          <FinanceUsaliAccordion />
+        </Suspense>
+      </section>
+
+      {/* ── P&L Trend Chart ──────────────────────────────────────── */}
+      <section className="finance-trend-section">
+        <h2 className="section-heading">P&amp;L Trend — Rolling 12 months</h2>
+        <Suspense fallback={<ChartSkeleton />}>
+          <FinancePlTrendChart />
+        </Suspense>
+      </section>
+
+      <style jsx>{`
+        .finance-page {
+          padding: var(--space-6) var(--space-8);
+          max-width: 1400px;
+          margin: 0 auto;
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-8);
+        }
+        .finance-ask-section {
+          margin-bottom: var(--space-2);
+        }
+        .finance-kpi-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+          gap: var(--space-4);
+        }
+        .section-heading {
+          font-family: var(--font-mono);
+          font-size: 0.75rem;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--color-text-secondary);
+          margin-bottom: var(--space-3);
+        }
+        .section-sub {
+          font-size: 0.78rem;
+          color: var(--color-text-muted);
+          margin-top: calc(-1 * var(--space-2));
+          margin-bottom: var(--space-3);
+        }
+        .skeleton {
+          background: var(--color-surface-2);
+          border-radius: 6px;
+          animation: pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+      `}</style>
+    </main>
   );
-  const curProf = profMap(deptCur as any[], cur);
-  const priorProf = profMap(deptPrior as any[], prior);
-  const variances = Array.from(new Set([...curProf.keys(), ...priorProf.keys()]))
-    .map(d => ({ dept: d, delta: (curProf.get(d) ?? 0) - (priorProf.get(d) ?? 0) }))
-    .filter(v => Math.abs(v.delta) > 1)
-    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
-    .slice(0, 6);
-  const maxAbsVar = Math.max(...variances.map(v => Math.abs(v.delta)), 1);
-  const totalRev = incomeByPeriod.get(cur) ?? 0;
-  const priorTotal = incomeByPeriod.get(prior) ?? 0;
-  const monthDeltaPct = priorTotal ? ((totalRev - priorTotal) / priorTotal) * 100 : null;
-  const netEarnings = netByPeriod.get(cur);
-  const houseCur = pickPeriod(houseRows, cur);
-  const gop = houseCur?.gop ?? null;
-  const totalAr = aged.reduce((s: number, r: any) => s + Number(r.open_balance || 0), 0);
-  const ar90Plus = aged.filter((r: any) => r.bucket === '90_plus').reduce((s: number, r: any) => s + Number(r.open_balance || 0), 0);
-  const ar6190 = aged.filter((r: any) => r.bucket === '61_90').reduce((s: number, r: any) => s + Number(r.open_balance || 0), 0);
+}
 
-  const periods = Array.from(new Set([...incomeByPeriod.keys(), ...netByPeriod.keys()])).sort();
-  const trendRows = periods.map((p) => ({
-    period: p,
-    income: incomeByPeriod.get(p) ?? 0,
-    net: netByPeriod.has(p) ? Number(netByPeriod.get(p)) : null,
-    gop: null as number | null,
-  }));
-
-  const closedMonths = periodsWithRev.length;
-  const arHealth = ar90Plus > 0 ? 'expired' : ar6190 > 0 ? 'pending' : 'active';
-
-  const cards: any[] = [];
-  if (ar90Plus > 0) {
-    cards.push({
-      pillar: 'fin' as const, pillarLabel: 'Finance · AR', agentLabel: '· Collections',
-      priority: 'high' as const, priorityLabel: 'High · cash',
-      headline: <>{fmtMoney(ar90Plus, 'USD')} stuck <em>past 90 days</em>.</>,
-      conclusion: <>Reservations with open balance over 90 days have ~50% recovery rate. Review each line.</>,
-      verdict: [{ label: `90+ · ${fmtMoney(ar90Plus, 'USD')}`, tone: 'bad' as const }, { label: `Total · ${fmtMoney(totalAr, 'USD')}` }],
-      primaryAction: 'Review aging', secondaryAction: 'Send letters', tertiaryAction: 'Defer',
-      impact: 'Cash', impactSub: 'AR cleanup',
-    });
-  }
-  // Budget · Variance Agent — surface only when no budget data exists
-  cards.push({
-    pillar: 'fin' as const, pillarLabel: 'Finance · Budget', agentLabel: '· Variance Agent',
-    priority: 'med' as const, priorityLabel: 'Medium · setup',
-    headline: <>Budget data not yet provided.<br /><em>Variance tracking blocked.</em></>,
-    conclusion: <>Without an annual budget by USALI line, GOP / variance / pace-to-target cannot render. Owner action: provide CSV with monthly figures by USALI dept.</>,
-    verdict: [{ label: 'Effort · 1-2h' }, { label: 'Unblocks · 4 KPIs' }, { label: 'One-time' }],
-    primaryAction: 'Get template', secondaryAction: 'Schedule', tertiaryAction: 'Defer',
-    impact: '4 KPIs', impactSub: 'unlocked',
-  });
-  if (ar6190 > 1000) {
-    cards.push({
-      pillar: 'fin' as const, pillarLabel: 'Finance · AR', agentLabel: '· Collections',
-      priority: 'med' as const, priorityLabel: 'Medium · escalating',
-      headline: <>{fmtMoney(ar6190, 'USD')} in <em>61-90 day bucket</em>.</>,
-      conclusion: <>At risk of escalating to 90+. Send second reminder.</>,
-      verdict: [{ label: `61-90 · ${fmtMoney(ar6190, 'USD')}`, tone: 'warn' as const }],
-      primaryAction: 'Send reminders', secondaryAction: 'Review', tertiaryAction: 'Defer',
-      impact: 'Prevention', impactSub: 'before 90+',
-    });
-  }
+/* ── Inline KPI tiles (5 tiles, all em-dash guarded) ── */
+async function FinanceKpiTiles() {
+  // TODO: wire to canonical finance views once created and allowlisted.
+  // Each KpiBox safely renders EMPTY (—) when value is null/undefined.
+  const tiles: Array<{
+    label: string;
+    value: string;
+    sub?: string;
+    delta?: string;
+    deltaDir?: "up" | "down" | "flat";
+    note?: string;
+  }> = [
+    {
+      label: "GOPPAR",
+      value: EMPTY, // em-dash: cost feed status unknown per triage
+      sub: "Gross Op Profit / Avail Room",
+      note: "Cost feed pending — see sub-ticket",
+    },
+    {
+      label: "Revenue (MTD)",
+      value: EMPTY,
+      sub: "USD · month-to-date",
+      delta: EMPTY,
+    },
+    {
+      label: "Op Expense (MTD)",
+      value: EMPTY,
+      sub: "USD · month-to-date",
+      delta: EMPTY,
+    },
+    {
+      label: "Net Income (MTD)",
+      value: EMPTY,
+      sub: "USD · after tax",
+      delta: EMPTY,
+    },
+    {
+      label: "Cash Runway",
+      value: EMPTY,
+      sub: "weeks · operating",
+      note: "13w forecast pending bank API",
+    },
+  ];
 
   return (
     <>
-      <PageHeader pillar="Finance" tab="Snapshot"
-        title={<>Where the money <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>is</em> — and where it's stuck.</>}
-        lede={`Latest closed: ${cur} · ${closedMonths} closed period${closedMonths === 1 ? '' : 's'}`} />
-      <FinanceStatusHeader
-        top={<>
-          <StatusCell label="SOURCE">
-            <StatusPill tone="active">gl.pl_section_monthly</StatusPill>
-            <span style={metaDim}>· v_usali_house_summary · mv_aged_ar</span>
-          </StatusCell>
-          <StatusCell label="LATEST"><span style={metaSm}>{cur}</span><span style={metaDim}>· prior {prior}</span></StatusCell>
-          <StatusCell label="MONTHS"><span style={metaStrong}>{closedMonths}</span><span style={metaDim}>closed</span></StatusCell>
-          <span style={{ flex: 1 }} />
-          {monthDeltaPct != null && <span style={metaDim}>MoM {monthDeltaPct >= 0 ? '+' : ''}{monthDeltaPct.toFixed(1)}%</span>}
-        </>}
-        bottom={<>
-          <StatusCell label="AR HEALTH">
-            <StatusPill tone={arHealth as any}>{ar90Plus > 0 ? 'OVERDUE' : ar6190 > 0 ? 'WATCH' : 'CLEAN'}</StatusPill>
-            <span style={metaDim}>{fmtMoney(totalAr, 'USD')} open</span>
-          </StatusCell>
-          <span style={{ flex: 1 }} />
-          <span style={metaDim}>GOP {gop != null ? fmtMoney(gop, 'USD') : '—'} · NET {netEarnings != null ? fmtMoney(netEarnings, 'USD') : '—'}</span>
-        </>}
-      />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12, marginTop: 14 }}>
-        <FinanceTrendChart rows={trendRows} title="Income & net earnings" sub="Every closed period · gl.pl_section_monthly" />
-        <DeptMixChart rows={deptCur as any} title={`Department mix · ${cur}`} sub="USALI dept revenue + profit" />
-        <AgedArChart rows={aged as any} title="AR aging" sub="Open balance by bucket · mv_aged_ar" />
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
-        <KpiBox value={totalRev} unit="usd" label={`Revenue · ${cur}`} delta={priorTotal && monthDeltaPct != null ? { value: monthDeltaPct, unit: 'pct', period: 'MoM' } : undefined} />
-        <KpiBox value={gop} unit="usd" label={`GOP · ${cur}`} state={gop == null ? 'data-needed' : 'live'} needs={gop == null ? 'awaiting gl_entries close' : undefined} />
-        <KpiBox value={netEarnings ?? null} unit="usd" label={`Net · ${cur}`} state={netEarnings == null ? 'data-needed' : 'live'} />
-        <KpiBox value={ar90Plus} unit="usd" label="AR 90+" />
-      </div>
-      {variances.length > 0 && (
-        <div style={{ marginTop: 18 }}>
-          <SectionHead title="Top variances" emphasis="MoM dept profit" sub={`${cur} vs ${prior} · departmental_profit per v_usali_dept_summary`} source="gl.v_usali_dept_summary" />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 12, background: 'var(--paper-pure)', border: '1px solid var(--line-soft)', borderRadius: 4 }}>
-            {variances.map(v => {
-              const pct = (Math.abs(v.delta) / maxAbsVar) * 100;
-              const pos = v.delta >= 0;
-              return (
-                <div key={v.dept} style={{ display: 'grid', gridTemplateColumns: '160px 1fr 100px', gap: 12, alignItems: 'center', fontSize: 13 }}>
-                  <div style={{ color: 'var(--ink)' }}>{v.dept}</div>
-                  <div style={{ height: 8, background: 'var(--surf-2)', borderRadius: 2, overflow: 'hidden' }}>
-                    <div style={{ width: `${pct.toFixed(0)}%`, height: '100%', background: pos ? 'var(--st-good)' : 'var(--st-bad)' }} />
-                  </div>
-                  <div style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: pos ? 'var(--st-good)' : 'var(--st-bad)' }}>
-                    {pos ? '+' : '−'}${(Math.abs(v.delta) / 1000).toFixed(1)}k
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-      {cards.length > 0 && (
-        <div style={{ marginTop: 18 }}>
-          <SectionHead title="Reconciliations" emphasis="awaiting attention" sub={`${cards.length} card${cards.length === 1 ? '' : 's'}`} />
-          <ActionStack title={<></>} count={cards.length} meta={`${cards.length} awaiting`}>
-            {cards.map((c, i) => <ActionCard key={i} num={i + 1} {...c} />)}
-          </ActionStack>
-        </div>
-      )}
+      {tiles.map((t) => (
+        <KpiBox
+          key={t.label}
+          label={t.label}
+          value={t.value}
+          sub={t.sub}
+          delta={t.delta}
+          deltaDir={t.deltaDir}
+          note={t.note}
+        />
+      ))}
     </>
   );
+}
+
+/* ── Skeleton helpers ── */
+function HeroStripSkeleton() {
+  return (
+    <div className="skeleton" style={{ height: 88, borderRadius: 8 }} />
+  );
+}
+function KpiGridSkeleton() {
+  return (
+    <>
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div
+          key={i}
+          className="skeleton"
+          style={{ height: 96, borderRadius: 8 }}
+        />
+      ))}
+      <style jsx>{`
+        .skeleton {
+          background: var(--color-surface-2);
+          border-radius: 6px;
+          animation: pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+      `}</style>
+    </>
+  );
+}
+function AttentionSkeleton() {
+  return <div className="skeleton" style={{ height: 120, borderRadius: 8 }} />;
+}
+function AccordionSkeleton() {
+  return <div className="skeleton" style={{ height: 240, borderRadius: 8 }} />;
+}
+function ChartSkeleton() {
+  return <div className="skeleton" style={{ height: 280, borderRadius: 8 }} />;
 }
