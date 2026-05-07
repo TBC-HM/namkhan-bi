@@ -1382,30 +1382,52 @@ function TeamTab({ onCount }: { onCount: (n: number) => void }) {
 // ============================================================================
 // LOGS TAB — cockpit_audit_log with filters
 // ============================================================================
+type AuditRow = {
+  id: number; created_at: string;
+  agent: string | null; action: string | null; target: string | null;
+  ticket_id: number | null; success: boolean | null;
+  reasoning: string | null;
+  input_tokens: number | null; output_tokens: number | null;
+  cost_usd_milli: number | null; duration_ms: number | null;
+};
+
 function LogsTab() {
-  const [logs, setLogs] = useState<AuditLog[]>([]);
-  const [filter, setFilter] = useState<"all" | "success" | "partial" | "failed" | "today">("all");
+  const [logs, setLogs] = useState<AuditRow[]>([]);
+  const [filter, setFilter] = useState<"all" | "success" | "failed" | "today">("all");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let q = supabase.from("cockpit_audit_log").select("*").order("created_at", { ascending: false }).limit(200);
-    if (filter === "success") q = q.eq("status", "success");
-    if (filter === "partial") q = q.eq("status", "partial");
-    if (filter === "failed") q = q.in("status", ["failed", "skipped"]);
+  const load = useCallback(async () => {
+    setLoading(true);
+    let q = supabase.from("cockpit_audit_log")
+      .select("id,created_at,agent,action,target,ticket_id,success,reasoning,input_tokens,output_tokens,cost_usd_milli,duration_ms")
+      .order("id", { ascending: false }).limit(300);
+    if (filter === "success") q = q.eq("success", true);
+    if (filter === "failed") q = q.eq("success", false);
     if (filter === "today") {
       const today = new Date(); today.setHours(0, 0, 0, 0);
       q = q.gte("created_at", today.toISOString());
     }
-    setLoading(true);
-    q.then(({ data }) => { setLogs(data ?? []); setLoading(false); });
+    const { data } = await q;
+    setLogs((data as AuditRow[]) ?? []);
+    setLoading(false);
   }, [filter]);
+
+  useEffect(() => {
+    load();
+    const ch = supabase.channel("audit_realtime")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "cockpit_audit_log" }, () => load())
+      .subscribe();
+    const id = setInterval(load, 10_000);
+    return () => { supabase.removeChannel(ch); clearInterval(id); };
+  }, [load]);
 
   const filtered = search
     ? logs.filter((l) =>
-        l.job?.toLowerCase().includes(search.toLowerCase()) ||
-        l.output?.toLowerCase().includes(search.toLowerCase()) ||
-        l.arms?.some((a) => a.toLowerCase().includes(search.toLowerCase()))
+        (l.agent ?? "").toLowerCase().includes(search.toLowerCase()) ||
+        (l.action ?? "").toLowerCase().includes(search.toLowerCase()) ||
+        (l.target ?? "").toLowerCase().includes(search.toLowerCase()) ||
+        (l.reasoning ?? "").toLowerCase().includes(search.toLowerCase())
       )
     : logs;
 
@@ -1419,7 +1441,7 @@ function LogsTab() {
           onChange={(e) => setSearch(e.target.value)}
         />
         <div className="logs-filter">
-          {(["all", "success", "partial", "failed", "today"] as const).map((f) => (
+          {(["all", "success", "failed", "today"] as const).map((f) => (
             <span key={f} className={`filter-pill ${filter === f ? "active" : ""}`} onClick={() => setFilter(f)}>
               {f}
             </span>
@@ -1429,27 +1451,27 @@ function LogsTab() {
 
       <div className="logs-list">
         {loading && <div className="empty">Loading logs...</div>}
-        {!loading && filtered.length === 0 && <div className="empty">No logs match. Check cockpit_audit_log table.</div>}
-        {filtered.map((log) => (
-          <div key={log.id} className={`log-row log-${log.status}`}>
-            <div className="log-row-header">
-              <div className="log-time">{absTime(log.created_at)}</div>
-              <div className="log-job">{log.job}</div>
-              <div className={`log-status log-${log.status}`}>{log.status}</div>
-              {log.trigger && <div className="log-trigger">{log.trigger}</div>}
-              {log.duration_ms != null && <div className="log-duration">{formatDuration(log.duration_ms)}</div>}
+        {!loading && filtered.length === 0 && <div className="empty">No log rows match.</div>}
+        {filtered.map((log) => {
+          const sev = log.success === true ? "success" : log.success === false ? "failed" : "partial";
+          return (
+            <div key={log.id} className={`log-row log-${sev}`}>
+              <div className="log-row-header">
+                <div className="log-time">{absTime(log.created_at)}</div>
+                <div className="log-job">{log.agent ?? "—"} · {log.action ?? "—"}</div>
+                <div className={`log-status log-${sev}`}>{sev}</div>
+                {log.ticket_id && <div className="log-trigger">#{log.ticket_id}</div>}
+                {log.duration_ms != null && <div className="log-duration">{formatDuration(log.duration_ms)}</div>}
+              </div>
+              <div className="log-meta">
+                {log.target && <div><span className="meta-label">target:</span> {log.target}</div>}
+                {log.cost_usd_milli != null && log.cost_usd_milli > 0 && <div><span className="meta-label">cost:</span> ${(log.cost_usd_milli / 1000).toFixed(3)}</div>}
+                {log.input_tokens != null && log.input_tokens > 0 && <div><span className="meta-label">tokens:</span> {log.input_tokens}+{log.output_tokens ?? 0}</div>}
+              </div>
+              {log.reasoning && <div className="log-output">{log.reasoning}</div>}
             </div>
-            <div className="log-meta">
-              {log.arms && log.arms.length > 0 && <div><span className="meta-label">arms:</span> {log.arms.join(", ")}</div>}
-              {log.skills && log.skills.length > 0 && <div><span className="meta-label">skills:</span> {log.skills.join(", ")}</div>}
-              {log.cost_usd != null && <div><span className="meta-label">cost:</span> ${log.cost_usd.toFixed(2)}</div>}
-            </div>
-            {log.output && <div className="log-output">{log.output}</div>}
-            {log.pr_url && (
-              <a className="log-action" href={log.pr_url} target="_blank" rel="noreferrer">View PR ↗</a>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <style jsx>{`
