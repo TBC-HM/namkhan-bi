@@ -51,14 +51,6 @@ export default async function RateplansPage() {
     rows.length > 0
       ? rows.reduce((s, r) => s + (r.occupancy_pct ?? 0), 0) / rows.length
       : null;
-  const avgCxl =
-    rows.length > 0
-      ? rows.reduce((s, r) => s + (r.cancellation_pct ?? 0), 0) / rows.length
-      : null;
-  const avgLos =
-    rows.length > 0
-      ? rows.reduce((s, r) => s + (r.avg_los ?? 0), 0) / rows.length
-      : null;
   const uniqueChannels = new Set(rows.map((r) => r.channel).filter(Boolean)).size;
 
   const tableColumns = [
@@ -88,72 +80,57 @@ export default async function RateplansPage() {
   }));
 
   return (
-    <main style={{ padding: 24 }}>
+    <main style={{ padding: 'var(--space-6, 24px)', maxWidth: 1280, margin: '0 auto' }}>
       <PageHeader pillar="Revenue" tab="Rate Plans" title="Rate Plan Performance" />
 
       {error && (
         <div
           style={{
-            background: '#fff1f0',
-            border: '1px solid #ffccc7',
+            background: 'var(--red-alert, #7f1d1d)',
+            color: '#fff',
             borderRadius: 6,
             padding: '12px 16px',
             marginBottom: 16,
-            color: '#a8071a',
+            fontSize: 'var(--t-sm, 13px)',
           }}
         >
           ⚠️ Supabase error: {error.message}
         </div>
       )}
 
-      {/* KPI strip — row 1 */}
+      {/* KPI strip */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
           gap: 16,
-          marginBottom: 16,
+          marginBottom: 32,
         }}
       >
         <KpiBox label="Rate Plans" value={rows.length > 0 ? String(rows.length) : '—'} />
-        <KpiBox label="Room Nights" value={totalRN > 0 ? fmtNum(totalRN) : '—'} />
+        <KpiBox label="Total Room Nights" value={totalRN > 0 ? fmtNum(totalRN) : '—'} />
         <KpiBox label="Total Revenue" value={totalRev > 0 ? fmtUsd(totalRev) : '—'} />
         <KpiBox label="Blended ADR" value={fmtUsd(blendedAdr)} />
-      </div>
-
-      {/* KPI strip — row 2 */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: 16,
-          marginBottom: 24,
-        }}
-      >
         <KpiBox label="Avg OCC %" value={fmtPct(avgOcc)} />
-        <KpiBox label="Avg CXL %" value={fmtPct(avgCxl)} />
-        <KpiBox label="Avg LOS (nights)" value={avgLos != null ? Number(avgLos).toFixed(1) : '—'} />
         <KpiBox label="Channels" value={uniqueChannels > 0 ? String(uniqueChannels) : '—'} />
       </div>
 
       {rows.length === 0 ? (
         <div
           style={{
+            padding: 40,
             textAlign: 'center',
-            padding: '48px 24px',
-            color: '#888',
-            border: '1px dashed #d9d9d9',
-            borderRadius: 8,
+            color: 'var(--muted, #6b7280)',
+            fontSize: 'var(--t-sm, 13px)',
           }}
         >
-          <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>
-            No rate plan data available
-          </p>
-          <p style={{ fontSize: 13 }}>
-            {error
-              ? 'Check Supabase service-role access to public.v_rateplan_performance'
-              : 'View public.v_rateplan_performance returned 0 rows — ensure ETL has run.'}
-          </p>
+          No rate plan data available.
+          {!error && (
+            <span>
+              {' '}
+              View <code>public.v_rateplan_performance</code> returned 0 rows — ensure ETL has run.
+            </span>
+          )}
         </div>
       ) : (
         <DataTable columns={tableColumns} rows={tableRows} />
