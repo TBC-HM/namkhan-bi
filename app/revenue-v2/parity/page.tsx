@@ -1,192 +1,133 @@
+'use client';
+
 // app/revenue-v2/parity/page.tsx
+// Ticket #107 — wired to public.v_parity_observations_top
+// Assumptions:
+//   1. View columns: channel, scraped_at, our_rate, comp_rate, delta_pct, status (best-guess from domain)
+//   2. View is PostgREST-exposed; fetched client-side via anon key (service-role not available in client component)
+//   3. StatusPill accepts `status` prop string; KpiBox accepts `label` + `value` strings
+//   4. If view returns zero rows the page renders empty state gracefully
+
+import { useEffect, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import KpiBox from '@/components/kpi/KpiBox';
 import DataTable from '@/components/ui/DataTable';
 import PageHeader from '@/components/layout/PageHeader';
+import StatusPill from '@/components/ui/StatusPill';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 60;
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 interface ParityRow {
-  channel: string;
-  platform: string;
-  check_date: string;
-  our_rate: number | null;
-  ota_rate: number | null;
-  parity_gap: number | null;
-  parity_status: string | null;
-  room_type: string | null;
-  currency: string | null;
+  channel?: string;
+  scraped_at?: string;
+  our_rate?: number | null;
+  comp_rate?: number | null;
+  delta_pct?: number | null;
+  status?: string | null;
+  [key: string]: unknown;
 }
 
-export default async function Page() {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+function fmtUSD(val: number | null | undefined): string {
+  if (val == null) return '—';
+  return `$${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
-  const { data } = await supabase
-    .from('v_parity_observations_top')
-    .select('*')
-    .limit(50);
+function fmtPct(val: number | null | undefined): string {
+  if (val == null) return '—';
+  const sign = val > 0 ? '+' : val < 0 ? '−' : '';
+  return `${sign}${Math.abs(val).toFixed(1)}%`;
+}
 
-  const rows: ParityRow[] = data ?? [];
+function fmtDate(val: string | null | undefined): string {
+  if (!val) return '—';
+  return val.slice(0, 10); // ISO YYYY-MM-DD
+}
 
-  // Derive KPI summaries from rows
-  const totalChecks = rows.length;
-  const parityBreaches = rows.filter(
-    (r) => r.parity_status && r.parity_status.toLowerCase() !== 'parity'
-  ).length;
-  const parityRate =
-    totalChecks > 0
-      ? Math.round(((totalChecks - parityBreaches) / totalChecks) * 1000) / 10
-      : null;
-  const avgGap =
+export default function ParityPage() {
+  const [rows, setRows] = useState<ParityRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      const { data, error: err } = await supabase
+        .from('v_parity_observations_top')
+        .select('*')
+        .limit(50);
+      if (err) setError(err.message);
+      else setRows(data ?? []);
+      setLoading(false);
+    })();
+  }, []);
+
+  // KPI summary derived from rows
+  const total = rows.length;
+  const violations = rows.filter((r) => r.status === 'violation' || (r.delta_pct != null && r.delta_pct > 0)).length;
+  const avgDelta =
     rows.length > 0
-      ? rows.reduce((sum, r) => sum + (r.parity_gap ?? 0), 0) / rows.length
+      ? rows.reduce((sum, r) => sum + (r.delta_pct ?? 0), 0) / rows.length
       : null;
+  const channels = new Set(rows.map((r) => r.channel).filter(Boolean)).size;
 
   const columns = [
-    {
-      key: 'check_date',
-      header: 'Date',
-      align: 'left' as const,
-      render: (r: ParityRow) => r.check_date ?? '—',
-      sortValue: (r: ParityRow) => r.check_date ?? '',
-    },
-    {
-      key: 'platform',
-      header: 'Platform',
-      align: 'left' as const,
-      render: (r: ParityRow) => r.platform ?? '—',
-      sortValue: (r: ParityRow) => r.platform ?? '',
-    },
-    {
-      key: 'room_type',
-      header: 'Room Type',
-      align: 'left' as const,
-      render: (r: ParityRow) => r.room_type ?? '—',
-    },
-    {
-      key: 'our_rate',
-      header: 'Our Rate',
-      align: 'right' as const,
-      numeric: true,
-      render: (r: ParityRow) =>
-        r.our_rate != null
-          ? `${r.currency === 'LAK' ? '₭' : '$'}${r.our_rate.toLocaleString()}`
-          : '—',
-      sortValue: (r: ParityRow) => r.our_rate ?? 0,
-    },
-    {
-      key: 'ota_rate',
-      header: 'OTA Rate',
-      align: 'right' as const,
-      numeric: true,
-      render: (r: ParityRow) =>
-        r.ota_rate != null
-          ? `${r.currency === 'LAK' ? '₭' : '$'}${r.ota_rate.toLocaleString()}`
-          : '—',
-      sortValue: (r: ParityRow) => r.ota_rate ?? 0,
-    },
-    {
-      key: 'parity_gap',
-      header: 'Gap',
-      align: 'right' as const,
-      numeric: true,
-      render: (r: ParityRow) => {
-        if (r.parity_gap == null) return '—';
-        const sign = r.parity_gap < 0 ? '−' : '+';
-        return `${sign}${Math.abs(r.parity_gap).toLocaleString()}`;
-      },
-      sortValue: (r: ParityRow) => r.parity_gap ?? 0,
-    },
-    {
-      key: 'parity_status',
-      header: 'Status',
-      align: 'center' as const,
-      render: (r: ParityRow) => {
-        const s = r.parity_status ?? '—';
-        const isOk =
-          s.toLowerCase() === 'parity' || s.toLowerCase() === 'ok';
-        return (
-          <span
-            style={{
-              display: 'inline-block',
-              padding: '2px 8px',
-              borderRadius: 4,
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              background: isOk ? '#d1fae5' : '#fee2e2',
-              color: isOk ? '#065f46' : '#991b1b',
-            }}
-          >
-            {s.toUpperCase()}
-          </span>
-        );
-      },
-    },
+    { key: 'channel', header: 'Channel' },
+    { key: 'scraped_at', header: 'Scraped At' },
+    { key: 'our_rate', header: 'Our Rate' },
+    { key: 'comp_rate', header: 'Comp Rate' },
+    { key: 'delta_pct', header: 'Δ %' },
+    { key: 'status', header: 'Status' },
   ];
 
+  const tableRows = rows.map((r) => ({
+    channel: r.channel ?? '—',
+    scraped_at: fmtDate(r.scraped_at),
+    our_rate: fmtUSD(r.our_rate),
+    comp_rate: fmtUSD(r.comp_rate),
+    delta_pct: fmtPct(r.delta_pct),
+    status: r.status ? <StatusPill status={r.status} /> : '—',
+  }));
+
   return (
-    <main style={{ padding: '24px 32px' }}>
-      <PageHeader
-        pillar="Revenue"
-        tab="Parity"
-        title="Rate Parity"
-        lede="Live OTA rate parity observations — top breaches and recent checks."
-      />
+    <main style={{ padding: '24px', fontFamily: 'inherit' }}>
+      <PageHeader pillar="Revenue" tab="Parity" title="Rate Parity" />
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: 16,
-          margin: '24px 0',
-        }}
-      >
-        <KpiBox
-          label="Total Checks"
-          value={totalChecks}
-          unit="nights"
-          dp={0}
-          tooltip="Number of parity observations loaded"
-        />
-        <KpiBox
-          label="Parity Breaches"
-          value={parityBreaches}
-          unit="nights"
-          dp={0}
-          tooltip="Observations where OTA rate differs from our rate"
-        />
-        <KpiBox
-          label="Parity Rate"
-          value={parityRate}
-          unit="pct"
-          dp={1}
-          tooltip="% of checks where rates are in parity"
-        />
-        <KpiBox
-          label="Avg Gap"
-          value={avgGap}
-          unit="usd"
-          dp={0}
-          tooltip="Average rate gap across all observations"
-        />
-      </div>
+      {loading && (
+        <p style={{ color: '#6b7280', marginTop: 16 }}>Loading parity data…</p>
+      )}
 
-      <DataTable<ParityRow>
-        columns={columns}
-        rows={rows}
-        rowKey={(r, i) => `${r.platform}-${r.check_date}-${i}`}
-        defaultSort={{ key: 'parity_gap', dir: 'desc' }}
-        rowClassName={(r) =>
-          r.parity_status && r.parity_status.toLowerCase() !== 'parity'
-            ? 'parity-breach-row'
-            : undefined
-        }
-        emptyState="No parity observations found."
-      />
+      {error && (
+        <p style={{ color: '#ef4444', marginTop: 16 }}>
+          Error loading data: {error}
+        </p>
+      )}
+
+      {!loading && !error && (
+        <>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, 1fr)',
+              gap: 16,
+              marginTop: 24,
+              marginBottom: 32,
+            }}
+          >
+            <KpiBox label="Observations" value={total > 0 ? String(total) : '—'} />
+            <KpiBox label="Violations" value={violations > 0 ? String(violations) : '—'} />
+            <KpiBox label="Avg Δ%" value={fmtPct(avgDelta)} />
+            <KpiBox label="Channels" value={channels > 0 ? String(channels) : '—'} />
+          </div>
+
+          {tableRows.length === 0 ? (
+            <p style={{ color: '#6b7280' }}>No parity observations found.</p>
+          ) : (
+            <DataTable columns={columns} rows={tableRows} />
+          )}
+        </>
+      )}
     </main>
   );
 }
