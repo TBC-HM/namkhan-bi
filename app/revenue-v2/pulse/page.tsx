@@ -1,164 +1,100 @@
-/**
- * /revenue-v2/pulse — Live KPI pulse page
- * Ticket #107 slice: wire to public.v_overview_kpis
- *
- * Assumptions:
- *  - v_overview_kpis exposes: period_date, rooms_sold, adr_usd, revpar_usd,
- *    occupancy_pct, adr_stly, revpar_stly, occupancy_stly (STLY compare columns)
- *  - Server component — no client interactivity needed on this slice
- *  - USD values prefixed with $, occupancy as %, STLY delta shown as +/− pp
- *  - Em-dash rendered for any null value per brand standard
- *  - Colors via CSS vars only (var(--brass), var(--t-2xl), etc.)
- *  - KpiBox imported from canonical component path
- */
+// app/revenue-v2/pulse/page.tsx
+import { createClient } from '@supabase/supabase-js';
+import KpiBox from '@/components/kpi/KpiBox';
+import DataTable from '@/components/ui/DataTable';
+import PageHeader from '@/components/layout/PageHeader';
 
-import { createClient } from '@supabase/supabase-js'
-import { KpiBox } from '@/components/kpi/KpiBox'
-
-const NEXT_PUBLIC_SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
+export const dynamic = 'force-dynamic';
+export const revalidate = 60;
 
 interface OverviewKpiRow {
-  period_date: string | null
-  rooms_sold: number | null
-  adr_usd: number | null
-  revpar_usd: number | null
-  occupancy_pct: number | null
-  adr_stly: number | null
-  revpar_stly: number | null
-  occupancy_stly: number | null
-  total_revenue_usd: number | null
+  kpi_date?: string;
+  date?: string;
+  rooms_sold?: number | null;
+  occupancy_pct?: number | null;
+  adr_usd?: number | null;
+  adr?: number | null;
+  revpar_usd?: number | null;
+  revpar?: number | null;
+  revenue_usd?: number | null;
+  total_revenue?: number | null;
+  rooms_available?: number | null;
+  [key: string]: unknown;
 }
 
-function fmt(val: number | null, prefix = '', decimals = 0): string {
-  if (val === null || val === undefined) return '—'
-  return `${prefix}${val.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`
-}
-
-function fmtPct(val: number | null): string {
-  if (val === null || val === undefined) return '—'
-  return `${val.toFixed(1)}%`
-}
-
-function fmtDelta(current: number | null, stly: number | null, prefix = '', decimals = 0): string {
-  if (current === null || stly === null) return '—'
-  const delta = current - stly
-  const sign = delta >= 0 ? '+' : '−'
-  return `${sign}${prefix}${Math.abs(delta).toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`
-}
-
-function fmtDeltaPct(current: number | null, stly: number | null): string {
-  if (current === null || stly === null) return '—'
-  const delta = current - stly
-  const sign = delta >= 0 ? '+' : '−'
-  return `${sign}${Math.abs(delta).toFixed(1)} pp`
-}
-
-export const revalidate = 300 // ISR: refresh every 5 minutes
-
-export default async function RevenuePulsePage() {
-  const supabase = createClient(NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+export default async function Page() {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
 
   const { data, error } = await supabase
-    .from('v_overview_kpis')
+    .from('f_overview_kpis')
     .select('*')
-    .order('period_date', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+    .order('kpi_date', { ascending: false })
+    .limit(30);
 
-  const row: OverviewKpiRow | null = error ? null : data
+  const rows: OverviewKpiRow[] = data ?? [];
+  const latest = rows[0] ?? {};
 
-  // Latest date label
-  const dateLabel = row?.period_date
-    ? new Date(row.period_date).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      })
-    : '—'
+  // Normalise column name variants between fact table and view aliases
+  const occupancy = latest.occupancy_pct ?? latest.occupancy ?? null;
+  const adr = latest.adr_usd ?? latest.adr ?? null;
+  const revpar = latest.revpar_usd ?? latest.revpar ?? null;
+  const roomsSold = latest.rooms_sold ?? null;
+  const totalRevenue = latest.revenue_usd ?? latest.total_revenue ?? null;
+
+  const fmt = (v: number | null | undefined, prefix = '') =>
+    v != null ? `${prefix}${v.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '—';
+
+  const fmtPct = (v: number | null | undefined) =>
+    v != null ? `${(v * (v <= 1 ? 100 : 1)).toFixed(1)}%` : '—';
 
   return (
-    <main className="pulse-page">
-      <header className="pulse-header">
-        <h1 className="pulse-title">Revenue Pulse</h1>
-        {error && (
-          <p className="pulse-error" role="alert">
-            ⚠ Could not load live data — showing placeholder values.
-          </p>
-        )}
-        <p className="pulse-date">
-          As of&nbsp;<time dateTime={row?.period_date ?? ''}>{dateLabel}</time>
+    <main style={{ padding: '24px 32px' }}>
+      <PageHeader pillar="Revenue" tab="Pulse" title="Revenue Pulse" />
+
+      {error && (
+        <p style={{ color: '#c0392b', marginBottom: 16 }}>
+          ⚠ Could not load KPI data: {error.message}
         </p>
-      </header>
+      )}
 
-      <section className="pulse-kpi-grid" aria-label="Key performance indicators">
-        <KpiBox
-          label="Rooms Sold"
-          value={fmt(row?.rooms_sold ?? null)}
-          delta={null}
-          deltaLabel={null}
-        />
-        <KpiBox
-          label="ADR"
-          value={fmt(row?.adr_usd ?? null, '$', 2)}
-          delta={fmtDelta(row?.adr_usd ?? null, row?.adr_stly ?? null, '$', 2)}
-          deltaLabel="vs STLY"
-        />
-        <KpiBox
-          label="RevPAR"
-          value={fmt(row?.revpar_usd ?? null, '$', 2)}
-          delta={fmtDelta(row?.revpar_usd ?? null, row?.revpar_stly ?? null, '$', 2)}
-          deltaLabel="vs STLY"
-        />
-        <KpiBox
-          label="Occupancy"
-          value={fmtPct(row?.occupancy_pct ?? null)}
-          delta={fmtDeltaPct(row?.occupancy_pct ?? null, row?.occupancy_stly ?? null)}
-          deltaLabel="vs STLY"
-        />
-        {row?.total_revenue_usd !== undefined && (
-          <KpiBox
-            label="Total Revenue"
-            value={fmt(row?.total_revenue_usd ?? null, '$', 0)}
-            delta={null}
-            deltaLabel={null}
-          />
-        )}
-      </section>
+      {/* KPI summary strip — most-recent date */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(5, 1fr)',
+          gap: 16,
+          marginBottom: 32,
+        }}
+      >
+        <KpiBox label="Occupancy" value={fmtPct(occupancy)} />
+        <KpiBox label="ADR" value={fmt(adr, '$')} />
+        <KpiBox label="RevPAR" value={fmt(revpar, '$')} />
+        <KpiBox label="Rooms Sold" value={fmt(roomsSold)} />
+        <KpiBox label="Total Revenue" value={fmt(totalRevenue, '$')} />
+      </div>
 
-      <style jsx>{`
-        .pulse-page {
-          padding: 2rem;
-          max-width: 1200px;
-          margin: 0 auto;
-        }
-        .pulse-header {
-          margin-bottom: 2rem;
-        }
-        .pulse-title {
-          font-family: var(--font-fraunces, Georgia, serif);
-          font-style: italic;
-          font-size: var(--t-2xl);
-          letter-spacing: var(--ls-extra);
-          color: var(--brass);
-          margin: 0 0 0.25rem;
-        }
-        .pulse-date {
-          font-size: var(--t-sm);
-          color: var(--muted, #6b7280);
-          margin: 0;
-        }
-        .pulse-error {
-          font-size: var(--t-sm);
-          color: var(--danger, #dc2626);
-          margin: 0.25rem 0;
-        }
-        .pulse-kpi-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-          gap: 1.5rem;
-        }
-      `}</style>
+      {/* Rolling 30-day table */}
+      <DataTable
+        columns={[
+          { key: 'kpi_date', header: 'Date' },
+          { key: 'rooms_sold', header: 'Rooms Sold' },
+          { key: 'occupancy_pct', header: 'Occ %' },
+          { key: 'adr_usd', header: 'ADR' },
+          { key: 'revpar_usd', header: 'RevPAR' },
+          { key: 'revenue_usd', header: 'Revenue' },
+        ]}
+        rows={rows.map((r) => ({
+          kpi_date: r.kpi_date ?? r.date ?? '—',
+          rooms_sold: r.rooms_sold != null ? String(r.rooms_sold) : '—',
+          occupancy_pct: fmtPct(r.occupancy_pct ?? r.occupancy),
+          adr_usd: fmt(r.adr_usd ?? r.adr, '$'),
+          revpar_usd: fmt(r.revpar_usd ?? r.revpar, '$'),
+          revenue_usd: fmt(r.revenue_usd ?? r.total_revenue, '$'),
+        }))}
+      />
     </main>
-  )
+  );
 }
