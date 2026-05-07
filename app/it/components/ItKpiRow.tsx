@@ -1,21 +1,21 @@
-// FIX (re PR #51): was `import { KpiBox } from '@/components/kpi/KpiBox'` — named import fails.
-// KpiBox is a default export. Corrected to default-import syntax.
+// FIX (re PR #51): default-import KpiBox (was named import → TS2614).
+// Props renamed to match page.tsx call signature.
 import KpiBox from '@/components/kpi/KpiBox';
 
 interface Props {
-  activeAgents: number;
-  ticketsShipped24h: number;
-  costUsd24h: number;
+  ticketsShipped: number;
   kitDoneClean: number | null;
   kitFailureRate: number | null;
+  agentCount: number;
+  activeCount: number;
 }
 
 export default function ItKpiRow({
-  activeAgents,
-  ticketsShipped24h,
-  costUsd24h,
+  ticketsShipped,
   kitDoneClean,
   kitFailureRate,
+  agentCount,
+  activeCount,
 }: Props) {
   return (
     <div
@@ -25,9 +25,10 @@ export default function ItKpiRow({
         gap: 'var(--space-4)',
       }}
     >
-      <KpiBox label="Agents Online" value={String(activeAgents)} />
-      <KpiBox label="Tickets Shipped 24h" value={String(ticketsShipped24h)} />
-      <KpiBox label="Cost 24h" value={`$${costUsd24h.toFixed(2)}`} />
+      <KpiBox
+        label="Tickets Shipped (week)"
+        value={ticketsShipped > 0 ? String(ticketsShipped) : '—'}
+      />
       <KpiBox
         label="KIT Done Clean"
         value={kitDoneClean !== null ? String(kitDoneClean) : '—'}
@@ -35,6 +36,14 @@ export default function ItKpiRow({
       <KpiBox
         label="KIT Failure Rate"
         value={kitFailureRate !== null ? `${kitFailureRate}%` : '—'}
+      />
+      <KpiBox
+        label="Total Agents"
+        value={agentCount > 0 ? String(agentCount) : '—'}
+      />
+      <KpiBox
+        label="Active Agents"
+        value={activeCount > 0 ? String(activeCount) : '—'}
       />
     </div>
   );
