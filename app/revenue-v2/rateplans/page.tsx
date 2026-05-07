@@ -1,8 +1,9 @@
 // app/revenue-v2/rateplans/page.tsx
+// Wired to public.v_rateplan_performance — ticket #107 slice
 import { createClient } from '@supabase/supabase-js';
+import PageHeader from '@/components/layout/PageHeader';
 import KpiBox from '@/components/kpi/KpiBox';
 import DataTable from '@/components/ui/DataTable';
-import PageHeader from '@/components/layout/PageHeader';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -80,18 +81,18 @@ export default async function RateplansPage() {
   }));
 
   return (
-    <main style={{ padding: 'var(--space-6, 24px)', maxWidth: 1280, margin: '0 auto' }}>
+    <main style={{ padding: '24px' }}>
       <PageHeader pillar="Revenue" tab="Rate Plans" title="Rate Plan Performance" />
 
       {error && (
         <div
           style={{
-            background: 'var(--red-alert, #7f1d1d)',
-            color: '#fff',
-            borderRadius: 6,
+            background: 'var(--color-error, #fee2e2)',
+            border: '1px solid var(--color-error-border, #fca5a5)',
+            borderRadius: 8,
             padding: '12px 16px',
             marginBottom: 16,
-            fontSize: 'var(--t-sm, 13px)',
+            color: 'var(--color-error-text, #991b1b)',
           }}
         >
           ⚠️ Supabase error: {error.message}
@@ -104,7 +105,7 @@ export default async function RateplansPage() {
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
           gap: 16,
-          marginBottom: 32,
+          marginBottom: 24,
         }}
       >
         <KpiBox label="Rate Plans" value={rows.length > 0 ? String(rows.length) : '—'} />
@@ -116,22 +117,15 @@ export default async function RateplansPage() {
       </div>
 
       {rows.length === 0 ? (
-        <div
-          style={{
-            padding: 40,
-            textAlign: 'center',
-            color: 'var(--muted, #6b7280)',
-            fontSize: 'var(--t-sm, 13px)',
-          }}
-        >
+        <p style={{ color: 'var(--color-muted, #6b7280)', marginTop: 32, textAlign: 'center' }}>
           No rate plan data available.
           {!error && (
             <span>
               {' '}
-              View <code>public.v_rateplan_performance</code> returned 0 rows — ensure ETL has run.
+              View public.v_rateplan_performance returned 0 rows — ensure ETL has run.
             </span>
           )}
-        </div>
+        </p>
       ) : (
         <DataTable columns={tableColumns} rows={tableRows} />
       )}
