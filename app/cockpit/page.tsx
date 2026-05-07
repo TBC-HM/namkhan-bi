@@ -691,13 +691,21 @@ function ChatTab() {
               f === "all"
                 ? tickets.length
                 : tickets.filter((t) => FILTER_GROUPS[f].includes(t.status)).length;
+            const label = f === "waiting" ? "needs you" : f;
+            const tooltip = f === "waiting"
+              ? "Awaiting your input. After the autonomous-repair mandate (KB #271) this should only show when an agent genuinely needs PBS — personal credential, real outbound message, or owner-only action. Anything else is a stale ticket Cowork should close."
+              : f === "open" ? "In flight — triaging, triaged, working, in_progress."
+              : f === "done" ? "Completed."
+              : f === "failed" ? "Triage failed or blocked."
+              : "Every ticket regardless of status.";
             return (
               <button
                 key={f}
                 className={`chat-filter-pill ${filter === f ? "active" : ""}`}
                 onClick={() => setFilter(f)}
+                title={tooltip}
               >
-                {f} {count > 0 && <span className="cf-count">{count}</span>}
+                {label} {count > 0 && <span className="cf-count">{count}</span>}
               </button>
             );
           })}
@@ -1919,12 +1927,12 @@ function ActivityTab() {
   if (!data) return <div className="act-tab"><div className="empty">No data.</div></div>;
 
   const funnelOrder: Array<{ key: string; label: string; color: string }> = [
-    { key: "new", label: "New", color: "var(--text-3)" },
-    { key: "triaging", label: "Triaging", color: "var(--cyan)" },
-    { key: "triaged", label: "Triaged", color: "var(--cyan)" },
-    { key: "working", label: "Working", color: "var(--purple)" },
-    { key: "awaits_user", label: "Awaits User", color: "var(--yellow)" },
-    { key: "completed", label: "Completed", color: "var(--green)" },
+    { key: "new", label: "Just received", color: "var(--text-3)" },
+    { key: "triaging", label: "Reading it", color: "var(--cyan)" },
+    { key: "triaged", label: "Queued for specialist", color: "var(--cyan)" },
+    { key: "working", label: "Working on it", color: "var(--purple)" },
+    { key: "awaits_user", label: "Needs you", color: "var(--yellow)" },
+    { key: "completed", label: "Done", color: "var(--green)" },
     { key: "failed", label: "Failed", color: "var(--red)" },
   ];
   const maxCost = Math.max(0.0001, ...data.days_buckets.cost_by_day.map((d) => d.cost_usd));
@@ -2105,8 +2113,37 @@ const DOC_LABELS: Record<string, string> = {
 };
 
 function DocsTab() {
-  type SubView = "live" | "staging" | "activity" | "backup";
-  const [view, setView] = useState<SubView>("live");
+  type SubView = "pulse" | "live" | "staging" | "activity" | "backup";
+  const [view, setView] = useState<SubView>("pulse");
+  // Live pulse — last changes flowing through Supabase
+  const [pulse, setPulse] = useState<{
+    audit: Array<{ id: number; agent: string; action: string; target: string | null; success: boolean; created_at: string; cost_usd_milli: number | null }>;
+    kb: Array<{ id: number; topic: string; scope: string; created_at: string; updated_at: string }>;
+    prompts: Array<{ id: number; role: string; version: number; source: string | null; updated_at: string }>;
+    migrations: Array<{ version: string; name: string }>;
+    tickets: Array<{ id: number; status: string; arm: string | null; intent: string | null; updated_at: string }>;
+  } | null>(null);
+  useEffect(() => {
+    const tick = async () => {
+      const [au, kb, pr, mg, tk] = await Promise.all([
+        supabase.from("cockpit_audit_log").select("id,agent,action,target,success,created_at,cost_usd_milli").order("id", { ascending: false }).limit(15),
+        supabase.from("cockpit_knowledge_base").select("id,topic,scope,created_at,updated_at").order("updated_at", { ascending: false }).limit(8),
+        supabase.from("cockpit_agent_prompts").select("id,role,version,source,updated_at").eq("active", true).order("updated_at", { ascending: false }).limit(8),
+        supabase.schema("supabase_migrations" as never).from("schema_migrations" as never).select("version,name").order("version", { ascending: false }).limit(5).then((r) => r.error ? { data: [] as Array<{ version: string; name: string }> } : r),
+        supabase.from("cockpit_tickets").select("id,status,arm,intent,updated_at").order("updated_at", { ascending: false }).limit(10),
+      ]);
+      setPulse({
+        audit: (au.data ?? []) as never,
+        kb: (kb.data ?? []) as never,
+        prompts: (pr.data ?? []) as never,
+        migrations: ((mg as { data?: unknown }).data ?? []) as never,
+        tickets: (tk.data ?? []) as never,
+      });
+    };
+    tick();
+    const id = setInterval(tick, 8000);
+    return () => clearInterval(id);
+  }, []);
   const [list, setList] = useState<DocSummary[]>([]);
   const [pending, setPending] = useState(0);
   const [activeDoc, setActiveDoc] = useState<string | null>(null);
@@ -2188,8 +2225,9 @@ function DocsTab() {
         </span>
       </div>
       <div className="docs-subnav">
-        {(["live", "staging", "activity", "backup"] as SubView[]).map((v) => (
+        {(["pulse", "live", "staging", "activity", "backup"] as SubView[]).map((v) => (
           <button key={v} className={`docs-pill ${view === v ? "active" : ""}`} onClick={() => setView(v)}>
+            {v === "pulse" && "🫀 Pulse"}
             {v === "live" && "📜 Live"}
             {v === "staging" && `📝 Staging${pending > 0 ? ` (${pending})` : ""}`}
             {v === "activity" && "📊 Activity"}
@@ -2197,6 +2235,81 @@ function DocsTab() {
           </button>
         ))}
       </div>
+
+      {view === "pulse" && pulse && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 12 }}>
+          <div style={{ background: "var(--bg-2)", border: "1px solid var(--border-1)", borderRadius: 8, padding: 12, gridColumn: "span 2" }}>
+            <div style={{ fontSize: 10, color: "var(--brass)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>
+              🫀 Live Supabase activity · refreshes every 8s · everything that's happening on the database, audited
+            </div>
+            <div style={{ fontSize: 11, color: "var(--text-3)" }}>
+              Every change made by an agent or cron lands in <code>cockpit_audit_log</code>. This panel = live tail of that log.
+            </div>
+          </div>
+
+          <div style={{ background: "var(--bg-2)", border: "1px solid var(--border-1)", borderRadius: 8, padding: 12 }}>
+            <div style={{ fontSize: 10, color: "var(--brass)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Audit log · last 15</div>
+            {pulse.audit.length === 0 ? <div style={{ color: "var(--text-3)" }}>—</div> : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11, fontFamily: "ui-monospace, monospace" }}>
+                {pulse.audit.map(a => (
+                  <div key={a.id} style={{ display: "flex", gap: 8, alignItems: "baseline", padding: "3px 0", borderBottom: "1px dashed var(--border-2)" }}>
+                    <span style={{ color: a.success ? "var(--good, #2a7d2e)" : "var(--bad, #b3261e)", width: 14 }}>{a.success ? "✓" : "✗"}</span>
+                    <span style={{ color: "var(--text-3)", width: 70 }}>{new Date(a.created_at).toISOString().slice(11, 16)}</span>
+                    <span style={{ color: "var(--brass)", width: 110, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.agent}</span>
+                    <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.action}</span>
+                    {a.cost_usd_milli !== null && a.cost_usd_milli > 0 && <span style={{ color: "var(--text-3)" }}>${(a.cost_usd_milli / 1000).toFixed(3)}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div style={{ background: "var(--bg-2)", border: "1px solid var(--border-1)", borderRadius: 8, padding: 12 }}>
+            <div style={{ fontSize: 10, color: "var(--brass)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>KB updates · last 8</div>
+            {pulse.kb.map(k => (
+              <div key={k.id} style={{ fontSize: 11, fontFamily: "ui-monospace, monospace", padding: "3px 0", borderBottom: "1px dashed var(--border-2)", display: "flex", justifyContent: "space-between" }}>
+                <span style={{ color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{k.topic}</span>
+                <span style={{ color: "var(--text-3)" }}>{new Date(k.updated_at).toISOString().slice(0, 10)}</span>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ background: "var(--bg-2)", border: "1px solid var(--border-1)", borderRadius: 8, padding: 12 }}>
+            <div style={{ fontSize: 10, color: "var(--brass)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Active agent prompts · versions</div>
+            {pulse.prompts.map(p => (
+              <div key={p.id} style={{ fontSize: 11, fontFamily: "ui-monospace, monospace", padding: "3px 0", borderBottom: "1px dashed var(--border-2)", display: "flex", justifyContent: "space-between", gap: 8 }}>
+                <span style={{ color: "var(--text-1)", width: 130, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.role}</span>
+                <span style={{ color: "var(--brass)" }}>v{p.version}</span>
+                <span style={{ color: "var(--text-3)", flex: 1, textAlign: "right", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.source ?? "—"}</span>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ background: "var(--bg-2)", border: "1px solid var(--border-1)", borderRadius: 8, padding: 12 }}>
+            <div style={{ fontSize: 10, color: "var(--brass)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Schema migrations · last 5</div>
+            {pulse.migrations.length === 0 ? <div style={{ color: "var(--text-3)", fontSize: 11 }}>(schema not exposed via PostgREST — read locally)</div> :
+              pulse.migrations.map((m, i) => (
+                <div key={i} style={{ fontSize: 11, fontFamily: "ui-monospace, monospace", padding: "3px 0", borderBottom: "1px dashed var(--border-2)" }}>
+                  <span style={{ color: "var(--brass)", width: 130, display: "inline-block" }}>{m.version}</span>
+                  <span style={{ color: "var(--text-1)" }}>{m.name}</span>
+                </div>
+              ))}
+          </div>
+
+          <div style={{ background: "var(--bg-2)", border: "1px solid var(--border-1)", borderRadius: 8, padding: 12, gridColumn: "span 2" }}>
+            <div style={{ fontSize: 10, color: "var(--brass)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Recent ticket activity · last 10</div>
+            {pulse.tickets.map(t => (
+              <div key={t.id} style={{ fontSize: 11, fontFamily: "ui-monospace, monospace", padding: "3px 0", borderBottom: "1px dashed var(--border-2)", display: "flex", gap: 12 }}>
+                <span style={{ color: "var(--brass)", width: 50 }}>#{t.id}</span>
+                <span style={{ width: 90, color: t.status === "completed" ? "var(--good, #2a7d2e)" : t.status === "triage_failed" ? "var(--bad, #b3261e)" : "var(--text-2)" }}>{t.status}</span>
+                <span style={{ width: 80, color: "var(--text-3)" }}>{t.arm ?? "—"}</span>
+                <span style={{ width: 80, color: "var(--text-3)" }}>{t.intent ?? "—"}</span>
+                <span style={{ flex: 1, color: "var(--text-3)", textAlign: "right" }}>{new Date(t.updated_at).toISOString().slice(0, 16).replace("T", " ")}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {(view === "live" || view === "staging") && (
         <div className="docs-grid">
