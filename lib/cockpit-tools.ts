@@ -1030,6 +1030,72 @@ async function supabase_execute_sql(args: { query: string }): Promise<ToolResult
   return { ok: true, result: { rows: data } };
 }
 
+async function github_list_issues(args: { state?: "open" | "closed" | "all"; labels?: string; per_page?: number }): Promise<ToolResult> {
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) return { ok: false, error: "GITHUB_TOKEN env var missing" };
+  const repo = "TBC-HM/namkhan-bi";
+  const params = new URLSearchParams({
+    state: args.state ?? "open",
+    per_page: String(Math.min(Math.max(args.per_page ?? 20, 1), 100)),
+  });
+  if (args.labels) params.set("labels", args.labels);
+  const res = await fetch(`https://api.github.com/repos/${repo}/issues?${params}`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
+  });
+  if (!res.ok) return { ok: false, error: `github api ${res.status}: ${(await res.text()).slice(0, 200)}` };
+  const issues = (await res.json()) as Array<{ number: number; state: string; title: string; html_url: string; labels: Array<{ name: string }>; user: { login: string } }>;
+  return {
+    ok: true,
+    result: issues.map(i => ({
+      number: i.number, state: i.state, title: i.title, url: i.html_url,
+      labels: i.labels.map(l => l.name), opened_by: i.user?.login,
+    })),
+  };
+}
+
+async function github_close_issue(args: { number: number; reason?: "completed" | "not_planned"; comment?: string }): Promise<ToolResult> {
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) return { ok: false, error: "GITHUB_TOKEN env var missing" };
+  const repo = "TBC-HM/namkhan-bi";
+  if (args.comment) {
+    await fetch(`https://api.github.com/repos/${repo}/issues/${args.number}/comments`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "Content-Type": "application/json" },
+      body: JSON.stringify({ body: args.comment }),
+    });
+  }
+  const res = await fetch(`https://api.github.com/repos/${repo}/issues/${args.number}`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "Content-Type": "application/json" },
+    body: JSON.stringify({ state: "closed", state_reason: args.reason ?? "completed" }),
+  });
+  if (!res.ok) return { ok: false, error: `github close ${res.status}: ${(await res.text()).slice(0, 200)}` };
+  await supabase.from("cockpit_audit_log").insert({
+    agent: "github-write", action: "close_issue", target: `${repo}#${args.number}`, success: true,
+    metadata: { reason: args.reason ?? "completed", comment_added: !!args.comment },
+    reasoning: args.comment ?? "Closed by agent.",
+  });
+  return { ok: true, result: { number: args.number, state: "closed" } };
+}
+
+async function github_comment_issue(args: { number: number; body: string }): Promise<ToolResult> {
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) return { ok: false, error: "GITHUB_TOKEN env var missing" };
+  const repo = "TBC-HM/namkhan-bi";
+  const res = await fetch(`https://api.github.com/repos/${repo}/issues/${args.number}/comments`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "Content-Type": "application/json" },
+    body: JSON.stringify({ body: args.body }),
+  });
+  if (!res.ok) return { ok: false, error: `github comment ${res.status}: ${(await res.text()).slice(0, 200)}` };
+  await supabase.from("cockpit_audit_log").insert({
+    agent: "github-write", action: "comment_issue", target: `${repo}#${args.number}`, success: true,
+    metadata: { body_preview: args.body.slice(0, 200) },
+    reasoning: "Comment added by agent.",
+  });
+  return { ok: true, result: { number: args.number } };
+}
+
 async function github_commit_file(args: { path: string; content: string; message: string; branch?: string }): Promise<ToolResult> {
   const token = process.env.GITHUB_TOKEN;
   if (!token) return { ok: false, error: "GITHUB_TOKEN env var missing" };
@@ -1091,6 +1157,9 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => Promise<ToolRe
   vercel_redeploy: (a) => vercel_redeploy(a as Parameters<typeof vercel_redeploy>[0]),
   supabase_execute_sql: (a) => supabase_execute_sql(a as Parameters<typeof supabase_execute_sql>[0]),
   github_commit_file: (a) => github_commit_file(a as Parameters<typeof github_commit_file>[0]),
+  github_list_issues: (a) => github_list_issues(a as Parameters<typeof github_list_issues>[0]),
+  github_close_issue: (a) => github_close_issue(a as Parameters<typeof github_close_issue>[0]),
+  github_comment_issue: (a) => github_comment_issue(a as Parameters<typeof github_comment_issue>[0]),
 };
 
 export async function dispatchSkill(handler: string, args: Record<string, unknown>): Promise<ToolResult> {

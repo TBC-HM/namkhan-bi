@@ -72,13 +72,26 @@ export default function Page() {
   const [sending, setSending] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [threadStart, setThreadStart] = useState<string>(() => {
+    if (typeof window === "undefined") return new Date(Date.now() - 24 * 3600_000).toISOString();
+    return localStorage.getItem("kit_chat_thread_start") ?? new Date(Date.now() - 24 * 3600_000).toISOString();
+  });
   const fileRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
+
+  const startNewChat = () => {
+    const now = new Date().toISOString();
+    localStorage.setItem("kit_chat_thread_start", now);
+    setThreadStart(now);
+    setInput("");
+    setAttachments([]);
+  };
 
   const load = async () => {
     const { data } = await supabase
       .from("cockpit_tickets")
       .select("id,status,parsed_summary,arm,intent,created_at,updated_at")
+      .gte("created_at", threadStart)
       .order("created_at", { ascending: true })
       .limit(40);
     setTickets((data as Ticket[]) ?? []);
@@ -92,7 +105,8 @@ export default function Page() {
       .subscribe();
     const id = setInterval(load, 8000);
     return () => { supabase.removeChannel(ch); clearInterval(id); };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threadStart]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -141,6 +155,7 @@ export default function Page() {
       <div style={S.topbar}>
         <div style={S.logo}><div style={S.logoMark}>N</div><span>Chat with <b>Captain Kit</b></span></div>
         <div style={S.topbarRight}>
+          <button onClick={startNewChat} style={{ ...S.topBtn, background: "#c79a6b", color: "#0a0a0b", border: 0, fontWeight: 600, cursor: "pointer" }}>＋ New chat</button>
           <a href="/cockpit" style={S.topBtn}>cockpit ↗</a>
           <a href="/staging/mockups" style={S.topBtn}>mockups ↗</a>
         </div>
