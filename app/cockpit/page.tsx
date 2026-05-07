@@ -278,9 +278,8 @@ function TopBar({
       </div>
 
       <div className="topbar-right">
-        <a className="org-btn" href="https://vercel.com/pbsbase-2825s-projects/namkhan-bi/deployments" target="_blank" rel="noreferrer" title="Latest preview deploys (staging-first env coming via standing task)">🌐 Preview</a>
+        <a className="org-btn" href="https://vercel.com/pbsbase-2825s-projects/namkhan-bi/deployments" target="_blank" rel="noreferrer" title="Latest preview deploys">🌐 Preview</a>
         <a className="org-btn" href="/" target="_blank" rel="noreferrer" title="Open the live BI app in a new tab">↗ App</a>
-        <button className="org-btn" onClick={onOrg}>🗂 Org Chart</button>
         <div className="system-pulse" style={{ background: `${healthColor}20`, borderColor: `${healthColor}50`, color: healthColor }}>
           <div className="pulse-dot" style={{ background: healthColor }} />
           <span>{healthLabel}</span>
@@ -1104,8 +1103,11 @@ function TeamTab({ onCount }: { onCount: (n: number) => void }) {
         .then((r) => r.json())
         .then((d) => {
           if (!alive) return;
-          setAgents(d.agents ?? []);
-          onCount(d.agents?.length ?? 0);
+          // /cockpit Team tab shows ONLY the IT department per PBS 2026-05-07.
+          // Other dept teams will live at /sales/team, /revenue/team, etc.
+          const itOnly = (d.agents ?? []).filter((a: Agent) => (a.department ?? "it") === "it");
+          setAgents(itOnly);
+          onCount(itOnly.length);
         })
         .catch(() => alive && setAgents([]))
         .finally(() => alive && setLoading(false));
