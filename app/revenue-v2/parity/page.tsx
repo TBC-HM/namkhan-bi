@@ -2,7 +2,7 @@
 // Ticket #107 — wired to public.v_parity_observations_top (server component)
 // Assumptions:
 //   1. View columns: channel, platform, our_rate, comp_rate, delta, delta_pct, parity_status, check_date, room_type
-//   2. Service role key used server-side (no anon key in server components)
+//   2. Service role key used server-side
 //   3. parity_status === 'at parity' (case-insensitive) = healthy; anything else = breach
 //   4. Rates are USD (integer or float), $ prefix applied
 //   5. delta = our_rate − comp_rate; positive = we are higher
@@ -72,10 +72,11 @@ export default async function Page() {
   ).length;
   const parityRate =
     total > 0 ? (((total - breaches) / total) * 100).toFixed(1) + '%' : '—';
-  const avgDelta =
+  const avgDeltaRaw =
     rows.length > 0
       ? rows.reduce((sum, r) => sum + (r.delta ?? 0), 0) / rows.length
       : null;
+  const avgDelta = fmtDelta(avgDeltaRaw);
 
   const columns = [
     { key: 'check_date', header: 'Date' },
@@ -84,8 +85,8 @@ export default async function Page() {
     { key: 'room_type', header: 'Room Type' },
     { key: 'our_rate', header: 'Our Rate' },
     { key: 'comp_rate', header: 'Comp Rate' },
-    { key: 'delta', header: 'Δ Rate' },
-    { key: 'delta_pct', header: 'Δ %' },
+    { key: 'delta', header: '\u0394 Rate' },
+    { key: 'delta_pct', header: '\u0394 %' },
     { key: 'parity_status', header: 'Status' },
   ];
 
@@ -102,18 +103,17 @@ export default async function Page() {
   }));
 
   return (
-    <main style={{ padding: 24 }}>
+    <main style={{ padding: '24px' }}>
       <PageHeader pillar="Revenue" tab="Parity" title="Rate Parity" />
 
       {error && (
         <div
-          role="alert"
           style={{
             background: '#fee2e2',
-            border: '1px solid #fca5a5',
-            borderRadius: 6,
+            border: '1px solid #f87171',
+            borderRadius: 8,
             padding: '12px 16px',
-            marginBottom: 16,
+            marginBottom: 24,
             color: '#991b1b',
           }}
         >
@@ -132,16 +132,12 @@ export default async function Page() {
       >
         <KpiBox label="Observations" value={total > 0 ? String(total) : '—'} />
         <KpiBox label="Parity Rate" value={parityRate} />
-        <KpiBox label="Breaches" value={total > 0 ? String(breaches) : '—'} />
-        <KpiBox label="Avg Δ Rate" value={fmtDelta(avgDelta)} />
+        <KpiBox label="Breaches" value={breaches > 0 ? String(breaches) : '0'} />
+        <KpiBox label="Avg Delta" value={avgDelta} />
       </div>
 
-      {/* Status summary pills */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
-        <StatusPill
-          status={breaches === 0 ? 'ok' : 'warn'}
-          label={`${total - breaches} at parity`}
-        />
+      {/* Status summary pill */}
+      <div style={{ marginBottom: 24 }}>
         <StatusPill
           status={breaches > 0 ? 'error' : 'ok'}
           label={`${breaches} breach${breaches !== 1 ? 'es' : ''}`}
