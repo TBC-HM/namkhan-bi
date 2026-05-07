@@ -585,6 +585,30 @@ function ChatTab() {
     if (typeof window === "undefined") return new Date(Date.now() - 7 * 24 * 3600_000).toISOString();
     return localStorage.getItem("kit_cockpit_thread_start") ?? new Date(Date.now() - 7 * 24 * 3600_000).toISOString();
   });
+  // Resizable left ticket panel — PBS wants to drag the divider.
+  const [listWidth, setListWidth] = useState<number>(() => {
+    if (typeof window === "undefined") return 280;
+    const saved = parseInt(localStorage.getItem("kit_cockpit_list_width") ?? "280", 10);
+    return Number.isFinite(saved) && saved >= 200 && saved <= 700 ? saved : 280;
+  });
+  const draggingRef = useRef(false);
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!draggingRef.current) return;
+      const w = Math.max(200, Math.min(700, e.clientX));
+      setListWidth(w);
+    };
+    const onUp = () => {
+      if (draggingRef.current) {
+        draggingRef.current = false;
+        document.body.style.cursor = "";
+        localStorage.setItem("kit_cockpit_list_width", String(listWidth));
+      }
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+  }, [listWidth]);
   const startNewChat = () => {
     const now = new Date().toISOString();
     localStorage.setItem("kit_cockpit_thread_start", now);
@@ -708,7 +732,7 @@ function ChatTab() {
   };
 
   return (
-    <div className="chat-tab">
+    <div className="chat-tab" style={{ gridTemplateColumns: `${listWidth}px 6px 1fr` }}>
       <div className="chat-list">
         <div className="chat-list-header">
           <span>Conversation</span>
@@ -778,6 +802,12 @@ function ChatTab() {
           ));
         })()}
       </div>
+
+      <div
+        className="chat-resizer"
+        onMouseDown={() => { draggingRef.current = true; document.body.style.cursor = "col-resize"; }}
+        title="Drag to resize ticket list"
+      />
 
       <div className="chat-main">
         <div className="chat-thread">
@@ -907,8 +937,21 @@ function ChatTab() {
       </div>
 
       <style jsx>{`
-        .chat-tab { height: 100%; display: grid; grid-template-columns: 280px 1fr; }
+        .chat-tab { height: 100%; display: grid; grid-template-columns: 280px 6px 1fr; }
         .chat-list { background: var(--bg-1); border-right: 1px solid var(--border); overflow-y: auto; }
+        .chat-resizer {
+          background: var(--brass);
+          opacity: 0.25;
+          cursor: col-resize;
+          transition: opacity 0.12s;
+          position: relative;
+        }
+        .chat-resizer:hover { opacity: 0.85; }
+        .chat-resizer::after {
+          content: "⋮"; position: absolute; top: 50%; left: 50%;
+          transform: translate(-50%,-50%); color: #0a0a0b; font-size: 14px;
+          font-weight: 700; line-height: 1;
+        }
         .chat-list-header {
           padding: 14px 16px 8px;
           font-size: 10px; color: var(--text-3);
