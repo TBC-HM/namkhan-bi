@@ -1,511 +1,391 @@
-// app/marketing/page.tsx
-// Marketing snapshot — redesigned 2026-05-04 to match the canonical
-// /operations/staff visual language (PageHeader + 5-tile KpiBox strip +
-// 3-chart panel row + table sections).
-//
-// Data reality check (run before redesigning):
-//   reviews              = 0
-//   social.followers     = 0 across 8 channels (handles claimed)
-//   influencers          = 0
-//   media_links          = 0
-//   media_assets         = 36 (ingested)
-//   factsheet            = rich (10 rooms, 20 facilities, 20 activities,
-//                                4 certifications, 4 meeting rooms, 3 retreats,
-//                                13 open todos, 1 LOREM placeholder)
-//
-// Result: lead with what's populated (factsheet content + photo library +
-// channel handles); mark scrape-dependent metrics (reviews, followers) as
-// DATA NEEDED with explainer per the canonical KpiBox state.
+'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import PageHeader from '@/components/layout/PageHeader';
-import KpiBox from '@/components/kpi/KpiBox';
-import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { getReviewSummary, getSocialAccounts } from '@/lib/marketing';
-import { countPlaceholders, PROPERTY_ID } from '@/lib/settings';
-import {
-  inventoryByTierSvg,
-  categoryBarsSvg,
-  channelMatrixSvg,
-  type InventoryTierRow,
-  type CategoryCountRow,
-  type ChannelStatusRow,
-} from '@/lib/marketingCharts';
-import { fmtIsoDate, EMPTY } from '@/lib/format';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 60;
+// ─── Types ───────────────────────────────────────────────────────────────────
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Server-side data layer
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface FactsheetSnapshot {
-  ok: boolean;
-  errorMsg?: string;
-  todos: string[];
-  placeholders: number;
-  identity: any;
-  rooms: any[];
-  facilities: Record<string, any[]>;
-  activities: Record<string, any[]>;
-  certifications: any[];
-  meetingsCount: number;
-  retreatsCount: number;
-  generated_at: string | null;
+interface DocItem {
+  id: string;
+  title: string;
+  href: string;
 }
 
-async function getFactsheet(): Promise<FactsheetSnapshot> {
-  try {
-    const admin = getSupabaseAdmin();
-    const { data, error } = await admin
-      .schema('marketing')
-      .from('v_namkhan_factsheet')
-      .select('*')
-      .eq('property_id', PROPERTY_ID)
-      .maybeSingle();
-
-    if (error || !data) {
-      return {
-        ok: false,
-        errorMsg: error?.message ?? 'No factsheet row',
-        todos: [],
-        placeholders: 0,
-        identity: {},
-        rooms: [],
-        facilities: {},
-        activities: {},
-        certifications: [],
-        meetingsCount: 0,
-        retreatsCount: 0,
-        generated_at: null,
-      };
-    }
-
-    return {
-      ok: true,
-      todos: Array.isArray((data as any).todos) ? (data as any).todos : [],
-      placeholders: countPlaceholders(data),
-      identity: (data as any).identity ?? {},
-      rooms: Array.isArray((data as any).rooms) ? (data as any).rooms : [],
-      facilities: ((data as any).facilities as Record<string, any[]>) ?? {},
-      activities: ((data as any).activities as Record<string, any[]>) ?? {},
-      certifications: Array.isArray((data as any).certifications) ? (data as any).certifications : [],
-      meetingsCount: Array.isArray((data as any).meetings?.rooms) ? (data as any).meetings.rooms.length : 0,
-      retreatsCount: Array.isArray((data as any).retreats) ? (data as any).retreats.length : 0,
-      generated_at: (data as any).factsheet_generated_at ?? null,
-    };
-  } catch (e: any) {
-    return {
-      ok: false,
-      errorMsg: e?.message ?? 'admin client unavailable',
-      todos: [],
-      placeholders: 0,
-      identity: {},
-      rooms: [],
-      facilities: {},
-      activities: {},
-      certifications: [],
-      meetingsCount: 0,
-      retreatsCount: 0,
-      generated_at: null,
-    };
-  }
+interface TaskItem {
+  id: string;
+  label: string;
+  done: boolean;
 }
 
-async function getMediaCount(): Promise<number | null> {
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const DOCS_KEY = 'nk.entry.docs.marketing.v1';
+const TASKS_KEY = 'nk.entry.tasks.marketing.v1';
+
+const DEFAULT_DOCS: DocItem[] = [
+  { id: 'd1', title: 'Brand Guidelines', href: '/marketing/brand' },
+  { id: 'd2', title: 'Content Library', href: '/marketing/content' },
+  { id: 'd3', title: 'Campaign Tracker', href: '/marketing/campaigns' },
+];
+
+const DEFAULT_TASKS: TaskItem[] = [
+  { id: 't1', label: 'Review Q2 campaign assets', done: false },
+  { id: 't2', label: 'Update Instagram content calendar', done: false },
+  { id: 't3', label: 'Approve new hero image for SLH', done: false },
+];
+
+const QUICK_CHIPS = [
+  { label: 'Campaigns', href: '/marketing/campaigns' },
+  { label: 'Content', href: '/marketing/content' },
+  { label: 'Assets', href: '/marketing/assets' },
+  { label: 'Analytics', href: '/marketing/analytics' },
+  { label: 'Social', href: '/marketing/social' },
+  { label: 'Brand', href: '/marketing/brand' },
+];
+
+const DEPT_ITEMS = [
+  { label: 'Campaigns', href: '/marketing/campaigns' },
+  { label: 'Content Library', href: '/marketing/content' },
+  { label: 'Asset DAM', href: '/marketing/assets' },
+  { label: 'Analytics', href: '/marketing/analytics' },
+  { label: 'Social Media', href: '/marketing/social' },
+  { label: 'Brand Hub', href: '/marketing/brand' },
+];
+
+const ATTENTION_ITEMS = [
+  { id: 'a1', label: 'SLH asset submission deadline — 3 days remaining', href: '/marketing/assets' },
+  { id: 'a2', label: 'Instagram post scheduled but image missing', href: '/marketing/social' },
+  { id: 'a3', label: 'Campaign performance report overdue', href: '/marketing/analytics' },
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function getHour(): number {
+  return new Date().getHours();
+}
+
+function greeting(): string {
+  const h = getHour();
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function loadFromStorage<T>(key: string, fallback: T): T {
+  if (typeof window === 'undefined') return fallback;
   try {
-    const admin = getSupabaseAdmin();
-    const { count, error } = await admin
-      .schema('marketing')
-      .from('media_assets')
-      .select('asset_id', { count: 'exact', head: true })
-      .eq('status', 'ingested');
-    if (error) return null;
-    return count ?? 0;
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
   } catch {
-    return null;
+    return fallback;
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Page
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
-export default async function MarketingPage() {
-  const [reviews30d, socials, factsheet, mediaCount] = await Promise.all([
-    getReviewSummary(30),
-    getSocialAccounts(),
-    getFactsheet(),
-    getMediaCount(),
-  ]);
-
-  // ── KPI 1 · Profile completeness ───────────────────────────────────────────
-  const TOTAL_FACTSHEET_FIELDS = 184; // from v_settings_field_schema audit
-  const gapPenalty = factsheet.todos.length + factsheet.placeholders;
-  const completenessPct = factsheet.ok
-    ? Math.max(0, Math.min(100, ((TOTAL_FACTSHEET_FIELDS - gapPenalty) / TOTAL_FACTSHEET_FIELDS) * 100))
-    : null;
-
-  // ── KPI 2 · Photo library (real) ───────────────────────────────────────────
-  // mediaCount is the live count of ingested media_assets
-
-  // ── KPI 3 · Channels claimed ───────────────────────────────────────────────
-  const totalChannels = socials.length;
-  const claimedChannels = socials.filter((s: any) => Boolean(s.handle)).length;
-
-  // ── KPI 4 · Reviews 30d (likely 0 → DATA NEEDED) ───────────────────────────
-  const noReviewData = reviews30d.total === 0;
-
-  // ── KPI 5 · Total followers (likely 0 → DATA NEEDED) ───────────────────────
-  const totalFollowers = socials.reduce((s: number, a: any) => s + (a.followers ?? 0), 0);
-  const noFollowerData = totalFollowers === 0;
-
-  // ── Chart 1 · Room inventory by tier ───────────────────────────────────────
-  const tierMap = new Map<string, { units: number; types: number }>();
-  for (const r of factsheet.rooms) {
-    const t = String(r.tier ?? 'unknown').toLowerCase();
-    const cur = tierMap.get(t) ?? { units: 0, types: 0 };
-    cur.units += Number(r.units ?? 0);
-    cur.types += 1;
-    tierMap.set(t, cur);
-  }
-  const tierOrder = ['premium', 'signature', 'entry', 'unknown'];
-  const inventoryRows: InventoryTierRow[] = tierOrder
-    .filter((t) => tierMap.has(t))
-    .map((t) => ({ tier: t, units: tierMap.get(t)!.units, room_types: tierMap.get(t)!.types }));
-  const inventorySvg = inventoryByTierSvg(inventoryRows);
-  const totalUnits = inventoryRows.reduce((s, r) => s + r.units, 0);
-  const totalRoomTypes = factsheet.rooms.length;
-
-  // ── Chart 2 · Facilities & activities by category ──────────────────────────
-  const facilityRows: CategoryCountRow[] = Object.entries(factsheet.facilities)
-    .map(([cat, items]) => ({
-      label: cat,
-      count: Array.isArray(items) ? items.length : 0,
-      tone: 'good' as const,
-    }))
-    .filter((r) => r.count > 0)
-    .sort((a, b) => b.count - a.count);
-  const facilitiesSvg = categoryBarsSvg(facilityRows);
-  const totalFacilities = facilityRows.reduce((s, r) => s + r.count, 0);
-
-  const activityRows: CategoryCountRow[] = Object.entries(factsheet.activities)
-    .map(([cat, items]) => ({
-      label: cat,
-      count: Array.isArray(items) ? items.length : 0,
-      tone: 'neutral' as const,
-    }))
-    .filter((r) => r.count > 0)
-    .sort((a, b) => b.count - a.count);
-  const activitiesSvg = categoryBarsSvg(activityRows);
-  const totalActivities = activityRows.reduce((s, r) => s + r.count, 0);
-
-  // ── Chart 3 · Channel presence matrix ──────────────────────────────────────
-  const channelRows: ChannelStatusRow[] = socials.map((s: any) => ({
-    platform: String(s.platform),
-    has_handle: Boolean(s.handle),
-    followers: typeof s.followers === 'number' ? s.followers : null,
-  }));
-  const channelSvg = channelMatrixSvg(channelRows);
-
+function DeptDropdown({ dept, items }: { dept: string; items: { label: string; href: string }[] }) {
+  const [open, setOpen] = useState(false);
   return (
-    <div className="panel" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <PageHeader
-        pillar="Marketing"
-        tab="Snapshot"
-        title={<>Brand reach, told by the <em style={{ color: 'var(--brass)' }}>factsheet</em>.</>}
-        lede={
-          <>
-            {totalRoomTypes} room types · {totalFacilities} facilities ·{' '}
-            {totalActivities} activities · {factsheet.certifications.length} certifications ·{' '}
-            {totalChannels} channels · {mediaCount ?? '—'} photos
-          </>
-        }
-        rightSlot={
-          <Link
-            href="/settings/property"
-            className="t-eyebrow"
-            style={{
-              display: 'inline-block',
-              padding: '8px 14px',
-              border: '1px solid var(--moss)',
-              background: 'var(--moss)',
-              color: 'var(--paper-warm)',
-              borderRadius: 4,
-              letterSpacing: 'var(--ls-extra)',
-              textTransform: 'uppercase',
-              fontSize: 'var(--t-xs)',
-            }}
-          >
-            + Edit factsheet
-          </Link>
-        }
-      />
-
-      {/* KPI strip — 5 tiles */}
-      <section className="kpi-strip cols-5">
-        <KpiBox
-          value={completenessPct}
-          unit="pct"
-          label="Profile completeness"
-          state={completenessPct == null ? 'data-needed' : 'live'}
-          needs={
-            completenessPct == null
-              ? 'Connect service-role key to read factsheet.'
-              : undefined
-          }
-          tooltip={`(${TOTAL_FACTSHEET_FIELDS} editable fields − ${factsheet.todos.length} todos − ${factsheet.placeholders} LOREM placeholders) / ${TOTAL_FACTSHEET_FIELDS}`}
-        />
-        <KpiBox
-          value={mediaCount}
-          unit="count"
-          label="Photo library"
-          state={mediaCount == null ? 'data-needed' : 'live'}
-          tooltip="Ingested media_assets · /marketing/upload"
-        />
-        <KpiBox
-          value={claimedChannels}
-          unit="count"
-          label={`Channels claimed · ${claimedChannels}/${totalChannels}`}
-          state={totalChannels === 0 ? 'data-needed' : 'live'}
-          tooltip={`Of ${totalChannels} configured channels, ${claimedChannels} have a handle on file.`}
-        />
-        <KpiBox
-          value={noReviewData ? null : reviews30d.total}
-          unit="count"
-          label="Reviews · last 30d"
-          state={noReviewData ? 'data-needed' : 'live'}
-          needs={noReviewData ? 'No OTA review scrape connected — wire BDC/Google/TripAdvisor agent.' : undefined}
-          tooltip="marketing.reviews · received_at within 30d"
-        />
-        <KpiBox
-          value={factsheet.todos.length}
-          unit="count"
-          label="Open todos"
-          state={factsheet.todos.length === 0 ? 'live' : 'data-needed'}
-          needs={factsheet.todos.length === 0 ? undefined : 'Edit in /settings/property to clear.'}
-          tooltip="Auto-generated from blank required fields + LOREM placeholders + manual TODOs"
-        />
-      </section>
-
-      {/* 3-chart row — Inventory · Facilities · Channels */}
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-        <div className="panel">
-          <div className="panel-head">
-            <div className="panel-head-title">Inventory · <em>by tier</em></div>
-            <span className="panel-head-meta">marketing.room_type_content</span>
-          </div>
-          {inventorySvg
-            ? <div dangerouslySetInnerHTML={{ __html: inventorySvg }} />
-            : <div style={{ padding: 32, textAlign: 'center', color: 'var(--ink-mute)', fontSize: 'var(--t-sm)' }}>No room content yet.</div>}
-          <div style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)', marginTop: 6 }}>
-            {totalUnits} sellable units across {totalRoomTypes} room types · italic = units, plain = type count
-          </div>
-        </div>
-
-        <div className="panel">
-          <div className="panel-head">
-            <div className="panel-head-title">Facilities · <em>by category</em></div>
-            <span className="panel-head-meta">marketing.facilities</span>
-          </div>
-          {facilitiesSvg
-            ? <div dangerouslySetInnerHTML={{ __html: facilitiesSvg }} />
-            : <div style={{ padding: 32, textAlign: 'center', color: 'var(--ink-mute)', fontSize: 'var(--t-sm)' }}>No facilities catalogued.</div>}
-          <div style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)', marginTop: 6 }}>
-            {totalFacilities} on-site facilities · {totalActivities} catalogued activities (overflow below)
-          </div>
-        </div>
-
-        <div className="panel">
-          <div className="panel-head">
-            <div className="panel-head-title">Channel presence · <em>handle vs followers</em></div>
-            <span className="panel-head-meta">marketing.social_accounts</span>
-          </div>
-          {channelSvg
-            ? <div dangerouslySetInnerHTML={{ __html: channelSvg }} />
-            : <div style={{ padding: 32, textAlign: 'center', color: 'var(--ink-mute)', fontSize: 'var(--t-sm)' }}>No channels configured.</div>}
-          <div style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)', marginTop: 6, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <span><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 9, background: 'var(--moss-glow)', marginRight: 4, verticalAlign: 'middle' }} />claimed / has data</span>
-            <span><span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: 9, background: '#a14b3a', marginRight: 4, verticalAlign: 'middle' }} />no data</span>
-          </div>
-        </div>
-      </section>
-
-      {/* Activities (full-width bars) */}
-      <section>
-        <div className="panel-head">
-          <div>
-            <div className="panel-head-title">
-              Activities catalogue · <em>by category</em>
-            </div>
-            <div style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)', marginTop: 2 }}>
-              {totalActivities} curated guest experiences across {activityRows.length} categories — feeds AI proposal builder + sales decks.
-            </div>
-          </div>
-          <span className="panel-head-meta">marketing.activities_catalog</span>
-        </div>
-        <div className="panel">
-          {activitiesSvg
-            ? <div dangerouslySetInnerHTML={{ __html: activitiesSvg }} />
-            : <div style={{ padding: 32, textAlign: 'center', color: 'var(--ink-mute)', fontSize: 'var(--t-sm)' }}>No activities catalogued yet.</div>}
-        </div>
-      </section>
-
-      {/* Channels detail table */}
-      <section>
-        <div className="panel-head">
-          <div>
-            <div className="panel-head-title">
-              Channel handles · <em>{claimedChannels}/{totalChannels} claimed</em>
-            </div>
-            <div style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)', marginTop: 2 }}>
-              Manual entry today. Follower auto-pull arrives with the social-scrape agent.
-            </div>
-          </div>
-          <span className="panel-head-meta">marketing.social_accounts</span>
-        </div>
-        <div className="panel flush">
-          <table>
-            <thead>
-              <tr>
-                <th style={{ textAlign: 'left' }}>Platform</th>
-                <th style={{ textAlign: 'left' }}>Handle</th>
-                <th style={{ textAlign: 'right' }}>Followers</th>
-                <th style={{ textAlign: 'left' }}>Last sync</th>
-                <th style={{ textAlign: 'left' }}>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {socials.length === 0 && (
-                <tr>
-                  <td colSpan={5} style={{ padding: 24, fontStyle: 'italic', color: 'var(--ink-mute)', textAlign: 'center' }}>
-                    No channels configured. <Link href="/settings/property/social" style={{ color: 'var(--brass)', textDecoration: 'underline' }}>Add one.</Link>
-                  </td>
-                </tr>
-              )}
-              {socials.map((s: any) => {
-                const claimed = Boolean(s.handle);
-                const hasFollowers = (s.followers ?? 0) > 0;
-                return (
-                  <tr key={s.id}>
-                    <td style={{ fontWeight: 500, textTransform: 'uppercase', letterSpacing: 'var(--ls-loose)', fontSize: 'var(--t-sm)' }}>
-                      {s.platform}
-                    </td>
-                    <td style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-sm)', color: claimed ? 'var(--ink)' : 'var(--ink-mute)' }}>
-                      {s.handle ?? EMPTY}
-                    </td>
-                    <td style={{ textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 'var(--t-sm)', color: hasFollowers ? 'var(--ink)' : 'var(--ink-mute)' }}>
-                      {hasFollowers ? Number(s.followers).toLocaleString('en-US') : EMPTY}
-                    </td>
-                    <td style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>
-                      {s.last_synced_at ? fmtIsoDate(s.last_synced_at) : EMPTY}
-                    </td>
-                    <td>
-                      <span
-                        className="status-pill"
-                        style={{
-                          background: claimed ? 'var(--st-good-bg, #e8efe2)' : 'var(--st-bad-bg, #f3e0db)',
-                          color: claimed ? 'var(--moss)' : 'var(--st-bad, #8e3a35)',
-                          padding: '3px 10px',
-                          borderRadius: 12,
-                          fontFamily: 'var(--mono)',
-                          fontSize: 'var(--t-xs)',
-                          textTransform: 'uppercase',
-                          letterSpacing: 'var(--ls-loose)',
-                        }}
-                      >
-                        {claimed ? 'Claimed' : 'Missing'}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* Open todos + LOREM placeholders */}
-      <section>
-        <div className="panel-head">
-          <div>
-            <div className="panel-head-title">
-              Profile gaps · <em>{factsheet.todos.length} todo{factsheet.todos.length === 1 ? '' : 's'}{factsheet.placeholders ? ` · ${factsheet.placeholders} placeholder${factsheet.placeholders === 1 ? '' : 's'}` : ''}</em>
-            </div>
-            <div style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)', marginTop: 2 }}>
-              Auto-extracted from blank required fields + LOREM IPSUM markers + owner-flagged TODOs in the factsheet.
-            </div>
-          </div>
-          <span className="panel-head-meta">marketing.v_namkhan_factsheet.todos</span>
-        </div>
-        <div className="panel flush">
-          <table>
-            <thead>
-              <tr>
-                <th style={{ width: 40, textAlign: 'left' }}>#</th>
-                <th style={{ textAlign: 'left' }}>Action</th>
-                <th style={{ textAlign: 'left' }}>Where to fix</th>
-              </tr>
-            </thead>
-            <tbody>
-              {factsheet.todos.length === 0 && (
-                <tr>
-                  <td colSpan={3} style={{ padding: 24, fontStyle: 'italic', color: 'var(--ink-mute)', textAlign: 'center' }}>
-                    No open todos. Profile is clean.
-                  </td>
-                </tr>
-              )}
-              {factsheet.todos.map((todo: string, i: number) => {
-                const where = inferSection(todo);
-                return (
-                  <tr key={i}>
-                    <td style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>
-                      {String(i + 1).padStart(2, '0')}
-                    </td>
-                    <td style={{ fontSize: 'var(--t-sm)' }}>{todo}</td>
-                    <td>
-                      <Link
-                        href={`/settings/property/${where.section}`}
-                        style={{
-                          fontFamily: 'var(--mono)',
-                          fontSize: 'var(--t-xs)',
-                          color: 'var(--brass)',
-                          textDecoration: 'underline',
-                          letterSpacing: 'var(--ls-loose)',
-                          textTransform: 'uppercase',
-                        }}
-                      >
-                        {where.label}
-                      </Link>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {factsheet.generated_at && (
-        <div style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)', textAlign: 'right' }}>
-          Factsheet generated {fmtIsoDate(factsheet.generated_at)} · regenerates on each Settings save
+    <div style={{ position: 'relative', display: 'inline-block' }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          background: 'transparent',
+          border: '1px solid rgba(255,255,255,0.25)',
+          color: '#fff',
+          padding: '6px 16px',
+          borderRadius: 6,
+          cursor: 'pointer',
+          fontSize: 14,
+          letterSpacing: '0.04em',
+        }}
+      >
+        {dept} ▾
+      </button>
+      {open && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '110%',
+            left: 0,
+            background: '#111',
+            border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: 8,
+            padding: '6px 0',
+            zIndex: 100,
+            minWidth: 180,
+          }}
+        >
+          {items.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={() => setOpen(false)}
+              style={{
+                display: 'block',
+                padding: '8px 18px',
+                color: '#e2e8f0',
+                textDecoration: 'none',
+                fontSize: 14,
+                whiteSpace: 'nowrap',
+              }}
+              onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.background = 'rgba(255,255,255,0.07)')}
+              onMouseLeave={(e) => ((e.currentTarget as HTMLAnchorElement).style.background = 'transparent')}
+            >
+              {item.label}
+            </Link>
+          ))}
         </div>
       )}
     </div>
   );
 }
 
-// Best-effort routing of a todo string to its Settings section + label.
-function inferSection(todo: string): { section: string; label: string } {
-  const t = todo.toLowerCase();
-  if (t.includes('street') || t.includes('plus_code') || t.includes('google')) return { section: 'location_climate', label: 'Location & Climate' };
-  if (t.includes('logo') || t.includes('hero_image') || t.includes('brand')) return { section: 'brand', label: 'Brand Identity' };
-  if (t.includes('business_license')) return { section: 'property_identity', label: 'Property Identity' };
-  if (t.includes('gm') || t.includes('owner') || t.includes('emergency') || t.includes('phone') || t.includes('email')) return { section: 'contacts', label: 'Contacts' };
-  if (t.includes('agoda') || t.includes('listing url') || t.includes('handle')) return { section: 'social', label: 'Social Media' };
-  if (t.includes('retreat') || t.includes('pricing')) return { section: 'retreat_pricing', label: 'Retreat Pricing' };
-  if (t.includes('pool') || t.includes('facility')) return { section: 'facilities', label: 'Facilities' };
-  if (t.includes('room') || t.includes('hero_image_url')) return { section: 'rooms', label: 'Rooms' };
-  return { section: 'property_identity', label: 'Property Identity' };
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
+export default function MarketingEntryPage() {
+  const [chatInput, setChatInput] = useState('');
+  const [docs, setDocs] = useState<DocItem[]>(DEFAULT_DOCS);
+  const [tasks, setTasks] = useState<TaskItem[]>(DEFAULT_TASKS);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setDocs(loadFromStorage<DocItem[]>(DOCS_KEY, DEFAULT_DOCS));
+    setTasks(loadFromStorage<TaskItem[]>(TASKS_KEY, DEFAULT_TASKS));
+    setMounted(true);
+  }, []);
+
+  function toggleTask(id: string) {
+    setTasks((prev) => {
+      const next = prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t));
+      localStorage.setItem(TASKS_KEY, JSON.stringify(next));
+      return next;
+    });
+  }
+
+  function handleChatSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!chatInput.trim()) return;
+    setChatInput('');
+  }
+
+  return (
+    <main
+      style={{
+        minHeight: '100vh',
+        background: '#000',
+        color: '#fff',
+        fontFamily: 'Inter, system-ui, sans-serif',
+        padding: '48px 40px 80px',
+        boxSizing: 'border-box',
+      }}
+    >
+      {/* ── Greeting ── */}
+      <p
+        style={{
+          fontFamily: '"Fraunces", Georgia, serif',
+          fontStyle: 'italic',
+          fontSize: 28,
+          fontWeight: 300,
+          marginBottom: 32,
+          color: '#f8f4ee',
+        }}
+      >
+        {greeting()}, Boss (Paul Bauer).
+      </p>
+
+      {/* ── Chat box ── */}
+      <form onSubmit={handleChatSubmit} style={{ marginBottom: 32 }}>
+        <div
+          style={{
+            display: 'flex',
+            gap: 10,
+            background: 'rgba(255,255,255,0.05)',
+            border: '1px solid rgba(255,255,255,0.12)',
+            borderRadius: 10,
+            padding: '10px 14px',
+            maxWidth: 680,
+          }}
+        >
+          <input
+            type="text"
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            placeholder="Ask anything about marketing…"
+            style={{
+              flex: 1,
+              background: 'transparent',
+              border: 'none',
+              outline: 'none',
+              color: '#fff',
+              fontSize: 15,
+            }}
+          />
+          <button
+            type="submit"
+            style={{
+              background: 'rgba(255,255,255,0.1)',
+              border: 'none',
+              borderRadius: 6,
+              color: '#fff',
+              padding: '6px 14px',
+              cursor: 'pointer',
+              fontSize: 14,
+            }}
+          >
+            Ask
+          </button>
+        </div>
+      </form>
+
+      {/* ── Quick chips ── */}
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 40 }}>
+        {QUICK_CHIPS.map((chip) => (
+          <Link
+            key={chip.href}
+            href={chip.href}
+            style={{
+              background: 'rgba(255,255,255,0.07)',
+              border: '1px solid rgba(255,255,255,0.14)',
+              borderRadius: 20,
+              color: '#e2e8f0',
+              padding: '5px 16px',
+              fontSize: 13,
+              textDecoration: 'none',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {chip.label}
+          </Link>
+        ))}
+      </div>
+
+      {/* ── Two-column: My Docs | My Tasks ── */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: 28,
+          marginBottom: 40,
+          maxWidth: 860,
+        }}
+      >
+        {/* My Docs */}
+        <div
+          style={{
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 12,
+            padding: '20px 22px',
+          }}
+        >
+          <h2 style={{ fontSize: 13, letterSpacing: '0.08em', color: '#94a3b8', marginBottom: 14, textTransform: 'uppercase' }}>
+            My Docs
+          </h2>
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {docs.map((doc) => (
+              <li key={doc.id} style={{ marginBottom: 10 }}>
+                <Link
+                  href={doc.href}
+                  style={{ color: '#e2e8f0', textDecoration: 'none', fontSize: 14 }}
+                >
+                  📄 {doc.title}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* My Tasks */}
+        <div
+          style={{
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 12,
+            padding: '20px 22px',
+          }}
+        >
+          <h2 style={{ fontSize: 13, letterSpacing: '0.08em', color: '#94a3b8', marginBottom: 14, textTransform: 'uppercase' }}>
+            My Tasks
+          </h2>
+          {mounted && (
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+              {tasks.map((task) => (
+                <li
+                  key={task.id}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, cursor: 'pointer' }}
+                  onClick={() => toggleTask(task.id)}
+                >
+                  <span
+                    style={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: 4,
+                      border: '1px solid rgba(255,255,255,0.3)',
+                      background: task.done ? 'rgba(255,255,255,0.3)' : 'transparent',
+                      flexShrink: 0,
+                      display: 'inline-block',
+                    }}
+                  />
+                  <span
+                    style={{
+                      fontSize: 14,
+                      color: task.done ? '#64748b' : '#e2e8f0',
+                      textDecoration: task.done ? 'line-through' : 'none',
+                    }}
+                  >
+                    {task.label}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      {/* ── Department dropdown ── */}
+      <div style={{ marginBottom: 40 }}>
+        <DeptDropdown dept="Marketing" items={DEPT_ITEMS} />
+      </div>
+
+      {/* ── Needs-your-attention ── */}
+      <div style={{ maxWidth: 680 }}>
+        <h2
+          style={{
+            fontSize: 13,
+            letterSpacing: '0.08em',
+            color: '#94a3b8',
+            textTransform: 'uppercase',
+            marginBottom: 14,
+          }}
+        >
+          Needs Your Attention
+        </h2>
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {ATTENTION_ITEMS.map((item) => (
+            <li key={item.id}>
+              <Link
+                href={item.href}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  background: 'rgba(255,200,50,0.06)',
+                  border: '1px solid rgba(255,200,50,0.18)',
+                  borderRadius: 8,
+                  padding: '10px 16px',
+                  color: '#fcd34d',
+                  textDecoration: 'none',
+                  fontSize: 14,
+                }}
+              >
+                <span>⚠</span>
+                <span>{item.label}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </main>
+  );
 }
