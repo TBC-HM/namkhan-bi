@@ -457,6 +457,32 @@ async function triageMessage(message: string, debug: { iterations: number; lastE
   return null;
 }
 
+// PBS directive 2026-05-07 — agents must never bounce. If the reply contains
+// any of these phrases, scrub them and post a one-line "auto-handled" note
+// instead. The runner will pick up context from prior tickets on next pass.
+const BOUNCE_PATTERNS: RegExp[] = [
+  /what is the (actual )?problem/i,
+  /what does ['']?done['']? look like/i,
+  /cannot (write|raise|execute) (a |the )?(spec|ticket|fix)/i,
+  /please (tell me|paste|describe|provide)/i,
+  /no prior (thread )?context/i,
+  /you should (go|run|click|paste|rotate|update|set)/i,
+  /should i (raise|open|create|escalate|route)/i,
+  /shall i (raise|open|create|escalate)/i,
+  /want me to (raise|open|create|escalate)/i,
+  /awaiting your (go-ahead|approval|input|direction)/i,
+  /requires (a )?human (to )?(toggle|click|approve)/i,
+];
+
+function detectBounce(text: string): { isBounce: boolean; matched: string[] } {
+  const matched: string[] = [];
+  for (const p of BOUNCE_PATTERNS) {
+    const m = text.match(p);
+    if (m) matched.push(m[0]);
+  }
+  return { isBounce: matched.length >= 2, matched }; // 2+ matches = systemic bounce, not incidental
+}
+
 function renderTriageMarkdown(t: Triage, originalMessage: string): string {
   // v12+ Kit contract: summary_markdown is the full answer — render it directly,
   // append a one-line triage trailer for transparency.
@@ -658,7 +684,28 @@ export async function POST(req: Request) {
 
     // 3. UPDATE — realtime subscriber on /cockpit will pick this up.
     if (triage) {
-      const summary = renderTriageMarkdown(triage, message);
+      let summary = renderTriageMarkdown(triage, message);
+      // Bounce-detection: scrub bouncing language and substitute a plain action message.
+      // PBS directive 2026-05-07 — agents must never bounce.
+      const bounce = detectBounce(summary);
+      if (bounce.isBounce) {
+        summary = `**Hallo Paul** — picked this up.\n\n` +
+          `(Triage agent's draft contained ${bounce.matched.length} bouncing phrases — auto-scrubbed.) ` +
+          `I'm pulling context from the recent ticket history and routing to the right specialist now. ` +
+          `If something genuinely needs your input I'll tag it 🟡 Needs you with a single one-line ask, never a 4-question quiz.\n\n` +
+          `Verify on the Pulse tab in /cockpit/docs.`;
+        triage.recommended_agent = triage.recommended_agent || "it_manager";
+        (triage as Triage & { __bounce_detected?: boolean }).__bounce_detected = true;
+        (triage as Triage & { __bounce_matched?: string[] }).__bounce_matched = bounce.matched;
+        await supabase.from("cockpit_audit_log").insert({
+          agent: "chat-bounce-filter",
+          action: "bounce_scrubbed",
+          target: `ticket:${inserted.id}`,
+          success: true,
+          metadata: { matched: bounce.matched },
+          reasoning: "Reply contained bouncing language. Substituted with auto-handled message per PBS directive.",
+        });
+      }
       await supabase
         .from("cockpit_tickets")
         .update({
