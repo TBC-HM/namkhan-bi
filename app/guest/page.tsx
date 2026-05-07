@@ -1,78 +1,198 @@
-// app/guest/page.tsx — REDESIGN 2026-05-05 (recovery)
-import PageHeader from '@/components/layout/PageHeader';
-import KpiBox from '@/components/kpi/KpiBox';
-import StatusPill from '@/components/ui/StatusPill';
-import { getReviewSummary, getReviewStatsBySource, getSocialAccounts } from '@/lib/marketing';
-import { resolvePeriod } from '@/lib/period';
-import { supabase, PROPERTY_ID } from '@/lib/supabase';
-import {
-  GuestStatusHeader, StatusCell, SectionHead,
-  metaSm, metaStrong, metaDim,
-} from './_components/GuestShell';
-import AgentTopRow from './_components/AgentTopRow';
-import Reachable, { countReachable } from './_components/Reachable';
+'use client';
 
-export const revalidate = 300;
-export const dynamic = 'force-dynamic';
+import Link from 'next/link';
+import { useState } from 'react';
 
-interface Props { searchParams: Record<string, string | string[] | undefined>; }
-
-export default async function GuestSnapshotPage({ searchParams }: Props) {
-  const period = resolvePeriod(searchParams);
-  const [summary, stats, socials, profilesR] = await Promise.all([
-    getReviewSummary(period.days),
-    getReviewStatsBySource(Math.max(period.days, 90)),
-    getSocialAccounts(),
-    supabase
-      .schema('guest')
-      .from('mv_guest_profile')
-      .select('email, phone, country, lifetime_revenue, stays_count')
-      .eq('property_id', PROPERTY_ID)
-      .limit(10000),
-  ]);
-
-  const profiles = (profilesR.data ?? []) as { email: string | null; phone: string | null; country: string | null; lifetime_revenue: number; stays_count: number }[];
-  const reach = countReachable(profiles);
-  const totalGuests = profiles.length;
-  const repeatGuests = profiles.filter((p) => p.stays_count >= 2).length;
-  const totalFollowers = socials.reduce((s: number, a: any) => s + (a.followers ?? 0), 0);
-  const unanswered = summary.unanswered ?? 0;
-  const responseRate = summary.response_rate ?? 0;
-  const avgRating = Number(summary.avg_rating ?? 0);
-  const totalReviews = summary.total ?? 0;
+/**
+ * /guest — Full-viewport black entry screen.
+ * No app chrome. Standalone layout (see app/guest/layout.tsx).
+ * Brand: "N" monogram + Namkhan BI wordmark on obsidian bg.
+ */
+export default function GuestEntryPage() {
+  const [hovered, setHovered] = useState(false);
 
   return (
-    <>
-      <PageHeader pillar="Guest" tab="Snapshot"
-        title={<>The voice <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>of the house</em> — and who's reachable.</>}
-        lede={`${totalGuests} guests · ${repeatGuests} repeat · ${totalReviews} reviews ${period.label} · ${(responseRate * 100).toFixed(0)}% response`} />
-      <GuestStatusHeader
-        top={<>
-          <AgentTopRow code="review_agent" fallbackName="Review Agent" />
-          <span style={{ flex: 1 }} />
-          <StatusCell label="SOURCE"><StatusPill tone="active">guest.mv_guest_profile</StatusPill><span style={metaDim}>· marketing.reviews</span></StatusCell>
-        </>}
-        bottom={<>
-          <StatusCell label="WINDOW"><span style={metaSm}>{period.label}</span></StatusCell>
-          <StatusCell label="REPLY QUEUE">
-            <StatusPill tone={unanswered > 5 ? 'expired' : unanswered > 0 ? 'pending' : 'active'}>{unanswered}</StatusPill>
-            <span style={metaDim}>{(responseRate * 100).toFixed(0)}% rate</span>
-          </StatusCell>
-          <StatusCell label="SOCIAL"><span style={metaSm}>{totalFollowers.toLocaleString()}</span><span style={metaDim}>· {socials.length} channels</span></StatusCell>
-          <span style={{ flex: 1 }} />
-        </>}
-      />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12, marginTop: 14 }}>
-        <Reachable total={reach.total} withEmail={reach.withEmail} withPhone={reach.withPhone} withWhatsapp={reach.withWhatsapp} />
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
-        <KpiBox value={totalGuests} unit="count" label="Guest profiles" />
-        <KpiBox value={repeatGuests} unit="count" label="Repeat guests" />
-        <KpiBox value={totalReviews} unit="count" label={`Reviews · ${period.label}`} />
-        <KpiBox value={avgRating} unit="nights" dp={2} label="Avg rating /5" />
-        <KpiBox value={(responseRate * 100)} unit="pct" label="Response rate" />
-        <KpiBox value={totalFollowers} unit="count" label="Social followers" />
-      </div>
-    </>
+    <div style={styles.root}>
+      {/* ── Top-left Home link ─────────────────────────────────────── */}
+      <nav style={styles.topNav}>
+        <Link href="/" style={styles.homeLink}>
+          ← Home
+        </Link>
+      </nav>
+
+      {/* ── Centre brand block ─────────────────────────────────────── */}
+      <main style={styles.centre}>
+        {/* N monogram */}
+        <div style={styles.monogramWrap}>
+          <span style={styles.monogram}>N</span>
+        </div>
+
+        {/* Wordmark */}
+        <p style={styles.eyebrow}>NAMKHAN BI</p>
+        <h1 style={styles.headline}>
+          Guest&nbsp;<em style={styles.headlineEm}>Intelligence</em>
+        </h1>
+        <p style={styles.lede}>
+          Real-time property insights — curated for partners &amp; guests.
+        </p>
+
+        {/* CTA */}
+        <Link
+          href="/guest/dashboard"
+          style={{
+            ...styles.cta,
+            ...(hovered ? styles.ctaHover : {}),
+          }}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+        >
+          Enter&nbsp;→
+        </Link>
+      </main>
+
+      {/* ── Bottom brand line ──────────────────────────────────────── */}
+      <footer style={styles.footer}>
+        <span style={styles.footerText}>
+          Nam Khan River Lodge &nbsp;·&nbsp; Luang Prabang, Laos
+        </span>
+      </footer>
+    </div>
   );
 }
+
+/* ─── Inline styles — all tokens hand-rolled for zero-chrome standalone ─── */
+const styles = {
+  root: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: '100dvh',
+    width: '100%',
+    backgroundColor: '#0a0a0a',         // near-black — no --paper tokens on this standalone screen
+    color: '#efe6d3',                    // --paper equivalent for reversed layout
+    fontFamily: '"Inter Tight", Inter, system-ui, sans-serif',
+    padding: '24px',
+    boxSizing: 'border-box' as const,
+    position: 'relative' as const,
+    overflow: 'hidden',
+  },
+
+  /* subtle radial glow so it breathes */
+  topNav: {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    zIndex: 10,
+  },
+
+  homeLink: {
+    color: '#b3a888',                   // --ink-faint equivalent reversed
+    fontSize: '11px',
+    letterSpacing: '0.06em',
+    textTransform: 'uppercase' as const,
+    textDecoration: 'none',
+    fontFamily: '"JetBrains Mono", monospace',
+    transition: 'color 0.2s',
+  },
+
+  centre: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    gap: '16px',
+    textAlign: 'center' as const,
+    flex: 1,
+    justifyContent: 'center',
+  },
+
+  monogramWrap: {
+    width: '96px',
+    height: '96px',
+    borderRadius: '50%',
+    border: '1px solid #a8854a',        // --brass
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: '8px',
+    boxShadow: '0 0 40px rgba(168, 133, 74, 0.15)',
+  },
+
+  monogram: {
+    fontFamily: '"Fraunces", Georgia, serif',
+    fontSize: '48px',
+    fontStyle: 'italic',
+    color: '#a8854a',                   // --brass
+    lineHeight: 1,
+    letterSpacing: '-0.01em',
+  },
+
+  eyebrow: {
+    fontFamily: '"JetBrains Mono", monospace',
+    fontSize: '10px',
+    letterSpacing: '0.18em',
+    color: '#7d7565',                   // --ink-mute equivalent
+    margin: 0,
+    textTransform: 'uppercase' as const,
+  },
+
+  headline: {
+    fontFamily: '"Fraunces", Georgia, serif',
+    fontSize: 'clamp(28px, 5vw, 48px)',
+    fontWeight: 300,
+    color: '#efe6d3',
+    margin: 0,
+    letterSpacing: '-0.01em',
+    lineHeight: 1.1,
+  },
+
+  headlineEm: {
+    fontStyle: 'italic',
+    color: '#a8854a',                   // --brass
+  },
+
+  lede: {
+    fontFamily: '"Inter Tight", Inter, system-ui, sans-serif',
+    fontSize: '13px',
+    color: '#7d7565',
+    margin: 0,
+    maxWidth: '320px',
+    lineHeight: 1.6,
+  },
+
+  cta: {
+    display: 'inline-block',
+    marginTop: '8px',
+    padding: '12px 32px',
+    borderRadius: '4px',
+    border: '1px solid #a8854a',        // --brass
+    color: '#a8854a',
+    fontFamily: '"Inter Tight", Inter, system-ui, sans-serif',
+    fontSize: '13px',
+    letterSpacing: '0.06em',
+    textTransform: 'uppercase' as const,
+    textDecoration: 'none',
+    transition: 'background 0.2s, color 0.2s',
+    cursor: 'pointer',
+  },
+
+  ctaHover: {
+    backgroundColor: '#a8854a',
+    color: '#0a0a0a',
+  },
+
+  footer: {
+    width: '100%',
+    display: 'flex',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+
+  footerText: {
+    fontFamily: '"JetBrains Mono", monospace',
+    fontSize: '10px',
+    color: '#4a443c',                   // --ink-soft reversed
+    letterSpacing: '0.06em',
+  },
+} as const;
