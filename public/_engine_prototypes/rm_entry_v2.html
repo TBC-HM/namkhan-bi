@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Revenue</title>
+<style>
+  :root {
+    --bg: #0a0a0b;
+    --bg-2: #0f0f11;
+    --panel: #15151a;
+    --panel-2: #1c1c22;
+    --border: #25252d;
+    --border-soft: #1a1a20;
+    --text: #ededf0;
+    --text-2: #a1a1aa;
+    --muted: #6b6b75;
+    --accent: #c79a6b;
+    --accent-line: rgba(199, 154, 107, 0.5);
+    --green: #5cf2a4;
+    --warn: #ffb84d;
+    --red: #ff6b6b;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --serif: "Cooper", "Source Serif Pro", Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+    font-size: 14px; line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ============ TOP BAR — 2 actions only ============ */
+  .topbar {
+    height: 56px; padding: 0 28px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: relative; z-index: 100;
+  }
+  .logo {
+    font-weight: 500; font-size: 14px;
+    display: flex; align-items: center; gap: 10px; color: var(--text-2);
+  }
+  .logo-mark {
+    width: 22px; height: 22px; border-radius: 6px;
+    background: linear-gradient(135deg, var(--accent), #b88556);
+    color: #1a1a1a; font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .logo b { color: var(--text); font-weight: 600; }
+  .topbar-right { display: flex; align-items: center; gap: 8px; }
+
+  .top-btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 8px 14px; border-radius: 8px;
+    background: transparent; border: 1px solid transparent;
+    color: var(--text-2); font-size: 13px; cursor: pointer;
+    font-family: inherit; transition: all 0.15s;
+    position: relative;
+  }
+  .top-btn:hover { background: var(--panel); color: var(--text); }
+  .top-btn .caret { font-size: 9px; opacity: 0.5; }
+  .top-btn.cta {
+    color: var(--accent); border-color: var(--border);
+  }
+  .top-btn.cta:hover { background: rgba(199, 154, 107, 0.06); border-color: var(--accent-line); color: var(--accent); }
+
+  /* ============ DATA PANEL — unified ============ */
+  .panel-pop {
+    position: absolute; top: 46px; right: 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 14px;
+    width: 440px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+    display: none; z-index: 200;
+    overflow: hidden;
+  }
+  .panel-pop.open { display: block; animation: fadeIn 0.18s ease-out; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* Snap section at top of panel */
+  .snap-section {
+    padding: 18px 20px;
+    border-bottom: 1px solid var(--border-soft);
+    background: linear-gradient(180deg, rgba(199, 154, 107, 0.04), transparent);
+  }
+  .snap-headline {
+    font-family: var(--serif);
+    font-size: 19px; line-height: 1.3;
+    color: var(--text); font-weight: 400;
+    letter-spacing: -0.01em;
+  }
+  .snap-headline em {
+    color: var(--accent); font-style: italic; font-weight: 400;
+  }
+  .snap-meta {
+    margin-top: 8px; font-size: 11px; color: var(--muted);
+    font-family: var(--mono); letter-spacing: 0.02em;
+  }
+
+  /* KPI grid */
+  .kpi-section {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .panel-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--muted); font-weight: 600;
+    margin-bottom: 10px; padding: 0 4px;
+  }
+  .kpi-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1px;
+    background: var(--border-soft); border-radius: 8px; overflow: hidden;
+  }
+  .kpi-tile {
+    background: var(--bg-2); padding: 12px 14px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .kpi-label {
+    font-size: 10px; color: var(--muted); font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .kpi-value {
+    font-family: var(--serif); font-size: 22px; line-height: 1;
+    color: var(--text); font-weight: 400;
+  }
+  .kpi-delta { font-size: 10px; color: var(--muted); font-family: var(--mono); }
+  .kpi-delta.up { color: var(--green); }
+  .kpi-delta.down { color: var(--red); }
+
+  /* Reports list */
+  .reports-section { padding: 12px 12px 14px; }
+  .reports-list { display: flex; flex-direction: column; gap: 1px; }
+  .report-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 12px; border-radius: 6px;
+    color: var(--text-2); font-size: 13px; cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+  }
+  .report-item:hover { background: var(--panel-2); color: var(--text); }
+  .report-item .arrow { color: var(--muted); font-size: 12px; }
+  .report-divider {
+    height: 1px; background: var(--border-soft); margin: 6px 8px;
+  }
+
+  /* ============ HERO ============ */
+  .hero {
+    min-height: calc(100vh - 56px);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 0 24px 80px;
+    max-width: 720px; margin: 0 auto; width: 100%;
+    margin-top: -60px;
+  }
+
+  .greeting {
+    font-family: var(--serif);
+    font-size: 48px; line-height: 1.05;
+    color: var(--text); text-align: center;
+    font-weight: 400; letter-spacing: -0.025em;
+    margin-bottom: 56px;
+  }
+  .greeting em { color: var(--accent); font-style: italic; font-weight: 400; }
+
+  /* ============ PROMPT — the unambiguous hero ============ */
+  .prompt-shell {
+    width: 100%;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 20px; padding: 22px 24px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .prompt-shell:focus-within {
+    border-color: var(--accent-line);
+    box-shadow: 0 0 0 4px rgba(199, 154, 107, 0.06);
+  }
+  .prompt-input {
+    width: 100%; background: transparent; border: 0; outline: 0;
+    color: var(--text); font-size: 18px; font-family: inherit;
+    resize: none; min-height: 28px; max-height: 160px;
+    line-height: 1.4;
+  }
+  .prompt-input::placeholder { color: var(--muted); }
+  .prompt-toolbar {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 14px;
+  }
+  .prompt-tools { display: flex; gap: 2px; }
+  .tool-btn {
+    width: 30px; height: 30px; border-radius: 7px;
+    background: transparent; border: 0; color: var(--muted);
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-size: 14px; transition: all 0.12s;
+  }
+  .tool-btn:hover { background: var(--panel-2); color: var(--text-2); }
+  .send-btn {
+    width: 34px; height: 34px; border-radius: 9px;
+    background: var(--accent); color: #1a1a1a; border: 0;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-weight: 600; font-size: 15px;
+    transition: background 0.15s;
+  }
+  .send-btn:hover { background: #d4a672; }
+
+  /* ============ ALERTS — minimal, no card ============ */
+  .alerts {
+    width: 100%;
+    margin-top: 32px;
+  }
+  .alerts-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--muted); font-weight: 600; margin-bottom: 12px;
+    padding-left: 4px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .alerts-label .count { color: var(--text-2); }
+  .alert-list { display: flex; flex-direction: column; }
+  .alert {
+    display: flex; gap: 14px; align-items: center;
+    padding: 14px 4px;
+    border-bottom: 1px solid var(--border-soft);
+    cursor: pointer;
+    transition: padding 0.18s ease-out;
+  }
+  .alert:last-child { border-bottom: 0; }
+  .alert:hover { padding-left: 12px; }
+  .alert-stripe {
+    width: 2px; align-self: stretch; border-radius: 1px;
+    flex-shrink: 0;
+  }
+  .alert-stripe.amber { background: var(--accent); }
+  .alert-stripe.warn { background: var(--warn); }
+  .alert-stripe.urgent { background: var(--red); }
+  .alert-text { flex: 1; min-width: 0; }
+  .alert-title { font-size: 14px; color: var(--text); font-weight: 400; line-height: 1.3; }
+  .alert-meta { font-size: 12px; color: var(--muted); margin-top: 3px; font-family: var(--mono); }
+  .alert-arrow { color: var(--muted); font-size: 14px; opacity: 0.5; transition: opacity 0.15s, transform 0.15s; }
+  .alert:hover .alert-arrow { opacity: 1; transform: translateX(2px); color: var(--text-2); }
+
+  /* Mobile */
+  @media (max-width: 720px) {
+    .greeting { font-size: 34px; margin-bottom: 36px; }
+    .topbar { padding: 0 16px; }
+    .panel-pop { right: 16px; width: calc(100vw - 32px); }
+    .prompt-input { font-size: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ TOP BAR — 2 actions ============ -->
+<div class="topbar">
+  <div class="logo">
+    <span class="logo-mark">R</span>
+    <span><b>Revenue</b></span>
+  </div>
+  <div class="topbar-right">
+    <div style="position: relative;">
+      <button class="top-btn" id="data-btn" onclick="toggleDataPanel(event)">
+        Data <span class="caret">▾</span>
+      </button>
+      <div class="panel-pop" id="data-panel">
+
+        <!-- Snap -->
+        <div class="snap-section">
+          <div class="snap-headline">
+            Numbers look <em>good</em>. One thing needs you.
+          </div>
+          <div class="snap-meta">2026-05-06 · 09:14 LAK · synced 2m ago</div>
+        </div>
+
+        <!-- KPIs -->
+        <div class="kpi-section">
+          <div class="panel-label">KPIs · MTD</div>
+          <div class="kpi-grid">
+            <div class="kpi-tile">
+              <span class="kpi-label">Occupancy</span>
+              <span class="kpi-value">72.4%</span>
+              <span class="kpi-delta up">+0.8pp LY</span>
+            </div>
+            <div class="kpi-tile">
+              <span class="kpi-label">ADR</span>
+              <span class="kpi-value">$320</span>
+              <span class="kpi-delta up">+$12 LY</span>
+            </div>
+            <div class="kpi-tile">
+              <span class="kpi-label">RevPAR</span>
+              <span class="kpi-value">$232</span>
+              <span class="kpi-delta up">+$15 LY</span>
+            </div>
+            <div class="kpi-tile">
+              <span class="kpi-label">Pickup 24h</span>
+              <span class="kpi-value">+8</span>
+              <span class="kpi-delta up">+$2.5k</span>
+            </div>
+            <div class="kpi-tile">
+              <span class="kpi-label">Pickup 7d</span>
+              <span class="kpi-value">+45</span>
+              <span class="kpi-delta up">+$13.8k</span>
+            </div>
+            <div class="kpi-tile">
+              <span class="kpi-label">vs Budget</span>
+              <span class="kpi-value">+$8k</span>
+              <span class="kpi-delta up">+1.7%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Reports -->
+        <div class="reports-section">
+          <div class="panel-label" style="margin-bottom: 6px;">Reports</div>
+          <div class="reports-list">
+            <div class="report-item" onclick="openWorkspace('pickup')">Daily Pickup <span class="arrow">›</span></div>
+            <div class="report-item" onclick="openWorkspace('otb')">OTB by Date × Type <span class="arrow">›</span></div>
+            <div class="report-item" onclick="openWorkspace('segment')">Segment Mix <span class="arrow">›</span></div>
+            <div class="report-divider"></div>
+            <div class="report-item" onclick="openWorkspace('weekly')">Weekly Dashboard <span class="arrow">›</span></div>
+            <div class="report-item" onclick="openWorkspace('compset')">Comp Set <span class="arrow">›</span></div>
+            <div class="report-item" onclick="openWorkspace('monthly')">Monthly USALI P&L <span class="arrow">›</span></div>
+            <div class="report-divider"></div>
+            <div class="report-item" onclick="openWorkspace('recommendations')">Pricing Recommendations <span class="arrow">›</span></div>
+            <div class="report-item" onclick="openWorkspace('rateplans')">Rate Plan Performance <span class="arrow">›</span></div>
+            <div class="report-item" onclick="openWorkspace('promos')">Promo Analyzer <span class="arrow">›</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <button class="top-btn cta" onclick="openWorkspace()">Open Workspace</button>
+  </div>
+</div>
+
+<!-- ============ HERO ============ -->
+<div class="hero">
+
+  <h1 class="greeting">Good morning, <em>Hannes.</em></h1>
+
+  <!-- PROMPT — the only hero ROI element -->
+  <div class="prompt-shell">
+    <textarea class="prompt-input" id="prompt" placeholder="Ask anything…" rows="1" onkeydown="handleKey(event)"></textarea>
+    <div class="prompt-toolbar">
+      <div class="prompt-tools">
+        <button class="tool-btn" title="Attach">+</button>
+        <button class="tool-btn" title="Filter">⌖</button>
+      </div>
+      <button class="send-btn" onclick="ask()">↑</button>
+    </div>
+  </div>
+
+  <!-- ALERTS — list, not card -->
+  <div class="alerts">
+    <div class="alerts-label">
+      <span>Needs your attention</span>
+      <span class="count">3 open</span>
+    </div>
+    <div class="alert-list">
+      <div class="alert" onclick="ask('Show me the 5 pricing recommendations queued for today')">
+        <div class="alert-stripe amber"></div>
+        <div class="alert-text">
+          <div class="alert-title">5 pricing recommendations queued for review</div>
+          <div class="alert-meta">By 16:00 · 2 flagged soft-floor</div>
+        </div>
+        <span class="alert-arrow">›</span>
+      </div>
+      <div class="alert" onclick="ask('Group ABC cut-off status')">
+        <div class="alert-stripe warn"></div>
+        <div class="alert-text">
+          <div class="alert-title">Group ABC cut-off in 9 days</div>
+          <div class="alert-meta">32 rms uncommitted · $9,600 at risk</div>
+        </div>
+        <span class="alert-arrow">›</span>
+      </div>
+      <div class="alert" onclick="ask('Why is +90d pacing weak?')">
+        <div class="alert-stripe urgent"></div>
+        <div class="alert-text">
+          <div class="alert-title">+90d pace −12.1% vs STLY</div>
+          <div class="alert-meta">Rev gap −$28k · trends −18% MoM</div>
+        </div>
+        <span class="alert-arrow">›</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Panel toggle
+  function closeAll() {
+    document.querySelectorAll('.panel-pop.open').forEach(el => el.classList.remove('open'));
+  }
+  document.body.addEventListener('click', closeAll);
+  function toggleDataPanel(e) {
+    e.stopPropagation();
+    const wasOpen = document.getElementById('data-panel').classList.contains('open');
+    closeAll();
+    if (!wasOpen) document.getElementById('data-panel').classList.add('open');
+  }
+  // Click inside panel doesn't close
+  document.getElementById('data-panel').addEventListener('click', e => e.stopPropagation());
+
+  // Ask + routing
+  function ask(text) {
+    const input = document.getElementById('prompt');
+    const q = text || input.value.trim();
+    if (!q) return;
+    const shell = document.querySelector('.prompt-shell');
+    shell.style.borderColor = 'var(--accent-line)';
+    shell.style.transform = 'scale(0.995)';
+    setTimeout(() => {
+      shell.style.transform = '';
+      alert('→ Open Workspace with prompt:\n\n"' + q + '"');
+      shell.style.borderColor = '';
+    }, 180);
+  }
+  function openWorkspace(view) {
+    if (view) alert('→ Open Workspace · view: ' + view);
+    else alert('→ Open Workspace');
+  }
+  function handleKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(); }
+  }
+  // Auto-grow + focus
+  const ta = document.getElementById('prompt');
+  ta.addEventListener('input', () => {
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(ta.scrollHeight, 160) + 'px';
+  });
+  setTimeout(() => ta.focus(), 200);
+
+  // ESC closes panel
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAll(); });
+</script>
+
+</body>
+</html>

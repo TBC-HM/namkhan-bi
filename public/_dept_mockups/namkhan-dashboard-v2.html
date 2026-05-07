@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>The Namkhan — Revenue Operations</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0F1411;
+    --surface: #18201C;
+    --surface-2: #1F2924;
+    --border: #2A3530;
+    --text: #E8E5DC;
+    --muted: #8A8C84;
+    --primary: #1F3A2E;
+    --primary-light: #2C5444;
+    --sand: #D7C9A7;
+    --terracotta: #B8542A;
+    --red: #C4452D;
+    --amber: #D4923A;
+    --green: #5C8A6B;
+    --ink: #2A2A2A;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+    overflow-x: hidden;
+  }
+  h1, h2, h3 { font-family: 'Tiempos Headline', Georgia, serif; font-weight: 500; letter-spacing: -0.01em; }
+  
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 24px; border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-mark { font-family: 'Tiempos', serif; font-size: 20px; letter-spacing: 0.5px; }
+  .brand-sub { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; }
+  .topbar-right { display: flex; gap: 12px; align-items: center; font-size: 12px; color: var(--muted); }
+  .live-dot { width: 8px; height: 8px; background: var(--green); border-radius: 50%; display: inline-block; }
+  
+  .container { padding: 20px 24px; max-width: 1600px; margin: 0 auto; }
+  
+  /* Period switcher */
+  .period-bar {
+    display: flex; gap: 6px; flex-wrap: wrap;
+    padding: 12px 16px; background: var(--surface); border-radius: 12px;
+    margin-bottom: 16px; align-items: center;
+  }
+  .period-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; margin-right: 4px; }
+  .period-divider { width: 1px; height: 18px; background: var(--border); margin: 0 4px; }
+  .period-pill {
+    padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 500;
+    border: 1px solid var(--border); background: transparent; color: var(--muted);
+    cursor: pointer; transition: all .15s ease;
+  }
+  .period-pill:hover { border-color: var(--sand); color: var(--text); }
+  .period-pill.active { background: var(--primary); border-color: var(--primary); color: white; }
+  .period-pill.forward { color: var(--sand); }
+  .period-pill.forward.active { background: var(--terracotta); border-color: var(--terracotta); color: white; }
+  
+  /* Main grid */
+  .main-grid { display: grid; grid-template-columns: 1fr 1.4fr; gap: 16px; }
+  @media (max-width: 1100px) { .main-grid { grid-template-columns: 1fr; } }
+  
+  /* KPI strip */
+  .kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 16px; }
+  .kpi-card {
+    background: var(--surface); padding: 14px; border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+  .kpi-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 6px; }
+  .kpi-value { font-size: 22px; font-weight: 600; font-family: 'Tiempos', serif; letter-spacing: -0.5px; }
+  .kpi-deltas { display: flex; gap: 10px; margin-top: 6px; font-size: 10px; }
+  .kpi-delta { color: var(--muted); }
+  .kpi-delta strong { font-weight: 600; }
+  .kpi-delta.up strong { color: var(--green); }
+  .kpi-delta.down strong { color: var(--red); }
+  
+  /* Action engine */
+  .action-panel {
+    background: var(--surface); border-radius: 12px; padding: 18px;
+    border: 1px solid var(--border);
+  }
+  .action-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; }
+  .action-title { font-size: 16px; font-weight: 500; }
+  .action-period-tag { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.2px; }
+  
+  .action-list { display: flex; flex-direction: column; gap: 10px; }
+  .action-item {
+    display: flex; gap: 12px; padding: 12px;
+    background: var(--surface-2); border-radius: 8px;
+    border-left: 3px solid var(--border);
+    cursor: pointer; transition: background .15s;
+  }
+  .action-item:hover { background: #232E29; }
+  .action-item.act_now { border-left-color: var(--red); }
+  .action-item.review { border-left-color: var(--amber); }
+  .action-item.opportunity { border-left-color: var(--green); }
+  
+  .action-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 6px; }
+  .action-dot.act_now { background: var(--red); box-shadow: 0 0 0 4px rgba(196, 69, 45, 0.15); }
+  .action-dot.review { background: var(--amber); }
+  .action-dot.opportunity { background: var(--green); }
+  
+  .action-body { flex: 1; }
+  .action-tag {
+    display: inline-block; font-size: 9px; padding: 2px 8px; border-radius: 999px;
+    background: var(--bg); color: var(--muted); text-transform: uppercase;
+    letter-spacing: 1px; margin-bottom: 4px; border: 1px solid var(--border);
+  }
+  .action-headline { font-weight: 500; font-size: 13px; line-height: 1.3; margin-bottom: 4px; }
+  .action-detail { font-size: 12px; color: var(--muted); line-height: 1.4; }
+  .action-arrow { color: var(--muted); font-size: 14px; align-self: center; }
+  
+  /* Drill toggle */
+  .drill-row {
+    display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px;
+    background: var(--surface); border-radius: 12px; padding: 4px;
+    margin-top: 16px; border: 1px solid var(--border);
+  }
+  .drill-tab {
+    text-align: center; padding: 10px 4px; font-size: 11px;
+    color: var(--muted); cursor: pointer; border-radius: 8px;
+    text-transform: uppercase; letter-spacing: 1px; transition: all .15s;
+  }
+  .drill-tab:hover { color: var(--text); }
+  .drill-tab.active { background: var(--primary); color: white; }
+  
+  .drill-content {
+    background: var(--surface); border-radius: 12px; padding: 16px;
+    margin-top: 8px; border: 1px solid var(--border);
+    display: none;
+  }
+  .drill-content.active { display: block; }
+  
+  table.drill-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.drill-table th {
+    text-align: left; padding: 8px 10px; font-weight: 500;
+    color: var(--muted); font-size: 10px; text-transform: uppercase;
+    letter-spacing: 1px; border-bottom: 1px solid var(--border);
+  }
+  table.drill-table th.num, table.drill-table td.num { text-align: right; }
+  table.drill-table td {
+    padding: 9px 10px; border-bottom: 1px solid var(--border);
+    font-variant-numeric: tabular-nums;
+  }
+  table.drill-table tr:last-child td { border-bottom: none; }
+  table.drill-table tr:hover { background: var(--surface-2); }
+  
+  .pill-bar { display: inline-block; height: 4px; background: var(--primary-light); border-radius: 2px; vertical-align: middle; }
+  .pos { color: var(--green); }
+  .neg { color: var(--red); }
+  
+  /* Loading state */
+  .skeleton { animation: shimmer 1.4s infinite linear; background: linear-gradient(90deg, var(--surface) 0%, var(--surface-2) 50%, var(--surface) 100%); background-size: 200% 100%; border-radius: 4px; color: transparent; }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  
+  .muted { color: var(--muted); }
+  .small { font-size: 11px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <div>
+      <div class="brand-mark">THE NAMKHAN</div>
+      <div class="brand-sub">Revenue Operations · Luang Prabang</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span><span class="live-dot"></span> Live · <span id="last-sync">—</span></span>
+    <span id="user-info">SLH · USALI 11</span>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="period-bar">
+    <span class="period-label">Look Back</span>
+    <button class="period-pill" data-period="last_7">7d</button>
+    <button class="period-pill active" data-period="last_30">30d</button>
+    <button class="period-pill" data-period="last_90">90d</button>
+    <button class="period-pill" data-period="last_180">180d</button>
+    <button class="period-pill" data-period="last_365">1y</button>
+    <button class="period-pill" data-period="ytd">YTD</button>
+    
+    <span class="period-divider"></span>
+    <span class="period-label">Forward</span>
+    <button class="period-pill forward" data-period="next_30">+30d</button>
+    <button class="period-pill forward" data-period="next_60">+60d</button>
+    <button class="period-pill forward" data-period="next_90">+90d</button>
+    <button class="period-pill forward" data-period="next_180">+180d</button>
+    <button class="period-pill forward" data-period="next_365">+1y</button>
+  </div>
+
+  <div class="kpi-grid" id="kpi-grid">
+    <!-- populated by JS -->
+  </div>
+
+  <div class="main-grid">
+    <div class="action-panel">
+      <div class="action-header">
+        <div class="action-title">Action Engine</div>
+        <div class="action-period-tag" id="action-period-tag">last 30 days</div>
+      </div>
+      <div class="action-list" id="action-list">
+        <div class="muted small" style="padding:20px;text-align:center">Loading recommendations…</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="drill-row">
+        <div class="drill-tab active" data-drill="source">Source</div>
+        <div class="drill-tab" data-drill="room">Room</div>
+        <div class="drill-tab" data-drill="room_type">Type</div>
+        <div class="drill-tab" data-drill="country">Country</div>
+        <div class="drill-tab" data-drill="segment">Segment</div>
+        <div class="drill-tab" data-drill="dow">DOW</div>
+        <div class="drill-tab" data-drill="lead_time">Lead</div>
+        <div class="drill-tab" data-drill="los">LOS</div>
+      </div>
+      <div class="drill-content active" id="drill-content">
+        <div class="muted small" style="padding:20px;text-align:center">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const SUPABASE_URL = 'https://kpenyneooigsyuuomgct.supabase.co';
+const SUPABASE_ANON = 'sb_publishable_aefvH-xleansBGXsuq2Zng_tGC3ED2h';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+let currentPeriod = 'last_30';
+let currentDrill = 'source';
+
+const periodLabels = {
+  last_7: 'last 7 days', last_30: 'last 30 days', last_90: 'last 90 days',
+  last_180: 'last 180 days', last_365: 'last year', ytd: 'year to date',
+  next_30: 'next 30 days', next_60: 'next 60 days', next_90: 'next 90 days',
+  next_180: 'next 180 days', next_365: 'next year'
+};
+
+const moneyFormat = v => {
+  if (v == null || isNaN(v)) return '—';
+  if (Math.abs(v) >= 1000) return '$' + (v / 1000).toFixed(1) + 'k';
+  return '$' + Math.round(v);
+};
+const numFormat = v => v == null || isNaN(v) ? '—' : Math.round(v).toLocaleString();
+const pctFormat = v => v == null || isNaN(v) ? '—' : v.toFixed(1) + '%';
+const deltaArrow = v => v == null || isNaN(v) ? '' : v >= 0 ? '↑' : '↓';
+const deltaClass = v => v == null || isNaN(v) ? '' : v >= 0 ? 'up' : 'down';
+
+async function loadHeadline() {
+  const { data, error } = await sb.rpc('headline', { p_period: currentPeriod });
+  if (error) { console.error(error); return; }
+  
+  const want = ['occupancy_pct', 'adr', 'revpar', 'rooms_revenue', 'total_revenue'];
+  const labels = { occupancy_pct: 'Occupancy', adr: 'ADR', revpar: 'RevPAR', rooms_revenue: 'Rooms Rev', total_revenue: 'Total Rev' };
+  const formats = { occupancy_pct: pctFormat, adr: moneyFormat, revpar: moneyFormat, rooms_revenue: moneyFormat, total_revenue: moneyFormat };
+  
+  const grid = document.getElementById('kpi-grid');
+  grid.innerHTML = want.map(metric => {
+    const row = data.find(d => d.metric === metric) || {};
+    const fmt = formats[metric];
+    return `
+      <div class="kpi-card">
+        <div class="kpi-label">${labels[metric]}</div>
+        <div class="kpi-value">${fmt(row.current_value)}</div>
+        <div class="kpi-deltas">
+          <span class="kpi-delta ${deltaClass(row.prior_pct_change)}"><strong>${deltaArrow(row.prior_pct_change)}${row.prior_pct_change == null ? '' : Math.abs(row.prior_pct_change).toFixed(1)}%</strong> prior</span>
+          <span class="kpi-delta ${deltaClass(row.stly_pct_change)}"><strong>${deltaArrow(row.stly_pct_change)}${row.stly_pct_change == null ? '' : Math.abs(row.stly_pct_change).toFixed(1)}%</strong> STLY</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function loadActions() {
+  const tag = document.getElementById('action-period-tag');
+  tag.textContent = periodLabels[currentPeriod] || currentPeriod;
+  
+  const list = document.getElementById('action-list');
+  list.innerHTML = '<div class="muted small" style="padding:20px;text-align:center">Computing recommendations…</div>';
+  
+  const { data, error } = await sb.rpc('actions', { p_period: currentPeriod });
+  if (error) { 
+    list.innerHTML = '<div class="muted small" style="padding:20px">Error: ' + error.message + '</div>';
+    return;
+  }
+  
+  if (!data || data.length === 0) {
+    list.innerHTML = '<div class="muted small" style="padding:20px;text-align:center">All clear. No actions needed for this period.</div>';
+    return;
+  }
+  
+  const order = { act_now: 1, review: 2, opportunity: 3 };
+  data.sort((a, b) => (order[a.severity] || 4) - (order[b.severity] || 4));
+  
+  list.innerHTML = data.map(a => `
+    <div class="action-item ${a.severity}" data-drill="${a.drill_hint || ''}" data-param="${a.drill_param || ''}">
+      <div class="action-dot ${a.severity}"></div>
+      <div class="action-body">
+        <span class="action-tag">${a.category}</span>
+        <div class="action-headline">${a.headline}</div>
+        <div class="action-detail">${a.detail}</div>
+      </div>
+      <div class="action-arrow">→</div>
+    </div>
+  `).join('');
+  
+  // Click an action → switch to that drill
+  list.querySelectorAll('.action-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const dr = el.dataset.drill;
+      if (dr && document.querySelector(`[data-drill="${dr}"]`)) {
+        document.querySelector(`[data-drill="${dr}"].drill-tab`)?.click();
+      }
+    });
+  });
+}
+
+async function loadDrill() {
+  const fnMap = {
+    source: 'drill_by_source', room: 'drill_by_room', room_type: 'drill_by_room_type',
+    country: 'drill_by_country', segment: 'drill_by_segment', dow: 'drill_by_dow',
+    lead_time: 'drill_by_lead_time', los: 'drill_by_los'
+  };
+  
+  const fn = fnMap[currentDrill];
+  if (!fn) return;
+  
+  const content = document.getElementById('drill-content');
+  content.innerHTML = '<div class="muted small" style="padding:20px;text-align:center">Loading…</div>';
+  
+  const { data, error } = await sb.rpc(fn, { p_period: currentPeriod });
+  if (error) {
+    content.innerHTML = '<div class="muted small" style="padding:20px">Error: ' + error.message + '</div>';
+    return;
+  }
+  
+  if (!data || data.length === 0) {
+    content.innerHTML = '<div class="muted small" style="padding:20px;text-align:center">No data for this period.</div>';
+    return;
+  }
+  
+  // Render appropriate table for drill
+  const renderers = {
+    source: renderSourceTable,
+    room: renderRoomTable,
+    room_type: renderRoomTypeTable,
+    country: renderCountryTable,
+    segment: renderSegmentTable,
+    dow: renderDowTable,
+    lead_time: renderBucketTable,
+    los: renderBucketTable
+  };
+  
+  content.innerHTML = renderers[currentDrill](data);
+}
+
+function maxBar(rows, key) {
+  return Math.max(...rows.map(r => Number(r[key]) || 0), 1);
+}
+
+function renderSourceTable(rows) {
+  const max = maxBar(rows, 'rooms_revenue');
+  return `
+    <table class="drill-table"><thead><tr>
+      <th>Source</th>
+      <th class="num">RN</th>
+      <th class="num">Gross ADR</th>
+      <th class="num">Net ADR</th>
+      <th class="num">Comm%</th>
+      <th class="num">Revenue</th>
+      <th class="num">% Mix</th>
+    </tr></thead><tbody>
+    ${rows.slice(0, 12).map(r => `
+      <tr>
+        <td>${r.source}</td>
+        <td class="num">${numFormat(r.room_nights)}</td>
+        <td class="num">${moneyFormat(r.adr)}</td>
+        <td class="num">${moneyFormat(r.net_adr)}</td>
+        <td class="num muted">${r.est_commission_pct}%</td>
+        <td class="num">${moneyFormat(r.rooms_revenue)} <span class="pill-bar" style="width:${(r.rooms_revenue/max*40)}px"></span></td>
+        <td class="num muted">${pctFormat(r.pct_of_revenue)}</td>
+      </tr>
+    `).join('')}
+    </tbody></table>
+  `;
+}
+
+function renderRoomTable(rows) {
+  const sorted = rows.filter(r => r.is_active !== false).sort((a, b) => Number(b.rooms_revenue) - Number(a.rooms_revenue));
+  return `
+    <table class="drill-table"><thead><tr>
+      <th>Room</th>
+      <th class="num">RN</th>
+      <th class="num">ADR</th>
+      <th class="num">Occ</th>
+      <th class="num">Revenue</th>
+    </tr></thead><tbody>
+    ${sorted.slice(0, 24).map(r => `
+      <tr>
+        <td>${r.room_name} ${r.is_active === false ? '<span class="muted small">(inactive)</span>' : ''}</td>
+        <td class="num">${numFormat(r.room_nights)}</td>
+        <td class="num">${moneyFormat(r.adr)}</td>
+        <td class="num ${r.occupancy_pct < 30 ? 'neg' : (r.occupancy_pct > 60 ? 'pos' : '')}">${pctFormat(r.occupancy_pct)}</td>
+        <td class="num">${moneyFormat(r.rooms_revenue)}</td>
+      </tr>
+    `).join('')}
+    </tbody></table>
+  `;
+}
+
+function renderRoomTypeTable(rows) {
+  return `
+    <table class="drill-table"><thead><tr>
+      <th>Type</th>
+      <th class="num">Rooms</th>
+      <th class="num">RN</th>
+      <th class="num">ADR</th>
+      <th class="num">Occ</th>
+      <th class="num">Revenue</th>
+    </tr></thead><tbody>
+    ${rows.map(r => `
+      <tr>
+        <td>${r.room_type_name}</td>
+        <td class="num">${numFormat(r.rooms_in_type)}</td>
+        <td class="num">${numFormat(r.room_nights)}</td>
+        <td class="num">${moneyFormat(r.adr)}</td>
+        <td class="num">${pctFormat(r.occupancy_pct)}</td>
+        <td class="num">${moneyFormat(r.rooms_revenue)}</td>
+      </tr>
+    `).join('')}
+    </tbody></table>
+  `;
+}
+
+function renderCountryTable(rows) {
+  return `
+    <table class="drill-table"><thead><tr>
+      <th>Country</th>
+      <th class="num">Res</th>
+      <th class="num">Guests</th>
+      <th class="num">RN</th>
+      <th class="num">ADR</th>
+      <th class="num">ALOS</th>
+      <th class="num">Revenue</th>
+      <th class="num">% Mix</th>
+    </tr></thead><tbody>
+    ${rows.slice(0, 15).map(r => `
+      <tr>
+        <td>${r.country}</td>
+        <td class="num">${numFormat(r.reservations)}</td>
+        <td class="num">${numFormat(r.guests)}</td>
+        <td class="num">${numFormat(r.room_nights)}</td>
+        <td class="num">${moneyFormat(r.adr)}</td>
+        <td class="num">${(r.alos || 0).toFixed(1)}</td>
+        <td class="num">${moneyFormat(r.rooms_revenue)}</td>
+        <td class="num muted">${pctFormat(r.pct_of_revenue)}</td>
+      </tr>
+    `).join('')}
+    </tbody></table>
+  `;
+}
+
+function renderSegmentTable(rows) {
+  return `
+    <table class="drill-table"><thead><tr>
+      <th>Segment</th>
+      <th class="num">Res</th>
+      <th class="num">RN</th>
+      <th class="num">ADR</th>
+      <th class="num">Revenue</th>
+      <th class="num">% Mix</th>
+    </tr></thead><tbody>
+    ${rows.map(r => `
+      <tr>
+        <td>${r.segment}</td>
+        <td class="num">${numFormat(r.reservations)}</td>
+        <td class="num">${numFormat(r.room_nights)}</td>
+        <td class="num">${moneyFormat(r.adr)}</td>
+        <td class="num">${moneyFormat(r.rooms_revenue)}</td>
+        <td class="num muted">${pctFormat(r.pct_of_revenue)}</td>
+      </tr>
+    `).join('')}
+    </tbody></table>
+  `;
+}
+
+function renderDowTable(rows) {
+  return `
+    <table class="drill-table"><thead><tr>
+      <th>Day</th>
+      <th class="num">Days</th>
+      <th class="num">Avg Occ</th>
+      <th class="num">Avg ADR</th>
+      <th class="num">RevPAR</th>
+      <th class="num">Total Rev</th>
+    </tr></thead><tbody>
+    ${rows.map(r => `
+      <tr>
+        <td>${r.dow_name}</td>
+        <td class="num">${numFormat(r.days_in_period)}</td>
+        <td class="num">${pctFormat(r.avg_occupancy_pct)}</td>
+        <td class="num">${moneyFormat(r.avg_adr)}</td>
+        <td class="num">${moneyFormat(r.avg_revpar)}</td>
+        <td class="num">${moneyFormat(r.total_rooms_revenue)}</td>
+      </tr>
+    `).join('')}
+    </tbody></table>
+  `;
+}
+
+function renderBucketTable(rows) {
+  const isLead = currentDrill === 'lead_time';
+  const labelKey = isLead ? 'lead_bucket' : 'los_bucket';
+  return `
+    <table class="drill-table"><thead><tr>
+      <th>${isLead ? 'Lead Time' : 'Length of Stay'}</th>
+      <th class="num">Res</th>
+      <th class="num">RN</th>
+      <th class="num">ADR</th>
+      <th class="num">Revenue</th>
+      <th class="num">% Res</th>
+    </tr></thead><tbody>
+    ${rows.map(r => `
+      <tr>
+        <td>${r[labelKey].replace(/^\d+_/, '').replace(/_/g, ' ')}</td>
+        <td class="num">${numFormat(r.reservations)}</td>
+        <td class="num">${numFormat(r.room_nights)}</td>
+        <td class="num">${moneyFormat(r.adr)}</td>
+        <td class="num">${moneyFormat(r.rooms_revenue)}</td>
+        <td class="num muted">${pctFormat(r.pct_of_reservations)}</td>
+      </tr>
+    `).join('')}
+    </tbody></table>
+  `;
+}
+
+async function refreshAll() {
+  const tag = document.getElementById('action-period-tag');
+  tag.textContent = 'Computing…';
+  document.getElementById('last-sync').textContent = new Date().toLocaleTimeString('en-US', {hour: '2-digit', minute:'2-digit'});
+  await Promise.all([loadHeadline(), loadActions(), loadDrill()]);
+}
+
+document.querySelectorAll('.period-pill').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.period-pill').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentPeriod = btn.dataset.period;
+    refreshAll();
+  });
+});
+
+document.querySelectorAll('.drill-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.drill-tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentDrill = btn.dataset.drill;
+    loadDrill();
+  });
+});
+
+// initial load
+refreshAll();
+</script>
+</body>
+</html>

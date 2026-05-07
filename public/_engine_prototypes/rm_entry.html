@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Revenue · Ask</title>
+<style>
+  :root {
+    --bg: #0a0a0b; --bg-2: #111113; --panel: #15151a; --panel-2: #1c1c22;
+    --border: #25252d; --border-soft: #1d1d24;
+    --text: #ededf0; --text-2: #a1a1aa; --muted: #6b6b75;
+    --accent: #c79a6b; --accent-soft: rgba(199, 154, 107, 0.12);
+    --green: #5cf2a4; --warn: #ffb84d; --red: #ff6b6b;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --serif: "Cooper", "Source Serif Pro", Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+    font-size: 14px; line-height: 1.5;
+  }
+
+  /* ============ TOP BAR ============ */
+  .topbar {
+    height: 56px; padding: 0 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: relative; z-index: 100;
+  }
+  .logo {
+    font-weight: 500; font-size: 14px;
+    display: flex; align-items: center; gap: 10px; color: var(--text-2);
+  }
+  .logo-mark {
+    width: 24px; height: 24px; border-radius: 7px;
+    background: linear-gradient(135deg, var(--accent), #b88556);
+    color: #1a1a1a; font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .logo b { color: var(--text); font-weight: 600; }
+  .topbar-right { display: flex; align-items: center; gap: 8px; }
+
+  .top-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 12px; border-radius: 8px;
+    background: transparent; border: 1px solid transparent;
+    color: var(--text-2); font-size: 13px; cursor: pointer;
+    font-family: inherit; transition: all 0.15s;
+    position: relative;
+  }
+  .top-btn:hover { background: var(--panel); color: var(--text); }
+  .top-btn .caret { font-size: 9px; opacity: 0.6; }
+  .top-btn.primary {
+    background: var(--accent); color: #1a1a1a; font-weight: 500;
+    border-color: var(--accent);
+  }
+  .top-btn.primary:hover { background: #d4a672; color: #1a1a1a; }
+  .top-btn.snap-btn { background: var(--panel); border-color: var(--border-soft); }
+
+  /* ============ KPI POPOVER ============ */
+  .popover {
+    position: absolute; top: 44px; right: 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px;
+    min-width: 380px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+    display: none; z-index: 200;
+  }
+  .popover.open { display: block; animation: fadeIn 0.15s ease-out; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+  .popover-head {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 12px;
+  }
+  .popover-title {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--muted); font-weight: 600;
+  }
+  .popover-meta {
+    font-family: var(--mono); font-size: 10px; color: var(--muted);
+  }
+  .kpi-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
+  }
+  .kpi-tile {
+    background: var(--bg-2); border: 1px solid var(--border-soft);
+    border-radius: 8px; padding: 10px 12px;
+  }
+  .kpi-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--muted); font-weight: 600;
+  }
+  .kpi-value {
+    font-family: var(--serif); font-size: 22px; line-height: 1.1;
+    color: var(--text); font-weight: 400; margin-top: 4px;
+  }
+  .kpi-delta { font-size: 11px; margin-top: 4px; font-family: var(--mono); }
+  .kpi-delta.up { color: var(--green); }
+  .kpi-delta.down { color: var(--red); }
+
+  /* ============ REPORTS DROPDOWN ============ */
+  .dropdown {
+    position: absolute; top: 44px; right: 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 6px; min-width: 240px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+    display: none; z-index: 200;
+  }
+  .dropdown.open { display: block; animation: fadeIn 0.15s ease-out; }
+  .dropdown-section {
+    padding: 8px 10px 4px; font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--muted); font-weight: 600;
+  }
+  .dropdown-item {
+    padding: 8px 10px; border-radius: 6px; cursor: pointer;
+    font-size: 13px; color: var(--text-2);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .dropdown-item:hover { background: var(--panel-2); color: var(--text); }
+  .dropdown-item .arrow { color: var(--muted); font-size: 12px; }
+
+  /* ============ TODAY'S SNAP MODAL ============ */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px); z-index: 300;
+    display: none; align-items: center; justify-content: center;
+  }
+  .modal-backdrop.open { display: flex; animation: fadeIn 0.2s ease-out; }
+  .modal {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 16px; padding: 32px;
+    width: 90%; max-width: 560px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+  }
+  .modal-head {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 20px;
+  }
+  .modal-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+  .modal-close {
+    width: 28px; height: 28px; border-radius: 6px;
+    background: transparent; border: 0; color: var(--muted);
+    cursor: pointer; font-size: 18px;
+  }
+  .modal-close:hover { background: var(--panel-2); color: var(--text); }
+  .snap-headline {
+    font-family: var(--serif); font-size: 28px; line-height: 1.2;
+    color: var(--text); font-weight: 400; letter-spacing: -0.01em;
+    margin-bottom: 16px;
+  }
+  .snap-headline .accent { color: var(--accent); font-style: italic; }
+  .snap-stat {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 12px 0; border-bottom: 1px solid var(--border-soft);
+    font-size: 13px;
+  }
+  .snap-stat:last-child { border-bottom: 0; }
+  .snap-stat .label { color: var(--text-2); }
+  .snap-stat .value { font-family: var(--mono); color: var(--text); }
+  .snap-stat .delta { font-size: 11px; margin-left: 8px; font-family: var(--mono); }
+  .snap-stat .delta.up { color: var(--green); }
+  .snap-stat .delta.down { color: var(--red); }
+  .snap-foot {
+    margin-top: 20px; font-size: 12px; color: var(--muted); text-align: center;
+  }
+
+  /* ============ HERO ============ */
+  .hero {
+    min-height: calc(100vh - 56px);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 0 24px 80px;
+    max-width: 760px; margin: 0 auto; width: 100%;
+    margin-top: -40px;
+  }
+  .hero-greeting {
+    font-family: var(--serif);
+    font-size: 44px; line-height: 1.1; letter-spacing: -0.02em;
+    color: var(--text); text-align: center;
+    font-weight: 400; margin-bottom: 8px;
+  }
+  .hero-greeting .accent { color: var(--accent); font-style: italic; }
+  .hero-sub {
+    color: var(--muted); font-size: 14px; margin-bottom: 36px; text-align: center;
+  }
+
+  /* ============ PROMPT ============ */
+  .prompt-shell {
+    width: 100%; max-width: 680px;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 18px; padding: 18px 20px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .prompt-shell:focus-within {
+    border-color: rgba(199, 154, 107, 0.4);
+    box-shadow: 0 0 0 4px rgba(199, 154, 107, 0.06);
+  }
+  .prompt-input {
+    width: 100%; background: transparent; border: 0; outline: 0;
+    color: var(--text); font-size: 17px; font-family: inherit;
+    resize: none; min-height: 26px; max-height: 140px;
+  }
+  .prompt-input::placeholder { color: var(--muted); }
+  .prompt-toolbar {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 12px;
+  }
+  .prompt-tools { display: flex; gap: 4px; }
+  .tool-btn {
+    width: 30px; height: 30px; border-radius: 8px;
+    background: transparent; border: 0; color: var(--muted);
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+  }
+  .tool-btn:hover { background: var(--panel-2); color: var(--text-2); }
+  .send-btn {
+    width: 32px; height: 32px; border-radius: 9px;
+    background: var(--accent); color: #1a1a1a; border: 0;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-weight: 600; font-size: 15px;
+  }
+  .send-btn:hover { background: #d4a672; }
+
+  .suggestions {
+    display: flex; gap: 6px; flex-wrap: wrap; justify-content: center;
+    margin-top: 16px; max-width: 680px;
+  }
+  .suggestion {
+    padding: 6px 12px; border-radius: 100px; font-size: 12px;
+    background: transparent; color: var(--text-2);
+    border: 1px solid var(--border-soft); cursor: pointer;
+    transition: all 0.15s;
+  }
+  .suggestion:hover { color: var(--text); border-color: var(--border); background: var(--panel); }
+
+  /* ============ ALERTS CONTAINER ============ */
+  .alerts {
+    width: 100%; max-width: 680px;
+    margin-top: 36px;
+    background: var(--panel); border: 1px solid var(--border-soft);
+    border-radius: 14px; padding: 16px 18px;
+  }
+  .alerts-head {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 12px;
+  }
+  .alerts-label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--muted); font-weight: 600;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .alerts-badge {
+    font-size: 10px; padding: 2px 7px; border-radius: 100px;
+    background: rgba(255, 184, 77, 0.12); color: var(--warn);
+    border: 1px solid rgba(255, 184, 77, 0.25);
+    font-family: var(--mono);
+  }
+  .alerts-meta { font-size: 11px; color: var(--muted); }
+  .alert-list { display: flex; flex-direction: column; gap: 6px; }
+  .alert {
+    display: flex; gap: 12px; align-items: center;
+    padding: 10px 12px; border-radius: 9px;
+    background: var(--bg-2); border: 1px solid transparent;
+    cursor: pointer; transition: border-color 0.15s, transform 0.15s;
+  }
+  .alert:hover { border-color: var(--border); transform: translateX(2px); }
+  .alert-icon {
+    width: 28px; height: 28px; border-radius: 7px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600;
+  }
+  .alert-icon.pricing { background: rgba(199, 154, 107, 0.15); color: var(--accent); }
+  .alert-icon.group { background: rgba(255, 184, 77, 0.15); color: var(--warn); }
+  .alert-icon.pace { background: rgba(255, 107, 107, 0.15); color: var(--red); }
+  .alert-text { flex: 1; min-width: 0; }
+  .alert-title { font-size: 13px; color: var(--text); font-weight: 500; line-height: 1.3; }
+  .alert-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .alert-arrow { color: var(--muted); font-size: 14px; }
+
+  /* ============ FOOTER HINT ============ */
+  .footer-hint {
+    margin-top: 32px; color: var(--muted); font-size: 11px;
+    text-align: center;
+  }
+  .footer-hint .kbd {
+    font-family: var(--mono); font-size: 10px; color: var(--text-2);
+    padding: 2px 5px; border-radius: 3px; background: var(--panel);
+    border: 1px solid var(--border-soft); margin: 0 2px;
+  }
+
+  @media (max-width: 720px) {
+    .hero-greeting { font-size: 32px; }
+    .topbar { padding: 0 16px; }
+    .top-btn { padding: 6px 8px; font-size: 12px; }
+    .popover { right: 16px; min-width: calc(100vw - 32px); }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ TOP BAR ============ -->
+<div class="topbar">
+  <div class="logo">
+    <span class="logo-mark">R</span>
+    <span><b>Revenue</b></span>
+  </div>
+  <div class="topbar-right">
+
+    <!-- Today's Snap button -->
+    <button class="top-btn snap-btn" onclick="openSnap()">Today's Snap</button>
+
+    <!-- KPIs popover button -->
+    <div style="position: relative;">
+      <button class="top-btn" id="kpi-btn" onclick="toggleKpiPopover(event)">
+        KPIs <span class="caret">▾</span>
+      </button>
+      <div class="popover" id="kpi-popover">
+        <div class="popover-head">
+          <span class="popover-title">Live KPIs · MTD</span>
+          <span class="popover-meta">09:14 LAK · synced 2m ago</span>
+        </div>
+        <div class="kpi-grid">
+          <div class="kpi-tile">
+            <div class="kpi-label">Occupancy</div>
+            <div class="kpi-value">72.4%</div>
+            <div class="kpi-delta up">+0.8pp vs LY</div>
+          </div>
+          <div class="kpi-tile">
+            <div class="kpi-label">ADR</div>
+            <div class="kpi-value">$320</div>
+            <div class="kpi-delta up">+$12 vs LY</div>
+          </div>
+          <div class="kpi-tile">
+            <div class="kpi-label">RevPAR</div>
+            <div class="kpi-value">$232</div>
+            <div class="kpi-delta up">+$15 vs LY</div>
+          </div>
+          <div class="kpi-tile">
+            <div class="kpi-label">Pickup 24h</div>
+            <div class="kpi-value">+8 rms</div>
+            <div class="kpi-delta up">+$2,520</div>
+          </div>
+          <div class="kpi-tile">
+            <div class="kpi-label">Pickup 7d</div>
+            <div class="kpi-value">+45 rms</div>
+            <div class="kpi-delta up">+$13.8k</div>
+          </div>
+          <div class="kpi-tile">
+            <div class="kpi-label">vs Budget MTD</div>
+            <div class="kpi-value">+$8k</div>
+            <div class="kpi-delta up">+1.7%</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reports dropdown -->
+    <div style="position: relative;">
+      <button class="top-btn" id="reports-btn" onclick="toggleReportsDropdown(event)">
+        Reports <span class="caret">▾</span>
+      </button>
+      <div class="dropdown" id="reports-dropdown">
+        <div class="dropdown-section">Daily</div>
+        <div class="dropdown-item" onclick="openWorkspace('pickup')">Daily Pickup <span class="arrow">›</span></div>
+        <div class="dropdown-item" onclick="openWorkspace('otb')">OTB by Date × Type <span class="arrow">›</span></div>
+        <div class="dropdown-item" onclick="openWorkspace('segment')">Segment Mix <span class="arrow">›</span></div>
+        <div class="dropdown-section">Weekly</div>
+        <div class="dropdown-item" onclick="openWorkspace('weekly')">Weekly Dashboard <span class="arrow">›</span></div>
+        <div class="dropdown-item" onclick="openWorkspace('compset')">Comp Set Sheet <span class="arrow">›</span></div>
+        <div class="dropdown-section">Monthly</div>
+        <div class="dropdown-item" onclick="openWorkspace('monthly')">USALI P&L <span class="arrow">›</span></div>
+        <div class="dropdown-section">Pricing</div>
+        <div class="dropdown-item" onclick="openWorkspace('recommendations')">Today's Recommendations <span class="arrow">›</span></div>
+        <div class="dropdown-item" onclick="openWorkspace('rateplans')">Rate Plan Performance <span class="arrow">›</span></div>
+        <div class="dropdown-item" onclick="openWorkspace('promos')">Promo Analyzer <span class="arrow">›</span></div>
+      </div>
+    </div>
+
+    <!-- Open Workspace -->
+    <button class="top-btn primary" onclick="openWorkspace()">Open Workspace</button>
+  </div>
+</div>
+
+<!-- ============ HERO ============ -->
+<div class="hero">
+
+  <h1 class="hero-greeting">
+    Good morning. <span class="accent">Ask anything.</span>
+  </h1>
+  <div class="hero-sub">6 agents online · last sync 2m ago</div>
+
+  <!-- PROMPT -->
+  <div class="prompt-shell">
+    <textarea class="prompt-input" id="prompt" placeholder="What do you want to know about your numbers?" rows="1" onkeydown="handleKey(event)"></textarea>
+    <div class="prompt-toolbar">
+      <div class="prompt-tools">
+        <button class="tool-btn" title="Attach">+</button>
+        <button class="tool-btn" title="Filter">⌖</button>
+        <button class="tool-btn" title="Voice">🎤</button>
+      </div>
+      <button class="send-btn" onclick="ask()">↑</button>
+    </div>
+  </div>
+
+  <div class="suggestions">
+    <span class="suggestion" onclick="ask('Show +60d Pool Villa pickup')">+60d Pool Villa</span>
+    <span class="suggestion" onclick="ask('Why is +90d weak?')">Why +90d weak?</span>
+    <span class="suggestion" onclick="ask('Compare to STLY')">Compare to STLY</span>
+    <span class="suggestion" onclick="ask('Group ABC status')">Group ABC status</span>
+  </div>
+
+  <!-- ALERTS CONTAINER -->
+  <div class="alerts">
+    <div class="alerts-head">
+      <div class="alerts-label">
+        Needs your attention
+        <span class="alerts-badge">3</span>
+      </div>
+      <span class="alerts-meta">As of 09:14 LAK</span>
+    </div>
+    <div class="alert-list">
+      <div class="alert" onclick="ask('Show me the 5 pricing recommendations queued for today')">
+        <div class="alert-icon pricing">$</div>
+        <div class="alert-text">
+          <div class="alert-title">5 pricing recommendations queued</div>
+          <div class="alert-meta">Review by 16:00 · 2 flagged soft-floor</div>
+        </div>
+        <span class="alert-arrow">›</span>
+      </div>
+      <div class="alert" onclick="ask('Group ABC cut-off status')">
+        <div class="alert-icon group">G</div>
+        <div class="alert-text">
+          <div class="alert-title">Group ABC cut-off in 9 days</div>
+          <div class="alert-meta">32 rms uncommitted · $9,600 at risk</div>
+        </div>
+        <span class="alert-arrow">›</span>
+      </div>
+      <div class="alert" onclick="ask('Why is +90d pacing weak?')">
+        <div class="alert-icon pace">!</div>
+        <div class="alert-text">
+          <div class="alert-title">+90d pace −12.1% vs STLY</div>
+          <div class="alert-meta">Rev gap −$28k · trends −18% MoM</div>
+        </div>
+        <span class="alert-arrow">›</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-hint">
+    Press <span class="kbd">↵</span> to ask · <span class="kbd">⌘K</span> for reports · <span class="kbd">⌘.</span> for workspace
+  </div>
+
+</div>
+
+<!-- ============ TODAY'S SNAP MODAL ============ -->
+<div class="modal-backdrop" id="snap-modal" onclick="closeSnap(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-head">
+      <span class="modal-title">Today's Snap · 2026-05-06</span>
+      <button class="modal-close" onclick="closeSnap()">×</button>
+    </div>
+    <div class="snap-headline">
+      Numbers look <span class="accent">good</span> — one thing needs you.
+    </div>
+    <div>
+      <div class="snap-stat">
+        <span class="label">RevPAR MTD</span>
+        <span class="value">$232 <span class="delta up">+5.8% vs LY</span></span>
+      </div>
+      <div class="snap-stat">
+        <span class="label">ADR MTD</span>
+        <span class="value">$320 <span class="delta up">+$12 vs LY</span></span>
+      </div>
+      <div class="snap-stat">
+        <span class="label">Occupancy MTD</span>
+        <span class="value">72.4% <span class="delta up">+0.8pp vs LY</span></span>
+      </div>
+      <div class="snap-stat">
+        <span class="label">Pickup last 24h</span>
+        <span class="value">+8 rms <span class="delta up">+$2,520</span></span>
+      </div>
+      <div class="snap-stat">
+        <span class="label">Pickup last 7d</span>
+        <span class="value">+45 rms <span class="delta up">+$13.8k</span></span>
+      </div>
+      <div class="snap-stat">
+        <span class="label">Forecast +90d</span>
+        <span class="value">620 rms <span class="delta down">−12.1% STLY</span></span>
+      </div>
+    </div>
+    <div class="snap-foot">
+      Daily flash dispatched 09:00 LAK · Reporting Agent
+    </div>
+  </div>
+</div>
+
+<script>
+  // ============ POPOVER / DROPDOWN STATE ============
+  function closeAllPopovers() {
+    document.querySelectorAll('.popover.open, .dropdown.open').forEach(el => el.classList.remove('open'));
+  }
+  document.body.addEventListener('click', closeAllPopovers);
+
+  function toggleKpiPopover(e) {
+    e.stopPropagation();
+    const wasOpen = document.getElementById('kpi-popover').classList.contains('open');
+    closeAllPopovers();
+    if (!wasOpen) document.getElementById('kpi-popover').classList.add('open');
+  }
+  function toggleReportsDropdown(e) {
+    e.stopPropagation();
+    const wasOpen = document.getElementById('reports-dropdown').classList.contains('open');
+    closeAllPopovers();
+    if (!wasOpen) document.getElementById('reports-dropdown').classList.add('open');
+  }
+
+  // ============ TODAY'S SNAP MODAL ============
+  function openSnap() {
+    document.getElementById('snap-modal').classList.add('open');
+  }
+  function closeSnap(e) {
+    if (e && e.target.closest('.modal') && !e.target.classList.contains('modal-close')) return;
+    document.getElementById('snap-modal').classList.remove('open');
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeSnap();
+  });
+
+  // ============ ASK / ROUTING ============
+  function ask(text) {
+    const input = document.getElementById('prompt');
+    const q = text || input.value.trim();
+    if (!q) return;
+    // Visual feedback on prompt
+    const shell = document.querySelector('.prompt-shell');
+    shell.style.borderColor = 'var(--accent)';
+    shell.style.transform = 'scale(0.995)';
+    setTimeout(() => {
+      shell.style.transform = '';
+      // In real app: route to workspace with this prompt prefilled
+      alert('→ Open Workspace with prompt:\n\n"' + q + '"');
+      shell.style.borderColor = '';
+    }, 180);
+  }
+
+  function openWorkspace(reportKey) {
+    if (reportKey) {
+      alert('→ Open Workspace · loaded view: ' + reportKey);
+    } else {
+      alert('→ Open Workspace (default view)');
+    }
+  }
+
+  function handleKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      ask();
+    }
+  }
+
+  // Auto-grow textarea
+  const ta = document.getElementById('prompt');
+  ta.addEventListener('input', () => {
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(ta.scrollHeight, 140) + 'px';
+  });
+
+  // Focus prompt on load
+  setTimeout(() => ta.focus(), 200);
+</script>
+
+</body>
+</html>

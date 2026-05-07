@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Revenue Management Team — Claude Code Architecture</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel-2: #1c232c;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --accent-2: #d29922;
+    --green: #3fb950;
+    --red: #f85149;
+    --purple: #bc8cff;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    line-height: 1.5; padding: 32px; max-width: 1400px; margin: 0 auto;
+  }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  h2 { font-size: 20px; margin: 32px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 15px; margin: 16px 0 8px; color: var(--accent); }
+  .sub { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+  .grid { display: grid; gap: 16px; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px;
+  }
+  .panel-tight { padding: 12px 14px; }
+
+  /* Org chart */
+  .org { display: grid; gap: 24px; margin: 16px 0; }
+  .org-row { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+  .node {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px; min-width: 140px; text-align: center;
+    font-size: 13px; position: relative;
+  }
+  .node.lead { border-color: var(--accent); background: linear-gradient(180deg, #0d2748, var(--panel)); min-width: 220px; }
+  .node.human { border-color: var(--accent-2); background: linear-gradient(180deg, #3a2a05, var(--panel)); min-width: 200px; }
+  .node.worker { border-color: var(--border); }
+  .node.mvp { border-color: var(--green); }
+  .node-title { font-weight: 600; }
+  .node-sub { color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .badge {
+    display: inline-block; font-size: 10px; padding: 1px 6px;
+    border-radius: 10px; background: var(--green); color: #000; font-weight: 600; margin-left: 4px;
+  }
+  .badge.p2 { background: var(--purple); }
+  .connector {
+    height: 24px; border-left: 1px solid var(--border); margin: 0 auto;
+  }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  td code { font-family: var(--mono); font-size: 12px; color: var(--accent); background: rgba(88,166,255,0.08); padding: 1px 5px; border-radius: 3px; }
+
+  /* Agent cards */
+  .agents { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 12px; }
+  .agent { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+  .agent.mvp { border-left: 3px solid var(--green); }
+  .agent.p2 { border-left: 3px solid var(--purple); }
+  .agent h3 { margin-top: 0; }
+  .agent dl { display: grid; grid-template-columns: 90px 1fr; gap: 4px 10px; font-size: 12px; margin: 8px 0 0; }
+  .agent dt { color: var(--muted); }
+  .agent dd { margin: 0; }
+  .pill {
+    display: inline-block; font-family: var(--mono); font-size: 11px;
+    padding: 1px 6px; border-radius: 3px; background: var(--panel-2);
+    border: 1px solid var(--border); margin: 2px 2px 0 0;
+  }
+
+  /* Timeline */
+  .timeline { display: grid; grid-template-columns: 70px 1fr; gap: 8px 16px; }
+  .time { font-family: var(--mono); color: var(--accent-2); font-size: 13px; padding-top: 2px; }
+  .event { font-size: 13px; }
+  .event b { color: var(--text); }
+  .event span { color: var(--muted); }
+
+  /* Approval gates */
+  .gates { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .gate { padding: 12px; border-radius: 6px; font-size: 13px; }
+  .gate.auto { background: rgba(63,185,80,0.08); border: 1px solid rgba(63,185,80,0.3); }
+  .gate.human { background: rgba(210,153,34,0.08); border: 1px solid rgba(210,153,34,0.3); }
+  .gate h4 { margin: 0 0 8px; font-size: 13px; }
+  .gate ul { margin: 0; padding-left: 18px; }
+  .gate li { margin-bottom: 4px; }
+
+  /* Risk */
+  .risk { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; }
+  .risk-card { padding: 12px; border-radius: 6px; background: rgba(248,81,73,0.06); border: 1px solid rgba(248,81,73,0.25); font-size: 13px; }
+  .risk-card h4 { margin: 0 0 6px; color: var(--red); font-size: 13px; }
+  .risk-card p { margin: 0; color: var(--text); }
+  .risk-card .mitigation { margin-top: 6px; color: var(--muted); font-size: 12px; }
+
+  /* Cost */
+  .cost-table td:nth-child(2), .cost-table td:nth-child(3) { font-family: var(--mono); text-align: right; }
+
+  /* Phase tabs */
+  .phase-key { display: flex; gap: 12px; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .phase-key span::before { content: "■"; margin-right: 4px; }
+  .phase-key .mvp::before { color: var(--green); }
+  .phase-key .p2::before { color: var(--purple); }
+
+  .footer { color: var(--muted); font-size: 12px; margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+
+<h1>Revenue Management Team — Claude Code Architecture</h1>
+<div class="sub">Independent 5-star hotel · Cloudbeds PMS · USALI 11th Ed · LAK time</div>
+
+<!-- ============ 1. ORG CHART ============ -->
+<h2>1. Org structure</h2>
+<div class="phase-key">
+  <span class="mvp">MVP (day 1, weeks 1–4)</span>
+  <span class="p2">Phase 2 (months 2–4)</span>
+</div>
+
+<div class="org">
+  <div class="org-row">
+    <div class="node human">
+      <div class="node-title">Human Revenue Manager</div>
+      <div class="node-sub">Approves · sets strategy · escalation</div>
+    </div>
+  </div>
+  <div class="connector"></div>
+  <div class="org-row">
+    <div class="node lead">
+      <div class="node-title">RM Team Lead — Claude Code</div>
+      <div class="node-sub">Orchestrator · QA · routes to sub-agents · reads project files</div>
+    </div>
+  </div>
+  <div class="connector"></div>
+  <div class="org-row">
+    <div class="node mvp"><div class="node-title">Reporting Agent <span class="badge">MVP</span></div><div class="node-sub">Daily flash · USALI pack</div></div>
+    <div class="node mvp"><div class="node-title">Pace & Forecast Agent <span class="badge">MVP</span></div><div class="node-sub">OTB vs LY · pickup · 90-day forecast</div></div>
+    <div class="node mvp"><div class="node-title">Pricing Agent <span class="badge">MVP</span></div><div class="node-sub">BAR recommendations · LOS controls</div></div>
+    <div class="node worker"><div class="node-title">Channel & Mix Agent <span class="badge p2">P2</span></div><div class="node-sub">OTA vs Direct · commission · net ADR</div></div>
+    <div class="node worker"><div class="node-title">Segment Agent <span class="badge p2">P2</span></div><div class="node-sub">Group · Wholesale · Corporate</div></div>
+    <div class="node worker"><div class="node-title">Comp Set Agent <span class="badge p2">P2</span></div><div class="node-sub">Rate shop · demand signals</div></div>
+  </div>
+</div>
+
+<!-- ============ 2. AGENT SPEC ============ -->
+<h2>2. Agent specifications</h2>
+
+<div class="agents">
+
+  <div class="agent mvp">
+    <h3>Reporting Agent</h3>
+    <dl>
+      <dt>Inputs</dt><dd>Cloudbeds API (folio, reservations, rooms, housekeeping)</dd>
+      <dt>Outputs</dt><dd>Daily flash (Slack/Telegram), Weekly dashboard, Monthly USALI P&L pack</dd>
+      <dt>Tools</dt><dd><span class="pill">cloudbeds_api</span><span class="pill">sheets_write</span><span class="pill">slack_post</span><span class="pill">pdf_export</span></dd>
+      <dt>Skills</dt><dd><span class="pill">usali_mapping.md</span><span class="pill">kpi_definitions.md</span><span class="pill">flash_template.md</span></dd>
+      <dt>Cadence</dt><dd>09:00, Mon 10:00, Day 5 of month</dd>
+      <dt>Owner</dt><dd>Mgmt + Revenue</dd>
+    </dl>
+  </div>
+
+  <div class="agent mvp">
+    <h3>Pace & Forecast Agent</h3>
+    <dl>
+      <dt>Inputs</dt><dd>OTB reservations, last year actuals, budget, group block status</dd>
+      <dt>Outputs</dt><dd>Pickup vs LY/STLY, 7/30/90-day forecast, alert on negative pace</dd>
+      <dt>Tools</dt><dd><span class="pill">cloudbeds_api</span><span class="pill">sheets_read</span><span class="pill">slack_post</span></dd>
+      <dt>Skills</dt><dd><span class="pill">pace_methodology.md</span><span class="pill">forecast_curves.md</span></dd>
+      <dt>Cadence</dt><dd>Daily 06:00 + intra-day on demand</dd>
+      <dt>Owner</dt><dd>Revenue</dd>
+    </dl>
+  </div>
+
+  <div class="agent mvp">
+    <h3>Pricing Agent (recommend-only mode)</h3>
+    <dl>
+      <dt>Inputs</dt><dd>Pace, comp set, occupancy %, lead time, day-of-week, events</dd>
+      <dt>Outputs</dt><dd>BAR recommendation per room type per day (next 90 days), LOS restriction proposals</dd>
+      <dt>Tools</dt><dd><span class="pill">cloudbeds_api</span><span class="pill">sheets_write</span><span class="pill">approval_request</span></dd>
+      <dt>Skills</dt><dd><span class="pill">pricing_rules.md</span><span class="pill">demand_calendar.md</span></dd>
+      <dt>Cadence</dt><dd>Daily 14:00 → human approves by 16:00 → push to Cloudbeds</dd>
+      <dt>Owner</dt><dd>Revenue (Human approves)</dd>
+    </dl>
+  </div>
+
+  <div class="agent p2">
+    <h3>Channel & Mix Agent</h3>
+    <dl>
+      <dt>Inputs</dt><dd>Reservations by channel, OTA commission rates, direct booking rev</dd>
+      <dt>Outputs</dt><dd>Channel mix %, net ADR per channel, commission leakage report, direct-booking lever recommendations</dd>
+      <dt>Tools</dt><dd><span class="pill">cloudbeds_api</span><span class="pill">channel_manager_api</span></dd>
+      <dt>Skills</dt><dd><span class="pill">channel_economics.md</span><span class="pill">parity_rules.md</span></dd>
+      <dt>Cadence</dt><dd>Weekly Mon 09:00</dd>
+    </dl>
+  </div>
+
+  <div class="agent p2">
+    <h3>Segment Agent</h3>
+    <dl>
+      <dt>Inputs</dt><dd>Market segment, group blocks, wholesale allotments, corporate accounts</dd>
+      <dt>Outputs</dt><dd>Group quote analysis (displacement), segment mix, contract performance, group cut-off alerts</dd>
+      <dt>Tools</dt><dd><span class="pill">cloudbeds_api</span><span class="pill">displacement_calc</span></dd>
+      <dt>Skills</dt><dd><span class="pill">group_displacement.md</span><span class="pill">contract_terms.md</span></dd>
+      <dt>Cadence</dt><dd>On-demand for quotes, weekly summary</dd>
+    </dl>
+  </div>
+
+  <div class="agent p2">
+    <h3>Comp Set & Market Agent</h3>
+    <dl>
+      <dt>Inputs</dt><dd>STR/Lighthouse feed (preferred) OR manual rate-shop sheet, event calendar, flight load factors</dd>
+      <dt>Outputs</dt><dd>RGI/MPI/ARI vs comp set, demand signal alerts</dd>
+      <dt>Tools</dt><dd><span class="pill">str_api</span><span class="pill">events_api</span></dd>
+      <dt>Skills</dt><dd><span class="pill">comp_set_definition.md</span><span class="pill">market_indicators.md</span></dd>
+      <dt>Cadence</dt><dd>Weekly + event triggers</dd>
+    </dl>
+  </div>
+
+</div>
+
+<!-- ============ 3. DAILY WORKFLOW ============ -->
+<h2>3. Daily workflow (LAK time)</h2>
+<div class="panel">
+  <div class="timeline">
+    <div class="time">06:00</div><div class="event"><b>Pace & Forecast Agent</b> <span>pulls overnight bookings, computes pickup vs STLY, updates 90-day forecast</span></div>
+    <div class="time">07:30</div><div class="event"><b>Reporting Agent</b> <span>compiles daily flash: occupancy, ADR, RevPAR, pickup, top alerts</span></div>
+    <div class="time">09:00</div><div class="event"><b>Daily flash</b> <span>posts to Slack/Telegram. Human RM reviews over coffee.</span></div>
+    <div class="time">10:00</div><div class="event"><b>Human standup</b> <span>RM + GM + F&B 15 min on numbers + actions</span></div>
+    <div class="time">14:00</div><div class="event"><b>Pricing Agent</b> <span>generates BAR recommendations for next 90 days, flags exceptions</span></div>
+    <div class="time">16:00</div><div class="event"><b>Human approves</b> <span>RM signs off / overrides → Team Lead pushes to Cloudbeds</span></div>
+    <div class="time">22:00</div><div class="event"><b>Reporting Agent</b> <span>end-of-day reconciliation, prep tomorrow's flash data</span></div>
+  </div>
+</div>
+
+<!-- ============ 4. APPROVAL GATES ============ -->
+<h2>4. Approval gates — what Claude decides vs human</h2>
+<div class="gates">
+  <div class="gate auto">
+    <h4>Autonomous (Claude executes)</h4>
+    <ul>
+      <li>Generate reports, dashboards, USALI P&L</li>
+      <li>Compute KPIs and pace</li>
+      <li>Recommend BAR within ±15% of last published rate</li>
+      <li>Alert on cancellations, no-show spikes, OOO/OOS</li>
+      <li>Propose LOS restrictions</li>
+      <li>Push approved rates to Cloudbeds</li>
+    </ul>
+  </div>
+  <div class="gate human">
+    <h4>Human approval required</h4>
+    <ul>
+      <li>Any BAR change &gt; ±15% of last rate</li>
+      <li>Group quotes above $X total value (set threshold)</li>
+      <li>New rate plans / channel contracts</li>
+      <li>Wholesale allotment changes</li>
+      <li>Closing dates / overbooking decisions</li>
+      <li>Strategy shifts (new comp set, new segment focus)</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============ 5. SKILLS LIBRARY ============ -->
+<h2>5. Skills library — what each agent loads</h2>
+<table>
+  <thead>
+    <tr><th>Skill file</th><th>Purpose</th><th>Used by</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>04_USALI_MAPPING.md</code></td><td>Folio → USALI account mapping (already in project)</td><td>Reporting</td></tr>
+    <tr><td><code>05_KPI_DEFINITIONS.md</code></td><td>KPI formulas, sources, owners (already in project)</td><td>All agents</td></tr>
+    <tr><td><code>06_PRICING_RULES.md</code></td><td>Floor/ceiling per room type, DOW multipliers, event surcharges</td><td>Pricing</td></tr>
+    <tr><td><code>07_PACE_METHODOLOGY.md</code></td><td>Pickup windows, STLY adjustments, forecast confidence intervals</td><td>Pace</td></tr>
+    <tr><td><code>08_CHANNEL_ECONOMICS.md</code></td><td>Commission % per channel, parity rules, direct-booking incentives</td><td>Channel</td></tr>
+    <tr><td><code>09_GROUP_DISPLACEMENT.md</code></td><td>Displacement calc, decision matrix for group quotes</td><td>Segment</td></tr>
+    <tr><td><code>10_COMP_SET.md</code></td><td>Comp set definition, weighting, RGI/MPI/ARI calc</td><td>Comp Set</td></tr>
+    <tr><td><code>11_FLASH_TEMPLATE.md</code></td><td>Daily flash structure, alert thresholds</td><td>Reporting</td></tr>
+  </tbody>
+</table>
+
+<!-- ============ 6. RISKS ============ -->
+<h2>6. Risks & weak spots — be honest</h2>
+<div class="risk">
+  <div class="risk-card">
+    <h4>Pricing Agent autonomy</h4>
+    <p>If you graduate to autonomous BAR pushing too fast, one bad data feed = revenue disaster.</p>
+    <div class="mitigation">→ Mitigation: 90 days recommend-only, then guardrails (floor/ceiling, max ±15% per day, max 3 changes per week per room type).</div>
+  </div>
+  <div class="risk-card">
+    <h4>Comp Set scraping</h4>
+    <p>Scraping OTAs is fragile (anti-bot), legally grey, and rates shown ≠ rates booked.</p>
+    <div class="mitigation">→ Mitigation: subscribe to Lighthouse or OTA Insight. Budget ~€300–600/mo. Or accept manual weekly shop.</div>
+  </div>
+  <div class="risk-card">
+    <h4>Cloudbeds API limits</h4>
+    <p>API rate limits + folio sync delays mean "real-time" reporting is actually 15–30 min lagged.</p>
+    <div class="mitigation">→ Mitigation: cache aggressively, run heavy queries off-hours, accept lag for non-pricing decisions.</div>
+  </div>
+  <div class="risk-card">
+    <h4>Hallucinated KPIs</h4>
+    <p>If Claude invents a KPI not in <code>05_KPI_DEFINITIONS.md</code>, your USALI pack goes wrong.</p>
+    <div class="mitigation">→ Mitigation: hard rule in Team Lead system prompt — refuse any KPI not defined in the file. Fail loud.</div>
+  </div>
+  <div class="risk-card">
+    <h4>Single point of failure</h4>
+    <p>If Claude Code crashes at 08:55, no flash at 09:00. Operations breaks.</p>
+    <div class="mitigation">→ Mitigation: cron + health check. Fallback to last-known-good flash. SMS alert to human RM.</div>
+  </div>
+  <div class="risk-card">
+    <h4>Human RM atrophy</h4>
+    <p>If the human stops thinking and rubber-stamps Claude's recommendations, you lose strategic judgment.</p>
+    <div class="mitigation">→ Mitigation: weekly "challenge session" — human must override at least one Claude recommendation with rationale.</div>
+  </div>
+</div>
+
+<!-- ============ 7. COST ============ -->
+<h2>7. Rough monthly cost estimate</h2>
+<table class="cost-table">
+  <thead>
+    <tr><th>Item</th><th>Monthly</th><th>Notes</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Claude API (Sonnet 4.5/Opus mix, ~7 agents)</td><td>$200–500</td><td>Depends on token volume; reporting is light, pricing is heavy</td></tr>
+    <tr><td>Lighthouse / OTA Insight</td><td>$300–600</td><td>Optional but recommended for Comp Set Agent</td></tr>
+    <tr><td>Cloudbeds API (already paid)</td><td>$0</td><td>Included in PMS subscription</td></tr>
+    <tr><td>Make.com / orchestration</td><td>$30–100</td><td>If you don't host Claude Code yourself</td></tr>
+    <tr><td>Hosting (VPS for Claude Code agent)</td><td>$20–50</td><td>Or run on existing infra</td></tr>
+    <tr><td><b>Total</b></td><td><b>$550–1,250/mo</b></td><td>vs €4–6k/mo for a junior RM analyst</td></tr>
+  </tbody>
+</table>
+
+<!-- ============ 8. ROLLOUT ============ -->
+<h2>8. Rollout plan</h2>
+<table>
+  <thead>
+    <tr><th>Week</th><th>Deliverable</th><th>Success criteria</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>1</td><td>Cloudbeds API integration + Reporting Agent (daily flash only)</td><td>Flash arrives at 09:00 for 7 consecutive days, numbers tie to PMS</td></tr>
+    <tr><td>2</td><td>USALI mapping validated, monthly P&L pack generated</td><td>P&L matches accountant's manual version ±0.5%</td></tr>
+    <tr><td>3</td><td>Pace & Forecast Agent live</td><td>Forecast accuracy within ±5% on 30-day horizon</td></tr>
+    <tr><td>4</td><td>Pricing Agent in recommend-only mode</td><td>Recommendations posted daily 14:00, human reviews and tracks accept/override rate</td></tr>
+    <tr><td>5–8</td><td>Channel + Segment agents</td><td>Net ADR per channel computed, group displacement live</td></tr>
+    <tr><td>9–12</td><td>Comp Set Agent + autonomous pricing within guardrails</td><td>Pricing Agent auto-pushes within ±15% guardrails, escalates outside</td></tr>
+  </tbody>
+</table>
+
+<div class="footer">
+  Open questions to debate: (1) keep Comp Set Agent or kill it for v1? (2) BAR autonomy threshold — ±15% too tight or too loose? (3) who owns the skill files — RM or PBS? (4) Slack vs Telegram for daily flash? (5) does Pricing Agent need its own LLM (Opus) while others run on Sonnet?
+</div>
+
+</body>
+</html>

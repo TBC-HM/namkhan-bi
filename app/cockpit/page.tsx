@@ -18,6 +18,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
+import NotificationsBar from "@/components/cockpit/NotificationsBar";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -161,6 +162,7 @@ export default function CockpitPage() {
 
   return (
     <div className="cockpit">
+      <NotificationsBar />
       <TopBar
         tab={tab}
         setTab={setTab}
@@ -372,6 +374,184 @@ const FILTER_GROUPS: Record<Filter, string[]> = {
   all: [],
 };
 
+// ─── Tiny inline markdown renderer ───────────────────────────────────────
+// Covers what agents actually emit: headers, bold, italic, code, lists,
+// links, tables, inline code. No new dependency.
+function mdToHtml(md: string): string {
+  if (!md) return "";
+  let s = md;
+  // Escape HTML first
+  s = s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  // Code fences ```lang ... ```
+  s = s.replace(/```([a-z]*)\n([\s\S]*?)```/g, (_m, lang, body) => {
+    return `<pre class="md-pre" data-lang="${lang || ""}"><code>${body}</code></pre>`;
+  });
+  // Headers (#, ##, ###)
+  s = s.replace(/^### (.+)$/gm, "<h4 class='md-h4'>$1</h4>");
+  s = s.replace(/^## (.+)$/gm, "<h3 class='md-h3'>$1</h3>");
+  s = s.replace(/^# (.+)$/gm, "<h2 class='md-h2'>$1</h2>");
+  // Bold + italic
+  s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/\*(.+?)\*/g, "<em>$1</em>");
+  s = s.replace(/`([^`]+?)`/g, "<code class='md-code'>$1</code>");
+  // Links
+  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "<a href='$2' target='_blank' rel='noreferrer' class='md-a'>$1</a>");
+  // Tables (simple pipe-tables)
+  s = s.replace(/((?:^\|.+\|\n)+)/gm, (block) => {
+    const rows = block.trim().split("\n").map((r) => r.trim());
+    if (rows.length < 2) return block;
+    const isSep = (r: string) => /^\|[\s|:-]+\|$/.test(r);
+    const hdr = rows[0];
+    const sep = rows[1];
+    if (!isSep(sep)) return block;
+    const body = rows.slice(2);
+    const splitRow = (r: string) => r.replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+    const th = splitRow(hdr).map((c) => `<th>${c}</th>`).join("");
+    const tbody = body.map((r) => `<tr>${splitRow(r).map((c) => `<td>${c}</td>`).join("")}</tr>`).join("");
+    return `<table class='md-table'><thead><tr>${th}</tr></thead><tbody>${tbody}</tbody></table>`;
+  });
+  // Lists (- or * at start of line)
+  s = s.replace(/(^|\n)((?:[-*] .+\n?)+)/g, (_m, lead, block) => {
+    const items = block.trim().split("\n").map((l: string) => l.replace(/^[-*] /, "")).map((l: string) => `<li>${l}</li>`).join("");
+    return `${lead}<ul class='md-ul'>${items}</ul>`;
+  });
+  // Paragraphs (double newlines)
+  s = s.replace(/\n\n+/g, "</p><p class='md-p'>");
+  s = `<p class='md-p'>${s}</p>`;
+  // Single newlines → <br>
+  s = s.replace(/(<\/p><p class='md-p'>)|(\n)/g, (m) => (m === "\n" ? "<br/>" : m));
+  return s;
+}
+
+// Extract all ```json ... ``` blocks from a markdown string.
+function extractJsonBlocks(md: string): { jsons: unknown[]; stripped: string } {
+  if (!md) return { jsons: [], stripped: md };
+  const jsons: unknown[] = [];
+  const stripped = md.replace(/```json\n([\s\S]*?)```/gi, (_m, body) => {
+    try {
+      jsons.push(JSON.parse(body));
+    } catch {
+      jsons.push({ __unparseable: body });
+    }
+    return "";
+  });
+  return { jsons, stripped };
+}
+
+// Build a clean human-readable markdown summary from agent JSON output.
+// Preference order:
+//   1. summary_markdown (agent's own pre-rendered output — Olive v3, Felix v2 etc.)
+//   2. Known structured fields (next_action, plan, findings, team_roster_if_relevant, …)
+//   3. Recursive walk of nested objects (BRIEFING, table arrays, …) — last resort
+//      so older agents (Olive v2 / pre-summary_markdown) still render readably.
+function walkObjectAsMarkdown(o: Record<string, unknown>, depth = 0): string {
+  // Skip noise keys + already-handled keys
+  const SKIP = new Set([
+    "mode", "owner", "deps", "estimated_minutes", "needs_human_decision",
+    "interpretations_if_ambiguous", "blocking_questions", "next_action",
+    "summary", "summary_markdown", "plan", "findings", "team_roster_if_relevant",
+    "recommendation", "result_summary", "tasks", "critical_path", "parallel_safe",
+    "rollout_plan", "__skill_calls",
+  ]);
+  const lines: string[] = [];
+  for (const [k, v] of Object.entries(o)) {
+    if (SKIP.has(k)) continue;
+    const heading = depth === 0 ? `### ${k}` : `**${k}**`;
+    if (Array.isArray(v)) {
+      if (v.length === 0) continue;
+      // Array of objects with consistent shape → markdown table
+      const allObjs = v.every((x) => x && typeof x === "object" && !Array.isArray(x));
+      if (allObjs && v.length > 1) {
+        const cols = Array.from(new Set(v.flatMap((x) => Object.keys(x as object))));
+        if (cols.length > 0 && cols.length <= 6) {
+          lines.push(heading);
+          lines.push("| " + cols.join(" | ") + " |");
+          lines.push("| " + cols.map(() => "---").join(" | ") + " |");
+          for (const row of v as Array<Record<string, unknown>>) {
+            lines.push("| " + cols.map((c) => {
+              const cell = row[c];
+              if (cell === null || cell === undefined) return "—";
+              return typeof cell === "string" ? cell : JSON.stringify(cell);
+            }).join(" | ") + " |");
+          }
+          continue;
+        }
+      }
+      lines.push(heading);
+      for (const item of v) {
+        if (item && typeof item === "object") {
+          lines.push("- " + JSON.stringify(item));
+        } else {
+          lines.push(`- ${item}`);
+        }
+      }
+    } else if (v && typeof v === "object") {
+      lines.push(heading);
+      lines.push(walkObjectAsMarkdown(v as Record<string, unknown>, depth + 1));
+    } else if (v !== null && v !== undefined && v !== "") {
+      lines.push(`**${k}:** ${v}`);
+    }
+  }
+  return lines.join("\n\n");
+}
+
+function agentJsonToMarkdown(j: unknown): string {
+  if (!j || typeof j !== "object") return "";
+  const o = j as Record<string, unknown>;
+  // 1. Agent-supplied pre-rendered markdown wins
+  if (typeof o.summary_markdown === "string" && o.summary_markdown.trim().length > 0) {
+    return o.summary_markdown.trim();
+  }
+  // 2. Known structured fields
+  const lines: string[] = [];
+  if (typeof o.next_action === "string") lines.push(`**Next:** ${o.next_action}`);
+  if (typeof o.summary === "string") lines.push(o.summary);
+  if (Array.isArray(o.plan) && o.plan.length > 0) {
+    lines.push("**Plan**");
+    o.plan.forEach((p) => lines.push(`- ${typeof p === "string" ? p : JSON.stringify(p)}`));
+  }
+  if (Array.isArray(o.tasks) && o.tasks.length > 0) {
+    lines.push("**Tasks**");
+    lines.push("| # | Owner | Title | Est. min |");
+    lines.push("|---|---|---|---|");
+    (o.tasks as Array<Record<string, unknown>>).forEach((t, i) =>
+      lines.push(`| ${t.order ?? i + 1} | ${t.owner ?? "—"} | ${t.title ?? "—"} | ${t.estimated_minutes ?? "—"} |`)
+    );
+  }
+  if (Array.isArray(o.findings) && o.findings.length > 0) {
+    lines.push("**Findings**");
+    o.findings.forEach((f) => lines.push(`- ${typeof f === "string" ? f : JSON.stringify(f)}`));
+  }
+  if (Array.isArray(o.team_roster_if_relevant) && o.team_roster_if_relevant.length > 0) {
+    lines.push("**Team**");
+    lines.push("| Role | Name | Tagline |");
+    lines.push("|---|---|---|");
+    (o.team_roster_if_relevant as Array<Record<string, unknown>>).forEach((m) =>
+      lines.push(`| ${m.role ?? "—"} | ${m.display_name ?? "—"} | ${m.tagline ?? "—"} |`)
+    );
+  }
+  if (Array.isArray(o.blocking_questions) && o.blocking_questions.length > 0) {
+    lines.push("**Questions**");
+    o.blocking_questions.forEach((q) => lines.push(`- ${typeof q === "string" ? q : JSON.stringify(q)}`));
+  }
+  if (typeof o.recommendation === "string") lines.push(`**Recommendation:** ${o.recommendation}`);
+  if (typeof o.result_summary === "string") lines.push(o.result_summary);
+  if (typeof o.rollout_plan === "string") lines.push(`**Rollout:** ${o.rollout_plan}`);
+  // 3. If nothing structured matched, walk the rest of the object (handles legacy
+  // BRIEFING-style payloads from Olive v2 ticket #25 etc.)
+  if (lines.length === 0) {
+    const walked = walkObjectAsMarkdown(o, 0);
+    if (walked.trim().length > 0) return walked;
+  } else {
+    // Append any unhandled keys at the bottom (don't repeat known ones)
+    const walked = walkObjectAsMarkdown(o, 0);
+    if (walked.trim().length > 0) lines.push(walked);
+  }
+  return lines.join("\n\n");
+}
+
+type Attachment = { name: string; path: string; public_url: string | null; size: number; mime: string; ext: string };
+
 function ChatTab() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [activeTicket, setActiveTicket] = useState<Ticket | null>(null);
@@ -379,6 +559,9 @@ function ChatTab() {
   const [sending, setSending] = useState(false);
   const [filter, setFilter] = useState<Filter>("open");
   const [search, setSearch] = useState("");
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const listEnd = useRef<HTMLDivElement>(null);
 
   const loadTickets = useCallback(async () => {
@@ -396,29 +579,84 @@ function ChatTab() {
       .channel("cockpit_tickets_realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "cockpit_tickets" }, () => loadTickets())
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    // Belt-and-braces poll every 15s in case realtime drops (Bug 3 — DB and UI got out of sync)
+    const poll = setInterval(loadTickets, 15_000);
+    return () => { supabase.removeChannel(channel); clearInterval(poll); };
   }, [loadTickets]);
+
+  // Keep activeTicket in sync with the latest list (status updates from agents arrive after selection)
+  useEffect(() => {
+    if (!activeTicket) return;
+    const fresh = tickets.find((t) => t.id === activeTicket.id);
+    if (fresh && (fresh.status !== activeTicket.status || fresh.parsed_summary !== activeTicket.parsed_summary)) {
+      setActiveTicket(fresh);
+    }
+  }, [tickets, activeTicket]);
 
   useEffect(() => { listEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [tickets]);
 
   const send = async (override?: string) => {
     const msg = (override ?? input).trim();
-    if (!msg || sending) return;
+    if ((!msg && attachments.length === 0) || sending) return;
     setSending(true);
     try {
+      // If attachments exist, append references to the message body
+      let body = msg;
+      if (attachments.length > 0) {
+        const lines = attachments.map(
+          (a) => `📎 ${a.name} (${(a.size / 1024).toFixed(1)} KB) → ${a.public_url ?? a.path}`
+        );
+        body = msg ? `${msg}\n\n**Attached files:**\n${lines.join("\n")}` : `**Attached files:**\n${lines.join("\n")}`;
+      }
       const res = await fetch("/api/cockpit/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: msg }),
+        body: JSON.stringify({ message: body, attachments }),
       });
       if (!res.ok) throw new Error("Send failed");
       if (!override) setInput("");
+      setAttachments([]);
       await loadTickets();
     } catch (e) {
       alert(`Error: ${e instanceof Error ? e.message : "unknown"}`);
     } finally {
       setSending(false);
     }
+  };
+
+  const handleFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      const newAttachments: Attachment[] = [];
+      for (const file of Array.from(files)) {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch("/api/cockpit/upload", { method: "POST", body: fd });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          alert(`Upload failed for ${file.name}: ${err.error ?? res.statusText}`);
+          continue;
+        }
+        const json = await res.json();
+        newAttachments.push({
+          name: json.name,
+          path: json.path,
+          public_url: json.public_url,
+          size: json.size,
+          mime: json.mime,
+          ext: json.ext,
+        });
+      }
+      setAttachments((prev) => [...prev, ...newAttachments]);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const removeAttachment = (path: string) => {
+    setAttachments((prev) => prev.filter((a) => a.path !== path));
   };
 
   const requestMagicLink = async () => {
@@ -443,7 +681,10 @@ function ChatTab() {
       <div className="chat-list">
         <div className="chat-list-header">
           <span>Tickets</span>
-          <button onClick={requestMagicLink} className="chat-magic-btn" title="Get a 10-min QR code to log in on phone">📱</button>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={loadTickets} className="chat-magic-btn" title="Refresh ticket list">🔄</button>
+            <button onClick={requestMagicLink} className="chat-magic-btn" title="Get a 10-min QR code to log in on phone">📱</button>
+          </div>
         </div>
         <div className="chat-filters">
           {(["open", "waiting", "done", "failed", "all"] as Filter[]).map((f) => {
@@ -518,7 +759,26 @@ function ChatTab() {
                 </div>
               </div>
               <div className="ctd-body">
-                {activeTicket.parsed_summary || <i>No summary parsed yet.</i>}
+                {(() => {
+                  const raw = activeTicket.parsed_summary;
+                  if (!raw) return <i>No summary parsed yet.</i>;
+                  const { jsons, stripped } = extractJsonBlocks(raw);
+                  const agentSummaries = jsons.map(agentJsonToMarkdown).filter((s) => s.trim().length > 0);
+                  const human = [stripped.trim(), ...agentSummaries].filter(Boolean).join("\n\n---\n\n");
+                  return (
+                    <>
+                      <div className="md-render" dangerouslySetInnerHTML={{ __html: mdToHtml(human) }} />
+                      {jsons.length > 0 && (
+                        <details className="ctd-raw">
+                          <summary>Show raw agent JSON ({jsons.length})</summary>
+                          {jsons.map((j, i) => (
+                            <pre key={i} className="ctd-raw-pre">{JSON.stringify(j, null, 2)}</pre>
+                          ))}
+                        </details>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
               {activeTicket.status === "awaits_user" && (
                 <div className="ctd-approve">
@@ -555,6 +815,20 @@ function ChatTab() {
         </div>
 
         <div className="chat-input-wrap">
+          {attachments.length > 0 && (
+            <div className="chat-attachments">
+              {attachments.map((a) => (
+                <span key={a.path} className="chat-attachment-chip" title={a.path}>
+                  📎 {a.name} <small>({(a.size / 1024).toFixed(0)} KB)</small>
+                  <button
+                    className="chat-attachment-remove"
+                    onClick={() => removeAttachment(a.path)}
+                    title="Remove"
+                  >×</button>
+                </span>
+              ))}
+            </div>
+          )}
           <textarea
             className="chat-input"
             value={input}
@@ -566,7 +840,27 @@ function ChatTab() {
             disabled={sending}
             rows={3}
           />
-          <button className="chat-send" onClick={() => send()} disabled={sending || !input.trim()}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            style={{ display: "none" }}
+            accept=".md,.txt,.csv,.tsv,.json,.yaml,.yml,.pdf,.doc,.docx,.rtf,.odt,.xls,.xlsx,.ods,.ppt,.pptx,.odp,.png,.jpg,.jpeg,.gif,.webp,.avif,.svg,.heic,.heif,.zip,.tar,.gz,.tgz,.mp4,.mov,.webm,.m4a,.mp3,.wav"
+            onChange={(e) => handleFiles(e.target.files)}
+          />
+          <button
+            className="chat-attach"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={sending || uploading}
+            title="Attach files (md, zip, csv, xlsx, docs, images, ...)"
+          >
+            {uploading ? "↑ Uploading…" : "📎 Attach"}
+          </button>
+          <button
+            className="chat-send"
+            onClick={() => send()}
+            disabled={sending || (!input.trim() && attachments.length === 0)}
+          >
             {sending ? "Sending..." : "Send · ⌘↵"}
           </button>
         </div>
@@ -674,22 +968,64 @@ function ChatTab() {
         .ctd-link:hover { border-color: var(--blue); }
         .chat-input-wrap {
           padding: 14px 24px; border-top: 1px solid var(--border);
-          display: flex; gap: 10px; background: var(--bg-1);
+          display: flex; gap: 10px; background: var(--bg-1); flex-wrap: wrap;
         }
+        .chat-attachments {
+          flex-basis: 100%;
+          display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px;
+        }
+        .chat-attachment-chip {
+          display: inline-flex; align-items: center; gap: 6px;
+          background: var(--bg-2); border: 1px solid var(--border-2);
+          border-radius: 6px; padding: 4px 8px; font-size: 11px;
+          color: var(--text-1);
+        }
+        .chat-attachment-chip small { color: var(--text-3); font-size: 10px; }
+        .chat-attachment-remove {
+          background: transparent; border: none; color: var(--text-3);
+          cursor: pointer; font-size: 14px; padding: 0 2px; line-height: 1;
+        }
+        .chat-attachment-remove:hover { color: var(--bad, #b3261e); }
         .chat-input {
-          flex: 1; resize: none;
+          flex: 1; resize: none; min-width: 200px;
           background: var(--bg-2); border: 1px solid var(--border-2); color: var(--text-0);
           border-radius: 7px; padding: 10px 14px; font-size: 13px;
           font-family: inherit; outline: none;
         }
         .chat-input:focus { border-color: var(--blue); }
         .chat-input:disabled { opacity: 0.5; }
+        .chat-attach {
+          background: var(--bg-2); border: 1px solid var(--border-2); color: var(--text-1);
+          border-radius: 7px; padding: 0 12px; font-size: 12px;
+          cursor: pointer; align-self: flex-end; height: 38px;
+        }
+        .chat-attach:hover:not(:disabled) { border-color: var(--brass); color: var(--brass); }
+        .chat-attach:disabled { opacity: 0.4; cursor: not-allowed; }
         .chat-send {
           background: var(--blue); border: none; color: white;
           border-radius: 7px; padding: 0 16px; font-size: 12px; font-weight: 600;
           cursor: pointer; align-self: flex-end; height: 38px;
         }
         .chat-send:disabled { opacity: 0.4; cursor: not-allowed; }
+        .md-render { font-size: 13px; line-height: 1.55; color: var(--text-0); }
+        .md-render .md-h2 { font-size: 16px; margin: 12px 0 6px; color: var(--text-0); }
+        .md-render .md-h3 { font-size: 14px; margin: 10px 0 4px; color: var(--text-1); }
+        .md-render .md-h4 { font-size: 13px; margin: 8px 0 4px; color: var(--text-1); }
+        .md-render .md-p { margin: 6px 0; }
+        .md-render .md-ul { margin: 6px 0; padding-left: 22px; }
+        .md-render .md-ul li { margin: 2px 0; }
+        .md-render .md-pre { background: var(--bg-2); padding: 10px 12px; border-radius: 6px; overflow-x: auto; font-size: 11px; }
+        .md-render .md-code { background: var(--bg-2); padding: 1px 5px; border-radius: 3px; font-size: 11px; }
+        .md-render .md-a { color: var(--blue); text-decoration: underline; }
+        .md-render .md-table { border-collapse: collapse; margin: 8px 0; font-size: 12px; }
+        .md-render .md-table th, .md-render .md-table td { border: 1px solid var(--border-2); padding: 5px 8px; text-align: left; }
+        .md-render .md-table th { background: var(--bg-2); font-weight: 600; }
+        .ctd-raw { margin-top: 12px; }
+        .ctd-raw summary { cursor: pointer; color: var(--text-3); font-size: 11px; }
+        .ctd-raw-pre {
+          margin-top: 6px; background: var(--bg-2); padding: 10px 12px; border-radius: 6px;
+          overflow-x: auto; font-size: 10px; color: var(--text-2); white-space: pre-wrap;
+        }
       `}</style>
     </div>
   );

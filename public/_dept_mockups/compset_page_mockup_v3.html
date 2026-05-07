@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>06 Comp Set — v3 with edit + scoring + settings</title>
+<style>
+  :root {
+    --bg: #f5f1e8;
+    --bg-card: #faf6ed;
+    --bg-expand: #f0ebde;
+    --bg-drawer: #efe9d8;
+    --ink: #1a2b1f;
+    --ink-2: #4a5a4f;
+    --ink-3: #6b7a70;
+    --accent: #1f3a2e;
+    --gold: #b8954a;
+    --green: #2d5a3d;
+    --green-soft: rgba(45, 90, 61, 0.08);
+    --amber: #c87d2e;
+    --amber-soft: rgba(200, 125, 46, 0.08);
+    --red: #8b3a3a;
+    --red-soft: rgba(139, 58, 58, 0.08);
+    --gray-pill: rgba(107, 122, 112, 0.15);
+    --line: rgba(26, 43, 31, 0.12);
+    --line-strong: rgba(26, 43, 31, 0.25);
+    --lock-bg: rgba(139, 58, 58, 0.05);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: 'EB Garamond', Georgia, 'Times New Roman', serif;
+    font-size: 15px; line-height: 1.5; padding: 32px 48px;
+  }
+  .serif { font-family: 'EB Garamond', Georgia, serif; }
+  .mono { font-family: 'JetBrains Mono', Menlo, monospace; font-size: 11px; letter-spacing: 0.5px; }
+  .label { font-family: 'JetBrains Mono', Menlo, monospace; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--ink-3); }
+  .h2 { font-size: 22px; font-weight: 400; }
+  .h3 { font-size: 16px; font-weight: 600; letter-spacing: 0.3px; }
+  .h4 { font-size: 14px; font-weight: 600; }
+  .num { font-family: 'JetBrains Mono', Menlo, monospace; font-variant-numeric: tabular-nums; }
+  
+  .tabs { display: flex; gap: 32px; padding: 16px 0 24px; border-bottom: 1px solid var(--line); margin-bottom: 24px; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 11px; letter-spacing: 2px; }
+  .tab { color: var(--ink-3); padding-bottom: 4px; }
+  .tab.active { color: var(--ink); border-bottom: 2px solid var(--gold); padding-bottom: 4px; font-weight: 600; }
+  
+  .top-strip {
+    display: grid; grid-template-columns: 2fr 1.2fr 1.2fr 1.2fr;
+    background: var(--bg-card); border: 1px solid var(--line);
+    border-radius: 4px; margin-bottom: 16px;
+  }
+  .strip-cell { padding: 18px 20px; border-right: 1px solid var(--line); }
+  .strip-cell:last-child { border-right: none; }
+  
+  .util-bar { display: flex; gap: 8px; margin-bottom: 24px; align-items: center; }
+  
+  .run-btn {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: var(--accent); color: var(--bg); border: none;
+    padding: 10px 16px; font-family: 'JetBrains Mono', Menlo, monospace;
+    font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase;
+    cursor: pointer; border-radius: 2px;
+  }
+  .run-btn:hover { background: var(--green); }
+  .run-btn-primary-large { padding: 12px 20px; }
+  .run-btn-secondary { background: transparent; color: var(--ink-2); border: 1px solid var(--line-strong); }
+  .run-btn-secondary:hover { background: var(--bg-card); border-color: var(--ink-2); }
+  .run-btn-link { background: transparent; color: var(--ink-2); border: none; padding: 6px 10px; text-decoration: underline; cursor: pointer; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; }
+  
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 12px; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; font-weight: 600; }
+  .pill .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .pill-green { background: var(--green-soft); color: var(--green); }
+  .pill-green .dot { background: var(--green); }
+  .pill-amber { background: var(--amber-soft); color: var(--amber); }
+  .pill-amber .dot { background: var(--amber); }
+  .pill-red { background: var(--red-soft); color: var(--red); }
+  .pill-red .dot { background: var(--red); }
+  .pill-gray { background: var(--gray-pill); color: var(--ink-3); }
+  .pill-gray .dot { background: var(--ink-3); }
+  
+  .preview { background: var(--bg-card); border: 1px solid var(--line); border-radius: 4px; padding: 22px 24px; margin-bottom: 24px; }
+  .preview-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; gap: 16px; }
+  .preview-title { font-size: 18px; font-weight: 500; }
+  .preview-sub { color: var(--ink-3); font-size: 13px; margin-top: 4px; }
+  .info-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--ink-3); color: var(--bg-card);
+    font-size: 10px; font-weight: 700; cursor: pointer; margin-left: 4px;
+    font-family: serif;
+  }
+  .info-icon:hover { background: var(--accent); }
+  
+  .date-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+  .date-card { background: var(--bg); border: 1px solid var(--line); border-left: 3px solid var(--gold); padding: 12px 14px; border-radius: 2px; position: relative; }
+  .date-card.high { border-left-color: var(--green); }
+  .date-card.med { border-left-color: var(--gold); }
+  .date-card.custom { border-left-color: var(--accent); border-style: dashed; }
+  .date-card.custom .date-source { background: var(--accent); color: var(--bg); }
+  .date-day { font-family: 'JetBrains Mono', Menlo, monospace; font-size: 12px; font-weight: 600; }
+  .date-score { font-family: 'JetBrains Mono', Menlo, monospace; font-size: 10px; color: var(--ink-3); float: right; }
+  .date-event-tag { display: inline-block; padding: 1px 6px; background: rgba(184, 149, 74, 0.15); color: var(--gold); border-radius: 2px; font-size: 10px; margin-right: 4px; font-family: 'JetBrains Mono', Menlo, monospace; margin-top: 4px; }
+  .date-source { display: inline-block; padding: 1px 6px; border-radius: 2px; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 9px; letter-spacing: 0.5px; text-transform: uppercase; background: var(--gray-pill); color: var(--ink-3); margin-top: 4px; }
+  .date-remove { position: absolute; top: 6px; right: 6px; cursor: pointer; color: var(--ink-3); font-size: 12px; }
+  .date-remove:hover { color: var(--red); }
+  
+  .add-date-row { display: flex; gap: 8px; align-items: center; padding: 12px 16px; background: rgba(31, 58, 46, 0.04); border-radius: 4px; border: 1px dashed var(--line-strong); }
+  .add-date-row input { padding: 8px 12px; border: 1px solid var(--line); background: var(--bg); border-radius: 2px; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 12px; color: var(--ink); }
+  .add-date-row select { padding: 8px 12px; border: 1px solid var(--line); background: var(--bg); border-radius: 2px; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 12px; color: var(--ink); }
+  .add-date-row .reason-input { flex: 1; }
+  
+  .events-strip { display: flex; gap: 12px; padding: 14px 0; margin-bottom: 24px; overflow-x: auto; }
+  .event-chip { flex: 0 0 auto; background: var(--bg-card); border: 1px solid var(--line); border-radius: 4px; padding: 10px 14px; min-width: 200px; }
+  .event-chip.live { border-left: 3px solid var(--green); }
+  .event-chip.buildup { border-left: 3px solid var(--amber); }
+  .event-chip.horizon { border-left: 3px solid var(--ink-3); }
+  .event-name { font-size: 13px; font-weight: 500; margin-bottom: 2px; }
+  .event-meta { font-size: 11px; color: var(--ink-3); font-family: 'JetBrains Mono', Menlo, monospace; }
+  
+  .set-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
+  .set-tab { padding: 12px 18px; border: 1px solid var(--line); border-bottom: none; border-radius: 4px 4px 0 0; background: var(--bg); color: var(--ink-3); font-size: 13px; display: flex; align-items: center; gap: 8px; }
+  .set-tab.active { background: var(--bg-card); color: var(--ink); font-weight: 600; }
+  .set-tab .count { font-family: 'JetBrains Mono', Menlo, monospace; font-size: 10px; color: var(--ink-3); }
+  .set-tab .star { color: var(--gold); }
+  
+  .table-wrap { background: var(--bg-card); border: 1px solid var(--line); border-radius: 0 4px 4px 4px; overflow: hidden; }
+  .table-header { display: flex; justify-content: space-between; align-items: center; padding: 18px 24px; border-bottom: 1px solid var(--line); }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; padding: 10px 14px; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--ink-3); font-weight: 500; border-bottom: 1px solid var(--line); background: rgba(26, 43, 31, 0.02); }
+  td { padding: 12px 14px; border-bottom: 1px solid var(--line); font-size: 14px; vertical-align: middle; }
+  tr.expandable td:first-child { cursor: pointer; }
+  tr.self-row { background: rgba(184, 149, 74, 0.06); }
+  tr.expanded { background: var(--bg-expand); }
+  tr.detail-row td { padding: 0; border-bottom: 1px solid var(--line-strong); }
+  td.num { font-family: 'JetBrains Mono', Menlo, monospace; font-variant-numeric: tabular-nums; }
+  td.empty { color: var(--ink-3); }
+  td.never { color: var(--ink-3); font-size: 12px; font-style: italic; }
+  
+  .prop-name { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .prop-name a { color: var(--ink); text-decoration: none; font-weight: 500; border-bottom: 1px dashed var(--line-strong); padding-bottom: 1px; }
+  .prop-name a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  .prop-name .expand-arrow { color: var(--ink-3); font-size: 11px; transition: transform 0.15s; margin-right: 4px; }
+  tr.expanded .expand-arrow { transform: rotate(90deg); }
+  .star-icon { color: var(--gold); }
+  
+  .channel-badges { display: inline-flex; gap: 3px; margin-left: 4px; }
+  .ch-badge { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 3px; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 8px; font-weight: 700; letter-spacing: 0.3px; text-decoration: none; border: 1px solid var(--line); }
+  .ch-badge.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .ch-badge.active:hover { background: var(--green); }
+  .ch-badge.inactive { background: transparent; color: var(--ink-3); opacity: 0.4; cursor: not-allowed; }
+  
+  .review-score { display: inline-flex; flex-direction: column; align-items: flex-start; line-height: 1.2; }
+  .review-score .score-num { font-family: 'JetBrains Mono', Menlo, monospace; font-size: 14px; font-weight: 600; color: var(--green); }
+  .review-score .score-num.medium { color: var(--amber); }
+  .review-score .review-count { font-size: 10px; color: var(--ink-3); font-family: 'JetBrains Mono', Menlo, monospace; }
+  
+  /* COMPETITOR DEEP-EXPAND */
+  .deep-expand { padding: 24px 28px; background: var(--bg-expand); border-top: 2px solid var(--gold); }
+  .deep-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-bottom: 24px; }
+  .deep-section { background: var(--bg-card); border: 1px solid var(--line); border-radius: 4px; padding: 18px 20px; }
+  .deep-section h4 { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .deep-section h4 .edit-link { margin-left: auto; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 10px; letter-spacing: 1px; color: var(--ink-3); cursor: pointer; text-decoration: underline; }
+  .deep-section h4 .edit-link:hover { color: var(--accent); }
+  
+  .deep-info-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+  .deep-info-row:last-child { border-bottom: none; }
+  .deep-info-row .key { color: var(--ink-3); font-family: 'JetBrains Mono', Menlo, monospace; font-size: 11px; }
+  .deep-info-row .val { color: var(--ink); font-weight: 500; text-align: right; }
+  .deep-info-row a { color: var(--accent); text-decoration: underline; font-size: 12px; word-break: break-all; }
+  
+  /* ROOM MAPPING TABLE */
+  table.rooms { width: 100%; }
+  table.rooms th, table.rooms td { padding: 8px 10px; font-size: 12px; border: 1px solid var(--line); }
+  table.rooms th { background: rgba(26, 43, 31, 0.04); font-family: 'JetBrains Mono', Menlo, monospace; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--ink-3); font-weight: 500; }
+  table.rooms td { vertical-align: top; }
+  table.rooms td.target { background: rgba(184, 149, 74, 0.12); border-left: 2px solid var(--gold); }
+  .tier-badge { display: inline-block; padding: 2px 8px; background: var(--gray-pill); color: var(--ink-2); border-radius: 10px; font-size: 10px; font-family: 'JetBrains Mono', Menlo, monospace; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; }
+  .tier-badge.entry { background: rgba(107, 122, 112, 0.15); color: var(--ink-3); }
+  .tier-badge.standard { background: rgba(45, 90, 61, 0.10); color: var(--green); }
+  .tier-badge.premium { background: rgba(184, 149, 74, 0.20); color: var(--gold); }
+  .tier-badge.suite { background: rgba(31, 58, 46, 0.15); color: var(--accent); }
+  .tier-badge.villa { background: rgba(139, 58, 58, 0.10); color: var(--red); }
+  
+  /* MATRIX */
+  .matrix-wrap { padding: 18px 0 0; }
+  table.matrix { width: 100%; }
+  table.matrix th, table.matrix td { padding: 6px 10px; border: 1px solid var(--line); font-size: 12px; text-align: right; background: var(--bg-card); }
+  table.matrix th:first-child, table.matrix td:first-child { text-align: left; padding-left: 12px; min-width: 130px; }
+  table.matrix th { background: rgba(26, 43, 31, 0.04); }
+  table.matrix td.rate { font-family: 'JetBrains Mono', Menlo, monospace; font-weight: 600; }
+  table.matrix td.rate.cheapest { background: rgba(45, 90, 61, 0.12); color: var(--green); }
+  table.matrix td.rate.dim { color: var(--ink-3); font-weight: 400; }
+  table.matrix td.event-row { background: rgba(184, 149, 74, 0.08); }
+  table.matrix .matrix-event-tag { display: inline-block; font-size: 9px; color: var(--gold); margin-left: 4px; font-family: 'JetBrains Mono', Menlo, monospace; }
+  
+  /* DRAWERS (faked as wrapper with title) */
+  .drawer { background: var(--bg-drawer); border: 1px solid var(--line); border-radius: 4px; margin-top: 24px; padding: 0; overflow: hidden; }
+  .drawer-header { display: flex; justify-content: space-between; align-items: center; padding: 18px 28px; background: var(--accent); color: var(--bg); }
+  .drawer-header .h3 { color: var(--bg); }
+  .drawer-header .close { cursor: pointer; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 18px; }
+  .drawer-body { padding: 24px 28px; }
+  
+  /* SCORING DRAWER */
+  .scoring-formula { background: var(--bg-card); border: 1px solid var(--line); border-radius: 3px; padding: 20px; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 13px; text-align: center; line-height: 2; margin-bottom: 24px; }
+  .scoring-formula .factor { display: inline-block; padding: 4px 8px; border-radius: 3px; margin: 0 4px; }
+  .scoring-formula .f-dow { background: rgba(45, 90, 61, 0.15); color: var(--green); }
+  .scoring-formula .f-event { background: rgba(184, 149, 74, 0.20); color: var(--gold); }
+  .scoring-formula .f-lead { background: rgba(200, 125, 46, 0.15); color: var(--amber); }
+  .scoring-formula .f-peak { background: rgba(31, 58, 46, 0.15); color: var(--accent); }
+  
+  .scoring-tables { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+  .scoring-block { background: var(--bg-card); border: 1px solid var(--line); border-radius: 3px; padding: 16px; }
+  .scoring-block h4 { margin-bottom: 12px; }
+  .scoring-block table { width: 100%; }
+  .scoring-block td { padding: 4px 0; font-size: 12px; border: none; }
+  .scoring-block td.value { text-align: right; font-family: 'JetBrains Mono', Menlo, monospace; font-weight: 600; }
+  .bar-cell { display: flex; align-items: center; gap: 8px; }
+  .score-bar { flex: 1; height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; }
+  .score-bar-fill { height: 100%; background: var(--gold); }
+  
+  /* SETTINGS DRAWER */
+  .settings-section { margin-bottom: 24px; }
+  .settings-section .section-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+  .settings-section .lock-icon { color: var(--red); font-size: 11px; font-family: 'JetBrains Mono', Menlo, monospace; }
+  .settings-section .edit-icon { color: var(--green); font-size: 11px; font-family: 'JetBrains Mono', Menlo, monospace; }
+  .settings-locked { background: var(--lock-bg); border: 1px solid rgba(139, 58, 58, 0.15); border-radius: 3px; padding: 14px 16px; }
+  .settings-locked .lock-banner { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--red); margin-bottom: 12px; font-family: 'JetBrains Mono', Menlo, monospace; letter-spacing: 0.5px; }
+  
+  .setting-row { display: grid; grid-template-columns: 200px 1fr auto; gap: 16px; align-items: center; padding: 10px 0; border-bottom: 1px dashed var(--line); }
+  .setting-row:last-child { border-bottom: none; }
+  .setting-row .key { font-size: 12px; color: var(--ink-2); font-family: 'JetBrains Mono', Menlo, monospace; }
+  .setting-row .key .desc { display: block; color: var(--ink-3); font-weight: 400; margin-top: 2px; font-size: 10px; line-height: 1.4; }
+  .setting-row input, .setting-row select { padding: 6px 10px; border: 1px solid var(--line); background: var(--bg-card); border-radius: 2px; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 12px; color: var(--ink); width: 100%; }
+  .setting-row .input-locked { background: rgba(0,0,0,0.05); cursor: not-allowed; color: var(--ink-3); }
+  .setting-row .toggle { display: inline-block; width: 36px; height: 18px; background: var(--gray-pill); border-radius: 10px; position: relative; cursor: pointer; }
+  .setting-row .toggle.on { background: var(--green); }
+  .setting-row .toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; background: var(--bg-card); border-radius: 50%; transition: 0.2s; }
+  .setting-row .toggle.on::after { left: 20px; }
+  
+  .row { display: flex; align-items: center; gap: 12px; }
+  .grow { flex: 1; }
+  .muted { color: var(--ink-3); }
+  .small { font-size: 12px; }
+  .mt-8 { margin-top: 8px; }
+  .mt-16 { margin-top: 16px; }
+  .mb-8 { margin-bottom: 8px; }
+  .mb-16 { margin-bottom: 16px; }
+  .progress { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; margin-top: 8px; }
+  .progress-bar { height: 100%; background: var(--gold); }
+</style>
+</head>
+<body>
+
+<div class="tabs">
+  <span class="tab">01 PULSE</span>
+  <span class="tab">02 PACE</span>
+  <span class="tab">03 CHANNELS</span>
+  <span class="tab">04 RATE PLANS</span>
+  <span class="tab">05 PRICING</span>
+  <span class="tab active">06 COMP SET</span>
+  <span class="tab">07 AGENTS</span>
+</div>
+
+<!-- TOP STRIP -->
+<div class="top-strip">
+  <div class="strip-cell">
+    <div class="label">COMP SET AGENT</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:6px;">
+      <span class="pill pill-amber"><span class="dot"></span>BETA</span>
+      <span class="muted small">claude-sonnet-4-6</span>
+    </div>
+    <button class="run-btn run-btn-primary-large" style="margin-top:8px;">▶ RUN NOW <span>→</span></button>
+    <button class="run-btn run-btn-secondary" style="margin-left:8px;">DEEP SHOP</button>
+  </div>
+  <div class="strip-cell">
+    <div class="label">LAST RUN</div>
+    <div class="h2 mt-8 mono" style="font-size:18px;">2h 14m ago</div>
+    <div class="muted small"><span class="pill pill-green" style="margin-right:4px;"><span class="dot"></span>SUCCESS</span> 128/132</div>
+  </div>
+  <div class="strip-cell">
+    <div class="label">MTD COST</div>
+    <div class="h2 mt-8 mono" style="font-size:18px;">$12.40 <span class="muted" style="font-size:13px;">/ $150</span></div>
+    <div class="progress"><div class="progress-bar" style="width:8%"></div></div>
+    <div class="muted small mt-8">8% of monthly cap</div>
+  </div>
+  <div class="strip-cell">
+    <div class="label">NEXT MAJOR EVENT</div>
+    <div class="h2 mt-8" style="font-size:18px;">Vesak</div>
+    <div class="muted small mono">19 days · score 65</div>
+  </div>
+</div>
+
+<!-- UTILITY BAR — 2 new buttons for scoring + settings -->
+<div class="util-bar">
+  <button class="run-btn run-btn-link" style="border:1px solid var(--line-strong);background:var(--bg-card);text-decoration:none;">📊 HOW DATES ARE SCORED</button>
+  <button class="run-btn run-btn-link" style="border:1px solid var(--line-strong);background:var(--bg-card);text-decoration:none;">⚙ AGENT SETTINGS</button>
+  <span class="grow"></span>
+  <span class="muted small">Showing both buttons inline for mockup. In production these open as right-side drawers.</span>
+</div>
+
+<!-- EVENTS STRIP -->
+<div class="events-strip">
+  <div class="event-chip live"><div class="event-name">Golden Week JP</div><div class="event-meta"><span class="pill pill-green" style="margin-right:6px;"><span class="dot"></span>LIVE</span> ends 3d</div></div>
+  <div class="event-chip live"><div class="event-name">TH Labor Day</div><div class="event-meta"><span class="pill pill-green" style="margin-right:6px;"><span class="dot"></span>LIVE</span> ends 1d</div></div>
+  <div class="event-chip buildup"><div class="event-name">Vesak 2026</div><div class="event-meta"><span class="pill pill-amber" style="margin-right:6px;"><span class="dot"></span>BUILDUP</span> 19d</div></div>
+  <div class="event-chip buildup"><div class="event-name">Full Moon May 31</div><div class="event-meta"><span class="pill pill-amber" style="margin-right:6px;"><span class="dot"></span>IMMINENT</span> 28d</div></div>
+  <div class="event-chip horizon"><div class="event-name">Summer 2026</div><div class="event-meta"><span class="pill pill-gray" style="margin-right:6px;"><span class="dot"></span>HORIZON</span> 59d</div></div>
+  <div class="event-chip horizon"><div class="event-name">Boun Ok Phansa</div><div class="event-meta"><span class="pill pill-gray" style="margin-right:6px;"><span class="dot"></span>HORIZON</span> 176d</div></div>
+</div>
+
+<!-- SCRAPE PREVIEW with editable dates + add custom -->
+<div class="preview">
+  <div class="preview-header">
+    <div>
+      <div class="preview-title serif">Next run will shop these dates</div>
+      <div class="preview-sub">8 picked by smart picker · 1 added by you · 9 total · click ✕ to remove</div>
+    </div>
+    <div class="muted small mono" style="text-align:right;line-height:1.7;">
+      Mode: DAILY_LEAN<span class="info-icon" title="Lean = BDC+AGD+DIR · 1 LOS · US geo. Deep = all 5 channels · 2 LOS · 4 geos.">i</span><br>
+      Horizon: 120d<span class="info-icon" title="Maximum days into the future to consider when picking dates. 120d covers 4 months ahead.">i</span> · Floor: 40<span class="info-icon" title="Minimum total score (0-100) for a date to be included. Lower = more dates, more cost. Higher = fewer, only high-impact.">i</span>
+    </div>
+  </div>
+  
+  <div class="date-grid">
+    <div class="date-card high"><span class="date-day">Sat 16 May</span><span class="date-score">72</span><div><span class="date-event-tag">vesak</span><span class="date-event-tag">summer</span></div><span class="date-source">picker</span></div>
+    <div class="date-card high"><span class="date-day">Fri 15 May</span><span class="date-score">71</span><div><span class="date-event-tag">vesak</span><span class="date-event-tag">summer</span></div><span class="date-source">picker</span></div>
+    <div class="date-card high"><span class="date-day">Fri 22 May</span><span class="date-score">70</span><div><span class="date-event-tag">full_moon</span><span class="date-event-tag">vesak</span></div><span class="date-source">picker</span></div>
+    <div class="date-card med"><span class="date-day">Sat 09 May</span><span class="date-score">69</span><div><span class="date-event-tag">vesak</span><span class="date-event-tag">summer</span></div><span class="date-source">picker</span></div>
+    <div class="date-card med"><span class="date-day">Fri 08 May</span><span class="date-score">67</span><div><span class="date-event-tag">vesak</span><span class="date-event-tag">summer</span></div><span class="date-source">picker</span></div>
+    <div class="date-card med"><span class="date-day">Thu 14 May</span><span class="date-score">65</span><div><span class="date-event-tag">vesak</span><span class="date-event-tag">summer</span></div><span class="date-source">picker</span></div>
+    <div class="date-card med"><span class="date-day">Sat 30 May</span><span class="date-score">65</span><div><span class="date-event-tag">full_moon</span><span class="date-event-tag">summer</span></div><span class="date-source">picker</span></div>
+    <div class="date-card med"><span class="date-day">Sun 17 May</span><span class="date-score">63</span><div><span class="date-event-tag">full_moon</span><span class="date-event-tag">vesak</span></div><span class="date-source">picker</span></div>
+    <!-- Custom user-added date -->
+    <div class="date-card custom" style="grid-column: span 2;">
+      <span class="date-remove">✕</span>
+      <span class="date-day">Sat 27 Jun</span><span class="date-score">manual</span>
+      <div style="font-size:11px;color:var(--ink-2);margin-top:6px;">"Big inquiry from Bangkok group — confirming rate before quoting"</div>
+      <span class="date-source">CUSTOM · PBS</span>
+    </div>
+  </div>
+  
+  <!-- ADD DATE form -->
+  <div class="add-date-row">
+    <span class="label" style="color:var(--ink-2);">+ ADD CUSTOM DATE</span>
+    <input type="date" value="2026-08-15" />
+    <select>
+      <option>1 night LOS</option><option>2 nights</option><option>3 nights</option>
+    </select>
+    <select>
+      <option>US geo</option><option>GB geo</option><option>TH geo</option><option>LA geo</option>
+    </select>
+    <input type="text" class="reason-input" placeholder="Reason — e.g. group inquiry, event, suspicion" />
+    <button class="run-btn">+ ADD</button>
+  </div>
+</div>
+
+<!-- SET TABS + TABLE -->
+<div class="set-tabs">
+  <div class="set-tab active"><span class="star">★</span><span>Local — manual</span><span class="count">11 props · ● fresh</span></div>
+  <div class="set-tab"><span>Local — AI proposed</span><span class="count">phase 2</span></div>
+  <div class="set-tab"><span>Regional — manual</span><span class="count">empty</span></div>
+  <div class="set-tab"><span>Regional — AI proposed</span><span class="count">phase 2</span></div>
+</div>
+
+<div class="table-wrap">
+  <div class="table-header">
+    <div>
+      <div class="h3">Local — manual (Luang Prabang)</div>
+      <div class="muted small mt-8">11 properties · last shop 2h 14m ago · click row to expand</div>
+    </div>
+    <button class="run-btn run-btn-secondary">EDIT COMPS</button>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th style="padding-left:24px;">Property</th>
+        <th>★ / Reviews</th>
+        <th>Rooms</th>
+        <th>Best Rate</th>
+        <th>30D Avg</th>
+        <th>Range</th>
+        <th>Obs.</th>
+        <th>Last Shop</th>
+        <th>vs. Median</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- The Namkhan SELF -->
+      <tr class="self-row expandable">
+        <td style="padding-left:24px;">
+          <div class="prop-name">
+            <span class="expand-arrow">▶</span>
+            <span class="star-icon">★</span>
+            <a href="https://thenamkhan.com" target="_blank">The Namkhan</a>
+            <span class="channel-badges">
+              <a class="ch-badge active" target="_blank">B</a><a class="ch-badge active" target="_blank">A</a>
+              <a class="ch-badge active" target="_blank">E</a><a class="ch-badge active" target="_blank">T</a>
+              <a class="ch-badge active" target="_blank">D</a>
+            </span>
+          </div>
+        </td>
+        <td><div class="review-score"><span class="score-num">9.2</span><span class="review-count">★ 4 · 487 reviews</span></div></td>
+        <td class="num">20</td>
+        <td class="num"><strong>$165</strong> <span class="muted small">DIR</span></td>
+        <td class="num">$172</td>
+        <td class="num muted small">$148–$210</td>
+        <td class="num">38</td>
+        <td><span class="pill pill-green"><span class="dot"></span>2H AGO</span></td>
+        <td class="num muted">self</td>
+      </tr>
+      
+      <!-- Sofitel EXPANDED with deep view -->
+      <tr class="expandable expanded">
+        <td style="padding-left:24px;">
+          <div class="prop-name">
+            <span class="expand-arrow">▶</span>
+            <a href="https://www.booking.com/hotel/la/sofitel-luang-prabang.html" target="_blank">Sofitel Luang Prabang</a>
+            <span class="channel-badges">
+              <a class="ch-badge active" target="_blank">B</a><a class="ch-badge active" target="_blank">A</a>
+              <span class="ch-badge inactive" title="Not on Expedia">E</span>
+              <a class="ch-badge active" target="_blank">T</a><a class="ch-badge active" target="_blank">D</a>
+            </span>
+          </div>
+        </td>
+        <td><div class="review-score"><span class="score-num">9.3</span><span class="review-count">★ 5 · 2,891 reviews</span></div></td>
+        <td class="num">25</td>
+        <td class="num">$420 <span class="muted small">DIR</span></td>
+        <td class="num">$445</td>
+        <td class="num muted small">$385–$520</td>
+        <td class="num">38</td>
+        <td><span class="pill pill-green"><span class="dot"></span>2H AGO</span></td>
+        <td class="num" style="color:var(--red)">+105.4%</td>
+      </tr>
+      
+      <!-- DEEP EXPAND ROW -->
+      <tr class="detail-row">
+        <td colspan="9">
+          <div class="deep-expand">
+            <div class="deep-grid">
+              <!-- LEFT: Property metadata -->
+              <div class="deep-section">
+                <h4>Property details<span class="edit-link">EDIT →</span></h4>
+                <div class="deep-info-row"><span class="key">Star rating</span><span class="val">★ 5</span></div>
+                <div class="deep-info-row"><span class="key">Total rooms</span><span class="val">25</span></div>
+                <div class="deep-info-row"><span class="key">City / Country</span><span class="val">Luang Prabang, LA</span></div>
+                <div class="deep-info-row"><span class="key">Scrape priority</span><span class="val">P1 (every run)</span></div>
+                <div class="deep-info-row"><span class="key">Active</span><span class="val">✓ true</span></div>
+                <div class="deep-info-row"><span class="key">Notes</span><span class="val muted small">Luxury heritage property. Watch ADR closely Q4.</span></div>
+              </div>
+              <!-- RIGHT: URLs per channel -->
+              <div class="deep-section">
+                <h4>Channel URLs<span class="edit-link">EDIT →</span></h4>
+                <div class="deep-info-row"><span class="key">Booking.com</span><span class="val"><a href="https://www.booking.com/hotel/la/sofitel-luang-prabang.html" target="_blank">/sofitel-luang-prabang ↗</a></span></div>
+                <div class="deep-info-row"><span class="key">Agoda</span><span class="val"><a href="#" target="_blank">/sofitel-luang-prabang ↗</a></span></div>
+                <div class="deep-info-row"><span class="key">Expedia</span><span class="val muted">— not listed</span></div>
+                <div class="deep-info-row"><span class="key">Trip.com</span><span class="val"><a href="#" target="_blank">/hotels/1521185 ↗</a></span></div>
+                <div class="deep-info-row"><span class="key">Direct</span><span class="val"><a href="https://sofitel-luangprabang.com" target="_blank">sofitel-luangprabang.com ↗</a></span></div>
+                <div class="deep-info-row"><span class="key">Google Place</span><span class="val muted small mono">ChIJX...kHqQ</span></div>
+              </div>
+            </div>
+            
+            <!-- ROOM MAPPINGS -->
+            <div class="deep-section" style="margin-bottom:24px;">
+              <h4>Room mappings<span class="edit-link">+ ADD MAPPING / EDIT →</span></h4>
+              <div class="muted small mb-16">Maps competitor's room types to YOUR tier for like-for-like comparison. Target room (gold) is what the rate-shop agent tracks.</div>
+              <table class="rooms">
+                <thead>
+                  <tr>
+                    <th>Channel</th>
+                    <th>Competitor's room</th>
+                    <th>Size</th>
+                    <th>Beds</th>
+                    <th>Max</th>
+                    <th>Mapped to our tier</th>
+                    <th>Target?</th>
+                    <th>Verified</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr class="target">
+                    <td>Booking</td>
+                    <td>Luxury Room with River View</td>
+                    <td class="num">42 m²</td>
+                    <td>1 King</td>
+                    <td class="num">2</td>
+                    <td><span class="tier-badge premium">Premium</span></td>
+                    <td>★ yes</td>
+                    <td class="num muted small">PBS · 2026-04-22</td>
+                  </tr>
+                  <tr>
+                    <td>Booking</td>
+                    <td>Junior Suite</td>
+                    <td class="num">62 m²</td>
+                    <td>1 King</td>
+                    <td class="num">3</td>
+                    <td><span class="tier-badge suite">Suite</span></td>
+                    <td>—</td>
+                    <td class="num muted small">PBS · 2026-04-22</td>
+                  </tr>
+                  <tr class="target">
+                    <td>Agoda</td>
+                    <td>Luxury Room (River View)</td>
+                    <td class="num">42 m²</td>
+                    <td>1 King</td>
+                    <td class="num">2</td>
+                    <td><span class="tier-badge premium">Premium</span></td>
+                    <td>★ yes</td>
+                    <td class="num muted small">PBS · 2026-04-22</td>
+                  </tr>
+                  <tr>
+                    <td>Trip.com</td>
+                    <td>Deluxe Room</td>
+                    <td class="num">42 m²</td>
+                    <td>1 King / 2 Twin</td>
+                    <td class="num">2</td>
+                    <td><span class="tier-badge premium">Premium</span></td>
+                    <td>—</td>
+                    <td class="num muted small" style="color:var(--amber);">⚠ unverified</td>
+                  </tr>
+                  <tr class="target">
+                    <td>Direct</td>
+                    <td>Luxury Heritage Room</td>
+                    <td class="num">42 m²</td>
+                    <td>1 King</td>
+                    <td class="num">2</td>
+                    <td><span class="tier-badge premium">Premium</span></td>
+                    <td>★ yes</td>
+                    <td class="num muted small">PBS · 2026-04-22</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            
+            <!-- RATE MATRIX -->
+            <div class="deep-section">
+              <h4>Rate matrix — last 8 dates shopped</h4>
+              <table class="matrix">
+                <thead>
+                  <tr><th>Stay date</th><th>Booking</th><th>Agoda</th><th>Expedia</th><th>Trip.com</th><th>Direct</th><th>Min</th></tr>
+                </thead>
+                <tbody>
+                  <tr class="event-row"><td>Fri 08 May<span class="matrix-event-tag">vesak·summer</span></td><td class="rate">$425</td><td class="rate">$420</td><td class="rate dim">—</td><td class="rate">$430</td><td class="rate cheapest">$385</td><td class="rate cheapest">$385</td></tr>
+                  <tr class="event-row"><td>Sat 09 May<span class="matrix-event-tag">vesak·summer</span></td><td class="rate">$465</td><td class="rate">$460</td><td class="rate dim">—</td><td class="rate">$470</td><td class="rate cheapest">$420</td><td class="rate cheapest">$420</td></tr>
+                  <tr class="event-row"><td>Thu 14 May<span class="matrix-event-tag">vesak</span></td><td class="rate">$425</td><td class="rate">$420</td><td class="rate dim">—</td><td class="rate">$430</td><td class="rate cheapest">$385</td><td class="rate cheapest">$385</td></tr>
+                  <tr class="event-row"><td>Fri 15 May<span class="matrix-event-tag">vesak·summer</span></td><td class="rate">$465</td><td class="rate">$460</td><td class="rate dim">—</td><td class="rate">$470</td><td class="rate cheapest">$420</td><td class="rate cheapest">$420</td></tr>
+                  <tr class="event-row"><td>Sat 16 May<span class="matrix-event-tag">vesak·summer</span></td><td class="rate">$520</td><td class="rate">$510</td><td class="rate dim">—</td><td class="rate">$525</td><td class="rate cheapest">$465</td><td class="rate cheapest">$465</td></tr>
+                  <tr class="event-row"><td>Sun 17 May<span class="matrix-event-tag">full_moon</span></td><td class="rate">$425</td><td class="rate">$420</td><td class="rate dim">—</td><td class="rate">$430</td><td class="rate cheapest">$385</td><td class="rate cheapest">$385</td></tr>
+                  <tr class="event-row"><td>Fri 22 May<span class="matrix-event-tag">full_moon·vesak</span></td><td class="rate">$465</td><td class="rate">$460</td><td class="rate dim">—</td><td class="rate">$470</td><td class="rate cheapest">$420</td><td class="rate cheapest">$420</td></tr>
+                  <tr class="event-row"><td>Sat 30 May<span class="matrix-event-tag">full_moon</span></td><td class="rate">$485</td><td class="rate">$480</td><td class="rate dim">—</td><td class="rate">$490</td><td class="rate cheapest">$445</td><td class="rate cheapest">$445</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </td>
+      </tr>
+      
+      <!-- Other rows collapsed -->
+      <tr class="expandable">
+        <td style="padding-left:24px;">
+          <div class="prop-name">
+            <span class="expand-arrow">▶</span>
+            <a href="https://www.booking.com/hotel/la/3-nagas-luang-prabang-by-accor.html" target="_blank">3 Nagas Luang Prabang — MGallery</a>
+            <span class="channel-badges">
+              <a class="ch-badge active" target="_blank">B</a><a class="ch-badge active" target="_blank">A</a>
+              <span class="ch-badge inactive" title="Not on Expedia">E</span>
+              <a class="ch-badge active" target="_blank">T</a><a class="ch-badge active" target="_blank">D</a>
+            </span>
+          </div>
+        </td>
+        <td><div class="review-score"><span class="score-num">8.9</span><span class="review-count">★ 4 · 1,243 reviews</span></div></td>
+        <td class="num">15</td>
+        <td class="num">$245 <span class="muted small">BDC</span></td>
+        <td class="num">$258</td>
+        <td class="num muted small">$220–$310</td>
+        <td class="num">32</td>
+        <td><span class="pill pill-green"><span class="dot"></span>2H AGO</span></td>
+        <td class="num" style="color:var(--red)">+19.8%</td>
+      </tr>
+      <tr class="expandable">
+        <td style="padding-left:24px;"><div class="prop-name"><span class="expand-arrow">▶</span><a target="_blank">Satri House</a><span class="channel-badges"><a class="ch-badge active" target="_blank">B</a><a class="ch-badge active" target="_blank">A</a><a class="ch-badge active" target="_blank">E</a><a class="ch-badge active" target="_blank">T</a><a class="ch-badge active" target="_blank">D</a></span></div></td>
+        <td><div class="review-score"><span class="score-num">9.1</span><span class="review-count">★ 4 · 982 reviews</span></div></td>
+        <td class="num">31</td>
+        <td class="num">$180 <span class="muted small">BDC</span></td>
+        <td class="num">$192</td>
+        <td class="num muted small">$165–$235</td>
+        <td class="num">38</td>
+        <td><span class="pill pill-green"><span class="dot"></span>2H AGO</span></td>
+        <td class="num" style="color:var(--green)">-12.1%</td>
+      </tr>
+      <tr><td colspan="9" class="muted small" style="text-align:center;padding:14px;">… 7 more competitors collapsed for brevity …</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================================ -->
+<!-- SCORING DRAWER (faked open inline) -->
+<!-- ============================================================ -->
+<div class="drawer">
+  <div class="drawer-header">
+    <div>
+      <span class="h3">📊 How dates are scored</span>
+      <div class="muted small" style="color:rgba(245,241,232,0.7);margin-top:4px;font-size:12px;">Read-only · in production opens as right-side drawer</div>
+    </div>
+    <span class="close">✕</span>
+  </div>
+  <div class="drawer-body">
+    
+    <p class="mb-16" style="font-size:14px;line-height:1.7;">The agent picks dates by scoring every day in the next 120 days on four factors. The top-scoring dates above the floor get scraped. <strong>Goal:</strong> spend the request budget on dates that actually move pricing decisions, not random Tuesdays in shoulder season.</p>
+    
+    <div class="scoring-formula">
+      <div class="muted small mb-8">SCORING FORMULA (each date)</div>
+      total = 
+      <span class="factor f-dow">DOW × 0.25</span> +
+      <span class="factor f-event">events × 0.35</span> +
+      <span class="factor f-lead">lead_time × 0.30</span> +
+      <span class="factor f-peak">peak_bonus × 0.10</span>
+      <div class="muted small mt-8">All factors return 0–100. Total capped at 100.</div>
+    </div>
+    
+    <div class="scoring-tables">
+      <div class="scoring-block">
+        <h4>Day-of-week weight (25%)</h4>
+        <div class="muted small mb-8">LP is leisure market — Sat/Fri matter most</div>
+        <table>
+          <tr><td>Saturday</td><td><div class="bar-cell"><div class="score-bar"><div class="score-bar-fill" style="width:95%"></div></div></div></td><td class="value">95</td></tr>
+          <tr><td>Friday</td><td><div class="bar-cell"><div class="score-bar"><div class="score-bar-fill" style="width:90%"></div></div></div></td><td class="value">90</td></tr>
+          <tr><td>Thursday</td><td><div class="bar-cell"><div class="score-bar"><div class="score-bar-fill" style="width:70%"></div></div></div></td><td class="value">70</td></tr>
+          <tr><td>Sunday</td><td><div class="bar-cell"><div class="score-bar"><div class="score-bar-fill" style="width:60%"></div></div></div></td><td class="value">60</td></tr>
+          <tr><td>Wednesday</td><td><div class="bar-cell"><div class="score-bar"><div class="score-bar-fill" style="width:45%"></div></div></div></td><td class="value">45</td></tr>
+          <tr><td>Tuesday</td><td><div class="bar-cell"><div class="score-bar"><div class="score-bar-fill" style="width:35%"></div></div></div></td><td class="value">35</td></tr>
+          <tr><td>Monday</td><td><div class="bar-cell"><div class="score-bar"><div class="score-bar-fill" style="width:30%"></div></div></div></td><td class="value">30</td></tr>
+        </table>
+      </div>
+      
+      <div class="scoring-block">
+        <h4>Lead time weight (30%)</h4>
+        <div class="muted small mb-8">T+3 to T+14 = highest decision value</div>
+        <table>
+          <tr><td>3–14 days out</td><td><div class="bar-cell"><div class="score-bar"><div class="score-bar-fill" style="width:100%"></div></div></div></td><td class="value">100</td></tr>
+          <tr><td>15–30 days</td><td><div class="bar-cell"><div class="score-bar"><div class="score-bar-fill" style="width:80%"></div></div></div></td><td class="value">80</td></tr>
+          <tr><td>0–2 days</td><td><div class="bar-cell"><div class="score-bar"><div class="score-bar-fill" style="width:60%"></div></div></div></td><td class="value">60</td></tr>
+          <tr><td>31–60 days</td><td><div class="bar-cell"><div class="score-bar"><div class="score-bar-fill" style="width:60%"></div></div></div></td><td class="value">60</td></tr>
+          <tr><td>61–90 days</td><td><div class="bar-cell"><div class="score-bar"><div class="score-bar-fill" style="width:40%"></div></div></div></td><td class="value">40</td></tr>
+          <tr><td>91–180 days</td><td><div class="bar-cell"><div class="score-bar"><div class="score-bar-fill" style="width:25%"></div></div></div></td><td class="value">25</td></tr>
+          <tr><td>180+ days</td><td><div class="bar-cell"><div class="score-bar"><div class="score-bar-fill" style="width:10%"></div></div></div></td><td class="value">10</td></tr>
+        </table>
+      </div>
+    </div>
+    
+    <div class="scoring-block">
+      <h4>Calendar event weight (35%)</h4>
+      <div class="muted small mb-8">Events score full strength on event days, 50–90% during build-up window</div>
+      <table>
+        <tr><td>Christmas / NYE</td><td><div class="bar-cell"><div class="score-bar"><div class="score-bar-fill" style="width:100%"></div></div></div></td><td class="value">100</td></tr>
+        <tr><td>Pi Mai (Lao NY)</td><td><div class="bar-cell"><div class="score-bar"><div class="score-bar-fill" style="width:100%"></div></div></div></td><td class="value">100</td></tr>
+        <tr><td>Chinese New Year</td><td><div class="bar-cell"><div class="score-bar"><div class="score-bar-fill" style="width:95%"></div></div></div></td><td class="value">95</td></tr>
+        <tr><td>Boun Ok Phansa (LP)</td><td><div class="bar-cell"><div class="score-bar"><div class="score-bar-fill" style="width:90%"></div></div></div></td><td class="value">90</td></tr>
+        <tr><td>Songkran (TH market)</td><td><div class="bar-cell"><div class="score-bar"><div class="score-bar-fill" style="width:75%"></div></div></div></td><td class="value">75</td></tr>
+        <tr><td>Easter / Golden Week</td><td><div class="bar-cell"><div class="score-bar"><div class="score-bar-fill" style="width:75%"></div></div></div></td><td class="value">75</td></tr>
+        <tr><td>That Luang / Vesak</td><td><div class="bar-cell"><div class="score-bar"><div class="score-bar-fill" style="width:70%"></div></div></div></td><td class="value">70</td></tr>
+        <tr><td>Thai Long Weekends</td><td><div class="bar-cell"><div class="score-bar"><div class="score-bar-fill" style="width:65%"></div></div></div></td><td class="value">65</td></tr>
+        <tr><td>Summer peak (EU/US)</td><td><div class="bar-cell"><div class="score-bar"><div class="score-bar-fill" style="width:60%"></div></div></div></td><td class="value">60</td></tr>
+        <tr><td>Full Moon (lunar)</td><td><div class="bar-cell"><div class="score-bar"><div class="score-bar-fill" style="width:55%"></div></div></div></td><td class="value">55</td></tr>
+      </table>
+    </div>
+    
+    <div class="muted small mt-16" style="padding:14px;background:var(--bg-card);border-radius:3px;border-left:3px solid var(--gold);">
+      <strong>Edit calendar events:</strong> Adding new events (industry conferences, group bookings, suspected demand spikes) changes which dates the picker chooses. Manage at <a href="#" style="color:var(--accent);">Marketing → Calendar Events →</a>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- AGENT SETTINGS DRAWER (faked open inline) -->
+<!-- ============================================================ -->
+<div class="drawer">
+  <div class="drawer-header">
+    <div>
+      <span class="h3">⚙ Agent settings — compset_agent</span>
+      <div class="muted small" style="color:rgba(245,241,232,0.7);margin-top:4px;font-size:12px;">Settings split: editable runtime config vs. mandate-locked rules</div>
+    </div>
+    <span class="close">✕</span>
+  </div>
+  <div class="drawer-body">
+    
+    <!-- EDITABLE SECTION -->
+    <div class="settings-section">
+      <div class="section-header">
+        <h4>Runtime settings</h4>
+        <span class="edit-icon">✓ EDITABLE BY RM</span>
+      </div>
+      
+      <div class="setting-row">
+        <div class="key">picker_mode<span class="desc">Lean = 3 channels · Deep = all 5</span></div>
+        <select><option>daily_lean</option><option>ondemand_deep</option><option>phase_1_validation</option></select>
+        <span class="muted small mono">current: daily_lean</span>
+      </div>
+      <div class="setting-row">
+        <div class="key">picker_max_dates<span class="desc">Max dates per run (1–20)</span></div>
+        <input type="number" value="8" min="1" max="20" />
+        <span class="muted small mono">current: 8</span>
+      </div>
+      <div class="setting-row">
+        <div class="key">picker_horizon_days<span class="desc">How far ahead to consider (7–365)</span></div>
+        <input type="number" value="120" min="7" max="365" />
+        <span class="muted small mono">current: 120</span>
+      </div>
+      <div class="setting-row">
+        <div class="key">picker_min_score<span class="desc">Minimum score for dates (0–100). Higher = fewer dates, only big events</span></div>
+        <input type="number" value="40" min="0" max="100" />
+        <span class="muted small mono">current: 40</span>
+      </div>
+      <div class="setting-row">
+        <div class="key">channels_to_scrape<span class="desc">Per-OTA toggles · BDC · AGD · EXP · TRP · DIR</span></div>
+        <div class="row">
+          <span class="pill pill-green"><span class="dot"></span>BDC</span>
+          <span class="pill pill-green"><span class="dot"></span>AGD</span>
+          <span class="pill pill-gray"><span class="dot"></span>EXP</span>
+          <span class="pill pill-gray"><span class="dot"></span>TRP</span>
+          <span class="pill pill-green"><span class="dot"></span>DIR</span>
+        </div>
+        <span class="muted small mono">3 of 5 active</span>
+      </div>
+      <div class="setting-row">
+        <div class="key">default_geo_markets<span class="desc">Exit IPs for scraping (rate varies by market)</span></div>
+        <div class="row"><span class="pill pill-green">US</span><button class="run-btn run-btn-link">+ ADD MARKET</button></div>
+        <span class="muted small mono">1 market</span>
+      </div>
+      <div class="setting-row">
+        <div class="key">cron_enabled<span class="desc">Daily auto-run at 06:00 ICT</span></div>
+        <div><span class="toggle"></span> <span class="muted small">currently OFF — manual only</span></div>
+        <span class="muted small mono">→ enable after 3 clean runs</span>
+      </div>
+      <div class="setting-row">
+        <div class="key">cron_schedule<span class="desc">Cron expression (UTC)</span></div>
+        <input type="text" value="0 23 * * *" />
+        <span class="muted small mono">06:00 ICT</span>
+      </div>
+    </div>
+    
+    <!-- LOCKED MANDATE SECTION -->
+    <div class="settings-section">
+      <div class="section-header">
+        <h4>Mandate-locked rules</h4>
+        <span class="lock-icon">🔒 OWNER-ONLY · CHANGE REQUIRES MANDATE_V2</span>
+      </div>
+      <div class="settings-locked">
+        <div class="lock-banner">⚠ THESE LIMITS ARE SET BY MANDATE compset_agent_v1 · CANNOT BE EDITED HERE</div>
+        
+        <div class="setting-row">
+          <div class="key">monthly_budget_usd<span class="desc">Hard cap on agent spend per month</span></div>
+          <input type="text" value="$150" class="input-locked" disabled />
+          <span class="muted small mono">used: $12.40 (8%)</span>
+        </div>
+        <div class="setting-row">
+          <div class="key">max_requests_per_run<span class="desc">Hard cap on Nimble requests per run</span></div>
+          <input type="text" value="1700" class="input-locked" disabled />
+          <span class="muted small mono">last run: 132</span>
+        </div>
+        <div class="setting-row">
+          <div class="key">max_cost_per_run<span class="desc">Hard cap on cost per single run</span></div>
+          <input type="text" value="$20" class="input-locked" disabled />
+          <span class="muted small mono">last run: $0.42</span>
+        </div>
+        <div class="setting-row">
+          <div class="key">data_completeness_floor<span class="desc">Min % of successful scrapes to mark run as success</span></div>
+          <input type="text" value="70%" class="input-locked" disabled />
+          <span class="muted small mono">last run: 97%</span>
+        </div>
+        <div class="setting-row">
+          <div class="key">may_create_proposals<span class="desc">Can agent write to governance.proposals?</span></div>
+          <input type="text" value="false" class="input-locked" disabled />
+          <span class="muted small mono">read-only agent</span>
+        </div>
+        <div class="setting-row">
+          <div class="key">may_call_write_tools<span class="desc">Can agent call any write tools?</span></div>
+          <input type="text" value="false" class="input-locked" disabled />
+          <span class="muted small mono">read-only agent</span>
+        </div>
+        <div class="setting-row">
+          <div class="key">data_retention_days<span class="desc">How long competitor_rates rows are kept</span></div>
+          <input type="text" value="365" class="input-locked" disabled />
+          <span class="muted small mono">days</span>
+        </div>
+      </div>
+    </div>
+    
+    <div style="display:flex;justify-content:space-between;align-items:center;padding-top:18px;border-top:1px solid var(--line);">
+      <span class="muted small">Last edited by PBS · 2 days ago · <a href="#" style="color:var(--accent);">view audit log →</a></span>
+      <div>
+        <button class="run-btn run-btn-secondary">CANCEL</button>
+        <button class="run-btn" style="margin-left:8px;">SAVE CHANGES</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

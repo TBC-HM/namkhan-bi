@@ -598,6 +598,61 @@ async function read_knowledge_base(args: { topic?: string; scope?: string; limit
   return { ok: true, result: data ?? [] };
 }
 
+async function read_knowledge_base_semantic(args: {
+  query?: string;
+  limit?: number;
+  scope?: string;
+  min_similarity?: number;
+}): Promise<ToolResult> {
+  const query = (args.query ?? "").toString().trim();
+  if (!query) return { ok: false, error: "query required" };
+  const limit = Math.min(Math.max(args.limit ?? 5, 1), 20);
+  const minSim = typeof args.min_similarity === "number" ? args.min_similarity : 0.5;
+  const scope = args.scope ?? null;
+
+  // 1. Embed the query via the embed-kb edge function (gte-small, 384-dim).
+  const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supaKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  const embRes = await fetch(`${supaUrl}/functions/v1/embed-kb`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${supaKey}`,
+    },
+    body: JSON.stringify({ mode: "embed_query", query }),
+  });
+  if (!embRes.ok) {
+    return { ok: false, error: `embed-kb ${embRes.status}: ${await embRes.text().then((t) => t.slice(0, 200))}` };
+  }
+  const embJson = (await embRes.json()) as { embedding?: number[]; error?: string };
+  if (!embJson.embedding) {
+    return { ok: false, error: `embed failed: ${embJson.error ?? "no embedding returned"}` };
+  }
+
+  // 2. Call the SQL semantic search function with the query vector.
+  // Pass the vector as a Postgres array literal string — pgvector accepts the
+  // `[a,b,c]` text form when cast to vector.
+  const vecLiteral = `[${embJson.embedding.join(",")}]`;
+  const { data, error } = await supabase.rpc("read_knowledge_base_semantic", {
+    p_query_embedding: vecLiteral,
+    p_limit: limit,
+    p_scope: scope,
+    p_min_similarity: minSim,
+  });
+  if (error) return { ok: false, error: error.message };
+  return {
+    ok: true,
+    result: {
+      query,
+      limit,
+      scope,
+      min_similarity: minSim,
+      hits: data ?? [],
+      model: "gte-small",
+    },
+  };
+}
+
 async function add_knowledge_base_entry(args: {
   topic?: string;
   key_fact?: string;
@@ -649,7 +704,212 @@ async function web_fetch(args: { url?: string }): Promise<ToolResult> {
   }
 }
 
+// Anti-fantasy guardrail: agents asking "who's on the team" must call this
+// to get real names from cockpit_agent_identity. Verified against ticket #25
+// hallucination (Olive invented "Backend Boris" / "Frontend Faye" / etc).
+async function list_team_members(args: { include_archived?: boolean }): Promise<ToolResult> {
+  const { include_archived = false } = args;
+  const { data: identities, error: idErr } = await supabase
+    .from("cockpit_agent_identity")
+    .select("role, display_name, avatar, tagline, color")
+    .order("display_name");
+  if (idErr) return { ok: false, error: `cockpit_agent_identity: ${idErr.message}` };
+
+  const { data: prompts, error: pErr } = await supabase
+    .from("cockpit_agent_prompts")
+    .select("role, version, active, status, archived_at, archived_reason");
+  if (pErr) return { ok: false, error: `cockpit_agent_prompts: ${pErr.message}` };
+
+  type PromptRow = {
+    role: string;
+    version: number;
+    active: boolean;
+    status: string;
+    archived_at: string | null;
+    archived_reason: string | null;
+  };
+  const promptByRole: Record<string, PromptRow[]> = {};
+  for (const row of (prompts ?? []) as PromptRow[]) {
+    (promptByRole[row.role] ??= []).push(row);
+  }
+
+  type AgentRow = {
+    role: string;
+    display_name: string;
+    avatar: string;
+    tagline: string;
+    active_prompt_version: number | null;
+    archived: boolean;
+    archived_reason: string | null;
+  };
+
+  const roster: AgentRow[] = [];
+  for (const id of (identities ?? []) as Array<{
+    role: string; display_name: string; avatar: string; tagline: string; color: string;
+  }>) {
+    const versions = promptByRole[id.role] ?? [];
+    const activeOne = versions.find((v) => v.active);
+    const allArchived =
+      versions.length > 0 && versions.every((v) => v.status === "archived");
+    if (allArchived && !include_archived) continue;
+    roster.push({
+      role: id.role,
+      display_name: id.display_name,
+      avatar: id.avatar,
+      tagline: id.tagline,
+      active_prompt_version: activeOne?.version ?? null,
+      archived: allArchived,
+      archived_reason: versions.find((v) => v.status === "archived")?.archived_reason ?? null,
+    });
+  }
+
+  return {
+    ok: true,
+    result: {
+      total: roster.length,
+      authoritative_source: "cockpit_agent_identity (DO NOT INVENT — these names are the only valid ones)",
+      roster,
+    },
+  };
+}
+
+// Architect hard-precondition check (ZIP 3 founder interview).
+async function check_founder_brief(args: { dept?: string }): Promise<ToolResult> {
+  const { count, error } = await supabase
+    .from("cockpit_knowledge_base")
+    .select("id", { count: "exact", head: true })
+    .like("topic", "architect_brief_%")
+    .eq("active", true);
+  if (error) return { ok: false, error: `cockpit_knowledge_base: ${error.message}` };
+  const c = count ?? 0;
+  const expected = 47;
+  return {
+    ok: true,
+    result: {
+      brief_rows_present: c,
+      brief_rows_expected: expected,
+      halt: c < expected,
+      reason: c < expected
+        ? `founder_interview_incomplete (${c}/${expected} architect_brief_* rows)`
+        : "ok",
+      dept_checked: args.dept ?? null,
+    },
+  };
+}
+
+// propose_department — read-only stub. Architect emits the proposal in JSON output;
+// this skill exists so the prompt can claim the capability without DB writes.
+async function propose_department(args: Record<string, unknown>): Promise<ToolResult> {
+  return {
+    ok: true,
+    result: {
+      action: "noop",
+      message: "propose_department is read-only. Embed the proposal in your JSON output (department_proposal field). Cowork executes via apply_migration after PBS approves.",
+      received: args,
+    },
+  };
+}
+
+// HoD-level skills (Smart Office 2026-05-07).
+async function create_subticket(args: { worker_role?: string; task?: string; due?: string }): Promise<ToolResult> {
+  const role = (args.worker_role ?? "").toString();
+  const task = (args.task ?? "").toString();
+  if (!role || !task) return { ok: false, error: "worker_role + task required" };
+  const { data, error } = await supabase
+    .from("cockpit_tickets")
+    .insert({
+      source: "hod_subticket",
+      arm: "dev",
+      intent: "build",
+      status: "triaged",
+      email_subject: `[${role}] ${task.slice(0, 80)}`,
+      parsed_summary: task + (args.due ? `\n\nDue: ${args.due}` : ""),
+      notes: `Spawned by HoD via create_subticket. Assigned to ${role}.`,
+    })
+    .select("id")
+    .single();
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, result: { ticket_id: data?.id, assigned_to: role } };
+}
+
+async function request_peer_consult(args: { peer_role?: string; question?: string }): Promise<ToolResult> {
+  const peer = (args.peer_role ?? "").toString();
+  const q = (args.question ?? "").toString();
+  if (!peer || !q) return { ok: false, error: "peer_role + question required" };
+  const { data, error } = await supabase
+    .from("cockpit_tickets")
+    .insert({
+      source: "hod_peer_consult",
+      arm: "dev",
+      intent: "decide",
+      status: "triaged",
+      email_subject: `[peer-consult → ${peer}]`,
+      parsed_summary: q,
+      notes: "Cross-dept consult between HoDs.",
+    })
+    .select("id")
+    .single();
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, result: { ticket_id: data?.id, peer } };
+}
+
+async function open_pbs_ticket(args: { topic?: string; decision_required?: string; context?: string }): Promise<ToolResult> {
+  const t = (args.topic ?? "").toString();
+  const d = (args.decision_required ?? "").toString();
+  if (!t || !d) return { ok: false, error: "topic + decision_required required" };
+  const { data, error } = await supabase
+    .from("cockpit_tickets")
+    .insert({
+      source: "hod_pbs_escalation",
+      arm: "ops",
+      intent: "decide",
+      status: "awaits_user",
+      email_subject: `[PBS] ${t}`,
+      parsed_summary: `**Decision required:** ${d}\n\n${args.context ?? ""}`,
+      notes: "HoD escalation to PBS.",
+    })
+    .select("id")
+    .single();
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, result: { ticket_id: data?.id } };
+}
+
+async function propose_kpi_target(args: { kpi?: string; proposed_threshold?: string; rationale?: string }): Promise<ToolResult> {
+  if (!args.kpi || !args.proposed_threshold) return { ok: false, error: "kpi + proposed_threshold required" };
+  await supabase.from("cockpit_audit_log").insert({
+    agent: "hod",
+    action: "kpi_target_proposed",
+    target: args.kpi,
+    success: true,
+    metadata: { proposed: args.proposed_threshold, rationale: args.rationale ?? null },
+    reasoning: "HoD proposes KPI threshold change for PBS review.",
+  });
+  return { ok: true, result: { logged: true, kpi: args.kpi } };
+}
+
+async function route_ticket_to_dept(args: { ticket_id?: number }): Promise<ToolResult> {
+  if (!args.ticket_id) return { ok: false, error: "ticket_id required" };
+  // Simple acknowledgement — Captain Kit assigns via recommended_agent already.
+  await supabase.from("cockpit_audit_log").insert({
+    agent: "hod",
+    action: "ticket_received",
+    target: `ticket ${args.ticket_id}`,
+    success: true,
+    metadata: { ticket_id: args.ticket_id },
+    reasoning: "HoD acknowledged routing from Captain Kit.",
+  });
+  return { ok: true, result: { acknowledged: args.ticket_id } };
+}
+
 const HANDLERS: Record<string, (args: Record<string, unknown>) => Promise<ToolResult>> = {
+  list_team_members: (a) => list_team_members(a as Parameters<typeof list_team_members>[0]),
+  check_founder_brief: (a) => check_founder_brief(a as Parameters<typeof check_founder_brief>[0]),
+  propose_department: (a) => propose_department(a),
+  create_subticket: (a) => create_subticket(a as Parameters<typeof create_subticket>[0]),
+  request_peer_consult: (a) => request_peer_consult(a as Parameters<typeof request_peer_consult>[0]),
+  open_pbs_ticket: (a) => open_pbs_ticket(a as Parameters<typeof open_pbs_ticket>[0]),
+  propose_kpi_target: (a) => propose_kpi_target(a as Parameters<typeof propose_kpi_target>[0]),
+  route_ticket_to_dept: (a) => route_ticket_to_dept(a as Parameters<typeof route_ticket_to_dept>[0]),
   query_supabase_view: (a) => query_supabase_view(a as Parameters<typeof query_supabase_view>[0]),
   read_audit_log: (a) => read_audit_log(a as Parameters<typeof read_audit_log>[0]),
   read_design_doc: (a) => read_design_doc(a as Parameters<typeof read_design_doc>[0]),
@@ -660,6 +920,7 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => Promise<ToolRe
   read_github_issue: (a) => read_github_issue(a as Parameters<typeof read_github_issue>[0]),
   web_fetch: (a) => web_fetch(a as Parameters<typeof web_fetch>[0]),
   read_knowledge_base: (a) => read_knowledge_base(a as Parameters<typeof read_knowledge_base>[0]),
+  read_knowledge_base_semantic: (a) => read_knowledge_base_semantic(a as Parameters<typeof read_knowledge_base_semantic>[0]),
   add_knowledge_base_entry: (a) => add_knowledge_base_entry(a as Parameters<typeof add_knowledge_base_entry>[0]),
   create_department: (a) => create_department(a as Parameters<typeof create_department>[0]),
   read_property_settings: (a) => read_property_settings(a as Parameters<typeof read_property_settings>[0]),
@@ -677,6 +938,72 @@ export async function dispatchSkill(handler: string, args: Record<string, unknow
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "handler crashed" };
   }
+}
+
+/**
+ * Phase 1.2 — wrap a skill invocation with cockpit.call_skill / complete_skill_call.
+ * Authorizes via SQL dispatcher (logs unauthorized attempts to cockpit_skill_calls
+ * with status=rejected_*), executes the handler, then closes the call row with
+ * output/error/duration. Falls back to raw dispatchSkill if the SQL gate isn't
+ * available (e.g. migration not yet applied) so production never hard-breaks.
+ *
+ * skill_name + role are the cockpit_agent_skills.name + cockpit_agent_prompts.role
+ * the agent runner is currently executing as. ticket_id is optional for tying the
+ * skill call back to the originating ticket.
+ */
+export async function dispatchSkillGated(
+  role: string,
+  skillName: string,
+  handler: string,
+  args: Record<string, unknown>,
+  ticketId: number | null = null,
+): Promise<ToolResult> {
+  const t0 = Date.now();
+  // 1. Authorization gate.
+  const { data: authData, error: authErr } = await supabase.rpc("call_skill", {
+    p_role: role,
+    p_skill_name: skillName,
+    p_input: args as never,
+    p_dry_run: false,
+    p_approval_id: null,
+    p_ticket_id: ticketId,
+  });
+  if (authErr) {
+    // SQL gate unavailable — fall through to ungated dispatch (back-compat).
+    return dispatchSkill(handler, args);
+  }
+  const auth = authData as { authorized?: boolean; reason?: string; call_id?: number };
+  if (!auth?.authorized) {
+    return { ok: false, error: `skill_gated: ${auth?.reason ?? "unauthorized"}` };
+  }
+  const callId = auth.call_id ?? null;
+  // 2. Execute the handler.
+  let result: ToolResult;
+  let status: "succeeded" | "failed" = "succeeded";
+  let errPayload: Record<string, unknown> | null = null;
+  try {
+    result = await dispatchSkill(handler, args);
+    if (!result.ok) {
+      status = "failed";
+      errPayload = { error: (result as { ok: false; error: string }).error };
+    }
+  } catch (e) {
+    status = "failed";
+    errPayload = { error: e instanceof Error ? e.message : "handler crashed" };
+    result = { ok: false, error: errPayload.error as string };
+  }
+  // 3. Close the call row.
+  if (callId !== null) {
+    await supabase.rpc("complete_skill_call", {
+      p_call_id: callId,
+      p_status: status,
+      p_output: status === "succeeded" ? (result as never) : null,
+      p_error: errPayload as never,
+      p_cost_usd_milli: 0,
+      p_duration_ms: Date.now() - t0,
+    });
+  }
+  return result;
 }
 
 export type AgentToolDef = {

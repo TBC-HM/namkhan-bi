@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RM Team v2 — Recommend-Only, OTB-Aware, Guardrailed</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --panel-2: #1c232c;
+    --border: #30363d; --text: #e6edf3; --muted: #8b949e;
+    --accent: #58a6ff; --accent-2: #d29922;
+    --green: #3fb950; --red: #f85149; --purple: #bc8cff;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    line-height: 1.5; padding: 32px; max-width: 1400px; margin: 0 auto; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  h2 { font-size: 20px; margin: 36px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 15px; margin: 16px 0 8px; color: var(--accent); }
+  .sub { color: var(--muted); font-size: 14px; margin-bottom: 8px; }
+  .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 4px;
+    background: rgba(63,185,80,0.15); color: var(--green); border: 1px solid rgba(63,185,80,0.3);
+    margin-right: 4px; font-weight: 600; }
+  .tag.warn { background: rgba(210,153,34,0.15); color: var(--accent-2); border-color: rgba(210,153,34,0.3); }
+  .tag.danger { background: rgba(248,81,73,0.15); color: var(--red); border-color: rgba(248,81,73,0.3); }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+
+  /* Org */
+  .org { display: grid; gap: 24px; margin: 16px 0; }
+  .org-row { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+  .node { background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 14px; min-width: 150px; text-align: center; font-size: 13px; }
+  .node.lead { border-color: var(--accent); background: linear-gradient(180deg, #0d2748, var(--panel)); min-width: 240px; }
+  .node.human { border-color: var(--accent-2); background: linear-gradient(180deg, #3a2a05, var(--panel)); min-width: 220px; }
+  .node-title { font-weight: 600; }
+  .node-sub { color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .connector { height: 24px; border-left: 1px solid var(--border); margin: 0 auto; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+  td code { font-family: var(--mono); font-size: 11px; color: var(--accent);
+    background: rgba(88,166,255,0.08); padding: 1px 5px; border-radius: 3px; }
+  .scroll { overflow-x: auto; }
+
+  /* Agents */
+  .agents { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 12px; }
+  .agent { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px;
+    border-left: 3px solid var(--green); }
+  .agent h3 { margin-top: 0; }
+  .agent dl { display: grid; grid-template-columns: 90px 1fr; gap: 4px 10px; font-size: 12px; margin: 8px 0 0; }
+  .agent dt { color: var(--muted); }
+  .agent dd { margin: 0; }
+  .pill { display: inline-block; font-family: var(--mono); font-size: 10px;
+    padding: 1px 6px; border-radius: 3px; background: var(--panel-2);
+    border: 1px solid var(--border); margin: 2px 2px 0 0; }
+
+  /* Mockup of pickup report */
+  .mockup { background: #fff; color: #111; padding: 16px; border-radius: 6px;
+    font-family: var(--mono); font-size: 10px; overflow-x: auto; }
+  .mockup table { font-size: 10px; }
+  .mockup th, .mockup td { padding: 4px 6px; border-bottom: 1px solid #ddd; color: #111; }
+  .mockup th { background: #f3f4f6; color: #374151; border-bottom: 1px solid #d1d5db; }
+  .mockup .header { background: #1f2937; color: #fff; padding: 8px 10px; border-radius: 4px; margin-bottom: 8px; font-size: 11px; }
+  .mockup .alert { background: #fef2f2; border-left: 3px solid #dc2626; padding: 6px 10px; margin-top: 8px; font-size: 10px; }
+  .mockup .section-title { background: #1f2937; color: #fff; padding: 4px 8px; margin: 10px 0 4px; font-size: 10px; border-radius: 3px; }
+  .mockup .pos { color: #15803d; }
+  .mockup .neg { color: #dc2626; }
+
+  /* Logic flow */
+  .flow { display: grid; gap: 8px; }
+  .flow-step { display: grid; grid-template-columns: 30px 1fr; gap: 12px; padding: 10px 12px;
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; }
+  .flow-num { font-family: var(--mono); color: var(--accent); font-weight: 600; }
+  .flow-title { font-weight: 600; font-size: 13px; }
+  .flow-desc { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .flow-step.block { border-left: 3px solid var(--red); }
+  .flow-step.warn { border-left: 3px solid var(--accent-2); }
+  .flow-step.ok { border-left: 3px solid var(--green); }
+
+  /* Code block */
+  .code { font-family: var(--mono); font-size: 12px; background: #010409;
+    border: 1px solid var(--border); border-radius: 6px; padding: 12px;
+    color: var(--text); overflow-x: auto; white-space: pre; }
+  .code .c { color: var(--muted); }
+  .code .k { color: var(--purple); }
+  .code .s { color: var(--green); }
+  .code .n { color: var(--accent-2); }
+
+  /* Guardrails */
+  .guard { background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    overflow: hidden; }
+  .guard table { font-size: 13px; }
+  .guard td { padding: 10px 12px; }
+  .guard td:first-child { width: 50%; color: var(--text); }
+  .guard td:last-child { font-family: var(--mono); color: var(--accent-2); text-align: right; }
+
+  /* Timeline */
+  .timeline { display: grid; grid-template-columns: 70px 1fr; gap: 8px 16px; }
+  .time { font-family: var(--mono); color: var(--accent-2); font-size: 13px; }
+  .event { font-size: 13px; }
+  .event b { color: var(--text); } .event span { color: var(--muted); }
+
+  /* Comp set sheet mockup */
+  .comp-mockup { background: #fff; color: #111; padding: 12px; border-radius: 6px;
+    font-family: var(--mono); font-size: 10px; }
+  .comp-mockup table { font-size: 10px; }
+  .comp-mockup th, .comp-mockup td { padding: 4px 6px; border: 1px solid #d1d5db; color: #111; }
+  .comp-mockup th { background: #f3f4f6; }
+
+  .footer { color: var(--muted); font-size: 12px; margin-top: 32px; padding-top: 16px;
+    border-top: 1px solid var(--border); }
+
+  details { margin: 8px 0; }
+  summary { cursor: pointer; padding: 8px 12px; background: var(--panel-2);
+    border: 1px solid var(--border); border-radius: 6px; font-weight: 600; font-size: 13px; }
+  details[open] summary { border-radius: 6px 6px 0 0; }
+  details > div { border: 1px solid var(--border); border-top: 0; border-radius: 0 0 6px 6px; padding: 12px; background: var(--panel); }
+</style>
+</head>
+<body>
+
+<h1>Revenue Management Team v2</h1>
+<div class="sub">Independent 5-star hotel · Cloudbeds PMS · USALI 11th Ed · LAK time</div>
+<div style="margin-bottom: 24px;">
+  <span class="tag">Recommend-only</span>
+  <span class="tag">No Cloudbeds writes</span>
+  <span class="tag">OTB-aware pricing</span>
+  <span class="tag warn">Max 1 rate change / room type / date / day</span>
+  <span class="tag warn">Predefined templates only</span>
+</div>
+
+<!-- ============ 1. ORG ============ -->
+<h2>1. Org structure</h2>
+<div class="org">
+  <div class="org-row">
+    <div class="node human">
+      <div class="node-title">Human Revenue Manager</div>
+      <div class="node-sub">Reviews · approves · pushes rates manually to Cloudbeds</div>
+    </div>
+  </div>
+  <div class="connector"></div>
+  <div class="org-row">
+    <div class="node lead">
+      <div class="node-title">RM Team Lead — Claude</div>
+      <div class="node-sub">Orchestrator · QA · validates outputs against KPI/USALI files · refuses undefined KPIs</div>
+    </div>
+  </div>
+  <div class="connector"></div>
+  <div class="org-row">
+    <div class="node"><div class="node-title">Reporting Agent</div><div class="node-sub">Daily pickup · weekly · monthly USALI</div></div>
+    <div class="node"><div class="node-title">Pace & OTB Agent</div><div class="node-sub">OTB by date/type/rate · pickup vs STLY</div></div>
+    <div class="node"><div class="node-title">Demand Signal Agent</div><div class="node-sub">Comp set sheet · Google Trends · events</div></div>
+    <div class="node"><div class="node-title">Pricing Recommender</div><div class="node-sub">BAR proposals · OTB-aware · guardrailed</div></div>
+    <div class="node"><div class="node-title">Promo Analyzer</div><div class="node-sub">Net contribution · cannibalization</div></div>
+    <div class="node"><div class="node-title">Rate Plan Optimizer</div><div class="node-sub">Modify existing plans only</div></div>
+  </div>
+</div>
+
+<!-- ============ 2. AGENT SPECS ============ -->
+<h2>2. Agent specifications</h2>
+<div class="agents">
+
+  <div class="agent">
+    <h3>Reporting Agent</h3>
+    <dl>
+      <dt>Output</dt><dd>Daily pickup (09:00), Weekly (Mon 10:00), Monthly USALI P&L (Day 5)</dd>
+      <dt>Template</dt><dd>Fixed structure — fills predefined slots, never invents columns</dd>
+      <dt>Inputs</dt><dd>Cloudbeds API · USALI mapping · KPI definitions</dd>
+      <dt>Tools</dt><dd><span class="pill">cloudbeds_api</span><span class="pill">sheets_write</span><span class="pill">telegram_send</span></dd>
+      <dt>Skills</dt><dd><span class="pill">04_USALI_MAPPING.md</span><span class="pill">05_KPI_DEFINITIONS.md</span><span class="pill">11_FLASH_TEMPLATE.md</span></dd>
+      <dt>Writes</dt><dd>Sheet only · zero PMS writes</dd>
+    </dl>
+  </div>
+
+  <div class="agent">
+    <h3>Pace & OTB Agent</h3>
+    <dl>
+      <dt>Output</dt><dd>OTB by date × room type × rate plan, pickup last 24h/7d, pace vs STLY, 7/30/60/90-day forecast</dd>
+      <dt>Critical role</dt><dd>Feeds OTB data to Pricing Recommender — without this, no OTB-aware pricing</dd>
+      <dt>Tools</dt><dd><span class="pill">cloudbeds_api</span><span class="pill">sheets_read</span><span class="pill">sheets_write</span></dd>
+      <dt>Skills</dt><dd><span class="pill">07_PACE_METHODOLOGY.md</span></dd>
+      <dt>Writes</dt><dd>Sheet only</dd>
+    </dl>
+  </div>
+
+  <div class="agent">
+    <h3>Demand Signal Agent</h3>
+    <dl>
+      <dt>Output</dt><dd>Comp set rate index (from manual sheet), Google Trends index for destination, event flags, flight load (if API available)</dd>
+      <dt>Comp set</dt><dd>Reads <code>comp_set_weekly.gsheet</code> filled manually every Friday by team</dd>
+      <dt>Trends usage</dt><dd>Tiebreaker only — direction signal, never threshold trigger</dd>
+      <dt>Tools</dt><dd><span class="pill">sheets_read</span><span class="pill">google_trends_api</span><span class="pill">events_calendar</span></dd>
+      <dt>Skills</dt><dd><span class="pill">10_COMP_SET.md</span><span class="pill">12_DEMAND_SIGNALS.md</span></dd>
+      <dt>Writes</dt><dd>Signal sheet only</dd>
+    </dl>
+  </div>
+
+  <div class="agent">
+    <h3>Pricing Recommender</h3>
+    <dl>
+      <dt>Output</dt><dd>BAR proposals per room type per future date — RECOMMENDATION ONLY, never pushed</dd>
+      <dt>Logic</dt><dd>OTB-aware (3-layer floor) · respects all guardrails · refuses if logic blocks</dd>
+      <dt>Limits</dt><dd>Max 1 change per room type per date per day · max 5 future dates touched per day · ±15% max magnitude · T+1 minimum · 48h cooling</dd>
+      <dt>Tools</dt><dd><span class="pill">sheets_read</span><span class="pill">sheets_write</span></dd>
+      <dt>Skills</dt><dd><span class="pill">06_PRICING_RULES.md</span><span class="pill">13_OTB_FLOOR_LOGIC.md</span></dd>
+      <dt>Writes</dt><dd>Recommendation sheet only · Human pushes manually to Cloudbeds</dd>
+    </dl>
+  </div>
+
+  <div class="agent">
+    <h3>Promo Analyzer</h3>
+    <dl>
+      <dt>Scope</dt><dd>Post-mortem on active promos only — NOT "should I run a promo"</dd>
+      <dt>Output</dt><dd>(b) Is OTA promo (Genius, Mobile, Country) net-positive after commission? (c) Is promo cannibalizing BAR vs incremental?</dd>
+      <dt>Method</dt><dd>Compares booking patterns 30d before vs after promo activation, channel-level commission netting</dd>
+      <dt>Tools</dt><dd><span class="pill">cloudbeds_api</span><span class="pill">sheets_read</span></dd>
+      <dt>Skills</dt><dd><span class="pill">14_PROMO_ANALYSIS.md</span></dd>
+      <dt>Writes</dt><dd>Weekly report sheet</dd>
+    </dl>
+  </div>
+
+  <div class="agent">
+    <h3>Rate Plan Optimizer</h3>
+    <dl>
+      <dt>Scope</dt><dd>Modify EXISTING rate plans only — never proposes new plans</dd>
+      <dt>Output</dt><dd>Open/close existing rate plans by date · adjust LOS restrictions · tune NR discount % vs flexible</dd>
+      <dt>Method</dt><dd>Compares conversion + ADR per rate plan, identifies underperformers and overlap</dd>
+      <dt>Tools</dt><dd><span class="pill">cloudbeds_api</span><span class="pill">sheets_read</span><span class="pill">sheets_write</span></dd>
+      <dt>Skills</dt><dd><span class="pill">15_RATE_PLAN_RULES.md</span></dd>
+      <dt>Writes</dt><dd>Recommendation sheet only</dd>
+    </dl>
+  </div>
+
+</div>
+
+<!-- ============ 3. PICKUP TEMPLATE ============ -->
+<h2>3. Daily pickup template — exact structure</h2>
+<div class="sub">Predefined slots. Agent fills nothing else. If a cell can't be computed → <code>n/a</code> + reason.</div>
+
+<div class="mockup">
+  <div class="header"><b>DAILY PICKUP REPORT</b> · Property Name · USD · 2026-05-06 09:00 LAK · Generated by Reporting Agent v2.1</div>
+
+  <div class="section-title">A. MTD / YTD vs Budget vs LY</div>
+  <table>
+    <tr><th>Period</th><th>Occ%</th><th>vs Bud</th><th>vs LY</th><th>ADR</th><th>vs Bud</th><th>vs LY</th><th>RevPAR</th><th>vs Bud</th><th>vs LY</th></tr>
+    <tr><td>MTD</td><td>72.4%</td><td class="pos">+2.1pp</td><td class="neg">−1.8pp</td><td>$320</td><td class="pos">+$8</td><td class="pos">+$15</td><td>$232</td><td class="pos">+$12</td><td>+$4</td></tr>
+    <tr><td>YTD</td><td>68.1%</td><td>−0.5pp</td><td class="pos">+3.2pp</td><td>$298</td><td class="pos">+$6</td><td class="pos">+$22</td><td>$203</td><td>+$2</td><td class="pos">+$18</td></tr>
+  </table>
+
+  <div class="section-title">B. Today snapshot</div>
+  <table>
+    <tr><th>Arrivals</th><th>Departures</th><th>Stayovers</th><th>Occupied</th><th>Available</th><th>OOO/OOS</th><th>Occ%</th><th>Walk-in</th><th>Day-use</th><th>Comp</th><th>House</th></tr>
+    <tr><td>18</td><td>14</td><td>32</td><td>50</td><td>72</td><td>2</td><td>69.4%</td><td>0</td><td>0</td><td>1</td><td>0</td></tr>
+  </table>
+
+  <div class="section-title">C. Pickup table — core</div>
+  <table>
+    <tr>
+      <th>Period</th><th>Rms OTB</th><th>Rev OTB</th><th>ADR OTB</th>
+      <th>Pickup 24h<br/>rms / rev</th><th>Pickup 7d<br/>rms / rev</th>
+      <th>LY Final<br/>rms / ADR</th><th>STLY<br/>rms / ADR</th>
+      <th>Var STLY %</th><th>Forecast</th><th>vs Budget</th>
+    </tr>
+    <tr><td>Today</td><td>50</td><td>$15,200</td><td>$304</td><td class="pos">+2 / +$640</td><td class="pos">+8 / +$2,500</td><td>52 / $310</td><td>48 / $295</td><td class="pos">+4.2%</td><td>50 / $304</td><td class="pos">+$200</td></tr>
+    <tr><td>Tomorrow</td><td>44</td><td>$13,800</td><td>$314</td><td class="pos">+3 / +$950</td><td class="pos">+11 / +$3,400</td><td>49 / $305</td><td>45 / $302</td><td class="neg">−2.2%</td><td>48 / $315</td><td>−$120</td></tr>
+    <tr><td>+7d</td><td>305</td><td>$96,400</td><td>$316</td><td class="pos">+12</td><td class="pos">+38</td><td>328 / $310</td><td>312 / $308</td><td>−2.2%</td><td>320</td><td>+$1,200</td></tr>
+    <tr><td>MTD</td><td>1,124</td><td>$352k</td><td>$313</td><td>—</td><td>—</td><td>1,158</td><td>1,098</td><td class="pos">+2.4%</td><td>1,510</td><td class="pos">+$8k</td></tr>
+    <tr><td>Current Mo</td><td>1,510</td><td>$478k</td><td>$317</td><td class="pos">+18</td><td class="pos">+62</td><td>1,540</td><td>1,485</td><td class="pos">+1.7%</td><td>1,540</td><td class="pos">+$3k</td></tr>
+    <tr><td>+30d</td><td>1,420</td><td>$445k</td><td>$313</td><td class="pos">+22</td><td class="pos">+85</td><td>1,498</td><td>1,402</td><td class="pos">+1.3%</td><td>1,485</td><td>−$2k</td></tr>
+    <tr><td>+60d</td><td>980</td><td>$304k</td><td>$310</td><td class="pos">+15</td><td class="pos">+52</td><td>1,210</td><td>1,025</td><td class="neg">−4.4%</td><td>1,180</td><td class="neg">−$15k</td></tr>
+    <tr><td>+90d</td><td>620</td><td>$192k</td><td>$310</td><td class="pos">+8</td><td class="pos">+28</td><td>880</td><td>705</td><td class="neg">−12.1%</td><td>820</td><td class="neg">−$28k</td></tr>
+    <tr><td>Next Mo</td><td>1,180</td><td>$368k</td><td>$312</td><td class="pos">+18</td><td class="pos">+72</td><td>1,420</td><td>1,205</td><td class="neg">−2.1%</td><td>1,380</td><td class="neg">−$18k</td></tr>
+    <tr><td>YTD</td><td>8,420</td><td>$2.51M</td><td>$298</td><td>—</td><td>—</td><td>—</td><td>8,180</td><td class="pos">+2.9%</td><td>—</td><td class="pos">+$45k</td></tr>
+    <tr><td>Full Year</td><td>14,200</td><td>$4.32M</td><td>$304</td><td class="pos">+45</td><td class="pos">+182</td><td>15,800</td><td>13,920</td><td class="pos">+2.0%</td><td>15,400</td><td class="neg">−$32k</td></tr>
+  </table>
+
+  <div class="section-title">D. By segment (Current + Next month)</div>
+  <table>
+    <tr><th>Segment</th><th>CM Rms</th><th>CM ADR</th><th>CM Mix%</th><th>NM Rms</th><th>NM ADR</th><th>NM Mix%</th><th>Pickup 7d</th></tr>
+    <tr><td>Transient Retail</td><td>520</td><td>$385</td><td>34%</td><td>410</td><td>$378</td><td>35%</td><td class="pos">+18</td></tr>
+    <tr><td>Transient Discount</td><td>340</td><td>$285</td><td>23%</td><td>280</td><td>$280</td><td>24%</td><td class="pos">+22</td></tr>
+    <tr><td>Transient Negotiated</td><td>180</td><td>$298</td><td>12%</td><td>140</td><td>$295</td><td>12%</td><td class="pos">+8</td></tr>
+    <tr><td>Wholesale</td><td>210</td><td>$210</td><td>14%</td><td>180</td><td>$208</td><td>15%</td><td class="pos">+12</td></tr>
+    <tr><td>Group</td><td>240</td><td>$280</td><td>16%</td><td>160</td><td>$285</td><td>14%</td><td>+0</td></tr>
+    <tr><td>Contract</td><td>20</td><td>$240</td><td>1%</td><td>10</td><td>$240</td><td>1%</td><td>0</td></tr>
+  </table>
+
+  <div class="section-title">E. By room type (Current + Next month)</div>
+  <table>
+    <tr><th>Room Type</th><th>CM Rms</th><th>CM ADR</th><th>CM Occ%</th><th>NM Rms</th><th>NM ADR</th><th>NM Occ%</th></tr>
+    <tr><td>Deluxe King</td><td>620</td><td>$295</td><td>78%</td><td>510</td><td>$292</td><td>72%</td></tr>
+    <tr><td>Deluxe Twin</td><td>340</td><td>$298</td><td>72%</td><td>280</td><td>$295</td><td>68%</td></tr>
+    <tr><td>Junior Suite</td><td>280</td><td>$385</td><td>74%</td><td>220</td><td>$382</td><td>69%</td></tr>
+    <tr><td>Pool Villa</td><td>180</td><td>$580</td><td>71%</td><td>120</td><td>$575</td><td>62%</td></tr>
+    <tr><td>Master Suite</td><td>90</td><td>$680</td><td>68%</td><td>50</td><td>$675</td><td>58%</td></tr>
+  </table>
+
+  <div class="section-title">F. Top 5 alerts</div>
+  <div class="alert"><b>1.</b> +90d pacing −12.1% vs STLY · Forecast revenue gap −$28k vs Budget · Demand Signal: comp set rates flat, Google Trends destination interest <span class="neg">−18% MoM</span></div>
+  <div class="alert"><b>2.</b> Pool Villa next month occ 62% vs LY 71% · Pricing Recommender flagged 14 future dates for review</div>
+  <div class="alert"><b>3.</b> Group block "ABC Corp" cut-off in 9 days · 32 rooms uncommitted · revenue at risk $9,600</div>
+  <div class="alert"><b>4.</b> Cancellations last 24h: 6 reservations / $4,200 (vs 30-day avg of 2.4 / $1,650) · 4 are non-refundable, investigate</div>
+  <div class="alert"><b>5.</b> 2 rooms OOO · Maintenance ticket open since 3 days for Pool Villa #14</div>
+</div>
+
+<!-- ============ 4. OTB FLOOR LOGIC ============ -->
+<h2>4. Pricing Recommender — OTB-aware floor logic</h2>
+<div class="panel">
+  <h3 style="margin-top: 0;">Decision flow for every BAR proposal</h3>
+  <div class="flow">
+    <div class="flow-step ok">
+      <div class="flow-num">1</div>
+      <div>
+        <div class="flow-title">Read OTB for the target date</div>
+        <div class="flow-desc">From Pace Agent output: rooms OTB, lowest refundable rate, weighted avg rate, pace vs STLY, days to arrival</div>
+      </div>
+    </div>
+    <div class="flow-step block">
+      <div class="flow-num">2</div>
+      <div>
+        <div class="flow-title">Pace check (BLOCKER)</div>
+        <div class="flow-desc">If <code>OTB_pace_vs_STLY > +5%</code> AND <code>days_to_arrival &lt; 30</code> → BLOCK rate drops, propose RAISE only</div>
+      </div>
+    </div>
+    <div class="flow-step warn">
+      <div class="flow-num">3</div>
+      <div>
+        <div class="flow-title">Hard floor (cannot breach)</div>
+        <div class="flow-desc"><code>floor = MAX(static_floor_per_room_type, lowest_refundable_OTB_rate)</code> — proposal below floor → REJECT silently</div>
+      </div>
+    </div>
+    <div class="flow-step warn">
+      <div class="flow-num">4</div>
+      <div>
+        <div class="flow-title">Soft floor (warn, requires human override)</div>
+        <div class="flow-desc"><code>soft_floor = weighted_avg_OTB_rate × 0.92</code> — proposal below soft_floor → flag red, human must explicitly approve</div>
+      </div>
+    </div>
+    <div class="flow-step ok">
+      <div class="flow-num">5</div>
+      <div>
+        <div class="flow-title">Demand signal weighting</div>
+        <div class="flow-desc">Comp set delta + Google Trends direction + events. Trends used as tiebreaker only — never as standalone trigger</div>
+      </div>
+    </div>
+    <div class="flow-step ok">
+      <div class="flow-num">6</div>
+      <div>
+        <div class="flow-title">Apply guardrails (next section)</div>
+        <div class="flow-desc">Validate against rate change rules table. If any rule fails → mark as "deferred to next cycle"</div>
+      </div>
+    </div>
+    <div class="flow-step ok">
+      <div class="flow-num">7</div>
+      <div>
+        <div class="flow-title">Write to recommendation sheet</div>
+        <div class="flow-desc">Sheet column: date, room type, current BAR, proposed BAR, delta %, rationale (≤80 chars), confidence, signals used</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Pseudocode</h3>
+  <div class="code"><span class="c"># 13_OTB_FLOOR_LOGIC.md — pseudocode for Pricing Recommender</span>
+
+<span class="k">def</span> propose_bar(date, room_type):
+    otb = pace_agent.read_otb(date, room_type)
+    current_bar = cloudbeds.get_current_bar(date, room_type)
+
+    <span class="c"># Step 2: Pace blocker</span>
+    <span class="k">if</span> otb.pace_vs_stly_pct &gt; <span class="n">5.0</span> <span class="k">and</span> otb.days_to_arrival &lt; <span class="n">30</span>:
+        direction = <span class="s">"raise_only"</span>
+    <span class="k">else</span>:
+        direction = <span class="s">"both"</span>
+
+    <span class="c"># Step 3: Hard floor</span>
+    static_floor = pricing_rules.floor[room_type]
+    hard_floor = <span class="k">max</span>(static_floor, otb.lowest_refundable_rate)
+
+    <span class="c"># Step 4: Soft floor</span>
+    soft_floor = otb.weighted_avg_rate * <span class="n">0.92</span>
+
+    <span class="c"># Compute target rate from demand signals</span>
+    target = compute_target_bar(current_bar, demand_signals, direction)
+
+    <span class="c"># Apply floors</span>
+    <span class="k">if</span> target &lt; hard_floor:
+        <span class="k">return</span> reject(<span class="s">"below hard floor"</span>)
+    <span class="k">if</span> target &lt; soft_floor:
+        flag = <span class="s">"requires_human_override"</span>
+
+    <span class="c"># Apply magnitude guardrail</span>
+    max_change = current_bar * <span class="n">0.15</span>
+    target = clamp(target, current_bar - max_change, current_bar + max_change)
+
+    <span class="k">return</span> recommendation(date, room_type, target, flag, signals)
+</div>
+</div>
+
+<!-- ============ 5. GUARDRAILS ============ -->
+<h2>5. Rate change guardrails — hard rules</h2>
+<div class="guard">
+  <table>
+    <tr><td>Max BAR changes per room type per date</td><td>1 per day</td></tr>
+    <tr><td>Max future dates touched per cycle</td><td>5</td></tr>
+    <tr><td>Max BAR change magnitude</td><td>±15% vs last published</td></tr>
+    <tr><td>Min notice for BAR change</td><td>T+1 (no same-day drops if any OTB exists)</td></tr>
+    <tr><td>Cooling period after a change on a date</td><td>48h before next change on that date</td></tr>
+    <tr><td>Hard ceiling per room type</td><td>2.5× annual ADR</td></tr>
+    <tr><td>Hard floor per room type</td><td>From <code>06_PRICING_RULES.md</code></td></tr>
+    <tr><td>Pace blocker threshold</td><td>OTB pace &gt; +5% vs STLY AND days_to_arrival &lt; 30 → no drops</td></tr>
+    <tr><td>Soft floor</td><td>Weighted avg OTB rate × 0.92</td></tr>
+    <tr><td>Cloudbeds writes</td><td>NEVER · human pushes manually</td></tr>
+  </table>
+</div>
+
+<!-- ============ 6. DAILY WORKFLOW ============ -->
+<h2>6. Daily workflow (LAK time)</h2>
+<div class="panel">
+  <div class="timeline">
+    <div class="time">06:00</div><div class="event"><b>Pace & OTB Agent</b> <span>pulls overnight bookings, computes OTB by date × room type × rate plan</span></div>
+    <div class="time">06:30</div><div class="event"><b>Demand Signal Agent</b> <span>reads comp set sheet (last Friday entry), pulls Google Trends, checks event calendar</span></div>
+    <div class="time">07:30</div><div class="event"><b>Reporting Agent</b> <span>compiles daily pickup template, validates every cell against KPI definitions</span></div>
+    <div class="time">09:00</div><div class="event"><b>Daily flash delivered</b> <span>Telegram (mobile-friendly digest) + Sheet link (full drill-down). Human RM reviews.</span></div>
+    <div class="time">10:00</div><div class="event"><b>Human standup</b> <span>RM + GM + F&B · 15 min on numbers and actions</span></div>
+    <div class="time">14:00</div><div class="event"><b>Pricing Recommender</b> <span>generates BAR proposals (max 5 dates × room types, OTB-aware, guardrailed)</span></div>
+    <div class="time">14:30</div><div class="event"><b>Recommendations posted</b> <span>to dedicated sheet · human reviews each line · approves or overrides</span></div>
+    <div class="time">16:00</div><div class="event"><b>Human pushes approved rates</b> <span>manually into Cloudbeds extranet · zero AI write access</span></div>
+    <div class="time">22:00</div><div class="event"><b>Reporting Agent</b> <span>EOD reconciliation, prep tomorrow's data, snapshot OTB state</span></div>
+    <div class="time">Fri 17:00</div><div class="event"><b>Comp Set update</b> <span>team manually fills <code>comp_set_weekly.gsheet</code> for next 7 days</span></div>
+  </div>
+</div>
+
+<!-- ============ 7. COMP SET SHEET ============ -->
+<h2>7. Comp set sheet — manual weekly entry</h2>
+<div class="sub">Filled every Friday afternoon by reservations or RM. Demand Signal Agent reads it Mon morning. No scraping.</div>
+
+<div class="comp-mockup">
+  <table>
+    <tr>
+      <th>Date</th>
+      <th>Comp 1<br/>Lowest Avail Deluxe King</th>
+      <th>Comp 2</th>
+      <th>Comp 3</th>
+      <th>Comp 4</th>
+      <th>Source</th>
+      <th>Shopper</th>
+      <th>Timestamp</th>
+      <th>Notes</th>
+    </tr>
+    <tr><td>2026-05-09 Sat</td><td>$340</td><td>$365</td><td>$320</td><td>$355</td><td>Booking.com</td><td>JL</td><td>2026-05-08 17:12</td><td></td></tr>
+    <tr><td>2026-05-10 Sun</td><td>$310</td><td>$340</td><td>$295</td><td>$330</td><td>Booking.com</td><td>JL</td><td>2026-05-08 17:14</td><td></td></tr>
+    <tr><td>2026-05-11 Mon</td><td>$285</td><td>$310</td><td>$275</td><td>$305</td><td>Booking.com</td><td>JL</td><td>2026-05-08 17:15</td><td></td></tr>
+    <tr><td>2026-05-12 Tue</td><td>$285</td><td>$305</td><td>$280</td><td>$305</td><td>Booking.com</td><td>JL</td><td>2026-05-08 17:16</td><td></td></tr>
+    <tr><td>2026-05-13 Wed</td><td>$290</td><td>$315</td><td>$280</td><td>$310</td><td>Booking.com</td><td>JL</td><td>2026-05-08 17:17</td><td></td></tr>
+    <tr><td>2026-05-14 Thu</td><td>$305</td><td>$325</td><td>$295</td><td>$320</td><td>Booking.com</td><td>JL</td><td>2026-05-08 17:18</td><td></td></tr>
+    <tr><td>2026-05-15 Fri</td><td>$340</td><td>$370</td><td>$325</td><td>$360</td><td>Booking.com</td><td>JL</td><td>2026-05-08 17:19</td><td></td></tr>
+  </table>
+</div>
+
+<!-- ============ 8. DELIVERABLES ============ -->
+<h2>8. Outputs the human sees</h2>
+<div class="agents">
+  <div class="agent">
+    <h3>Telegram daily digest (09:00)</h3>
+    <div style="font-family: var(--mono); font-size: 12px; background: #010409; padding: 12px; border-radius: 6px; margin-top: 8px;">
+📊 <b>Daily Pickup · 2026-05-06</b><br/>
+Occ MTD <b>72.4%</b> (+2.1pp Bud, −1.8pp LY)<br/>
+ADR MTD <b>$320</b> (+$8 Bud, +$15 LY)<br/>
+RevPAR MTD <b>$232</b> (+$12 Bud)<br/><br/>
+Pickup 24h: <b>+8 rooms / +$2,520</b><br/>
+Pickup 7d: <b>+45 rooms / +$13,800</b><br/><br/>
+🚨 +90d pace −12.1% vs STLY<br/>
+🚨 Group ABC cut-off in 9d<br/><br/>
+👉 <a>Full report</a>
+    </div>
+  </div>
+  <div class="agent">
+    <h3>Pricing recommendation sheet (14:30)</h3>
+    <table style="margin-top: 8px;">
+      <tr><th>Date</th><th>Type</th><th>Now</th><th>Prop</th><th>Δ%</th><th>Flag</th><th>Why</th></tr>
+      <tr><td>+45d</td><td>Pool Villa</td><td>$580</td><td>$540</td><td>−6.9%</td><td style="color:var(--accent-2)">Soft</td><td>OTB pace −8% vs STLY · comp −5%</td></tr>
+      <tr><td>+38d</td><td>Deluxe King</td><td>$295</td><td>$310</td><td>+5.1%</td><td style="color:var(--green)">OK</td><td>Pace +12% · event weekend</td></tr>
+      <tr><td>+62d</td><td>Junior Suite</td><td>$385</td><td>$362</td><td>−6.0%</td><td style="color:var(--accent-2)">Soft</td><td>Pace −10% · trends −18%</td></tr>
+      <tr><td>+72d</td><td>Pool Villa</td><td>$580</td><td>$555</td><td>−4.3%</td><td style="color:var(--green)">OK</td><td>Pace −6% · within hard floor</td></tr>
+      <tr><td>+89d</td><td>Master Suite</td><td>$680</td><td>$650</td><td>−4.4%</td><td style="color:var(--green)">OK</td><td>0 OTB · long lead time</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ============ 9. ROLLOUT ============ -->
+<h2>9. Rollout plan</h2>
+<table>
+  <thead><tr><th>Week</th><th>Deliverable</th><th>Success criteria</th></tr></thead>
+  <tbody>
+    <tr><td>1–2</td><td>Cloudbeds API connection · Reporting Agent (daily pickup template only)</td><td>Pickup arrives 09:00 for 7 consecutive days · numbers tie to PMS within ±0.1%</td></tr>
+    <tr><td>3</td><td>Pace & OTB Agent live · feeds OTB sheet by date × type × rate plan</td><td>OTB rate breakdown matches PMS folio export</td></tr>
+    <tr><td>4</td><td>Demand Signal Agent · comp set sheet template + Google Trends feed</td><td>Friday team comp set entry → Mon agent reads it correctly</td></tr>
+    <tr><td>5</td><td>Pricing Recommender (recommend-only, all guardrails active)</td><td>Recommendations daily 14:30 · zero PMS writes · human accept/override tracked</td></tr>
+    <tr><td>6</td><td>Weekly + Monthly USALI P&L pack</td><td>P&L matches accountant manual ±0.5%</td></tr>
+    <tr><td>7</td><td>Promo Analyzer · post-mortem on existing promos</td><td>Net contribution per promo computed, cannibalization estimated</td></tr>
+    <tr><td>8</td><td>Rate Plan Optimizer · open/close/LOS suggestions</td><td>Recommendations on existing plans only</td></tr>
+    <tr><td>9–12</td><td>Tuning + accept/override tracking + cost optimization (Sonnet vs Opus split)</td><td>Recommendation accept rate &gt;60% · monthly cost &lt;$700</td></tr>
+  </tbody>
+</table>
+
+<!-- ============ 10. RISKS ============ -->
+<h2>10. Open risks (still real, even with no writes)</h2>
+<details><summary>Bad data in Reporting Agent → wrong decisions even without auto-pricing</summary><div>
+Recommend-only doesn't protect you if the human trusts wrong numbers. <b>Mitigation:</b> Team Lead validates every KPI cell against <code>05_KPI_DEFINITIONS.md</code>, refuses any cell it can't trace. Add a daily audit row: "X rooms in PMS folio = Y rooms in Reporting Agent output." Mismatch &gt; 0.1% triggers red alert before flash sends.
+</div></details>
+
+<details><summary>Comp set decay — manual entry skipped or sloppy</summary><div>
+By week 4, the Friday shop becomes "5 minutes before going home." Bad data feeds bad recommendations. <b>Mitigation:</b> agent refuses to issue recommendations if comp set sheet is &gt;10 days stale, alerts human RM.
+</div></details>
+
+<details><summary>Human override fatigue</summary><div>
+If the human approves 95% of recommendations, autonomy is happening de-facto without the safety. <b>Mitigation:</b> track accept/override rate. If &gt;90% accept after 30 days, force a "challenge week" — human must override at least 3 recommendations with documented rationale.
+</div></details>
+
+<details><summary>OTB-aware logic depends on Pace Agent accuracy</summary><div>
+If Pace Agent miscomputes OTB (e.g., misses last-minute bookings), Pricing Recommender makes wrong decisions on correct logic. Garbage in, garbage out. <b>Mitigation:</b> Pace Agent runs sanity check — total OTB rev = sum of folio rooms revenue. Mismatch → flag and skip pricing cycle that day.
+</div></details>
+
+<details><summary>Google Trends signal noise</summary><div>
+Trends index swings ±20% week-to-week even with stable demand. Treating it as direction signal still risks false positives. <b>Mitigation:</b> 4-week rolling average only · used only as tiebreaker between two close decisions, never as primary trigger.
+</div></details>
+
+<details><summary>Promo Analyzer attribution problem</summary><div>
+"Did this promo cause incremental bookings, or would they have come anyway?" is genuinely hard. Pre/post comparison ignores seasonality. <b>Mitigation:</b> agent reports outputs as "indicators" not "causal" — use 90-day pre/post + same-period LY as control. Never claim causation in the report wording.
+</div></details>
+
+<div class="footer">
+v2 — Recommend-only · OTB-aware · Predefined templates · Manual comp set · No PMS writes · Human pushes rates manually
+</div>
+
+</body>
+</html>

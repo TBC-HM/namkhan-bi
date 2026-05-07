@@ -21,44 +21,81 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 export const config = {
-  matcher: ["/cockpit/:path*", "/api/cockpit/:path*"],
+  // Gate cockpit + dept routes. /login + /api/auth/* + webhooks bypass.
+  matcher: [
+    "/cockpit/:path*",
+    "/api/cockpit/:path*",
+    "/revenue/:path*",
+    "/sales/:path*",
+    "/marketing/:path*",
+    "/operations/:path*",
+    "/finance/:path*",
+    "/overview",
+  ],
 };
 
-export function middleware(_req: NextRequest) {
-  // AUTH DISABLED 2026-05-06 per PBS — page has no real PII/numbers yet,
-  // Basic Auth was blocking dev iteration. Re-enable when:
-  //   - Real revenue/guest data lands on /cockpit, OR
-  //   - Cockpit is shared with anyone outside PBS.
-  // To re-enable: revert this commit OR uncomment the gated block below.
-  return NextResponse.next();
+import { verifyWorkspaceCookie } from "@/lib/workspace-cookie";
 
-  // ---- gated implementation kept for reference ----
-  //
-  // if (req.nextUrl.pathname.startsWith("/api/cockpit/webhooks/")) return NextResponse.next();
-  // if (req.nextUrl.pathname.startsWith("/api/cockpit/agent/run")) return NextResponse.next();
-  // if (req.nextUrl.pathname.startsWith("/api/cockpit/auth/redeem")) return NextResponse.next();
-  //
-  // const expectedUser = process.env.COCKPIT_USERNAME;
-  // const expectedPass = process.env.COCKPIT_PASSWORD;
-  // if (!expectedUser || !expectedPass) {
-  //   return new NextResponse("cockpit auth not configured", { status: 503 });
-  // }
-  //
-  // const magic = req.cookies.get("cockpit_magic")?.value;
-  // if (magic && /^[a-f0-9]{64}$/.test(magic)) return NextResponse.next();
-  //
-  // const auth = req.headers.get("authorization");
-  // if (auth?.startsWith("Basic ")) {
-  //   try {
-  //     const decoded = atob(auth.slice(6));
-  //     const [user, ...rest] = decoded.split(":");
-  //     const pass = rest.join(":");
-  //     if (user === expectedUser && pass === expectedPass) return NextResponse.next();
-  //   } catch {}
-  // }
-  //
-  // return new NextResponse("authentication required", {
-  //   status: 401,
-  //   headers: { "WWW-Authenticate": 'Basic realm="Namkhan BI Cockpit", charset="UTF-8"' },
-  // });
+const DEPT_PREFIXES: Array<{ prefix: string; flag: keyof Awaited<ReturnType<typeof verifyWorkspaceCookie>> & string }> = [
+  { prefix: "/revenue", flag: "access_revenue" },
+  { prefix: "/sales", flag: "access_sales" },
+  { prefix: "/marketing", flag: "access_marketing" },
+  { prefix: "/operations", flag: "access_operations" },
+  { prefix: "/finance", flag: "access_finance" },
+];
+
+function notFound() {
+  // 404 not 403 — never reveal route existence to unauthorized users (KB id 19).
+  return new NextResponse("Not Found", { status: 404 });
+}
+
+export async function middleware(req: NextRequest) {
+  const path = req.nextUrl.pathname;
+
+  // OPEN MODE — auth gate disabled per PBS 2026-05-07 "dnt waste time is a
+  // page withut nbrs". Single-user system. Re-enable by setting
+  // COCKPIT_AUTH_GATE=on in env.
+  const gateOn = process.env.COCKPIT_AUTH_GATE === "on";
+  if (!gateOn) return NextResponse.next();
+
+  // Bypasses (only consulted if gate is on)
+  if (path.startsWith("/api/cockpit/webhooks/")) return NextResponse.next();
+  if (path.startsWith("/api/cockpit/agent/run")) return NextResponse.next();
+  if (path.startsWith("/api/cockpit/auth/redeem")) return NextResponse.next();
+  if (path.startsWith("/api/cockpit/audit-log") ||
+      path.startsWith("/api/cockpit/backup/status") ||
+      path.startsWith("/api/cockpit/deploy/rollback") ||
+      path.startsWith("/api/cockpit/webhooks/post-deploy") ||
+      path.startsWith("/api/cockpit/chat")) {
+    return NextResponse.next();
+  }
+
+  const cookie = req.cookies.get("workspace_session")?.value;
+  let user;
+  try {
+    user = await verifyWorkspaceCookie(cookie);
+  } catch {
+    user = null;
+  }
+
+  if (!user) {
+    if (path.startsWith("/api/")) return notFound();
+    const url = req.nextUrl.clone();
+    url.pathname = "/login";
+    url.searchParams.set("from", path);
+    return NextResponse.redirect(url);
+  }
+
+  if (path.startsWith("/cockpit/users")) {
+    if (!user.is_owner) return notFound();
+  }
+
+  for (const { prefix, flag } of DEPT_PREFIXES) {
+    if (path.startsWith(prefix)) {
+      const allowed = user.is_owner || (user as Record<string, unknown>)[flag];
+      if (!allowed) return notFound();
+    }
+  }
+
+  return NextResponse.next();
 }

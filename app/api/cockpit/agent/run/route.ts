@@ -20,10 +20,10 @@
 import { NextResponse } from "next/server";
 import { unstable_noStore as noStore } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
-import { loadSkillsForRole, dispatchSkill, type AgentToolDef } from "@/lib/cockpit-tools";
+import { loadSkillsForRole, dispatchSkill, dispatchSkillGated, type AgentToolDef } from "@/lib/cockpit-tools";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;  // Vercel Pro max — long-task survival per it_only_window_v2 4.4
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 export const revalidate = 0;
@@ -39,9 +39,10 @@ type Triage = {
   urgency: string;
   summary: string;
   plan: string[];
-  recommended_agent: string;
+  recommended_agent?: string;     // Kit ≤v11
+  recommended_role?: string;       // Kit v12+ JSON contract
   blockers: string[];
-  estimated_minutes: number;
+  estimated_minutes?: number;
 };
 
 type AgentRole =
@@ -54,6 +55,7 @@ type AgentRole =
   | "lead"
   | "frontend"
   | "backend"
+  | "architect"
   | "none";
 
 const ROLE_PROMPTS: Record<AgentRole, string> = {
@@ -146,19 +148,23 @@ Output ONLY valid JSON:
   frontend: `You are the Frontend Agent. Output ONLY JSON: {"files_to_create":[],"files_to_edit":[],"components_to_use":[],"components_to_create":[],"data_sources":[],"design_system_compliance":[],"blocking_questions":[]}`,
 
   backend: `You are the Backend Agent. Output ONLY JSON: {"schema_changes":[],"api_routes_to_create":[],"edge_functions":[],"cron_jobs":[],"data_sources_consumed":[],"performance_notes":[],"blocking_questions":[]}`,
+
+  architect: `Fallback Architect prompt — DB lookup should override this. Output JSON: {"summary_markdown":"...","triage":{"arm":"dev","intent":"decide","urgency":"low","recommended_role":"architect"},"needs_human_decision":false,"blocking_questions":[]}`,
 };
 
 function pickRole(triage: Triage): AgentRole {
-  const candidate = (triage.recommended_agent || "").toLowerCase();
+  const candidate = (triage.recommended_role || triage.recommended_agent || "").toLowerCase();
   if ((Object.keys(ROLE_PROMPTS) as AgentRole[]).includes(candidate as AgentRole)) {
     return candidate as AgentRole;
   }
+  if (candidate === "architect") return "architect";
+  if (candidate === "it_manager") return "none"; // Kit answered directly
   // Fallback by arm.
   if (triage.arm === "research") return "researcher";
   if (triage.arm === "design") return "designer";
   if (triage.arm === "control") return "reviewer";
   if (triage.arm === "ops") return "ops_lead";
-  if (triage.arm === "dev") return "lead"; // dev with no specialist → decompose first
+  if (triage.arm === "dev") return "lead";
   return "none";
 }
 
@@ -177,7 +183,7 @@ function calcMilliCost(inTok: number, outTok: number): number {
   return Math.round((inTok * 3 + outTok * 15) / 1000);
 }
 
-async function callRoleAgent(role: AgentRole, triage: Triage, originalMessage: string): Promise<{
+async function callRoleAgent(role: AgentRole, triage: Triage, originalMessage: string, ticketId: number | null = null): Promise<{
   result: Record<string, unknown>;
   trace: Array<{ tool: string; input: Record<string, unknown>; ok: boolean }>;
   tokens_in: number;
@@ -260,7 +266,8 @@ ${originalMessage}`;
         if (!handler) {
           resultText = JSON.stringify({ ok: false, error: `unknown skill: ${tu.name}` });
         } else {
-          const r = await dispatchSkill(handler, tu.input ?? {});
+          // Phase 1.2: gate every skill call through call_skill / complete_skill_call.
+          const r = await dispatchSkillGated(role, tu.name ?? "", handler, tu.input ?? {}, ticketId);
           ok = r.ok;
           resultText = JSON.stringify(r).slice(0, 6000);
         }
@@ -494,7 +501,7 @@ async function processTicket(ticketId: number) {
 
   let runOutcome: Awaited<ReturnType<typeof callRoleAgent>>;
   try {
-    runOutcome = await callRoleAgent(role, triage, originalMessage);
+    runOutcome = await callRoleAgent(role, triage, originalMessage, ticketId);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await supabase

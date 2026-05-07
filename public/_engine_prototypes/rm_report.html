@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Revenue · Reports</title>
+<style>
+  :root {
+    --bg: #0a0a0b; --bg-2: #0f0f11; --panel: #15151a; --panel-2: #1c1c22;
+    --border: #25252d; --border-soft: #1a1a20;
+    --text: #ededf0; --text-2: #a1a1aa; --muted: #6b6b75;
+    --accent: #c79a6b; --accent-line: rgba(199, 154, 107, 0.5);
+    --green: #5cf2a4; --warn: #ffb84d; --red: #ff6b6b;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --serif: "Cooper", "Source Serif Pro", Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+    font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+  }
+
+  /* ============ TOP BAR ============ */
+  .topbar {
+    height: 56px; padding: 0 28px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .topbar-left {
+    display: flex; align-items: center; gap: 20px;
+  }
+  .logo {
+    font-weight: 500; font-size: 14px; display: flex; align-items: center; gap: 10px;
+    color: var(--text-2); cursor: pointer;
+  }
+  .logo:hover { color: var(--text); }
+  .logo-mark {
+    width: 22px; height: 22px; border-radius: 6px;
+    background: linear-gradient(135deg, var(--accent), #b88556);
+    color: #1a1a1a; font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .logo b { color: var(--text); font-weight: 600; }
+  .crumb-sep { color: var(--muted); font-size: 13px; }
+  .crumb { color: var(--text-2); font-size: 13px; }
+  .crumb.active { color: var(--text); font-weight: 500; }
+
+  .topbar-right { display: flex; align-items: center; gap: 6px; }
+  .top-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 12px; border-radius: 7px;
+    background: transparent; border: 1px solid transparent;
+    color: var(--text-2); font-size: 13px; cursor: pointer;
+    transition: all 0.15s; font-family: inherit;
+  }
+  .top-btn:hover { background: var(--panel); color: var(--text); }
+  .top-btn .icon { font-size: 13px; }
+  .top-btn.cta { color: var(--accent); border-color: var(--border); }
+  .top-btn.cta:hover { border-color: var(--accent-line); background: rgba(199,154,107,0.05); }
+
+  /* ============ REPORT HEADER ============ */
+  .report-header {
+    padding: 28px 28px 20px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .report-title-row {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 16px; margin-bottom: 18px;
+  }
+  .report-title {
+    font-family: var(--serif);
+    font-size: 32px; line-height: 1.1; letter-spacing: -0.02em;
+    color: var(--text); font-weight: 400; margin: 0;
+  }
+  .report-sub {
+    color: var(--muted); font-size: 13px; margin-top: 4px;
+    font-family: var(--mono);
+  }
+
+  .report-actions { display: flex; gap: 6px; }
+  .action-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 12px; border-radius: 7px;
+    background: var(--panel); border: 1px solid var(--border-soft);
+    color: var(--text-2); font-size: 12px; cursor: pointer;
+    transition: all 0.15s; font-family: inherit;
+    position: relative;
+  }
+  .action-btn:hover { background: var(--panel-2); color: var(--text); border-color: var(--border); }
+  .action-btn.saved { color: var(--accent); border-color: var(--accent-line); background: rgba(199,154,107,0.06); }
+  .action-btn .icon { font-size: 12px; }
+
+  /* ============ TIME SELECTOR ============ */
+  .time-selector {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  }
+  .selector-group {
+    display: inline-flex; align-items: center; gap: 1px;
+    background: var(--border-soft); border-radius: 8px; padding: 1px;
+  }
+  .selector-btn {
+    padding: 6px 12px; background: transparent; border: 0;
+    color: var(--text-2); font-size: 12px; cursor: pointer;
+    font-family: inherit; border-radius: 6px;
+    transition: all 0.12s;
+  }
+  .selector-btn:hover { color: var(--text); background: var(--panel); }
+  .selector-btn.active {
+    background: var(--panel); color: var(--text); font-weight: 500;
+  }
+  .selector-divider { color: var(--muted); font-size: 11px; padding: 0 4px; }
+
+  .compare-selector {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; background: var(--panel); border: 1px solid var(--border-soft);
+    border-radius: 7px; color: var(--text-2); font-size: 12px; cursor: pointer;
+  }
+  .compare-selector:hover { border-color: var(--border); color: var(--text); }
+  .compare-selector .label { color: var(--muted); }
+  .compare-selector .caret { font-size: 9px; opacity: 0.6; margin-left: 4px; }
+
+  .nav-arrows { display: inline-flex; gap: 1px; background: var(--border-soft); border-radius: 7px; padding: 1px; }
+  .nav-arrow {
+    width: 28px; height: 28px; background: transparent; border: 0;
+    color: var(--text-2); cursor: pointer; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center; font-size: 14px;
+  }
+  .nav-arrow:hover { background: var(--panel); color: var(--text); }
+
+  /* ============ REPORT BODY ============ */
+  .report-body {
+    padding: 24px 28px;
+    max-width: 1280px; margin: 0 auto;
+  }
+
+  /* Summary stats row */
+  .summary-row {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
+    background: var(--border-soft); border-radius: 10px; overflow: hidden;
+    margin-bottom: 20px;
+  }
+  .summary-tile {
+    background: var(--bg-2); padding: 16px 18px;
+  }
+  .summary-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--muted); font-weight: 600;
+  }
+  .summary-value {
+    font-family: var(--serif); font-size: 26px; line-height: 1.1;
+    color: var(--text); font-weight: 400; margin-top: 6px;
+  }
+  .summary-delta {
+    font-size: 11px; margin-top: 4px; font-family: var(--mono);
+    color: var(--muted);
+  }
+  .summary-delta.up { color: var(--green); }
+  .summary-delta.down { color: var(--red); }
+
+  /* Tables */
+  .data-card {
+    background: var(--panel); border: 1px solid var(--border-soft);
+    border-radius: 10px; overflow: hidden;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead { background: var(--bg-2); }
+  th {
+    text-align: left; padding: 11px 14px;
+    color: var(--muted); font-weight: 500; font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  th.right { text-align: right; }
+  td {
+    padding: 11px 14px; border-bottom: 1px solid var(--border-soft);
+    color: var(--text-2); font-variant-numeric: tabular-nums;
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr:hover { background: var(--panel-2); }
+  td.right { text-align: right; }
+  td b { color: var(--text); font-weight: 500; }
+  td.row-key { color: var(--text); font-weight: 500; }
+  .pos { color: var(--green); }
+  .neg { color: var(--red); }
+  .muted-cell { color: var(--muted); }
+
+  .verdict {
+    display: inline-block; padding: 2px 8px; border-radius: 100px;
+    font-size: 11px; font-family: var(--mono);
+  }
+  .verdict.keep { background: rgba(92, 242, 164, 0.1); color: var(--green); }
+  .verdict.review { background: rgba(255, 184, 77, 0.1); color: var(--warn); }
+  .verdict.close { background: rgba(255, 107, 107, 0.1); color: var(--red); }
+
+  /* ============ FOOTER ============ */
+  .report-footer {
+    padding: 24px 28px; max-width: 1280px; margin: 0 auto;
+    display: flex; justify-content: space-between; align-items: center;
+    border-top: 1px solid var(--border-soft);
+    margin-top: 12px;
+    font-size: 12px; color: var(--muted);
+  }
+  .schedule-link {
+    color: var(--accent); cursor: pointer; font-size: 12px;
+  }
+  .schedule-link:hover { text-decoration: underline; }
+
+  /* ============ POPOVERS ============ */
+  .menu {
+    position: absolute; top: 38px; right: 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 6px;
+    min-width: 220px;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.6);
+    display: none; z-index: 200;
+  }
+  .menu.open { display: block; animation: fadeIn 0.15s ease-out; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+  .menu-section {
+    padding: 8px 10px 4px; font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--muted); font-weight: 600;
+  }
+  .menu-item {
+    padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 13px;
+    color: var(--text-2); display: flex; align-items: center; gap: 10px;
+  }
+  .menu-item:hover { background: var(--panel-2); color: var(--text); }
+  .menu-item .icon { font-size: 14px; opacity: 0.7; width: 16px; text-align: center; }
+  .menu-divider { height: 1px; background: var(--border-soft); margin: 4px 8px; }
+
+  /* Time period menu (wider) */
+  .menu.period { min-width: 200px; }
+
+  /* ============ MODAL (schedule) ============ */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px); z-index: 300;
+    display: none; align-items: center; justify-content: center;
+  }
+  .modal-backdrop.open { display: flex; animation: fadeIn 0.2s ease-out; }
+  .modal {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 14px; padding: 28px;
+    width: 90%; max-width: 480px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+  }
+  .modal-head {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 20px;
+  }
+  .modal-title {
+    font-family: var(--serif); font-size: 22px; line-height: 1.2;
+    color: var(--text); font-weight: 400;
+  }
+  .modal-close {
+    width: 28px; height: 28px; border-radius: 6px;
+    background: transparent; border: 0; color: var(--muted);
+    cursor: pointer; font-size: 18px;
+  }
+  .modal-close:hover { background: var(--panel-2); color: var(--text); }
+  .form-row { margin-bottom: 16px; }
+  .form-label {
+    display: block; font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--muted); font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .form-control {
+    width: 100%; padding: 10px 12px; border-radius: 8px;
+    background: var(--bg-2); border: 1px solid var(--border-soft);
+    color: var(--text); font-family: inherit; font-size: 14px;
+    outline: 0;
+  }
+  .form-control:focus { border-color: var(--accent-line); }
+  .modal-foot {
+    display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px;
+  }
+  .btn-secondary {
+    padding: 8px 14px; border-radius: 7px;
+    background: transparent; border: 1px solid var(--border);
+    color: var(--text-2); cursor: pointer; font-family: inherit; font-size: 13px;
+  }
+  .btn-secondary:hover { color: var(--text); }
+  .btn-primary {
+    padding: 8px 14px; border-radius: 7px;
+    background: var(--accent); border: 0;
+    color: #1a1a1a; cursor: pointer; font-family: inherit; font-size: 13px;
+    font-weight: 500;
+  }
+  .btn-primary:hover { background: #d4a672; }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 18px;
+    color: var(--text); font-size: 13px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+    opacity: 0; pointer-events: none; transition: all 0.25s;
+    z-index: 400;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast .check {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--green); color: #1a1a1a; font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* Report switcher in header */
+  .report-tabs {
+    display: flex; gap: 4px; margin-bottom: 20px;
+  }
+  .report-tab {
+    padding: 6px 12px; border-radius: 7px;
+    background: transparent; border: 1px solid transparent;
+    color: var(--text-2); font-size: 12px; cursor: pointer;
+    font-family: inherit;
+  }
+  .report-tab:hover { color: var(--text); background: var(--panel); }
+  .report-tab.active {
+    background: var(--panel); color: var(--text);
+    border-color: var(--border-soft);
+  }
+
+  @media (max-width: 720px) {
+    .summary-row { grid-template-columns: 1fr 1fr; }
+    .report-title { font-size: 24px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ TOP BAR ============ -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="logo" onclick="alert('→ Back to Ask')">
+      <span class="logo-mark">R</span>
+      <span><b>Revenue</b></span>
+    </div>
+    <span class="crumb-sep">/</span>
+    <span class="crumb">Reports</span>
+    <span class="crumb-sep">/</span>
+    <span class="crumb active" id="crumb-current">Comp Set</span>
+  </div>
+  <div class="topbar-right">
+    <button class="top-btn" onclick="alert('→ Back to Ask')">← Ask</button>
+    <button class="top-btn cta" onclick="alert('→ Open Workspace')">Open Workspace</button>
+  </div>
+</div>
+
+<!-- ============ REPORT TABS (switch between reports) ============ -->
+<div style="padding: 18px 28px 0; max-width: 1280px; margin: 0 auto; width: 100%;">
+  <div class="report-tabs">
+    <button class="report-tab active" onclick="loadReport('compset', this)">Comp Set</button>
+    <button class="report-tab" onclick="loadReport('rateplans', this)">Rate Plan Performance</button>
+    <button class="report-tab" onclick="loadReport('pickup', this)">Daily Pickup</button>
+    <button class="report-tab" onclick="loadReport('promos', this)">Promo Analyzer</button>
+  </div>
+</div>
+
+<!-- ============ REPORT HEADER ============ -->
+<div class="report-header" style="padding-top: 0;">
+  <div class="report-title-row">
+    <div>
+      <h1 class="report-title" id="report-title">Comp Set</h1>
+      <div class="report-sub" id="report-sub">7-day forward shop · Booking.com · Deluxe King equivalent</div>
+    </div>
+    <div class="report-actions">
+      <!-- Save -->
+      <button class="action-btn" id="save-btn" onclick="toggleSave(event)">
+        <span class="icon">★</span><span id="save-label">Save</span>
+      </button>
+
+      <!-- Share -->
+      <div style="position: relative;">
+        <button class="action-btn" onclick="toggleMenu(event, 'share-menu')">
+          <span class="icon">↗</span>Share
+        </button>
+        <div class="menu" id="share-menu">
+          <div class="menu-section">Send now</div>
+          <div class="menu-item" onclick="sendVia('Telegram')"><span class="icon">✈</span>Telegram digest</div>
+          <div class="menu-item" onclick="sendVia('Email')"><span class="icon">✉</span>Email</div>
+          <div class="menu-item" onclick="sendVia('Link')"><span class="icon">🔗</span>Copy link</div>
+          <div class="menu-divider"></div>
+          <div class="menu-section">Export</div>
+          <div class="menu-item" onclick="sendVia('Excel')"><span class="icon">▦</span>Download Excel</div>
+          <div class="menu-item" onclick="sendVia('PDF', true)"><span class="icon">▤</span>Download PDF <span style="font-size:10px;color:var(--muted);margin-left:auto;">v2</span></div>
+        </div>
+      </div>
+
+      <!-- More -->
+      <div style="position: relative;">
+        <button class="action-btn" onclick="toggleMenu(event, 'more-menu')">
+          <span class="icon">⋯</span>
+        </button>
+        <div class="menu" id="more-menu">
+          <div class="menu-item" onclick="openSchedule()"><span class="icon">⏱</span>Schedule recurring delivery</div>
+          <div class="menu-item" onclick="alert('→ Edit columns')"><span class="icon">▦</span>Edit columns</div>
+          <div class="menu-item" onclick="alert('→ Edit comp set members')"><span class="icon">⚙</span>Edit comp set members</div>
+          <div class="menu-divider"></div>
+          <div class="menu-item" onclick="alert('→ Refresh now')"><span class="icon">↻</span>Refresh now</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Time selector -->
+  <div class="time-selector">
+    <div class="selector-group" id="period-group">
+      <button class="selector-btn" data-period="today">Today</button>
+      <button class="selector-btn active" data-period="week">This Week</button>
+      <button class="selector-btn" data-period="month">This Month</button>
+      <button class="selector-btn" data-period="30d">Last 30d</button>
+      <button class="selector-btn" data-period="90d">Last 90d</button>
+      <button class="selector-btn" data-period="ytd">YTD</button>
+    </div>
+
+    <div class="nav-arrows">
+      <button class="nav-arrow" onclick="alert('Previous period')">‹</button>
+      <button class="nav-arrow" onclick="alert('Next period')">›</button>
+    </div>
+
+    <div style="position: relative;">
+      <button class="compare-selector" onclick="toggleMenu(event, 'compare-menu')">
+        <span class="label">Compare to:</span>
+        <span id="compare-current">Last Year</span>
+        <span class="caret">▾</span>
+      </button>
+      <div class="menu" id="compare-menu">
+        <div class="menu-item" onclick="setCompare('Last Year')">Last Year</div>
+        <div class="menu-item" onclick="setCompare('STLY')">STLY (same time last year)</div>
+        <div class="menu-item" onclick="setCompare('Budget')">Budget</div>
+        <div class="menu-item" onclick="setCompare('Forecast')">Forecast</div>
+        <div class="menu-item" onclick="setCompare('None')">None</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ REPORT BODY ============ -->
+<div class="report-body" id="report-body">
+  <!-- Filled by loadReport() -->
+</div>
+
+<!-- ============ FOOTER ============ -->
+<div class="report-footer">
+  <span>Last refreshed <span style="color:var(--text-2);">2026-05-06 09:14 LAK</span> by Reporting Agent · Auto-refresh every 15 min</span>
+  <span class="schedule-link" onclick="openSchedule()">⏱ Schedule recurring delivery</span>
+</div>
+
+<!-- ============ SCHEDULE MODAL ============ -->
+<div class="modal-backdrop" id="schedule-modal" onclick="closeSchedule(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-head">
+      <div class="modal-title">Schedule delivery</div>
+      <button class="modal-close" onclick="closeSchedule()">×</button>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Frequency</label>
+      <select class="form-control">
+        <option>Daily at 09:00 LAK</option>
+        <option>Weekly · Mondays at 09:00</option>
+        <option>Monthly · 1st of month</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Send to</label>
+      <select class="form-control">
+        <option>Telegram · Revenue channel</option>
+        <option>Email · me@hotel.com</option>
+        <option>Both</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Format</label>
+      <select class="form-control">
+        <option>Summary digest (mobile-friendly)</option>
+        <option>Full table</option>
+        <option>Excel attachment</option>
+      </select>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-secondary" onclick="closeSchedule()">Cancel</button>
+      <button class="btn-primary" onclick="saveSchedule()">Schedule</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+  <span class="check">✓</span>
+  <span id="toast-msg">Done</span>
+</div>
+
+<script>
+  // ============ MENUS ============
+  function closeAllMenus() {
+    document.querySelectorAll('.menu.open').forEach(m => m.classList.remove('open'));
+  }
+  document.body.addEventListener('click', closeAllMenus);
+
+  function toggleMenu(e, id) {
+    e.stopPropagation();
+    const m = document.getElementById(id);
+    const wasOpen = m.classList.contains('open');
+    closeAllMenus();
+    if (!wasOpen) m.classList.add('open');
+  }
+
+  // ============ SAVE ============
+  let saved = false;
+  function toggleSave(e) {
+    e.stopPropagation();
+    saved = !saved;
+    const btn = document.getElementById('save-btn');
+    const label = document.getElementById('save-label');
+    if (saved) {
+      btn.classList.add('saved');
+      label.textContent = 'Saved';
+      showToast('Saved as "' + currentReport.title + ' · ' + currentPeriod + '"');
+    } else {
+      btn.classList.remove('saved');
+      label.textContent = 'Save';
+    }
+  }
+
+  // ============ SHARE ============
+  function sendVia(channel, isV2) {
+    closeAllMenus();
+    if (isV2) {
+      showToast(channel + ' export coming in v2');
+      return;
+    }
+    showToast('Sent via ' + channel);
+  }
+
+  // ============ COMPARE ============
+  function setCompare(value) {
+    document.getElementById('compare-current').textContent = value;
+    closeAllMenus();
+  }
+
+  // ============ PERIOD ============
+  let currentPeriod = 'This Week';
+  document.querySelectorAll('#period-group .selector-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#period-group .selector-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentPeriod = btn.textContent;
+    });
+  });
+
+  // ============ SCHEDULE MODAL ============
+  function openSchedule() {
+    closeAllMenus();
+    document.getElementById('schedule-modal').classList.add('open');
+  }
+  function closeSchedule(e) {
+    if (e && e.target.closest('.modal') && !e.target.classList.contains('modal-close')) return;
+    document.getElementById('schedule-modal').classList.remove('open');
+  }
+  function saveSchedule() {
+    closeSchedule();
+    showToast('Recurring delivery scheduled');
+  }
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeSchedule(); closeAllMenus(); }
+  });
+
+  // ============ TOAST ============
+  let toastTimer;
+  function showToast(msg) {
+    document.getElementById('toast-msg').textContent = msg;
+    document.getElementById('toast').classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      document.getElementById('toast').classList.remove('show');
+    }, 2400);
+  }
+
+  // ============ REPORTS ============
+  const reports = {
+    compset: {
+      title: 'Comp Set',
+      sub: '7-day forward shop · Booking.com · Deluxe King equivalent',
+      crumb: 'Comp Set',
+      summary: [
+        { label: 'Our avg BAR', value: '$323', delta: '+2.1% vs comp avg', cls: 'up' },
+        { label: 'Comp avg', value: '$316', delta: '$285–$370 range', cls: '' },
+        { label: 'Our position', value: '#2 of 5', delta: 'mid-premium', cls: '' },
+        { label: 'Last shop', value: '4d ago', delta: 'JL · Friday 17:18', cls: '' }
+      ],
+      body: `
+        <div class="data-card">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th class="right">Comp 1</th>
+                <th class="right">Comp 2</th>
+                <th class="right">Comp 3</th>
+                <th class="right">Comp 4</th>
+                <th class="right">Comp avg</th>
+                <th class="right">Our BAR</th>
+                <th class="right">vs avg</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td class="row-key">Sat 05-09</td><td class="right">$340</td><td class="right">$365</td><td class="right">$320</td><td class="right">$355</td><td class="right"><b>$345</b></td><td class="right"><b>$355</b></td><td class="right pos">+2.9%</td></tr>
+              <tr><td class="row-key">Sun 05-10</td><td class="right">$310</td><td class="right">$340</td><td class="right">$295</td><td class="right">$330</td><td class="right"><b>$319</b></td><td class="right"><b>$320</b></td><td class="right pos">+0.3%</td></tr>
+              <tr><td class="row-key">Mon 05-11</td><td class="right">$285</td><td class="right">$310</td><td class="right">$275</td><td class="right">$305</td><td class="right"><b>$294</b></td><td class="right"><b>$295</b></td><td class="right pos">+0.3%</td></tr>
+              <tr><td class="row-key">Tue 05-12</td><td class="right">$285</td><td class="right">$305</td><td class="right">$280</td><td class="right">$305</td><td class="right"><b>$294</b></td><td class="right"><b>$298</b></td><td class="right pos">+1.4%</td></tr>
+              <tr><td class="row-key">Wed 05-13</td><td class="right">$290</td><td class="right">$315</td><td class="right">$280</td><td class="right">$310</td><td class="right"><b>$299</b></td><td class="right"><b>$305</b></td><td class="right pos">+2.0%</td></tr>
+              <tr><td class="row-key">Thu 05-14</td><td class="right">$305</td><td class="right">$325</td><td class="right">$295</td><td class="right">$320</td><td class="right"><b>$311</b></td><td class="right"><b>$320</b></td><td class="right pos">+2.9%</td></tr>
+              <tr><td class="row-key">Fri 05-15</td><td class="right">$340</td><td class="right">$370</td><td class="right">$325</td><td class="right">$360</td><td class="right"><b>$349</b></td><td class="right"><b>$365</b></td><td class="right pos">+4.6%</td></tr>
+            </tbody>
+          </table>
+        </div>
+      `
+    },
+    rateplans: {
+      title: 'Rate Plan Performance',
+      sub: 'Last 30 days · all channels · all room types',
+      crumb: 'Rate Plan Performance',
+      summary: [
+        { label: 'Active plans', value: '12', delta: '6 direct · 6 OTA', cls: '' },
+        { label: 'Top performer', value: 'BAR Flex', delta: '418 rms · $320 ADR', cls: 'up' },
+        { label: 'Worst performer', value: '3rd Night Free', delta: '15 rms · close?', cls: 'down' },
+        { label: 'Total bookings', value: '503', delta: '+12% vs prev 30d', cls: 'up' }
+      ],
+      body: `
+        <div class="data-card">
+          <table>
+            <thead>
+              <tr>
+                <th>Rate Plan</th>
+                <th>Channel</th>
+                <th class="right">Bookings</th>
+                <th class="right">Rooms</th>
+                <th class="right">ADR</th>
+                <th class="right">Conversion</th>
+                <th class="right">Trend</th>
+                <th>Verdict</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td class="row-key">BAR Flexible</td><td>Direct</td><td class="right">142</td><td class="right"><b>418</b></td><td class="right">$320</td><td class="right">4.2%</td><td class="right pos">+8%</td><td><span class="verdict keep">Keep</span></td></tr>
+              <tr><td class="row-key">Non-Refundable −10%</td><td>Direct</td><td class="right">68</td><td class="right"><b>198</b></td><td class="right">$288</td><td class="right">3.1%</td><td class="right pos">+5%</td><td><span class="verdict keep">Keep</span></td></tr>
+              <tr><td class="row-key">Booking.com Standard</td><td>OTA</td><td class="right">185</td><td class="right"><b>520</b></td><td class="right">$305</td><td class="right">2.8%</td><td class="right pos">+3%</td><td><span class="verdict keep">Keep</span></td></tr>
+              <tr><td class="row-key">Genius 10%</td><td>OTA</td><td class="right">92</td><td class="right"><b>248</b></td><td class="right">$282</td><td class="right">3.4%</td><td class="right pos">+12%</td><td><span class="verdict keep">Keep</span></td></tr>
+              <tr><td class="row-key">Country Rate −12%</td><td>OTA</td><td class="right">48</td><td class="right"><b>134</b></td><td class="right">$278</td><td class="right">2.1%</td><td class="right muted-cell">flat</td><td><span class="verdict keep">Keep</span></td></tr>
+              <tr><td class="row-key">Mobile Rate −8%</td><td>OTA</td><td class="right">12</td><td class="right"><b>32</b></td><td class="right">$291</td><td class="right">0.4%</td><td class="right neg">−18%</td><td><span class="verdict review">Review</span></td></tr>
+              <tr><td class="row-key">Long Stay 7+ Nights</td><td>Direct</td><td class="right">8</td><td class="right"><b>54</b></td><td class="right">$268</td><td class="right">0.6%</td><td class="right neg">−5%</td><td><span class="verdict review">Review</span></td></tr>
+              <tr><td class="row-key">3rd Night Free</td><td>Direct</td><td class="right">4</td><td class="right"><b>15</b></td><td class="right">$245</td><td class="right">0.2%</td><td class="right neg">−42%</td><td><span class="verdict close">Close</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      `
+    },
+    pickup: {
+      title: 'Daily Pickup',
+      sub: 'OTB by period · 24h and 7d pickup · forecast vs STLY',
+      crumb: 'Daily Pickup',
+      summary: [
+        { label: 'Pickup 24h', value: '+8 rms', delta: '+$2,520 rev', cls: 'up' },
+        { label: 'Pickup 7d', value: '+45 rms', delta: '+$13.8k rev', cls: 'up' },
+        { label: 'CM forecast', value: '1,510', delta: '+1.7% vs STLY', cls: 'up' },
+        { label: '+90d gap', value: '−85 rms', delta: '−$28k vs STLY', cls: 'down' }
+      ],
+      body: `
+        <div class="data-card">
+          <table>
+            <thead>
+              <tr>
+                <th>Period</th>
+                <th class="right">Rms OTB</th>
+                <th class="right">Rev OTB</th>
+                <th class="right">ADR</th>
+                <th class="right">Pickup 24h</th>
+                <th class="right">Pickup 7d</th>
+                <th class="right">vs STLY</th>
+                <th class="right">vs Budget</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td class="row-key">Today</td><td class="right"><b>50</b></td><td class="right">$15,200</td><td class="right">$304</td><td class="right pos">+2 / +$640</td><td class="right pos">+8 / +$2.5k</td><td class="right pos">+4.2%</td><td class="right pos">+$200</td></tr>
+              <tr><td class="row-key">+7d</td><td class="right"><b>305</b></td><td class="right">$96,400</td><td class="right">$316</td><td class="right pos">+12 / +$3.8k</td><td class="right pos">+38 / +$12k</td><td class="right neg">−2.2%</td><td class="right pos">+$1.2k</td></tr>
+              <tr><td class="row-key">Current Month</td><td class="right"><b>1,510</b></td><td class="right">$478k</td><td class="right">$317</td><td class="right pos">+18 / +$5.7k</td><td class="right pos">+62 / +$19.6k</td><td class="right pos">+1.7%</td><td class="right pos">+$3k</td></tr>
+              <tr><td class="row-key">+30d</td><td class="right"><b>1,420</b></td><td class="right">$445k</td><td class="right">$313</td><td class="right pos">+22 / +$6.9k</td><td class="right pos">+85 / +$26.6k</td><td class="right pos">+1.3%</td><td class="right neg">−$2k</td></tr>
+              <tr><td class="row-key">+60d</td><td class="right"><b>980</b></td><td class="right">$304k</td><td class="right">$310</td><td class="right pos">+15 / +$4.7k</td><td class="right pos">+52 / +$16.2k</td><td class="right neg">−4.4%</td><td class="right neg">−$15k</td></tr>
+              <tr><td class="row-key">+90d</td><td class="right"><b>620</b></td><td class="right">$192k</td><td class="right">$310</td><td class="right pos">+8 / +$2.5k</td><td class="right pos">+28 / +$8.7k</td><td class="right neg">−12.1%</td><td class="right neg">−$28k</td></tr>
+              <tr><td class="row-key">Next Month</td><td class="right"><b>1,180</b></td><td class="right">$368k</td><td class="right">$312</td><td class="right pos">+18 / +$5.6k</td><td class="right pos">+72 / +$22.5k</td><td class="right neg">−2.1%</td><td class="right neg">−$18k</td></tr>
+              <tr><td class="row-key">Full Year</td><td class="right"><b>14,200</b></td><td class="right">$4.32M</td><td class="right">$304</td><td class="right pos">+45 / +$13.7k</td><td class="right pos">+182 / +$55.4k</td><td class="right pos">+2.0%</td><td class="right neg">−$32k</td></tr>
+            </tbody>
+          </table>
+        </div>
+      `
+    },
+    promos: {
+      title: 'Promo Analyzer',
+      sub: 'Active campaigns · net contribution after commission · cannibalization estimate',
+      crumb: 'Promo Analyzer',
+      summary: [
+        { label: 'Active promos', value: '3', delta: 'all on Booking.com', cls: '' },
+        { label: 'Total promo rev', value: '$76.4k', delta: 'last 30 days', cls: '' },
+        { label: 'Net positive', value: '2 of 3', delta: 'after commission', cls: 'up' },
+        { label: 'Cannibalization', value: '~28%', delta: 'weighted avg', cls: '' }
+      ],
+      body: `
+        <div class="data-card">
+          <table>
+            <thead>
+              <tr>
+                <th>Promo</th>
+                <th>Channel</th>
+                <th class="right">Rms generated</th>
+                <th class="right">Gross rev</th>
+                <th class="right">Commission</th>
+                <th class="right">Net rev</th>
+                <th class="right">Cannibalization</th>
+                <th>Verdict</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td class="row-key">Genius 10%</td><td>Booking.com</td><td class="right"><b>248</b></td><td class="right">$70.0k</td><td class="right muted-cell">−$13.6k</td><td class="right">$56.4k</td><td class="right">~22%</td><td><span class="verdict keep">Net positive</span></td></tr>
+              <tr><td class="row-key">Country Rate −12%</td><td>Booking.com</td><td class="right"><b>48</b></td><td class="right">$14.5k</td><td class="right muted-cell">−$2.7k</td><td class="right">$11.8k</td><td class="right">~28%</td><td><span class="verdict keep">Net positive</span></td></tr>
+              <tr><td class="row-key">Mobile Rate −8%</td><td>Booking.com</td><td class="right"><b>32</b></td><td class="right">$10.1k</td><td class="right muted-cell">−$1.9k</td><td class="right">$8.2k</td><td class="right">~35%</td><td><span class="verdict review">Marginal</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      `
+    }
+  };
+
+  let currentReport = reports.compset;
+
+  function loadReport(key, btnEl) {
+    currentReport = reports[key];
+    document.getElementById('report-title').textContent = currentReport.title;
+    document.getElementById('report-sub').textContent = currentReport.sub;
+    document.getElementById('crumb-current').textContent = currentReport.crumb;
+
+    // Build summary row
+    const summaryHtml = `
+      <div class="summary-row">
+        ${currentReport.summary.map(s => `
+          <div class="summary-tile">
+            <div class="summary-label">${s.label}</div>
+            <div class="summary-value">${s.value}</div>
+            <div class="summary-delta ${s.cls}">${s.delta}</div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+    document.getElementById('report-body').innerHTML = summaryHtml + currentReport.body;
+
+    // Switch active tab
+    if (btnEl) {
+      document.querySelectorAll('.report-tab').forEach(t => t.classList.remove('active'));
+      btnEl.classList.add('active');
+    }
+
+    // Reset save state
+    saved = false;
+    document.getElementById('save-btn').classList.remove('saved');
+    document.getElementById('save-label').textContent = 'Save';
+  }
+
+  // Init
+  loadReport('compset');
+</script>
+
+</body>
+</html>

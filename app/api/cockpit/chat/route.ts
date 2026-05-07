@@ -9,7 +9,7 @@
 import { NextResponse } from "next/server";
 import { unstable_noStore as noStore } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
-import { loadSkillsForRole, dispatchSkill } from "@/lib/cockpit-tools";
+import { loadSkillsForRole, dispatchSkill, dispatchSkillGated } from "@/lib/cockpit-tools";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -396,7 +396,9 @@ async function triageMessage(message: string, debug: { iterations: number; lastE
         if (!handler) {
           resultText = JSON.stringify({ ok: false, error: `unknown skill: ${tu.name}` });
         } else {
-          const r = await dispatchSkill(handler, tu.input ?? {});
+          // Phase 1.2: gate every skill call through call_skill / complete_skill_call.
+          // Triage runs as it_manager; ticket_id not available here yet (chat creates it post-triage).
+          const r = await dispatchSkillGated("it_manager", tu.name ?? "", handler, tu.input ?? {}, null);
           resultText = JSON.stringify(r).slice(0, 4000);
         }
         results.push({ type: "tool_result", tool_use_id: tu.id ?? "", content: resultText });
@@ -417,7 +419,32 @@ async function triageMessage(message: string, debug: { iterations: number; lastE
     }
     try {
       debug.duration_ms = Date.now() - t0;
-      return JSON.parse(cleaned) as Triage;
+      const parsed = JSON.parse(cleaned) as Record<string, unknown>;
+
+      // v12+ contract: { summary_markdown, triage:{arm,intent,urgency,recommended_role}, needs_human_decision, blocking_questions }
+      // Detect by presence of nested triage + summary_markdown.
+      if (parsed && typeof parsed === "object" && parsed.triage && typeof parsed.triage === "object" && typeof parsed.summary_markdown === "string") {
+        const inner = parsed.triage as Record<string, unknown>;
+        const sm = parsed.summary_markdown as string;
+        const blocking = Array.isArray(parsed.blocking_questions) ? (parsed.blocking_questions as string[]) : [];
+        const t: Triage = {
+          arm: typeof inner.arm === "string" ? inner.arm : "ops",
+          intent: typeof inner.intent === "string" ? inner.intent : "decide",
+          urgency: typeof inner.urgency === "string" ? inner.urgency : "low",
+          summary: sm.split("\n").find((l) => l.trim().length > 0)?.slice(0, 240) ?? "Captain Kit answer",
+          plan: ["Direct answer rendered in summary_markdown."],
+          recommended_agent: typeof inner.recommended_role === "string" ? inner.recommended_role : "none",
+          blockers: blocking,
+          estimated_minutes: 0,
+        };
+        // Stash full markdown so renderer surfaces it.
+        (t as Triage & { summary_markdown?: string }).summary_markdown = sm;
+        (t as Triage & { needs_human_decision?: boolean }).needs_human_decision = !!parsed.needs_human_decision;
+        return t;
+      }
+
+      // Legacy contract — pass through.
+      return parsed as unknown as Triage;
     } catch (e) {
       debug.lastError = `parse err: ${e instanceof Error ? e.message : "unknown"} | text: ${text.slice(0, 300)}`;
       console.error(debug.lastError);
@@ -431,12 +458,26 @@ async function triageMessage(message: string, debug: { iterations: number; lastE
 }
 
 function renderTriageMarkdown(t: Triage, originalMessage: string): string {
+  // v12+ Kit contract: summary_markdown is the full answer — render it directly,
+  // append a one-line triage trailer for transparency.
+  const sm = (t as Triage & { summary_markdown?: string }).summary_markdown;
+  if (sm && sm.trim().length > 0) {
+    const blockerLines = (t.blockers ?? []).filter(Boolean).map((s) => `- ${s}`).join("\n");
+    return [
+      `**Request**: ${originalMessage}`,
+      "",
+      sm.trim(),
+      blockerLines ? `\n**Blocking questions**\n${blockerLines}` : "",
+      `\n_— ${t.arm} · ${t.intent} · urgency ${t.urgency} · → ${t.recommended_agent}_`,
+    ].join("\n");
+  }
+  // Legacy contract (Kit ≤v11) — preserve original triage layout.
   const planLines = t.plan.map((s, i) => `${i + 1}. ${s}`).join("\n");
   const blockerLines = (t.blockers ?? []).filter(Boolean).map((s) => `- ${s}`).join("\n");
   return [
     `**Request**: ${originalMessage}`,
     "",
-    `**Triage** — ${t.arm} · ${t.intent} · urgency ${t.urgency} · ~${t.estimated_minutes} min`,
+    `**Triage** — ${t.arm} · ${t.intent} · urgency ${t.urgency}`,
     "",
     t.summary,
     "",
@@ -447,9 +488,23 @@ function renderTriageMarkdown(t: Triage, originalMessage: string): string {
   ].join("\n");
 }
 
+function isAuthorized(req: Request): boolean {
+  // OPEN MODE — auth gate disabled per PBS. Re-enable with COCKPIT_AUTH_GATE=on.
+  if (process.env.COCKPIT_AUTH_GATE !== "on") return true;
+  const cookie = req.headers.get("cookie") ?? "";
+  if (/workspace_session=/.test(cookie)) return true;
+  const auth = req.headers.get("authorization") ?? "";
+  const expected = process.env.COCKPIT_AGENT_TOKEN;
+  if (expected && auth === `Bearer ${expected}`) return true;
+  return false;
+}
+
 export async function POST(req: Request) {
   noStore();
   try {
+    if (!isAuthorized(req)) {
+      return NextResponse.json({ error: "Not Found" }, { status: 404 });
+    }
     const { message } = await req.json();
     if (!message || typeof message !== "string") {
       return NextResponse.json({ error: "message required" }, { status: 400 });
@@ -653,7 +708,62 @@ export async function POST(req: Request) {
         triage,
       });
     } else {
-      // Anthropic failed → mark ticket and surface error.
+      // Triage parse failed. Defensive fallback: if the model produced a
+      // substantive markdown answer (Captain Kit answered the user directly
+      // instead of emitting JSON triage), wrap it as a direct-answer ticket
+      // with the markdown surfaced via parsed_summary so the user sees the
+      // actual response — a 502 hides a perfectly good answer.
+      const fallbackText = (debug.lastText ?? "").trim();
+      const looksLikeAnswer =
+        fallbackText.length >= 120 &&
+        (/^#{1,6}\s/m.test(fallbackText) ||      // markdown headings
+          /^\s*[-*]\s/m.test(fallbackText) ||    // bullets
+          /\|.*\|/.test(fallbackText));          // tables
+
+      if (looksLikeAnswer) {
+        const fakeTriage: Triage = {
+          arm: "ops",
+          intent: "decide",
+          urgency: "low",
+          summary: "Direct answer (model emitted markdown, not triage JSON).",
+          plan: ["Direct answer rendered below."],
+          recommended_agent: "none",
+          blockers: [],
+          estimated_minutes: 0,
+        };
+        const fallbackSummary = `**Request**: ${message}\n\n${fallbackText}`;
+        await supabase
+          .from("cockpit_tickets")
+          .update({
+            arm: "ops",
+            intent: "decide",
+            status: "triaged",
+            parsed_summary: fallbackSummary,
+            notes: JSON.stringify({ kind: "direct_answer_fallback", debug }),
+          })
+          .eq("id", inserted.id);
+        const milliCost = Math.round((debug.tokens_in * 3 + debug.tokens_out * 15) / 1000);
+        await supabase.from("cockpit_audit_log").insert({
+          ticket_id: inserted.id,
+          agent: "it_manager",
+          action: "triage_fallback_markdown",
+          target: `ticket:${inserted.id}`,
+          success: true,
+          metadata: { kind: "direct_answer_fallback", debug },
+          reasoning: "Model returned markdown instead of triage JSON. Treated text as direct answer.",
+          input_tokens: debug.tokens_in,
+          output_tokens: debug.tokens_out,
+          cost_usd_milli: milliCost,
+          duration_ms: debug.duration_ms,
+        });
+        return NextResponse.json({
+          ticket: { ...inserted, ...fakeTriage, status: "triaged", parsed_summary: fallbackSummary },
+          triage: fakeTriage,
+          fallback: "direct_answer_markdown",
+        });
+      }
+
+      // True triage failure (no answer, no JSON) → mark + 502.
       await supabase
         .from("cockpit_tickets")
         .update({
