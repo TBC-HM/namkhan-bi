@@ -1,156 +1,192 @@
 // app/revenue-v2/parity/page.tsx
 import { createClient } from '@supabase/supabase-js';
-import PageHeader from '@/components/layout/PageHeader';
 import KpiBox from '@/components/kpi/KpiBox';
 import DataTable from '@/components/ui/DataTable';
-import StatusPill from '@/components/ui/StatusPill';
+import PageHeader from '@/components/layout/PageHeader';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
-// ---------------------------------------------------------------------------
-// Types inferred from view name: v_parity_observations_top
-// Adjust column names if DB schema differs — all cells fall back to '—'
-// ---------------------------------------------------------------------------
 interface ParityRow {
-  channel?: string | null;
-  platform?: string | null;
-  our_rate?: number | null;
-  comp_rate?: number | null;
-  delta?: number | null;
-  delta_pct?: number | null;
-  parity_status?: string | null;
-  check_date?: string | null;
-  room_type?: string | null;
-  nights?: number | null;
+  channel: string;
+  platform: string;
+  check_date: string;
+  our_rate: number | null;
+  ota_rate: number | null;
+  parity_gap: number | null;
+  parity_status: string | null;
+  room_type: string | null;
+  currency: string | null;
 }
 
-function fmtUSD(val: number | null | undefined): string {
-  if (val == null) return '—';
-  return `$${val.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-}
-
-function fmtDelta(val: number | null | undefined): string {
-  if (val == null) return '—';
-  if (val === 0) return '$0';
-  const sign = val > 0 ? '+' : '−';
-  return `${sign}$${Math.abs(val).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-}
-
-function fmtPct(val: number | null | undefined): string {
-  if (val == null) return '—';
-  const sign = val > 0 ? '+' : val < 0 ? '−' : '';
-  return `${sign}${Math.abs(val).toFixed(1)}%`;
-}
-
-export default async function ParityPage() {
+export default async function Page() {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  const { data, error } = await supabase
+  const { data } = await supabase
     .from('v_parity_observations_top')
     .select('*')
     .limit(50);
 
   const rows: ParityRow[] = data ?? [];
 
-  // ── KPI aggregates ─────────────────────────────────────────────────────────
-  const total = rows.length;
-  const atParity = rows.filter(
-    (r) => (r.parity_status ?? '').toLowerCase() === 'at parity'
+  // Derive KPI summaries from rows
+  const totalChecks = rows.length;
+  const parityBreaches = rows.filter(
+    (r) => r.parity_status && r.parity_status.toLowerCase() !== 'parity'
   ).length;
-  const breachCount = total - atParity;
-  const parityRate = total > 0 ? Math.round((atParity / total) * 100) : null;
-
-  const avgDelta =
+  const parityRate =
+    totalChecks > 0
+      ? Math.round(((totalChecks - parityBreaches) / totalChecks) * 1000) / 10
+      : null;
+  const avgGap =
     rows.length > 0
-      ? rows.reduce((sum, r) => sum + (r.delta ?? 0), 0) / rows.length
+      ? rows.reduce((sum, r) => sum + (r.parity_gap ?? 0), 0) / rows.length
       : null;
 
-  // ── DataTable columns ──────────────────────────────────────────────────────
   const columns = [
-    { key: 'check_date', header: 'Date' },
-    { key: 'platform', header: 'Platform' },
-    { key: 'channel', header: 'Channel' },
-    { key: 'room_type', header: 'Room Type' },
-    { key: 'our_rate', header: 'Our Rate' },
-    { key: 'comp_rate', header: 'Comp Rate' },
-    { key: 'delta', header: 'Delta' },
-    { key: 'delta_pct', header: 'Δ %' },
-    { key: 'parity_status', header: 'Status' },
+    {
+      key: 'check_date',
+      header: 'Date',
+      align: 'left' as const,
+      render: (r: ParityRow) => r.check_date ?? '—',
+      sortValue: (r: ParityRow) => r.check_date ?? '',
+    },
+    {
+      key: 'platform',
+      header: 'Platform',
+      align: 'left' as const,
+      render: (r: ParityRow) => r.platform ?? '—',
+      sortValue: (r: ParityRow) => r.platform ?? '',
+    },
+    {
+      key: 'room_type',
+      header: 'Room Type',
+      align: 'left' as const,
+      render: (r: ParityRow) => r.room_type ?? '—',
+    },
+    {
+      key: 'our_rate',
+      header: 'Our Rate',
+      align: 'right' as const,
+      numeric: true,
+      render: (r: ParityRow) =>
+        r.our_rate != null
+          ? `${r.currency === 'LAK' ? '₭' : '$'}${r.our_rate.toLocaleString()}`
+          : '—',
+      sortValue: (r: ParityRow) => r.our_rate ?? 0,
+    },
+    {
+      key: 'ota_rate',
+      header: 'OTA Rate',
+      align: 'right' as const,
+      numeric: true,
+      render: (r: ParityRow) =>
+        r.ota_rate != null
+          ? `${r.currency === 'LAK' ? '₭' : '$'}${r.ota_rate.toLocaleString()}`
+          : '—',
+      sortValue: (r: ParityRow) => r.ota_rate ?? 0,
+    },
+    {
+      key: 'parity_gap',
+      header: 'Gap',
+      align: 'right' as const,
+      numeric: true,
+      render: (r: ParityRow) => {
+        if (r.parity_gap == null) return '—';
+        const sign = r.parity_gap < 0 ? '−' : '+';
+        return `${sign}${Math.abs(r.parity_gap).toLocaleString()}`;
+      },
+      sortValue: (r: ParityRow) => r.parity_gap ?? 0,
+    },
+    {
+      key: 'parity_status',
+      header: 'Status',
+      align: 'center' as const,
+      render: (r: ParityRow) => {
+        const s = r.parity_status ?? '—';
+        const isOk =
+          s.toLowerCase() === 'parity' || s.toLowerCase() === 'ok';
+        return (
+          <span
+            style={{
+              display: 'inline-block',
+              padding: '2px 8px',
+              borderRadius: 4,
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              background: isOk ? '#d1fae5' : '#fee2e2',
+              color: isOk ? '#065f46' : '#991b1b',
+            }}
+          >
+            {s.toUpperCase()}
+          </span>
+        );
+      },
+    },
   ];
-
-  // Transform rows for display
-  const tableRows = rows.map((r, i) => ({
-    _key: i,
-    check_date: r.check_date ?? '—',
-    platform: r.platform ?? '—',
-    channel: r.channel ?? '—',
-    room_type: r.room_type ?? '—',
-    our_rate: fmtUSD(r.our_rate),
-    comp_rate: fmtUSD(r.comp_rate),
-    delta: fmtDelta(r.delta),
-    delta_pct: fmtPct(r.delta_pct),
-    parity_status: r.parity_status ?? '—',
-  }));
 
   return (
     <main style={{ padding: '24px 32px' }}>
-      <PageHeader pillar="Revenue" tab="Parity" title="Rate Parity" />
+      <PageHeader
+        pillar="Revenue"
+        tab="Parity"
+        title="Rate Parity"
+        lede="Live OTA rate parity observations — top breaches and recent checks."
+      />
 
-      {error && (
-        <div
-          style={{
-            marginBottom: 16,
-            padding: '10px 16px',
-            background: '#fff3cd',
-            border: '1px solid #ffc107',
-            borderRadius: 6,
-            fontSize: 13,
-            color: '#856404',
-          }}
-        >
-          ⚠ Data load error: {error.message}
-        </div>
-      )}
-
-      {/* ── KPI row ── */}
       <div
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(4, 1fr)',
           gap: 16,
-          marginBottom: 28,
+          margin: '24px 0',
         }}
       >
         <KpiBox
-          label="Observations"
-          value={total > 0 ? String(total) : '—'}
+          label="Total Checks"
+          value={totalChecks}
+          unit="nights"
+          dp={0}
+          tooltip="Number of parity observations loaded"
+        />
+        <KpiBox
+          label="Parity Breaches"
+          value={parityBreaches}
+          unit="nights"
+          dp={0}
+          tooltip="Observations where OTA rate differs from our rate"
         />
         <KpiBox
           label="Parity Rate"
-          value={parityRate != null ? `${parityRate}%` : '—'}
+          value={parityRate}
+          unit="pct"
+          dp={1}
+          tooltip="% of checks where rates are in parity"
         />
         <KpiBox
-          label="Breaches"
-          value={breachCount > 0 ? String(breachCount) : '—'}
-        />
-        <KpiBox
-          label="Avg Delta"
-          value={avgDelta != null ? fmtDelta(Math.round(avgDelta)) : '—'}
+          label="Avg Gap"
+          value={avgGap}
+          unit="usd"
+          dp={0}
+          tooltip="Average rate gap across all observations"
         />
       </div>
 
-      {/* ── Breach-status summary pills ── */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
-        <StatusPill label={`At Parity: ${atParity}`} status="ok" />
-        <StatusPill label={`Breaches: ${breachCount}`} status={breachCount > 0 ? 'warn' : 'ok'} />
-      </div>
-
-      {/* ── Main table ── */}
-      <DataTable columns={columns} rows={tableRows} />
+      <DataTable<ParityRow>
+        columns={columns}
+        rows={rows}
+        rowKey={(r, i) => `${r.platform}-${r.check_date}-${i}`}
+        defaultSort={{ key: 'parity_gap', dir: 'desc' }}
+        rowClassName={(r) =>
+          r.parity_status && r.parity_status.toLowerCase() !== 'parity'
+            ? 'parity-breach-row'
+            : undefined
+        }
+        emptyState="No parity observations found."
+      />
     </main>
   );
 }
