@@ -362,6 +362,24 @@ function Tab({ name, active, onClick, count }: { name: string; active: boolean; 
 
 // ============================================================================
 // CHAT TAB
+// Plain-English status labels per PBS 2026-05-07 — internal state names are jargon.
+function statusLabel(s: string): string {
+  switch (s) {
+    case "new": return "📥 Just received";
+    case "triaging": return "👀 Reading";
+    case "triaged": return "⏳ Waiting (queued for specialist)";
+    case "working": return "🛠️ In process";
+    case "in_progress": return "🛠️ In process";
+    case "awaits_user": return "🟡 Needs you";
+    case "completed": return "✅ Finished";
+    case "triage_failed": return "❌ Failed";
+    case "blocked": return "🚧 Blocked";
+    case "cancelled": return "⊘ Cancelled";
+    case "merged": return "✅ Merged";
+    default: return s;
+  }
+}
+
 // ============================================================================
 type Filter = "open" | "waiting" | "done" | "failed" | "all";
 
@@ -567,6 +585,8 @@ function ChatTab() {
     const { data } = await supabase
       .from("cockpit_tickets")
       .select("*")
+      // Hide cron/scheduled tickets — they live in the Schedule tab now (PBS 2026-05-07)
+      .not("source", "ilike", "cron_%")
       .order("created_at", { ascending: false })
       .limit(50);
     if (data) setTickets(data);
@@ -737,7 +757,7 @@ function ChatTab() {
             >
               <div className="cli-top">
                 <span className={`cli-arm cli-arm-${t.arm}`}>{t.arm}</span>
-                <span className="cli-status" data-status={t.status}>{t.status}</span>
+                <span className="cli-status" data-status={t.status}>{statusLabel(t.status)}</span>
                 <span className="cli-time">{relTime(t.created_at)}</span>
               </div>
               <div className="cli-summary">{t.parsed_summary || `#${t.id} · ${t.intent}`}</div>
@@ -760,7 +780,7 @@ function ChatTab() {
                 <h2>#{activeTicket.id} · {activeTicket.intent}</h2>
                 <div className="ctd-meta">
                   <span className={`cli-arm cli-arm-${activeTicket.arm}`}>{activeTicket.arm}</span>
-                  <span className="cli-status" data-status={activeTicket.status}>{activeTicket.status}</span>
+                  <span className="cli-status" data-status={activeTicket.status}>{statusLabel(activeTicket.status)}</span>
                   <span className="cli-time">{absTime(activeTicket.created_at)}</span>
                   {activeTicket.iterations > 0 && <span className="cli-time">{activeTicket.iterations} iterations</span>}
                 </div>
@@ -1808,7 +1828,15 @@ function KnowledgeTab() {
     setLoading(false);
   }, [search, scope]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    const ch = supabase
+      .channel("kb_realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "cockpit_knowledge_base" }, () => load())
+      .subscribe();
+    const id = setInterval(load, 15_000); // belt + braces
+    return () => { supabase.removeChannel(ch); clearInterval(id); };
+  }, [load]);
 
   const addEntry = async () => {
     if (!newTopic.trim() || !newFact.trim()) return;
