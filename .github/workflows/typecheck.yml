@@ -1,0 +1,46 @@
+name: typecheck
+
+# Fast feedback gate — fires on every push to every branch AND every PR.
+# Goal: catch broken TypeScript before any deploy or merge.
+# Reference: COWORK BRIEF v2 GAP 8 (the "real fix" PBS approved 2026-05-07).
+#
+# Branch protection should require this check to pass before merge to staging
+# and main. Configure in GitHub → Settings → Branches → Branch protection rules.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+concurrency:
+  group: typecheck-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tsc:
+    name: tsc --noEmit
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+
+    env:
+      # tsc itself does not need real env vars; placeholders keep imports stable.
+      NEXT_PUBLIC_SUPABASE_URL: https://kpenyneooigsyuuomgct.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-for-typecheck
+      NEXT_PUBLIC_FX_LAK_USD: '21800'
+      NEXT_PUBLIC_PROPERTY_ID: '260955'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install (frozen lockfile)
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck
+        run: npx tsc --noEmit
