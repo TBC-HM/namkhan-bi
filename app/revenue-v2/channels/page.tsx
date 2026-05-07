@@ -7,140 +7,105 @@ import PageHeader from '@/components/layout/PageHeader';
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 interface ChannelRow {
-  channel_name?: string | null;
-  channel_code?: string | null;
-  room_nights?: number | null;
-  gross_revenue?: number | null;
-  net_revenue?: number | null;
-  adr?: number | null;
-  commission_pct?: number | null;
-  commission_amount?: number | null;
-  revenue_share_pct?: number | null;
-  reservations?: number | null;
-  cancellations?: number | null;
-  period_label?: string | null;
+  channel_name?: string;
+  channel_code?: string;
+  room_nights?: number;
+  revenue_usd?: number;
+  revenue_lak?: number;
+  adr_usd?: number;
+  commission_pct?: number;
+  net_revenue_usd?: number;
+  contribution_pct?: number;
+  bookings?: number;
+  cancellations?: number;
+  cancellation_rate?: number;
+  period_label?: string;
   [key: string]: unknown;
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-function fmt$( v: number | null | undefined ): string {
-  if (v == null) return '—';
-  return `$${v.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-}
-
-function fmtPct( v: number | null | undefined ): string {
-  if (v == null) return '—';
-  return `${(v * (Math.abs(v) <= 1 ? 100 : 1)).toFixed(1)}%`;
-}
-
-function fmtN( v: number | null | undefined ): string {
-  if (v == null) return '—';
-  return v.toLocaleString('en-US');
-}
-
-function totalRevenue( rows: ChannelRow[] ): number {
-  return rows.reduce((s, r) => s + (r.gross_revenue ?? 0), 0);
-}
-
-function totalNights( rows: ChannelRow[] ): number {
-  return rows.reduce((s, r) => s + (r.room_nights ?? 0), 0);
-}
-
-function blendedADR( rows: ChannelRow[] ): string {
-  const nights = totalNights(rows);
-  if (nights === 0) return '—';
-  return fmt$(totalRevenue(rows) / nights);
-}
-
-// ---------------------------------------------------------------------------
-// Page
-// ---------------------------------------------------------------------------
-export default async function ChannelsPage() {
+export default async function Page() {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  const { data, error } = await supabase
+  const { data } = await supabase
     .from('mv_channel_economics')
     .select('*')
-    .order('gross_revenue', { ascending: false })
-    .limit(100);
+    .order('revenue_usd', { ascending: false })
+    .limit(50);
 
   const rows: ChannelRow[] = data ?? [];
 
-  // Surface the most-recent period label from data if present
-  const periodLabel: string = rows[0]?.period_label ?? 'Current Period';
+  // Aggregate KPIs
+  const totalRevenue = rows.reduce((s, r) => s + (r.revenue_usd ?? 0), 0);
+  const totalNights = rows.reduce((s, r) => s + (r.room_nights ?? 0), 0);
+  const totalNet = rows.reduce((s, r) => s + (r.net_revenue_usd ?? 0), 0);
+  const totalBookings = rows.reduce((s, r) => s + (r.bookings ?? 0), 0);
+
+  const avgAdr =
+    rows.length > 0
+      ? rows.reduce((s, r) => s + (r.adr_usd ?? 0), 0) / rows.filter((r) => r.adr_usd != null).length
+      : null;
+
+  const fmt = (n: number | null | undefined, prefix = '$') =>
+    n == null ? '—' : `${prefix}${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+
+  const fmtPct = (n: number | null | undefined) =>
+    n == null ? '—' : `${(n * 100).toFixed(1)}%`;
+
+  const columns = [
+    { key: 'channel_name', header: 'Channel' },
+    { key: 'room_nights', header: 'Room Nights' },
+    { key: 'bookings', header: 'Bookings' },
+    { key: 'adr_usd', header: 'ADR (USD)' },
+    { key: 'revenue_usd', header: 'Revenue (USD)' },
+    { key: 'commission_pct', header: 'Commission' },
+    { key: 'net_revenue_usd', header: 'Net Revenue' },
+    { key: 'contribution_pct', header: 'Contribution' },
+    { key: 'cancellation_rate', header: 'Cancel Rate' },
+  ];
+
+  const tableRows = rows.map((r) => ({
+    channel_name: r.channel_name ?? r.channel_code ?? '—',
+    room_nights: r.room_nights ?? '—',
+    bookings: r.bookings ?? '—',
+    adr_usd: r.adr_usd != null ? `$${r.adr_usd.toFixed(0)}` : '—',
+    revenue_usd: r.revenue_usd != null ? `$${r.revenue_usd.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—',
+    commission_pct: r.commission_pct != null ? fmtPct(r.commission_pct) : '—',
+    net_revenue_usd: r.net_revenue_usd != null ? `$${r.net_revenue_usd.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—',
+    contribution_pct: r.contribution_pct != null ? fmtPct(r.contribution_pct) : '—',
+    cancellation_rate: r.cancellation_rate != null ? fmtPct(r.cancellation_rate) : '—',
+  }));
 
   return (
-    <main className="p-6 space-y-6">
+    <main style={{ padding: '24px' }}>
       <PageHeader pillar="Revenue" tab="Channels" title="Channel Economics" />
 
-      {error && (
-        <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
-          Data unavailable: {error.message}
-        </div>
+      {rows.length === 0 && (
+        <p style={{ color: '#888', marginBottom: 16 }}>
+          No data yet — mv_channel_economics is empty or still building.
+        </p>
       )}
 
-      {/* KPI Summary Row */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <KpiBox
-          label="Gross Revenue"
-          value={fmt$(totalRevenue(rows))}
-          sub={periodLabel}
-        />
-        <KpiBox
-          label="Room Nights"
-          value={fmtN(totalNights(rows))}
-          sub={periodLabel}
-        />
-        <KpiBox
-          label="Blended ADR"
-          value={blendedADR(rows)}
-          sub="across channels"
-        />
-        <KpiBox
-          label="Active Channels"
-          value={rows.length > 0 ? String(rows.length) : '—'}
-          sub="by booking source"
-        />
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: 16,
+          marginBottom: 32,
+        }}
+      >
+        <KpiBox label="Total Revenue" value={fmt(totalRevenue)} />
+        <KpiBox label="Net Revenue" value={fmt(totalNet)} />
+        <KpiBox label="Avg ADR" value={fmt(avgAdr)} />
+        <KpiBox label="Total Room Nights" value={totalNights > 0 ? totalNights.toLocaleString() : '—'} />
+        <KpiBox label="Total Bookings" value={totalBookings > 0 ? totalBookings.toLocaleString() : '—'} />
+        <KpiBox label="Channels" value={rows.length > 0 ? String(rows.length) : '—'} />
       </div>
 
-      {/* Channel breakdown table */}
-      <DataTable
-        columns={[
-          { key: 'channel_name',      header: 'Channel'         },
-          { key: 'channel_code',      header: 'Code'            },
-          { key: 'room_nights',       header: 'Room Nights'     },
-          { key: 'reservations',      header: 'Reservations'    },
-          { key: 'cancellations',     header: 'Cancellations'   },
-          { key: 'adr',               header: 'ADR'             },
-          { key: 'gross_revenue',     header: 'Gross Revenue'   },
-          { key: 'net_revenue',       header: 'Net Revenue'     },
-          { key: 'commission_pct',    header: 'Commission %'    },
-          { key: 'commission_amount', header: 'Commission $'    },
-          { key: 'revenue_share_pct', header: 'Rev Share %'     },
-        ]}
-        rows={rows.map((r) => ({
-          channel_name:      r.channel_name      ?? '—',
-          channel_code:      r.channel_code      ?? '—',
-          room_nights:       fmtN(r.room_nights),
-          reservations:      fmtN(r.reservations),
-          cancellations:     fmtN(r.cancellations),
-          adr:               fmt$(r.adr),
-          gross_revenue:     fmt$(r.gross_revenue),
-          net_revenue:       fmt$(r.net_revenue),
-          commission_pct:    fmtPct(r.commission_pct),
-          commission_amount: fmt$(r.commission_amount),
-          revenue_share_pct: fmtPct(r.revenue_share_pct),
-        }))}
-      />
+      <DataTable columns={columns} rows={tableRows} />
     </main>
   );
 }
