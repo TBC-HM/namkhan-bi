@@ -1,14 +1,14 @@
 // app/revenue-v2/compset/page.tsx
 import { createClient } from '@supabase/supabase-js';
-import PageHeader from '@/components/layout/PageHeader';
-import DataTable from '@/components/ui/DataTable';
 import KpiBox from '@/components/kpi/KpiBox';
+import DataTable from '@/components/ui/DataTable';
+import PageHeader from '@/components/layout/PageHeader';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 60;
+export const revalidate = 3600;
 
 interface CompsetRow {
-  property_name?: string;
+  property_name?: string | null;
   stars?: number | null;
   rate_usd?: number | null;
   rate_lak?: number | null;
@@ -27,7 +27,6 @@ export default async function CompsetPage() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  // v_compset_set_summary is the allowlisted canonical view for compset rows
   const { data, error } = await supabase
     .from('v_compset_set_summary')
     .select('*')
@@ -35,7 +34,7 @@ export default async function CompsetPage() {
 
   const rows: CompsetRow[] = data ?? [];
 
-  // Derive summary KPIs from the set
+  // Separate Namkhan row from competitors
   const namkhanRow = rows.find(
     (r) =>
       typeof r.property_name === 'string' &&
@@ -60,15 +59,15 @@ export default async function CompsetPage() {
       : null;
 
   const fmtUsd = (v: number | null | undefined) =>
-    v != null ? `$${v.toFixed(0)}` : '—';
+    v != null ? `$${v.toFixed(0)}` : '\u2014';
   const fmtPct = (v: number | null | undefined) =>
-    v != null ? `${v.toFixed(1)}%` : '—';
+    v != null ? `${v.toFixed(1)}%` : '\u2014';
   const fmtIdx = (v: number | null | undefined) =>
-    v != null ? v.toFixed(2) : '—';
+    v != null ? v.toFixed(2) : '\u2014';
 
   const columns = [
     { key: 'property_name', header: 'Property' },
-    { key: 'stars', header: '★' },
+    { key: 'stars', header: '\u2605' },
     { key: 'rate_usd', header: 'Rate (USD)' },
     { key: 'occupancy_pct', header: 'OCC %' },
     { key: 'adr_usd', header: 'ADR' },
@@ -85,9 +84,9 @@ export default async function CompsetPage() {
     adr_usd: fmtUsd(r.adr_usd as number | null),
     revpar_usd: fmtUsd(r.revpar_usd as number | null),
     index_vs_namkhan: fmtIdx(r.index_vs_namkhan as number | null),
-    stars: r.stars ?? '—',
-    source: r.source ?? '—',
-    snapshot_date: r.snapshot_date ?? '—',
+    stars: r.stars ?? '\u2014',
+    source: r.source ?? '\u2014',
+    snapshot_date: r.snapshot_date ?? '\u2014',
   }));
 
   return (
@@ -106,7 +105,7 @@ export default async function CompsetPage() {
             fontSize: 14,
           }}
         >
-          ⚠ Data load error: {error.message}
+          {'\u26a0'} Data load error: {error.message}
         </div>
       )}
 
@@ -121,15 +120,15 @@ export default async function CompsetPage() {
       >
         <KpiBox
           label="NK Rate (USD)"
-          value={fmtUsd(namkhanRow?.rate_usd as number | null)}
+          value={fmtUsd(namkhanRow?.rate_usd as number | null | undefined)}
         />
         <KpiBox
           label="Comp Avg Rate"
           value={fmtUsd(avgCompRate)}
         />
         <KpiBox
-          label="NK OCC"
-          value={fmtPct(namkhanRow?.occupancy_pct as number | null)}
+          label="NK OCC %"
+          value={fmtPct(namkhanRow?.occupancy_pct as number | null | undefined)}
         />
         <KpiBox
           label="Comp Avg OCC"
@@ -137,21 +136,20 @@ export default async function CompsetPage() {
         />
       </div>
 
-      {/* Compset Table */}
+      {/* Compset Detail Table */}
       <DataTable columns={columns} rows={tableRows} />
 
       {rows.length === 0 && !error && (
-        <p
+        <div
           style={{
-            textAlign: 'center',
-            color: '#6b7280',
             marginTop: 48,
+            textAlign: 'center',
+            color: 'var(--muted)',
             fontSize: 14,
           }}
         >
-          No compset data available yet. Populate via the compset ingestion
-          pipeline.
-        </p>
+          No compset data available yet. Populate via the compset ingestion pipeline.
+        </div>
       )}
     </main>
   );
