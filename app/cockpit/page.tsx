@@ -25,7 +25,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-type Tab = "chat" | "schedule" | "team" | "logs" | "data" | "knowledge" | "tools" | "cost" | "activity" | "docs";
+type Tab = "chat" | "schedule" | "team" | "logs" | "data" | "knowledge" | "tools" | "cost" | "activity" | "docs" | "deploys";
 
 type Ticket = {
   id: number;
@@ -178,6 +178,7 @@ export default function CockpitPage() {
         {tab === "cost" && <CostTab />}
         {tab === "activity" && <ActivityTab />}
         {tab === "docs" && <DocsTab />}
+        {tab === "deploys" && <DeploysTab />}
         {tab === "schedule" && <ScheduleTab onCount={(n) => setCounts((c) => ({ ...c, schedule: n }))} />}
         {tab === "team" && <TeamTab onCount={(n) => setCounts((c) => ({ ...c, team: n }))} />}
         {tab === "logs" && <LogsTab />}
@@ -270,6 +271,7 @@ function TopBar({
         <Tab name="👥 Team" active={tab === "team"} onClick={() => setTab("team")} count={counts.team} />
         <Tab name="🧠 Knowledge" active={tab === "knowledge"} onClick={() => setTab("knowledge")} />
         <Tab name="📄 Docs" active={tab === "docs"} onClick={() => setTab("docs")} />
+        <Tab name="🚀 Deploys" active={tab === "deploys"} onClick={() => setTab("deploys")} />
         <Tab name="📅 Schedule" active={tab === "schedule"} onClick={() => setTab("schedule")} count={counts.schedule} />
         <Tab name="📜 Logs" active={tab === "logs"} onClick={() => setTab("logs")} count={counts.logs} />
         <Tab name="🗄 Data" active={tab === "data"} onClick={() => setTab("data")} count={counts.data} />
@@ -2407,6 +2409,107 @@ const DOC_LABELS: Record<string, string> = {
   security: "Security & Multi-tenancy",
   integration: "Integration & Deployment",
 };
+
+type DeployRow = { uid: string; state: string; created_at: string; sha: string; ref: string; message: string; url: string | null };
+
+function DeploysTab() {
+  const [data, setData] = useState<{ "namkhan-bi"?: { deploys?: DeployRow[]; error?: string }; "namkhan-bi-staging"?: { deploys?: DeployRow[]; error?: string }; fetched_at?: string } | null>(null);
+  const [routeChecks, setRouteChecks] = useState<Array<{ url: string; status: number | null }>>([]);
+
+  const checkRoutes = async () => {
+    const routes = [
+      "/cockpit","/chat","/staging/mockups",
+      "/sales/dashboard","/revenue/dashboard","/marketing/dashboard","/operations/dashboard","/guest/dashboard","/finance/dashboard",
+      "/sales/cockpit","/revenue/cockpit","/marketing/cockpit","/operations/cockpit","/guest/cockpit","/finance/cockpit",
+      "/revenue/engine?view=entry","/revenue/engine?view=workspace","/revenue/engine?view=report","/revenue/engine?view=dashboard","/revenue/engine?view=morning",
+    ];
+    const results = await Promise.all(routes.map(async (r) => {
+      try {
+        const res = await fetch(r, { method: "HEAD", cache: "no-store" });
+        return { url: r, status: res.status };
+      } catch {
+        return { url: r, status: null };
+      }
+    }));
+    setRouteChecks(results);
+  };
+
+  useEffect(() => {
+    fetch("/api/cockpit/deployments", { cache: "no-store" }).then((r) => r.json()).then(setData).catch(() => setData({}));
+    checkRoutes();
+    const id = setInterval(() => {
+      fetch("/api/cockpit/deployments", { cache: "no-store" }).then((r) => r.json()).then(setData).catch(() => null);
+      checkRoutes();
+    }, 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div style={{ padding: 24, height: "100%", overflowY: "auto" }}>
+      <div style={{ marginBottom: 16 }}>
+        <h1 style={{ fontSize: 18, fontWeight: 600 }}>🚀 Deploys & live routes</h1>
+        <span style={{ fontSize: 12, color: "var(--text-3)" }}>
+          Ground truth: every prod deploy on Vercel + live HTTP check on every documented route. Refreshes every 30s.
+        </span>
+      </div>
+
+      <div style={{ background: "var(--bg-2)", border: "1px solid var(--border-1)", borderRadius: 8, padding: 14, marginBottom: 16 }}>
+        <div style={{ fontSize: 11, color: "var(--brass)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10, fontWeight: 600 }}>
+          Route health · {routeChecks.filter(r => r.status === 200).length}/{routeChecks.length} green
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 6 }}>
+          {routeChecks.map((r) => (
+            <div key={r.url} style={{ display: "flex", justifyContent: "space-between", padding: "4px 8px", background: "var(--bg-1)", border: "1px solid var(--border-2)", borderRadius: 4, fontSize: 11, fontFamily: "ui-monospace, monospace" }}>
+              <a href={r.url} target="_blank" rel="noreferrer" style={{ color: "var(--text-1)", textDecoration: "none" }}>{r.url}</a>
+              <span style={{ color: r.status === 200 ? "var(--good, #2a7d2e)" : r.status === null ? "var(--text-3)" : "var(--bad, #b3261e)", fontWeight: 600 }}>
+                {r.status ?? "—"}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {(["namkhan-bi", "namkhan-bi-staging"] as const).map((proj) => {
+        const block = data?.[proj];
+        return (
+          <div key={proj} style={{ background: "var(--bg-2)", border: "1px solid var(--border-1)", borderRadius: 8, padding: 14, marginBottom: 16 }}>
+            <div style={{ fontSize: 11, color: "var(--brass)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10, fontWeight: 600 }}>
+              📦 {proj} · last 20 prod deploys
+            </div>
+            {block?.error && <div style={{ color: "var(--bad, #b3261e)", fontSize: 12 }}>error: {block.error}</div>}
+            {!block?.deploys && !block?.error && <div style={{ color: "var(--text-3)" }}>loading…</div>}
+            {block?.deploys && (
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: "left", padding: "6px 10px", fontSize: 10, color: "var(--text-3)", textTransform: "uppercase" }}>When</th>
+                    <th style={{ textAlign: "left", padding: "6px 10px", fontSize: 10, color: "var(--text-3)", textTransform: "uppercase" }}>SHA</th>
+                    <th style={{ textAlign: "left", padding: "6px 10px", fontSize: 10, color: "var(--text-3)", textTransform: "uppercase" }}>Branch</th>
+                    <th style={{ textAlign: "left", padding: "6px 10px", fontSize: 10, color: "var(--text-3)", textTransform: "uppercase" }}>Message</th>
+                    <th style={{ textAlign: "left", padding: "6px 10px", fontSize: 10, color: "var(--text-3)", textTransform: "uppercase" }}>URL</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {block.deploys.map((d) => (
+                    <tr key={d.uid} style={{ borderBottom: "1px solid var(--border-2)" }}>
+                      <td style={{ padding: "6px 10px", fontFamily: "ui-monospace, monospace", color: "var(--text-3)" }}>{d.created_at.replace("T", " ").slice(0, 16)}</td>
+                      <td style={{ padding: "6px 10px", fontFamily: "ui-monospace, monospace", color: "var(--brass)" }}>{d.sha}</td>
+                      <td style={{ padding: "6px 10px", fontFamily: "ui-monospace, monospace" }}>{d.ref}</td>
+                      <td style={{ padding: "6px 10px" }}>{d.message}</td>
+                      <td style={{ padding: "6px 10px" }}>{d.url ? <a href={d.url} target="_blank" rel="noreferrer" style={{ color: "var(--brass)" }}>↗</a> : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        );
+      })}
+
+      {data?.fetched_at && <div style={{ fontSize: 10, color: "var(--text-3)", textAlign: "right", fontFamily: "ui-monospace, monospace" }}>fetched {data.fetched_at.slice(11, 19)} UTC</div>}
+    </div>
+  );
+}
 
 function DocsTab() {
   type SubView = "pulse" | "live" | "staging" | "activity" | "backup";
