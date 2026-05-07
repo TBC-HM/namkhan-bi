@@ -7,20 +7,41 @@ import PageHeader from '@/components/layout/PageHeader';
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
-interface OverviewKpiRow {
-  kpi_date?: string;
-  date?: string;
-  rooms_sold?: number | null;
-  occupancy_pct?: number | null;
-  adr_usd?: number | null;
-  adr?: number | null;
-  revpar_usd?: number | null;
-  revpar?: number | null;
-  revenue_usd?: number | null;
-  total_revenue?: number | null;
-  rooms_available?: number | null;
-  [key: string]: unknown;
+interface KpiSnapshot {
+  id: string;
+  metric_key: string;
+  metric_value: number | null;
+  currency: string | null;
+  period_label: string | null;
+  stly_value: number | null;
+  recorded_at: string;
 }
+
+function formatValue(row: KpiSnapshot): string {
+  if (row.metric_value === null || row.metric_value === undefined) return '—';
+  const v = row.metric_value;
+  if (row.metric_key === 'occupancy_pct') return `${v.toFixed(1)}%`;
+  if (row.currency === 'USD') return `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (row.currency === 'LAK') return `₭${v.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+  return v.toLocaleString('en-US');
+}
+
+function formatChange(row: KpiSnapshot): string {
+  if (row.metric_value === null || row.stly_value === null || row.stly_value === 0) return '—';
+  const pct = ((row.metric_value - row.stly_value) / Math.abs(row.stly_value)) * 100;
+  const sign = pct >= 0 ? '+' : '−';
+  return `${sign}${Math.abs(pct).toFixed(1)}%`;
+}
+
+const KEY_ORDER = ['occupancy_pct', 'adr', 'revpar', 'rooms_sold', 'total_revenue'];
+
+const LABEL_MAP: Record<string, string> = {
+  occupancy_pct: 'Occupancy',
+  adr: 'ADR',
+  revpar: 'RevPAR',
+  rooms_sold: 'Rooms Sold',
+  total_revenue: 'Total Revenue',
+};
 
 export default async function Page() {
   const supabase = createClient(
@@ -28,72 +49,82 @@ export default async function Page() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
+  // Pull latest snapshot per metric key
   const { data, error } = await supabase
-    .from('f_overview_kpis')
-    .select('*')
-    .order('kpi_date', { ascending: false })
-    .limit(30);
+    .from('cockpit_kpi_snapshots')
+    .select('id, metric_key, metric_value, currency, period_label, stly_value, recorded_at')
+    .order('recorded_at', { ascending: false })
+    .limit(50);
 
-  const rows: OverviewKpiRow[] = data ?? [];
-  const latest = rows[0] ?? {};
+  if (error) {
+    console.error('[pulse] kpi_snapshots fetch error:', error.message);
+  }
 
-  // Normalise column name variants between fact table and view aliases
-  const occupancy = latest.occupancy_pct ?? latest.occupancy ?? null;
-  const adr = latest.adr_usd ?? latest.adr ?? null;
-  const revpar = latest.revpar_usd ?? latest.revpar ?? null;
-  const roomsSold = latest.rooms_sold ?? null;
-  const totalRevenue = latest.revenue_usd ?? latest.total_revenue ?? null;
+  const rows: KpiSnapshot[] = data ?? [];
 
-  const fmt = (v: number | null | undefined, prefix = '') =>
-    v != null ? `${prefix}${v.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '—';
+  // Deduplicate: keep the latest snapshot per metric_key
+  const latest = new Map<string, KpiSnapshot>();
+  for (const row of rows) {
+    if (!latest.has(row.metric_key)) {
+      latest.set(row.metric_key, row);
+    }
+  }
 
-  const fmtPct = (v: number | null | undefined) =>
-    v != null ? `${(v * (v <= 1 ? 100 : 1)).toFixed(1)}%` : '—';
+  // Ordered KPI tiles (known keys first, then any extras)
+  const orderedKeys = [
+    ...KEY_ORDER.filter((k) => latest.has(k)),
+    ...[...latest.keys()].filter((k) => !KEY_ORDER.includes(k)),
+  ];
+
+  // Table rows — all snapshots for trend view
+  const tableRows = rows.map((r) => ({
+    ...r,
+    recorded_at_fmt: r.recorded_at ? r.recorded_at.slice(0, 10) : '—',
+    value_fmt: formatValue(r),
+    change_vs_stly: formatChange(r),
+    label: LABEL_MAP[r.metric_key] ?? r.metric_key,
+  }));
 
   return (
-    <main style={{ padding: '24px 32px' }}>
+    <main className="p-6 space-y-6">
       <PageHeader pillar="Revenue" tab="Pulse" title="Revenue Pulse" />
 
-      {error && (
-        <p style={{ color: '#c0392b', marginBottom: 16 }}>
-          ⚠ Could not load KPI data: {error.message}
-        </p>
-      )}
-
-      {/* KPI summary strip — most-recent date */}
+      {/* KPI tile grid */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(5, 1fr)',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
           gap: 16,
-          marginBottom: 32,
         }}
       >
-        <KpiBox label="Occupancy" value={fmtPct(occupancy)} />
-        <KpiBox label="ADR" value={fmt(adr, '$')} />
-        <KpiBox label="RevPAR" value={fmt(revpar, '$')} />
-        <KpiBox label="Rooms Sold" value={fmt(roomsSold)} />
-        <KpiBox label="Total Revenue" value={fmt(totalRevenue, '$')} />
+        {orderedKeys.length === 0 ? (
+          <p className="text-sm text-muted-foreground col-span-full">No KPI data available.</p>
+        ) : (
+          orderedKeys.map((key) => {
+            const row = latest.get(key)!;
+            return (
+              <KpiBox
+                key={key}
+                label={LABEL_MAP[key] ?? key}
+                value={formatValue(row)}
+                subLabel={row.period_label ?? undefined}
+                delta={formatChange(row)}
+              />
+            );
+          })
+        )}
       </div>
 
-      {/* Rolling 30-day table */}
+      {/* Historical snapshots table */}
       <DataTable
         columns={[
-          { key: 'kpi_date', header: 'Date' },
-          { key: 'rooms_sold', header: 'Rooms Sold' },
-          { key: 'occupancy_pct', header: 'Occ %' },
-          { key: 'adr_usd', header: 'ADR' },
-          { key: 'revpar_usd', header: 'RevPAR' },
-          { key: 'revenue_usd', header: 'Revenue' },
+          { key: 'recorded_at_fmt', header: 'Date' },
+          { key: 'label', header: 'Metric' },
+          { key: 'value_fmt', header: 'Value' },
+          { key: 'change_vs_stly', header: 'vs STLY' },
+          { key: 'period_label', header: 'Period' },
         ]}
-        rows={rows.map((r) => ({
-          kpi_date: r.kpi_date ?? r.date ?? '—',
-          rooms_sold: r.rooms_sold != null ? String(r.rooms_sold) : '—',
-          occupancy_pct: fmtPct(r.occupancy_pct ?? r.occupancy),
-          adr_usd: fmt(r.adr_usd ?? r.adr, '$'),
-          revpar_usd: fmt(r.revpar_usd ?? r.revpar, '$'),
-          revenue_usd: fmt(r.revenue_usd ?? r.total_revenue, '$'),
-        }))}
+        rows={tableRows}
       />
     </main>
   );
