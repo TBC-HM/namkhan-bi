@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Revenue · Morning</title>
+<style>
+  :root {
+    --bg: #0a0a0b;
+    --bg-2: #111113;
+    --panel: #15151a;
+    --panel-2: #1c1c22;
+    --border: #25252d;
+    --border-soft: #1d1d24;
+    --text: #ededf0;
+    --text-2: #a1a1aa;
+    --muted: #6b6b75;
+    --accent: #c79a6b;        /* Claude-ish warm tan */
+    --accent-soft: rgba(199, 154, 107, 0.12);
+    --green: #5cf2a4;
+    --warn: #ffb84d;
+    --red: #ff6b6b;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --serif: "Cooper", "Source Serif Pro", Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif;
+    font-size: 14px; line-height: 1.5;
+    overflow-x: hidden;
+  }
+
+  /* Top bar — minimal */
+  .topbar {
+    height: 52px; padding: 0 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: relative; z-index: 10;
+  }
+  .logo {
+    font-weight: 500; font-size: 14px;
+    display: flex; align-items: center; gap: 10px;
+    color: var(--text-2);
+  }
+  .logo-mark {
+    width: 22px; height: 22px; border-radius: 6px;
+    background: linear-gradient(135deg, var(--accent), #b88556);
+    display: flex; align-items: center; justify-content: center;
+    color: #1a1a1a; font-size: 11px; font-weight: 700;
+  }
+  .logo b { color: var(--text); font-weight: 600; }
+  .topbar-right {
+    display: flex; align-items: center; gap: 16px;
+    color: var(--muted); font-size: 12px;
+  }
+  .top-link {
+    color: var(--text-2); text-decoration: none; font-size: 13px;
+    padding: 6px 10px; border-radius: 6px;
+    transition: background 0.15s;
+  }
+  .top-link:hover { background: var(--panel); color: var(--text); }
+  .status-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 100px;
+    background: rgba(92, 242, 164, 0.08);
+    color: var(--green); font-size: 11px; font-weight: 500;
+  }
+  .status-chip .dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--green);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* Main hero */
+  .hero {
+    min-height: calc(100vh - 52px);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 0 24px 40px;
+    max-width: 880px; margin: 0 auto; width: 100%;
+  }
+
+  .greeting {
+    font-family: var(--serif);
+    font-size: 38px; line-height: 1.15; letter-spacing: -0.02em;
+    color: var(--text); text-align: center;
+    margin-bottom: 6px;
+    font-weight: 400;
+  }
+  .greeting .accent { color: var(--accent); font-style: italic; }
+  .subgreeting {
+    color: var(--muted); font-size: 14px; margin-bottom: 32px; text-align: center;
+  }
+
+  /* Prompt */
+  .prompt-shell {
+    width: 100%; max-width: 720px;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 16px; padding: 16px 18px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .prompt-shell:focus-within {
+    border-color: rgba(199, 154, 107, 0.4);
+    box-shadow: 0 0 0 4px rgba(199, 154, 107, 0.06);
+  }
+  .prompt-input {
+    width: 100%; background: transparent; border: 0; outline: 0;
+    color: var(--text); font-size: 16px; font-family: inherit;
+    resize: none; min-height: 24px; max-height: 140px;
+  }
+  .prompt-input::placeholder { color: var(--muted); }
+  .prompt-toolbar {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 12px;
+  }
+  .prompt-tools {
+    display: flex; gap: 4px;
+  }
+  .tool-btn {
+    width: 28px; height: 28px; border-radius: 7px;
+    background: transparent; border: 0;
+    color: var(--muted); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+  }
+  .tool-btn:hover { background: var(--panel-2); color: var(--text-2); }
+  .send-btn {
+    width: 30px; height: 30px; border-radius: 8px;
+    background: var(--accent); color: #1a1a1a; border: 0;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-weight: 600; font-size: 14px;
+  }
+  .send-btn:hover { background: #d4a672; }
+
+  /* Containers — sit ABOVE the prompt as glanceable cards */
+  .containers {
+    width: 100%; max-width: 880px;
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--border-soft);
+    border-radius: 14px; padding: 16px 18px;
+    transition: border-color 0.2s, transform 0.2s;
+    cursor: pointer; position: relative; overflow: hidden;
+    display: flex; flex-direction: column;
+    min-height: 168px;
+  }
+  .card:hover { border-color: var(--border); transform: translateY(-1px); }
+  .card-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .card-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--muted); font-weight: 600;
+  }
+  .card-badge {
+    font-size: 10px; padding: 2px 7px; border-radius: 100px;
+    background: var(--bg-2); color: var(--text-2);
+    border: 1px solid var(--border-soft);
+    font-family: var(--mono);
+  }
+  .card-badge.live { color: var(--green); border-color: rgba(92, 242, 164, 0.25); background: rgba(92, 242, 164, 0.06); }
+  .card-badge.warn { color: var(--warn); border-color: rgba(255, 184, 77, 0.25); background: rgba(255, 184, 77, 0.06); }
+
+  /* Card 1: Flash */
+  .flash-headline {
+    font-family: var(--serif);
+    font-size: 30px; line-height: 1.1; letter-spacing: -0.02em;
+    color: var(--text); font-weight: 400;
+    margin-bottom: 8px;
+  }
+  .flash-headline .delta { color: var(--green); font-style: italic; font-weight: 400; }
+  .flash-sub {
+    color: var(--text-2); font-size: 13px; line-height: 1.55;
+  }
+  .flash-sub b { color: var(--text); font-weight: 500; }
+  .flash-divider {
+    height: 1px; background: var(--border-soft); margin: 12px 0;
+  }
+  .flash-row {
+    display: flex; justify-content: space-between; font-size: 12px;
+    color: var(--text-2); font-family: var(--mono);
+  }
+  .flash-row .v { color: var(--text); }
+  .flash-row .v.up { color: var(--green); }
+  .flash-row .v.down { color: var(--red); }
+
+  /* Card 2: Action queue */
+  .action-list {
+    display: flex; flex-direction: column; gap: 8px; margin-top: 4px;
+  }
+  .action {
+    display: flex; gap: 10px; align-items: flex-start;
+    padding: 8px 10px; border-radius: 8px;
+    background: var(--bg-2); border: 1px solid transparent;
+    cursor: pointer; transition: border-color 0.15s;
+  }
+  .action:hover { border-color: var(--border); }
+  .action-icon {
+    width: 24px; height: 24px; border-radius: 6px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600;
+  }
+  .action-icon.pricing { background: rgba(199, 154, 107, 0.15); color: var(--accent); }
+  .action-icon.group { background: rgba(255, 184, 77, 0.15); color: var(--warn); }
+  .action-icon.pace { background: rgba(255, 107, 107, 0.15); color: var(--red); }
+  .action-text { flex: 1; min-width: 0; }
+  .action-title { font-size: 12px; color: var(--text); font-weight: 500; line-height: 1.3; }
+  .action-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .action-arrow {
+    color: var(--muted); font-size: 14px; align-self: center;
+  }
+
+  /* Card 3: Pickup pulse */
+  .pulse-stat {
+    display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px;
+  }
+  .pulse-num {
+    font-family: var(--serif); font-size: 30px; line-height: 1;
+    color: var(--green); font-weight: 400;
+  }
+  .pulse-label { color: var(--muted); font-size: 12px; }
+  .pulse-sub {
+    color: var(--text-2); font-size: 12px; margin-bottom: 12px;
+  }
+  .pulse-sub b { color: var(--text); }
+  .pulse-chart {
+    display: flex; align-items: flex-end; gap: 2px;
+    height: 36px; margin-top: auto;
+  }
+  .pulse-bar {
+    flex: 1; background: var(--accent); opacity: 0.5;
+    border-radius: 1px;
+    transition: height 0.6s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s;
+    min-height: 2px;
+  }
+  .pulse-foot {
+    display: flex; justify-content: space-between;
+    font-size: 10px; color: var(--muted); margin-top: 6px;
+    font-family: var(--mono);
+  }
+
+  /* Suggestions below prompt */
+  .suggestions {
+    display: flex; gap: 6px; flex-wrap: wrap; justify-content: center;
+    margin-top: 16px;
+    width: 100%; max-width: 720px;
+  }
+  .suggestion {
+    padding: 6px 12px; border-radius: 100px; font-size: 12px;
+    background: transparent; color: var(--text-2);
+    border: 1px solid var(--border-soft); cursor: pointer;
+    transition: all 0.15s;
+  }
+  .suggestion:hover {
+    color: var(--text); border-color: var(--border);
+    background: var(--panel);
+  }
+
+  /* Footer hint */
+  .footer-hint {
+    margin-top: 32px; color: var(--muted); font-size: 12px;
+    text-align: center;
+  }
+  .footer-hint .kbd {
+    font-family: var(--mono); font-size: 10px; color: var(--text-2);
+    padding: 2px 6px; border-radius: 4px; background: var(--panel);
+    border: 1px solid var(--border-soft); margin: 0 2px;
+  }
+
+  /* Mobile */
+  @media (max-width: 760px) {
+    .containers { grid-template-columns: 1fr; }
+    .greeting { font-size: 28px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="logo">
+    <span class="logo-mark">R</span>
+    <span><b>Revenue</b> <span style="color:var(--muted);">/ Morning</span></span>
+  </div>
+  <div class="topbar-right">
+    <span class="status-chip"><span class="dot"></span>6 agents live</span>
+    <a href="#" class="top-link">Workspace</a>
+    <a href="#" class="top-link">Data</a>
+    <a href="#" class="top-link">Settings</a>
+  </div>
+</div>
+
+<!-- HERO -->
+<div class="hero">
+
+  <div class="greeting">
+    Good morning. <span class="accent">Numbers look good</span> — one thing needs you.
+  </div>
+  <div class="subgreeting">Daily flash dispatched 09:00 LAK · 6 agents reporting nominal</div>
+
+  <!-- 3 CONTAINERS -->
+  <div class="containers">
+
+    <!-- CARD 1 — DAILY FLASH -->
+    <div class="card" onclick="this.style.borderColor='var(--accent)'">
+      <div class="card-head">
+        <span class="card-label">Daily Flash</span>
+        <span class="card-badge live">live</span>
+      </div>
+      <div class="flash-headline">
+        RevPAR <b>$232</b> <span class="delta">+5.8%</span>
+      </div>
+      <div class="flash-sub">
+        MTD pacing <b>+$8k vs budget</b>, <b>+$4 vs LY</b>. ADR holding $320, occupancy 72.4%.
+      </div>
+      <div class="flash-divider"></div>
+      <div class="flash-row">
+        <span>Pickup 24h</span>
+        <span class="v up">+8 rms / +$2,520</span>
+      </div>
+      <div class="flash-row" style="margin-top: 6px;">
+        <span>Pickup 7d</span>
+        <span class="v up">+45 rms / +$13.8k</span>
+      </div>
+    </div>
+
+    <!-- CARD 2 — NEEDS ATTENTION -->
+    <div class="card">
+      <div class="card-head">
+        <span class="card-label">Needs your attention</span>
+        <span class="card-badge warn">3 items</span>
+      </div>
+      <div class="action-list">
+        <div class="action" onclick="event.stopPropagation(); askPrompt('Show me the 5 pricing recommendations queued for today')">
+          <div class="action-icon pricing">$</div>
+          <div class="action-text">
+            <div class="action-title">5 pricing recommendations queued</div>
+            <div class="action-meta">Review by 16:00 · 2 flagged soft-floor</div>
+          </div>
+          <span class="action-arrow">›</span>
+        </div>
+        <div class="action" onclick="event.stopPropagation(); askPrompt('Group ABC cut-off status')">
+          <div class="action-icon group">G</div>
+          <div class="action-text">
+            <div class="action-title">Group ABC cut-off in 9 days</div>
+            <div class="action-meta">32 rms uncommitted · $9,600 at risk</div>
+          </div>
+          <span class="action-arrow">›</span>
+        </div>
+        <div class="action" onclick="event.stopPropagation(); askPrompt('Why is +90d pacing weak?')">
+          <div class="action-icon pace">!</div>
+          <div class="action-text">
+            <div class="action-title">+90d pace −12.1% vs STLY</div>
+            <div class="action-meta">Rev gap −$28k · trends −18% MoM</div>
+          </div>
+          <span class="action-arrow">›</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- CARD 3 — PICKUP PULSE -->
+    <div class="card">
+      <div class="card-head">
+        <span class="card-label">Pickup pulse · last hour</span>
+        <span class="card-badge live">live</span>
+      </div>
+      <div class="pulse-stat">
+        <span class="pulse-num" id="pulse-num">+3</span>
+        <span class="pulse-label">net rooms</span>
+      </div>
+      <div class="pulse-sub">
+        <b id="pulse-rev">+$945</b> rev · 4 bookings, 1 cancellation
+      </div>
+      <div class="pulse-chart" id="pulse-chart"></div>
+      <div class="pulse-foot">
+        <span>−60min</span>
+        <span>now</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- PROMPT -->
+  <div class="prompt-shell">
+    <textarea class="prompt-input" id="prompt" placeholder="Ask anything about your numbers..." rows="1" onkeydown="handleKey(event)"></textarea>
+    <div class="prompt-toolbar">
+      <div class="prompt-tools">
+        <button class="tool-btn" title="Attach">+</button>
+        <button class="tool-btn" title="Filter by date">⌖</button>
+        <button class="tool-btn" title="Voice">🎤</button>
+      </div>
+      <button class="send-btn" onclick="askPrompt()">↑</button>
+    </div>
+  </div>
+
+  <div class="suggestions">
+    <span class="suggestion" onclick="askPrompt('Show +60d Pool Villa pickup')">+60d Pool Villa pickup</span>
+    <span class="suggestion" onclick="askPrompt('Compare this week to STLY')">Compare to STLY</span>
+    <span class="suggestion" onclick="askPrompt('Open daily pickup table')">Open daily pickup</span>
+    <span class="suggestion" onclick="askPrompt('What dropped in the last hour?')">What dropped last hour?</span>
+  </div>
+
+  <div class="footer-hint">
+    Press <span class="kbd">↵</span> to ask · <span class="kbd">⌘K</span> for data views · <span class="kbd">⌘.</span> for settings
+  </div>
+
+</div>
+
+<script>
+  // Pulse chart — 30 bars, simulates booking events
+  const chartEl = document.getElementById('pulse-chart');
+  const NUM_BARS = 30;
+  const heights = [];
+  for (let i = 0; i < NUM_BARS; i++) {
+    const bar = document.createElement('div');
+    bar.className = 'pulse-bar';
+    const h = 4 + Math.random() * 28;
+    bar.style.height = h + 'px';
+    bar.style.opacity = 0.25 + (i / NUM_BARS) * 0.5;
+    chartEl.appendChild(bar);
+    heights.push(h);
+  }
+
+  // Net rooms / rev counters
+  let netRooms = 3;
+  let netRev = 945;
+  function updatePulse() {
+    // Slide window
+    const bars = chartEl.querySelectorAll('.pulse-bar');
+    heights.shift();
+
+    // 70% chance of small bar (ambient), 30% chance of bigger (booking event)
+    const isEvent = Math.random() < 0.3;
+    const h = isEvent
+      ? 14 + Math.random() * 22
+      : 3 + Math.random() * 8;
+    heights.push(h);
+
+    bars.forEach((b, i) => {
+      b.style.height = heights[i] + 'px';
+      b.style.opacity = 0.25 + (i / NUM_BARS) * 0.5;
+    });
+
+    // Occasionally bump the net rooms / rev
+    if (isEvent && Math.random() < 0.5) {
+      const isBooking = Math.random() < 0.75;
+      if (isBooking) {
+        netRooms += 1;
+        netRev += 280 + Math.floor(Math.random() * 220);
+      } else {
+        netRooms -= 1;
+        netRev -= 200 + Math.floor(Math.random() * 180);
+      }
+      document.getElementById('pulse-num').textContent = (netRooms >= 0 ? '+' : '') + netRooms;
+      document.getElementById('pulse-rev').textContent = (netRev >= 0 ? '+' : '−') + '$' + Math.abs(netRev).toLocaleString();
+    }
+  }
+  setInterval(updatePulse, 1200);
+
+  // Prompt handling — clicking suggestion or sending takes you to workspace
+  function askPrompt(text) {
+    const input = document.getElementById('prompt');
+    const q = text || input.value.trim();
+    if (!q) return;
+    // Visual feedback — flash the prompt shell
+    const shell = document.querySelector('.prompt-shell');
+    shell.style.borderColor = 'var(--accent)';
+    shell.style.transform = 'scale(0.995)';
+    setTimeout(() => {
+      shell.style.transform = '';
+      // In real app: navigate to workspace with this prompt
+      alert('→ Would route to Workspace with prompt:\n\n"' + q + '"');
+      shell.style.borderColor = '';
+    }, 200);
+  }
+
+  function handleKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      askPrompt();
+    }
+  }
+
+  // Auto-grow textarea
+  const ta = document.getElementById('prompt');
+  ta.addEventListener('input', () => {
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(ta.scrollHeight, 140) + 'px';
+  });
+</script>
+
+</body>
+</html>

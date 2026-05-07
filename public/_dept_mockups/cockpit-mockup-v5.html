@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Cockpit v5 — IT Department</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg-0: #0a0e1a;
+    --bg-1: #131826;
+    --bg-2: #1a2030;
+    --bg-3: #232b3d;
+    --border: #1f2937;
+    --border-2: #2a3447;
+    --text-0: #f3f4f6;
+    --text-1: #cbd5e0;
+    --text-2: #8b95a7;
+    --text-3: #64748b;
+    --green: #22c55e;
+    --green-bg: rgba(34,197,94,0.12);
+    --yellow: #f59e0b;
+    --yellow-bg: rgba(245,158,11,0.12);
+    --red: #ef4444;
+    --red-bg: rgba(239,68,68,0.12);
+    --blue: #60a5fa;
+    --blue-bg: rgba(96,165,250,0.12);
+    --purple: #a855f7;
+    --purple-bg: rgba(168,85,247,0.12);
+    --cyan: #22d3ee;
+    --cyan-bg: rgba(34,211,238,0.12);
+    --pink: #ec4899;
+    --pink-bg: rgba(236,72,153,0.12);
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
+    background: var(--bg-0);
+    color: var(--text-0);
+    font-size: 13px;
+    line-height: 1.4;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* TOP BAR */
+  .topbar {
+    height: 48px;
+    background: var(--bg-1);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 14px;
+  }
+  .logo { font-weight: 600; font-size: 14px; color: var(--text-0); display: flex; align-items: center; gap: 8px; }
+  .logo-dot { width: 8px; height: 8px; background: var(--green); border-radius: 50%; box-shadow: 0 0 8px var(--green); }
+  .topbar-sub { font-size: 11px; color: var(--text-3); }
+
+  .tabs { display: flex; gap: 0; margin-left: 6px; }
+  .tab {
+    padding: 0 13px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-2);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+  .tab.active { color: var(--text-0); border-bottom-color: var(--blue); }
+  .tab:hover:not(.active) { color: var(--text-1); }
+  .tab-count {
+    font-size: 9.5px;
+    background: var(--bg-2);
+    padding: 1px 5px;
+    border-radius: 8px;
+    color: var(--text-2);
+  }
+  .tab.active .tab-count { background: var(--blue-bg); color: var(--blue); }
+
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .org-btn {
+    background: var(--bg-2);
+    border: 1px solid var(--border-2);
+    color: var(--text-1);
+    border-radius: 6px;
+    padding: 6px 11px;
+    font-size: 11px;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .org-btn:hover { border-color: var(--blue); color: var(--blue); }
+  .system-pulse {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 11px;
+    background: var(--green-bg);
+    border: 1px solid rgba(34,197,94,0.3);
+    border-radius: 14px;
+    font-size: 11px;
+    color: var(--green);
+  }
+  .pulse-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--green);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+  .user-avatar {
+    width: 28px; height: 28px;
+    background: var(--bg-2);
+    border: 1px solid var(--border-2);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px;
+    color: var(--text-1);
+    font-weight: 600;
+  }
+
+  /* DATA TAB CONTENT */
+  .data-page {
+    height: calc(100vh - 48px);
+    display: grid;
+    grid-template-columns: 280px 1fr;
+  }
+
+  /* TABLE LIST SIDEBAR */
+  .tables-sidebar {
+    background: var(--bg-1);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 14px 0;
+  }
+  .tables-search {
+    margin: 0 12px 14px;
+    background: var(--bg-2);
+    border: 1px solid var(--border-2);
+    border-radius: 6px;
+    padding: 7px 11px;
+    color: var(--text-0);
+    font-size: 12px;
+    outline: none;
+    font-family: inherit;
+    width: calc(100% - 24px);
+  }
+  .tables-search:focus { border-color: var(--blue); }
+
+  .tables-section {
+    margin-bottom: 16px;
+  }
+  .tables-section-label {
+    font-size: 10px;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    padding: 0 16px 6px;
+    font-weight: 600;
+  }
+  .table-item {
+    padding: 7px 16px;
+    font-size: 12px;
+    color: var(--text-1);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    border-left: 2px solid transparent;
+  }
+  .table-item:hover { background: var(--bg-2); }
+  .table-item.active {
+    background: var(--bg-2);
+    border-left-color: var(--blue);
+    color: var(--text-0);
+  }
+  .table-item-icon {
+    color: var(--text-3);
+    font-size: 12px;
+  }
+  .table-item.view .table-item-icon { color: var(--purple); }
+  .table-item-name {
+    flex: 1;
+    font-family: ui-monospace, SF Mono, Menlo, monospace;
+    font-size: 11.5px;
+  }
+  .table-item-rows {
+    font-size: 10px;
+    color: var(--text-3);
+  }
+  .table-item-pii {
+    color: var(--red);
+    font-size: 10px;
+  }
+
+  /* TABLE VIEW */
+  .table-main {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .table-header {
+    background: var(--bg-1);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 20px;
+  }
+  .table-header-top {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .table-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-0);
+    font-family: ui-monospace, monospace;
+  }
+  .table-meta {
+    margin-left: 12px;
+    display: flex;
+    gap: 10px;
+    font-size: 11px;
+    color: var(--text-3);
+  }
+  .table-meta .stat {
+    display: flex;
+    gap: 4px;
+  }
+  .table-meta .stat-num {
+    color: var(--text-1);
+    font-weight: 600;
+  }
+  .table-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 6px;
+  }
+  .table-action {
+    font-size: 11px;
+    padding: 5px 10px;
+    background: var(--bg-2);
+    border: 1px solid var(--border-2);
+    color: var(--text-1);
+    border-radius: 5px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .table-action:hover { border-color: var(--blue); color: var(--blue); }
+  .table-action.primary { background: var(--blue); border-color: var(--blue); color: white; }
+
+  .table-filters {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+  .filter-pill {
+    font-size: 11px;
+    padding: 4px 9px;
+    background: var(--bg-2);
+    border: 1px solid var(--border-2);
+    border-radius: 4px;
+    color: var(--text-2);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .filter-pill:hover { color: var(--text-0); }
+  .filter-pill.active {
+    background: var(--blue-bg);
+    border-color: var(--blue);
+    color: var(--blue);
+  }
+
+  /* TABLE GRID */
+  .table-scroll {
+    flex: 1;
+    overflow: auto;
+  }
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    font-family: ui-monospace, SF Mono, Menlo, monospace;
+  }
+  .data-table thead th {
+    background: var(--bg-1);
+    color: var(--text-3);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: 600;
+    text-align: left;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    white-space: nowrap;
+  }
+  .data-table thead th .col-type {
+    color: var(--text-3);
+    font-size: 9.5px;
+    margin-left: 4px;
+    text-transform: lowercase;
+    font-weight: 400;
+  }
+  .data-table tbody td {
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    color: var(--text-1);
+    white-space: nowrap;
+    max-width: 250px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .data-table tbody tr:hover td { background: var(--bg-2); }
+  .data-table .cell-id { color: var(--cyan); }
+  .data-table .cell-time { color: var(--text-3); }
+  .data-table .cell-status-success { color: var(--green); }
+  .data-table .cell-status-failed { color: var(--red); }
+  .data-table .cell-status-partial { color: var(--yellow); }
+  .data-table .cell-num { color: var(--text-0); text-align: right; }
+
+  .table-footer {
+    background: var(--bg-1);
+    border-top: 1px solid var(--border);
+    padding: 9px 20px;
+    display: flex;
+    align-items: center;
+    font-size: 11px;
+    color: var(--text-3);
+    gap: 14px;
+  }
+  .table-footer .pagination {
+    margin-left: auto;
+    display: flex;
+    gap: 5px;
+    align-items: center;
+  }
+  .page-btn {
+    background: var(--bg-2);
+    border: 1px solid var(--border-2);
+    color: var(--text-1);
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .page-btn:hover { border-color: var(--blue); color: var(--blue); }
+  .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* SCHEMA INFO PANEL */
+  .schema-info {
+    background: var(--bg-1);
+    border-top: 1px solid var(--border);
+    padding: 12px 20px;
+    font-size: 11px;
+    color: var(--text-2);
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+  .schema-info-item .label {
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-size: 9.5px;
+    display: block;
+    margin-bottom: 2px;
+  }
+  .schema-info-item .val {
+    color: var(--text-1);
+    font-size: 11.5px;
+  }
+  .access-pill {
+    font-size: 9.5px;
+    background: var(--bg-2);
+    border: 1px solid var(--border-2);
+    color: var(--text-2);
+    padding: 1px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-right: 4px;
+  }
+  .access-pill.research { color: var(--purple); border-color: var(--purple); }
+  .access-pill.dev { color: var(--cyan); border-color: var(--cyan); }
+  .access-pill.health { color: var(--green); border-color: var(--green); }
+
+  /* ORG CHART OVERLAY */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 14, 26, 0.92);
+    backdrop-filter: blur(6px);
+    z-index: 100;
+    display: none;
+    padding: 26px;
+    overflow: auto;
+  }
+  .overlay.show { display: block; }
+  .overlay-header { display: flex; align-items: center; margin-bottom: 20px; max-width: 1200px; margin-left: auto; margin-right: auto; }
+  .overlay-title { font-size: 16px; color: var(--text-0); font-weight: 600; }
+  .overlay-sub { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+  .overlay-close {
+    margin-left: auto;
+    background: var(--bg-2);
+    border: 1px solid var(--border-2);
+    color: var(--text-1);
+    width: 32px; height: 32px;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .overlay-close:hover { color: var(--red); border-color: var(--red); }
+
+  .org-chart {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  .org-level {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+  .org-arrows {
+    height: 22px;
+    margin-bottom: 6px;
+    position: relative;
+  }
+  .org-arrow-trunk {
+    position: absolute;
+    top: 0; left: 50%;
+    width: 1px;
+    height: 100%;
+    background: var(--border-2);
+  }
+  .org-node {
+    background: var(--bg-1);
+    border: 1px solid var(--border-2);
+    border-radius: 10px;
+    padding: 12px 14px;
+    min-width: 158px;
+    cursor: pointer;
+    text-align: center;
+    border-top: 3px solid;
+  }
+  .org-node:hover { border-color: var(--blue); }
+  .org-node.manager { border-top-color: var(--blue); min-width: 220px; }
+  .org-node.health { border-top-color: var(--green); }
+  .org-node.dev { border-top-color: var(--cyan); }
+  .org-node.research { border-top-color: var(--purple); }
+  .org-node.control { border-top-color: var(--yellow); }
+  .org-node.design { border-top-color: var(--pink); }
+  .org-node.skill-creator { border-top-color: var(--purple); border-style: dashed; }
+
+  .org-node-title { font-size: 13px; color: var(--text-0); font-weight: 600; margin-bottom: 3px; }
+  .org-node-role { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 8px; }
+  .org-node-stats { display: flex; gap: 10px; justify-content: center; font-size: 10.5px; color: var(--text-2); }
+  .org-node-stat .num { color: var(--text-0); font-weight: 600; font-size: 13px; display: block; }
+  .org-node-stat .lbl { color: var(--text-3); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .org-node-state { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.3px; margin-top: 7px; color: var(--text-3); }
+  .org-node-state.active { color: var(--cyan); }
+  .org-node-state.attention { color: var(--yellow); }
+
+  /* SKILLS GRID FOR ALL ARMS */
+  .skills-grid-all {
+    max-width: 1200px;
+    margin: 24px auto 0;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+  }
+  .arm-skills-panel {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    border-left: 3px solid;
+  }
+  .arm-skills-panel.health { border-left-color: var(--green); }
+  .arm-skills-panel.dev { border-left-color: var(--cyan); }
+  .arm-skills-panel.research { border-left-color: var(--purple); }
+  .arm-skills-panel.control { border-left-color: var(--yellow); }
+  .arm-skills-panel.design { border-left-color: var(--pink); }
+
+  .arm-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .arm-panel-name {
+    font-size: 13px;
+    color: var(--text-0);
+    font-weight: 600;
+  }
+  .arm-panel-count {
+    margin-left: auto;
+    font-size: 10.5px;
+    color: var(--text-3);
+  }
+  .skill-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 8px;
+    margin: 2px;
+    font-size: 11px;
+    color: var(--text-1);
+  }
+  .skill-pill.official .dot { background: var(--green); }
+  .skill-pill.custom .dot { background: var(--cyan); }
+  .skill-pill.todo .dot { background: var(--text-3); }
+  .skill-pill .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .skill-pill.todo { color: var(--text-3); }
+  .skill-pill .skill-source {
+    font-size: 9px;
+    color: var(--text-3);
+    text-transform: uppercase;
+    margin-left: 2px;
+    letter-spacing: 0.3px;
+  }
+
+  ::-webkit-scrollbar { width: 7px; height: 7px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border-2); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-dot"></div>
+    Cockpit
+  </div>
+  <div class="topbar-sub">namkhan-bi</div>
+
+  <div class="tabs">
+    <div class="tab">💬 Chat</div>
+    <div class="tab">📅 Schedule <span class="tab-count">12</span></div>
+    <div class="tab">👥 Team <span class="tab-count">5</span></div>
+    <div class="tab">📜 Logs <span class="tab-count">347</span></div>
+    <div class="tab active">🗄 Data <span class="tab-count">23</span></div>
+  </div>
+
+  <div class="topbar-right">
+    <button class="org-btn" onclick="document.getElementById('orgOverlay').classList.add('show')">
+      🗂 Org Chart
+    </button>
+    <div class="system-pulse">
+      <div class="pulse-dot"></div>
+      <span>All operational</span>
+    </div>
+    <div class="user-avatar">PB</div>
+  </div>
+</div>
+
+<!-- DATA TAB -->
+<div class="data-page">
+
+  <!-- LEFT SIDEBAR -->
+  <div class="tables-sidebar">
+    <input class="tables-search" placeholder="Search tables, views, columns..." />
+
+    <div class="tables-section">
+      <div class="tables-section-label">Cockpit · 5</div>
+      <div class="table-item active">
+        <span class="table-item-icon">⊞</span>
+        <span class="table-item-name">cockpit_tickets</span>
+        <span class="table-item-rows">142</span>
+      </div>
+      <div class="table-item">
+        <span class="table-item-icon">⊞</span>
+        <span class="table-item-name">cockpit_decisions</span>
+        <span class="table-item-rows">38</span>
+      </div>
+      <div class="table-item">
+        <span class="table-item-icon">⊞</span>
+        <span class="table-item-name">cockpit_incidents</span>
+        <span class="table-item-rows">17</span>
+      </div>
+      <div class="table-item">
+        <span class="table-item-icon">⊞</span>
+        <span class="table-item-name">cockpit_kpi_snapshots</span>
+        <span class="table-item-rows">62</span>
+      </div>
+      <div class="table-item">
+        <span class="table-item-icon">⊞</span>
+        <span class="table-item-name">cockpit_audit_log</span>
+        <span class="table-item-rows">3.4k</span>
+      </div>
+    </div>
+
+    <div class="tables-section">
+      <div class="tables-section-label">Hotel · BI · 11</div>
+      <div class="table-item">
+        <span class="table-item-icon">⊞</span>
+        <span class="table-item-name">bookings</span>
+        <span class="table-item-pii">PII</span>
+        <span class="table-item-rows">1.2k</span>
+      </div>
+      <div class="table-item view">
+        <span class="table-item-icon">▶</span>
+        <span class="table-item-name">v_bookings_research</span>
+        <span class="table-item-rows">1.2k</span>
+      </div>
+      <div class="table-item">
+        <span class="table-item-icon">⊞</span>
+        <span class="table-item-name">parity_check_results</span>
+        <span class="table-item-rows">8.4k</span>
+      </div>
+      <div class="table-item">
+        <span class="table-item-icon">⊞</span>
+        <span class="table-item-name">rate_shop_results</span>
+        <span class="table-item-rows">2.1k</span>
+      </div>
+      <div class="table-item">
+        <span class="table-item-icon">⊞</span>
+        <span class="table-item-name">channel_performance</span>
+        <span class="table-item-rows">428</span>
+      </div>
+      <div class="table-item">
+        <span class="table-item-icon">⊞</span>
+        <span class="table-item-name">pickup_snapshots</span>
+        <span class="table-item-rows">90</span>
+      </div>
+      <div class="table-item">
+        <span class="table-item-icon">⊞</span>
+        <span class="table-item-name">fx_rates</span>
+        <span class="table-item-rows">365</span>
+      </div>
+      <div class="table-item">
+        <span class="table-item-icon">⊞</span>
+        <span class="table-item-name">usali_mapping</span>
+        <span class="table-item-rows">87</span>
+      </div>
+      <div class="table-item">
+        <span class="table-item-icon">⊞</span>
+        <span class="table-item-name">packages</span>
+        <span class="table-item-rows">12</span>
+      </div>
+      <div class="table-item">
+        <span class="table-item-icon">⊞</span>
+        <span class="table-item-name">page_views</span>
+        <span class="table-item-rows">42k</span>
+      </div>
+      <div class="table-item view">
+        <span class="table-item-icon">▶</span>
+        <span class="table-item-name">v_analytics_research</span>
+        <span class="table-item-rows">42k</span>
+      </div>
+    </div>
+
+    <div class="tables-section">
+      <div class="tables-section-label">Auth · 4</div>
+      <div class="table-item">
+        <span class="table-item-icon">⊞</span>
+        <span class="table-item-name">auth.users</span>
+        <span class="table-item-pii">PII</span>
+        <span class="table-item-rows">8</span>
+      </div>
+      <div class="table-item">
+        <span class="table-item-icon">⊞</span>
+        <span class="table-item-name">auth.sessions</span>
+        <span class="table-item-pii">PII</span>
+        <span class="table-item-rows">14</span>
+      </div>
+      <div class="table-item">
+        <span class="table-item-icon">⊞</span>
+        <span class="table-item-name">auth.identities</span>
+        <span class="table-item-pii">PII</span>
+        <span class="table-item-rows">8</span>
+      </div>
+      <div class="table-item">
+        <span class="table-item-icon">⊞</span>
+        <span class="table-item-name">auth.audit_log</span>
+        <span class="table-item-rows">2.1k</span>
+      </div>
+    </div>
+
+    <div class="tables-section">
+      <div class="tables-section-label">Storage · 3</div>
+      <div class="table-item">
+        <span class="table-item-icon">⊞</span>
+        <span class="table-item-name">storage.buckets</span>
+        <span class="table-item-rows">4</span>
+      </div>
+      <div class="table-item">
+        <span class="table-item-icon">⊞</span>
+        <span class="table-item-name">storage.objects</span>
+        <span class="table-item-rows">387</span>
+      </div>
+      <div class="table-item">
+        <span class="table-item-icon">⊞</span>
+        <span class="table-item-name">storage.migrations</span>
+        <span class="table-item-rows">12</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABLE VIEW -->
+  <div class="table-main">
+
+    <div class="table-header">
+      <div class="table-header-top">
+        <div class="table-name">cockpit_tickets</div>
+        <div class="table-meta">
+          <div class="stat"><span class="stat-num">142</span> rows</div>
+          <div class="stat"><span class="stat-num">15</span> columns</div>
+          <div class="stat">last update <span class="stat-num">2 min ago</span></div>
+        </div>
+        <div class="table-actions">
+          <button class="table-action">⤓ CSV</button>
+          <button class="table-action">SQL</button>
+          <button class="table-action primary">Ask Manager about this</button>
+        </div>
+      </div>
+      <div class="table-filters">
+        <span class="filter-pill active">All</span>
+        <span class="filter-pill">In progress</span>
+        <span class="filter-pill">Awaiting you</span>
+        <span class="filter-pill">Closed</span>
+        <span class="filter-pill">Today</span>
+        <span class="filter-pill">Last 7d</span>
+        <span class="filter-pill">+ filter</span>
+      </div>
+    </div>
+
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>id <span class="col-type">int8</span></th>
+            <th>created_at <span class="col-type">timestamptz</span></th>
+            <th>arm <span class="col-type">text</span></th>
+            <th>intent <span class="col-type">text</span></th>
+            <th>status <span class="col-type">text</span></th>
+            <th>parsed_summary <span class="col-type">text</span></th>
+            <th>pr_url <span class="col-type">text</span></th>
+            <th>iterations <span class="col-type">int4</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="cell-id">144</td>
+            <td class="cell-time">2026-05-06 09:15:08</td>
+            <td>dev</td>
+            <td>build</td>
+            <td class="cell-status-partial">in_progress</td>
+            <td>Coiler gallery rebuild + image opt</td>
+            <td>—</td>
+            <td class="cell-num">0</td>
+          </tr>
+          <tr>
+            <td class="cell-id">143</td>
+            <td class="cell-time">2026-05-06 09:14:31</td>
+            <td>research</td>
+            <td>investigate</td>
+            <td class="cell-status-success">closed</td>
+            <td>Why is ADR down on weekends</td>
+            <td>—</td>
+            <td class="cell-num">2</td>
+          </tr>
+          <tr>
+            <td class="cell-id">142</td>
+            <td class="cell-time">2026-05-06 08:42:01</td>
+            <td>dev</td>
+            <td>build</td>
+            <td class="cell-status-success">merged</td>
+            <td>Footer copy update</td>
+            <td>github.com/.../#142</td>
+            <td class="cell-num">1</td>
+          </tr>
+          <tr>
+            <td class="cell-id">141</td>
+            <td class="cell-time">2026-05-05 14:18:55</td>
+            <td>dev</td>
+            <td>fix</td>
+            <td class="cell-status-success">merged</td>
+            <td>Mobile menu z-index</td>
+            <td>github.com/.../#141</td>
+            <td class="cell-num">1</td>
+          </tr>
+          <tr>
+            <td class="cell-id">140</td>
+            <td class="cell-time">2026-05-05 11:02:12</td>
+            <td>research</td>
+            <td>decide</td>
+            <td class="cell-status-partial">awaits user</td>
+            <td>OTA channel mix audit Q1</td>
+            <td>—</td>
+            <td class="cell-num">3</td>
+          </tr>
+          <tr>
+            <td class="cell-id">139</td>
+            <td class="cell-time">2026-05-05 09:34:00</td>
+            <td>dev</td>
+            <td>build</td>
+            <td class="cell-status-success">merged</td>
+            <td>Add /coiler page seo meta</td>
+            <td>github.com/.../#139</td>
+            <td class="cell-num">2</td>
+          </tr>
+          <tr>
+            <td class="cell-id">138</td>
+            <td class="cell-time">2026-05-04 22:11:38</td>
+            <td>health</td>
+            <td>fix</td>
+            <td class="cell-status-success">closed</td>
+            <td>Auto-rollback deploy abc123 (RLS issue)</td>
+            <td>—</td>
+            <td class="cell-num">0</td>
+          </tr>
+          <tr>
+            <td class="cell-id">137</td>
+            <td class="cell-time">2026-05-04 16:45:22</td>
+            <td>research</td>
+            <td>investigate</td>
+            <td class="cell-status-success">closed</td>
+            <td>TikTok funnel analysis</td>
+            <td>—</td>
+            <td class="cell-num">1</td>
+          </tr>
+          <tr>
+            <td class="cell-id">136</td>
+            <td class="cell-time">2026-05-04 10:18:09</td>
+            <td>dev</td>
+            <td>build</td>
+            <td class="cell-status-success">merged</td>
+            <td>Newsletter signup form</td>
+            <td>github.com/.../#136</td>
+            <td class="cell-num">2</td>
+          </tr>
+          <tr>
+            <td class="cell-id">135</td>
+            <td class="cell-time">2026-05-03 15:22:41</td>
+            <td>dev</td>
+            <td>fix</td>
+            <td class="cell-status-failed">cancelled</td>
+            <td>Contact form spam filter</td>
+            <td>—</td>
+            <td class="cell-num">5</td>
+          </tr>
+          <tr>
+            <td class="cell-id">134</td>
+            <td class="cell-time">2026-05-03 09:00:00</td>
+            <td>health</td>
+            <td>investigate</td>
+            <td class="cell-status-success">closed</td>
+            <td>Weekly audit Mon</td>
+            <td>—</td>
+            <td class="cell-num">0</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="schema-info">
+      <div class="schema-info-item">
+        <span class="label">access</span>
+        <span class="val">
+          <span class="access-pill research">research</span>
+          <span class="access-pill dev">dev</span>
+          <span class="access-pill health">health</span>
+        </span>
+      </div>
+      <div class="schema-info-item">
+        <span class="label">RLS</span>
+        <span class="val">enabled · 2 policies</span>
+      </div>
+      <div class="schema-info-item">
+        <span class="label">PII</span>
+        <span class="val">none</span>
+      </div>
+      <div class="schema-info-item">
+        <span class="label">indexes</span>
+        <span class="val">3 · status, arm, created_at</span>
+      </div>
+      <div class="schema-info-item">
+        <span class="label">size</span>
+        <span class="val">88 KB</span>
+      </div>
+    </div>
+
+    <div class="table-footer">
+      <span>Showing 1–11 of 142</span>
+      <span>·</span>
+      <span>read-only</span>
+      <div class="pagination">
+        <button class="page-btn" disabled>‹</button>
+        <button class="page-btn">1</button>
+        <button class="page-btn">2</button>
+        <button class="page-btn">…</button>
+        <button class="page-btn">13</button>
+        <button class="page-btn">›</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ORG CHART OVERLAY -->
+<div class="overlay" id="orgOverlay">
+  <div class="overlay-header">
+    <div>
+      <div class="overlay-title">IT Department · Org Chart + Skills</div>
+      <div class="overlay-sub">All arms with their skills · 🟢 official · 🔵 custom · ⚪ TBD</div>
+    </div>
+    <button class="overlay-close" onclick="document.getElementById('orgOverlay').classList.remove('show')">×</button>
+  </div>
+
+  <div class="org-chart">
+    <div class="org-level">
+      <div class="org-node manager">
+        <div class="org-node-title">IT Manager</div>
+        <div class="org-node-role">Lead Agent</div>
+        <div class="org-node-stats">
+          <div class="org-node-stat"><span class="num">5</span><span class="lbl">arms</span></div>
+          <div class="org-node-stat"><span class="num">28</span><span class="lbl">skills</span></div>
+        </div>
+        <div class="org-node-state active">handling 2 conversations</div>
+      </div>
+    </div>
+
+    <div class="org-arrows"><div class="org-arrow-trunk"></div></div>
+
+    <div class="org-level">
+      <div class="org-node health">
+        <div class="org-node-title">Health</div>
+        <div class="org-node-role">Monitoring</div>
+        <div class="org-node-stats">
+          <div class="org-node-stat"><span class="num">5</span><span class="lbl">workers</span></div>
+          <div class="org-node-stat"><span class="num">5</span><span class="lbl">skills</span></div>
+        </div>
+      </div>
+      <div class="org-node dev">
+        <div class="org-node-title">Development</div>
+        <div class="org-node-role">Build · Fix</div>
+        <div class="org-node-stats">
+          <div class="org-node-stat"><span class="num">2</span><span class="lbl">teammates</span></div>
+          <div class="org-node-stat"><span class="num">7</span><span class="lbl">skills</span></div>
+        </div>
+        <div class="org-node-state active">2 active</div>
+      </div>
+      <div class="org-node research">
+        <div class="org-node-title">Research</div>
+        <div class="org-node-role">Investigate</div>
+        <div class="org-node-stats">
+          <div class="org-node-stat"><span class="num">0</span><span class="lbl">workers</span></div>
+          <div class="org-node-stat"><span class="num">6</span><span class="lbl">skills</span></div>
+        </div>
+        <div class="org-node-state attention">awaits you</div>
+      </div>
+      <div class="org-node control">
+        <div class="org-node-title">Control</div>
+        <div class="org-node-role">QA · Tests</div>
+        <div class="org-node-stats">
+          <div class="org-node-stat"><span class="num">3</span><span class="lbl">workers</span></div>
+          <div class="org-node-stat"><span class="num">5</span><span class="lbl">skills</span></div>
+        </div>
+      </div>
+      <div class="org-node design">
+        <div class="org-node-title">Design</div>
+        <div class="org-node-role">Brand</div>
+        <div class="org-node-stats">
+          <div class="org-node-stat"><span class="num">0</span><span class="lbl">workers</span></div>
+          <div class="org-node-stat"><span class="num">5</span><span class="lbl">skills</span></div>
+        </div>
+        <div class="org-node-state active">drafting skill</div>
+      </div>
+      <div class="org-node skill-creator">
+        <div class="org-node-title">Skill Creator</div>
+        <div class="org-node-role">On-demand</div>
+        <div class="org-node-stats">
+          <div class="org-node-stat"><span class="num">7</span><span class="lbl">created</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SKILLS PER ARM -->
+    <div class="skills-grid-all">
+
+      <div class="arm-skills-panel health">
+        <div class="arm-panel-header">
+          <span style="color: var(--green); font-size: 14px;">●</span>
+          <div class="arm-panel-name">Health</div>
+          <div class="arm-panel-count">5 skills</div>
+        </div>
+        <div>
+          <span class="skill-pill custom"><span class="dot"></span>uptime-monitoring<span class="skill-source">custom</span></span>
+          <span class="skill-pill custom"><span class="dot"></span>vercel-incident-response<span class="skill-source">custom</span></span>
+          <span class="skill-pill custom"><span class="dot"></span>supabase-advisors<span class="skill-source">custom</span></span>
+          <span class="skill-pill custom"><span class="dot"></span>rollback-decision<span class="skill-source">custom</span></span>
+          <span class="skill-pill official"><span class="dot"></span>lighthouse-ci<span class="skill-source">official</span></span>
+        </div>
+      </div>
+
+      <div class="arm-skills-panel dev">
+        <div class="arm-panel-header">
+          <span style="color: var(--cyan); font-size: 14px;">●</span>
+          <div class="arm-panel-name">Development</div>
+          <div class="arm-panel-count">7 skills</div>
+        </div>
+        <div>
+          <span class="skill-pill official"><span class="dot"></span>frontend-design<span class="skill-source">official</span></span>
+          <span class="skill-pill official"><span class="dot"></span>simplify<span class="skill-source">official</span></span>
+          <span class="skill-pill official"><span class="dot"></span>claude-api<span class="skill-source">bundled</span></span>
+          <span class="skill-pill todo"><span class="dot"></span>cloudbeds-api<span class="skill-source">tbd</span></span>
+          <span class="skill-pill todo"><span class="dot"></span>namkhan-data-dictionary<span class="skill-source">tbd</span></span>
+          <span class="skill-pill custom"><span class="dot"></span>supabase-mcp<span class="skill-source">custom</span></span>
+          <span class="skill-pill todo"><span class="dot"></span>next-vercel-patterns<span class="skill-source">tbd</span></span>
+        </div>
+      </div>
+
+      <div class="arm-skills-panel research">
+        <div class="arm-panel-header">
+          <span style="color: var(--purple); font-size: 14px;">●</span>
+          <div class="arm-panel-name">Research</div>
+          <div class="arm-panel-count">6 skills</div>
+        </div>
+        <div>
+          <span class="skill-pill todo"><span class="dot"></span>namkhan-data-dictionary<span class="skill-source">tbd</span></span>
+          <span class="skill-pill custom"><span class="dot"></span>supabase-readonly-queries<span class="skill-source">custom</span></span>
+          <span class="skill-pill todo"><span class="dot"></span>competitor-analysis<span class="skill-source">tbd</span></span>
+          <span class="skill-pill todo"><span class="dot"></span>revenue-management<span class="skill-source">tbd</span></span>
+          <span class="skill-pill todo"><span class="dot"></span>usali-mapping<span class="skill-source">tbd</span></span>
+          <span class="skill-pill todo"><span class="dot"></span>fx-handling<span class="skill-source">tbd</span></span>
+        </div>
+      </div>
+
+      <div class="arm-skills-panel control">
+        <div class="arm-panel-header">
+          <span style="color: var(--yellow); font-size: 14px;">●</span>
+          <div class="arm-panel-name">Control</div>
+          <div class="arm-panel-count">5 skills</div>
+        </div>
+        <div>
+          <span class="skill-pill todo"><span class="dot"></span>playwright-testing<span class="skill-source">tbd</span></span>
+          <span class="skill-pill todo"><span class="dot"></span>vitest-patterns<span class="skill-source">tbd</span></span>
+          <span class="skill-pill todo"><span class="dot"></span>calculation-validation<span class="skill-source">tbd</span></span>
+          <span class="skill-pill custom"><span class="dot"></span>security-review<span class="skill-source">custom</span></span>
+          <span class="skill-pill official"><span class="dot"></span>dependency-audit<span class="skill-source">official</span></span>
+        </div>
+      </div>
+
+      <div class="arm-skills-panel design">
+        <div class="arm-panel-header">
+          <span style="color: var(--pink); font-size: 14px;">●</span>
+          <div class="arm-panel-name">Design</div>
+          <div class="arm-panel-count">5 skills</div>
+        </div>
+        <div>
+          <span class="skill-pill official"><span class="dot"></span>frontend-design<span class="skill-source">official</span></span>
+          <span class="skill-pill custom"><span class="dot"></span>brand-namkhan<span class="skill-source">custom</span></span>
+          <span class="skill-pill custom"><span class="dot"></span>brand-donna<span class="skill-source">custom</span></span>
+          <span class="skill-pill custom"><span class="dot"></span>slh-branding<span class="skill-source">auto</span></span>
+          <span class="skill-pill custom"><span class="dot"></span>design-tokens<span class="skill-source">custom</span></span>
+        </div>
+      </div>
+
+      <div class="arm-skills-panel" style="border-left-color: var(--purple); border-left-style: dashed;">
+        <div class="arm-panel-header">
+          <span style="color: var(--purple); font-size: 14px;">●</span>
+          <div class="arm-panel-name">Skill Creator (meta)</div>
+          <div class="arm-panel-count">2 skills</div>
+        </div>
+        <div>
+          <span class="skill-pill official"><span class="dot"></span>skill-creator<span class="skill-source">official</span></span>
+          <span class="skill-pill custom"><span class="dot"></span>gotchas-pattern<span class="skill-source">custom</span></span>
+        </div>
+      </div>
+
+    </div>
+
+    <p style="text-align:center; color: var(--text-3); font-size: 11px; margin: 24px 0 12px;">
+      🟢 official skills (npm install) · 🔵 custom written · ⚪ TBD (not yet written) · auto = generated by skill-creator
+    </p>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+    });
+  });
+  document.querySelectorAll('.table-item').forEach(t => {
+    t.addEventListener('click', () => {
+      document.querySelectorAll('.table-item').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+    });
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') document.getElementById('orgOverlay').classList.remove('show');
+  });
+</script>
+
+</body>
+</html>

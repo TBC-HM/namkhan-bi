@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Revenue · Workspace</title>
+<style>
+  :root {
+    --bg: #0a0a0b; --bg-2: #111113; --panel: #15151a; --panel-2: #1c1c22;
+    --border: #25252d; --border-soft: #1d1d24;
+    --text: #ededf0; --text-2: #a1a1aa; --muted: #6b6b75;
+    --accent: #c79a6b; --accent-2: #5cf2a4;
+    --green: #5cf2a4; --warn: #ffb84d; --red: #ff6b6b;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --serif: "Cooper", "Source Serif Pro", Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+    font-size: 14px; line-height: 1.5; overflow: hidden;
+  }
+
+  /* Top bar */
+  .topbar {
+    height: 48px; padding: 0 20px;
+    display: flex; align-items: center; gap: 24px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .logo { font-weight: 500; font-size: 14px; display: flex; align-items: center; gap: 10px; color: var(--text-2); }
+  .logo-mark {
+    width: 22px; height: 22px; border-radius: 6px;
+    background: linear-gradient(135deg, var(--accent), #b88556);
+    color: #1a1a1a; font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .logo b { color: var(--text); font-weight: 600; }
+  .topbar nav { display: flex; gap: 4px; flex: 1; }
+  .nav-item {
+    padding: 6px 12px; border-radius: 6px; font-size: 13px;
+    color: var(--text-2); cursor: pointer; user-select: none; position: relative;
+  }
+  .nav-item:hover { background: var(--panel); color: var(--text); }
+  .nav-item.active { background: var(--panel); color: var(--text); }
+  .nav-item.has-dropdown::after { content: "▾"; margin-left: 6px; font-size: 10px; opacity: 0.6; }
+  .topbar-right { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; }
+  .status-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 100px;
+    background: rgba(92, 242, 164, 0.08); color: var(--green); font-size: 11px;
+  }
+  .status-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  .dropdown {
+    position: absolute; top: 38px; left: 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 6px; min-width: 240px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5); display: none; z-index: 100;
+  }
+  .nav-item.open .dropdown { display: block; }
+  .dropdown-section { padding: 6px 10px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+  .dropdown-item { padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--text-2); }
+  .dropdown-item:hover { background: var(--panel-2); color: var(--text); }
+  .dropdown-item.active { background: rgba(199, 154, 107, 0.12); color: var(--accent); }
+
+  /* Main */
+  .main { height: calc(100vh - 48px); display: grid; grid-template-rows: auto 1fr auto; overflow: hidden; }
+
+  /* Prompt */
+  .prompt-area { padding: 24px 24px 12px; max-width: 920px; margin: 0 auto; width: 100%; }
+  .greeting { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+  .greeting b { color: var(--text-2); font-weight: 500; }
+  .prompt-shell {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 14px; padding: 12px 14px; transition: border-color 0.15s;
+  }
+  .prompt-shell:focus-within { border-color: rgba(199, 154, 107, 0.4); }
+  .prompt-input {
+    width: 100%; background: transparent; border: 0; outline: 0;
+    color: var(--text); font-size: 15px; font-family: inherit;
+    resize: none; min-height: 22px; max-height: 120px;
+  }
+  .prompt-input::placeholder { color: var(--muted); }
+  .prompt-toolbar { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+  .prompt-suggestions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .suggestion {
+    padding: 4px 10px; border-radius: 100px; font-size: 11px;
+    background: var(--panel-2); color: var(--text-2);
+    border: 1px solid var(--border-soft); cursor: pointer;
+  }
+  .suggestion:hover { color: var(--text); background: var(--bg-2); }
+  .send-btn {
+    width: 28px; height: 28px; border-radius: 8px;
+    background: var(--accent); color: #1a1a1a; border: 0;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-weight: 600;
+  }
+
+  /* Conversation */
+  .conversation {
+    max-width: 920px; margin: 0 auto; width: 100%;
+    padding: 0 24px 16px; overflow-y: auto;
+  }
+  .msg { margin: 14px 0; animation: fadeIn 0.3s ease-out; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  .msg.user {
+    background: var(--panel); border: 1px solid var(--border-soft);
+    margin-left: 80px; padding: 10px 14px;
+    border-radius: 12px; font-size: 14px; color: var(--text);
+  }
+  .msg.agent { background: transparent; }
+  .msg.agent .meta {
+    font-size: 11px; color: var(--muted); margin-bottom: 8px;
+    display: flex; align-items: center; gap: 8px; justify-content: space-between;
+  }
+  .msg.agent .meta-left { display: flex; gap: 8px; align-items: center; }
+  .msg.agent .agent-tag {
+    color: var(--accent-2); font-family: var(--mono); font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .msg.agent .timing { color: var(--muted); }
+
+  /* Format toggle */
+  .format-toggle { position: relative; }
+  .format-btn {
+    background: transparent; border: 1px solid var(--border-soft);
+    border-radius: 6px; padding: 3px 8px; color: var(--muted);
+    font-size: 11px; cursor: pointer; font-family: var(--mono);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .format-btn:hover { background: var(--panel-2); color: var(--text-2); border-color: var(--border); }
+  .format-btn .current { color: var(--text-2); }
+  .format-menu {
+    position: absolute; top: 28px; right: 0;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 4px; min-width: 140px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5); z-index: 50;
+    display: none;
+  }
+  .format-toggle.open .format-menu { display: block; }
+  .format-option {
+    padding: 6px 10px; font-size: 12px; border-radius: 4px;
+    cursor: pointer; color: var(--text-2);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .format-option:hover { background: var(--panel-2); color: var(--text); }
+  .format-option.active { color: var(--accent); }
+  .format-option.disabled { color: var(--muted); cursor: not-allowed; opacity: 0.5; }
+  .format-option .check { color: var(--accent); font-size: 10px; }
+
+  .msg.agent .body {
+    color: var(--text-2); line-height: 1.6; font-size: 14px;
+  }
+  .msg.agent .body b { color: var(--text); font-weight: 500; }
+  .msg.agent .body code {
+    font-family: var(--mono); font-size: 12px;
+    background: rgba(199, 154, 107, 0.1); color: var(--accent);
+    padding: 1px 5px; border-radius: 3px;
+  }
+  .msg.agent .body .upgrade-link {
+    display: inline-block; margin-top: 8px; color: var(--accent);
+    font-size: 13px; cursor: pointer; user-select: none;
+  }
+  .msg.agent .body .upgrade-link:hover { text-decoration: underline; }
+  .msg.agent .body .upgrade-link::before { content: "→ "; }
+
+  /* Hero number (text format with single value) */
+  .hero-num {
+    font-family: var(--serif); font-size: 36px; line-height: 1;
+    color: var(--text); font-weight: 400; margin: 12px 0 4px;
+    letter-spacing: -0.02em;
+  }
+  .hero-num .delta { color: var(--green); font-style: italic; font-size: 28px; margin-left: 8px; }
+  .hero-num .delta.neg { color: var(--red); }
+  .hero-context { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+
+  /* Stats strip */
+  .stats-strip {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+    margin: 10px 0;
+  }
+  .stat-tile {
+    background: var(--panel); border: 1px solid var(--border-soft);
+    border-radius: 10px; padding: 12px 14px;
+  }
+  .stat-tile .label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--muted); font-weight: 600; margin-bottom: 4px;
+  }
+  .stat-tile .value {
+    font-family: var(--serif); font-size: 22px; line-height: 1;
+    color: var(--text); font-weight: 400;
+  }
+  .stat-tile .value.up { color: var(--green); }
+  .stat-tile .value.down { color: var(--red); }
+  .stat-tile .sub { font-size: 11px; color: var(--text-2); margin-top: 4px; }
+
+  /* Inline table */
+  .inline-table {
+    margin: 10px 0; background: var(--panel);
+    border: 1px solid var(--border-soft); border-radius: 10px;
+    overflow: hidden;
+  }
+  .inline-table table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .inline-table th {
+    text-align: left; padding: 8px 12px; color: var(--muted);
+    font-weight: 500; font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.05em; border-bottom: 1px solid var(--border-soft);
+    background: var(--panel-2);
+  }
+  .inline-table td {
+    padding: 8px 12px; border-bottom: 1px solid var(--border-soft);
+    color: var(--text-2); font-variant-numeric: tabular-nums;
+  }
+  .inline-table tr:last-child td { border-bottom: 0; }
+  .inline-table td b { color: var(--text); font-weight: 500; }
+  .inline-table .row-period { color: var(--text); font-weight: 500; }
+  .pos { color: var(--green); }
+  .neg { color: var(--red); }
+
+  /* Low-confidence fallback */
+  .fallback {
+    background: linear-gradient(135deg, rgba(199,154,107,0.06), rgba(255,184,77,0.04));
+    border: 1px solid rgba(255, 184, 77, 0.2);
+    border-radius: 10px; padding: 12px 14px;
+    font-size: 13px;
+  }
+  .fallback-q { color: var(--text); margin-bottom: 8px; }
+  .fallback-options { display: flex; gap: 6px; flex-wrap: wrap; }
+  .fallback-option {
+    padding: 5px 10px; border-radius: 8px; font-size: 12px;
+    background: var(--panel); border: 1px solid var(--border-soft);
+    color: var(--text-2); cursor: pointer;
+  }
+  .fallback-option:hover { color: var(--text); border-color: var(--accent); }
+
+  /* Live agents strip */
+  .agents-strip { border-top: 1px solid var(--border-soft); background: var(--bg-2); padding: 12px 24px; }
+  .agents-header { display: flex; justify-content: space-between; max-width: 1280px; margin: 0 auto 8px; padding: 0 4px; }
+  .agents-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+  .agents-meta { font-size: 11px; color: var(--muted); }
+  .agents { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; max-width: 1280px; margin: 0 auto; }
+  .agent {
+    background: var(--panel); border: 1px solid var(--border-soft);
+    border-radius: 10px; padding: 8px 10px;
+    display: flex; flex-direction: column; gap: 6px;
+    cursor: pointer; min-width: 0;
+  }
+  .agent-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .agent-name { font-size: 11px; font-weight: 500; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .agent-state { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .agent-state.idle { background: var(--muted); }
+  .agent-state.active { background: var(--green); animation: pulse 1.4s ease-in-out infinite; }
+  .agent-state.warn { background: var(--warn); }
+  .agent-bars { display: flex; align-items: flex-end; gap: 2px; height: 22px; }
+  .agent-bars .bar { flex: 1; background: var(--accent-2); opacity: 0.55; border-radius: 1px; transition: height 0.4s; min-height: 2px; }
+  .agent-foot { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); font-family: var(--mono); }
+
+  /* Data view */
+  .data-view { border-top: 1px solid var(--border-soft); background: var(--bg); padding: 14px 24px 20px; max-height: 32vh; overflow-y: auto; }
+  .data-header { display: flex; justify-content: space-between; align-items: center; max-width: 1280px; margin: 0 auto 10px; }
+  .data-title { font-size: 13px; font-weight: 500; color: var(--text); }
+  .data-title .label { font-size: 11px; color: var(--muted); margin-right: 6px; }
+
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="logo">
+    <span class="logo-mark">R</span>
+    <span><b>Revenue</b> <span style="color:var(--muted);">/ Workspace</span></span>
+  </div>
+  <nav>
+    <div class="nav-item active">Workspace</div>
+    <div class="nav-item has-dropdown" id="data-nav" onclick="toggleDataNav(event)">
+      Data
+      <div class="dropdown">
+        <div class="dropdown-section">Reports</div>
+        <div class="dropdown-item active">Daily Pickup</div>
+        <div class="dropdown-item">Weekly Dashboard</div>
+        <div class="dropdown-item">Monthly USALI P&L</div>
+        <div class="dropdown-section">Operational</div>
+        <div class="dropdown-item">OTB by Date × Type</div>
+        <div class="dropdown-item">Segment Mix</div>
+        <div class="dropdown-item">Comp Set Sheet</div>
+      </div>
+    </div>
+    <div class="nav-item">Agents</div>
+    <div class="nav-item">Settings</div>
+  </nav>
+  <div class="topbar-right">
+    <span class="status-chip"><span class="dot"></span>6 agents live</span>
+    <span id="clock">09:14 LAK</span>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- PROMPT + CONVERSATION -->
+  <div style="overflow-y: auto;">
+    <div class="prompt-area">
+      <div class="greeting">Good morning. <b>+90d pacing −12.1% vs STLY</b> flagged. Ask anything below or click a suggestion.</div>
+      <div class="prompt-shell">
+        <textarea class="prompt-input" id="prompt" placeholder="Ask anything about your numbers..." rows="1" onkeydown="handleKey(event)"></textarea>
+        <div class="prompt-toolbar">
+          <div class="prompt-suggestions">
+            <span class="suggestion" onclick="askPrompt('What is RevPAR MTD?')">RevPAR MTD</span>
+            <span class="suggestion" onclick="askPrompt('Show +60d Pool Villa pickup')">+60d Pool Villa</span>
+            <span class="suggestion" onclick="askPrompt('Show me all pickup periods')">All pickup periods</span>
+            <span class="suggestion" onclick="askPrompt('Why is +90d weak?')">Why +90d weak?</span>
+            <span class="suggestion" onclick="askPrompt('Show me the data')">Vague question</span>
+          </div>
+          <button class="send-btn" onclick="askPrompt()">↑</button>
+        </div>
+      </div>
+    </div>
+    <div class="conversation" id="conv">
+      <!-- Pre-loaded examples will be inserted here on init -->
+    </div>
+  </div>
+
+  <!-- LIVE AGENTS STRIP -->
+  <div class="agents-strip">
+    <div class="agents-header">
+      <div class="agents-title">Live agents</div>
+      <div class="agents-meta">Activity · last 60s</div>
+    </div>
+    <div class="agents" id="agents-grid">
+      <div class="agent" data-agent="reporting"><div class="agent-head"><span class="agent-name">Reporting</span><span class="agent-state idle"></span></div><div class="agent-bars"></div><div class="agent-foot"><span>idle</span><span>+12 KPIs</span></div></div>
+      <div class="agent" data-agent="pace"><div class="agent-head"><span class="agent-name">Pace & OTB</span><span class="agent-state active"></span></div><div class="agent-bars"></div><div class="agent-foot"><span>syncing</span><span>+8 rms</span></div></div>
+      <div class="agent" data-agent="signal"><div class="agent-head"><span class="agent-name">Demand Signal</span><span class="agent-state idle"></span></div><div class="agent-bars"></div><div class="agent-foot"><span>idle</span><span>trends −18%</span></div></div>
+      <div class="agent" data-agent="pricing"><div class="agent-head"><span class="agent-name">Pricing</span><span class="agent-state warn"></span></div><div class="agent-bars"></div><div class="agent-foot"><span>5 pending</span><span>14:00</span></div></div>
+      <div class="agent" data-agent="promo"><div class="agent-head"><span class="agent-name">Promo</span><span class="agent-state idle"></span></div><div class="agent-bars"></div><div class="agent-foot"><span>idle</span><span>3 active</span></div></div>
+      <div class="agent" data-agent="rateplan"><div class="agent-head"><span class="agent-name">Rate Plans</span><span class="agent-state idle"></span></div><div class="agent-bars"></div><div class="agent-foot"><span>idle</span><span>12 monitored</span></div></div>
+    </div>
+  </div>
+
+  <!-- DATA VIEW -->
+  <div class="data-view">
+    <div class="data-header">
+      <div class="data-title"><span class="label">Data</span><span>Daily Pickup · 2026-05-06</span></div>
+    </div>
+    <div style="max-width: 1280px; margin: 0 auto; font-size: 12px; color: var(--muted);">
+      Click <b style="color:var(--text-2);">Data</b> in the top bar to switch between pickup, OTB, segments, comp set, recommendations and more.
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // --- Clock + nav ---
+  function tickClock() {
+    const d = new Date();
+    document.getElementById('clock').textContent = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')} LAK`;
+  }
+  setInterval(tickClock, 30000);
+  function toggleDataNav(e) { e.stopPropagation(); document.getElementById('data-nav').classList.toggle('open'); }
+  document.body.addEventListener('click', () => {
+    document.getElementById('data-nav').classList.remove('open');
+    document.querySelectorAll('.format-toggle.open').forEach(t => t.classList.remove('open'));
+  });
+
+  // --- Live agent bars ---
+  const agentRhythm = {
+    reporting: { base: 0.15, spike: 0.05 },
+    pace: { base: 0.45, spike: 0.20 },
+    signal: { base: 0.10, spike: 0.05 },
+    pricing: { base: 0.20, spike: 0.10 },
+    promo: { base: 0.08, spike: 0.03 },
+    rateplan: { base: 0.05, spike: 0.02 }
+  };
+  document.querySelectorAll('.agent').forEach(a => {
+    const c = a.querySelector('.agent-bars');
+    for (let i = 0; i < 24; i++) { const b = document.createElement('div'); b.className = 'bar'; b.style.height = '2px'; c.appendChild(b); }
+  });
+  function updateAgentBars() {
+    document.querySelectorAll('.agent').forEach(a => {
+      const r = agentRhythm[a.dataset.agent];
+      const bars = a.querySelectorAll('.bar');
+      const heights = Array.from(bars).map(b => parseFloat(b.style.height) || 2);
+      heights.shift();
+      const isSpike = Math.random() < r.spike;
+      const v = isSpike ? r.base * 0.6 + Math.random() * 0.5 : r.base * (0.5 + Math.random() * 0.6);
+      heights.push(2 + v * 20);
+      bars.forEach((b, i) => { b.style.height = heights[i] + 'px'; b.style.opacity = 0.3 + (i / bars.length) * 0.5; });
+    });
+  }
+  updateAgentBars();
+  setInterval(updateAgentBars, 600);
+
+  // ============================================================
+  // FORMAT ROUTING — the new logic
+  // ============================================================
+
+  // Question → default format mapping
+  function routeFormat(q) {
+    const ql = q.toLowerCase();
+    // Hero number questions
+    if (/^what(?:'s| is) /.test(ql) && !/show|all|every/.test(ql)) return 'text';
+    if (/^how (much|many) /.test(ql) && !/show|list/.test(ql)) return 'text';
+    // Table questions
+    if (/show (me )?all|all periods|every|list/.test(ql)) return 'table';
+    if (/by date|by type|by room|by segment|by channel/.test(ql)) return 'table';
+    // Trend/chart questions (we don't ship charts in v1, fallback to table)
+    if (/trend|over time|history|last \d+ days/.test(ql)) return 'table';
+    // Stats questions (specific filters)
+    if (/show .*(pickup|otb|adr|occ)/.test(ql)) return 'stats';
+    // Why / how / explain → text + stats
+    if (/^(why|how come|explain|what caused|reason)/.test(ql)) return 'text-stats';
+    // Group / specific entity status
+    if (/group |status|cut.?off/.test(ql)) return 'text-stats';
+    // Vague / low-confidence
+    if (ql.split(' ').length < 4) return 'fallback';
+    return 'text-stats';
+  }
+
+  // Mock data for each query type
+  const queryData = {
+    'revpar': {
+      sentence: 'RevPAR MTD is <b>$232</b>, pacing <b>+5.8% vs LY</b> and <b>+5.4% vs budget</b>. Driven by ADR (+$12) more than occupancy (+0.8pp).',
+      hero: { num: '$232', delta: '+5.8%', deltaClass: 'up' },
+      heroLabel: 'RevPAR MTD vs LY',
+      stats: [
+        { label: 'Occupancy MTD', value: '72.4%', sub: '+0.8pp vs LY' },
+        { label: 'ADR MTD', value: '$320', sub: '+$12 vs LY' },
+        { label: 'RevPAR MTD', value: '$232', sub: '+$15 vs LY', cls: 'up' }
+      ],
+      table: {
+        headers: ['Metric', 'MTD', 'vs Budget', 'vs LY'],
+        rows: [
+          ['Occupancy', '72.4%', '+2.1pp', '+0.8pp'],
+          ['ADR', '$320', '+$8', '+$12'],
+          ['RevPAR', '$232', '+$12', '+$15'],
+          ['TRevPAR', '$298', '+$14', '+$22']
+        ]
+      }
+    },
+    'pool-villa-60d': {
+      sentence: 'Pool Villa at <b>+60 days</b> is <b>112 rooms OTB</b> at <b>$571 ADR</b>. Pace is <b>−6.4 rms vs STLY</b>. Lowest refundable OTB rate is $540.',
+      stats: [
+        { label: 'Rms OTB', value: '112' },
+        { label: 'ADR OTB', value: '$571' },
+        { label: 'vs STLY', value: '−6.4 rms', cls: 'down' }
+      ],
+      table: {
+        headers: ['Date window', 'Rms OTB', 'ADR', 'Lowest Ref', 'vs STLY'],
+        rows: [
+          ['+58d', '14', '$575', '$540', '−1 rms'],
+          ['+59d', '16', '$571', '$540', '−2 rms'],
+          ['+60d', '15', '$568', '$540', '−1 rms'],
+          ['+61d', '18', '$580', '$555', '+0 rms'],
+          ['+62d', '12', '$565', '$540', '−2 rms']
+        ]
+      },
+      followUp: 'Pricing Recommender already queued a soft-floor proposal at $540 for review at 14:00.'
+    },
+    'all-pickup': {
+      sentence: 'Pickup across all forecast periods. Strongest pickup is current month +18 rms / +$5.7k 24h.',
+      table: {
+        headers: ['Period', 'Rms OTB', 'Rev OTB', 'ADR', 'Pickup 24h', 'vs STLY'],
+        rows: [
+          ['Today', '50', '$15.2k', '$304', '+2 / +$640', '+4.2%'],
+          ['Tomorrow', '44', '$13.8k', '$314', '+3 / +$950', '−2.2%'],
+          ['+7d', '305', '$96.4k', '$316', '+12', '−2.2%'],
+          ['Current Mo', '1,510', '$478k', '$317', '+18', '+1.7%'],
+          ['+30d', '1,420', '$445k', '$313', '+22', '+1.3%'],
+          ['+60d', '980', '$304k', '$310', '+15', '−4.4%'],
+          ['+90d', '620', '$192k', '$310', '+8', '−12.1%']
+        ]
+      },
+      stats: [
+        { label: 'CM OTB', value: '1,510', sub: '+1.7% vs STLY', cls: 'up' },
+        { label: '+90d OTB', value: '620', sub: '−12.1% vs STLY', cls: 'down' },
+        { label: 'Pickup 7d', value: '+45 rms', sub: '+$13.8k', cls: 'up' }
+      ]
+    },
+    '90d-weak': {
+      sentence: 'Three drivers. <b>Comp set rates flat</b> (no market compression to ride). <b>Google Trends destination interest −18% MoM</b> (4-week rolling). <b>One major group fell out two weeks ago</b> (−84 room nights).',
+      stats: [
+        { label: 'Rms gap', value: '−85', cls: 'down' },
+        { label: 'Rev gap', value: '−$28k', cls: 'down' },
+        { label: 'Confidence', value: 'High' }
+      ],
+      followUp: 'This is too far out to chase with rate cuts (would only dilute pickup that\'s still coming). Recommend wholesale push or targeted Booking.com promo for that window.',
+      table: {
+        headers: ['Driver', 'Impact (rms)', 'Impact ($)', 'Confidence'],
+        rows: [
+          ['Comp set flat', '−18', '−$5.6k', 'Medium'],
+          ['Trends −18% MoM', '−24', '−$7.4k', 'Medium'],
+          ['Group fall-out', '−84', '−$15.0k', 'High']
+        ]
+      }
+    },
+    'fallback': {
+      question: '"Show me the data" is a bit broad — which slice did you mean?',
+      options: [
+        { label: 'Daily pickup', prompt: 'Show me daily pickup' },
+        { label: 'OTB by room type', prompt: 'Show OTB by room type' },
+        { label: 'Segment mix', prompt: 'Show segment mix' },
+        { label: 'Comp set position', prompt: 'Show comp set position' }
+      ]
+    }
+  };
+
+  // Map query → data key
+  function dataKeyFor(q) {
+    const ql = q.toLowerCase();
+    if (/revpar|adr|occupanc/.test(ql) && /mtd|month/.test(ql)) return 'revpar';
+    if (/pool villa/.test(ql) && /60/.test(ql)) return 'pool-villa-60d';
+    if (/all|every/.test(ql) && /pickup/.test(ql)) return 'all-pickup';
+    if (/why|weak/.test(ql) && /90/.test(ql)) return '90d-weak';
+    if (q.toLowerCase().split(' ').length < 4) return 'fallback';
+    return null;
+  }
+
+  // ============================================================
+  // RENDER A MESSAGE WITH FORMAT TOGGLE
+  // ============================================================
+  let msgIdCounter = 0;
+  function renderResponse(q, dataKey, defaultFormat) {
+    const data = queryData[dataKey];
+    if (!data) return null;
+
+    const id = 'msg-' + (++msgIdCounter);
+
+    // Special case: fallback
+    if (dataKey === 'fallback') {
+      return `
+        <div class="msg agent" id="${id}">
+          <div class="meta">
+            <div class="meta-left">
+              <span class="agent-tag">Orchestrator</span>
+              <span class="timing">· 0.2s · low confidence</span>
+            </div>
+          </div>
+          <div class="body">
+            <div class="fallback">
+              <div class="fallback-q">${data.question}</div>
+              <div class="fallback-options">
+                ${data.options.map(o => `<span class="fallback-option" onclick="askPrompt('${o.prompt}')">${o.label}</span>`).join('')}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    const agent = dataKey === 'revpar' ? 'Reporting Agent' :
+                  dataKey === 'pool-villa-60d' ? 'Pace & OTB Agent' :
+                  dataKey === 'all-pickup' ? 'Reporting Agent' :
+                  dataKey === '90d-weak' ? 'Pace & OTB + Demand Signal' : 'Orchestrator';
+
+    return `
+      <div class="msg agent" id="${id}" data-key="${dataKey}" data-format="${defaultFormat}">
+        <div class="meta">
+          <div class="meta-left">
+            <span class="agent-tag">${agent}</span>
+            <span class="timing">· 0.4s</span>
+          </div>
+          <div class="format-toggle" onclick="toggleFormatMenu(event, '${id}')">
+            <button class="format-btn">
+              <span class="current">${defaultFormat.replace('-', ' + ')}</span>
+              <span style="opacity: 0.5;">▾</span>
+            </button>
+            <div class="format-menu">
+              <div class="format-option ${defaultFormat==='text'?'active':''}" onclick="setFormat(event, '${id}', 'text')">text <span class="check">${defaultFormat==='text'?'✓':''}</span></div>
+              <div class="format-option ${defaultFormat==='text-stats'?'active':''}" onclick="setFormat(event, '${id}', 'text-stats')">text + stats <span class="check">${defaultFormat==='text-stats'?'✓':''}</span></div>
+              <div class="format-option ${defaultFormat==='stats'?'active':''}" onclick="setFormat(event, '${id}', 'stats')">stats <span class="check">${defaultFormat==='stats'?'✓':''}</span></div>
+              <div class="format-option ${defaultFormat==='table'?'active':''}" onclick="setFormat(event, '${id}', 'table')">table <span class="check">${defaultFormat==='table'?'✓':''}</span></div>
+              <div class="format-option disabled">chart <span style="font-size:9px;">v2</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="body" id="${id}-body">
+          ${renderBody(data, defaultFormat, id)}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderBody(data, format, id) {
+    let html = '';
+    const showText = format.includes('text') || format === 'text';
+    const showStats = format.includes('stats') || format === 'stats';
+    const showTable = format === 'table';
+    const showHero = format === 'text' && data.hero;
+
+    if (showText && data.sentence) {
+      html += `<p style="margin: 0 0 8px;">${data.sentence}</p>`;
+    }
+    if (showHero) {
+      html += `<div class="hero-context">${data.heroLabel || ''}</div>`;
+      html += `<div class="hero-num">${data.hero.num}<span class="delta ${data.hero.deltaClass}">${data.hero.delta}</span></div>`;
+    }
+    if (showStats && data.stats) {
+      html += '<div class="stats-strip">';
+      data.stats.forEach(s => {
+        html += `<div class="stat-tile">
+          <div class="label">${s.label}</div>
+          <div class="value ${s.cls || ''}">${s.value}</div>
+          ${s.sub ? `<div class="sub">${s.sub}</div>` : ''}
+        </div>`;
+      });
+      html += '</div>';
+    }
+    if (showTable && data.table) {
+      html += '<div class="inline-table"><table><thead><tr>';
+      data.table.headers.forEach(h => html += `<th>${h}</th>`);
+      html += '</tr></thead><tbody>';
+      data.table.rows.forEach(row => {
+        html += '<tr>';
+        row.forEach((cell, i) => {
+          const cls = i === 0 ? 'row-period' : '';
+          const colorCls = String(cell).match(/^(\+|−)/) ?
+            (String(cell).startsWith('+') ? 'pos' : 'neg') : '';
+          html += `<td class="${cls} ${colorCls}">${cell}</td>`;
+        });
+        html += '</tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+    if (data.followUp && (showText || format === 'text-stats')) {
+      html += `<p style="margin: 8px 0 0; color: var(--text-2); font-size: 13px;">${data.followUp}</p>`;
+    }
+    // Offer table upgrade if not already showing table and table exists
+    if (!showTable && data.table && (format === 'text' || format === 'stats')) {
+      html += `<span class="upgrade-link" onclick="setFormat(event, '${id}', 'table')">Show as full table</span>`;
+    }
+    return html;
+  }
+
+  function toggleFormatMenu(e, id) {
+    e.stopPropagation();
+    document.querySelectorAll('.format-toggle.open').forEach(t => {
+      if (!t.closest('#' + id)) t.classList.remove('open');
+    });
+    const toggle = document.querySelector('#' + id + ' .format-toggle');
+    toggle.classList.toggle('open');
+  }
+
+  function setFormat(e, id, fmt) {
+    e.stopPropagation();
+    const msg = document.getElementById(id);
+    const dataKey = msg.dataset.key;
+    const data = queryData[dataKey];
+    msg.dataset.format = fmt;
+    document.getElementById(id + '-body').innerHTML = renderBody(data, fmt, id);
+    // Update toggle UI
+    msg.querySelector('.format-btn .current').textContent = fmt.replace('-', ' + ');
+    msg.querySelectorAll('.format-option').forEach(o => o.classList.remove('active'));
+    msg.querySelectorAll('.format-option .check').forEach(c => c.textContent = '');
+    msg.querySelector('.format-toggle').classList.remove('open');
+    // Mark new active
+    msg.querySelectorAll('.format-option').forEach(o => {
+      if (o.textContent.trim().startsWith(fmt.replace('-', ' + ').split(' ')[0]) &&
+          o.textContent.trim().includes(fmt.replace('-', ' + '))) {
+        o.classList.add('active');
+        const c = o.querySelector('.check'); if (c) c.textContent = '✓';
+      }
+    });
+  }
+
+  // ============================================================
+  // CONVERSATION
+  // ============================================================
+  function addMessage(html, type='agent') {
+    const conv = document.getElementById('conv');
+    if (type === 'user') {
+      const div = document.createElement('div');
+      div.className = 'msg user';
+      div.textContent = html;
+      conv.appendChild(div);
+    } else {
+      conv.insertAdjacentHTML('beforeend', html);
+    }
+    const last = conv.lastElementChild;
+    if (last) last.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }
+
+  function askPrompt(text) {
+    const input = document.getElementById('prompt');
+    const q = text || input.value.trim();
+    if (!q) return;
+    input.value = '';
+    addMessage(q, 'user');
+    setTimeout(() => respondTo(q), 350);
+  }
+
+  function respondTo(q) {
+    const dataKey = dataKeyFor(q);
+    if (!dataKey) {
+      const html = `
+        <div class="msg agent">
+          <div class="meta"><div class="meta-left"><span class="agent-tag">Orchestrator</span><span class="timing">· 0.2s</span></div></div>
+          <div class="body">I can answer on pickup, pace, OTB, segments, comp set, group blocks, and active promos. Try one of the suggestions above.</div>
+        </div>`;
+      addMessage(html);
+      return;
+    }
+    const format = routeFormat(q);
+    const html = renderResponse(q, dataKey, format);
+    if (html) addMessage(html);
+  }
+
+  function handleKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); askPrompt(); }
+  }
+
+  // ============================================================
+  // PRELOAD EXAMPLES so the page demos format routing immediately
+  // ============================================================
+  function preload() {
+    // Example 1: hero number (text)
+    addMessage('What is RevPAR MTD?', 'user');
+    addMessage(renderResponse('What is RevPAR MTD?', 'revpar', 'text'));
+
+    // Example 2: stats (filter question)
+    addMessage('Show +60d Pool Villa pickup', 'user');
+    addMessage(renderResponse('Show +60d Pool Villa pickup', 'pool-villa-60d', 'stats'));
+
+    // Example 3: table (broad list)
+    addMessage('Show me all pickup periods', 'user');
+    addMessage(renderResponse('Show me all pickup periods', 'all-pickup', 'table'));
+
+    // Example 4: text + stats (why question)
+    addMessage('Why is +90d weak?', 'user');
+    addMessage(renderResponse('Why is +90d weak?', '90d-weak', 'text-stats'));
+
+    // Example 5: low confidence fallback
+    addMessage('Show me the data', 'user');
+    addMessage(renderResponse('Show me the data', 'fallback', 'fallback'));
+  }
+  preload();
+</script>
+
+</body>
+</html>

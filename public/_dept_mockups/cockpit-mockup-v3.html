@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Cockpit v3 — IT Department</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg-0: #0a0e1a;
+    --bg-1: #131826;
+    --bg-2: #1a2030;
+    --bg-3: #232b3d;
+    --border: #1f2937;
+    --border-2: #2a3447;
+    --text-0: #f3f4f6;
+    --text-1: #cbd5e0;
+    --text-2: #8b95a7;
+    --text-3: #64748b;
+    --green: #22c55e;
+    --green-bg: rgba(34,197,94,0.12);
+    --yellow: #f59e0b;
+    --yellow-bg: rgba(245,158,11,0.12);
+    --red: #ef4444;
+    --red-bg: rgba(239,68,68,0.12);
+    --blue: #60a5fa;
+    --blue-bg: rgba(96,165,250,0.12);
+    --purple: #a855f7;
+    --purple-bg: rgba(168,85,247,0.12);
+    --cyan: #22d3ee;
+    --cyan-bg: rgba(34,211,238,0.12);
+    --pink: #ec4899;
+    --pink-bg: rgba(236,72,153,0.12);
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
+    background: var(--bg-0);
+    color: var(--text-0);
+    font-size: 13px;
+    line-height: 1.4;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* TOP BAR */
+  .topbar {
+    height: 48px;
+    background: var(--bg-1);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 24px;
+  }
+  .logo {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-0);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .logo-dot { width: 8px; height: 8px; background: var(--green); border-radius: 50%; box-shadow: 0 0 8px var(--green); }
+  .topbar-sub {
+    font-size: 11px;
+    color: var(--text-3);
+  }
+
+  /* TABS */
+  .tabs {
+    display: flex;
+    gap: 0;
+    margin-left: 8px;
+  }
+  .tab {
+    padding: 0 16px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12.5px;
+    color: var(--text-2);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+  .tab.active {
+    color: var(--text-0);
+    border-bottom-color: var(--blue);
+  }
+  .tab:hover:not(.active) { color: var(--text-1); }
+  .tab-count {
+    font-size: 10px;
+    background: var(--bg-2);
+    padding: 1px 6px;
+    border-radius: 8px;
+    color: var(--text-2);
+  }
+  .tab.active .tab-count { background: var(--blue-bg); color: var(--blue); }
+
+  .topbar-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 11px;
+    color: var(--text-3);
+  }
+  .system-pulse {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px;
+    background: var(--green-bg);
+    border: 1px solid rgba(34,197,94,0.3);
+    border-radius: 14px;
+    font-size: 11px;
+    color: var(--green);
+  }
+  .pulse-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--green);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+  .user-avatar {
+    width: 28px; height: 28px;
+    background: var(--bg-2);
+    border: 1px solid var(--border-2);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px;
+    color: var(--text-1);
+    font-weight: 600;
+  }
+
+  /* MAIN GRID */
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    height: calc(100vh - 48px);
+  }
+
+  /* CENTER */
+  .center {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-right: 1px solid var(--border);
+  }
+
+  /* NOTES BAR */
+  .notes-bar {
+    background: var(--bg-1);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+  }
+  .note-card {
+    flex-shrink: 0;
+    min-width: 260px;
+    max-width: 300px;
+    background: var(--bg-2);
+    border: 1px solid var(--border-2);
+    border-radius: 8px;
+    padding: 11px 13px;
+    border-left: 3px solid;
+    cursor: pointer;
+  }
+  .note-card.action { border-left-color: var(--blue); }
+  .note-card.fyi { border-left-color: var(--text-3); }
+  .note-card.warn { border-left-color: var(--yellow); }
+  .note-card.red { border-left-color: var(--red); }
+  .note-card.scheduled { border-left-color: var(--cyan); }
+  .note-tag {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+  .note-card.action .note-tag { color: var(--blue); }
+  .note-card.fyi .note-tag { color: var(--text-3); }
+  .note-card.warn .note-tag { color: var(--yellow); }
+  .note-card.red .note-tag { color: var(--red); }
+  .note-card.scheduled .note-tag { color: var(--cyan); }
+  .note-title {
+    font-size: 12.5px;
+    color: var(--text-0);
+    font-weight: 500;
+    margin-bottom: 4px;
+    line-height: 1.35;
+  }
+  .note-meta {
+    font-size: 10.5px;
+    color: var(--text-3);
+    margin-bottom: 6px;
+  }
+  .note-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+  }
+  .note-btn {
+    font-size: 10.5px;
+    padding: 4px 9px;
+    border-radius: 4px;
+    border: 1px solid var(--border-2);
+    background: transparent;
+    color: var(--text-1);
+    cursor: pointer;
+  }
+  .note-btn.primary {
+    background: var(--blue);
+    color: white;
+    border-color: var(--blue);
+  }
+  .note-btn:hover { border-color: var(--blue); color: var(--blue); }
+  .note-btn.primary:hover { background: #4a92e8; color: white; }
+
+  /* CHAT */
+  .chat-header {
+    padding: 14px 24px 8px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .chat-header-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-0);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .chat-header-sub {
+    font-size: 11px;
+    color: var(--text-3);
+    margin-left: auto;
+  }
+  .manager-icon {
+    width: 22px; height: 22px;
+    background: var(--blue-bg);
+    border: 1px solid rgba(96,165,250,0.3);
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: var(--blue);
+    font-weight: 700;
+  }
+
+  .chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 24px;
+  }
+  .message {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .msg-avatar {
+    width: 26px; height: 26px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    flex-shrink: 0;
+    font-weight: 700;
+  }
+  .msg-avatar.user {
+    background: var(--bg-2);
+    color: var(--text-1);
+    border: 1px solid var(--border-2);
+  }
+  .msg-avatar.manager {
+    background: var(--blue-bg);
+    color: var(--blue);
+    border: 1px solid rgba(96,165,250,0.3);
+  }
+  .msg-body {
+    flex: 1;
+    min-width: 0;
+  }
+  .msg-meta {
+    font-size: 10.5px;
+    color: var(--text-3);
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .msg-name {
+    color: var(--text-2);
+    font-weight: 500;
+  }
+  .msg-tag {
+    font-size: 9px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: 600;
+    background: var(--bg-2);
+    color: var(--text-3);
+  }
+  .msg-tag.dispatch { background: var(--cyan-bg); color: var(--cyan); }
+  .msg-tag.skill-creator { background: var(--purple-bg); color: var(--purple); }
+  .msg-tag.team-edit { background: var(--pink-bg); color: var(--pink); }
+
+  .msg-content {
+    font-size: 13px;
+    color: var(--text-1);
+    line-height: 1.55;
+  }
+  .msg-content p { margin-bottom: 7px; }
+  .msg-content strong { color: var(--text-0); font-weight: 600; }
+  .msg-content code {
+    background: var(--bg-1);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: ui-monospace, SF Mono, Menlo, monospace;
+    font-size: 11.5px;
+    color: var(--cyan);
+  }
+  .msg-content ul {
+    margin-left: 18px;
+    margin-bottom: 7px;
+  }
+  .msg-content ul li { margin-bottom: 3px; }
+
+  .diff-block {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin: 10px 0;
+    font-family: ui-monospace, SF Mono, monospace;
+    font-size: 11.5px;
+    line-height: 1.5;
+  }
+  .diff-line.add { color: var(--green); }
+  .diff-line.add::before { content: '+ '; }
+  .diff-line.remove { color: var(--red); }
+  .diff-line.remove::before { content: '- '; }
+  .diff-line.context { color: var(--text-3); }
+  .diff-line.context::before { content: '  '; }
+
+  .action-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  .action-btn {
+    font-size: 11px;
+    padding: 6px 12px;
+    border-radius: 5px;
+    border: 1px solid var(--border-2);
+    background: var(--bg-2);
+    color: var(--text-1);
+    cursor: pointer;
+  }
+  .action-btn:hover { background: var(--bg-3); border-color: var(--blue); }
+  .action-btn.primary { background: var(--blue); border-color: var(--blue); color: white; }
+  .action-btn.primary:hover { background: #4a92e8; }
+
+  /* INPUT */
+  .input-area {
+    padding: 14px 24px 22px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-0);
+  }
+  .input-wrap {
+    background: var(--bg-1);
+    border: 1px solid var(--border-2);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .input-wrap:focus-within {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 1px var(--blue);
+  }
+  .input-textarea {
+    width: 100%;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-0);
+    font-size: 13px;
+    font-family: inherit;
+    resize: none;
+    min-height: 22px;
+    line-height: 1.5;
+  }
+  .input-textarea::placeholder { color: var(--text-3); }
+  .input-toolbar {
+    display: flex;
+    align-items: center;
+    margin-top: 10px;
+    gap: 10px;
+  }
+  .quick-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .quick-action {
+    font-size: 10.5px;
+    padding: 4px 9px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-3);
+    cursor: pointer;
+  }
+  .quick-action:hover { color: var(--text-1); border-color: var(--border-2); }
+  .input-tools {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .icon-btn {
+    width: 28px; height: 28px;
+    border-radius: 5px;
+    border: 1px solid var(--border-2);
+    background: var(--bg-2);
+    color: var(--text-2);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px;
+  }
+  .icon-btn:hover { color: var(--text-0); border-color: var(--blue); }
+  .send-btn {
+    background: var(--blue);
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 7px 14px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  /* RIGHT PANEL */
+  .right {
+    background: var(--bg-1);
+    overflow-y: auto;
+    padding: 16px 16px;
+  }
+  .panel {
+    margin-bottom: 18px;
+  }
+  .panel-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .panel-title {
+    font-size: 11px;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    font-weight: 600;
+  }
+  .panel-status-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+  }
+  .panel-status-dot.green { background: var(--green); }
+  .panel-status-dot.yellow { background: var(--yellow); }
+  .panel-status-dot.red { background: var(--red); }
+  .panel-action {
+    margin-left: auto;
+    font-size: 10.5px;
+    color: var(--text-3);
+    cursor: pointer;
+  }
+  .panel-action:hover { color: var(--blue); }
+
+  .arm-row {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 9px 11px;
+    margin-bottom: 6px;
+  }
+  .arm-row-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 3px;
+  }
+  .arm-row-name {
+    font-size: 12px;
+    color: var(--text-0);
+    font-weight: 500;
+  }
+  .arm-row-state {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--text-3);
+  }
+  .arm-row-state.active { color: var(--cyan); }
+  .arm-row-detail {
+    font-size: 11px;
+    color: var(--text-2);
+    line-height: 1.4;
+  }
+
+  .schedule-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 11.5px;
+  }
+  .schedule-item:last-child { border-bottom: none; }
+  .schedule-time {
+    color: var(--text-2);
+    font-size: 10.5px;
+    font-family: ui-monospace, monospace;
+    flex-shrink: 0;
+    width: 50px;
+  }
+  .schedule-text {
+    flex: 1;
+    color: var(--text-1);
+    line-height: 1.3;
+  }
+  .schedule-status {
+    font-size: 10px;
+    flex-shrink: 0;
+  }
+  .schedule-status.done { color: var(--green); }
+  .schedule-status.next { color: var(--cyan); }
+  .schedule-status.overdue { color: var(--red); }
+
+  .activity-item {
+    display: flex;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 11.5px;
+  }
+  .activity-item:last-child { border-bottom: none; }
+  .activity-time {
+    color: var(--text-3);
+    font-size: 10.5px;
+    flex-shrink: 0;
+    width: 38px;
+    font-family: ui-monospace, monospace;
+    padding-top: 1px;
+  }
+  .activity-text {
+    color: var(--text-1);
+    line-height: 1.4;
+    flex: 1;
+  }
+  .activity-arm {
+    font-size: 9.5px;
+    color: var(--text-3);
+    margin-right: 5px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .activity-arm.health { color: var(--green); }
+  .activity-arm.dev { color: var(--cyan); }
+  .activity-arm.research { color: var(--purple); }
+  .activity-arm.control { color: var(--yellow); }
+  .activity-arm.skill { color: var(--purple); }
+
+  /* TEAM TAB CONTENT */
+  .team-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    padding: 20px 24px;
+    overflow-y: auto;
+  }
+  .agent-card {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    cursor: pointer;
+  }
+  .agent-card:hover { border-color: var(--border-2); }
+  .agent-card.active { border-color: var(--blue); }
+  .agent-card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .agent-avatar {
+    width: 32px; height: 32px;
+    border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700;
+    font-size: 12px;
+  }
+  .agent-avatar.health { background: var(--green-bg); color: var(--green); }
+  .agent-avatar.dev { background: var(--cyan-bg); color: var(--cyan); }
+  .agent-avatar.research { background: var(--purple-bg); color: var(--purple); }
+  .agent-avatar.control { background: var(--yellow-bg); color: var(--yellow); }
+  .agent-avatar.design { background: var(--pink-bg); color: var(--pink); }
+  .agent-avatar.skill { background: var(--purple-bg); color: var(--purple); border: 1px dashed var(--purple); }
+  .agent-name {
+    font-size: 13px;
+    color: var(--text-0);
+    font-weight: 600;
+  }
+  .agent-role {
+    font-size: 10.5px;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .agent-state {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--text-3);
+  }
+  .agent-desc {
+    font-size: 11.5px;
+    color: var(--text-2);
+    line-height: 1.4;
+    margin-bottom: 10px;
+  }
+  .agent-meta {
+    display: flex;
+    gap: 8px;
+    font-size: 10.5px;
+    color: var(--text-3);
+  }
+  .agent-meta .meta-item {
+    display: flex; align-items: center; gap: 3px;
+  }
+  .agent-actions {
+    margin-top: 10px;
+    display: flex;
+    gap: 6px;
+  }
+
+  /* SCHEDULE TAB CONTENT */
+  .schedule-page {
+    padding: 20px 24px;
+    overflow-y: auto;
+  }
+  .schedule-section {
+    margin-bottom: 20px;
+  }
+  .schedule-section-title {
+    font-size: 11px;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .schedule-table {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .schedule-row {
+    display: grid;
+    grid-template-columns: 36px 1fr 100px 110px 80px;
+    gap: 14px;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    align-items: center;
+  }
+  .schedule-row:last-child { border-bottom: none; }
+  .schedule-row.header {
+    background: var(--bg-2);
+    font-size: 10px;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 8px 14px;
+  }
+  .schedule-row .arm-tag {
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 3px;
+    text-align: center;
+  }
+  .arm-tag.health { background: var(--green-bg); color: var(--green); }
+  .arm-tag.control { background: var(--yellow-bg); color: var(--yellow); }
+  .arm-tag.dev { background: var(--cyan-bg); color: var(--cyan); }
+  .arm-tag.research { background: var(--purple-bg); color: var(--purple); }
+  .arm-tag.all { background: var(--bg-2); color: var(--text-2); }
+
+  /* SCROLLBARS */
+  ::-webkit-scrollbar { width: 7px; height: 7px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border-2); }
+
+  @media (max-width: 1100px) {
+    .layout { grid-template-columns: 1fr; }
+    .right { display: none; }
+    .team-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-dot"></div>
+    Cockpit
+  </div>
+  <div class="topbar-sub">namkhan-bi</div>
+
+  <div class="tabs">
+    <div class="tab active">
+      💬 <span>Chat</span>
+    </div>
+    <div class="tab">
+      📅 <span>Schedule</span>
+      <span class="tab-count">12</span>
+    </div>
+    <div class="tab">
+      👥 <span>Team</span>
+      <span class="tab-count">5</span>
+    </div>
+  </div>
+
+  <div class="topbar-right">
+    <div class="system-pulse">
+      <div class="pulse-dot"></div>
+      <span>All operational</span>
+    </div>
+    <div class="user-avatar">PB</div>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="center">
+
+    <!-- NOTES BAR -->
+    <div class="notes-bar">
+      <div class="note-card action">
+        <div class="note-tag">Needs you</div>
+        <div class="note-title">2 PRs ready for review</div>
+        <div class="note-meta">Coiler gallery · Footer copy</div>
+        <div class="note-actions">
+          <button class="note-btn primary">Review</button>
+        </div>
+      </div>
+
+      <div class="note-card warn">
+        <div class="note-tag">Question</div>
+        <div class="note-title">Designer keeps missing SLH logo on Namkhan pages</div>
+        <div class="note-meta">3rd time this month — propose fix?</div>
+        <div class="note-actions">
+          <button class="note-btn primary">Yes, fix it</button>
+          <button class="note-btn">Later</button>
+        </div>
+      </div>
+
+      <div class="note-card scheduled">
+        <div class="note-tag">Scheduled</div>
+        <div class="note-title">Weekly audit running Mon 06:00</div>
+        <div class="note-meta">In 2d 14h · 7 checks</div>
+        <div class="note-actions">
+          <button class="note-btn">View schedule</button>
+        </div>
+      </div>
+
+      <div class="note-card fyi">
+        <div class="note-tag">FYI</div>
+        <div class="note-title">3 fixes shipped overnight</div>
+        <div class="note-meta">Mobile menu · Image lazy-load · Deps</div>
+      </div>
+    </div>
+
+    <!-- CHAT HEADER -->
+    <div class="chat-header">
+      <div class="chat-header-title">
+        <div class="manager-icon">IT</div>
+        <span>IT Manager</span>
+      </div>
+      <div class="chat-header-sub">Manages Health · Dev · Research · Control · Design + Skill Creator</div>
+    </div>
+
+    <!-- CHAT -->
+    <div class="chat">
+
+      <!-- USER MSG -->
+      <div class="message">
+        <div class="msg-avatar user">PB</div>
+        <div class="msg-body">
+          <div class="msg-meta"><span class="msg-name">You · 09:14</span></div>
+          <div class="msg-content">
+            i noticed the designer keeps missing the SLH logo on Namkhan pages. fix this once and for all
+          </div>
+        </div>
+      </div>
+
+      <!-- IT MANAGER DIAGNOSE -->
+      <div class="message">
+        <div class="msg-avatar manager">IT</div>
+        <div class="msg-body">
+          <div class="msg-meta">
+            <span class="msg-name">IT Manager · 09:14</span>
+            <span class="msg-tag dispatch">diagnosing</span>
+          </div>
+          <div class="msg-content">
+            <p>Confirmed pattern. Designer has flagged SLH-missing 3 times in last 30d. Root cause: brand-namkhan.md says "SLH logo bottom left" but it's a sentence buried in a long file — the rule isn't standing out.</p>
+
+            <p>Two ways to fix:</p>
+            <ul>
+              <li><strong>A.</strong> Tighten <code>brand-namkhan.md</code> — make SLH logo a top-priority checklist item</li>
+              <li><strong>B.</strong> Spawn skill-creator subagent → write a dedicated <code>slh-branding</code> skill with examples + gotchas. Designer auto-loads it on every Namkhan task.</li>
+            </ul>
+
+            <p><strong>Recommend B</strong> — same approach we use for the cockpit gotchas. It actually prevents recurrence.</p>
+
+            <div class="action-row">
+              <button class="action-btn primary">B — spawn skill-creator</button>
+              <button class="action-btn">A — quick fix the standard</button>
+              <button class="action-btn">Show me both diffs first</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- USER -->
+      <div class="message">
+        <div class="msg-avatar user">PB</div>
+        <div class="msg-body">
+          <div class="msg-meta"><span class="msg-name">You · 09:15</span></div>
+          <div class="msg-content">B</div>
+        </div>
+      </div>
+
+      <!-- SKILL CREATOR -->
+      <div class="message">
+        <div class="msg-avatar manager">IT</div>
+        <div class="msg-body">
+          <div class="msg-meta">
+            <span class="msg-name">IT Manager · 09:15</span>
+            <span class="msg-tag skill-creator">skill-creator</span>
+          </div>
+          <div class="msg-content">
+            <p>Spawned skill-creator. Drafting <code>slh-branding</code> skill now. Will include:</p>
+            <ul>
+              <li>SKILL.md with strict rules (logo position, sizing, file path)</li>
+              <li><code>examples/</code> folder — 3 correct layouts as reference</li>
+              <li><code>gotchas.md</code> — the 3 past failures with what went wrong</li>
+              <li>Auto-load trigger: any task touching Namkhan-branded materials</li>
+            </ul>
+            <p style="color: var(--text-3); font-size: 12px;">Drafting… ETA 90s.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- TEAM EDIT PROPOSAL -->
+      <div class="message">
+        <div class="msg-avatar manager">IT</div>
+        <div class="msg-body">
+          <div class="msg-meta">
+            <span class="msg-name">IT Manager · 09:17</span>
+            <span class="msg-tag team-edit">team change</span>
+          </div>
+          <div class="msg-content">
+            <p>Skill drafted. Also proposing one Designer agent update — to load this skill automatically:</p>
+
+            <div class="diff-block">
+              <div class="diff-line context">.claude/agents/designer.md</div>
+              <div class="diff-line context">---</div>
+              <div class="diff-line context">tools: Read, Grep, Glob</div>
+              <div class="diff-line add">skills: [slh-branding, frontend-design]</div>
+              <div class="diff-line context">model: sonnet</div>
+              <div class="diff-line context">---</div>
+            </div>
+
+            <p>Also new file: <code>.claude/skills/slh-branding/SKILL.md</code> + 4 sub-files. <strong>+5 files, 0 deletions.</strong></p>
+
+            <div class="action-row">
+              <button class="action-btn primary">Approve all</button>
+              <button class="action-btn">View full diff</button>
+              <button class="action-btn">Test on next Namkhan task first</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- INPUT -->
+    <div class="input-area">
+      <div class="input-wrap">
+        <textarea class="input-textarea" placeholder="Tell the IT Manager what you want..."></textarea>
+        <div class="input-toolbar">
+          <div class="quick-actions">
+            <button class="quick-action">/status</button>
+            <button class="quick-action">/audit</button>
+            <button class="quick-action">/schedule</button>
+            <button class="quick-action">/team</button>
+            <button class="quick-action">/skills</button>
+            <button class="quick-action">/costs</button>
+          </div>
+          <div class="input-tools">
+            <button class="icon-btn" title="Voice note">🎙</button>
+            <button class="icon-btn" title="Attach">📎</button>
+            <button class="send-btn">Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right">
+
+    <!-- DEPARTMENT -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-status-dot green"></div>
+        <div class="panel-title">Department now</div>
+        <div class="panel-action">team →</div>
+      </div>
+
+      <div class="arm-row">
+        <div class="arm-row-header">
+          <div class="panel-status-dot green"></div>
+          <div class="arm-row-name">Health</div>
+          <div class="arm-row-state">monitoring</div>
+        </div>
+        <div class="arm-row-detail">99.97% · last incident 4d</div>
+      </div>
+
+      <div class="arm-row">
+        <div class="arm-row-header">
+          <div class="panel-status-dot green"></div>
+          <div class="arm-row-name">Development</div>
+          <div class="arm-row-state active">2 active</div>
+        </div>
+        <div class="arm-row-detail">#143 carousel · #144 deps</div>
+      </div>
+
+      <div class="arm-row">
+        <div class="arm-row-header">
+          <div class="panel-status-dot yellow"></div>
+          <div class="arm-row-name">Research</div>
+          <div class="arm-row-state">awaits you</div>
+        </div>
+        <div class="arm-row-detail">TikTok funnel decision</div>
+      </div>
+
+      <div class="arm-row">
+        <div class="arm-row-header">
+          <div class="panel-status-dot green"></div>
+          <div class="arm-row-name">Control</div>
+          <div class="arm-row-state">idle</div>
+        </div>
+        <div class="arm-row-detail">All tests green · 12 min ago</div>
+      </div>
+
+      <div class="arm-row">
+        <div class="arm-row-header">
+          <div class="panel-status-dot green"></div>
+          <div class="arm-row-name">Design</div>
+          <div class="arm-row-state active">working</div>
+        </div>
+        <div class="arm-row-detail">Drafting slh-branding skill</div>
+      </div>
+    </div>
+
+    <!-- SCHEDULE TODAY -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">Today's schedule</div>
+        <div class="panel-action">all →</div>
+      </div>
+
+      <div class="schedule-item">
+        <div class="schedule-time">05:00</div>
+        <div class="schedule-text">Daily dependency check</div>
+        <div class="schedule-status done">✓ done</div>
+      </div>
+      <div class="schedule-item">
+        <div class="schedule-time">06:00</div>
+        <div class="schedule-text">Daily security advisor scan</div>
+        <div class="schedule-status done">✓ done</div>
+      </div>
+      <div class="schedule-item">
+        <div class="schedule-time">07:00</div>
+        <div class="schedule-text">KPI snapshot (uptime, perf)</div>
+        <div class="schedule-status done">✓ done</div>
+      </div>
+      <div class="schedule-item">
+        <div class="schedule-time">18:00</div>
+        <div class="schedule-text">Doc drift check</div>
+        <div class="schedule-status next">in 8h 42m</div>
+      </div>
+      <div class="schedule-item">
+        <div class="schedule-time">23:00</div>
+        <div class="schedule-text">DB backup verify</div>
+        <div class="schedule-status next">in 13h 42m</div>
+      </div>
+    </div>
+
+    <!-- ACTIVITY -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">Recent activity</div>
+        <div class="panel-action">log →</div>
+      </div>
+
+      <div class="activity-item">
+        <div class="activity-time">09:17</div>
+        <div class="activity-text">
+          <span class="activity-arm skill">skill</span>
+          Drafted slh-branding skill
+        </div>
+      </div>
+      <div class="activity-item">
+        <div class="activity-time">09:15</div>
+        <div class="activity-text">
+          <span class="activity-arm dev">dev</span>
+          Started #143 (Coiler gallery)
+        </div>
+      </div>
+      <div class="activity-item">
+        <div class="activity-time">08:42</div>
+        <div class="activity-text">
+          <span class="activity-arm dev">dev</span>
+          Merged #142 → deploy live
+        </div>
+      </div>
+      <div class="activity-item">
+        <div class="activity-time">07:01</div>
+        <div class="activity-text">
+          <span class="activity-arm control">control</span>
+          Auto-merged 3 patches
+        </div>
+      </div>
+      <div class="activity-item">
+        <div class="activity-time">06:00</div>
+        <div class="activity-text">
+          <span class="activity-arm health">health</span>
+          Security scan: 0 red
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PBS Central — Cockpit Mockup</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1d2129;
+    --border: #2a2f3a;
+    --text: #e6e8eb;
+    --muted: #8a93a3;
+    --accent: #4f8cff;
+    --green: #2ecc71;
+    --yellow: #f5c518;
+    --red: #ff5a5f;
+    --pill-bg: #232733;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+  }
+  /* Top bar */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 24px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 10;
+  }
+  .logo { font-weight: 700; letter-spacing: 0.5px; }
+  .logo span { color: var(--accent); }
+  .topbar-right { display: flex; align-items: center; gap: 16px; color: var(--muted); font-size: 13px; }
+  .topbar-right .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); display: inline-block; margin-right: 6px; }
+
+  /* Layout */
+  .layout { display: flex; min-height: calc(100vh - 49px); }
+  .sidebar {
+    width: 220px;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    padding: 16px 8px;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--muted);
+    font-weight: 500;
+    user-select: none;
+  }
+  .nav-item:hover { background: var(--panel-2); color: var(--text); }
+  .nav-item.active { background: var(--panel-2); color: var(--text); }
+  .nav-item .badge {
+    margin-left: auto;
+    background: var(--accent);
+    color: white;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 10px;
+  }
+  .nav-section {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    padding: 16px 14px 6px;
+  }
+
+  .content { flex: 1; padding: 24px 32px; overflow-y: auto; }
+  .page-header { margin-bottom: 20px; }
+  .page-title { font-size: 22px; font-weight: 700; margin: 0; }
+  .page-sub { color: var(--muted); margin-top: 4px; font-size: 13px; }
+
+  /* KPI strip */
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+  .kpi {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .kpi-label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .kpi-value { font-size: 24px; font-weight: 700; margin-top: 4px; }
+  .kpi-trend { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  /* Cards */
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 14px;
+    padding: 14px 16px;
+  }
+  .card-title { font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+  .card-meta { color: var(--muted); font-size: 12px; margin-bottom: 10px; }
+  .actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .btn {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .btn:hover { background: #262b36; }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: white; }
+  .btn-primary:hover { background: #3b78f0; }
+  .btn-danger { color: var(--red); border-color: var(--red); }
+
+  /* Pills */
+  .pill {
+    display: inline-block;
+    background: var(--pill-bg);
+    color: var(--muted);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-right: 6px;
+  }
+  .pill.green { background: rgba(46,204,113,0.15); color: var(--green); }
+  .pill.yellow { background: rgba(245,197,24,0.15); color: var(--yellow); }
+  .pill.red { background: rgba(255,90,95,0.15); color: var(--red); }
+
+  /* Entities grid */
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .entity-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .entity-card:hover { border-color: var(--accent); }
+  .entity-card .top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .entity-card .name { font-weight: 600; margin-bottom: 2px; }
+  .entity-card .country { color: var(--muted); font-size: 12px; }
+  .entity-card .stats { display: flex; gap: 12px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .entity-card .stats span b { color: var(--text); display: block; font-size: 14px; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  tr:hover { background: var(--panel-2); cursor: pointer; }
+  .table-wrap { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+
+  /* Empty state */
+  .empty {
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    padding: 40px;
+    text-align: center;
+    color: var(--muted);
+    background: var(--panel);
+  }
+  .empty h3 { color: var(--text); margin: 0 0 8px; }
+
+  /* Right drawer */
+  .drawer-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5);
+    display: none;
+    z-index: 100;
+  }
+  .drawer-overlay.open { display: block; }
+  .drawer {
+    position: fixed; top: 0; right: 0; bottom: 0;
+    width: 480px;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    padding: 24px;
+    transform: translateX(100%);
+    transition: transform 0.2s;
+    overflow-y: auto;
+    z-index: 101;
+  }
+  .drawer.open { transform: translateX(0); }
+  .drawer-close { float: right; cursor: pointer; color: var(--muted); }
+  .drawer h2 { margin-top: 0; }
+
+  /* Hide all panels except active */
+  .panel { display: none; }
+  .panel.active { display: block; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">PBS<span>·</span>CENTRAL</div>
+  <div class="topbar-right">
+    <span><span class="dot"></span>Connected · 26 entities · 1010 people</span>
+    <span>Mon 27 Apr 2026 · Jaén</span>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="nav-item active" data-tab="today">🏠 Today <span class="badge">7</span></div>
+    <div class="nav-item" data-tab="entities">🏢 Entities</div>
+    <div class="nav-item" data-tab="projects">🧱 Projects</div>
+    <div class="nav-item" data-tab="people">👥 People</div>
+    <div class="nav-item" data-tab="tasks">✅ Tasks</div>
+    <div class="nav-section">Coming next</div>
+    <div class="nav-item" data-tab="actions" style="opacity:0.6">🤖 Action Inbox</div>
+  </div>
+
+  <!-- Content -->
+  <div class="content">
+
+    <!-- TODAY -->
+    <div class="panel active" id="panel-today">
+      <div class="page-header">
+        <h1 class="page-title">Good morning.</h1>
+        <p class="page-sub">7 things need you today. Est. 14 minutes. <span style="color: var(--yellow)">⚠ 2 entities went yellow overnight.</span></p>
+      </div>
+
+      <div class="kpi-row">
+        <div class="kpi"><div class="kpi-label">Active entities</div><div class="kpi-value">26</div><div class="kpi-trend">21 🟢 · 3 🟡 · 2 🔴</div></div>
+        <div class="kpi"><div class="kpi-label">Open projects</div><div class="kpi-value">2</div><div class="kpi-trend">⚠ Far below target — seed more</div></div>
+        <div class="kpi"><div class="kpi-label">Areas in flight</div><div class="kpi-value">33</div><div class="kpi-trend">11 due in &lt;14d</div></div>
+        <div class="kpi"><div class="kpi-label">Tasks open</div><div class="kpi-value">2</div><div class="kpi-trend">DB nearly empty — onboard first</div></div>
+      </div>
+
+      <h3 style="margin-top:0">Top of stack</h3>
+
+      <div class="card" onclick="openDrawer('Investor X — Q1 numbers')">
+        <div class="card-title">🔴 Investor X waiting on Q1 numbers <span class="pill red">VIP</span></div>
+        <div class="card-meta">Entity: PBS Holding · Last touched 2 days ago · Email thread + 1 attachment</div>
+        <div>Suggested: send the draft. Aligned with Q4 wording, signed off by CFO last quarter.</div>
+        <div class="actions">
+          <button class="btn btn-primary">Review draft</button>
+          <button class="btn">Delegate to CFO</button>
+          <button class="btn">Defer 24h</button>
+          <button class="btn btn-danger">Dismiss</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🟡 Pricing change · Entity Z (Bauer Company) <span class="pill yellow">Decision</span></div>
+        <div class="card-meta">Manager proposes +8% on B2B segment · Impact ~€8k/mo · 14 days SLA</div>
+        <div>Recommendation: <b>approve with caps</b> (max 6%, review in 60 days). Alternatives: full approve · counter-propose tiered model.</div>
+        <div class="actions">
+          <button class="btn btn-primary">Approve with caps</button>
+          <button class="btn">Approve full</button>
+          <button class="btn">Counter</button>
+          <button class="btn btn-danger">Reject</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🟡 Project "Donna Portals" — no update 9 days <span class="pill yellow">Stale</span></div>
+        <div class="card-meta">Owner: not assigned · Status: planning · 11 areas, 0 tasks logged</div>
+        <div>Project has 11 areas configured but zero tasks created. Either kill it or assign owner + seed tasks this week.</div>
+        <div class="actions">
+          <button class="btn btn-primary">Assign owner</button>
+          <button class="btn">Open project</button>
+          <button class="btn btn-danger">Archive</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🟢 4 routine items batched <span class="pill">Batch</span></div>
+        <div class="card-meta">3 newsletter archives · 1 calendar accept · all low-risk</div>
+        <div class="actions">
+          <button class="btn btn-primary">Approve all</button>
+          <button class="btn">Review one by one</button>
+        </div>
+      </div>
+
+      <p style="color: var(--muted); text-align: center; margin-top: 20px;">— Show 3 more —</p>
+    </div>
+
+    <!-- ENTITIES -->
+    <div class="panel" id="panel-entities">
+      <div class="page-header">
+        <h1 class="page-title">Entities</h1>
+        <p class="page-sub">26 entities · grouped by health · click any card to open the drilldown drawer</p>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <button class="btn">All (26)</button>
+        <button class="btn">🔴 Red (2)</button>
+        <button class="btn">🟡 Yellow (3)</button>
+        <button class="btn">🟢 Green (21)</button>
+        <button class="btn">By country</button>
+        <button class="btn">By manager</button>
+      </div>
+
+      <div class="grid-4">
+        <!-- Sample cards based on real data names from project context -->
+        <div class="entity-card" onclick="openDrawer('PBS Base · ES')">
+          <div class="top"><div><div class="name">PBS Base</div><div class="country">ES · opco</div></div><span class="pill green">🟢</span></div>
+          <div class="stats"><span><b>2</b>projects</span><span><b>11</b>areas</span><span><b>3d</b>last touch</span></div>
+        </div>
+        <div class="entity-card" onclick="openDrawer('Bauer Company · DE')">
+          <div class="top"><div><div class="name">Bauer Company</div><div class="country">DE · opco</div></div><span class="pill yellow">🟡</span></div>
+          <div class="stats"><span><b>1</b>project</span><span><b>8</b>areas</span><span><b>8d</b>last touch</span></div>
+        </div>
+        <div class="entity-card" onclick="openDrawer('The Donna Portals · ES')">
+          <div class="top"><div><div class="name">The Donna Portals</div><div class="country">ES · opco</div></div><span class="pill yellow">🟡</span></div>
+          <div class="stats"><span><b>1</b>project</span><span><b>11</b>areas</span><span><b>9d</b>last touch</span></div>
+        </div>
+        <div class="entity-card" onclick="openDrawer('Nam Khan · TH')">
+          <div class="top"><div><div class="name">Nam Khan</div><div class="country">TH · opco</div></div><span class="pill green">🟢</span></div>
+          <div class="stats"><span><b>0</b>projects</span><span><b>3</b>areas</span><span><b>1d</b>last touch</span></div>
+        </div>
+        <!-- Generated placeholders for remaining 22 to show density -->
+        <script>
+          const sampleEntities = [
+            ['Holding SA','LU','holding','green',0,0,'2d'],
+            ['OpCo 5','ES','opco','green',0,0,'4d'],['OpCo 6','PT','opco','green',0,0,'5d'],
+            ['OpCo 7','FR','opco','red',0,0,'12d'],['OpCo 8','IT','opco','green',0,0,'1d'],
+            ['OpCo 9','DE','opco','green',0,0,'3d'],['OpCo 10','ES','opco','green',0,0,'6d'],
+            ['OpCo 11','UK','opco','red',0,0,'15d'],['SPV 1','LU','spv','green',0,0,'7d'],
+            ['SPV 2','LU','spv','green',0,0,'8d'],['Brand A','ES','brand','green',0,0,'2d'],
+            ['Brand B','TH','brand','green',0,0,'4d'],['JV 1','SG','jv','green',0,0,'5d'],
+            ['JV 2','PT','jv','green',0,0,'3d'],['OpCo 16','MX','opco','green',0,0,'2d'],
+            ['OpCo 17','AR','opco','green',0,0,'9d'],['OpCo 18','BR','opco','green',0,0,'1d'],
+            ['OpCo 19','ES','opco','green',0,0,'2d'],['OpCo 20','ES','opco','green',0,0,'3d'],
+            ['OpCo 21','MA','opco','green',0,0,'4d'],['OpCo 22','TN','opco','green',0,0,'7d'],
+          ];
+          let html = '';
+          sampleEntities.forEach(e => {
+            const dot = e[3]==='red'?'🔴':(e[3]==='yellow'?'🟡':'🟢');
+            html += `<div class="entity-card" onclick="openDrawer('${e[0]} · ${e[1]}')">
+              <div class="top"><div><div class="name">${e[0]}</div><div class="country">${e[1]} · ${e[2]}</div></div><span class="pill ${e[3]}">${dot}</span></div>
+              <div class="stats"><span><b>${e[4]}</b>projects</span><span><b>${e[5]}</b>areas</span><span><b>${e[6]}</b>last touch</span></div>
+            </div>`;
+          });
+          document.write(html);
+        </script>
+      </div>
+    </div>
+
+    <!-- PROJECTS -->
+    <div class="panel" id="panel-projects">
+      <div class="page-header">
+        <h1 class="page-title">Projects</h1>
+        <p class="page-sub">2 projects · 33 areas · ⚠ severe imbalance — areas exist but project layer is bare</p>
+      </div>
+      <div class="card" style="border-color: var(--yellow);">
+        <div class="card-title">⚠ Reality check</div>
+        <div>Database has 33 areas across only 2 projects. Either projects are missing in the DB, or "areas" are being used as projects. Recommendation: consolidate before building project tab.</div>
+        <div class="actions">
+          <button class="btn btn-primary">Audit project layer</button>
+          <button class="btn">Hide this warning</button>
+        </div>
+      </div>
+
+      <div class="table-wrap" style="margin-top: 16px;">
+        <table>
+          <thead><tr><th>Project</th><th>Entity</th><th>Owner</th><th>Status</th><th>Health</th><th>Areas</th><th>Tasks</th><th>Due</th></tr></thead>
+          <tbody>
+            <tr onclick="openDrawer('Project A')"><td>Internal Ops Migration</td><td>PBS Base</td><td>—</td><td><span class="pill">planning</span></td><td><span class="pill yellow">🟡</span></td><td>11</td><td>1</td><td>30 Jun</td></tr>
+            <tr onclick="openDrawer('Project B')"><td>Donna Portals</td><td>The Donna Portals</td><td>—</td><td><span class="pill">planning</span></td><td><span class="pill yellow">🟡</span></td><td>11</td><td>1</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- PEOPLE -->
+    <div class="panel" id="panel-people">
+      <div class="page-header">
+        <h1 class="page-title">People</h1>
+        <p class="page-sub">1010 records · biggest table you have — likely needs dedup pass</p>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <button class="btn">All (1010)</button>
+        <button class="btn">VIP</button>
+        <button class="btn">Internal</button>
+        <button class="btn">External</button>
+        <button class="btn">Stale (no contact 30d+)</button>
+        <button class="btn">By entity</button>
+      </div>
+
+      <div class="card" style="border-color: var(--yellow);">
+        <div class="card-title">⚠ Data hygiene</div>
+        <div>1010 people across 26 entities ≈ 39 per entity. Likely contains duplicates (same person, multiple emails). Run dedup before this tab is useful.</div>
+        <div class="actions"><button class="btn btn-primary">Run dedup agent</button></div>
+      </div>
+
+      <div class="table-wrap" style="margin-top: 16px;">
+        <table>
+          <thead><tr><th>Name</th><th>Role</th><th>Entity</th><th>Type</th><th>Last touch</th><th>Flags</th></tr></thead>
+          <tbody>
+            <tr onclick="openDrawer('Person A')"><td>Maria González</td><td>CFO</td><td>PBS Base</td><td><span class="pill">internal</span></td><td>2d ago</td><td></td></tr>
+            <tr onclick="openDrawer('Person B')"><td>John Bauer</td><td>Manager</td><td>Bauer Company</td><td><span class="pill">internal</span></td><td>8d ago</td><td><span class="pill yellow">stale</span></td></tr>
+            <tr onclick="openDrawer('Person C')"><td>Investor X</td><td>LP</td><td>Holding SA</td><td><span class="pill">external</span></td><td>2d ago</td><td><span class="pill red">VIP</span></td></tr>
+            <tr onclick="openDrawer('Person D')"><td>Anna Schmidt</td><td>Legal</td><td>—</td><td><span class="pill">vendor</span></td><td>45d ago</td><td><span class="pill yellow">stale</span></td></tr>
+            <tr onclick="openDrawer('Person E')"><td>Tom Lee</td><td>Dev</td><td>The Donna Portals</td><td><span class="pill">contractor</span></td><td>1d ago</td><td></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TASKS -->
+    <div class="panel" id="panel-tasks">
+      <div class="page-header">
+        <h1 class="page-title">Tasks</h1>
+        <p class="page-sub">2 tasks total · this layer is empty — onboard real work before this tab matters</p>
+      </div>
+
+      <div class="empty">
+        <h3>Almost no tasks logged</h3>
+        <p>Only 2 tasks exist in the database. Either work isn't being captured, or it's living in another tool (email, Notion, heads). Decide on the capture flow before this tab earns a place.</p>
+        <button class="btn btn-primary">Set up capture flow</button>
+        <button class="btn">Import from external tool</button>
+      </div>
+    </div>
+
+    <!-- ACTION INBOX (placeholder) -->
+    <div class="panel" id="panel-actions">
+      <div class="page-header">
+        <h1 class="page-title">Action Inbox</h1>
+        <p class="page-sub">Where signals (Gmail, Calendar, Drive) become CEO-ready proposed actions</p>
+      </div>
+      <div class="empty">
+        <h3>Not built yet</h3>
+        <p>This tab needs: <b>signals</b> table, <b>proposed_actions</b> table, Gmail webhook, and the A01 triage agent.<br>
+        Estimated build: 1 week to first working flow (F01 — email triage).</p>
+        <button class="btn btn-primary">Start phase 1</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Drawer -->
+<div class="drawer-overlay" id="overlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-close" onclick="closeDrawer()">✕ Close</div>
+  <h2 id="drawerTitle">Drilldown</h2>
+  <p class="page-sub">This is the drilldown drawer. Every card click opens this — context on top, detail middle, actions bottom. No deep page navigation.</p>
+
+  <h4>Context</h4>
+  <p>Last 3 events, key relationships, open items. Pulled from <code>activity_log</code> + linked records.</p>
+
+  <h4>Detail</h4>
+  <ul>
+    <li>Entity / project / person fields</li>
+    <li>Linked tasks &amp; areas</li>
+    <li>Recent comments &amp; links</li>
+  </ul>
+
+  <h4>CEO actions</h4>
+  <div class="actions" style="flex-direction: column;">
+    <button class="btn btn-primary">Approve</button>
+    <button class="btn">Delegate</button>
+    <button class="btn">Add note</button>
+    <button class="btn">Defer</button>
+    <button class="btn btn-danger">Dismiss</button>
+  </div>
+</div>
+
+<script>
+  // Tab nav
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+      document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      item.classList.add('active');
+      const tab = item.getAttribute('data-tab');
+      document.getElementById('panel-' + tab).classList.add('active');
+    });
+  });
+
+  function openDrawer(title) {
+    document.getElementById('drawerTitle').innerText = title;
+    document.getElementById('drawer').classList.add('open');
+    document.getElementById('overlay').classList.add('open');
+  }
+  function closeDrawer() {
+    document.getElementById('drawer').classList.remove('open');
+    document.getElementById('overlay').classList.remove('open');
+  }
+</script>
+
+</body>
+</html>
