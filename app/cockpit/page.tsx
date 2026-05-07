@@ -1117,41 +1117,116 @@ function ChatTab() {
 // ============================================================================
 // SCHEDULE TAB — reads from /api/cockpit/schedule which lists GitHub Actions + Make.com scenarios
 // ============================================================================
+type CronJob = { jobid: number; jobname: string; schedule: string; command: string; active: boolean; username: string };
+type CronRun = { runid: number; jobid: number; jobname: string; status: string; return_message: string | null; start_time: string; end_time: string | null; duration_sec: number | null };
+
 function ScheduleTab({ onCount }: { onCount: (n: number) => void }) {
-  const [items, setItems] = useState<Array<{ name: string; cron: string; source: string; nextRun: string | null; lastStatus: string | null }>>([]);
+  const [jobs, setJobs] = useState<CronJob[]>([]);
+  const [runs, setRuns] = useState<CronRun[]>([]);
+  const [editing, setEditing] = useState<number | null>(null);
+  const [editVal, setEditVal] = useState("");
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetch("/api/cockpit/schedule")
-      .then((r) => r.json())
-      .then((d) => { setItems(d.items ?? []); onCount(d.items?.length ?? 0); })
-      .catch(() => setItems([]))
-      .finally(() => setLoading(false));
+  const load = useCallback(async () => {
+    setLoading(true);
+    const [j, r] = await Promise.all([
+      supabase.from("v_cockpit_cron_jobs").select("*"),
+      supabase.from("v_cockpit_cron_recent").select("*").limit(80),
+    ]);
+    setJobs((j.data as CronJob[]) ?? []);
+    setRuns((r.data as CronRun[]) ?? []);
+    onCount(j.data?.length ?? 0);
+    setLoading(false);
   }, [onCount]);
+
+  useEffect(() => {
+    load();
+    const id = setInterval(load, 12_000);
+    return () => clearInterval(id);
+  }, [load]);
+
+  const saveEdit = async (jobid: number) => {
+    if (!editVal.trim()) { setEditing(null); return; }
+    await supabase.rpc("cockpit_cron_update", { p_jobid: jobid, p_schedule: editVal.trim(), p_active: null });
+    setEditing(null); setEditVal("");
+    load();
+  };
+  const toggleActive = async (jobid: number, current: boolean) => {
+    await supabase.rpc("cockpit_cron_update", { p_jobid: jobid, p_schedule: null, p_active: !current });
+    load();
+  };
+
+  const lastRunByJob: Record<number, CronRun | undefined> = {};
+  for (const r of runs) if (!lastRunByJob[r.jobid]) lastRunByJob[r.jobid] = r;
+
+  // Owner inference
+  function ownerOf(j: CronJob): string {
+    if (j.jobname.startsWith("agent-")) return "Kit (agent runner)";
+    if (j.jobname.startsWith("cockpit-")) return "Cowork";
+    if (j.jobname.startsWith("compset")) return "Vector";
+    if (j.jobname.startsWith("kb-") || j.jobname.includes("embed")) return "Cowork";
+    if (j.jobname.startsWith("it_window")) return "Sentinel";
+    if (j.jobname.includes("self_heal")) return "Cowork (self-heal)";
+    return "system";
+  }
 
   return (
     <div className="schedule-tab">
       <div className="page-header">
         <h1>Schedule</h1>
-        <span className="page-sub">All scheduled jobs (GitHub Actions + Make.com)</span>
+        <span className="page-sub">
+          Every cron job in Supabase. Edit the schedule inline (5-field cron expression). Toggle active.
+          Owner shows who runs each. {jobs.length} jobs, {runs.length} runs in last 7d.
+        </span>
       </div>
-      {loading && <div className="empty">Loading schedule...</div>}
-      {!loading && items.length === 0 && <div className="empty">No scheduled jobs found. Check /api/cockpit/schedule.</div>}
-      {!loading && items.length > 0 && (
+      {loading && <div className="empty">Loading…</div>}
+      {!loading && jobs.length === 0 && <div className="empty">No cron jobs yet.</div>}
+      {!loading && jobs.length > 0 && (
         <table className="sched-table">
           <thead>
-            <tr><th>Job</th><th>Cron</th><th>Source</th><th>Next run</th><th>Last status</th></tr>
+            <tr>
+              <th>Job</th><th>Schedule</th><th>Owner</th><th>Active</th>
+              <th>Last run</th><th>Last status</th><th>Edit</th>
+            </tr>
           </thead>
           <tbody>
-            {items.map((it, i) => (
-              <tr key={i}>
-                <td>{it.name}</td>
-                <td><code>{it.cron}</code></td>
-                <td><span className="src-pill" data-src={it.source}>{it.source}</span></td>
-                <td>{it.nextRun ?? "—"}</td>
-                <td>{it.lastStatus ?? "—"}</td>
-              </tr>
-            ))}
+            {jobs.map((j) => {
+              const last = lastRunByJob[j.jobid];
+              return (
+                <tr key={j.jobid}>
+                  <td><div style={{ fontWeight: 600 }}>{j.jobname}</div>
+                    <div style={{ fontSize: 10, color: "var(--text-3)", fontFamily: "ui-monospace, monospace", marginTop: 2 }}>{j.command.replace(/\s+/g, " ").slice(0, 80)}…</div>
+                  </td>
+                  <td>
+                    {editing === j.jobid ? (
+                      <input value={editVal} onChange={(e) => setEditVal(e.target.value)}
+                        onBlur={() => saveEdit(j.jobid)}
+                        onKeyDown={(e) => { if (e.key === "Enter") saveEdit(j.jobid); if (e.key === "Escape") setEditing(null); }}
+                        autoFocus
+                        style={{ background: "var(--bg-2)", color: "var(--text-1)", border: "1px solid var(--brass)", borderRadius: 4, padding: "4px 8px", fontFamily: "ui-monospace, monospace", fontSize: 12, width: 140 }}
+                      />
+                    ) : <code>{j.schedule}</code>}
+                  </td>
+                  <td><span style={{ fontSize: 11, color: "var(--brass)" }}>{ownerOf(j)}</span></td>
+                  <td>
+                    <button onClick={() => toggleActive(j.jobid, j.active)}
+                      style={{ background: j.active ? "var(--good, #2a7d2e)" : "var(--text-3)", color: "#0a0a0b", border: 0, borderRadius: 4, padding: "3px 10px", fontSize: 10, fontWeight: 600, cursor: "pointer" }}>
+                      {j.active ? "ON" : "OFF"}
+                    </button>
+                  </td>
+                  <td>{last ? new Date(last.start_time).toISOString().slice(0, 16).replace("T", " ") : "—"}</td>
+                  <td>{last ? <span className="src-pill" data-src={last.status}>{last.status}</span> : "—"}</td>
+                  <td>
+                    {editing === j.jobid ? null : (
+                      <button onClick={() => { setEditing(j.jobid); setEditVal(j.schedule); }}
+                        style={{ background: "transparent", color: "var(--brass)", border: "1px solid var(--brass)", borderRadius: 4, padding: "3px 10px", fontSize: 10, cursor: "pointer" }}>
+                        edit
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}
@@ -1163,11 +1238,11 @@ function ScheduleTab({ onCount }: { onCount: (n: number) => void }) {
         .empty { padding: 40px; text-align: center; color: var(--text-3); }
         .sched-table { width: 100%; border-collapse: collapse; background: var(--bg-1); border-radius: 8px; overflow: hidden; }
         th { background: var(--bg-2); padding: 10px 14px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-3); }
-        td { padding: 10px 14px; border-top: 1px solid var(--border); font-size: 12px; }
+        td { padding: 10px 14px; border-top: 1px solid var(--border); font-size: 12px; vertical-align: top; }
         code { font-family: ui-monospace, monospace; font-size: 11.5px; color: var(--cyan); }
         .src-pill { font-size: 10px; padding: 2px 7px; border-radius: 3px; text-transform: uppercase; }
-        .src-pill[data-src="github"] { background: var(--bg-3); color: var(--text-1); }
-        .src-pill[data-src="make"] { background: var(--purple-bg); color: var(--purple); }
+        .src-pill[data-src="succeeded"] { background: var(--green-bg); color: var(--good, #2a7d2e); }
+        .src-pill[data-src="failed"] { background: var(--red-bg); color: var(--bad, #b3261e); }
       `}</style>
     </div>
   );
@@ -1176,30 +1251,66 @@ function ScheduleTab({ onCount }: { onCount: (n: number) => void }) {
 // ============================================================================
 // TEAM TAB — reads agent definitions from /api/cockpit/team
 // ============================================================================
+type AgentStat = { agent: string; runs_24h: number; cost_milli_24h: number; success_pct: number; last_action_at: string | null };
+
+const kpiBox: React.CSSProperties = { background: "var(--bg-2)", border: "1px solid var(--border-1)", padding: 14, borderRadius: 8 };
+const kpiLabel: React.CSSProperties = { fontSize: 10, color: "var(--brass)", textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 600 };
+const kpiVal: React.CSSProperties = { fontFamily: "'Cooper', Georgia, serif", fontSize: 24, color: "var(--text-1)", marginTop: 4 };
+
 function TeamTab({ onCount }: { onCount: (n: number) => void }) {
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [stats, setStats] = useState<Record<string, AgentStat>>({});
+  const [kpi, setKpi] = useState({ total_runs: 0, total_cost_usd: 0, active_agents: 0, top_agent: "—" });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let alive = true;
-    const tick = () => {
-      fetch("/api/cockpit/team")
-        .then((r) => r.json())
-        .then((d) => {
-          if (!alive) return;
-          // /cockpit Team tab shows ONLY the IT department per PBS 2026-05-07.
-          // Other dept teams will live at /sales/team, /revenue/team, etc.
-          const itOnly = (d.agents ?? []).filter((a: Agent) => (a.department ?? "it") === "it");
-          setAgents(itOnly);
-          onCount(itOnly.length);
-        })
-        .catch(() => alive && setAgents([]))
-        .finally(() => alive && setLoading(false));
+    const tick = async () => {
+      const team = fetch("/api/cockpit/team").then((r) => r.json()).catch(() => ({ agents: [] }));
+      const since = new Date(Date.now() - 24 * 3600_000).toISOString();
+      const audit = supabase.from("cockpit_audit_log")
+        .select("agent,success,cost_usd_milli,created_at")
+        .gte("created_at", since)
+        .limit(2000);
+      const [t, a] = await Promise.all([team, audit]);
+      if (!alive) return;
+      const itOnly = (t.agents ?? []).filter((x: Agent) => (x.department ?? "it") === "it");
+      setAgents(itOnly);
+      onCount(itOnly.length);
+      // Aggregate audit by agent.
+      const m: Record<string, { runs: number; cost: number; ok: number; last: string | null }> = {};
+      for (const r of (a.data ?? []) as Array<{ agent: string; success: boolean | null; cost_usd_milli: number | null; created_at: string }>) {
+        const key = r.agent ?? "?";
+        if (!m[key]) m[key] = { runs: 0, cost: 0, ok: 0, last: null };
+        m[key].runs += 1;
+        m[key].cost += r.cost_usd_milli ?? 0;
+        if (r.success) m[key].ok += 1;
+        if (!m[key].last || r.created_at > m[key].last) m[key].last = r.created_at;
+      }
+      const built: Record<string, AgentStat> = {};
+      for (const k of Object.keys(m)) {
+        built[k] = {
+          agent: k, runs_24h: m[k].runs, cost_milli_24h: m[k].cost,
+          success_pct: m[k].runs > 0 ? Math.round((m[k].ok / m[k].runs) * 100) : 0,
+          last_action_at: m[k].last,
+        };
+      }
+      setStats(built);
+      const totalRuns = Object.values(built).reduce((s, x) => s + x.runs_24h, 0);
+      const totalCost = Object.values(built).reduce((s, x) => s + x.cost_milli_24h, 0) / 1000;
+      const activeAgents = Object.values(built).filter((x) => x.runs_24h > 0).length;
+      const top = Object.values(built).sort((a, b) => b.runs_24h - a.runs_24h)[0];
+      setKpi({ total_runs: totalRuns, total_cost_usd: totalCost, active_agents: activeAgents, top_agent: top?.agent ?? "—" });
+      setLoading(false);
     };
     tick();
-    const id = setInterval(tick, 15_000); // live worker indicator refreshes
+    const id = setInterval(tick, 15_000);
     return () => { alive = false; clearInterval(id); };
   }, [onCount]);
+
+  function statFor(role: string): AgentStat | undefined {
+    return stats[role];
+  }
 
   const chief = agents.find((a) => a.is_chief);
   const workers = agents.filter((a) => !a.is_chief);
@@ -1214,10 +1325,18 @@ function TeamTab({ onCount }: { onCount: (n: number) => void }) {
       <div className="page-header">
         <h1>Team</h1>
         <span className="page-sub">
-          Source of truth: <code>cockpit_agent_prompts</code> + <code>cockpit_agent_skills</code> in Postgres.
-          To refine an agent, talk to the IT Manager in Chat — type the change, click Approve.
+          Source of truth: <code>cockpit_agent_prompts</code> + <code>cockpit_agent_skills</code>. Activity from <code>cockpit_audit_log</code> (last 24h).
         </span>
       </div>
+
+      {/* KPI strip */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, margin: "0 0 18px 0" }}>
+        <div style={kpiBox}><div style={kpiLabel}>Runs · 24h</div><div style={kpiVal}>{kpi.total_runs}</div></div>
+        <div style={kpiBox}><div style={kpiLabel}>Cost · 24h</div><div style={kpiVal}>${kpi.total_cost_usd.toFixed(2)}</div></div>
+        <div style={kpiBox}><div style={kpiLabel}>Active agents</div><div style={kpiVal}>{kpi.active_agents}</div></div>
+        <div style={kpiBox}><div style={kpiLabel}>Top by runs</div><div style={{ ...kpiVal, fontSize: 16 }}>{kpi.top_agent}</div></div>
+      </div>
+
       {loading && <div className="empty">Loading team...</div>}
       {!loading && agents.length === 0 && <div className="empty">No agents found. Run the cockpit_agent_prompts migration.</div>}
       {!loading && chief && (
@@ -1291,9 +1410,17 @@ function TeamTab({ onCount }: { onCount: (n: number) => void }) {
                   <div className="agent-stats">
                     <div><strong>v{a.version ?? 1}</strong></div>
                     <div><strong>{a.skills.length}</strong> skills</div>
-                    <div><strong>{a.runs_24h ?? 0}</strong> runs</div>
-                    {a.success_rate !== null && a.success_rate !== undefined && <div><strong>{a.success_rate}%</strong> ok</div>}
-                    {a.cost_24h_usd && Number(a.cost_24h_usd) > 0 && <div><strong>${a.cost_24h_usd}</strong></div>}
+                    {(() => {
+                      const s = statFor(a.name);
+                      return (
+                        <>
+                          <div><strong>{s?.runs_24h ?? 0}</strong> runs/24h</div>
+                          {s && s.success_pct > 0 && <div><strong>{s.success_pct}%</strong> ok</div>}
+                          {s && s.cost_milli_24h > 0 && <div><strong>${(s.cost_milli_24h / 1000).toFixed(3)}</strong></div>}
+                          {s && s.last_action_at && <div style={{ fontSize: 10, color: "var(--text-3)" }}>last: {new Date(s.last_action_at).toISOString().slice(11, 16)}</div>}
+                        </>
+                      );
+                    })()}
                   </div>
                   <div className="agent-skills">
                     {a.skills.length === 0 && <i className="agent-no-skills">no skills assigned</i>}
