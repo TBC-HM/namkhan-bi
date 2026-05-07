@@ -1,11 +1,49 @@
-// app/revenue/page.tsx
-// Redesign v2 (30 Apr 2026): bare /revenue redirects to /revenue/pulse — the new landing tab.
-// Old Snapshot KPIs/cards folded into /revenue/pulse. Existing rail/topnav links continue to work via this redirect.
-
-import { redirect } from 'next/navigation';
+import { createClient } from '@supabase/supabase-js';
+import PageHeader from '@/components/layout/PageHeader';
+import KpiBox from '@/components/kpi/KpiBox';
+import DataTable from '@/components/ui/DataTable';
+import DeptDropdown from '@/components/nav/DeptDropdown';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 60;
 
-export default function RevenueIndexPage() {
-  redirect('/revenue/pulse');
+export default async function RevenuePage() {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
+
+  const { data } = await supabase
+    .from('v_overview_kpis')
+    .select('*')
+    .limit(30);
+  const rows = data ?? [];
+  const top = rows[0] ?? {};
+
+  return (
+    <main style={{ padding: '24px 32px', maxWidth: 1280, margin: '0 auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+        <PageHeader pillar="Revenue" tab="Overview" title="Revenue Overview" lede="Live occupancy, ADR, and RevPAR at a glance." />
+        <DeptDropdown />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 32 }}>
+        <KpiBox label="Occupancy" value={top.occupancy_pct != null ? `${top.occupancy_pct}%` : '—'} />
+        <KpiBox label="ADR" value={top.adr != null ? `$${top.adr}` : '—'} />
+        <KpiBox label="RevPAR" value={top.revpar != null ? `$${top.revpar}` : '—'} />
+        <KpiBox label="Rooms Sold" value={top.rooms_sold ?? '—'} />
+      </div>
+
+      <DataTable
+        columns={[
+          { key: 'date',          header: 'Date' },
+          { key: 'occupancy_pct', header: 'OCC %' },
+          { key: 'adr',           header: 'ADR' },
+          { key: 'revpar',        header: 'RevPAR' },
+          { key: 'rooms_sold',    header: 'Rooms Sold' },
+        ]}
+        rows={rows}
+      />
+    </main>
+  );
 }
