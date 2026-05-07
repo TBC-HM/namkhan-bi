@@ -3,13 +3,12 @@
 -- Ticket #114 — Explicit RLS policies for all four media storage buckets
 -- Author: Code Carla (agent) — review required before production apply
 --
--- FIX (PBS review comment on PR #39):
---   Renamed from 20240701_media_rls.sql → 20260507_media_rls.sql
---   Old timestamp caused this migration to sort before bucket-creation
---   migrations, resulting in policy creation on non-existent buckets.
---   New timestamp (2026-05-07) ensures correct execution order.
+-- CHANGED FROM PR #39: Timestamp corrected from 20240701 → 20260507 so this
+-- migration runs AFTER bucket-creation and other critical migrations.
+-- The old file (20240701_media_rls.sql) must be deleted from the repo
+-- if it was ever applied to staging — see rollback note below.
 --
--- ASSUMPTIONS (document in PR review):
+-- ASSUMPTIONS:
 -- A1. Workers authenticate via service_role JWT (bypasses RLS by default in
 --     Supabase; explicit policies below still restrict anon + authenticated).
 -- A2. "owner" is stored in storage.objects.owner (auth.uid() UUID) per
@@ -25,6 +24,9 @@
 --     default on hosted projects; verify with:
 --       SELECT relrowsecurity FROM pg_class WHERE relname = 'objects';
 --     before running this migration).
+--
+-- ROLLBACK NOTE: If 20240701_media_rls.sql was already applied to staging,
+-- run the DROP POLICY block at the bottom of this file first, then re-apply.
 -- =============================================================================
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -39,40 +41,40 @@
 
 -- INSERT: authenticated user can upload to their own path
 CREATE POLICY "media-raw: authenticated insert own"
-ON storage.objects FOR INSERT
-TO authenticated
-WITH CHECK (
-  bucket_id = 'media-raw'
-  AND auth.uid() = owner
-);
+  ON storage.objects FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    bucket_id = 'media-raw'
+    AND auth.uid() = owner
+  );
 
 -- SELECT: authenticated user can read their own objects only
 CREATE POLICY "media-raw: authenticated select own"
-ON storage.objects FOR SELECT
-TO authenticated
-USING (
-  bucket_id = 'media-raw'
-  AND auth.uid() = owner
-);
+  ON storage.objects FOR SELECT
+  TO authenticated
+  USING (
+    bucket_id = 'media-raw'
+    AND auth.uid() = owner
+  );
 
 -- UPDATE: blocked for authenticated (service_role bypasses RLS)
 CREATE POLICY "media-raw: deny authenticated update"
-ON storage.objects FOR UPDATE
-TO authenticated
-USING (false);
+  ON storage.objects FOR UPDATE
+  TO authenticated
+  USING (false);
 
 -- DELETE: blocked for authenticated (service_role bypasses RLS)
 CREATE POLICY "media-raw: deny authenticated delete"
-ON storage.objects FOR DELETE
-TO authenticated
-USING (false);
+  ON storage.objects FOR DELETE
+  TO authenticated
+  USING (false);
 
 -- Deny anon all access to media-raw
 CREATE POLICY "media-raw: deny anon all"
-ON storage.objects FOR ALL
-TO anon
-USING (false)
-WITH CHECK (false);
+  ON storage.objects FOR ALL
+  TO anon
+  USING (false)
+  WITH CHECK (false);
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BUCKET: media-master
@@ -86,37 +88,37 @@ WITH CHECK (false);
 
 -- SELECT: authenticated user can read their own master objects
 CREATE POLICY "media-master: authenticated select own"
-ON storage.objects FOR SELECT
-TO authenticated
-USING (
-  bucket_id = 'media-master'
-  AND auth.uid() = owner
-);
+  ON storage.objects FOR SELECT
+  TO authenticated
+  USING (
+    bucket_id = 'media-master'
+    AND auth.uid() = owner
+  );
 
 -- INSERT: block authenticated users (pipeline writes as service_role)
 CREATE POLICY "media-master: deny authenticated insert"
-ON storage.objects FOR INSERT
-TO authenticated
-WITH CHECK (false);
+  ON storage.objects FOR INSERT
+  TO authenticated
+  WITH CHECK (false);
 
 -- UPDATE: blocked for authenticated
 CREATE POLICY "media-master: deny authenticated update"
-ON storage.objects FOR UPDATE
-TO authenticated
-USING (false);
+  ON storage.objects FOR UPDATE
+  TO authenticated
+  USING (false);
 
 -- DELETE: blocked for authenticated
 CREATE POLICY "media-master: deny authenticated delete"
-ON storage.objects FOR DELETE
-TO authenticated
-USING (false);
+  ON storage.objects FOR DELETE
+  TO authenticated
+  USING (false);
 
 -- Deny anon all access to media-master
 CREATE POLICY "media-master: deny anon all"
-ON storage.objects FOR ALL
-TO anon
-USING (false)
-WITH CHECK (false);
+  ON storage.objects FOR ALL
+  TO anon
+  USING (false)
+  WITH CHECK (false);
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BUCKET: media-renders
@@ -130,34 +132,34 @@ WITH CHECK (false);
 -- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE POLICY "media-renders: authenticated select own"
-ON storage.objects FOR SELECT
-TO authenticated
-USING (
-  bucket_id = 'media-renders'
-  AND auth.uid() = owner
-);
+  ON storage.objects FOR SELECT
+  TO authenticated
+  USING (
+    bucket_id = 'media-renders'
+    AND auth.uid() = owner
+  );
 
 CREATE POLICY "media-renders: deny authenticated insert"
-ON storage.objects FOR INSERT
-TO authenticated
-WITH CHECK (false);
+  ON storage.objects FOR INSERT
+  TO authenticated
+  WITH CHECK (false);
 
 CREATE POLICY "media-renders: deny authenticated update"
-ON storage.objects FOR UPDATE
-TO authenticated
-USING (false);
+  ON storage.objects FOR UPDATE
+  TO authenticated
+  USING (false);
 
 CREATE POLICY "media-renders: deny authenticated delete"
-ON storage.objects FOR DELETE
-TO authenticated
-USING (false);
+  ON storage.objects FOR DELETE
+  TO authenticated
+  USING (false);
 
 -- Deny anon all access to media-renders
 CREATE POLICY "media-renders: deny anon all"
-ON storage.objects FOR ALL
-TO anon
-USING (false)
-WITH CHECK (false);
+  ON storage.objects FOR ALL
+  TO anon
+  USING (false)
+  WITH CHECK (false);
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BUCKET: media-rejects
@@ -170,64 +172,64 @@ WITH CHECK (false);
 -- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE POLICY "media-rejects: authenticated select own"
-ON storage.objects FOR SELECT
-TO authenticated
-USING (
-  bucket_id = 'media-rejects'
-  AND auth.uid() = owner
-);
+  ON storage.objects FOR SELECT
+  TO authenticated
+  USING (
+    bucket_id = 'media-rejects'
+    AND auth.uid() = owner
+  );
 
 CREATE POLICY "media-rejects: deny authenticated insert"
-ON storage.objects FOR INSERT
-TO authenticated
-WITH CHECK (false);
+  ON storage.objects FOR INSERT
+  TO authenticated
+  WITH CHECK (false);
 
 CREATE POLICY "media-rejects: deny authenticated update"
-ON storage.objects FOR UPDATE
-TO authenticated
-USING (false);
+  ON storage.objects FOR UPDATE
+  TO authenticated
+  USING (false);
 
 CREATE POLICY "media-rejects: deny authenticated delete"
-ON storage.objects FOR DELETE
-TO authenticated
-USING (false);
+  ON storage.objects FOR DELETE
+  TO authenticated
+  USING (false);
 
 -- Deny anon all access to media-rejects
 CREATE POLICY "media-rejects: deny anon all"
-ON storage.objects FOR ALL
-TO anon
-USING (false)
-WITH CHECK (false);
+  ON storage.objects FOR ALL
+  TO anon
+  USING (false)
+  WITH CHECK (false);
 
 -- =============================================================================
--- ACCEPTANCE TEST (run each block in staging SQL editor; confirm results)
+-- ROLLBACK / CLEANUP
+-- If the old 20240701_media_rls.sql was applied, drop those policies first:
 -- =============================================================================
---
--- 1. Verify RLS is enabled on storage.objects:
---    SELECT relrowsecurity FROM pg_class WHERE relname = 'objects';
---    → Expected: true
---
--- 2. Verify all 20 policies exist:
---    SELECT policyname, cmd, roles, qual, with_check
---    FROM pg_policies
---    WHERE tablename = 'objects'
---    ORDER BY policyname;
---    → Expected: 20 rows (5 policies × 4 buckets)
---
--- 3. Test anon denied on media-raw:
---    SET ROLE anon;
---    SELECT count(*) FROM storage.objects WHERE bucket_id = 'media-raw';
---    → Expected: 0 rows (policy blocks visibility)
---
--- 4. Test authenticated can only see own objects:
---    SET ROLE authenticated;
---    SET request.jwt.claim.sub = '<your-test-uuid>';
---    SELECT count(*) FROM storage.objects
---    WHERE bucket_id = 'media-raw' AND owner != '<your-test-uuid>'::uuid;
---    → Expected: 0 rows
---
+-- DROP POLICY IF EXISTS "media-raw: authenticated insert own"    ON storage.objects;
+-- DROP POLICY IF EXISTS "media-raw: authenticated select own"    ON storage.objects;
+-- DROP POLICY IF EXISTS "media-raw: deny authenticated update"   ON storage.objects;
+-- DROP POLICY IF EXISTS "media-raw: deny authenticated delete"   ON storage.objects;
+-- DROP POLICY IF EXISTS "media-raw: deny anon all"               ON storage.objects;
+-- DROP POLICY IF EXISTS "media-master: authenticated select own" ON storage.objects;
+-- DROP POLICY IF EXISTS "media-master: deny authenticated insert" ON storage.objects;
+-- DROP POLICY IF EXISTS "media-master: deny authenticated update" ON storage.objects;
+-- DROP POLICY IF EXISTS "media-master: deny authenticated delete" ON storage.objects;
+-- DROP POLICY IF EXISTS "media-master: deny anon all"            ON storage.objects;
+-- DROP POLICY IF EXISTS "media-renders: authenticated select own" ON storage.objects;
+-- DROP POLICY IF EXISTS "media-renders: deny authenticated insert" ON storage.objects;
+-- DROP POLICY IF EXISTS "media-renders: deny authenticated update" ON storage.objects;
+-- DROP POLICY IF EXISTS "media-renders: deny authenticated delete" ON storage.objects;
+-- DROP POLICY IF EXISTS "media-renders: deny anon all"           ON storage.objects;
+-- DROP POLICY IF EXISTS "media-rejects: authenticated select own" ON storage.objects;
+-- DROP POLICY IF EXISTS "media-rejects: deny authenticated insert" ON storage.objects;
+-- DROP POLICY IF EXISTS "media-rejects: deny authenticated update" ON storage.objects;
+-- DROP POLICY IF EXISTS "media-rejects: deny authenticated delete" ON storage.objects;
+-- DROP POLICY IF EXISTS "media-rejects: deny anon all"           ON storage.objects;
+
 -- =============================================================================
--- NOTE: The old migration file (20240701_media_rls.sql) must be removed from
--- the branch — it will cause duplicate policy errors if both files are applied.
--- Delete it via: git rm supabase/migrations/20240701_media_rls.sql
+-- VERIFY applied:
+-- SELECT policyname, cmd, roles, qual, with_check
+--   FROM pg_policies
+--  WHERE tablename = 'objects'
+--  ORDER BY policyname;
 -- =============================================================================
