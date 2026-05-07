@@ -1,10 +1,10 @@
 'use client';
-
 // components/nav/LeftRail.tsx
 // 7-pillar architecture (v10 + Marketing restore 2026-04-30 + Front Office unfold 2026-05-01):
-//   01 Revenue · 02 Sales · 03 Marketing · 04 Operations · 04b Front Office · 05 Guest · 06 Finance
+// 01 Revenue · 02 Sales · 03 Marketing · 04 Operations · 04b Front Office · 05 Guest · 06 Finance
 // Bottom utility section: Knowledge · Settings.
 // Click N at top → Home (overview lives at /).
+// Home link added 2026-05-08 (ticket #190) — sits between N glyph and pillar list.
 // Note: Sales glyph is '$' to avoid collision with Settings 'S'.
 // Front Office glyph is 'A' (Arrivals) — distinct from Operations 'O' and Marketing 'M'.
 
@@ -35,14 +35,12 @@ const PILLARS: RailItem[] = [
     href: '/marketing',
     glyph: 'M',
     label: 'Marketing',
-    // marketing owns reviews/social/influencers/media as sub-tabs
     matches: ['/marketing'],
   },
   {
     href: '/operations',
     glyph: 'O',
     label: 'Ops',
-    // operations folds in: today, departments, action plans
     matches: ['/operations', '/today', '/departments', '/actions'],
   },
   {
@@ -89,30 +87,107 @@ export default function LeftRail() {
       <Link
         key={it.href}
         href={it.href}
-        className={`rail-icon ${active ? 'active' : ''}`}
         title={it.label}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 2,
+          padding: '8px 0',
+          color: active ? '#fff' : 'rgba(255,255,255,0.45)',
+          textDecoration: 'none',
+          fontSize: 10,
+          fontWeight: active ? 700 : 400,
+          borderLeft: active ? '2px solid #fff' : '2px solid transparent',
+          width: '100%',
+        }}
       >
-        <span className="rail-glyph">{it.glyph}</span>
-        <span>{it.label}</span>
+        <span style={{ fontSize: 16, lineHeight: 1 }}>{it.glyph}</span>
+        {it.label}
       </Link>
     );
   };
 
-  // Overview-active when on /overview or /
-  const overviewActive = pathname === '/' || pathname === '/overview';
+  // Overview-active when on / or /overview or /architect
+  const overviewActive = pathname === '/' || pathname === '/overview' || pathname === '/architect';
 
   return (
-    <aside className="rail">
+    <nav
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        width: 56,
+        minHeight: '100vh',
+        background: '#111',
+        paddingTop: 12,
+        paddingBottom: 12,
+        gap: 4,
+        position: 'fixed',
+        left: 0,
+        top: 0,
+        zIndex: 100,
+      }}
+    >
+      {/* N brand — links to home */}
       <Link
-        href="/overview"
-        className={`rail-mark ${overviewActive ? 'active' : ''}`}
-        title="The Namkhan · Home"
+        href="/"
+        title="Namkhan BI"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 2,
+          padding: '8px 0',
+          color: '#fff',
+          textDecoration: 'none',
+          fontSize: 20,
+          fontWeight: 800,
+          letterSpacing: '-0.5px',
+          width: '100%',
+          marginBottom: 4,
+        }}
       >
         N
       </Link>
+
+      {/* Home link — sits between N and pillars */}
+      <Link
+        href="/architect"
+        title="Home"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 2,
+          padding: '8px 0',
+          color: overviewActive ? '#fff' : 'rgba(255,255,255,0.45)',
+          textDecoration: 'none',
+          fontSize: 10,
+          fontWeight: overviewActive ? 700 : 400,
+          borderLeft: overviewActive ? '2px solid #fff' : '2px solid transparent',
+          width: '100%',
+          marginBottom: 4,
+        }}
+      >
+        <span style={{ fontSize: 16, lineHeight: 1 }}>⌂</span>
+        Home
+      </Link>
+
+      <div
+        style={{
+          width: 32,
+          height: 1,
+          background: 'rgba(255,255,255,0.1)',
+          marginBottom: 4,
+        }}
+      />
+
       {PILLARS.map(renderItem)}
-      <div className="rail-divider" />
+
+      <div style={{ flex: 1 }} />
+
       {UTILITY.map(renderItem)}
-    </aside>
+    </nav>
   );
 }
