@@ -1,79 +1,113 @@
-// app/revenue-v2/pricing/page.tsx
 import { createClient } from '@supabase/supabase-js';
-import KpiBox from '@/components/kpi/KpiBox';
-import DataTable from '@/components/ui/DataTable';
-import PageHeader from '@/components/layout/PageHeader';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 60;
+export const revalidate = 0;
 
+// ─── Types ───────────────────────────────────────────────────────────────────
 interface BarLadderRow {
-  rate_category?: string | null;
+  stay_date?: string | null;
   room_type?: string | null;
-  bar_level?: string | number | null;
-  rate_usd?: number | null;
-  rate_lak?: number | null;
-  min_stay?: number | null;
-  effective_date?: string | null;
-  expiry_date?: string | null;
+  bar_level?: string | null;
+  bar_rate_usd?: number | null;
+  bar_rate_lak?: number | null;
+  occ_pct?: number | null;
+  rooms_available?: number | null;
+  rooms_sold?: number | null;
   channel?: string | null;
-  is_active?: boolean | null;
+  notes?: string | null;
   [key: string]: unknown;
 }
 
-export default async function Page() {
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function dash(v: unknown): string {
+  if (v === null || v === undefined || v === '') return '—';
+  return String(v);
+}
+
+function fmtUsd(v: number | null | undefined): string {
+  if (v === null || v === undefined) return '—';
+  const sign = v < 0 ? '\u2212' : '';
+  return `${sign}$${Math.abs(v).toFixed(2)}`;
+}
+
+function fmtLak(v: number | null | undefined): string {
+  if (v === null || v === undefined) return '—';
+  const sign = v < 0 ? '\u2212' : '';
+  return `${sign}₭${Math.abs(v).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+}
+
+function fmtPct(v: number | null | undefined): string {
+  if (v === null || v === undefined) return '—';
+  const pct = v <= 1 ? v * 100 : v;
+  return `${pct.toFixed(1)}%`;
+}
+
+// ─── Data fetcher (server-side, service role) ─────────────────────────────────
+async function fetchBarLadder(): Promise<BarLadderRow[]> {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
-
   const { data, error } = await supabase
     .from('v_bar_ladder')
     .select('*')
+    .order('stay_date', { ascending: true })
     .limit(120);
 
   if (error) {
-    console.error('[pricing] v_bar_ladder fetch error:', error.message);
+    console.error('[pricing/page] v_bar_ladder error:', error.message);
+    return [];
   }
+  return (data ?? []) as BarLadderRow[];
+}
 
-  const rows: BarLadderRow[] = data ?? [];
+// ─── Column config ────────────────────────────────────────────────────────────
+const COLUMNS: { key: keyof BarLadderRow; header: string }[] = [
+  { key: 'stay_date', header: 'Stay Date' },
+  { key: 'room_type', header: 'Room Type' },
+  { key: 'bar_level', header: 'BAR Level' },
+  { key: 'bar_rate_usd', header: 'BAR (USD)' },
+  { key: 'bar_rate_lak', header: 'BAR (LAK)' },
+  { key: 'occ_pct', header: 'Occ %' },
+  { key: 'rooms_available', header: 'Avail' },
+  { key: 'rooms_sold', header: 'Sold' },
+  { key: 'channel', header: 'Channel' },
+  { key: 'notes', header: 'Notes' },
+];
 
-  const activeRates = rows.filter((r) => r.is_active !== false);
-  const rateCount = activeRates.length;
-  const avgRateUsd =
-    rateCount > 0
-      ? activeRates.reduce((sum, r) => sum + (r.rate_usd ?? 0), 0) / rateCount
-      : null;
-  const roomTypes = new Set(rows.map((r) => r.room_type).filter(Boolean)).size;
-  const barLevels = new Set(rows.map((r) => r.bar_level).filter(Boolean)).size;
+// ─── Page ─────────────────────────────────────────────────────────────────────
+export default async function PricingPage() {
+  const rows = await fetchBarLadder();
 
-  const fmtUsd = (v: number | null | undefined): string =>
-    v != null ? `$${v.toFixed(2)}` : '\u2014';
-
-  const tableRows = rows.map((r) => ({
-    rate_category: r.rate_category ?? '\u2014',
-    room_type: r.room_type ?? '\u2014',
-    bar_level: r.bar_level ?? '\u2014',
-    rate_usd:
-      r.rate_usd != null
-        ? `$${Number(r.rate_usd).toFixed(2)}`
-        : '\u2014',
-    rate_lak:
-      r.rate_lak != null
-        ? `\u20ADK${Number(r.rate_lak).toLocaleString()}`
-        : '\u2014',
-    min_stay: r.min_stay != null ? `${r.min_stay}n` : '\u2014',
-    effective_date: r.effective_date ?? '\u2014',
-    expiry_date: r.expiry_date ?? '\u2014',
-    channel: r.channel ?? '\u2014',
-    is_active:
-      r.is_active === true ? 'Yes' : r.is_active === false ? 'No' : '\u2014',
-  }));
+  function renderCell(row: BarLadderRow, key: keyof BarLadderRow): string {
+    const v = row[key];
+    if (key === 'bar_rate_usd') return fmtUsd(v as number | null);
+    if (key === 'bar_rate_lak') return fmtLak(v as number | null);
+    if (key === 'occ_pct') return fmtPct(v as number | null);
+    return dash(v);
+  }
 
   return (
     <main style={{ padding: '24px 32px' }}>
-      <PageHeader pillar="Revenue" tab="Pricing" title="BAR Ladder" />
+      {/* ── Header ── */}
+      <div style={{ marginBottom: 24 }}>
+        <h1
+          style={{
+            fontFamily: 'Fraunces, serif',
+            fontStyle: 'italic',
+            color: 'var(--brass)',
+            fontSize: 'var(--t-2xl)',
+            margin: 0,
+          }}
+        >
+          BAR Ladder — Pricing
+        </h1>
+        <p style={{ fontSize: 'var(--t-sm)', color: 'var(--muted)', marginTop: 4 }}>
+          Source: public.v_bar_ladder · {rows.length} rows · live
+        </p>
+      </div>
 
+      {/* ── KPI strip ── */}
       <div
         style={{
           display: 'grid',
@@ -82,39 +116,113 @@ export default async function Page() {
           marginBottom: 32,
         }}
       >
-        <KpiBox
-          label="Active Rates"
-          value={rateCount > 0 ? String(rateCount) : '\u2014'}
-        />
-        <KpiBox
-          label="Avg BAR (USD)"
-          value={fmtUsd(avgRateUsd)}
-        />
-        <KpiBox
-          label="Room Types"
-          value={roomTypes > 0 ? String(roomTypes) : '\u2014'}
-        />
-        <KpiBox
-          label="BAR Levels"
-          value={barLevels > 0 ? String(barLevels) : '\u2014'}
-        />
+        {[
+          { label: 'Total Rows', value: String(rows.length) },
+          {
+            label: 'Avg BAR (USD)',
+            value: fmtUsd(
+              rows.length
+                ? rows.reduce((s, r) => s + (r.bar_rate_usd ?? 0), 0) / rows.length
+                : null,
+            ),
+          },
+          {
+            label: 'Avg Occ %',
+            value: fmtPct(
+              rows.length
+                ? rows.reduce((s, r) => s + (r.occ_pct ?? 0), 0) / rows.length
+                : null,
+            ),
+          },
+          {
+            label: 'Rooms Available',
+            value: dash(rows.reduce((s, r) => s + (r.rooms_available ?? 0), 0) || null),
+          },
+        ].map((kpi) => (
+          <div
+            key={kpi.label}
+            style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              padding: '16px 20px',
+            }}
+          >
+            <div style={{ fontSize: 'var(--t-sm)', color: 'var(--muted)', marginBottom: 4 }}>
+              {kpi.label}
+            </div>
+            <div
+              style={{
+                fontSize: 'var(--t-2xl)',
+                fontWeight: 600,
+                color: 'var(--foreground)',
+              }}
+            >
+              {kpi.value}
+            </div>
+          </div>
+        ))}
       </div>
 
-      <DataTable
-        columns={[
-          { key: 'rate_category', header: 'Category' },
-          { key: 'room_type',     header: 'Room Type' },
-          { key: 'bar_level',     header: 'BAR Level' },
-          { key: 'rate_usd',      header: 'Rate (USD)' },
-          { key: 'rate_lak',      header: 'Rate (LAK)' },
-          { key: 'channel',       header: 'Channel' },
-          { key: 'min_stay',      header: 'Min Stay' },
-          { key: 'effective_date',header: 'Effective' },
-          { key: 'expiry_date',   header: 'Expires' },
-          { key: 'is_active',     header: 'Active' },
-        ]}
-        rows={tableRows}
-      />
+      {/* ── Table ── */}
+      {rows.length === 0 ? (
+        <p style={{ color: 'var(--muted)', fontSize: 'var(--t-sm)' }}>
+          No data returned from v_bar_ladder. Check view exists and is populated.
+        </p>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table
+            style={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              fontSize: 'var(--t-sm)',
+            }}
+          >
+            <thead>
+              <tr>
+                {COLUMNS.map((col) => (
+                  <th
+                    key={col.key as string}
+                    style={{
+                      textAlign: 'left',
+                      padding: '10px 12px',
+                      borderBottom: '2px solid var(--border)',
+                      color: 'var(--muted)',
+                      fontWeight: 600,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {col.header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, i) => (
+                <tr
+                  key={i}
+                  style={{
+                    background: i % 2 === 0 ? 'var(--surface)' : 'transparent',
+                  }}
+                >
+                  {COLUMNS.map((col) => (
+                    <td
+                      key={col.key as string}
+                      style={{
+                        padding: '9px 12px',
+                        borderBottom: '1px solid var(--border)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {renderCell(row, col.key)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </main>
   );
 }
