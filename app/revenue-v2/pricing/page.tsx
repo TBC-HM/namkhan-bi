@@ -8,16 +8,16 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
 interface BarLadderRow {
-  stay_date?: string;
+  rate_category?: string;
   room_type?: string;
   bar_level?: string | number;
   rate_usd?: number | null;
   rate_lak?: number | null;
-  channel?: string;
-  restriction?: string;
-  occupancy_pct?: number | null;
-  rooms_available?: number | null;
-  rooms_sold?: number | null;
+  min_stay?: number | null;
+  effective_date?: string | null;
+  expiry_date?: string | null;
+  channel?: string | null;
+  is_active?: boolean | null;
   [key: string]: unknown;
 }
 
@@ -30,50 +30,32 @@ export default async function Page() {
   const { data, error } = await supabase
     .from('v_bar_ladder')
     .select('*')
-    .order('stay_date', { ascending: true })
     .limit(100);
+
+  if (error) {
+    console.error('[pricing] v_bar_ladder fetch error:', error.message);
+  }
 
   const rows: BarLadderRow[] = data ?? [];
 
-  // Derive summary KPIs from first row / aggregates
-  const totalRows = rows.length;
+  // Derive summary KPIs
+  const activeRates = rows.filter((r) => r.is_active !== false);
+  const rateCount = activeRates.length;
   const avgRateUsd =
-    totalRows > 0
-      ? rows.reduce((sum, r) => sum + (r.rate_usd ?? 0), 0) / totalRows
+    rateCount > 0
+      ? activeRates.reduce((sum, r) => sum + (r.rate_usd ?? 0), 0) / rateCount
       : null;
-  const avgOcc =
-    totalRows > 0
-      ? rows.reduce((sum, r) => sum + (r.occupancy_pct ?? 0), 0) / totalRows
-      : null;
-  const activeLevels = new Set(rows.map((r) => r.bar_level)).size;
+  const roomTypes = new Set(rows.map((r) => r.room_type).filter(Boolean)).size;
+  const barLevels = new Set(rows.map((r) => r.bar_level).filter(Boolean)).size;
 
-  const fmt = (v: number | null, prefix = '') =>
-    v !== null && v !== undefined ? `${prefix}${v.toFixed(2)}` : '—';
-  const fmtPct = (v: number | null) =>
-    v !== null && v !== undefined ? `${(v * 100).toFixed(1)}%` : '—';
+  const formatUsd = (v: number | null) =>
+    v != null ? `$${v.toFixed(2)}` : '—';
 
   return (
-    <main style={{ padding: '24px 32px', fontFamily: 'var(--font-body, sans-serif)' }}>
+    <main style={{ padding: '24px 32px' }}>
       <PageHeader pillar="Revenue" tab="Pricing" title="BAR Ladder" />
 
-      {error && (
-        <div
-          role="alert"
-          style={{
-            background: '#fef2f2',
-            border: '1px solid #fca5a5',
-            borderRadius: 8,
-            padding: '12px 16px',
-            marginBottom: 24,
-            color: '#991b1b',
-            fontSize: 14,
-          }}
-        >
-          ⚠️ Data load error: {error.message}
-        </div>
-      )}
-
-      {/* KPI strip */}
+      {/* KPI summary row */}
       <div
         style={{
           display: 'grid',
@@ -82,45 +64,40 @@ export default async function Page() {
           marginBottom: 32,
         }}
       >
-        <KpiBox label="BAR Levels" value={activeLevels > 0 ? String(activeLevels) : '—'} />
-        <KpiBox label="Avg Rate (USD)" value={fmt(avgRateUsd, '$')} />
-        <KpiBox label="Avg Occupancy" value={fmtPct(avgOcc)} />
-        <KpiBox label="Rows Loaded" value={totalRows > 0 ? String(totalRows) : '—'} />
+        <KpiBox label="Active Rates" value={rateCount > 0 ? String(rateCount) : '—'} />
+        <KpiBox label="Avg BAR (USD)" value={formatUsd(avgRateUsd)} />
+        <KpiBox label="Room Types" value={roomTypes > 0 ? String(roomTypes) : '—'} />
+        <KpiBox label="BAR Levels" value={barLevels > 0 ? String(barLevels) : '—'} />
       </div>
 
-      {/* BAR ladder table */}
+      {/* Main table */}
       <DataTable
         columns={[
-          { key: 'stay_date',       header: 'Stay Date' },
-          { key: 'room_type',       header: 'Room Type' },
-          { key: 'bar_level',       header: 'BAR Level' },
-          { key: 'channel',         header: 'Channel' },
-          { key: 'rate_usd',        header: 'Rate (USD)' },
-          { key: 'rate_lak',        header: 'Rate (LAK)' },
-          { key: 'occupancy_pct',   header: 'Occupancy' },
-          { key: 'rooms_available', header: 'Avail' },
-          { key: 'rooms_sold',      header: 'Sold' },
-          { key: 'restriction',     header: 'Restriction' },
+          { key: 'rate_category', header: 'Category' },
+          { key: 'room_type',     header: 'Room Type' },
+          { key: 'bar_level',     header: 'BAR Level' },
+          { key: 'rate_usd',      header: 'Rate (USD)' },
+          { key: 'rate_lak',      header: 'Rate (LAK)' },
+          { key: 'channel',       header: 'Channel' },
+          { key: 'min_stay',      header: 'Min Stay' },
+          { key: 'effective_date', header: 'Effective' },
+          { key: 'expiry_date',   header: 'Expires' },
+          { key: 'is_active',     header: 'Active' },
         ]}
         rows={rows.map((r) => ({
-          stay_date:       r.stay_date       ?? '—',
-          room_type:       r.room_type       ?? '—',
-          bar_level:       r.bar_level       ?? '—',
-          channel:         r.channel         ?? '—',
-          rate_usd:        r.rate_usd        != null ? `$${r.rate_usd.toFixed(2)}`  : '—',
-          rate_lak:        r.rate_lak        != null ? `₭${r.rate_lak.toFixed(0)}`  : '—',
-          occupancy_pct:   r.occupancy_pct   != null ? `${(r.occupancy_pct * 100).toFixed(1)}%` : '—',
-          rooms_available: r.rooms_available ?? '—',
-          rooms_sold:      r.rooms_sold      ?? '—',
-          restriction:     r.restriction     ?? '—',
+          ...r,
+          rate_usd:       r.rate_usd      != null ? `$${Number(r.rate_usd).toFixed(2)}`      : '—',
+          rate_lak:       r.rate_lak      != null ? `₭${Number(r.rate_lak).toLocaleString()}` : '—',
+          min_stay:       r.min_stay      != null ? `${r.min_stay}n`                          : '—',
+          effective_date: r.effective_date ?? '—',
+          expiry_date:    r.expiry_date   ?? '—',
+          rate_category:  r.rate_category ?? '—',
+          room_type:      r.room_type     ?? '—',
+          bar_level:      r.bar_level     ?? '—',
+          channel:        r.channel       ?? '—',
+          is_active:      r.is_active === true ? 'Yes' : r.is_active === false ? 'No' : '—',
         }))}
       />
-
-      {totalRows === 0 && !error && (
-        <p style={{ textAlign: 'center', color: '#6b7280', marginTop: 48, fontSize: 14 }}>
-          No BAR ladder data found in <code>v_bar_ladder</code>.
-        </p>
-      )}
     </main>
   );
 }
