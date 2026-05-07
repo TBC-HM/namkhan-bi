@@ -1,10 +1,42 @@
-// app/sales/page.tsx
-// Pillar root — redirect to first sub-tab (Inquiries).
-
-import { redirect } from 'next/navigation';
+import PageHeader from '@/components/layout/PageHeader';
+import DeptDropdown from '@/components/nav/DeptDropdown';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 60;
 
-export default function SalesIndex() {
-  redirect('/sales/inquiries');
+const LINKS = [
+  { label: 'Inquiries',  href: '/sales/inquiries',    desc: 'Triage, quote, approve, send' },
+  { label: 'Pipeline',   href: '/sales/pipeline',     desc: 'Group & event opportunity tracker' },
+  { label: 'Contracts',  href: '/sales/contracts',    desc: 'Active & pending contract log' },
+];
+
+export default function SalesPage() {
+  return (
+    <main style={{ padding: '32px 40px', maxWidth: 1200 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8 }}>
+        <PageHeader pillar="Sales" tab="" title="Sales" lede="Every inquiry, an answer before lunch." />
+        <DeptDropdown />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16, marginTop: 32 }}>
+        {LINKS.map(l => (
+          <a key={l.href} href={l.href} style={{ textDecoration: 'none' }}>
+            <div style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 10,
+              padding: '20px 24px',
+            }}>
+              <div style={{ fontFamily: 'var(--serif)', fontSize: 'var(--t-xl)', fontStyle: 'italic', color: 'var(--brass)', marginBottom: 6 }}>
+                {l.label}
+              </div>
+              <div style={{ fontFamily: 'var(--sans)', fontSize: 'var(--t-sm)', color: 'var(--muted)' }}>
+                {l.desc}
+              </div>
+            </div>
+          </a>
+        ))}
+      </div>
+    </main>
+  );
 }
