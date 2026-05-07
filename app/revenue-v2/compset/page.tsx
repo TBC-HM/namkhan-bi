@@ -1,133 +1,158 @@
 // app/revenue-v2/compset/page.tsx
-// Ticket #107 slice — wire /revenue-v2/compset to live Supabase data.
-// Assumptions:
-//   1. v_compset_index exists in Supabase but is not yet on the query_supabase_view allowlist;
-//      the page fetches it directly via the service-role client (no RLS block).
-//   2. v_compset_set_summary / v_compset_property_summary returned permission-denied at build time;
-//      we fall back to v_compset_index exclusively.
-//   3. Column shape inferred from view name convention:
-//      property_name, category, our_rate, comp_rate, index_pct, rank, as_of_date.
-//      Any missing column renders '—'.
-//   4. KpiBox, DataTable, PageHeader are all DEFAULT exports.
-
 import { createClient } from '@supabase/supabase-js';
-import KpiBox from '@/components/kpi/KpiBox';
-import DataTable from '@/components/ui/DataTable';
 import PageHeader from '@/components/layout/PageHeader';
+import DataTable from '@/components/ui/DataTable';
+import KpiBox from '@/components/kpi/KpiBox';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
 interface CompsetRow {
   property_name?: string;
-  category?: string;
-  our_rate?: number | null;
-  comp_rate?: number | null;
-  index_pct?: number | null;
-  rank?: number | null;
-  as_of_date?: string | null;
+  stars?: number | null;
+  rate_usd?: number | null;
+  rate_lak?: number | null;
+  occupancy_pct?: number | null;
+  revpar_usd?: number | null;
+  adr_usd?: number | null;
+  index_vs_namkhan?: number | null;
+  source?: string | null;
+  snapshot_date?: string | null;
+  [key: string]: unknown;
 }
 
-function fmtPct(v: number | null | undefined): string {
-  if (v == null) return '—';
-  const sign = v >= 0 ? '+' : '−';
-  return `${sign}${Math.abs(v).toFixed(1)}%`;
-}
-
-function fmtUsd(v: number | null | undefined): string {
-  if (v == null) return '—';
-  return `$${v.toFixed(2)}`;
-}
-
-export default async function Page() {
+export default async function CompsetPage() {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
+  // v_compset_set_summary is the allowlisted canonical view for compset rows
   const { data, error } = await supabase
-    .from('v_compset_index')
+    .from('v_compset_set_summary')
     .select('*')
-    .order('as_of_date', { ascending: false })
     .limit(50);
 
   const rows: CompsetRow[] = data ?? [];
 
-  // KPI summary — use the most recent row for top-level metrics
-  const latest = rows[0] ?? {};
-  const avgIndex =
-    rows.length > 0
-      ? rows.reduce((s, r) => s + (r.index_pct ?? 0), 0) / rows.length
+  // Derive summary KPIs from the set
+  const namkhanRow = rows.find(
+    (r) =>
+      typeof r.property_name === 'string' &&
+      r.property_name.toLowerCase().includes('namkhan')
+  );
+  const compRows = rows.filter(
+    (r) =>
+      typeof r.property_name !== 'string' ||
+      !r.property_name.toLowerCase().includes('namkhan')
+  );
+
+  const avgCompRate =
+    compRows.length > 0
+      ? compRows.reduce((sum, r) => sum + (Number(r.rate_usd) || 0), 0) /
+        compRows.length
       : null;
 
+  const avgCompOcc =
+    compRows.length > 0
+      ? compRows.reduce((sum, r) => sum + (Number(r.occupancy_pct) || 0), 0) /
+        compRows.length
+      : null;
+
+  const fmtUsd = (v: number | null | undefined) =>
+    v != null ? `$${v.toFixed(0)}` : '—';
+  const fmtPct = (v: number | null | undefined) =>
+    v != null ? `${v.toFixed(1)}%` : '—';
+  const fmtIdx = (v: number | null | undefined) =>
+    v != null ? v.toFixed(2) : '—';
+
+  const columns = [
+    { key: 'property_name', header: 'Property' },
+    { key: 'stars', header: '★' },
+    { key: 'rate_usd', header: 'Rate (USD)' },
+    { key: 'occupancy_pct', header: 'OCC %' },
+    { key: 'adr_usd', header: 'ADR' },
+    { key: 'revpar_usd', header: 'RevPAR' },
+    { key: 'index_vs_namkhan', header: 'Index vs NK' },
+    { key: 'source', header: 'Source' },
+    { key: 'snapshot_date', header: 'Snapshot' },
+  ];
+
+  const tableRows = rows.map((r) => ({
+    ...r,
+    rate_usd: fmtUsd(r.rate_usd as number | null),
+    occupancy_pct: fmtPct(r.occupancy_pct as number | null),
+    adr_usd: fmtUsd(r.adr_usd as number | null),
+    revpar_usd: fmtUsd(r.revpar_usd as number | null),
+    index_vs_namkhan: fmtIdx(r.index_vs_namkhan as number | null),
+    stars: r.stars ?? '—',
+    source: r.source ?? '—',
+    snapshot_date: r.snapshot_date ?? '—',
+  }));
+
   return (
-    <main style={{ padding: '24px 32px' }}>
-      <PageHeader pillar="Revenue" tab="Compset" title="Competitive Set Index" />
+    <main style={{ padding: '24px' }}>
+      <PageHeader pillar="Revenue" tab="Compset" title="Competitive Set" />
 
       {error && (
-        <p
-          role="alert"
+        <div
           style={{
-            background: '#fff3cd',
-            border: '1px solid #ffc107',
-            borderRadius: 6,
-            padding: '8px 14px',
-            marginBottom: 20,
-            fontSize: 13,
+            background: '#fee2e2',
+            border: '1px solid #ef4444',
+            borderRadius: 8,
+            padding: '12px 16px',
+            marginBottom: 24,
+            color: '#991b1b',
+            fontSize: 14,
           }}
         >
-          ⚠️ Data unavailable: {error.message}
-        </p>
+          ⚠ Data load error: {error.message}
+        </div>
       )}
 
-      {/* KPI strip */}
+      {/* KPI Summary Strip */}
       <div
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(4, 1fr)',
           gap: 16,
-          marginBottom: 28,
+          marginBottom: 32,
         }}
       >
         <KpiBox
-          label="Our Rate"
-          value={fmtUsd(latest.our_rate)}
+          label="NK Rate (USD)"
+          value={fmtUsd(namkhanRow?.rate_usd as number | null)}
         />
         <KpiBox
-          label="Comp Rate"
-          value={fmtUsd(latest.comp_rate)}
+          label="Comp Avg Rate"
+          value={fmtUsd(avgCompRate)}
         />
         <KpiBox
-          label="Rate Index"
-          value={fmtPct(latest.index_pct)}
+          label="NK OCC"
+          value={fmtPct(namkhanRow?.occupancy_pct as number | null)}
         />
         <KpiBox
-          label="Avg Index (all)"
-          value={fmtPct(avgIndex)}
+          label="Comp Avg OCC"
+          value={fmtPct(avgCompOcc)}
         />
       </div>
 
-      {/* Detail table */}
-      <DataTable
-        columns={[
-          { key: 'as_of_date', header: 'Date' },
-          { key: 'property_name', header: 'Property' },
-          { key: 'category', header: 'Category' },
-          { key: 'our_rate', header: 'Our Rate' },
-          { key: 'comp_rate', header: 'Comp Rate' },
-          { key: 'index_pct', header: 'Index %' },
-          { key: 'rank', header: 'Rank' },
-        ]}
-        rows={rows.map((r) => ({
-          as_of_date: r.as_of_date ?? '—',
-          property_name: r.property_name ?? '—',
-          category: r.category ?? '—',
-          our_rate: fmtUsd(r.our_rate),
-          comp_rate: fmtUsd(r.comp_rate),
-          index_pct: fmtPct(r.index_pct),
-          rank: r.rank != null ? String(r.rank) : '—',
-        }))}
-      />
+      {/* Compset Table */}
+      <DataTable columns={columns} rows={tableRows} />
+
+      {rows.length === 0 && !error && (
+        <p
+          style={{
+            textAlign: 'center',
+            color: '#6b7280',
+            marginTop: 48,
+            fontSize: 14,
+          }}
+        >
+          No compset data available yet. Populate via the compset ingestion
+          pipeline.
+        </p>
+      )}
     </main>
   );
 }
