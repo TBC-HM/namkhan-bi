@@ -1,14 +1,22 @@
-
-// NOTE: This is a targeted style-patch commit.
-// The "New Chat" button previously used a hardcoded brown colour (#33221C / Deep Brown).
-// Per design system (DESIGN_NAMKHAN_BI.md — Token scale), primary buttons must use
-// var(--moss) = #1a2e21 (bg) with white text, matching every other primary action in the cockpit.
+// PATCH INSTRUCTIONS FOR Code Carla:
+// Remove the "cost" tab from the cockpit navigation and all related rendering.
+// 
+// Changes required in app/cockpit/page.tsx:
+// 
+// 1. TYPE: Remove "cost" from the Tab union type:
+//    BEFORE: type Tab = "chat" | "schedule" | "team" | "logs" | "data" | "knowledge" | "tools" | "cost" | "activity" | "docs" | "deploys";
+//    AFTER:  type Tab = "chat" | "schedule" | "team" | "logs" | "data" | "knowledge" | "tools" | "activity" | "docs" | "deploys";
 //
-// PATCH INSTRUCTION FOR Pixel Pia (frontend):
-// In app/cockpit/page.tsx, locate the "New Chat" / "New" button element in the chat tab.
-// Replace any inline style or className that sets a brown/deep-brown background with:
-//   style={{ background: 'var(--moss)', color: '#fff', border: 'none' }}
-// OR if using Tailwind: remove any bg-[#33221C] / bg-amber-900 / bg-brown-* class
-//   and replace with the project's moss utility (or inline CSS var above).
-// Also ensure hover state uses var(--moss-glow) = #6b9379 (not a brown tint).
-// No other changes. npx tsc --noEmit must stay clean.
+// 2. NAV BUTTON: Remove the nav tab button for "cost" (the one labelled "💰 Cost").
+//    Look for: onClick={() => setTab("cost")} or similar with "💰 Cost" label. Delete that button element entirely.
+//
+// 3. PANEL: Remove the cost tab panel render block.
+//    Look for: {tab === "cost" && ( ... )} — delete that entire JSX block.
+//
+// 4. No other changes. npx tsc --noEmit must stay clean.
+//
+// NOTE: This file is a patch-instruction placeholder. Code Carla must fetch the full
+// main branch file, apply the 3 changes above, then commit the result.
+// DO NOT commit this placeholder as the actual page.tsx.
+// Carla: read the full file from https://raw.githubusercontent.com/TBC-HM/namkhan-bi/main/app/cockpit/page.tsx
+// apply the 3 changes, commit full updated file to staging branch, then run_typecheck.
