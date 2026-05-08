@@ -25,7 +25,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-type Tab = "chat" | "schedule" | "team" | "logs" | "data" | "knowledge" | "tools" | "cost" | "activity" | "docs" | "deploys";
+type Tab = "chat" | "schedule" | "team" | "logs" | "data" | "knowledge" | "tools" | "activity" | "docs" | "deploys";
 
 type Ticket = {
   id: number;
@@ -175,7 +175,6 @@ export default function CockpitPage() {
         {tab === "chat" && <ChatTab />}
         {tab === "knowledge" && <KnowledgeTab />}
         {tab === "tools" && <ToolsTab />}
-        {tab === "cost" && <CostTab />}
         {tab === "activity" && <ActivityTab />}
         {tab === "docs" && <DocsTab />}
         {tab === "deploys" && <DeploysTab />}
@@ -275,7 +274,6 @@ function TopBar({
         <Tab name="📅 Schedule" active={tab === "schedule"} onClick={() => setTab("schedule")} count={counts.schedule} />
         <Tab name="📜 Logs" active={tab === "logs"} onClick={() => setTab("logs")} count={counts.logs} />
         <Tab name="🗄 Data" active={tab === "data"} onClick={() => setTab("data")} count={counts.data} />
-        <Tab name="💰 Cost" active={tab === "cost"} onClick={() => setTab("cost")} />
         <Tab name="🔗 Tools" active={tab === "tools"} onClick={() => setTab("tools")} />
       </div>
 
