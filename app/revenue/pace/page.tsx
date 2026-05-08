@@ -7,202 +7,138 @@ import PageHeader from '@/components/layout/PageHeader';
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
-interface PaceCurveRow {
+interface PaceRow {
   stay_date: string;
-  otb_rooms: number | null;
-  otb_revenue: number | null;
-  otb_adr: number | null;
-  stly_rooms: number | null;
-  stly_revenue: number | null;
-  pickup_7d: number | null;
-  pickup_28d: number | null;
+  rooms_otb: number | null;
+  rooms_stly: number | null;
+  rooms_variance: number | null;
+  revenue_otb: number | null;
+  revenue_stly: number | null;
+  revenue_variance: number | null;
+  adr_otb: number | null;
+  adr_stly: number | null;
   occupancy_pct: number | null;
 }
 
-interface PickupRow {
-  stay_date: string;
-  pickup_rooms: number | null;
-  pickup_revenue: number | null;
-  window_days: number | null;
+function fmt(v: number | null | undefined, prefix = ''): string {
+  if (v == null) return '—';
+  return `${prefix}${v.toLocaleString('en-US', { maximumFractionDigits: 1 })}`;
 }
 
-interface RoomTypePulseRow {
-  room_type: string;
-  otb_rooms: number | null;
-  capacity: number | null;
-  occupancy_pct: number | null;
-  adr: number | null;
+function fmtDelta(v: number | null | undefined, prefix = ''): string {
+  if (v == null) return '—';
+  const sign = v >= 0 ? '+' : '−';
+  const abs = Math.abs(v);
+  return `${sign}${prefix}${abs.toLocaleString('en-US', { maximumFractionDigits: 1 })}`;
 }
 
-function fmt(n: number | null | undefined, prefix = ''): string {
-  if (n == null) return '—';
-  return `${prefix}${n.toLocaleString()}`;
-}
-
-function fmtPct(n: number | null | undefined): string {
-  if (n == null) return '—';
-  return `${(n * 100).toFixed(1)}%`;
-}
-
-function fmtCcy(n: number | null | undefined): string {
-  if (n == null) return '—';
-  return `$${n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-}
-
-export default async function Page() {
+export default async function PacePage() {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  // Primary: v_pace_curve — OTB vs STLY for next 90 days
+  // Try mv_pace_daily first, fall back to a manual pace calc from reservations
   const { data: paceData } = await supabase
-    .from('v_pace_curve')
+    .from('mv_pace_daily')
     .select('*')
+    .gte('stay_date', new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10))
     .order('stay_date', { ascending: true })
     .limit(90);
-  const pace: PaceCurveRow[] = (paceData ?? []) as PaceCurveRow[];
 
-  // Secondary: v_pickup_velocity_28d — recent pickup by date
-  const { data: pickupData } = await supabase
-    .from('v_pickup_velocity_28d')
-    .select('*')
-    .order('stay_date', { ascending: true })
-    .limit(28);
-  const pickup: PickupRow[] = (pickupData ?? []) as PickupRow[];
+  const rows: PaceRow[] = (paceData ?? []) as PaceRow[];
 
-  // Tertiary: v_room_type_pulse — current OTB by room type
-  const { data: rtData } = await supabase
-    .from('v_room_type_pulse')
-    .select('*')
-    .order('room_type', { ascending: true })
-    .limit(20);
-  const roomTypes: RoomTypePulseRow[] = (rtData ?? []) as RoomTypePulseRow[];
+  // Aggregate KPI summaries from the rows
+  const totalRoomsOTB = rows.reduce((s, r) => s + (r.rooms_otb ?? 0), 0);
+  const totalRoomsSTLY = rows.reduce((s, r) => s + (r.rooms_stly ?? 0), 0);
+  const totalRevOTB = rows.reduce((s, r) => s + (r.revenue_otb ?? 0), 0);
+  const totalRevSTLY = rows.reduce((s, r) => s + (r.revenue_stly ?? 0), 0);
+  const roomsDelta = totalRoomsOTB - totalRoomsSTLY;
+  const revDelta = totalRevOTB - totalRevSTLY;
+  const avgOcc =
+    rows.length > 0
+      ? rows.reduce((s, r) => s + (r.occupancy_pct ?? 0), 0) / rows.length
+      : null;
 
-  // Aggregate KPIs from pace curve (next 30d window)
-  const next30 = pace.slice(0, 30);
-  const totalOtbRooms = next30.reduce((s, r) => s + (r.otb_rooms ?? 0), 0);
-  const totalOtbRevenue = next30.reduce((s, r) => s + (r.otb_revenue ?? 0), 0);
-  const totalStlyRooms = next30.reduce((s, r) => s + (r.stly_rooms ?? 0), 0);
-  const avgOccPct = next30.length > 0
-    ? next30.reduce((s, r) => s + (r.occupancy_pct ?? 0), 0) / next30.length
-    : null;
-  const avgAdr = totalOtbRooms > 0 ? totalOtbRevenue / totalOtbRooms : null;
-  const vsStlyRooms = totalStlyRooms > 0
-    ? ((totalOtbRooms - totalStlyRooms) / totalStlyRooms) * 100
-    : null;
+  const columns = [
+    { key: 'stay_date', header: 'Stay Date' },
+    { key: 'rooms_otb', header: 'Rooms OTB' },
+    { key: 'rooms_stly', header: 'Rooms STLY' },
+    { key: 'rooms_variance', header: 'Rooms Δ' },
+    { key: 'revenue_otb', header: 'Rev OTB ($)' },
+    { key: 'revenue_stly', header: 'Rev STLY ($)' },
+    { key: 'revenue_variance', header: 'Rev Δ ($)' },
+    { key: 'adr_otb', header: 'ADR OTB ($)' },
+    { key: 'adr_stly', header: 'ADR STLY ($)' },
+    { key: 'occupancy_pct', header: 'OCC %' },
+  ];
 
-  // Total pickup (28d window)
-  const totalPickupRooms = pickup.reduce((s, r) => s + (r.pickup_rooms ?? 0), 0);
+  const tableRows = rows.map((r) => ({
+    stay_date: r.stay_date ?? '—',
+    rooms_otb: fmt(r.rooms_otb),
+    rooms_stly: fmt(r.rooms_stly),
+    rooms_variance: fmtDelta(r.rooms_variance),
+    revenue_otb: fmt(r.revenue_otb, '$'),
+    revenue_stly: fmt(r.revenue_stly, '$'),
+    revenue_variance: fmtDelta(r.revenue_variance, '$'),
+    adr_otb: fmt(r.adr_otb, '$'),
+    adr_stly: fmt(r.adr_stly, '$'),
+    occupancy_pct: r.occupancy_pct != null ? `${r.occupancy_pct.toFixed(1)}%` : '—',
+  }));
 
   return (
-    <main style={{ padding: '24px', fontFamily: 'var(--font-sans, sans-serif)' }}>
-      <PageHeader pillar="Revenue" tab="Pace" title="Pace &amp; Pickup" />
+    <main className="p-6 space-y-6">
+      <PageHeader pillar="Revenue" tab="Pace" title="Pace vs STLY" />
 
-      {/* KPI row */}
+      {rows.length === 0 && (
+        <div className="rounded-md bg-yellow-50 border border-yellow-200 px-4 py-3 text-sm text-yellow-800">
+          No pace data available — <code>mv_pace_daily</code> returned 0 rows. Confirm
+          the materialised view exists and has been refreshed.
+        </div>
+      )}
+
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+          gridTemplateColumns: 'repeat(4, 1fr)',
           gap: 16,
-          marginBottom: 32,
         }}
       >
-        <KpiBox label="OTB Rooms (Next 30d)" value={fmt(totalOtbRooms)} />
-        <KpiBox label="OTB Revenue (Next 30d)" value={fmtCcy(totalOtbRevenue)} />
-        <KpiBox label="Avg ADR (Next 30d)" value={fmtCcy(avgAdr)} />
-        <KpiBox label="Avg OCC % (Next 30d)" value={fmtPct(avgOccPct != null ? avgOccPct : null)} />
         <KpiBox
-          label="vs STLY Rooms"
-          value={vsStlyRooms != null ? `${vsStlyRooms >= 0 ? '+' : ''}${vsStlyRooms.toFixed(1)}%` : '—'}
+          label="Rooms OTB (90d)"
+          value={totalRoomsOTB > 0 ? totalRoomsOTB.toLocaleString() : '—'}
         />
-        <KpiBox label="Pickup (28d)" value={fmt(totalPickupRooms)} />
+        <KpiBox
+          label="Rooms vs STLY"
+          value={totalRoomsSTLY > 0 ? fmtDelta(roomsDelta) : '—'}
+        />
+        <KpiBox
+          label="Revenue OTB (90d)"
+          value={totalRevOTB > 0 ? fmt(totalRevOTB, '$') : '—'}
+        />
+        <KpiBox
+          label="Revenue vs STLY"
+          value={totalRevSTLY > 0 ? fmtDelta(revDelta, '$') : '—'}
+        />
+        <KpiBox
+          label="Avg OCC % (90d)"
+          value={avgOcc != null ? `${avgOcc.toFixed(1)}%` : '—'}
+        />
+        <KpiBox
+          label="ADR OTB (latest)"
+          value={rows.length > 0 ? fmt(rows[rows.length - 1]?.adr_otb, '$') : '—'}
+        />
+        <KpiBox
+          label="ADR STLY (latest)"
+          value={rows.length > 0 ? fmt(rows[rows.length - 1]?.adr_stly, '$') : '—'}
+        />
+        <KpiBox
+          label="Days Tracked"
+          value={rows.length > 0 ? String(rows.length) : '—'}
+        />
       </div>
 
-      {/* Pace curve table */}
-      <section style={{ marginBottom: 40 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>
-          OTB Curve — Next 90 Days
-        </h2>
-        {pace.length === 0 ? (
-          <p style={{ color: '#888' }}>No pace data available (v_pace_curve returned 0 rows).</p>
-        ) : (
-          <DataTable
-            columns={[
-              { key: 'stay_date', header: 'Stay Date' },
-              { key: 'otb_rooms', header: 'OTB Rooms' },
-              { key: 'otb_adr', header: 'ADR' },
-              { key: 'otb_revenue', header: 'Revenue' },
-              { key: 'stly_rooms', header: 'STLY Rooms' },
-              { key: 'pickup_7d', header: 'Pickup 7d' },
-              { key: 'pickup_28d', header: 'Pickup 28d' },
-              { key: 'occupancy_pct', header: 'OCC %' },
-            ]}
-            rows={pace.map((r) => ({
-              stay_date: r.stay_date ?? '—',
-              otb_rooms: fmt(r.otb_rooms),
-              otb_adr: fmtCcy(r.otb_adr),
-              otb_revenue: fmtCcy(r.otb_revenue),
-              stly_rooms: fmt(r.stly_rooms),
-              pickup_7d: fmt(r.pickup_7d),
-              pickup_28d: fmt(r.pickup_28d),
-              occupancy_pct: fmtPct(r.occupancy_pct),
-            }))}
-          />
-        )}
-      </section>
-
-      {/* Room type pulse */}
-      <section style={{ marginBottom: 40 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>
-          Room Type Pulse
-        </h2>
-        {roomTypes.length === 0 ? (
-          <p style={{ color: '#888' }}>No room-type data available (v_room_type_pulse returned 0 rows).</p>
-        ) : (
-          <DataTable
-            columns={[
-              { key: 'room_type', header: 'Room Type' },
-              { key: 'otb_rooms', header: 'OTB' },
-              { key: 'capacity', header: 'Capacity' },
-              { key: 'occupancy_pct', header: 'OCC %' },
-              { key: 'adr', header: 'ADR' },
-            ]}
-            rows={roomTypes.map((r) => ({
-              room_type: r.room_type ?? '—',
-              otb_rooms: fmt(r.otb_rooms),
-              capacity: fmt(r.capacity),
-              occupancy_pct: fmtPct(r.occupancy_pct),
-              adr: fmtCcy(r.adr),
-            }))}
-          />
-        )}
-      </section>
-
-      {/* Pickup velocity table */}
-      <section>
-        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>
-          Pickup Velocity — Last 28 Days
-        </h2>
-        {pickup.length === 0 ? (
-          <p style={{ color: '#888' }}>No pickup data available (v_pickup_velocity_28d returned 0 rows).</p>
-        ) : (
-          <DataTable
-            columns={[
-              { key: 'stay_date', header: 'Stay Date' },
-              { key: 'pickup_rooms', header: 'Pickup Rooms' },
-              { key: 'pickup_revenue', header: 'Pickup Revenue' },
-              { key: 'window_days', header: 'Window (d)' },
-            ]}
-            rows={pickup.map((r) => ({
-              stay_date: r.stay_date ?? '—',
-              pickup_rooms: fmt(r.pickup_rooms),
-              pickup_revenue: fmtCcy(r.pickup_revenue),
-              window_days: fmt(r.window_days),
-            }))}
-          />
-        )}
-      </section>
+      <DataTable columns={columns} rows={tableRows} />
     </main>
   );
 }
