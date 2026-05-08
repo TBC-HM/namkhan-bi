@@ -1123,7 +1123,22 @@ async function github_commit_file(args: { path: string; content: string; message
   const token = process.env.GITHUB_TOKEN;
   if (!token) return { ok: false, error: "GITHUB_TOKEN env var missing" };
   const repo = "TBC-HM/namkhan-bi";
-  const branch = args.branch ?? "staging";
+  // 2026-05-08 PBS directive: NEVER allow direct commits to main or staging.
+  // Yesterday's marathon dropped 13 destructive commits straight onto staging,
+  // bypassing PR review. Force every commit through a feature branch + PR.
+  const requestedBranch = args.branch ?? "";
+  if (!requestedBranch || requestedBranch === "main" || requestedBranch === "staging") {
+    await supabase.from("cockpit_audit_log").insert({
+      agent: "github-write", action: "commit_file_BLOCKED",
+      target: `${repo}@${requestedBranch || "(none)"}:${args.path}`, success: false,
+      reasoning: `BLOCKED: agent tried to commit directly to '${requestedBranch || "default"}'. Must target a feature branch like feature/agent-{ticket}-{slug}.`,
+    });
+    return {
+      ok: false,
+      error: `BRANCH_GUARD: refusing to commit to '${requestedBranch || "(no branch given)"}'. You MUST pass branch:"feature/agent-{ticket-id}-{short-slug}". Direct commits to main and staging are forbidden — every change goes through a PR.`,
+    };
+  }
+  const branch = requestedBranch;
   const headers = { Authorization: `Bearer ${token}`, "Accept": "application/vnd.github+json", "Content-Type": "application/json" };
 
   // 2026-05-07 — auto-create the branch from main if it doesn't exist.
