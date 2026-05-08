@@ -4,7 +4,10 @@
 // Global mockup elements (agent dock, modal overlay, tooltip) are rendered once here.
 // Mockup JS is loaded from /public/revenue-redesign.js after interactive.
 
+'use client';
+
 import Script from 'next/script';
+import { usePathname } from 'next/navigation';
 import Banner from '@/components/nav/Banner';
 import SubNav from '@/components/nav/SubNav';
 import FilterStrip from '@/components/nav/FilterStrip';
@@ -17,6 +20,8 @@ import MODAL_HTML from './_redesign/modalHtml';
 import TOOLTIP_HTML from './_redesign/tooltipHtml';
 
 export default function RevenueLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname() ?? '';
+  if (pathname === '/revenue' || pathname === '/revenue/') return <>{children}</>;
   const h = PILLAR_HEADER.revenue;
   const t = new Date().toLocaleTimeString('en-GB', {
     hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Vientiane',
