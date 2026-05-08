@@ -1,83 +1,125 @@
 // app/it/page.tsx
 import { createClient } from '@supabase/supabase-js';
+import PageHeader from '@/components/layout/PageHeader';
 import KpiBox from '@/components/kpi/KpiBox';
 import DataTable from '@/components/ui/DataTable';
-import PageHeader from '@/components/layout/PageHeader';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
-interface Incident {
-  id: number;
-  detected_at: string;
-  resolved_at: string | null;
-  severity: number;
-  symptom: string;
-  root_cause: string | null;
-  fix: string | null;
-  auto_resolved: boolean;
-  mttr_minutes: number | null;
-  source: string | null;
+// ── severity label helpers ────────────────────────────────────────────────────
+const SEVERITY_LABEL: Record<number, string> = {
+  1: 'Critical',
+  2: 'High',
+  3: 'Medium',
+  4: 'Informational',
+};
+
+function severityLabel(sev: number | null): string {
+  if (sev == null) return '—';
+  return SEVERITY_LABEL[sev] ?? `Sev ${sev}`;
 }
 
-interface Ticket {
-  id: number;
-  created_at: string;
-  updated_at: string;
-  arm: string;
-  intent: string;
-  status: string;
-  parsed_summary: string | null;
+function fmtDate(iso: string | null): string {
+  if (!iso) return '—';
+  return iso.slice(0, 16).replace('T', ' ');
 }
 
-function severityLabel(n: number): string {
-  if (n <= 1) return 'P1 Critical';
-  if (n === 2) return 'P2 High';
-  if (n === 3) return 'P3 Medium';
-  return 'P4 Info';
-}
-
-export default async function Page() {
+// ── page ─────────────────────────────────────────────────────────────────────
+export default async function ITPage() {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  const [{ data: incidentData }, { data: ticketData }] = await Promise.all([
-    supabase
-      .from('cockpit_incidents')
-      .select('*')
-      .order('detected_at', { ascending: false })
-      .limit(50),
-    supabase
-      .from('cockpit_tickets')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(50),
-  ]);
+  // Incidents (last 20, most recent first, excluding informational probes)
+  const { data: incidentRaw } = await supabase
+    .from('cockpit_incidents')
+    .select('id, detected_at, resolved_at, severity, symptom, root_cause, fix, auto_resolved, mttr_minutes, source')
+    .lte('severity', 3)
+    .order('detected_at', { ascending: false })
+    .limit(20);
 
-  const incidents: Incident[] = incidentData ?? [];
-  const tickets: Ticket[] = ticketData ?? [];
+  // Open tickets for the dev arm
+  const { data: ticketRaw } = await supabase
+    .from('cockpit_tickets')
+    .select('id, created_at, arm, intent, status, parsed_summary')
+    .eq('arm', 'dev')
+    .not('status', 'eq', 'completed')
+    .order('created_at', { ascending: false })
+    .limit(20);
 
-  // --- KPI derivations ---
-  const openIncidents = incidents.filter((i) => !i.resolved_at && i.severity <= 3);
-  const criticalIncidents = incidents.filter((i) => !i.resolved_at && i.severity === 1);
+  // Mismatches (informational probes count)
+  const { data: allIncidents } = await supabase
+    .from('cockpit_incidents')
+    .select('id, severity, resolved_at')
+    .order('detected_at', { ascending: false })
+    .limit(100);
+
+  const incidents = incidentRaw ?? [];
+  const tickets = ticketRaw ?? [];
+  const allInc = allIncidents ?? [];
+
+  // KPI calculations
+  const openIncidents = incidents.filter((r) => !r.resolved_at).length;
+  const resolvedToday = allInc.filter((r) => {
+    if (!r.resolved_at) return false;
+    const today = new Date().toISOString().slice(0, 10);
+    return r.resolved_at.slice(0, 10) === today;
+  }).length;
+  const criticalOpen = incidents.filter((r) => r.severity === 1 && !r.resolved_at).length;
   const avgMttr =
-    incidents.filter((i) => i.mttr_minutes !== null).length > 0
+    incidents.filter((r) => r.mttr_minutes != null).length > 0
       ? Math.round(
           incidents
-            .filter((i) => i.mttr_minutes !== null)
-            .reduce((sum, i) => sum + (i.mttr_minutes ?? 0), 0) /
-            incidents.filter((i) => i.mttr_minutes !== null).length
+            .filter((r) => r.mttr_minutes != null)
+            .reduce((sum, r) => sum + (r.mttr_minutes ?? 0), 0) /
+            incidents.filter((r) => r.mttr_minutes != null).length
         )
       : null;
-  const openTickets = tickets.filter((t) => !['completed', 'closed', 'cancelled'].includes(t.status));
+
+  // Table columns
+  const incidentColumns = [
+    { key: 'detected_at', header: 'Detected' },
+    { key: 'severity_label', header: 'Severity' },
+    { key: 'symptom', header: 'Symptom' },
+    { key: 'source', header: 'Source' },
+    { key: 'status_label', header: 'Status' },
+    { key: 'mttr_minutes', header: 'MTTR (min)' },
+  ];
+
+  const incidentRows = incidents.map((r) => ({
+    ...r,
+    detected_at: fmtDate(r.detected_at),
+    severity_label: severityLabel(r.severity),
+    status_label: r.resolved_at ? `✅ Resolved ${fmtDate(r.resolved_at)}` : r.auto_resolved ? '🔄 Auto-resolved' : '🔴 Open',
+    mttr_minutes: r.mttr_minutes ?? '—',
+    symptom: r.symptom ?? '—',
+    source: r.source ?? '—',
+  }));
+
+  const ticketColumns = [
+    { key: 'id', header: '#' },
+    { key: 'created_at', header: 'Created' },
+    { key: 'arm', header: 'Arm' },
+    { key: 'intent', header: 'Intent' },
+    { key: 'status', header: 'Status' },
+    { key: 'summary_short', header: 'Summary' },
+  ];
+
+  const ticketRows = tickets.map((r) => ({
+    ...r,
+    created_at: fmtDate(r.created_at),
+    summary_short: r.parsed_summary
+      ? r.parsed_summary.replace(/\*\*/g, '').split('\n')[0].slice(0, 80)
+      : '—',
+  }));
 
   return (
-    <main style={{ padding: '24px 32px', fontFamily: 'inherit' }}>
-      <PageHeader pillar="IT" tab="Overview" title="IT Overview" />
+    <main style={{ padding: '24px 32px', maxWidth: 1280 }}>
+      <PageHeader pillar="IT" tab="Overview" title="IT Manager Dashboard" />
 
-      {/* KPI Row */}
+      {/* KPI Strip */}
       <div
         style={{
           display: 'grid',
@@ -88,73 +130,63 @@ export default async function Page() {
       >
         <KpiBox
           label="Open Incidents"
-          value={openIncidents.length === 0 ? '—' : String(openIncidents.length)}
+          value={openIncidents === 0 ? '✅ None' : String(openIncidents)}
         />
         <KpiBox
-          label="P1 Critical"
-          value={criticalIncidents.length === 0 ? '—' : String(criticalIncidents.length)}
+          label="Critical Open"
+          value={criticalOpen === 0 ? '✅ None' : `🔴 ${criticalOpen}`}
+        />
+        <KpiBox
+          label="Resolved Today"
+          value={resolvedToday === 0 ? '—' : String(resolvedToday)}
         />
         <KpiBox
           label="Avg MTTR (min)"
-          value={avgMttr !== null ? String(avgMttr) : '—'}
-        />
-        <KpiBox
-          label="Open Tickets"
-          value={openTickets.length === 0 ? '—' : String(openTickets.length)}
+          value={avgMttr != null ? String(avgMttr) : '—'}
         />
       </div>
 
-      {/* Incidents Table */}
-      <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12, marginTop: 0 }}>
-        Recent Incidents
-      </h2>
-      <DataTable
-        columns={[
-          { key: 'id', header: '#' },
-          { key: 'detected_at_fmt', header: 'Detected' },
-          { key: 'resolved_at_fmt', header: 'Resolved' },
-          { key: 'severity_label', header: 'Severity' },
-          { key: 'symptom', header: 'Symptom' },
-          { key: 'source', header: 'Source' },
-          { key: 'mttr_minutes', header: 'MTTR (min)' },
-        ]}
-        rows={incidents.map((i) => ({
-          id: i.id,
-          detected_at_fmt: i.detected_at
-            ? new Date(i.detected_at).toISOString().slice(0, 16).replace('T', ' ')
-            : '—',
-          resolved_at_fmt: i.resolved_at
-            ? new Date(i.resolved_at).toISOString().slice(0, 16).replace('T', ' ')
-            : '—',
-          severity_label: severityLabel(i.severity),
-          symptom: i.symptom ?? '—',
-          source: i.source ?? '—',
-          mttr_minutes: i.mttr_minutes ?? '—',
-        }))}
-      />
+      {/* Incidents table */}
+      <section style={{ marginBottom: 40 }}>
+        <h2
+          style={{
+            fontSize: 16,
+            fontWeight: 600,
+            marginBottom: 12,
+            color: '#1a1a1a',
+          }}
+        >
+          Recent Incidents (Sev 1–3, last 20)
+        </h2>
+        {incidents.length === 0 ? (
+          <p style={{ color: '#6b7280', fontSize: 14 }}>
+            No incidents at severity 1–3 on record. System is healthy.
+          </p>
+        ) : (
+          <DataTable columns={incidentColumns} rows={incidentRows} />
+        )}
+      </section>
 
-      {/* Tickets Table */}
-      <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12, marginTop: 32 }}>
-        Recent Tickets
-      </h2>
-      <DataTable
-        columns={[
-          { key: 'id', header: '#' },
-          { key: 'created_at_fmt', header: 'Created' },
-          { key: 'arm', header: 'Arm' },
-          { key: 'intent', header: 'Intent' },
-          { key: 'status', header: 'Status' },
-        ]}
-        rows={tickets.map((t) => ({
-          id: t.id,
-          created_at_fmt: t.created_at
-            ? new Date(t.created_at).toISOString().slice(0, 16).replace('T', ' ')
-            : '—',
-          arm: t.arm ?? '—',
-          intent: t.intent ?? '—',
-          status: t.status ?? '—',
-        }))}
-      />
+      {/* Open dev tickets */}
+      <section>
+        <h2
+          style={{
+            fontSize: 16,
+            fontWeight: 600,
+            marginBottom: 12,
+            color: '#1a1a1a',
+          }}
+        >
+          Open Dev Tickets
+        </h2>
+        {tickets.length === 0 ? (
+          <p style={{ color: '#6b7280', fontSize: 14 }}>
+            No open dev tickets. Queue is clear.
+          </p>
+        ) : (
+          <DataTable columns={ticketColumns} rows={ticketRows} />
+        )}
+      </section>
     </main>
   );
 }
