@@ -701,11 +701,28 @@ export default function RevenuePage() {
   }
 
   // attention CRUD
-  function addAttn(kind: 'leakage' | 'opportunity' = 'leakage') {
-    const label = prompt(kind === 'leakage' ? 'What is leaking?' : 'What is the opportunity?');
-    if (!label) return;
-    const next: AttentionItem[] = [...attn, { id: uid(), label, severity: 'medium' as const, kind }];
-    setAttn(next); saveLS(ATTN_KEY, next);
+  // 2026-05-08 — manual addAttn dropped. Leakage + Opportunity rows are
+  // populated by AI agents; the human acts on them, doesn't author them.
+  // Each row is clickable: routes to the relevant /revenue sub-page so
+  // the operator can drill into the source data, with an inline "✦ Ask
+  // Vector" affordance that opens chat with the item as the prompt.
+
+  // Map item label keywords → the most relevant /revenue sub-route. This
+  // is heuristic; agents can override by adding `targetHref` later.
+  function attnTargetHref(label: string): string {
+    const s = label.toLowerCase();
+    if (s.includes('parity'))            return '/revenue/parity';
+    if (s.includes('comp set') || s.includes('compset')) return '/revenue/compset';
+    if (s.includes('pace'))              return '/revenue/pace';
+    if (s.includes('channel'))           return '/revenue/channels';
+    if (s.includes('rate') || s.includes('bar')) return '/revenue/pricing';
+    if (s.includes('forecast'))          return '/revenue/forecast';
+    return '/revenue/pulse';
+  }
+  function askVectorAbout(label: string) {
+    const params = new URLSearchParams({ q: label, dept: 'revenue' });
+    if (activeProject) params.set('project', activeProject.slug);
+    router.push(`/cockpit/chat?${params.toString()}`);
   }
   function delAttn(id: string) {
     const next = attn.filter(a => a.id !== id);
@@ -869,8 +886,10 @@ export default function RevenuePage() {
         gap: 16,
         flexWrap: 'wrap',
       }}>
-        {/* LEFT — sub-pages strip */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14 }}>
+        {/* LEFT — sub-pages strip. marginLeft offsets the global N dropdown
+          * (rendered in app/layout.tsx top-left); without it PULSE crashes
+          * into the N. */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginLeft: 56 }}>
           {DEPT_LINKS.map(d => (
             <a key={d.href} href={d.href} style={{
               color:          '#9b907a',
@@ -1411,40 +1430,30 @@ export default function RevenuePage() {
         width:               '100%',
       }}>
 
-        {/* LEAKAGE */}
-        <Container
-          title="Leakage"
-          onAdd={() => addAttn('leakage')}
-        >
+        {/* LEAKAGE — AI-populated; rows are actionable. */}
+        <Container title="Leakage" hint="ai-fed">
           {attn.filter(a => a.kind === 'leakage').map(a => (
-            <Row key={a.id} onDelete={() => delAttn(a.id)}>
-              <span style={{
-                width: 7, height: 7, borderRadius: '50%',
-                background: SEVERITY_DOT[a.severity], flexShrink: 0,
-              }} />
-              <span style={{ flex: 1, fontSize: 13, color: '#c9bb96', lineHeight: 1.4 }}>
-                {a.label}
-              </span>
-            </Row>
+            <AttnRow
+              key={a.id}
+              item={a}
+              targetHref={attnTargetHref(a.label)}
+              onAsk={() => askVectorAbout(a.label)}
+              onDelete={() => delAttn(a.id)}
+            />
           ))}
           {attn.filter(a => a.kind === 'leakage').length === 0 && <Empty label="No leaks flagged" />}
         </Container>
 
-        {/* OPPORTUNITY */}
-        <Container
-          title="Opportunity"
-          onAdd={() => addAttn('opportunity')}
-        >
+        {/* OPPORTUNITY — AI-populated; rows are actionable. */}
+        <Container title="Opportunity" hint="ai-fed">
           {attn.filter(a => a.kind === 'opportunity').map(a => (
-            <Row key={a.id} onDelete={() => delAttn(a.id)}>
-              <span style={{
-                width: 7, height: 7, borderRadius: '50%',
-                background: SEVERITY_DOT[a.severity], flexShrink: 0,
-              }} />
-              <span style={{ flex: 1, fontSize: 13, color: '#c9bb96', lineHeight: 1.4 }}>
-                {a.label}
-              </span>
-            </Row>
+            <AttnRow
+              key={a.id}
+              item={a}
+              targetHref={attnTargetHref(a.label)}
+              onAsk={() => askVectorAbout(a.label)}
+              onDelete={() => delAttn(a.id)}
+            />
           ))}
           {attn.filter(a => a.kind === 'opportunity').length === 0 && <Empty label="No upside flagged" />}
         </Container>
@@ -1569,6 +1578,9 @@ export default function RevenuePage() {
           {tasks.length === 0 && <Empty label="Nothing on the list" />}
         </Container>
       </div>
+
+      {/* ── Footer (PBS 2026-05-08): SLH affiliation + standard internal-BI line ── */}
+      <Footer />
 
       {/* Doc create — choice modal (PBS 2026-05-08): Upload OR Build report. */}
       {docChoiceOpen && (
@@ -1921,8 +1933,8 @@ export default function RevenuePage() {
 /* ─── small primitives ───────────────────────────────────────────────────── */
 
 function Container({
-  title, onAdd, children,
-}: { title: string; onAdd: () => void; children: React.ReactNode }) {
+  title, onAdd, hint, children,
+}: { title: string; onAdd?: () => void; hint?: string; children: React.ReactNode }) {
   return (
     <div style={{
       background:    '#0f0d0a',
@@ -1951,27 +1963,36 @@ function Container({
         }}>
           {title}
         </h2>
-        <button
-          onClick={onAdd}
-          aria-label="Add"
-          style={{
-            background:    'transparent',
-            border:        '1px solid #2a261d',
-            borderRadius:  4,
-            color:         '#a8854a',
-            cursor:        'pointer',
-            fontSize:      13,
-            lineHeight:    1,
-            width:         20,
-            height:        20,
-            padding:       0,
-            display:       'flex',
-            alignItems:    'center',
-            justifyContent:'center',
-          }}
-        >
-          +
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {hint && (
+            <span style={{
+              fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+              fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase',
+              color: '#5a5448',
+            }}>{hint}</span>
+          )}
+          {onAdd && (
+            <button
+              onClick={onAdd}
+              aria-label="Add"
+              style={{
+                background:    'transparent',
+                border:        '1px solid #2a261d',
+                borderRadius:  4,
+                color:         '#a8854a',
+                cursor:        'pointer',
+                fontSize:      13,
+                lineHeight:    1,
+                width:         20,
+                height:        20,
+                padding:       0,
+                display:       'flex',
+                alignItems:    'center',
+                justifyContent:'center',
+              }}
+            >+</button>
+          )}
+        </div>
       </div>
       <div style={{
         display:       'flex',
@@ -2012,6 +2033,150 @@ function Row({ children, onDelete }: { children: React.ReactNode; onDelete: () =
       >
         ×
       </button>
+    </div>
+  );
+}
+
+// Footer — SLH affiliation logo bottom-left + standard internal-BI line.
+// SLH SVG comes from documents-public storage (verified live 2026-05-08).
+// The Namkhan logo registry is set up in marketing.brand_assets but the
+// SVG files haven't been uploaded yet, so we render the brass wordmark as
+// a text mark for now; swap to <img> once the SVG lands at
+// brand-assets/namkhan/namkhan-white.svg.
+function Footer() {
+  const SLH_LOGO_URL = 'https://kpenyneooigsyuuomgct.supabase.co/storage/v1/object/public/documents-public/marketing/2026/marketing/slh-considerate-white-logo-moqc2u81.svg';
+  const year = new Date().getFullYear();
+  return (
+    <footer style={{
+      marginTop:    56,
+      paddingTop:   18,
+      borderTop:    '1px solid #1f1c15',
+      display:      'flex',
+      flexWrap:     'wrap',
+      gap:          16,
+      alignItems:   'center',
+      justifyContent: 'space-between',
+      maxWidth:     1200,
+      width:        '100%',
+      marginLeft:   'auto',
+      marginRight:  'auto',
+    }}>
+      {/* LEFT: SLH affiliation */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <a href="https://slh.com/hotels/the-namkhan/" target="_blank" rel="noreferrer" title="Member of Small Luxury Hotels of the World">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={SLH_LOGO_URL}
+            alt="Member of Small Luxury Hotels of the World"
+            style={{ height: 28, width: 'auto', opacity: 0.85, display: 'block' }}
+          />
+        </a>
+        <span style={{
+          fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+          fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#5a5448',
+        }}>
+          Member · Small Luxury Hotels
+        </span>
+      </div>
+
+      {/* RIGHT: standard internal-BI footer line */}
+      <div style={{
+        display: 'flex', flexWrap: 'wrap', gap: 18,
+        fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+        fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase', color: '#7d7565',
+      }}>
+        <a href="/cockpit" style={footerLinkStyle()}>Cockpit</a>
+        <a href="/knowledge" style={footerLinkStyle()}>Knowledge</a>
+        <a href="https://github.com/TBC-HM/namkhan-bi" target="_blank" rel="noreferrer" style={footerLinkStyle()}>Repo ↗</a>
+        <a href="https://namkhan-bi.vercel.app" style={footerLinkStyle()}>Status</a>
+        <span style={{ color: '#3d3a32' }}>·</span>
+        <span>v{(process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ?? 'dev').slice(0, 7)}</span>
+        <span>{process.env.NEXT_PUBLIC_VERCEL_ENV ?? 'local'}</span>
+        <span>© {year} The Namkhan</span>
+      </div>
+    </footer>
+  );
+}
+function footerLinkStyle(): React.CSSProperties {
+  return {
+    color:          '#9b907a',
+    textDecoration: 'none',
+    transition:     'color 100ms ease',
+  };
+}
+
+// AttnRow — actionable row used by Leakage + Opportunity. AI-populated.
+// Click body → drilldown to the source view. ✦ button → ask Vector about it.
+// × → dismiss. The whole row reveals the inline actions on hover.
+function AttnRow({
+  item, targetHref, onAsk, onDelete,
+}: {
+  item: AttentionItem;
+  targetHref: string;
+  onAsk: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div
+      style={{
+        display:      'flex',
+        alignItems:   'center',
+        gap:          10,
+        padding:      '7px 8px',
+        borderRadius: 6,
+        background:   'transparent',
+        transition:   'background 0.12s',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.background = '#1c160d'; }}
+      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+    >
+      <span style={{
+        width: 7, height: 7, borderRadius: '50%',
+        background: SEVERITY_DOT[item.severity], flexShrink: 0,
+      }} />
+      <a
+        href={targetHref}
+        style={{
+          flex:           1,
+          fontSize:       13,
+          color:          '#c9bb96',
+          textDecoration: 'none',
+          lineHeight:     1.4,
+        }}
+      >{item.label}</a>
+      <button
+        onClick={onAsk}
+        title="Ask Vector about this"
+        aria-label="Ask Vector"
+        style={{
+          background:    'transparent',
+          border:        '1px solid #2a261d',
+          borderRadius:  999,
+          color:         '#a8854a',
+          cursor:        'pointer',
+          fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
+          fontSize:      9,
+          letterSpacing: '0.12em',
+          textTransform: 'uppercase',
+          padding:       '2px 8px',
+          flexShrink:    0,
+        }}
+      >✦ Ask</button>
+      <button
+        onClick={onDelete}
+        aria-label="Dismiss"
+        title="Dismiss"
+        style={{
+          background:   'transparent',
+          border:       'none',
+          color:        '#5a5040',
+          cursor:       'pointer',
+          fontSize:     14,
+          lineHeight:   1,
+          padding:      '0 2px',
+          flexShrink:   0,
+        }}
+      >×</button>
     </div>
   );
 }

@@ -102,6 +102,13 @@ export default function ChatShell({
   const [sending, setSending] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
+  // 2026-05-08 — Add conversation to project. Lists active projects;
+  // attaches the most-recent ticket in this thread to the picked project.
+  type ProjectLite = { id: number; slug: string; name: string };
+  const [projectList, setProjectList] = useState<ProjectLite[]>([]);
+  const [attachOpen,  setAttachOpen]  = useState(false);
+  const [attaching,   setAttaching]   = useState(false);
+  const [attachToast, setAttachToast] = useState<string | null>(null);
   const [threadStart, setThreadStart] = useState<string>(() => {
     if (typeof window === 'undefined') return new Date(Date.now() - 24 * 3600_000).toISOString();
     return localStorage.getItem(STORE_KEY) ?? new Date(Date.now() - 24 * 3600_000).toISOString();
@@ -154,6 +161,35 @@ export default function ChatShell({
   }, [threadStart, role, mentionNickname]);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [tickets.length]);
+
+  useEffect(() => {
+    fetch('/api/cockpit/projects', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => setProjectList(Array.isArray(j?.projects) ? j.projects : []))
+      .catch(() => { /* silent — projects optional */ });
+  }, []);
+
+  async function attachLatestTo(slug: string, projectName: string) {
+    if (tickets.length === 0) return;
+    // Most-recent ticket in this thread = the one PBS is referring to.
+    const latest = [...tickets].sort((a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    )[0];
+    if (!latest) return;
+    setAttaching(true);
+    try {
+      await fetch(`/api/cockpit/projects/${slug}/attach-ticket`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticket_id: latest.id }),
+      });
+      setAttachToast(`Added #${latest.id} to "${projectName}"`);
+      setTimeout(() => setAttachToast(null), 2400);
+      setAttachOpen(false);
+    } finally {
+      setAttaching(false);
+    }
+  }
 
   const send = async () => {
     if (!input.trim() && attachments.length === 0) return;
@@ -214,6 +250,49 @@ export default function ChatShell({
         </div>
         <div style={S.topbarRight}>
           <button onClick={startNewChat} style={{ ...S.topBtn, background: '#c79a6b', color: '#0a0a0b', border: 0, fontWeight: 600, cursor: 'pointer' }}>＋ New chat</button>
+          {/* Add conversation to project (PBS 2026-05-08).
+            * Uses projectList fetched on mount; tags the most-recent ticket
+            * in this thread via /api/cockpit/projects/[slug]/attach-ticket. */}
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setAttachOpen(o => !o)}
+              disabled={attaching || tickets.length === 0}
+              title={tickets.length === 0 ? 'Send a message first' : 'Add this conversation to a project'}
+              style={{
+                ...S.topBtn,
+                cursor: (attaching || tickets.length === 0) ? 'not-allowed' : 'pointer',
+                background: 'transparent',
+                opacity: tickets.length === 0 ? 0.4 : 1,
+              }}
+            >
+              📁 Add to project ▾
+            </button>
+            {attachOpen && (
+              <div style={{
+                position: 'absolute', right: 0, top: 36, zIndex: 80,
+                background: '#0e0e0c', border: '1px solid #25252d', borderRadius: 6,
+                padding: 4, minWidth: 240, maxHeight: 320, overflowY: 'auto',
+                boxShadow: '0 12px 28px rgba(0,0,0,0.55)',
+              }}>
+                {projectList.length === 0 && (
+                  <div style={{ padding: '8px 10px', fontSize: 11, color: '#7d7565', fontStyle: 'italic' }}>
+                    No active projects yet. Create one from a dept landing page.
+                  </div>
+                )}
+                {projectList.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => attachLatestTo(p.slug, p.name)}
+                    style={{
+                      width: '100%', textAlign: 'left',
+                      background: 'transparent', border: 'none', cursor: 'pointer',
+                      color: '#ededf0', padding: '7px 10px', fontSize: 13, borderRadius: 4,
+                    }}
+                  >{p.name}</button>
+                ))}
+              </div>
+            )}
+          </div>
           <a href="/cockpit" style={S.topBtn}>cockpit ↗</a>
         </div>
       </div>
@@ -294,6 +373,18 @@ export default function ChatShell({
         </div>
         <div style={S.hint}>Enter to send · Shift+Enter for new line · paperclip to attach</div>
       </div>
+
+      {/* tiny attach-to-project confirmation toast (PBS 2026-05-08) */}
+      {attachToast && (
+        <div style={{
+          position: 'fixed', bottom: 24, right: 24, zIndex: 300,
+          background: '#0f0d0a', border: '1px solid #3a3327', borderRadius: 8,
+          padding: '10px 14px', fontSize: 12, color: '#d8cca8',
+          boxShadow: '0 12px 28px rgba(0,0,0,0.5)',
+        }}>
+          📁 {attachToast}
+        </div>
+      )}
 
       <style jsx global>{`
         @keyframes blink { 0%,80%,100% { opacity: 0.3 } 40% { opacity: 1 } }
