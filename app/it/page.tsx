@@ -9,185 +9,241 @@ export const revalidate = 60;
 
 interface Incident {
   id: number;
-  detected_at: string | null;
+  detected_at: string;
   resolved_at: string | null;
-  severity: number | null;
-  symptom: string | null;
+  severity: number;
+  symptom: string;
   root_cause: string | null;
   fix: string | null;
-  auto_resolved: boolean | null;
-  rollback_attempted: boolean | null;
+  auto_resolved: boolean;
   mttr_minutes: number | null;
   source: string | null;
 }
 
 interface Ticket {
   id: number;
-  created_at: string | null;
-  updated_at: string | null;
-  arm: string | null;
-  intent: string | null;
-  status: string | null;
+  created_at: string;
+  updated_at: string;
+  arm: string;
+  intent: string;
+  status: string;
   source: string | null;
   parsed_summary: string | null;
 }
 
-const SEVERITY_LABEL: Record<number, string> = {
-  1: 'Critical',
-  2: 'High',
-  3: 'Medium',
-  4: 'Info',
-};
-
-function fmtDate(iso: string | null): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString('en-GB', {
-    timeZone: 'Asia/Vientiane',
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+function severityLabel(s: number): string {
+  if (s <= 1) return 'Critical';
+  if (s === 2) return 'High';
+  if (s === 3) return 'Medium';
+  if (s === 4) return 'Informational';
+  return String(s);
 }
 
-export default async function ITPage() {
+function severityColor(s: number): string {
+  if (s <= 1) return '#ef4444'; // red
+  if (s === 2) return '#f97316'; // orange
+  if (s === 3) return '#eab308'; // yellow
+  return '#6b7280'; // gray
+}
+
+export default async function Page() {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  const [{ data: incidentData }, { data: ticketData }] = await Promise.all([
-    supabase
-      .from('cockpit_incidents')
-      .select('*')
-      .order('detected_at', { ascending: false })
-      .limit(50),
-    supabase
-      .from('cockpit_tickets')
-      .select('id, created_at, updated_at, arm, intent, status, source, parsed_summary')
-      .order('created_at', { ascending: false })
-      .limit(50),
-  ]);
+  // Fetch recent incidents (most severe first, then newest)
+  const { data: incidentData } = await supabase
+    .from('cockpit_incidents')
+    .select(
+      'id, detected_at, resolved_at, severity, symptom, root_cause, fix, auto_resolved, mttr_minutes, source'
+    )
+    .order('severity', { ascending: true })
+    .order('detected_at', { ascending: false })
+    .limit(50);
+
+  // Fetch recent dev tickets
+  const { data: ticketData } = await supabase
+    .from('cockpit_tickets')
+    .select('id, created_at, updated_at, arm, intent, status, source, parsed_summary')
+    .order('created_at', { ascending: false })
+    .limit(50);
 
   const incidents: Incident[] = incidentData ?? [];
   const tickets: Ticket[] = ticketData ?? [];
 
-  // KPI: open incidents (no resolved_at), by severity
-  const openIncidents = incidents.filter((i) => !i.resolved_at);
-  const criticalOpen = openIncidents.filter((i) => (i.severity ?? 4) <= 2).length;
-  const openCount = openIncidents.filter((i) => (i.severity ?? 4) <= 3).length;
-  const avgMttr = (() => {
-    const resolved = incidents.filter((i) => i.mttr_minutes != null);
-    if (!resolved.length) return '—';
-    const avg = resolved.reduce((s, i) => s + (i.mttr_minutes ?? 0), 0) / resolved.length;
-    return `${Math.round(avg)} min`;
-  })();
+  // KPI derivations
+  const openIncidents = incidents.filter((i) => i.resolved_at === null && i.severity <= 3).length;
+  const criticalCount = incidents.filter((i) => i.severity <= 1).length;
+  const avgMttr =
+    incidents.filter((i) => i.mttr_minutes !== null).length > 0
+      ? Math.round(
+          incidents
+            .filter((i) => i.mttr_minutes !== null)
+            .reduce((acc, i) => acc + (i.mttr_minutes ?? 0), 0) /
+            incidents.filter((i) => i.mttr_minutes !== null).length
+        )
+      : null;
 
-  // KPI: ticket breakdown
-  const openTickets = tickets.filter((t) => !['completed', 'closed'].includes(t.status ?? ''));
-  const failedTickets = tickets.filter((t) => t.status === 'triage_failed').length;
+  const openTickets = tickets.filter((t) => !['completed', 'closed'].includes(t.status)).length;
 
-  const incidentColumns = [
-    { key: 'id', header: 'ID' },
-    { key: 'detected_at_fmt', header: 'Detected (LAK)' },
-    { key: 'resolved_at_fmt', header: 'Resolved (LAK)' },
-    { key: 'severity_label', header: 'Severity' },
-    { key: 'source', header: 'Source' },
-    { key: 'symptom_short', header: 'Symptom' },
-    { key: 'mttr_minutes', header: 'MTTR (min)' },
-  ];
+  const statusCounts: Record<string, number> = {};
+  for (const t of tickets) {
+    statusCounts[t.status] = (statusCounts[t.status] ?? 0) + 1;
+  }
 
-  const incidentRows = incidents.map((i) => ({
-    id: i.id,
-    detected_at_fmt: fmtDate(i.detected_at),
-    resolved_at_fmt: i.resolved_at ? fmtDate(i.resolved_at) : '—',
-    severity_label: SEVERITY_LABEL[i.severity ?? 4] ?? String(i.severity ?? '—'),
-    source: i.source ?? '—',
-    symptom_short:
-      i.symptom && i.symptom.length > 60 ? i.symptom.slice(0, 60) + '…' : (i.symptom ?? '—'),
-    mttr_minutes: i.mttr_minutes ?? '—',
-  }));
-
-  const ticketColumns = [
-    { key: 'id', header: '#' },
-    { key: 'created_at_fmt', header: 'Created (LAK)' },
-    { key: 'arm', header: 'Arm' },
-    { key: 'intent', header: 'Intent' },
-    { key: 'status', header: 'Status' },
-    { key: 'source', header: 'Source' },
-    { key: 'summary_short', header: 'Summary' },
-  ];
-
-  const ticketRows = tickets.map((t) => ({
-    id: t.id,
-    created_at_fmt: fmtDate(t.created_at),
-    arm: t.arm ?? '—',
-    intent: t.intent ?? '—',
-    status: t.status ?? '—',
-    source: t.source ?? '—',
-    summary_short: (() => {
-      const raw = t.parsed_summary ?? '';
-      // strip markdown bold/headings — first plain line
-      const firstLine = raw.replace(/\*\*/g, '').split('\n').find((l) => l.trim().length > 4) ?? '';
-      return firstLine.length > 70 ? firstLine.slice(0, 70) + '…' : firstLine || '—';
-    })(),
-  }));
+  // Truncate parsed_summary to first 80 chars for table display
+  function truncate(s: string | null, n = 80): string {
+    if (!s) return '—';
+    return s.length > n ? s.slice(0, n) + '…' : s;
+  }
 
   return (
-    <main style={{ padding: '24px 32px', fontFamily: 'inherit' }}>
-      <PageHeader pillar="IT" tab="Dashboard" title="IT Manager Dashboard" />
+    <main style={{ padding: '24px 32px', maxWidth: 1400, margin: '0 auto' }}>
+      <PageHeader pillar="IT" tab="Overview" title="IT Manager" />
 
-      {/* KPI row */}
+      {/* ── KPI Strip ── */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(5, 1fr)',
+          gridTemplateColumns: 'repeat(4, 1fr)',
           gap: 16,
           marginBottom: 32,
         }}
       >
-        <KpiBox label="Open Incidents" value={openCount} />
-        <KpiBox label="Critical / High Open" value={criticalOpen} />
-        <KpiBox label="Avg MTTR" value={avgMttr} />
-        <KpiBox label="Open Tickets" value={openTickets.length} />
-        <KpiBox label="Triage Failed" value={failedTickets} />
+        <KpiBox label="Open Incidents" value={openIncidents} />
+        <KpiBox label="Critical (Sev ≤1)" value={criticalCount} />
+        <KpiBox
+          label="Avg MTTR (min)"
+          value={avgMttr !== null ? String(avgMttr) : '—'}
+        />
+        <KpiBox label="Open Tickets" value={openTickets} />
       </div>
 
-      {/* Incidents table */}
+      {/* ── Ticket Status Summary ── */}
+      {Object.keys(statusCounts).length > 0 && (
+        <section style={{ marginBottom: 32 }}>
+          <h2
+            style={{
+              fontSize: 14,
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              color: '#6b7280',
+              marginBottom: 12,
+            }}
+          >
+            Tickets by Status
+          </h2>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            {Object.entries(statusCounts)
+              .sort((a, b) => b[1] - a[1])
+              .map(([status, count]) => (
+                <div
+                  key={status}
+                  style={{
+                    background: '#f3f4f6',
+                    borderRadius: 8,
+                    padding: '8px 16px',
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: '#374151',
+                  }}
+                >
+                  {status}{' '}
+                  <span
+                    style={{
+                      background: '#e5e7eb',
+                      borderRadius: 12,
+                      padding: '2px 8px',
+                      marginLeft: 6,
+                    }}
+                  >
+                    {count}
+                  </span>
+                </div>
+              ))}
+          </div>
+        </section>
+      )}
+
+      {/* ── Recent Incidents ── */}
       <section style={{ marginBottom: 40 }}>
         <h2
           style={{
-            fontSize: 16,
+            fontSize: 14,
             fontWeight: 600,
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            color: '#6b7280',
             marginBottom: 12,
-            color: 'var(--color-text-primary, #1a1a1a)',
           }}
         >
-          Recent Incidents{' '}
-          <span style={{ fontWeight: 400, color: '#666', fontSize: 13 }}>
-            (last {incidents.length})
-          </span>
+          Recent Incidents
         </h2>
-        <DataTable columns={incidentColumns} rows={incidentRows} />
+        <DataTable
+          columns={[
+            { key: 'id', header: 'ID' },
+            { key: 'severity_label', header: 'Severity' },
+            { key: 'detected_at_fmt', header: 'Detected' },
+            { key: 'resolved_at_fmt', header: 'Resolved' },
+            { key: 'symptom_short', header: 'Symptom' },
+            { key: 'source', header: 'Source' },
+            { key: 'mttr_minutes', header: 'MTTR (min)' },
+          ]}
+          rows={incidents.map((i) => ({
+            id: i.id,
+            severity_label: severityLabel(i.severity),
+            _severity_color: severityColor(i.severity),
+            detected_at_fmt: i.detected_at
+              ? new Date(i.detected_at).toISOString().slice(0, 16).replace('T', ' ')
+              : '—',
+            resolved_at_fmt: i.resolved_at
+              ? new Date(i.resolved_at).toISOString().slice(0, 16).replace('T', ' ')
+              : '—',
+            symptom_short: truncate(i.symptom, 80),
+            source: i.source ?? '—',
+            mttr_minutes: i.mttr_minutes !== null ? String(i.mttr_minutes) : '—',
+          }))}
+        />
       </section>
 
-      {/* Tickets table */}
+      {/* ── Recent Tickets ── */}
       <section>
         <h2
           style={{
-            fontSize: 16,
+            fontSize: 14,
             fontWeight: 600,
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            color: '#6b7280',
             marginBottom: 12,
-            color: 'var(--color-text-primary, #1a1a1a)',
           }}
         >
-          Agent Tickets{' '}
-          <span style={{ fontWeight: 400, color: '#666', fontSize: 13 }}>
-            (last {tickets.length})
-          </span>
+          Recent Cockpit Tickets
         </h2>
-        <DataTable columns={ticketColumns} rows={ticketRows} />
+        <DataTable
+          columns={[
+            { key: 'id', header: '#' },
+            { key: 'status', header: 'Status' },
+            { key: 'arm', header: 'Arm' },
+            { key: 'intent', header: 'Intent' },
+            { key: 'source', header: 'Source' },
+            { key: 'created_at_fmt', header: 'Created' },
+            { key: 'summary_short', header: 'Summary' },
+          ]}
+          rows={tickets.map((t) => ({
+            id: t.id,
+            status: t.status,
+            arm: t.arm ?? '—',
+            intent: t.intent ?? '—',
+            source: t.source ?? '—',
+            created_at_fmt: t.created_at
+              ? new Date(t.created_at).toISOString().slice(0, 16).replace('T', ' ')
+              : '—',
+            summary_short: truncate(t.parsed_summary, 80),
+          }))}
+        />
       </section>
     </main>
   );
