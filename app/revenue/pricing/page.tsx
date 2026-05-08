@@ -1,109 +1,316 @@
-'use client';
+// app/revenue/pricing/page.tsx
+// Revenue › Pricing — WIRED to public.rate_inventory + rate_plans + room_types.
 
-import { useEffect, useState } from 'react';
+import { resolvePeriod, type WindowKey } from '@/lib/period';
+import { getRoomTypes, getRatePlans, getRateInventory } from '@/lib/pricing';
 import PageHeader from '@/components/layout/PageHeader';
-import KpiBox from '@/components/kpi/KpiBox';
-import DataTable from '@/components/ui/DataTable';
 
-interface PricingRow {
-  date?: string;
-  room_type?: string;
-  bar_rate?: number | null;
-  bar_rate_lak?: number | null;
-  occupancy_pct?: number | null;
-  channel?: string;
-  status?: string;
-  [key: string]: unknown;
+export const dynamic = 'force-dynamic';
+export const revalidate = 60;
+
+interface SearchParams { win?: string; gran?: string }
+
+const VALID_FWD: WindowKey[] = ['next7', 'next30', 'next90', 'next180', 'next365'];
+
+function parseWin(raw: string | undefined): WindowKey {
+  return (VALID_FWD.includes(raw as WindowKey) ? raw : 'next90') as WindowKey;
+}
+function parseGran(raw: string | undefined): 'day' | 'week' | 'month' {
+  if (raw === 'day' || raw === 'week' || raw === 'month') return raw;
+  return 'month';
 }
 
-export default function PricingPage() {
-  const [rows, setRows] = useState<PricingRow[]>([]);
-  const [loading, setLoading] = useState(true);
+function fmtMonth(yyyymm: string) {
+  const [y, m] = yyyymm.split('-');
+  const d = new Date(Number(y), Number(m) - 1, 1);
+  return d.toLocaleString('en-US', { month: 'short', year: '2-digit' });
+}
 
-  useEffect(() => {
-    void fetch('/api/revenue/pricing')
-      .then((r) => r.json())
-      .then((d) => {
-        setRows(Array.isArray(d) ? d : (d?.data ?? []));
-      })
-      .catch(() => setRows([]))
-      .finally(() => setLoading(false));
-  }, []);
+function rateColor(rate: number, min: number, max: number): string {
+  if (max <= min) return 'var(--paper-deep)';
+  const t = (rate - min) / (max - min);
+  const hi = { r: 0xa1, g: 0x7a, b: 0x4f };
+  const lo = { r: 0xf6, g: 0xf0, b: 0xe1 };
+  const r = Math.round(lo.r + (hi.r - lo.r) * t);
+  const g = Math.round(lo.g + (hi.g - lo.g) * t);
+  const b = Math.round(lo.b + (hi.b - lo.b) * t);
+  return `rgb(${r},${g},${b})`;
+}
 
-  const avgBar = rows.length
-    ? rows.reduce((s, r) => s + (r.bar_rate ?? 0), 0) / rows.length
-    : null;
+export default async function PricingPage({ searchParams }: { searchParams: SearchParams }) {
+  const win = parseWin(searchParams.win);
+  const gran = parseGran(searchParams.gran);
+  const period = resolvePeriod({ win });
 
-  const avgOcc = rows.length
-    ? rows.reduce((s, r) => s + (r.occupancy_pct ?? 0), 0) / rows.length
-    : null;
+  const [roomTypes, ratePlans, inventory] = await Promise.all([
+    getRoomTypes(),
+    getRatePlans(),
+    getRateInventory(period.from, period.to),
+  ]);
 
-  const activeRooms = rows.filter(
-    (r) => r.status === 'open' || r.status === 'active'
-  ).length;
+  type RoomAgg = { rt: string; min: number; max: number; sum: number; count: number; stops: number; minStays: number; cta: number; ctd: number };
+  const byRoom = new Map<number, RoomAgg>();
+  for (const r of inventory) {
+    if (!byRoom.has(r.room_type_id)) {
+      const rt = roomTypes.find((x) => x.room_type_id === r.room_type_id);
+      byRoom.set(r.room_type_id, {
+        rt: rt?.room_type_name ?? `room_${r.room_type_id}`,
+        min: Number.POSITIVE_INFINITY, max: 0, sum: 0, count: 0,
+        stops: 0, minStays: 0, cta: 0, ctd: 0,
+      });
+    }
+    const a = byRoom.get(r.room_type_id)!;
+    const rate = Number(r.rate) || 0;
+    if (rate > 0) {
+      a.min = Math.min(a.min, rate);
+      a.max = Math.max(a.max, rate);
+      a.sum += rate;
+      a.count += 1;
+    }
+    if (r.stop_sell) a.stops += 1;
+    if ((Number(r.minimum_stay) || 0) > 1) a.minStays += 1;
+    if (r.closed_to_arrival) a.cta += 1;
+    if (r.closed_to_departure) a.ctd += 1;
+  }
+  const roomAggs = Array.from(byRoom.entries()).map(([id, a]) => ({
+    id,
+    ...a,
+    avg: a.count > 0 ? a.sum / a.count : 0,
+    min: a.min === Number.POSITIVE_INFINITY ? 0 : a.min,
+  })).sort((a, b) => b.avg - a.avg);
+
+  function bucketKey(date: string): string {
+    if (gran === 'month') return date.slice(0, 7);
+    if (gran === 'week') {
+      const d = new Date(date);
+      const dow = d.getUTCDay();
+      const diff = (dow + 6) % 7;
+      const monday = new Date(d.getTime() - diff * 86400000);
+      return monday.toISOString().slice(0, 10);
+    }
+    return date;
+  }
+  type Cell = { sum: number; count: number; min: number; max: number; stops: number };
+  const cellRates = new Map<string, Cell>();
+  for (const r of inventory) {
+    const rate = Number(r.rate) || 0;
+    if (rate <= 0) continue;
+    const k = `${r.room_type_id}|${bucketKey(r.inventory_date)}`;
+    if (!cellRates.has(k)) cellRates.set(k, { sum: 0, count: 0, min: rate, max: rate, stops: 0 });
+    const c = cellRates.get(k)!;
+    c.sum += rate;
+    c.count += 1;
+    c.min = Math.min(c.min, rate);
+    c.max = Math.max(c.max, rate);
+    if (r.stop_sell) c.stops += 1;
+  }
+  const bucketSet = new Set<string>();
+  for (const k of cellRates.keys()) bucketSet.add(k.split('|')[1]);
+  const buckets = Array.from(bucketSet).sort();
+
+  const totalInv = inventory.length;
+  const stopSells = inventory.filter((r) => r.stop_sell).length;
+  const minStayRows = inventory.filter((r) => (Number(r.minimum_stay) || 0) > 1).length;
+  const allRates = inventory.map((r) => Number(r.rate) || 0).filter((x) => x > 0);
+  const avgRate = allRates.length > 0 ? allRates.reduce((a, b) => a + b, 0) / allRates.length : 0;
+  const minRate = allRates.length > 0 ? Math.min(...allRates) : 0;
+  const maxRate = allRates.length > 0 ? Math.max(...allRates) : 0;
+
+  type PlanAgg = { name: string; type: string | null; count: number; sum: number; min: number; max: number };
+  const byPlan = new Map<string, PlanAgg>();
+  for (const r of inventory) {
+    const p = ratePlans.find((x) => x.rate_id === r.rate_id);
+    const key = r.rate_id;
+    if (!byPlan.has(key)) {
+      byPlan.set(key, { name: p?.rate_name ?? r.rate_id, type: p?.rate_type ?? null, count: 0, sum: 0, min: Number.POSITIVE_INFINITY, max: 0 });
+    }
+    const a = byPlan.get(key)!;
+    const rate = Number(r.rate) || 0;
+    if (rate > 0) {
+      a.sum += rate; a.count += 1;
+      a.min = Math.min(a.min, rate); a.max = Math.max(a.max, rate);
+    }
+  }
+  const planAggs = Array.from(byPlan.values())
+    .map((p) => ({ ...p, avg: p.count > 0 ? p.sum / p.count : 0, min: p.min === Number.POSITIVE_INFINITY ? 0 : p.min }))
+    .filter((p) => p.count > 0)
+    .sort((a, b) => b.count - a.count);
+
+  const winLabels: Record<string, string> = {
+    next7: 'Next 7d', next30: 'Next 30d', next90: 'Next 90d', next180: 'Next 180d', next365: 'Next 365d',
+  };
 
   return (
-    <main
-      style={{
-        minHeight: '100vh',
-        background: '#000',
-        color: '#fff',
-        padding: '24px',
-      }}
-    >
-      <PageHeader pillar="Revenue" tab="Pricing" title="Pricing" />
+    <>
+      <style>{`
+        .filter-btn:not(.fwd):not([href*="seg="]):not([href*="cmp="]):not([href*="cap="]) {
+          opacity: 0.35; pointer-events: none;
+        }
+      `}</style>
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: 16,
-          marginBottom: 32,
-        }}
-      >
-        <KpiBox
-          label="Avg BAR (USD)"
-          value={avgBar != null ? `$${avgBar.toFixed(2)}` : '—'}
-        />
-        <KpiBox
-          label="Avg Occupancy"
-          value={avgOcc != null ? `${avgOcc.toFixed(1)}%` : '—'}
-        />
-        <KpiBox
-          label="Open Rate Rows"
-          value={loading ? '…' : String(activeRooms)}
-        />
-        <KpiBox
-          label="Total Rows"
-          value={loading ? '…' : String(rows.length)}
-        />
+      <PageHeader
+        pillar="Revenue"
+        tab="Pricing"
+        title={<>Pricing · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>{winLabels[win]} · by {gran}</em></>}
+        lede={<>Forward inventory rates from <code>public.rate_inventory</code> ({totalInv.toLocaleString()} cells across {roomTypes.length} room types × {planAggs.length} rate plans). <span style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>Backward chips greyed — pricing is forward-only.</span></>}
+      />
+
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 12, marginBottom: 10 }}>
+        <span style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Granularity</span>
+        {(['day', 'week', 'month'] as const).map((g) => {
+          const active = g === gran;
+          const params = new URLSearchParams();
+          if (win !== 'next90') params.set('win', win);
+          if (g !== 'month') params.set('gran', g);
+          const href = `/revenue/pricing${params.toString() ? '?' + params.toString() : ''}`;
+          return (
+            <a key={g} href={href} style={{
+              padding: '4px 12px', borderRadius: 4, border: '1px solid var(--line-soft)',
+              background: active ? 'var(--ink-soft)' : 'var(--paper-warm)', color: active ? 'var(--paper-warm)' : 'var(--ink-soft)',
+              fontSize: "var(--t-base)", textDecoration: 'none', textTransform: 'capitalize',
+            }}>{g}</a>
+          );
+        })}
       </div>
 
-      <DataTable
-        columns={[
-          { key: 'date', header: 'Date' },
-          { key: 'room_type', header: 'Room Type' },
-          { key: 'bar_rate', header: 'BAR (USD)' },
-          { key: 'bar_rate_lak', header: 'BAR (₭)' },
-          { key: 'occupancy_pct', header: 'Occ %' },
-          { key: 'channel', header: 'Channel' },
-          { key: 'status', header: 'Status' },
-        ]}
-        rows={rows.map((r) => ({
-          ...r,
-          date: r.date ?? '—',
-          room_type: r.room_type ?? '—',
-          bar_rate: r.bar_rate != null ? `$${Number(r.bar_rate).toFixed(2)}` : '—',
-          bar_rate_lak:
-            r.bar_rate_lak != null
-              ? `₭${Number(r.bar_rate_lak).toLocaleString()}`
-              : '—',
-          occupancy_pct:
-            r.occupancy_pct != null ? `${Number(r.occupancy_pct).toFixed(1)}%` : '—',
-          channel: r.channel ?? '—',
-          status: r.status ?? '—',
-        }))}
-      />
-    </main>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 10, marginBottom: 14 }}>
+        <Kpi scope="Inventory cells" value={totalInv.toLocaleString()} sub={`${period.days}n × ${roomTypes.length}rt × ${planAggs.length}rp`} />
+        <Kpi scope="Avg rate" value={`$${avgRate.toFixed(0)}`} sub="across all cells" />
+        <Kpi scope="Floor (BAR)" value={`$${minRate.toFixed(0)}`} sub="lowest non-zero" />
+        <Kpi scope="Ceiling" value={`$${maxRate.toFixed(0)}`} sub="highest" />
+        <Kpi scope="Stop-sell" value={stopSells.toLocaleString()} sub="closed cells" tone={stopSells > 0 ? 'warn' : 'flat'} />
+        <Kpi scope="Min-stay" value={minStayRows.toLocaleString()} sub="LOS restricted" />
+      </div>
+
+      <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, marginBottom: 14, overflow: 'hidden' }}>
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--paper-deep)' }}>
+          <h2 style={{ margin: 0, fontFamily: 'var(--serif)', fontWeight: 500, fontSize: "var(--t-xl)" }}>BAR ladder by room type</h2>
+        </div>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: "var(--t-base)" }}>
+          <thead>
+            <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <th style={{ padding: '10px 12px' }}>Room type</th>
+              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Cells</th>
+              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Avg</th>
+              <th style={{ padding: '10px 12px', textAlign: 'right' }}>BAR floor</th>
+              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Max</th>
+              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Spread</th>
+              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Stop</th>
+              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Min-stay</th>
+              <th style={{ padding: '10px 12px', textAlign: 'right' }}>CTA/CTD</th>
+            </tr>
+          </thead>
+          <tbody>
+            {roomAggs.map((a) => (
+              <tr key={a.id} style={{ borderTop: '1px solid var(--paper-warm)' }}>
+                <td style={{ padding: '10px 12px', fontWeight: 500 }}>{a.rt}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>{a.count}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>${a.avg.toFixed(0)}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--moss-glow)' }}>${a.min.toFixed(0)}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--brass)' }}>${a.max.toFixed(0)}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>${(a.max - a.min).toFixed(0)}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: a.stops > 0 ? 'var(--st-bad)' : 'var(--ink-mute)' }}>{a.stops || '—'}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: a.minStays > 0 ? 'var(--brass)' : 'var(--ink-mute)' }}>{a.minStays || '—'}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>{a.cta || 0}/{a.ctd || 0}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px', marginBottom: 14, overflowX: 'auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
+          <h2 style={{ margin: 0, fontFamily: 'var(--serif)', fontWeight: 500, fontSize: "var(--t-xl)" }}>Rate calendar · room × {gran}</h2>
+          <span style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>Color = avg USD (terracotta=high, pale=low) · hover for details</span>
+        </div>
+        <table style={{ borderCollapse: 'collapse', fontSize: "var(--t-sm)", minWidth: '100%' }}>
+          <thead>
+            <tr>
+              <th style={{ padding: '6px 10px', textAlign: 'left', color: 'var(--ink-mute)', fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: '0.05em' }}>Room</th>
+              {buckets.map((b) => (
+                <th key={b} style={{ padding: '6px 4px', textAlign: 'center', color: 'var(--ink-mute)', fontSize: "var(--t-xs)", fontWeight: 500, minWidth: 50 }}>
+                  {gran === 'month' ? fmtMonth(b) : b.slice(5)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {roomAggs.map((a) => (
+              <tr key={a.id}>
+                <td style={{ padding: '4px 10px', fontWeight: 500, fontSize: "var(--t-sm)", whiteSpace: 'nowrap' }}>{a.rt}</td>
+                {buckets.map((b) => {
+                  const k = `${a.id}|${b}`;
+                  const c = cellRates.get(k);
+                  if (!c) return <td key={b} style={{ padding: '4px', textAlign: 'center', color: 'var(--ink-faint)' }}>—</td>;
+                  const avg = c.sum / c.count;
+                  const bg = rateColor(avg, minRate, maxRate);
+                  return (
+                    <td key={b} style={{
+                      padding: '6px 4px', textAlign: 'center', background: bg,
+                      color: avg > avgRate * 1.2 ? 'var(--paper-warm)' : 'var(--ink-soft)',
+                      fontFamily: 'var(--mono)', fontSize: "var(--t-xs)", border: '1px solid #fff',
+                    }} title={`${a.rt} · ${b}\navg USD ${avg.toFixed(0)}\nmin USD ${c.min.toFixed(0)} · max USD ${c.max.toFixed(0)}${c.stops > 0 ? `\n${c.stops} stop-sell` : ''}`}>
+                      {avg.toFixed(0)}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--paper-deep)' }}>
+          <h2 style={{ margin: 0, fontFamily: 'var(--serif)', fontWeight: 500, fontSize: "var(--t-xl)" }}>Rate plans active in window ({planAggs.length})</h2>
+        </div>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: "var(--t-base)" }}>
+          <thead>
+            <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <th style={{ padding: '10px 12px' }}>Rate plan</th>
+              <th style={{ padding: '10px 12px' }}>Type</th>
+              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Cells</th>
+              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Avg</th>
+              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Min</th>
+              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Max</th>
+              <th style={{ padding: '10px 12px', textAlign: 'right' }}>vs avg</th>
+            </tr>
+          </thead>
+          <tbody>
+            {planAggs.slice(0, 30).map((p) => {
+              const deltaPct = avgRate > 0 ? ((p.avg - avgRate) / avgRate) * 100 : 0;
+              const dColor = deltaPct < -10 ? 'var(--st-bad)' : deltaPct < 0 ? 'var(--brass)' : deltaPct > 10 ? 'var(--moss-glow)' : 'var(--ink-soft)';
+              return (
+                <tr key={p.name} style={{ borderTop: '1px solid var(--paper-warm)' }}>
+                  <td style={{ padding: '10px 12px', fontWeight: 500 }}>{p.name}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--ink-mute)', fontSize: "var(--t-sm)" }}>{p.type ?? '—'}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{p.count}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>${p.avg.toFixed(0)}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>${p.min.toFixed(0)}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>${p.max.toFixed(0)}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: dColor }}>{deltaPct >= 0 ? '+' : ''}{deltaPct.toFixed(0)}%</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {planAggs.length > 30 && <div style={{ padding: '8px 16px', fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>+ {planAggs.length - 30} more</div>}
+      </div>
+
+      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: "var(--t-sm)" }}>
+        <strong>✓ Wired.</strong> {totalInv.toLocaleString()} live inventory cells. KPIs · BAR ladder · heatmap · rate-plan breakdown all driven by URL <code>?win=</code> + <code>?gran=</code>.
+      </div>
+    </>
+  );
+}
+
+function Kpi({ scope, value, sub, tone = 'flat' }: { scope: string; value: string; sub: string; tone?: 'flat' | 'up' | 'warn' | 'bad' }) {
+  const cls = tone === 'up' ? 'pos' : tone === 'warn' ? 'warn' : tone === 'bad' ? 'neg' : '';
+  return (
+    <div className="kpi-box" data-tooltip={`${scope} · ${sub}`}>
+      <div className="kpi-tile-scope">{scope}</div>
+      <div className={`kpi-box-value ${cls}`.trim()}>{value}</div>
+      <div className="kpi-tile-sub">{sub}</div>
+    </div>
   );
 }
