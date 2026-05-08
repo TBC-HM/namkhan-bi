@@ -1,11 +1,13 @@
 // app/layout.tsx
-// Beyond Circle shell: left rail + main column.
-// Each page renders its own <Banner>, <SubNav>, <FilterStrip>, <main className="panel">.
+// 2026-05-08 redesign — green frame REMOVED per PBS directive.
+// Old: LeftRail + main column with green PILLAR header + horizontal tabs.
+// New: edge-to-edge content; navigation handled by floating <NDropdown />
+// (top-left brass N badge, click → dept menu) on every page.
 
 import type { Metadata } from 'next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import './../styles/globals.css';
-import LeftRail from '@/components/nav/LeftRail';
+import NDropdown from '@/components/nav/NDropdown';
 import CapacityResetOnPillarChange from '@/components/nav/CapacityResetOnPillarChange';
 import AgentEditModal from '@/components/agents/AgentEditModal';
 
@@ -20,10 +22,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body>
         <CapacityResetOnPillarChange />
-        <div className="shell">
-          <LeftRail />
-          <div className="main">{children}</div>
-        </div>
+        <NDropdown />
+        {children}
         <AgentEditModal />
         <SpeedInsights />
       </body>
