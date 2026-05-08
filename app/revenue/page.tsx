@@ -16,37 +16,37 @@ import { useRouter } from 'next/navigation';
  * ────────────────────────────────────────────────────────────────────────── */
 
 interface AttentionItem { id: string; label: string; severity: 'high' | 'medium' | 'low' }
-interface DocItem       { id: string; label: string; href: string }
-interface TaskItem      { id: string; label: string; done: boolean }
+interface DocItem       { id: string; label: string; href: string; size?: number; uploaded_at?: string }
+interface TaskItem      { id: string; label: string; done: boolean; created?: string; due?: string; alert?: boolean }
 
 const ATTN_KEY  = 'nk.rev.entry.attention.v2';
 const DOCS_KEY  = 'nk.rev.entry.docs.v2';
 const TASKS_KEY = 'nk.rev.entry.tasks.v2';
 
 const DEFAULT_ATTN: AttentionItem[] = [
-  { id: 'a1', label: 'OTA parity breach — BDC $142 vs direct $158',  severity: 'high'   },
-  { id: 'a2', label: 'Pace −14 % vs STLY for next 30 days',           severity: 'medium' },
-  { id: 'a3', label: 'Compset data stale — last sync 48 h ago',      severity: 'low'    },
+  { id: 'a1', label: 'OTA parity breach — BDC $142 vs direct $158', severity: 'high'   },
+  { id: 'a2', label: 'Pace −14% vs STLY for next 30 days',          severity: 'medium' },
+  { id: 'a3', label: 'Comp set data stale — last sync 48h ago',     severity: 'low'    },
 ];
 
 const DEFAULT_DOCS: DocItem[] = [
-  { id: 'd1', label: 'Revenue Strategy 2025',      href: '/revenue/strategy'    },
-  { id: 'd2', label: 'Channel Mix Report — Apr 26', href: '/revenue/channel-mix' },
-  { id: 'd3', label: 'BAR Rate Grid',               href: '/revenue/bar'         },
+  { id: 'd1', label: 'Revenue Strategy 2026',       href: '/revenue/strategy'    },
+  { id: 'd2', label: 'Channel Mix Report — Apr 2026', href: '/revenue/channel-mix' },
+  { id: 'd3', label: 'BAR Rate Grid',                href: '/revenue/bar'         },
 ];
 
 const DEFAULT_TASKS: TaskItem[] = [
-  { id: 't1', label: 'Review OTA parity alerts',     done: false },
-  { id: 't2', label: 'Update BAR for long weekend',  done: false },
-  { id: 't3', label: 'Sign off on group quote #12',  done: false },
+  { id: 't1', label: 'Review OTA parity alerts',    done: false, created: '2026-05-08' },
+  { id: 't2', label: 'Update BAR for long weekend', done: false, created: '2026-05-08' },
+  { id: 't3', label: 'Sign off on group quote #12', done: false, created: '2026-05-08' },
 ];
 
 const QUICK_CHIPS = [
   { label: 'Pulse',    href: '/revenue/pulse'    },
-  { label: 'Compset',  href: '/revenue/compset'  },
-  { label: 'Parity',   href: '/revenue/parity'   },
   { label: 'Pace',     href: '/revenue/pace'     },
   { label: 'Channels', href: '/revenue/channels' },
+  { label: 'Comp Set', href: '/revenue/compset'  },
+  { label: 'Parity',   href: '/revenue/parity'   },
   { label: 'Forecast', href: '/revenue/forecast' },
 ];
 
@@ -147,6 +147,10 @@ export default function RevenuePage() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const fileRef  = useRef<HTMLInputElement>(null);
+  const docFileRef = useRef<HTMLInputElement>(null);
+  const [chatFocused, setChatFocused] = useState(false);
+  const [taskModal, setTaskModal] = useState(false);
+  const [taskDraft, setTaskDraft] = useState({ label: '', due: '', alert: false });
 
   const [greeting,  setGreeting]  = useState('Good morning');
   const [chatValue, setChatValue] = useState('');
@@ -311,25 +315,53 @@ export default function RevenuePage() {
     setAttn(next); saveLS(ATTN_KEY, next);
   }
 
-  // docs CRUD
-  function addDoc() {
-    const label = prompt('Doc title');
-    if (!label) return;
-    const href = prompt('Link URL', '/revenue/') || '/revenue/';
-    const next = [...docs, { id: uid(), label, href }];
+  // docs — pick from computer (PBS 2026-05-08): no more URL prompts.
+  // Click + → file picker → upload to /api/cockpit/upload → add to docs.
+  async function pickDocFiles(files: FileList | null) {
+    if (!files?.length) return;
+    const out: DocItem[] = [];
+    for (const file of Array.from(files)) {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/cockpit/upload', { method: 'POST', body: fd });
+      if (!res.ok) continue;
+      const j = await res.json();
+      out.push({
+        id: uid(),
+        label: file.name,
+        href: j.public_url || j.path,
+        size: file.size,
+        uploaded_at: new Date().toISOString().slice(0, 10),
+      });
+    }
+    if (out.length === 0) return;
+    const next = [...docs, ...out];
     setDocs(next); saveLS(DOCS_KEY, next);
+    if (docFileRef.current) docFileRef.current.value = '';
   }
   function delDoc(id: string) {
     const next = docs.filter(d => d.id !== id);
     setDocs(next); saveLS(DOCS_KEY, next);
   }
 
-  // tasks CRUD
-  function addTask() {
-    const label = prompt('New task');
+  // tasks — modal for create with due-date + alert option (PBS 2026-05-08).
+  function openTaskModal() {
+    setTaskDraft({ label: '', due: '', alert: false });
+    setTaskModal(true);
+  }
+  function saveTask() {
+    const label = taskDraft.label.trim();
     if (!label) return;
-    const next = [...tasks, { id: uid(), label, done: false }];
+    const next = [...tasks, {
+      id: uid(),
+      label,
+      done: false,
+      created: new Date().toISOString().slice(0, 10),
+      due: taskDraft.due || undefined,
+      alert: taskDraft.alert,
+    }];
     setTasks(next); saveLS(TASKS_KEY, next);
+    setTaskModal(false);
   }
   function toggleTask(id: string) {
     const next = tasks.map(t => t.id === id ? { ...t, done: !t.done } : t);
@@ -608,10 +640,10 @@ export default function RevenuePage() {
                 The AI uses <b>only</b> the global knowledge <b>+ this project&apos;s knowledge</b> — no other project leaks in.
               </p>
               <ul style={{ margin: '0 0 8px 16px', padding: 0 }}>
-                <li>HoD creates projects from this menu.</li>
-                <li>Click <b>＋ Attach</b> in the chat to upload a file (max 25 MB).</li>
-                <li>Press <b>Summarise</b> any time to get a fresh retro of the project so far.</li>
-                <li>Archive = gone. The list filters archived projects out.</li>
+                <li>HoDs create projects from this menu.</li>
+                <li>Click the <b>+</b> in the chat to attach a file (max 25 MB).</li>
+                <li>Hit <b>Summarise</b> any time for a fresh retro of the project so far.</li>
+                <li>Archive = gone — archived projects are filtered out of this list.</li>
               </ul>
               <button
                 onClick={() => setHelpOpen(false)}
@@ -698,37 +730,45 @@ export default function RevenuePage() {
           Ask Vector anything about revenue.
         </div>
 
-        <form onSubmit={submitChat} style={{ width: '100%', maxWidth: 720 }}>
-          {/* attached file chips (above the input pill) */}
+        <form onSubmit={submitChat} style={{ width: '100%', maxWidth: 680 }}>
+          {/* attached-file chips above the pill */}
           {attachments.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
               {attachments.map((a, i) => (
                 <div key={`${a.path}-${i}`} style={{
-                  display: 'flex', alignItems: 'center', gap: 4,
-                  background: '#15110b', border: '1px solid #3a3327', borderRadius: 12,
-                  padding: '3px 8px', fontSize: 11, color: '#d8cca8',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  background: '#15110b', border: '1px solid #2a261d', borderRadius: 999,
+                  padding: '4px 10px', fontSize: 11, color: '#d8cca8',
                 }}>
-                  <span>📎 {a.name}</span>
-                  <span style={{ color: '#7d7565' }}>· {(a.size / 1024).toFixed(0)} KB</span>
+                  <span>{a.name}</span>
+                  <span style={{ color: '#5a5448' }}>{(a.size / 1024).toFixed(0)} KB</span>
                   <button
                     type="button"
                     onClick={() => setAttachments(prev => prev.filter((_, j) => j !== i))}
-                    style={{ background: 'transparent', border: 'none', color: '#7d7565', cursor: 'pointer', fontSize: 13, padding: '0 2px' }}
+                    aria-label={`Remove ${a.name}`}
+                    style={{ background: 'transparent', border: 'none', color: '#7d7565', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0 }}
                   >×</button>
                 </div>
               ))}
             </div>
           )}
+          {/* Standard 2026 LLM composer — 16px text, 16px radius, single
+            * row ~52px tall, subtle brass focus ring. Match the proportions
+            * of Claude.ai / ChatGPT input boxes. */}
           <div style={{
             display:      'flex',
-            alignItems:   'stretch',
-            border:       '1px solid #3a3327',
-            borderRadius: 14,
-            overflow:     'hidden',
+            alignItems:   'center',
+            border:       `1px solid ${chatFocused ? '#a8854a' : '#3a3327'}`,
+            borderRadius: 16,
             background:   '#15110b',
-            boxShadow:    '0 12px 32px rgba(0,0,0,0.45)',
+            boxShadow:    chatFocused
+              ? '0 0 0 3px rgba(168,133,74,0.12), 0 8px 24px rgba(0,0,0,0.4)'
+              : '0 8px 20px rgba(0,0,0,0.35)',
+            transition:   'border-color 120ms ease, box-shadow 120ms ease',
+            paddingLeft:  4,
+            paddingRight: 4,
+            height:       52,
           }}>
-            {/* + paperclip — file upload trigger (PBS 2026-05-08) */}
             <input
               ref={fileRef}
               type="file"
@@ -741,15 +781,21 @@ export default function RevenuePage() {
               onClick={() => fileRef.current?.click()}
               disabled={uploading}
               title="Attach files (up to 25 MB each)"
+              aria-label="Attach files"
               style={{
-                background: 'transparent',
-                border:     'none',
-                borderRight:'1px solid #2a261d',
-                color:      uploading ? '#5a5448' : '#a8854a',
-                cursor:     uploading ? 'wait' : 'pointer',
-                padding:    '0 16px',
-                fontSize:   18,
-                fontWeight: 300,
+                background:   'transparent',
+                border:       'none',
+                color:        uploading ? '#5a5448' : '#a8854a',
+                cursor:       uploading ? 'wait' : 'pointer',
+                width:        40,
+                height:       40,
+                borderRadius: 12,
+                fontSize:     20,
+                fontWeight:   300,
+                lineHeight:   1,
+                display:      'flex',
+                alignItems:   'center',
+                justifyContent: 'center',
               }}
             >
               {uploading ? '↑' : '+'}
@@ -759,7 +805,9 @@ export default function RevenuePage() {
               type="text"
               value={chatValue}
               onChange={e => setChatValue(e.target.value)}
-              placeholder={activeProject ? `Ask Vector — scoped to "${activeProject.name}"…` : 'e.g. how are we pacing for next weekend?'}
+              onFocus={() => setChatFocused(true)}
+              onBlur={() => setChatFocused(false)}
+              placeholder={activeProject ? `Ask Vector — scoped to "${activeProject.name}"…` : 'Ask anything about revenue…'}
               style={{
                 flex:       1,
                 background: 'transparent',
@@ -767,26 +815,33 @@ export default function RevenuePage() {
                 outline:    'none',
                 color:      '#efe6d3',
                 fontFamily: "'Inter Tight', system-ui, sans-serif",
-                fontSize:   15,
-                padding:    '16px 20px',
+                fontSize:   16,
+                lineHeight: 1.4,
+                padding:    '0 8px',
+                height:     '100%',
               }}
             />
             <button
               type="submit"
+              disabled={!chatValue.trim() && attachments.length === 0}
+              aria-label="Send"
               style={{
-                background:    '#a8854a',
+                background:    chatValue.trim() || attachments.length > 0 ? '#a8854a' : '#1c160d',
                 border:        'none',
-                color:         '#0a0a0a',
-                padding:       '0 22px',
-                cursor:        'pointer',
-                fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
-                fontSize:      11,
-                letterSpacing: '0.18em',
-                textTransform: 'uppercase',
+                color:         chatValue.trim() || attachments.length > 0 ? '#0a0a0a' : '#5a5448',
+                width:         40,
+                height:        40,
+                borderRadius:  12,
+                cursor:        (chatValue.trim() || attachments.length > 0) ? 'pointer' : 'not-allowed',
+                fontSize:      16,
                 fontWeight:    600,
+                display:       'flex',
+                alignItems:    'center',
+                justifyContent:'center',
+                transition:    'background 100ms ease',
               }}
             >
-              Ask ↵
+              ↑
             </button>
           </div>
         </form>
@@ -860,21 +915,38 @@ export default function RevenuePage() {
         {/* DOCS */}
         <Container
           title="My docs"
-          onAdd={addDoc}
+          onAdd={() => docFileRef.current?.click()}
         >
+          <input
+            ref={docFileRef}
+            type="file"
+            multiple
+            style={{ display: 'none' }}
+            onChange={e => pickDocFiles(e.target.files)}
+          />
           {docs.map(d => (
             <Row key={d.id} onDelete={() => delDoc(d.id)}>
               <a
                 href={d.href}
+                target={d.href?.startsWith('http') ? '_blank' : undefined}
+                rel={d.href?.startsWith('http') ? 'noreferrer' : undefined}
                 style={{
                   flex:           1,
                   fontSize:       13,
                   color:          '#c9bb96',
                   textDecoration: 'none',
                   lineHeight:     1.4,
+                  overflow:       'hidden',
+                  textOverflow:   'ellipsis',
+                  whiteSpace:     'nowrap',
                 }}
               >
                 {d.label}
+                {d.uploaded_at && (
+                  <span style={{ color: '#5a5448', marginLeft: 8, fontSize: 11 }}>
+                    {d.uploaded_at}
+                  </span>
+                )}
               </a>
             </Row>
           ))}
@@ -884,45 +956,158 @@ export default function RevenuePage() {
         {/* TASKS */}
         <Container
           title="My tasks"
-          onAdd={addTask}
+          onAdd={openTaskModal}
         >
-          {tasks.map(t => (
-            <Row key={t.id} onDelete={() => delTask(t.id)}>
-              <button
-                onClick={() => toggleTask(t.id)}
-                style={{
-                  width:           14,
-                  height:          14,
-                  borderRadius:    3,
-                  border:          `1px solid ${t.done ? '#5a5040' : '#7d7565'}`,
-                  background:      t.done ? '#a8854a' : 'transparent',
-                  cursor:          'pointer',
-                  display:         'flex',
-                  alignItems:      'center',
-                  justifyContent:  'center',
-                  flexShrink:      0,
-                  padding:         0,
-                  fontSize:        10,
-                  color:           '#0a0a0a',
-                  fontWeight:      700,
-                }}
-              >
-                {t.done ? '✓' : ''}
-              </button>
-              <span style={{
-                flex:           1,
-                fontSize:       13,
-                color:          t.done ? '#7d7565' : '#c9bb96',
-                textDecoration: t.done ? 'line-through' : 'none',
-                lineHeight:     1.4,
-              }}>
-                {t.label}
-              </span>
-            </Row>
-          ))}
+          {tasks.map(t => {
+            const overdue = !t.done && t.due && t.due < new Date().toISOString().slice(0, 10);
+            return (
+              <Row key={t.id} onDelete={() => delTask(t.id)}>
+                <button
+                  onClick={() => toggleTask(t.id)}
+                  aria-label={t.done ? 'Mark as not done' : 'Mark as done'}
+                  style={{
+                    width:           14,
+                    height:          14,
+                    borderRadius:    3,
+                    border:          `1px solid ${t.done ? '#5a5040' : '#7d7565'}`,
+                    background:      t.done ? '#a8854a' : 'transparent',
+                    cursor:          'pointer',
+                    display:         'flex',
+                    alignItems:      'center',
+                    justifyContent:  'center',
+                    flexShrink:      0,
+                    padding:         0,
+                    fontSize:        10,
+                    color:           '#0a0a0a',
+                    fontWeight:      700,
+                  }}
+                >
+                  {t.done ? '✓' : ''}
+                </button>
+                <div style={{
+                  flex:           1,
+                  fontSize:       13,
+                  color:          t.done ? '#7d7565' : '#c9bb96',
+                  textDecoration: t.done ? 'line-through' : 'none',
+                  lineHeight:     1.4,
+                  display:        'flex',
+                  alignItems:     'center',
+                  gap:            8,
+                  flexWrap:       'wrap',
+                }}>
+                  <span>{t.label}</span>
+                  {t.due && (
+                    <span style={{
+                      fontSize: 11,
+                      color: overdue ? '#c0584c' : '#7d7565',
+                      fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+                      letterSpacing: '0.04em',
+                    }}>
+                      {overdue ? '⚠ ' : '· '}due {t.due}
+                    </span>
+                  )}
+                  {t.alert && (
+                    <span title="Alert on" style={{ fontSize: 11, color: '#a8854a' }}>🔔</span>
+                  )}
+                </div>
+              </Row>
+            );
+          })}
           {tasks.length === 0 && <Empty label="Nothing on the list" />}
         </Container>
       </div>
+
+      {/* Task creation modal (PBS 2026-05-08) */}
+      {taskModal && (
+        <div
+          onClick={() => setTaskModal(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 200,
+            background: 'rgba(0,0,0,0.6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 24,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#0f0d0a', border: '1px solid #3a3327', borderRadius: 12,
+              padding: 20, width: '100%', maxWidth: 420,
+              boxShadow: '0 20px 50px rgba(0,0,0,0.6)',
+              fontFamily: "'Inter Tight', system-ui, sans-serif",
+            }}
+          >
+            <div style={{
+              fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+              fontSize: 10, letterSpacing: '0.22em', textTransform: 'uppercase',
+              color: '#a8854a', marginBottom: 12,
+            }}>New task</div>
+
+            <input
+              autoFocus
+              value={taskDraft.label}
+              onChange={e => setTaskDraft(d => ({ ...d, label: e.target.value }))}
+              onKeyDown={e => { if (e.key === 'Enter') saveTask(); }}
+              placeholder="What needs doing…"
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                background: '#15110b', border: '1px solid #2a261d', borderRadius: 8,
+                color: '#efe6d3', padding: '10px 12px', fontSize: 14,
+                fontFamily: 'inherit', outline: 'none', marginBottom: 12,
+              }}
+            />
+
+            <label style={{ display: 'block', fontSize: 11, color: '#9b907a', marginBottom: 4, fontFamily: "'JetBrains Mono', ui-monospace, monospace", letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+              Due date <span style={{ color: '#5a5448' }}>(optional)</span>
+            </label>
+            <input
+              type="date"
+              value={taskDraft.due}
+              onChange={e => setTaskDraft(d => ({ ...d, due: e.target.value }))}
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                background: '#15110b', border: '1px solid #2a261d', borderRadius: 8,
+                color: '#efe6d3', padding: '8px 12px', fontSize: 13,
+                fontFamily: 'inherit', outline: 'none', marginBottom: 12,
+                colorScheme: 'dark',
+              }}
+            />
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#c9bb96', cursor: 'pointer', marginBottom: 16 }}>
+              <input
+                type="checkbox"
+                checked={taskDraft.alert}
+                onChange={e => setTaskDraft(d => ({ ...d, alert: e.target.checked }))}
+                style={{ accentColor: '#a8854a', width: 16, height: 16 }}
+              />
+              <span>Alert me when due</span>
+            </label>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button
+                onClick={() => setTaskModal(false)}
+                style={{
+                  background: 'transparent', border: '1px solid #2a261d', borderRadius: 8,
+                  color: '#9b907a', padding: '8px 14px', fontSize: 12, cursor: 'pointer',
+                  fontFamily: "'JetBrains Mono', ui-monospace, monospace", letterSpacing: '0.14em', textTransform: 'uppercase',
+                }}
+              >Cancel</button>
+              <button
+                onClick={saveTask}
+                disabled={!taskDraft.label.trim()}
+                style={{
+                  background: taskDraft.label.trim() ? '#a8854a' : '#1c160d',
+                  border: 'none', borderRadius: 8,
+                  color: taskDraft.label.trim() ? '#0a0a0a' : '#5a5448',
+                  padding: '8px 14px', fontSize: 12,
+                  cursor: taskDraft.label.trim() ? 'pointer' : 'not-allowed',
+                  fontFamily: "'JetBrains Mono', ui-monospace, monospace", letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 600,
+                }}
+              >Save task</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -934,20 +1119,19 @@ function Container({
 }: { title: string; onAdd: () => void; children: React.ReactNode }) {
   return (
     <div style={{
-      background:   '#0f0d0a',
-      border:       '1px solid #1f1c15',
-      borderRadius: 12,
-      padding:      '14px 16px 16px',
-      display:      'flex',
+      background:    '#0f0d0a',
+      border:        '1px solid #1f1c15',
+      borderRadius:  12,
+      padding:       '12px 14px 14px',
+      display:       'flex',
       flexDirection: 'column',
-      minHeight:    180,
     }}>
       <div style={{
         display:        'flex',
         justifyContent: 'space-between',
         alignItems:     'center',
-        marginBottom:   12,
-        paddingBottom:  10,
+        marginBottom:   8,
+        paddingBottom:  6,
         borderBottom:   '1px solid #1f1c15',
       }}>
         <h2 style={{
@@ -965,19 +1149,19 @@ function Container({
           onClick={onAdd}
           aria-label="Add"
           style={{
-            background:   'transparent',
-            border:       '1px solid #2a261d',
-            borderRadius: 4,
-            color:        '#a8854a',
-            cursor:       'pointer',
-            fontSize:     14,
-            lineHeight:   1,
-            width:        22,
-            height:       22,
-            padding:      0,
-            display:      'flex',
-            alignItems:   'center',
-            justifyContent: 'center',
+            background:    'transparent',
+            border:        '1px solid #2a261d',
+            borderRadius:  4,
+            color:         '#a8854a',
+            cursor:        'pointer',
+            fontSize:      13,
+            lineHeight:    1,
+            width:         20,
+            height:        20,
+            padding:       0,
+            display:       'flex',
+            alignItems:    'center',
+            justifyContent:'center',
           }}
         >
           +
