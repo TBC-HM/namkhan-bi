@@ -1,10 +1,10 @@
+'use client';
+
 // app/sample/3/page.tsx — BRIEF-LED: AI summary up top, then evidence.
 
 import KpiBox from '@/components/kpi/KpiBox';
 import DataTable from '@/components/ui/DataTable';
 import StatusPill from '@/components/ui/StatusPill';
-
-export const dynamic = 'force-dynamic';
 
 const TABLE_ROWS = [
   { channel: 'Booking.com',  rn: 84,  rev: 14820, share: 0.34, adr: 176, comm: 0.18 },

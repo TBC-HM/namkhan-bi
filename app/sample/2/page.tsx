@@ -1,10 +1,10 @@
+'use client';
+
 // app/sample/2/page.tsx — HERO + SIDEBAR: one chart dominates, rail narrates.
 
 import KpiBox from '@/components/kpi/KpiBox';
 import DataTable from '@/components/ui/DataTable';
 import StatusPill from '@/components/ui/StatusPill';
-
-export const dynamic = 'force-dynamic';
 
 const TABLE_ROWS = [
   { period: '2026-05', otb: 524, stly: 612, var_pct: -14.4, pickup: 47, status: 'risk'    },
