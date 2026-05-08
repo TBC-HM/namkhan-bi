@@ -1,305 +1,309 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
 
-// Types
-interface GuestRow {
-  id: string;
-  reservation_id?: string;
-  guest_name?: string;
-  email?: string;
-  phone?: string;
-  nationality?: string;
-  check_in?: string;
-  check_out?: string;
-  room_number?: string;
-  room_type?: string;
-  status?: string;
-  total_usd?: number;
-  total_lak?: number;
-  source_channel?: string;
-  notes?: string;
-}
+/* ─── constants ─── */
+const DEPT_CHIPS = [
+  { label: 'Revenue',    href: '/revenue' },
+  { label: 'Sales',      href: '/sales' },
+  { label: 'Marketing',  href: '/marketing' },
+  { label: 'Operations', href: '/operations' },
+  { label: 'Guest',      href: '/guest' },
+  { label: 'Finance',    href: '/finance' },
+  { label: 'IT',         href: '/it' },
+];
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+const STUB_ATTENTION = [
+  { id: 1, text: 'Late check-out request pending — Villa 3' },
+  { id: 2, text: 'Guest complaint: pool noise after 22:00' },
+  { id: 3, text: 'Welcome amenity not delivered — Bungalow 7' },
+];
 
-function StatusBadge({ status }: { status?: string }) {
-  const s = status?.toLowerCase() ?? '';
-  const map: Record<string, { bg: string; label: string }> = {
-    checked_in:   { bg: '#16a34a', label: 'Checked In' },
-    checked_out:  { bg: '#6b7280', label: 'Checked Out' },
-    reserved:     { bg: '#2563eb', label: 'Reserved' },
-    cancelled:    { bg: '#dc2626', label: 'Cancelled' },
-    no_show:      { bg: '#d97706', label: 'No Show' },
-  };
-  const style = map[s] ?? { bg: '#6b7280', label: status ?? '—' };
-  return (
-    <span style={{
-      background: style.bg,
-      color: '#fff',
-      padding: '2px 10px',
-      borderRadius: 12,
-      fontSize: 12,
-      fontWeight: 600,
-      letterSpacing: '0.03em',
-      whiteSpace: 'nowrap',
-    }}>
-      {style.label}
-    </span>
-  );
-}
+const DOC_KEY  = 'nk.entry.docs.guest.v1';
+const TASK_KEY = 'nk.entry.tasks.guest.v1';
 
-export default function GuestPage() {
-  const [rows, setRows] = useState<GuestRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [error, setError] = useState<string | null>(null);
+type ListItem = { id: number; text: string; done: boolean };
+
+function useLocalList(key: string, stubs: string[]): [ListItem[], (id: number) => void, (text: string) => void] {
+  const [items, setItems] = useState<ListItem[]>([]);
 
   useEffect(() => {
-    async function load() {
-      setLoading(true);
-      setError(null);
-
-      // Try the most likely view names; fall back gracefully
-      const candidates = [
-        'v_guest_entry',
-        'v_guests',
-        'v_reservations',
-        'reservations',
-        'guests',
-      ];
-
-      let found = false;
-      for (const table of candidates) {
-        const { data, error: qErr } = await supabase
-          .from(table)
-          .select('*')
-          .order('check_in', { ascending: false })
-          .limit(200);
-
-        if (!qErr && data) {
-          setRows(data as GuestRow[]);
-          found = true;
-          break;
-        }
-      }
-
-      if (!found) {
-        setError('No guest data source found — please wire a view named v_guest_entry or v_reservations.');
-      }
-      setLoading(false);
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      try { setItems(JSON.parse(raw) as ListItem[]); return; } catch { /* fall through */ }
     }
-    void load();
-  }, []);
+    const defaults = stubs.map((text, i) => ({ id: i + 1, text, done: false }));
+    setItems(defaults);
+    localStorage.setItem(key, JSON.stringify(defaults));
+  }, [key, stubs]);
 
-  // Client-side filter
-  const filtered = rows.filter((r) => {
-    const matchSearch =
-      search.trim() === '' ||
-      [r.guest_name, r.email, r.reservation_id, r.room_number]
-        .join(' ')
-        .toLowerCase()
-        .includes(search.toLowerCase());
-    const matchStatus =
-      statusFilter === 'all' || (r.status?.toLowerCase() ?? '') === statusFilter;
-    return matchSearch && matchStatus;
-  });
+  function toggle(id: number) {
+    setItems(prev => {
+      const next = prev.map(it => it.id === id ? { ...it, done: !it.done } : it);
+      localStorage.setItem(key, JSON.stringify(next));
+      return next;
+    });
+  }
 
-  const statuses = ['all', 'checked_in', 'reserved', 'checked_out', 'cancelled', 'no_show'];
+  function add(text: string) {
+    setItems(prev => {
+      const next = [...prev, { id: Date.now(), text, done: false }];
+      localStorage.setItem(key, JSON.stringify(next));
+      return next;
+    });
+  }
 
-  const fmt = (v?: string | null) => v ?? '—';
-  const fmtDate = (v?: string | null) => {
-    if (!v) return '—';
-    return v.slice(0, 10); // ISO YYYY-MM-DD
-  };
-  const fmtUsd = (v?: number | null) =>
-    v != null ? `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
+  return [items, toggle, add];
+}
+
+/* ─── page ─── */
+export default function GuestPage() {
+  const [chat, setChat]   = useState('');
+  const [deptOpen, setDeptOpen] = useState(false);
+  const [newDoc,  setNewDoc]  = useState('');
+  const [newTask, setNewTask] = useState('');
+
+  const docStubs  = ['Guest satisfaction report Q1', 'VIP arrivals brief', 'Complaint resolution log'];
+  const taskStubs = ['Review NPS scores', 'Follow up on pool complaint', 'Prepare welcome packs for VIPs'];
+
+  const [docs,  toggleDoc,  addDoc]  = useLocalList(DOC_KEY,  docStubs);
+  const [tasks, toggleTask, addTask] = useLocalList(TASK_KEY, taskStubs);
+
+  function handleChat(e: React.FormEvent) {
+    e.preventDefault();
+    if (!chat.trim()) return;
+    window.location.href = `/chat?role=guest&q=${encodeURIComponent(chat)}`;
+  }
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
   return (
-    <main style={{ fontFamily: 'Inter, sans-serif', padding: '24px 32px', background: '#f9fafb', minHeight: '100vh' }}>
-      {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <p style={{ margin: 0, fontSize: 12, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-          Guest
-        </p>
-        <h1 style={{ margin: '4px 0 0', fontSize: 28, fontWeight: 700, color: '#111827' }}>
-          Guest Entry
-        </h1>
-        <p style={{ margin: '6px 0 0', fontSize: 14, color: '#6b7280' }}>
-          Reservation log — search by name, email, or reservation ID
-        </p>
+    <main style={{
+      minHeight: '100vh',
+      background: '#000',
+      color: '#fff',
+      fontFamily: 'Inter, sans-serif',
+      padding: '40px 48px',
+      boxSizing: 'border-box',
+    }}>
+
+      {/* ── Greeting ── */}
+      <p style={{
+        fontFamily: "'Fraunces', serif",
+        fontStyle: 'italic',
+        fontSize: 28,
+        fontWeight: 300,
+        margin: '0 0 32px',
+        color: '#f5f0e8',
+      }}>
+        {greeting}, Boss (Paul Bauer).
+      </p>
+
+      {/* ── Chat box ── */}
+      <form onSubmit={handleChat} style={{ marginBottom: 32 }}>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            value={chat}
+            onChange={e => setChat(e.target.value)}
+            placeholder="Ask anything about Guests…"
+            style={{
+              flex: 1,
+              background: '#111',
+              border: '1px solid #333',
+              borderRadius: 8,
+              color: '#fff',
+              padding: '12px 16px',
+              fontSize: 15,
+              outline: 'none',
+            }}
+          />
+          <button type="submit" style={{
+            background: '#fff',
+            color: '#000',
+            border: 'none',
+            borderRadius: 8,
+            padding: '12px 24px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            fontSize: 15,
+          }}>Ask</button>
+        </div>
+      </form>
+
+      {/* ── Chip row ── */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 36 }}>
+        {DEPT_CHIPS.map(chip => (
+          <a
+            key={chip.href}
+            href={chip.href}
+            style={{
+              background: chip.href === '/guest' ? '#fff' : '#1a1a1a',
+              color:      chip.href === '/guest' ? '#000' : '#ccc',
+              border: '1px solid #333',
+              borderRadius: 20,
+              padding: '6px 18px',
+              fontSize: 13,
+              fontWeight: 500,
+              textDecoration: 'none',
+              transition: 'background 0.15s',
+            }}
+          >
+            {chip.label}
+          </a>
+        ))}
       </div>
 
-      {/* Controls */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
-        <input
-          type="text"
-          placeholder="Search guest, email, reservation ID…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+      {/* ── Two-column: Docs + Tasks ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 36 }}>
+
+        {/* My Docs */}
+        <div style={{ background: '#0d0d0d', border: '1px solid #222', borderRadius: 12, padding: 20 }}>
+          <h2 style={{ fontSize: 14, fontWeight: 600, letterSpacing: '0.08em', color: '#888', textTransform: 'uppercase', margin: '0 0 14px' }}>
+            My Docs
+          </h2>
+          <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 14px' }}>
+            {docs.map(d => (
+              <li key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid #1a1a1a' }}>
+                <input
+                  type="checkbox"
+                  checked={d.done}
+                  onChange={() => toggleDoc(d.id)}
+                  style={{ accentColor: '#fff', cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: 14, color: d.done ? '#555' : '#ddd', textDecoration: d.done ? 'line-through' : 'none' }}>
+                  {d.text}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              value={newDoc}
+              onChange={e => setNewDoc(e.target.value)}
+              placeholder="Add doc…"
+              style={{ flex: 1, background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: 6, color: '#fff', padding: '6px 10px', fontSize: 13 }}
+              onKeyDown={e => { if (e.key === 'Enter' && newDoc.trim()) { addDoc(newDoc.trim()); setNewDoc(''); } }}
+            />
+            <button
+              onClick={() => { if (newDoc.trim()) { addDoc(newDoc.trim()); setNewDoc(''); } }}
+              style={{ background: '#222', color: '#fff', border: '1px solid #333', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 13 }}
+            >+</button>
+          </div>
+        </div>
+
+        {/* My Tasks */}
+        <div style={{ background: '#0d0d0d', border: '1px solid #222', borderRadius: 12, padding: 20 }}>
+          <h2 style={{ fontSize: 14, fontWeight: 600, letterSpacing: '0.08em', color: '#888', textTransform: 'uppercase', margin: '0 0 14px' }}>
+            My Tasks
+          </h2>
+          <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 14px' }}>
+            {tasks.map(t => (
+              <li key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid #1a1a1a' }}>
+                <input
+                  type="checkbox"
+                  checked={t.done}
+                  onChange={() => toggleTask(t.id)}
+                  style={{ accentColor: '#fff', cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: 14, color: t.done ? '#555' : '#ddd', textDecoration: t.done ? 'line-through' : 'none' }}>
+                  {t.text}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              value={newTask}
+              onChange={e => setNewTask(e.target.value)}
+              placeholder="Add task…"
+              style={{ flex: 1, background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: 6, color: '#fff', padding: '6px 10px', fontSize: 13 }}
+              onKeyDown={e => { if (e.key === 'Enter' && newTask.trim()) { addTask(newTask.trim()); setNewTask(''); } }}
+            />
+            <button
+              onClick={() => { if (newTask.trim()) { addTask(newTask.trim()); setNewTask(''); } }}
+              style={{ background: '#222', color: '#fff', border: '1px solid #333', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontSize: 13 }}
+            >+</button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Needs your attention ── */}
+      <div style={{ background: '#0d0d0d', border: '1px solid #2a1a1a', borderRadius: 12, padding: 20, marginBottom: 32 }}>
+        <h2 style={{ fontSize: 14, fontWeight: 600, letterSpacing: '0.08em', color: '#c0392b', textTransform: 'uppercase', margin: '0 0 14px' }}>
+          ⚠ Needs Your Attention
+        </h2>
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          {STUB_ATTENTION.map(item => (
+            <li key={item.id} style={{
+              padding: '10px 0',
+              borderBottom: '1px solid #1a1a1a',
+              fontSize: 14,
+              color: '#e0d0d0',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+            }}>
+              <span style={{ color: '#c0392b', fontSize: 16 }}>●</span>
+              {item.text}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* ── Department dropdown ── */}
+      <div style={{ position: 'relative', display: 'inline-block' }}>
+        <button
+          onClick={() => setDeptOpen(o => !o)}
           style={{
-            flex: '1 1 280px',
-            padding: '8px 14px',
-            border: '1px solid #d1d5db',
+            background: '#111',
+            color: '#fff',
+            border: '1px solid #333',
             borderRadius: 8,
+            padding: '10px 20px',
             fontSize: 14,
-            outline: 'none',
-            background: '#fff',
-          }}
-        />
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          style={{
-            padding: '8px 14px',
-            border: '1px solid #d1d5db',
-            borderRadius: 8,
-            fontSize: 14,
-            background: '#fff',
             cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
           }}
         >
-          {statuses.map((s) => (
-            <option key={s} value={s}>
-              {s === 'all' ? 'All Statuses' : s.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
-            </option>
-          ))}
-        </select>
-        <span style={{ fontSize: 13, color: '#6b7280' }}>
-          {loading ? 'Loading…' : `${filtered.length} guest${filtered.length !== 1 ? 's' : ''}`}
-        </span>
+          Departments ▾
+        </button>
+        {deptOpen && (
+          <ul style={{
+            position: 'absolute',
+            bottom: '110%',
+            left: 0,
+            background: '#111',
+            border: '1px solid #333',
+            borderRadius: 8,
+            listStyle: 'none',
+            padding: '6px 0',
+            margin: 0,
+            minWidth: 160,
+            zIndex: 100,
+          }}>
+            {DEPT_CHIPS.map(chip => (
+              <li key={chip.href}>
+                <a
+                  href={chip.href}
+                  style={{
+                    display: 'block',
+                    padding: '8px 18px',
+                    color: '#ccc',
+                    textDecoration: 'none',
+                    fontSize: 14,
+                  }}
+                >
+                  {chip.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
-      {/* Error */}
-      {error && (
-        <div style={{
-          background: '#fef2f2',
-          border: '1px solid #fca5a5',
-          borderRadius: 8,
-          padding: '12px 16px',
-          color: '#991b1b',
-          fontSize: 14,
-          marginBottom: 20,
-        }}>
-          ⚠️ {error}
-        </div>
-      )}
-
-      {/* Table */}
-      <div style={{
-        background: '#fff',
-        borderRadius: 12,
-        border: '1px solid #e5e7eb',
-        overflow: 'hidden',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-      }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ background: '#f3f4f6', borderBottom: '1px solid #e5e7eb' }}>
-                {[
-                  'Reservation ID',
-                  'Guest Name',
-                  'Email',
-                  'Phone',
-                  'Nationality',
-                  'Room',
-                  'Room Type',
-                  'Check-in',
-                  'Check-out',
-                  'Status',
-                  'Total (USD)',
-                  'Channel',
-                  'Notes',
-                ].map((h) => (
-                  <th
-                    key={h}
-                    style={{
-                      padding: '10px 14px',
-                      textAlign: 'left',
-                      fontWeight: 600,
-                      color: '#374151',
-                      whiteSpace: 'nowrap',
-                      fontSize: 12,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.05em',
-                    }}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={13} style={{ padding: '40px 0', textAlign: 'center', color: '#9ca3af' }}>
-                    Loading guest data…
-                  </td>
-                </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={13} style={{ padding: '40px 0', textAlign: 'center', color: '#9ca3af' }}>
-                    No guests match your filters.
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((r, i) => (
-                  <tr
-                    key={r.id ?? i}
-                    style={{
-                      borderBottom: '1px solid #f3f4f6',
-                      background: i % 2 === 0 ? '#fff' : '#fafafa',
-                    }}
-                  >
-                    <td style={{ padding: '10px 14px', fontWeight: 500, color: '#111827', whiteSpace: 'nowrap' }}>
-                      {fmt(r.reservation_id)}
-                    </td>
-                    <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#111827' }}>
-                      {fmt(r.guest_name)}
-                    </td>
-                    <td style={{ padding: '10px 14px', color: '#374151' }}>{fmt(r.email)}</td>
-                    <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#374151' }}>
-                      {fmt(r.phone)}
-                    </td>
-                    <td style={{ padding: '10px 14px', color: '#374151' }}>{fmt(r.nationality)}</td>
-                    <td style={{ padding: '10px 14px', fontWeight: 600, color: '#111827' }}>
-                      {fmt(r.room_number)}
-                    </td>
-                    <td style={{ padding: '10px 14px', color: '#374151' }}>{fmt(r.room_type)}</td>
-                    <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#374151' }}>
-                      {fmtDate(r.check_in)}
-                    </td>
-                    <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#374151' }}>
-                      {fmtDate(r.check_out)}
-                    </td>
-                    <td style={{ padding: '10px 14px' }}>
-                      <StatusBadge status={r.status} />
-                    </td>
-                    <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: '#374151' }}>
-                      {fmtUsd(r.total_usd)}
-                    </td>
-                    <td style={{ padding: '10px 14px', color: '#374151' }}>{fmt(r.source_channel)}</td>
-                    <td style={{ padding: '10px 14px', color: '#6b7280', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {fmt(r.notes)}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Footer */}
-      <p style={{ marginTop: 16, fontSize: 12, color: '#9ca3af', textAlign: 'right' }}>
-        Namkhan BI · Guest Entry · Data refreshes on page load
-      </p>
     </main>
   );
 }
