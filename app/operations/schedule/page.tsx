@@ -4,7 +4,6 @@ import PageHeader from '@/components/layout/PageHeader';
 import DataTable from '@/components/ui/DataTable';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 60;
 
 export default async function SchedulePage() {
   const supabase = createClient(
@@ -21,22 +20,24 @@ export default async function SchedulePage() {
   const rows = scheduleData ?? [];
 
   return (
-    <main className="p-6">
+    <main>
       <PageHeader pillar="Operations" tab="Schedule" title="Schedule" />
 
       {rows.length === 0 ? (
-        <p className="text-sm text-gray-500 mt-8">No schedule entries found.</p>
+        <p style={{ padding: '2rem', color: 'var(--color-text-muted)' }}>
+          No schedule entries found.
+        </p>
       ) : (
         <DataTable
           columns={[
             { key: 'scheduled_date', header: 'Date' },
-            { key: 'shift', header: 'Shift' },
-            { key: 'staff_name', header: 'Staff' },
-            { key: 'department', header: 'Department' },
-            { key: 'role', header: 'Role' },
-            { key: 'start_time', header: 'Start' },
-            { key: 'end_time', header: 'End' },
-            { key: 'status', header: 'Status' },
+            { key: 'shift',          header: 'Shift' },
+            { key: 'staff_name',     header: 'Staff' },
+            { key: 'department',     header: 'Department' },
+            { key: 'role',           header: 'Role' },
+            { key: 'start_time',     header: 'Start' },
+            { key: 'end_time',       header: 'End' },
+            { key: 'status',         header: 'Status' },
           ]}
           rows={rows}
         />
