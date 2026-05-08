@@ -1,135 +1,146 @@
 // app/marketing/campaigns/page.tsx
-// Brand & Marketing · Campaigns — list of all campaigns by status.
-
-import Link from 'next/link';
-import PanelHero from '@/components/sections/PanelHero';
-import Card from '@/components/sections/Card';
-import KpiCard from '@/components/kpi/KpiCard';
-import { getCampaigns, CHANNEL_LABEL, STATUS_COLOR, type CampaignStatus } from '@/lib/marketing';
+import { createClient } from '@supabase/supabase-js';
+import KpiBox from '@/components/kpi/KpiBox';
+import DataTable from '@/components/ui/DataTable';
+import PageHeader from '@/components/layout/PageHeader';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 30;
+export const revalidate = 60;
 
-const STATUS_TABS: Array<{ key: CampaignStatus | ''; label: string }> = [
-  { key: '',                 label: 'All' },
-  { key: 'draft',            label: 'Drafts' },
-  { key: 'pending_approval', label: 'Pending' },
-  { key: 'scheduled',        label: 'Scheduled' },
-  { key: 'published',        label: 'Published' },
-];
+interface Campaign {
+  id?: string | number;
+  name?: string;
+  channel?: string;
+  status?: string;
+  start_date?: string;
+  end_date?: string;
+  budget_usd?: number | null;
+  spend_usd?: number | null;
+  leads?: number | null;
+  bookings?: number | null;
+  revenue_usd?: number | null;
+}
 
-interface SP { searchParams?: Record<string, string | string[] | undefined> }
+function fmt(n: number | null | undefined, prefix = ''): string {
+  if (n == null) return '—';
+  return `${prefix}${n.toLocaleString('en-US')}`;
+}
 
-export default async function CampaignsPage({ searchParams }: SP) {
-  const status = (typeof searchParams?.status === 'string' ? searchParams.status : '') as CampaignStatus | '';
-  const campaigns = await getCampaigns(status ? { status } : {});
+function fmtDate(d: string | null | undefined): string {
+  if (!d) return '—';
+  return d.slice(0, 10);
+}
 
-  const counts = {
-    all:        await getCampaigns().then(c => c.length),
-    drafts:     campaigns.filter(c => c.status === 'draft').length,
-    pending:    campaigns.filter(c => c.status === 'pending_approval').length,
-    scheduled:  campaigns.filter(c => c.status === 'scheduled').length,
-    published:  campaigns.filter(c => c.status === 'published').length,
-  };
+export default async function Page() {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
+  // Attempt to read from marketing.v_campaigns_active; fall back to marketing.campaigns
+  let rows: Campaign[] = [];
+
+  const { data: viewData } = await supabase
+    .schema('marketing')
+    .from('v_campaigns_active')
+    .select('*')
+    .limit(100);
+
+  if (viewData && viewData.length > 0) {
+    rows = viewData as Campaign[];
+  } else {
+    const { data: tableData } = await supabase
+      .schema('marketing')
+      .from('campaigns')
+      .select('*')
+      .order('start_date', { ascending: false })
+      .limit(100);
+    rows = (tableData ?? []) as Campaign[];
+  }
+
+  // KPI aggregates
+  const total = rows.length;
+  const active = rows.filter(
+    (r) => r.status?.toLowerCase() === 'active'
+  ).length;
+  const totalBudget = rows.reduce((s, r) => s + (r.budget_usd ?? 0), 0);
+  const totalSpend = rows.reduce((s, r) => s + (r.spend_usd ?? 0), 0);
+  const totalRevenue = rows.reduce((s, r) => s + (r.revenue_usd ?? 0), 0);
+  const totalBookings = rows.reduce((s, r) => s + (r.bookings ?? 0), 0);
+
+  const roasPct =
+    totalSpend > 0
+      ? `${((totalRevenue / totalSpend) * 100).toFixed(1)}%`
+      : '—';
+
+  const columns = [
+    { key: 'name', header: 'Campaign' },
+    { key: 'channel', header: 'Channel' },
+    { key: 'status', header: 'Status' },
+    { key: 'start_date', header: 'Start' },
+    { key: 'end_date', header: 'End' },
+    { key: 'budget_usd', header: 'Budget (USD)' },
+    { key: 'spend_usd', header: 'Spend (USD)' },
+    { key: 'leads', header: 'Leads' },
+    { key: 'bookings', header: 'Bookings' },
+    { key: 'revenue_usd', header: 'Revenue (USD)' },
+  ];
+
+  const tableRows = rows.map((r) => ({
+    name: r.name ?? '—',
+    channel: r.channel ?? '—',
+    status: r.status ?? '—',
+    start_date: fmtDate(r.start_date),
+    end_date: fmtDate(r.end_date),
+    budget_usd: fmt(r.budget_usd, '$'),
+    spend_usd: fmt(r.spend_usd, '$'),
+    leads: fmt(r.leads),
+    bookings: fmt(r.bookings),
+    revenue_usd: fmt(r.revenue_usd, '$'),
+  }));
 
   return (
-    <>
-      <PanelHero
-        eyebrow="Brand · Marketing · campaigns"
-        title="Outbound"
-        emphasis="campaigns"
-        sub="Plan · curate · compose · approve · ship — with locked templates"
-        kpis={
-          <>
-            <KpiCard label="Total"     value={counts.all} />
-            <KpiCard label="Drafts"    value={counts.drafts} />
-            <KpiCard label="Scheduled" value={counts.scheduled} />
-            <KpiCard label="Published" value={counts.published} />
-          </>
-        }
-      />
+    <main className="p-6 space-y-6">
+      <PageHeader pillar="Marketing" tab="Campaigns" title="Campaigns" />
 
-      <Card
-        title="All"
-        emphasis="campaigns"
-        sub={status ? `filtered by ${status}` : 'newest first'}
-        source="marketing.v_campaign_calendar"
-        actions={
-          <Link href="/marketing/campaigns/new" className="btn" style={{ fontSize: "var(--t-sm)", textDecoration: 'none', background: 'var(--moss)', color: 'var(--paper-warm)', borderColor: 'var(--moss)' }}>
-            + new campaign
-          </Link>
-        }
+      {/* KPI strip */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+          gap: 16,
+        }}
       >
-        {/* Status tabs */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-          {STATUS_TABS.map(t => {
-            const active = status === t.key;
-            return (
-              <Link
-                key={t.key || 'all'}
-                href={t.key ? `/marketing/campaigns?status=${t.key}` : '/marketing/campaigns'}
-                className="btn"
-                style={{
-                  fontSize: "var(--t-sm)",
-                  textDecoration: 'none',
-                  background: active ? 'var(--moss)' : 'var(--paper-warm)',
-                  color: active ? 'var(--paper-warm)' : 'var(--ink)',
-                  borderColor: active ? 'var(--moss)' : 'var(--line)',
-                }}
-              >{t.label}</Link>
-            );
-          })}
-        </div>
+        <KpiBox label="Total Campaigns" value={total > 0 ? String(total) : '—'} />
+        <KpiBox label="Active" value={active > 0 ? String(active) : '—'} />
+        <KpiBox
+          label="Total Budget"
+          value={totalBudget > 0 ? fmt(totalBudget, '$') : '—'}
+        />
+        <KpiBox
+          label="Total Spend"
+          value={totalSpend > 0 ? fmt(totalSpend, '$') : '—'}
+        />
+        <KpiBox
+          label="Total Revenue"
+          value={totalRevenue > 0 ? fmt(totalRevenue, '$') : '—'}
+        />
+        <KpiBox
+          label="Total Bookings"
+          value={totalBookings > 0 ? String(totalBookings) : '—'}
+        />
+        <KpiBox label="ROAS" value={roasPct} />
+      </div>
 
-        {campaigns.length === 0 ? (
-          <div className="stub" style={{ padding: 32, textAlign: 'center' }}>
-            <h3>No campaigns yet</h3>
-            <p>Build your first campaign in 4 minutes — pick a channel, brief one sentence, AI proposes assets, you approve and download.</p>
-            <p style={{ marginTop: 12 }}>
-              <Link href="/marketing/campaigns/new" className="btn" style={{ fontSize: "var(--t-sm)", textDecoration: 'none', background: 'var(--moss)', color: 'var(--paper-warm)', borderColor: 'var(--moss)' }}>
-                start a campaign →
-              </Link>
-            </p>
-          </div>
-        ) : (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Channel</th>
-                <th className="num">Assets</th>
-                <th>Status</th>
-                <th>When</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {campaigns.map(c => {
-                const sc = STATUS_COLOR[c.status];
-                return (
-                  <tr key={c.campaign_id}>
-                    <td className="lbl">
-                      <Link href={`/marketing/campaigns/${c.campaign_id}`} style={{ color: 'var(--ink)', textDecoration: 'none', fontWeight: 600 }}>
-                        {c.name}
-                      </Link>
-                      {c.brief_text && <div style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)', marginTop: 2, fontStyle: 'italic' }}>{c.brief_text.slice(0, 80)}{c.brief_text.length > 80 ? '…' : ''}</div>}
-                    </td>
-                    <td style={{ fontSize: "var(--t-base)" }}>{CHANNEL_LABEL[c.channel]}</td>
-                    <td className="num">{c.asset_count}</td>
-                    <td><span className="pill" style={{ background: sc.bg, color: sc.tx }}>{sc.label}</span></td>
-                    <td style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>
-                      {c.calendar_at ? new Date(c.calendar_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
-                    </td>
-                    <td style={{ textAlign: 'right' }}>
-                      <Link href={`/marketing/campaigns/${c.campaign_id}`} style={{ fontSize: "var(--t-sm)", color: 'var(--moss)' }}>open ↗</Link>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </Card>
-    </>
+      {/* Campaign table */}
+      {tableRows.length > 0 ? (
+        <DataTable columns={columns} rows={tableRows} />
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          No campaign data available yet. Campaigns will appear here once added
+          to the marketing schema.
+        </p>
+      )}
+    </main>
   );
 }
