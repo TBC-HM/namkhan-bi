@@ -1,99 +1,129 @@
 // app/operations/spa/page.tsx
-// Re-restored 2026-05-05 — SlimHero · 2 KpiStrips · 3 cards · P&L grid · GL detail · trend · raw POS.
+// Marathon #195 child — Operations · Spa
+// v_spa_today is not yet in the PostgREST allowlist;
+// page renders gracefully with em-dash placeholders until the view is exposed.
 
-import FilterStrip from '@/components/nav/FilterStrip';
-import SlimHero from '@/components/sections/SlimHero';
-import KpiStrip, { type KpiStripItem } from '@/components/kpi/KpiStrip';
-import PnlGrid from '@/components/pl/PnlGrid';
-import DeptTrendChart from '@/components/pl/DeptTrendChart';
-import FnbGlBreakdown from '@/components/pl/FnbGlBreakdown';
-import FnbTopSellerTrend from '@/components/pl/FnbTopSellerTrend';
-import FnbRawTransactions from '@/components/pl/FnbRawTransactions';
-import {
-  getKpiDaily, aggregateDaily, getDeptPl, getSpaTreatments,
-  getDeptCaptureForPeriod, getSpaCostsForPeriod,
-  getDeptGlBreakdown, getDeptTopSellerTrend, getDeptRawTransactions,
-} from '@/lib/data';
-import { resolvePeriod } from '@/lib/period';
+import { createClient } from '@supabase/supabase-js';
+import KpiBox from '@/components/kpi/KpiBox';
+import DataTable from '@/components/ui/DataTable';
+import PageHeader from '@/components/layout/PageHeader';
 
-export const revalidate = 60;
 export const dynamic = 'force-dynamic';
+export const revalidate = 60;
 
-interface Props { searchParams: Record<string, string | string[] | undefined>; }
+interface SpaRow {
+  treatment_date?: string | null;
+  treatment_name?: string | null;
+  therapist?: string | null;
+  guest_name?: string | null;
+  duration_min?: number | null;
+  revenue_usd?: number | null;
+  status?: string | null;
+}
 
-export default async function SpaPage({ searchParams }: Props) {
-  const period = resolvePeriod(searchParams);
-  const [daily, pl, periodCosts, captureP, glBreakdown, topTrend, rawTxns, spa12] = await Promise.all([
-    getKpiDaily(period.from, period.to).catch(() => []),
-    getDeptPl('spa', 16).catch(() => []),
-    getSpaCostsForPeriod(period.from, period.to).catch(() => null),
-    getDeptCaptureForPeriod({ usali_dept: 'Other Operated', usali_subdept: 'Spa' }, period.from, period.to).catch(() => null),
-    getDeptGlBreakdown('Spa', 16).catch(() => ({ periods: [], lines: [] })),
-    getDeptTopSellerTrend({ usali_dept: 'Other Operated', usali_subdept: 'Spa' }, '2026-01-01', 8).catch(() => ({ periods: [], items: [] })),
-    getDeptRawTransactions({ usali_dept: 'Other Operated', usali_subdept: 'Spa' }, 2000).catch(() => []),
-    getSpaTreatments(12).catch(() => null),
-  ]);
-  const a30 = aggregateDaily(daily, period.capacityMode);
-  const plLatest = pl.find(r => r.revenue > 0) ?? null;
-  const tileSrc = periodCosts ?? (plLatest ? {
-    revenue: plLatest.revenue, spa_cost: plLatest.spa_cost, payroll: plLatest.payroll,
-    total_cost: plLatest.total_cost, gop: plLatest.gop,
-    spa_cost_pct: plLatest.spa_cost_pct, labor_cost_pct: plLatest.labor_cost_pct, gop_pct: plLatest.gop_pct,
-    months_used: [plLatest.period],
-  } : null);
-  const captureRate = captureP ? Number(captureP.capture_pct) : 0;
-  const perOccRn = captureP ? Number(captureP.spend_per_occ) : 0;
-  const recent30 = spa12?.by_month?.[spa12.by_month.length - 1];
+export default async function SpaPage() {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
+  const { data, error } = await supabase
+    .from('v_spa_today')
+    .select('*')
+    .limit(100);
+
+  const rows: SpaRow[] = data ?? [];
+
+  // KPI derivations — computed client-side from view rows
+  const totalTreatments = rows.length;
+  const totalRevenue = rows.reduce((sum, r) => sum + (r.revenue_usd ?? 0), 0);
+  const avgDuration =
+    rows.length > 0
+      ? Math.round(
+          rows.reduce((sum, r) => sum + (r.duration_min ?? 0), 0) / rows.length
+        )
+      : null;
+  const confirmedCount = rows.filter(
+    (r) => (r.status ?? '').toLowerCase() === 'confirmed'
+  ).length;
+
+  const fmt = (n: number | null, prefix = '') =>
+    n !== null ? `${prefix}${n.toLocaleString()}` : '—';
 
   return (
-    <>
-      <FilterStrip showForward={false} showCompare={false} showSegment={false} liveSource="Cloudbeds · live" />
-      <SlimHero eyebrow={`Spa · ${period.label}`} title="Wellness" emphasis="treatments" sub="therapy · attached treatments · capture rate · per-occupied-roomnight" />
+    <main style={{ padding: '24px 32px', fontFamily: 'var(--font-sans, sans-serif)' }}>
+      <PageHeader pillar="Operations" tab="Spa" title="Spa — Today's Schedule" />
 
-      <KpiStrip items={[
-        { label: 'Spa Revenue',    value: Number(a30?.spa_revenue ?? 0), kind: 'money', tone: 'pos' },
-        { label: 'Spa / Occ Rn',   value: perOccRn, kind: 'money', tone: perOccRn >= 25 ? 'pos' : 'warn', hint: 'benchmark $25-40' },
-        { label: 'Capture %',      value: captureRate, kind: 'pct', hint: 'benchmark ≥ 35%' },
-        { label: 'Treatments / day', value: recent30 ? Number(recent30.avg_per_day) : 0, kind: 'count', hint: 'latest month' },
-        { label: 'Months',         value: tileSrc ? tileSrc.months_used.length : 0, kind: 'count', hint: tileSrc ? tileSrc.months_used[0] : '—' },
-        { label: 'Therapist util', value: 0, kind: 'pct', hint: 'scheduler not synced' },
-      ] satisfies KpiStripItem[]} />
+      {/* KPI strip */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: 16,
+          marginTop: 24,
+          marginBottom: 32,
+        }}
+      >
+        <KpiBox
+          label="Treatments Today"
+          value={totalTreatments > 0 ? String(totalTreatments) : '—'}
+        />
+        <KpiBox
+          label="Revenue (USD)"
+          value={totalRevenue > 0 ? fmt(totalRevenue, '$') : '—'}
+        />
+        <KpiBox
+          label="Avg Duration (min)"
+          value={fmt(avgDuration)}
+        />
+        <KpiBox
+          label="Confirmed Bookings"
+          value={confirmedCount > 0 ? String(confirmedCount) : '—'}
+        />
+      </div>
 
-      <KpiStrip items={[
-        { label: 'Spa Cost %', value: tileSrc ? tileSrc.spa_cost_pct : 0, kind: 'pct', tone: tileSrc && tileSrc.spa_cost_pct <= 12 ? 'pos' : 'warn', hint: 'target ≤ 12%' },
-        { label: 'Labor %',    value: tileSrc ? tileSrc.labor_cost_pct : 0, kind: 'pct', tone: tileSrc && tileSrc.labor_cost_pct <= 35 ? 'pos' : 'neg', hint: 'target ≤ 35%' },
-        { label: 'GOP %',      value: tileSrc ? tileSrc.gop_pct : 0, kind: 'pct', tone: tileSrc && tileSrc.gop_pct >= 50 ? 'pos' : tileSrc && tileSrc.gop_pct >= 0 ? 'warn' : 'neg', hint: 'target ≥ 50%' },
-        { label: 'Revenue (QB)', value: tileSrc ? tileSrc.revenue : 0, kind: 'money', hint: tileSrc ? `${tileSrc.months_used.length} mo` : '—' },
-        { label: 'Spa COGS',   value: tileSrc ? tileSrc.spa_cost : 0, kind: 'money' },
-        { label: 'Payroll',    value: tileSrc ? tileSrc.payroll : 0, kind: 'money' },
-      ] satisfies KpiStripItem[]} />
+      {/* Error banner — only shown when view exists but query fails */}
+      {error && !data && (
+        <div
+          style={{
+            background: '#fff3cd',
+            border: '1px solid #ffc107',
+            borderRadius: 6,
+            padding: '10px 16px',
+            marginBottom: 16,
+            fontSize: 13,
+            color: '#856404',
+          }}
+        >
+          ⚠️ Could not load spa data: {error.message}. KPIs show em-dash placeholders
+          until <code>v_spa_today</code> is allowlisted in PostgREST.
+        </div>
+      )}
 
-      <h2 style={{ marginTop: 28, marginBottom: 6, fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>Monthly trend · revenue · costs · GOP %</h2>
-      <DeptTrendChart rows={pl} dept="spa" />
-
-      <h2 style={{ marginTop: 28, marginBottom: 6, fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>P&amp;L · QB GL · USALI rollup</h2>
-      <PnlGrid rows={pl} dept="spa" targets={{ spa_cost_pct: 12, labor_cost_pct: 35, gop_pct: 50 }} defaultRows={6} />
-
-      <details style={{ marginTop: 24 }}>
-        <summary style={{ cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)', padding: '8px 0' }}>
-          GL detail · Spa accounts ▾
-        </summary>
-        <FnbGlBreakdown data={glBreakdown} defaultMonths={4} />
-      </details>
-
-      <details style={{ marginTop: 24 }} open>
-        <summary style={{ cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)', padding: '8px 0' }}>
-          Top spa treatments · trend since Jan 26 ▾
-        </summary>
-        <FnbTopSellerTrend data={topTrend} />
-      </details>
-
-      <details style={{ marginTop: 24 }}>
-        <summary style={{ cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)', padding: '8px 0' }}>
-          All POS transactions · search &amp; reconcile ▾  <span style={{ color: 'var(--ink-soft)', textTransform: 'none', letterSpacing: 'normal' }}>({rawTxns.length} most recent)</span>
-        </summary>
-        <FnbRawTransactions data={rawTxns} pageSize={200} />
-      </details>
-    </>
+      {/* Treatments table */}
+      <DataTable
+        columns={[
+          { key: 'treatment_date', header: 'Date' },
+          { key: 'treatment_name', header: 'Treatment' },
+          { key: 'therapist', header: 'Therapist' },
+          { key: 'guest_name', header: 'Guest' },
+          { key: 'duration_min', header: 'Duration (min)' },
+          { key: 'revenue_usd', header: 'Revenue (USD)' },
+          { key: 'status', header: 'Status' },
+        ]}
+        rows={rows.map((r) => ({
+          treatment_date: r.treatment_date ?? '—',
+          treatment_name: r.treatment_name ?? '—',
+          therapist: r.therapist ?? '—',
+          guest_name: r.guest_name ?? '—',
+          duration_min: r.duration_min !== null && r.duration_min !== undefined ? r.duration_min : '—',
+          revenue_usd:
+            r.revenue_usd !== null && r.revenue_usd !== undefined
+              ? `$${r.revenue_usd.toLocaleString()}`
+              : '—',
+          status: r.status ?? '—',
+        }))}
+      />
+    </main>
   );
 }
