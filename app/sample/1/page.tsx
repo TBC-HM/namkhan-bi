@@ -1,11 +1,14 @@
 'use client';
 
-// app/sample/1/page.tsx — CLASSIC: KPI strip · 3 chart row · table
-// Demo data only; PBS picks the layout, then we wire real data per dept.
+// app/sample/1/page.tsx — CLASSIC: KPI strip · 3 chart row · table.
+// Refactored 2026-05-09 to use the locked Page shell + shared Panel.
 
 import KpiBox from '@/components/kpi/KpiBox';
 import DataTable from '@/components/ui/DataTable';
 import StatusPill from '@/components/ui/StatusPill';
+import Page from '@/components/page/Page';
+import Panel from '@/components/page/Panel';
+import SampleSwitcher from '../_components/SampleSwitcher';
 
 const TABLE_ROWS = [
   { day: '2026-05-09', occ: 0.78, adr: 184, rev: 4280, comp: 0.74, pickup: 12 },
@@ -19,18 +22,16 @@ const TABLE_ROWS = [
 
 export default function Sample1() {
   return (
-    <div style={page}>
-      <SampleHeader title="Pulse · last 7d" eyebrow="Sample 1 · Classic — KPIs · 3 charts · table" />
+    <Page eyebrow="Sample 1 · Classic — KPIs · 3 charts · table" title="Pulse · last 7d">
+      <SampleSwitcher current={1} />
 
-      {/* KPI strip — 4 tiles */}
       <div style={kpiStrip}>
-        <KpiBox value={78}   unit="pct"     label="Occupancy"  delta={{ value: 4.2, unit: 'pp', period: 'STLY' }} compare={{ value: -1.1, unit: 'pp', period: 'Bgt' }} />
-        <KpiBox value={184}  unit="usd"     label="ADR"        delta={{ value: 6,   unit: 'usd', period: 'STLY' }} />
-        <KpiBox value={143}  unit="usd"     label="RevPAR"     delta={{ value: 11,  unit: 'usd', period: 'LY' }}  />
-        <KpiBox value={4624} unit="usd"     label="Revenue 7d" delta={{ value: 8.1, unit: 'pct', period: 'STLY' }} />
+        <KpiBox value={78}   unit="pct" label="Occupancy"  delta={{ value: 4.2, unit: 'pp', period: 'STLY' }} compare={{ value: -1.1, unit: 'pp', period: 'Bgt' }} />
+        <KpiBox value={184}  unit="usd" label="ADR"        delta={{ value: 6,   unit: 'usd', period: 'STLY' }} />
+        <KpiBox value={143}  unit="usd" label="RevPAR"     delta={{ value: 11,  unit: 'usd', period: 'LY' }}  />
+        <KpiBox value={4624} unit="usd" label="Revenue 7d" delta={{ value: 8.1, unit: 'pct', period: 'STLY' }} />
       </div>
 
-      {/* 3-chart row — equal width */}
       <div style={chartRow}>
         <Panel title="Daily revenue · 30d">
           <BarChart data={[42,38,46,52,48,55,61,58,52,49,57,63,68,71,66,59,62,68,74,78,72,70,75,82,88,85,79,84,91,96]} />
@@ -46,8 +47,7 @@ export default function Sample1() {
         </Panel>
       </div>
 
-      {/* Data table — full width */}
-      <div style={tableWrap}>
+      <div style={{ marginBottom: 24 }}>
         <DataTable
           columns={[
             { key: 'day',    header: 'Date',                   render: (r) => r.day,                                            sortValue: (r) => r.day },
@@ -64,63 +64,13 @@ export default function Sample1() {
           rowKey={(r) => r.day}
         />
       </div>
-
-      <SampleFooter sampleName="1 · Classic" />
-    </div>
+    </Page>
   );
 }
 
-// ─── shared primitives (used by all 3 samples) ──────────────────────────
+// ─── chart helpers (kept inline until we extract to components/charts/) ──
 
-function SampleHeader({ title, eyebrow }: { title: string; eyebrow: string }) {
-  return (
-    <div style={{ marginBottom: 24 }}>
-      <div style={{
-        fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-        fontSize: 10, letterSpacing: '0.22em', textTransform: 'uppercase',
-        color: '#a8854a', marginBottom: 6,
-      }}>{eyebrow}</div>
-      <h1 style={{
-        fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic',
-        fontWeight: 300, fontSize: 32, color: '#e9e1ce', margin: 0,
-      }}>{title}</h1>
-    </div>
-  );
-}
-function SampleFooter({ sampleName }: { sampleName: string }) {
-  return (
-    <div style={{
-      marginTop: 48, paddingTop: 16, borderTop: '1px solid #1f1c15',
-      display: 'flex', gap: 12, alignItems: 'center',
-      fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-      fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#5a5448',
-    }}>
-      <span>Sample {sampleName}</span>
-      <span style={{ color: '#3d3a32' }}>·</span>
-      <a href="/sample" style={{ color: '#9b907a', textDecoration: 'none' }}>← all samples</a>
-      <span style={{ color: '#3d3a32' }}>·</span>
-      <a href="/sample/1" style={{ color: '#9b907a', textDecoration: 'none' }}>Sample 1</a>
-      <a href="/sample/2" style={{ color: '#9b907a', textDecoration: 'none' }}>Sample 2</a>
-      <a href="/sample/3" style={{ color: '#9b907a', textDecoration: 'none' }}>Sample 3</a>
-    </div>
-  );
-}
-
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div style={{
-      background: '#0f0d0a', border: '1px solid #1f1c15', borderRadius: 10,
-      padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10,
-    }}>
-      <div style={{
-        fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-        fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: '#a8854a',
-      }}>{title}</div>
-      <div>{children}</div>
-    </div>
-  );
-}
-function BarChart({ data }: { data: number[] }) {
+export function BarChart({ data }: { data: number[] }) {
   const W = 480, H = 160, padL = 8, padR = 8, padB = 8, padT = 8;
   const innerW = W - padL - padR, innerH = H - padT - padB;
   const max = Math.max(...data) || 1;
@@ -134,7 +84,7 @@ function BarChart({ data }: { data: number[] }) {
     </svg>
   );
 }
-function DonutChart({ slices }: { slices: { label: string; v: number; color: string }[] }) {
+export function DonutChart({ slices }: { slices: { label: string; v: number; color: string }[] }) {
   const total = slices.reduce((s, x) => s + x.v, 0) || 1;
   const r = 60, R = 88, cx = 110, cy = 90;
   let acc = 0;
@@ -165,7 +115,7 @@ function DonutChart({ slices }: { slices: { label: string; v: number; color: str
     </div>
   );
 }
-function LineChart({ series }: { series: { label: string; color: string; data: number[] }[] }) {
+export function LineChart({ series }: { series: { label: string; color: string; data: number[] }[] }) {
   const W = 480, H = 160, padL = 8, padR = 8, padB = 8, padT = 8;
   const innerW = W - padL - padR, innerH = H - padT - padB;
   const allMax = Math.max(...series.flatMap((s) => s.data)) || 1;
@@ -191,16 +141,9 @@ function LineChart({ series }: { series: { label: string; color: string; data: n
 }
 
 // ─── styles ──────────────────────────────────────────────────────────────
-const page: React.CSSProperties = {
-  minHeight: '100vh', background: '#0a0a0a', color: '#e9e1ce',
-  fontFamily: "'Inter Tight', system-ui, sans-serif",
-  padding: '32px 48px 64px',
-  maxWidth: 1280, margin: '0 auto',
-};
 const kpiStrip: React.CSSProperties = {
   display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 24,
 };
 const chartRow: React.CSSProperties = {
   display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14, marginBottom: 24,
 };
-const tableWrap: React.CSSProperties = { marginBottom: 24 };

@@ -7,6 +7,35 @@
 1. **Open `DESIGN_NAMKHAN_BI.md` (repo root)** — full canonical design system reference.
 2. **Open `docs/11_BRAND_AND_UI_STANDARDS.md`** — full spec for `<KpiBox>`, `<DataTable>`, `<StatusPill>`, `<PageHeader>`.
 3. Use canonical components only. Don't introduce new tile/table markup, hardcoded fontSize literals, hex colors, or `USD ` prefixes.
+4. **Read the design-system manifesto** (locked 2026-05-09 — see § "Design system manifesto" below). PBS directive: *the canvas at `/` is the primary UI; sub-page dashboards are the exception*. **Every** route renders inside `<Page>`; six canonical primitives only; no data cemetery.
+
+## Design system manifesto (locked 2026-05-09)
+
+Persisted in `cockpit_knowledge_base WHERE scope = 'design_system_manifesto'` so every agent that consults KB reads it before touching UI. Seven entries (ids 483–489); never overwrite.
+
+### The 7 binding rules
+
+1. **Canvas first.** Primary UI = the canvas at `/`. PBS asks → agent returns a Brief (signal · good · bad · proposals) → 3-state kanban (proposal · in_process · done). Sub-page dashboards are the **exception**, not the default. When a question is best answered by a viz, render one of the 3 sample dashboard layouts (`/sample/1|2|3`); otherwise return a Brief.
+
+2. **`<Page>` shell mandatory.** Every route renders inside `components/page/Page.tsx`. The shell owns page padding (32px sides, 64px bottom, max-width 1280, centered), eyebrow + Fraunces italic title, optional sub-pages strip, optional topRight slot for weather/user/date pills, and the SLH-affiliation footer. **Pages do not reinvent header/footer/chrome.** If you find yourself writing `<div style={{ minHeight: '100vh', padding: ... }}>`, stop and use `<Page>`.
+
+3. **Six primitives, nothing else:**
+   - `<Page>` — shell (`components/page/Page.tsx`)
+   - `<KpiBox>` — locked KPI tile (`components/kpi/KpiBox.tsx`)
+   - `<Panel>` — card around any chart/table/list (`components/page/Panel.tsx`)
+   - `<DataTable>` — sortable rows (`components/ui/DataTable.tsx`)
+   - `<Brief>` — signal+good+bad+proposals (`components/page/Brief.tsx`)
+   - `<Lane>` + `<ProposalCard>` — 3-state kanban (`components/page/{Lane,ProposalCard}.tsx`)
+   
+   Hard rule: **no ad-hoc `<div style={{ background, border, borderRadius }}>` mimicking these.** Wrap content in `<Panel>` instead.
+
+4. **Action overlay everywhere.** Every artifact (chart, table, KPI, brief) carries the same 4 actions, always: `✦ AI` · `⊕ Save to Reports` · `↻ Schedule` · `📁 Add to Project`. Single `<ArtifactActions>` component (TODO when wiring page-by-page). Each calls existing `/api/cockpit/*` endpoints. Never add a one-off action button outside this set.
+
+5. **Tokens locked in `:root`.** Use CSS variables in `styles/globals.css`: `--t-xs` (10px) → `--t-3xl` (30px) for typography; brand palette `--paper`, `--paper-warm`, `--ink`, `--brass`, `--moss`. **No** inline `style={{ fontSize: 14 }}`. **No** hex colors outside `:root`. **No** system-font fallbacks (Georgia/Helvetica/Arial inline) — use Fraunces / Inter Tight / JetBrains Mono. CI greps from DESIGN_NAMKHAN_BI.md verification recipes are binding.
+
+6. **Proposal lifecycle.** `cockpit_proposals` table is the atomic unit of agent work: `signal` + `agent_role` + `action_type` + `body` + `action_payload` + `status` (proposal | in_process | done | rejected). Trigger `proposals_bump_trust` auto-bumps `agent_trust` counters on status flips. Trust unlocks auto-run per `(agent_role, action_type)` pair after threshold (default 10) approves with zero rejects; one rejection re-locks. **Approval-required-always at start; trust meter UNLOCKS auto-run, never the other way around.**
+
+7. **No data cemetery.** A signal without a proposal is data cemetery. A proposal without state is a chat that goes nowhere. **Every** surface answers four questions in the same language: WHAT (signal) · WHY (body) · WHAT NEXT (proposals) · WHERE WE ARE (lane state). When designing any new surface, write it as a Brief first; only fall back to a dashboard layout if the Brief literally cannot carry the answer.
 
 ## Mandatory session ritual (locked 2026-05-03)
 

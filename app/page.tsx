@@ -1,42 +1,22 @@
 'use client';
 
 // app/page.tsx — THE CANVAS.
-// PBS directive 2026-05-09: stop building dashboards. The single surface
-// is a question + a brief + proposal cards + a 3-state kanban.
-//
-// Flow per turn:
-//   1. ask                       → POST /api/canvas/ask
-//   2. brief renders             ← signal · good · bad · proposal cards
-//   3. approve / tweak / reject  → POST /api/canvas/proposal/[id]/{approve,reject}
-//   4. proposal slides into the kanban (3 lanes at the bottom)
-//   5. audit_log captures every transition; trust meter unlocks auto-run
-//      after N approves of (agent, action_type).
-//
-// No dept dashboards on this surface. Dept entry pages still exist
-// (/revenue, /sales, ...) for direct dept work; the architect launcher
-// is now parked at /architect.
+// Refactored 2026-05-09 to use the locked design-system shell + primitives.
+// Same flow as before: ask → brief → approve → kanban → trust unlocks auto-run.
 
 import { useEffect, useRef, useState } from 'react';
+import Page from '@/components/page/Page';
+import Brief, { type BriefData } from '@/components/page/Brief';
+import Lane from '@/components/page/Lane';
+import ProposalCard, { type ProposalLite } from '@/components/page/ProposalCard';
 
-interface Proposal {
-  id: number;
-  agent_role: string;
-  action_type: string;
+interface Proposal extends ProposalLite {
   dept: string | null;
-  signal: string;
-  body: string | null;
-  status: 'proposal' | 'in_process' | 'done' | 'rejected';
   requires_approval: boolean;
   created_at: string;
   started_at: string | null;
   finished_at: string | null;
   evidence: unknown;
-}
-interface Brief {
-  signal: string;
-  body: string;
-  good: string[];
-  bad: string[];
 }
 interface TrustRow {
   agent_role: string;
@@ -51,7 +31,7 @@ export default function Canvas() {
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [brief, setBrief] = useState<Brief | null>(null);
+  const [brief, setBrief] = useState<BriefData | null>(null);
   const [briefProposals, setBriefProposals] = useState<Proposal[]>([]);
   const [lanes, setLanes] = useState<{ proposal: Proposal[]; in_process: Proposal[]; done: Proposal[]; rejected: Proposal[] }>({
     proposal: [], in_process: [], done: [], rejected: [],
@@ -114,8 +94,6 @@ export default function Canvas() {
     void loadLanes();
   }
   async function complete(id: number) {
-    // Mock executor — flips in_process → done with a pseudo evidence
-    // payload so PBS can see the lane move. Real integrations replace this.
     await fetch(`/api/canvas/proposal/${id}/done`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ evidence: { mock: true, completed_at: new Date().toISOString() } }),
@@ -124,24 +102,16 @@ export default function Canvas() {
   }
 
   return (
-    <div style={page}>
-      {/* Top — eyebrow + greeting */}
-      <div style={{ marginBottom: 24, marginLeft: 56 }}>
-        <div style={eyebrow}>Canvas · the hotel</div>
-        <h1 style={greeting}>What does the hotel need?</h1>
-        <div style={{ color: '#7d7565', fontSize: 13, lineHeight: 1.5, maxWidth: 720, marginTop: 6 }}>
-          Ask anything. The agents read the data, surface the signal, propose actions. You approve, tweak, or reject. Approved proposals run; trust unlocks auto-run over time.
-        </div>
-      </div>
+    <Page eyebrow="Canvas · the hotel" title="What does the hotel need?">
 
-      {/* Composer */}
+      {/* COMPOSER */}
       <form onSubmit={(e) => { e.preventDefault(); ask(); }} style={composerWrap}>
         <textarea
           ref={inputRef}
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); ask(); } }}
-          placeholder="e.g. how do we play the long weekend?  ·  reply to the latest bad review  ·  re-engage silent B2B partners"
+          placeholder="e.g. how do we play the long weekend? · reply to the latest bad review · re-engage silent B2B partners"
           rows={2}
           style={composerInput}
         />
@@ -149,6 +119,7 @@ export default function Canvas() {
           {busy ? '…' : 'Ask ↑'}
         </button>
       </form>
+
       {error && (
         <div style={errBanner}>
           ⚠️ {error}
@@ -156,48 +127,59 @@ export default function Canvas() {
         </div>
       )}
 
-      {/* Brief */}
+      {/* BRIEF */}
       {brief && (
-        <div style={briefWrap}>
-          <div style={signalEyebrow}>✦ Signal</div>
-          <div style={signalLine}>{brief.signal}</div>
-          {brief.body && <div style={signalBody}>{brief.body}</div>}
-
-          <div style={goodBadGrid}>
-            <div style={goodCard}>
-              <div style={cardEyebrow('good')}>Good · opportunity</div>
-              <ul style={listReset}>{brief.good.map((g, i) => <li key={i} style={listItem('#7c9a6b')}>{g}</li>)}</ul>
-            </div>
-            <div style={badCard}>
-              <div style={cardEyebrow('bad')}>Bad · leakage</div>
-              <ul style={listReset}>{brief.bad.map((b, i) => <li key={i} style={listItem('#c0584c')}>{b}</li>)}</ul>
-            </div>
-          </div>
-
-          {briefProposals.length > 0 && (
-            <div style={{ marginTop: 18 }}>
-              <div style={signalEyebrow}>Proposals</div>
+        <Brief
+          brief={brief}
+          proposalSlot={briefProposals.length > 0 && (
+            <>
+              <div style={sectionEyebrow}>Proposals</div>
               <div style={proposalGrid}>
                 {briefProposals.map((p) => (
-                  <ProposalCard key={p.id} p={p} onApprove={() => approve(p.id)} onReject={() => reject(p.id)} />
+                  <ProposalCard
+                    key={p.id}
+                    p={p}
+                    cta={p.status === 'in_process' ? [] : [
+                      { label: '⏵ Approve', onClick: () => approve(p.id), primary: true },
+                      { label: 'Reject',    onClick: () => reject(p.id) },
+                    ]}
+                  />
                 ))}
               </div>
-            </div>
+            </>
           )}
-        </div>
+        />
       )}
 
-      {/* Lanes — kanban */}
+      {/* LANES */}
       <div style={lanesWrap}>
-        <div style={signalEyebrow}>State</div>
+        <div style={sectionEyebrow}>State</div>
         <div style={lanesGrid}>
-          <Lane label="Proposal"   accent="#a8854a" items={lanes.proposal}   render={(p) => <LaneCard p={p} cta={[{ label: 'Approve', onClick: () => approve(p.id), primary: true }, { label: 'Reject', onClick: () => reject(p.id) }]} />} />
-          <Lane label="In process" accent="#c79a6b" items={lanes.in_process} render={(p) => <LaneCard p={p} cta={[{ label: 'Mark done', onClick: () => complete(p.id), primary: true }]} />} />
-          <Lane label="Done"       accent="#7c9a6b" items={lanes.done}       render={(p) => <LaneCard p={p} muted />} />
+          <Lane label="Proposal"   accent="#a8854a" count={lanes.proposal.length}   emptyLabel="ask something to seed">
+            {lanes.proposal.map((p) => (
+              <ProposalCard key={p.id} p={p} variant="lane" cta={[
+                { label: 'Approve', onClick: () => approve(p.id), primary: true },
+                { label: 'Reject',  onClick: () => reject(p.id) },
+              ]} />
+            ))}
+          </Lane>
+          <Lane label="In process" accent="#c79a6b" count={lanes.in_process.length} emptyLabel="nothing running">
+            {lanes.in_process.map((p) => (
+              <ProposalCard key={p.id} p={p} variant="lane" cta={[
+                { label: 'Mark done', onClick: () => complete(p.id), primary: true },
+              ]} />
+            ))}
+          </Lane>
+          <Lane label="Done"       accent="#7c9a6b" count={lanes.done.length}       emptyLabel="nothing shipped yet">
+            {lanes.done.map((p) => (
+              <ProposalCard key={p.id} p={p} variant="lane" />
+            ))}
+          </Lane>
         </div>
+
         {lanes.rejected.length > 0 && (
           <div style={{ marginTop: 18 }}>
-            <div style={{ ...cardEyebrow('bad'), marginBottom: 6 }}>Rejected · last 6</div>
+            <div style={rejectedEyebrow}>Rejected · last 6</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {lanes.rejected.map((p) => (
                 <span key={p.id} style={rejectChip}>{p.signal.slice(0, 60)}</span>
@@ -207,10 +189,10 @@ export default function Canvas() {
         )}
       </div>
 
-      {/* Trust meter */}
+      {/* TRUST METER */}
       {trust.length > 0 && (
         <div style={trustWrap}>
-          <div style={{ ...signalEyebrow, marginBottom: 8 }}>Trust meter · auto-run unlocks</div>
+          <div style={{ ...sectionEyebrow, marginBottom: 8 }}>Trust meter · auto-run unlocks</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {trust.map((t) => (
               <div key={`${t.agent_role}-${t.action_type}`} style={trustPill(t.auto_unlocked)}>
@@ -223,104 +205,17 @@ export default function Canvas() {
           </div>
         </div>
       )}
-    </div>
+    </Page>
   );
 }
 
-// ─── components ────────────────────────────────────────────────────────
+// ─── styles local to canvas ─────────────────────────────────────────────
 
-function ProposalCard({ p, onApprove, onReject }: { p: Proposal; onApprove: () => void; onReject: () => void }) {
-  const inProcess = p.status === 'in_process';
-  return (
-    <div style={proposalCard(inProcess)}>
-      <div style={proposalAgent}>
-        <span style={{ color: '#a8854a' }}>{p.agent_role}</span>
-        <span style={{ color: '#5a5448' }}>·</span>
-        <span style={{ color: '#7d7565' }}>{p.action_type}</span>
-      </div>
-      <div style={proposalSignal}>{p.signal}</div>
-      {p.body && <div style={proposalBody}>{p.body}</div>}
-
-      <div style={proposalCta}>
-        {!inProcess && (
-          <>
-            <button onClick={onApprove} style={ctaBtn(true)}>⏵ Approve</button>
-            <button onClick={onReject}  style={ctaBtn(false)}>Reject</button>
-          </>
-        )}
-        {inProcess && <span style={{ color: '#c79a6b', fontSize: 11, fontFamily: "'JetBrains Mono', ui-monospace, monospace", letterSpacing: '0.16em', textTransform: 'uppercase' }}>● in process</span>}
-      </div>
-    </div>
-  );
-}
-
-function Lane({ label, accent, items, render }: { label: string; accent: string; items: Proposal[]; render: (p: Proposal) => React.ReactNode }) {
-  return (
-    <div style={{
-      background: '#0f0d0a', border: '1px solid #1f1c15', borderRadius: 12,
-      padding: '12px 14px', display: 'flex', flexDirection: 'column', minHeight: 220,
-    }}>
-      <div style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        marginBottom: 10, paddingBottom: 6, borderBottom: '1px solid #1f1c15',
-      }}>
-        <span style={{
-          fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-          fontSize: 10, letterSpacing: '0.22em', textTransform: 'uppercase', color: accent,
-        }}>{label}</span>
-        <span style={{
-          fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-          fontSize: 10, color: '#5a5448',
-        }}>{items.length}</span>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {items.length === 0 && <div style={{ fontSize: 12, color: '#5a5040', fontStyle: 'italic', padding: '8px 4px' }}>nothing here</div>}
-        {items.map((p) => <div key={p.id}>{render(p)}</div>)}
-      </div>
-    </div>
-  );
-}
-
-function LaneCard({ p, cta = [], muted = false }: { p: Proposal; cta?: { label: string; onClick: () => void; primary?: boolean }[]; muted?: boolean }) {
-  return (
-    <div style={{
-      background: muted ? '#0a0a0a' : '#15110b',
-      border: '1px solid #2a261d', borderRadius: 8,
-      padding: '8px 10px',
-      opacity: muted ? 0.7 : 1,
-    }}>
-      <div style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 9, letterSpacing: '0.18em', color: '#7d7565', textTransform: 'uppercase', marginBottom: 4 }}>
-        {p.agent_role} · {p.action_type}
-      </div>
-      <div style={{ fontSize: 12, color: '#d8cca8', lineHeight: 1.45 }}>{p.signal}</div>
-      {cta.length > 0 && (
-        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-          {cta.map((c, i) => (
-            <button key={i} onClick={c.onClick} style={smallCta(!!c.primary)}>{c.label}</button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── styles ────────────────────────────────────────────────────────────
-
-const page: React.CSSProperties = {
-  minHeight: '100vh', background: '#0a0a0a', color: '#e9e1ce',
-  fontFamily: "'Inter Tight', system-ui, sans-serif",
-  padding: '32px 32px 64px', maxWidth: 1280, margin: '0 auto',
-};
-const eyebrow: React.CSSProperties = {
+const sectionEyebrow: React.CSSProperties = {
   fontFamily: "'JetBrains Mono', ui-monospace, monospace",
   fontSize: 10, letterSpacing: '0.22em', textTransform: 'uppercase',
-  color: '#a8854a', marginBottom: 6,
+  color: '#a8854a', marginBottom: 8,
 };
-const greeting: React.CSSProperties = {
-  fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic',
-  fontWeight: 300, fontSize: 'clamp(28px, 3.5vw, 40px)', color: '#e9e1ce', margin: 0,
-};
-
 const composerWrap: React.CSSProperties = {
   display: 'flex', gap: 8, alignItems: 'stretch', maxWidth: 880, margin: '0 auto 14px',
 };
@@ -344,76 +239,14 @@ const errBanner: React.CSSProperties = {
 };
 const errClose: React.CSSProperties = { background: 'transparent', border: 'none', color: '#f5b1ad', cursor: 'pointer', fontSize: 16 };
 
-const briefWrap: React.CSSProperties = {
-  maxWidth: 880, margin: '20px auto 24px', padding: 22,
-  background: 'linear-gradient(180deg, #0f0d0a 0%, #100c08 100%)',
-  border: '1px solid #2a261d', borderRadius: 14,
-};
-const signalEyebrow: React.CSSProperties = {
-  fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-  fontSize: 10, letterSpacing: '0.22em', textTransform: 'uppercase',
-  color: '#a8854a', marginBottom: 8,
-};
-const signalLine: React.CSSProperties = {
-  fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic',
-  fontSize: 22, lineHeight: 1.4, color: '#e9e1ce', marginBottom: 8,
-};
-const signalBody: React.CSSProperties = {
-  fontSize: 14, color: '#c9bb96', lineHeight: 1.6, marginBottom: 14,
-};
-const goodBadGrid: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12, marginTop: 6 };
-const goodCard: React.CSSProperties = { background: '#0a1f12', border: '1px solid #1c3526', borderRadius: 10, padding: '12px 14px' };
-const badCard:  React.CSSProperties = { background: '#1f0e0c', border: '1px solid #5a2825', borderRadius: 10, padding: '12px 14px' };
-const cardEyebrow = (kind: 'good' | 'bad'): React.CSSProperties => ({
-  fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-  fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase',
-  color: kind === 'good' ? '#7c9a6b' : '#f5b1ad', marginBottom: 8,
-});
-const listReset: React.CSSProperties = { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 6 };
-const listItem  = (dot: string): React.CSSProperties => ({
-  fontSize: 13, color: '#d8cca8', lineHeight: 1.5,
-  paddingLeft: 16, position: 'relative',
-  textShadow: 'none',
-  borderLeft: `2px solid ${dot}`,
-  paddingTop: 2, paddingBottom: 2, marginLeft: 0,
-});
-
 const proposalGrid: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10 };
-const proposalCard = (inProcess: boolean): React.CSSProperties => ({
-  background: '#15110b',
-  border: `1px solid ${inProcess ? '#a8854a' : '#2a261d'}`,
-  borderRadius: 10, padding: '12px 14px',
-  display: 'flex', flexDirection: 'column', gap: 6,
-});
-const proposalAgent: React.CSSProperties = {
-  fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-  fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase',
-  display: 'flex', gap: 6,
-};
-const proposalSignal: React.CSSProperties = { fontSize: 14, color: '#e9e1ce', lineHeight: 1.4, fontWeight: 500 };
-const proposalBody:   React.CSSProperties = { fontSize: 12, color: '#9b907a', lineHeight: 1.5 };
-const proposalCta:    React.CSSProperties = { display: 'flex', gap: 6, marginTop: 6 };
-const ctaBtn = (primary: boolean): React.CSSProperties => ({
-  background: primary ? '#a8854a' : 'transparent',
-  border: `1px solid ${primary ? '#a8854a' : '#3a3327'}`,
-  color: primary ? '#0a0a0a' : '#9b907a',
-  borderRadius: 8, padding: '5px 12px',
-  fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-  fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: primary ? 600 : 500,
-  cursor: 'pointer',
-});
-const smallCta = (primary: boolean): React.CSSProperties => ({
-  background: primary ? '#1c160d' : 'transparent',
-  border: '1px solid #2a261d',
-  color: primary ? '#a8854a' : '#7d7565',
-  borderRadius: 6, padding: '3px 8px',
-  fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-  fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase',
-  cursor: 'pointer',
-});
 
 const lanesWrap: React.CSSProperties = { maxWidth: 1200, margin: '32px auto 0' };
 const lanesGrid: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 };
+const rejectedEyebrow: React.CSSProperties = {
+  fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+  fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: '#f5b1ad', marginBottom: 6,
+};
 const rejectChip: React.CSSProperties = {
   background: '#1f0e0c', border: '1px solid #3a1a18', color: '#9b907a',
   fontSize: 11, padding: '4px 10px', borderRadius: 999,

@@ -1,10 +1,14 @@
 'use client';
 
-// app/sample/2/page.tsx — HERO + SIDEBAR: one chart dominates, rail narrates.
+// app/sample/2/page.tsx — HERO + SIDEBAR.
+// Refactored 2026-05-09 to use the locked Page shell + shared Panel.
 
 import KpiBox from '@/components/kpi/KpiBox';
 import DataTable from '@/components/ui/DataTable';
 import StatusPill from '@/components/ui/StatusPill';
+import Page from '@/components/page/Page';
+import Panel from '@/components/page/Panel';
+import SampleSwitcher from '../_components/SampleSwitcher';
 
 const TABLE_ROWS = [
   { period: '2026-05', otb: 524, stly: 612, var_pct: -14.4, pickup: 47, status: 'risk'    },
@@ -18,18 +22,16 @@ const TABLE_ROWS = [
 
 export default function Sample2() {
   return (
-    <div style={page}>
-      <SampleHeader title="Pace · forward 6 months" eyebrow="Sample 2 · Hero + sidebar" />
+    <Page eyebrow="Sample 2 · Hero + sidebar" title="Pace · forward 6 months">
+      <SampleSwitcher current={2} />
 
-      {/* KPI strip — narrower, 4 tiles */}
       <div style={kpiStrip}>
-        <KpiBox value={3952} unit="usd" label="OTB · 90d" delta={{ value: -8.2, unit: 'pct', period: 'STLY' }} />
-        <KpiBox value={28}   unit="count" label="Risk months" delta={{ value: 2, unit: 'count', period: 'WoW' }} />
-        <KpiBox value={42}   unit="count" label="Pickup last 28d" delta={{ value: 14, unit: 'pct', period: 'WoW' }} />
-        <KpiBox value={68}   unit="pct" label="On-the-books vs target" delta={{ value: -4, unit: 'pp', period: 'Bgt' }} />
+        <KpiBox value={3952} unit="usd"   label="OTB · 90d"            delta={{ value: -8.2, unit: 'pct',   period: 'STLY' }} />
+        <KpiBox value={28}   unit="count" label="Risk months"          delta={{ value: 2,    unit: 'count', period: 'WoW'  }} />
+        <KpiBox value={42}   unit="count" label="Pickup last 28d"      delta={{ value: 14,   unit: 'pct',   period: 'WoW'  }} />
+        <KpiBox value={68}   unit="pct"   label="OTB vs target"        delta={{ value: -4,   unit: 'pp',    period: 'Bgt'  }} />
       </div>
 
-      {/* HERO: 8-col chart + 4-col insight rail */}
       <div style={heroRow}>
         <Panel title="OTB vs STLY · next 12 months" eyebrow="hero">
           <BigPaceChart />
@@ -53,7 +55,6 @@ export default function Sample2() {
         </div>
       </div>
 
-      {/* 2 stacked panels — secondary depth */}
       <div style={twoCol}>
         <Panel title="Pickup curve · last 28d">
           <BarChart data={[3,5,4,7,6,9,11,14,12,15,18,21,19,22,24,28,26,31,29,33,38,35,41,39,44,47,49,52]} />
@@ -68,7 +69,6 @@ export default function Sample2() {
         </Panel>
       </div>
 
-      {/* Table — full width */}
       <div style={{ marginBottom: 24 }}>
         <DataTable
           columns={[
@@ -86,70 +86,11 @@ export default function Sample2() {
           rowKey={(r) => r.period}
         />
       </div>
-
-      <SampleFooter sampleName="2 · Hero + sidebar" />
-    </div>
+    </Page>
   );
 }
 
-// ─── shared primitives — same across all 3 samples ───────────────────────
-
-function SampleHeader({ title, eyebrow }: { title: string; eyebrow: string }) {
-  return (
-    <div style={{ marginBottom: 24 }}>
-      <div style={{
-        fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-        fontSize: 10, letterSpacing: '0.22em', textTransform: 'uppercase',
-        color: '#a8854a', marginBottom: 6,
-      }}>{eyebrow}</div>
-      <h1 style={{
-        fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic',
-        fontWeight: 300, fontSize: 32, color: '#e9e1ce', margin: 0,
-      }}>{title}</h1>
-    </div>
-  );
-}
-function SampleFooter({ sampleName }: { sampleName: string }) {
-  return (
-    <div style={{
-      marginTop: 48, paddingTop: 16, borderTop: '1px solid #1f1c15',
-      display: 'flex', gap: 12, alignItems: 'center',
-      fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-      fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#5a5448',
-    }}>
-      <span>Sample {sampleName}</span>
-      <span style={{ color: '#3d3a32' }}>·</span>
-      <a href="/sample"   style={{ color: '#9b907a', textDecoration: 'none' }}>← all samples</a>
-      <span style={{ color: '#3d3a32' }}>·</span>
-      <a href="/sample/1" style={{ color: '#9b907a', textDecoration: 'none' }}>Sample 1</a>
-      <a href="/sample/2" style={{ color: '#9b907a', textDecoration: 'none' }}>Sample 2</a>
-      <a href="/sample/3" style={{ color: '#9b907a', textDecoration: 'none' }}>Sample 3</a>
-    </div>
-  );
-}
-
-function Panel({ title, eyebrow, children }: { title: string; eyebrow?: string; children: React.ReactNode }) {
-  return (
-    <div style={{
-      background: '#0f0d0a', border: '1px solid #1f1c15', borderRadius: 10,
-      padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10,
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <div style={{
-          fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-          fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: '#a8854a',
-        }}>{title}</div>
-        {eyebrow && (
-          <span style={{
-            fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-            fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#5a5448',
-          }}>{eyebrow}</span>
-        )}
-      </div>
-      <div>{children}</div>
-    </div>
-  );
-}
+// ─── chart helpers ───────────────────────────────────────────────────────
 
 function InsightList({ items }: { items: { tone: 'risk' | 'lead' | 'on' | 'pending'; text: string }[] }) {
   const dot: Record<typeof items[number]['tone'], string> = { risk: '#c0584c', lead: '#a8854a', on: '#7c9a6b', pending: '#7d7565' };
@@ -177,23 +118,17 @@ function BigPaceChart() {
   const stlyPts = stly.map((v, i) => `${(padL + i * xStep).toFixed(1)},${(padT + innerH - (v / max) * innerH).toFixed(1)}`).join(' ');
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 280 }} preserveAspectRatio="xMidYMid meet">
-      {/* gridlines */}
       {[0.25, 0.5, 0.75].map((p) => (
         <line key={p} x1={padL} x2={W - padR} y1={padT + innerH * (1 - p)} y2={padT + innerH * (1 - p)} stroke="#2a261d" strokeDasharray="2,3" />
       ))}
-      {/* STLY area */}
       <polyline points={stlyPts} fill="none" stroke="#7d7565" strokeWidth={1.4} strokeDasharray="3,3" />
-      {/* OTB line */}
-      <polyline points={otbPts} fill="none" stroke="#a8854a" strokeWidth={2.2} />
-      {/* x-axis */}
+      <polyline points={otbPts}  fill="none" stroke="#a8854a" strokeWidth={2.2} />
       {months.map((m, i) => (
         <text key={m} x={padL + i * xStep} y={H - 8} textAnchor="middle" fontSize="9" fill="#7d7565" fontFamily="'JetBrains Mono', monospace">{m}</text>
       ))}
-      {/* points */}
       {otb.map((v, i) => (
         <circle key={i} cx={padL + i * xStep} cy={padT + innerH - (v / max) * innerH} r={3.5} fill="#a8854a" />
       ))}
-      {/* legend */}
       <g transform={`translate(${padL}, ${padT})`}>
         <line x1={0} y1={0} x2={20} y2={0} stroke="#a8854a" strokeWidth={2} />
         <text x={26} y={4} fontSize="10" fill="#9b907a">OTB</text>
@@ -250,17 +185,6 @@ function DonutChart({ slices }: { slices: { label: string; v: number; color: str
   );
 }
 
-const page: React.CSSProperties = {
-  minHeight: '100vh', background: '#0a0a0a', color: '#e9e1ce',
-  fontFamily: "'Inter Tight', system-ui, sans-serif",
-  padding: '32px 48px 64px', maxWidth: 1280, margin: '0 auto',
-};
-const kpiStrip: React.CSSProperties = {
-  display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 24,
-};
-const heroRow: React.CSSProperties = {
-  display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: 14, marginBottom: 24,
-};
-const twoCol: React.CSSProperties = {
-  display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14, marginBottom: 24,
-};
+const kpiStrip: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 24 };
+const heroRow:  React.CSSProperties = { display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: 14, marginBottom: 24 };
+const twoCol:   React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14, marginBottom: 24 };
