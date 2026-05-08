@@ -8,6 +8,7 @@
 import Link from 'next/link';
 import PageHeader from '@/components/layout/PageHeader';
 import KpiBox from '@/components/kpi/KpiBox';
+import ChatShell from '@/components/chat/ChatShell';
 import { resolvePeriod } from '@/lib/period';
 import { getOverviewKpis } from '@/lib/data';
 
@@ -154,14 +155,32 @@ export default async function RevenueIndexPage({ searchParams }: Props) {
           </div>
         </section>
 
-        {/* footer note */}
-        <p style={{
-          fontSize: 'var(--t-sm)', color: 'var(--ink-mute, #888)',
-          fontStyle: 'italic', maxWidth: 720,
-        }}>
-          Pulse is the canonical revenue dashboard. This entry page is a quick switchboard —
-          tap any chip above to drill in.
-        </p>
+        {/* Chat with Vector — embedded below the boxes */}
+        <section style={{ marginTop: 8 }}>
+          <div style={{
+            fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra, 0.18em)',
+            textTransform: 'uppercase', color: 'var(--brass, #a8854a)',
+            fontFamily: 'Menlo, monospace', marginBottom: 14,
+          }}>
+            ASK VECTOR
+          </div>
+          <div style={{
+            background: 'rgba(255,255,255,0.02)',
+            border: '1px solid var(--border-soft, rgba(168,133,74,0.18))',
+            borderRadius: 8,
+            padding: 12,
+          }}>
+            <ChatShell
+              role="revenue_hod"
+              displayName="Vector"
+              dept="Revenue"
+              emoji="📈"
+              mentionNickname="vector"
+              placeholder="Ask Vector about Pulse, pricing, channel mix, parity…"
+              embedded
+            />
+          </div>
+        </section>
 
       </div>
     </main>

@@ -53,6 +53,13 @@ interface ChatShellProps {
   placeholder?: string;
   /** localStorage key prefix so each chat shell has its own thread state. */
   storageKey?: string;
+  /**
+   * 2026-05-08 — when true, ChatShell renders inline (no full-screen min-height,
+   * no fixed-position composer). Used by dept landings that want v2 boxes ABOVE
+   * the chat. Composer sits at the end of the chat thread instead of fixed
+   * to the viewport bottom.
+   */
+  embedded?: boolean;
 }
 
 function stripTicketFraming(s: string | null): { user: string; agent: string } {
@@ -95,6 +102,7 @@ export default function ChatShell({
   mentionNickname,
   placeholder,
   storageKey,
+  embedded = false,
 }: ChatShellProps) {
   const STORE_KEY = storageKey ?? `chat_thread_start_${role}`;
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -203,8 +211,20 @@ export default function ChatShell({
 
   const placeholderText = placeholder ?? `Write to ${displayName}…`;
 
+  // Embedded mode: drop minHeight + fixed composer; dept page provides chrome.
+  const bodyStyle: React.CSSProperties = embedded
+    ? { ...S.body, minHeight: 'auto' }
+    : S.body;
+  const composerStyle: React.CSSProperties = embedded
+    ? { ...S.composer, position: 'sticky', bottom: 0, marginTop: 12 }
+    : S.composer;
+  const threadStyle: React.CSSProperties = embedded
+    ? { ...S.thread, padding: '12px 4px 12px', overflowY: 'visible' }
+    : S.thread;
+
   return (
-    <div style={S.body}>
+    <div style={bodyStyle}>
+      {!embedded && (
       <div style={S.topbar}>
         <div style={S.logo}>
           {/* The brass N globally lives in NDropdown — top-left of the page. */}
@@ -217,8 +237,9 @@ export default function ChatShell({
           <a href="/cockpit" style={S.topBtn}>cockpit ↗</a>
         </div>
       </div>
+      )}
 
-      <div style={S.thread}>
+      <div style={threadStyle}>
         {tickets.length === 0 && (
           <div style={S.welcome}>
             <div style={{ fontFamily: "'Cooper',Georgia,serif", fontSize: 32, color: '#ededf0', marginBottom: 8, fontStyle: 'italic' }}>
@@ -264,7 +285,7 @@ export default function ChatShell({
         <div ref={endRef} />
       </div>
 
-      <div style={S.composer}>
+      <div style={composerStyle}>
         {attachments.length > 0 && (
           <div style={S.attachStrip}>
             {attachments.map((a, i) => (
