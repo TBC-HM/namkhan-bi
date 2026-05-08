@@ -36,7 +36,7 @@ export async function GET(req: Request) {
 
   let q = supabase
     .from("cockpit_projects")
-    .select("id, slug, name, description, dept, owner_role, status, created_at, archived_at")
+    .select("id, slug, name, description, goal, dept, owner_role, status, created_at, archived_at")
     .order("created_at", { ascending: false })
     .limit(50);
 
@@ -53,6 +53,7 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const name = String(body.name ?? "").trim();
   const description = String(body.description ?? "").trim();
+  const goal = String(body.goal ?? "").trim();
   const dept = String(body.dept ?? "").trim() || null;
   const owner_role = String(body.owner_role ?? "").trim() || null;
   const created_by = String(body.created_by ?? "PBS").trim();
@@ -76,7 +77,7 @@ export async function POST(req: Request) {
 
   const { data, error } = await supabase
     .from("cockpit_projects")
-    .insert({ slug, name, description: description || null, dept, owner_role, created_by, status: "active" })
+    .insert({ slug, name, description: description || null, goal: goal || null, dept, owner_role, created_by, status: "active" })
     .select()
     .single();
 

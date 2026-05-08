@@ -15,8 +15,8 @@ import { useRouter } from 'next/navigation';
  *   • black background, brass + paper accents (brand)
  * ────────────────────────────────────────────────────────────────────────── */
 
-interface AttentionItem { id: string; label: string; severity: 'high' | 'medium' | 'low' }
-interface DocItem       { id: string; label: string; href: string; size?: number; uploaded_at?: string }
+interface AttentionItem { id: string; label: string; severity: 'high' | 'medium' | 'low'; kind: 'leakage' | 'opportunity' }
+interface DocItem       { id: string; label: string; href: string; size?: number; uploaded_at?: string; body?: string }
 interface TaskItem      { id: string; label: string; done: boolean; created?: string; due?: string; alert?: boolean }
 
 const ATTN_KEY  = 'nk.rev.entry.attention.v2';
@@ -24,9 +24,12 @@ const DOCS_KEY  = 'nk.rev.entry.docs.v2';
 const TASKS_KEY = 'nk.rev.entry.tasks.v2';
 
 const DEFAULT_ATTN: AttentionItem[] = [
-  { id: 'a1', label: 'OTA parity breach — BDC $142 vs direct $158', severity: 'high'   },
-  { id: 'a2', label: 'Pace −14% vs STLY for next 30 days',          severity: 'medium' },
-  { id: 'a3', label: 'Comp set data stale — last sync 48h ago',     severity: 'low'    },
+  // Leakage = revenue we are losing or about to lose (parity, cancellations, channel-cost creep).
+  { id: 'l1', label: 'OTA parity breach — BDC $142 vs direct $158',  severity: 'high',   kind: 'leakage'     },
+  { id: 'l2', label: 'Comp set data stale — last sync 48h ago',      severity: 'low',    kind: 'leakage'     },
+  // Opportunity = unrealized upside (pace gaps, mix shifts, group ask we can win).
+  { id: 'o1', label: 'Pace −14% vs STLY for next 30 days',           severity: 'medium', kind: 'opportunity' },
+  { id: 'o2', label: 'Long-weekend BAR ladder under-priced vs comp', severity: 'medium', kind: 'opportunity' },
 ];
 
 const DEFAULT_DOCS: DocItem[] = [
@@ -115,6 +118,54 @@ function langFlagStyle(active: boolean): React.CSSProperties {
   };
 }
 
+// Modal field styles (project + task creation)
+const modalLabelStyle: React.CSSProperties = {
+  display:        'block',
+  fontFamily:     "'JetBrains Mono', ui-monospace, monospace",
+  fontSize:       10,
+  letterSpacing:  '0.14em',
+  textTransform:  'uppercase',
+  color:          '#9b907a',
+  marginBottom:   4,
+  marginTop:      10,
+};
+const modalInputStyle: React.CSSProperties = {
+  width:        '100%',
+  boxSizing:    'border-box',
+  background:   '#15110b',
+  border:       '1px solid #2a261d',
+  borderRadius: 8,
+  color:        '#efe6d3',
+  padding:      '9px 12px',
+  fontSize:     13,
+  fontFamily:   "'Inter Tight', system-ui, sans-serif",
+  outline:      'none',
+  marginBottom: 4,
+  colorScheme:  'dark',
+};
+const modalCancelStyle: React.CSSProperties = {
+  background:    'transparent',
+  border:        '1px solid #2a261d',
+  borderRadius:  8,
+  color:         '#9b907a',
+  padding:       '8px 14px',
+  fontSize:      11,
+  cursor:        'pointer',
+  fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
+  letterSpacing: '0.14em',
+  textTransform: 'uppercase',
+};
+const modalSaveStyle: React.CSSProperties = {
+  border:        'none',
+  borderRadius:  8,
+  padding:       '8px 14px',
+  fontSize:      11,
+  fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
+  letterSpacing: '0.14em',
+  textTransform: 'uppercase',
+  fontWeight:    600,
+};
+
 // 2026-05-08 — projects v1 (PR follow-up to #211).
 // Active project lives in localStorage; selecting one tags subsequent
 // chats with project_id so agents read the project's KB rows in addition
@@ -164,7 +215,11 @@ export default function RevenuePage() {
   const [projOpen,    setProjOpen]    = useState(false);
   const [helpOpen,    setHelpOpen]    = useState(false);
   const [creating,    setCreating]    = useState(false);
-  const [newProjName, setNewProjName] = useState('');
+  // Create-project modal (PBS 2026-05-08): full form replaces the inline
+  // single-input "name" so the agent system prompt has goal + description
+  // alongside the name.
+  const [projModal,   setProjModal]   = useState(false);
+  const [projDraft,   setProjDraft]   = useState({ name: '', goal: '', description: '' });
 
   // File attachments for next send
   const [attachments, setAttachments] = useState<AttachedFile[]>([]);
@@ -223,15 +278,26 @@ export default function RevenuePage() {
     else   localStorage.removeItem(ACTIVE_PROJECT_KEY);
   }
 
+  function openProjectModal() {
+    setProjDraft({ name: '', goal: '', description: '' });
+    setProjOpen(false);
+    setProjModal(true);
+  }
   async function createProject() {
-    const name = newProjName.trim();
+    const name = projDraft.name.trim();
     if (!name) return;
     setCreating(true);
     try {
       const res = await fetch('/api/cockpit/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, dept: 'revenue', owner_role: 'revenue_hod' }),
+        body: JSON.stringify({
+          name,
+          goal: projDraft.goal.trim(),
+          description: projDraft.description.trim(),
+          dept: 'revenue',
+          owner_role: 'revenue_hod',
+        }),
       });
       if (!res.ok) return;
       const j = await res.json();
@@ -239,7 +305,7 @@ export default function RevenuePage() {
       if (created) {
         setProjects(prev => [created, ...prev]);
         pickProject(created);
-        setNewProjName('');
+        setProjModal(false);
       }
     } finally {
       setCreating(false);
@@ -260,7 +326,22 @@ export default function RevenuePage() {
     try {
       const res = await fetch(`/api/cockpit/projects/${activeProject.slug}/summarize`, { method: 'POST' });
       const j = await res.json();
-      setSummary(typeof j?.summary === 'string' ? j.summary : (j?.error ?? 'no summary'));
+      const text = typeof j?.summary === 'string' ? j.summary : (j?.error ?? 'no summary');
+      setSummary(text);
+      // PBS 2026-05-08: every retro auto-lands in My Docs as a dated entry.
+      // The doc opens the project's chat thread (existing route).
+      if (typeof j?.summary === 'string' && j.summary.trim()) {
+        const stamp = new Date().toISOString().slice(0, 10);
+        const newDoc: DocItem = {
+          id: uid(),
+          label: `Retro · ${activeProject.name} · ${stamp}`,
+          href: `/cockpit/chat?project=${activeProject.slug}`,
+          uploaded_at: stamp,
+          body: j.summary,
+        };
+        const next = [newDoc, ...docs];
+        setDocs(next); saveLS(DOCS_KEY, next);
+      }
     } catch (e) {
       setSummary(e instanceof Error ? e.message : 'summarise failed');
     } finally {
@@ -304,10 +385,10 @@ export default function RevenuePage() {
   }
 
   // attention CRUD
-  function addAttn() {
-    const label = prompt('New attention item');
+  function addAttn(kind: 'leakage' | 'opportunity' = 'leakage') {
+    const label = prompt(kind === 'leakage' ? 'What is leaking?' : 'What is the opportunity?');
     if (!label) return;
-    const next = [...attn, { id: uid(), label, severity: 'medium' as const }];
+    const next: AttentionItem[] = [...attn, { id: uid(), label, severity: 'medium' as const, kind }];
     setAttn(next); saveLS(ATTN_KEY, next);
   }
   function delAttn(id: string) {
@@ -586,26 +667,17 @@ export default function RevenuePage() {
                   Leave project context
                 </button>
               )}
-              <div style={{ marginTop: 8, padding: '8px 6px 4px', borderTop: '1px solid #2a261d', display: 'flex', gap: 6 }}>
-                <input
-                  value={newProjName}
-                  onChange={e => setNewProjName(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') createProject(); }}
-                  placeholder="New project name…"
-                  style={{
-                    flex: 1, background: '#15110b', border: '1px solid #3a3327', borderRadius: 4,
-                    color: '#efe6d3', padding: '5px 8px', fontSize: 12, fontFamily: 'inherit', outline: 'none',
-                  }}
-                />
+              <div style={{ marginTop: 8, padding: '6px 4px 0', borderTop: '1px solid #2a261d' }}>
                 <button
-                  onClick={createProject}
-                  disabled={creating || !newProjName.trim()}
+                  onClick={openProjectModal}
                   style={{
-                    background: '#a8854a', border: 'none', borderRadius: 4, color: '#0a0a0a',
-                    padding: '0 10px', fontSize: 11, fontWeight: 600, cursor: creating ? 'wait' : 'pointer',
-                    opacity: creating || !newProjName.trim() ? 0.5 : 1,
+                    width: '100%', padding: '7px 10px',
+                    background: 'transparent', border: '1px dashed #3a3327', borderRadius: 6,
+                    color: '#a8854a', cursor: 'pointer',
+                    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+                    fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase',
                   }}
-                >＋ New</button>
+                >＋ New project</button>
               </div>
             </div>
           )}
@@ -880,36 +952,55 @@ export default function RevenuePage() {
         </div>
       </div>
 
-      {/* ── 3 containers in a row at bottom ──────────────────────────────── */}
+      {/* ── containers row (PBS 2026-05-08): "Needs your attention" split
+       *   into Leakage + Opportunity. With Docs + Tasks that's 4 cards;
+       *   responsive grid auto-wraps to 2×2 on narrower viewports.
+       * ───────────────────────────────────────────────────────────────── */}
       <div style={{
         display:             'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
-        gap:                 20,
+        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+        gap:                 16,
         maxWidth:            1200,
         margin:              '0 auto',
         width:               '100%',
       }}>
 
-        {/* ATTENTION */}
+        {/* LEAKAGE */}
         <Container
-          title="Needs your attention"
-          onAdd={addAttn}
+          title="Leakage"
+          onAdd={() => addAttn('leakage')}
         >
-          {attn.map(a => (
+          {attn.filter(a => a.kind === 'leakage').map(a => (
             <Row key={a.id} onDelete={() => delAttn(a.id)}>
               <span style={{
-                width:        7,
-                height:       7,
-                borderRadius: '50%',
-                background:   SEVERITY_DOT[a.severity],
-                flexShrink:   0,
+                width: 7, height: 7, borderRadius: '50%',
+                background: SEVERITY_DOT[a.severity], flexShrink: 0,
               }} />
               <span style={{ flex: 1, fontSize: 13, color: '#c9bb96', lineHeight: 1.4 }}>
                 {a.label}
               </span>
             </Row>
           ))}
-          {attn.length === 0 && <Empty label="All clear" />}
+          {attn.filter(a => a.kind === 'leakage').length === 0 && <Empty label="No leaks flagged" />}
+        </Container>
+
+        {/* OPPORTUNITY */}
+        <Container
+          title="Opportunity"
+          onAdd={() => addAttn('opportunity')}
+        >
+          {attn.filter(a => a.kind === 'opportunity').map(a => (
+            <Row key={a.id} onDelete={() => delAttn(a.id)}>
+              <span style={{
+                width: 7, height: 7, borderRadius: '50%',
+                background: SEVERITY_DOT[a.severity], flexShrink: 0,
+              }} />
+              <span style={{ flex: 1, fontSize: 13, color: '#c9bb96', lineHeight: 1.4 }}>
+                {a.label}
+              </span>
+            </Row>
+          ))}
+          {attn.filter(a => a.kind === 'opportunity').length === 0 && <Empty label="No upside flagged" />}
         </Container>
 
         {/* DOCS */}
@@ -1016,6 +1107,78 @@ export default function RevenuePage() {
           {tasks.length === 0 && <Empty label="Nothing on the list" />}
         </Container>
       </div>
+
+      {/* Project creation modal (PBS 2026-05-08): name + goal + description.
+        * Goal + description are injected into the agent system prompt later
+        * so Vector / Felix know what the project is for. */}
+      {projModal && (
+        <div
+          onClick={() => setProjModal(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 200,
+            background: 'rgba(0,0,0,0.6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 24,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#0f0d0a', border: '1px solid #3a3327', borderRadius: 12,
+              padding: 22, width: '100%', maxWidth: 460,
+              boxShadow: '0 20px 50px rgba(0,0,0,0.6)',
+              fontFamily: "'Inter Tight', system-ui, sans-serif",
+            }}
+          >
+            <div style={{
+              fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+              fontSize: 10, letterSpacing: '0.22em', textTransform: 'uppercase',
+              color: '#a8854a', marginBottom: 14,
+            }}>New project</div>
+
+            <label style={modalLabelStyle}>Name</label>
+            <input
+              autoFocus
+              value={projDraft.name}
+              onChange={e => setProjDraft(d => ({ ...d, name: e.target.value }))}
+              placeholder="e.g. Long-weekend BAR ladder"
+              style={modalInputStyle}
+            />
+
+            <label style={modalLabelStyle}>Goal</label>
+            <input
+              value={projDraft.goal}
+              onChange={e => setProjDraft(d => ({ ...d, goal: e.target.value }))}
+              placeholder="What outcome are we chasing?"
+              style={modalInputStyle}
+            />
+
+            <label style={modalLabelStyle}>What about <span style={{ color: '#5a5448', textTransform: 'none', letterSpacing: 0 }}>(background)</span></label>
+            <textarea
+              value={projDraft.description}
+              onChange={e => setProjDraft(d => ({ ...d, description: e.target.value }))}
+              placeholder="Why now? What's the situation? Anything the AI should know up-front?"
+              rows={4}
+              style={{ ...modalInputStyle, resize: 'vertical', minHeight: 80, fontFamily: 'inherit' }}
+            />
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+              <button onClick={() => setProjModal(false)} style={modalCancelStyle}>Cancel</button>
+              <button
+                onClick={createProject}
+                disabled={creating || !projDraft.name.trim()}
+                style={{
+                  ...modalSaveStyle,
+                  background: projDraft.name.trim() ? '#a8854a' : '#1c160d',
+                  color:      projDraft.name.trim() ? '#0a0a0a' : '#5a5448',
+                  cursor:     creating ? 'wait' : (projDraft.name.trim() ? 'pointer' : 'not-allowed'),
+                  opacity:    creating ? 0.7 : 1,
+                }}
+              >{creating ? 'Creating…' : 'Create project'}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Task creation modal (PBS 2026-05-08) */}
       {taskModal && (
