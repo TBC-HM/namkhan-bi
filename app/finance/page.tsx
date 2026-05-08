@@ -41,23 +41,29 @@ const DEFAULT_TASKS: TaskItem[] = [
   { id: 't3', label: 'Sign off on group quote #12',  done: false },
 ];
 
+// 2026-05-08 (ticket #328 follow-up): chips + top-right dropdown both
+// pointed at /revenue/* sub-pages because every dept entry page was a
+// copy of /revenue/page.tsx and the hrefs never got rewritten. Now they
+// point at this dept's actual sub-routes.
 const QUICK_CHIPS = [
-  { label: 'Pulse',    href: '/revenue/pulse'    },
-  { label: 'Compset',  href: '/revenue/compset'  },
-  { label: 'Parity',   href: '/revenue/parity'   },
-  { label: 'Pace',     href: '/revenue/pace'     },
-  { label: 'Channels', href: '/revenue/channels' },
-  { label: 'Forecast', href: '/revenue/forecast' },
+  { label: 'Snapshot',     href: '/finance'              },
+  { label: 'P&L',          href: '/finance/pnl'          },
+  { label: 'Ledger',       href: '/finance/ledger'       },
+  { label: 'Transactions', href: '/finance/transactions' },
+  { label: 'Budget',       href: '/finance/budget'       },
+  { label: 'Mapping',      href: '/finance/mapping'      },
 ];
 
 const DEPT_LINKS = [
-  { label: 'Overview',   href: '/overview'   },
-  { label: 'Revenue',    href: '/revenue'    },
-  { label: 'Sales',      href: '/sales'      },
-  { label: 'Marketing',  href: '/marketing'  },
-  { label: 'Operations', href: '/operations' },
-  { label: 'Finance',    href: '/finance'    },
-  { label: 'Guest',      href: '/guest'      },
+  { label: 'Snapshot',         href: '/finance'                  },
+  { label: 'P&L',              href: '/finance/pnl'              },
+  { label: 'Ledger',           href: '/finance/ledger'           },
+  { label: 'Transactions',     href: '/finance/transactions'     },
+  { label: 'POS · Cloudbeds',  href: '/finance/pos-transactions' },
+  { label: 'POS · Poster',     href: '/finance/poster'           },
+  { label: 'Account mapping',  href: '/finance/mapping'          },
+  { label: 'Supplier mapping', href: '/finance/supplier-mapping' },
+  { label: 'Budget',           href: '/finance/budget'           },
 ];
 
 const SEVERITY_DOT: Record<string, string> = {
@@ -198,7 +204,7 @@ export default function RevenuePage() {
               fontWeight:    500,
             }}
           >
-            Finance ▾
+            Sub-pages ▾
           </button>
           {deptOpen && (
             <ul style={{
@@ -223,7 +229,7 @@ export default function RevenuePage() {
                     style={{
                       display:        'block',
                       padding:        '8px 18px',
-                      color:          d.label === 'Finance' ? '#c4a06b' : '#9b907a',
+                      color:          '#9b907a',
                       textDecoration: 'none',
                       fontFamily:     "'JetBrains Mono', ui-monospace, monospace",
                       fontSize:       10,

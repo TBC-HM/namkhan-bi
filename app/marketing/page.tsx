@@ -41,23 +41,26 @@ const DEFAULT_TASKS: TaskItem[] = [
   { id: 't3', label: 'Sign off on group quote #12',  done: false },
 ];
 
+// 2026-05-08 (ticket #328 follow-up): chips + dropdown rewired to /marketing sub-pages.
 const QUICK_CHIPS = [
-  { label: 'Pulse',    href: '/revenue/pulse'    },
-  { label: 'Compset',  href: '/revenue/compset'  },
-  { label: 'Parity',   href: '/revenue/parity'   },
-  { label: 'Pace',     href: '/revenue/pace'     },
-  { label: 'Channels', href: '/revenue/channels' },
-  { label: 'Forecast', href: '/revenue/forecast' },
+  { label: 'Snapshot',  href: '/marketing'             },
+  { label: 'Library',   href: '/marketing/library'     },
+  { label: 'Campaigns', href: '/marketing/campaigns'   },
+  { label: 'Social',    href: '/marketing/social'      },
+  { label: 'Reviews',   href: '/marketing/reviews'     },
+  { label: 'Audiences', href: '/marketing/audiences'   },
 ];
 
 const DEPT_LINKS = [
-  { label: 'Overview',   href: '/overview'   },
-  { label: 'Revenue',    href: '/revenue'    },
-  { label: 'Sales',      href: '/sales'      },
-  { label: 'Marketing',  href: '/marketing'  },
-  { label: 'Operations', href: '/operations' },
-  { label: 'Finance',    href: '/finance'    },
-  { label: 'Guest',      href: '/guest'      },
+  { label: 'Snapshot',     href: '/marketing'             },
+  { label: 'Audiences',    href: '/marketing/audiences'   },
+  { label: 'Library',      href: '/marketing/library'     },
+  { label: 'Campaigns',    href: '/marketing/campaigns'   },
+  { label: 'Compiler',     href: '/marketing/compiler'    },
+  { label: 'Social',       href: '/marketing/social'      },
+  { label: 'Influencers',  href: '/marketing/influencers' },
+  { label: 'Taxonomy',     href: '/marketing/taxonomy'    },
+  { label: 'Agents',       href: '/marketing/agents'      },
 ];
 
 const SEVERITY_DOT: Record<string, string> = {
@@ -198,7 +201,7 @@ export default function RevenuePage() {
               fontWeight:    500,
             }}
           >
-            Marketing ▾
+            Sub-pages ▾
           </button>
           {deptOpen && (
             <ul style={{
@@ -223,7 +226,7 @@ export default function RevenuePage() {
                     style={{
                       display:        'block',
                       padding:        '8px 18px',
-                      color:          d.label === 'Marketing' ? '#c4a06b' : '#9b907a',
+                      color:          '#9b907a',
                       textDecoration: 'none',
                       fontFamily:     "'JetBrains Mono', ui-monospace, monospace",
                       fontSize:       10,

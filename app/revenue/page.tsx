@@ -50,14 +50,19 @@ const QUICK_CHIPS = [
   { label: 'Forecast', href: '/revenue/forecast' },
 ];
 
+// 2026-05-08 (ticket #328 follow-up): top-right dropdown was a duplicate
+// of the global N (dept switcher). PBS asked it to surface this dept's
+// own sub-tabs instead, so the bare entry page has a way to jump into
+// the original tabbed views.
 const DEPT_LINKS = [
-  { label: 'Overview',   href: '/overview'   },
-  { label: 'Revenue',    href: '/revenue'    },
-  { label: 'Sales',      href: '/sales'      },
-  { label: 'Marketing',  href: '/marketing'  },
-  { label: 'Operations', href: '/operations' },
-  { label: 'Finance',    href: '/finance'    },
-  { label: 'Guest',      href: '/guest'      },
+  { label: 'Pulse',      href: '/revenue/pulse'     },
+  { label: 'Pace',       href: '/revenue/pace'      },
+  { label: 'Channels',   href: '/revenue/channels'  },
+  { label: 'Rate Plans', href: '/revenue/rateplans' },
+  { label: 'Pricing',    href: '/revenue/pricing'   },
+  { label: 'Comp Set',   href: '/revenue/compset'   },
+  { label: 'Parity',     href: '/revenue/parity'    },
+  { label: 'Agents',     href: '/revenue/agents'    },
 ];
 
 const SEVERITY_DOT: Record<string, string> = {
@@ -198,7 +203,7 @@ export default function RevenuePage() {
               fontWeight:    500,
             }}
           >
-            Revenue ▾
+            Sub-pages ▾
           </button>
           {deptOpen && (
             <ul style={{
@@ -223,7 +228,7 @@ export default function RevenuePage() {
                     style={{
                       display:        'block',
                       padding:        '8px 18px',
-                      color:          d.label === 'Revenue' ? '#c4a06b' : '#9b907a',
+                      color:          '#9b907a',
                       textDecoration: 'none',
                       fontFamily:     "'JetBrains Mono', ui-monospace, monospace",
                       fontSize:       10,

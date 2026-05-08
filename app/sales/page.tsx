@@ -41,23 +41,26 @@ const DEFAULT_TASKS: TaskItem[] = [
   { id: 't3', label: 'Sign off on group quote #12',  done: false },
 ];
 
+// 2026-05-08 (ticket #328 follow-up): chips + dropdown rewired to /sales sub-pages.
 const QUICK_CHIPS = [
-  { label: 'Pulse',    href: '/revenue/pulse'    },
-  { label: 'Compset',  href: '/revenue/compset'  },
-  { label: 'Parity',   href: '/revenue/parity'   },
-  { label: 'Pace',     href: '/revenue/pace'     },
-  { label: 'Channels', href: '/revenue/channels' },
-  { label: 'Forecast', href: '/revenue/forecast' },
+  { label: 'Inquiries', href: '/sales/inquiries' },
+  { label: 'Leads',     href: '/sales/leads'     },
+  { label: 'Packages',  href: '/sales/packages'  },
+  { label: 'B2B / DMC', href: '/sales/b2b'       },
+  { label: 'Pipeline',  href: '/sales/pipeline'  },
+  { label: 'Agents',    href: '/sales/agents'    },
 ];
 
 const DEPT_LINKS = [
-  { label: 'Overview',   href: '/overview'   },
-  { label: 'Revenue',    href: '/revenue'    },
-  { label: 'Sales',      href: '/sales'      },
-  { label: 'Marketing',  href: '/marketing'  },
-  { label: 'Operations', href: '/operations' },
-  { label: 'Finance',    href: '/finance'    },
-  { label: 'Guest',      href: '/guest'      },
+  { label: 'Inquiries', href: '/sales/inquiries' },
+  { label: 'Leads',     href: '/sales/leads'     },
+  { label: 'Groups',    href: '/sales/groups'    },
+  { label: 'FIT',       href: '/sales/fit'       },
+  { label: 'Packages',  href: '/sales/packages'  },
+  { label: 'B2B / DMC', href: '/sales/b2b'       },
+  { label: 'Pipeline',  href: '/sales/pipeline'  },
+  { label: 'Roster',    href: '/sales/roster'    },
+  { label: 'Agents',    href: '/sales/agents'    },
 ];
 
 const SEVERITY_DOT: Record<string, string> = {
@@ -198,7 +201,7 @@ export default function RevenuePage() {
               fontWeight:    500,
             }}
           >
-            Sales ▾
+            Sub-pages ▾
           </button>
           {deptOpen && (
             <ul style={{
@@ -223,7 +226,7 @@ export default function RevenuePage() {
                     style={{
                       display:        'block',
                       padding:        '8px 18px',
-                      color:          d.label === 'Sales' ? '#c4a06b' : '#9b907a',
+                      color:          '#9b907a',
                       textDecoration: 'none',
                       fontFamily:     "'JetBrains Mono', ui-monospace, monospace",
                       fontSize:       10,

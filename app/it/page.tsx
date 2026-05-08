@@ -41,23 +41,25 @@ const DEFAULT_TASKS: TaskItem[] = [
   { id: 't3', label: 'Sign off on group quote #12',  done: false },
 ];
 
+// 2026-05-08 (ticket #328 follow-up): /it has no formal sub-routes yet, so
+// chips + dropdown surface the cockpit's IT-relevant tabs (cockpit, knowledge,
+// settings, schedule, audit log) until a proper /it/* IA lands.
 const QUICK_CHIPS = [
-  { label: 'Pulse',    href: '/revenue/pulse'    },
-  { label: 'Compset',  href: '/revenue/compset'  },
-  { label: 'Parity',   href: '/revenue/parity'   },
-  { label: 'Pace',     href: '/revenue/pace'     },
-  { label: 'Channels', href: '/revenue/channels' },
-  { label: 'Forecast', href: '/revenue/forecast' },
+  { label: 'Cockpit',    href: '/cockpit'                 },
+  { label: 'Tasks',      href: '/cockpit/tasks'           },
+  { label: 'Schedule',   href: '/cockpit/schedule'        },
+  { label: 'Knowledge',  href: '/knowledge'               },
+  { label: 'Audit log',  href: '/cockpit?tab=audit'       },
+  { label: 'Agents',     href: '/cockpit?tab=team'        },
 ];
 
 const DEPT_LINKS = [
-  { label: 'Overview',   href: '/overview'   },
-  { label: 'Revenue',    href: '/revenue'    },
-  { label: 'Sales',      href: '/sales'      },
-  { label: 'Marketing',  href: '/marketing'  },
-  { label: 'Operations', href: '/operations' },
-  { label: 'Finance',    href: '/finance'    },
-  { label: 'Guest',      href: '/guest'      },
+  { label: 'Cockpit',    href: '/cockpit'           },
+  { label: 'Tasks',      href: '/cockpit/tasks'     },
+  { label: 'Schedule',   href: '/cockpit/schedule'  },
+  { label: 'Knowledge',  href: '/knowledge'         },
+  { label: 'Audit log',  href: '/cockpit?tab=audit' },
+  { label: 'Agents',     href: '/cockpit?tab=team'  },
 ];
 
 const SEVERITY_DOT: Record<string, string> = {
@@ -198,7 +200,7 @@ export default function RevenuePage() {
               fontWeight:    500,
             }}
           >
-            IT ▾
+            Sub-pages ▾
           </button>
           {deptOpen && (
             <ul style={{
@@ -223,7 +225,7 @@ export default function RevenuePage() {
                     style={{
                       display:        'block',
                       padding:        '8px 18px',
-                      color:          d.label === 'IT' ? '#c4a06b' : '#9b907a',
+                      color:          '#9b907a',
                       textDecoration: 'none',
                       fontFamily:     "'JetBrains Mono', ui-monospace, monospace",
                       fontSize:       10,
