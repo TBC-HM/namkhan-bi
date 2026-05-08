@@ -1,59 +1,72 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-interface DocItem  { id: string; label: string; href: string }
-interface TaskItem { id: string; label: string; done: boolean }
+/* ──────────────────────────────────────────────────────────────────────────
+ * /revenue — entry page
+ * Layout (PBS spec 2026-05-08):
+ *   • greeting top-left, italic Fraunces, modest size
+ *   • Revenue ▾ dept dropdown top-right
+ *   • CHAT in the middle as hero
+ *   • small chip row immediately below chat
+ *   • 3 containers in a row (Action items / My Docs / My Tasks)
+ *     with + add and × delete per row, persisted to localStorage
+ *   • black background, brass + paper accents (brand)
+ * ────────────────────────────────────────────────────────────────────────── */
 
-const DOCS_KEY  = 'nk.entry.docs.revenue.v1';
-const TASKS_KEY = 'nk.entry.tasks.revenue.v1';
+interface AttentionItem { id: string; label: string; severity: 'high' | 'medium' | 'low' }
+interface DocItem       { id: string; label: string; href: string }
+interface TaskItem      { id: string; label: string; done: boolean }
+
+const ATTN_KEY  = 'nk.rev.entry.attention.v2';
+const DOCS_KEY  = 'nk.rev.entry.docs.v2';
+const TASKS_KEY = 'nk.rev.entry.tasks.v2';
+
+const DEFAULT_ATTN: AttentionItem[] = [
+  { id: 'a1', label: 'OTA parity breach — BDC $142 vs direct $158',  severity: 'high'   },
+  { id: 'a2', label: 'Pace −14 % vs STLY for next 30 days',           severity: 'medium' },
+  { id: 'a3', label: 'Compset data stale — last sync 48 h ago',      severity: 'low'    },
+];
 
 const DEFAULT_DOCS: DocItem[] = [
-  { id: '1', label: 'Revenue Strategy 2025',       href: '/revenue/strategy'    },
-  { id: '2', label: 'Channel Mix Report — Apr 26',  href: '/revenue/channel-mix' },
-  { id: '3', label: 'BAR Rate Grid',                href: '/revenue/bar'         },
+  { id: 'd1', label: 'Revenue Strategy 2025',      href: '/revenue/strategy'    },
+  { id: 'd2', label: 'Channel Mix Report — Apr 26', href: '/revenue/channel-mix' },
+  { id: 'd3', label: 'BAR Rate Grid',               href: '/revenue/bar'         },
 ];
 
 const DEFAULT_TASKS: TaskItem[] = [
-  { id: '1', label: 'Review OTA parity alerts',     done: false },
-  { id: '2', label: 'Update BAR for long weekend',  done: false },
-  { id: '3', label: 'Sign off on group quote #12',  done: false },
+  { id: 't1', label: 'Review OTA parity alerts',     done: false },
+  { id: 't2', label: 'Update BAR for long weekend',  done: false },
+  { id: 't3', label: 'Sign off on group quote #12',  done: false },
 ];
 
 const QUICK_CHIPS = [
-  { label: 'Pulse',    href: '/revenue/pulse'       },
-  { label: 'Compset',  href: '/revenue/compset'     },
-  { label: 'Parity',   href: '/revenue/parity'      },
-  { label: 'Pace',     href: '/revenue/pace'        },
-  { label: 'Channels', href: '/revenue/channels'    },
-  { label: 'Forecast', href: '/revenue/forecast'    },
-];
-
-const ATTENTION_ITEMS = [
-  { id: '1', label: 'OTA parity breach — Booking.com $142 vs direct $158', severity: 'high'   },
-  { id: '2', label: 'Pace is −14 % vs STLY for next 30 days',              severity: 'medium' },
-  { id: '3', label: 'Compset data stale — last sync 48 h ago',             severity: 'low'    },
+  { label: 'Pulse',    href: '/revenue/pulse'    },
+  { label: 'Compset',  href: '/revenue/compset'  },
+  { label: 'Parity',   href: '/revenue/parity'   },
+  { label: 'Pace',     href: '/revenue/pace'     },
+  { label: 'Channels', href: '/revenue/channels' },
+  { label: 'Forecast', href: '/revenue/forecast' },
 ];
 
 const DEPT_LINKS = [
-  { label: 'Overview',    href: '/overview'    },
-  { label: 'Revenue',     href: '/revenue'     },
-  { label: 'Sales',       href: '/sales'       },
-  { label: 'Marketing',   href: '/marketing'   },
-  { label: 'Operations',  href: '/operations'  },
-  { label: 'Finance',     href: '/finance'     },
-  { label: 'Guest',       href: '/guest'       },
+  { label: 'Overview',   href: '/overview'   },
+  { label: 'Revenue',    href: '/revenue'    },
+  { label: 'Sales',      href: '/sales'      },
+  { label: 'Marketing',  href: '/marketing'  },
+  { label: 'Operations', href: '/operations' },
+  { label: 'Finance',    href: '/finance'    },
+  { label: 'Guest',      href: '/guest'      },
 ];
 
-const severityColor: Record<string, string> = {
-  high:   '#ef4444',
-  medium: '#f59e0b',
-  low:    '#6b7280',
+const SEVERITY_DOT: Record<string, string> = {
+  high:   '#c0584c',
+  medium: '#c4a06b',
+  low:    '#7d7565',
 };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── helpers ────────────────────────────────────────────────────────────────
 function loadLS<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
@@ -62,304 +75,499 @@ function loadLS<T>(key: string, fallback: T): T {
     return fallback;
   }
 }
+function saveLS(key: string, val: unknown) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch { /* noop */ }
+}
+function uid() { return Math.random().toString(36).slice(2, 9); }
 
-// ─── Component ───────────────────────────────────────────────────────────────
+// ─── component ──────────────────────────────────────────────────────────────
 export default function RevenuePage() {
   const router = useRouter();
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const [greeting, setGreeting] = useState('Good morning');
+  const [greeting,  setGreeting]  = useState('Good morning');
   const [chatValue, setChatValue] = useState('');
-  const [docs,  setDocs]  = useState<DocItem[]>(DEFAULT_DOCS);
-  const [tasks, setTasks] = useState<TaskItem[]>(DEFAULT_TASKS);
-  const [deptOpen, setDeptOpen] = useState(false);
+  const [attn,      setAttn]      = useState<AttentionItem[]>(DEFAULT_ATTN);
+  const [docs,      setDocs]      = useState<DocItem[]>(DEFAULT_DOCS);
+  const [tasks,     setTasks]     = useState<TaskItem[]>(DEFAULT_TASKS);
+  const [deptOpen,  setDeptOpen]  = useState(false);
 
-  // Hydrate from localStorage after mount
   useEffect(() => {
-    setDocs(loadLS<DocItem[]>(DOCS_KEY, DEFAULT_DOCS));
-    setTasks(loadLS<TaskItem[]>(TASKS_KEY, DEFAULT_TASKS));
-
+    setAttn (loadLS<AttentionItem[]>(ATTN_KEY,  DEFAULT_ATTN));
+    setDocs (loadLS<DocItem[]>      (DOCS_KEY,  DEFAULT_DOCS));
+    setTasks(loadLS<TaskItem[]>     (TASKS_KEY, DEFAULT_TASKS));
     const h = new Date().getHours();
     if (h >= 12 && h < 17) setGreeting('Good afternoon');
-    else if (h >= 17)       setGreeting('Good evening');
+    else if (h >= 17)      setGreeting('Good evening');
+    inputRef.current?.focus();
   }, []);
 
-  // Persist tasks on toggle
-  function toggleTask(id: string) {
-    setTasks(prev => {
-      const next = prev.map(t => t.id === id ? { ...t, done: !t.done } : t);
-      localStorage.setItem(TASKS_KEY, JSON.stringify(next));
-      return next;
-    });
+  function submitChat(e: React.FormEvent) {
+    e.preventDefault();
+    const q = chatValue.trim();
+    if (!q) return;
+    router.push(`/cockpit/chat?q=${encodeURIComponent(q)}&dept=revenue`);
   }
 
-  function handleChat(e: React.FormEvent) {
-    e.preventDefault();
-    if (!chatValue.trim()) return;
-    void router.push(`/cockpit/chat?q=${encodeURIComponent(chatValue.trim())}&dept=revenue`);
+  // attention CRUD
+  function addAttn() {
+    const label = prompt('New attention item');
+    if (!label) return;
+    const next = [...attn, { id: uid(), label, severity: 'medium' as const }];
+    setAttn(next); saveLS(ATTN_KEY, next);
+  }
+  function delAttn(id: string) {
+    const next = attn.filter(a => a.id !== id);
+    setAttn(next); saveLS(ATTN_KEY, next);
+  }
+
+  // docs CRUD
+  function addDoc() {
+    const label = prompt('Doc title');
+    if (!label) return;
+    const href = prompt('Link URL', '/revenue/') || '/revenue/';
+    const next = [...docs, { id: uid(), label, href }];
+    setDocs(next); saveLS(DOCS_KEY, next);
+  }
+  function delDoc(id: string) {
+    const next = docs.filter(d => d.id !== id);
+    setDocs(next); saveLS(DOCS_KEY, next);
+  }
+
+  // tasks CRUD
+  function addTask() {
+    const label = prompt('New task');
+    if (!label) return;
+    const next = [...tasks, { id: uid(), label, done: false }];
+    setTasks(next); saveLS(TASKS_KEY, next);
+  }
+  function toggleTask(id: string) {
+    const next = tasks.map(t => t.id === id ? { ...t, done: !t.done } : t);
+    setTasks(next); saveLS(TASKS_KEY, next);
+  }
+  function delTask(id: string) {
+    const next = tasks.filter(t => t.id !== id);
+    setTasks(next); saveLS(TASKS_KEY, next);
   }
 
   return (
     <div style={{
-      minHeight:       '100vh',
-      background:      '#000',
-      color:           '#fff',
-      fontFamily:      'Inter, sans-serif',
-      padding:         '48px 40px 80px',
-      boxSizing:       'border-box',
-      position:        'relative',
+      minHeight:  '100vh',
+      background: '#0a0a0a',
+      color:      '#e9e1ce',
+      fontFamily: "'Inter Tight', system-ui, sans-serif",
+      padding:    '32px 48px 64px',
+      position:   'relative',
+      display:    'flex',
+      flexDirection: 'column',
     }}>
 
-      {/* ── Dept dropdown (top-right) ──────────────────────────────────────── */}
-      <div style={{ position: 'absolute', top: 24, right: 40, zIndex: 50 }}>
-        <button
-          onClick={() => setDeptOpen(o => !o)}
-          style={{
-            background:   'transparent',
-            border:       '1px solid #333',
-            borderRadius: 8,
-            color:        '#aaa',
-            padding:      '6px 14px',
-            cursor:       'pointer',
-            fontSize:     13,
-          }}
-        >
-          Revenue ▾
-        </button>
-        {deptOpen && (
-          <ul style={{
-            position:     'absolute',
-            right:        0,
-            top:          36,
-            background:   '#111',
-            border:       '1px solid #333',
-            borderRadius: 8,
-            listStyle:    'none',
-            margin:       0,
-            padding:      '6px 0',
-            minWidth:     140,
-          }}>
-            {DEPT_LINKS.map(d => (
-              <li key={d.href}>
-                <a
-                  href={d.href}
-                  style={{
-                    display:  'block',
-                    padding:  '7px 18px',
-                    color:    '#ccc',
-                    textDecoration: 'none',
-                    fontSize: 13,
-                  }}
-                  onClick={() => setDeptOpen(false)}
-                >
-                  {d.label}
-                </a>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {/* ── 1. Greeting ───────────────────────────────────────────────────── */}
-      <h1 style={{
-        fontFamily:  'Fraunces, Georgia, serif',
-        fontStyle:   'italic',
-        fontWeight:  400,
-        fontSize:    'clamp(28px, 4vw, 48px)',
-        margin:      '0 0 36px',
-        letterSpacing: '-0.5px',
-      }}>
-        {greeting}, Boss (Paul Bauer).
-      </h1>
-
-      {/* ── 2. Ask-anything chat box ──────────────────────────────────────── */}
-      <form onSubmit={handleChat} style={{ marginBottom: 32, maxWidth: 640 }}>
-        <div style={{
-          display:      'flex',
-          border:       '1px solid #333',
-          borderRadius: 12,
-          overflow:     'hidden',
-          background:   '#0d0d0d',
-        }}>
-          <input
-            type="text"
-            value={chatValue}
-            onChange={e => setChatValue(e.target.value)}
-            placeholder="Ask anything about Revenue…"
-            style={{
-              flex:        1,
-              background:  'transparent',
-              border:      'none',
-              outline:     'none',
-              color:       '#fff',
-              fontSize:    15,
-              padding:     '14px 18px',
-            }}
-          />
-          <button
-            type="submit"
-            style={{
-              background:  '#1a1a1a',
-              border:      'none',
-              borderLeft:  '1px solid #333',
-              color:       '#888',
-              padding:     '0 20px',
-              cursor:      'pointer',
-              fontSize:    18,
-            }}
-          >
-            ↵
-          </button>
-        </div>
-      </form>
-
-      {/* ── 3. Quick-page chip row ────────────────────────────────────────── */}
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 48 }}>
-        {QUICK_CHIPS.map(c => (
-          <a
-            key={c.href}
-            href={c.href}
-            style={{
-              background:   '#111',
-              border:       '1px solid #2a2a2a',
-              borderRadius: 20,
-              color:        '#ccc',
-              fontSize:     13,
-              padding:      '7px 18px',
-              textDecoration: 'none',
-              whiteSpace:   'nowrap',
-              transition:   'border-color 0.15s',
-            }}
-          >
-            {c.label}
-          </a>
-        ))}
-      </div>
-
-      {/* ── 4. Two-column: My Docs / My Tasks ────────────────────────────── */}
+      {/* ── Top row: greeting (left) + dept dropdown (right) ──────────────── */}
       <div style={{
-        display:             'grid',
-        gridTemplateColumns: '1fr 1fr',
-        gap:                 32,
-        marginBottom:        48,
-        maxWidth:            960,
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: 8,
       }}>
+        <h1 style={{
+          fontFamily:  "'Fraunces', Georgia, serif",
+          fontStyle:   'italic',
+          fontWeight:  300,
+          fontSize:    'clamp(20px, 2.4vw, 28px)',
+          letterSpacing: '-0.01em',
+          color:       '#e9e1ce',
+          margin:      0,
+        }}>
+          {greeting}, <span style={{ color: '#c4a06b' }}>Boss</span>.
+        </h1>
 
-        {/* My Docs */}
-        <div>
-          <h2 style={{ fontSize: 13, fontWeight: 600, color: '#666', letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 16px' }}>
-            My Docs
-          </h2>
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {docs.map(doc => (
-              <li key={doc.id}>
-                <a
-                  href={doc.href}
-                  style={{
-                    display:      'flex',
-                    alignItems:   'center',
-                    gap:          10,
-                    background:   '#0d0d0d',
-                    border:       '1px solid #1e1e1e',
-                    borderRadius: 8,
-                    padding:      '10px 14px',
-                    color:        '#ddd',
-                    textDecoration: 'none',
-                    fontSize:     14,
-                  }}
-                >
-                  <span style={{ color: '#555', fontSize: 16 }}>📄</span>
-                  {doc.label}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* My Tasks */}
-        <div>
-          <h2 style={{ fontSize: 13, fontWeight: 600, color: '#666', letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 16px' }}>
-            My Tasks
-          </h2>
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {tasks.map(task => (
-              <li key={task.id}>
-                <button
-                  onClick={() => toggleTask(task.id)}
-                  style={{
-                    display:      'flex',
-                    alignItems:   'center',
-                    gap:          10,
-                    width:        '100%',
-                    background:   '#0d0d0d',
-                    border:       '1px solid #1e1e1e',
-                    borderRadius: 8,
-                    padding:      '10px 14px',
-                    color:        task.done ? '#555' : '#ddd',
-                    fontSize:     14,
-                    cursor:       'pointer',
-                    textAlign:    'left',
-                    textDecoration: task.done ? 'line-through' : 'none',
-                    transition:   'color 0.15s',
-                  }}
-                >
-                  <span style={{
-                    width:        18,
-                    height:       18,
-                    borderRadius: 4,
-                    border:       `1px solid ${task.done ? '#3a3a3a' : '#555'}`,
-                    background:   task.done ? '#1a1a1a' : 'transparent',
-                    display:      'flex',
-                    alignItems:   'center',
-                    justifyContent: 'center',
-                    flexShrink:   0,
-                    fontSize:     11,
-                  }}>
-                    {task.done ? '✓' : ''}
-                  </span>
-                  {task.label}
-                </button>
-              </li>
-            ))}
-          </ul>
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setDeptOpen(o => !o)}
+            style={{
+              background:    'transparent',
+              border:        '1px solid #2a261d',
+              borderRadius:  6,
+              color:         '#c4a06b',
+              padding:       '6px 14px',
+              cursor:        'pointer',
+              fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
+              fontSize:      10,
+              letterSpacing: '0.18em',
+              textTransform: 'uppercase',
+              fontWeight:    500,
+            }}
+          >
+            Revenue ▾
+          </button>
+          {deptOpen && (
+            <ul style={{
+              position:     'absolute',
+              right:        0,
+              top:          36,
+              background:   '#0f0d0a',
+              border:       '1px solid #2a261d',
+              borderRadius: 6,
+              listStyle:    'none',
+              margin:       0,
+              padding:      '4px 0',
+              minWidth:     160,
+              zIndex:       50,
+              boxShadow:    '0 8px 24px rgba(0,0,0,0.6)',
+            }}>
+              {DEPT_LINKS.map(d => (
+                <li key={d.href}>
+                  <a
+                    href={d.href}
+                    onClick={() => setDeptOpen(false)}
+                    style={{
+                      display:        'block',
+                      padding:        '8px 18px',
+                      color:          d.label === 'Revenue' ? '#c4a06b' : '#9b907a',
+                      textDecoration: 'none',
+                      fontFamily:     "'JetBrains Mono', ui-monospace, monospace",
+                      fontSize:       10,
+                      letterSpacing:  '0.18em',
+                      textTransform:  'uppercase',
+                    }}
+                  >
+                    {d.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
 
-      {/* ── 5. Dept dropdown already rendered top-right ───────────────────── */}
+      {/* sub-eyebrow (department) */}
+      <div style={{
+        fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
+        fontSize:      10,
+        letterSpacing: '0.28em',
+        textTransform: 'uppercase',
+        color:         '#7d7565',
+        marginBottom:  56,
+      }}>
+        Revenue · The Namkhan
+      </div>
 
-      {/* ── 6. Needs-your-attention ───────────────────────────────────────── */}
-      <div style={{ maxWidth: 960 }}>
-        <h2 style={{ fontSize: 13, fontWeight: 600, color: '#666', letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 16px' }}>
-          Needs your attention
-        </h2>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {ATTENTION_ITEMS.map(item => (
-            <div
-              key={item.id}
+      {/* ── HERO: chat in the middle ─────────────────────────────────────── */}
+      <div style={{
+        flex:           1,
+        display:        'flex',
+        flexDirection:  'column',
+        justifyContent: 'center',
+        alignItems:     'center',
+        gap:            22,
+        marginTop:      -32, // pull up so chat sits visually centered
+        marginBottom:   56,
+      }}>
+        <div style={{
+          fontFamily:    "'Fraunces', Georgia, serif",
+          fontStyle:     'italic',
+          fontWeight:    300,
+          fontSize:      'clamp(24px, 3.4vw, 38px)',
+          letterSpacing: '-0.015em',
+          color:         '#d8cca8',
+          textAlign:     'center',
+          maxWidth:      720,
+        }}>
+          Ask Vector anything about revenue.
+        </div>
+
+        <form onSubmit={submitChat} style={{ width: '100%', maxWidth: 720 }}>
+          <div style={{
+            display:      'flex',
+            border:       '1px solid #3a3327',
+            borderRadius: 14,
+            overflow:     'hidden',
+            background:   '#15110b',
+            boxShadow:    '0 12px 32px rgba(0,0,0,0.45)',
+          }}>
+            <input
+              ref={inputRef}
+              type="text"
+              value={chatValue}
+              onChange={e => setChatValue(e.target.value)}
+              placeholder="e.g. how are we pacing for next weekend?"
               style={{
-                display:      'flex',
-                alignItems:   'center',
-                gap:          12,
-                background:   '#0d0d0d',
-                border:       `1px solid #1e1e1e`,
-                borderLeft:   `3px solid ${severityColor[item.severity]}`,
-                borderRadius: 8,
-                padding:      '12px 16px',
-                fontSize:     14,
-                color:        '#ccc',
+                flex:       1,
+                background: 'transparent',
+                border:     'none',
+                outline:    'none',
+                color:      '#efe6d3',
+                fontFamily: "'Inter Tight', system-ui, sans-serif",
+                fontSize:   15,
+                padding:    '16px 20px',
+              }}
+            />
+            <button
+              type="submit"
+              style={{
+                background:    '#a8854a',
+                border:        'none',
+                color:         '#0a0a0a',
+                padding:       '0 22px',
+                cursor:        'pointer',
+                fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
+                fontSize:      11,
+                letterSpacing: '0.18em',
+                textTransform: 'uppercase',
+                fontWeight:    600,
               }}
             >
-              <span style={{
-                width:        8,
-                height:       8,
-                borderRadius: '50%',
-                background:   severityColor[item.severity],
-                flexShrink:   0,
-              }} />
-              {item.label}
-            </div>
+              Ask ↵
+            </button>
+          </div>
+        </form>
+
+        {/* small chip row immediately below chat */}
+        <div style={{
+          display:    'flex',
+          gap:        8,
+          flexWrap:   'wrap',
+          justifyContent: 'center',
+          maxWidth:   720,
+        }}>
+          {QUICK_CHIPS.map(c => (
+            <a
+              key={c.href}
+              href={c.href}
+              style={{
+                background:     'transparent',
+                border:         '1px solid #2a261d',
+                borderRadius:   18,
+                color:          '#9b907a',
+                fontFamily:     "'JetBrains Mono', ui-monospace, monospace",
+                fontSize:       10,
+                letterSpacing:  '0.18em',
+                textTransform:  'uppercase',
+                fontWeight:     500,
+                padding:        '6px 14px',
+                textDecoration: 'none',
+                whiteSpace:     'nowrap',
+                transition:     'border-color 0.15s, color 0.15s',
+              }}
+            >
+              {c.label}
+            </a>
           ))}
         </div>
       </div>
+
+      {/* ── 3 containers in a row at bottom ──────────────────────────────── */}
+      <div style={{
+        display:             'grid',
+        gridTemplateColumns: 'repeat(3, 1fr)',
+        gap:                 20,
+        maxWidth:            1200,
+        margin:              '0 auto',
+        width:               '100%',
+      }}>
+
+        {/* ATTENTION */}
+        <Container
+          title="Needs your attention"
+          onAdd={addAttn}
+        >
+          {attn.map(a => (
+            <Row key={a.id} onDelete={() => delAttn(a.id)}>
+              <span style={{
+                width:        7,
+                height:       7,
+                borderRadius: '50%',
+                background:   SEVERITY_DOT[a.severity],
+                flexShrink:   0,
+              }} />
+              <span style={{ flex: 1, fontSize: 13, color: '#c9bb96', lineHeight: 1.4 }}>
+                {a.label}
+              </span>
+            </Row>
+          ))}
+          {attn.length === 0 && <Empty label="All clear" />}
+        </Container>
+
+        {/* DOCS */}
+        <Container
+          title="My docs"
+          onAdd={addDoc}
+        >
+          {docs.map(d => (
+            <Row key={d.id} onDelete={() => delDoc(d.id)}>
+              <a
+                href={d.href}
+                style={{
+                  flex:           1,
+                  fontSize:       13,
+                  color:          '#c9bb96',
+                  textDecoration: 'none',
+                  lineHeight:     1.4,
+                }}
+              >
+                {d.label}
+              </a>
+            </Row>
+          ))}
+          {docs.length === 0 && <Empty label="No docs pinned" />}
+        </Container>
+
+        {/* TASKS */}
+        <Container
+          title="My tasks"
+          onAdd={addTask}
+        >
+          {tasks.map(t => (
+            <Row key={t.id} onDelete={() => delTask(t.id)}>
+              <button
+                onClick={() => toggleTask(t.id)}
+                style={{
+                  width:           14,
+                  height:          14,
+                  borderRadius:    3,
+                  border:          `1px solid ${t.done ? '#5a5040' : '#7d7565'}`,
+                  background:      t.done ? '#a8854a' : 'transparent',
+                  cursor:          'pointer',
+                  display:         'flex',
+                  alignItems:      'center',
+                  justifyContent:  'center',
+                  flexShrink:      0,
+                  padding:         0,
+                  fontSize:        10,
+                  color:           '#0a0a0a',
+                  fontWeight:      700,
+                }}
+              >
+                {t.done ? '✓' : ''}
+              </button>
+              <span style={{
+                flex:           1,
+                fontSize:       13,
+                color:          t.done ? '#7d7565' : '#c9bb96',
+                textDecoration: t.done ? 'line-through' : 'none',
+                lineHeight:     1.4,
+              }}>
+                {t.label}
+              </span>
+            </Row>
+          ))}
+          {tasks.length === 0 && <Empty label="Nothing on the list" />}
+        </Container>
+      </div>
+    </div>
+  );
+}
+
+/* ─── small primitives ───────────────────────────────────────────────────── */
+
+function Container({
+  title, onAdd, children,
+}: { title: string; onAdd: () => void; children: React.ReactNode }) {
+  return (
+    <div style={{
+      background:   '#0f0d0a',
+      border:       '1px solid #1f1c15',
+      borderRadius: 12,
+      padding:      '14px 16px 16px',
+      display:      'flex',
+      flexDirection: 'column',
+      minHeight:    180,
+    }}>
+      <div style={{
+        display:        'flex',
+        justifyContent: 'space-between',
+        alignItems:     'center',
+        marginBottom:   12,
+        paddingBottom:  10,
+        borderBottom:   '1px solid #1f1c15',
+      }}>
+        <h2 style={{
+          fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
+          fontSize:      10,
+          letterSpacing: '0.18em',
+          textTransform: 'uppercase',
+          fontWeight:    600,
+          color:         '#a8854a',
+          margin:        0,
+        }}>
+          {title}
+        </h2>
+        <button
+          onClick={onAdd}
+          aria-label="Add"
+          style={{
+            background:   'transparent',
+            border:       '1px solid #2a261d',
+            borderRadius: 4,
+            color:        '#a8854a',
+            cursor:       'pointer',
+            fontSize:     14,
+            lineHeight:   1,
+            width:        22,
+            height:       22,
+            padding:      0,
+            display:      'flex',
+            alignItems:   'center',
+            justifyContent: 'center',
+          }}
+        >
+          +
+        </button>
+      </div>
+      <div style={{
+        display:       'flex',
+        flexDirection: 'column',
+        gap:           6,
+      }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Row({ children, onDelete }: { children: React.ReactNode; onDelete: () => void }) {
+  return (
+    <div style={{
+      display:      'flex',
+      alignItems:   'center',
+      gap:          10,
+      padding:      '7px 8px',
+      borderRadius: 6,
+      background:   'transparent',
+      transition:   'background 0.12s',
+    }}>
+      {children}
+      <button
+        onClick={onDelete}
+        aria-label="Delete"
+        style={{
+          background:   'transparent',
+          border:       'none',
+          color:        '#5a5040',
+          cursor:       'pointer',
+          fontSize:     14,
+          lineHeight:   1,
+          padding:      '2px 4px',
+          flexShrink:   0,
+        }}
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
+function Empty({ label }: { label: string }) {
+  return (
+    <div style={{
+      fontFamily:    "'Fraunces', Georgia, serif",
+      fontStyle:     'italic',
+      fontSize:      12,
+      color:         '#5a5040',
+      padding:       '12px 4px',
+      textAlign:     'center',
+    }}>
+      {label}
     </div>
   );
 }

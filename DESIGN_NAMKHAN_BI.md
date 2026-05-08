@@ -2127,3 +2127,23 @@ Three stacked fixes addressing "give me the paragraph not the doc" + "answer my 
 
 **Why Option 3:** preserves both design intents, no reskin work needed, gives users a psychological cue (front-stage = premium dark, back-stage = brass functional). Long-term cost = 2 systems to maintain — accepted.
 
+
+### 2026-05-08 — /revenue entry redesign (PBS spec)
+
+**File**: `app/revenue/page.tsx` (573 lines, single-file client component, no extra deps).
+
+**Layout** (top → bottom):
+- Greeting top-left (italic Fraunces, `clamp(20px, 2.4vw, 28px)`) + Revenue ▾ dept dropdown top-right (mono brass eyebrow).
+- Sub-eyebrow `Revenue · The Namkhan` (mono, 10px, brass-letterspaced).
+- HERO chat block centered vertically: serif italic prompt "Ask Vector anything about revenue.", input with brass `Ask ↵` submit, max-width 720px, posts to `/cockpit/chat?q=...&dept=revenue`.
+- Small chip row immediately below chat (Pulse / Compset / Parity / Pace / Channels / Forecast — mono, 10px, 18px-radius pills, transparent border).
+- 3 containers in a row at bottom: Attention (severity dots) / My Docs / My Tasks. Each has `+` add button in header and `×` delete on hover for every row. Typography: brass mono header, body `#c9bb96` sans 13px. Empty state shows Fraunces italic "Nothing on the list" / "All clear".
+
+**Persistence**: localStorage keys `nk.rev.entry.attention.v2`, `nk.rev.entry.docs.v2`, `nk.rev.entry.tasks.v2`. Add via `prompt()`, delete in-place; tasks toggleable.
+
+**Workspace-theme conformance**: black bg `#0a0a0a`, paper text `#e9e1ce`, brass `#c4a06b` / `#a8854a`, Fraunces italic for serif text, JetBrains Mono uppercase brass-letterspaced for eyebrows. No hardcoded $/USD strings (no KPIs on this page — chat-first surface).
+
+**Deploy script**: `cloudbeds Vercel portal/ship-revenue-redesign.command` (commits to `feature/revenue-stylish-redesign-{ts}`, opens PR to main, polls mergeable, admin-merges, prunes branch).
+
+**Next**: same pattern for /sales, /marketing, /operations, /guest, /finance once /revenue is approved.
+
