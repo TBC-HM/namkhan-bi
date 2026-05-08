@@ -17,6 +17,10 @@ import { createClient } from "@supabase/supabase-js";
 import crypto from "node:crypto";
 
 export const runtime = "nodejs";
+// 2026-05-08 — explicit 60s cap. Default is 10s on Hobby and was hitting
+// timeouts on >5MB uploads; 60s is plenty for the 25MB cap below and
+// matches the Pro standard.
+export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 export const revalidate = 0;
