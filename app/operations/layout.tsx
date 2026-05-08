@@ -1,14 +1,15 @@
 // app/operations/layout.tsx
-// Cowork audit 2026-05-03: removed FilterStrip from this layout. Most Ops
-// sub-pages (today, housekeeping, maintenance, staff, inventory) are live
-// snapshots and shouldn't show window/compare/segment selectors. Pages that
-// ARE period-aware (operations/page.tsx, restaurant, spa, activities) render
-// their own FilterStrip inline.
+// 2026-05-08 (ticket #328): bare-render the entry page (matches /revenue).
+'use client';
+
+import { usePathname } from 'next/navigation';
 import Banner from '@/components/nav/Banner';
 import SubNav from '@/components/nav/SubNav';
 import { RAIL_SUBNAV, PILLAR_HEADER } from '@/components/nav/subnavConfig';
 
 export default function OperationsLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname() ?? '';
+  if (pathname === '/operations' || pathname === '/operations/') return <>{children}</>;
   const h = PILLAR_HEADER.operations;
   const t = new Date().toLocaleTimeString('en-GB', {
     hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Vientiane',

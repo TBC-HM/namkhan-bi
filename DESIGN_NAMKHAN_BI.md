@@ -406,6 +406,31 @@ If memory is wiped AND nothing above is reachable, the repo itself has a `CLAUDE
 
 Append-only. Newest at top. Date heading + bullet changes.
 
+### 2026-05-09 — Design system manifesto + canvas-first UI
+
+Why: PBS rejected the page-as-dashboard model. New direction codified in 7 binding rules persisted to `cockpit_knowledge_base` (scope `design_system_manifesto`, ids 483–489) so every agent inherits them. Same rules now in `CLAUDE.md` § "Design system manifesto".
+
+**Files**
+- `components/page/Page.tsx` — NEW. The shell every route renders inside (eyebrow + Fraunces italic title + optional sub-pages strip + optional topRight + SLH footer). Replaces ad-hoc top-level `<div style={{ minHeight, padding ... }}>` patterns.
+- `components/page/Panel.tsx` — NEW. Canonical container around any chart/table/list. Replaces every inline `<div style={{ background, border, borderRadius ... }}>`.
+- `components/page/Brief.tsx` — NEW. Signal · body · Good (moss) · Bad (red) · proposalSlot. The PRIMARY answer shape on the canvas.
+- `components/page/Lane.tsx` + `components/page/ProposalCard.tsx` — NEW. 3-state kanban primitives (proposal / in_process / done) used on the canvas.
+- `app/page.tsx` — refactored to use the shell + the four new primitives. The architect-style launcher moved to `/architect`.
+- `app/sample/{1,2,3}/page.tsx` — refactored to use `<Page>` + the shared `<Panel>`. Local `Panel` / `SampleHeader` / `SampleFooter` definitions removed; only chart helpers stay inline (extraction to `components/charts/` is a follow-up).
+- `app/sample/_components/SampleSwitcher.tsx` — NEW. Shared switcher used by all 3 sample candidates so PBS can flip between them.
+- `CLAUDE.md` — added § "Design system manifesto (locked 2026-05-09)" with the 7 binding rules.
+
+**Schema**
+- `cockpit_proposals` (migration `cockpit_proposals_v1`): atomic unit — `signal · agent_role · action_type · body · action_payload · status (proposal | in_process | done | rejected)`. Trigger `proposals_bump_trust` flips `agent_trust` counters on transitions.
+- `agent_trust` (same migration): per-(agent, action_type) approve/reject counter. Auto-unlock when `approve_count ≥ threshold && reject_count = 0`. One rejection re-locks.
+
+**Verification (pre-deploy)**
+- `npx tsc --noEmit` exit 0.
+- /, /sample/{1,2,3}, /architect, /revenue, /sales, /marketing, /operations, /guest, /finance, /it — all 200.
+- `cockpit_knowledge_base` returns 7 entries WHERE `scope = 'design_system_manifesto'`.
+
+**Wiring next** (per-page pass): apply the shell + primitives + action overlay to every dept entry, every sub-page that survives, every report view. Never overwrite the manifesto KB entries. When a future agent edits UI, it MUST consult the 7 rules first.
+
 ### 2026-05-04 (late evening — /marketing snapshot redesigned to canonical pattern)
 
 Why: User flagged the page looked bad. Audit showed underlying data is mostly empty (`marketing.reviews=0`, `social.followers=0`, `influencers=0`), so the prior `KpiCard`-based layout rendered as four em-dashes. Redesigned to lead with what's actually populated (factsheet content + photos + channel handles) and honestly mark scrape-dependent metrics as DATA NEEDED.
