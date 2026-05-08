@@ -85,11 +85,46 @@ function saveLS(key: string, val: unknown) {
 }
 function uid() { return Math.random().toString(36).slice(2, 9); }
 
+function todayLabel(): string {
+  const d = new Date();
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' });
+}
+
+function menuLinkStyle(): React.CSSProperties {
+  return {
+    display:        'block',
+    padding:        '7px 12px',
+    color:          '#d8cca8',
+    textDecoration: 'none',
+    fontFamily:     "'JetBrains Mono', ui-monospace, monospace",
+    fontSize:       11,
+    letterSpacing:  '0.12em',
+    textTransform:  'uppercase',
+    borderRadius:   4,
+  };
+}
+function langFlagStyle(active: boolean): React.CSSProperties {
+  return {
+    background:   active ? '#1c160d' : 'transparent',
+    border:       `1px solid ${active ? '#a8854a' : '#2a261d'}`,
+    borderRadius: 4,
+    padding:      '3px 8px',
+    cursor:       'pointer',
+    fontSize:     14,
+    lineHeight:   1,
+  };
+}
+
 // 2026-05-08 — projects v1 (PR follow-up to #211).
 // Active project lives in localStorage; selecting one tags subsequent
 // chats with project_id so agents read the project's KB rows in addition
 // to global KB. Picker calls /api/cockpit/projects (GET list, POST create).
 const ACTIVE_PROJECT_KEY = 'nk.rev.entry.activeProject.v1';
+const LANG_KEY           = 'nk.rev.entry.lang.v1';
+
+// Mock auth — `workspace_users` wiring is a later PR. Owner UUID is in
+// the infrastructure memory; for now we hardcode the operator label.
+const USER_NAME = 'PBS';
 
 interface ProjectRow {
   id: number;
@@ -118,7 +153,6 @@ export default function RevenuePage() {
   const [attn,      setAttn]      = useState<AttentionItem[]>(DEFAULT_ATTN);
   const [docs,      setDocs]      = useState<DocItem[]>(DEFAULT_DOCS);
   const [tasks,     setTasks]     = useState<TaskItem[]>(DEFAULT_TASKS);
-  const [deptOpen,  setDeptOpen]  = useState(false);
 
   // Projects state
   const [projects,    setProjects]    = useState<ProjectRow[]>([]);
@@ -136,6 +170,16 @@ export default function RevenuePage() {
   const [summarising, setSummarising] = useState(false);
   const [summary,     setSummary]     = useState<string | null>(null);
 
+  // Top-bar UI (PBS 2026-05-08 redesign)
+  const [dateHover,   setDateHover]   = useState(false);
+  const [userOpen,    setUserOpen]    = useState(false);
+  const [lang,        setLangState]   = useState<'en' | 'th'>('en');
+  function setLang(next: 'en' | 'th') {
+    setLangState(next);
+    try { localStorage.setItem(LANG_KEY, next); } catch { /* SSR/quota */ }
+    setUserOpen(false);
+  }
+
   useEffect(() => {
     setAttn (loadLS<AttentionItem[]>(ATTN_KEY,  DEFAULT_ATTN));
     setDocs (loadLS<DocItem[]>      (DOCS_KEY,  DEFAULT_DOCS));
@@ -144,6 +188,12 @@ export default function RevenuePage() {
     if (h >= 12 && h < 17) setGreeting('Good afternoon');
     else if (h >= 17)      setGreeting('Good evening');
     inputRef.current?.focus();
+
+    // Restore language preference
+    try {
+      const saved = localStorage.getItem(LANG_KEY);
+      if (saved === 'en' || saved === 'th') setLangState(saved);
+    } catch { /* SSR */ }
 
     // Hydrate projects + active selection
     fetch('/api/cockpit/projects?dept=revenue', { cache: 'no-store' })
@@ -302,94 +352,134 @@ export default function RevenuePage() {
       flexDirection: 'column',
     }}>
 
-      {/* ── Top row: greeting (left) + dept dropdown (right) ──────────────── */}
+      {/* ── Top row (PBS 2026-05-08 redesign):
+       *   • LEFT: horizontal sub-pages strip (replaces "Revenue · The Namkhan" line + ▾ dropdown)
+       *   • RIGHT: date (hover → dept KPI tiles) + user dropdown (settings / email / account / lang flags)
+       *   The "Good evening, Boss." greeting moves to ABOVE the chat hero (see below).
+       * ───────────────────────────────────────────────────────────────────── */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        marginBottom: 8,
+        alignItems: 'center',
+        marginBottom: 12,
+        gap: 16,
+        flexWrap: 'wrap',
       }}>
-        <h1 style={{
-          fontFamily:  "'Fraunces', Georgia, serif",
-          fontStyle:   'italic',
-          fontWeight:  300,
-          fontSize:    'clamp(20px, 2.4vw, 28px)',
-          letterSpacing: '-0.01em',
-          color:       '#e9e1ce',
-          margin:      0,
-        }}>
-          {greeting}, <span style={{ color: '#c4a06b' }}>Boss</span>.
-        </h1>
+        {/* LEFT — sub-pages strip */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14 }}>
+          {DEPT_LINKS.map(d => (
+            <a key={d.href} href={d.href} style={{
+              color:          '#9b907a',
+              textDecoration: 'none',
+              fontFamily:     "'JetBrains Mono', ui-monospace, monospace",
+              fontSize:       10,
+              letterSpacing:  '0.18em',
+              textTransform:  'uppercase',
+              padding:        '4px 0',
+              borderBottom:   '1px solid transparent',
+              transition:     'color 100ms ease, border-color 100ms ease',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = '#d8cca8'; e.currentTarget.style.borderBottomColor = '#3a3327'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = '#9b907a'; e.currentTarget.style.borderBottomColor = 'transparent'; }}>
+              {d.label}
+            </a>
+          ))}
+        </div>
 
-        <div style={{ position: 'relative' }}>
-          <button
-            onClick={() => setDeptOpen(o => !o)}
-            style={{
-              background:    'transparent',
-              border:        '1px solid #2a261d',
-              borderRadius:  6,
-              color:         '#c4a06b',
-              padding:       '6px 14px',
-              cursor:        'pointer',
+        {/* RIGHT — date (hover → KPIs) + user dropdown */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          {/* Date with hover popover (KPIs are placeholders; wire to live views in a later PR) */}
+          <div
+            style={{ position: 'relative' }}
+            onMouseEnter={() => setDateHover(true)}
+            onMouseLeave={() => setDateHover(false)}
+          >
+            <span style={{
               fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
               fontSize:      10,
               letterSpacing: '0.18em',
               textTransform: 'uppercase',
-              fontWeight:    500,
-            }}
-          >
-            Sub-pages ▾
-          </button>
-          {deptOpen && (
-            <ul style={{
-              position:     'absolute',
-              right:        0,
-              top:          36,
-              background:   '#0f0d0a',
-              border:       '1px solid #2a261d',
-              borderRadius: 6,
-              listStyle:    'none',
-              margin:       0,
-              padding:      '4px 0',
-              minWidth:     160,
-              zIndex:       50,
-              boxShadow:    '0 8px 24px rgba(0,0,0,0.6)',
+              color:         '#9b907a',
+              cursor:        'help',
             }}>
-              {DEPT_LINKS.map(d => (
-                <li key={d.href}>
-                  <a
-                    href={d.href}
-                    onClick={() => setDeptOpen(false)}
-                    style={{
-                      display:        'block',
-                      padding:        '8px 18px',
-                      color:          '#9b907a',
-                      textDecoration: 'none',
-                      fontFamily:     "'JetBrains Mono', ui-monospace, monospace",
-                      fontSize:       10,
-                      letterSpacing:  '0.18em',
-                      textTransform:  'uppercase',
-                    }}
-                  >
-                    {d.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
+              {todayLabel()}
+            </span>
+            {dateHover && (
+              <div style={{
+                position: 'absolute', top: 26, right: 0, zIndex: 60,
+                background: '#0f0d0a', border: '1px solid #3a3327', borderRadius: 8,
+                padding: 12, minWidth: 360,
+                boxShadow: '0 12px 28px rgba(0,0,0,0.6)',
+                display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8,
+              }}>
+                {[
+                  { k: 'OCC',     v: '78%',     d: '+4 vs LY' },
+                  { k: 'ADR',     v: '$182',    d: '+$6 vs STLY' },
+                  { k: 'RevPAR',  v: '$142',    d: '+$11 vs LY' },
+                  { k: 'PACE',    v: '−14%',    d: 'next 30d vs STLY' },
+                ].map(t => (
+                  <div key={t.k} style={{
+                    background: '#15110b', border: '1px solid #2a261d', borderRadius: 6,
+                    padding: '8px 10px',
+                  }}>
+                    <div style={{
+                      fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+                      fontSize: 9, letterSpacing: '0.22em', color: '#7d7565', textTransform: 'uppercase',
+                    }}>{t.k}</div>
+                    <div style={{
+                      fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic',
+                      fontSize: 22, color: '#d8cca8', marginTop: 2,
+                    }}>{t.v}</div>
+                    <div style={{ fontSize: 10, color: '#9b907a', marginTop: 2 }}>{t.d}</div>
+                  </div>
+                ))}
+                <div style={{ gridColumn: '1 / -1', fontSize: 10, color: '#5a5448', textAlign: 'right', fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>
+                  preview · live wiring TODO
+                </div>
+              </div>
+            )}
+          </div>
 
-      {/* sub-eyebrow (department) */}
-      <div style={{
-        fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
-        fontSize:      10,
-        letterSpacing: '0.28em',
-        textTransform: 'uppercase',
-        color:         '#7d7565',
-        marginBottom:  16,
-      }}>
-        Revenue · The Namkhan
+          {/* User dropdown (mock auth — workspace_users wiring is a later PR) */}
+          <div style={{ position: 'relative' }}>
+            <button onClick={() => setUserOpen(o => !o)} style={{
+              background:    'transparent',
+              border:        '1px solid #2a261d',
+              borderRadius:  6,
+              color:         '#c4a06b',
+              padding:       '5px 12px',
+              cursor:        'pointer',
+              fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
+              fontSize:      10,
+              letterSpacing: '0.16em',
+              textTransform: 'uppercase',
+              fontWeight:    500,
+              display:       'flex', alignItems: 'center', gap: 6,
+            }}>
+              <span style={{
+                width: 18, height: 18, borderRadius: '50%', background: '#a8854a',
+                color: '#0a0a0a', fontSize: 9, fontWeight: 700,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              }}>{(USER_NAME[0] ?? '?').toUpperCase()}</span>
+              {USER_NAME} ▾
+            </button>
+            {userOpen && (
+              <div style={{
+                position: 'absolute', right: 0, top: 36, zIndex: 60,
+                background: '#0f0d0a', border: '1px solid #2a261d', borderRadius: 6,
+                padding: 6, minWidth: 200, boxShadow: '0 12px 28px rgba(0,0,0,0.6)',
+              }}>
+                <a href="/settings/property" onClick={() => setUserOpen(false)} style={menuLinkStyle()}>Settings</a>
+                <a href="/settings/email-categories" onClick={() => setUserOpen(false)} style={menuLinkStyle()}>Email</a>
+                <a href="/cockpit/users" onClick={() => setUserOpen(false)} style={menuLinkStyle()}>Account</a>
+                <div style={{ borderTop: '1px solid #2a261d', marginTop: 4, paddingTop: 6, display: 'flex', justifyContent: 'center', gap: 10 }}>
+                  <button onClick={() => setLang('en')} title="English" style={langFlagStyle(lang === 'en')}>🇬🇧</button>
+                  <button onClick={() => setLang('th')} title="ไทย" style={langFlagStyle(lang === 'th')}>🇹🇭</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* ── PROJECT BOX (PBS 2026-05-08) ───────────────────────────────────
@@ -571,22 +661,35 @@ export default function RevenuePage() {
         </div>
       )}
 
-      {/* ── HERO: chat in the middle ─────────────────────────────────────── */}
+      {/* ── HERO: greeting + chat in the middle ──────────────────────────── */}
       <div style={{
         flex:           1,
         display:        'flex',
         flexDirection:  'column',
         justifyContent: 'center',
         alignItems:     'center',
-        gap:            22,
+        gap:            14,
         marginTop:      -32,
         marginBottom:   56,
       }}>
+        {/* greeting (was top-left; PBS moved it here 2026-05-08) */}
         <div style={{
           fontFamily:    "'Fraunces', Georgia, serif",
           fontStyle:     'italic',
           fontWeight:    300,
-          fontSize:      'clamp(24px, 3.4vw, 38px)',
+          fontSize:      'clamp(20px, 2.4vw, 28px)',
+          letterSpacing: '-0.01em',
+          color:         '#e9e1ce',
+          textAlign:     'center',
+          margin:        0,
+        }}>
+          {greeting}, <span style={{ color: '#c4a06b' }}>Boss</span>.
+        </div>
+        <div style={{
+          fontFamily:    "'Fraunces', Georgia, serif",
+          fontStyle:     'italic',
+          fontWeight:    300,
+          fontSize:      'clamp(22px, 3vw, 32px)',
           letterSpacing: '-0.015em',
           color:         '#d8cca8',
           textAlign:     'center',
