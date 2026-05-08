@@ -1,98 +1,118 @@
-'use client';
-
-import { useEffect, useState } from 'react';
-import PageHeader from '@/components/layout/PageHeader';
+// app/operations/suppliers/page.tsx
+import { createClient } from '@supabase/supabase-js';
 import KpiBox from '@/components/kpi/KpiBox';
 import DataTable from '@/components/ui/DataTable';
-import StatusPill from '@/components/ui/StatusPill';
+import PageHeader from '@/components/layout/PageHeader';
 
-interface Supplier {
-  id: string;
-  name: string;
-  category: string;
-  status: string;
-  contact_name: string | null;
-  contact_email: string | null;
-  contact_phone: string | null;
-  payment_terms: string | null;
-  currency: string | null;
-  lead_time_days: number | null;
-  last_order_date: string | null;
-  notes: string | null;
+export const dynamic = 'force-dynamic';
+export const revalidate = 60;
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+interface SupplierRow {
+  id?: string | number;
+  supplier_name?: string;
+  category?: string;
+  contact_name?: string;
+  contact_email?: string;
+  phone?: string;
+  currency?: string;
+  payment_terms_days?: number | null;
+  status?: string;
+  country?: string;
+  notes?: string;
+  // fallback if view uses slightly different column names
+  name?: string;
+  is_active?: boolean | null;
 }
 
-const STATUS_COLORS: Record<string, 'green' | 'yellow' | 'red' | 'grey'> = {
-  active: 'green',
-  inactive: 'grey',
-  suspended: 'red',
-  pending: 'yellow',
-};
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+export default async function SuppliersPage() {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
 
-export default function SuppliersPage() {
-  const [rows, setRows] = useState<Supplier[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('All');
+  // Primary: schema-qualified view
+  const { data: viewData } = await supabase
+    .schema('suppliers')
+    .from('v_active_suppliers')
+    .select('*')
+    .limit(100);
 
-  useEffect(() => {
-    void fetch('/api/operations/suppliers')
-      .then((r) => r.json())
-      .then((d) => {
-        setRows(Array.isArray(d) ? d : d.data ?? []);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, []);
+  // Fallback: raw table in suppliers schema
+  const { data: tableData } = !viewData?.length
+    ? await supabase.schema('suppliers').from('suppliers').select('*').limit(100)
+    : { data: null };
 
-  const categories = ['All', ...Array.from(new Set(rows.map((r) => r.category).filter(Boolean)))];
+  // Second fallback: public schema
+  const { data: publicData } = !viewData?.length && !tableData?.length
+    ? await supabase.from('suppliers').select('*').limit(100)
+    : { data: null };
 
-  const filtered = rows.filter((r) => {
-    const matchesCat = categoryFilter === 'All' || r.category === categoryFilter;
-    const q = search.toLowerCase();
-    const matchesSearch =
-      !q ||
-      r.name?.toLowerCase().includes(q) ||
-      r.contact_name?.toLowerCase().includes(q) ||
-      r.category?.toLowerCase().includes(q);
-    return matchesCat && matchesSearch;
-  });
+  const rows: SupplierRow[] = (viewData ?? tableData ?? publicData ?? []) as SupplierRow[];
 
-  const totalActive = rows.filter((r) => r.status === 'active').length;
-  const totalSuspended = rows.filter((r) => r.status === 'suspended').length;
-  const totalPending = rows.filter((r) => r.status === 'pending').length;
+  // ---------------------------------------------------------------------------
+  // KPI derivations
+  // ---------------------------------------------------------------------------
+  const totalSuppliers = rows.length;
 
+  const activeSuppliers = rows.filter(
+    (r) =>
+      r.status?.toLowerCase() === 'active' ||
+      r.is_active === true ||
+      r.status == null // treat null as active when no status column
+  ).length;
+
+  const categories = Array.from(new Set(rows.map((r) => r.category).filter(Boolean)));
+  const uniqueCategories = categories.length;
+
+  const currencies = Array.from(new Set(rows.map((r) => r.currency).filter(Boolean)));
+  const uniqueCurrencies = currencies.length;
+
+  // ---------------------------------------------------------------------------
+  // Table columns — guard every field with ?? '—'
+  // ---------------------------------------------------------------------------
   const columns = [
-    { key: 'name', header: 'SUPPLIER' },
-    { key: 'category', header: 'CATEGORY' },
-    {
-      key: 'status',
-      header: 'STATUS',
-      render: (v: string) => (
-        <StatusPill color={STATUS_COLORS[v?.toLowerCase()] ?? 'grey'} label={v ?? '—'} />
-      ),
-    },
-    { key: 'contact_name', header: 'CONTACT' },
-    { key: 'contact_phone', header: 'PHONE' },
-    { key: 'contact_email', header: 'EMAIL' },
-    { key: 'payment_terms', header: 'PAYMENT TERMS' },
-    {
-      key: 'lead_time_days',
-      header: 'LEAD TIME',
-      render: (v: number | null) => (v != null ? `${v}d` : '—'),
-    },
-    {
-      key: 'last_order_date',
-      header: 'LAST ORDER',
-      render: (v: string | null) => v ?? '—',
-    },
-    { key: 'notes', header: 'NOTES' },
+    { key: 'supplier_name', header: 'Supplier' },
+    { key: 'category', header: 'Category' },
+    { key: 'contact_name', header: 'Contact' },
+    { key: 'contact_email', header: 'Email' },
+    { key: 'phone', header: 'Phone' },
+    { key: 'currency', header: 'Currency' },
+    { key: 'payment_terms_days', header: 'Payment Terms' },
+    { key: 'country', header: 'Country' },
+    { key: 'status', header: 'Status' },
   ];
 
-  return (
-    <main style={{ padding: '24px 32px', fontFamily: 'var(--font-sans)' }}>
-      <PageHeader pillar="Operations" tab="Suppliers" title="Suppliers" />
+  // Normalise rows so every expected key is present
+  const normalisedRows = rows.map((r) => ({
+    ...r,
+    supplier_name: r.supplier_name ?? r.name ?? '—',
+    category: r.category ?? '—',
+    contact_name: r.contact_name ?? '—',
+    contact_email: r.contact_email ?? '—',
+    phone: r.phone ?? '—',
+    currency: r.currency ?? '—',
+    payment_terms_days:
+      r.payment_terms_days != null ? `${r.payment_terms_days} days` : '—',
+    country: r.country ?? '—',
+    status: r.status ?? (r.is_active === false ? 'Inactive' : 'Active'),
+  }));
 
-      {/* KPI tiles */}
+  return (
+    <main style={{ padding: '24px 32px' }}>
+      <PageHeader
+        pillar="Operations"
+        tab="Suppliers"
+        title="Suppliers"
+        lede="Active vendor and supplier register — payment terms, contacts, and categories."
+      />
+
+      {/* KPI strip */}
       <div
         style={{
           display: 'grid',
@@ -101,67 +121,26 @@ export default function SuppliersPage() {
           marginBottom: 32,
         }}
       >
-        <KpiBox label="Total Suppliers" value={loading ? '…' : String(rows.length)} />
-        <KpiBox label="Active" value={loading ? '…' : String(totalActive)} />
-        <KpiBox label="Suspended" value={loading ? '…' : String(totalSuspended)} />
-        <KpiBox label="Pending" value={loading ? '…' : String(totalPending)} />
+        <KpiBox
+          label="Total Suppliers"
+          value={totalSuppliers > 0 ? String(totalSuppliers) : '—'}
+        />
+        <KpiBox
+          label="Active Suppliers"
+          value={activeSuppliers > 0 ? String(activeSuppliers) : '—'}
+        />
+        <KpiBox
+          label="Categories"
+          value={uniqueCategories > 0 ? String(uniqueCategories) : '—'}
+        />
+        <KpiBox
+          label="Currencies"
+          value={uniqueCurrencies > 0 ? String(uniqueCurrencies) : '—'}
+        />
       </div>
 
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
-        <input
-          type="text"
-          placeholder="Search supplier, contact, category…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{
-            padding: '8px 12px',
-            borderRadius: 6,
-            border: '1px solid #d4af37',
-            background: '#1a1a1a',
-            color: '#fff',
-            fontSize: 13,
-            width: 280,
-          }}
-        />
-        <select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          style={{
-            padding: '8px 12px',
-            borderRadius: 6,
-            border: '1px solid #d4af37',
-            background: '#1a1a1a',
-            color: '#fff',
-            fontSize: 13,
-          }}
-        >
-          {categories.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Table */}
-      {loading ? (
-        <p style={{ color: '#aaa', fontStyle: 'italic' }}>Loading suppliers…</p>
-      ) : filtered.length === 0 ? (
-        <p style={{ color: '#aaa', fontStyle: 'italic' }}>No suppliers found — {search ? 'try a different search' : 'no data available'}.</p>
-      ) : (
-        <DataTable
-          columns={columns}
-          rows={filtered.map((r) => ({
-            ...r,
-            contact_name: r.contact_name ?? '—',
-            contact_phone: r.contact_phone ?? '—',
-            contact_email: r.contact_email ?? '—',
-            payment_terms: r.payment_terms ?? '—',
-            notes: r.notes ?? '—',
-          }))}
-        />
-      )}
+      {/* Supplier register table */}
+      <DataTable columns={columns} rows={normalisedRows} />
     </main>
   );
 }
