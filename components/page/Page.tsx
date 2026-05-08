@@ -21,6 +21,7 @@
 // outside this shell. Use CSS variables in styles/globals.css :root.
 
 import type { ReactNode } from 'react';
+import SubPagesStrip from './SubPagesStrip';
 
 interface SubPageLink { label: string; href: string }
 interface PageProps {
@@ -88,20 +89,8 @@ function PageFooter() {
   );
 }
 
-function SubPagesStrip({ items }: { items: SubPageLink[] }) {
-  return (
-    <div style={S.subPagesStrip}>
-      {items.map((d) => (
-        <a key={d.href} href={d.href} style={S.subPageLink}
-          onMouseEnter={(e) => { e.currentTarget.style.color = '#d8cca8'; e.currentTarget.style.borderBottomColor = '#3a3327'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = '#9b907a'; e.currentTarget.style.borderBottomColor = 'transparent'; }}
-        >
-          {d.label}
-        </a>
-      ))}
-    </div>
-  );
-}
+// SubPagesStrip lives in its own file as a client component because its
+// onMouseEnter/Leave handlers can't be serialized through the RSC boundary.
 
 // ─── styles ────────────────────────────────────────────────────────────
 
@@ -138,18 +127,6 @@ const S: Record<string, React.CSSProperties> = {
     marginLeft:    56,
   },
   body: { flex: 1 },
-  subPagesStrip: { display: 'flex', flexWrap: 'wrap', gap: 14 },
-  subPageLink: {
-    color:          '#9b907a',
-    textDecoration: 'none',
-    fontFamily:     "'JetBrains Mono', ui-monospace, monospace",
-    fontSize:       10,
-    letterSpacing:  '0.18em',
-    textTransform:  'uppercase',
-    padding:        '4px 0',
-    borderBottom:   '1px solid transparent',
-    transition:     'color 100ms ease, border-color 100ms ease',
-  },
   footer: {
     marginTop:      56,
     paddingTop:     18,
