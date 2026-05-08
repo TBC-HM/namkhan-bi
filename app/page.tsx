@@ -1,177 +1,189 @@
 'use client';
 
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
-const PILLARS = [
+// ─── Home / Architect / CEO entry ────────────────────────────────────────────
+// Full-viewport black entry. No data fetch required at this level — this is a
+// pure navigation hub. Sub-routes (revenue-v2, operations, etc.) each own their
+// own data loading.
+//
+// Assumptions:
+//  1. No v_overview_kpis view exists yet — KPI tiles are nav cards, not live data.
+//  2. Brand colours from property_settings: Forest Green #084838, Leaf #8AC479,
+//     black background per ticket spec "full-viewport black".
+//  3. TT Drugs font not bundled locally; falls back to Georgia in the stack.
+//  4. Auth middleware is disabled in Phase 1 (SSO coming Phase 4); no guard here.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const NAV_SECTIONS = [
   {
-    href: '/revenue-v2',
     label: 'Revenue',
-    description: 'Pulse · Compset · Parity · Forecast',
     icon: '📈',
+    href: '/revenue-v2',
+    description: 'ADR · RevPAR · OCC · Comp-set index',
+    accent: '#8AC479',
   },
   {
-    href: '/frontoffice',
-    label: 'Front Office',
-    description: 'Arrivals · In-house · Departures',
-    icon: '🛎',
-  },
-  {
-    href: '/finance',
-    label: 'Finance',
-    description: 'P&L · USALI · GL Entries',
-    icon: '💰',
-  },
-  {
-    href: '/sales',
-    label: 'Sales',
-    description: 'Inquiries · Contracts · Pipeline',
-    icon: '🤝',
-  },
-  {
-    href: '/marketing',
-    label: 'Marketing',
-    description: 'Content · Channels · Performance',
-    icon: '📣',
-  },
-  {
-    href: '/ops',
     label: 'Operations',
-    description: 'Maintenance · Inventory · HR',
     icon: '⚙️',
+    href: '/operations',
+    description: 'Housekeeping · Maintenance · F&B',
+    accent: '#8AC479',
+  },
+  {
+    label: 'Finance',
+    icon: '💰',
+    href: '/finance',
+    description: 'P&L · USALI GOP · Cashflow',
+    accent: '#8AC479',
+  },
+  {
+    label: 'Marketing',
+    icon: '📣',
+    href: '/marketing',
+    description: 'Media · Social · Content pipeline',
+    accent: '#8AC479',
+  },
+  {
+    label: 'Intelligence',
+    icon: '🧠',
+    href: '/intelligence',
+    description: 'Agent cockpit · Incidents · KB',
+    accent: '#084838',
   },
 ];
 
 export default function HomePage() {
+  const router = useRouter();
+
   return (
     <main
       style={{
         minHeight: '100vh',
-        backgroundColor: '#0a0a0a',
+        background: '#000',
+        color: '#fff',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '40px 24px',
-        fontFamily: 'var(--sans, "Inter Tight", sans-serif)',
+        fontFamily: 'TT Drugs, Times New Roman, Georgia, serif',
+        padding: '48px 24px',
+        boxSizing: 'border-box',
       }}
     >
-      {/* Wordmark */}
-      <div style={{ textAlign: 'center', marginBottom: 64 }}>
+      {/* ── Wordmark ── */}
+      <header style={{ textAlign: 'center', marginBottom: 64 }}>
         <p
           style={{
-            fontSize: 10,
-            letterSpacing: '0.18em',
+            fontSize: 11,
+            letterSpacing: '0.35em',
             textTransform: 'uppercase',
-            color: '#7d7565',
-            margin: '0 0 12px',
+            color: '#8AC479',
+            marginBottom: 8,
+            fontFamily: 'Lora, Georgia, serif',
           }}
         >
-          The Namkhan · Business Intelligence
+          SLH · Small Luxury Hotels of the World
         </p>
         <h1
           style={{
-            fontFamily: 'var(--serif, Fraunces, serif)',
-            fontSize: 'clamp(36px, 6vw, 72px)',
-            fontWeight: 300,
-            fontStyle: 'italic',
-            color: '#a8854a',
-            letterSpacing: '-0.01em',
-            margin: '0 0 16px',
-            lineHeight: 1.1,
+            fontSize: 'clamp(32px, 6vw, 72px)',
+            fontWeight: 700,
+            letterSpacing: '0.04em',
+            margin: 0,
+            lineHeight: 1.05,
           }}
         >
-          Namkhan BI
+          The Namkhan
         </h1>
         <p
           style={{
-            fontSize: 14,
-            color: '#7d7565',
-            margin: 0,
-            letterSpacing: '0.02em',
+            fontSize: 13,
+            letterSpacing: '0.25em',
+            textTransform: 'uppercase',
+            color: '#CBC2BB',
+            marginTop: 12,
+            fontFamily: 'Lora, Georgia, serif',
           }}
         >
-          Considerate luxury on the river — command view
+          Business Intelligence Portal
         </p>
-      </div>
+      </header>
 
-      {/* Pillar grid */}
-      <div
+      {/* ── Nav grid ── */}
+      <nav
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
           gap: 16,
           width: '100%',
-          maxWidth: 900,
-          marginBottom: 64,
+          maxWidth: 960,
         }}
       >
-        {PILLARS.map((p) => (
-          <Link
-            key={p.href}
-            href={p.href}
+        {NAV_SECTIONS.map((s) => (
+          <button
+            key={s.href}
+            onClick={() => router.push(s.href)}
             style={{
-              display: 'block',
-              padding: '24px 20px',
-              backgroundColor: '#111',
-              border: '1px solid #2a2520',
+              background: '#0a0a0a',
+              border: '1px solid #222',
               borderRadius: 8,
-              textDecoration: 'none',
-              transition: 'border-color 0.15s, background-color 0.15s',
+              padding: '28px 24px',
+              textAlign: 'left',
+              cursor: 'pointer',
+              transition: 'border-color 0.15s, background 0.15s',
+              color: '#fff',
             }}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLAnchorElement).style.borderColor = '#a8854a';
-              (e.currentTarget as HTMLAnchorElement).style.backgroundColor = '#141210';
+              (e.currentTarget as HTMLButtonElement).style.borderColor = s.accent;
+              (e.currentTarget as HTMLButtonElement).style.background = '#111';
             }}
             onMouseLeave={(e) => {
-              (e.currentTarget as HTMLAnchorElement).style.borderColor = '#2a2520';
-              (e.currentTarget as HTMLAnchorElement).style.backgroundColor = '#111';
+              (e.currentTarget as HTMLButtonElement).style.borderColor = '#222';
+              (e.currentTarget as HTMLButtonElement).style.background = '#0a0a0a';
             }}
           >
-            <div style={{ fontSize: 24, marginBottom: 10 }}>{p.icon}</div>
-            <div
+            <span style={{ fontSize: 28, display: 'block', marginBottom: 12 }}>
+              {s.icon}
+            </span>
+            <span
               style={{
-                fontSize: 14,
+                fontSize: 18,
                 fontWeight: 600,
-                color: '#efe6d3',
-                letterSpacing: '0.02em',
+                display: 'block',
                 marginBottom: 6,
+                fontFamily: 'TT Drugs, Georgia, serif',
               }}
             >
-              {p.label}
-            </div>
-            <div style={{ fontSize: 11, color: '#7d7565', lineHeight: 1.5 }}>
-              {p.description}
-            </div>
-          </Link>
+              {s.label}
+            </span>
+            <span
+              style={{
+                fontSize: 12,
+                color: '#8a8a8a',
+                fontFamily: 'Lora, Georgia, serif',
+                lineHeight: 1.5,
+              }}
+            >
+              {s.description}
+            </span>
+          </button>
         ))}
-      </div>
+      </nav>
 
-      {/* Cockpit shortcut */}
-      <div style={{ textAlign: 'center' }}>
-        <Link
-          href="/cockpit"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '10px 24px',
-            backgroundColor: '#1a2e21',
-            border: '1px solid #2d4a35',
-            borderRadius: 6,
-            color: '#6b9379',
-            fontSize: 12,
-            letterSpacing: '0.06em',
-            textTransform: 'uppercase',
-            textDecoration: 'none',
-          }}
-        >
-          <span>⚡</span>
-          Agent Cockpit
-        </Link>
-        <p style={{ marginTop: 12, fontSize: 10, color: '#4a443c', letterSpacing: '0.06em' }}>
-          SLH · HILTON HONORS · ASEAN GREEN HOTEL
-        </p>
-      </div>
+      {/* ── Footer ── */}
+      <footer
+        style={{
+          marginTop: 80,
+          fontSize: 11,
+          color: '#444',
+          letterSpacing: '0.2em',
+          textTransform: 'uppercase',
+          fontFamily: 'Lora, Georgia, serif',
+        }}
+      >
+        Namkhan BI · Internal Operations · Confidential
+      </footer>
     </main>
   );
 }
