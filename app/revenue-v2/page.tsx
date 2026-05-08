@@ -1,0 +1,1 @@
+// read-only probe — will be overwritten by actual commit
