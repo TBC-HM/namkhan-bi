@@ -1,132 +1,162 @@
-'use client';
+// app/operations/restaurant/page.tsx
+// Operations · F&B — re-restored 2026-05-05 after parallel-session wipe.
+// SlimHero · 2 KpiStrip rows (Operating + USALI Effective) · 3 explainer cards
+// (Staff Canteen · Breakfast allocation · Menu engineering coming-soon) · P&L grid
+// · GL detail (collapsed) · Top-seller trend · raw POS list.
 
-import { useEffect, useState } from 'react';
-import KpiBox from '@/components/kpi/KpiBox';
-import DataTable from '@/components/ui/DataTable';
-import PageHeader from '@/components/layout/PageHeader';
+import FilterStrip from '@/components/nav/FilterStrip';
+import SlimHero from '@/components/sections/SlimHero';
+import KpiStrip, { type KpiStripItem } from '@/components/kpi/KpiStrip';
+import PnlGrid from '@/components/pl/PnlGrid';
+import DeptTrendChart from '@/components/pl/DeptTrendChart';
+import FnbGlBreakdown from '@/components/pl/FnbGlBreakdown';
+import FnbTopSellerTrend from '@/components/pl/FnbTopSellerTrend';
+import FnbRawTransactions from '@/components/pl/FnbRawTransactions';
+import {
+  getKpiDaily, aggregateDaily, getDeptPl, getFnbCovers,
+  getFnbCostsForPeriod, getFnbCaptureForPeriod, getCanteenForPeriod,
+  getFnbGlBreakdown, getFnbTopSellerTrend, getBreakfastAllocation, getFnbRawTransactions,
+} from '@/lib/data';
+import { resolvePeriod } from '@/lib/period';
 
+export const revalidate = 60;
 export const dynamic = 'force-dynamic';
 
-interface RestaurantRow {
-  date?: string;
-  meal_period?: string;
-  covers?: number;
-  revenue?: number;
-  revenue_lak?: number;
-  avg_spend_usd?: number;
-  avg_spend_lak?: number;
-  voids?: number;
-  discounts_usd?: number;
-  food_cost_pct?: number;
-  beverage_cost_pct?: number;
-  table_turns?: number;
-  no_shows?: number;
-  reservations?: number;
-  walk_ins?: number;
-  staff_count?: number;
-}
+interface Props { searchParams: Record<string, string | string[] | undefined>; }
 
-const COLUMNS = [
-  { key: 'date', header: 'Date' },
-  { key: 'meal_period', header: 'Period' },
-  { key: 'covers', header: 'Covers' },
-  { key: 'revenue_fmt', header: 'Revenue (USD)' },
-  { key: 'revenue_lak_fmt', header: 'Revenue (LAK)' },
-  { key: 'avg_spend_fmt', header: 'Avg Spend' },
-  { key: 'food_cost_pct_fmt', header: 'Food Cost %' },
-  { key: 'beverage_cost_pct_fmt', header: 'Bev Cost %' },
-  { key: 'table_turns', header: 'Table Turns' },
-  { key: 'reservations', header: 'Reservations' },
-  { key: 'walk_ins', header: 'Walk-ins' },
-  { key: 'no_shows', header: 'No-shows' },
-];
-
-function fmt(v: number | undefined | null, prefix = '$', decimals = 0): string {
-  if (v == null) return '\u2014';
-  return `${prefix}${v.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
-}
-
-function pct(v: number | undefined | null): string {
-  if (v == null) return '\u2014';
-  return `${v.toFixed(1)}%`;
-}
-
-export default function RestaurantPage() {
-  const [rows, setRows] = useState<RestaurantRow[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    void fetch('/api/operations/restaurant')
-      .then((r) => r.json())
-      .then((d) => {
-        setRows(Array.isArray(d) ? d : []);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, []);
-
-  const latest = rows[0] ?? {};
-  const totalCovers = rows.reduce((s, r) => s + (r.covers ?? 0), 0);
-  const totalRevenue = rows.reduce((s, r) => s + (r.revenue ?? 0), 0);
-  const avgSpend = totalCovers > 0 ? totalRevenue / totalCovers : null;
-  const avgFoodCostRows = rows.filter((r) => r.food_cost_pct != null);
-  const avgFoodCost =
-    avgFoodCostRows.length > 0
-      ? avgFoodCostRows.reduce((s, r) => s + (r.food_cost_pct ?? 0), 0) / avgFoodCostRows.length
-      : null;
-
-  const tableRows = rows.map((r) => ({
-    ...r,
-    date: r.date ?? '\u2014',
-    meal_period: r.meal_period ?? '\u2014',
-    covers: r.covers ?? '\u2014',
-    revenue_fmt: fmt(r.revenue, '$'),
-    revenue_lak_fmt: fmt(r.revenue_lak, '\u20AD'),
-    avg_spend_fmt: fmt(r.avg_spend_usd, '$', 2),
-    food_cost_pct_fmt: pct(r.food_cost_pct),
-    beverage_cost_pct_fmt: pct(r.beverage_cost_pct),
-    table_turns: r.table_turns ?? '\u2014',
-    reservations: r.reservations ?? '\u2014',
-    walk_ins: r.walk_ins ?? '\u2014',
-    no_shows: r.no_shows ?? '\u2014',
-  }));
+export default async function FnbPage({ searchParams }: Props) {
+  const period = resolvePeriod(searchParams);
+  const [daily, pl, periodCosts, captureP, canteen, glBreakdown, topTrend, rawTxns, bkfst, covers] = await Promise.all([
+    getKpiDaily(period.from, period.to).catch(() => []),
+    getDeptPl('fnb', 16).catch(() => []),
+    getFnbCostsForPeriod(period.from, period.to).catch(() => null),
+    getFnbCaptureForPeriod(period.from, period.to).catch(() => null),
+    getCanteenForPeriod(period.from, period.to).catch(() => null),
+    getFnbGlBreakdown(16).catch(() => ({ periods: [], lines: [] })),
+    getFnbTopSellerTrend('2026-01-01', 8).catch(() => ({ periods: [], items: [] })),
+    getFnbRawTransactions(2000).catch(() => []),
+    getBreakfastAllocation(period.from, period.to).catch(() => null),
+    getFnbCovers(period.from, period.to).catch(() => null),
+  ]);
+  const a30 = aggregateDaily(daily, period.capacityMode);
+  const plLatest = pl.find(r => r.revenue > 0) ?? null;
+  const tileSrc = periodCosts ?? (plLatest ? {
+    revenue: plLatest.revenue, food_revenue: plLatest.food_revenue, bev_revenue: plLatest.bev_revenue,
+    food_cost: plLatest.food_cost, bev_cost: plLatest.bev_cost, payroll: plLatest.payroll,
+    total_cost: plLatest.total_cost, gop: plLatest.gop,
+    food_cost_pct: plLatest.food_cost_pct, bev_cost_pct: plLatest.bev_cost_pct,
+    labor_cost_pct: plLatest.labor_cost_pct, gop_pct: plLatest.gop_pct,
+    months_used: [plLatest.period],
+  } : null);
+  const effectiveFnbRev = (tileSrc?.revenue ?? 0) + (bkfst?.total_alloc_usd ?? 0);
+  const effectiveLaborPct = effectiveFnbRev > 0 && tileSrc ? (tileSrc.payroll / effectiveFnbRev) * 100 : null;
+  const effectiveGopUsd = tileSrc ? (effectiveFnbRev - tileSrc.total_cost) : null;
+  const effectiveGopPct = effectiveFnbRev > 0 && effectiveGopUsd != null ? (effectiveGopUsd / effectiveFnbRev) * 100 : null;
 
   return (
-    <main
-      style={{
-        minHeight: '100vh',
-        background: '#000',
-        color: '#fff',
-        padding: '24px',
-        fontFamily: 'var(--font-sans, sans-serif)',
-      }}
-    >
-      <PageHeader pillar="Operations" tab="Restaurant" title="Restaurant" />
+    <>
+      <FilterStrip showForward={false} showCompare={false} showSegment={false} liveSource="Cloudbeds · live" />
+      <SlimHero eyebrow={`F&B · ${period.label}`} title="Roots" emphasis="restaurant" sub="revenue · cost ratios · covers · guest sat" />
 
-      {loading && (
-        <p style={{ color: '#888', marginTop: 24 }}>Loading\u2026</p>
-      )}
+      {/* Row 1 — Operating snapshot */}
+      <KpiStrip items={[
+        { label: 'F&B / Occ Rn',  value: captureP ? Number(captureP.spend_per_occ) : 0, kind: 'money', tone: 'pos', hint: captureP ? period.label : 'no data — try 30d+' },
+        { label: 'Capture %',     value: captureP ? Number(captureP.capture_pct)   : 0, kind: 'pct', hint: captureP ? `${captureP.res_with_purchase}/${captureP.res_in_house} res` : 'no data' },
+        { label: 'Food Rev',      value: Number(a30?.fnb_food_revenue ?? 0), kind: 'money' },
+        { label: 'Beverage Rev',  value: Number(a30?.fnb_beverage_revenue ?? 0), kind: 'money' },
+        { label: 'Staff Canteen', value: Number(canteen?.total_usd ?? 0), kind: 'money' },
+        { label: 'Canteen / Occ', value: Number(canteen?.cost_per_occ_room ?? 0), kind: 'money' },
+      ] satisfies KpiStripItem[]} />
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: 16,
-          marginTop: 24,
-          marginBottom: 32,
-        }}
-      >
-        <KpiBox label="Total Covers" value={totalCovers > 0 ? String(totalCovers) : (latest.covers != null ? String(latest.covers) : '\u2014')} />
-        <KpiBox label="Total Revenue" value={fmt(totalRevenue > 0 ? totalRevenue : (latest.revenue ?? null), '$')} />
-        <KpiBox label="Avg Spend / Cover" value={fmt(avgSpend ?? latest.avg_spend_usd ?? null, '$', 2)} />
-        <KpiBox label="Food Cost %" value={pct(avgFoodCost ?? latest.food_cost_pct ?? null)} />
-        <KpiBox label="Bev Cost %" value={pct(latest.beverage_cost_pct ?? null)} />
-        <KpiBox label="Table Turns" value={latest.table_turns != null ? String(latest.table_turns) : '\u2014'} />
-        <KpiBox label="Reservations" value={latest.reservations != null ? String(latest.reservations) : '\u2014'} />
-        <KpiBox label="No-shows" value={latest.no_shows != null ? String(latest.no_shows) : '\u2014'} />
+      {/* Row 2 — USALI Effective view */}
+      <KpiStrip items={[
+        { label: 'Breakfast alloc',    value: Number(bkfst?.total_alloc_usd ?? 0), kind: 'money', hint: 'USALI fair value' },
+        { label: 'Effective F&B Rev',  value: effectiveFnbRev, kind: 'money', tone: 'pos' },
+        { label: 'Effective GOP $',    value: Number(effectiveGopUsd ?? 0), kind: 'money',
+          tone: effectiveGopUsd != null && effectiveGopUsd > 0 ? 'pos' : 'neg' },
+        { label: 'Effective GOP %',    value: Number(effectiveGopPct ?? 0), kind: 'pct',
+          tone: effectiveGopPct != null && effectiveGopPct >= 25 ? 'pos' : 'warn', hint: 'target ≥ 25%' },
+        { label: 'Eff Labor %',        value: Number(effectiveLaborPct ?? 0), kind: 'pct', hint: 'target ≤ 35%' },
+        { label: 'Eff Food %',         value: effectiveFnbRev > 0 && tileSrc ? (tileSrc.food_cost / effectiveFnbRev) * 100 : 0, kind: 'pct', hint: 'target ≤ 30%' },
+      ] satisfies KpiStripItem[]} />
+
+      {/* 3 explainer cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10, marginTop: 12 }}>
+        <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>Staff canteen</div>
+          <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-lg)', lineHeight: 1.15 }}>
+            ${canteen ? Math.round(canteen.total_usd).toLocaleString() : '—'} <span style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-soft)', fontStyle: 'normal' }}>· {period.label}</span>
+          </div>
+          <div style={{ fontSize: 'var(--t-sm)', color: 'var(--ink)', lineHeight: 1.4 }}>
+            <code style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>EMPLOYEE MEAL</code> + <code style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>STAFF CANTEEN MATERIALS</code> across all depts.
+          </div>
+          {canteen && canteen.by_dept.length > 0 && (
+            <div style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-soft)' }}>
+              By dept: {canteen.by_dept.map(d => `${d.dept} $${Math.round(d.usd).toLocaleString()}`).join(' · ')}
+            </div>
+          )}
+          <div style={{ fontSize: 'var(--t-xs)', color: 'var(--bad, #b53a2a)', background: 'rgba(181, 58, 42, 0.08)', padding: '6px 8px', borderLeft: '2px solid var(--bad, #b53a2a)', marginTop: 'auto' }}>
+            <strong>Watch:</strong> Mar / Apr 2026 reclassified F&amp;B → Undistributed. The &quot;labor drop&quot; is a posting reclass, not a real saving.
+          </div>
+        </div>
+
+        <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>Breakfast allocation · USALI</div>
+          <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-lg)', lineHeight: 1.15 }}>
+            ${bkfst ? Math.round(bkfst.total_alloc_usd).toLocaleString() : '—'} <span style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-soft)', fontStyle: 'normal' }}>· to move Rooms → F&amp;B</span>
+          </div>
+          <div style={{ fontSize: 'var(--t-sm)', color: 'var(--ink)', lineHeight: 1.4 }}>
+            {bkfst ? <>{bkfst.adult_nights} adult-nights × $10 + {bkfst.child_nights} child-nights × $5 (fair value).</> : 'Pax-nights × $10/adult + $5/child.'}
+            {' '}Configurable via <code style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>BREAKFAST_USD_ADULT</code>.
+          </div>
+          {effectiveLaborPct != null && tileSrc && (
+            <div style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-soft)' }}>
+              Labor% drops {tileSrc.labor_cost_pct.toFixed(1)}% → {effectiveLaborPct.toFixed(1)}% if JE applied.
+            </div>
+          )}
+          <div style={{ fontSize: 'var(--t-xs)', color: 'var(--good, #2c7a4b)', background: 'rgba(44, 122, 75, 0.08)', padding: '6px 8px', borderLeft: '2px solid var(--good, #2c7a4b)', marginTop: 'auto' }}>
+            <strong>Action:</strong> Monthly QB JE — <code style={{ fontFamily: 'var(--mono)' }}>DR Rooms Rev · CR Food Rev</code>. Zero P&amp;L impact, USALI-clean.
+          </div>
+        </div>
+
+        <div style={{ background: 'var(--paper-warm)', border: '1px dashed var(--paper-deep)', borderRadius: 8, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8, opacity: 0.85 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>Menu engineering</div>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)', border: '1px solid var(--brass)', padding: '1px 6px', borderRadius: 999 }}>Coming soon</span>
+          </div>
+          <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-lg)', lineHeight: 1.15 }}>Stars · Plowhorses · Puzzles · Dogs</div>
+          <div style={{ fontSize: 'var(--t-sm)', color: 'var(--ink)', lineHeight: 1.4 }}>
+            Each dish on popularity × profitability. Needs POS qty + recipe sheets in <code style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>inv.recipes</code>.
+          </div>
+        </div>
       </div>
 
-      <DataTable columns={COLUMNS} rows={tableRows} />
-    </main>
+      <h2 style={{ marginTop: 28, marginBottom: 6, fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>Monthly trend · revenue · costs · GOP %</h2>
+      <DeptTrendChart rows={pl} dept="fnb" />
+
+      <h2 style={{ marginTop: 28, marginBottom: 6, fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>P&amp;L · QB GL · USALI rollup</h2>
+      <PnlGrid rows={pl} dept="fnb" targets={{ food_cost_pct: 30, bev_cost_pct: 25, labor_cost_pct: 35, gop_pct: 25 }} defaultRows={6} />
+
+      <details style={{ marginTop: 24 }}>
+        <summary style={{ cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)', padding: '8px 0' }}>
+          GL detail · F&amp;B accounts (every QB line) ▾
+        </summary>
+        <FnbGlBreakdown data={glBreakdown} defaultMonths={4} />
+      </details>
+
+      <details style={{ marginTop: 24 }} open>
+        <summary style={{ cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)', padding: '8px 0' }}>
+          Top sellers · trend since Jan 26 ▾
+        </summary>
+        <FnbTopSellerTrend data={topTrend} />
+      </details>
+
+      <details style={{ marginTop: 24 }}>
+        <summary style={{ cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)', padding: '8px 0' }}>
+          All POS transactions · search &amp; reconcile ▾  <span style={{ color: 'var(--ink-soft)', textTransform: 'none', letterSpacing: 'normal' }}>({rawTxns.length} most recent)</span>
+        </summary>
+        <FnbRawTransactions data={rawTxns} pageSize={200} />
+      </details>
+    </>
   );
 }
