@@ -406,6 +406,22 @@ If memory is wiped AND nothing above is reachable, the repo itself has a `CLAUDE
 
 Append-only. Newest at top. Date heading + bullet changes.
 
+### 2026-05-09 (later — page-by-page wiring pass starts: DeptEntry + ArtifactActions + /revenue/pace + Anthropic brief)
+
+Why: PBS asked for full-autonomy execution of the 4-step wiring plan after the manifesto landed. KPI calculations already exist in Supabase, so this pass only swaps chrome onto the canonical primitives and lights up the live agent path for non-BAR questions.
+
+**Files**
+- `components/page/Page.tsx` — `eyebrow` is now optional (so dept-entry pages with no eyebrow line can use the shell). Render logic flips to `subPages || eyebrow || title`.
+- `components/page/ArtifactActions.tsx` — NEW. The 4-action overlay dropped into every Panel/Brief: `✦ AI · ⊕ Save · ↻ Schedule · 📁 Project`. Default behaviour dispatches `CustomEvent('artifact:<name>', { detail })` on `window` so page-level handlers can route to existing `/api/cockpit/*` endpoints. Each action also accepts an `onX` override prop for direct wiring.
+- `components/dept-entry/DeptEntry.tsx` — wrapped in `<Page subPages={DEPT_LINKS} topRight={...}>`. Top-row sub-page strip + weather/date/user dropdown moved into `topRight`. Local `<Footer/>` removed (Page now provides the SLH/version/© footer). Local `Container` collapsed to a thin `<Panel>` wrapper that adds `+` add and hint pill — manifesto rule #3 satisfied (every card is a Panel).
+- `app/revenue/pace/page.tsx` — first real wired sub-page. Drops `<PageHeader>` for `<Page>` shell with the Revenue sub-pages strip; adds `<Brief>` at top (signal/good/bad derived from real OTB+STLY+capacity numbers); wraps `PaceStatusHeader`, `PaceGraphs`, and `PaceBucketsTable` in `<Panel actions={<ArtifactActions ... />}>`. Data fetching unchanged (`getPace`, `getStlyActuals`, `getPaceCurve`).
+- `app/api/canvas/ask/route.ts` — non-BAR questions now route to Anthropic Sonnet (`claude-sonnet-4-6`) with the design-system manifesto + last 8 tickets as system context. Response is JSON-validated to `BriefPayload`; proposals seed into `cockpit_proposals` exactly like the BAR seed. BAR/long-weekend/rate/ladder keywords still hit the seeded brief. Fallback brief returned if Anthropic fails or `ANTHROPIC_API_KEY` is missing.
+
+**Verification (pre-deploy)**
+- `npx tsc --noEmit` exit 0.
+
+**Wiring next**: apply Page + Panel + ArtifactActions to remaining /revenue sub-pages (pulse, channels, pricing, compset, demand) and across other depts. Replace `window.dispatchEvent('artifact:*')` defaults with concrete handlers as the canvas matures.
+
 ### 2026-05-09 — Design system manifesto + canvas-first UI
 
 Why: PBS rejected the page-as-dashboard model. New direction codified in 7 binding rules persisted to `cockpit_knowledge_base` (scope `design_system_manifesto`, ids 483–489) so every agent inherits them. Same rules now in `CLAUDE.md` § "Design system manifesto".

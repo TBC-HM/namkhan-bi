@@ -24,7 +24,8 @@ import type { ReactNode } from 'react';
 
 interface SubPageLink { label: string; href: string }
 interface PageProps {
-  eyebrow: string;
+  /** Optional small mono caps line above the title. */
+  eyebrow?: string;
   title?: ReactNode;
   /** Optional dept sub-pages strip rendered top-left, offset to clear the global N */
   subPages?: SubPageLink[];
@@ -43,15 +44,9 @@ export default function Page({ eyebrow, title, subPages, topRight, footer = true
           of the eyebrow line so dept entries stay the way they are. */}
       <div style={S.topRow}>
         <div style={{ flex: 1, marginLeft: subPages ? 56 : 0 }}>
-          {subPages
-            ? <SubPagesStrip items={subPages} />
-            : <div style={S.eyebrow}>{eyebrow}</div>
-          }
+          {subPages && <SubPagesStrip items={subPages} />}
+          {!subPages && eyebrow && <div style={S.eyebrow}>{eyebrow}</div>}
           {title && <h1 style={S.title}>{title}</h1>}
-          {!subPages && eyebrow && title && (
-            // when both are present, eyebrow already rendered above title
-            null
-          )}
         </div>
         {topRight && <div style={S.topRight}>{topRight}</div>}
       </div>

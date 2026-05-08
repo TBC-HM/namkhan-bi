@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import type { DeptCfg } from '@/lib/dept-cfg/types';
+import Page from '@/components/page/Page';
+import Panel from '@/components/page/Panel';
 
 /* ──────────────────────────────────────────────────────────────────────────
  * /revenue — entry page
@@ -762,212 +764,167 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
     setTasks(next); saveLS(TASKS_KEY, next);
   }
 
-  return (
-    <div style={{
-      minHeight:  '100vh',
-      background: '#0a0a0a',
-      color:      '#e9e1ce',
-      fontFamily: "'Inter Tight', system-ui, sans-serif",
-      padding:    '32px 48px 64px',
-      position:   'relative',
-      display:    'flex',
-      flexDirection: 'column',
-    }}>
-
-      {/* ── Top row (PBS 2026-05-08 redesign):
-       *   • LEFT: horizontal sub-pages strip (replaces "Revenue · The Namkhan" line + ▾ dropdown)
-       *   • RIGHT: date (hover → dept KPI tiles) + user dropdown (settings / email / account / lang flags)
-       *   The "Good evening, Boss." greeting moves to ABOVE the chat hero (see below).
-       * ───────────────────────────────────────────────────────────────────── */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 12,
-        gap: 16,
-        flexWrap: 'wrap',
-      }}>
-        {/* LEFT — sub-pages strip. marginLeft offsets the global N dropdown
-          * (rendered in app/layout.tsx top-left); without it PULSE crashes
-          * into the N. */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginLeft: 56 }}>
-          {DEPT_LINKS.map(d => (
-            <a key={d.href} href={d.href} style={{
-              color:          '#9b907a',
-              textDecoration: 'none',
-              fontFamily:     "'JetBrains Mono', ui-monospace, monospace",
-              fontSize:       10,
-              letterSpacing:  '0.18em',
-              textTransform:  'uppercase',
-              padding:        '4px 0',
-              borderBottom:   '1px solid transparent',
-              transition:     'color 100ms ease, border-color 100ms ease',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.color = '#d8cca8'; e.currentTarget.style.borderBottomColor = '#3a3327'; }}
-            onMouseLeave={e => { e.currentTarget.style.color = '#9b907a'; e.currentTarget.style.borderBottomColor = 'transparent'; }}>
-              {d.label}
-            </a>
-          ))}
-        </div>
-
-        {/* RIGHT — weather widgets + date (hover → KPIs) + user dropdown */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          {/* TEMP widget — Luang Prabang. Click → KB-style info card. Placeholder
-            * data until weather API is wired (Open-Meteo would be the cheapest). */}
-          <div style={{ position: 'relative' }}>
-            <button
-              onClick={() => { setTempOpen(o => !o); setAirOpen(false); setUserOpen(false); }}
-              title="Temperature in Luang Prabang"
-              aria-label="Temperature"
-              style={weatherChipStyle()}
-            >
-              <span style={{ color: '#c4a06b', fontSize: 12 }}>☀</span>
-              <span style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 11 }}>32°</span>
-            </button>
-            {tempOpen && (
-              <KBPopover
-                onClose={() => setTempOpen(false)}
-                eyebrow="Temperature · Luang Prabang"
-                title="32°C · feels 36°"
-                rows={[
-                  { k: 'Now',         v: '32°C',  d: 'partly cloudy' },
-                  { k: 'Today high',  v: '34°C',  d: 'peaks ~14:00 ICT' },
-                  { k: 'Tonight low', v: '24°C',  d: 'clear' },
-                  { k: 'Tomorrow',    v: '33°C',  d: 'thunderstorms PM' },
-                ]}
-                footer="preview · Open-Meteo wiring TODO"
-              />
-            )}
-          </div>
-
-          {/* AIR widget — humidity + AQI. Click → KB-style info card. */}
-          <div style={{ position: 'relative' }}>
-            <button
-              onClick={() => { setAirOpen(o => !o); setTempOpen(false); setUserOpen(false); }}
-              title="Air quality + humidity"
-              aria-label="Air"
-              style={weatherChipStyle()}
-            >
-              <span style={{ color: '#c4a06b', fontSize: 12 }}>≈</span>
-              <span style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 11 }}>AQI 42</span>
-            </button>
-            {airOpen && (
-              <KBPopover
-                onClose={() => setAirOpen(false)}
-                eyebrow="Air · Luang Prabang"
-                title="AQI 42 · good"
-                rows={[
-                  { k: 'PM2.5',     v: '11 µg/m³', d: 'WHO guideline' },
-                  { k: 'Humidity',  v: '76%',      d: 'high · seasonal' },
-                  { k: 'UV index',  v: '8',        d: 'very high · 11–15h' },
-                  { k: 'Wind',      v: '6 km/h',   d: 'WSW' },
-                ]}
-                footer="preview · IQAir wiring TODO"
-              />
-            )}
-          </div>
-
-          {/* Date with hover popover (KPIs are placeholders; wire to live views in a later PR) */}
-          <div
-            style={{ position: 'relative' }}
-            onMouseEnter={() => setDateHover(true)}
-            onMouseLeave={() => setDateHover(false)}
-          >
-            <span style={{
-              fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
-              fontSize:      10,
-              letterSpacing: '0.18em',
-              textTransform: 'uppercase',
-              color:         '#9b907a',
-              cursor:        'help',
-            }}>
-              {todayLabel()}
-            </span>
-            {dateHover && (
-              <div style={{
-                position: 'absolute', top: 26, right: 0, zIndex: 60,
-                background: '#0f0d0a', border: '1px solid #3a3327', borderRadius: 8,
-                padding: 12, minWidth: 360,
-                boxShadow: '0 12px 28px rgba(0,0,0,0.6)',
-                display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8,
-              }}>
-                {(cfg.kpiTiles ?? []).map(t => (
-                  <div key={t.k} style={{
-                    background: '#15110b', border: '1px solid #2a261d', borderRadius: 6,
-                    padding: '8px 10px',
-                  }}>
-                    <div style={{
-                      fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-                      fontSize: 9, letterSpacing: '0.22em', color: '#7d7565', textTransform: 'uppercase',
-                    }}>{t.k}</div>
-                    <div style={{
-                      fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic',
-                      fontSize: 22, color: '#d8cca8', marginTop: 2,
-                    }}>{t.v}</div>
-                    <div style={{ fontSize: 10, color: '#9b907a', marginTop: 2 }}>{t.d}</div>
-                  </div>
-                ))}
-                <div style={{ gridColumn: '1 / -1', fontSize: 10, color: '#5a5448', textAlign: 'right', fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>
-                  preview · live wiring TODO
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* User dropdown (mock auth — workspace_users wiring is a later PR) */}
-          <div style={{ position: 'relative' }}>
-            <button onClick={() => setUserOpen(o => !o)} style={{
-              background:    'transparent',
-              border:        '1px solid #2a261d',
-              borderRadius:  6,
-              color:         '#c4a06b',
-              padding:       '5px 12px',
-              cursor:        'pointer',
-              fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
-              fontSize:      10,
-              letterSpacing: '0.16em',
-              textTransform: 'uppercase',
-              fontWeight:    500,
-              display:       'flex', alignItems: 'center', gap: 6,
-            }}>
-              <span style={{
-                width: 18, height: 18, borderRadius: '50%', background: '#a8854a',
-                color: '#0a0a0a', fontSize: 9, fontWeight: 700,
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              }}>{(USER_NAME[0] ?? '?').toUpperCase()}</span>
-              {USER_NAME} ▾
-            </button>
-            {userOpen && (
-              <div style={{
-                position: 'absolute', right: 0, top: 36, zIndex: 60,
-                background: '#0f0d0a', border: '1px solid #2a261d', borderRadius: 6,
-                padding: 6, minWidth: 200, boxShadow: '0 12px 28px rgba(0,0,0,0.6)',
-              }}>
-                <a href="/settings/property" onClick={() => setUserOpen(false)} style={menuLinkStyle()}>Settings</a>
-                <a href="/settings/email-categories" onClick={() => setUserOpen(false)} style={menuLinkStyle()}>Email</a>
-                <a href="/cockpit/users" onClick={() => setUserOpen(false)} style={menuLinkStyle()}>Account</a>
-                {/* PBS 2026-05-08: Cockpit / Knowledge / Front Office removed
-                  * from the global N menu and parked here under "Tools". */}
-                <div style={{ borderTop: '1px solid #2a261d', margin: '4px 0', paddingTop: 4 }}>
-                  <div style={{
-                    padding: '4px 12px',
-                    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-                    fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase',
-                    color: '#5a5448',
-                  }}>Tools</div>
-                  <a href="/cockpit"               onClick={() => setUserOpen(false)} style={menuLinkStyle()}>IT cockpit</a>
-                  <a href="/knowledge"             onClick={() => setUserOpen(false)} style={menuLinkStyle()}>Knowledge</a>
-                  <a href="/front-office/arrivals" onClick={() => setUserOpen(false)} style={menuLinkStyle()}>Front office</a>
-                </div>
-                <div style={{ borderTop: '1px solid #2a261d', marginTop: 4, paddingTop: 6, display: 'flex', justifyContent: 'center', gap: 10 }}>
-                  <button onClick={() => setLang('en')} title="English" style={langFlagStyle(lang === 'en')}>🇬🇧</button>
-                  <button onClick={() => setLang('th')} title="ไทย" style={langFlagStyle(lang === 'th')}>🇹🇭</button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+  // topRight slot for <Page>: weather chips + date hover + user dropdown.
+  // Inlined as JSX so handlers close over component state (tempOpen, airOpen,
+  // dateHover, userOpen, lang). No new component — it's a single render.
+  const topRightJSX = (
+    <>
+      {/* TEMP widget — Luang Prabang. Click → KB-style info card. */}
+      <div style={{ position: 'relative' }}>
+        <button
+          onClick={() => { setTempOpen(o => !o); setAirOpen(false); setUserOpen(false); }}
+          title="Temperature in Luang Prabang"
+          aria-label="Temperature"
+          style={weatherChipStyle()}
+        >
+          <span style={{ color: '#c4a06b', fontSize: 12 }}>☀</span>
+          <span style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 11 }}>32°</span>
+        </button>
+        {tempOpen && (
+          <KBPopover
+            onClose={() => setTempOpen(false)}
+            eyebrow="Temperature · Luang Prabang"
+            title="32°C · feels 36°"
+            rows={[
+              { k: 'Now',         v: '32°C',  d: 'partly cloudy' },
+              { k: 'Today high',  v: '34°C',  d: 'peaks ~14:00 ICT' },
+              { k: 'Tonight low', v: '24°C',  d: 'clear' },
+              { k: 'Tomorrow',    v: '33°C',  d: 'thunderstorms PM' },
+            ]}
+            footer="preview · Open-Meteo wiring TODO"
+          />
+        )}
       </div>
+
+      {/* AIR widget — humidity + AQI. */}
+      <div style={{ position: 'relative' }}>
+        <button
+          onClick={() => { setAirOpen(o => !o); setTempOpen(false); setUserOpen(false); }}
+          title="Air quality + humidity"
+          aria-label="Air"
+          style={weatherChipStyle()}
+        >
+          <span style={{ color: '#c4a06b', fontSize: 12 }}>≈</span>
+          <span style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 11 }}>AQI 42</span>
+        </button>
+        {airOpen && (
+          <KBPopover
+            onClose={() => setAirOpen(false)}
+            eyebrow="Air · Luang Prabang"
+            title="AQI 42 · good"
+            rows={[
+              { k: 'PM2.5',     v: '11 µg/m³', d: 'WHO guideline' },
+              { k: 'Humidity',  v: '76%',      d: 'high · seasonal' },
+              { k: 'UV index',  v: '8',        d: 'very high · 11–15h' },
+              { k: 'Wind',      v: '6 km/h',   d: 'WSW' },
+            ]}
+            footer="preview · IQAir wiring TODO"
+          />
+        )}
+      </div>
+
+      {/* Date with hover popover (KPIs are placeholders). */}
+      <div
+        style={{ position: 'relative' }}
+        onMouseEnter={() => setDateHover(true)}
+        onMouseLeave={() => setDateHover(false)}
+      >
+        <span style={{
+          fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
+          fontSize:      10,
+          letterSpacing: '0.18em',
+          textTransform: 'uppercase',
+          color:         '#9b907a',
+          cursor:        'help',
+        }}>
+          {todayLabel()}
+        </span>
+        {dateHover && (
+          <div style={{
+            position: 'absolute', top: 26, right: 0, zIndex: 60,
+            background: '#0f0d0a', border: '1px solid #3a3327', borderRadius: 8,
+            padding: 12, minWidth: 360,
+            boxShadow: '0 12px 28px rgba(0,0,0,0.6)',
+            display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8,
+          }}>
+            {(cfg.kpiTiles ?? []).map(t => (
+              <div key={t.k} style={{
+                background: '#15110b', border: '1px solid #2a261d', borderRadius: 6,
+                padding: '8px 10px',
+              }}>
+                <div style={{
+                  fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+                  fontSize: 9, letterSpacing: '0.22em', color: '#7d7565', textTransform: 'uppercase',
+                }}>{t.k}</div>
+                <div style={{
+                  fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic',
+                  fontSize: 22, color: '#d8cca8', marginTop: 2,
+                }}>{t.v}</div>
+                <div style={{ fontSize: 10, color: '#9b907a', marginTop: 2 }}>{t.d}</div>
+              </div>
+            ))}
+            <div style={{ gridColumn: '1 / -1', fontSize: 10, color: '#5a5448', textAlign: 'right', fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>
+              preview · live wiring TODO
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* User dropdown (mock auth — workspace_users wiring is a later PR) */}
+      <div style={{ position: 'relative' }}>
+        <button onClick={() => setUserOpen(o => !o)} style={{
+          background:    'transparent',
+          border:        '1px solid #2a261d',
+          borderRadius:  6,
+          color:         '#c4a06b',
+          padding:       '5px 12px',
+          cursor:        'pointer',
+          fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
+          fontSize:      10,
+          letterSpacing: '0.16em',
+          textTransform: 'uppercase',
+          fontWeight:    500,
+          display:       'flex', alignItems: 'center', gap: 6,
+        }}>
+          <span style={{
+            width: 18, height: 18, borderRadius: '50%', background: '#a8854a',
+            color: '#0a0a0a', fontSize: 9, fontWeight: 700,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          }}>{(USER_NAME[0] ?? '?').toUpperCase()}</span>
+          {USER_NAME} ▾
+        </button>
+        {userOpen && (
+          <div style={{
+            position: 'absolute', right: 0, top: 36, zIndex: 60,
+            background: '#0f0d0a', border: '1px solid #2a261d', borderRadius: 6,
+            padding: 6, minWidth: 200, boxShadow: '0 12px 28px rgba(0,0,0,0.6)',
+          }}>
+            <a href="/settings/property" onClick={() => setUserOpen(false)} style={menuLinkStyle()}>Settings</a>
+            <a href="/settings/email-categories" onClick={() => setUserOpen(false)} style={menuLinkStyle()}>Email</a>
+            <a href="/cockpit/users" onClick={() => setUserOpen(false)} style={menuLinkStyle()}>Account</a>
+            <div style={{ borderTop: '1px solid #2a261d', margin: '4px 0', paddingTop: 4 }}>
+              <div style={{
+                padding: '4px 12px',
+                fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+                fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase',
+                color: '#5a5448',
+              }}>Tools</div>
+              <a href="/cockpit"               onClick={() => setUserOpen(false)} style={menuLinkStyle()}>IT cockpit</a>
+              <a href="/knowledge"             onClick={() => setUserOpen(false)} style={menuLinkStyle()}>Knowledge</a>
+              <a href="/front-office/arrivals" onClick={() => setUserOpen(false)} style={menuLinkStyle()}>Front office</a>
+            </div>
+            <div style={{ borderTop: '1px solid #2a261d', marginTop: 4, paddingTop: 6, display: 'flex', justifyContent: 'center', gap: 10 }}>
+              <button onClick={() => setLang('en')} title="English" style={langFlagStyle(lang === 'en')}>🇬🇧</button>
+              <button onClick={() => setLang('th')} title="ไทย" style={langFlagStyle(lang === 'th')}>🇹🇭</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  );
+
+  return (
+    <Page subPages={DEPT_LINKS} topRight={topRightJSX}>
 
       {/* ── PROJECT BOX (PBS 2026-05-08) ───────────────────────────────────
        * Scopes chat + uploads to a project so the AI uses only global KB +
@@ -1523,8 +1480,7 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
         </div>
       )}
 
-      {/* ── Footer (PBS 2026-05-08): SLH affiliation + standard internal-BI line ── */}
-      <Footer />
+      {/* Footer comes from <Page>; do not re-render here. */}
 
       {/* Doc analyze modal (PBS 2026-05-08): pick a doc + ask a question. */}
       {docAnalyze.open && (
@@ -1954,83 +1910,50 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
           </div>
         </div>
       )}
-    </div>
+    </Page>
   );
 }
 
 /* ─── small primitives ───────────────────────────────────────────────────── */
 
+// Container — thin wrapper around <Panel> that adds a `+` add button and
+// a hint pill. Keeps the manifesto rule (every card is a Panel) while
+// preserving DeptEntry's add-row affordance.
 function Container({
   title, onAdd, hint, actions, children,
 }: { title: string; onAdd?: () => void; hint?: string; actions?: React.ReactNode; children: React.ReactNode }) {
+  const headerActions = (
+    <>
+      {actions}
+      {onAdd && (
+        <button
+          onClick={onAdd}
+          aria-label="Add"
+          style={{
+            background:    'transparent',
+            border:        '1px solid #2a261d',
+            borderRadius:  4,
+            color:         '#a8854a',
+            cursor:        'pointer',
+            fontSize:      13,
+            lineHeight:    1,
+            width:         20,
+            height:        20,
+            padding:       0,
+            display:       'flex',
+            alignItems:    'center',
+            justifyContent:'center',
+          }}
+        >+</button>
+      )}
+    </>
+  );
   return (
-    <div style={{
-      background:    '#0f0d0a',
-      border:        '1px solid #1f1c15',
-      borderRadius:  12,
-      padding:       '12px 14px 14px',
-      display:       'flex',
-      flexDirection: 'column',
-    }}>
-      <div style={{
-        display:        'flex',
-        justifyContent: 'space-between',
-        alignItems:     'center',
-        marginBottom:   8,
-        paddingBottom:  6,
-        borderBottom:   '1px solid #1f1c15',
-      }}>
-        <h2 style={{
-          fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
-          fontSize:      10,
-          letterSpacing: '0.18em',
-          textTransform: 'uppercase',
-          fontWeight:    600,
-          color:         '#a8854a',
-          margin:        0,
-        }}>
-          {title}
-        </h2>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {hint && (
-            <span style={{
-              fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-              fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase',
-              color: '#5a5448',
-            }}>{hint}</span>
-          )}
-          {actions}
-          {onAdd && (
-            <button
-              onClick={onAdd}
-              aria-label="Add"
-              style={{
-                background:    'transparent',
-                border:        '1px solid #2a261d',
-                borderRadius:  4,
-                color:         '#a8854a',
-                cursor:        'pointer',
-                fontSize:      13,
-                lineHeight:    1,
-                width:         20,
-                height:        20,
-                padding:       0,
-                display:       'flex',
-                alignItems:    'center',
-                justifyContent:'center',
-              }}
-            >+</button>
-          )}
-        </div>
-      </div>
-      <div style={{
-        display:       'flex',
-        flexDirection: 'column',
-        gap:           6,
-      }}>
+    <Panel title={title} eyebrow={hint} actions={headerActions}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {children}
       </div>
-    </div>
+    </Panel>
   );
 }
 
@@ -2064,74 +1987,6 @@ function Row({ children, onDelete }: { children: React.ReactNode; onDelete: () =
       </button>
     </div>
   );
-}
-
-// Footer — SLH affiliation logo bottom-left + standard internal-BI line.
-// SLH SVG comes from documents-public storage (verified live 2026-05-08).
-// The Namkhan logo registry is set up in marketing.brand_assets but the
-// SVG files haven't been uploaded yet, so we render the brass wordmark as
-// a text mark for now; swap to <img> once the SVG lands at
-// brand-assets/namkhan/namkhan-white.svg.
-function Footer() {
-  const SLH_LOGO_URL = 'https://kpenyneooigsyuuomgct.supabase.co/storage/v1/object/public/documents-public/marketing/2026/marketing/slh-considerate-white-logo-moqc2u81.svg';
-  const year = new Date().getFullYear();
-  return (
-    <footer style={{
-      marginTop:    56,
-      paddingTop:   18,
-      borderTop:    '1px solid #1f1c15',
-      display:      'flex',
-      flexWrap:     'wrap',
-      gap:          16,
-      alignItems:   'center',
-      justifyContent: 'space-between',
-      maxWidth:     1200,
-      width:        '100%',
-      marginLeft:   'auto',
-      marginRight:  'auto',
-    }}>
-      {/* LEFT: SLH affiliation */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <a href="https://slh.com/hotels/the-namkhan/" target="_blank" rel="noreferrer" title="Member of Small Luxury Hotels of the World">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={SLH_LOGO_URL}
-            alt="Member of Small Luxury Hotels of the World"
-            style={{ height: 28, width: 'auto', opacity: 0.85, display: 'block' }}
-          />
-        </a>
-        <span style={{
-          fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-          fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#5a5448',
-        }}>
-          Member · Small Luxury Hotels
-        </span>
-      </div>
-
-      {/* RIGHT: standard internal-BI footer line */}
-      <div style={{
-        display: 'flex', flexWrap: 'wrap', gap: 18,
-        fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-        fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase', color: '#7d7565',
-      }}>
-        <a href="/cockpit" style={footerLinkStyle()}>Cockpit</a>
-        <a href="/knowledge" style={footerLinkStyle()}>Knowledge</a>
-        <a href="https://github.com/TBC-HM/namkhan-bi" target="_blank" rel="noreferrer" style={footerLinkStyle()}>Repo ↗</a>
-        <a href="https://namkhan-bi.vercel.app" style={footerLinkStyle()}>Status</a>
-        <span style={{ color: '#3d3a32' }}>·</span>
-        <span>v{(process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ?? 'dev').slice(0, 7)}</span>
-        <span>{process.env.NEXT_PUBLIC_VERCEL_ENV ?? 'local'}</span>
-        <span>© {year} The Namkhan</span>
-      </div>
-    </footer>
-  );
-}
-function footerLinkStyle(): React.CSSProperties {
-  return {
-    color:          '#9b907a',
-    textDecoration: 'none',
-    transition:     'color 100ms ease',
-  };
 }
 
 // AttnRow — actionable row used by Leakage + Opportunity. AI-populated.
