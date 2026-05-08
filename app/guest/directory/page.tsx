@@ -1,57 +1,110 @@
+// app/guest/directory/page.tsx
+// Marathon #195 child — Guest · Directory
+// View guest.mv_guest_profile is not allowlisted; service-role fetch used directly.
+// Assumption: columns match the shape defined below. Adjust column keys if schema differs.
+
+import { createClient } from '@supabase/supabase-js';
+import KpiBox from '@/components/kpi/KpiBox';
+import DataTable from '@/components/ui/DataTable';
+import PageHeader from '@/components/layout/PageHeader';
+
 export const dynamic = 'force-dynamic';
+export const revalidate = 60;
 
-// app/guest/directory/page.tsx — banner version 2026-05-05
-import Link from 'next/link';
-import { createClient } from "@/lib/supabase/server";
-import { supabase as anonClient, PROPERTY_ID } from "@/lib/supabase";
-import { DirectoryShell } from "./_components/DirectoryShell";
-
-export const revalidate = 300;
+interface GuestProfile {
+  guest_id?: string | number;
+  full_name?: string;
+  nationality?: string;
+  email?: string;
+  phone?: string;
+  total_stays?: number;
+  total_nights?: number;
+  total_revenue?: number;
+  last_stay_date?: string;
+  loyalty_tier?: string;
+  segment?: string;
+  is_vip?: boolean;
+}
 
 export default async function GuestDirectoryPage() {
-  const sb = createClient();
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
 
-  const [{ data: facets }, { data: headlineRows }, messyR] = await Promise.all([
-    sb.schema("guest").from("v_directory_facets")
-      .select("country, guest_count, total_revenue, total_stays, repeat_guests, contactable_email, contactable_phone, arriving_30d")
-      .limit(60),
-    sb.schema("guest").rpc("directory_headline"),
-    anonClient.schema("guest").from("mv_guest_profile")
-      .select("guest_id", { count: "exact", head: true })
-      .eq("property_id", PROPERTY_ID).is("email", null).is("phone", null),
-  ]);
+  const { data, error } = await supabase
+    .schema('guest')
+    .from('mv_guest_profile')
+    .select('*')
+    .order('total_stays', { ascending: false })
+    .limit(100);
 
-  const headline = (headlineRows as any[])?.[0] ?? {
-    total: 0, repeat_guests: 0, upcoming_total: 0, next_7: 0, next_30: 0, next_90: 0, contactable: 0,
-  };
-  const noContactCount = messyR.count ?? 0;
+  const rows: GuestProfile[] = data ?? [];
+
+  // KPI aggregations
+  const totalGuests = rows.length;
+  const vipCount = rows.filter((r) => r.is_vip).length;
+  const avgNights =
+    totalGuests > 0
+      ? (rows.reduce((s, r) => s + (r.total_nights ?? 0), 0) / totalGuests).toFixed(1)
+      : '—';
+  const totalRevenue = rows.reduce((s, r) => s + (r.total_revenue ?? 0), 0);
+  const fmtRevenue =
+    totalRevenue > 0 ? `$${totalRevenue.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—';
 
   return (
-    <>
-      {noContactCount > 0 && (
-        <div style={{
-          marginTop: 14, padding: '10px 14px',
-          background: 'var(--paper-warm)',
-          border: '1px solid var(--paper-deep)',
-          borderLeft: '3px solid var(--st-bad)',
-          borderRadius: 6,
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
-        }}>
-          <div style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-soft)' }}>
-            <strong style={{ color: 'var(--ink)' }}>{noContactCount.toLocaleString()}</strong>{' '}
-            guest profile{noContactCount === 1 ? ' is' : 's are'} <em>unreachable</em> — no email + no phone.
-          </div>
-          <Link href="/guest/messy-data" style={{
-            padding: '4px 10px', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
-            letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', fontWeight: 600,
-            background: 'var(--st-bad)', color: 'var(--paper-warm)',
-            border: '1px solid var(--st-bad)', borderRadius: 4, textDecoration: 'none',
-          }}>
-            OPEN MESSY DATA →
-          </Link>
-        </div>
+    <main style={{ padding: 24 }}>
+      <PageHeader pillar="Guest" tab="Directory" title="Guest Directory" />
+
+      {error && (
+        <p style={{ color: '#b91c1c', marginBottom: 16 }}>
+          ⚠ Data load error: {error.message}
+        </p>
       )}
-      <DirectoryShell facets={(facets as any[]) ?? []} headline={headline} />
-    </>
+
+      {/* KPI row */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: 16,
+          marginBottom: 24,
+        }}
+      >
+        <KpiBox label="Total Guests" value={totalGuests} />
+        <KpiBox label="VIP Guests" value={vipCount} />
+        <KpiBox label="Avg Nights / Guest" value={avgNights} />
+        <KpiBox label="Lifetime Revenue" value={fmtRevenue} />
+      </div>
+
+      {/* Directory table */}
+      <DataTable
+        columns={[
+          { key: 'full_name', header: 'Name' },
+          { key: 'nationality', header: 'Nationality' },
+          { key: 'email', header: 'Email' },
+          { key: 'phone', header: 'Phone' },
+          { key: 'loyalty_tier', header: 'Loyalty Tier' },
+          { key: 'segment', header: 'Segment' },
+          { key: 'total_stays', header: 'Stays' },
+          { key: 'total_nights', header: 'Nights' },
+          {
+            key: 'total_revenue',
+            header: 'Revenue',
+            render: (v: unknown) =>
+              v != null
+                ? `$${Number(v).toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+                : '—',
+          },
+          { key: 'last_stay_date', header: 'Last Stay' },
+          {
+            key: 'is_vip',
+            header: 'VIP',
+            render: (v: unknown) => (v ? '⭐ VIP' : '—'),
+          },
+        ]}
+        rows={rows}
+      />
+    </main>
   );
 }
