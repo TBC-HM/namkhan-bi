@@ -528,7 +528,13 @@ async function triageMessage(message: string, debug: { iterations: number; lastE
 
   // Tool-use loop. Up to 10 iterations: IT Manager v5 may want to call
   // read_knowledge_base + list_recent_tickets + search_repo + ... so be generous.
-  for (let iter = 0; iter < 10; iter++) {
+  // 2026-05-08 — bumped 10→25. Kit's IT Manager prompt is 31k chars and
+  // calls KB lookup + page data + active doc + recent tickets + sometimes
+  // chained look-ups. With 10 iterations Kit was hitting the cap before
+  // producing JSON triage output, which marked the chat ticket as
+  // `triage_failed` and made PBS see "Failed" with no answer. 25 matches
+  // the code_writer cap in the agent-worker route.
+  for (let iter = 0; iter < 25; iter++) {
     const body: Record<string, unknown> = {
       model: "claude-sonnet-4-6",
       max_tokens: 1000,
