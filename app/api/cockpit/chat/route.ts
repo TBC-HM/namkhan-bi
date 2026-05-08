@@ -180,7 +180,13 @@ function renderEnrichmentBlock(ctx: Record<string, unknown>, currentPageUrl?: st
 }
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// 2026-05-08 — bumped 60→300 (Vercel Pro max). Triage + KB enrichment +
+// Anthropic call routinely takes 3–7 min; the old 60s cap killed the
+// request mid-flight, surfacing as "send failed" in the browser even
+// though the ticket was already inserted in cockpit_tickets and triage
+// was still running. Frontend now also fires the chat fetch as
+// fire-and-forget — realtime + 8s poll picks up the ticket either way.
+export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 export const revalidate = 0;

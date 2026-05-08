@@ -102,6 +102,7 @@ export default function ChatShell({
   const [sending, setSending] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [threadStart, setThreadStart] = useState<string>(() => {
     if (typeof window === 'undefined') return new Date(Date.now() - 24 * 3600_000).toISOString();
     return localStorage.getItem(STORE_KEY) ?? new Date(Date.now() - 24 * 3600_000).toISOString();
@@ -157,45 +158,65 @@ export default function ChatShell({
 
   const send = async () => {
     if (!input.trim() && attachments.length === 0) return;
-    setSending(true);
-    try {
-      // Auto-prefix @mention so the triage routes to this HoD.
-      let body = input;
-      if (mentionNickname && !body.match(/^@/)) {
-        body = `@${mentionNickname} ${body}`;
-      }
-      if (attachments.length > 0) {
-        const lines = attachments.map((a) => `📎 ${a.name} (${(a.size / 1024).toFixed(0)} KB) — ${a.public_url ?? a.path}`);
-        body = body ? `${body}\n\n${lines.join('\n')}` : lines.join('\n');
-      }
-      await fetch('/api/cockpit/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: body, attachments, mention: mentionNickname }),
-      });
-      setInput('');
-      setAttachments([]);
-      load();
-    } finally {
-      setSending(false);
+    // Auto-prefix @mention so the triage routes to this HoD.
+    let body = input;
+    if (mentionNickname && !body.match(/^@/)) {
+      body = `@${mentionNickname} ${body}`;
     }
+    if (attachments.length > 0) {
+      const lines = attachments.map((a) => `📎 ${a.name} (${(a.size / 1024).toFixed(0)} KB) — ${a.public_url ?? a.path}`);
+      body = body ? `${body}\n\n${lines.join('\n')}` : lines.join('\n');
+    }
+    // FIRE-AND-FORGET: the server inserts the ticket synchronously before
+    // it starts triage (which can take 3–7 min on Anthropic). Vercel's
+    // 60s function cap was killing the request mid-triage and the browser
+    // surfaced "send failed" — but the ticket was already in the DB and the
+    // realtime subscription would render it. Unblock the input immediately
+    // and let realtime + the 8s poll show the agent reply when it arrives.
+    setSending(true);
+    setSendError(null);
+    setInput('');
+    setAttachments([]);
+    void fetch('/api/cockpit/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: body, attachments, mention: mentionNickname }),
+      keepalive: true,
+    }).catch((err: unknown) => {
+      // Network or abort. The ticket may or may not have made it. Let the
+      // poll/realtime resolve which case we're in; only surface an inline
+      // hint, never an alert popup.
+      setSendError(err instanceof Error ? err.message : 'send failed (will retry on next poll)');
+    });
+    // Optimistic refresh — the ticket usually appears within 100–300ms.
+    setTimeout(() => { load(); setSending(false); }, 250);
+    setTimeout(() => { load(); }, 2000);
   };
 
   const handleFiles = async (files: FileList | null) => {
     if (!files?.length) return;
     setUploading(true);
+    setSendError(null);
     try {
       const out: Attachment[] = [];
+      const failures: string[] = [];
       for (const file of Array.from(files)) {
         const fd = new FormData();
         fd.append('file', file);
-        const res = await fetch('/api/cockpit/upload', { method: 'POST', body: fd });
-        if (res.ok) {
-          const j = await res.json();
-          out.push({ name: file.name, size: file.size, path: j.path, public_url: j.public_url });
+        try {
+          const res = await fetch('/api/cockpit/upload', { method: 'POST', body: fd });
+          if (res.ok) {
+            const j = await res.json();
+            out.push({ name: file.name, size: file.size, path: j.path, public_url: j.public_url });
+          } else {
+            failures.push(`${file.name}: HTTP ${res.status}`);
+          }
+        } catch (e) {
+          failures.push(`${file.name}: ${e instanceof Error ? e.message : 'upload error'}`);
         }
       }
       setAttachments((prev) => [...prev, ...out]);
+      if (failures.length > 0) setSendError(`upload: ${failures.join(' · ')}`);
     } finally {
       setUploading(false);
     }
@@ -293,6 +314,12 @@ export default function ChatShell({
           </button>
         </div>
         <div style={S.hint}>Enter to send · Shift+Enter for new line · paperclip to attach</div>
+        {sendError && (
+          <div style={S.errBanner}>
+            <span>⚠️ {sendError}</span>
+            <button onClick={() => setSendError(null)} style={S.errDismiss}>×</button>
+          </div>
+        )}
       </div>
 
       <style jsx global>{`
@@ -329,4 +356,6 @@ const S: Record<string, React.CSSProperties> = {
   textarea: { flex: 1, background: '#15151a', border: '1px solid #25252d', color: '#ededf0', padding: '12px 14px', borderRadius: 12, fontSize: 14, fontFamily: 'inherit', resize: 'none', minHeight: 22, maxHeight: 200 },
   sendBtn: { background: '#c79a6b', color: '#0a0a0b', border: 0, borderRadius: 8, padding: '12px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 16, minWidth: 50 },
   hint: { fontSize: 10, color: '#3d3d45', textAlign: 'center', marginTop: 6, maxWidth: 820, margin: '6px auto 0' },
+  errBanner: { maxWidth: 820, margin: '8px auto 0', padding: '6px 10px', background: '#2a1614', border: '1px solid #5a2825', borderRadius: 6, color: '#f5b1ad', fontSize: 11, display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  errDismiss: { background: 'transparent', border: 0, color: '#f5b1ad', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '0 4px' },
 };
