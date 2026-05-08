@@ -30,6 +30,10 @@ interface DocItem       {
   report_dims?: Record<string, string>;
   schedule?: 'once' | 'daily' | 'weekly' | 'monthly';
   next_run?: string;
+  // Email delivery (PBS 2026-05-08). Recipients run alongside the
+  // schedule — same cron tick generates the report AND emails it.
+  email_recipients?: string[];
+  email_time?: string;  // "HH:MM" 24-hour, ICT
 }
 interface TaskItem      { id: string; label: string; done: boolean; created?: string; due?: string; alert?: boolean }
 
@@ -450,6 +454,21 @@ function pillBtnStyle(active: boolean): React.CSSProperties {
   };
 }
 
+// Small chip that sits inline next to a doc label (schedule, email count, …).
+function cardChipStyle(color: string): React.CSSProperties {
+  return {
+    fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
+    fontSize:      9,
+    letterSpacing: '0.12em',
+    textTransform: 'uppercase',
+    color,
+    border:        '1px solid #2a261d',
+    borderRadius:  999,
+    padding:       '1px 6px',
+    flexShrink:    0,
+  };
+}
+
 // 2026-05-08 — projects v1 (PR follow-up to #211).
 // Active project lives in localStorage; selecting one tags subsequent
 // chats with project_id so agents read the project's KB rows in addition
@@ -494,6 +513,9 @@ export default function RevenuePage() {
   const [reportType,    setReportType]    = useState<ReportType | ''>('');
   const [reportDims,    setReportDims]    = useState<Record<string, string>>({});
   const [reportSchedule, setReportSchedule] = useState<'once' | 'daily' | 'weekly' | 'monthly'>('once');
+  const [reportEmails,  setReportEmails]   = useState<string[]>([]);
+  const [emailDraft,    setEmailDraft]     = useState('');
+  const [reportEmailTime, setReportEmailTime] = useState('06:00');
 
   const [greeting,  setGreeting]  = useState('Good morning');
   const [chatValue, setChatValue] = useState('');
@@ -701,7 +723,21 @@ export default function RevenuePage() {
     setReportType('');
     setReportDims({});
     setReportSchedule('once');
+    setReportEmails([]);
+    setEmailDraft('');
+    setReportEmailTime('06:00');
     setReportModal(true);
+  }
+  function addReportEmail(raw: string) {
+    const email = raw.trim().toLowerCase();
+    if (!email) return;
+    if (!/^\S+@\S+\.\S+$/.test(email)) return;       // light validation
+    if (reportEmails.includes(email)) return;
+    setReportEmails(prev => [...prev, email]);
+    setEmailDraft('');
+  }
+  function removeReportEmail(email: string) {
+    setReportEmails(prev => prev.filter(e => e !== email));
   }
   function startUploadFlow() {
     setDocChoiceOpen(false);
@@ -744,6 +780,8 @@ export default function RevenuePage() {
       report_dims: reportDims,
       schedule: reportSchedule,
       next_run: computeNextRun(reportSchedule),
+      email_recipients: reportEmails.length > 0 ? reportEmails : undefined,
+      email_time:       reportEmails.length > 0 ? reportEmailTime : undefined,
     };
     const next: DocItem[] = [newDoc, ...docs];
     setDocs(next); saveLS(DOCS_KEY, next);
@@ -1426,6 +1464,7 @@ export default function RevenuePage() {
           />
           {docs.map(d => {
             const isRecurring = d.schedule && d.schedule !== 'once';
+            const hasEmails = (d.email_recipients?.length ?? 0) > 0;
             return (
               <Row key={d.id} onDelete={() => delDoc(d.id)}>
                 <a
@@ -1448,12 +1487,16 @@ export default function RevenuePage() {
                     {d.label}
                   </span>
                   {isRecurring && (
-                    <span title={d.next_run ? `Next run ${d.next_run} ICT` : undefined} style={{
-                      fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-                      fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase',
-                      color: '#a8854a', border: '1px solid #2a261d', borderRadius: 999, padding: '1px 6px',
-                    }}>
+                    <span title={d.next_run ? `Next run ${d.next_run} ICT` : undefined} style={cardChipStyle('#a8854a')}>
                       ↻ {d.schedule}
+                    </span>
+                  )}
+                  {hasEmails && (
+                    <span
+                      title={`Emails: ${d.email_recipients!.join(', ')}${d.email_time ? ` at ${d.email_time} ICT` : ''}`}
+                      style={cardChipStyle('#9b907a')}
+                    >
+                      ✉ {d.email_recipients!.length}{d.email_time ? ` · ${d.email_time}` : ''}
                     </span>
                   )}
                 </a>
@@ -1610,7 +1653,82 @@ export default function RevenuePage() {
                 </div>
                 {reportSchedule !== 'once' && (
                   <div style={{ fontSize: 11, color: '#7d7565', marginTop: 6 }}>
-                    Next run: <span style={{ color: '#c4a06b' }}>{computeNextRun(reportSchedule)}</span> (06:00 ICT)
+                    Next run: <span style={{ color: '#c4a06b' }}>{computeNextRun(reportSchedule)}</span> ICT
+                  </div>
+                )}
+
+                {/* Email delivery (PBS 2026-05-08): recipients + time */}
+                <div style={{ borderTop: '1px solid #1f1c15', margin: '12px 0 6px' }} />
+                <label style={modalLabelStyle}>
+                  Email delivery <span style={{ color: '#5a5448', textTransform: 'none', letterSpacing: 0 }}>(optional — leave empty to keep in Reports only)</span>
+                </label>
+
+                {/* recipient chips */}
+                {reportEmails.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                    {reportEmails.map(e => (
+                      <span key={e} style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        background: '#15110b', border: '1px solid #2a261d', borderRadius: 999,
+                        padding: '3px 10px', fontSize: 11, color: '#d8cca8',
+                      }}>
+                        ✉ {e}
+                        <button
+                          onClick={() => removeReportEmail(e)}
+                          aria-label={`Remove ${e}`}
+                          style={{ background: 'transparent', border: 'none', color: '#7d7565', cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: 0 }}
+                        >×</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                  <input
+                    type="email"
+                    value={emailDraft}
+                    onChange={e => setEmailDraft(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' || e.key === ',') {
+                        e.preventDefault();
+                        addReportEmail(emailDraft);
+                      }
+                      if (e.key === 'Backspace' && !emailDraft && reportEmails.length > 0) {
+                        removeReportEmail(reportEmails[reportEmails.length - 1]);
+                      }
+                    }}
+                    placeholder="name@thenamkhan.com — Enter to add"
+                    style={{ ...modalInputStyle, marginBottom: 0, flex: 1 }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => addReportEmail(emailDraft)}
+                    disabled={!emailDraft.trim()}
+                    style={{
+                      ...modalSaveStyle,
+                      background: emailDraft.trim() ? '#a8854a' : '#1c160d',
+                      color:      emailDraft.trim() ? '#0a0a0a' : '#5a5448',
+                      cursor:     emailDraft.trim() ? 'pointer' : 'not-allowed',
+                    }}
+                  >Add</button>
+                </div>
+
+                {reportEmails.length > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
+                    <label style={{ fontSize: 11, color: '#9b907a', fontFamily: "'JetBrains Mono', ui-monospace, monospace", letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                      Send at
+                    </label>
+                    <input
+                      type="time"
+                      value={reportEmailTime}
+                      onChange={e => setReportEmailTime(e.target.value)}
+                      style={{
+                        background: '#15110b', border: '1px solid #2a261d', borderRadius: 6,
+                        color: '#efe6d3', padding: '6px 10px', fontSize: 12, fontFamily: 'inherit',
+                        outline: 'none', colorScheme: 'dark',
+                      }}
+                    />
+                    <span style={{ fontSize: 11, color: '#7d7565' }}>ICT · matches the schedule above</span>
                   </div>
                 )}
               </>
