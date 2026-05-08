@@ -1,79 +1,82 @@
-// app/operations/page.tsx
-import { createClient } from '@supabase/supabase-js';
+'use client';
+
+import Link from 'next/link';
 import PageHeader from '@/components/layout/PageHeader';
-import KpiBox from '@/components/kpi/KpiBox';
-import DataTable from '@/components/ui/DataTable';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 60;
+// ---------------------------------------------------------------------------
+// Operations entry page — /operations
+// Pillar landing: surfaces quick-nav cards for each Operations sub-section.
+// No DB call needed here — each child page fetches its own data.
+// ---------------------------------------------------------------------------
 
-export default async function OperationsPage() {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+const NAV_CARDS: { href: string; title: string; description: string; emoji: string }[] = [
+  {
+    href: '/operations/staff',
+    title: 'Staff & Payroll',
+    description: 'Headcount, payroll breakdown, department summary and trend.',
+    emoji: '👤',
+  },
+  {
+    href: '/operations/inventory',
+    title: 'Inventory',
+    description: 'Room supplies, F&B stock levels and low-stock alerts.',
+    emoji: '📦',
+  },
+];
 
-  // Fetch recent incidents from cockpit_incidents
-  const { data: incidents } = await supabase
-    .from('cockpit_incidents')
-    .select('id, detected_at, resolved_at, severity, symptom, root_cause, fix, auto_resolved, mttr_minutes, source')
-    .order('detected_at', { ascending: false })
-    .limit(50);
-
-  const rows = incidents ?? [];
-
-  // Derive KPI summary values
-  const openIncidents = rows.filter((r) => !r.resolved_at).length;
-  const resolvedIncidents = rows.filter((r) => r.resolved_at).length;
-  const avgMttr = (() => {
-    const withMttr = rows.filter((r) => typeof r.mttr_minutes === 'number');
-    if (withMttr.length === 0) return '—';
-    const avg = withMttr.reduce((sum, r) => sum + (r.mttr_minutes as number), 0) / withMttr.length;
-    return `${Math.round(avg)} min`;
-  })();
-  const criticalCount = rows.filter((r) => (r.severity ?? 5) <= 2 && !r.resolved_at).length;
-
-  const columns: { key: string; header: string }[] = [
-    { key: 'detected_at', header: 'Detected' },
-    { key: 'severity', header: 'Sev' },
-    { key: 'symptom', header: 'Symptom' },
-    { key: 'source', header: 'Source' },
-    { key: 'root_cause', header: 'Root Cause' },
-    { key: 'fix', header: 'Fix' },
-    { key: 'resolved_at', header: 'Resolved' },
-    { key: 'mttr_minutes', header: 'MTTR (min)' },
-  ];
-
-  // Format rows for display
-  const tableRows = rows.map((r) => ({
-    ...r,
-    detected_at: r.detected_at ? new Date(r.detected_at).toISOString().slice(0, 16).replace('T', ' ') : '—',
-    resolved_at: r.resolved_at ? new Date(r.resolved_at).toISOString().slice(0, 16).replace('T', ' ') : '—',
-    severity: r.severity ?? '—',
-    symptom: r.symptom ?? '—',
-    source: r.source ?? '—',
-    root_cause: r.root_cause ?? '—',
-    fix: r.fix ?? '—',
-    mttr_minutes: r.mttr_minutes != null ? r.mttr_minutes : '—',
-  }));
-
+export default function OperationsPage() {
   return (
-    <main className="p-6 space-y-6">
-      <PageHeader pillar="Operations" tab="Overview" title="Operations" />
+    <main style={{ padding: '0 0 48px' }}>
+      <PageHeader
+        pillar="Operations"
+        tab="Home"
+        title="Operations"
+        lede="Manage your team, payroll and inventory from one place."
+      />
 
-      {/* KPI row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-        <KpiBox label="Open Incidents" value={String(openIncidents)} />
-        <KpiBox label="Resolved (last 50)" value={String(resolvedIncidents)} />
-        <KpiBox label="Critical Open" value={String(criticalCount)} />
-        <KpiBox label="Avg MTTR" value={avgMttr} />
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+          gap: 20,
+          padding: '28px 24px 0',
+        }}
+      >
+        {NAV_CARDS.map((card) => (
+          <Link
+            key={card.href}
+            href={card.href}
+            style={{ textDecoration: 'none', color: 'inherit' }}
+          >
+            <div
+              style={{
+                border: '1px solid var(--border, #e5e7eb)',
+                borderRadius: 10,
+                padding: '24px 20px',
+                background: 'var(--card-bg, #fff)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+                cursor: 'pointer',
+                transition: 'box-shadow 0.15s ease',
+              }}
+              onMouseEnter={(e) =>
+                ((e.currentTarget as HTMLDivElement).style.boxShadow =
+                  '0 4px 16px rgba(0,0,0,0.08)')
+              }
+              onMouseLeave={(e) =>
+                ((e.currentTarget as HTMLDivElement).style.boxShadow = 'none')
+              }
+            >
+              <span style={{ fontSize: 32 }}>{card.emoji}</span>
+              <strong style={{ fontSize: 16, fontWeight: 600 }}>{card.title}</strong>
+              <span style={{ fontSize: 13, color: 'var(--muted, #6b7280)', lineHeight: 1.5 }}>
+                {card.description}
+              </span>
+            </div>
+          </Link>
+        ))}
       </div>
-
-      {/* Incidents table */}
-      <section>
-        <h2 className="text-lg font-semibold mb-3">Recent Incidents</h2>
-        <DataTable columns={columns} rows={tableRows} />
-      </section>
     </main>
   );
 }
