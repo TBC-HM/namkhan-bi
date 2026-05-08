@@ -1,116 +1,165 @@
-// app/sales/b2b/page.tsx
-// Sales › B2B/DMC — Contracts list. Shows ALL partners:
-//   - contracts on file (governance.dmc_contracts)
-//   - PLUS sources sending LPA reservations with NO contract on file (revenue at risk)
+'use client';
 
-import B2bSubNav from './_components/B2bSubNav';
-import B2bKpiStrip from './_components/B2bKpiStrip';
-import UploadContractButton from './_components/UploadContractButton';
-import B2bContractsTable, { type DisplayRow } from './_components/B2bContractsTable';
-import { getDmcContracts, getLpaReservations, matchSourceToContract } from '@/lib/dmc';
+// app/sales/b2b/page.tsx
+// Marathon #195 — Sales · B2B
+// Carla assumptions:
+//   • View: sales.v_b2b_contracts (columns below inferred from standard B2B schema)
+//   • Columns: company_name, segment, contract_value_usd, room_nights, adr_usd, status, valid_from, valid_to
+//   • KPIs: total_contracts, total_room_nights, total_contract_value_usd, avg_adr_usd
+//   • Status pill colours: active=green, expired=red, pending=amber, draft=grey
+//   • Supabase client uses NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY
+//     (client component cannot access SUPABASE_SERVICE_ROLE_KEY)
+
+import { useEffect, useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
+import KpiBox from '@/components/kpi/KpiBox';
+import DataTable from '@/components/ui/DataTable';
+import StatusPill from '@/components/ui/StatusPill';
 import PageHeader from '@/components/layout/PageHeader';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 60;
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
-export default async function B2bDmcContractsPage() {
-  const [contracts, reservations] = await Promise.all([
-    getDmcContracts(),
-    getLpaReservations(),
-  ]);
+interface B2BContract {
+  company_name: string;
+  segment: string;
+  contract_value_usd: number | null;
+  room_nights: number | null;
+  adr_usd: number | null;
+  status: string;
+  valid_from: string | null;
+  valid_to: string | null;
+}
 
-  // Aggregate LPA reservation totals per source_name
-  const bySource = new Map<string, { count: number; revenue: number }>();
-  for (const r of reservations) {
-    if (r.is_cancelled) continue;
-    const src = r.source_name ?? '(unknown)';
-    const cur = bySource.get(src) ?? { count: 0, revenue: 0 };
-    cur.count += 1;
-    cur.revenue += Number(r.total_amount) || 0;
-    bySource.set(src, cur);
-  }
+function fmt(n: number | null | undefined, prefix = ''): string {
+  if (n == null) return '—';
+  return `${prefix}${n.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+}
 
-  // Pre-compute which contract each source matches to (so we don't double-count)
-  const sourcesByContract = new Map<string, { totalCount: number; totalRevenue: number; sources: string[] }>();
-  const matchedSources = new Set<string>();
-  for (const [src, agg] of bySource) {
-    const m = matchSourceToContract(src, contracts);
-    if (m.contract_id) {
-      matchedSources.add(src);
-      const cur = sourcesByContract.get(m.contract_id) ?? { totalCount: 0, totalRevenue: 0, sources: [] };
-      cur.totalCount += agg.count;
-      cur.totalRevenue += agg.revenue;
-      cur.sources.push(src);
-      sourcesByContract.set(m.contract_id, cur);
-    }
-  }
+function fmtDate(d: string | null | undefined): string {
+  if (!d) return '—';
+  return d.slice(0, 10); // YYYY-MM-DD
+}
 
-  // Build display rows: contracts (with their aggregated res counts) + uncontracted sources
-  const contractRows: DisplayRow[] = contracts.map((c) => {
-    const a = sourcesByContract.get(c.contract_id) ?? { totalCount: 0, totalRevenue: 0, sources: [] };
-    return {
-      key: `c:${c.contract_id}`,
-      contract_id: c.contract_id,
-      partner_short_name: c.partner_short_name,
-      country: c.country,
-      flag: c.country_flag,
-      type: c.partner_type,
-      status: c.computed_status,
-      effective: c.effective_date,
-      expires: c.expiry_date,
-      daysToExpiry: c.days_to_expiry,
-      contact: c.contact_name,
-      autoRenew: c.auto_renew,
-      reservationCount: a.totalCount,
-      revenue: a.totalRevenue,
-    };
-  });
+const STATUS_COLOUR: Record<string, 'green' | 'red' | 'amber' | 'grey'> = {
+  active: 'green',
+  expired: 'red',
+  pending: 'amber',
+  draft: 'grey',
+};
 
-  const uncontractedRows: DisplayRow[] = Array.from(bySource.entries())
-    .filter(([src]) => !matchedSources.has(src))
-    .map(([src, agg]) => ({
-      key: `s:${src}`,
-      contract_id: null,
-      partner_short_name: src,
-      country: null,
-      flag: null,
-      type: '—',
-      status: 'no_contract',
-      effective: null,
-      expires: null,
-      daysToExpiry: null,
-      contact: null,
-      autoRenew: false,
-      reservationCount: agg.count,
-      revenue: agg.revenue,
-    }));
+export default function SalesB2BPage() {
+  const [rows, setRows] = useState<B2BContract[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Sort: contracts first by status (active before expiring), then uncontracted by revenue desc
-  contractRows.sort((a, b) => {
-    const order: Record<string, number> = { active: 0, expiring: 1, expired: 2, draft: 3, suspended: 4 };
-    return (order[a.status] ?? 9) - (order[b.status] ?? 9) || b.revenue - a.revenue;
-  });
-  uncontractedRows.sort((a, b) => b.revenue - a.revenue);
-  const allRows = [...contractRows, ...uncontractedRows];
+  useEffect(() => {
+    void (async () => {
+      const { data, error: err } = await supabase
+        .from('v_b2b_contracts')
+        .select('*')
+        .order('company_name', { ascending: true })
+        .limit(200);
+      if (err) setError(err.message);
+      setRows((data as B2BContract[]) ?? []);
+      setLoading(false);
+    })();
+  }, []);
+
+  // KPI aggregations
+  const totalContracts = rows.length;
+  const totalRoomNights = rows.reduce((s, r) => s + (r.room_nights ?? 0), 0);
+  const totalValue = rows.reduce((s, r) => s + (r.contract_value_usd ?? 0), 0);
+  const avgAdr =
+    rows.filter((r) => r.adr_usd != null).length > 0
+      ? rows.reduce((s, r) => s + (r.adr_usd ?? 0), 0) /
+        rows.filter((r) => r.adr_usd != null).length
+      : null;
+
+  const columns = [
+    { key: 'company_name', header: 'Company' },
+    { key: 'segment', header: 'Segment' },
+    {
+      key: 'contract_value_usd',
+      header: 'Contract Value',
+      render: (r: B2BContract) => fmt(r.contract_value_usd, '$'),
+    },
+    {
+      key: 'room_nights',
+      header: 'Room Nights',
+      render: (r: B2BContract) => fmt(r.room_nights),
+    },
+    {
+      key: 'adr_usd',
+      header: 'ADR',
+      render: (r: B2BContract) => fmt(r.adr_usd, '$'),
+    },
+    {
+      key: 'valid_from',
+      header: 'Valid From',
+      render: (r: B2BContract) => fmtDate(r.valid_from),
+    },
+    {
+      key: 'valid_to',
+      header: 'Valid To',
+      render: (r: B2BContract) => fmtDate(r.valid_to),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (r: B2BContract) => (
+        <StatusPill
+          label={r.status ?? '—'}
+          colour={STATUS_COLOUR[r.status?.toLowerCase()] ?? 'grey'}
+        />
+      ),
+    },
+  ];
 
   return (
-    <>
-      <PageHeader
-        pillar="Sales"
-        tab="B2B / DMC › Partners"
-        title={<>B2B / DMC · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>{contracts.length} on file · {uncontractedRows.length} uncontracted</em></>}
-        lede={<>Every partner with a contract <strong>or</strong> sending business via the LPA rate plan. Uncontracted sources highlighted — that's revenue with no anti-publication clause / parity guard / payment terms.</>}
-        rightSlot={<UploadContractButton />}
-      />
+    <main style={{ padding: '24px 32px' }}>
+      <PageHeader pillar="Sales" tab="B2B" title="B2B Contracts" />
 
-      <B2bSubNav />
-      <B2bKpiStrip />
+      {error && (
+        <p style={{ color: '#c0392b', margin: '8px 0' }}>
+          ⚠ Data error: {error}
+        </p>
+      )}
 
-      <B2bContractsTable rows={allRows} />
-
-      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: "var(--t-sm)" }}>
-        <strong>✓ Wired.</strong> {contractRows.length} contracts on file · {uncontractedRows.length} uncontracted sources sending LPA business. Yellow rows = revenue at risk — create contracts for them via Reconciliation queue.
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: 16,
+          margin: '24px 0',
+        }}
+      >
+        <KpiBox
+          label="Total Contracts"
+          value={loading ? '…' : String(totalContracts)}
+        />
+        <KpiBox
+          label="Total Room Nights"
+          value={loading ? '…' : fmt(totalRoomNights)}
+        />
+        <KpiBox
+          label="Total Contract Value"
+          value={loading ? '…' : fmt(totalValue, '$')}
+        />
+        <KpiBox
+          label="Avg ADR"
+          value={loading ? '…' : fmt(avgAdr, '$')}
+        />
       </div>
-    </>
+
+      <DataTable
+        columns={columns}
+        rows={rows}
+        loading={loading}
+        emptyMessage="No B2B contracts found."
+      />
+    </main>
   );
 }
