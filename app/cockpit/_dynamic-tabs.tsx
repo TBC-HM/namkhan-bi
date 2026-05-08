@@ -1,20 +1,34 @@
 'use client';
+
 /**
- * _dynamic-tabs.tsx
- * Ticket #233 — Code-split heavy tab components in /cockpit
+ * ticket #233 — Perf marathon: code-split heavy tab components in /cockpit
  *
- * Wraps the five non-default tabs (Activity, Logs, Schedule, Cost, Tools)
- * with next/dynamic + ssr:false so their JS is NOT included in the initial
- * page bundle. The default tab (Overview/Pulse) remains a static import.
+ * Exports next/dynamic versions of every non-default cockpit tab so the
+ * main page.tsx can switch to these imports one-by-one without a full
+ * rewrite.  Each component is loaded only when its tab becomes active,
+ * cutting the initial JS bundle delivered to the browser.
  *
- * Usage: import these in place of the raw tab components inside page.tsx
- * or any CockpitTabs client component.
+ * Usage in page.tsx (replace static imports):
+ *
+ *   // BEFORE (eager, bundled into initial chunk)
+ *   import CockpitActivityTab  from './_tabs/ActivityTab';
+ *
+ *   // AFTER (lazy, split into its own chunk)
+ *   import { DynamicActivityTab as CockpitActivityTab } from './_dynamic-tabs';
+ *
+ * Tabs kept eager (default-open, so no benefit from splitting):
+ *   - Overview / Dashboard tab  →  keep as static import in page.tsx
+ *
+ * Tabs code-split here (not visible on first paint):
+ *   - Activity, Logs, Schedule, Cost, Tools
  */
 
 import dynamic from 'next/dynamic';
 import type { ComponentType } from 'react';
 
-/** Shared loading placeholder — tiny, renders instantly */
+// ---------------------------------------------------------------------------
+// Loading placeholder — lightweight spinner shown while the chunk downloads
+// ---------------------------------------------------------------------------
 function TabSkeleton() {
   return (
     <div
@@ -22,73 +36,73 @@ function TabSkeleton() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: 240,
-        color: '#888',
+        minHeight: 200,
+        color: '#6b7280',
         fontSize: 14,
-        letterSpacing: '0.02em',
       }}
+      aria-busy="true"
+      aria-label="Loading tab…"
     >
       Loading…
     </div>
   );
 }
 
-/* ─────────────────────────────────────────────
-   Activity tab  (heavy: renders full audit log)
-   ───────────────────────────────────────────── */
-export const DynamicActivityTab: ComponentType<Record<string, unknown>> =
-  dynamic(
-    () =>
-      import('@/components/cockpit/ActivityTab').then(
-        (m) => m.default ?? m.ActivityTab ?? m,
-      ) as Promise<ComponentType<Record<string, unknown>>>,
-    { ssr: false, loading: TabSkeleton },
-  );
+// ---------------------------------------------------------------------------
+// Helper — creates a next/dynamic import with shared defaults
+// ---------------------------------------------------------------------------
+function lazyTab<T extends object>(
+  loader: () => Promise<{ default: ComponentType<T> }>
+): ComponentType<T> {
+  return dynamic<T>(loader, {
+    ssr: false,
+    loading: TabSkeleton,
+  });
+}
 
-/* ─────────────────────────────────────────────
-   Logs tab  (heavy: virtualized log list)
-   ───────────────────────────────────────────── */
-export const DynamicLogsTab: ComponentType<Record<string, unknown>> =
-  dynamic(
-    () =>
-      import('@/components/cockpit/LogsTab').then(
-        (m) => m.default ?? m.LogsTab ?? m,
-      ) as Promise<ComponentType<Record<string, unknown>>>,
-    { ssr: false, loading: TabSkeleton },
-  );
+// ---------------------------------------------------------------------------
+// Dynamic tab exports
+// Adjust the import paths if your project uses a different directory.
+// The page.tsx file should already have static imports for these; just swap
+// the import source to this file.
+// ---------------------------------------------------------------------------
 
-/* ─────────────────────────────────────────────
-   Schedule tab  (heavy: calendar / Recharts)
-   ───────────────────────────────────────────── */
-export const DynamicScheduleTab: ComponentType<Record<string, unknown>> =
-  dynamic(
-    () =>
-      import('@/components/cockpit/ScheduleTab').then(
-        (m) => m.default ?? m.ScheduleTab ?? m,
-      ) as Promise<ComponentType<Record<string, unknown>>>,
-    { ssr: false, loading: TabSkeleton },
-  );
+/**
+ * Activity tab — user/agent action feed; typically large list rendering.
+ * Resolves: app/cockpit/_tabs/ActivityTab.tsx  (adjust path as needed)
+ */
+export const DynamicActivityTab = lazyTab(
+  () => import('./_tabs/ActivityTab')
+);
 
-/* ─────────────────────────────────────────────
-   Cost tab  (heavy: finance charts / tables)
-   ───────────────────────────────────────────── */
-export const DynamicCostTab: ComponentType<Record<string, unknown>> =
-  dynamic(
-    () =>
-      import('@/components/cockpit/CostTab').then(
-        (m) => m.default ?? m.CostTab ?? m,
-      ) as Promise<ComponentType<Record<string, unknown>>>,
-    { ssr: false, loading: TabSkeleton },
-  );
+/**
+ * Logs tab — audit/event log, can have 1k+ rows; heavy render cost.
+ * Resolves: app/cockpit/_tabs/LogsTab.tsx
+ */
+export const DynamicLogsTab = lazyTab(
+  () => import('./_tabs/LogsTab')
+);
 
-/* ─────────────────────────────────────────────
-   Tools tab  (heavy: admin actions / rich forms)
-   ───────────────────────────────────────────── */
-export const DynamicToolsTab: ComponentType<Record<string, unknown>> =
-  dynamic(
-    () =>
-      import('@/components/cockpit/ToolsTab').then(
-        (m) => m.default ?? m.ToolsTab ?? m,
-      ) as Promise<ComponentType<Record<string, unknown>>>,
-    { ssr: false, loading: TabSkeleton },
-  );
+/**
+ * Schedule tab — calendar / task scheduler; often pulls in date-fns / calendar libs.
+ * Resolves: app/cockpit/_tabs/ScheduleTab.tsx
+ */
+export const DynamicScheduleTab = lazyTab(
+  () => import('./_tabs/ScheduleTab')
+);
+
+/**
+ * Cost tab — financial data, may include heavy chart imports (Recharts etc.).
+ * Resolves: app/cockpit/_tabs/CostTab.tsx
+ */
+export const DynamicCostTab = lazyTab(
+  () => import('./_tabs/CostTab')
+);
+
+/**
+ * Tools tab — admin utilities; rarely visited so ideal for splitting.
+ * Resolves: app/cockpit/_tabs/ToolsTab.tsx
+ */
+export const DynamicToolsTab = lazyTab(
+  () => import('./_tabs/ToolsTab')
+);
