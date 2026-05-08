@@ -1,14 +1,21 @@
-// app/sales/layout.tsx
-// Sales pillar shell — Banner + SubNav + FilterStrip + panel children.
-// Mirrors /operations/layout.tsx pattern. Hides forward-window buttons since
-// inquiries are received-on (past + now), not forward-pace.
+'use client';
 
+// app/sales/layout.tsx
+// 2026-05-08 — conditional chrome. Dept root (/sales) is the chat landing,
+// renders pass-through. Sub-pages (/sales/inquiries etc) get the full
+// Banner + SubNav + FilterStrip chrome.
+
+import { usePathname } from 'next/navigation';
 import Banner from '@/components/nav/Banner';
 import SubNav from '@/components/nav/SubNav';
 import FilterStrip from '@/components/nav/FilterStrip';
 import { RAIL_SUBNAV, PILLAR_HEADER } from '@/components/nav/subnavConfig';
 
 export default function SalesLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname() ?? '';
+  if (pathname === '/sales' || pathname === '/sales/') {
+    return <>{children}</>;
+  }
   const h = PILLAR_HEADER.sales;
   const t = new Date().toLocaleTimeString('en-GB', {
     hour: '2-digit',

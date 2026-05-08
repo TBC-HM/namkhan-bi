@@ -66,29 +66,56 @@ async function listDeploysFromVercel(project: string, token: string, limit: numb
 }
 
 async function listDeploysFromAuditLog(slug: string, limit: number): Promise<{ deploys: Deploy[] }> {
+  // The Vercel webhook stores 2 row shapes:
+  //   1. action='deploy_succeeded', target=<deployment URL>, metadata={name, deployment}
+  //   2. action='unknown_event', target='deployment.created', metadata.payload={name, deployment{meta:{...}}}
+  // Both have the slug at metadata->>'name' OR metadata->'payload'->>'name', so query both.
+  // Slug-keying via target string fails because target is the deploy URL alias,
+  // not the slug. Query everything vercel-tagged and post-filter by slug in JS.
   const { data } = await supabase
     .from("cockpit_audit_log")
     .select("id, created_at, action, target, success, reasoning, metadata")
     .eq("agent", "vercel")
-    .in("action", ["deploy_started", "deploy_succeeded", "deploy_ready"])
-    .ilike("target", `%${slug}%`)
     .order("created_at", { ascending: false })
-    .limit(limit);
+    .limit(Math.max(limit * 4, 80));
 
-  const rows = data ?? [];
+  const rows = (data ?? []).filter((r) => {
+    const m = (r.metadata as Record<string, unknown>) ?? {};
+    const direct = m.name as string | undefined;
+    const payload = (m.payload as Record<string, unknown> | undefined);
+    const fromPayload = payload?.name as string | undefined;
+    return direct === slug || fromPayload === slug;
+  }).slice(0, limit);
+
   return {
     deploys: rows.map((r): Deploy => {
       const meta = (r.metadata as Record<string, unknown>) ?? {};
-      const url = (meta.url as string) ?? (meta.deployment_url as string) ?? (meta.target_url as string) ?? null;
-      const sha = ((meta.sha as string) ?? (meta.commit_sha as string) ?? "").slice(0, 7);
-      const ref = (meta.branch as string) ?? (meta.ref as string) ?? "?";
+      const payload = (meta.payload as Record<string, unknown> | undefined) ?? {};
+      const deployment = (payload.deployment as Record<string, unknown> | undefined) ?? {};
+      const dpMeta = (deployment.meta as Record<string, unknown> | undefined) ?? {};
+
+      const url = (meta.url as string)
+        ?? (meta.deployment_url as string)
+        ?? (payload.url as string)
+        ?? (deployment.url as string)
+        ?? r.target
+        ?? null;
+      const sha = ((dpMeta.githubCommitSha as string) ?? (meta.sha as string) ?? "").slice(0, 7);
+      const ref = (dpMeta.githubCommitRef as string) ?? (payload.target as string) ?? "?";
+      const msg = (dpMeta.githubCommitMessage as string)?.split("\n")[0]
+        ?? (r.reasoning as string)
+        ?? (r.action ?? "");
+
+      const action = r.action ?? "";
+      const isReady = action === "deploy_succeeded" || action === "deploy_ready";
+
       return {
         uid: `audit-${r.id}`,
-        state: r.action === "deploy_succeeded" || r.action === "deploy_ready" ? "READY" : "BUILDING",
+        state: isReady ? "READY" : "BUILDING",
         created_at: r.created_at,
         sha,
         ref,
-        message: (r.reasoning ?? "") || (r.action ?? ""),
+        message: msg,
         url: url ? (url.startsWith("http") ? url : `https://${url}`) : null,
         source: "audit_log",
       };
