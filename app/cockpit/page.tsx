@@ -580,6 +580,35 @@ function ChatTab() {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const listEnd = useRef<HTMLDivElement>(null);
+  // 2026-05-08 — "Add conversation to project" affordance. Fetches active
+  // projects on mount; click "📁 Add to project ▾" on the active ticket
+  // to associate the ticket with a project (sets cockpit_tickets.project_id).
+  type ProjectLite = { id: number; slug: string; name: string };
+  const [projectList, setProjectList] = useState<ProjectLite[]>([]);
+  const [attachOpen,  setAttachOpen]  = useState(false);
+  const [attaching,   setAttaching]   = useState(false);
+  useEffect(() => {
+    fetch('/api/cockpit/projects', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => setProjectList(Array.isArray(j?.projects) ? j.projects : []))
+      .catch(() => { /* silent */ });
+  }, []);
+  async function attachActiveTicketTo(slug: string) {
+    if (!activeTicket) return;
+    setAttaching(true);
+    try {
+      await fetch(`/api/cockpit/projects/${slug}/attach-ticket`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticket_id: activeTicket.id }),
+      });
+      setAttachOpen(false);
+      // Optimistic: refresh tickets so the row reflects the project tag.
+      void loadTickets();
+    } finally {
+      setAttaching(false);
+    }
+  }
 
   const [threadStart, setThreadStart] = useState<string>(() => {
     if (typeof window === "undefined") return new Date(Date.now() - 7 * 24 * 3600_000).toISOString();
@@ -826,6 +855,52 @@ function ChatTab() {
                   <span className="cli-status" data-status={activeTicket.status}>{statusLabel(activeTicket.status)}</span>
                   <span className="cli-time">{absTime(activeTicket.created_at)}</span>
                   {activeTicket.iterations > 0 && <span className="cli-time">{activeTicket.iterations} iterations</span>}
+                  {/* PBS 2026-05-08 — promote this conversation to a project */}
+                  <span style={{ position: 'relative', marginLeft: 'auto' }}>
+                    <button
+                      onClick={() => setAttachOpen(o => !o)}
+                      disabled={attaching}
+                      style={{
+                        background:    'transparent',
+                        border:        '1px solid var(--border-2, #25252d)',
+                        borderRadius:  999,
+                        color:         '#a8854a',
+                        padding:       '3px 10px',
+                        fontSize:      11,
+                        cursor:        attaching ? 'wait' : 'pointer',
+                        fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
+                        letterSpacing: '0.12em',
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      📁 Add to project ▾
+                    </button>
+                    {attachOpen && (
+                      <div style={{
+                        position: 'absolute', right: 0, top: 28, zIndex: 80,
+                        background: '#0e0e0c', border: '1px solid #2a261d', borderRadius: 6,
+                        padding: 4, minWidth: 220, maxHeight: 320, overflowY: 'auto',
+                        boxShadow: '0 12px 28px rgba(0,0,0,0.55)',
+                      }}>
+                        {projectList.length === 0 && (
+                          <div style={{ padding: '8px 10px', fontSize: 11, color: '#7d7565', fontStyle: 'italic' }}>
+                            No active projects. Create one from the dept landing page.
+                          </div>
+                        )}
+                        {projectList.map(p => (
+                          <button
+                            key={p.id}
+                            onClick={() => attachActiveTicketTo(p.slug)}
+                            style={{
+                              width: '100%', textAlign: 'left',
+                              background: 'transparent', border: 'none', cursor: 'pointer',
+                              color: '#d8cca8', padding: '6px 10px', fontSize: 12, borderRadius: 4,
+                            }}
+                          >{p.name}</button>
+                        ))}
+                      </div>
+                    )}
+                  </span>
                 </div>
               </div>
               <div className="ctd-body">

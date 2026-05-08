@@ -118,6 +118,20 @@ function langFlagStyle(active: boolean): React.CSSProperties {
   };
 }
 
+function weatherChipStyle(): React.CSSProperties {
+  return {
+    display:      'flex',
+    alignItems:   'center',
+    gap:          6,
+    background:   'transparent',
+    border:       '1px solid #2a261d',
+    borderRadius: 999,
+    padding:      '4px 10px',
+    cursor:       'pointer',
+    color:        '#9b907a',
+  };
+}
+
 // Modal field styles (project + task creation)
 const modalLabelStyle: React.CSSProperties = {
   display:        'block',
@@ -165,6 +179,57 @@ const modalSaveStyle: React.CSSProperties = {
   textTransform: 'uppercase',
   fontWeight:    600,
 };
+const modalOverlayStyle: React.CSSProperties = {
+  position:        'fixed',
+  inset:           0,
+  zIndex:          200,
+  background:      'rgba(0,0,0,0.6)',
+  display:         'flex',
+  alignItems:      'center',
+  justifyContent:  'center',
+  padding:         24,
+};
+const modalCardStyle: React.CSSProperties = {
+  background:   '#0f0d0a',
+  border:       '1px solid #3a3327',
+  borderRadius: 12,
+  padding:      22,
+  width:        '100%',
+  boxShadow:    '0 20px 50px rgba(0,0,0,0.6)',
+  fontFamily:   "'Inter Tight', system-ui, sans-serif",
+};
+const modalEyebrowStyle: React.CSSProperties = {
+  fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
+  fontSize:      10,
+  letterSpacing: '0.22em',
+  textTransform: 'uppercase',
+  color:         '#a8854a',
+  marginBottom:  14,
+};
+const docChoiceBtnStyle: React.CSSProperties = {
+  width:        '100%',
+  background:   '#15110b',
+  border:       '1px solid #2a261d',
+  borderRadius: 10,
+  padding:      '14px 16px',
+  cursor:       'pointer',
+  textAlign:    'center',
+  transition:   'border-color 100ms ease',
+};
+function pillBtnStyle(active: boolean): React.CSSProperties {
+  return {
+    background:    active ? '#1c160d' : 'transparent',
+    border:        `1px solid ${active ? '#a8854a' : '#2a261d'}`,
+    borderRadius:  18,
+    color:         active ? '#c4a06b' : '#9b907a',
+    padding:       '5px 12px',
+    fontSize:      11,
+    cursor:        'pointer',
+    fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
+    letterSpacing: '0.12em',
+    textTransform: 'uppercase',
+  };
+}
 
 // 2026-05-08 — projects v1 (PR follow-up to #211).
 // Active project lives in localStorage; selecting one tags subsequent
@@ -202,6 +267,13 @@ export default function RevenuePage() {
   const [chatFocused, setChatFocused] = useState(false);
   const [taskModal, setTaskModal] = useState(false);
   const [taskDraft, setTaskDraft] = useState({ label: '', due: '', alert: false });
+  // Doc-create choice + report builder (PBS 2026-05-08).
+  const [docChoiceOpen, setDocChoiceOpen] = useState(false);
+  const [reportModal,   setReportModal]   = useState(false);
+  const [reportDraft,   setReportDraft]   = useState({
+    type: '' as '' | 'pulse' | 'pace' | 'channels' | 'pricing' | 'comp_set' | 'forecast' | 'all',
+    dimensions: [] as Array<'room' | 'time' | 'source' | 'comp'>,
+  });
 
   const [greeting,  setGreeting]  = useState('Good morning');
   const [chatValue, setChatValue] = useState('');
@@ -232,6 +304,8 @@ export default function RevenuePage() {
   // Top-bar UI (PBS 2026-05-08 redesign)
   const [dateHover,   setDateHover]   = useState(false);
   const [userOpen,    setUserOpen]    = useState(false);
+  const [tempOpen,    setTempOpen]    = useState(false);
+  const [airOpen,     setAirOpen]     = useState(false);
   const [lang,        setLangState]   = useState<'en' | 'th'>('en');
   function setLang(next: 'en' | 'th') {
     setLangState(next);
@@ -396,8 +470,49 @@ export default function RevenuePage() {
     setAttn(next); saveLS(ATTN_KEY, next);
   }
 
-  // docs — pick from computer (PBS 2026-05-08): no more URL prompts.
-  // Click + → file picker → upload to /api/cockpit/upload → add to docs.
+  // docs — click + opens a choice (PBS 2026-05-08): upload from computer
+  // OR build a report. Choice modal then routes to either the file picker
+  // or the report builder.
+  function openDocChoice() {
+    setDocChoiceOpen(true);
+  }
+  function startReportBuilder() {
+    setDocChoiceOpen(false);
+    setReportDraft({ type: '', dimensions: [] });
+    setReportModal(true);
+  }
+  function startUploadFlow() {
+    setDocChoiceOpen(false);
+    docFileRef.current?.click();
+  }
+  function toggleReportDim(d: 'room' | 'time' | 'source' | 'comp') {
+    setReportDraft(prev => ({
+      ...prev,
+      dimensions: prev.dimensions.includes(d)
+        ? prev.dimensions.filter(x => x !== d)
+        : [...prev.dimensions, d],
+    }));
+  }
+  function saveReport() {
+    if (!reportDraft.type) return;
+    const stamp = new Date().toISOString().slice(0, 10);
+    const dims = reportDraft.dimensions.length === 0 || reportDraft.type === 'all'
+      ? 'all'
+      : reportDraft.dimensions.join('+');
+    const labelMap: Record<string, string> = {
+      pulse: 'Pulse', pace: 'Pace', channels: 'Channels', pricing: 'Pricing',
+      comp_set: 'Comp Set', forecast: 'Forecast', all: 'All revenue',
+    };
+    const reportLabel = `${labelMap[reportDraft.type] ?? reportDraft.type} report · ${dims} · ${stamp}`;
+    const href = reportDraft.type === 'all'
+      ? '/revenue'
+      : `/revenue/${reportDraft.type === 'comp_set' ? 'compset' : reportDraft.type}?dim=${encodeURIComponent(dims)}`;
+    const next: DocItem[] = [{ id: uid(), label: reportLabel, href, uploaded_at: stamp }, ...docs];
+    setDocs(next); saveLS(DOCS_KEY, next);
+    setReportModal(false);
+  }
+
+  // Pick from computer — direct upload via /api/cockpit/upload.
   async function pickDocFiles(files: FileList | null) {
     if (!files?.length) return;
     const out: DocItem[] = [];
@@ -499,8 +614,63 @@ export default function RevenuePage() {
           ))}
         </div>
 
-        {/* RIGHT — date (hover → KPIs) + user dropdown */}
+        {/* RIGHT — weather widgets + date (hover → KPIs) + user dropdown */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          {/* TEMP widget — Luang Prabang. Click → KB-style info card. Placeholder
+            * data until weather API is wired (Open-Meteo would be the cheapest). */}
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => { setTempOpen(o => !o); setAirOpen(false); setUserOpen(false); }}
+              title="Temperature in Luang Prabang"
+              aria-label="Temperature"
+              style={weatherChipStyle()}
+            >
+              <span style={{ color: '#c4a06b', fontSize: 12 }}>☀</span>
+              <span style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 11 }}>32°</span>
+            </button>
+            {tempOpen && (
+              <KBPopover
+                onClose={() => setTempOpen(false)}
+                eyebrow="Temperature · Luang Prabang"
+                title="32°C · feels 36°"
+                rows={[
+                  { k: 'Now',         v: '32°C',  d: 'partly cloudy' },
+                  { k: 'Today high',  v: '34°C',  d: 'peaks ~14:00 ICT' },
+                  { k: 'Tonight low', v: '24°C',  d: 'clear' },
+                  { k: 'Tomorrow',    v: '33°C',  d: 'thunderstorms PM' },
+                ]}
+                footer="preview · Open-Meteo wiring TODO"
+              />
+            )}
+          </div>
+
+          {/* AIR widget — humidity + AQI. Click → KB-style info card. */}
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => { setAirOpen(o => !o); setTempOpen(false); setUserOpen(false); }}
+              title="Air quality + humidity"
+              aria-label="Air"
+              style={weatherChipStyle()}
+            >
+              <span style={{ color: '#c4a06b', fontSize: 12 }}>≈</span>
+              <span style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 11 }}>AQI 42</span>
+            </button>
+            {airOpen && (
+              <KBPopover
+                onClose={() => setAirOpen(false)}
+                eyebrow="Air · Luang Prabang"
+                title="AQI 42 · good"
+                rows={[
+                  { k: 'PM2.5',     v: '11 µg/m³', d: 'WHO guideline' },
+                  { k: 'Humidity',  v: '76%',      d: 'high · seasonal' },
+                  { k: 'UV index',  v: '8',        d: 'very high · 11–15h' },
+                  { k: 'Wind',      v: '6 km/h',   d: 'WSW' },
+                ]}
+                footer="preview · IQAir wiring TODO"
+              />
+            )}
+          </div>
+
           {/* Date with hover popover (KPIs are placeholders; wire to live views in a later PR) */}
           <div
             style={{ position: 'relative' }}
@@ -1006,7 +1176,7 @@ export default function RevenuePage() {
         {/* DOCS */}
         <Container
           title="My docs"
-          onAdd={() => docFileRef.current?.click()}
+          onAdd={openDocChoice}
         >
           <input
             ref={docFileRef}
@@ -1107,6 +1277,88 @@ export default function RevenuePage() {
           {tasks.length === 0 && <Empty label="Nothing on the list" />}
         </Container>
       </div>
+
+      {/* Doc create — choice modal (PBS 2026-05-08): Upload OR Build report. */}
+      {docChoiceOpen && (
+        <div onClick={() => setDocChoiceOpen(false)} style={modalOverlayStyle}>
+          <div onClick={e => e.stopPropagation()} style={{ ...modalCardStyle, maxWidth: 380 }}>
+            <div style={modalEyebrowStyle}>Add to My docs</div>
+            <button onClick={startUploadFlow} style={docChoiceBtnStyle}>
+              <div style={{ fontSize: 22, marginBottom: 4 }}>📎</div>
+              <div style={{ fontSize: 13, color: '#d8cca8' }}>Upload from computer</div>
+              <div style={{ fontSize: 11, color: '#7d7565', marginTop: 2 }}>md · pdf · xlsx · png · 25 MB max</div>
+            </button>
+            <button onClick={startReportBuilder} style={{ ...docChoiceBtnStyle, marginTop: 8 }}>
+              <div style={{ fontSize: 22, marginBottom: 4 }}>📊</div>
+              <div style={{ fontSize: 13, color: '#d8cca8' }}>Build a report</div>
+              <div style={{ fontSize: 11, color: '#7d7565', marginTop: 2 }}>pace · channels · pricing · comp set · …</div>
+            </button>
+            <button onClick={() => setDocChoiceOpen(false)} style={{ ...modalCancelStyle, width: '100%', marginTop: 12 }}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Report builder modal — dimensions + type → adds doc card. */}
+      {reportModal && (
+        <div onClick={() => setReportModal(false)} style={modalOverlayStyle}>
+          <div onClick={e => e.stopPropagation()} style={{ ...modalCardStyle, maxWidth: 480 }}>
+            <div style={modalEyebrowStyle}>Build a report</div>
+
+            <label style={modalLabelStyle}>Report type</label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, marginBottom: 6 }}>
+              {([
+                { v: 'pulse',     l: 'Pulse'    },
+                { v: 'pace',      l: 'Pace'     },
+                { v: 'channels',  l: 'Channels' },
+                { v: 'pricing',   l: 'Pricing'  },
+                { v: 'comp_set',  l: 'Comp Set' },
+                { v: 'forecast',  l: 'Forecast' },
+              ] as const).map(t => (
+                <button
+                  key={t.v}
+                  onClick={() => setReportDraft(d => ({ ...d, type: t.v }))}
+                  style={pillBtnStyle(reportDraft.type === t.v)}
+                >{t.l}</button>
+              ))}
+            </div>
+            <button
+              onClick={() => setReportDraft(d => ({ ...d, type: 'all' }))}
+              style={{ ...pillBtnStyle(reportDraft.type === 'all'), width: '100%', marginBottom: 4 }}
+            >All — full revenue snapshot</button>
+
+            <label style={modalLabelStyle}>Dimensions <span style={{ color: '#5a5448', textTransform: 'none', letterSpacing: 0 }}>(narrow down — leave empty for all)</span></label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
+              {([
+                { v: 'room',   l: 'Room type' },
+                { v: 'time',   l: 'Time'      },
+                { v: 'source', l: 'Source'    },
+                { v: 'comp',   l: 'Comp set'  },
+              ] as const).map(d => (
+                <button
+                  key={d.v}
+                  onClick={() => toggleReportDim(d.v)}
+                  style={pillBtnStyle(reportDraft.dimensions.includes(d.v))}
+                  disabled={reportDraft.type === 'all'}
+                >{d.l}</button>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
+              <button onClick={() => setReportModal(false)} style={modalCancelStyle}>Cancel</button>
+              <button
+                onClick={saveReport}
+                disabled={!reportDraft.type}
+                style={{
+                  ...modalSaveStyle,
+                  background: reportDraft.type ? '#a8854a' : '#1c160d',
+                  color:      reportDraft.type ? '#0a0a0a' : '#5a5448',
+                  cursor:     reportDraft.type ? 'pointer' : 'not-allowed',
+                }}
+              >Generate</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Project creation modal (PBS 2026-05-08): name + goal + description.
         * Goal + description are injected into the agent system prompt later
@@ -1384,6 +1636,64 @@ function Empty({ label }: { label: string }) {
       textAlign:     'center',
     }}>
       {label}
+    </div>
+  );
+}
+
+// KB-landing-style info popover (shared by weather widgets, date hover, etc.)
+// 4-up tile grid with eyebrow + scope title + small footer.
+function KBPopover({
+  onClose, eyebrow, title, rows, footer,
+}: {
+  onClose: () => void;
+  eyebrow: string;
+  title: string;
+  rows: { k: string; v: string; d: string }[];
+  footer?: string;
+}) {
+  return (
+    <div style={{
+      position: 'absolute', top: 32, right: 0, zIndex: 60,
+      background: '#0f0d0a', border: '1px solid #3a3327', borderRadius: 10,
+      padding: 14, minWidth: 320, boxShadow: '0 12px 28px rgba(0,0,0,0.6)',
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+        <div style={{
+          fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+          fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: '#a8854a',
+        }}>{eyebrow}</div>
+        <button onClick={onClose} aria-label="Close" style={{
+          background: 'transparent', border: 'none', color: '#7d7565', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0,
+        }}>×</button>
+      </div>
+      <div style={{
+        fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic',
+        fontSize: 22, color: '#d8cca8', marginBottom: 12,
+      }}>{title}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+        {rows.map(r => (
+          <div key={r.k} style={{
+            background: '#15110b', border: '1px solid #2a261d', borderRadius: 6, padding: '8px 10px',
+          }}>
+            <div style={{
+              fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+              fontSize: 9, letterSpacing: '0.18em', color: '#7d7565', textTransform: 'uppercase',
+            }}>{r.k}</div>
+            <div style={{
+              fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic',
+              fontSize: 18, color: '#d8cca8', marginTop: 2,
+            }}>{r.v}</div>
+            <div style={{ fontSize: 10, color: '#9b907a', marginTop: 2 }}>{r.d}</div>
+          </div>
+        ))}
+      </div>
+      {footer && (
+        <div style={{
+          marginTop: 10, paddingTop: 8, borderTop: '1px solid #1f1c15',
+          fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+          fontSize: 9, letterSpacing: '0.16em', color: '#5a5448', textAlign: 'right',
+        }}>{footer}</div>
+      )}
     </div>
   );
 }
