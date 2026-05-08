@@ -10,7 +10,10 @@
 import { useEffect, useState, useCallback } from 'react';
 
 interface FeedRow {
-  id: number;
+  // Feed ids are prefixed strings: "n-<num>" for notifications, "t-<num>" for tickets.
+  // Was typed as `number` until 2026-05-08; the backend was reading `notification_id`
+  // which never arrived, so mark-seen never fired and approved messages came back.
+  id: string;
   kind: string;
   title: string;
   url?: string | null;
@@ -20,6 +23,14 @@ interface FeedRow {
   is_new: boolean;
   created_at?: string;
   age_label?: string;
+}
+
+// "n-123" → { source:"notification", num:123 }
+// "t-456" → { source:"ticket", num:456 }
+function parseFeedId(id: string): { source: 'notification' | 'ticket' | 'unknown'; num: number | null } {
+  const m = String(id ?? '').match(/^([nt])-(\d+)$/);
+  if (!m) return { source: 'unknown', num: null };
+  return { source: m[1] === 'n' ? 'notification' : 'ticket', num: Number(m[2]) };
 }
 
 const FLASH_KEYFRAMES = `
@@ -53,20 +64,32 @@ export default function NDButton() {
 
   const newCount = rows.filter((r) => r.is_new).length;
 
+  // Build the canonical body for any per-row action. Resolves the prefixed
+  // feed id ("n-123" / "t-456") into the discrete numeric notification_id /
+  // ticket_id fields the backend expects.
+  function rowBody(r: FeedRow, extra: Record<string, unknown> = {}) {
+    const parsed = parseFeedId(r.id);
+    return {
+      id: r.id,
+      notification_id: parsed.source === 'notification' ? parsed.num : null,
+      ticket_id: r.ticket_id ?? (parsed.source === 'ticket' ? parsed.num : null),
+      pr_number: r.pr_number ?? null,
+      ...extra,
+    };
+  }
   async function approve(r: FeedRow) {
-    const body = { id: r.id, pr_number: r.pr_number ?? null, ticket_id: r.ticket_id ?? null };
     setRows((rs) => rs.filter((x) => x.id !== r.id)); // optimistic
-    try { await fetch('/api/cockpit/deployments/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); }
+    try { await fetch('/api/cockpit/deployments/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rowBody(r)) }); }
     catch { refresh(); }
   }
   async function comment(r: FeedRow) {
-    const body = prompt('Comment:');
-    if (!body) return;
+    const text = prompt('Comment:');
+    if (!text) return;
     setRows((rs) => rs.filter((x) => x.id !== r.id));
     try {
       await fetch('/api/cockpit/deployments/comment', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: r.id, pr_number: r.pr_number ?? null, ticket_id: r.ticket_id ?? null, body }),
+        body: JSON.stringify(rowBody(r, { body: text, comment: text })),
       });
     } catch { refresh(); }
   }
@@ -76,7 +99,7 @@ export default function NDButton() {
     try {
       await fetch('/api/cockpit/deployments/delete', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: r.id, pr_number: r.pr_number ?? null }),
+        body: JSON.stringify(rowBody(r)),
       });
     } catch { refresh(); }
   }

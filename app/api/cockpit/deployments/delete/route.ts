@@ -18,14 +18,28 @@ const supabase = createClient(
 
 const REPO = "TBC-HM/namkhan-bi";
 
+// Feed ids are prefixed strings ("n-123" / "t-456"). Older callers also
+// passed them via `body.id`. Parse defensively.
+function parseFeedId(raw: unknown): number | null {
+  if (raw == null) return null;
+  const s = String(raw);
+  const m = s.match(/^n-(\d+)$/);
+  if (m) return Number(m[1]);
+  if (/^\d+$/.test(s)) return Number(s);
+  return null;
+}
+
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
-  const notificationId = Number(body.notification_id);
+  const notificationIdRaw = body.notification_id;
+  const notificationId = Number.isFinite(Number(notificationIdRaw))
+    ? Number(notificationIdRaw)
+    : parseFeedId(body.id);
   const prNumber = Number(body.pr_number);
   const closePr = body.also_close_pr === true;
 
   // Hard-delete the notification row
-  if (Number.isFinite(notificationId)) {
+  if (notificationId != null) {
     await supabase
       .from("cockpit_pbs_notifications")
       .delete()
@@ -51,11 +65,11 @@ export async function POST(req: Request) {
   await supabase.from("cockpit_audit_log").insert({
     agent: "pbs",
     action: "notification_deleted",
-    target: notificationId ? `notification:${notificationId}` : (prNumber ? `${REPO}#${prNumber}` : "unknown"),
+    target: notificationId != null ? `notification:${notificationId}` : (Number.isFinite(prNumber) ? `${REPO}#${prNumber}` : "unknown"),
     success: true,
     metadata: {
-      notification_id: notificationId || null,
-      pr_number: prNumber || null,
+      notification_id: notificationId,
+      pr_number: Number.isFinite(prNumber) ? prNumber : null,
       also_close_pr: closePr,
       pr_closed: prClosed,
     },
@@ -64,7 +78,7 @@ export async function POST(req: Request) {
 
   return NextResponse.json({
     ok: true,
-    deleted_notification: Number.isFinite(notificationId) ? notificationId : null,
+    deleted_notification: notificationId,
     pr_closed: prClosed,
   });
 }

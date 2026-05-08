@@ -17,12 +17,27 @@ const supabase = createClient(
 
 const REPO = "TBC-HM/namkhan-bi";
 
+// Feed ids are prefixed strings ("n-123" / "t-456"); legacy callers may
+// also pass them via body.id. Parse defensively so the seen-stamp lands.
+function parseFeedNotifId(raw: unknown): number | null {
+  if (raw == null) return null;
+  const s = String(raw);
+  const m = s.match(/^n-(\d+)$/);
+  if (m) return Number(m[1]);
+  if (/^\d+$/.test(s)) return Number(s);
+  return null;
+}
+
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const prNumber = Number(body.pr_number);
-  const text = String(body.comment ?? "").trim();
+  // Frontend prompts to "Comment:" — accept both `body` and `comment` field names.
+  const text = String(body.comment ?? body.body ?? "").trim();
   const liveUrl = String(body.url ?? "").trim();
-  const notificationId = Number(body.notification_id);
+  const notificationIdRaw = body.notification_id;
+  const notificationId = Number.isFinite(Number(notificationIdRaw))
+    ? Number(notificationIdRaw)
+    : parseFeedNotifId(body.id);
   const titleHint = String(body.title ?? "").trim();
   if (!text) {
     return NextResponse.json({ ok: false, error: "comment required" }, { status: 400 });
@@ -95,7 +110,7 @@ export async function POST(req: Request) {
     .single();
 
   // 3. Mark the source notification as seen.
-  if (Number.isFinite(notificationId)) {
+  if (notificationId != null) {
     await supabase
       .from("cockpit_pbs_notifications")
       .update({ seen_at: new Date().toISOString(), seen_by: "PBS" })
