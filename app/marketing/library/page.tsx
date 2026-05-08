@@ -1,339 +1,178 @@
 // app/marketing/library/page.tsx
-// Brand & Marketing · Library — main media browser.
-// 3-column layout: filter rail · asset grid · (right drawer mounted globally in layout).
-// Uses URL search params for filter state (server-component-friendly).
-
-import Link from 'next/link';
-import PanelHero from '@/components/sections/PanelHero';
-import Card from '@/components/sections/Card';
-import KpiCard from '@/components/kpi/KpiCard';
-import AssetGrid from '@/components/marketing/AssetGrid';
-import { getMediaReady, getMediaTierCounts, getTaxonomy, getCuratorPicks, getRoomTypeBuckets, getOtaPack, TIER_LABEL } from '@/lib/marketing';
+import { createClient } from '@supabase/supabase-js';
+import KpiBox from '@/components/kpi/KpiBox';
+import DataTable from '@/components/ui/DataTable';
+import PageHeader from '@/components/layout/PageHeader';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
-const TIERS = [
-  { key: '',                  label: 'All' },
-  { key: 'tier_ota_profile',  label: 'OTA' },
-  { key: 'tier_website_hero', label: 'Website' },
-  { key: 'tier_social_pool',  label: 'Social' },
-  { key: 'tier_internal',     label: 'Internal' },
-  { key: 'tier_archive',      label: 'Logos' },
-];
+interface MediaAsset {
+  asset_id: string;
+  filename: string;
+  asset_type: string;
+  tier: string;
+  status: string;
+  qc_score: number | null;
+  license_type: string;
+  primary_area: string | null;
+  tag_slugs: string[] | null;
+  created_at: string;
+}
 
-interface SP { searchParams?: Record<string, string | string[] | undefined> }
+interface IngestRow {
+  asset_id: string;
+  filename: string;
+  status: string;
+  pipeline_stage: string | null;
+  error_message: string | null;
+  ingested_at: string | null;
+}
 
-export default async function LibraryPage({ searchParams }: SP) {
-  const tier = (typeof searchParams?.tier === 'string' ? searchParams.tier : '') as string;
-  const tag  = (typeof searchParams?.tag  === 'string' ? searchParams.tag  : '') as string;
-  const q    = (typeof searchParams?.q    === 'string' ? searchParams.q    : '') as string;
+export default async function Page() {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
 
-  const [assets, tierRows, taxonomy, curatorPicks, roomBuckets, otaPack] = await Promise.all([
-    getMediaReady({ limit: 80, tier: tier || undefined, tag: tag || undefined }),
-    getMediaTierCounts(),
-    getTaxonomy(),
-    getCuratorPicks(12),
-    getRoomTypeBuckets(),
-    getOtaPack(),
-  ]);
+  // Primary: v_media_ready_v2 (canonical view per KB #327)
+  const { data: assets } = await supabase
+    .schema('marketing')
+    .from('v_media_ready_v2')
+    .select('asset_id, filename, asset_type, tier, status, qc_score, license_type, primary_area, tag_slugs, created_at')
+    .order('qc_score', { ascending: false })
+    .limit(100);
 
-  const otaTotalFound = otaPack.reduce((s, sl) => s + sl.found, 0);
-  const otaTotalTarget = otaPack.reduce((s, sl) => s + sl.min_count, 0);
-  const otaTotalGap = otaPack.reduce((s, sl) => s + sl.gap, 0);
-  const roomsUnderTarget = roomBuckets.filter(b => b.under_target).length;
+  // Secondary: ingest pipeline status
+  const { data: ingestRows } = await supabase
+    .schema('public')
+    .from('v_media_ingest_status')
+    .select('asset_id, filename, status, pipeline_stage, error_message, ingested_at')
+    .order('ingested_at', { ascending: false })
+    .limit(20);
 
-  // Total ready EXCLUDES tier_archive (logos / decommissioned) so the visible
-  // KPI matches the visible grid by default.
-  const archiveCount = Number(tierRows.find(r => r.primary_tier === 'tier_archive')?.total ?? 0);
-  const totalReady   = tierRows.reduce((s, r) => s + Number(r.total ?? 0), 0) - archiveCount;
-  const otaCount     = tierRows.find(r => r.primary_tier === 'tier_ota_profile')?.total  ?? 0;
-  const heroCount    = tierRows.find(r => r.primary_tier === 'tier_website_hero')?.total ?? 0;
-  const socialCount  = tierRows.find(r => r.primary_tier === 'tier_social_pool')?.total  ?? 0;
+  const rows: MediaAsset[] = assets ?? [];
+  const ingest: IngestRow[] = ingestRows ?? [];
 
-  // Filter to text-search match on the server (since we don't have a full-text index yet)
-  const filtered = q
-    ? assets.filter(a =>
-        (a.caption ?? '').toLowerCase().includes(q.toLowerCase()) ||
-        (a.alt_text ?? '').toLowerCase().includes(q.toLowerCase()) ||
-        (a.original_filename ?? '').toLowerCase().includes(q.toLowerCase())
-      )
-    : assets;
+  // KPI aggregates
+  const totalAssets = rows.length;
+  const heroTier = rows.filter((r) => r.tier === 'tier_website_hero').length;
+  const otaTier = rows.filter((r) => r.tier === 'tier_ota_profile').length;
+  const socialTier = rows.filter((r) => r.tier === 'tier_social_pool').length;
+  const avgQc =
+    rows.filter((r) => r.qc_score != null).length > 0
+      ? (
+          rows
+            .filter((r) => r.qc_score != null)
+            .reduce((sum, r) => sum + (r.qc_score ?? 0), 0) /
+          rows.filter((r) => r.qc_score != null).length
+        ).toFixed(1)
+      : '—';
 
-  // Group taxonomy by category for the filter rail
-  const tagsByCategory = new Map<string, Array<{ label: string; count?: number }>>();
-  for (const t of taxonomy) {
-    const arr = tagsByCategory.get(t.category) ?? [];
-    arr.push({ label: t.label, count: t.used_count ?? undefined });
-    tagsByCategory.set(t.category, arr);
-  }
+  const tierLabel = (tier: string) => {
+    const map: Record<string, string> = {
+      tier_website_hero: 'Hero',
+      tier_ota_profile: 'OTA',
+      tier_social_pool: 'Social',
+      tier_internal: 'Internal',
+      tier_archive: 'Archive',
+    };
+    return map[tier] ?? tier;
+  };
+
+  const assetColumns = [
+    { key: 'filename', header: 'Filename' },
+    { key: 'asset_type', header: 'Type' },
+    { key: 'tier_label', header: 'Tier' },
+    { key: 'qc_score_fmt', header: 'QC Score' },
+    { key: 'license_type', header: 'License' },
+    { key: 'primary_area', header: 'Area' },
+    { key: 'status', header: 'Status' },
+    { key: 'created_at_fmt', header: 'Added' },
+  ];
+
+  const assetTableRows = rows.map((r) => ({
+    ...r,
+    tier_label: tierLabel(r.tier),
+    qc_score_fmt: r.qc_score != null ? r.qc_score.toFixed(1) : '—',
+    primary_area: r.primary_area ?? '—',
+    created_at_fmt: r.created_at ? r.created_at.slice(0, 10) : '—',
+  }));
+
+  const ingestColumns = [
+    { key: 'filename', header: 'Filename' },
+    { key: 'status', header: 'Status' },
+    { key: 'pipeline_stage', header: 'Stage' },
+    { key: 'error_message', header: 'Error' },
+    { key: 'ingested_at_fmt', header: 'Ingested' },
+  ];
+
+  const ingestTableRows = ingest.map((r) => ({
+    ...r,
+    pipeline_stage: r.pipeline_stage ?? '—',
+    error_message: r.error_message ?? '—',
+    ingested_at_fmt: r.ingested_at ? r.ingested_at.slice(0, 10) : '—',
+  }));
 
   return (
-    <>
-      <PanelHero
-        eyebrow="Brand · Marketing · library"
-        title="Media"
-        emphasis="library"
-        sub="Tagged · classified · render-ready · usage-tier sorted"
-        kpis={
-          <>
-            <KpiCard label="Total ready"    value={totalReady}  hint="all tiers" />
-            <KpiCard label="OTA profile"    value={otaCount}    hint="best of best" />
-            <KpiCard label="Website hero"   value={heroCount}   hint="thenamkhan.com" />
-            <KpiCard label="Social pool"    value={socialCount} hint="rotate weekly" />
-          </>
-        }
-      />
+    <main style={{ padding: '0 24px 48px' }}>
+      <PageHeader pillar="Marketing" tab="Library" title="Media Library" />
 
-      {/* Curator: Fresh & ready — top 12 by qc + brand-fit */}
-      {curatorPicks.length > 0 && !tier && !tag && !q && (
-        <Card
-          title="Fresh"
-          emphasis="& ready"
-          sub={`${curatorPicks.length} picks · highest qc + brand-fit · pull these for OTAs, hero, social`}
-          source="auto-tagger · vision · tier-classifier"
-        >
-          <AssetGrid assets={curatorPicks} minColPx={180} />
-        </Card>
-      )}
-
-      {/* OTA Pack: 50-photo carousel template */}
-      {!tier && !tag && !q && (
-        <Card
-          title="OTA"
-          emphasis="pack"
-          sub={`${otaTotalFound} of ${otaTotalTarget} slots filled${otaTotalGap > 0 ? ` · ${otaTotalGap} photos still needed` : ' · ready to publish'}`}
-          source="canonical Booking.com / Expedia / SLH carousel"
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            {otaPack.map(slot => (
-              <div key={slot.slot}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 6 }}>
-                  <h4 style={{
-                    fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
-                    letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase',
-                    color: 'var(--ink)', margin: 0, fontWeight: 700,
-                  }}>{slot.label}</h4>
-                  <span style={{
-                    fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
-                    color: slot.gap > 0 ? 'var(--st-bad)' : 'var(--moss-glow)',
-                  }}>
-                    {slot.found}/{slot.min_count}{slot.gap > 0 ? ` · ${slot.gap} short` : ' · ✓'}
-                  </span>
-                </div>
-                {slot.samples.length > 0 ? (
-                  <AssetGrid assets={slot.samples} minColPx={150} />
-                ) : (
-                  <div style={{
-                    padding: '12px 14px', background: 'var(--st-bad-bg)',
-                    border: '1px dashed var(--st-bad-bd)', borderRadius: 4,
-                    fontSize: 'var(--t-sm)', color: 'var(--st-bad)',
-                  }}>
-                    No qualifying photos for {slot.label.toLowerCase()}. Need {slot.min_count} with qc≥70 + brand-fit≥0.7.
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* By-Room: 10 room types, 5+ photos each, gap warnings */}
-      {!tier && !tag && !q && (
-        <Card
-          title="By"
-          emphasis="room"
-          sub={`${roomBuckets.length} room types · ${roomsUnderTarget > 0 ? `${roomsUnderTarget} below 5-photo target` : 'all rooms covered'}`}
-          source="marketing.media_taxonomy.room_type"
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {roomBuckets.map(b => (
-              <div key={b.slug}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 6 }}>
-                  <h4 style={{
-                    fontFamily: 'var(--serif)', fontSize: 'var(--t-md)',
-                    color: 'var(--ink)', margin: 0,
-                  }}>{b.label}</h4>
-                  <Link
-                    href={`/marketing/library?tag=${encodeURIComponent(b.slug)}`}
-                    style={{
-                      fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
-                      color: b.under_target ? 'var(--st-bad)' : 'var(--moss-glow)',
-                      textDecoration: 'none',
-                    }}
-                  >
-                    {b.count} photo{b.count === 1 ? '' : 's'}{b.under_target ? ` · need ${5 - b.count} more` : ' · ✓'} →
-                  </Link>
-                </div>
-                {b.samples.length > 0 ? (
-                  <AssetGrid assets={b.samples} minColPx={150} />
-                ) : (
-                  <div style={{
-                    padding: '12px 14px', background: 'var(--st-bad-bg)',
-                    border: '1px dashed var(--st-bad-bd)', borderRadius: 4,
-                    fontSize: 'var(--t-sm)', color: 'var(--st-bad)',
-                  }}>
-                    No photos tagged <code>{b.slug}</code>. Either no shots taken yet, or photos exist but the auto-tagger missed the room link — open one and add the tag manually.
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* Tier-toggle pills + actions */}
-      <Card
-        title="Browse"
-        emphasis="library"
-        sub={`${filtered.length} asset${filtered.length === 1 ? '' : 's'}${tier ? ` · ${TIER_LABEL[tier as keyof typeof TIER_LABEL] ?? tier}` : ''}${q ? ` · matching "${q}"` : ''}`}
-        source="marketing.v_media_ready"
-        actions={
-          <div style={{ display: 'flex', gap: 6 }}>
-            <Link href="/marketing/upload" className="btn" style={{ fontSize: "var(--t-sm)", textDecoration: 'none', background: 'var(--brass)', color: 'var(--paper-warm)', borderColor: 'var(--brass)' }}>upload ↗</Link>
-            <Link href="/marketing/campaigns/new" className="btn" style={{ fontSize: "var(--t-sm)", textDecoration: 'none', background: 'var(--moss)', color: 'var(--paper-warm)', borderColor: 'var(--moss)' }}>+ new campaign</Link>
-          </div>
-        }
+      {/* KPI Strip */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(5, 1fr)',
+          gap: 16,
+          marginBottom: 32,
+        }}
       >
-        {/* Tier pills */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-          {TIERS.map(t => {
-            const internalCount = Number(tierRows.find(r => r.primary_tier === 'tier_internal')?.total ?? 0);
-            const count =
-              t.key === ''                    ? totalReady :
-              t.key === 'tier_ota_profile'    ? Number(otaCount) :
-              t.key === 'tier_website_hero'   ? Number(heroCount) :
-              t.key === 'tier_social_pool'    ? Number(socialCount) :
-              t.key === 'tier_internal'       ? internalCount :
-              t.key === 'tier_archive'        ? archiveCount :
-              0;
-            const active = tier === t.key;
-            return (
-              <Link
-                key={t.key || 'all'}
-                href={t.key ? `/marketing/library?tier=${t.key}` : '/marketing/library'}
-                className="btn"
-                style={{
-                  fontSize: "var(--t-sm)",
-                  textDecoration: 'none',
-                  background: active ? 'var(--moss)' : 'var(--paper-warm)',
-                  color: active ? 'var(--paper-warm)' : 'var(--ink)',
-                  borderColor: active ? 'var(--moss)' : 'var(--line)',
-                }}
-              >{t.label} <span style={{ fontFamily: 'var(--mono)', opacity: 0.7, marginLeft: 4 }}>{count}</span></Link>
-            );
-          })}
-        </div>
+        <KpiBox label="Total Assets" value={totalAssets === 0 ? '—' : String(totalAssets)} />
+        <KpiBox label="Hero Tier" value={heroTier === 0 ? '—' : String(heroTier)} />
+        <KpiBox label="OTA Tier" value={otaTier === 0 ? '—' : String(otaTier)} />
+        <KpiBox label="Social Pool" value={socialTier === 0 ? '—' : String(socialTier)} />
+        <KpiBox label="Avg QC Score" value={String(avgQc)} />
+      </div>
 
-        {/* Search */}
-        <form method="GET" action="/marketing/library" style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-          {tier && <input type="hidden" name="tier" value={tier} />}
-          {tag  && <input type="hidden" name="tag"  value={tag} />}
-          <input
-            name="q"
-            defaultValue={q}
-            placeholder="search caption, alt-text, filename…"
-            style={{
-              flex: 1,
-              fontSize: "var(--t-base)",
-              padding: '8px 12px',
-              border: '1px solid var(--line)',
-              borderRadius: 4,
-              background: 'var(--paper-warm)',
-              fontFamily: 'var(--sans)',
-            }}
-          />
-          <button type="submit" className="btn" style={{ fontSize: "var(--t-sm)" }}>search</button>
-          {q && <Link href="/marketing/library" className="btn" style={{ fontSize: "var(--t-sm)", textDecoration: 'none' }}>clear</Link>}
-        </form>
-
-        {/* Tag chip filter (single-tag for now) */}
-        {tag && (
-          <div style={{ marginBottom: 12, fontSize: "var(--t-sm)", color: 'var(--ink-soft)' }}>
-            tag filter: <strong>{tag}</strong>
-            <Link href={`/marketing/library${tier ? `?tier=${tier}` : ''}`} style={{ marginLeft: 6, color: 'var(--moss)' }}>×</Link>
-          </div>
+      {/* Asset Library Table */}
+      <div style={{ marginBottom: 40 }}>
+        <h2
+          style={{
+            margin: '0 0 12px',
+            fontWeight: 600,
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+            opacity: 0.55,
+          }}
+        >
+          Ready Assets
+        </h2>
+        {rows.length === 0 ? (
+          <p style={{ opacity: 0.5 }}>No ready assets found — check ingest pipeline below.</p>
+        ) : (
+          <DataTable columns={assetColumns} rows={assetTableRows} />
         )}
+      </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 18 }}>
-          {/* Filter rail */}
-          <aside style={{ fontSize: "var(--t-base)" }}>
-            <FilterCategory title={`Tags (${taxonomy.length})`}>
-              {Array.from(tagsByCategory.entries())
-                .sort((a, b) => a[0].localeCompare(b[0]))
-                .slice(0, 6)
-                .map(([cat, items]) => (
-                  <div key={cat} style={{ marginTop: 12 }}>
-                    <div style={{ fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: 1, color: 'var(--ink-mute)', marginBottom: 4, fontFamily: 'var(--mono)' }}>
-                      {cat} · {items.length}
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      {items.slice(0, 8).map(t => (
-                        <Link
-                          key={t.label}
-                          href={`/marketing/library?tag=${encodeURIComponent(t.label)}${tier ? `&tier=${tier}` : ''}`}
-                          style={{
-                            fontSize: "var(--t-sm)",
-                            color: tag === t.label ? 'var(--moss)' : 'var(--ink-soft)',
-                            textDecoration: 'none',
-                            fontWeight: tag === t.label ? 600 : 400,
-                          }}
-                        >{tag === t.label ? '☑' : '☐'} {t.label}</Link>
-                      ))}
-                      {items.length > 8 && <span style={{ fontSize: "var(--t-xs)", color: 'var(--ink-mute)' }}>+{items.length - 8} more</span>}
-                    </div>
-                  </div>
-                ))}
-            </FilterCategory>
-
-            <FilterCategory title="Type">
-              <Label>☐ Photo</Label>
-              <Label>☐ Video</Label>
-              <Label>☐ Reel</Label>
-              <Label>☐ 360</Label>
-            </FilterCategory>
-
-            <FilterCategory title="Freshness">
-              <Label>◉ Any</Label>
-              <Label>○ Used last 30d</Label>
-              <Label>○ Unused 90d+</Label>
-              <Label>○ Never used</Label>
-            </FilterCategory>
-
-            <FilterCategory title="License">
-              <Label>☐ Owned only</Label>
-              <Label>☐ Paid ads OK</Label>
-              <Label>☐ Print OK</Label>
-            </FilterCategory>
-          </aside>
-
-          {/* Grid */}
-          <div>
-            <AssetGrid
-              assets={filtered}
-              emptyText={totalReady === 0 ? 'Library empty' : 'No assets match these filters'}
-              emptyAction={
-                totalReady === 0
-                  ? <p>Drop your first photos at <Link href="/marketing/upload" style={{ color: 'var(--brass)' }}>upload</Link>, or sync via Google Drive (Phase 1 ingest pipeline).</p>
-                  : <p style={{ fontSize: "var(--t-base)", color: 'var(--ink-mute)' }}>Try removing a filter or <Link href="/marketing/library" style={{ color: 'var(--moss)' }}>clear all</Link>.</p>
-              }
-            />
-          </div>
-        </div>
-      </Card>
-    </>
+      {/* Ingest Pipeline Table */}
+      <div>
+        <h2
+          style={{
+            margin: '0 0 12px',
+            fontWeight: 600,
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+            opacity: 0.55,
+          }}
+        >
+          Ingest Pipeline (last 20)
+        </h2>
+        {ingest.length === 0 ? (
+          <p style={{ opacity: 0.5 }}>No recent ingest activity.</p>
+        ) : (
+          <DataTable columns={ingestColumns} rows={ingestTableRows} />
+        )}
+      </div>
+    </main>
   );
-}
-
-function FilterCategory({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div style={{ marginBottom: 18, paddingBottom: 14, borderBottom: '1px solid var(--line-soft)' }}>
-      <div style={{ fontSize: "var(--t-xs)", fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--ink)', fontWeight: 600, marginBottom: 8 }}>{title}</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>{children}</div>
-    </div>
-  );
-}
-
-function Label({ children }: { children: React.ReactNode }) {
-  return <span style={{ fontSize: "var(--t-sm)", color: 'var(--ink-soft)', cursor: 'default' }}>{children}</span>;
 }
