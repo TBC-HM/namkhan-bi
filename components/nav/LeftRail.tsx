@@ -4,9 +4,9 @@
 // 01 Revenue · 02 Sales · 03 Marketing · 04 Operations · 04b Front Office · 05 Guest · 06 Finance
 // Bottom utility section: Knowledge · Settings.
 // Click N at top → Home (overview lives at /).
-// Home link added 2026-05-08: explicit 'H' glyph between N brand and pillar list.
 // Note: Sales glyph is '$' to avoid collision with Settings 'S'.
 // Front Office glyph is 'A' (Arrivals) — distinct from Operations 'O' and Marketing 'M'.
+// 2026-05-08: Added explicit Home rail item (⌂/H) between N logo and pillar list (slice of #159).
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -84,7 +84,9 @@ export default function LeftRail() {
   const pathname = usePathname();
 
   const renderItem = (it: RailItem) => {
-    const active = it.matches.some((m) => pathname === m || pathname.startsWith(m + '/'));
+    const active = it.matches.some(
+      (m) => pathname === m || pathname.startsWith(m + '/')
+    );
     return (
       <Link
         key={it.href}
@@ -96,11 +98,12 @@ export default function LeftRail() {
           alignItems: 'center',
           gap: 2,
           padding: '10px 0',
-          color: active ? '#fff' : '#666',
           textDecoration: 'none',
-          fontSize: 11,
+          color: active ? '#fff' : 'rgba(255,255,255,0.55)',
           fontWeight: active ? 700 : 400,
+          fontSize: 11,
           borderLeft: active ? '2px solid #fff' : '2px solid transparent',
+          transition: 'color 0.15s, border-color 0.15s',
         }}
       >
         <span style={{ fontSize: 16, lineHeight: 1 }}>{it.glyph}</span>
@@ -111,15 +114,13 @@ export default function LeftRail() {
 
   // Overview-active when on /overview or /
   const overviewActive = pathname === '/' || pathname === '/overview';
-  // Home-active when on / or /overview (same condition — Home IS the overview)
-  const homeActive = overviewActive;
 
   return (
     <nav
       style={{
         width: 56,
         minHeight: '100vh',
-        background: '#0a0a0a',
+        background: '#111',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -132,21 +133,21 @@ export default function LeftRail() {
         zIndex: 100,
       }}
     >
-      {/* N brand glyph — clickable to Home */}
+      {/* N — property logo / wordmark, always links to / */}
       <Link
         href="/"
-        title="Home"
+        title="Namkhan BI"
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           width: 36,
           height: 36,
-          background: '#fff',
-          color: '#000',
-          fontWeight: 900,
-          fontSize: 20,
           borderRadius: 6,
+          background: '#2a2a2a',
+          color: '#fff',
+          fontWeight: 800,
+          fontSize: 18,
           textDecoration: 'none',
           marginBottom: 8,
           flexShrink: 0,
@@ -155,7 +156,7 @@ export default function LeftRail() {
         N
       </Link>
 
-      {/* Explicit Home link — between N brand and department pillars */}
+      {/* ── HOME LINK (slice of #159) ── inserted between N and pillar list */}
       <Link
         href="/"
         title="Home"
@@ -165,37 +166,46 @@ export default function LeftRail() {
           alignItems: 'center',
           gap: 2,
           padding: '10px 0',
-          color: homeActive ? '#fff' : '#666',
-          textDecoration: 'none',
-          fontSize: 11,
-          fontWeight: homeActive ? 700 : 400,
-          borderLeft: homeActive ? '2px solid #fff' : '2px solid transparent',
           width: '100%',
-          paddingLeft: 2,
+          textDecoration: 'none',
+          color: overviewActive ? '#fff' : 'rgba(255,255,255,0.55)',
+          fontWeight: overviewActive ? 700 : 400,
+          fontSize: 11,
+          borderLeft: overviewActive ? '2px solid #fff' : '2px solid transparent',
+          transition: 'color 0.15s, border-color 0.15s',
         }}
       >
         <span style={{ fontSize: 16, lineHeight: 1 }}>⌂</span>
         <span>Home</span>
       </Link>
 
-      {/* Divider */}
+      {/* ── DIVIDER ── */}
       <div
         style={{
           width: 32,
           height: 1,
-          background: '#222',
-          margin: '4px 0 8px',
+          background: 'rgba(255,255,255,0.12)',
+          margin: '4px 0 4px',
           flexShrink: 0,
         }}
       />
 
-      {/* Department pillars */}
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, width: '100%', alignItems: 'center' }}>
+      {/* ── PILLARS ── */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', width: '100%', alignItems: 'center' }}>
         {PILLARS.map(renderItem)}
       </div>
 
-      {/* Utility items at bottom */}
+      {/* ── UTILITY ── */}
       <div style={{ display: 'flex', flexDirection: 'column', width: '100%', alignItems: 'center' }}>
+        <div
+          style={{
+            width: 32,
+            height: 1,
+            background: 'rgba(255,255,255,0.12)',
+            margin: '4px 0 4px',
+            flexShrink: 0,
+          }}
+        />
         {UTILITY.map(renderItem)}
       </div>
     </nav>
