@@ -1,176 +1,84 @@
 'use client';
 
-/**
- * DeptDropdown — shared navigation component
- * Slice of ticket #159: renders a styled "Departments ▾" dropdown
- * linking to all 7 department entry pages.
- *
- * Usage:
- *   import DeptDropdown from '@/components/nav/DeptDropdown';
- *   <DeptDropdown />
- *
- * Optional props:
- *   current  — the slug of the active dept (highlights that item)
- *   label    — override button label (default: "Departments")
- */
+import { useRouter, usePathname } from 'next/navigation';
 
-import { useState, useRef, useEffect } from 'react';
-import Link from 'next/link';
+export type Department =
+  | 'Revenue'
+  | 'Finance'
+  | 'Guest'
+  | 'Operations'
+  | 'HR';
 
-export interface DeptLink {
-  label: string;
-  slug: string;
-  href: string;
-}
+const DEPT_ROUTES: Record<Department, string> = {
+  Revenue:    '/revenue',
+  Finance:    '/finance',
+  Guest:      '/guest',
+  Operations: '/operations',
+  HR:         '/hr',
+};
 
-export const DEPARTMENTS: DeptLink[] = [
-  { label: 'Revenue',    slug: 'revenue',    href: '/revenue' },
-  { label: 'Sales',      slug: 'sales',      href: '/sales' },
-  { label: 'Marketing',  slug: 'marketing',  href: '/marketing' },
-  { label: 'Operations', slug: 'operations', href: '/operations' },
-  { label: 'Guest',      slug: 'guest',      href: '/guest' },
-  { label: 'Finance',    slug: 'finance',    href: '/finance' },
-  { label: 'IT',         slug: 'it',         href: '/it' },
+const DEPARTMENTS: Department[] = [
+  'Revenue',
+  'Finance',
+  'Guest',
+  'Operations',
+  'HR',
 ];
 
 interface DeptDropdownProps {
-  /** slug of current active dept — highlights that entry */
-  current?: string;
-  /** override button label */
-  label?: string;
+  /** Override the active department label. Defaults to path-detected value. */
+  value?: Department;
+  /** Called with the newly selected department. */
+  onChange?: (dept: Department) => void;
 }
 
-export default function DeptDropdown({ current, label = 'Departments' }: DeptDropdownProps) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+/**
+ * DeptDropdown — shared nav component.
+ * Renders a <select> pre-selected to the current pillar and navigates on change.
+ * Can be overridden via value/onChange for controlled usage.
+ */
+export default function DeptDropdown({ value, onChange }: DeptDropdownProps) {
+  const router = useRouter();
+  const pathname = usePathname();
 
-  // Close on click-outside
-  useEffect(() => {
-    function handleOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    if (open) {
-      document.addEventListener('mousedown', handleOutside);
-    }
-    return () => document.removeEventListener('mousedown', handleOutside);
-  }, [open]);
+  // Detect active dept from URL if not controlled
+  const detected = (Object.keys(DEPT_ROUTES) as Department[]).find((d) =>
+    pathname.startsWith(DEPT_ROUTES[d])
+  );
+  const active = value ?? detected ?? 'Revenue';
 
-  // Close on Escape
-  useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setOpen(false);
+  function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const dept = e.target.value as Department;
+    if (onChange) {
+      onChange(dept);
+    } else {
+      router.push(DEPT_ROUTES[dept]);
     }
-    if (open) {
-      document.addEventListener('keydown', handleKey);
-    }
-    return () => document.removeEventListener('keydown', handleKey);
-  }, [open]);
+  }
 
   return (
-    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
-      <button
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '6px 14px',
-          background: 'var(--surface-2, #111)',
-          border: '1px solid var(--border, #2a2a2a)',
-          borderRadius: 6,
-          color: 'var(--text-primary, #f0f0f0)',
-          fontFamily: 'var(--sans, "Inter Tight", sans-serif)',
-          fontSize: 'var(--t-md, 13px)',
-          letterSpacing: 'var(--ls-loose, 0.06em)',
-          cursor: 'pointer',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {label}
-        <span
-          aria-hidden="true"
-          style={{
-            display: 'inline-block',
-            transition: 'transform 200ms',
-            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
-            fontSize: 10,
-            opacity: 0.7,
-          }}
-        >
-          ▾
-        </span>
-      </button>
-
-      {open && (
-        <ul
-          role="listbox"
-          aria-label="Select department"
-          style={{
-            position: 'absolute',
-            top: 'calc(100% + 6px)',
-            left: 0,
-            minWidth: 180,
-            margin: 0,
-            padding: '6px 0',
-            listStyle: 'none',
-            background: 'var(--surface-2, #111)',
-            border: '1px solid var(--border, #2a2a2a)',
-            borderRadius: 6,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.55)',
-            zIndex: 200,
-          }}
-        >
-          {DEPARTMENTS.map((dept) => {
-            const isActive = dept.slug === current;
-            return (
-              <li
-                key={dept.slug}
-                role="option"
-                aria-selected={isActive}
-              >
-                <Link
-                  href={dept.href}
-                  onClick={() => setOpen(false)}
-                  style={{
-                    display: 'block',
-                    padding: '8px 18px',
-                    fontFamily: 'var(--sans, "Inter Tight", sans-serif)',
-                    fontSize: 'var(--t-md, 13px)',
-                    letterSpacing: 'var(--ls-loose, 0.06em)',
-                    color: isActive
-                      ? 'var(--gold, #c9a84c)'
-                      : 'var(--text-primary, #f0f0f0)',
-                    textDecoration: 'none',
-                    background: isActive
-                      ? 'var(--surface-3, #1a1a1a)'
-                      : 'transparent',
-                    fontWeight: isActive ? 600 : 400,
-                    transition: 'background 120ms, color 120ms',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) {
-                      (e.currentTarget as HTMLAnchorElement).style.background =
-                        'var(--surface-3, #1a1a1a)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) {
-                      (e.currentTarget as HTMLAnchorElement).style.background =
-                        'transparent';
-                    }
-                  }}
-                >
-                  {dept.label}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
+    <select
+      value={active}
+      onChange={handleChange}
+      aria-label="Switch department"
+      style={{
+        fontFamily: 'var(--sans, "Inter Tight", sans-serif)',
+        fontSize: 'var(--t-md, 13px)',
+        letterSpacing: 'var(--ls-tight, -0.01em)',
+        background: 'transparent',
+        border: '1px solid rgba(255,255,255,0.25)',
+        borderRadius: 6,
+        padding: '4px 10px',
+        color: 'inherit',
+        cursor: 'pointer',
+        outline: 'none',
+      }}
+    >
+      {DEPARTMENTS.map((dept) => (
+        <option key={dept} value={dept}>
+          {dept}
+        </option>
+      ))}
+    </select>
   );
 }
