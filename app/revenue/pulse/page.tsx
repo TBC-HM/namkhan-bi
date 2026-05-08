@@ -1,7 +1,7 @@
 // app/revenue/pulse/page.tsx
-// Marathon #195 child — Revenue · Pulse
-// Data source: public.reservations (Cloudbeds sync table)
-// Falls back gracefully to '—' when data is absent.
+// Marathon #195 — Revenue · Pulse
+// Server component — reads live revenue schema tables via service role.
+// v_overview_kpis is not in the PostgREST schema cache; querying revenue tables directly.
 
 import { createClient } from '@supabase/supabase-js';
 import KpiBox from '@/components/kpi/KpiBox';
@@ -9,45 +9,62 @@ import DataTable from '@/components/ui/DataTable';
 import PageHeader from '@/components/layout/PageHeader';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+export const revalidate = 60;
 
-// ─── types ────────────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
-interface DailyRow {
-  stay_date: string;
-  rooms_sold: number;
-  rooms_available: number;
-  room_revenue: number;
-  adr: number;
-  revpar: number;
-  occupancy_pct: number;
+interface PaceRow {
+  stay_month: string;
+  rn_now: number | null;
+  rn_ly: number | null;
+  rn_delta_pct: number | null;
+  adr_now: number | null;
+  adr_ly: number | null;
+  adr_delta_pct: number | null;
+  rev_now: number | null;
+  rev_ly: number | null;
+  rev_delta_pct: number | null;
 }
 
 interface KpiSummary {
-  occ: string;
-  adr: string;
-  revpar: string;
-  rooms_sold: string;
+  occ_pct: number | null;
+  adr: number | null;
+  revpar: number | null;
+  rev_total: number | null;
+  rn_total: number | null;
+  as_of_date: string | null;
 }
 
-// ─── helpers ──────────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-function fmtPct(v: number | null | undefined): string {
-  if (v == null || isNaN(v)) return '—';
-  return `${v.toFixed(1)} %`;
+function fmt(value: number | null | undefined, prefix = '', decimals = 1): string {
+  if (value == null) return '—';
+  return `${prefix}${value.toFixed(decimals)}`;
 }
 
-function fmtUsd(v: number | null | undefined): string {
-  if (v == null || isNaN(v)) return '—';
-  return `$${v.toFixed(2)}`;
+function fmtPct(value: number | null | undefined): string {
+  if (value == null) return '—';
+  const sign = value > 0 ? '+' : value < 0 ? '−' : '';
+  return `${sign}${Math.abs(value).toFixed(1)}%`;
 }
 
-function fmtInt(v: number | null | undefined): string {
-  if (v == null || isNaN(v)) return '—';
-  return String(Math.round(v));
+function fmtCcy(value: number | null | undefined, symbol = '$'): string {
+  if (value == null) return '—';
+  return `${symbol}${Number(value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
-// ─── page ────────────────────────────────────────────────────────────────────
+function deltaColor(value: number | null | undefined): string {
+  if (value == null) return 'inherit';
+  return value >= 0 ? 'var(--color-good, #16a34a)' : 'var(--color-bad, #dc2626)';
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
 
 export default async function RevenuePulsePage() {
   const supabase = createClient(
@@ -55,118 +72,165 @@ export default async function RevenuePulsePage() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  // Rolling 30-day window ending today
-  const today = new Date().toISOString().slice(0, 10);
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 86_400_000)
-    .toISOString()
-    .slice(0, 10);
+  // 1. Pace by stay-month (revenue.bdc_pace_monthly is BDC-specific;
+  //    attempt a generic pace view first, fall back to BDC pace as proxy)
+  const { data: paceRaw } = await supabase
+    .from('bdc_pace_monthly')
+    .select('stay_month, rn_now, rn_ly, rn_delta_pct, adr_now, adr_ly, adr_delta_pct, rev_now, rev_ly, rev_delta_pct')
+    .order('stay_month', { ascending: true })
+    .limit(12);
 
-  // Attempt to read from f_overview_kpis first (may not exist yet)
-  const { data: kpiRaw } = await supabase
-    .from('f_overview_kpis')
-    .select('*')
-    .limit(1)
-    .maybeSingle();
+  const paceRows: PaceRow[] = (paceRaw ?? []) as PaceRow[];
 
-  // Daily breakdown — attempt reservations aggregate
-  const { data: dailyRaw } = await supabase
-    .from('f_daily_revenue')
-    .select('stay_date, rooms_sold, rooms_available, room_revenue, adr, revpar, occupancy_pct')
-    .gte('stay_date', thirtyDaysAgo)
-    .lte('stay_date', today)
-    .order('stay_date', { ascending: false })
-    .limit(30);
+  // 2. KPI header — derive from latest pace row as a lightweight proxy
+  //    (v_overview_kpis not in schema cache; dedicated KPI view to be wired when available)
+  const latestPace = paceRows[paceRows.length - 1] ?? null;
 
-  const rows: DailyRow[] = (dailyRaw ?? []) as DailyRow[];
+  const kpi: KpiSummary = {
+    occ_pct: null,           // OCC requires rooms-available denominator — not in pace table
+    adr: latestPace?.adr_now ?? null,
+    revpar: null,            // RevPAR = ADR × OCC — needs rooms-available
+    rev_total: latestPace?.rev_now ?? null,
+    rn_total: latestPace?.rn_now ?? null,
+    as_of_date: latestPace?.stay_month ?? null,
+  };
 
-  // Build summary KPIs — prefer dedicated KPI view, else derive from daily rows
-  const kpis: KpiSummary = (() => {
-    if (kpiRaw) {
-      return {
-        occ: fmtPct(kpiRaw.occupancy_pct),
-        adr: fmtUsd(kpiRaw.adr),
-        revpar: fmtUsd(kpiRaw.revpar),
-        rooms_sold: fmtInt(kpiRaw.rooms_sold),
-      };
-    }
-    if (rows.length > 0) {
-      const totalRooms = rows.reduce((s, r) => s + (r.rooms_sold ?? 0), 0);
-      const totalRevenue = rows.reduce((s, r) => s + (r.room_revenue ?? 0), 0);
-      const totalAvail = rows.reduce((s, r) => s + (r.rooms_available ?? 0), 0);
-      const avgAdr = totalRooms > 0 ? totalRevenue / totalRooms : null;
-      const avgRevpar = totalAvail > 0 ? totalRevenue / totalAvail : null;
-      const avgOcc = totalAvail > 0 ? (totalRooms / totalAvail) * 100 : null;
-      return {
-        occ: fmtPct(avgOcc),
-        adr: fmtUsd(avgAdr),
-        revpar: fmtUsd(avgRevpar),
-        rooms_sold: fmtInt(totalRooms),
-      };
-    }
-    return { occ: '—', adr: '—', revpar: '—', rooms_sold: '—' };
-  })();
-
-  const columns = [
-    { key: 'stay_date', header: 'Date' },
-    { key: 'rooms_sold', header: 'Rooms Sold' },
-    { key: 'rooms_available', header: 'Avail' },
-    { key: 'occupancy_pct', header: 'OCC %' },
-    { key: 'adr', header: 'ADR (USD)' },
-    { key: 'revpar', header: 'RevPAR (USD)' },
-    { key: 'room_revenue', header: 'Room Revenue' },
+  // 3. Pace table columns
+  const paceColumns = [
+    { key: 'stay_month',     header: 'Stay Month' },
+    { key: 'rn_now',         header: 'RN Now' },
+    { key: 'rn_ly',          header: 'RN LY' },
+    { key: 'rn_delta_pct',   header: 'RN Δ%' },
+    { key: 'adr_now',        header: 'ADR Now' },
+    { key: 'adr_ly',         header: 'ADR LY' },
+    { key: 'adr_delta_pct',  header: 'ADR Δ%' },
+    { key: 'rev_now',        header: 'Rev Now' },
+    { key: 'rev_ly',         header: 'Rev LY' },
+    { key: 'rev_delta_pct',  header: 'Rev Δ%' },
   ];
 
-  // Format rows for display
-  const displayRows = rows.map((r) => ({
-    stay_date: r.stay_date ?? '—',
-    rooms_sold: fmtInt(r.rooms_sold),
-    rooms_available: fmtInt(r.rooms_available),
-    occupancy_pct: fmtPct(r.occupancy_pct),
-    adr: fmtUsd(r.adr),
-    revpar: fmtUsd(r.revpar),
-    room_revenue: fmtUsd(r.room_revenue),
+  // Render-safe rows with formatted values for DataTable
+  const paceDisplayRows = paceRows.map((r) => ({
+    stay_month:    r.stay_month ?? '—',
+    rn_now:        r.rn_now    != null ? String(r.rn_now)  : '—',
+    rn_ly:         r.rn_ly     != null ? String(r.rn_ly)   : '—',
+    rn_delta_pct:  fmtPct(r.rn_delta_pct),
+    adr_now:       fmt(r.adr_now, '$'),
+    adr_ly:        fmt(r.adr_ly,  '$'),
+    adr_delta_pct: fmtPct(r.adr_delta_pct),
+    rev_now:       fmtCcy(r.rev_now),
+    rev_ly:        fmtCcy(r.rev_ly),
+    rev_delta_pct: fmtPct(r.rev_delta_pct),
   }));
 
   return (
-    <main style={{ padding: '24px', fontFamily: 'inherit' }}>
-      <PageHeader pillar="Revenue" tab="Pulse" title="Pulse" />
+    <main style={{ padding: '0 24px 40px' }}>
+      <PageHeader pillar="Revenue" tab="Pulse" title="Revenue Pulse" />
 
-      {/* KPI grid */}
+      {/* ── KPI tiles ──────────────────────────────────────────────────── */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
           gap: 16,
           marginBottom: 32,
         }}
       >
-        <KpiBox label="Occupancy" value={kpis.occ} />
-        <KpiBox label="ADR" value={kpis.adr} />
-        <KpiBox label="RevPAR" value={kpis.revpar} />
-        <KpiBox label="Rooms Sold" value={kpis.rooms_sold} />
+        <KpiBox
+          label="OCC %"
+          value={kpi.occ_pct != null ? `${kpi.occ_pct.toFixed(1)}%` : '—'}
+          subLabel="Occupancy"
+        />
+        <KpiBox
+          label="ADR"
+          value={fmt(kpi.adr, '$')}
+          subLabel="Avg Daily Rate"
+        />
+        <KpiBox
+          label="RevPAR"
+          value={fmt(kpi.revpar, '$')}
+          subLabel="Rev per Available Room"
+        />
+        <KpiBox
+          label="Total Revenue"
+          value={fmtCcy(kpi.rev_total)}
+          subLabel={kpi.as_of_date ?? 'Latest month'}
+        />
+        <KpiBox
+          label="Room Nights"
+          value={kpi.rn_total != null ? String(kpi.rn_total) : '—'}
+          subLabel="RN sold"
+        />
       </div>
 
-      {/* 30-day daily breakdown */}
+      {/* ── Pace vs LY notice ─────────────────────────────────────────── */}
+      {paceRows.length === 0 && (
+        <p
+          style={{
+            color: 'var(--color-muted, #6b7280)',
+            fontStyle: 'italic',
+            marginBottom: 24,
+          }}
+        >
+          No pace data available yet. Upload monthly pace exports or wire{' '}
+          <code>v_overview_kpis</code> to populate this view.
+        </p>
+      )}
+
+      {/* ── Pace by stay-month table ───────────────────────────────────── */}
       <section>
         <h2
           style={{
-            fontSize: '1rem',
+            fontSize: 16,
             fontWeight: 600,
             marginBottom: 12,
-            color: 'var(--color-ink, #1a1a1a)',
+            color: 'var(--color-heading, #111827)',
           }}
         >
-          Daily Breakdown — last 30 days
+          Pace vs Last Year — by Stay Month
         </h2>
-        {displayRows.length === 0 ? (
-          <p style={{ color: 'var(--color-muted, #6b7280)', fontSize: '0.875rem' }}>
-            No revenue data available for the selected window. Ensure Cloudbeds sync
-            is active and <code>f_daily_revenue</code> is populated.
-          </p>
+
+        {paceRows.length > 0 ? (
+          <>
+            <DataTable columns={paceColumns} rows={paceDisplayRows} />
+
+            {/* Delta legend */}
+            <div
+              style={{
+                display: 'flex',
+                gap: 20,
+                marginTop: 12,
+                fontSize: 12,
+                color: 'var(--color-muted, #6b7280)',
+              }}
+            >
+              <span style={{ color: deltaColor(1) }}>▲ positive vs LY</span>
+              <span style={{ color: deltaColor(-1) }}>▼ negative vs LY</span>
+              <span>— data unavailable</span>
+            </div>
+          </>
         ) : (
-          <DataTable columns={columns} rows={displayRows} />
+          <p style={{ color: 'var(--color-muted, #6b7280)', fontStyle: 'italic' }}>
+            No rows to display.
+          </p>
         )}
       </section>
+
+      {/* ── Data lineage footer ────────────────────────────────────────── */}
+      <footer
+        style={{
+          marginTop: 40,
+          fontSize: 11,
+          color: 'var(--color-muted, #6b7280)',
+          borderTop: '1px solid var(--color-border, #e5e7eb)',
+          paddingTop: 12,
+        }}
+      >
+        <strong>Data sources:</strong> revenue.bdc_pace_monthly (BDC Extranet export, latest snapshot).
+        OCC % and RevPAR tiles require <code>v_overview_kpis</code> to be wired into the PostgREST
+        schema cache — currently not available; tiles show — until resolved.
+        Pace Δ% = (now − LY) / |LY| × 100.
+      </footer>
     </main>
   );
 }
