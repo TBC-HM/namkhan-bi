@@ -7,107 +7,77 @@ import PageHeader from '@/components/layout/PageHeader';
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
-// ── Severity helpers ────────────────────────────────────────────────────────
-const SEVERITY_LABELS: Record<number, string> = {
-  1: 'Critical',
-  2: 'High',
-  3: 'Medium',
-  4: 'Informational',
-};
-
-function severityLabel(n: number | null): string {
-  if (n == null) return '—';
-  return SEVERITY_LABELS[n] ?? `Sev ${n}`;
+interface Incident {
+  id: number;
+  detected_at: string;
+  resolved_at: string | null;
+  severity: number;
+  symptom: string;
+  root_cause: string | null;
+  fix: string | null;
+  auto_resolved: boolean;
+  mttr_minutes: number | null;
+  source: string | null;
 }
 
-function isoDate(ts: string | null): string {
-  if (!ts) return '—';
-  return ts.slice(0, 10);
+interface Ticket {
+  id: number;
+  created_at: string;
+  updated_at: string;
+  arm: string;
+  intent: string;
+  status: string;
+  parsed_summary: string | null;
 }
 
-// ── Page ────────────────────────────────────────────────────────────────────
+function severityLabel(n: number): string {
+  if (n <= 1) return 'P1 Critical';
+  if (n === 2) return 'P2 High';
+  if (n === 3) return 'P3 Medium';
+  return 'P4 Info';
+}
+
 export default async function Page() {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  // Parallel data fetches
-  const [ticketsRes, incidentsRes] = await Promise.all([
-    supabase
-      .from('cockpit_tickets')
-      .select('id, created_at, status, arm, parsed_summary')
-      .order('created_at', { ascending: false })
-      .limit(50),
+  const [{ data: incidentData }, { data: ticketData }] = await Promise.all([
     supabase
       .from('cockpit_incidents')
-      .select('id, detected_at, resolved_at, severity, symptom, source, auto_resolved')
+      .select('*')
       .order('detected_at', { ascending: false })
+      .limit(50),
+    supabase
+      .from('cockpit_tickets')
+      .select('*')
+      .order('created_at', { ascending: false })
       .limit(50),
   ]);
 
-  const tickets = ticketsRes.data ?? [];
-  const incidents = incidentsRes.data ?? [];
+  const incidents: Incident[] = incidentData ?? [];
+  const tickets: Ticket[] = ticketData ?? [];
 
-  // ── Derived KPIs ──────────────────────────────────────────────────────────
-  const openTickets = tickets.filter(
-    (t) => t.status !== 'completed' && t.status !== 'closed' && t.status !== 'cancelled'
-  ).length;
+  // --- KPI derivations ---
+  const openIncidents = incidents.filter((i) => !i.resolved_at && i.severity <= 3);
+  const criticalIncidents = incidents.filter((i) => !i.resolved_at && i.severity === 1);
+  const avgMttr =
+    incidents.filter((i) => i.mttr_minutes !== null).length > 0
+      ? Math.round(
+          incidents
+            .filter((i) => i.mttr_minutes !== null)
+            .reduce((sum, i) => sum + (i.mttr_minutes ?? 0), 0) /
+            incidents.filter((i) => i.mttr_minutes !== null).length
+        )
+      : null;
+  const openTickets = tickets.filter((t) => !['completed', 'closed', 'cancelled'].includes(t.status));
 
-  const devTickets = tickets.filter((t) => t.arm === 'dev').length;
-
-  const openIncidents = incidents.filter((i) => !i.resolved_at).length;
-
-  const criticalIncidents = incidents.filter(
-    (i) => (i.severity ?? 4) <= 2 && !i.resolved_at
-  ).length;
-
-  // ── Table column definitions ───────────────────────────────────────────────
-  const ticketColumns = [
-    { key: 'id',              header: 'ID'       },
-    { key: 'created_at_fmt',  header: 'Created'  },
-    { key: 'arm',             header: 'Arm'      },
-    { key: 'status',          header: 'Status'   },
-    { key: 'summary_short',   header: 'Summary'  },
-  ];
-
-  const incidentColumns = [
-    { key: 'id',              header: 'ID'          },
-    { key: 'detected_at_fmt', header: 'Detected'    },
-    { key: 'severity_label',  header: 'Severity'    },
-    { key: 'source',          header: 'Source'      },
-    { key: 'symptom_short',   header: 'Symptom'     },
-    { key: 'resolved',        header: 'Resolved'    },
-  ];
-
-  // ── Row shaping ────────────────────────────────────────────────────────────
-  const ticketRows = tickets.map((t) => ({
-    ...t,
-    created_at_fmt: isoDate(t.created_at as string | null),
-    arm:            t.arm ?? '—',
-    status:         t.status ?? '—',
-    summary_short:  typeof t.parsed_summary === 'string'
-      ? t.parsed_summary.slice(0, 80).replace(/\n/g, ' ') + (t.parsed_summary.length > 80 ? '…' : '')
-      : '—',
-  }));
-
-  const incidentRows = incidents.map((i) => ({
-    ...i,
-    detected_at_fmt: isoDate(i.detected_at as string | null),
-    severity_label:  severityLabel(i.severity as number | null),
-    source:          (i.source as string | null) ?? '—',
-    symptom_short:   typeof i.symptom === 'string'
-      ? i.symptom.slice(0, 80) + (i.symptom.length > 80 ? '…' : '')
-      : '—',
-    resolved:        i.resolved_at ? '✓' : i.auto_resolved ? 'Auto' : '—',
-  }));
-
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <main style={{ padding: '24px 32px', maxWidth: 1400, margin: '0 auto' }}>
-      <PageHeader pillar="IT" tab="Overview" title="IT Operations" />
+    <main style={{ padding: '24px 32px', fontFamily: 'inherit' }}>
+      <PageHeader pillar="IT" tab="Overview" title="IT Overview" />
 
-      {/* KPI strip */}
+      {/* KPI Row */}
       <div
         style={{
           display: 'grid',
@@ -116,41 +86,75 @@ export default async function Page() {
           marginBottom: 32,
         }}
       >
-        <KpiBox label="Open Tickets"      value={String(openTickets)}      />
-        <KpiBox label="Dev-Arm Tickets"   value={String(devTickets)}       />
-        <KpiBox label="Open Incidents"    value={String(openIncidents)}    />
-        <KpiBox label="Critical / High"   value={String(criticalIncidents)}/>
+        <KpiBox
+          label="Open Incidents"
+          value={openIncidents.length === 0 ? '—' : String(openIncidents.length)}
+        />
+        <KpiBox
+          label="P1 Critical"
+          value={criticalIncidents.length === 0 ? '—' : String(criticalIncidents.length)}
+        />
+        <KpiBox
+          label="Avg MTTR (min)"
+          value={avgMttr !== null ? String(avgMttr) : '—'}
+        />
+        <KpiBox
+          label="Open Tickets"
+          value={openTickets.length === 0 ? '—' : String(openTickets.length)}
+        />
       </div>
 
-      {/* Tickets table */}
-      <section style={{ marginBottom: 40 }}>
-        <h2
-          style={{
-            fontSize: 18,
-            fontWeight: 600,
-            marginBottom: 12,
-            color: '#1a1a2e',
-          }}
-        >
-          Cockpit Tickets (last 50)
-        </h2>
-        <DataTable columns={ticketColumns} rows={ticketRows} />
-      </section>
+      {/* Incidents Table */}
+      <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12, marginTop: 0 }}>
+        Recent Incidents
+      </h2>
+      <DataTable
+        columns={[
+          { key: 'id', header: '#' },
+          { key: 'detected_at_fmt', header: 'Detected' },
+          { key: 'resolved_at_fmt', header: 'Resolved' },
+          { key: 'severity_label', header: 'Severity' },
+          { key: 'symptom', header: 'Symptom' },
+          { key: 'source', header: 'Source' },
+          { key: 'mttr_minutes', header: 'MTTR (min)' },
+        ]}
+        rows={incidents.map((i) => ({
+          id: i.id,
+          detected_at_fmt: i.detected_at
+            ? new Date(i.detected_at).toISOString().slice(0, 16).replace('T', ' ')
+            : '—',
+          resolved_at_fmt: i.resolved_at
+            ? new Date(i.resolved_at).toISOString().slice(0, 16).replace('T', ' ')
+            : '—',
+          severity_label: severityLabel(i.severity),
+          symptom: i.symptom ?? '—',
+          source: i.source ?? '—',
+          mttr_minutes: i.mttr_minutes ?? '—',
+        }))}
+      />
 
-      {/* Incidents table */}
-      <section>
-        <h2
-          style={{
-            fontSize: 18,
-            fontWeight: 600,
-            marginBottom: 12,
-            color: '#1a1a2e',
-          }}
-        >
-          Incidents (last 50)
-        </h2>
-        <DataTable columns={incidentColumns} rows={incidentRows} />
-      </section>
+      {/* Tickets Table */}
+      <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12, marginTop: 32 }}>
+        Recent Tickets
+      </h2>
+      <DataTable
+        columns={[
+          { key: 'id', header: '#' },
+          { key: 'created_at_fmt', header: 'Created' },
+          { key: 'arm', header: 'Arm' },
+          { key: 'intent', header: 'Intent' },
+          { key: 'status', header: 'Status' },
+        ]}
+        rows={tickets.map((t) => ({
+          id: t.id,
+          created_at_fmt: t.created_at
+            ? new Date(t.created_at).toISOString().slice(0, 16).replace('T', ' ')
+            : '—',
+          arm: t.arm ?? '—',
+          intent: t.intent ?? '—',
+          status: t.status ?? '—',
+        }))}
+      />
     </main>
   );
 }
