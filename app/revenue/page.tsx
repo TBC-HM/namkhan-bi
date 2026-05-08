@@ -85,10 +85,33 @@ function saveLS(key: string, val: unknown) {
 }
 function uid() { return Math.random().toString(36).slice(2, 9); }
 
+// 2026-05-08 — projects v1 (PR follow-up to #211).
+// Active project lives in localStorage; selecting one tags subsequent
+// chats with project_id so agents read the project's KB rows in addition
+// to global KB. Picker calls /api/cockpit/projects (GET list, POST create).
+const ACTIVE_PROJECT_KEY = 'nk.rev.entry.activeProject.v1';
+
+interface ProjectRow {
+  id: number;
+  slug: string;
+  name: string;
+  description: string | null;
+  dept: string | null;
+  status: string;
+}
+
+interface AttachedFile {
+  name: string;
+  size: number;
+  path: string;
+  public_url: string | null;
+}
+
 // ─── component ──────────────────────────────────────────────────────────────
 export default function RevenuePage() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileRef  = useRef<HTMLInputElement>(null);
 
   const [greeting,  setGreeting]  = useState('Good morning');
   const [chatValue, setChatValue] = useState('');
@@ -96,6 +119,22 @@ export default function RevenuePage() {
   const [docs,      setDocs]      = useState<DocItem[]>(DEFAULT_DOCS);
   const [tasks,     setTasks]     = useState<TaskItem[]>(DEFAULT_TASKS);
   const [deptOpen,  setDeptOpen]  = useState(false);
+
+  // Projects state
+  const [projects,    setProjects]    = useState<ProjectRow[]>([]);
+  const [activeProject, setActiveProject] = useState<ProjectRow | null>(null);
+  const [projOpen,    setProjOpen]    = useState(false);
+  const [helpOpen,    setHelpOpen]    = useState(false);
+  const [creating,    setCreating]    = useState(false);
+  const [newProjName, setNewProjName] = useState('');
+
+  // File attachments for next send
+  const [attachments, setAttachments] = useState<AttachedFile[]>([]);
+  const [uploading,   setUploading]   = useState(false);
+
+  // Auto-summarise (on-request)
+  const [summarising, setSummarising] = useState(false);
+  const [summary,     setSummary]     = useState<string | null>(null);
 
   useEffect(() => {
     setAttn (loadLS<AttentionItem[]>(ATTN_KEY,  DEFAULT_ATTN));
@@ -105,13 +144,109 @@ export default function RevenuePage() {
     if (h >= 12 && h < 17) setGreeting('Good afternoon');
     else if (h >= 17)      setGreeting('Good evening');
     inputRef.current?.focus();
+
+    // Hydrate projects + active selection
+    fetch('/api/cockpit/projects?dept=revenue', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => {
+        const list = Array.isArray(j?.projects) ? (j.projects as ProjectRow[]) : [];
+        setProjects(list);
+        const savedSlug = (typeof window !== 'undefined') ? localStorage.getItem(ACTIVE_PROJECT_KEY) : null;
+        if (savedSlug) {
+          const match = list.find(p => p.slug === savedSlug);
+          if (match) setActiveProject(match);
+          else localStorage.removeItem(ACTIVE_PROJECT_KEY);
+        }
+      })
+      .catch(() => { /* silent — projects are optional */ });
   }, []);
+
+  function pickProject(p: ProjectRow | null) {
+    setActiveProject(p);
+    setProjOpen(false);
+    setSummary(null);
+    if (p) localStorage.setItem(ACTIVE_PROJECT_KEY, p.slug);
+    else   localStorage.removeItem(ACTIVE_PROJECT_KEY);
+  }
+
+  async function createProject() {
+    const name = newProjName.trim();
+    if (!name) return;
+    setCreating(true);
+    try {
+      const res = await fetch('/api/cockpit/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, dept: 'revenue', owner_role: 'revenue_hod' }),
+      });
+      if (!res.ok) return;
+      const j = await res.json();
+      const created = j?.project as ProjectRow | undefined;
+      if (created) {
+        setProjects(prev => [created, ...prev]);
+        pickProject(created);
+        setNewProjName('');
+      }
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function archiveProject(p: ProjectRow) {
+    if (!confirm(`Archive "${p.name}"? Archive = hidden from this list.`)) return;
+    await fetch(`/api/cockpit/projects/${p.slug}/archive`, { method: 'POST' });
+    setProjects(prev => prev.filter(x => x.id !== p.id));
+    if (activeProject?.id === p.id) pickProject(null);
+  }
+
+  async function summariseProject() {
+    if (!activeProject) return;
+    setSummarising(true);
+    setSummary(null);
+    try {
+      const res = await fetch(`/api/cockpit/projects/${activeProject.slug}/summarize`, { method: 'POST' });
+      const j = await res.json();
+      setSummary(typeof j?.summary === 'string' ? j.summary : (j?.error ?? 'no summary'));
+    } catch (e) {
+      setSummary(e instanceof Error ? e.message : 'summarise failed');
+    } finally {
+      setSummarising(false);
+    }
+  }
+
+  async function handleFiles(files: FileList | null) {
+    if (!files?.length) return;
+    setUploading(true);
+    try {
+      const out: AttachedFile[] = [];
+      for (const file of Array.from(files)) {
+        const fd = new FormData();
+        fd.append('file', file);
+        const res = await fetch('/api/cockpit/upload', { method: 'POST', body: fd });
+        if (res.ok) {
+          const j = await res.json();
+          out.push({ name: file.name, size: file.size, path: j.path, public_url: j.public_url });
+        }
+      }
+      setAttachments(prev => [...prev, ...out]);
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  }
 
   function submitChat(e: React.FormEvent) {
     e.preventDefault();
     const q = chatValue.trim();
-    if (!q) return;
-    router.push(`/cockpit/chat?q=${encodeURIComponent(q)}&dept=revenue`);
+    if (!q && attachments.length === 0) return;
+    let body = q;
+    if (attachments.length > 0) {
+      const lines = attachments.map(a => `📎 ${a.name} (${(a.size / 1024).toFixed(0)} KB) — ${a.public_url ?? a.path}`);
+      body = body ? `${body}\n\n${lines.join('\n')}` : lines.join('\n');
+    }
+    const params = new URLSearchParams({ q: body, dept: 'revenue' });
+    if (activeProject) params.set('project', activeProject.slug);
+    router.push(`/cockpit/chat?${params.toString()}`);
   }
 
   // attention CRUD
@@ -252,10 +387,189 @@ export default function RevenuePage() {
         letterSpacing: '0.28em',
         textTransform: 'uppercase',
         color:         '#7d7565',
-        marginBottom:  56,
+        marginBottom:  16,
       }}>
         Revenue · The Namkhan
       </div>
+
+      {/* ── PROJECT BOX (PBS 2026-05-08) ───────────────────────────────────
+       * Scopes chat + uploads to a project so the AI uses only global KB +
+       * this project's KB. Active project persisted to localStorage.
+       * (?) icon opens a small inline help block. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 32, flexWrap: 'wrap' }}>
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => { setProjOpen(o => !o); setHelpOpen(false); }}
+            style={{
+              background:    activeProject ? '#1c160d' : 'transparent',
+              border:        '1px solid #3a3327',
+              borderRadius:  18,
+              color:         activeProject ? '#d8cca8' : '#9b907a',
+              padding:       '5px 14px',
+              cursor:        'pointer',
+              fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
+              fontSize:      10,
+              letterSpacing: '0.16em',
+              textTransform: 'uppercase',
+              fontWeight:    500,
+              display:       'flex',
+              alignItems:    'center',
+              gap:           6,
+            }}
+            title={activeProject ? `Active project: ${activeProject.name}` : 'No project — pick or create one'}
+          >
+            📁 {activeProject ? activeProject.name : 'No project'} ▾
+          </button>
+          {projOpen && (
+            <div style={{
+              position: 'absolute', left: 0, top: 36, zIndex: 60,
+              background: '#0f0d0a', border: '1px solid #2a261d', borderRadius: 8,
+              padding: 6, minWidth: 280, maxHeight: 360, overflowY: 'auto',
+              boxShadow: '0 12px 28px rgba(0,0,0,0.6)',
+            }}>
+              {projects.length === 0 && (
+                <div style={{ padding: '8px 10px', fontSize: 11, color: '#7d7565', fontStyle: 'italic' }}>
+                  No projects yet. Create the first one.
+                </div>
+              )}
+              {projects.map(p => (
+                <div key={p.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px',
+                  background: activeProject?.id === p.id ? '#1c160d' : 'transparent', borderRadius: 6,
+                }}>
+                  <button
+                    onClick={() => pickProject(p)}
+                    style={{
+                      flex: 1, textAlign: 'left', background: 'transparent', border: 'none',
+                      color: activeProject?.id === p.id ? '#c4a06b' : '#d8cca8', cursor: 'pointer',
+                      padding: '4px 6px', fontSize: 12,
+                    }}
+                  >{p.name}</button>
+                  <button
+                    onClick={() => archiveProject(p)}
+                    style={{ background: 'transparent', border: 'none', color: '#7d7565', cursor: 'pointer', fontSize: 14, padding: '0 4px' }}
+                    title="Archive (gone)"
+                  >×</button>
+                </div>
+              ))}
+              {activeProject && (
+                <button
+                  onClick={() => pickProject(null)}
+                  style={{
+                    width: '100%', marginTop: 6, padding: '6px 10px',
+                    background: 'transparent', border: '1px dashed #3a3327', borderRadius: 6,
+                    color: '#9b907a', cursor: 'pointer', fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase',
+                  }}
+                >
+                  Leave project context
+                </button>
+              )}
+              <div style={{ marginTop: 8, padding: '8px 6px 4px', borderTop: '1px solid #2a261d', display: 'flex', gap: 6 }}>
+                <input
+                  value={newProjName}
+                  onChange={e => setNewProjName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') createProject(); }}
+                  placeholder="New project name…"
+                  style={{
+                    flex: 1, background: '#15110b', border: '1px solid #3a3327', borderRadius: 4,
+                    color: '#efe6d3', padding: '5px 8px', fontSize: 12, fontFamily: 'inherit', outline: 'none',
+                  }}
+                />
+                <button
+                  onClick={createProject}
+                  disabled={creating || !newProjName.trim()}
+                  style={{
+                    background: '#a8854a', border: 'none', borderRadius: 4, color: '#0a0a0a',
+                    padding: '0 10px', fontSize: 11, fontWeight: 600, cursor: creating ? 'wait' : 'pointer',
+                    opacity: creating || !newProjName.trim() ? 0.5 : 1,
+                  }}
+                >＋ New</button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* (?) help icon */}
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => { setHelpOpen(o => !o); setProjOpen(false); }}
+            style={{
+              width: 22, height: 22, borderRadius: '50%',
+              background: 'transparent', border: '1px solid #3a3327',
+              color: '#7d7565', cursor: 'pointer', fontSize: 11, lineHeight: 1,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+            }}
+            title="What are projects?"
+          >?</button>
+          {helpOpen && (
+            <div style={{
+              position: 'absolute', left: 0, top: 30, zIndex: 60,
+              background: '#0f0d0a', border: '1px solid #3a3327', borderRadius: 8,
+              padding: 14, width: 360, fontSize: 12, color: '#d8cca8', lineHeight: 1.5,
+              boxShadow: '0 12px 28px rgba(0,0,0,0.6)',
+            }}>
+              <div style={{
+                fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 9,
+                letterSpacing: '0.22em', textTransform: 'uppercase', color: '#a8854a', marginBottom: 8,
+              }}>Projects = scoped memory</div>
+              <p style={{ margin: '0 0 8px' }}>
+                When a project is active, every message you send and every file you upload becomes part of that project.
+                The AI uses <b>only</b> the global knowledge <b>+ this project&apos;s knowledge</b> — no other project leaks in.
+              </p>
+              <ul style={{ margin: '0 0 8px 16px', padding: 0 }}>
+                <li>HoD creates projects from this menu.</li>
+                <li>Click <b>＋ Attach</b> in the chat to upload a file (max 25 MB).</li>
+                <li>Press <b>Summarise</b> any time to get a fresh retro of the project so far.</li>
+                <li>Archive = gone. The list filters archived projects out.</li>
+              </ul>
+              <button
+                onClick={() => setHelpOpen(false)}
+                style={{
+                  background: 'transparent', border: '1px solid #3a3327', borderRadius: 4,
+                  color: '#9b907a', padding: '4px 10px', fontSize: 10, letterSpacing: '0.12em',
+                  textTransform: 'uppercase', cursor: 'pointer',
+                }}
+              >Got it</button>
+            </div>
+          )}
+        </div>
+
+        {activeProject && (
+          <button
+            onClick={summariseProject}
+            disabled={summarising}
+            style={{
+              background: 'transparent', border: '1px solid #3a3327', borderRadius: 18,
+              color: '#9b907a', padding: '5px 12px', cursor: summarising ? 'wait' : 'pointer',
+              fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 10,
+              letterSpacing: '0.16em', textTransform: 'uppercase',
+              opacity: summarising ? 0.5 : 1,
+            }}
+            title="On-request retro"
+          >
+            {summarising ? 'Summarising…' : '✦ Summarise'}
+          </button>
+        )}
+      </div>
+
+      {summary && (
+        <div style={{
+          maxWidth: 720, width: '100%', margin: '0 auto 24px',
+          padding: 14, background: '#15110b', border: '1px solid #3a3327', borderRadius: 8,
+          fontSize: 12, lineHeight: 1.55, color: '#d8cca8', whiteSpace: 'pre-wrap',
+        }}>
+          <div style={{
+            fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 9,
+            letterSpacing: '0.22em', textTransform: 'uppercase', color: '#a8854a',
+            display: 'flex', justifyContent: 'space-between', marginBottom: 8,
+          }}>
+            <span>RETRO · {activeProject?.name}</span>
+            <button onClick={() => setSummary(null)} style={{ background: 'transparent', border: 'none', color: '#7d7565', cursor: 'pointer', fontSize: 12 }}>×</button>
+          </div>
+          {summary}
+        </div>
+      )}
 
       {/* ── HERO: chat in the middle ─────────────────────────────────────── */}
       <div style={{
@@ -282,20 +596,67 @@ export default function RevenuePage() {
         </div>
 
         <form onSubmit={submitChat} style={{ width: '100%', maxWidth: 720 }}>
+          {/* attached file chips (above the input pill) */}
+          {attachments.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+              {attachments.map((a, i) => (
+                <div key={`${a.path}-${i}`} style={{
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  background: '#15110b', border: '1px solid #3a3327', borderRadius: 12,
+                  padding: '3px 8px', fontSize: 11, color: '#d8cca8',
+                }}>
+                  <span>📎 {a.name}</span>
+                  <span style={{ color: '#7d7565' }}>· {(a.size / 1024).toFixed(0)} KB</span>
+                  <button
+                    type="button"
+                    onClick={() => setAttachments(prev => prev.filter((_, j) => j !== i))}
+                    style={{ background: 'transparent', border: 'none', color: '#7d7565', cursor: 'pointer', fontSize: 13, padding: '0 2px' }}
+                  >×</button>
+                </div>
+              ))}
+            </div>
+          )}
           <div style={{
             display:      'flex',
+            alignItems:   'stretch',
             border:       '1px solid #3a3327',
             borderRadius: 14,
             overflow:     'hidden',
             background:   '#15110b',
             boxShadow:    '0 12px 32px rgba(0,0,0,0.45)',
           }}>
+            {/* + paperclip — file upload trigger (PBS 2026-05-08) */}
+            <input
+              ref={fileRef}
+              type="file"
+              multiple
+              style={{ display: 'none' }}
+              onChange={e => handleFiles(e.target.files)}
+            />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              title="Attach files (up to 25 MB each)"
+              style={{
+                background: 'transparent',
+                border:     'none',
+                borderRight:'1px solid #2a261d',
+                color:      uploading ? '#5a5448' : '#a8854a',
+                cursor:     uploading ? 'wait' : 'pointer',
+                padding:    '0 16px',
+                fontSize:   18,
+                fontWeight: 300,
+              }}
+            >
+              {uploading ? '↑' : '+'}
+            </button>
             <input
               ref={inputRef}
               type="text"
               value={chatValue}
               onChange={e => setChatValue(e.target.value)}
-              placeholder="e.g. how are we pacing for next weekend?"
+              placeholder={activeProject ? `Ask Vector — scoped to "${activeProject.name}"…` : 'e.g. how are we pacing for next weekend?'}
               style={{
                 flex:       1,
                 background: 'transparent',
