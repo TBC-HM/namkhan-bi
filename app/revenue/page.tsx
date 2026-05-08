@@ -439,6 +439,24 @@ const docChoiceBtnStyle: React.CSSProperties = {
   textAlign:    'center',
   transition:   'border-color 100ms ease',
 };
+// Small AI-assist button used inline in modals + card headers. Brass-stroke
+// outline, "..." while busy, disabled when not enough input.
+function aiAssistBtnStyle(busy: boolean): React.CSSProperties {
+  return {
+    background:    busy ? '#1c160d' : 'transparent',
+    border:        '1px solid #2a261d',
+    borderRadius:  999,
+    color:         '#a8854a',
+    cursor:        busy ? 'wait' : 'pointer',
+    fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
+    fontSize:      9,
+    letterSpacing: '0.14em',
+    textTransform: 'uppercase',
+    padding:       '3px 9px',
+    flexShrink:    0,
+    opacity:       1,
+  };
+}
 function pillBtnStyle(active: boolean): React.CSSProperties {
   return {
     background:    active ? '#1c160d' : 'transparent',
@@ -516,6 +534,12 @@ export default function RevenuePage() {
   const [reportEmails,  setReportEmails]   = useState<string[]>([]);
   const [emailDraft,    setEmailDraft]     = useState('');
   const [reportEmailTime, setReportEmailTime] = useState('06:00');
+  // AI assist state (PBS 2026-05-08): per-button loading + last response.
+  const [aiBusy,        setAIBusy]        = useState<'project_goal' | 'project_desc' | 'tasks' | 'doc' | null>(null);
+  const [tasksAdvice,   setTasksAdvice]   = useState<string | null>(null);
+  const [docAnalyze,    setDocAnalyze]    = useState<{ open: boolean; doc?: DocItem; question: string; answer: string | null }>({
+    open: false, question: '', answer: null,
+  });
 
   const [greeting,  setGreeting]  = useState('Good morning');
   const [chatValue, setChatValue] = useState('');
@@ -723,6 +747,78 @@ export default function RevenuePage() {
     const params = new URLSearchParams({ q: label, dept: 'revenue' });
     if (activeProject) params.set('project', activeProject.slug);
     router.push(`/cockpit/chat?${params.toString()}`);
+  }
+
+  // AI assist — Project modal: suggest goal / description.
+  async function aiSuggestProject(field: 'goal' | 'description') {
+    if (!projDraft.name.trim()) return;
+    setAIBusy(field === 'goal' ? 'project_goal' : 'project_desc');
+    try {
+      const res = await fetch('/api/cockpit/ai/assist', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'project_suggest',
+          payload: { field, name: projDraft.name, goal: projDraft.goal, dept: 'revenue' },
+        }),
+      });
+      const j = await res.json();
+      if (typeof j?.text === 'string' && j.text.trim()) {
+        setProjDraft(d => ({ ...d, [field]: j.text.trim() }));
+      }
+    } finally {
+      setAIBusy(null);
+    }
+  }
+
+  // AI assist — Tasks: prioritize the open list. Result shown inline above the
+  // 3 containers as a small advice block, dismissable.
+  async function aiHelpTasks() {
+    setAIBusy('tasks');
+    setTasksAdvice(null);
+    try {
+      const res = await fetch('/api/cockpit/ai/assist', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'tasks_help',
+          payload: { tasks, dept: 'revenue' },
+        }),
+      });
+      const j = await res.json();
+      setTasksAdvice(typeof j?.text === 'string' ? j.text : (j?.error ?? 'no advice produced'));
+    } catch (e) {
+      setTasksAdvice(e instanceof Error ? e.message : 'tasks help failed');
+    } finally {
+      setAIBusy(null);
+    }
+  }
+
+  // AI assist — Docs/Reports: pick a doc + ask a question.
+  function openDocAnalyze() {
+    setDocAnalyze({ open: true, doc: docs[0], question: '', answer: null });
+  }
+  async function runDocAnalyze() {
+    if (!docAnalyze.doc || !docAnalyze.question.trim()) return;
+    setAIBusy('doc');
+    try {
+      const res = await fetch('/api/cockpit/ai/assist', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'doc_analyze',
+          payload: {
+            doc_label: docAnalyze.doc.label,
+            doc_url:   docAnalyze.doc.href?.startsWith('http') ? docAnalyze.doc.href : undefined,
+            doc_body:  docAnalyze.doc.body,
+            question:  docAnalyze.question,
+          },
+        }),
+      });
+      const j = await res.json();
+      setDocAnalyze(d => ({ ...d, answer: typeof j?.text === 'string' ? j.text : (j?.error ?? 'no answer produced') }));
+    } catch (e) {
+      setDocAnalyze(d => ({ ...d, answer: e instanceof Error ? e.message : 'analyze failed' }));
+    } finally {
+      setAIBusy(null);
+    }
   }
   function delAttn(id: string) {
     const next = attn.filter(a => a.id !== id);
@@ -1463,6 +1559,14 @@ export default function RevenuePage() {
         <Container
           title="Reports"
           onAdd={openDocChoice}
+          actions={
+            <button
+              onClick={openDocAnalyze}
+              disabled={docs.length === 0}
+              title="Pick a doc and ask the AI a question about it"
+              style={aiAssistBtnStyle(false)}
+            >✦ Analyze</button>
+          }
         >
           <input
             ref={docFileRef}
@@ -1519,6 +1623,14 @@ export default function RevenuePage() {
         <Container
           title="My tasks"
           onAdd={openTaskModal}
+          actions={
+            <button
+              onClick={aiHelpTasks}
+              disabled={aiBusy === 'tasks' || tasks.filter(t => !t.done).length === 0}
+              title="Prioritize my open tasks"
+              style={aiAssistBtnStyle(aiBusy === 'tasks')}
+            >{aiBusy === 'tasks' ? '…' : '✦ Help'}</button>
+          }
         >
           {tasks.map(t => {
             const overdue = !t.done && t.due && t.due < new Date().toISOString().slice(0, 10);
@@ -1579,8 +1691,91 @@ export default function RevenuePage() {
         </Container>
       </div>
 
+      {/* Tasks AI-help inline advice (PBS 2026-05-08) */}
+      {tasksAdvice && (
+        <div style={{
+          maxWidth: 1200, width: '100%', margin: '20px auto 0',
+          padding: 14, background: '#15110b', border: '1px solid #3a3327', borderRadius: 8,
+          fontSize: 12, lineHeight: 1.55, color: '#d8cca8', whiteSpace: 'pre-wrap',
+        }}>
+          <div style={{
+            fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 9,
+            letterSpacing: '0.22em', textTransform: 'uppercase', color: '#a8854a',
+            display: 'flex', justifyContent: 'space-between', marginBottom: 8,
+          }}>
+            <span>✦ Tasks · Help</span>
+            <button onClick={() => setTasksAdvice(null)} style={{ background: 'transparent', border: 'none', color: '#7d7565', cursor: 'pointer', fontSize: 12 }}>×</button>
+          </div>
+          {tasksAdvice}
+        </div>
+      )}
+
       {/* ── Footer (PBS 2026-05-08): SLH affiliation + standard internal-BI line ── */}
       <Footer />
+
+      {/* Doc analyze modal (PBS 2026-05-08): pick a doc + ask a question. */}
+      {docAnalyze.open && (
+        <div onClick={() => setDocAnalyze({ open: false, question: '', answer: null })} style={modalOverlayStyle}>
+          <div onClick={e => e.stopPropagation()} style={{ ...modalCardStyle, maxWidth: 560 }}>
+            <div style={modalEyebrowStyle}>✦ Analyze a doc</div>
+
+            <label style={modalLabelStyle}>Document</label>
+            <select
+              value={docAnalyze.doc?.id ?? ''}
+              onChange={e => {
+                const doc = docs.find(x => x.id === e.target.value);
+                setDocAnalyze(d => ({ ...d, doc, answer: null }));
+              }}
+              style={{ ...modalInputStyle, padding: '9px 10px' }}
+            >
+              {docs.map(d => (
+                <option key={d.id} value={d.id}>{d.label}</option>
+              ))}
+            </select>
+            {docAnalyze.doc && !docAnalyze.doc.body && !docAnalyze.doc.href?.startsWith('http') && (
+              <div style={{ fontSize: 11, color: '#c0584c', marginTop: 4 }}>
+                ⚠ This entry has no readable body or external URL — analysis only works on text/markdown/csv/json content.
+              </div>
+            )}
+
+            <label style={modalLabelStyle}>Question</label>
+            <input
+              autoFocus
+              value={docAnalyze.question}
+              onChange={e => setDocAnalyze(d => ({ ...d, question: e.target.value }))}
+              onKeyDown={e => { if (e.key === 'Enter' && docAnalyze.question.trim()) runDocAnalyze(); }}
+              placeholder="e.g. summarize the action items, or what's the cancellation rate?"
+              style={modalInputStyle}
+            />
+
+            {docAnalyze.answer !== null && (
+              <div style={{
+                marginTop: 12, padding: 12, background: '#15110b',
+                border: '1px solid #2a261d', borderRadius: 8,
+                fontSize: 12, color: '#d8cca8', whiteSpace: 'pre-wrap', lineHeight: 1.55,
+                maxHeight: 360, overflowY: 'auto',
+              }}>
+                {docAnalyze.answer}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
+              <button onClick={() => setDocAnalyze({ open: false, question: '', answer: null })} style={modalCancelStyle}>Close</button>
+              <button
+                onClick={runDocAnalyze}
+                disabled={!docAnalyze.doc || !docAnalyze.question.trim() || aiBusy === 'doc'}
+                style={{
+                  ...modalSaveStyle,
+                  background: (docAnalyze.doc && docAnalyze.question.trim()) ? '#a8854a' : '#1c160d',
+                  color:      (docAnalyze.doc && docAnalyze.question.trim()) ? '#0a0a0a' : '#5a5448',
+                  cursor:     aiBusy === 'doc' ? 'wait' : ((docAnalyze.doc && docAnalyze.question.trim()) ? 'pointer' : 'not-allowed'),
+                  opacity:    aiBusy === 'doc' ? 0.7 : 1,
+                }}
+              >{aiBusy === 'doc' ? 'Analyzing…' : 'Ask AI'}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Doc create — choice modal (PBS 2026-05-08): Upload OR Build report. */}
       {docChoiceOpen && (
@@ -1800,7 +1995,16 @@ export default function RevenuePage() {
               style={modalInputStyle}
             />
 
-            <label style={modalLabelStyle}>Goal</label>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <label style={{ ...modalLabelStyle, marginBottom: 0 }}>Goal</label>
+              <button
+                type="button"
+                onClick={() => aiSuggestProject('goal')}
+                disabled={!projDraft.name.trim() || aiBusy === 'project_goal'}
+                title="Use the project name to suggest a goal"
+                style={aiAssistBtnStyle(aiBusy === 'project_goal')}
+              >{aiBusy === 'project_goal' ? '…' : '✨ AI suggest'}</button>
+            </div>
             <input
               value={projDraft.goal}
               onChange={e => setProjDraft(d => ({ ...d, goal: e.target.value }))}
@@ -1808,7 +2012,18 @@ export default function RevenuePage() {
               style={modalInputStyle}
             />
 
-            <label style={modalLabelStyle}>What about <span style={{ color: '#5a5448', textTransform: 'none', letterSpacing: 0 }}>(background)</span></label>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <label style={{ ...modalLabelStyle, marginBottom: 0 }}>
+                What about <span style={{ color: '#5a5448', textTransform: 'none', letterSpacing: 0 }}>(background)</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => aiSuggestProject('description')}
+                disabled={!projDraft.name.trim() || aiBusy === 'project_desc'}
+                title="Expand name + goal into a description"
+                style={aiAssistBtnStyle(aiBusy === 'project_desc')}
+              >{aiBusy === 'project_desc' ? '…' : '✨ AI suggest'}</button>
+            </div>
             <textarea
               value={projDraft.description}
               onChange={e => setProjDraft(d => ({ ...d, description: e.target.value }))}
@@ -1933,8 +2148,8 @@ export default function RevenuePage() {
 /* ─── small primitives ───────────────────────────────────────────────────── */
 
 function Container({
-  title, onAdd, hint, children,
-}: { title: string; onAdd?: () => void; hint?: string; children: React.ReactNode }) {
+  title, onAdd, hint, actions, children,
+}: { title: string; onAdd?: () => void; hint?: string; actions?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div style={{
       background:    '#0f0d0a',
@@ -1971,6 +2186,7 @@ function Container({
               color: '#5a5448',
             }}>{hint}</span>
           )}
+          {actions}
           {onAdd && (
             <button
               onClick={onAdd}
