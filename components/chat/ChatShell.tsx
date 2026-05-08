@@ -55,6 +55,40 @@ interface ChatShellProps {
   storageKey?: string;
 }
 
+// 2026-05-08 PBS taxonomy: collapse the 8+ raw cockpit_tickets statuses
+// into the 5 buckets PBS asked for in chat. "Open" is a derived filter
+// (in_process ∪ needs_you) and not a bucket on its own ticket.
+type StatusBucket = 'in_process' | 'needs_you' | 'done' | 'failed' | 'archive';
+function statusBucket(raw: string): StatusBucket {
+  switch (raw) {
+    case 'completed': return 'done';
+    case 'awaits_user': return 'needs_you';
+    case 'archived': return 'archive';
+    case 'triage_failed':
+    case 'blocked': return 'failed';
+    case 'new':
+    case 'triaging':
+    case 'triaged':
+    case 'working':
+    case 'queued':
+    default: return 'in_process';
+  }
+}
+const BUCKET_LABEL: Record<StatusBucket, string> = {
+  in_process: 'In process',
+  needs_you: 'Needs you',
+  done: 'Done',
+  failed: 'Failed',
+  archive: 'Archive',
+};
+const BUCKET_STYLE: Record<StatusBucket, { bg: string; fg: string; border: string }> = {
+  in_process: { bg: '#1a1a20', fg: '#a8854a', border: '#3a2e1a' }, // brass-on-dark
+  needs_you:  { bg: '#3a1f0a', fg: '#f5b87b', border: '#5a3a1a' }, // amber alert
+  done:       { bg: '#0a1f12', fg: '#7bc99c', border: '#1a3a26' }, // moss
+  failed:     { bg: '#2a1614', fg: '#f5b1ad', border: '#5a2825' }, // red
+  archive:    { bg: '#15151a', fg: '#6b6b75', border: '#25252d' }, // muted grey
+};
+
 function stripTicketFraming(s: string | null): { user: string; agent: string } {
   if (!s) return { user: '', agent: '' };
   const m = s.match(/^\*\*Request\*\*:?\s*(.*?)\n\n([\s\S]*)$/);
@@ -253,9 +287,13 @@ export default function ChatShell({
           </div>
         )}
 
-        {tickets.map((t) => {
+        {tickets
+          .filter((t) => statusBucket(t.status) !== 'archive')
+          .map((t) => {
           const split = stripTicketFraming(t.parsed_summary);
-          const isPending = t.status === 'triaging' || t.status === 'new';
+          const bucket = statusBucket(t.status);
+          const isPending = bucket === 'in_process' && (t.status === 'triaging' || t.status === 'new');
+          const pillStyle = BUCKET_STYLE[bucket];
           return (
             <div key={t.id} style={S.exchange}>
               {split.user && (
@@ -267,15 +305,20 @@ export default function ChatShell({
               {(split.agent || isPending) && (
                 <div style={S.agentRow}>
                   <div style={S.agentAvatar}>{emoji}</div>
-                  <div style={S.agentBubble}>
-                    {isPending ? (
-                      <div style={S.thinking}>
-                        <span style={S.dot} /><span style={{ ...S.dot, animationDelay: '0.2s' }} /><span style={{ ...S.dot, animationDelay: '0.4s' }} />
-                        <span style={{ marginLeft: 10, color: '#6b6b75' }}>thinking...</span>
-                      </div>
-                    ) : (
-                      <div dangerouslySetInnerHTML={{ __html: md(split.agent) }} />
-                    )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={S.agentBubble}>
+                      {isPending ? (
+                        <div style={S.thinking}>
+                          <span style={S.dot} /><span style={{ ...S.dot, animationDelay: '0.2s' }} /><span style={{ ...S.dot, animationDelay: '0.4s' }} />
+                          <span style={{ marginLeft: 10, color: '#6b6b75' }}>thinking...</span>
+                        </div>
+                      ) : (
+                        <div dangerouslySetInnerHTML={{ __html: md(split.agent) }} />
+                      )}
+                    </div>
+                    <div style={{ ...S.statusPill, background: pillStyle.bg, color: pillStyle.fg, border: `1px solid ${pillStyle.border}` }}>
+                      {BUCKET_LABEL[bucket]}
+                    </div>
                   </div>
                 </div>
               )}
@@ -358,4 +401,5 @@ const S: Record<string, React.CSSProperties> = {
   hint: { fontSize: 10, color: '#3d3d45', textAlign: 'center', marginTop: 6, maxWidth: 820, margin: '6px auto 0' },
   errBanner: { maxWidth: 820, margin: '8px auto 0', padding: '6px 10px', background: '#2a1614', border: '1px solid #5a2825', borderRadius: 6, color: '#f5b1ad', fontSize: 11, display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   errDismiss: { background: 'transparent', border: 0, color: '#f5b1ad', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '0 4px' },
+  statusPill: { display: 'inline-block', marginTop: 6, padding: '2px 8px', borderRadius: 10, fontSize: 10, letterSpacing: '0.04em', fontFamily: 'Menlo, monospace', textTransform: 'uppercase', fontWeight: 600 },
 };
