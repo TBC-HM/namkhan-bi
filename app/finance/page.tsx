@@ -1,183 +1,573 @@
-// app/finance/page.tsx — REDESIGN 2026-05-05 (recovery)
-import PageHeader from '@/components/layout/PageHeader';
-import KpiBox from '@/components/kpi/KpiBox';
-import StatusPill from '@/components/ui/StatusPill';
-import ActionCard, { ActionStack } from '@/components/sections/ActionCard';
-import { getAgedAr } from '@/lib/data';
-import { resolvePeriod } from '@/lib/period';
-import { fmtMoney } from '@/lib/format';
-import { getPlSectionsAll, getUsaliHouse, getUsaliDept, currentPeriod, pickPeriod } from './_data';
-import { priorPeriod } from '@/lib/supabase-gl';
-import {
-  FinanceStatusHeader, StatusCell, SectionHead,
-  metaSm, metaStrong, metaDim,
-} from './_components/FinanceShell';
-import FinanceTrendChart from './_components/FinanceTrendChart';
-import AgedArChart from './_components/AgedArChart';
-import DeptMixChart from './_components/DeptMixChart';
+'use client';
 
-export const revalidate = 60;
-export const dynamic = 'force-dynamic';
+import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 
-interface Props { searchParams: Record<string, string | string[] | undefined>; }
+/* ──────────────────────────────────────────────────────────────────────────
+ * /finance — entry page
+ * Layout (PBS spec 2026-05-08):
+ *   • greeting top-left, italic Fraunces, modest size
+ *   • Finance ▾ dept dropdown top-right
+ *   • CHAT in the middle as hero
+ *   • small chip row immediately below chat
+ *   • 3 containers in a row (Action items / My Docs / My Tasks)
+ *     with + add and × delete per row, persisted to localStorage
+ *   • black background, brass + paper accents (brand)
+ * ────────────────────────────────────────────────────────────────────────── */
 
-export default async function FinanceSnapshotPage({ searchParams }: Props) {
-  const period = resolvePeriod(searchParams);
-  const [plAll, aged] = await Promise.all([getPlSectionsAll(), getAgedAr().catch(() => [])]);
+interface AttentionItem { id: string; label: string; severity: 'high' | 'medium' | 'low' }
+interface DocItem       { id: string; label: string; href: string }
+interface TaskItem      { id: string; label: string; done: boolean }
 
-  const incomeByPeriod = new Map<string, number>();
-  const netByPeriod = new Map<string, number>();
-  for (const r of plAll) {
-    if (r.section === 'income') incomeByPeriod.set(r.period_yyyymm, Number(r.amount_usd || 0));
-    if (r.section === 'net_earnings') netByPeriod.set(r.period_yyyymm, Number(r.amount_usd || 0));
+const ATTN_KEY  = 'nk.fin.entry.attention.v2';
+const DOCS_KEY  = 'nk.fin.entry.docs.v2';
+const TASKS_KEY = 'nk.fin.entry.tasks.v2';
+
+const DEFAULT_ATTN: AttentionItem[] = [
+  { id: 'a1', label: 'OTA parity breach — BDC $142 vs direct $158',  severity: 'high'   },
+  { id: 'a2', label: 'Pace −14 % vs STLY for next 30 days',           severity: 'medium' },
+  { id: 'a3', label: 'Compset data stale — last sync 48 h ago',      severity: 'low'    },
+];
+
+const DEFAULT_DOCS: DocItem[] = [
+  { id: 'd1', label: 'Revenue Strategy 2025',      href: '/finance/strategy'    },
+  { id: 'd2', label: 'Channel Mix Report — Apr 26', href: '/finance/channel-mix' },
+  { id: 'd3', label: 'BAR Rate Grid',               href: '/finance/bar'         },
+];
+
+const DEFAULT_TASKS: TaskItem[] = [
+  { id: 't1', label: 'Review OTA parity alerts',     done: false },
+  { id: 't2', label: 'Update BAR for long weekend',  done: false },
+  { id: 't3', label: 'Sign off on group quote #12',  done: false },
+];
+
+const QUICK_CHIPS = [
+  { label: 'Pulse',    href: '/revenue/pulse'    },
+  { label: 'Compset',  href: '/revenue/compset'  },
+  { label: 'Parity',   href: '/revenue/parity'   },
+  { label: 'Pace',     href: '/revenue/pace'     },
+  { label: 'Channels', href: '/revenue/channels' },
+  { label: 'Forecast', href: '/revenue/forecast' },
+];
+
+const DEPT_LINKS = [
+  { label: 'Overview',   href: '/overview'   },
+  { label: 'Revenue',    href: '/revenue'    },
+  { label: 'Sales',      href: '/sales'      },
+  { label: 'Marketing',  href: '/marketing'  },
+  { label: 'Operations', href: '/operations' },
+  { label: 'Finance',    href: '/finance'    },
+  { label: 'Guest',      href: '/guest'      },
+];
+
+const SEVERITY_DOT: Record<string, string> = {
+  high:   '#c0584c',
+  medium: '#c4a06b',
+  low:    '#7d7565',
+};
+
+// ─── helpers ────────────────────────────────────────────────────────────────
+function loadLS<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
   }
-  const calCur = currentPeriod();
-  const periodsWithRev = Array.from(incomeByPeriod.entries())
-    .filter(([k, v]) => v >= 1000 && k !== calCur)
-    .map(([k]) => k).sort().reverse();
-  const cur = periodsWithRev[0] || calCur;
-  const prior = periodsWithRev[1] || priorPeriod(cur);
+}
+function saveLS(key: string, val: unknown) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch { /* noop */ }
+}
+function uid() { return Math.random().toString(36).slice(2, 9); }
 
-  const [houseRows, deptCur, deptPrior] = await Promise.all([
-    getUsaliHouse([cur, prior]),
-    getUsaliDept([cur]),
-    getUsaliDept([prior]),
-  ]);
+// ─── component ──────────────────────────────────────────────────────────────
+export default function RevenuePage() {
+  const router = useRouter();
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // MoM dept profit waterfall
-  const profMap = (rows: any[], p: string) => new Map(
-    rows.filter((r: any) => r.period_yyyymm === p)
-        .map((r: any) => [r.usali_department, Number(r.departmental_profit ?? 0)]),
-  );
-  const curProf = profMap(deptCur as any[], cur);
-  const priorProf = profMap(deptPrior as any[], prior);
-  const variances = Array.from(new Set([...curProf.keys(), ...priorProf.keys()]))
-    .map(d => ({ dept: d, delta: (curProf.get(d) ?? 0) - (priorProf.get(d) ?? 0) }))
-    .filter(v => Math.abs(v.delta) > 1)
-    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
-    .slice(0, 6);
-  const maxAbsVar = Math.max(...variances.map(v => Math.abs(v.delta)), 1);
-  const totalRev = incomeByPeriod.get(cur) ?? 0;
-  const priorTotal = incomeByPeriod.get(prior) ?? 0;
-  const monthDeltaPct = priorTotal ? ((totalRev - priorTotal) / priorTotal) * 100 : null;
-  const netEarnings = netByPeriod.get(cur);
-  const houseCur = pickPeriod(houseRows, cur);
-  const gop = houseCur?.gop ?? null;
-  const totalAr = aged.reduce((s: number, r: any) => s + Number(r.open_balance || 0), 0);
-  const ar90Plus = aged.filter((r: any) => r.bucket === '90_plus').reduce((s: number, r: any) => s + Number(r.open_balance || 0), 0);
-  const ar6190 = aged.filter((r: any) => r.bucket === '61_90').reduce((s: number, r: any) => s + Number(r.open_balance || 0), 0);
+  const [greeting,  setGreeting]  = useState('Good morning');
+  const [chatValue, setChatValue] = useState('');
+  const [attn,      setAttn]      = useState<AttentionItem[]>(DEFAULT_ATTN);
+  const [docs,      setDocs]      = useState<DocItem[]>(DEFAULT_DOCS);
+  const [tasks,     setTasks]     = useState<TaskItem[]>(DEFAULT_TASKS);
+  const [deptOpen,  setDeptOpen]  = useState(false);
 
-  const periods = Array.from(new Set([...incomeByPeriod.keys(), ...netByPeriod.keys()])).sort();
-  const trendRows = periods.map((p) => ({
-    period: p,
-    income: incomeByPeriod.get(p) ?? 0,
-    net: netByPeriod.has(p) ? Number(netByPeriod.get(p)) : null,
-    gop: null as number | null,
-  }));
+  useEffect(() => {
+    setAttn (loadLS<AttentionItem[]>(ATTN_KEY,  DEFAULT_ATTN));
+    setDocs (loadLS<DocItem[]>      (DOCS_KEY,  DEFAULT_DOCS));
+    setTasks(loadLS<TaskItem[]>     (TASKS_KEY, DEFAULT_TASKS));
+    const h = new Date().getHours();
+    if (h >= 12 && h < 17) setGreeting('Good afternoon');
+    else if (h >= 17)      setGreeting('Good evening');
+    inputRef.current?.focus();
+  }, []);
 
-  const closedMonths = periodsWithRev.length;
-  const arHealth = ar90Plus > 0 ? 'expired' : ar6190 > 0 ? 'pending' : 'active';
-
-  const cards: any[] = [];
-  if (ar90Plus > 0) {
-    cards.push({
-      pillar: 'fin' as const, pillarLabel: 'Finance · AR', agentLabel: '· Collections',
-      priority: 'high' as const, priorityLabel: 'High · cash',
-      headline: <>{fmtMoney(ar90Plus, 'USD')} stuck <em>past 90 days</em>.</>,
-      conclusion: <>Reservations with open balance over 90 days have ~50% recovery rate. Review each line.</>,
-      verdict: [{ label: `90+ · ${fmtMoney(ar90Plus, 'USD')}`, tone: 'bad' as const }, { label: `Total · ${fmtMoney(totalAr, 'USD')}` }],
-      primaryAction: 'Review aging', secondaryAction: 'Send letters', tertiaryAction: 'Defer',
-      impact: 'Cash', impactSub: 'AR cleanup',
-    });
+  function submitChat(e: React.FormEvent) {
+    e.preventDefault();
+    const q = chatValue.trim();
+    if (!q) return;
+    router.push(`/cockpit/chat?q=${encodeURIComponent(q)}&dept=finance`);
   }
-  // Budget · Variance Agent — surface only when no budget data exists
-  cards.push({
-    pillar: 'fin' as const, pillarLabel: 'Finance · Budget', agentLabel: '· Variance Agent',
-    priority: 'med' as const, priorityLabel: 'Medium · setup',
-    headline: <>Budget data not yet provided.<br /><em>Variance tracking blocked.</em></>,
-    conclusion: <>Without an annual budget by USALI line, GOP / variance / pace-to-target cannot render. Owner action: provide CSV with monthly figures by USALI dept.</>,
-    verdict: [{ label: 'Effort · 1-2h' }, { label: 'Unblocks · 4 KPIs' }, { label: 'One-time' }],
-    primaryAction: 'Get template', secondaryAction: 'Schedule', tertiaryAction: 'Defer',
-    impact: '4 KPIs', impactSub: 'unlocked',
-  });
-  if (ar6190 > 1000) {
-    cards.push({
-      pillar: 'fin' as const, pillarLabel: 'Finance · AR', agentLabel: '· Collections',
-      priority: 'med' as const, priorityLabel: 'Medium · escalating',
-      headline: <>{fmtMoney(ar6190, 'USD')} in <em>61-90 day bucket</em>.</>,
-      conclusion: <>At risk of escalating to 90+. Send second reminder.</>,
-      verdict: [{ label: `61-90 · ${fmtMoney(ar6190, 'USD')}`, tone: 'warn' as const }],
-      primaryAction: 'Send reminders', secondaryAction: 'Review', tertiaryAction: 'Defer',
-      impact: 'Prevention', impactSub: 'before 90+',
-    });
+
+  // attention CRUD
+  function addAttn() {
+    const label = prompt('New attention item');
+    if (!label) return;
+    const next = [...attn, { id: uid(), label, severity: 'medium' as const }];
+    setAttn(next); saveLS(ATTN_KEY, next);
+  }
+  function delAttn(id: string) {
+    const next = attn.filter(a => a.id !== id);
+    setAttn(next); saveLS(ATTN_KEY, next);
+  }
+
+  // docs CRUD
+  function addDoc() {
+    const label = prompt('Doc title');
+    if (!label) return;
+    const href = prompt('Link URL', '/finance/') || '/finance/';
+    const next = [...docs, { id: uid(), label, href }];
+    setDocs(next); saveLS(DOCS_KEY, next);
+  }
+  function delDoc(id: string) {
+    const next = docs.filter(d => d.id !== id);
+    setDocs(next); saveLS(DOCS_KEY, next);
+  }
+
+  // tasks CRUD
+  function addTask() {
+    const label = prompt('New task');
+    if (!label) return;
+    const next = [...tasks, { id: uid(), label, done: false }];
+    setTasks(next); saveLS(TASKS_KEY, next);
+  }
+  function toggleTask(id: string) {
+    const next = tasks.map(t => t.id === id ? { ...t, done: !t.done } : t);
+    setTasks(next); saveLS(TASKS_KEY, next);
+  }
+  function delTask(id: string) {
+    const next = tasks.filter(t => t.id !== id);
+    setTasks(next); saveLS(TASKS_KEY, next);
   }
 
   return (
-    <>
-      <PageHeader pillar="Finance" tab="Snapshot"
-        title={<>Where the money <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>is</em> — and where it's stuck.</>}
-        lede={`Latest closed: ${cur} · ${closedMonths} closed period${closedMonths === 1 ? '' : 's'}`} />
-      <FinanceStatusHeader
-        top={<>
-          <StatusCell label="SOURCE">
-            <StatusPill tone="active">gl.pl_section_monthly</StatusPill>
-            <span style={metaDim}>· v_usali_house_summary · mv_aged_ar</span>
-          </StatusCell>
-          <StatusCell label="LATEST"><span style={metaSm}>{cur}</span><span style={metaDim}>· prior {prior}</span></StatusCell>
-          <StatusCell label="MONTHS"><span style={metaStrong}>{closedMonths}</span><span style={metaDim}>closed</span></StatusCell>
-          <span style={{ flex: 1 }} />
-          {monthDeltaPct != null && <span style={metaDim}>MoM {monthDeltaPct >= 0 ? '+' : ''}{monthDeltaPct.toFixed(1)}%</span>}
-        </>}
-        bottom={<>
-          <StatusCell label="AR HEALTH">
-            <StatusPill tone={arHealth as any}>{ar90Plus > 0 ? 'OVERDUE' : ar6190 > 0 ? 'WATCH' : 'CLEAN'}</StatusPill>
-            <span style={metaDim}>{fmtMoney(totalAr, 'USD')} open</span>
-          </StatusCell>
-          <span style={{ flex: 1 }} />
-          <span style={metaDim}>GOP {gop != null ? fmtMoney(gop, 'USD') : '—'} · NET {netEarnings != null ? fmtMoney(netEarnings, 'USD') : '—'}</span>
-        </>}
-      />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12, marginTop: 14 }}>
-        <FinanceTrendChart rows={trendRows} title="Income & net earnings" sub="Every closed period · gl.pl_section_monthly" />
-        <DeptMixChart rows={deptCur as any} title={`Department mix · ${cur}`} sub="USALI dept revenue + profit" />
-        <AgedArChart rows={aged as any} title="AR aging" sub="Open balance by bucket · mv_aged_ar" />
+    <div style={{
+      minHeight:  '100vh',
+      background: '#0a0a0a',
+      color:      '#e9e1ce',
+      fontFamily: "'Inter Tight', system-ui, sans-serif",
+      padding:    '32px 48px 64px',
+      position:   'relative',
+      display:    'flex',
+      flexDirection: 'column',
+    }}>
+
+      {/* ── Top row: greeting (left) + dept dropdown (right) ──────────────── */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: 8,
+      }}>
+        <h1 style={{
+          fontFamily:  "'Fraunces', Georgia, serif",
+          fontStyle:   'italic',
+          fontWeight:  300,
+          fontSize:    'clamp(20px, 2.4vw, 28px)',
+          letterSpacing: '-0.01em',
+          color:       '#e9e1ce',
+          margin:      0,
+        }}>
+          {greeting}, <span style={{ color: '#c4a06b' }}>Boss</span>.
+        </h1>
+
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setDeptOpen(o => !o)}
+            style={{
+              background:    'transparent',
+              border:        '1px solid #2a261d',
+              borderRadius:  6,
+              color:         '#c4a06b',
+              padding:       '6px 14px',
+              cursor:        'pointer',
+              fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
+              fontSize:      10,
+              letterSpacing: '0.18em',
+              textTransform: 'uppercase',
+              fontWeight:    500,
+            }}
+          >
+            Finance ▾
+          </button>
+          {deptOpen && (
+            <ul style={{
+              position:     'absolute',
+              right:        0,
+              top:          36,
+              background:   '#0f0d0a',
+              border:       '1px solid #2a261d',
+              borderRadius: 6,
+              listStyle:    'none',
+              margin:       0,
+              padding:      '4px 0',
+              minWidth:     160,
+              zIndex:       50,
+              boxShadow:    '0 8px 24px rgba(0,0,0,0.6)',
+            }}>
+              {DEPT_LINKS.map(d => (
+                <li key={d.href}>
+                  <a
+                    href={d.href}
+                    onClick={() => setDeptOpen(false)}
+                    style={{
+                      display:        'block',
+                      padding:        '8px 18px',
+                      color:          d.label === 'Finance' ? '#c4a06b' : '#9b907a',
+                      textDecoration: 'none',
+                      fontFamily:     "'JetBrains Mono', ui-monospace, monospace",
+                      fontSize:       10,
+                      letterSpacing:  '0.18em',
+                      textTransform:  'uppercase',
+                    }}
+                  >
+                    {d.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
-        <KpiBox value={totalRev} unit="usd" label={`Revenue · ${cur}`} delta={priorTotal && monthDeltaPct != null ? { value: monthDeltaPct, unit: 'pct', period: 'MoM' } : undefined} />
-        <KpiBox value={gop} unit="usd" label={`GOP · ${cur}`} state={gop == null ? 'data-needed' : 'live'} needs={gop == null ? 'awaiting gl_entries close' : undefined} />
-        <KpiBox value={netEarnings ?? null} unit="usd" label={`Net · ${cur}`} state={netEarnings == null ? 'data-needed' : 'live'} />
-        <KpiBox value={ar90Plus} unit="usd" label="AR 90+" />
+
+      {/* sub-eyebrow (department) */}
+      <div style={{
+        fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
+        fontSize:      10,
+        letterSpacing: '0.28em',
+        textTransform: 'uppercase',
+        color:         '#7d7565',
+        marginBottom:  56,
+      }}>
+        Finance · The Namkhan
       </div>
-      {variances.length > 0 && (
-        <div style={{ marginTop: 18 }}>
-          <SectionHead title="Top variances" emphasis="MoM dept profit" sub={`${cur} vs ${prior} · departmental_profit per v_usali_dept_summary`} source="gl.v_usali_dept_summary" />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 12, background: 'var(--paper-pure)', border: '1px solid var(--line-soft)', borderRadius: 4 }}>
-            {variances.map(v => {
-              const pct = (Math.abs(v.delta) / maxAbsVar) * 100;
-              const pos = v.delta >= 0;
-              return (
-                <div key={v.dept} style={{ display: 'grid', gridTemplateColumns: '160px 1fr 100px', gap: 12, alignItems: 'center', fontSize: 13 }}>
-                  <div style={{ color: 'var(--ink)' }}>{v.dept}</div>
-                  <div style={{ height: 8, background: 'var(--surf-2)', borderRadius: 2, overflow: 'hidden' }}>
-                    <div style={{ width: `${pct.toFixed(0)}%`, height: '100%', background: pos ? 'var(--st-good)' : 'var(--st-bad)' }} />
-                  </div>
-                  <div style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: pos ? 'var(--st-good)' : 'var(--st-bad)' }}>
-                    {pos ? '+' : '−'}${(Math.abs(v.delta) / 1000).toFixed(1)}k
-                  </div>
-                </div>
-              );
-            })}
+
+      {/* ── HERO: chat in the middle ─────────────────────────────────────── */}
+      <div style={{
+        flex:           1,
+        display:        'flex',
+        flexDirection:  'column',
+        justifyContent: 'center',
+        alignItems:     'center',
+        gap:            22,
+        marginTop:      -32,
+        marginBottom:   56,
+      }}>
+        <div style={{
+          fontFamily:    "'Fraunces', Georgia, serif",
+          fontStyle:     'italic',
+          fontWeight:    300,
+          fontSize:      'clamp(24px, 3.4vw, 38px)',
+          letterSpacing: '-0.015em',
+          color:         '#d8cca8',
+          textAlign:     'center',
+          maxWidth:      720,
+        }}>
+          Ask Intel anything about finance.
+        </div>
+
+        <form onSubmit={submitChat} style={{ width: '100%', maxWidth: 720 }}>
+          <div style={{
+            display:      'flex',
+            border:       '1px solid #3a3327',
+            borderRadius: 14,
+            overflow:     'hidden',
+            background:   '#15110b',
+            boxShadow:    '0 12px 32px rgba(0,0,0,0.45)',
+          }}>
+            <input
+              ref={inputRef}
+              type="text"
+              value={chatValue}
+              onChange={e => setChatValue(e.target.value)}
+              placeholder="e.g. how are we doing today?"
+              style={{
+                flex:       1,
+                background: 'transparent',
+                border:     'none',
+                outline:    'none',
+                color:      '#efe6d3',
+                fontFamily: "'Inter Tight', system-ui, sans-serif",
+                fontSize:   15,
+                padding:    '16px 20px',
+              }}
+            />
+            <button
+              type="submit"
+              style={{
+                background:    '#a8854a',
+                border:        'none',
+                color:         '#0a0a0a',
+                padding:       '0 22px',
+                cursor:        'pointer',
+                fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
+                fontSize:      11,
+                letterSpacing: '0.18em',
+                textTransform: 'uppercase',
+                fontWeight:    600,
+              }}
+            >
+              Ask ↵
+            </button>
           </div>
+        </form>
+
+        {/* small chip row immediately below chat */}
+        <div style={{
+          display:    'flex',
+          gap:        8,
+          flexWrap:   'wrap',
+          justifyContent: 'center',
+          maxWidth:   720,
+        }}>
+          {QUICK_CHIPS.map(c => (
+            <a
+              key={c.href}
+              href={c.href}
+              style={{
+                background:     'transparent',
+                border:         '1px solid #2a261d',
+                borderRadius:   18,
+                color:          '#9b907a',
+                fontFamily:     "'JetBrains Mono', ui-monospace, monospace",
+                fontSize:       10,
+                letterSpacing:  '0.18em',
+                textTransform:  'uppercase',
+                fontWeight:     500,
+                padding:        '6px 14px',
+                textDecoration: 'none',
+                whiteSpace:     'nowrap',
+                transition:     'border-color 0.15s, color 0.15s',
+              }}
+            >
+              {c.label}
+            </a>
+          ))}
         </div>
-      )}
-      {cards.length > 0 && (
-        <div style={{ marginTop: 18 }}>
-          <SectionHead title="Reconciliations" emphasis="awaiting attention" sub={`${cards.length} card${cards.length === 1 ? '' : 's'}`} />
-          <ActionStack title={<></>} count={cards.length} meta={`${cards.length} awaiting`}>
-            {cards.map((c, i) => <ActionCard key={i} num={i + 1} {...c} />)}
-          </ActionStack>
-        </div>
-      )}
-    </>
+      </div>
+
+      {/* ── 3 containers in a row at bottom ──────────────────────────────── */}
+      <div style={{
+        display:             'grid',
+        gridTemplateColumns: 'repeat(3, 1fr)',
+        gap:                 20,
+        maxWidth:            1200,
+        margin:              '0 auto',
+        width:               '100%',
+      }}>
+
+        {/* ATTENTION */}
+        <Container
+          title="Needs your attention"
+          onAdd={addAttn}
+        >
+          {attn.map(a => (
+            <Row key={a.id} onDelete={() => delAttn(a.id)}>
+              <span style={{
+                width:        7,
+                height:       7,
+                borderRadius: '50%',
+                background:   SEVERITY_DOT[a.severity],
+                flexShrink:   0,
+              }} />
+              <span style={{ flex: 1, fontSize: 13, color: '#c9bb96', lineHeight: 1.4 }}>
+                {a.label}
+              </span>
+            </Row>
+          ))}
+          {attn.length === 0 && <Empty label="All clear" />}
+        </Container>
+
+        {/* DOCS */}
+        <Container
+          title="My docs"
+          onAdd={addDoc}
+        >
+          {docs.map(d => (
+            <Row key={d.id} onDelete={() => delDoc(d.id)}>
+              <a
+                href={d.href}
+                style={{
+                  flex:           1,
+                  fontSize:       13,
+                  color:          '#c9bb96',
+                  textDecoration: 'none',
+                  lineHeight:     1.4,
+                }}
+              >
+                {d.label}
+              </a>
+            </Row>
+          ))}
+          {docs.length === 0 && <Empty label="No docs pinned" />}
+        </Container>
+
+        {/* TASKS */}
+        <Container
+          title="My tasks"
+          onAdd={addTask}
+        >
+          {tasks.map(t => (
+            <Row key={t.id} onDelete={() => delTask(t.id)}>
+              <button
+                onClick={() => toggleTask(t.id)}
+                style={{
+                  width:           14,
+                  height:          14,
+                  borderRadius:    3,
+                  border:          `1px solid ${t.done ? '#5a5040' : '#7d7565'}`,
+                  background:      t.done ? '#a8854a' : 'transparent',
+                  cursor:          'pointer',
+                  display:         'flex',
+                  alignItems:      'center',
+                  justifyContent:  'center',
+                  flexShrink:      0,
+                  padding:         0,
+                  fontSize:        10,
+                  color:           '#0a0a0a',
+                  fontWeight:      700,
+                }}
+              >
+                {t.done ? '✓' : ''}
+              </button>
+              <span style={{
+                flex:           1,
+                fontSize:       13,
+                color:          t.done ? '#7d7565' : '#c9bb96',
+                textDecoration: t.done ? 'line-through' : 'none',
+                lineHeight:     1.4,
+              }}>
+                {t.label}
+              </span>
+            </Row>
+          ))}
+          {tasks.length === 0 && <Empty label="Nothing on the list" />}
+        </Container>
+      </div>
+    </div>
+  );
+}
+
+/* ─── small primitives ───────────────────────────────────────────────────── */
+
+function Container({
+  title, onAdd, children,
+}: { title: string; onAdd: () => void; children: React.ReactNode }) {
+  return (
+    <div style={{
+      background:   '#0f0d0a',
+      border:       '1px solid #1f1c15',
+      borderRadius: 12,
+      padding:      '14px 16px 16px',
+      display:      'flex',
+      flexDirection: 'column',
+      minHeight:    180,
+    }}>
+      <div style={{
+        display:        'flex',
+        justifyContent: 'space-between',
+        alignItems:     'center',
+        marginBottom:   12,
+        paddingBottom:  10,
+        borderBottom:   '1px solid #1f1c15',
+      }}>
+        <h2 style={{
+          fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
+          fontSize:      10,
+          letterSpacing: '0.18em',
+          textTransform: 'uppercase',
+          fontWeight:    600,
+          color:         '#a8854a',
+          margin:        0,
+        }}>
+          {title}
+        </h2>
+        <button
+          onClick={onAdd}
+          aria-label="Add"
+          style={{
+            background:   'transparent',
+            border:       '1px solid #2a261d',
+            borderRadius: 4,
+            color:        '#a8854a',
+            cursor:       'pointer',
+            fontSize:     14,
+            lineHeight:   1,
+            width:        22,
+            height:       22,
+            padding:      0,
+            display:      'flex',
+            alignItems:   'center',
+            justifyContent: 'center',
+          }}
+        >
+          +
+        </button>
+      </div>
+      <div style={{
+        display:       'flex',
+        flexDirection: 'column',
+        gap:           6,
+      }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Row({ children, onDelete }: { children: React.ReactNode; onDelete: () => void }) {
+  return (
+    <div style={{
+      display:      'flex',
+      alignItems:   'center',
+      gap:          10,
+      padding:      '7px 8px',
+      borderRadius: 6,
+      background:   'transparent',
+      transition:   'background 0.12s',
+    }}>
+      {children}
+      <button
+        onClick={onDelete}
+        aria-label="Delete"
+        style={{
+          background:   'transparent',
+          border:       'none',
+          color:        '#5a5040',
+          cursor:       'pointer',
+          fontSize:     14,
+          lineHeight:   1,
+          padding:      '2px 4px',
+          flexShrink:   0,
+        }}
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
+function Empty({ label }: { label: string }) {
+  return (
+    <div style={{
+      fontFamily:    "'Fraunces', Georgia, serif",
+      fontStyle:     'italic',
+      fontSize:      12,
+      color:         '#5a5040',
+      padding:       '12px 4px',
+      textAlign:     'center',
+    }}>
+      {label}
+    </div>
   );
 }
