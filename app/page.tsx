@@ -1,188 +1,151 @@
-'use client';
+/**
+ * HOME — Architect / CEO Entry Page
+ * ticket #159 · full-viewport black entry point
+ *
+ * Brand palette sourced from marketing.v_property_card:
+ *   Black     #000000  — background
+ *   Forest    #084838  — primary / logo accent
+ *   Leaf      #8AC479  — CTA accent
+ *   Stone     #CBC2BB  — subtext
+ *   Deep Brown #33221C — dividers
+ */
 
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
-// ─── Home / Architect / CEO entry ────────────────────────────────────────────
-// Full-viewport black entry. No data fetch required at this level — this is a
-// pure navigation hub. Sub-routes (revenue-v2, operations, etc.) each own their
-// own data loading.
-//
-// Assumptions:
-//  1. No v_overview_kpis view exists yet — KPI tiles are nav cards, not live data.
-//  2. Brand colours from property_settings: Forest Green #084838, Leaf #8AC479,
-//     black background per ticket spec "full-viewport black".
-//  3. TT Drugs font not bundled locally; falls back to Georgia in the stack.
-//  4. Auth middleware is disabled in Phase 1 (SSO coming Phase 4); no guard here.
-// ─────────────────────────────────────────────────────────────────────────────
+export const dynamic = 'force-dynamic';
 
-const NAV_SECTIONS = [
-  {
-    label: 'Revenue',
-    icon: '📈',
-    href: '/revenue-v2',
-    description: 'ADR · RevPAR · OCC · Comp-set index',
-    accent: '#8AC479',
-  },
-  {
-    label: 'Operations',
-    icon: '⚙️',
-    href: '/operations',
-    description: 'Housekeeping · Maintenance · F&B',
-    accent: '#8AC479',
-  },
-  {
-    label: 'Finance',
-    icon: '💰',
-    href: '/finance',
-    description: 'P&L · USALI GOP · Cashflow',
-    accent: '#8AC479',
-  },
-  {
-    label: 'Marketing',
-    icon: '📣',
-    href: '/marketing',
-    description: 'Media · Social · Content pipeline',
-    accent: '#8AC479',
-  },
-  {
-    label: 'Intelligence',
-    icon: '🧠',
-    href: '/intelligence',
-    description: 'Agent cockpit · Incidents · KB',
-    accent: '#084838',
-  },
-];
+const NAV_LINKS = [
+  { href: '/revenue-v2',    label: 'Revenue',      description: 'Pulse · Segments · Pace' },
+  { href: '/operations',    label: 'Operations',   description: 'Housekeeping · Maintenance · F&B' },
+  { href: '/finance',       label: 'Finance',      description: 'P&L · Cash · Budgets' },
+  { href: '/marketing',     label: 'Marketing',    description: 'Campaigns · Leads · Analytics' },
+  { href: '/sustainability', label: 'Sustainability', description: 'Carbon · Farm · Certifications' },
+  { href: '/cockpit',       label: 'AI Cockpit',   description: 'Agent activity · Tickets · Audit' },
+] as const;
 
 export default function HomePage() {
-  const router = useRouter();
-
   return (
     <main
       style={{
-        minHeight: '100vh',
-        background: '#000',
-        color: '#fff',
+        minHeight: '100dvh',
+        background: 'var(--color-black, #000000)',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        fontFamily: 'TT Drugs, Times New Roman, Georgia, serif',
-        padding: '48px 24px',
-        boxSizing: 'border-box',
+        padding: '2rem',
+        fontFamily: 'TT Drugs, "Times New Roman", Georgia, serif',
       }}
     >
-      {/* ── Wordmark ── */}
-      <header style={{ textAlign: 'center', marginBottom: 64 }}>
+      {/* ── WORDMARK ── */}
+      <header style={{ textAlign: 'center', marginBottom: '3.5rem' }}>
         <p
           style={{
-            fontSize: 11,
+            fontSize: '0.7rem',
             letterSpacing: '0.35em',
             textTransform: 'uppercase',
-            color: '#8AC479',
-            marginBottom: 8,
-            fontFamily: 'Lora, Georgia, serif',
+            color: 'var(--color-stone, #CBC2BB)',
+            marginBottom: '0.75rem',
           }}
         >
-          SLH · Small Luxury Hotels of the World
+          Small Luxury Hotels of the World
         </p>
         <h1
           style={{
-            fontSize: 'clamp(32px, 6vw, 72px)',
-            fontWeight: 700,
-            letterSpacing: '0.04em',
+            fontSize: 'clamp(2rem, 5vw, 3.5rem)',
+            fontWeight: 400,
+            letterSpacing: '0.12em',
+            textTransform: 'uppercase',
+            color: '#ffffff',
             margin: 0,
-            lineHeight: 1.05,
+            lineHeight: 1.1,
           }}
         >
-          The Namkhan
+          Namkhan
         </h1>
         <p
           style={{
-            fontSize: 13,
-            letterSpacing: '0.25em',
+            fontSize: '0.65rem',
+            letterSpacing: '0.3em',
             textTransform: 'uppercase',
-            color: '#CBC2BB',
-            marginTop: 12,
-            fontFamily: 'Lora, Georgia, serif',
+            color: 'var(--color-forest, #084838)',
+            marginTop: '0.5rem',
           }}
         >
-          Business Intelligence Portal
+          Business Intelligence
         </p>
       </header>
 
-      {/* ── Nav grid ── */}
+      {/* ── NAV GRID ── */}
       <nav
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-          gap: 16,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: '1px',
           width: '100%',
-          maxWidth: 960,
+          maxWidth: '900px',
+          background: 'var(--color-deep-brown, #33221C)',
+          border: '1px solid var(--color-deep-brown, #33221C)',
         }}
       >
-        {NAV_SECTIONS.map((s) => (
-          <button
-            key={s.href}
-            onClick={() => router.push(s.href)}
+        {NAV_LINKS.map(({ href, label, description }) => (
+          <Link
+            key={href}
+            href={href}
             style={{
-              background: '#0a0a0a',
-              border: '1px solid #222',
-              borderRadius: 8,
-              padding: '28px 24px',
-              textAlign: 'left',
-              cursor: 'pointer',
-              transition: 'border-color 0.15s, background 0.15s',
-              color: '#fff',
+              display: 'block',
+              padding: '1.75rem 1.5rem',
+              background: 'var(--color-black, #000000)',
+              color: '#ffffff',
+              textDecoration: 'none',
+              transition: 'background 0.15s ease',
             }}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor = s.accent;
-              (e.currentTarget as HTMLButtonElement).style.background = '#111';
+              (e.currentTarget as HTMLAnchorElement).style.background =
+                'var(--color-forest, #084838)';
             }}
             onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.borderColor = '#222';
-              (e.currentTarget as HTMLButtonElement).style.background = '#0a0a0a';
+              (e.currentTarget as HTMLAnchorElement).style.background =
+                'var(--color-black, #000000)';
             }}
           >
-            <span style={{ fontSize: 28, display: 'block', marginBottom: 12 }}>
-              {s.icon}
-            </span>
             <span
               style={{
-                fontSize: 18,
-                fontWeight: 600,
                 display: 'block',
-                marginBottom: 6,
-                fontFamily: 'TT Drugs, Georgia, serif',
+                fontSize: '0.65rem',
+                letterSpacing: '0.25em',
+                textTransform: 'uppercase',
+                color: 'var(--color-leaf, #8AC479)',
+                marginBottom: '0.4rem',
               }}
             >
-              {s.label}
+              {label}
             </span>
             <span
               style={{
-                fontSize: 12,
-                color: '#8a8a8a',
-                fontFamily: 'Lora, Georgia, serif',
-                lineHeight: 1.5,
+                display: 'block',
+                fontSize: '0.75rem',
+                color: 'var(--color-stone, #CBC2BB)',
+                letterSpacing: '0.04em',
               }}
             >
-              {s.description}
+              {description}
             </span>
-          </button>
+          </Link>
         ))}
       </nav>
 
-      {/* ── Footer ── */}
+      {/* ── FOOTER ── */}
       <footer
         style={{
-          marginTop: 80,
-          fontSize: 11,
-          color: '#444',
+          marginTop: '3rem',
+          fontSize: '0.6rem',
           letterSpacing: '0.2em',
           textTransform: 'uppercase',
-          fontFamily: 'Lora, Georgia, serif',
+          color: 'var(--color-deep-brown, #33221C)',
         }}
       >
-        Namkhan BI · Internal Operations · Confidential
+        © {new Date().getFullYear()} Namkhan Resort · Luang Prabang, Lao PDR
       </footer>
     </main>
   );
