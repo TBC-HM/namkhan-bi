@@ -76,6 +76,14 @@ const ALLOWED_VIEWS = new Set([
   "cockpit_audit_log",
   "cockpit_kpi_snapshots",
   "cockpit_decisions",
+  // GAPs 3+4+5 of COWORK BRIEF 2026-05-07 — Kit cross-dept watch.
+  "v_agent_health",
+  "v_cross_dept_it_intake",
+  "v_it_weekly_digest",
+  // GAP 13 (v2 brief) — Kit retro
+  "v_kit_performance",
+  // From v2 brief context — already created elsewhere, allowlist for explicit access
+  "v_agent_capabilities",
 ]);
 
 type ToolResult = {
@@ -1096,19 +1104,86 @@ async function github_comment_issue(args: { number: number; body: string }): Pro
   return { ok: true, result: { number: args.number } };
 }
 
-async function github_commit_file(args: { path: string; content: string; message: string; branch?: string }): Promise<ToolResult> {
+async function github_read_file(args: { path: string; ref?: string }): Promise<ToolResult> {
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) return { ok: false, error: "GITHUB_TOKEN env var missing" };
+  const repo = "TBC-HM/namkhan-bi";
+  const ref = args.ref ?? "main";
+  const headers = { Authorization: `Bearer ${token}`, "Accept": "application/vnd.github+json" };
+  const res = await fetch(`https://api.github.com/repos/${repo}/contents/${args.path}?ref=${ref}`, { headers });
+  if (res.status === 404) return { ok: true, result: { exists: false, path: args.path, ref } };
+  if (!res.ok) return { ok: false, error: `github api ${res.status}: ${(await res.text()).slice(0, 200)}` };
+  const j = await res.json() as { content?: string; sha?: string; size?: number };
+  if (!j.content) return { ok: false, error: "no content field (likely a directory)" };
+  const text = Buffer.from(j.content.replace(/\n/g, ""), "base64").toString("utf-8");
+  return { ok: true, result: { exists: true, path: args.path, ref, sha: j.sha, size: j.size, lines: text.split("\n").length, content: text } };
+}
+
+async function github_commit_file(args: { path: string; content: string; message: string; branch?: string; allow_destructive?: boolean }): Promise<ToolResult> {
   const token = process.env.GITHUB_TOKEN;
   if (!token) return { ok: false, error: "GITHUB_TOKEN env var missing" };
   const repo = "TBC-HM/namkhan-bi";
   const branch = args.branch ?? "staging";
   const headers = { Authorization: `Bearer ${token}`, "Accept": "application/vnd.github+json", "Content-Type": "application/json" };
-  // Get current file SHA if exists
-  const cur = await fetch(`https://api.github.com/repos/${repo}/contents/${args.path}?ref=${branch}`, { headers }).then(r => r.ok ? r.json() : null).catch(() => null);
+
+  // 2026-05-07 — auto-create the branch from main if it doesn't exist.
+  // Lets agents target feature/agent-{id}-{slug} branches without needing
+  // a separate "create branch" call. PRs can then be opened against this.
+  if (branch !== "main" && branch !== "staging") {
+    const ref = await fetch(`https://api.github.com/repos/${repo}/git/ref/heads/${branch}`, { headers });
+    if (ref.status === 404) {
+      const mainRef = await fetch(`https://api.github.com/repos/${repo}/git/ref/heads/main`, { headers });
+      if (!mainRef.ok) return { ok: false, error: `cannot read main ref: ${mainRef.status}` };
+      const mainJson = await mainRef.json();
+      const create = await fetch(`https://api.github.com/repos/${repo}/git/refs`, {
+        method: "POST", headers,
+        body: JSON.stringify({ ref: `refs/heads/${branch}`, sha: mainJson.object?.sha }),
+      });
+      if (!create.ok && create.status !== 422) {
+        return { ok: false, error: `branch create failed: ${create.status}: ${(await create.text()).slice(0, 200)}` };
+      }
+    }
+  }
+
+  // Get current file SHA + content if exists (always read main, not branch — we want delta vs production state)
+  const curOnBranch = await fetch(`https://api.github.com/repos/${repo}/contents/${args.path}?ref=${branch}`, { headers }).then(r => r.ok ? r.json() : null).catch(() => null);
+  const curOnMain = (branch === "main")
+    ? curOnBranch
+    : await fetch(`https://api.github.com/repos/${repo}/contents/${args.path}?ref=main`, { headers }).then(r => r.ok ? r.json() : null).catch(() => null);
+
+  // ─── DESTRUCTION GUARD (added 2026-05-08 PBS directive) ─────────────────────
+  // Reject any commit that deletes >50 lines from an existing file unless
+  // the caller explicitly sets allow_destructive: true (used for verified rewrites).
+  // Reason: preserves every existing tab/sub-tab/expandable table by default.
+  if (curOnMain && (curOnMain as { content?: string }).content && !args.allow_destructive) {
+    try {
+      const existingB64 = (curOnMain as { content: string }).content.replace(/\n/g, "");
+      const existingText = Buffer.from(existingB64, "base64").toString("utf-8");
+      const before = existingText.split("\n").length;
+      const after = args.content.split("\n").length;
+      const linesRemoved = before - after;
+      const ratio = before > 0 ? after / before : 1;
+      if (linesRemoved > 50 || (before > 100 && ratio < 0.6)) {
+        await supabase.from("cockpit_audit_log").insert({
+          agent: "github-write", action: "commit_file_BLOCKED", target: `${repo}@${branch}:${args.path}`, success: false,
+          metadata: { before_lines: before, after_lines: after, lines_removed: linesRemoved, ratio: Number(ratio.toFixed(2)), branch },
+          reasoning: `BLOCKED destructive commit: would delete ${linesRemoved} lines (${before}→${after}, ratio ${ratio.toFixed(2)}). Pass allow_destructive:true if intentional.`,
+        });
+        return {
+          ok: false,
+          error: `DESTRUCTION_GUARD: refusing to commit. Existing file has ${before} lines, your version has ${after} lines (delta -${linesRemoved}, kept ratio ${ratio.toFixed(2)}). Use github_read_file first to fetch existing content, then ADD/MODIFY only the sections you need. If this rewrite is intentional, re-call with allow_destructive:true.`,
+        };
+      }
+    } catch {
+      // base64 decode failed — fall through, don't block on guard error
+    }
+  }
+
   const body = {
     message: args.message,
     content: Buffer.from(args.content, "utf-8").toString("base64"),
     branch,
-    sha: (cur as { sha?: string } | null)?.sha,
+    sha: (curOnBranch as { sha?: string } | null)?.sha,
   };
   const res = await fetch(`https://api.github.com/repos/${repo}/contents/${args.path}`, {
     method: "PUT", headers, body: JSON.stringify(body),
@@ -1121,6 +1196,88 @@ async function github_commit_file(args: { path: string; content: string; message
     reasoning: args.message,
   });
   return { ok: true, result: { sha: j.commit?.sha, branch, path: args.path, html_url: j.commit?.html_url } };
+}
+
+async function github_open_pr(args: { branch: string; title: string; body?: string; base?: string; labels?: string[]; auto_merge?: boolean }): Promise<ToolResult> {
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) return { ok: false, error: "GITHUB_TOKEN env var missing" };
+  const repo = "TBC-HM/namkhan-bi";
+  const base = args.base ?? "main";
+  const autoMerge = args.auto_merge !== false; // default true per PBS directive 2026-05-07
+  const headers = { Authorization: `Bearer ${token}`, "Accept": "application/vnd.github+json", "Content-Type": "application/json" };
+
+  const body = {
+    title: args.title.slice(0, 120),
+    head: args.branch,
+    base,
+    body: (args.body ?? "").slice(0, 4000),
+    maintainer_can_modify: true,
+  };
+  const res = await fetch(`https://api.github.com/repos/${repo}/pulls`, {
+    method: "POST", headers, body: JSON.stringify(body),
+  });
+  let pr: { number: number; html_url: string; node_id?: string; reused?: boolean };
+  if (!res.ok) {
+    const txt = (await res.text()).slice(0, 300);
+    if (res.status === 422 && txt.includes("already exists")) {
+      const list = await fetch(`https://api.github.com/repos/${repo}/pulls?head=TBC-HM:${args.branch}&state=open`, { headers });
+      const arr = list.ok ? await list.json() : [];
+      const existing = Array.isArray(arr) && arr.length > 0 ? arr[0] : null;
+      if (existing) {
+        pr = { number: existing.number, html_url: existing.html_url, node_id: existing.node_id, reused: true };
+      } else {
+        return { ok: false, error: `github api ${res.status}: ${txt}` };
+      }
+    } else {
+      return { ok: false, error: `github api ${res.status}: ${txt}` };
+    }
+  } else {
+    const j = await res.json();
+    pr = { number: j.number, html_url: j.html_url, node_id: j.node_id };
+  }
+
+  // Apply labels if requested.
+  if (Array.isArray(args.labels) && args.labels.length > 0) {
+    await fetch(`https://api.github.com/repos/${repo}/issues/${pr.number}/labels`, {
+      method: "POST", headers,
+      body: JSON.stringify({ labels: args.labels }),
+    }).catch(() => {});
+  }
+
+  // Enable auto-merge so the PR squashes into main automatically when CI passes.
+  // Uses the GraphQL enablePullRequestAutoMerge mutation. Requires the repo to
+  // have auto-merge enabled in Settings → General (already on per PBS setup).
+  let autoMergeEnabled = false;
+  if (autoMerge && pr.node_id) {
+    const gq = await fetch("https://api.github.com/graphql", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: `mutation Auto($id: ID!) {
+          enablePullRequestAutoMerge(input: { pullRequestId: $id, mergeMethod: SQUASH }) {
+            pullRequest { number autoMergeRequest { enabledAt mergeMethod } }
+          }
+        }`,
+        variables: { id: pr.node_id },
+      }),
+    }).catch(() => null);
+    if (gq && gq.ok) {
+      const gqJson = await gq.json();
+      if (gqJson?.data?.enablePullRequestAutoMerge?.pullRequest?.autoMergeRequest?.enabledAt) {
+        autoMergeEnabled = true;
+      }
+    }
+  }
+
+  await supabase.from("cockpit_audit_log").insert({
+    agent: "github-write", action: "open_pr", target: `${repo}#${pr.number}`, success: true,
+    metadata: {
+      number: pr.number, head: args.branch, base, html_url: pr.html_url,
+      labels: args.labels ?? [], auto_merge: autoMergeEnabled, reused: pr.reused ?? false,
+    },
+    reasoning: args.title,
+  });
+  return { ok: true, result: { number: pr.number, html_url: pr.html_url, branch: args.branch, base, auto_merge: autoMergeEnabled } };
 }
 
 const HANDLERS: Record<string, (args: Record<string, unknown>) => Promise<ToolResult>> = {
@@ -1157,10 +1314,238 @@ const HANDLERS: Record<string, (args: Record<string, unknown>) => Promise<ToolRe
   vercel_redeploy: (a) => vercel_redeploy(a as Parameters<typeof vercel_redeploy>[0]),
   supabase_execute_sql: (a) => supabase_execute_sql(a as Parameters<typeof supabase_execute_sql>[0]),
   github_commit_file: (a) => github_commit_file(a as Parameters<typeof github_commit_file>[0]),
+  github_read_file: (a) => github_read_file(a as Parameters<typeof github_read_file>[0]),
+  github_open_pr: (a) => github_open_pr(a as Parameters<typeof github_open_pr>[0]),
   github_list_issues: (a) => github_list_issues(a as Parameters<typeof github_list_issues>[0]),
   github_close_issue: (a) => github_close_issue(a as Parameters<typeof github_close_issue>[0]),
   github_comment_issue: (a) => github_comment_issue(a as Parameters<typeof github_comment_issue>[0]),
+  unzip_storage_object: (a) => unzip_storage_object(a as Parameters<typeof unzip_storage_object>[0]),
+  list_mcp_connectors: (a) => list_mcp_connectors(a as Parameters<typeof list_mcp_connectors>[0]),
+  request_skill_approval: (a) => request_skill_approval(a as Parameters<typeof request_skill_approval>[0]),
+  list_vercel_crons: (a) => list_vercel_crons(a as Parameters<typeof list_vercel_crons>[0]),
+  run_typecheck: (a) => run_typecheck(a as Parameters<typeof run_typecheck>[0]),
 };
+
+// ============================================================================
+// unzip_storage_object — GAP 1 of COWORK BRIEF 2026-05-07.
+// Same logic as /api/cockpit/skills/unzip_storage_object/route.ts but callable
+// in-process from the agent runner.
+// ============================================================================
+async function unzip_storage_object(args: { storage_url?: string; max_files?: number }): Promise<ToolResult> {
+  const STORAGE_PREFIX = "https://kpenyneooigsyuuomgct.supabase.co/storage/v1/object/public/cockpit-uploads/";
+  const TEXT_EXTS = new Set(["md","json","txt","html","htm","css","tsx","ts","jsx","js","mjs","cjs","yml","yaml","csv","tsv"]);
+  const HARD_CAP_FILES = 200;
+  const HARD_CAP_BYTES = 10 * 1024 * 1024;
+
+  const url = (args.storage_url ?? "").trim();
+  const maxFiles = Math.min(Math.max(args.max_files ?? HARD_CAP_FILES, 1), HARD_CAP_FILES);
+  if (!url) return { ok: false, error: "storage_url required" };
+  if (!url.startsWith(STORAGE_PREFIX)) return { ok: false, error: `storage_url must start with ${STORAGE_PREFIX}` };
+
+  const t0 = Date.now();
+  let zipBuf: ArrayBuffer;
+  try {
+    const r = await fetch(url, { cache: "no-store" });
+    if (!r.ok) return { ok: false, error: `fetch ${r.status}` };
+    zipBuf = await r.arrayBuffer();
+  } catch (e) {
+    return { ok: false, error: `fetch_threw: ${e instanceof Error ? e.message : String(e)}` };
+  }
+
+  const JSZipMod = (await import("jszip")).default;
+  let zip: InstanceType<typeof JSZipMod>;
+  try { zip = await JSZipMod.loadAsync(zipBuf); }
+  catch (e) { return { ok: false, error: `zip_invalid: ${e instanceof Error ? e.message : String(e)}` }; }
+
+  const file_tree: { path: string; size: number; is_text: boolean }[] = [];
+  const text_contents: Record<string, string> = {};
+  let totalBytes = 0; let count = 0;
+
+  for (const path of Object.keys(zip.files)) {
+    const entry = zip.files[path];
+    if (entry.dir) continue;
+    if (count >= maxFiles) return { ok: false, error: `too_many_files: > ${maxFiles}` };
+    const ext = (() => { const i = path.lastIndexOf("."); return i >= 0 ? path.slice(i + 1).toLowerCase() : ""; })();
+    const isText = TEXT_EXTS.has(ext);
+    let size = 0;
+    if (isText) {
+      const c = await entry.async("string");
+      size = Buffer.byteLength(c, "utf8");
+      text_contents[path] = c;
+    } else {
+      size = (await entry.async("uint8array")).byteLength;
+    }
+    totalBytes += size;
+    if (totalBytes > HARD_CAP_BYTES) return { ok: false, error: `too_large: > ${HARD_CAP_BYTES} bytes` };
+    file_tree.push({ path, size, is_text: isText });
+    count++;
+  }
+
+  await supabase.from("cockpit_audit_log").insert({
+    agent: "skill-unzip", action: "unzip_storage_object", target: url, success: true,
+    duration_ms: Date.now() - t0,
+    metadata: { files: count, total_bytes: totalBytes, text_files: Object.keys(text_contents).length },
+    reasoning: `Unzipped ${count} files (${totalBytes} bytes uncompressed).`,
+  });
+
+  return {
+    ok: true,
+    result: {
+      file_tree, text_contents,
+      stats: { files: count, total_bytes: totalBytes, text_files: Object.keys(text_contents).length, duration_ms: Date.now() - t0 },
+    },
+  };
+}
+
+// ============================================================================
+// COWORK BRIEF v2 — GAPs 8, 9, 10, 12 in-process handlers.
+// Each one mirrors its HTTP route under /api/cockpit/skills/<name>/route.ts.
+// ============================================================================
+
+async function list_mcp_connectors(_args: Record<string, unknown>): Promise<ToolResult> {
+  const t0 = Date.now();
+  const now = () => new Date().toISOString();
+  type C = { name: string; scopes: string[]; auth_status: string; last_check_at: string; detail?: string };
+  const connectors: C[] = [];
+  // vercel
+  if (!process.env.VERCEL_TOKEN) connectors.push({ name: "vercel", scopes: [], auth_status: "misconfigured", last_check_at: now(), detail: "VERCEL_TOKEN missing" });
+  else {
+    const r = await fetch("https://api.vercel.com/v2/user", { headers: { Authorization: `Bearer ${process.env.VERCEL_TOKEN}` } }).catch(() => null);
+    connectors.push({ name: "vercel", scopes: ["projects:read","deployments:write","env:write"], auth_status: r?.ok ? "connected" : "misconfigured", last_check_at: now(), detail: r?.ok ? undefined : `vercel ${r?.status ?? "fetch-fail"}` });
+  }
+  // github
+  if (!process.env.GITHUB_TOKEN) connectors.push({ name: "github", scopes: [], auth_status: "misconfigured", last_check_at: now(), detail: "GITHUB_TOKEN missing" });
+  else {
+    const r = await fetch("https://api.github.com/user", { headers: { Authorization: `Bearer ${process.env.GITHUB_TOKEN}`, "User-Agent": "namkhan-cockpit" } }).catch(() => null);
+    connectors.push({ name: "github", scopes: (r?.headers.get("x-oauth-scopes") ?? "").split(",").map(s => s.trim()).filter(Boolean), auth_status: r?.ok ? "connected" : "misconfigured", last_check_at: now() });
+  }
+  // supabase
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    connectors.push({ name: "supabase", scopes: [], auth_status: "misconfigured", last_check_at: now(), detail: "URL or SERVICE_ROLE_KEY missing" });
+  } else {
+    const { error } = await supabase.from("cockpit_audit_log").select("id").limit(1);
+    connectors.push({ name: "supabase", scopes: ["sql:write","storage:rw","rpc:call"], auth_status: error ? "misconfigured" : "connected", last_check_at: now(), detail: error?.message });
+  }
+  // env-only ones
+  const envOnly: [string, string, string[], string?][] = [
+    ["anthropic", "ANTHROPIC_API_KEY", ["claude:inference"]],
+    ["openai", "OPENAI_API_KEY", ["embeddings"], "used by embed-kb edge function only"],
+    ["cloudbeds", "CLOUDBEDS_CLIENT_ID", ["pms:read","pms:write"], "OAuth flow handled in Edge Function"],
+    ["make_com", "MAKE_WEBHOOK_TOKEN", ["webhook:trigger"]],
+    ["nimble", "NIMBLE_API_KEY", ["scrape:read"], "comp-set scraper"],
+    ["gmail_oauth", "GMAIL_CLIENT_ID", ["gmail.readonly","gmail.send"], "pb@ only currently"],
+  ];
+  for (const [name, varName, scopes, note] of envOnly) {
+    connectors.push({ name, scopes, auth_status: process.env[varName] ? "connected" : "misconfigured", last_check_at: now(), detail: process.env[varName] ? note : `${varName} env var missing${note ? `; ${note}` : ""}` });
+  }
+
+  await supabase.from("cockpit_audit_log").insert({
+    agent: "skill-mcp-discovery", action: "list_mcp_connectors", target: "cockpit", success: true,
+    duration_ms: Date.now() - t0,
+    metadata: { connected: connectors.filter(c => c.auth_status === "connected").length, misconfigured: connectors.filter(c => c.auth_status === "misconfigured").length },
+    reasoning: `Probed ${connectors.length} connectors.`,
+  });
+  return { ok: true, result: { connectors } };
+}
+
+async function request_skill_approval(args: { target_skill?: string; action_summary?: string; reasoning?: string; rollback_plan?: string; parent_ticket_id?: number; requesting_agent?: string }): Promise<ToolResult> {
+  if (!args.target_skill || !args.action_summary || !args.reasoning) return { ok: false, error: "target_skill, action_summary, reasoning all required" };
+  const subject = `[skill_approval] ${args.target_skill} — ${args.action_summary.slice(0, 80)}`;
+  const noteJson = JSON.stringify({
+    type: "skill_approval_request",
+    target_skill: args.target_skill,
+    action_summary: args.action_summary,
+    reasoning: args.reasoning,
+    rollback_plan: args.rollback_plan ?? null,
+    requesting_agent: args.requesting_agent ?? null,
+    parent_ticket_id: args.parent_ticket_id ?? null,
+    requested_at: new Date().toISOString(),
+  }, null, 2);
+  const { data, error } = await supabase.from("cockpit_tickets").insert({
+    source: "skill_approval_request", arm: "dev", intent: "skill_approval", status: "pending_pbs_approval",
+    email_subject: subject, parsed_summary: args.action_summary, notes: noteJson,
+    metadata: { tags: ["skill_approval"], target_skill: args.target_skill, parent_ticket_id: args.parent_ticket_id ?? null },
+  }).select("id").single();
+  if (error) return { ok: false, error: error.message };
+  await supabase.from("cockpit_audit_log").insert({
+    agent: args.requesting_agent ?? "skill-approval", action: "request_skill_approval", target: args.target_skill, success: true, ticket_id: data.id,
+    metadata: { target_skill: args.target_skill, parent_ticket_id: args.parent_ticket_id ?? null },
+    reasoning: `Opened approval sub-ticket #${data.id} for ${args.target_skill}.`,
+  });
+  return { ok: true, result: { ticket_id: data.id, status: "pending_pbs_approval" } };
+}
+
+async function list_vercel_crons(args: { project?: string }): Promise<ToolResult> {
+  const slug = args.project ?? "namkhan-bi";
+  const token = process.env.VERCEL_TOKEN;
+  if (!token) return { ok: false, error: "VERCEL_TOKEN missing" };
+  const t0 = Date.now();
+  const pidRes = await fetch(`https://api.vercel.com/v9/projects/${slug}?teamId=${VERCEL_TEAM_ID}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!pidRes.ok) return { ok: false, error: `project ${slug} not resolvable: ${pidRes.status}` };
+  const pid = (await pidRes.json()).id as string;
+  const r = await fetch(`https://api.vercel.com/v1/projects/${pid}/crons?teamId=${VERCEL_TEAM_ID}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!r.ok) return { ok: false, error: `vercel crons api ${r.status}` };
+  type RawCron = { schedule?: string; path?: string; lastFinishedAt?: number; lastRunStatus?: string };
+  const arr: RawCron[] = (await r.json()).crons ?? [];
+  const crons = arr.map((c) => ({
+    schedule: c.schedule ?? "?", path: c.path ?? "?",
+    last_run_at: c.lastFinishedAt ? new Date(c.lastFinishedAt).toISOString() : null,
+    last_run_status: c.lastRunStatus ?? null,
+  }));
+  await supabase.from("cockpit_audit_log").insert({
+    agent: "skill-vercel-crons", action: "list_vercel_crons", target: slug, success: true,
+    duration_ms: Date.now() - t0, metadata: { count: crons.length }, reasoning: `Fetched ${crons.length} crons for ${slug}.`,
+  });
+  return { ok: true, result: { project: slug, crons } };
+}
+
+async function run_typecheck(args: { project?: string }): Promise<ToolResult> {
+  const slug = args.project ?? "namkhan-bi-staging";
+  const token = process.env.VERCEL_TOKEN;
+  if (!token) return { ok: false, error: "VERCEL_TOKEN missing" };
+  const t0 = Date.now();
+  const pidRes = await fetch(`https://api.vercel.com/v9/projects/${slug}?teamId=${VERCEL_TEAM_ID}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!pidRes.ok) return { ok: false, error: `project ${slug} not resolvable` };
+  const pid = (await pidRes.json()).id as string;
+
+  const dRes = await fetch(`https://api.vercel.com/v6/deployments?projectId=${pid}&teamId=${VERCEL_TEAM_ID}&limit=1`, { headers: { Authorization: `Bearer ${token}` } });
+  const dep = ((await dRes.json()).deployments ?? [])[0];
+  if (!dep) return { ok: false, error: "no deployments found" };
+
+  let errors: { file: string; line: number; col?: number; message: string }[] = [];
+  if (dep.state === "ERROR") {
+    const evRes = await fetch(`https://api.vercel.com/v3/deployments/${dep.uid}/events?teamId=${VERCEL_TEAM_ID}&direction=forward&limit=500&builds=1`, { headers: { Authorization: `Bearer ${token}` } });
+    type Ev = { text?: string; payload?: { text?: string } };
+    const evs = (await evRes.json()) as Ev[];
+    const log = (evs ?? []).map((e) => e.text ?? e.payload?.text ?? "").join("\n");
+    const re1 = /([./\w-]+\.tsx?):(\d+):(\d+)\s*\n\s*Type error:\s*(.+?)(?:\n|$)/g;
+    const re2 = /([./\w-]+\.tsx?)\((\d+),(\d+)\):\s*error\s*TS\d+:\s*(.+?)(?:\n|$)/g;
+    const seen = new Set<string>();
+    for (const re of [re1, re2]) {
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(log))) {
+        const k = `${m[1]}:${m[2]}:${m[4]}`;
+        if (!seen.has(k)) { seen.add(k); errors.push({ file: m[1], line: +m[2], col: +m[3], message: m[4].trim() }); }
+      }
+    }
+  }
+
+  const ok = dep.state === "READY";
+  await supabase.from("cockpit_audit_log").insert({
+    agent: "skill-typecheck", action: "run_typecheck", target: slug, success: ok,
+    duration_ms: Date.now() - t0,
+    metadata: { deployment_id: dep.uid, deployment_state: dep.state, sha: dep.meta?.githubCommitSha?.slice(0, 7) ?? null, error_count: errors.length },
+    reasoning: ok ? `Latest deploy READY (sha ${dep.meta?.githubCommitSha?.slice(0, 7) ?? "?"}).` : `Latest deploy state ${dep.state}; ${errors.length} type error(s).`,
+  });
+  return {
+    ok: true,
+    result: {
+      project: slug, deployment_id: dep.uid, deployment_state: dep.state,
+      sha: dep.meta?.githubCommitSha?.slice(0, 7) ?? null, errors,
+      build_passed: ok,
+    },
+  };
+}
 
 export async function dispatchSkill(handler: string, args: Record<string, unknown>): Promise<ToolResult> {
   const fn = HANDLERS[handler];
