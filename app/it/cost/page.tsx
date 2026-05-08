@@ -1,147 +1,167 @@
+'use client';
+
 // app/it/cost/page.tsx
+// Marathon #195 — IT · Cost
+// Data: v_it_weekly_digest (cost_usd, tickets_closed, deploys)
+//       v_agent_health (per-agent call & failure counts)
+// Assumptions:
+//   • v_agent_cost_24h not in allowlist — using v_it_weekly_digest + v_agent_health as cost proxies
+//   • cost_usd from weekly digest is the canonical AI/infra spend figure
+//   • v_agent_health recent_failures / recent_calls used to derive per-agent failure cost ratio
+//   • All KpiBox / DataTable / PageHeader are default exports
+
+import { useEffect, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import KpiBox from '@/components/kpi/KpiBox';
 import DataTable from '@/components/ui/DataTable';
 import PageHeader from '@/components/layout/PageHeader';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 60;
+export const revalidate = 0;
 
-interface AgentHealthRow {
+interface DigestRow {
+  cost_usd: number | null;
+  tickets_closed: number | null;
+  deploys_staging: number | null;
+  deploys_prod: number | null;
+  workers_spawned: number | null;
+  emergencies_escalated: number | null;
+}
+
+interface AgentRow {
   agent_id: number;
   role: string;
   department: string;
   active: boolean;
-  status: string;
+  health_state: string;
   recent_calls: number;
   recent_failures: number;
   minutes_since_last_call: number | null;
-  health_state: string;
 }
 
-interface KitPerfRow {
-  done_clean: number;
-  done_fake: number;
-  hallucinations: number;
-  workers_spawned: number;
-  failed_calls: number;
-  total_calls: number;
-  evidence_rate_pct: number;
-  failure_rate_pct: number;
-}
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
-export default async function Page() {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+export default function ItCostPage() {
+  const [digest, setDigest] = useState<DigestRow | null>(null);
+  const [agents, setAgents] = useState<AgentRow[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const [{ data: agentData }, { data: kitData }] = await Promise.all([
-    supabase.from('v_agent_health').select('*').order('department').limit(100),
-    supabase.from('v_kit_performance').select('*').limit(1),
-  ]);
+  useEffect(() => {
+    async function load() {
+      const [digestRes, agentRes] = await Promise.all([
+        supabase.from('v_it_weekly_digest').select('*').limit(1).single(),
+        supabase.from('v_agent_health').select('*').order('recent_calls', { ascending: false }).limit(50),
+      ]);
+      if (digestRes.data) setDigest(digestRes.data as DigestRow);
+      if (agentRes.data) setAgents(agentRes.data as AgentRow[]);
+      setLoading(false);
+    }
+    void load();
+  }, []);
 
-  const agents: AgentHealthRow[] = agentData ?? [];
-  const kit: KitPerfRow = (kitData as KitPerfRow[] | null)?.[0] ?? {
-    done_clean: 0,
-    done_fake: 0,
-    hallucinations: 0,
-    workers_spawned: 0,
-    failed_calls: 0,
-    total_calls: 0,
-    evidence_rate_pct: 0,
-    failure_rate_pct: 0,
-  };
+  const totalCost = digest?.cost_usd ?? null;
+  const ticketsClosed = digest?.tickets_closed ?? null;
+  const costPerTicket =
+    totalCost != null && ticketsClosed != null && ticketsClosed > 0
+      ? (totalCost / ticketsClosed).toFixed(2)
+      : null;
+  const totalCalls = agents.reduce((s, a) => s + (a.recent_calls ?? 0), 0);
+  const totalFailures = agents.reduce((s, a) => s + (a.recent_failures ?? 0), 0);
+  const failureRate =
+    totalCalls > 0 ? ((totalFailures / totalCalls) * 100).toFixed(1) : '—';
 
-  // Derive cost-proxy KPIs from call volume
-  const totalCalls = kit.total_calls ?? 0;
-  const failedCalls = kit.failed_calls ?? 0;
-  const failureRate = kit.failure_rate_pct ?? 0;
-  const evidenceRate = kit.evidence_rate_pct ?? 0;
-
-  const activeAgents = agents.filter((a) => a.active).length;
-  const failingAgents = agents.filter((a) => a.health_state === 'failing').length;
-  const healthyAgents = agents.filter((a) => a.health_state === 'healthy').length;
-
-  const columns = [
-    { key: 'agent_id', header: 'Agent ID' },
-    { key: 'role', header: 'Role' },
+  const columns: { key: keyof AgentRow | string; header: string }[] = [
+    { key: 'role', header: 'Agent Role' },
     { key: 'department', header: 'Dept' },
     { key: 'health_state', header: 'Health' },
-    { key: 'recent_calls', header: 'Calls (24h)' },
-    { key: 'recent_failures', header: 'Failures (24h)' },
+    { key: 'recent_calls', header: 'Calls (recent)' },
+    { key: 'recent_failures', header: 'Failures' },
+    { key: 'failure_rate_pct', header: 'Failure %' },
     { key: 'minutes_since_last_call', header: 'Idle (min)' },
-    { key: 'status', header: 'Status' },
   ];
 
-  const rows = agents.map((a) => ({
+  const tableRows = agents.map((a) => ({
     ...a,
-    minutes_since_last_call:
-      a.minutes_since_last_call !== null
-        ? `${a.minutes_since_last_call.toFixed(1)}`
+    failure_rate_pct:
+      a.recent_calls > 0
+        ? `${((a.recent_failures / a.recent_calls) * 100).toFixed(1)}%`
         : '—',
-    recent_failures:
-      a.recent_failures > 0
-        ? `⚠ ${a.recent_failures}`
-        : a.recent_failures,
+    minutes_since_last_call:
+      a.minutes_since_last_call != null
+        ? `${a.minutes_since_last_call.toFixed(0)}`
+        : '—',
   }));
 
   return (
-    <main style={{ padding: '24px', fontFamily: 'sans-serif' }}>
-      <PageHeader pillar="IT" tab="Cost" title="IT · Agent Cost Dashboard" />
+    <main style={{ padding: '24px 32px', maxWidth: 1280, margin: '0 auto' }}>
+      <PageHeader pillar="IT" tab="Cost" title="IT Cost & Agent Efficiency" />
 
-      {/* KPI strip */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: 16,
-          marginBottom: 32,
-        }}
-      >
-        <KpiBox label="Total Calls (lifetime)" value={totalCalls.toLocaleString()} />
-        <KpiBox label="Failed Calls" value={failedCalls.toLocaleString()} />
-        <KpiBox
-          label="Failure Rate"
-          value={`${failureRate.toFixed(1)} %`}
-        />
-        <KpiBox
-          label="Evidence Rate"
-          value={`${evidenceRate.toFixed(1)} %`}
-        />
-      </div>
+      {loading ? (
+        <p style={{ color: '#6b7280', marginTop: 24 }}>Loading cost data…</p>
+      ) : (
+        <>
+          {/* ── KPI Strip ── */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+              gap: 16,
+              marginTop: 24,
+              marginBottom: 32,
+            }}
+          >
+            <KpiBox
+              label="AI / Infra Spend (week)"
+              value={totalCost != null ? `$${totalCost.toFixed(2)}` : '—'}
+            />
+            <KpiBox
+              label="Tickets Closed"
+              value={ticketsClosed != null ? String(ticketsClosed) : '—'}
+            />
+            <KpiBox
+              label="Cost / Ticket"
+              value={costPerTicket != null ? `$${costPerTicket}` : '—'}
+            />
+            <KpiBox
+              label="Total Agent Calls"
+              value={totalCalls > 0 ? String(totalCalls) : '—'}
+            />
+            <KpiBox
+              label="Failure Rate"
+              value={`${failureRate}%`}
+            />
+            <KpiBox
+              label="Staging Deploys"
+              value={digest?.deploys_staging != null ? String(digest.deploys_staging) : '—'}
+            />
+            <KpiBox
+              label="Prod Deploys"
+              value={digest?.deploys_prod != null ? String(digest.deploys_prod) : '—'}
+            />
+            <KpiBox
+              label="Workers Spawned"
+              value={digest?.workers_spawned != null ? String(digest.workers_spawned) : '—'}
+            />
+          </div>
 
-      {/* Secondary KPI strip */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: 16,
-          marginBottom: 32,
-        }}
-      >
-        <KpiBox label="Active Agents" value={activeAgents} />
-        <KpiBox label="Healthy Agents" value={healthyAgents} />
-        <KpiBox label="Failing Agents" value={failingAgents} />
-      </div>
+          {/* ── Per-Agent Cost Breakdown ── */}
+          <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12, color: '#111827' }}>
+            Per-Agent Activity &amp; Failure Breakdown
+          </h2>
+          <DataTable
+            columns={columns}
+            rows={tableRows}
+          />
 
-      {/* Agent-level cost / activity table */}
-      <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 12 }}>
-        Agent Activity &amp; Cost Proxy
-      </h2>
-      <DataTable columns={columns} rows={rows} />
-
-      <p
-        style={{
-          marginTop: 16,
-          fontSize: 12,
-          color: '#888',
-        }}
-      >
-        Cost proxy: call volume × estimated token cost per call. Exact billing
-        data available via v_agent_cost_24h (pending allowlist approval).
-        Data refreshes every 60 s.
-      </p>
+          <p style={{ marginTop: 16, fontSize: 12, color: '#9ca3af' }}>
+            Source: <code>v_it_weekly_digest</code> · <code>v_agent_health</code> ·
+            Spend figure is weekly AI + infra total. Calls &amp; failures are rolling 24-hour window.
+          </p>
+        </>
+      )}
     </main>
   );
 }
