@@ -1,57 +1,72 @@
+// app/guest/directory/page.tsx
+import { createClient } from '@supabase/supabase-js';
+import KpiBox from '@/components/kpi/KpiBox';
+import DataTable from '@/components/ui/DataTable';
+import PageHeader from '@/components/layout/PageHeader';
+
 export const dynamic = 'force-dynamic';
+export const revalidate = 60;
 
-// app/guest/directory/page.tsx — banner version 2026-05-05
-import Link from 'next/link';
-import { createClient } from "@/lib/supabase/server";
-import { supabase as anonClient, PROPERTY_ID } from "@/lib/supabase";
-import { DirectoryShell } from "./_components/DirectoryShell";
+export default async function Page() {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
 
-export const revalidate = 300;
+  const { data, error } = await supabase
+    .from('v_guest_directory')
+    .select('*')
+    .limit(100);
 
-export default async function GuestDirectoryPage() {
-  const sb = createClient();
+  const rows = data ?? [];
 
-  const [{ data: facets }, { data: headlineRows }, messyR] = await Promise.all([
-    sb.schema("guest").from("v_directory_facets")
-      .select("country, guest_count, total_revenue, total_stays, repeat_guests, contactable_email, contactable_phone, arriving_30d")
-      .limit(60),
-    sb.schema("guest").rpc("directory_headline"),
-    anonClient.schema("guest").from("mv_guest_profile")
-      .select("guest_id", { count: "exact", head: true })
-      .eq("property_id", PROPERTY_ID).is("email", null).is("phone", null),
-  ]);
-
-  const headline = (headlineRows as any[])?.[0] ?? {
-    total: 0, repeat_guests: 0, upcoming_total: 0, next_7: 0, next_30: 0, next_90: 0, contactable: 0,
-  };
-  const noContactCount = messyR.count ?? 0;
+  const totalGuests = rows.length;
+  const vipGuests = rows.filter((r: Record<string, unknown>) => r.vip_flag || r.is_vip).length;
+  const returningGuests = rows.filter((r: Record<string, unknown>) => r.returning || r.is_returning).length;
 
   return (
-    <>
-      {noContactCount > 0 && (
-        <div style={{
-          marginTop: 14, padding: '10px 14px',
-          background: 'var(--paper-warm)',
-          border: '1px solid var(--paper-deep)',
-          borderLeft: '3px solid var(--st-bad)',
-          borderRadius: 6,
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
-        }}>
-          <div style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-soft)' }}>
-            <strong style={{ color: 'var(--ink)' }}>{noContactCount.toLocaleString()}</strong>{' '}
-            guest profile{noContactCount === 1 ? ' is' : 's are'} <em>unreachable</em> — no email + no phone.
-          </div>
-          <Link href="/guest/messy-data" style={{
-            padding: '4px 10px', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
-            letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', fontWeight: 600,
-            background: 'var(--st-bad)', color: 'var(--paper-warm)',
-            border: '1px solid var(--st-bad)', borderRadius: 4, textDecoration: 'none',
-          }}>
-            OPEN MESSY DATA →
-          </Link>
-        </div>
+    <main style={{ minHeight: '100vh', background: 'var(--black, #000)', color: 'var(--white, #fff)', padding: '0' }}>
+      <PageHeader pillar="Guest" tab="Directory" title="Directory" />
+
+      {error && (
+        <p style={{ color: 'var(--brass, #b08d57)', padding: '16px 24px', fontSize: 'var(--t-sm)' }}>
+          ⚠ View unavailable — showing em-dash placeholders
+        </p>
       )}
-      <DirectoryShell facets={(facets as any[]) ?? []} headline={headline} />
-    </>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, padding: '24px 24px 0' }}>
+        <KpiBox label="Total Guests" value={totalGuests > 0 ? String(totalGuests) : '—'} />
+        <KpiBox label="VIP Guests" value={vipGuests > 0 ? String(vipGuests) : '—'} />
+        <KpiBox label="Returning Guests" value={returningGuests > 0 ? String(returningGuests) : '—'} />
+        <KpiBox label="Avg Stay (nights)" value={rows[0]?.avg_stay_nights != null ? String(rows[0].avg_stay_nights) : '—'} />
+      </div>
+
+      <div style={{ padding: '24px' }}>
+        <DataTable
+          columns={[
+            { key: 'guest_name',    header: 'Guest Name' },
+            { key: 'nationality',   header: 'Nationality' },
+            { key: 'email',         header: 'Email' },
+            { key: 'check_in',      header: 'Check-In' },
+            { key: 'check_out',     header: 'Check-Out' },
+            { key: 'room_number',   header: 'Room' },
+            { key: 'vip_flag',      header: 'VIP' },
+            { key: 'total_stays',   header: 'Total Stays' },
+            { key: 'total_spend',   header: 'Total Spend' },
+          ]}
+          rows={rows.map((r: Record<string, unknown>) => ({
+            guest_name:   r.guest_name   ?? r.name          ?? '—',
+            nationality:  r.nationality  ?? r.country       ?? '—',
+            email:        r.email                           ?? '—',
+            check_in:     r.check_in     ?? r.arrival_date  ?? '—',
+            check_out:    r.check_out    ?? r.departure_date ?? '—',
+            room_number:  r.room_number  ?? r.room          ?? '—',
+            vip_flag:     (r.vip_flag || r.is_vip) ? 'Yes' : '—',
+            total_stays:  r.total_stays  != null ? String(r.total_stays)                        : '—',
+            total_spend:  r.total_spend  != null ? `$${Number(r.total_spend).toLocaleString()}` : '—',
+          }))}
+        />
+      </div>
+    </main>
   );
 }
