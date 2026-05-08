@@ -16,8 +16,227 @@ import { useRouter } from 'next/navigation';
  * ────────────────────────────────────────────────────────────────────────── */
 
 interface AttentionItem { id: string; label: string; severity: 'high' | 'medium' | 'low'; kind: 'leakage' | 'opportunity' }
-interface DocItem       { id: string; label: string; href: string; size?: number; uploaded_at?: string; body?: string }
+interface DocItem       {
+  id: string;
+  label: string;
+  href: string;
+  size?: number;
+  uploaded_at?: string;
+  body?: string;
+  // Reports-specific (PBS 2026-05-08): scheduled reports show recurrence
+  // pill on the card and the dim selection that produced them.
+  kind?: 'upload' | 'report';
+  report_type?: string;
+  report_dims?: Record<string, string>;
+  schedule?: 'once' | 'daily' | 'weekly' | 'monthly';
+  next_run?: string;
+}
 interface TaskItem      { id: string; label: string; done: boolean; created?: string; due?: string; alert?: boolean }
+
+// 2026-05-08 — Revenue-specific report dimensions. Each report type has its
+// OWN dimension groups (Pace ≠ Pulse ≠ Channels). The builder renders only
+// the groups for the selected type. Single-select per group; "All" or no
+// selection means the report uses its own default for that dimension.
+type ReportType = 'pulse' | 'pace' | 'channels' | 'pricing' | 'comp_set' | 'forecast' | 'all';
+
+interface DimGroup { key: string; label: string; options: { value: string; label: string }[] }
+
+const REPORT_LABEL: Record<ReportType, string> = {
+  pulse:    'Pulse',
+  pace:     'Pace',
+  channels: 'Channels',
+  pricing:  'Pricing',
+  comp_set: 'Comp Set',
+  forecast: 'Forecast',
+  all:      'All revenue',
+};
+
+const REPORT_HREF_BASE: Record<ReportType, string> = {
+  pulse:    '/revenue/pulse',
+  pace:     '/revenue/pace',
+  channels: '/revenue/channels',
+  pricing:  '/revenue/pricing',
+  comp_set: '/revenue/compset',
+  forecast: '/revenue/forecast',
+  all:      '/revenue',
+};
+
+const REPORT_DIM_GROUPS: Record<ReportType, DimGroup[]> = {
+  pulse: [
+    { key: 'window', label: 'Window', options: [
+      { value: 'today',  label: 'Today'   },
+      { value: 'last_7d',  label: 'Last 7d' },
+      { value: 'last_30d', label: 'Last 30d' },
+      { value: 'mtd',    label: 'MTD'     },
+      { value: 'ytd',    label: 'YTD'     },
+    ]},
+    { key: 'compare', label: 'Compare', options: [
+      { value: 'sdly', label: 'SDLY' },
+      { value: 'stly', label: 'STLY' },
+      { value: 'lw',   label: 'Last week' },
+      { value: 'lm',   label: 'Last month' },
+      { value: 'ly',   label: 'LY' },
+      { value: 'budget', label: 'Budget' },
+    ]},
+    { key: 'segment', label: 'Segment', options: [
+      { value: 'all',    label: 'All'        },
+      { value: 'room',   label: 'Room type'  },
+      { value: 'source', label: 'Source'     },
+      { value: 'rate',   label: 'Rate plan'  },
+    ]},
+  ],
+  pace: [
+    { key: 'horizon', label: 'Stay horizon', options: [
+      { value: 'fwd_7d',  label: 'Next 7d'  },
+      { value: 'fwd_30d', label: 'Next 30d' },
+      { value: 'fwd_60d', label: 'Next 60d' },
+      { value: 'fwd_90d', label: 'Next 90d' },
+      { value: 'fwd_180d', label: 'Next 180d' },
+    ]},
+    { key: 'pickup', label: 'Pickup window', options: [
+      { value: 'last_1d',  label: 'Last 1d'  },
+      { value: 'last_7d',  label: 'Last 7d'  },
+      { value: 'last_28d', label: 'Last 28d' },
+    ]},
+    { key: 'compare', label: 'Compare', options: [
+      { value: 'stly',   label: 'STLY' },
+      { value: 'sdly',   label: 'SDLY' },
+      { value: 'budget', label: 'Budget' },
+      { value: 'forecast', label: 'Forecast' },
+    ]},
+    { key: 'granularity', label: 'Granularity', options: [
+      { value: 'day',   label: 'Day'   },
+      { value: 'week',  label: 'Week'  },
+      { value: 'month', label: 'Month' },
+    ]},
+  ],
+  channels: [
+    { key: 'window', label: 'Window', options: [
+      { value: 'last_7d',  label: 'Last 7d'  },
+      { value: 'last_30d', label: 'Last 30d' },
+      { value: 'last_90d', label: 'Last 90d' },
+      { value: 'mtd',      label: 'MTD'      },
+      { value: 'ytd',      label: 'YTD'      },
+    ]},
+    { key: 'channel', label: 'Channel', options: [
+      { value: 'all',       label: 'All'       },
+      { value: 'direct',    label: 'Direct'    },
+      { value: 'ota',       label: 'OTA'       },
+      { value: 'wholesale', label: 'Wholesale' },
+      { value: 'gds',       label: 'GDS'       },
+    ]},
+    { key: 'metric', label: 'Metric', options: [
+      { value: 'revenue',    label: 'Revenue'    },
+      { value: 'rn',         label: 'RN'         },
+      { value: 'adr',        label: 'ADR'        },
+      { value: 'net_adr',    label: 'Net ADR'    },
+      { value: 'commission', label: 'Commission' },
+    ]},
+    { key: 'compare', label: 'Compare', options: [
+      { value: 'stly',   label: 'STLY' },
+      { value: 'ly',     label: 'LY'   },
+      { value: 'lm',     label: 'Last month' },
+    ]},
+  ],
+  pricing: [
+    { key: 'horizon', label: 'Date horizon', options: [
+      { value: 'fwd_7d',  label: 'Next 7d'  },
+      { value: 'fwd_30d', label: 'Next 30d' },
+      { value: 'fwd_90d', label: 'Next 90d' },
+    ]},
+    { key: 'room', label: 'Room type', options: [
+      { value: 'all',       label: 'All' },
+      { value: 'premium',   label: 'Premium' },
+      { value: 'signature', label: 'Signature' },
+      { value: 'entry',     label: 'Entry' },
+    ]},
+    { key: 'plan', label: 'Rate plan', options: [
+      { value: 'all',         label: 'All' },
+      { value: 'bar',         label: 'BAR' },
+      { value: 'promotional', label: 'Promotional' },
+      { value: 'package',     label: 'Package' },
+    ]},
+    { key: 'compare', label: 'Compare', options: [
+      { value: 'comp',     label: 'vs comp set' },
+      { value: 'ly_date',  label: 'vs LY same date' },
+    ]},
+  ],
+  comp_set: [
+    { key: 'window', label: 'Window', options: [
+      { value: 'last_7d',  label: 'Last 7d'  },
+      { value: 'last_30d', label: 'Last 30d' },
+      { value: 'last_90d', label: 'Last 90d' },
+    ]},
+    { key: 'property', label: 'Property', options: [
+      { value: 'all', label: 'All peers' },
+      { value: 'avg', label: 'Average' },
+      { value: 'top', label: 'Top performer' },
+    ]},
+    { key: 'metric', label: 'Metric', options: [
+      { value: 'mpi',    label: 'MPI'    },
+      { value: 'ari',    label: 'ARI'    },
+      { value: 'rgi',    label: 'RGI'    },
+      { value: 'adr',    label: 'ADR'    },
+      { value: 'occ',    label: 'OCC'    },
+      { value: 'revpar', label: 'RevPAR' },
+    ]},
+    { key: 'date_type', label: 'Date type', options: [
+      { value: 'stay', label: 'Stay date' },
+      { value: 'shop', label: 'Shop date' },
+    ]},
+  ],
+  forecast: [
+    { key: 'horizon', label: 'Horizon', options: [
+      { value: 'fwd_7d',   label: 'Next 7d'   },
+      { value: 'fwd_30d',  label: 'Next 30d'  },
+      { value: 'fwd_90d',  label: 'Next 90d'  },
+      { value: 'fwd_180d', label: 'Next 180d' },
+    ]},
+    { key: 'confidence', label: 'Confidence', options: [
+      { value: 'p50', label: 'P50' },
+      { value: 'p90', label: 'P90' },
+    ]},
+    { key: 'driver', label: 'Driver', options: [
+      { value: 'pace', label: 'Pace' },
+      { value: 'mix',  label: 'Mix'  },
+      { value: 'comp', label: 'Comp set' },
+    ]},
+    { key: 'compare', label: 'Compare', options: [
+      { value: 'budget', label: 'Budget' },
+      { value: 'ly',     label: 'LY'     },
+    ]},
+  ],
+  all: [
+    { key: 'window', label: 'Window', options: [
+      { value: 'last_7d',  label: 'Last 7d'  },
+      { value: 'last_30d', label: 'Last 30d' },
+      { value: 'mtd',      label: 'MTD'      },
+      { value: 'ytd',      label: 'YTD'      },
+    ]},
+    { key: 'compare', label: 'Compare', options: [
+      { value: 'stly',   label: 'STLY'   },
+      { value: 'budget', label: 'Budget' },
+    ]},
+  ],
+};
+
+const SCHEDULE_OPTIONS: { value: 'once' | 'daily' | 'weekly' | 'monthly'; label: string }[] = [
+  { value: 'once',    label: 'Once'    },
+  { value: 'daily',   label: 'Daily'   },
+  { value: 'weekly',  label: 'Weekly'  },
+  { value: 'monthly', label: 'Monthly' },
+];
+
+// Compute the next-run timestamp for a recurring schedule (for display only).
+function computeNextRun(schedule: 'once' | 'daily' | 'weekly' | 'monthly'): string | undefined {
+  if (schedule === 'once') return undefined;
+  const d = new Date();
+  if (schedule === 'daily')   d.setDate(d.getDate() + 1);
+  if (schedule === 'weekly')  d.setDate(d.getDate() + 7);
+  if (schedule === 'monthly') d.setMonth(d.getMonth() + 1);
+  d.setHours(6, 0, 0, 0);
+  return d.toISOString().slice(0, 16).replace('T', ' ');
+}
 
 const ATTN_KEY  = 'nk.rev.entry.attention.v2';
 const DOCS_KEY  = 'nk.rev.entry.docs.v2';
@@ -268,12 +487,13 @@ export default function RevenuePage() {
   const [taskModal, setTaskModal] = useState(false);
   const [taskDraft, setTaskDraft] = useState({ label: '', due: '', alert: false });
   // Doc-create choice + report builder (PBS 2026-05-08).
+  // The builder is type-aware: pick a report type first, then the dimensions
+  // for THAT type appear (Pace ≠ Pulse ≠ Channels). Single-select per group.
   const [docChoiceOpen, setDocChoiceOpen] = useState(false);
   const [reportModal,   setReportModal]   = useState(false);
-  const [reportDraft,   setReportDraft]   = useState({
-    type: '' as '' | 'pulse' | 'pace' | 'channels' | 'pricing' | 'comp_set' | 'forecast' | 'all',
-    dimensions: [] as Array<'room' | 'time' | 'source' | 'comp'>,
-  });
+  const [reportType,    setReportType]    = useState<ReportType | ''>('');
+  const [reportDims,    setReportDims]    = useState<Record<string, string>>({});
+  const [reportSchedule, setReportSchedule] = useState<'once' | 'daily' | 'weekly' | 'monthly'>('once');
 
   const [greeting,  setGreeting]  = useState('Good morning');
   const [chatValue, setChatValue] = useState('');
@@ -478,36 +698,54 @@ export default function RevenuePage() {
   }
   function startReportBuilder() {
     setDocChoiceOpen(false);
-    setReportDraft({ type: '', dimensions: [] });
+    setReportType('');
+    setReportDims({});
+    setReportSchedule('once');
     setReportModal(true);
   }
   function startUploadFlow() {
     setDocChoiceOpen(false);
     docFileRef.current?.click();
   }
-  function toggleReportDim(d: 'room' | 'time' | 'source' | 'comp') {
-    setReportDraft(prev => ({
-      ...prev,
-      dimensions: prev.dimensions.includes(d)
-        ? prev.dimensions.filter(x => x !== d)
-        : [...prev.dimensions, d],
-    }));
+  function setReportDim(groupKey: string, value: string) {
+    setReportDims(prev => {
+      // Click an already-selected option = clear it.
+      if (prev[groupKey] === value) {
+        const { [groupKey]: _drop, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [groupKey]: value };
+    });
   }
   function saveReport() {
-    if (!reportDraft.type) return;
+    if (!reportType) return;
     const stamp = new Date().toISOString().slice(0, 10);
-    const dims = reportDraft.dimensions.length === 0 || reportDraft.type === 'all'
-      ? 'all'
-      : reportDraft.dimensions.join('+');
-    const labelMap: Record<string, string> = {
-      pulse: 'Pulse', pace: 'Pace', channels: 'Channels', pricing: 'Pricing',
-      comp_set: 'Comp Set', forecast: 'Forecast', all: 'All revenue',
+    const groups = REPORT_DIM_GROUPS[reportType];
+    const dimSummary = groups
+      .map(g => {
+        const v = reportDims[g.key];
+        if (!v) return null;
+        const opt = g.options.find(o => o.value === v);
+        return opt?.label;
+      })
+      .filter((s): s is string => Boolean(s))
+      .join(' · ') || 'defaults';
+    const sched = reportSchedule === 'once' ? '' : ` · ↻ ${reportSchedule}`;
+    const reportLabel = `${REPORT_LABEL[reportType]} report · ${dimSummary}${sched} · ${stamp}`;
+    const queryString = new URLSearchParams(reportDims).toString();
+    const href = queryString ? `${REPORT_HREF_BASE[reportType]}?${queryString}` : REPORT_HREF_BASE[reportType];
+    const newDoc: DocItem = {
+      id: uid(),
+      label: reportLabel,
+      href,
+      uploaded_at: stamp,
+      kind: 'report',
+      report_type: reportType,
+      report_dims: reportDims,
+      schedule: reportSchedule,
+      next_run: computeNextRun(reportSchedule),
     };
-    const reportLabel = `${labelMap[reportDraft.type] ?? reportDraft.type} report · ${dims} · ${stamp}`;
-    const href = reportDraft.type === 'all'
-      ? '/revenue'
-      : `/revenue/${reportDraft.type === 'comp_set' ? 'compset' : reportDraft.type}?dim=${encodeURIComponent(dims)}`;
-    const next: DocItem[] = [{ id: uid(), label: reportLabel, href, uploaded_at: stamp }, ...docs];
+    const next: DocItem[] = [newDoc, ...docs];
     setDocs(next); saveLS(DOCS_KEY, next);
     setReportModal(false);
   }
@@ -1173,9 +1411,10 @@ export default function RevenuePage() {
           {attn.filter(a => a.kind === 'opportunity').length === 0 && <Empty label="No upside flagged" />}
         </Container>
 
-        {/* DOCS */}
+        {/* REPORTS (renamed from "My docs" 2026-05-08) — uploads + scheduled
+          * reports both land here. Recurring reports show a ↻ pill. */}
         <Container
-          title="My docs"
+          title="Reports"
           onAdd={openDocChoice}
         >
           <input
@@ -1185,33 +1424,43 @@ export default function RevenuePage() {
             style={{ display: 'none' }}
             onChange={e => pickDocFiles(e.target.files)}
           />
-          {docs.map(d => (
-            <Row key={d.id} onDelete={() => delDoc(d.id)}>
-              <a
-                href={d.href}
-                target={d.href?.startsWith('http') ? '_blank' : undefined}
-                rel={d.href?.startsWith('http') ? 'noreferrer' : undefined}
-                style={{
-                  flex:           1,
-                  fontSize:       13,
-                  color:          '#c9bb96',
-                  textDecoration: 'none',
-                  lineHeight:     1.4,
-                  overflow:       'hidden',
-                  textOverflow:   'ellipsis',
-                  whiteSpace:     'nowrap',
-                }}
-              >
-                {d.label}
-                {d.uploaded_at && (
-                  <span style={{ color: '#5a5448', marginLeft: 8, fontSize: 11 }}>
-                    {d.uploaded_at}
+          {docs.map(d => {
+            const isRecurring = d.schedule && d.schedule !== 'once';
+            return (
+              <Row key={d.id} onDelete={() => delDoc(d.id)}>
+                <a
+                  href={d.href}
+                  target={d.href?.startsWith('http') ? '_blank' : undefined}
+                  rel={d.href?.startsWith('http') ? 'noreferrer' : undefined}
+                  style={{
+                    flex:           1,
+                    fontSize:       13,
+                    color:          '#c9bb96',
+                    textDecoration: 'none',
+                    lineHeight:     1.4,
+                    display:        'flex',
+                    alignItems:     'center',
+                    gap:            8,
+                    flexWrap:       'wrap',
+                  }}
+                >
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {d.label}
                   </span>
-                )}
-              </a>
-            </Row>
-          ))}
-          {docs.length === 0 && <Empty label="No docs pinned" />}
+                  {isRecurring && (
+                    <span title={d.next_run ? `Next run ${d.next_run} ICT` : undefined} style={{
+                      fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+                      fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase',
+                      color: '#a8854a', border: '1px solid #2a261d', borderRadius: 999, padding: '1px 6px',
+                    }}>
+                      ↻ {d.schedule}
+                    </span>
+                  )}
+                </a>
+              </Row>
+            );
+          })}
+          {docs.length === 0 && <Empty label="No reports yet" />}
         </Container>
 
         {/* TASKS */}
@@ -1298,63 +1547,87 @@ export default function RevenuePage() {
         </div>
       )}
 
-      {/* Report builder modal — dimensions + type → adds doc card. */}
+      {/* Report builder modal — type-aware dimensions (PBS 2026-05-08).
+        * Stage 1: pick report type. Stage 2: dim groups specific to that
+        * type (e.g. Pace gets horizon/pickup/compare/granularity; Pulse
+        * gets window/compare/segment). Plus schedule (once/daily/weekly/
+        * monthly) — recurring schedules show ↻ on the doc card. */}
       {reportModal && (
         <div onClick={() => setReportModal(false)} style={modalOverlayStyle}>
-          <div onClick={e => e.stopPropagation()} style={{ ...modalCardStyle, maxWidth: 480 }}>
+          <div onClick={e => e.stopPropagation()} style={{ ...modalCardStyle, maxWidth: 540 }}>
             <div style={modalEyebrowStyle}>Build a report</div>
 
             <label style={modalLabelStyle}>Report type</label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, marginBottom: 6 }}>
-              {([
-                { v: 'pulse',     l: 'Pulse'    },
-                { v: 'pace',      l: 'Pace'     },
-                { v: 'channels',  l: 'Channels' },
-                { v: 'pricing',   l: 'Pricing'  },
-                { v: 'comp_set',  l: 'Comp Set' },
-                { v: 'forecast',  l: 'Forecast' },
-              ] as const).map(t => (
+              {(['pulse','pace','channels','pricing','comp_set','forecast'] as ReportType[]).map(t => (
                 <button
-                  key={t.v}
-                  onClick={() => setReportDraft(d => ({ ...d, type: t.v }))}
-                  style={pillBtnStyle(reportDraft.type === t.v)}
-                >{t.l}</button>
+                  key={t}
+                  onClick={() => { setReportType(t); setReportDims({}); }}
+                  style={pillBtnStyle(reportType === t)}
+                >{REPORT_LABEL[t]}</button>
               ))}
             </div>
             <button
-              onClick={() => setReportDraft(d => ({ ...d, type: 'all' }))}
-              style={{ ...pillBtnStyle(reportDraft.type === 'all'), width: '100%', marginBottom: 4 }}
+              onClick={() => { setReportType('all'); setReportDims({}); }}
+              style={{ ...pillBtnStyle(reportType === 'all'), width: '100%', marginBottom: 4 }}
             >All — full revenue snapshot</button>
 
-            <label style={modalLabelStyle}>Dimensions <span style={{ color: '#5a5448', textTransform: 'none', letterSpacing: 0 }}>(narrow down — leave empty for all)</span></label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
-              {([
-                { v: 'room',   l: 'Room type' },
-                { v: 'time',   l: 'Time'      },
-                { v: 'source', l: 'Source'    },
-                { v: 'comp',   l: 'Comp set'  },
-              ] as const).map(d => (
-                <button
-                  key={d.v}
-                  onClick={() => toggleReportDim(d.v)}
-                  style={pillBtnStyle(reportDraft.dimensions.includes(d.v))}
-                  disabled={reportDraft.type === 'all'}
-                >{d.l}</button>
-              ))}
-            </div>
+            {reportType && (
+              <>
+                <div style={{ borderTop: '1px solid #1f1c15', margin: '14px 0 4px' }} />
+                <div style={{ fontSize: 11, color: '#7d7565', marginBottom: 8 }}>
+                  Narrow down — these are the dimensions {REPORT_LABEL[reportType]} accepts.
+                  Click a chip to set, click again to clear (defaults apply).
+                </div>
+                {REPORT_DIM_GROUPS[reportType].map(group => (
+                  <div key={group.key} style={{ marginBottom: 10 }}>
+                    <label style={{ ...modalLabelStyle, marginTop: 0, marginBottom: 6 }}>
+                      {group.label}
+                    </label>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {group.options.map(opt => (
+                        <button
+                          key={opt.value}
+                          onClick={() => setReportDim(group.key, opt.value)}
+                          style={pillBtnStyle(reportDims[group.key] === opt.value)}
+                        >{opt.label}</button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Schedule — once / daily / weekly / monthly */}
+                <div style={{ borderTop: '1px solid #1f1c15', margin: '8px 0 6px' }} />
+                <label style={modalLabelStyle}>Schedule</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {SCHEDULE_OPTIONS.map(s => (
+                    <button
+                      key={s.value}
+                      onClick={() => setReportSchedule(s.value)}
+                      style={pillBtnStyle(reportSchedule === s.value)}
+                    >{s.label}</button>
+                  ))}
+                </div>
+                {reportSchedule !== 'once' && (
+                  <div style={{ fontSize: 11, color: '#7d7565', marginTop: 6 }}>
+                    Next run: <span style={{ color: '#c4a06b' }}>{computeNextRun(reportSchedule)}</span> (06:00 ICT)
+                  </div>
+                )}
+              </>
+            )}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
               <button onClick={() => setReportModal(false)} style={modalCancelStyle}>Cancel</button>
               <button
                 onClick={saveReport}
-                disabled={!reportDraft.type}
+                disabled={!reportType}
                 style={{
                   ...modalSaveStyle,
-                  background: reportDraft.type ? '#a8854a' : '#1c160d',
-                  color:      reportDraft.type ? '#0a0a0a' : '#5a5448',
-                  cursor:     reportDraft.type ? 'pointer' : 'not-allowed',
+                  background: reportType ? '#a8854a' : '#1c160d',
+                  color:      reportType ? '#0a0a0a' : '#5a5448',
+                  cursor:     reportType ? 'pointer' : 'not-allowed',
                 }}
-              >Generate</button>
+              >{reportSchedule === 'once' ? 'Generate' : `Schedule ${reportSchedule}`}</button>
             </div>
           </div>
         </div>
