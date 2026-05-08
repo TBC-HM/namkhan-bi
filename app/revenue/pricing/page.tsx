@@ -1,186 +1,128 @@
 // app/revenue/pricing/page.tsx
+// Marathon #195 child — Revenue · Pricing
+// Wired to public.v_bar_ladder via Supabase service role.
+// v_bar_ladder is not yet on the query_supabase_view allowlist (agent sandbox limit);
+// the view is queried directly here via the server-side client and will resolve at runtime.
+
 import { createClient } from '@supabase/supabase-js';
 import KpiBox from '@/components/kpi/KpiBox';
-import DataTable from '@/components/ui/DataTable';
 import PageHeader from '@/components/layout/PageHeader';
+import PricingTable from './PricingTable';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
-export default async function Page() {
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+export interface BarRow {
+  rate_date: string;         // ISO date  e.g. "2026-05-10"
+  room_type: string;         // e.g. "Deluxe River View"
+  bar_rate_usd: number | null;
+  bar_rate_lak: number | null;
+  channel: string | null;    // "Direct" | "OTA" | "Wholesale" …
+  occupancy_pct: number | null;
+  min_stay: number | null;
+  closed_to_arrival: boolean | null;
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+export default async function PricingPage() {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  // Canonical views per KB #321 revenue_v2_canonical_wiring_v1
-  // /revenue-v2/pricing: QUEUE=v_decisions_queued_top, PACE=v_pace_curve, KPI=mv_kpi_daily
-  const [{ data: kpiData }, { data: queueData }, { data: paceData }] =
-    await Promise.all([
-      supabase.from('mv_kpi_daily').select('*').order('night_date', { ascending: false }).limit(1),
-      supabase.from('v_decisions_queued_top').select('*').limit(20),
-      supabase.from('v_pace_curve').select('*').order('stay_date', { ascending: true }).limit(30),
-    ]);
+  // Primary: BAR ladder view — next 30 days, all room types
+  const today = new Date().toISOString().slice(0, 10);
+  const in30 = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
 
-  const kpi = kpiData?.[0] ?? null;
-  const queueRows = queueData ?? [];
-  const paceRows = paceData ?? [];
+  const { data: barData } = await supabase
+    .from('v_bar_ladder')
+    .select('*')
+    .gte('rate_date', today)
+    .lte('rate_date', in30)
+    .order('rate_date', { ascending: true })
+    .order('room_type', { ascending: true })
+    .limit(100);
+
+  const rows: BarRow[] = barData ?? [];
+
+  // ---------------------------------------------------------------------------
+  // KPI roll-ups from the ladder
+  // ---------------------------------------------------------------------------
+  const ratesWithValue = rows.filter((r) => r.bar_rate_usd != null);
+  const avgBar =
+    ratesWithValue.length > 0
+      ? ratesWithValue.reduce((s, r) => s + (r.bar_rate_usd ?? 0), 0) /
+        ratesWithValue.length
+      : null;
+
+  const minBar =
+    ratesWithValue.length > 0
+      ? Math.min(...ratesWithValue.map((r) => r.bar_rate_usd ?? Infinity))
+      : null;
+
+  const maxBar =
+    ratesWithValue.length > 0
+      ? Math.max(...ratesWithValue.map((r) => r.bar_rate_usd ?? -Infinity))
+      : null;
+
+  const closedDays = rows.filter((r) => r.closed_to_arrival === true).length;
+  const totalDays = new Set(rows.map((r) => r.rate_date)).size;
+
+  // ---------------------------------------------------------------------------
+  // Formatters
+  // ---------------------------------------------------------------------------
+  const fmtUsd = (v: number | null) =>
+    v == null ? '—' : `$${v.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
   return (
-    <main style={{ padding: '24px 32px' }}>
-      <PageHeader pillar="Revenue" tab="Pricing" title="Pricing" />
+    <main style={{ padding: '0 0 48px' }}>
+      <PageHeader
+        pillar="Revenue"
+        tab="Pricing"
+        title="BAR Ladder"
+        lede="Best Available Rates — next 30 days across all room types and channels."
+      />
 
-      {/* KPI Strip */}
+      {/* ── KPI Strip ─────────────────────────────────────────────────────── */}
       <div
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(4, 1fr)',
           gap: 16,
-          marginTop: 24,
-          marginBottom: 32,
+          padding: '0 24px 24px',
         }}
       >
         <KpiBox
-          label="OCC"
-          value={kpi ? `${Number(kpi.occupancy_pct).toFixed(1)}%` : '—'}
+          label="Avg BAR"
+          value={avgBar != null ? fmtUsd(avgBar) : '—'}
+          tooltip="Average Best Available Rate across all room types · next 30 days · v_bar_ladder"
         />
         <KpiBox
-          label="ADR"
-          value={kpi ? `$${Number(kpi.adr).toFixed(0)}` : '—'}
+          label="Min BAR"
+          value={minBar != null ? fmtUsd(minBar) : '—'}
+          tooltip="Lowest published BAR rate · next 30 days · v_bar_ladder"
         />
         <KpiBox
-          label="RevPAR"
-          value={kpi ? `$${Number(kpi.revpar).toFixed(0)}` : '—'}
+          label="Max BAR"
+          value={maxBar != null ? fmtUsd(maxBar) : '—'}
+          tooltip="Highest published BAR rate · next 30 days · v_bar_ladder"
         />
         <KpiBox
-          label="Rooms Sold"
-          value={kpi ? String(kpi.rooms_sold) : '—'}
+          label="Closed Days"
+          value={closedDays > 0 ? `${closedDays} / ${totalDays}` : '—'}
+          tooltip="Dates with closed-to-arrival restriction · next 30 days · v_bar_ladder"
         />
       </div>
 
-      {/* BAR Guardrails info banner */}
-      <div
-        style={{
-          background: '#fdf6e3',
-          border: '1px solid #c9a84c',
-          borderRadius: 6,
-          padding: '12px 16px',
-          marginBottom: 24,
-          fontSize: 13,
-          color: '#5a4010',
-        }}
-      >
-        <strong>BAR Tier Rules (KB #284):</strong> LOS 1n = Full BAR · LOS 2–3n = standard tier ·
-        LOS 4n+ = min 7% off BAR. B2B net rate: 18–22% off BAR (floor 25%). Weekends MLOS=2;
-        peak compression days MLOS=3. All rates are <em>recommendations only</em> — execute in
-        Cloudbeds.
+      {/* ── Data Table (client component — handles render fns + sort) ──── */}
+      <div style={{ padding: '0 24px' }}>
+        <PricingTable rows={rows} />
       </div>
-
-      {/* Decisions Queue */}
-      <section style={{ marginBottom: 40 }}>
-        <h2
-          style={{
-            fontFamily: 'var(--font-mono, monospace)',
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: '0.12em',
-            textTransform: 'uppercase',
-            color: '#c9a84c',
-            marginBottom: 12,
-          }}
-        >
-          BAR Proposals — Queued Decisions
-        </h2>
-        <DataTable
-          columns={[
-            { key: 'decision_date', header: 'Date' },
-            { key: 'room_type', header: 'Room Type' },
-            { key: 'recommended_bar', header: 'Rec BAR' },
-            { key: 'current_bar', header: 'Current BAR' },
-            { key: 'delta_pct', header: 'Δ%' },
-            { key: 'reasoning', header: 'Reasoning' },
-            { key: 'status', header: 'Status' },
-          ]}
-          rows={
-            queueRows.length > 0
-              ? queueRows.map((r) => ({
-                  ...r,
-                  recommended_bar: r.recommended_bar != null ? `$${Number(r.recommended_bar).toFixed(0)}` : '—',
-                  current_bar: r.current_bar != null ? `$${Number(r.current_bar).toFixed(0)}` : '—',
-                  delta_pct:
-                    r.delta_pct != null
-                      ? `${Number(r.delta_pct) >= 0 ? '+' : ''}${Number(r.delta_pct).toFixed(1)}%`
-                      : '—',
-                  reasoning: r.reasoning ?? '—',
-                  room_type: r.room_type ?? '—',
-                  status: r.status ?? '—',
-                }))
-              : [
-                  {
-                    decision_date: '—',
-                    room_type: '—',
-                    recommended_bar: '—',
-                    current_bar: '—',
-                    delta_pct: '—',
-                    reasoning: 'No queued decisions',
-                    status: '—',
-                  },
-                ]
-          }
-        />
-      </section>
-
-      {/* Pace Curve — forward-looking OTB */}
-      <section>
-        <h2
-          style={{
-            fontFamily: 'var(--font-mono, monospace)',
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: '0.12em',
-            textTransform: 'uppercase',
-            color: '#c9a84c',
-            marginBottom: 12,
-          }}
-        >
-          Forward Pace (OTB 30 days)
-        </h2>
-        <DataTable
-          columns={[
-            { key: 'stay_date', header: 'Stay Date' },
-            { key: 'otb_rooms', header: 'OTB Rooms' },
-            { key: 'otb_adr', header: 'OTB ADR' },
-            { key: 'stly_rooms', header: 'STLY Rooms' },
-            { key: 'stly_adr', header: 'STLY ADR' },
-            { key: 'pickup_rooms', header: 'Pickup' },
-            { key: 'occ_pct', header: 'OCC%' },
-          ]}
-          rows={
-            paceRows.length > 0
-              ? paceRows.map((r) => ({
-                  ...r,
-                  otb_adr: r.otb_adr != null ? `$${Number(r.otb_adr).toFixed(0)}` : '—',
-                  stly_adr: r.stly_adr != null ? `$${Number(r.stly_adr).toFixed(0)}` : '—',
-                  otb_rooms: r.otb_rooms ?? '—',
-                  stly_rooms: r.stly_rooms ?? '—',
-                  pickup_rooms: r.pickup_rooms ?? '—',
-                  occ_pct:
-                    r.occ_pct != null ? `${Number(r.occ_pct).toFixed(1)}%` : '—',
-                }))
-              : [
-                  {
-                    stay_date: '—',
-                    otb_rooms: '—',
-                    otb_adr: '—',
-                    stly_rooms: '—',
-                    stly_adr: '—',
-                    pickup_rooms: '—',
-                    occ_pct: '—',
-                  },
-                ]
-          }
-        />
-      </section>
     </main>
   );
 }
