@@ -1,11 +1,13 @@
 'use client';
 
 // components/nav/TopNav.tsx
-// Main horizontal navigation: 8 top-level tabs.
+// Main horizontal navigation: 8 top-level tabs + ND button on the right.
 // Active state determined by pathname prefix.
+// 2026-05-08: ND button restored — was working before working-tree rollback.
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
+import NDButton from './NDButton';
 
 interface TopNavItem {
     href: string;
@@ -30,7 +32,7 @@ export default function TopNav() {
     const qs = sp.toString();
 
   return (
-        <div className="nav-wrap">
+        <div className="nav-wrap" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
               <nav className="nav">
                 {ITEMS.map((it) => {
                     const active = pathname.startsWith(it.href);
@@ -43,6 +45,9 @@ export default function TopNav() {
                                 );
         })}
               </nav>
+              <div style={{ paddingRight: 12 }}>
+                <NDButton />
+              </div>
         </div>
       );
 }
