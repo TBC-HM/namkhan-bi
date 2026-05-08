@@ -1,210 +1,157 @@
-// app/revenue/rateplans/page.tsx — REDESIGN 2026-05-05 (recovery rewrite)
-// compset-style: PageHeader + status header + 3 graphs + KpiBox + DataTable.
-
-import PageHeader from '@/components/layout/PageHeader';
+// app/revenue/rateplans/page.tsx
+import { createClient } from '@supabase/supabase-js';
 import KpiBox from '@/components/kpi/KpiBox';
-import { supabase, PROPERTY_ID } from '@/lib/supabase';
-import { resolvePeriod } from '@/lib/period';
+import DataTable from '@/components/ui/DataTable';
+import PageHeader from '@/components/layout/PageHeader';
 
-import RatePlansStatusHeader from './_components/RatePlansStatusHeader';
-import RatePlansGraphs, {
-  type DailyTrendRow,
-  type TypeMixRow,
-  type CancelRow,
-} from './_components/RatePlansGraphs';
-import {
-  PlansTable,
-  SleepingTable,
-  OrphansTable,
-  type PlanRow,
-  type SleepingRow,
-  type OrphanRow,
-} from './_components/PlansTablesClient';
-
-export const revalidate = 60;
 export const dynamic = 'force-dynamic';
+export const revalidate = 60;
 
-interface Props { searchParams: Record<string, string | string[] | undefined>; }
-
-export default async function RatePlansPage({ searchParams }: Props) {
-  const period = resolvePeriod(searchParams);
-
-  const { data: configuredPlans } = await supabase
-    .from('rate_plans')
-    .select('rate_id, rate_name, rate_type, is_active')
-    .eq('property_id', PROPERTY_ID)
-    .eq('is_active', true);
-  const masterNames = new Set((configuredPlans ?? []).map((p: any) => p.rate_name));
-
-  const { data: recent90 } = await supabase
-    .from('reservations')
-    .select('rate_plan, status, booking_date')
-    .eq('property_id', PROPERTY_ID)
-    .gte('booking_date', new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10))
-    .neq('status', 'canceled');
-  const activeMasterNames = new Set(
-    (recent90 ?? [])
-      .map((r: any) => r.rate_plan)
-      .filter((n: string) => n && masterNames.has(n)),
-  );
-  const activeMasterCount = activeMasterNames.size;
-  const lastBookingDate = (recent90 ?? [])
-    .map((r: any) => (r.booking_date as string)?.slice(0, 10))
-    .filter(Boolean)
-    .sort()
-    .at(-1) ?? null;
-
-  const { data: windowRows } = await supabase
-    .from('v_rate_plan_perf')
-    .select('rate_plan, status, total_amount, nights, lead_days, plan_type, is_configured, booking_date, check_in_date')
-    .gte('check_in_date', period.from)
-    .lte('check_in_date', period.to);
-
-  type PlanAgg = {
-    name: string; type: string; isConfigured: boolean;
-    bookings: number; cancellations: number; nights: number; revenue: number;
-    leadDaysSum: number; leadDaysN: number; lastBooked: string | null;
-  };
-  const planMap: Record<string, PlanAgg> = {};
-  (windowRows ?? []).forEach((r: any) => {
-    const key = r.rate_plan;
-    if (!planMap[key]) {
-      planMap[key] = { name: key, type: r.plan_type, isConfigured: r.is_configured, bookings: 0, cancellations: 0, nights: 0, revenue: 0, leadDaysSum: 0, leadDaysN: 0, lastBooked: null };
-    }
-    const p = planMap[key];
-    if (r.status === 'canceled') p.cancellations += 1;
-    else {
-      p.bookings += 1;
-      p.nights += Number(r.nights || 0);
-      p.revenue += Number(r.total_amount || 0);
-      if (r.lead_days != null) { p.leadDaysSum += Number(r.lead_days); p.leadDaysN += 1; }
-    }
-    const bookDate = (r.booking_date as string)?.slice(0, 10);
-    if (bookDate && (!p.lastBooked || bookDate > p.lastBooked)) p.lastBooked = bookDate;
-  });
-
-  const rankedAll = Object.values(planMap)
-    .filter((p) => p.bookings > 0 || p.cancellations > 0)
-    .sort((a, b) => b.revenue - a.revenue);
-  const ranked = rankedAll.filter((p) => activeMasterNames.has(p.name));
-  const totalRev = ranked.reduce((s, r) => s + r.revenue, 0);
-  const plansBookingInWindow = ranked.filter((r) => r.bookings > 0).length;
-  const top3Pct = totalRev > 0 ? (100 * ranked.slice(0, 3).reduce((s, r) => s + r.revenue, 0)) / totalRev : 0;
-  const hiddenOrphanInWindow = rankedAll.length - ranked.length;
-
-  const planRows: PlanRow[] = ranked.map((p) => ({
-    name: p.name, type: p.type, isConfigured: p.isConfigured,
-    bookings: p.bookings, cancellations: p.cancellations, nights: p.nights, revenue: p.revenue,
-    adr: p.nights ? p.revenue / p.nights : 0,
-    cancelPct: (p.bookings + p.cancellations) > 0 ? (100 * p.cancellations) / (p.bookings + p.cancellations) : 0,
-    avgLead: p.leadDaysN ? p.leadDaysSum / p.leadDaysN : 0,
-    lastBooked: p.lastBooked,
-    mixPct: totalRev ? (100 * p.revenue) / totalRev : 0,
-  }));
-
-  const typeMap: Record<string, { bookings: number; revenue: number; nights: number }> = {};
-  ranked.forEach((p) => {
-    if (!typeMap[p.type]) typeMap[p.type] = { bookings: 0, revenue: 0, nights: 0 };
-    typeMap[p.type].bookings += p.bookings;
-    typeMap[p.type].revenue += p.revenue;
-    typeMap[p.type].nights += p.nights;
-  });
-  const typeRollup: TypeMixRow[] = Object.entries(typeMap).map(([type, v]) => ({
-    type, ...v,
-    adr: v.nights ? v.revenue / v.nights : 0,
-    mix: totalRev ? (100 * v.revenue) / totalRev : 0,
-  })).sort((a, b) => b.revenue - a.revenue);
-
-  const trendMap: Record<string, { bookings: number; revenue: number; nights: number }> = {};
-  (windowRows ?? []).forEach((r: any) => {
-    if (r.status === 'canceled') return;
-    const day = (r.booking_date as string)?.slice(0, 10);
-    if (!day) return;
-    if (!trendMap[day]) trendMap[day] = { bookings: 0, revenue: 0, nights: 0 };
-    trendMap[day].bookings += 1;
-    trendMap[day].revenue += Number(r.total_amount || 0);
-    trendMap[day].nights += Number(r.nights || 0);
-  });
-  const trend: DailyTrendRow[] = Object.entries(trendMap).map(([day, v]) => ({
-    day, bookings: v.bookings, revenue: v.revenue,
-    adr: v.nights ? v.revenue / v.nights : 0,
-  })).sort((a, b) => a.day.localeCompare(b.day));
-
-  const cancelData: CancelRow[] = ranked.map((p) => ({
-    name: p.name,
-    cancelPct: (p.bookings + p.cancellations) > 0 ? (100 * p.cancellations) / (p.bookings + p.cancellations) : 0,
-    bookings: p.bookings, cancellations: p.cancellations,
-  }));
-
-  const { data: sleepingPlans } = await supabase
-    .from('v_rate_plan_sleeping')
-    .select('rate_name, rate_type, last_booked, days_since')
-    .order('days_since', { ascending: false })
-    .limit(30);
-  const sleepingRows: SleepingRow[] = (sleepingPlans ?? []) as SleepingRow[];
-
-  const { data: orphans } = await supabase
-    .from('v_rate_plan_orphans')
-    .select('rate_plan, bookings_lifetime, revenue_lifetime, last_booked')
-    .order('revenue_lifetime', { ascending: false })
-    .limit(20);
-  const orphanRows: OrphanRow[] = (orphans ?? []) as OrphanRow[];
-
-  return (
-    <>
-      <PageHeader
-        pillar="Revenue"
-        tab="Rate plans"
-        title={<>Sell the right <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>plan</em>, retire the dead ones.</>}
-        lede={`${period.label} · ${plansBookingInWindow}/${activeMasterCount} active plans booking · top 3 = ${top3Pct.toFixed(0)}% of revenue`}
-      />
-      <RatePlansStatusHeader
-        lastBookingDate={lastBookingDate}
-        activeMasterCount={activeMasterCount}
-        bookingInWindow={plansBookingInWindow}
-        sleepingCount={sleepingRows.length}
-        orphanCount={orphanRows.length}
-        topTypes={typeRollup.slice(0, 5).map((t) => ({ type: t.type, mix: t.mix }))}
-        top3Pct={top3Pct}
-        periodLabel={period.label}
-        rangeLabel={period.rangeLabel}
-      />
-      <RatePlansGraphs trend={trend} typeMix={typeRollup} cancel={cancelData} />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 14 }}>
-        <KpiBox value={null} unit="text" valueText={`${plansBookingInWindow}/${activeMasterCount}`} label={`Plans booking ${period.label}`} />
-        <KpiBox value={sleepingRows.length} unit="count" label="Sleeping plans 90d" />
-        <KpiBox value={top3Pct} unit="pct" label="Top 3 concentration" />
-        <KpiBox value={totalRev} unit="usd" label={`Revenue ${period.label}`} />
-      </div>
-      <div style={{ marginTop: 18 }}>
-        <SectionHead title="Plans" emphasis="ranked by revenue" sub={`${period.label} · active master plans only${hiddenOrphanInWindow > 0 ? ` · ${hiddenOrphanInWindow} orphan/retired hidden — see below` : ''}`} source="v_rate_plan_perf" />
-        <PlansTable rows={planRows} />
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 12, marginTop: 18 }}>
-        <div>
-          <SectionHead title="Sleeping plans" emphasis="≥90d idle" sub={`${sleepingRows.length} configured · candidates to retire`} source="v_rate_plan_sleeping" />
-          <SleepingTable rows={sleepingRows} />
-        </div>
-        <div>
-          <SectionHead title="Orphan plans" emphasis="not in master" sub="Booked but not configured · GDS-injected" source="v_rate_plan_orphans" />
-          <OrphansTable rows={orphanRows} />
-        </div>
-      </div>
-    </>
-  );
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+interface RatePlanRow {
+  rate_plan_code:      string | null;
+  rate_plan_name:      string | null;
+  room_nights:         number | null;
+  revenue_usd:         number | null;
+  adr_usd:             number | null;
+  occupancy_pct:       number | null;
+  revpar_usd:          number | null;
+  avg_los:             number | null;
+  cancellation_pct:    number | null;
+  period:              string | null;
 }
 
-function SectionHead({ title, emphasis, sub, source }: { title: string; emphasis?: string; sub?: string; source?: string }) {
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function fmtUSD(v: number | null | undefined): string {
+  if (v == null) return '—';
+  return `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function fmtPct(v: number | null | undefined): string {
+  if (v == null) return '—';
+  return `${v.toFixed(1)}%`;
+}
+
+function fmtNum(v: number | null | undefined): string {
+  if (v == null) return '—';
+  return v.toLocaleString('en-US');
+}
+
+function fmtDec(v: number | null | undefined, dp = 1): string {
+  if (v == null) return '—';
+  return v.toFixed(dp);
+}
+
+// ---------------------------------------------------------------------------
+// Aggregation helpers
+// ---------------------------------------------------------------------------
+function sum(rows: RatePlanRow[], key: keyof RatePlanRow): number {
+  return rows.reduce((acc, r) => acc + (Number(r[key]) || 0), 0);
+}
+
+function wavg(
+  rows: RatePlanRow[],
+  numeratorKey: keyof RatePlanRow,
+  weightKey: keyof RatePlanRow,
+): number | null {
+  const totalWeight = sum(rows, weightKey);
+  if (totalWeight === 0) return null;
+  const weighted = rows.reduce(
+    (acc, r) => acc + (Number(r[numeratorKey]) || 0) * (Number(r[weightKey]) || 0),
+    0,
+  );
+  return weighted / totalWeight;
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+export default async function RatePlansPage() {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
+
+  const { data, error } = await supabase
+    .from('v_rateplan_performance')
+    .select('*')
+    .order('revenue_usd', { ascending: false })
+    .limit(100);
+
+  const rows: RatePlanRow[] = data ?? [];
+
+  if (error) {
+    console.error('[RatePlansPage] Supabase error:', error.message);
+  }
+
+  // KPI roll-ups
+  const totalRoomNights = sum(rows, 'room_nights');
+  const totalRevenue    = sum(rows, 'revenue_usd');
+  const blendedADR      = wavg(rows, 'adr_usd', 'room_nights');
+  const blendedRevPAR   = wavg(rows, 'revpar_usd', 'room_nights');
+
+  // Table columns
+  const columns = [
+    { key: 'rate_plan_code',   header: 'Code'         },
+    { key: 'rate_plan_name',   header: 'Rate Plan'    },
+    { key: 'period',           header: 'Period'       },
+    { key: 'room_nights',      header: 'Room Nights'  },
+    { key: 'revenue_usd',      header: 'Revenue (USD)'},
+    { key: 'adr_usd',          header: 'ADR'          },
+    { key: 'revpar_usd',       header: 'RevPAR'       },
+    { key: 'occupancy_pct',    header: 'OCC %'        },
+    { key: 'avg_los',          header: 'Avg LOS'      },
+    { key: 'cancellation_pct', header: 'Canc %'       },
+  ];
+
+  // Formatted rows for DataTable
+  const tableRows = rows.map((r) => ({
+    rate_plan_code:   r.rate_plan_code   ?? '—',
+    rate_plan_name:   r.rate_plan_name   ?? '—',
+    period:           r.period           ?? '—',
+    room_nights:      fmtNum(r.room_nights),
+    revenue_usd:      fmtUSD(r.revenue_usd),
+    adr_usd:          fmtUSD(r.adr_usd),
+    revpar_usd:       fmtUSD(r.revpar_usd),
+    occupancy_pct:    fmtPct(r.occupancy_pct),
+    avg_los:          fmtDec(r.avg_los),
+    cancellation_pct: fmtPct(r.cancellation_pct),
+  }));
+
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12, marginBottom: 6, flexWrap: 'wrap' }}>
-      <div>
-        <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-xl)', fontWeight: 500, color: 'var(--ink)', lineHeight: 1.1 }}>
-          {title}
-          {emphasis && <span style={{ marginLeft: 8, fontFamily: 'var(--mono)', fontStyle: 'normal', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>{emphasis}</span>}
-        </div>
-        {sub && <div style={{ marginTop: 2, fontSize: 'var(--t-sm)', color: 'var(--ink-mute)' }}>{sub}</div>}
+    <main style={{ padding: '24px', fontFamily: 'inherit' }}>
+      <PageHeader pillar="Revenue" tab="Rate Plans" title="Rate Plans Performance" />
+
+      {/* ── KPI summary strip ── */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: 16,
+          marginBottom: 32,
+          marginTop: 16,
+        }}
+      >
+        <KpiBox label="Total Room Nights"  value={fmtNum(totalRoomNights)} />
+        <KpiBox label="Total Revenue"      value={fmtUSD(totalRevenue)}    />
+        <KpiBox label="Blended ADR"        value={fmtUSD(blendedADR)}      />
+        <KpiBox label="Blended RevPAR"     value={fmtUSD(blendedRevPAR)}   />
       </div>
-      {source && <span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-loose)', textTransform: 'uppercase', color: 'var(--ink-faint)' }}>{source}</span>}
-    </div>
+
+      {/* ── Detail table ── */}
+      {rows.length === 0 ? (
+        <p style={{ color: '#888', fontSize: 14 }}>
+          {error
+            ? `Data unavailable — ${error.message}`
+            : 'No rate plan data found for the selected period.'}
+        </p>
+      ) : (
+        <DataTable columns={columns} rows={tableRows} />
+      )}
+    </main>
   );
 }
