@@ -2,50 +2,22 @@
 import { createClient } from '@supabase/supabase-js';
 import PageHeader from '@/components/layout/PageHeader';
 import KpiBox from '@/components/kpi/KpiBox';
-import Link from 'next/link';
+import DataTable from '@/components/ui/DataTable';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
-interface TacticalAlert {
-  id: string;
-  title: string;
-  severity: string;
-  created_at: string;
-}
-
 interface PlRow {
-  month: string;
-  total_revenue: number | null;
-  rooms_revenue: number | null;
+  period_label?: string;
+  total_revenue?: number | null;
+  rooms_revenue?: number | null;
+  fb_revenue?: number | null;
+  other_revenue?: number | null;
+  occupancy_pct?: number | null;
+  adr_usd?: number | null;
+  revpar_usd?: number | null;
+  rooms_sold?: number | null;
 }
-
-const REVENUE_SECTIONS = [
-  {
-    href: '/revenue/compset',
-    label: 'Comp Set',
-    description: 'Rate benchmarking vs competing properties',
-    icon: '📊',
-  },
-  {
-    href: '/revenue/parity',
-    label: 'Parity',
-    description: 'Channel rate parity monitoring & alerts',
-    icon: '⚖️',
-  },
-  {
-    href: '/revenue/channels',
-    label: 'Channels',
-    description: 'OTA & direct channel breakdown, Booking.com analytics',
-    icon: '📡',
-  },
-  {
-    href: '/revenue/pace',
-    label: 'Pace',
-    description: 'Pick-up pace vs same time last year',
-    icon: '📈',
-  },
-];
 
 export default async function RevenuePage() {
   const supabase = createClient(
@@ -53,187 +25,94 @@ export default async function RevenuePage() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  // Pull latest P&L row for headline KPIs
-  const { data: plData } = await supabase
+  const { data } = await supabase
     .from('v_pl_monthly_usali')
-    .select('month, total_revenue, rooms_revenue')
-    .order('month', { ascending: false })
-    .limit(1);
+    .select('*')
+    .order('period_label', { ascending: false })
+    .limit(12);
 
-  const latest: PlRow | null = plData?.[0] ?? null;
+  const rows: PlRow[] = data ?? [];
+  const latest = rows[0] ?? {};
 
-  // Pull top tactical alerts for revenue context
-  const { data: alertData } = await supabase
-    .from('v_tactical_alerts_top')
-    .select('id, title, severity, created_at')
-    .limit(4);
+  const fmt = (v: number | null | undefined, prefix = '$') =>
+    v != null ? `${prefix}${v.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—';
 
-  const alerts: TacticalAlert[] = alertData ?? [];
-
-  const fmtUSD = (v: number | null | undefined) =>
-    v == null ? '—' : `$${v.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+  const fmtPct = (v: number | null | undefined) =>
+    v != null ? `${v.toFixed(1)}%` : '—';
 
   return (
-    <main style={{ padding: '0 0 48px' }}>
-      <PageHeader pillar="Revenue" tab="Overview" title="Revenue" />
+    <main style={{ padding: '24px 32px' }}>
+      <PageHeader pillar="Revenue" tab="Overview" title="Revenue Overview" />
 
-      {/* ── Headline KPIs ── */}
-      <section
+      {/* KPI grid */}
+      <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+          gridTemplateColumns: 'repeat(4, 1fr)',
           gap: 16,
-          padding: '24px 24px 0',
+          marginTop: 24,
+          marginBottom: 32,
         }}
       >
-        <KpiBox
-          label="Total Revenue (latest month)"
-          value={fmtUSD(latest?.total_revenue)}
-          sub={latest?.month ?? '—'}
-        />
-        <KpiBox
-          label="Rooms Revenue"
-          value={fmtUSD(latest?.rooms_revenue)}
-          sub={latest?.month ?? '—'}
-        />
-      </section>
+        <KpiBox label="Total Revenue" value={fmt(latest.total_revenue)} />
+        <KpiBox label="Rooms Revenue" value={fmt(latest.rooms_revenue)} />
+        <KpiBox label="ADR" value={fmt(latest.adr_usd)} />
+        <KpiBox label="RevPAR" value={fmt(latest.revpar_usd)} />
+        <KpiBox label="Occupancy" value={fmtPct(latest.occupancy_pct)} />
+        <KpiBox label="Rooms Sold" value={latest.rooms_sold?.toLocaleString() ?? '—'} />
+        <KpiBox label="F&B Revenue" value={fmt(latest.fb_revenue)} />
+        <KpiBox label="Other Revenue" value={fmt(latest.other_revenue)} />
+      </div>
 
-      {/* ── Sub-section nav cards ── */}
-      <section style={{ padding: '32px 24px 0' }}>
-        <h2
-          style={{
-            fontFamily: 'var(--serif)',
-            fontStyle: 'italic',
-            fontSize: 'var(--t-xl)',
-            fontWeight: 600,
-            marginBottom: 16,
-            color: 'var(--color-text)',
-          }}
-        >
-          Revenue sections
-        </h2>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-            gap: 16,
-          }}
-        >
-          {REVENUE_SECTIONS.map((s) => (
-            <Link
-              key={s.href}
-              href={s.href}
-              style={{
-                display: 'block',
-                padding: '20px 20px 18px',
-                background: 'var(--color-surface)',
-                border: '1px solid var(--color-border)',
-                borderRadius: 8,
-                textDecoration: 'none',
-                color: 'var(--color-text)',
-                transition: 'box-shadow 0.15s ease',
-              }}
-            >
-              <div style={{ fontSize: 28, marginBottom: 8 }}>{s.icon}</div>
-              <div
-                style={{
-                  fontFamily: 'var(--serif)',
-                  fontStyle: 'italic',
-                  fontSize: 'var(--t-xl)',
-                  fontWeight: 600,
-                  marginBottom: 4,
-                }}
-              >
-                {s.label}
-              </div>
-              <div
-                style={{
-                  fontFamily: 'var(--sans)',
-                  fontSize: 'var(--t-sm)',
-                  color: 'var(--color-text-muted)',
-                  lineHeight: 1.5,
-                }}
-              >
-                {s.description}
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      {/* ── Tactical alerts ── */}
-      {alerts.length > 0 && (
-        <section style={{ padding: '32px 24px 0' }}>
-          <h2
-            style={{
-              fontFamily: 'var(--serif)',
-              fontStyle: 'italic',
-              fontSize: 'var(--t-xl)',
-              fontWeight: 600,
-              marginBottom: 16,
-              color: 'var(--color-text)',
-            }}
-          >
-            Active alerts
-          </h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {alerts.map((a) => (
-              <div
-                key={a.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  padding: '12px 16px',
-                  background: 'var(--color-surface)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 6,
-                }}
-              >
-                <span
-                  style={{
-                    fontFamily: 'var(--mono)',
-                    fontSize: 'var(--t-xs)',
-                    letterSpacing: 'var(--ls-extra)',
-                    textTransform: 'uppercase',
-                    padding: '2px 6px',
-                    borderRadius: 4,
-                    background:
-                      a.severity === 'critical'
-                        ? 'var(--color-bad)'
-                        : a.severity === 'high'
-                        ? 'var(--color-warn)'
-                        : 'var(--color-neutral)',
-                    color: 'var(--color-text-on-accent)',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {a.severity ?? '—'}
-                </span>
-                <span
-                  style={{
-                    fontFamily: 'var(--sans)',
-                    fontSize: 'var(--t-md)',
-                    flex: 1,
-                  }}
-                >
-                  {a.title ?? '—'}
-                </span>
-                <span
-                  style={{
-                    fontFamily: 'var(--mono)',
-                    fontSize: 'var(--t-xs)',
-                    color: 'var(--color-text-muted)',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {a.created_at ? a.created_at.slice(0, 10) : '—'}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+      {/* Monthly breakdown table */}
+      <DataTable
+        columns={[
+          { key: 'period_label', header: 'Period' },
+          {
+            key: 'total_revenue',
+            header: 'Total Revenue',
+            render: (v: unknown) =>
+              v != null ? `$${(v as number).toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—',
+          },
+          {
+            key: 'rooms_revenue',
+            header: 'Rooms Revenue',
+            render: (v: unknown) =>
+              v != null ? `$${(v as number).toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—',
+          },
+          {
+            key: 'fb_revenue',
+            header: 'F&B Revenue',
+            render: (v: unknown) =>
+              v != null ? `$${(v as number).toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—',
+          },
+          {
+            key: 'occupancy_pct',
+            header: 'Occ %',
+            render: (v: unknown) =>
+              v != null ? `${(v as number).toFixed(1)}%` : '—',
+          },
+          {
+            key: 'adr_usd',
+            header: 'ADR',
+            render: (v: unknown) =>
+              v != null ? `$${(v as number).toFixed(2)}` : '—',
+          },
+          {
+            key: 'revpar_usd',
+            header: 'RevPAR',
+            render: (v: unknown) =>
+              v != null ? `$${(v as number).toFixed(2)}` : '—',
+          },
+          {
+            key: 'rooms_sold',
+            header: 'Rooms Sold',
+            render: (v: unknown) =>
+              v != null ? (v as number).toLocaleString() : '—',
+          },
+        ]}
+        rows={rows}
+      />
     </main>
   );
 }
