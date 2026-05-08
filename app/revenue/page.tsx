@@ -260,7 +260,7 @@ export default function RevenuePage() {
         justifyContent: 'center',
         alignItems:     'center',
         gap:            22,
-        marginTop:      -32, // pull up so chat sits visually centered
+        marginTop:      -32,
         marginBottom:   56,
       }}>
         <div style={{
