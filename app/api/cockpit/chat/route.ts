@@ -1015,20 +1015,55 @@ export async function POST(req: Request) {
         });
       }
 
-      // True triage failure (no answer, no JSON) → mark + 502.
+      // 2026-05-08 PBS directive — never let a chat message land in triage_failed.
+      // Kit's prompt is too long (~27k chars) and 800 max_tokens often truncates
+      // the JSON, leaving us with neither markdown answer nor JSON. Drop straight
+      // through to code_writer (Carla) with a synthetic triage so the message
+      // becomes a real ticket the cron can drain. PBS sees it land in /cockpit/tasks
+      // instead of disappearing into a failed bucket.
+      const fallbackTriage = {
+        arm: "dev",
+        intent: "build" as const,
+        urgency: "medium" as const,
+        summary: message.slice(0, 280),
+        plan: ["github_read_file the affected file", "compose merged content preserving everything", "github_commit_file + github_open_pr"],
+        recommended_agent: "code_writer",
+        recommended_role: "code_writer",
+        blockers: [],
+        estimated_minutes: 30,
+      };
       await supabase
         .from("cockpit_tickets")
         .update({
-          status: "triage_failed",
-          arm: "ops",
-          notes: JSON.stringify({ kind: "triage_failure", debug }),
+          status: "triaged",
+          arm: "dev",
+          intent: "build",
+          parsed_summary:
+            "**Request**: " + message.slice(0, 600) +
+            "\n\n_Triage parse failed — auto-routed to code_writer (Carla) per PBS directive 2026-05-08._",
+          notes: JSON.stringify(fallbackTriage),
         })
         .eq("id", inserted.id);
 
-      return NextResponse.json(
-        { ticket: inserted, error: "triage_failed", debug },
-        { status: 502 },
-      );
+      await supabase.from("cockpit_audit_log").insert({
+        ticket_id: inserted.id,
+        agent: "it_manager",
+        action: "triage_fallback_codewriter",
+        target: `ticket:${inserted.id}`,
+        success: true,
+        metadata: { kind: "fallback_codewriter", debug },
+        reasoning: "Triage neither produced markdown nor parseable JSON. Routed to code_writer rather than dropping to triage_failed.",
+        input_tokens: debug.tokens_in,
+        output_tokens: debug.tokens_out,
+        cost_usd_milli: 0,
+        duration_ms: debug.duration_ms,
+      });
+
+      return NextResponse.json({
+        ticket: { ...inserted, ...fallbackTriage, status: "triaged" },
+        triage: fallbackTriage,
+        fallback: "code_writer_routing",
+      });
     }
   } catch (e) {
     return NextResponse.json(
