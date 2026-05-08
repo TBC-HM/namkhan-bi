@@ -1217,8 +1217,13 @@ async function github_open_pr(args: { branch: string; title: string; body?: stri
   const token = process.env.GITHUB_TOKEN;
   if (!token) return { ok: false, error: "GITHUB_TOKEN env var missing" };
   const repo = "TBC-HM/namkhan-bi";
-  const base = args.base ?? "main";
-  const autoMerge = args.auto_merge !== false; // default true per PBS directive 2026-05-07
+  // 2026-05-08 PBS directive: agent PRs ALWAYS land on staging, never main.
+  // PBS reviews on the staging preview URL, then opens a manual promotion PR
+  // staging→main when a batch is ready. Stops "agent shipped to prod" surprises.
+  const base = args.base ?? "staging";
+  // Auto-merge into staging stays on (preview deploy is instant after merge).
+  // Promotion staging→main is a separate manual step PBS triggers.
+  const autoMerge = args.auto_merge !== false;
   const headers = { Authorization: `Bearer ${token}`, "Accept": "application/vnd.github+json", "Content-Type": "application/json" };
 
   const body = {
