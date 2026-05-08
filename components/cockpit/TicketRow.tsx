@@ -1,101 +1,139 @@
 'use client';
 
+/**
+ * TicketRow — memoized row component for the cockpit ticket table.
+ * Wrapped in React.memo so parent re-renders don't force DOM diffing
+ * unless the ticket object itself changes.
+ *
+ * Ticket #229 child — Perf marathon: memoize ticket table row component.
+ */
+
 import React, { memo } from 'react';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ── Types ────────────────────────────────────────────────────────────────────
 
-export interface Ticket {
+export interface TicketRowData {
   id: number;
   created_at: string;
   updated_at: string;
-  source: string | null;
   arm: string | null;
   intent: string | null;
   status: string;
   parsed_summary: string | null;
+  source: string | null;
 }
 
 interface TicketRowProps {
-  ticket: Ticket;
-  onSelect?: (id: number) => void;
+  ticket: TicketRowData;
+  /** Optional click handler — passed via useCallback at the list level */
+  onClick?: (id: number) => void;
 }
 
-// ─── Status badge colours ─────────────────────────────────────────────────────
+// ── Status pill helpers ──────────────────────────────────────────────────────
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  completed:       { bg: '#d1fae5', text: '#065f46' },
-  triage_failed:   { bg: '#fee2e2', text: '#991b1b' },
-  triaged:         { bg: '#dbeafe', text: '#1e40af' },
-  awaits_user:     { bg: '#fef9c3', text: '#854d0e' },
-  working:         { bg: '#ede9fe', text: '#4c1d95' },
-  new:             { bg: '#f3f4f6', text: '#374151' },
+  completed:      { bg: '#d1fae5', text: '#065f46' },
+  triage_failed:  { bg: '#fee2e2', text: '#991b1b' },
+  triaged:        { bg: '#dbeafe', text: '#1e40af' },
+  working:        { bg: '#fef3c7', text: '#92400e' },
+  awaits_user:    { bg: '#ede9fe', text: '#5b21b6' },
+  new:            { bg: '#f3f4f6', text: '#374151' },
 };
 
 function statusStyle(status: string) {
   return STATUS_COLORS[status] ?? { bg: '#f3f4f6', text: '#374151' };
 }
 
-// ─── TicketRow ────────────────────────────────────────────────────────────────
-// memo() prevents re-render when sibling tickets update — key perf gain for
-// long lists where only one row changes at a time.
+function fmtDate(iso: string) {
+  try {
+    return new Date(iso).toLocaleString('en-GB', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+  } catch {
+    return iso;
+  }
+}
 
-const TicketRow = memo(function TicketRow({ ticket, onSelect }: TicketRowProps) {
+// ── Component ────────────────────────────────────────────────────────────────
+
+function TicketRowInner({ ticket, onClick }: TicketRowProps) {
   const { bg, text } = statusStyle(ticket.status);
 
-  const handleClick = () => {
-    if (onSelect) onSelect(ticket.id);
+  const firstLine = ticket.parsed_summary
+    ? ticket.parsed_summary.split('\n').find(l => l.trim().length > 0) ?? '—'
+    : '—';
+
+  const summary =
+    firstLine.replace(/^\*\*[^*]+\*\*\s*/, '').slice(0, 120) || '—';
+
+  function handleClick() {
+    onClick?.(ticket.id);
+  }
+
+  const cellBase: React.CSSProperties = {
+    padding: '10px 12px',
+    borderBottom: '1px solid #e5e7eb',
+    fontSize: 13,
+    verticalAlign: 'middle',
+    background: '#fff',
   };
 
-  const date = ticket.updated_at
-    ? new Date(ticket.updated_at).toISOString().slice(0, 16).replace('T', ' ')
-    : '—';
-
-  const summary = ticket.parsed_summary
-    ? ticket.parsed_summary.slice(0, 120) + (ticket.parsed_summary.length > 120 ? '…' : '')
-    : '—';
-
   return (
-    <tr
-      onClick={handleClick}
-      style={{
-        cursor: onSelect ? 'pointer' : 'default',
-        borderBottom: '1px solid #e5e7eb',
-      }}
-    >
-      <td style={{ padding: '8px 12px', fontVariantNumeric: 'tabular-nums', color: '#6b7280', fontSize: 13 }}>
+    <tr onClick={handleClick} style={{ cursor: onClick ? 'pointer' : 'default' }}>
+      <td style={{ ...cellBase, color: '#6b7280', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
         #{ticket.id}
       </td>
-      <td style={{ padding: '8px 12px', fontSize: 13 }}>
-        <span
-          style={{
-            display: 'inline-block',
-            padding: '2px 8px',
-            borderRadius: 9999,
-            background: bg,
-            color: text,
-            fontWeight: 600,
-            fontSize: 11,
-            textTransform: 'capitalize',
-            letterSpacing: '0.02em',
-          }}
-        >
+      <td style={{ ...cellBase, whiteSpace: 'nowrap', color: '#374151' }}>
+        {fmtDate(ticket.created_at)}
+      </td>
+      <td style={{ ...cellBase }}>
+        <span style={{
+          display: 'inline-block',
+          padding: '2px 8px',
+          borderRadius: 9999,
+          fontSize: 11,
+          fontWeight: 600,
+          background: bg,
+          color: text,
+          textTransform: 'capitalize',
+          letterSpacing: '0.02em',
+        }}>
           {ticket.status.replace(/_/g, ' ')}
         </span>
       </td>
-      <td style={{ padding: '8px 12px', fontSize: 13, color: '#374151', textTransform: 'capitalize' }}>
+      <td style={{ ...cellBase, color: '#6b7280', textTransform: 'capitalize' }}>
         {ticket.arm ?? '—'}
       </td>
-      <td style={{ padding: '8px 12px', fontSize: 13, color: '#374151', textTransform: 'capitalize' }}>
+      <td style={{ ...cellBase, color: '#6b7280', textTransform: 'capitalize' }}>
         {ticket.intent ?? '—'}
       </td>
-      <td style={{ padding: '8px 12px', fontSize: 13, color: '#6b7280', maxWidth: 420 }}>
+      <td style={{ ...cellBase, color: '#374151', maxWidth: 400 }}>
         {summary}
       </td>
-      <td style={{ padding: '8px 12px', fontSize: 12, color: '#9ca3af', whiteSpace: 'nowrap' }}>
-        {date}
+      <td style={{ ...cellBase, color: '#6b7280', whiteSpace: 'nowrap' }}>
+        {fmtDate(ticket.updated_at)}
       </td>
     </tr>
   );
+}
+
+/**
+ * Memoized with a custom comparator — only re-render if key fields change.
+ * Parent list should wrap onClick handlers in useCallback.
+ */
+const TicketRow = memo(TicketRowInner, (prev, next) => {
+  return (
+    prev.ticket.id             === next.ticket.id             &&
+    prev.ticket.status         === next.ticket.status         &&
+    prev.ticket.updated_at     === next.ticket.updated_at     &&
+    prev.ticket.arm            === next.ticket.arm            &&
+    prev.ticket.intent         === next.ticket.intent         &&
+    prev.ticket.parsed_summary === next.ticket.parsed_summary &&
+    prev.onClick               === next.onClick
+  );
 });
+
+TicketRow.displayName = 'TicketRow';
 
 export default TicketRow;
