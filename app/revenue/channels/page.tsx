@@ -1,140 +1,133 @@
-// app/revenue/channels/page.tsx
-import { createClient } from '@supabase/supabase-js';
+'use client';
+
+import { useEffect, useState } from 'react';
 import KpiBox from '@/components/kpi/KpiBox';
 import DataTable from '@/components/ui/DataTable';
 import PageHeader from '@/components/layout/PageHeader';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 60;
+// NOTE: mv_channel_economics is not in the PostgREST allowlist, so we fetch
+// via a dedicated API route that uses the service-role key server-side.
+// Assumption: /api/revenue/channels returns { rows: ChannelRow[] }.
+// Fallback: renders em-dash placeholders if API is unavailable.
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 interface ChannelRow {
-  channel_name: string;
-  room_nights: number | null;
-  revenue_usd: number | null;
-  adr_usd: number | null;
-  commission_usd: number | null;
-  commission_pct: number | null;
-  net_revenue_usd: number | null;
-  net_adr_usd: number | null;
-  contribution_pct: number | null;
-  period_label: string | null;
+  channel: string;
+  channel_group?: string;
+  room_nights?: number;
+  revenue_usd?: number;
+  adr_usd?: number;
+  occupancy_pct?: number;
+  commission_pct?: number;
+  net_revenue_usd?: number;
+  contribution_pct?: number;
+  reservations?: number;
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-const fmt = {
-  usd: (v: number | null) =>
-    v == null ? '—' : `$${v.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
-  pct: (v: number | null) =>
-    v == null ? '—' : `${v.toFixed(1)}%`,
-  int: (v: number | null) =>
-    v == null ? '—' : v.toLocaleString('en-US'),
-  neg: (v: number | null) =>
-    v == null ? '—' : v < 0 ? `\u2212${Math.abs(v).toFixed(1)}%` : `${v.toFixed(1)}%`,
+type Column<T> = {
+  key: string;
+  header: string;
+  numeric?: boolean;
+  render?: (row: T) => React.ReactNode;
 };
 
-// Sum a numeric field across rows
-function sumField(rows: ChannelRow[], key: keyof ChannelRow): number {
-  return rows.reduce((acc, r) => acc + (Number(r[key]) || 0), 0);
-}
+const fmt = (v: number | undefined | null, prefix = '', decimals = 0): string =>
+  v == null ? '—' : `${prefix}${v.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
 
-// ---------------------------------------------------------------------------
-// Page
-// ---------------------------------------------------------------------------
-export default async function Page() {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+const fmtPct = (v: number | undefined | null): string =>
+  v == null ? '—' : `${v.toFixed(1)}%`;
 
-  const { data, error } = await supabase
-    .from('mv_channel_economics')
-    .select('*')
-    .order('revenue_usd', { ascending: false })
-    .limit(50);
+const columns: Column<ChannelRow>[] = [
+  { key: 'channel',          header: 'CHANNEL',         render: r => r.channel ?? '—' },
+  { key: 'channel_group',    header: 'GROUP',            render: r => r.channel_group ?? '—' },
+  { key: 'reservations',     header: 'RESERVATIONS',     numeric: true, render: r => fmt(r.reservations) },
+  { key: 'room_nights',      header: 'ROOM NIGHTS',      numeric: true, render: r => fmt(r.room_nights) },
+  { key: 'revenue_usd',      header: 'REVENUE',          numeric: true, render: r => fmt(r.revenue_usd, '$') },
+  { key: 'adr_usd',          header: 'ADR',              numeric: true, render: r => fmt(r.adr_usd, '$', 2) },
+  { key: 'commission_pct',   header: 'COMMISSION',       numeric: true, render: r => fmtPct(r.commission_pct) },
+  { key: 'net_revenue_usd',  header: 'NET REVENUE',      numeric: true, render: r => fmt(r.net_revenue_usd, '$') },
+  { key: 'contribution_pct', header: 'CONTRIBUTION %',   numeric: true, render: r => fmtPct(r.contribution_pct) },
+];
 
-  if (error) {
-    console.error('[revenue/channels] supabase error:', error.message);
-  }
+export default function ChannelsPage() {
+  const [rows, setRows] = useState<ChannelRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const rows: ChannelRow[] = (data as ChannelRow[]) ?? [];
+  useEffect(() => {
+    void fetch('/api/revenue/channels')
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json() as Promise<{ rows: ChannelRow[] }>;
+      })
+      .then(data => {
+        setRows(data.rows ?? []);
+        setLoading(false);
+      })
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : 'Unknown error');
+        setLoading(false);
+      });
+  }, []);
 
-  // Aggregate KPIs
-  const totalRevenue   = sumField(rows, 'revenue_usd');
-  const totalNetRev    = sumField(rows, 'net_revenue_usd');
-  const totalRoomNights = sumField(rows, 'room_nights');
-  const totalCommission = sumField(rows, 'commission_usd');
-  const blendedADR     = totalRoomNights > 0 ? totalRevenue / totalRoomNights : null;
-  const blendedNetADR  = totalRoomNights > 0 ? totalNetRev / totalRoomNights  : null;
-  const commissionRate = totalRevenue > 0 ? (totalCommission / totalRevenue) * 100 : null;
-
-  const periodLabel = rows[0]?.period_label ?? null;
-
-  // Table column definitions
-  const columns: { key: keyof ChannelRow | string; header: string }[] = [
-    { key: 'channel_name',     header: 'Channel'         },
-    { key: 'room_nights',      header: 'Room Nights'     },
-    { key: 'revenue_usd',      header: 'Gross Revenue'   },
-    { key: 'adr_usd',          header: 'ADR'             },
-    { key: 'commission_usd',   header: 'Commission'      },
-    { key: 'commission_pct',   header: 'Commission %'    },
-    { key: 'net_revenue_usd',  header: 'Net Revenue'     },
-    { key: 'net_adr_usd',      header: 'Net ADR'         },
-    { key: 'contribution_pct', header: 'Mix %'           },
-  ];
-
-  // Format rows for DataTable (all values → display strings)
-  const tableRows = rows.map((r) => ({
-    channel_name:     r.channel_name ?? '—',
-    room_nights:      fmt.int(r.room_nights),
-    revenue_usd:      fmt.usd(r.revenue_usd),
-    adr_usd:          fmt.usd(r.adr_usd),
-    commission_usd:   fmt.usd(r.commission_usd),
-    commission_pct:   fmt.pct(r.commission_pct),
-    net_revenue_usd:  fmt.usd(r.net_revenue_usd),
-    net_adr_usd:      fmt.usd(r.net_adr_usd),
-    contribution_pct: fmt.pct(r.contribution_pct),
-  }));
+  // Aggregate KPIs from rows
+  const totalRevenue   = rows.reduce((s, r) => s + (r.revenue_usd ?? 0), 0);
+  const totalNights    = rows.reduce((s, r) => s + (r.room_nights ?? 0), 0);
+  const totalNet       = rows.reduce((s, r) => s + (r.net_revenue_usd ?? 0), 0);
+  const avgAdr         = totalNights > 0
+    ? rows.reduce((s, r) => s + (r.adr_usd ?? 0) * (r.room_nights ?? 0), 0) / totalNights
+    : null;
+  const topChannel     = rows.length > 0
+    ? rows.reduce((best, r) => (r.revenue_usd ?? 0) > (best.revenue_usd ?? 0) ? r : best, rows[0])
+    : null;
 
   return (
-    <main style={{ padding: '24px 32px', fontFamily: 'var(--font-sans, sans-serif)' }}>
+    <main style={{ padding: '24px 32px' }}>
       <PageHeader
         pillar="Revenue"
         tab="Channels"
-        title={periodLabel ? `Channel Economics — ${periodLabel}` : 'Channel Economics'}
+        title="Channel Economics"
+        lede="Revenue, ADR, and net contribution by booking channel."
       />
 
-      {/* KPI ribbon */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-          gap: 16,
-          marginTop: 24,
-          marginBottom: 32,
-        }}
-      >
-        <KpiBox label="Gross Revenue"     value={fmt.usd(totalRevenue)}   />
-        <KpiBox label="Net Revenue"       value={fmt.usd(totalNetRev)}    />
-        <KpiBox label="Room Nights"       value={fmt.int(totalRoomNights)}/>
-        <KpiBox label="Blended ADR"       value={fmt.usd(blendedADR)}     />
-        <KpiBox label="Net ADR"           value={fmt.usd(blendedNetADR)}  />
-        <KpiBox label="Avg Commission"    value={fmt.pct(commissionRate)} />
+      {error && (
+        <div style={{ color: 'var(--red, #c0392b)', marginBottom: 16, fontSize: 13 }}>
+          ⚠ Data unavailable: {error}. Check /api/revenue/channels route.
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 32 }}>
+        <KpiBox
+          label="Total Revenue"
+          value={loading ? '…' : totalRevenue > 0 ? `$${totalRevenue.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—'}
+          unit="usd"
+          tooltip="Sum of gross revenue across all channels · mv_channel_economics"
+        />
+        <KpiBox
+          label="Avg ADR"
+          value={loading ? '…' : avgAdr != null ? `$${avgAdr.toFixed(2)}` : '—'}
+          unit="usd"
+          tooltip="Weighted average daily rate across channels · mv_channel_economics"
+        />
+        <KpiBox
+          label="Net Revenue"
+          value={loading ? '…' : totalNet > 0 ? `$${totalNet.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—'}
+          unit="usd"
+          tooltip="Gross revenue minus commissions · mv_channel_economics"
+        />
+        <KpiBox
+          label="Top Channel"
+          value={loading ? '…' : topChannel?.channel ?? '—'}
+          unit="text"
+          tooltip="Channel generating highest gross revenue · mv_channel_economics"
+        />
       </div>
 
-      {/* Channel breakdown table */}
-      {rows.length === 0 ? (
-        <p style={{ color: '#888', fontStyle: 'italic' }}>
-          No channel data available
-          {error ? ` — ${error.message}` : ' for this period'}.
-        </p>
-      ) : (
-        <DataTable columns={columns} rows={tableRows} />
-      )}
+      <DataTable
+        columns={columns}
+        rows={rows}
+        rowKey={(r: ChannelRow) => r.channel}
+        emptyState={loading ? 'Loading channel data…' : 'No channel data available.'}
+      />
     </main>
   );
 }
