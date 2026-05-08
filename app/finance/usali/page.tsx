@@ -1,211 +1,216 @@
-// app/finance/usali/page.tsx
-// Marathon #195 — Finance · USALI: Uniform System of Accounts for the Lodging Industry
-// Wired to: v_pl_monthly_usali (public schema, allowlisted)
-// Assumption: view columns follow USALI P&L structure (period, department, revenue, expense, gop, etc.)
+'use client';
 
+// app/finance/usali/page.tsx
+// Marathon #195 – Finance · USALI — adapt + wire
+// Wires to: v_pl_monthly_usali (gl schema via Supabase service role)
+// Assumptions:
+//   1. v_pl_monthly_usali returns rows with columns listed in DataTable below.
+//   2. If the view is in `gl` schema, the Supabase client needs schema: 'gl'.
+//      We use public alias: supabase.from('v_pl_monthly_usali') after granting usage.
+//      If not yet exposed, the page renders em-dash placeholders gracefully.
+//   3. KpiBox, DataTable, PageHeader are default exports.
+//   4. The page is client-side to allow future filter interactivity.
+
+import { useEffect, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import KpiBox from '@/components/kpi/KpiBox';
 import DataTable from '@/components/ui/DataTable';
 import PageHeader from '@/components/layout/PageHeader';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 60;
-
-// ─── Types ───────────────────────────────────────────────────────────────────
-
 interface UsaliRow {
-  period?: string;
+  period_month?: string;
   department?: string;
-  revenue?: number | null;
-  expenses?: number | null;
-  gop?: number | null;
-  gop_pct?: number | null;
-  adr?: number | null;
-  revpar?: number | null;
-  occupancy_pct?: number | null;
-  rooms_sold?: number | null;
-  rooms_available?: number | null;
-  [key: string]: unknown;
+  category?: string;
+  account_code?: string;
+  account_name?: string;
+  actual_amount?: number | null;
+  budget_amount?: number | null;
+  variance_amount?: number | null;
+  variance_pct?: number | null;
+  por?: number | null;   // per occupied room
+  poc?: number | null;   // percentage of revenue
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
-function fmtUSD(v: number | null | undefined): string {
+function fmt(v: number | null | undefined, prefix = '') {
   if (v == null) return '—';
   const abs = Math.abs(v);
-  const formatted =
-    abs >= 1_000_000
-      ? `$${(abs / 1_000_000).toFixed(2)}M`
-      : abs >= 1_000
-      ? `$${(abs / 1_000).toFixed(1)}K`
-      : `$${abs.toFixed(2)}`;
-  return v < 0 ? `−${formatted.slice(1)}` : formatted;
+  const sign = v < 0 ? '−' : '';
+  return `${sign}${prefix}${abs.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
-function fmtPct(v: number | null | undefined): string {
+function fmtPct(v: number | null | undefined) {
   if (v == null) return '—';
   const sign = v < 0 ? '−' : '';
   return `${sign}${Math.abs(v).toFixed(1)}%`;
 }
 
-function fmtNum(v: number | null | undefined): string {
-  if (v == null) return '—';
-  return v.toLocaleString('en-US');
-}
+export default function UsaliPage() {
+  const [rows, setRows] = useState<UsaliRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-// ─── Page ────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    void (async () => {
+      const { data, error: err } = await supabase
+        .schema('gl' as never)
+        .from('mv_usali_categorized')
+        .select('*')
+        .order('period_month', { ascending: false })
+        .limit(200);
 
-export default async function UsaliPage() {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+      if (err) {
+        // Fallback: try public alias
+        const { data: data2, error: err2 } = await supabase
+          .from('v_pl_monthly_usali')
+          .select('*')
+          .order('period_month', { ascending: false })
+          .limit(200);
+
+        if (err2) {
+          setError(`Unable to load USALI data: ${err2.message}`);
+        } else {
+          setRows((data2 ?? []) as UsaliRow[]);
+        }
+      } else {
+        setRows((data ?? []) as UsaliRow[]);
+      }
+      setLoading(false);
+    })();
+  }, []);
+
+  // ── KPI aggregates (latest period) ───────────────────────────────────────
+  const latestPeriod = rows[0]?.period_month ?? null;
+  const periodRows = latestPeriod
+    ? rows.filter((r) => r.period_month === latestPeriod)
+    : rows;
+
+  const totalRevenue = periodRows
+    .filter((r) => r.category?.toLowerCase().includes('revenue'))
+    .reduce((s, r) => s + (r.actual_amount ?? 0), 0);
+
+  const totalExpense = periodRows
+    .filter((r) => r.category?.toLowerCase().includes('expense'))
+    .reduce((s, r) => s + (r.actual_amount ?? 0), 0);
+
+  const gop = totalRevenue - totalExpense;
+  const gopPct = totalRevenue !== 0 ? (gop / totalRevenue) * 100 : null;
+
+  const totalVariance = periodRows.reduce(
+    (s, r) => s + (r.variance_amount ?? 0),
+    0
   );
 
-  const { data, error } = await supabase
-    .from('v_pl_monthly_usali')
-    .select('*')
-    .order('period', { ascending: false })
-    .limit(60);
-
-  const rows: UsaliRow[] = data ?? [];
-
-  // Latest period aggregate (first row is most-recent period)
-  const latest = rows[0] ?? {};
-
-  // Summaries across all loaded rows
-  const totalRevenue = rows.reduce((s, r) => s + (r.revenue ?? 0), 0);
-  const totalExpenses = rows.reduce((s, r) => s + (r.expenses ?? 0), 0);
-  const totalGOP = rows.reduce((s, r) => s + (r.gop ?? 0), 0);
-  const avgGOPpct =
-    rows.length > 0
-      ? rows.reduce((s, r) => s + (r.gop_pct ?? 0), 0) / rows.length
-      : null;
+  // ── Columns ───────────────────────────────────────────────────────────────
+  const columns = [
+    { key: 'period_month', header: 'Period' },
+    { key: 'department', header: 'Department' },
+    { key: 'category', header: 'Category' },
+    { key: 'account_code', header: 'Code' },
+    { key: 'account_name', header: 'Account' },
+    {
+      key: 'actual_amount',
+      header: 'Actual ($)',
+      render: (r: UsaliRow) => fmt(r.actual_amount, '$'),
+    },
+    {
+      key: 'budget_amount',
+      header: 'Budget ($)',
+      render: (r: UsaliRow) => fmt(r.budget_amount, '$'),
+    },
+    {
+      key: 'variance_amount',
+      header: 'Variance ($)',
+      render: (r: UsaliRow) => fmt(r.variance_amount, '$'),
+    },
+    {
+      key: 'variance_pct',
+      header: 'Var %',
+      render: (r: UsaliRow) => fmtPct(r.variance_pct),
+    },
+    {
+      key: 'por',
+      header: 'POR ($)',
+      render: (r: UsaliRow) => fmt(r.por, '$'),
+    },
+    {
+      key: 'poc',
+      header: '% Rev',
+      render: (r: UsaliRow) => fmtPct(r.poc),
+    },
+  ];
 
   return (
-    <main style={{ padding: '24px 32px', fontFamily: 'inherit' }}>
-      <PageHeader pillar="Finance" tab="USALI" title="USALI P&L" />
+    <main style={{ padding: '24px' }}>
+      <PageHeader pillar="Finance" tab="USALI" title="USALI P&amp;L" />
 
-      {error && (
-        <p
-          role="alert"
-          style={{
-            background: '#fff1f0',
-            border: '1px solid #ffccc7',
-            borderRadius: 6,
-            padding: '10px 14px',
-            color: '#a8071a',
-            marginBottom: 20,
-            fontSize: 13,
-          }}
-        >
-          ⚠️ Data load error: {error.message}
+      {/* Period badge */}
+      {latestPeriod && (
+        <p style={{ color: '#6b7280', marginBottom: 16, fontSize: 13 }}>
+          Showing latest period: <strong>{latestPeriod}</strong>
+          {rows.length > periodRows.length &&
+            ` · ${rows.length} total rows loaded`}
         </p>
       )}
 
-      {/* ── KPI Strip ─────────────────────────────────────────────────────── */}
-      <section
-        aria-label="USALI KPIs"
+      {/* Error banner */}
+      {error && (
+        <div
+          style={{
+            background: '#fef2f2',
+            border: '1px solid #fca5a5',
+            borderRadius: 8,
+            padding: '12px 16px',
+            marginBottom: 16,
+            color: '#991b1b',
+            fontSize: 13,
+          }}
+        >
+          {error}
+        </div>
+      )}
+
+      {/* KPI row */}
+      <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+          gridTemplateColumns: 'repeat(4, 1fr)',
           gap: 16,
-          marginBottom: 32,
+          marginBottom: 24,
         }}
       >
         <KpiBox
           label="Total Revenue"
-          value={fmtUSD(totalRevenue)}
-          sublabel="all loaded periods"
+          value={loading ? '…' : fmt(totalRevenue, '$')}
         />
         <KpiBox
           label="Total Expenses"
-          value={fmtUSD(totalExpenses)}
-          sublabel="all loaded periods"
+          value={loading ? '…' : fmt(totalExpense, '$')}
         />
         <KpiBox
-          label="Gross Operating Profit"
-          value={fmtUSD(totalGOP)}
-          sublabel="all loaded periods"
+          label="GOP"
+          value={loading ? '…' : fmt(gop, '$')}
         />
         <KpiBox
-          label="Avg GOP %"
-          value={fmtPct(avgGOPpct)}
-          sublabel="across periods"
+          label="GOP %"
+          value={loading ? '…' : fmtPct(gopPct)}
         />
         <KpiBox
-          label="Latest ADR"
-          value={fmtUSD(latest.adr)}
-          sublabel={latest.period ?? '—'}
+          label="Budget Variance"
+          value={loading ? '…' : fmt(totalVariance, '$')}
         />
-        <KpiBox
-          label="Latest RevPAR"
-          value={fmtUSD(latest.revpar)}
-          sublabel={latest.period ?? '—'}
-        />
-        <KpiBox
-          label="Latest Occupancy"
-          value={fmtPct(latest.occupancy_pct)}
-          sublabel={latest.period ?? '—'}
-        />
-        <KpiBox
-          label="Rooms Sold"
-          value={fmtNum(latest.rooms_sold)}
-          sublabel={latest.period ?? '—'}
-        />
-      </section>
+      </div>
 
-      {/* ── USALI Detail Table ────────────────────────────────────────────── */}
-      <section aria-label="USALI detail">
-        <h2
-          style={{
-            fontSize: 15,
-            fontWeight: 600,
-            marginBottom: 12,
-            color: '#1a1a2e',
-          }}
-        >
-          Monthly P&amp;L Detail
-        </h2>
-        <DataTable
-          columns={[
-            { key: 'period',       header: 'Period'      },
-            { key: 'department',   header: 'Department'  },
-            { key: 'revenue',      header: 'Revenue'     },
-            { key: 'expenses',     header: 'Expenses'    },
-            { key: 'gop',          header: 'GOP'         },
-            { key: 'gop_pct',      header: 'GOP %'       },
-            { key: 'adr',          header: 'ADR'         },
-            { key: 'revpar',       header: 'RevPAR'      },
-            { key: 'occupancy_pct',header: 'OCC %'       },
-            { key: 'rooms_sold',   header: 'Rooms Sold'  },
-          ]}
-          rows={rows.map((r) => ({
-            ...r,
-            period:        r.period       ?? '—',
-            department:    r.department   ?? '—',
-            revenue:       fmtUSD(r.revenue),
-            expenses:      fmtUSD(r.expenses),
-            gop:           fmtUSD(r.gop),
-            gop_pct:       fmtPct(r.gop_pct),
-            adr:           fmtUSD(r.adr),
-            revpar:        fmtUSD(r.revpar),
-            occupancy_pct: fmtPct(r.occupancy_pct),
-            rooms_sold:    fmtNum(r.rooms_sold),
-          }))}
-        />
-        {rows.length === 0 && !error && (
-          <p
-            style={{
-              textAlign: 'center',
-              color: '#888',
-              fontSize: 13,
-              padding: '32px 0',
-            }}
-          >
-            No USALI data available yet.
-          </p>
-        )}
-      </section>
+      {/* Data table */}
+      {loading ? (
+        <p style={{ color: '#6b7280', fontSize: 14 }}>Loading USALI data…</p>
+      ) : (
+        <DataTable columns={columns} rows={rows} />
+      )}
     </main>
   );
 }
