@@ -578,6 +578,10 @@ function ChatTab() {
   const [search, setSearch] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
+  // 2026-05-08 — inline error banner replaces alert() popups so PBS no
+  // longer sees "namkhan-bi.vercel.app says: Send failed" dialogs when
+  // the chat route returns slow / 504 / 500.
+  const [chatError, setChatError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const listEnd = useRef<HTMLDivElement>(null);
 
@@ -653,57 +657,66 @@ function ChatTab() {
   const send = async (override?: string) => {
     const msg = (override ?? input).trim();
     if ((!msg && attachments.length === 0) || sending) return;
-    setSending(true);
-    try {
-      // If attachments exist, append references to the message body
-      let body = msg;
-      if (attachments.length > 0) {
-        const lines = attachments.map(
-          (a) => `📎 ${a.name} (${(a.size / 1024).toFixed(1)} KB) → ${a.public_url ?? a.path}`
-        );
-        body = msg ? `${msg}\n\n**Attached files:**\n${lines.join("\n")}` : `**Attached files:**\n${lines.join("\n")}`;
-      }
-      const res = await fetch("/api/cockpit/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: body, attachments }),
-      });
-      if (!res.ok) throw new Error("Send failed");
-      if (!override) setInput("");
-      setAttachments([]);
-      await loadTickets();
-    } catch (e) {
-      alert(`Error: ${e instanceof Error ? e.message : "unknown"}`);
-    } finally {
-      setSending(false);
+    // 2026-05-08 fire-and-forget. Server inserts ticket sync before triage
+    // (which can run 3-7 min on Anthropic). Old code awaited the whole thing
+    // and showed a popup on Vercel function timeout, even though the ticket
+    // was already in the DB and the realtime sub would render it. Now: clear
+    // input, unblock send, kick refresh after 250ms; let realtime/poll fill in.
+    let body = msg;
+    if (attachments.length > 0) {
+      const lines = attachments.map(
+        (a) => `📎 ${a.name} (${(a.size / 1024).toFixed(1)} KB) → ${a.public_url ?? a.path}`
+      );
+      body = msg ? `${msg}\n\n**Attached files:**\n${lines.join("\n")}` : `**Attached files:**\n${lines.join("\n")}`;
     }
+    setSending(true);
+    setChatError(null);
+    if (!override) setInput("");
+    setAttachments([]);
+    void fetch("/api/cockpit/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: body, attachments }),
+      keepalive: true,
+    }).catch((err: unknown) => {
+      setChatError(err instanceof Error ? err.message : "send failed (will retry on next poll)");
+    });
+    setTimeout(() => { void loadTickets(); setSending(false); }, 250);
+    setTimeout(() => { void loadTickets(); }, 2000);
   };
 
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     setUploading(true);
+    setChatError(null);
     try {
       const newAttachments: Attachment[] = [];
+      const failures: string[] = [];
       for (const file of Array.from(files)) {
         const fd = new FormData();
         fd.append("file", file);
-        const res = await fetch("/api/cockpit/upload", { method: "POST", body: fd });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          alert(`Upload failed for ${file.name}: ${err.error ?? res.statusText}`);
-          continue;
+        try {
+          const res = await fetch("/api/cockpit/upload", { method: "POST", body: fd });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            failures.push(`${file.name}: ${err.error ?? res.statusText}`);
+            continue;
+          }
+          const json = await res.json();
+          newAttachments.push({
+            name: json.name,
+            path: json.path,
+            public_url: json.public_url,
+            size: json.size,
+            mime: json.mime,
+            ext: json.ext,
+          });
+        } catch (e) {
+          failures.push(`${file.name}: ${e instanceof Error ? e.message : "upload error"}`);
         }
-        const json = await res.json();
-        newAttachments.push({
-          name: json.name,
-          path: json.path,
-          public_url: json.public_url,
-          size: json.size,
-          mime: json.mime,
-          ext: json.ext,
-        });
       }
       setAttachments((prev) => [...prev, ...newAttachments]);
+      if (failures.length > 0) setChatError(`upload: ${failures.join(" · ")}`);
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -933,6 +946,12 @@ function ChatTab() {
           >
             {sending ? "Sending..." : "Send · ⌘↵"}
           </button>
+          {chatError && (
+            <div className="chat-err">
+              <span>⚠️ {chatError}</span>
+              <button onClick={() => setChatError(null)} className="chat-err-x">×</button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1090,6 +1109,14 @@ function ChatTab() {
           cursor: pointer; align-self: flex-end; height: 38px;
         }
         .chat-send:disabled { opacity: 0.4; cursor: not-allowed; }
+        .chat-err {
+          grid-column: 1 / -1;
+          margin-top: 8px; padding: 6px 10px;
+          background: #2a1614; border: 1px solid #5a2825;
+          border-radius: 6px; color: #f5b1ad; font-size: 11px;
+          display: flex; justify-content: space-between; align-items: center;
+        }
+        .chat-err-x { background: transparent; border: 0; color: #f5b1ad; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 4px; }
         .md-render { font-size: 13px; line-height: 1.55; color: var(--text-0); }
         .md-render .md-h2 { font-size: 16px; margin: 12px 0 6px; color: var(--text-0); }
         .md-render .md-h3 { font-size: 14px; margin: 10px 0 4px; color: var(--text-1); }

@@ -180,7 +180,13 @@ function renderEnrichmentBlock(ctx: Record<string, unknown>, currentPageUrl?: st
 }
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// 2026-05-08 — bumped 60→300 (Vercel Pro max). Triage + KB enrichment +
+// Anthropic call routinely takes 3–7 min; the old 60s cap killed the
+// request mid-flight, surfacing as "send failed" in the browser even
+// though the ticket was already inserted in cockpit_tickets and triage
+// was still running. Frontend now also fires the chat fetch as
+// fire-and-forget — realtime + 8s poll picks up the ticket either way.
+export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 export const revalidate = 0;
@@ -522,7 +528,13 @@ async function triageMessage(message: string, debug: { iterations: number; lastE
 
   // Tool-use loop. Up to 10 iterations: IT Manager v5 may want to call
   // read_knowledge_base + list_recent_tickets + search_repo + ... so be generous.
-  for (let iter = 0; iter < 10; iter++) {
+  // 2026-05-08 — bumped 10→25. Kit's IT Manager prompt is 31k chars and
+  // calls KB lookup + page data + active doc + recent tickets + sometimes
+  // chained look-ups. With 10 iterations Kit was hitting the cap before
+  // producing JSON triage output, which marked the chat ticket as
+  // `triage_failed` and made PBS see "Failed" with no answer. 25 matches
+  // the code_writer cap in the agent-worker route.
+  for (let iter = 0; iter < 25; iter++) {
     const body: Record<string, unknown> = {
       model: "claude-sonnet-4-6",
       max_tokens: 1000,

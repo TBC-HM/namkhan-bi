@@ -7,6 +7,11 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
+// 2026-05-08 — bumped from default to 60s. PR approve does (1) GH review,
+// (2) GH PR fetch, (3) GraphQL auto-merge enable. Sequential GH calls
+// regularly take 5–15s wall clock; the default cap was OK but with
+// upstream slowdowns it occasionally 504-ed.
+export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 const supabase = createClient(
@@ -16,29 +21,60 @@ const supabase = createClient(
 
 const REPO = "TBC-HM/namkhan-bi";
 
+// 2026-05-08 — frontend feed ids are prefixed strings ("n-123" / "t-456").
+// Older callers also sent them as `body.id`. Parse defensively so a
+// notification gets marked seen regardless of which field carries it.
+function parseFeedId(raw: unknown): { source: "notification" | "ticket" | null; num: number | null } {
+  if (raw == null) return { source: null, num: null };
+  const s = String(raw);
+  const m = s.match(/^([nt])-(\d+)$/);
+  if (m) return { source: m[1] === "n" ? "notification" : "ticket", num: Number(m[2]) };
+  // Bare number: caller sent it via `id` without a prefix. Treat as notification id.
+  if (/^\d+$/.test(s)) return { source: "notification", num: Number(s) };
+  return { source: null, num: null };
+}
+
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const prNumber = Number(body.pr_number);
-  const notificationId = Number(body.notification_id);
+  const notificationIdRaw = body.notification_id;
+  const ticketIdRaw = body.ticket_id;
+  const idFallback = parseFeedId(body.id);
+  const notificationId = Number.isFinite(Number(notificationIdRaw))
+    ? Number(notificationIdRaw)
+    : (idFallback.source === "notification" ? idFallback.num : null);
+  const ticketId = Number.isFinite(Number(ticketIdRaw))
+    ? Number(ticketIdRaw)
+    : (idFallback.source === "ticket" ? idFallback.num : null);
 
-  // Mark-seen mode: no PR number, just an ack on a live/failed row.
-  if (!Number.isFinite(prNumber) && Number.isFinite(notificationId)) {
-    const { error } = await supabase
+  // Always try to mark the notification seen FIRST. The previous code only
+  // did this in the no-PR branch, so PR-bearing approvals fell through and
+  // the row reappeared on the next 30s feed refresh.
+  if (notificationId != null) {
+    await supabase
       .from("cockpit_pbs_notifications")
       .update({ seen_at: new Date().toISOString(), seen_by: "PBS" })
       .eq("id", notificationId);
+  }
+
+  // Mark-seen-only mode: no PR to approve, just an ack.
+  if (!Number.isFinite(prNumber)) {
+    if (notificationId == null && ticketId == null) {
+      return NextResponse.json({ ok: false, error: "notification_id, ticket_id, or pr_number required" }, { status: 400 });
+    }
     await supabase.from("cockpit_audit_log").insert({
       agent: "pbs",
       action: "notification_acked",
-      target: `notification:${notificationId}`,
-      success: !error,
-      reasoning: "PBS marked notification as seen via ND dropdown.",
+      target: notificationId != null ? `notification:${notificationId}` : `ticket:${ticketId}`,
+      success: true,
+      reasoning: "PBS marked row as seen via ND dropdown.",
     });
-    return NextResponse.json({ ok: !error, mode: "mark_seen", notification_id: notificationId });
-  }
-
-  if (!Number.isFinite(prNumber)) {
-    return NextResponse.json({ ok: false, error: "pr_number or notification_id required" }, { status: 400 });
+    return NextResponse.json({
+      ok: true,
+      mode: "mark_seen",
+      notification_id: notificationId,
+      ticket_id: ticketId,
+    });
   }
 
   const token = process.env.GITHUB_TOKEN;
@@ -86,14 +122,10 @@ export async function POST(req: Request) {
     }
   }
 
-  // Mark the source notification as seen so it disappears from the feed
-  if (Number.isFinite(notificationId)) {
-    await supabase
-      .from("cockpit_pbs_notifications")
-      .update({ seen_at: new Date().toISOString(), seen_by: "PBS" })
-      .eq("id", notificationId);
-  } else {
-    // Try to mark by pr_number as fallback
+  // Notification was marked seen at the top of the handler (regardless of
+  // pr_number). For approvals that came in only with a pr_number — e.g.
+  // legacy callers — also mark the matching unseen row by pr_number.
+  if (notificationId == null) {
     await supabase
       .from("cockpit_pbs_notifications")
       .update({ seen_at: new Date().toISOString(), seen_by: "PBS" })
