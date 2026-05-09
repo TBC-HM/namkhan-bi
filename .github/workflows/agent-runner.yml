@@ -52,8 +52,11 @@ jobs:
       - name: Run agent
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # PBS 2026-05-09: repo already has SUPABASE_SERVICE_KEY +
+          # SUPABASE_URL from prior CI work. Reuse those names instead of
+          # requiring two extra secrets.
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           TICKET_ID: ${{ github.event.inputs.ticket_id }}
         run: |
           if [ -f "scripts/agent-runner.ts" ]; then
