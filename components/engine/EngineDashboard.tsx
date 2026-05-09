@@ -1,11 +1,17 @@
 // components/engine/EngineDashboard.tsx
-// Shared engine-style department dashboard. Mirrors rm_dashboard.html visual:
-// dark bg, brass accent, snap headline, KPI grid, panels.
-// Driven entirely by the cfg passed in — no hardcoded data.
+// Shared engine-style department dashboard. Wired onto canonical primitives
+// (PBS manifesto 2026-05-09): renders inside <Page>, KPIs as <KpiBox>, each
+// panel as <Panel> with <ArtifactActions>. Data layer unchanged — same
+// supabase view/column reads, same filter / order_by / limit semantics.
 //
-// Author: PBS via Claude (Cowork) · 2026-05-07.
+// Originally drafted by PBS via Claude (Cowork) · 2026-05-07. Re-chromed by
+// Claude (Opus 4.7) · 2026-05-09.
 
 import { createClient } from "@supabase/supabase-js";
+import Page from "@/components/page/Page";
+import Panel from "@/components/page/Panel";
+import KpiBox from "@/components/kpi/KpiBox";
+import ArtifactActions from "@/components/page/ArtifactActions";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -84,115 +90,82 @@ export default async function EngineDashboard({ cfg }: { cfg: EngineConfig }) {
     Promise.all(panelPromises),
   ]);
 
+  // Map config formats to KpiBox units (same shape as KpiBox elsewhere).
+  const kpiUnit = (f?: EngineKpi['format']): 'usd' | 'lak' | 'pct' | 'count' | 'pp' | 'nights' => {
+    switch (f) {
+      case 'usd': return 'usd';
+      case 'lak': return 'lak';
+      case 'pct': return 'pct';
+      case 'pp':  return 'pp';
+      case 'k':   return 'count';
+      case 'int': return 'count';
+      default:    return 'count';
+    }
+  };
+  const ctx = (kind: 'panel' | 'kpi' | 'brief' | 'table', title: string) => ({ kind, title, dept: cfg.dept_label.toLowerCase() });
+  const askHref = `/cockpit?role=${encodeURIComponent(cfg.hod_role)}`;
+
   return (
-    <div style={S.body}>
-      {/* TOP BAR */}
-      <div style={S.topbar}>
-        <div style={S.logo}>
-          <div style={S.logoMark}>N</div>
-          <span>The Namkhan · <b>{cfg.dept_label}</b></span>
-        </div>
-        <div style={S.topbarRight}>
-          <a href="/cockpit" style={S.topBtn}>cockpit</a>
-          <a href={`/cockpit?role=${encodeURIComponent(cfg.hod_role)}`} style={{ ...S.topBtn, ...S.cta }}>
-            ask {cfg.hod_display_name} ↗
-          </a>
-        </div>
+    <Page
+      eyebrow={`${cfg.dept_label} · ${cfg.scope}`}
+      title={<><em style={{ fontStyle: 'italic' }}>{cfg.dept_label}</em> · live</>}
+      topRight={
+        <a href={askHref} style={{
+          fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+          fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase',
+          color: '#c4a06b', textDecoration: 'none',
+          border: '1px solid #2a261d', borderRadius: 6, padding: '5px 12px',
+        }}>Ask {cfg.hod_display_name} ↗</a>
+      }
+    >
+      {/* KPI strip */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
+        {cfg.kpis.map((k, i) => {
+          const row = kpiRows[i];
+          const n = typeof row.value === 'string' ? Number(row.value) : (row.value as number | null);
+          const value = (n === null || Number.isNaN(n)) ? 0 : (n as number);
+          return (
+            <KpiBox
+              key={k.label}
+              value={value}
+              unit={kpiUnit(k.format)}
+              label={k.label}
+              tooltip={`${k.label} · ${k.view}.${k.column}`}
+            />
+          );
+        })}
       </div>
 
-      {/* SNAP */}
-      <div style={S.snap}>
-        <div style={S.snapHeadline}>
-          <em>{cfg.dept_label}</em> · {cfg.scope}
-        </div>
-        <div style={S.snapMeta}>
-          live · {new Date().toISOString().slice(0, 16).replace("T", " ")} · sourced from Supabase views (no mocks)
-        </div>
-      </div>
-
-      {/* KPI GRID */}
-      <div style={S.kpiSection}>
-        <div style={S.panelLabel}>Key indicators</div>
-        <div style={{ ...S.kpiGrid, gridTemplateColumns: `repeat(${Math.min(cfg.kpis.length, 4)}, 1fr)` }}>
-          {cfg.kpis.map((k, i) => {
-            const row = kpiRows[i];
-            return (
-              <div key={k.label} style={S.kpiTile}>
-                <div style={S.kpiLabel}>{k.label}</div>
-                <div style={S.kpiValue}>{fmt(row.value, k.format)}</div>
-                {(row.ly !== undefined || row.bud !== undefined) && (
-                  <div style={S.kpiDeltas}>
-                    {row.ly !== undefined && <span>LY {fmt(row.ly, k.format)}</span>}
-                    {row.bud !== undefined && <span>Bud {fmt(row.bud, k.format)}</span>}
-                  </div>
-                )}
-                <div style={S.kpiSrc}>{k.view}</div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* PANELS */}
+      {/* Panels */}
       {cfg.panels.map((p, pi) => {
         const rows = panelRows[pi];
         return (
-          <div key={p.title} style={S.panelSection}>
-            <div style={S.panelLabel}>{p.title} · {p.view}</div>
-            {rows.length === 0 ? (
-              <div style={S.empty}>— no rows from {p.view} —</div>
-            ) : (
-              <table style={S.table}>
-                <thead>
-                  <tr>{p.columns.map((c) => <th key={c.key} style={S.th}>{c.label}</th>)}</tr>
-                </thead>
-                <tbody>
-                  {rows.map((row, ri) => (
-                    <tr key={ri} style={S.tr}>
-                      {p.columns.map((c) => (
-                        <td key={c.key} style={S.td}>{fmt(row[c.key], c.format)}</td>
+          <div key={p.title} style={{ marginBottom: 14 }}>
+            <Panel title={p.title} eyebrow={p.view} actions={<ArtifactActions context={ctx('table', p.title)} />}>
+              {rows.length === 0 ? (
+                <div style={{ color: '#7d7565', fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 12, padding: 12 }}>— no rows from {p.view} —</div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr>{p.columns.map((c) => <th key={c.key} style={{ textAlign: 'left', padding: '8px 10px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#7d7565', borderBottom: '1px solid #25252d' }}>{c.label}</th>)}</tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((row, ri) => (
+                        <tr key={ri} style={{ borderBottom: '1px solid #1f1c15' }}>
+                          {p.columns.map((c) => (
+                            <td key={c.key} style={{ padding: '8px 10px', color: '#d8cca8' }}>{fmt(row[c.key], c.format)}</td>
+                          ))}
+                        </tr>
                       ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Panel>
           </div>
         );
       })}
-
-      <div style={S.footer}>
-        Engine · {cfg.dept_label} · HoD <b>{cfg.hod_display_name}</b> ({cfg.hod_role}) ·{" "}
-        <a href="/cockpit" style={{ color: "#c79a6b" }}>open cockpit</a>
-      </div>
-    </div>
+    </Page>
   );
 }
-
-const S: Record<string, React.CSSProperties> = {
-  body: { background: "#0a0a0b", color: "#ededf0", minHeight: "100vh", fontFamily: "-apple-system, BlinkMacSystemFont, Inter, system-ui, sans-serif", fontSize: 14, lineHeight: 1.5 },
-  topbar: { height: 56, padding: "0 28px", display: "flex", alignItems: "center", justifyContent: "space-between" },
-  logo: { fontWeight: 500, fontSize: 14, display: "flex", alignItems: "center", gap: 10, color: "#a1a1aa" },
-  logoMark: { width: 22, height: 22, borderRadius: 6, background: "linear-gradient(135deg, #c79a6b, #b88556)", color: "#1a1a1a", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" },
-  topbarRight: { display: "flex", alignItems: "center", gap: 8 },
-  topBtn: { display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 14px", borderRadius: 8, background: "transparent", border: "1px solid transparent", color: "#a1a1aa", fontSize: 13, textDecoration: "none" },
-  cta: { color: "#c79a6b", borderColor: "#25252d" },
-  snap: { padding: "26px 28px 18px", borderBottom: "1px solid #1a1a20" },
-  snapHeadline: { fontFamily: "'Cooper','Source Serif Pro',Georgia,serif", fontSize: 28, lineHeight: 1.25, color: "#ededf0", fontWeight: 400, letterSpacing: "-0.01em" },
-  snapMeta: { marginTop: 8, fontSize: 11, color: "#6b6b75", fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace", letterSpacing: "0.02em" },
-  kpiSection: { padding: "20px 28px", borderBottom: "1px solid #1a1a20" },
-  panelLabel: { fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", color: "#6b6b75", fontWeight: 600, marginBottom: 10 },
-  kpiGrid: { display: "grid", gap: 1, background: "#1a1a20", borderRadius: 10, overflow: "hidden" },
-  kpiTile: { background: "#0f0f11", padding: "16px 18px", display: "flex", flexDirection: "column", gap: 4 },
-  kpiLabel: { fontSize: 11, color: "#a1a1aa", textTransform: "uppercase", letterSpacing: "0.05em" },
-  kpiValue: { fontFamily: "'Cooper','Source Serif Pro',Georgia,serif", fontSize: 30, fontWeight: 400, color: "#ededf0", marginTop: 4 },
-  kpiDeltas: { display: "flex", gap: 12, fontSize: 11, color: "#6b6b75", fontFamily: "ui-monospace, monospace", marginTop: 6 },
-  kpiSrc: { marginTop: 8, fontSize: 9, color: "#3d3d45", fontFamily: "ui-monospace, monospace" },
-  panelSection: { padding: "20px 28px", borderBottom: "1px solid #1a1a20" },
-  table: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
-  th: { textAlign: "left", padding: "8px 10px", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "#6b6b75", borderBottom: "1px solid #25252d" },
-  tr: { borderBottom: "1px solid #1a1a20" },
-  td: { padding: "8px 10px", color: "#ededf0" },
-  empty: { color: "#6b6b75", fontFamily: "ui-monospace, monospace", fontSize: 12, padding: 12 },
-  footer: { padding: "20px 28px", color: "#6b6b75", fontSize: 12, fontFamily: "ui-monospace, monospace" },
-};

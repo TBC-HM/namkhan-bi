@@ -69,7 +69,7 @@ export default function Reachable({
               </text>
               <rect x={padL} y={y} width={barMaxW} height={barH} fill="var(--paper-deep)" />
               <rect x={padL} y={y} width={wPx} height={barH} fill={c.color}>
-                <title>{`${c.label} · ${c.n} of ${total} · ${pct.toFixed(0)}%`}</title>
+                <title>{`${c.label} · ${c.n.toLocaleString()} of ${total.toLocaleString()} · ${pct.toFixed(1)}% · v_guest_profiles`}</title>
               </rect>
               <text x={w - padR + 4} y={y + barH / 2 + 4} style={{ fontFamily: 'var(--mono)', fontSize: 11, fill: 'var(--ink)', fontWeight: 600 }}>
                 {pct.toFixed(0)}%

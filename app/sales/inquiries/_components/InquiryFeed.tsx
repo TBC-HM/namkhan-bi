@@ -3,6 +3,7 @@
 // Mockup-mode: static rows. Live mode (post schema deploy) reads sales.inquiries.
 
 import { ReactNode } from 'react';
+import { MaybeOtaBadge } from '@/components/ota/OtaBadge';
 
 type InquiryType =
   | 'FIT'
@@ -247,7 +248,7 @@ export default function InquiryFeed({ overlay }: { overlay?: ReactNode }) {
               {r.subject}
             </div>
             <div style={{ fontSize: "var(--t-xs)", color: '#8a8170', marginTop: 2 }}>
-              {r.source}
+              <MaybeOtaBadge name={r.source} />
             </div>
           </div>
           <span

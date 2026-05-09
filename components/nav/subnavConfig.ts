@@ -36,12 +36,15 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/revenue/pricing',     label: 'Pricing' },
     { href: '/revenue/compset',     label: 'Comp Set' },
     { href: '/revenue/parity',      label: 'Parity',     isNew: true },
-    { href: '/revenue/agents',      label: 'Agents' },
+    // PBS 2026-05-09: agents only reachable via /cockpit.
   ],
 
   // ===== 02 Sales (added 2026-04-30) =====
   // First sub-tab Inquiries lands the inbound funnel; remaining tabs are placeholders
   // until each section's IA proposal is approved + shipped.
+  // PBS 2026-05-09 (repair list): Roster (was /sales/roster — staff roster
+  // duplicates /operations/staff) removed; Agents tab stripped — agents are
+  // only reachable via /cockpit now. Pages still exist; nav links gone.
   sales: [
     { href: '/sales/inquiries',  label: 'Inquiries', isNew: true },
     { href: '/sales/leads',      label: 'Leads',     isNew: true },
@@ -50,8 +53,6 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/sales/packages',   label: 'Packages',  isNew: true },
     { href: '/sales/b2b',        label: 'B2B / DMC', isNew: true },
     { href: '/sales/pipeline',   label: 'Pipeline',  coming: true },
-    { href: '/sales/roster',     label: 'Roster',    coming: true },
-    { href: '/sales/agents',     label: 'Agents' },
   ],
 
   // ===== 03 Marketing (restored 2026-04-30) =====
@@ -65,7 +66,7 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/marketing/social',       label: 'Social' },
     { href: '/marketing/influencers',  label: 'Influencers' },
     { href: '/marketing/taxonomy',     label: 'Taxonomy' },
-    { href: '/marketing/agents',       label: 'Agents' },
+    // PBS 2026-05-09: agents only reachable via /cockpit.
   ],
 
   // ===== 04 Operations =====
@@ -78,8 +79,10 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/operations/restaurant',       label: 'F&B' },
     { href: '/operations/spa',              label: 'Spa' },
     { href: '/operations/activities',       label: 'Activities' },
+    { href: '/operations/events',           label: 'Events',     isNew: true },
     // Housekeeping + Maintenance hidden — stub-only, hide until real content lands.
-    { href: '/operations/inventory',        label: 'Inventory & Suppliers' },
+    { href: '/operations/inventory',        label: 'Inventory' },
+    { href: '/operations/suppliers',        label: 'Suppliers',  isNew: true },
     { href: '/operations/catalog-cleanup',  label: 'Catalog cleanup' },
   ],
 
@@ -107,7 +110,7 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/guest/loyalty',          label: 'Loyalty',     isNew: true },
     { href: '/guest/messy-data',       label: 'Messy data',  isNew: true },
     { href: '/guest/findings',         label: 'Findings',    isNew: true },
-    { href: '/guest/agents',           label: 'Agents' },
+    // PBS 2026-05-09: agents only reachable via /cockpit.
   ],
 
   // ===== 04 Finance =====
@@ -124,34 +127,26 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/finance/cashflow',         label: 'Cashflow',        coming: true },
     { href: '/finance/variance',         label: 'Variance',        coming: true },
     { href: '/finance/apar',             label: 'AP / AR',         coming: true },
-    { href: '/finance/agents',           label: 'Agents' },
+    // PBS 2026-05-09: agents only reachable via /cockpit.
   ],
 
   // ===== Knowledge (utility) =====
+  // PBS 2026-05-09: /agents/{roster,run,history,settings} stripped — agents
+  // only reachable via /cockpit (Team tab + topbar quick-links). Pages still
+  // exist for direct URL access.
   knowledge: [
     { href: '/knowledge',          label: 'Snapshot' },
     { href: '/knowledge/alerts',   label: 'Alerts',          isNew: true },
-    { href: '/agents/roster',      label: 'Agents · Roster' },
-    { href: '/agents/run',         label: 'Agents · Run' },
-    { href: '/agents/history',     label: 'Agents · History' },
-    { href: '/agents/settings',    label: 'Agents · Settings' },
   ],
 
-  // ===== Settings (utility) — 2026-05-05 cleanup =====
-  // Removed: Budget (duplicate of /finance/budget), Agent guardrails (theatre).
-  // Agents are controlled 1:1 on each pillar's /agents page.
+  // ===== Settings (utility) =====
+  // PBS 2026-05-09 #26: only Property stays in settings. Users & roles, VAT,
+  // Manual entries, Integrations, Notifications, Reports, DQ engine, Platform
+  // map and the cockpit status page move to /cockpit (still reachable via
+  // direct URL until cockpit shell is updated to surface them).
   settings: [
-    { href: '/settings',                label: 'Snapshot' },
-    { href: '/settings/property',       label: 'Property' },
-    { href: '/settings/users',          label: 'Users & roles' },
-    { href: '/settings/vat-rates',      label: 'VAT rates' },
-    { href: '/settings/manual-entries', label: 'Manual entries' },
-    { href: '/settings/integrations',   label: 'Integrations' },
-    { href: '/settings/notifications',  label: 'Notifications' },
-    { href: '/settings/reports',        label: 'Reports' },
-    { href: '/settings/dq',             label: 'DQ engine' },
-    { href: '/settings/platform-map',   label: 'Platform map' },
-    { href: '/settings/cockpit',        label: 'Cockpit',  isNew: true },
+    { href: '/settings',          label: 'Snapshot' },
+    { href: '/settings/property', label: 'Property' },
   ],
 };
 

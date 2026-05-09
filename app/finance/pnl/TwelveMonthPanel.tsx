@@ -142,17 +142,45 @@ export default function TwelveMonthPanel({ rows, fy, demand = [] }: Props) {
               {/* zero line */}
               <line x1={padL} x2={chartW - padR} y1={y(0)} y2={y(0)} stroke="var(--line, #e7e2d8)" strokeDasharray="2 4" />
               {/* paths */}
-              <path d={pathRevB} fill="none" stroke="var(--brass, #a17a4f)" strokeWidth="1.5" strokeDasharray="4 3" />
-              <path d={pathRevA} fill="none" stroke="var(--green-2, #2e4a36)" strokeWidth="2" />
-              <path d={pathGopB} fill="none" stroke="#b34939" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.6" />
-              <path d={pathGopA} fill="none" stroke="#b34939" strokeWidth="2" />
-              {/* dots + labels */}
-              {monthly.map((m, i) => (
-                <g key={m.period}>
-                  <circle cx={x(i)} cy={y(m.agg.revA)} r="3" fill="var(--green-2, #2e4a36)" />
-                  <text x={x(i)} y={chartH - 6} fontSize="10" textAnchor="middle" fill="var(--ink-mute, #8a8170)">{m.period.slice(5)}</text>
-                </g>
-              ))}
+              <path d={pathRevB} fill="none" stroke="var(--brass, #a17a4f)" strokeWidth="1.5" strokeDasharray="4 3">
+                <title>{`Revenue · budget series · FY${fy[0]?.slice(0,4) ?? ''} · gl.v_budget_vs_actual`}</title>
+              </path>
+              <path d={pathRevA} fill="none" stroke="var(--green-2, #2e4a36)" strokeWidth="2">
+                <title>{`Revenue · actual series · FY${fy[0]?.slice(0,4) ?? ''} · gl.v_budget_vs_actual`}</title>
+              </path>
+              <path d={pathGopB} fill="none" stroke="#b34939" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.6">
+                <title>{`GOP · budget series · FY${fy[0]?.slice(0,4) ?? ''} · gl.v_budget_vs_actual`}</title>
+              </path>
+              <path d={pathGopA} fill="none" stroke="#b34939" strokeWidth="2">
+                <title>{`GOP · actual series · FY${fy[0]?.slice(0,4) ?? ''} · gl.v_budget_vs_actual`}</title>
+              </path>
+              {/* dots + invisible hit-rects + labels */}
+              {monthly.map((m, i) => {
+                const cx = x(i);
+                const colW = innerW / Math.max(monthly.length - 1, 1);
+                const hitX = cx - colW / 2;
+                return (
+                  <g key={m.period}>
+                    {/* invisible overlay carrying full month tooltip */}
+                    <rect x={hitX} y={padT} width={colW} height={innerH} fill="transparent">
+                      <title>{`${m.period} · revenue actual ${fmtK(m.agg.revA)} / budget ${fmtK(m.agg.revB)} · GOP actual ${fmtK(m.agg.gopA)} / budget ${fmtK(m.agg.gopB)} · gl.v_budget_vs_actual`}</title>
+                    </rect>
+                    <circle cx={cx} cy={y(m.agg.revA)} r="3" fill="var(--green-2, #2e4a36)">
+                      <title>{`${m.period} · revenue actual ${fmtK(m.agg.revA)} · gl.v_budget_vs_actual`}</title>
+                    </circle>
+                    <circle cx={cx} cy={y(m.agg.revB)} r="2.5" fill="var(--brass, #a17a4f)" opacity={0}>
+                      <title>{`${m.period} · revenue budget ${fmtK(m.agg.revB)} · gl.v_budget_vs_actual`}</title>
+                    </circle>
+                    <circle cx={cx} cy={y(m.agg.gopA)} r="2.5" fill="#b34939" opacity={0}>
+                      <title>{`${m.period} · GOP actual ${fmtK(m.agg.gopA)} · gl.v_budget_vs_actual`}</title>
+                    </circle>
+                    <circle cx={cx} cy={y(m.agg.gopB)} r="2.5" fill="#b34939" opacity={0}>
+                      <title>{`${m.period} · GOP budget ${fmtK(m.agg.gopB)} · gl.v_budget_vs_actual`}</title>
+                    </circle>
+                    <text x={cx} y={chartH - 6} fontSize="10" textAnchor="middle" fill="var(--ink-mute, #8a8170)">{m.period.slice(5)}</text>
+                  </g>
+                );
+              })}
             </svg>
             <div className="legend">
               <span><i style={{ background: 'var(--green-2)' }} />Revenue · actual</span>

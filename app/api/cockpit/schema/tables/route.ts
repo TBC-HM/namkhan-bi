@@ -3,12 +3,21 @@
 // Uses service role key to introspect pg_catalog.
 
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// PBS 2026-05-09: lazy-init + force-dynamic so build's page-data collection
+// step doesn't crash when env vars aren't passed to CI.
+export const dynamic = "force-dynamic";
+
+let _client: SupabaseClient | null = null;
+function supa(): SupabaseClient {
+  if (_client) return _client;
+  _client = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL || "https://build-placeholder.supabase.co",
+    process.env.SUPABASE_SERVICE_ROLE_KEY || "build-placeholder-key",
+  );
+  return _client;
+}
 
 export async function GET() {
   // Run a single SQL query via Supabase rpc OR via the SQL function.
@@ -38,7 +47,7 @@ export async function GET() {
   ];
 
   const tables = await Promise.all(tablesToCheck.map(async (t) => {
-    const { count } = await supabase
+    const { count } = await supa()
       .from(t.name)
       .select("*", { count: "exact", head: true });
     return {

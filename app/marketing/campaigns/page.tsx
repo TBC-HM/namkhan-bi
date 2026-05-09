@@ -2,10 +2,12 @@
 // Brand & Marketing · Campaigns — list of all campaigns by status.
 
 import Link from 'next/link';
-import PanelHero from '@/components/sections/PanelHero';
-import Card from '@/components/sections/Card';
-import KpiCard from '@/components/kpi/KpiCard';
+import Page from '@/components/page/Page';
+import Panel from '@/components/page/Panel';
+import KpiBox from '@/components/kpi/KpiBox';
+import ArtifactActions from '@/components/page/ArtifactActions';
 import { getCampaigns, CHANNEL_LABEL, STATUS_COLOR, type CampaignStatus } from '@/lib/marketing';
+import { MARKETING_SUBPAGES } from '../_subpages';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 30;
@@ -33,32 +35,27 @@ export default async function CampaignsPage({ searchParams }: SP) {
   };
 
   return (
-    <>
-      <PanelHero
-        eyebrow="Brand · Marketing · campaigns"
-        title="Outbound"
-        emphasis="campaigns"
-        sub="Plan · curate · compose · approve · ship — with locked templates"
-        kpis={
-          <>
-            <KpiCard label="Total"     value={counts.all} />
-            <KpiCard label="Drafts"    value={counts.drafts} />
-            <KpiCard label="Scheduled" value={counts.scheduled} />
-            <KpiCard label="Published" value={counts.published} />
-          </>
-        }
-      />
+    <Page
+      eyebrow="Marketing · Campaigns"
+      title={<>Outbound <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>campaigns</em>.</>}
+      subPages={MARKETING_SUBPAGES}
+    >
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
+        <KpiBox value={counts.all}        unit="count" label="Total"      tooltip="All campaigns in marketing.campaigns regardless of status." />
+        <KpiBox value={counts.drafts}     unit="count" label="Drafts"     tooltip="status IN ('draft','curating','composing','pending_approval'). Awaiting human input." />
+        <KpiBox value={counts.scheduled}  unit="count" label="Scheduled"  tooltip="status='scheduled' — approved + queued to publish at a future time." />
+        <KpiBox value={counts.published}  unit="count" label="Published"  tooltip="status='published' — already live on a channel." />
+      </div>
 
-      <Card
-        title="All"
-        emphasis="campaigns"
-        sub={status ? `filtered by ${status}` : 'newest first'}
-        source="marketing.v_campaign_calendar"
-        actions={
-          <Link href="/marketing/campaigns/new" className="btn" style={{ fontSize: "var(--t-sm)", textDecoration: 'none', background: 'var(--moss)', color: 'var(--paper-warm)', borderColor: 'var(--moss)' }}>
-            + new campaign
+      <Panel
+        title={`All campaigns${status ? ` · ${status}` : ''}`}
+        eyebrow="marketing.v_campaign_calendar"
+        actions={<>
+          <Link href="/marketing/campaigns/new" className="btn" style={{ fontSize: 'var(--t-sm)', textDecoration: 'none', background: 'var(--moss)', color: 'var(--paper-warm)', borderColor: 'var(--moss)' }}>
+            + new
           </Link>
-        }
+          <ArtifactActions context={{ kind: 'table', title: 'Campaigns', dept: 'marketing' }} />
+        </>}
       >
         {/* Status tabs */}
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
@@ -129,7 +126,7 @@ export default async function CampaignsPage({ searchParams }: SP) {
             </tbody>
           </table>
         )}
-      </Card>
-    </>
+      </Panel>
+    </Page>
   );
 }

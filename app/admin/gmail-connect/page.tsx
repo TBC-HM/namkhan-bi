@@ -1,7 +1,7 @@
 // /admin/gmail-connect — admin UI for hooking up Gmail OAuth + checking poller status.
 // Direct access by URL (gated by CRON_SECRET on the underlying routes, not via UI auth).
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
 import { listGmailConnections } from '@/lib/gmail';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
@@ -32,13 +32,7 @@ export default async function GmailConnectPage({ searchParams }: { searchParams:
   const adminKey = searchParams.key ?? '';
 
   return (
-    <>
-      <PageHeader
-        pillar="Settings"
-        tab="Gmail OAuth"
-        title={<>Gmail · poll <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>connections</em></>}
-        lede="OAuth connections to Google Workspace inboxes. Vercel cron polls every 5 min."
-      />
+    <Page eyebrow="Settings · Gmail OAuth" title={<>Gmail · poll <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>connections</em></>}>
 
       {searchParams.connected && (
         <div style={{ marginTop: 14, padding: 12, background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 8 }}>
@@ -165,7 +159,7 @@ export default async function GmailConnectPage({ searchParams }: { searchParams:
           </table>
         )}
       </section>
-    </>
+    </Page>
   );
 }
 

@@ -91,7 +91,7 @@ function Chart({ rows, total }: { rows: { bucket: string; value: number }[]; tot
           <g key={r.bucket}>
             <rect x={padL} y={y} width={innerW} height={lineH} fill="var(--paper-deep)" />
             <rect x={padL} y={y} width={wPx} height={lineH} fill={BUCKET_COLOR[r.bucket]}>
-              <title>{`${BUCKET_LABEL[r.bucket]} · ${fmtMoney(r.value, 'USD')} · ${pct.toFixed(0)}%`}</title>
+              <title>{`${BUCKET_LABEL[r.bucket]} · ${fmtMoney(r.value, 'USD')} · ${pct.toFixed(0)}% · gl.mv_aged_ar`}</title>
             </rect>
             <text
               x={padL + 6}

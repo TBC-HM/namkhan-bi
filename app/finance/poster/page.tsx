@@ -12,7 +12,8 @@
 
 import Link from 'next/link';
 import FilterStrip from '@/components/nav/FilterStrip';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { FINANCE_SUBPAGES } from '../_subpages';
 import StatusPill from '@/components/ui/StatusPill';
 import KpiStrip, { type KpiStripItem } from '@/components/kpi/KpiStrip';
 import PosterReceiptsTable from '@/components/poster/PosterReceiptsTable';
@@ -86,19 +87,11 @@ export default async function PosterPage({ searchParams }: Props) {
   const tipsDelta   = paidClosed - orderClosed;        // service charge / tips collected on top of orders
 
   return (
-    <>
-      <PageHeader
-        pillar="Finance"
-        tab="Poster POS"
-        title={
-          <>
-            Every{' '}
-            <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>receipt</em>{' '}
-            — and where it lands.
-          </>
-        }
-        lede={`${totals.receipts_total.toLocaleString()} receipts · ${totals.closed_n.toLocaleString()} closed · order $${Math.round(orderClosed).toLocaleString()} · paid $${Math.round(paidClosed).toLocaleString()} · ${periodLabel}`}
-      />
+    <Page
+      eyebrow="Finance · Poster POS"
+      title={<>Every <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>receipt</em> — and where it lands.</>}
+      subPages={FINANCE_SUBPAGES}
+    >
 
       <FinanceStatusHeader
         top={
@@ -339,6 +332,6 @@ export default async function PosterPage({ searchParams }: Props) {
         </div>
         <PosterReceiptsTable data={raw} pageSize={200} />
       </details>
-    </>
+    </Page>
   );
 }

@@ -3,12 +3,19 @@
 // Use this for any gl.* table or view query.
 // For cross-schema reads (governance.*, public.*) use the default `supabase` client.
 
+// 2026-05-09 (repair-list 14): switched anon → service-role. The `gl` schema
+// tables/views have tenant RLS that anon can't pass — every query was
+// returning [] silently, which is why /finance/pnl looked frozen on the
+// month dropdown. Same fix pattern as @/lib/supabase.
+
 import { createClient } from '@supabase/supabase-js';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const key = serviceKey ?? anonKey;
 
-export const supabaseGl = createClient(url, anonKey, {
+export const supabaseGl = createClient(url, key, {
   auth: { persistSession: false },
   db: { schema: 'gl' },
 });

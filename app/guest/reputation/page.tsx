@@ -2,7 +2,8 @@
 // Replaces /guest/reviews + /marketing/reviews (both redirect here).
 // compset-pattern: PageHeader + status header + 3 wired graphs + canonical KpiBox + review feed.
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { GUEST_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { getReviews, getReviewStatsBySource, getReviewSummary } from '@/lib/marketing';
@@ -71,19 +72,11 @@ export default async function ReputationPage() {
     .sort((a, b) => a.week.localeCompare(b.week));
 
   return (
-    <>
-      <PageHeader
-        pillar="Guest"
-        tab="Reputation"
-        title={
-          <>
-            What guests{' '}
-            <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>say</em>{' '}
-            — every channel, every reply.
-          </>
-        }
-        lede={`${total} reviews 30d · ${avgRating != null ? avgRating.toFixed(2) : '—'}/5 avg · ${unanswered} unanswered · ${responseRate.toFixed(0)}% response rate`}
-      />
+    <Page
+      eyebrow="Guest · Reputation"
+      title={<>What guests <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>say</em> — every channel, every reply.</>}
+      subPages={GUEST_SUBPAGES}
+    >
 
       <GuestStatusHeader
         top={
@@ -142,12 +135,13 @@ export default async function ReputationPage() {
           marginTop: 14,
         }}
       >
-        <KpiBox value={total} unit="count" label="Reviews 30d" tooltip="Across every source" />
+        <KpiBox value={total} unit="count" label="Reviews 30d" tooltip="Reviews received in the last 30 days across every source. Source: marketing.reviews." />
         <KpiBox
           value={avgRating}
           unit="nights"
           dp={2}
           label="Avg rating /5"
+          tooltip="Mean of rating_norm (normalised to /5). SLH brand target ≥ 4.6."
         />
         <KpiBox
           value={unanswered}
@@ -250,7 +244,7 @@ export default async function ReputationPage() {
           No reviews yet. Forward review notification emails to your Supabase webhook to populate <code>marketing.reviews</code>.
         </div>
       )}
-    </>
+    </Page>
   );
 }
 
@@ -283,7 +277,7 @@ function SourceMixChart({ rows, totalForSourceMix }: { rows: any[]; totalForSour
               </text>
               <rect x={labelW} y={y + 4} width={barMaxW} height={14} fill="var(--paper-deep)" />
               <rect x={labelW} y={y + 4} width={barW} height={14} fill={fill}>
-                <title>{`${SOURCE_LABEL[r.source] ?? r.source} · ${r.count} reviews · ${r.avg_rating ? Number(r.avg_rating).toFixed(2) : '—'}/5 · ${r.unanswered} unanswered`}</title>
+                <title>{`${SOURCE_LABEL[r.source] ?? r.source} · ${r.count.toLocaleString()} reviews · ${pct.toFixed(1)}% mix · avg ${r.avg_rating ? Number(r.avg_rating).toFixed(2) : '—'}/5 · ${r.unanswered.toLocaleString()} unanswered · 90d · marketing.reviews`}</title>
               </rect>
               <text x={labelW + barMaxW + 4} y={y + 14} style={{ fontFamily: 'var(--mono)', fontSize: 10, fill: 'var(--ink-soft)' }}>
                 {r.count} · {pct.toFixed(0)}%
@@ -323,7 +317,7 @@ function SentimentTrendChart({ rows }: { rows: { week: string; avg: number; n: n
         <path d={path} fill="none" stroke="var(--moss)" strokeWidth={2} />
         {rows.map((r, i) => (
           <circle key={r.week} cx={xAt(i)} cy={yAt(r.avg)} r={3} fill="var(--moss)">
-            <title>{`${r.week} · avg ${r.avg.toFixed(2)}/5 · ${r.n} review${r.n === 1 ? '' : 's'}`}</title>
+            <title>{`Week ${r.week} · avg ${r.avg.toFixed(2)}/5 · ${r.n.toLocaleString()} review${r.n === 1 ? '' : 's'} · marketing.reviews`}</title>
           </circle>
         ))}
         {rows.length > 0 && (
@@ -350,10 +344,10 @@ function ResponseQueueChart({ unanswered, answered }: { unanswered: number; answ
       <svg viewBox="0 0 320 200" style={{ width: '100%', height: 200 }}>
         <rect x={16} y={70} width={288} height={28} fill="var(--paper-deep)" />
         <rect x={16} y={70} width={(answered / total) * 288} height={28} fill="var(--moss)">
-          <title>{`Answered · ${answered} · ${responseRate.toFixed(0)}%`}</title>
+          <title>{`Answered · ${answered.toLocaleString()} of ${total.toLocaleString()} · ${responseRate.toFixed(1)}% · 30d · marketing.reviews`}</title>
         </rect>
         <rect x={16 + (answered / total) * 288} y={70} width={(unanswered / total) * 288} height={28} fill="var(--st-bad)">
-          <title>{`Unanswered · ${unanswered}`}</title>
+          <title>{`Unanswered · ${unanswered.toLocaleString()} of ${total.toLocaleString()} · ${(100 - responseRate).toFixed(1)}% · 30d · marketing.reviews`}</title>
         </rect>
         <text x={20} y={86} style={{ fontFamily: 'var(--mono)', fontSize: 11, fill: 'var(--paper-warm)', fontWeight: 600 }}>
           {answered} answered · {responseRate.toFixed(0)}%

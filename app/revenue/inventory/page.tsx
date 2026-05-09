@@ -1,5 +1,8 @@
 // app/revenue/inventory/page.tsx — REDESIGN 2026-05-05 (recovery)
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import TimeframeSelector from '@/components/page/TimeframeSelector';
+import CompareSelector from '@/components/page/CompareSelector';
+import { REVENUE_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { getRateInventoryCalendar } from '@/lib/data';
@@ -33,10 +36,12 @@ export default async function InventoryPage({ searchParams }: Props) {
   const lastShop = days.length ? days[days.length - 1].date : null;
 
   return (
-    <>
-      <PageHeader pillar="Revenue" tab="Inventory"
-        title={<>Sell what you <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>have</em>, push rate where it's tight.</>}
-        lede={`${period.label} · ${period.rangeLabel} · ${days.length} days`} />
+    <Page eyebrow="Revenue · Inventory" title={<>Sell what you <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>have</em>, push rate where it's tight.</>} subPages={REVENUE_SUBPAGES} topRight={
+      <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <TimeframeSelector basePath="/revenue/inventory" active={period.win} includeForward preserve={{ cmp: period.cmp, seg: period.seg }} />
+        <CompareSelector  basePath="/revenue/inventory" active={period.cmp}                   preserve={{ win: period.win, seg: period.seg }} />
+      </div>
+    }>
       <div style={statusWrap}>
         <div style={statusRow1}>
           <div style={cell}><span className="t-eyebrow" style={{ marginRight: 8 }}>SOURCE</span><StatusPill tone="active">mv_rate_inventory_calendar</StatusPill></div>
@@ -58,16 +63,16 @@ export default async function InventoryPage({ searchParams }: Props) {
       </div>
       <InventoryGraphs rows={days} />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
-        <KpiBox value={days.length} unit="count" label="Days in window" />
-        <KpiBox value={avgAvail} unit="nights" label="Avg available" />
-        <KpiBox value={tightDays} unit="count" label="Tight days (≤3)" />
-        <KpiBox value={sellouts} unit="count" label="Sellouts" />
+        <KpiBox value={days.length} unit="count" label="Days in window" tooltip="Distinct inventory_date values in the window. Source: rate_inventory." />
+        <KpiBox value={avgAvail}    unit="nights" label="Avg available" tooltip="Mean available_rooms across all room types per day in the window." />
+        <KpiBox value={tightDays}   unit="count" label="Tight days (≤3)" tooltip="Days where availability ≤ 3 rooms — push rate / close-to-arrival opportunity." />
+        <KpiBox value={sellouts}    unit="count" label="Sellouts"        tooltip="Days where availability = 0. Confirm against pickup before celebrating." />
       </div>
       <div style={{ marginTop: 18 }}>
         <SectionHead title="Inventory" emphasis="per date" sub={`${days.length} days · sellable inventory + rate spread`} source="mv_rate_inventory_calendar" />
         <InventoryTable rows={days} />
       </div>
-    </>
+    </Page>
   );
 }
 

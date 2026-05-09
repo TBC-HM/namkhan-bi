@@ -7,7 +7,8 @@ import DecisionQueue, { type DecisionRow } from '@/components/ops/DecisionQueue'
 import TacticalAlerts, { type TacticalAlert } from '@/components/ops/TacticalAlerts';
 import GuardrailsBanner from '@/components/ops/GuardrailsBanner';
 import DataNeededOverlay from '@/components/ops/DataNeededOverlay';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { OPERATIONS_SUBPAGES } from '../_subpages';
 
 import TicketQueue from './_components/TicketQueue';
 import AssetHeatMap from './_components/AssetHeatMap';
@@ -107,14 +108,11 @@ export default async function MaintenancePage() {
     : null;
 
   return (
-    <>
-      {/* BLOCK 1 */}
-      <PageHeader
-        pillar="Operations"
-        tab="Maintenance"
-        title={<>Maintenance · before it <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>breaks</em>.</>}
-        lede="Tickets, assets, energy, and CapEx — predict, fix, then plan."
-      />
+    <Page
+      eyebrow="Operations · Maintenance"
+      title={<>Maintenance · before it <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>breaks</em>.</>}
+      subPages={OPERATIONS_SUBPAGES}
+    >
 
       {/* BLOCK 2 */}
       <div
@@ -251,7 +249,7 @@ export default async function MaintenancePage() {
         <code>governance.budget_proposals</code> for /finance/budget review.
         Agents ship in approval-required mode.
       </GuardrailsBanner>
-    </>
+    </Page>
   );
 }
 

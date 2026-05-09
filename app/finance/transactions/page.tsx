@@ -1,10 +1,13 @@
 // app/finance/transactions/page.tsx
 // Finance · Transactions — full Cloudbeds + POS transactions with KPI grouping + search.
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { FINANCE_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
-import { supabase, PROPERTY_ID } from '@/lib/supabase';
+// 2026-05-09: public.transactions has RLS blocking anon; use service role.
+import { PROPERTY_ID } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { fmtMoney } from '@/lib/format';
 import {
   FinanceStatusHeader,
@@ -32,6 +35,7 @@ export default async function TransactionsPage({ searchParams }: Props) {
   const offset  = (page - 1) * PAGE_SIZE;
 
   // ---- KPIs (window-scoped to the date filter) ----
+  const supabase = getSupabaseAdmin();
   const { data: kpiRows } = await supabase
     .from('transactions')
     .select('amount, transaction_type, category, usali_dept')
@@ -61,9 +65,12 @@ export default async function TransactionsPage({ searchParams }: Props) {
                                                    && !['tax','fee','void','adjustment'].includes(r.category)));
 
   // ---- Listing query (filtered + paginated) ----
+  // Drop count:'exact' — it triggers a HEAD-style row count that PostgREST
+  // serves with a stale `Content-Range: */0` for some views, making the
+  // page render an empty table. Keep an estimated count via planner.
   let listQ = supabase
     .from('transactions')
-    .select('transaction_id, transaction_date, transaction_type, category, item_category_name, description, amount, currency, usali_dept, user_name, reservation_id, method', { count: 'exact' })
+    .select('transaction_id, transaction_date, transaction_type, category, item_category_name, description, amount, currency, usali_dept, user_name, reservation_id, method', { count: 'planned' })
     .eq('property_id', PROPERTY_ID)
     .gte('transaction_date', since)
     .lte('transaction_date', until + 'T23:59:59')
@@ -72,14 +79,13 @@ export default async function TransactionsPage({ searchParams }: Props) {
   if (dept)    listQ = listQ.eq('usali_dept', dept);
   if (txnType) listQ = listQ.eq('transaction_type', txnType);
   if (q) {
-    // Postgres ILIKE on description / item_category_name / user_name / reservation_id
     listQ = listQ.or(
       [`description.ilike.%${q}%`, `item_category_name.ilike.%${q}%`,
        `user_name.ilike.%${q}%`, `reservation_id.ilike.%${q}%`].join(',')
     );
   }
   const { data: rows, count: rowCount } = await listQ.range(offset, offset + PAGE_SIZE - 1);
-  const totalPages = Math.max(1, Math.ceil((rowCount ?? 0) / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil((rowCount ?? all.length) / PAGE_SIZE));
 
   // Daily volume series — wired from kpiRows by truncating transaction_date.
   const byDay = new Map<string, { count: number; sales: number }>();
@@ -101,19 +107,11 @@ export default async function TransactionsPage({ searchParams }: Props) {
     .sort((a, b) => a.d.localeCompare(b.d));
 
   return (
-    <>
-      <PageHeader
-        pillar="Finance"
-        tab="Transactions"
-        title={
-          <>
-            All{' '}
-            <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>transactions</em>{' '}
-            · Cloudbeds + POS.
-          </>
-        }
-        lede={`${rowCount?.toLocaleString() ?? 0} matching transactions · ${since} → ${until}`}
-      />
+    <Page
+      eyebrow="Finance · Transactions"
+      title={<>All <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>transactions</em> · Cloudbeds + POS.</>}
+      subPages={FINANCE_SUBPAGES}
+    >
 
       <FinanceStatusHeader
         top={
@@ -272,7 +270,7 @@ export default async function TransactionsPage({ searchParams }: Props) {
           </div>
         )}
       </div>
-    </>
+    </Page>
   );
 }
 
@@ -337,11 +335,23 @@ function DailyVolumeChart({ rows }: { rows: { d: string; count: number; sales: n
           const y = padT + innerH - bh;
           return (
             <rect key={r.d} x={x} y={y} width={barW} height={bh} fill="var(--moss)">
-              <title>{`${r.d} · ${r.count} txns · ${fmtMoney(r.sales, 'USD')} sales`}</title>
+              <title>{`${r.d} · ${r.count} txns · ${fmtMoney(r.sales, 'USD')} sales · v_finance_transactions`}</title>
             </rect>
           );
         })}
-        <path d={linePath} fill="none" stroke="var(--brass)" strokeWidth={1.5} />
+        <path d={linePath} fill="none" stroke="var(--brass)" strokeWidth={1.5}>
+          <title>{`Daily sales line · ${rows.length} days · max ${fmtMoney(maxSales, 'USD')} · v_finance_transactions`}</title>
+        </path>
+        {/* invisible hover dots for line points */}
+        {rows.map((r, i) => {
+          const cx = padL + i * groupW + groupW / 2;
+          const cy = padT + innerH - (r.sales / maxSales) * innerH;
+          return (
+            <circle key={`pt-${r.d}`} cx={cx} cy={cy} r={6} fill="var(--brass)" opacity={0}>
+              <title>{`${r.d} · sales ${fmtMoney(r.sales, 'USD')} · ${r.count} txns · v_finance_transactions`}</title>
+            </circle>
+          );
+        })}
         {/* x labels — sparse */}
         {rows.map((r, i) =>
           i % Math.max(1, Math.floor(rows.length / 6)) === 0 ? (

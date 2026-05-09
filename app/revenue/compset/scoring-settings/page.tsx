@@ -13,7 +13,8 @@
 //   POST /api/compset/scoring/activate  -> compset_activate_scoring_config
 
 import Link from 'next/link';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { REVENUE_SUBPAGES } from '../../_subpages';
 import StatusPill from '@/components/ui/StatusPill';
 import { supabase } from '@/lib/supabase';
 import { fmtIsoDate, EMPTY } from '@/lib/format';
@@ -107,23 +108,12 @@ export default async function ScoringSettingsPage() {
   const latestAudit = data.audits[0] ?? null;
 
   return (
-    <>
-      <PageHeader
-        pillar="Revenue"
-        tab="Comp Set · Scoring"
-        title={
-          <>
-            Tune the <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>weights</em>,
-            change what the agent shops.
-          </>
-        }
-        lede="Versioned weights for the date picker · every save is auditable · activation is one click."
-        rightSlot={
-          <Link href="/revenue/compset" style={backLinkStyle}>
-            ← BACK TO COMP SET
-          </Link>
-        }
-      />
+    <Page
+      eyebrow="Revenue · Comp Set · Scoring"
+      title={<>Tune the <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>weights</em>, change what the agent shops.</>}
+      subPages={REVENUE_SUBPAGES}
+      topRight={<Link href="/revenue/compset" style={backLinkStyle}>← BACK TO COMP SET</Link>}
+    >
 
       {/* STATUS ROW */}
       <div
@@ -339,7 +329,7 @@ export default async function ScoringSettingsPage() {
         </div>
         <VersionHistoryTable rows={versionRows} />
       </div>
-    </>
+    </Page>
   );
 }
 

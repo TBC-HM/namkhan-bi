@@ -4,7 +4,8 @@
 // Every value wired. No invented cohorts.
 
 import Link from 'next/link';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { GUEST_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
@@ -136,19 +137,11 @@ export default async function LoyaltyPage() {
     : 0;
 
   return (
-    <>
-      <PageHeader
-        pillar="Guest"
-        tab="Loyalty"
-        title={
-          <>
-            Who comes{' '}
-            <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>back</em>{' '}
-            — and who's about to slip.
-          </>
-        }
-        lede={`${totalGuests} guests · ${repeatGuests} repeat (${repeatPct.toFixed(0)}%) · ${winback.length} win-back candidates · ${programMembers} loyalty members`}
-      />
+    <Page
+      eyebrow="Guest · Loyalty"
+      title={<>Who comes <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>back</em> — and who's about to slip.</>}
+      subPages={GUEST_SUBPAGES}
+    >
 
       <GuestStatusHeader
         top={
@@ -227,12 +220,12 @@ export default async function LoyaltyPage() {
           marginTop: 14,
         }}
       >
-        <KpiBox value={totalGuests} unit="count" label="Total guests" />
-        <KpiBox value={repeatGuests} unit="count" label="Repeat guests" tooltip="≥2 stays" />
-        <KpiBox value={repeatPct} unit="pct" label="Repeat rate" />
-        <KpiBox value={avgLtv} unit="usd" label="Avg LTV" tooltip="Across all guests" />
-        <KpiBox value={avgLtvRepeat} unit="usd" label="Avg LTV · repeat" tooltip="Repeat guests only" />
-        <KpiBox value={winback.length} unit="count" label="Win-back candidates" />
+        <KpiBox value={totalGuests}        unit="count" label="Total guests"        tooltip="Distinct guest profiles. Source: guest.mv_guest_profile." />
+        <KpiBox value={repeatGuests}       unit="count" label="Repeat guests"       tooltip="Guests with ≥ 2 stays — drives loyalty programs." />
+        <KpiBox value={repeatPct}          unit="pct"   label="Repeat rate"         tooltip="Repeat guests ÷ total guests × 100. Industry healthy ≥ 25%." />
+        <KpiBox value={avgLtv}             unit="usd"   label="Avg LTV"             tooltip="Mean lifetime revenue across all guest profiles." />
+        <KpiBox value={avgLtvRepeat}       unit="usd"   label="Avg LTV · repeat"    tooltip="Mean lifetime revenue restricted to repeat guests." />
+        <KpiBox value={winback.length}     unit="count" label="Win-back candidates" tooltip="Guests with last_stay_date 12-24 months ago — prime win-back targets." />
       </div>
 
       {/* WIN-BACK TABLE */}
@@ -264,7 +257,7 @@ export default async function LoyaltyPage() {
           <GuestTable rows={vips} todayIso={todayIso} />
         )}
       </div>
-    </>
+    </Page>
   );
 }
 
@@ -294,7 +287,7 @@ function RepeatDistChart({ rows, total }: { rows: { k: string; n: number }[]; to
           return (
             <g key={r.k}>
               <rect x={x} y={y} width={barW} height={bh} fill={fill}>
-                <title>{`${r.k}× · ${r.n} guests · ${pct.toFixed(0)}%`}</title>
+                <title>{`${r.k}× stays · ${r.n.toLocaleString()} guests · ${pct.toFixed(1)}% of ${total.toLocaleString()} · guest.mv_guest_profile`}</title>
               </rect>
               <text x={x + barW / 2} y={y - 3} textAnchor="middle" style={{ fontFamily: 'var(--mono)', fontSize: 9, fill: 'var(--ink)' }}>
                 {r.n}
@@ -335,7 +328,7 @@ function LtvCohortChart({ rows }: { rows: { label: string; n: number; sum: numbe
               </text>
               <rect x={labelW} y={y + 4} width={barMaxW} height={18} fill="var(--paper-deep)" />
               <rect x={labelW} y={y + 4} width={barW} height={18} fill={fill}>
-                <title>{`${r.label} · ${r.n} guests · sum ${fmtMoney(r.sum, 'USD')}`}</title>
+                <title>{`LTV ${r.label} · ${r.n.toLocaleString()} guests · ${pct.toFixed(1)}% · sum ${fmtMoney(r.sum, 'USD')} · guest.mv_guest_profile`}</title>
               </rect>
               <text x={labelW + barMaxW + 4} y={y + 16} style={{ fontFamily: 'var(--mono)', fontSize: 10, fill: 'var(--ink-soft)' }}>
                 {r.n} · {pct.toFixed(0)}%
@@ -389,7 +382,7 @@ function RecencyChart({ profiles, todayIso }: { profiles: ProfileRow[]; todayIso
           return (
             <g key={b.label}>
               <rect x={x} y={y} width={barW} height={bh} fill={fill}>
-                <title>{`${b.label} · ${b.n} guests · ${total > 0 ? ((b.n / total) * 100).toFixed(0) : 0}%`}</title>
+                <title>{`Recency ${b.label} · ${b.n.toLocaleString()} guests · ${total > 0 ? ((b.n / total) * 100).toFixed(1) : '0.0'}% of ${total.toLocaleString()} · guest.mv_guest_profile`}</title>
               </rect>
               {b.n > 0 && (
                 <text x={x + barW / 2} y={y - 3} textAnchor="middle" style={{ fontFamily: 'var(--mono)', fontSize: 9, fill: 'var(--ink)' }}>

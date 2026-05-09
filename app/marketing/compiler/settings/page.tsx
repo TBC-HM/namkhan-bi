@@ -4,9 +4,9 @@
 // move these to a `compiler.settings` jsonb row so they're editable.
 
 import Link from 'next/link';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { MARKETING_SUBPAGES } from '../../_subpages';
 import StatusPill from '@/components/ui/StatusPill';
-import DataTable from '@/components/ui/DataTable';
 import { fmtKpi } from '@/lib/format';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { DEFAULT_RATE_PLAN_ID, listNrfRatePlans } from '@/lib/compiler/roomPricing';
@@ -53,36 +53,38 @@ export default async function CompilerSettingsPage() {
   ];
 
   return (
-    <>
-      <PageHeader
-        pillar="Marketing"
-        tab="Compiler · Settings"
-        title={<>Compiler <em style={{ color: 'var(--brass)' }}>settings</em></>}
-        lede="What the variant builder uses by default. v1 read-only — env vars editable in Vercel, code-default settings move to an editable `compiler.settings` table in v1.1."
-      />
+    <Page eyebrow="Marketing · Compiler · Settings" title={<>Compiler <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>settings</em></>} subPages={MARKETING_SUBPAGES}>
 
       <div style={{ marginTop: 16, marginBottom: 8 }} className="t-eyebrow">Configuration</div>
 
-      <DataTable<SettingRow>
-        rowKey={r => r.key}
-        rows={rows}
-        columns={[
-          { key: 'key', header: 'Key', align: 'left', render: r => <strong>{r.key}</strong>, sortValue: r => r.key },
-          { key: 'value', header: 'Value', align: 'left', render: r => r.value, sortValue: r => r.value },
-          { key: 'source', header: 'Source', align: 'left', render: r => (
-            <span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>{r.source}</span>
-          ) },
-          { key: 'editable', header: 'Editable', align: 'center', width: '110px', render: r => (
-            r.editable === 'live' ? <StatusPill tone="active">live</StatusPill>
-            : r.editable === 'env' ? <StatusPill tone="info">env var</StatusPill>
-            : <StatusPill tone="pending">v1.1</StatusPill>
-          ) },
-        ]}
-      />
+      <table className="tbl" style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            <th style={{ textAlign: 'left', padding: '8px 12px', borderBottom: '1px solid var(--paper-deep)' }}>Key</th>
+            <th style={{ textAlign: 'left', padding: '8px 12px', borderBottom: '1px solid var(--paper-deep)' }}>Value</th>
+            <th style={{ textAlign: 'left', padding: '8px 12px', borderBottom: '1px solid var(--paper-deep)' }}>Source</th>
+            <th style={{ textAlign: 'center', padding: '8px 12px', borderBottom: '1px solid var(--paper-deep)', width: 110 }}>Editable</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(r => (
+            <tr key={r.key}>
+              <td style={{ padding: '6px 12px', borderBottom: '1px solid var(--paper-warm)' }}><strong>{r.key}</strong></td>
+              <td style={{ padding: '6px 12px', borderBottom: '1px solid var(--paper-warm)' }}>{r.value}</td>
+              <td style={{ padding: '6px 12px', borderBottom: '1px solid var(--paper-warm)', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>{r.source}</td>
+              <td style={{ padding: '6px 12px', borderBottom: '1px solid var(--paper-warm)', textAlign: 'center' }}>
+                {r.editable === 'live' ? <StatusPill tone="active">live</StatusPill>
+                  : r.editable === 'env' ? <StatusPill tone="info">env var</StatusPill>
+                  : <StatusPill tone="pending">v1.1</StatusPill>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
 
       <div style={{ marginTop: 18, fontSize: 'var(--t-xs)', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>
         <Link href="/marketing/compiler" style={{ color: 'var(--brass)' }}>← BACK TO COMPILER</Link>
       </div>
-    </>
+    </Page>
   );
 }

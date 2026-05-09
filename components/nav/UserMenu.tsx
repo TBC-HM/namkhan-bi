@@ -63,9 +63,6 @@ export default function UserMenu({ user }: { user: CurrentUser }) {
             <span className="user-dropdown-icon">⇄</span>Switch property
             <span className="user-dropdown-coming">single property</span>
           </button>
-          <Link href="/knowledge" className="user-dropdown-item" role="menuitem" onClick={() => setOpen(false)}>
-            <span className="user-dropdown-icon">?</span>Help & docs
-          </Link>
           <div className="user-dropdown-divider" />
           <a href="/api/logout" className="user-dropdown-item logout" role="menuitem">
             <span className="user-dropdown-icon">↩</span>Sign out

@@ -91,13 +91,26 @@ function RateTrendChart({ calendar }: { calendar: CalendarRow[] }) {
     <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', height: 140 }}>
       <text x={4} y={20} style={{ fontFamily: 'var(--mono)', fontSize: 9, fill: 'var(--ink-mute)' }}>${max.toFixed(0)}</text>
       <text x={4} y={h - 8} style={{ fontFamily: 'var(--mono)', fontSize: 9, fill: 'var(--ink-mute)' }}>${min.toFixed(0)}</text>
-      <path d={path('median_usd')} fill="none" stroke="var(--ink-mute)" strokeWidth={1.5} strokeDasharray="4 3" />
-      <path d={path('namkhan_usd')} fill="none" stroke="var(--moss)" strokeWidth={2} />
-      {rows.map((r, i) =>
-        r.namkhan_usd != null ? (
-          <circle key={i} cx={xAt(i)} cy={yAt(Number(r.namkhan_usd))} r={2.5} fill="var(--moss)" />
-        ) : null,
-      )}
+      <path d={path('median_usd')} fill="none" stroke="var(--ink-mute)" strokeWidth={1.5} strokeDasharray="4 3">
+        <title>{`Comp median series · ${rows.length} stay-dates · v_compset_calendar`}</title>
+      </path>
+      <path d={path('namkhan_usd')} fill="none" stroke="var(--moss)" strokeWidth={2}>
+        <title>{`Namkhan rate series · ${rows.length} stay-dates · v_compset_calendar`}</title>
+      </path>
+      {rows.map((r, i) => (
+        <g key={i}>
+          {r.namkhan_usd != null ? (
+            <circle cx={xAt(i)} cy={yAt(Number(r.namkhan_usd))} r={2.5} fill="var(--moss)">
+              <title>{`${r.stay_date} · Namkhan $${Number(r.namkhan_usd).toFixed(0)}${r.median_usd != null ? ` · comp median $${Number(r.median_usd).toFixed(0)}` : ''} · v_compset_calendar`}</title>
+            </circle>
+          ) : null}
+          {r.median_usd != null ? (
+            <circle cx={xAt(i)} cy={yAt(Number(r.median_usd))} r={3} fill="var(--ink-mute)" opacity={0}>
+              <title>{`${r.stay_date} · comp median $${Number(r.median_usd).toFixed(0)}${r.namkhan_usd != null ? ` · Namkhan $${Number(r.namkhan_usd).toFixed(0)}` : ''} · v_compset_calendar`}</title>
+            </circle>
+          ) : null}
+        </g>
+      ))}
       <text x={pad} y={h - 2} style={{ fontFamily: 'var(--mono)', fontSize: 8, fill: 'var(--ink-faint)' }}>{rows[0].stay_date}</text>
       <text x={w - 60} y={h - 2} style={{ fontFamily: 'var(--mono)', fontSize: 8, fill: 'var(--ink-faint)' }}>{rows[rows.length - 1].stay_date}</text>
       <g transform={`translate(${pad}, ${h - 22})`} style={{ fontFamily: 'var(--mono)', fontSize: 8 }}>
@@ -136,8 +149,12 @@ function DowChart({ dow }: { dow: DowRow[] }) {
         const dowLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
         return (
           <g key={i}>
-            <rect x={x} y={baseY - nh} width={barW} height={nh} fill="var(--moss)" />
-            <rect x={x + barW + 2} y={baseY - mh} width={barW} height={mh} fill="var(--ink-mute)" opacity={0.6} />
+            <rect x={x} y={baseY - nh} width={barW} height={nh} fill="var(--moss)">
+              <title>{`${dowLabels[i]} · Namkhan avg $${Math.round(n)}${m > 0 ? ` · comp median $${Math.round(m)}` : ''} · v_compset_dow`}</title>
+            </rect>
+            <rect x={x + barW + 2} y={baseY - mh} width={barW} height={mh} fill="var(--ink-mute)" opacity={0.6}>
+              <title>{`${dowLabels[i]} · comp median $${Math.round(m)}${n > 0 ? ` · Namkhan $${Math.round(n)}` : ''} · v_compset_dow`}</title>
+            </rect>
             <text x={x + groupW / 2 - 2} y={h - 4} textAnchor="middle" style={{ fontFamily: 'var(--mono)', fontSize: 8, fill: 'var(--ink-mute)' }}>{dowLabels[i]}</text>
             {n > 0 && <text x={x + barW / 2} y={baseY - nh - 2} textAnchor="middle" style={{ fontFamily: 'var(--mono)', fontSize: 7, fill: 'var(--ink)' }}>${Math.round(n)}</text>}
           </g>
@@ -172,7 +189,9 @@ function PromoIntensityChart({ tiles }: { tiles: PromoTileRow[] }) {
               fontWeight: r.is_self ? 600 : 400,
             }}>{name.slice(0, 22)}</text>
             <rect x={labelW} y={y + 2} width={barMaxW} height={9} fill="var(--paper-deep)" />
-            <rect x={labelW} y={y + 2} width={barW} height={9} fill={fill} />
+            <rect x={labelW} y={y + 2} width={barW} height={9} fill={fill}>
+              <title>{`${name} · promo on ${pct.toFixed(0)}% of plans${r.is_self ? ' · Namkhan' : ''} · v_compset_promo_tiles`}</title>
+            </rect>
             <text x={labelW + barMaxW + 4} y={y + 9} style={{ fontFamily: 'var(--mono)', fontSize: 9, fill: 'var(--ink)' }}>{pct.toFixed(0)}%</text>
           </g>
         );

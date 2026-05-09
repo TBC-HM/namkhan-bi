@@ -106,7 +106,12 @@ function TrendChart({ trend }: { trend: TrendPoint[] }) {
               if (layer.n === 0) return null;
               const segH = (layer.n / maxV) * innerH;
               y -= segH;
-              return <rect key={li} x={x} y={y} width={barW} height={segH} fill={layer.fill} />;
+              const sevName = ['critical', 'high', 'medium', 'low'][li];
+              return (
+                <rect key={li} x={x} y={y} width={barW} height={segH} fill={layer.fill}>
+                  <title>{`${d.day} · ${sevName} ${layer.n} · total ${d.total} breaches · v_parity_breach_trend`}</title>
+                </rect>
+              );
             })}
             {i % 3 === 0 && (
               <text x={x + barW / 2} y={h - 4} textAnchor="middle"
@@ -164,7 +169,9 @@ function SeverityChart({ breaches }: { breaches: BreachLite[] }) {
         const bh = (n / max) * innerH;
         return (
           <g key={o.key}>
-            <rect x={x} y={baseY - bh} width={barW} height={bh} fill={o.fill} opacity={n > 0 ? 1 : 0.3} />
+            <rect x={x} y={baseY - bh} width={barW} height={bh} fill={o.fill} opacity={n > 0 ? 1 : 0.3}>
+              <title>{`${o.label} · ${n} open breach${n === 1 ? '' : 'es'} · v_parity_breaches`}</title>
+            </rect>
             <text x={x + barW / 2} y={baseY - bh - 3} textAnchor="middle"
               style={{ fontFamily: 'var(--mono)', fontSize: 9, fill: 'var(--ink)', fontWeight: 600 }}>
               {n}
@@ -206,7 +213,9 @@ function UndercutChart({ matrix }: { matrix: MatrixLite[] }) {
         const fill = n === 0 ? 'var(--moss)' : n / Math.max(1, total) > 0.5 ? 'var(--st-bad)' : 'var(--brass)';
         return (
           <g key={r.stay_date}>
-            <rect x={x} y={baseY - bh} width={barW} height={bh} fill={fill} />
+            <rect x={x} y={baseY - bh} width={barW} height={bh} fill={fill}>
+              <title>{`${r.stay_date} · ${n} of ${total} comps undercutting · v_parity_matrix`}</title>
+            </rect>
             {i % 4 === 0 && (
               <text x={x + barW / 2} y={h - 4} textAnchor="middle"
                 style={{ fontFamily: 'var(--mono)', fontSize: 7, fill: 'var(--ink-mute)' }}>

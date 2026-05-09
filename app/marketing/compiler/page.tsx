@@ -3,7 +3,8 @@
 //
 // Layout: prompt → action row (Settings · Pricelist · Live retreats) → recent runs.
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { MARKETING_SUBPAGES } from '../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import InlinePromptBar from './_components/InlinePromptBar';
 import CompilerActionRow from './_components/CompilerActionRow';
@@ -22,12 +23,12 @@ const TEMPLATES = [
 async function loadAll() {
   const admin = getSupabaseAdmin();
   const [recent, pricelist, retreats] = await Promise.all([
-    admin.schema('compiler').from('runs')
-      .select('id, prompt, status, cost_eur, created_at, variants(count)')
+    admin.from('v_compiler_runs')
+      .select('id, prompt, status, cost_eur, created_at')
       .order('created_at', { ascending: false })
       .limit(20),
     admin.schema('pricing').from('pricelist').select('*', { head: true, count: 'exact' }).eq('is_active', true),
-    admin.schema('web').from('retreats').select('*', { head: true, count: 'exact' }).eq('status', 'published'),
+    admin.from('v_retreats').select('*', { head: true, count: 'exact' }).eq('status', 'published'),
   ]);
   return {
     recent: (recent.data ?? []) as RunRow[],
@@ -42,13 +43,7 @@ export default async function CompilerHomePage() {
   try { data = await loadAll(); } catch (e: any) { dbErr = e?.message ?? String(e); }
 
   return (
-    <>
-      <PageHeader
-        pillar="Marketing"
-        tab="Compiler"
-        title={<>Retreat <em style={{ color: 'var(--brass)' }}>compiler</em></>}
-        lede="One prompt → priced variants → public funnel + checkout. Rates pulled live from Cloudbeds."
-      />
+    <Page eyebrow="Marketing · Compiler" title={<>Retreat <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>compiler</em></>} subPages={MARKETING_SUBPAGES}>
 
       <InlinePromptBar presets={TEMPLATES} />
 
@@ -97,6 +92,6 @@ export default async function CompilerHomePage() {
       </div>
 
       <RecentRunsTable rows={data?.recent ?? []} />
-    </>
+    </Page>
   );
 }

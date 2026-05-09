@@ -1,5 +1,8 @@
 // app/r/[slug]/page.tsx
-// Public retreat detail page — SSR, anonymous read of web.retreats + compiler.variants.
+// Public retreat detail page — SSR. Reads via public.v_retreats and
+// public.v_compiler_variants proxy views (PostgREST doesn't surface the
+// `web` / `compiler` schemas via .schema('web') for some sessions; the
+// proxy views in `public` are the safe path).
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -7,23 +10,21 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { fmtIsoDate, fmtKpi } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 300;
+export const revalidate = 0;
 
 interface Day { day: number; title: string; am: string[]; pm: string[]; eve: string[]; skus: string[]; }
 
 export default async function RetreatDetailPage({ params }: { params: { slug: string } }) {
   const admin = getSupabaseAdmin();
   const { data: retreat } = await admin
-    .schema('web')
-    .from('retreats')
+    .from('v_retreats')
     .select('*')
     .eq('slug', params.slug)
     .maybeSingle();
   if (!retreat) notFound();
 
   const { data: variant } = await admin
-    .schema('compiler')
-    .from('variants')
+    .from('v_compiler_variants')
     .select('*')
     .eq('id', retreat.variant_id)
     .maybeSingle();

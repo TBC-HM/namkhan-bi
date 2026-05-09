@@ -94,7 +94,7 @@ function AvailChart({ rows }: { rows: DayRow[] }) {
             height={bh}
             fill={fill}
           >
-            <title>{`${r.date} · ${r.total_avail} avail`}</title>
+            <title>{`${r.date} · ${r.total_avail} avail · BAR ${r.min_rate !== Infinity ? `$${Math.round(r.min_rate)}` : '—'}–${r.max_rate !== -Infinity ? `$${Math.round(r.max_rate)}` : '—'} · v_inventory_daily`}</title>
           </rect>
         );
       })}
@@ -128,8 +128,22 @@ function SpreadChart({ rows }: { rows: DayRow[] }) {
     <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', height: 160 }}>
       <text x={4} y={padT + 6} style={axisTxt}>${Math.round(max)}</text>
       <text x={4} y={padT + innerH} style={axisTxt}>${Math.round(min)}</text>
-      <path d={maxPath} fill="none" stroke="var(--brass)" strokeWidth={1.5} />
-      <path d={minPath} fill="none" stroke="var(--moss)" strokeWidth={1.5} />
+      <path d={maxPath} fill="none" stroke="var(--brass)" strokeWidth={1.5}>
+        <title>{`Max BAR series · ${data.length} nights · range $${Math.round(min)}–$${Math.round(max)} · v_inventory_daily`}</title>
+      </path>
+      <path d={minPath} fill="none" stroke="var(--moss)" strokeWidth={1.5}>
+        <title>{`Min BAR series · ${data.length} nights · range $${Math.round(min)}–$${Math.round(max)} · v_inventory_daily`}</title>
+      </path>
+      {data.map((r, i) => (
+        <g key={`spread-${r.date}`}>
+          <circle cx={xAt(i)} cy={yAt(r.min_rate)} r={5} fill="var(--moss)" opacity={0}>
+            <title>{`${r.date} · min BAR $${Math.round(r.min_rate)} · max $${Math.round(r.max_rate)} · v_inventory_daily`}</title>
+          </circle>
+          <circle cx={xAt(i)} cy={yAt(r.max_rate)} r={5} fill="var(--brass)" opacity={0}>
+            <title>{`${r.date} · max BAR $${Math.round(r.max_rate)} · min $${Math.round(r.min_rate)} · v_inventory_daily`}</title>
+          </circle>
+        </g>
+      ))}
       <g transform={`translate(${padL}, ${padT - 2})`} style={{ fontFamily: 'var(--mono)', fontSize: 8 }}>
         <rect x={0} y={-6} width={9} height={2} fill="var(--moss)" />
         <text x={12} y={-2} style={{ fill: 'var(--ink)' }}>Min BAR</text>
@@ -168,7 +182,9 @@ function TightnessChart({ rows }: { rows: DayRow[] }) {
         return (
           <g key={b.label}>
             <rect x={padL} y={y} width={barMaxW} height={barH} fill="var(--paper-deep)" />
-            <rect x={padL} y={y} width={wPx} height={barH} fill={b.color} />
+            <rect x={padL} y={y} width={wPx} height={barH} fill={b.color}>
+              <title>{`${b.label} · ${b.count} of ${total} nights · ${((b.count / total) * 100).toFixed(0)}% · v_inventory_daily`}</title>
+            </rect>
             <text x={padL + 6} y={y + barH / 2 + 4} style={{ fontFamily: 'var(--mono)', fontSize: 10, fill: 'var(--paper-warm)', fontWeight: 600 }}>
               {b.label}
             </text>

@@ -1,5 +1,6 @@
 // app/finance/budget/page.tsx — REDESIGN 2026-05-05 (recovery)
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { FINANCE_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { supabaseGl } from '@/lib/supabase-gl';
@@ -55,10 +56,11 @@ export default async function BudgetPage() {
   const lastUpload = allRows.map((r) => r.uploaded_at).filter((d): d is string => !!d).sort().reverse()[0] ?? null;
 
   return (
-    <>
-      <PageHeader pillar="Finance" tab="Budget"
-        title={<>The number you <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>committed to</em> — every USALI line, every month.</>}
-        lede={`USALI annual budget · ${totalRows} rows loaded · ${monthsCovered}/12 months · ${subcatsCovered}/${SUBCAT_ORDER.length} subcategories`} />
+    <Page
+      eyebrow="Finance · Budget"
+      title={<>The number you <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>committed to</em> — every USALI line, every month.</>}
+      subPages={FINANCE_SUBPAGES}
+    >
       <FinanceStatusHeader
         top={<>
           <StatusCell label="SOURCE"><StatusPill tone="active">plan.lines · v_budget_lines</StatusPill><span style={metaDim}>· "Budget 2026 v1"</span></StatusCell>
@@ -74,10 +76,10 @@ export default async function BudgetPage() {
         </>}
       />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
-        <KpiBox value={totalRows} unit="count" label="Budget rows" />
-        <KpiBox value={grand} unit="usd" label="Annual total" state={grand > 0 ? 'live' : 'data-needed'} needs={grand === 0 ? 'awaiting upload' : undefined} />
-        <KpiBox value={null} unit="text" valueText={`${monthsCovered}/12`} label="Months covered" />
-        <KpiBox value={null} unit="text" valueText={`${subcatsCovered}/${SUBCAT_ORDER.length}`} label="Subcats covered" />
+        <KpiBox value={totalRows} unit="count" label="Budget rows"   tooltip="Distinct (subcategory × month) rows in plan.lines for the active budget year." />
+        <KpiBox value={grand} unit="usd" label="Annual total"        state={grand > 0 ? 'live' : 'data-needed'} needs={grand === 0 ? 'awaiting upload' : undefined} tooltip="Sum of budget across every subcategory + month in the active year." />
+        <KpiBox value={null} unit="text" valueText={`${monthsCovered}/12`} label="Months covered" tooltip="Distinct months that have at least one budget row populated for the active year." />
+        <KpiBox value={null} unit="text" valueText={`${subcatsCovered}/${SUBCAT_ORDER.length}`} label="Subcats covered" tooltip="Distinct USALI subcategories with at least one budget row this year." />
       </div>
       <BudgetUpload lastUploadAt={lastUpload} />
       <div style={{ marginTop: 18 }}>
@@ -111,7 +113,7 @@ export default async function BudgetPage() {
           </table>
         </div>
       </div>
-    </>
+    </Page>
   );
 }
 

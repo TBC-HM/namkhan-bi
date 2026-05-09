@@ -42,7 +42,10 @@ export type DeptCockpitProps = {
 };
 
 export default function DeptCockpit(props: DeptCockpitProps) {
-  const [tab, setTab] = useState<"team" | "dashboard" | "chat" | "tickets">("team");
+  // PBS 2026-05-09 (repair list): dashboard tab/link hidden everywhere —
+  // "the dashboard in the menu in sales we don't need". Page still
+  // reachable via direct URL (e.g. /sales/dashboard) for any external link.
+  const [tab, setTab] = useState<"team" | "chat" | "tickets">("team");
   const [agents, setAgents] = useState<Agent[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [chatInput, setChatInput] = useState("");
@@ -99,7 +102,6 @@ export default function DeptCockpit(props: DeptCockpitProps) {
         </div>
         <div style={S.topbarRight}>
           <a href="/cockpit" style={S.topBtn}>cockpit</a>
-          <a href={props.dashboard_href} style={S.topBtn}>dashboard ↗</a>
         </div>
       </div>
 
@@ -111,8 +113,8 @@ export default function DeptCockpit(props: DeptCockpitProps) {
       </div>
 
       <div style={S.tabs}>
-        {(["team", "dashboard", "chat", "tickets"] as const).map((t) => (
-          <button key={t} onClick={() => t === "dashboard" ? (window.location.href = props.dashboard_href) : setTab(t)}
+        {(["team", "chat", "tickets"] as const).map((t) => (
+          <button key={t} onClick={() => setTab(t)}
                   style={{ ...S.tab, ...(tab === t ? S.tabActive : {}) }}>
             {t}
           </button>

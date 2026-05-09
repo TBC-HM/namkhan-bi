@@ -2,7 +2,8 @@
 // Guest · Journey — lifecycle funnel. Sources: reservations + guest.journey_events.
 // Every count wired. No invented data.
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { GUEST_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
@@ -24,10 +25,12 @@ export default async function JourneyPage({ searchParams }: Props) {
   const days = Number((searchParams.days as string) || 180);
   const since = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
 
-  // Reservation funnel — every stage wired off public.reservations
+  // Reservation funnel — every stage wired off public.reservations.
+  // (Note: public.reservations has no guest_phone column. Phone-coverage
+  // signals come from guest.mv_guest_profile via the messy-data page.)
   const { data: resRows } = await supabase
     .from('reservations')
-    .select('reservation_id, status, check_in_date, check_out_date, booking_date, guest_email, guest_phone, source_name, total_amount')
+    .select('reservation_id, status, check_in_date, check_out_date, booking_date, guest_email, source_name, total_amount')
     .eq('property_id', PROPERTY_ID)
     .gte('check_in_date', since);
 
@@ -41,9 +44,10 @@ export default async function JourneyPage({ searchParams }: Props) {
   const canceled = all.filter((r: any) => r.status === 'canceled').length;
   const noShow = all.filter((r: any) => r.status === 'no_show').length;
 
-  // Comm coverage — what fraction of reservations have an email/phone on file.
+  // Comm coverage — fraction of reservations with email on file.
+  // (guest_phone lives on guest.mv_guest_profile, not public.reservations.)
   const withEmail = all.filter((r: any) => !!r.guest_email).length;
-  const withPhone = all.filter((r: any) => !!r.guest_phone).length;
+  const withPhone = 0;
 
   // Lead time distribution (booking_date → check_in_date)
   const leads = all
@@ -98,19 +102,11 @@ export default async function JourneyPage({ searchParams }: Props) {
   const cancelRate = isReservation ? (canceled / isReservation) * 100 : 0;
 
   return (
-    <>
-      <PageHeader
-        pillar="Guest"
-        tab="Journey"
-        title={
-          <>
-            From{' '}
-            <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>inquiry</em>{' '}
-            to repeat — every touchpoint, every drop.
-          </>
-        }
-        lede={`Last ${days} days · ${isReservation} reservations · ${arrived} arrived · ${cancelRate.toFixed(0)}% cancel rate · ${events.length} comm events logged`}
-      />
+    <Page
+      eyebrow="Guest · Journey"
+      title={<>From <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>inquiry</em> to repeat — every touchpoint, every drop.</>}
+      subPages={GUEST_SUBPAGES}
+    >
 
       <GuestStatusHeader
         top={
@@ -171,12 +167,12 @@ export default async function JourneyPage({ searchParams }: Props) {
           marginTop: 14,
         }}
       >
-        <KpiBox value={isReservation} unit="count" label="Reservations" />
-        <KpiBox value={confirmRate} unit="pct" label="Confirm rate" tooltip="confirmed ÷ all" />
-        <KpiBox value={arriveRate} unit="pct" label="Arrive rate" tooltip="arrived ÷ confirmed" />
-        <KpiBox value={cancelRate} unit="pct" label="Cancel rate" />
-        <KpiBox value={med ?? null} unit="d" label="Median lead" />
-        <KpiBox value={noShow} unit="count" label="No-shows" />
+        <KpiBox value={isReservation} unit="count" label="Reservations" tooltip="Total reservations created in window. Source: public.reservations." />
+        <KpiBox value={confirmRate} unit="pct" label="Confirm rate"   tooltip="Confirmed ÷ all reservations × 100." />
+        <KpiBox value={arriveRate}  unit="pct" label="Arrive rate"    tooltip="Arrived ÷ confirmed × 100. Cancellations + no-shows reduce this." />
+        <KpiBox value={cancelRate}  unit="pct" label="Cancel rate"    tooltip="Cancelled ÷ all reservations × 100. Watch ≤ 10%." />
+        <KpiBox value={med ?? null} unit="d"   label="Median lead"    tooltip="Median days from booking to arrival. Drives pacing strategy." />
+        <KpiBox value={noShow}      unit="count" label="No-shows"     tooltip="Reservations marked no-show in window. Should remain near 0." />
       </div>
 
       {/* STAGE TABLE — wired from journey_events */}
@@ -214,7 +210,7 @@ export default async function JourneyPage({ searchParams }: Props) {
           </div>
         )}
       </div>
-    </>
+    </Page>
   );
 }
 
@@ -239,7 +235,7 @@ function FunnelChart({ rows, max }: { rows: { label: string; n: number }[]; max:
               </text>
               <rect x={labelW} y={y + 6} width={barMaxW} height={20} fill="var(--paper-deep)" />
               <rect x={labelW} y={y + 6} width={barW} height={20} fill="var(--moss)">
-                <title>{`${r.label} · ${r.n}${dropPct != null ? ` · ${dropPct.toFixed(0)}% of prior stage` : ''}`}</title>
+                <title>{`${r.label} · ${r.n.toLocaleString()} reservations${dropPct != null ? ` · ${dropPct.toFixed(1)}% of prior stage` : ''} · public.reservations`}</title>
               </rect>
               <text x={labelW + barMaxW + 4} y={y + 18} style={{ fontFamily: 'var(--mono)', fontSize: 10, fill: 'var(--ink-soft)', fontWeight: 600 }}>
                 {r.n}
@@ -289,7 +285,7 @@ function LeadTimeChart({ buckets, med, avg }: { buckets: { label: string; n: num
           return (
             <g key={b.label}>
               <rect x={x} y={y} width={barW} height={bh} fill={fill}>
-                <title>{`${b.label} · ${b.n} · ${total > 0 ? ((b.n / total) * 100).toFixed(0) : 0}%`}</title>
+                <title>{`Lead time ${b.label} · ${b.n.toLocaleString()} reservations · ${total > 0 ? ((b.n / total) * 100).toFixed(1) : '0.0'}% of ${total.toLocaleString()} · public.reservations`}</title>
               </rect>
               {b.n > 0 && (
                 <text x={x + barW / 2} y={y - 3} textAnchor="middle" style={{ fontFamily: 'var(--mono)', fontSize: 9, fill: 'var(--ink)' }}>
@@ -342,7 +338,7 @@ function CommCoverageChart({ withEmail, withPhone, total }: { withEmail: number;
               </text>
               <rect x={padL} y={y} width={barMaxW} height={barH} fill="var(--paper-deep)" />
               <rect x={padL} y={y} width={wPx} height={barH} fill={row.color}>
-                <title>{`${row.label} · ${row.n} of ${total} · ${row.pct.toFixed(0)}%`}</title>
+                <title>{`${row.label} contact · ${row.n.toLocaleString()} of ${total.toLocaleString()} reservations · ${row.pct.toFixed(1)}% · public.reservations`}</title>
               </rect>
               <text x={w - padR + 4} y={y + barH / 2 + 4} style={{ fontFamily: 'var(--mono)', fontSize: 11, fill: 'var(--ink)', fontWeight: 600 }}>
                 {row.pct.toFixed(0)}%

@@ -1,9 +1,10 @@
 // app/finance/agents/page.tsx — REDESIGN 2026-05-05 (recovery)
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { supabase } from '@/lib/supabase';
 import AgentsTable, { type AgentRow } from '@/app/revenue/agents/_components/AgentsTableClient';
+import { FINANCE_SUBPAGES } from '../_subpages';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -53,25 +54,22 @@ export default async function FinanceAgentsPage() {
   const totalSpent = rows.reduce((s, r) => s + (r.month_to_date_cost_usd ?? 0), 0);
 
   return (
-    <>
-      <PageHeader pillar="Finance" tab="Agents"
-        title={<>Finance <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>watchers</em> — variance, AR/AP, cash, close.</>}
-        lede={`${total} registered · ${active} active · MTD $${Math.round(totalSpent).toLocaleString()} of $${Math.round(totalBudget).toLocaleString()}`} />
+    <Page eyebrow="Finance · Agents" title={<>Finance <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>watchers</em> — variance, AR/AP, cash, close.</>} subPages={FINANCE_SUBPAGES}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'center', padding: '10px 16px', background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, marginTop: 14 }}>
         <span className="t-eyebrow">SOURCE</span>
         <StatusPill tone="active">governance.agents</StatusPill>
         <span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>· pillar=finance · {active} active · {failed} failed runs</span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
-        <KpiBox value={total} unit="count" label="Agents registered" />
-        <KpiBox value={active} unit="count" label="Active" />
-        <KpiBox value={totalSpent} unit="usd" label="MTD spend" />
-        <KpiBox value={totalBudget} unit="usd" label="Monthly budget" />
+        <KpiBox value={total} unit="count" label="Agents registered" tooltip="Rows in governance.agents filtered to pillar=finance." />
+        <KpiBox value={active} unit="count" label="Active"             tooltip="Agents with status=active. Inactive ones don't run on schedule." />
+        <KpiBox value={totalSpent} unit="usd" label="MTD spend"         tooltip="Sum of run costs (Sonnet pricing) for finance agents this month." />
+        <KpiBox value={totalBudget} unit="usd" label="Monthly budget"   tooltip="Sum of monthly_budget_usd across registered finance agents. Spend > budget = warn." />
       </div>
       <div style={{ marginTop: 18 }}>
         <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-xl)', fontWeight: 500, marginBottom: 6 }}>Agents</div>
         <AgentsTable rows={rows} />
       </div>
-    </>
+    </Page>
   );
 }

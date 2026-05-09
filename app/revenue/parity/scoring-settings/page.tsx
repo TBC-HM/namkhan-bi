@@ -1,7 +1,8 @@
 // /revenue/parity/scoring-settings — read-only view of the parity rule thresholds.
 // Lives in governance.agents.runtime_settings on parity_agent.
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { REVENUE_SUBPAGES } from '../../_subpages';
 import { supabase } from '@/lib/supabase';
 
 export const revalidate = 60;
@@ -55,13 +56,7 @@ export default async function ParityScoringSettings() {
   ];
 
   return (
-    <>
-      <PageHeader
-        pillar="Revenue"
-        tab="Parity · Scoring"
-        title="Rule thresholds"
-        lede="What counts as a breach. Edit thresholds via SQL on governance.agents.runtime_settings until UI is built."
-      />
+    <Page eyebrow="Revenue · Parity · Scoring" title="Rule thresholds" subPages={REVENUE_SUBPAGES}>
       <div style={card}>
         <div style={cardHeader}>
           <div className="t-eyebrow">RULE THRESHOLDS</div>
@@ -95,7 +90,7 @@ export default async function ParityScoringSettings() {
           </tbody>
         </table>
       </div>
-    </>
+    </Page>
   );
 }
 

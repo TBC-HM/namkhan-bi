@@ -11,8 +11,7 @@ export const dynamic = 'force-dynamic';
 export default async function LeadPage({ params }: { params: { slug: string } }) {
   const admin = getSupabaseAdmin();
   const { data: retreat } = await admin
-    .schema('web')
-    .from('retreats')
+    .from('v_retreats')
     .select('slug, name, tagline, series_slug')
     .eq('slug', params.slug)
     .maybeSingle();

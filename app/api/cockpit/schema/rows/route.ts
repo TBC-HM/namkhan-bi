@@ -3,12 +3,22 @@
 // Read-only. Service role key required to read regardless of RLS.
 
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// PBS 2026-05-09: lazy-init the Supabase client so the build's "collect
+// page data" step doesn't crash when env vars aren't available at build
+// time (CI doesn't pass NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY).
+export const dynamic = "force-dynamic";
+
+let _client: SupabaseClient | null = null;
+function supa(): SupabaseClient {
+  if (_client) return _client;
+  _client = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL || "https://build-placeholder.supabase.co",
+    process.env.SUPABASE_SERVICE_ROLE_KEY || "build-placeholder-key",
+  );
+  return _client;
+}
 
 const ALLOWED_TABLES = new Set([
   "cockpit_tickets",
@@ -40,7 +50,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "table not allowed" }, { status: 403 });
   }
 
-  const { data, error } = await supabase.from(tableName).select("*").limit(limit);
+  const { data, error } = await supa().from(tableName).select("*").limit(limit);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // Infer columns from the first row (good enough for read-only display)

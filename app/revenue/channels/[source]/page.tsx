@@ -7,7 +7,8 @@
 // content score, photo audit — PBS will populate from Booking.com download.
 
 import Link from 'next/link';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { REVENUE_SUBPAGES } from '../../_subpages';
 import { resolvePeriod } from '@/lib/period';
 import {
   getChannelEconomicsForRange,
@@ -25,6 +26,7 @@ import BdcHeroStrip from '@/components/channels/BdcHeroStrip';
 import BdcKpiStrip from '@/components/channels/BdcKpiStrip';
 import BdcProfileTab from '@/components/channels/BdcProfileTab';
 import ChannelContactCard from '@/components/channels/ChannelContactCard';
+import { MaybeOtaBadge } from '@/components/ota/OtaBadge';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -81,38 +83,24 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
     const bdcTab = String(searchParams.bdc_tab ?? 'now').toLowerCase();
     const tabBaseHref = `/revenue/channels/${encodeURIComponent(sourceName)}`;
     return (
-      <>
-        <PageHeader
-          pillar="Revenue"
-          tab="Channels"
-          title={<>{sourceName}</>}
-          lede={
-            <>
-              OTA · commission <strong>18%</strong> · 12-month rolling window from BDC reservations
-              {' · '}<Link href="/revenue/channels" style={{ color: 'var(--brass)' }}>← All channels</Link>
-            </>
-          }
-          rightSlot={
-            <Link
-              href="/settings/channel-contacts"
-              style={{
-                padding: '8px 14px',
-                fontFamily: 'var(--mono)',
-                fontSize: 'var(--t-xs)',
-                textTransform: 'uppercase',
-                letterSpacing: 'var(--ls-extra)',
-                color: 'var(--paper-warm)',
-                background: 'var(--moss)',
-                border: 'none',
-                borderRadius: 4,
-                textDecoration: 'none',
-                display: 'inline-block',
-              }}
-            >
-              ⚙ Channel settings
-            </Link>
-          }
-        />
+      <Page
+        eyebrow={`Revenue · Channels · ${sourceName}`}
+        title={<MaybeOtaBadge name={sourceName} />}
+        subPages={REVENUE_SUBPAGES}
+        topRight={<Link href="/settings/channel-contacts" style={{
+          padding: '8px 14px',
+          fontFamily: 'var(--mono)',
+          fontSize: 'var(--t-xs)',
+          textTransform: 'uppercase',
+          letterSpacing: 'var(--ls-extra)',
+          color: 'var(--paper-warm)',
+          background: 'var(--moss)',
+          border: 'none',
+          borderRadius: 4,
+          textDecoration: 'none',
+          display: 'inline-block',
+        }}>⚙ Channel settings</Link>}
+      >
 
         <div style={{ display: 'flex', gap: 0, marginTop: 12, marginBottom: 14, borderBottom: '1px solid var(--paper-deep)' }}>
           {[
@@ -160,40 +148,32 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
         {bdcTab === 'profile' && <BdcProfileTab otaSource="Booking.com" />}
         {bdcTab === 'trend' && <BdcTrends />}
         {bdcTab === 'signals' && <BdcSignals />}
-      </>
+      </Page>
     );
   }
 
   if (!meta) {
     return (
-      <>
-        <PageHeader
-          pillar="Revenue"
-          tab="Channels"
-          title={<>{sourceName}</>}
-          lede={<>No bookings from this source in the active window. <Link href="/revenue/channels" style={{ color: 'var(--brass)' }}>← Back to all channels</Link></>}
-          rightSlot={
-            <Link
-              href="/settings/channel-contacts"
-              style={{
-                padding: '8px 14px',
-                fontFamily: 'var(--mono)',
-                fontSize: 'var(--t-xs)',
-                textTransform: 'uppercase',
-                letterSpacing: 'var(--ls-extra)',
-                color: 'var(--paper-warm)',
-                background: 'var(--moss)',
-                border: 'none',
-                borderRadius: 4,
-                textDecoration: 'none',
-                display: 'inline-block',
-              }}
-            >
-              ⚙ Channel settings
-            </Link>
-          }
-        />
-      </>
+      <Page
+        eyebrow={`Revenue · Channels · ${sourceName}`}
+        title={<MaybeOtaBadge name={sourceName} />}
+        subPages={REVENUE_SUBPAGES}
+        topRight={<Link href="/settings/channel-contacts" style={{
+          padding: '8px 14px',
+          fontFamily: 'var(--mono)',
+          fontSize: 'var(--t-xs)',
+          textTransform: 'uppercase',
+          letterSpacing: 'var(--ls-extra)',
+          color: 'var(--paper-warm)',
+          background: 'var(--moss)',
+          border: 'none',
+          borderRadius: 4,
+          textDecoration: 'none',
+          display: 'inline-block',
+        }}>⚙ Channel settings</Link>}
+      >
+        <div style={{ padding: 24, color: 'var(--ink-mute)' }}>No bookings from this source in the active window.</div>
+      </Page>
     );
   }
 
@@ -213,38 +193,24 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
   }
 
   return (
-    <>
-      <PageHeader
-        pillar="Revenue"
-        tab="Channels"
-        title={<>{sourceName}</>}
-        lede={
-          <>
-            {cat} · commission <strong>{Number(meta.commission_pct).toFixed(0)}%</strong> · {period.label} · {period.rangeLabel}
-            {' · '}<Link href="/revenue/channels" style={{ color: 'var(--brass)' }}>← All channels</Link>
-          </>
-        }
-        rightSlot={
-          <Link
-            href="/settings/channel-contacts"
-            style={{
-              padding: '8px 14px',
-              fontFamily: 'var(--mono)',
-              fontSize: 'var(--t-xs)',
-              textTransform: 'uppercase',
-              letterSpacing: 'var(--ls-extra)',
-              color: 'var(--paper-warm)',
-              background: 'var(--moss)',
-              border: 'none',
-              borderRadius: 4,
-              textDecoration: 'none',
-              display: 'inline-block',
-            }}
-          >
-            ⚙ Channel settings
-          </Link>
-        }
-      />
+    <Page
+      eyebrow={`Revenue · Channels · ${sourceName}`}
+      title={<>{sourceName}</>}
+      subPages={REVENUE_SUBPAGES}
+      topRight={<Link href="/settings/channel-contacts" style={{
+        padding: '8px 14px',
+        fontFamily: 'var(--mono)',
+        fontSize: 'var(--t-xs)',
+        textTransform: 'uppercase',
+        letterSpacing: 'var(--ls-extra)',
+        color: 'var(--paper-warm)',
+        background: 'var(--moss)',
+        border: 'none',
+        borderRadius: 4,
+        textDecoration: 'none',
+        display: 'inline-block',
+      }}>⚙ Channel settings</Link>}
+    >
 
       {/* HERO KPI strip — 8 tiles */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10, marginTop: 12, marginBottom: 14 }}>
@@ -361,7 +327,7 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
       <Section title="Decisions queued for this source" sub="Filtered by source_agent or scope_section · governance.decision_queue">
         <Empty>No decisions queued. An agent watching {sourceName} will populate this when it detects an actionable play.</Empty>
       </Section>
-    </>
+    </Page>
   );
 }
 

@@ -84,6 +84,25 @@ const ALLOWED_VIEWS = new Set([
   "v_kit_performance",
   // From v2 brief context — already created elsewhere, allowlist for explicit access
   "v_agent_capabilities",
+  // PBS 2026-05-09: Felix + HoDs need to read the bug box, ticket queue,
+  // proposals, and project-related state directly. The dept Bugs box on
+  // every dept-entry page writes here; without read access, the personas
+  // can't answer "what's open in my bug box". Also expose tickets/proposals
+  // so personas can reason about WIP without going to the cockpit page.
+  "cockpit_bugs",
+  "cockpit_proposals",
+  "cockpit_plans",
+  "cockpit_plan_steps",
+  "cockpit_skill_calls",
+  "cockpit_notifications",
+  "cockpit_pbs_notifications",
+  "cockpit_knowledge_base",
+  // PBS 2026-05-09: targeting frameworks landed today — let personas reference
+  // ICP / firmographics / scoring weights when discussing leads + outreach.
+  "frameworks",
+  "framework_items",
+  "scoring_model",
+  "lead_scraping_fields",
 ]);
 
 type ToolResult = {
@@ -1300,8 +1319,58 @@ async function github_open_pr(args: { branch: string; title: string; body?: stri
   return { ok: true, result: { number: pr.number, html_url: pr.html_url, branch: args.branch, base, auto_merge: autoMergeEnabled } };
 }
 
+// PBS 2026-05-09: create_task — chat-mode-safe write tool. Lets Felix +
+// every chat persona convert a conversation into a cockpit_tickets row
+// when PBS asks "make a task" / "create a task" / "turn this into a task".
+// Single write to a low-risk surface (no schema mutation, no deploys), so
+// it's safe to allow in chat mode even though we keep tools=[] for
+// everything else.
+async function create_task(args: {
+  title?: string;
+  body?: string;
+  dept_slug?: string;
+  due_date?: string;          // YYYY-MM-DD
+  urgency?: 'low' | 'med' | 'high' | 'critical';
+}): Promise<ToolResult> {
+  const title = (args.title ?? '').trim();
+  const body = (args.body ?? '').trim();
+  if (!title) return { ok: false, error: 'title required (one-line summary of the task)' };
+  const dept = (args.dept_slug ?? '').trim() || 'architect';
+  const urgency = args.urgency ?? 'low';
+
+  const metadata: Record<string, unknown> = { source: 'create_task_tool', urgency };
+  if (args.due_date) metadata.due_at = `${args.due_date}T17:00:00+07:00`;
+
+  const { data, error } = await supabase
+    .from('cockpit_tickets')
+    .insert({
+      status: 'new',
+      arm: dept,
+      intent: 'task',
+      source: 'chat_create_task',
+      email_subject: title.slice(0, 140),
+      email_body: body || title,
+      parsed_summary: body || title,
+      metadata,
+    })
+    .select('id, status, created_at')
+    .single();
+
+  if (error) return { ok: false, error: error.message };
+  await supabase.from('cockpit_audit_log').insert({
+    agent: 'create_task',
+    action: 'agent_run',
+    target: `ticket:${data?.id}`,
+    success: true,
+    metadata: { ticket_id: data?.id, dept, urgency, title },
+    reasoning: `task created from chat: "${title.slice(0, 80)}"`,
+  });
+  return { ok: true, result: { ticket_id: data?.id, status: data?.status, created_at: data?.created_at, dept, title } };
+}
+
 const HANDLERS: Record<string, (args: Record<string, unknown>) => Promise<ToolResult>> = {
   list_team_members: (a) => list_team_members(a as Parameters<typeof list_team_members>[0]),
+  create_task: (a) => create_task(a as Parameters<typeof create_task>[0]),
   check_founder_brief: (a) => check_founder_brief(a as Parameters<typeof check_founder_brief>[0]),
   propose_department: (a) => propose_department(a),
   create_subticket: (a) => create_subticket(a as Parameters<typeof create_subticket>[0]),
@@ -1649,6 +1718,73 @@ export type AgentToolDef = {
   input_schema: Record<string, unknown>;
   handler: string;
 };
+
+// PBS 2026-05-09: chat-mode tool whitelist. Personas in chatMode normally
+// get tools=[] (single-shot prose). This list exposes 4 safe tools —
+// 1 write (create_task) + 3 reads (query_supabase_view, list_recent_tickets,
+// read_audit_log) — so Felix and HoDs can DIAGNOSE LIVE without saying
+// "tell me to switch modes". PBS feedback: Felix declining to query because
+// "I'd need a tool" was wrong — the tools exist, chat mode just hadn't
+// surfaced them. Now it does.
+export const CHAT_MODE_TOOLS: AgentToolDef[] = [
+  {
+    name: 'create_task',
+    description: 'Convert the current conversation into a task by inserting a row into cockpit_tickets. Use when PBS says "make a task", "create a task", "turn this into a task", "add to my list", or similar.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'One-line summary of the task — what needs to be done.' },
+        body: { type: 'string', description: 'Multi-line context: why, when, who. Defaults to title if omitted.' },
+        dept_slug: { type: 'string', enum: ['architect', 'revenue', 'sales', 'marketing', 'operations', 'guest', 'finance', 'it'], description: 'Which dept owns this task. Default: architect.' },
+        due_date: { type: 'string', description: 'Optional ISO date YYYY-MM-DD when the task is due.' },
+        urgency: { type: 'string', enum: ['low', 'med', 'high', 'critical'], description: 'Default low.' },
+      },
+      required: ['title'],
+    },
+    handler: 'create_task',
+  },
+  {
+    name: 'query_supabase_view',
+    description: 'Read live data from any allowlisted Supabase view/table. Use this PROACTIVELY whenever PBS asks about live state (bugs, tickets, KPIs, agents, KB, etc.) instead of saying you need to switch modes. Allowlist includes: cockpit_bugs, cockpit_tickets, cockpit_proposals, cockpit_audit_log, cockpit_knowledge_base, cockpit_incidents, cockpit_kpi_snapshots, v_overview_kpis, v_compset_set_summary, v_dq_open, v_pl_monthly_usali, v_tactical_alerts_top, v_unanswered_threads, v_agent_health, v_kit_performance, frameworks, framework_items, scoring_model, lead_scraping_fields, plus more.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        view_name: { type: 'string', description: 'e.g. cockpit_bugs' },
+        limit: { type: 'integer', description: 'Default 50, max 100.' },
+        filter_column: { type: 'string', description: 'Optional column to filter on.' },
+        filter_value: { type: 'string', description: 'Value for filter_column (e.g. dept_slug = architect).' },
+        order_by: { type: 'string', description: 'Optional column for descending order.' },
+      },
+      required: ['view_name'],
+    },
+    handler: 'query_supabase_view',
+  },
+  {
+    name: 'list_recent_tickets',
+    description: 'List the most recent cockpit_tickets rows with their status. Use to answer "what tickets are open / failed / pending".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'integer' },
+        status: { type: 'string', description: 'Filter by status (new / triaged / working / archived / triage_failed etc.).' },
+      },
+    },
+    handler: 'list_recent_tickets',
+  },
+  {
+    name: 'read_audit_log',
+    description: 'Read the last N entries of cockpit_audit_log. Use to investigate why an agent action failed (e.g. triage_failed, why a ticket stuck).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'integer' },
+        agent: { type: 'string', description: 'Filter by agent name (e.g. it_manager, bugs_sweep).' },
+        action: { type: 'string', description: 'Filter by action (e.g. triage, promote_done).' },
+      },
+    },
+    handler: 'read_audit_log',
+  },
+];
 
 export async function loadSkillsForRole(role: string): Promise<AgentToolDef[]> {
   const { data } = await supabase

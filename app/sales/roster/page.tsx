@@ -2,9 +2,14 @@
 // Sales › Roster — staff & sales agents.
 // WIRED to public.v_staff_register_extended (proxy view, since 'ops' schema not API-exposed).
 
-import { supabase } from '@/lib/supabase';
-import PageHeader from '@/components/layout/PageHeader';
+// 2026-05-09: anon RLS blocks v_staff_register_extended; use service role.
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import Page from '@/components/page/Page';
+import Panel from '@/components/page/Panel';
+import KpiBox from '@/components/kpi/KpiBox';
+import ArtifactActions from '@/components/page/ArtifactActions';
 import RosterTable, { type StaffRow as StaffRowT } from './_components/RosterTable';
+import { SALES_SUBPAGES } from '../_subpages';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -25,7 +30,7 @@ interface StaffRow {
 }
 
 async function getStaff() {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseAdmin()
     .from('v_staff_register_extended')
     .select('staff_id, full_name, position_title, dept_code, dept_name, employment_type, monthly_salary, salary_currency, hire_date, is_active, contract_hours_pw, skills')
     .eq('is_active', true)
@@ -47,36 +52,29 @@ export default async function RosterPage() {
   const fmtSalary = (n: number | null, cur: string | null) =>
     n == null ? '—' : `${cur ?? 'LAK'} ${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 
-  return (
-    <>
-      <PageHeader
-        pillar="Sales"
-        tab="Roster"
-        title={<>Roster · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>{display.length} active</em></>}
-        lede={<>{salesStaff.length > 0 ? `Sales-adjacent staff (${salesStaff.length} of ${staff.length} total)` : `Showing first 30 of ${staff.length} active staff (no sales-coded department found)`} from <code style={{ fontSize: "var(--t-sm)" }}>v_staff_register_extended</code>.</>}
-      />
+  const ctx = (kind: 'panel' | 'table' | 'kpi' | 'brief', title: string) => ({ kind, title, dept: 'sales' as const });
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 10, margin: '14px 0' }}>
-        {[
-          { scope: 'Active staff',     value: String(display.length),  sub: `of ${staff.length} total`,             lorem: false },
-          { scope: 'AI agents',        value: '8',                     sub: 'inquiry, group, fit, dmc, etc.',       lorem: false },
-          { scope: 'Avg tenure',       value: 'lorem',                 sub: 'needs hire_date analytics',            lorem: true  },
-          { scope: 'Productivity',     value: 'lorem',                 sub: 'needs deal data',                       lorem: true  },
-          { scope: 'Comp accruals',    value: 'lorem',                 sub: 'needs payroll_monthly join',            lorem: true  },
-        ].map((k) => (
-          <div key={k.scope} className="kpi-box" data-tooltip={`${k.scope} · ${k.sub}`}>
-            <div className="kpi-tile-scope">{k.scope}</div>
-            <div className={`kpi-box-value${k.lorem ? ' lorem' : ''}`}>{k.value}</div>
-            <div className="kpi-tile-sub">{k.sub}</div>
-          </div>
-        ))}
+  return (
+    <Page
+      eyebrow="Sales · Roster"
+      title={<>Roster · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>{display.length} active</em></>}
+      subPages={SALES_SUBPAGES}
+    >
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
+        <KpiBox value={display.length} unit="count" label="Active staff" tooltip={`of ${staff.length} total`} />
+        <KpiBox value={8}              unit="count" label="AI agents" tooltip="inquiry, group, fit, dmc, etc." />
+        <KpiBox value={null}           unit="nights" label="Avg tenure" state="data-needed" needs="hire_date analytics" tooltip="Mean years from hire_date for active sales staff. Needs an analytics view." />
+        <KpiBox value={null}           unit="count"  label="Productivity" state="data-needed" needs="deal data" tooltip="Deals or quotes per active rep per month. Needs sales.opportunities schema." />
+        <KpiBox value={null}           unit="usd"    label="Comp accruals" state="data-needed" needs="payroll_monthly join" tooltip="Base + commission YTD per rep. Needs ops.payroll_monthly join keyed on rep id." />
       </div>
 
-      <RosterTable rows={display as StaffRowT[]} />
+      <Panel title={`Roster · ${display.length} active`} eyebrow="v_staff_register_extended" actions={<ArtifactActions context={ctx('table', 'Roster')} />}>
+        <RosterTable rows={display as StaffRowT[]} />
+      </Panel>
 
       <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: "var(--t-sm)" }}>
         <strong>✓ Wired.</strong> Reading from <code>public.v_staff_register_extended</code> ({staff.length} active rows). Productivity &amp; comp metrics need deal/payroll join.
       </div>
-    </>
+    </Page>
   );
 }

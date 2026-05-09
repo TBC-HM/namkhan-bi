@@ -2,13 +2,14 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import type { ArrivalWindow } from "../_components/DirectoryShell";
+import type { ArrivalWindow, StayedSince } from "../_components/DirectoryShell";
 
 type Args = {
   q: string;
   country: string | null;
   sort: string;
   arrival: ArrivalWindow;
+  stayedSince: StayedSince;
   repeatOnly: boolean;
   contactableOnly: boolean;
   page: number;
@@ -20,6 +21,10 @@ const ARRIVAL_BUCKETS: Record<ArrivalWindow, string[] | null> = {
   next_7: ["next_7"],
   next_30: ["next_7", "next_30"],
   next_90: ["next_7", "next_30", "next_90"],
+};
+
+const STAYED_SINCE_DAYS: Record<StayedSince, number | null> = {
+  any: null, '30d': 30, '90d': 90, '365d': 365, '730d': 730,
 };
 
 export async function searchGuests(args: Args) {
@@ -55,6 +60,11 @@ export async function searchGuests(args: Args) {
   const buckets = ARRIVAL_BUCKETS[args.arrival];
   if (buckets) {
     query = query.in("arrival_bucket", buckets);
+  }
+  const days = STAYED_SINCE_DAYS[args.stayedSince];
+  if (days) {
+    const since = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+    query = query.gte("last_stay_date", since);
   }
 
   // Sort

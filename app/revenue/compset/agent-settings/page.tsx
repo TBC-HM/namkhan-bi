@@ -8,7 +8,8 @@
 //   POST /api/compset/agent-runtime  -> compset_update_agent_runtime
 
 import Link from 'next/link';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { REVENUE_SUBPAGES } from '../../_subpages';
 import StatusPill from '@/components/ui/StatusPill';
 import { supabase } from '@/lib/supabase';
 import { fmtTableUsd } from '@/lib/format';
@@ -93,23 +94,12 @@ export default async function AgentSettingsPage({ searchParams }: PageProps) {
   const totalCost = runs.reduce((s, r) => s + (r.cost_usd ?? 0), 0);
 
   return (
-    <>
-      <PageHeader
-        pillar="Revenue"
-        tab="Comp Set · Agents"
-        title={
-          <>
-            Tune the <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>knobs</em>,
-            respect the mandate.
-          </>
-        }
-        lede="Runtime knobs the RM can change · mandate-locked rules below."
-        rightSlot={
-          <Link href="/revenue/compset" style={backLinkStyle}>
-            ← BACK TO COMP SET
-          </Link>
-        }
-      />
+    <Page
+      eyebrow="Revenue · Comp Set · Agents"
+      title={<>Tune the <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>knobs</em>, respect the mandate.</>}
+      subPages={REVENUE_SUBPAGES}
+      topRight={<Link href="/revenue/compset" style={backLinkStyle}>← BACK TO COMP SET</Link>}
+    >
 
       {agents.length === 0 ? (
         <div
@@ -218,7 +208,7 @@ export default async function AgentSettingsPage({ searchParams }: PageProps) {
           )}
         </>
       )}
-    </>
+    </Page>
   );
 }
 

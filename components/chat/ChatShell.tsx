@@ -53,6 +53,10 @@ interface ChatShellProps {
   placeholder?: string;
   /** localStorage key prefix so each chat shell has its own thread state. */
   storageKey?: string;
+  /** Dept-entry storage prefix (rev / sal / fin / arch / it / …) — enables the "Create task" button to push into the right Tasks box. */
+  taskStorageKeyPrefix?: string;
+  /** Initial input prefilled into the composer (used when /cockpit/chat?q=… opens with a question). */
+  initialInput?: string;
 }
 
 function stripTicketFraming(s: string | null): { user: string; agent: string } {
@@ -64,7 +68,11 @@ function stripTicketFraming(s: string | null): { user: string; agent: string } {
     agent = agent.replace(/^\*\*Triage\*\*[\s\S]*?(?=\n\n)/, '').trim();
     return { user: m[1].trim(), agent };
   }
-  return { user: '', agent: s };
+  // PBS 2026-05-09 bug-fix: an in-progress ticket has parsed_summary set to
+  // the raw user message (no **Request**: framing yet). Treat that as a
+  // user turn, NOT an agent turn — otherwise conversation_history flips
+  // user/assistant roles and breaks the next Anthropic call.
+  return { user: s, agent: '' };
 }
 
 function md(s: string): string {
@@ -95,27 +103,92 @@ export default function ChatShell({
   mentionNickname,
   placeholder,
   storageKey,
+  taskStorageKeyPrefix,
+  initialInput,
 }: ChatShellProps) {
   const STORE_KEY = storageKey ?? `chat_thread_start_${role}`;
   const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState(initialInput ?? '');
   const [sending, setSending] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [threadStart, setThreadStart] = useState<string>(() => {
-    if (typeof window === 'undefined') return new Date(Date.now() - 24 * 3600_000).toISOString();
-    return localStorage.getItem(STORE_KEY) ?? new Date(Date.now() - 24 * 3600_000).toISOString();
-  });
+  // 2026-05-08 — Add conversation to project. Lists active projects;
+  // attaches the most-recent ticket in this thread to the picked project.
+  type ProjectLite = { id: number; slug: string; name: string };
+  const [projectList, setProjectList] = useState<ProjectLite[]>([]);
+  const [attachOpen,  setAttachOpen]  = useState(false);
+  const [attaching,   setAttaching]   = useState(false);
+  const [attachToast, setAttachToast] = useState<string | null>(null);
+  const [creatingTask, setCreatingTask] = useState(false);
+  // PBS 2026-05-09: thread always starts fresh on mount. "Leave the page,
+  // come back" should be empty. localStorage is no longer the source of
+  // truth — it lived too long and made every return feel cluttered.
+  // The "+ New chat" button still works for an in-session reset.
+  const [threadStart, setThreadStart] = useState<string>(() => new Date().toISOString());
   const fileRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
   const startNewChat = () => {
     const now = new Date().toISOString();
-    localStorage.setItem(STORE_KEY, now);
     setThreadStart(now);
     setInput('');
     setAttachments([]);
   };
+
+  // Build a turn-by-turn conversation history from the visible tickets so
+  // the API can run a real follow-up turn (PBS 2026-05-09). Without this
+  // every send was a one-shot ticket — the LLM had no idea what came before.
+  function buildConversationHistory(): Array<{ role: 'user' | 'assistant'; content: string }> {
+    const turns: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+    for (const t of tickets) {
+      // PBS 2026-05-09 bug-fix: skip tickets that haven't been triaged yet.
+      // Their parsed_summary still holds the raw user message — including
+      // them double-counts the user turn AND can flip role alternation
+      // (Anthropic rejects messages where assistant follows assistant).
+      if (t.status === 'triaging' || t.status === 'new') continue;
+      const split = stripTicketFraming(t.parsed_summary);
+      if (split.user)  turns.push({ role: 'user',      content: split.user });
+      if (split.agent) turns.push({ role: 'assistant', content: split.agent });
+    }
+    // Cap to last 20 turns to keep payload tight.
+    return turns.slice(-20);
+  }
+
+  async function createTaskFromConversation() {
+    if (!taskStorageKeyPrefix) {
+      setAttachToast('No dept linked — can’t create task here');
+      setTimeout(() => setAttachToast(null), 2400);
+      return;
+    }
+    if (tickets.length === 0) return;
+    setCreatingTask(true);
+    try {
+      const turns = buildConversationHistory();
+      const lastUser = [...turns].reverse().find(t => t.role === 'user')?.content ?? '';
+      // Cheap heuristic: take the most recent user ask, trim, fall back to
+      // the assistant’s last reply if the user never asked anything concrete.
+      const seed = (lastUser || turns[turns.length - 1]?.content || '').trim();
+      const label = seed.replace(/^@\w+\s+/, '').slice(0, 140) || `Follow-up from chat with ${displayName}`;
+      const newTask = {
+        id: Math.random().toString(36).slice(2, 9),
+        label,
+        done: false,
+        created: new Date().toISOString(),
+      };
+      const TASKS_KEY = `nk.${taskStorageKeyPrefix}.entry.tasks.v2`;
+      let existing: unknown[] = [];
+      try {
+        const raw = localStorage.getItem(TASKS_KEY);
+        if (raw) existing = JSON.parse(raw);
+      } catch { /* ignore parse errors */ }
+      const next = Array.isArray(existing) ? [...existing, newTask] : [newTask];
+      localStorage.setItem(TASKS_KEY, JSON.stringify(next));
+      setAttachToast(`✓ Task added to ${dept ?? 'dept'} list`);
+      setTimeout(() => setAttachToast(null), 2400);
+    } finally {
+      setCreatingTask(false);
+    }
+  }
 
   const load = async () => {
     const { data } = await supabase
@@ -136,7 +209,18 @@ export default function ChatShell({
         return false;
       }
     });
-    setTickets(filtered.length > 0 ? filtered : all);
+    const real = filtered.length > 0 ? filtered : all;
+    // PBS 2026-05-09: keep optimistic (id<0) tickets visible only until a
+    // real ticket whose parsed_summary starts with the same text shows up.
+    // Otherwise we'd render the user's question twice in the thread.
+    setTickets((prev) => {
+      const optimistic = prev.filter((t) => t.id < 0);
+      const stillNeeded = optimistic.filter((o) => {
+        const head = (o.parsed_summary ?? '').slice(0, 80);
+        return !real.some((r) => (r.parsed_summary ?? '').slice(0, 80).startsWith(head.slice(0, 60)) || head.includes((r.parsed_summary ?? '').slice(0, 60)));
+      });
+      return [...real, ...stillNeeded];
+    });
   };
 
   useEffect(() => {
@@ -155,27 +239,82 @@ export default function ChatShell({
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [tickets.length]);
 
+  useEffect(() => {
+    fetch('/api/cockpit/projects', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => setProjectList(Array.isArray(j?.projects) ? j.projects : []))
+      .catch(() => { /* silent — projects optional */ });
+  }, []);
+
+  async function attachLatestTo(slug: string, projectName: string) {
+    if (tickets.length === 0) return;
+    // Most-recent ticket in this thread = the one PBS is referring to.
+    const latest = [...tickets].sort((a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    )[0];
+    if (!latest) return;
+    setAttaching(true);
+    try {
+      await fetch(`/api/cockpit/projects/${slug}/attach-ticket`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticket_id: latest.id }),
+      });
+      setAttachToast(`Added #${latest.id} to "${projectName}"`);
+      setTimeout(() => setAttachToast(null), 2400);
+      setAttachOpen(false);
+    } finally {
+      setAttaching(false);
+    }
+  }
+
   const send = async () => {
     if (!input.trim() && attachments.length === 0) return;
+    // Auto-prefix @mention so the triage routes to this HoD.
+    let body = input;
+    if (mentionNickname && !body.match(/^@/)) {
+      body = `@${mentionNickname} ${body}`;
+    }
+    if (attachments.length > 0) {
+      const lines = attachments.map((a) => `📎 ${a.name} (${(a.size / 1024).toFixed(0)} KB) — ${a.public_url ?? a.path}`);
+      body = body ? `${body}\n\n${lines.join('\n')}` : lines.join('\n');
+    }
+    // PBS 2026-05-09 bug #2: clear input + show optimistic user bubble
+    // BEFORE awaiting fetch. Triage takes 5–15s; the UI must not block.
+    // Build conversation history from existing tickets (excludes the
+    // optimistic one we're about to add).
+    const conversation_history = buildConversationHistory();
+    const optimisticTicket: Ticket = {
+      id: -Date.now(), // negative so it never collides with a real id
+      status: 'triaging',
+      parsed_summary: body,
+      arm: 'triaging',
+      intent: 'triage',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      notes: null,
+    };
+    setTickets((prev) => [...prev, optimisticTicket]);
+    setInput('');
+    setAttachments([]);
     setSending(true);
     try {
-      // Auto-prefix @mention so the triage routes to this HoD.
-      let body = input;
-      if (mentionNickname && !body.match(/^@/)) {
-        body = `@${mentionNickname} ${body}`;
-      }
-      if (attachments.length > 0) {
-        const lines = attachments.map((a) => `📎 ${a.name} (${(a.size / 1024).toFixed(0)} KB) — ${a.public_url ?? a.path}`);
-        body = body ? `${body}\n\n${lines.join('\n')}` : lines.join('\n');
-      }
       await fetch('/api/cockpit/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: body, attachments, mention: mentionNickname }),
+        body: JSON.stringify({ message: body, attachments, mention: mentionNickname, conversation_history }),
       });
-      setInput('');
-      setAttachments([]);
+      // Reload so the real ticket replaces the optimistic one.
       load();
+    } catch {
+      // Surface a quiet failure on the optimistic bubble.
+      setTickets((prev) =>
+        prev.map((t) =>
+          t.id === optimisticTicket.id
+            ? { ...t, status: 'triage_failed', parsed_summary: `${body}\n\n_(network error — try again)_` }
+            : t,
+        ),
+      );
     } finally {
       setSending(false);
     }
@@ -214,7 +353,87 @@ export default function ChatShell({
         </div>
         <div style={S.topbarRight}>
           <button onClick={startNewChat} style={{ ...S.topBtn, background: '#c79a6b', color: '#0a0a0b', border: 0, fontWeight: 600, cursor: 'pointer' }}>＋ New chat</button>
-          <a href="/cockpit" style={S.topBtn}>cockpit ↗</a>
+          {/* Create task from conversation (PBS 2026-05-09): writes the most
+            * recent user ask into nk.<prefix>.entry.tasks.v2 so it shows up
+            * in the dept-entry "My tasks" box on next visit. */}
+          <button
+            onClick={createTaskFromConversation}
+            disabled={creatingTask || tickets.length === 0 || !taskStorageKeyPrefix}
+            title={
+              !taskStorageKeyPrefix ? 'No dept linked'
+              : tickets.length === 0 ? 'Send a message first'
+              : `Create a task in ${dept ?? 'this dept'} from this chat`
+            }
+            style={{
+              ...S.topBtn,
+              cursor: (creatingTask || tickets.length === 0 || !taskStorageKeyPrefix) ? 'not-allowed' : 'pointer',
+              background: 'transparent',
+              opacity: (tickets.length === 0 || !taskStorageKeyPrefix) ? 0.4 : 1,
+            }}
+          >
+            {creatingTask ? '…' : '＋ Create task'}
+          </button>
+          {/* Add conversation to project (PBS 2026-05-08).
+            * Uses projectList fetched on mount; tags the most-recent ticket
+            * in this thread via /api/cockpit/projects/[slug]/attach-ticket. */}
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setAttachOpen(o => !o)}
+              disabled={attaching || tickets.length === 0}
+              title={tickets.length === 0 ? 'Send a message first' : 'Add this conversation to a project'}
+              style={{
+                ...S.topBtn,
+                cursor: (attaching || tickets.length === 0) ? 'not-allowed' : 'pointer',
+                background: 'transparent',
+                opacity: tickets.length === 0 ? 0.4 : 1,
+              }}
+            >
+              📁 Add to project ▾
+            </button>
+            {attachOpen && (
+              <div style={{
+                position: 'absolute', right: 0, top: 36, zIndex: 80,
+                background: '#0e0e0c', border: '1px solid #25252d', borderRadius: 6,
+                padding: 4, minWidth: 240, maxHeight: 320, overflowY: 'auto',
+                boxShadow: '0 12px 28px rgba(0,0,0,0.55)',
+              }}>
+                {projectList.length === 0 && (
+                  <div style={{ padding: '8px 10px', fontSize: 11, color: '#7d7565', fontStyle: 'italic' }}>
+                    No active projects yet. Create one from a dept landing page.
+                  </div>
+                )}
+                {projectList.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => attachLatestTo(p.slug, p.name)}
+                    style={{
+                      width: '100%', textAlign: 'left',
+                      background: 'transparent', border: 'none', cursor: 'pointer',
+                      color: '#ededf0', padding: '7px 10px', fontSize: 13, borderRadius: 4,
+                    }}
+                  >{p.name}</button>
+                ))}
+              </div>
+            )}
+          </div>
+          {role === 'it_manager' ? (
+            // PBS 2026-05-09: from Captain Kit's chat, surface a prominent
+            // brass CTA to the IT Cockpit. Replaces the muted generic link
+            // for it_manager only — every other persona keeps the subtle
+            // "cockpit ↗" affordance.
+            <a
+              href="/cockpit"
+              style={{
+                ...S.topBtn,
+                background: '#c79a6b',
+                color: '#0a0a0b',
+                border: 0,
+                fontWeight: 600,
+              }}
+            >↗ Open IT Cockpit</a>
+          ) : (
+            <a href="/cockpit" style={S.topBtn}>cockpit ↗</a>
+          )}
         </div>
       </div>
 
@@ -294,6 +513,18 @@ export default function ChatShell({
         </div>
         <div style={S.hint}>Enter to send · Shift+Enter for new line · paperclip to attach</div>
       </div>
+
+      {/* tiny attach-to-project confirmation toast (PBS 2026-05-08) */}
+      {attachToast && (
+        <div style={{
+          position: 'fixed', bottom: 24, right: 24, zIndex: 300,
+          background: '#0f0d0a', border: '1px solid #3a3327', borderRadius: 8,
+          padding: '10px 14px', fontSize: 12, color: '#d8cca8',
+          boxShadow: '0 12px 28px rgba(0,0,0,0.5)',
+        }}>
+          📁 {attachToast}
+        </div>
+      )}
 
       <style jsx global>{`
         @keyframes blink { 0%,80%,100% { opacity: 0.3 } 40% { opacity: 1 } }

@@ -1,9 +1,10 @@
 // app/revenue/agents/page.tsx — REDESIGN 2026-05-05 (recovery)
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { supabase } from '@/lib/supabase';
 import AgentsTable, { type AgentRow } from './_components/AgentsTableClient';
+import { REVENUE_SUBPAGES } from '../_subpages';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -60,10 +61,7 @@ export default async function AgentsPage() {
   const totalSpent = rows.reduce((s, r) => s + (r.month_to_date_cost_usd ?? 0), 0);
 
   return (
-    <>
-      <PageHeader pillar="Revenue" tab="Agents"
-        title={<>Every agent on <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>watch</em> — schedule, status, MTD spend.</>}
-        lede={`${total} registered · ${active} active · MTD $${Math.round(totalSpent).toLocaleString()} of $${Math.round(totalBudget).toLocaleString()}`} />
+    <Page eyebrow="Revenue · Agents" title={<>Every agent on <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>watch</em> — schedule, status, MTD spend.</>} subPages={REVENUE_SUBPAGES}>
       <div style={statusWrap}>
         <div style={statusRow1}>
           <div style={cell}><span className="t-eyebrow" style={{ marginRight: 8 }}>SOURCE</span><StatusPill tone="active">governance.agents</StatusPill></div>
@@ -80,16 +78,16 @@ export default async function AgentsPage() {
         </div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
-        <KpiBox value={total} unit="count" label="Agents registered" />
-        <KpiBox value={active} unit="count" label="Active" />
-        <KpiBox value={totalSpent} unit="usd" label="MTD spend" />
-        <KpiBox value={totalBudget} unit="usd" label="Monthly budget" />
+        <KpiBox value={total} unit="count" label="Agents registered" tooltip="Rows in governance.agents filtered to pillar=revenue." />
+        <KpiBox value={active} unit="count" label="Active"             tooltip="Agents with status=active. Inactive ones don't run on schedule." />
+        <KpiBox value={totalSpent} unit="usd" label="MTD spend"         tooltip="Sum of run costs (Sonnet pricing) for revenue agents this month." />
+        <KpiBox value={totalBudget} unit="usd" label="Monthly budget"   tooltip="Sum of monthly_budget_usd across registered revenue agents. Spend > budget = warn." />
       </div>
       <div style={{ marginTop: 18 }}>
         <SectionHead title="Agents" emphasis="all registered" sub="Status · schedule · last run · MTD cost · budget · settings" source="governance.agents" />
         <AgentsTable rows={rows} />
       </div>
-    </>
+    </Page>
   );
 }
 

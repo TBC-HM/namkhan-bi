@@ -6,14 +6,21 @@
 //
 // Mockup-data mode: sales schema not yet deployed. KPI tiles + tray + feed all
 // carry "data needed" tags pointing at the email-ingest webhook + sales.* tables.
+//
+// 2026-05-09 (PBS) — BLOCK 2 mailbox-routing row activated:
+//   • dead <span> pills replaced with <Link>s driving ?scope=<addr>
+//   • 5 canonical Namkhan inboxes pinned (book / reservations / plan / wm / xl)
+//   • selected pill highlighted from `cockpitScope` searchParam
 
+import Link from 'next/link';
 import OpsKpiTile from '@/components/ops/OpsKpiTile';
 import AgentStrip from '@/components/ops/AgentStrip';
 import DecisionQueue, { type DecisionRow } from '@/components/ops/DecisionQueue';
 import TacticalAlerts, { type TacticalAlert } from '@/components/ops/TacticalAlerts';
 import GuardrailsBanner from '@/components/ops/GuardrailsBanner';
 import DataNeededOverlay from '@/components/ops/DataNeededOverlay';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { SALES_SUBPAGES } from '../_subpages';
 
 import InquiryFeed from './_components/InquiryFeed';
 import AutoDraftTray from './_components/AutoDraftTray';
@@ -294,17 +301,17 @@ export default async function InquiriesPage({
   const dataNeed = SCHEMA_LIVE ? undefined : 'Data needed · sales schema';
 
   return (
-    <>
-      {/* BLOCK 1: Breadcrumb + Title */}
-      <PageHeader
-        pillar="Sales"
-        tab="Inquiries"
-        title={<>Every inquiry, an <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>answer</em> before lunch.</>}
-        lede="Triage, auto-quote, approve, send. The funnel starts here."
-      />
+    <Page
+      eyebrow="Sales · Inquiries"
+      title={<>Every inquiry, an <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>answer</em> before lunch.</>}
+      subPages={SALES_SUBPAGES}
+    >
 
-      {/* BLOCK 2: Status pills (sales-specific, on top of layout's FilterStrip) */}
+      {/* BLOCK 2: Mailbox routing pills — drive ?scope=<address>.
+          5 canonical Namkhan inboxes pinned (book / reservations / plan / wm / xl).
+          Each <Link> sets cockpitScope which propagates to <EmailCockpit> below. */}
       <div
+        id="mailbox-router"
         style={{
           display: 'flex',
           gap: 8,
@@ -317,16 +324,29 @@ export default async function InquiriesPage({
           borderRadius: 8,
         }}
       >
-        <span style={pillActive}>All inquiries</span>
-        <span style={pill}>FIT</span>
-        <span style={pill}>Group</span>
-        <span style={pill}>Wedding</span>
-        <span style={pill}>Retreat</span>
-        <span style={pill}>Package</span>
-        <span style={pill}>B2B / DMC</span>
-        <span style={pill}>OTA pre-stay</span>
-        <span style={{ marginLeft: 'auto', fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>
-          Property + date + segment filters above (layout)
+        {(() => {
+          const items: Array<{ key: string; label: string }> = [
+            { key: 'all',                            label: 'All inquiries' },
+            { key: 'book@thenamkhan.com',            label: 'book@' },
+            { key: 'reservations@thenamkhan.com',    label: 'reservations@' },
+            { key: 'plan@thenamkhan.com',            label: 'plan@' },
+            { key: 'wm@thenamkhan.com',              label: 'wm@' },
+            { key: 'xl@thenamkhan.com',              label: 'xl@' },
+          ];
+          return items.map((it) => {
+            const active = (cockpitScope === it.key) || (it.key === 'all' && cockpitScope === 'all');
+            const params = new URLSearchParams();
+            if (it.key !== 'all') params.set('scope', it.key);
+            const href = '/sales/inquiries' + (params.toString() ? `?${params.toString()}` : '') + '#cockpit';
+            return (
+              <Link key={it.key} href={href} style={active ? pillActive : pill} prefetch={false}>
+                {it.label}
+              </Link>
+            );
+          });
+        })()}
+        <span style={{ marginLeft: 'auto', fontSize: 'var(--t-sm)', color: 'var(--ink-mute)' }}>
+          Routed via <code style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>sales.email_messages.intended_mailbox</code>
         </span>
       </div>
 
@@ -357,12 +377,14 @@ export default async function InquiriesPage({
           label="4 past 1h target"
           needs={dataNeed}
           valueColor="var(--st-bad)"
+          tooltip="Open inquiries / those past first-reply SLA (1h target). Source: sales.email_messages + sales.inquiry_status. Currently a placeholder."
         />
         <OpsKpiTile
           scope="Median time to first reply"
           value="2h 14m"
           label="target 1h · LM −18m"
           needs={dataNeed}
+          tooltip="Median minutes from inbound inquiry to first outbound reply. Target ≤ 1h. Source: v_thread_response."
         />
         <OpsKpiTile
           scope="Auto-offer hit rate"
@@ -370,18 +392,21 @@ export default async function InquiriesPage({
           label="sent without edit · target 75%"
           needs={dataNeed}
           valueColor="var(--brass)"
+          tooltip="Drafts the agent generated that were sent unedited ÷ total drafts. Target ≥ 75%. Source: sales.email_drafts.status."
         />
         <OpsKpiTile
           scope="Quote → Booking conv"
           value="27%"
           label="weighted 90d · LY +4 pts"
           needs={dataNeed}
+          tooltip="Quoted opportunities that converted to a confirmed booking, weighted by quote value over 90d. Target ≥ 30%."
         />
         <OpsKpiTile
           scope="Open pipeline value"
           value="$48,200"
           label="18 open quotes · weighted"
           needs={dataNeed}
+          tooltip="Sum of quote totals × win-probability for currently-open opportunities. Source: sales.opportunities (schema TODO)."
         />
         <OpsKpiTile
           scope="Sales revenue MTD"
@@ -479,7 +504,7 @@ export default async function InquiriesPage({
         criteria, ≥85% confidence, within rate guardrails) move to auto. All
         Tier-2 actions and rate exceptions remain human-approval forever.
       </GuardrailsBanner>
-    </>
+    </Page>
   );
 }
 
@@ -491,7 +516,10 @@ const pill: React.CSSProperties = {
   border: '1px solid var(--paper-deep)',
   borderRadius: 6,
   background: 'var(--paper-warm)',
-  fontSize: "var(--t-base)",
+  color: 'var(--ink)',
+  fontSize: 'var(--t-base)',
+  textDecoration: 'none',
+  cursor: 'pointer',
 };
 
 const pillActive: React.CSSProperties = {

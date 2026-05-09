@@ -4,7 +4,8 @@
 // cleanup. Every flag wired off real columns. No invented errors.
 
 import Link from 'next/link';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { GUEST_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
@@ -133,19 +134,11 @@ export default async function MessyDataPage() {
   const dupEmailCount = issueCounts.get('duplicate_email') ?? 0;
 
   return (
-    <>
-      <PageHeader
-        pillar="Guest"
-        tab="Messy data"
-        title={
-          <>
-            Fix it{' '}
-            <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>in the PMS</em>{' '}
-            — the materialised view follows.
-          </>
-        }
-        lede={`${total} profiles · ${flagged.length} flagged (${(100 - cleanPct).toFixed(0)}%) · ${noContactCount} unreachable · ${dupEmailCount} duplicate emails`}
-      />
+    <Page
+      eyebrow="Guest · Messy data"
+      title={<>Fix it <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>in the PMS</em> — the materialised view follows.</>}
+      subPages={GUEST_SUBPAGES}
+    >
 
       <GuestStatusHeader
         top={
@@ -222,11 +215,11 @@ export default async function MessyDataPage() {
           marginTop: 14,
         }}
       >
-        <KpiBox value={total} unit="count" label="Total profiles" />
-        <KpiBox value={flagged.length} unit="count" label="Flagged" tooltip="One or more issues" />
-        <KpiBox value={cleanPct} unit="pct" label="Clean rate" />
-        <KpiBox value={noContactCount} unit="count" label="Unreachable" tooltip="No email AND no phone" />
-        <KpiBox value={dupEmailCount} unit="count" label="Duplicate emails" />
+        <KpiBox value={total} unit="count" label="Total profiles" tooltip="Distinct guest profiles. Source: guest.mv_guest_profile." />
+        <KpiBox value={flagged.length} unit="count" label="Flagged" tooltip="Profiles with one or more data-quality issues — see panel below." />
+        <KpiBox value={cleanPct} unit="pct" label="Clean rate" tooltip="Profiles with no flags ÷ total × 100. Track over time." />
+        <KpiBox value={noContactCount} unit="count" label="Unreachable" tooltip="Profiles with neither email nor phone — cannot be marketed to." />
+        <KpiBox value={dupEmailCount} unit="count" label="Duplicate emails" tooltip="Distinct email values appearing on > 1 guest profile — likely merge candidates." />
       </div>
 
       {/* TABLE */}
@@ -308,7 +301,7 @@ export default async function MessyDataPage() {
         Open the guest in Cloudbeds (PMS) · merge duplicates via the guest profile screen · add missing email / phone / country.
         The materialised view <code style={{ fontFamily: 'var(--mono)' }}>guest.mv_guest_profile</code> refreshes via cron, so changes appear here on the next tick.
       </div>
-    </>
+    </Page>
   );
 }
 
@@ -351,7 +344,7 @@ function IssueChart({ issueCounts, total }: { issueCounts: Map<Issue, number>; t
               </text>
               <rect x={labelW} y={y + 4} width={barMaxW} height={14} fill="var(--paper-deep)" />
               <rect x={labelW} y={y + 4} width={barW} height={14} fill={fill}>
-                <title>{`${ISSUE_LABEL[r.issue]} · ${r.n} guests · ${pct.toFixed(0)}% of base`}</title>
+                <title>{`${ISSUE_LABEL[r.issue]} · ${r.n.toLocaleString()} guests · ${pct.toFixed(1)}% of ${total.toLocaleString()} · guest.mv_guest_profile`}</title>
               </rect>
               <text x={labelW + barMaxW + 4} y={y + 14} style={{ fontFamily: 'var(--mono)', fontSize: 10, fill: 'var(--ink-soft)' }}>
                 {r.n}

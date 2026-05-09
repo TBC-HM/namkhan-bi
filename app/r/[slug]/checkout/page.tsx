@@ -12,16 +12,14 @@ export const dynamic = 'force-dynamic';
 export default async function CheckoutPage({ params }: { params: { slug: string } }) {
   const admin = getSupabaseAdmin();
   const { data: retreat } = await admin
-    .schema('web')
-    .from('retreats')
+    .from('v_retreats')
     .select('*')
     .eq('slug', params.slug)
     .maybeSingle();
   if (!retreat) notFound();
 
   const { data: variant } = await admin
-    .schema('compiler')
-    .from('variants')
+    .from('v_compiler_variants')
     .select('total_usd, per_pax_usd, room_category, fnb_mode')
     .eq('id', retreat.variant_id)
     .maybeSingle();

@@ -2,8 +2,12 @@
 // Sales › Groups — group bookings pipeline. WIRED to public.groups.
 
 import { supabase } from '@/lib/supabase';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import Panel from '@/components/page/Panel';
+import KpiBox from '@/components/kpi/KpiBox';
+import ArtifactActions from '@/components/page/ArtifactActions';
 import GroupsTable, { type GroupRow as GroupRowT } from './_components/GroupsTable';
+import { SALES_SUBPAGES } from '../_subpages';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -52,38 +56,29 @@ export default async function GroupsPage() {
     ? groups.reduce((s, g) => s + (Number(g.pickup_pct) || 0), 0) / groups.length
     : 0;
 
-  return (
-    <>
-      <PageHeader
-        pillar="Sales"
-        tab="Groups"
-        title={<>Groups · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>{groups.length} blocks</em></>}
-        lede="Group bookings pipeline from Cloudbeds. MICE, weddings, retreats, family blocks. Strategist agent + margin floor + displacement check."
-      />
+  const ctx = (kind: 'panel' | 'table' | 'kpi' | 'brief', title: string) => ({ kind, title, dept: 'sales' as const });
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 10, margin: '14px 0' }}>
-        <Kpi scope="Active blocks" value={String(groups.length)} sub={`${upcoming} upcoming`} />
-        <Kpi scope="Total room nights" value={totalRn.toLocaleString()} sub="across all blocks" />
-        <Kpi scope="Picked up" value={pickedUp.toLocaleString()} sub={`${totalRn > 0 ? ((pickedUp / totalRn) * 100).toFixed(0) : 0}% of block`} />
-        <Kpi scope="Avg pickup" value={`${avgPickupPct.toFixed(0)}%`} sub="across all blocks" />
-        <Kpi scope="Margin floor" value="lorem" sub="needs revenue + cost join" lorem />
+  return (
+    <Page
+      eyebrow="Sales · Groups"
+      title={<>Groups · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>{groups.length} blocks</em></>}
+      subPages={SALES_SUBPAGES}
+    >
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
+        <KpiBox value={groups.length} unit="count" label="Active blocks" tooltip={`${upcoming} upcoming`} />
+        <KpiBox value={totalRn} unit="count" label="Total room nights" tooltip="Sum of block_size across active blocks." />
+        <KpiBox value={pickedUp} unit="count" label="Picked up" tooltip={`Pickup rooms confirmed · ${totalRn > 0 ? ((pickedUp / totalRn) * 100).toFixed(0) : 0}% of block. Source: public.groups.pickup.`} />
+        <KpiBox value={avgPickupPct} unit="pct" label="Avg pickup" tooltip="Average pickup_pct across active blocks. Watch ≥ 70% for healthy commitment." />
+        <KpiBox value={null} unit="usd" label="Margin floor" state="data-needed" needs="revenue + cost join" tooltip="Min margin guard for groups. Needs: contract revenue × cost-of-stay join (TODO)." />
       </div>
 
-      <GroupsTable rows={groups as GroupRowT[]} />
+      <Panel title={`Group blocks · ${groups.length}`} eyebrow="public.groups" actions={<ArtifactActions context={ctx('table', 'Group blocks')} />}>
+        <GroupsTable rows={groups as GroupRowT[]} />
+      </Panel>
 
       <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: "var(--t-sm)" }}>
         <strong>✓ Wired.</strong> Reading from <code>public.groups</code> ({groups.length} rows). Margin floor requires revenue + cost join — pending.
       </div>
-    </>
-  );
-}
-
-function Kpi({ scope, value, sub, lorem = false }: { scope: string; value: string; sub: string; lorem?: boolean }) {
-  return (
-    <div className="kpi-box" data-tooltip={`${scope} · ${sub}`}>
-      <div className="kpi-tile-scope">{scope}</div>
-      <div className={`kpi-box-value${lorem ? ' lorem' : ''}`}>{value}</div>
-      <div className="kpi-tile-sub">{sub}</div>
-    </div>
+    </Page>
   );
 }

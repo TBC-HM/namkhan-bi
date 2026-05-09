@@ -1,21 +1,11 @@
-// app/page.tsx — HOME = chat with Felix (architect/lead).
-// 2026-05-08 PBS directive: every dept landing IS the chat with that dept's HoD,
-// and Home is the architect chat.
-// The KPI dashboard previously at /overview stays accessible at /overview.
+// app/page.tsx — HOME = Architect command centre.
+// PBS 2026-05-09 (later): rejected the canvas Brief shape on /. Wants the
+// architect dept-entry — chat hero + dept chips + my-action-items / my-docs
+// / my-tasks containers, weather/date/user pills. The canvas Brief surface
+// stays accessible at /canvas.
+import DeptEntry from '@/components/dept-entry/DeptEntry';
+import { DEPT_CFG } from '@/lib/dept-cfg';
 
-import ChatShell from '@/components/chat/ChatShell';
-
-export const dynamic = 'force-dynamic';
-
-export default function HomePage() {
-  return (
-    <ChatShell
-      role="lead"
-      displayName="Felix"
-      dept="Architect"
-      emoji="🏛"
-      mentionNickname="felix"
-      placeholder="Tell Felix what you need…"
-    />
-  );
+export default function Home() {
+  return <DeptEntry cfg={DEPT_CFG.architect} />;
 }

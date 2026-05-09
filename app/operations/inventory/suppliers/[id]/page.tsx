@@ -7,7 +7,8 @@
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { OPERATIONS_SUBPAGES } from '../../../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { fmtIsoDate, EMPTY } from '@/lib/format';
@@ -70,35 +71,26 @@ export default async function VendorDetailPage({ params }: { params: { id: strin
   const span = spanDays(ov.first_txn_date, ov.last_txn_date);
 
   return (
-    <>
-      <PageHeader
-        pillar="Operations"
-        tab="Inventory · Suppliers · Vendor"
-        title={<><em style={{ color: 'var(--brass)' }}>{ov.vendor_name}</em></>}
-        lede={
-          <>
-            <span style={{ fontFamily: 'var(--mono)' }}>{ov.currency_guess ?? 'currency unknown'}</span>
-            {' · '}
-            {ov.is_active_recent ? <StatusPill tone="active">Recent</StatusPill> : <StatusPill tone="inactive">Dormant</StatusPill>}
-            {' · raw QB Name — clean later'}
-          </>
-        }
-        rightSlot={
-          <Link
-            href="/operations/inventory/suppliers"
-            style={{
-              fontFamily: 'var(--mono)',
-              fontSize: 'var(--t-xs)',
-              letterSpacing: 'var(--ls-extra)',
-              textTransform: 'uppercase',
-              color: 'var(--brass)',
-              textDecoration: 'none',
-              padding: '4px 10px',
-              border: '1px solid var(--brass-soft, #c4a06b)',
-            }}
-          >← Back to vendors</Link>
-        }
-      />
+    <Page
+      eyebrow="Operations · Inventory · Suppliers · Vendor"
+      title={<em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>{ov.vendor_name}</em>}
+      subPages={OPERATIONS_SUBPAGES}
+      topRight={
+        <Link
+          href="/operations/inventory/suppliers"
+          style={{
+            fontFamily: 'var(--mono)',
+            fontSize: 'var(--t-xs)',
+            letterSpacing: 'var(--ls-extra)',
+            textTransform: 'uppercase',
+            color: 'var(--brass)',
+            textDecoration: 'none',
+            padding: '4px 10px',
+            border: '1px solid var(--brass-soft, #c4a06b)',
+          }}
+        >← Back to vendors</Link>
+      }
+    >
 
       {/* KPI strip */}
       <div style={{
@@ -172,6 +164,6 @@ export default async function VendorDetailPage({ params }: { params: { id: strin
         Lines: <code style={{ fontFamily: 'var(--mono)' }}>gl.v_supplier_transactions</code> (last 500 by date).
         No <code style={{ fontFamily: 'var(--mono)' }}>gl.vendors</code> master join (it's empty). Curated attributes (contacts/terms/lead time) → <code style={{ fontFamily: 'var(--mono)' }}>suppliers.*</code> Phase 2.5b.
       </div>
-    </>
+    </Page>
   );
 }

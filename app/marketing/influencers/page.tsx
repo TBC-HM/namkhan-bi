@@ -1,10 +1,12 @@
 // app/marketing/influencers/page.tsx
 // Marketing · Influencers.
 
-import PanelHero from '@/components/sections/PanelHero';
-import Card from '@/components/sections/Card';
-import KpiCard from '@/components/kpi/KpiCard';
+import Page from '@/components/page/Page';
+import Panel from '@/components/page/Panel';
+import KpiBox from '@/components/kpi/KpiBox';
+import ArtifactActions from '@/components/page/ArtifactActions';
 import { getInfluencers } from '@/lib/marketing';
+import { MARKETING_SUBPAGES } from '../_subpages';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 300;
@@ -36,38 +38,19 @@ export default async function InfluencersPage() {
   const pending = list.length - delivered;
 
   return (
-    <>
-      <PanelHero
-        eyebrow="Influencers · all-time"
-        title="Influencer"
-        emphasis="campaigns"
-        sub="Comp + paid fees · reach · delivery status"
-        kpis={
-          <>
-            <KpiCard label="Total Campaigns" value={list.length} hint="all-time logged" />
-            <KpiCard
-              label="Pending Delivery"
-              value={pending}
-              tone={pending > 0 ? 'warn' : 'pos'}
-              hint={`${delivered} delivered`}
-            />
-            <KpiCard
-              label="Total Investment"
-              value={totalComp + totalPaid}
-              kind="money"
-              hint="comp + cash"
-            />
-            <KpiCard
-              label="Estimated Reach"
-              value={formatNum(totalReach)}
-              kind="text"
-              hint="across all campaigns"
-            />
-          </>
-        }
-      />
+    <Page
+      eyebrow="Marketing · Influencers"
+      title={<>Influencer <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>campaigns</em>.</>}
+      subPages={MARKETING_SUBPAGES}
+    >
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
+        <KpiBox value={list.length}            unit="count" label="Total campaigns" tooltip="Rows in marketing.influencers — every influencer engagement on the books." />
+        <KpiBox value={pending}                unit="count" label="Pending delivery" tooltip={`${delivered} delivered · ${pending} still outstanding deliverables.`} />
+        <KpiBox value={totalComp + totalPaid}  unit="usd"   label="Total investment" tooltip="Sum of comp_value_usd + paid_fee_usd across all influencers." />
+        <KpiBox value={null} unit="text" valueText={formatNum(totalReach)} label="Estimated reach" tooltip="Sum of estimated_reach (followers + organic reach) across all influencers. Manual estimate." />
+      </div>
 
-      <Card title="Influencer log" emphasis="recent first" sub={`${list.length} campaigns logged`} source="marketing.influencers">
+      <Panel title={`Influencer log · ${list.length}`} eyebrow="marketing.influencers" actions={<ArtifactActions context={{ kind: 'table', title: 'Influencer log', dept: 'marketing' }} />}>
         {list.length === 0 ? (
           <div className="stub" style={{ padding: 32 }}>
             <h3>No campaigns logged yet</h3>
@@ -114,7 +97,7 @@ export default async function InfluencersPage() {
             </tbody>
           </table>
         )}
-      </Card>
-    </>
+      </Panel>
+    </Page>
   );
 }

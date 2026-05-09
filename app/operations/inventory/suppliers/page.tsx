@@ -7,10 +7,11 @@
 // Replaces the previous version that read from suppliers.* (8 seeded rows).
 // suppliers.* schema retained for future curated procurement records.
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
 import KpiBox from '@/components/kpi/KpiBox';
 import { getGlVendorOverview, getGlSupplierKpis } from '../_data';
 import GlVendorsTableClient from './_GlVendorsTableClient';
+import { OPERATIONS_SUBPAGES } from '../../_subpages';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -22,13 +23,11 @@ export default async function SuppliersListPage() {
   ]);
 
   return (
-    <>
-      <PageHeader
-        pillar="Operations"
-        tab="Inventory · Suppliers"
-        title={<>Vendor <em style={{ color: 'var(--brass)' }}>register · 2026</em></>}
-        lede={<>Derived from QB transaction lines · {rows.length} vendors with activity since 2026-01-01 · {kpis.active_recent_count} active in last 90d. Names are raw QB Name field — clean later. Click a row for full transaction history.</>}
-      />
+    <Page
+      eyebrow="Operations · Inventory · Suppliers"
+      title={<>Vendor <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>register · 2026</em></>}
+      subPages={OPERATIONS_SUBPAGES}
+    >
 
       {/* KPIs */}
       <div style={{
@@ -69,6 +68,6 @@ export default async function SuppliersListPage() {
         }}>Data lineage · 2026 YTD</div>
         Source: <code style={{ fontFamily: 'var(--mono)' }}>gl.gl_entries.customer_name</code> (raw QB transaction Name field) WHERE <code style={{ fontFamily: 'var(--mono)' }}>qb_txn_type IN ('Bill', 'Bill Payment (Cheque)', 'Cheque', 'Expense', 'Vendor Credit', 'Refund')</code>, surfaced via <code style={{ fontFamily: 'var(--mono)' }}>gl.v_supplier_overview</code>, filtered to <code style={{ fontFamily: 'var(--mono)' }}>last_txn_date &gt;= 2026-01-01</code>. No join to <code style={{ fontFamily: 'var(--mono)' }}>gl.vendors</code> (that master is empty — 0 emails, 0 categories, 0 terms). Curated supplier attributes (reliability, contacts, alternates, lead time) will live in <code style={{ fontFamily: 'var(--mono)' }}>suppliers.*</code> when the procurement workflow ships (Phase 2.5b).
       </div>
-    </>
+    </Page>
   );
 }

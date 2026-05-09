@@ -2,10 +2,13 @@
 // Finance · POS Transactions — F&B + Other Operated POS items only.
 // Filters out Rooms (room rate), tax, fee, payment, void, adjustment lines.
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { FINANCE_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
-import { supabase, PROPERTY_ID } from '@/lib/supabase';
+// 2026-05-09: public.transactions has RLS blocking anon; use service role.
+import { PROPERTY_ID } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { fmtMoney } from '@/lib/format';
 import {
   FinanceStatusHeader,
@@ -34,6 +37,7 @@ export default async function PosTransactionsPage({ searchParams }: Props) {
   const offset  = (page - 1) * PAGE_SIZE;
 
   // ---- KPI window scan (POS subset) ----
+  const supabase = getSupabaseAdmin();
   const { data: kpiRows } = await supabase
     .from('transactions')
     .select('amount, item_category_name, usali_dept, fb_meal_period, fb_outlet, transaction_type, category')
@@ -68,7 +72,7 @@ export default async function PosTransactionsPage({ searchParams }: Props) {
   // ---- Listing ----
   let listQ = supabase
     .from('transactions')
-    .select('transaction_id, transaction_date, service_date, item_category_name, description, amount, currency, usali_dept, fb_meal_period, fb_outlet, user_name, reservation_id, quantity', { count: 'exact' })
+    .select('transaction_id, transaction_date, service_date, item_category_name, description, amount, currency, usali_dept, fb_meal_period, fb_outlet, user_name, reservation_id, quantity', { count: 'planned' })
     .eq('property_id', PROPERTY_ID)
     .in('usali_dept', POS_DEPTS)
     .not('category', 'in', `(${NON_POS_CATS.join(',')})`)
@@ -102,19 +106,11 @@ export default async function PosTransactionsPage({ searchParams }: Props) {
     .sort((a, b) => a.d.localeCompare(b.d));
 
   return (
-    <>
-      <PageHeader
-        pillar="Finance"
-        tab="POS"
-        title={
-          <>
-            Point-of-sale{' '}
-            <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>transactions</em>{' '}
-            — F&B · Spa · Retail · Transport.
-          </>
-        }
-        lede={`${rowCount?.toLocaleString() ?? 0} POS line items · ${since} → ${until} · ${fmtMoney(total$, 'USD')} sales`}
-      />
+    <Page
+      eyebrow="Finance · POS"
+      title={<>Point-of-sale <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>transactions</em> — F&B · Spa · Retail · Transport.</>}
+      subPages={FINANCE_SUBPAGES}
+    >
 
       <FinanceStatusHeader
         top={
@@ -170,17 +166,17 @@ export default async function PosTransactionsPage({ searchParams }: Props) {
 
 
       <div className="card-grid-6" style={{ marginTop: 18 }}>
-        <KpiBox label="POS Lines"      unit="count" value={totalCount} />
-        <KpiBox label="POS Revenue"    unit="usd"   value={total$} />
-        <KpiBox label="Avg Ticket"     unit="usd"   value={avgTicket} dp={2} />
-        <KpiBox label="F&B Lines"      unit="count" value={fb.length}    tooltip={`$${(sumAmt(fb)).toFixed(0)}`} />
-        <KpiBox label="Spa Lines"      unit="count" value={spa.length}   tooltip={`$${(sumAmt(spa)).toFixed(0)}`} />
-        <KpiBox label="Transport Lines" unit="count" value={trans.length} tooltip={`$${(sumAmt(trans)).toFixed(0)}`} />
+        <KpiBox label="POS Lines"      unit="count" value={totalCount} tooltip="Distinct POS transaction lines in the period. Source: public.transactions." />
+        <KpiBox label="POS Revenue"    unit="usd"   value={total$}     tooltip="Sum of POS line revenue in USD across all categories." />
+        <KpiBox label="Avg Ticket"     unit="usd"   value={avgTicket} dp={2} tooltip="Total POS revenue ÷ POS line count. A line ≠ a ticket — this is line-level avg." />
+        <KpiBox label="F&B Lines"      unit="count" value={fb.length}    tooltip={`$${(sumAmt(fb)).toFixed(0)} · F&B (USALI dept Food & Beverage).`} />
+        <KpiBox label="Spa Lines"      unit="count" value={spa.length}   tooltip={`$${(sumAmt(spa)).toFixed(0)} · Spa (Other Operated · Spa).`} />
+        <KpiBox label="Transport Lines" unit="count" value={trans.length} tooltip={`$${(sumAmt(trans)).toFixed(0)} · Transport (Other Operated · Transportation).`} />
       </div>
       <div className="card-grid-3" style={{ marginTop: 12 }}>
-        <KpiBox label="F&B $"    unit="usd" value={sumAmt(fb)} />
-        <KpiBox label="Spa $"    unit="usd" value={sumAmt(spa)} />
-        <KpiBox label="Other Op $" unit="usd" value={sumAmt(otherOp) + sumAmt(trans) + sumAmt(retail)} tooltip="Spa + Transport + Activities + Retail" />
+        <KpiBox label="F&B $"    unit="usd" value={sumAmt(fb)}    tooltip="Sum of F&B line revenue. Watch ratio to room nights for capture %." />
+        <KpiBox label="Spa $"    unit="usd" value={sumAmt(spa)}   tooltip="Sum of Spa line revenue. Watch ratio to room nights for spa capture %." />
+        <KpiBox label="Other Op $" unit="usd" value={sumAmt(otherOp) + sumAmt(trans) + sumAmt(retail)} tooltip="Spa + Transport + Activities + Retail combined (USALI 'Other Operated')." />
       </div>
 
       {/* Top categories */}
@@ -279,7 +275,7 @@ export default async function PosTransactionsPage({ searchParams }: Props) {
           </div>
         )}
       </div>
-    </>
+    </Page>
   );
 }
 
@@ -331,7 +327,7 @@ function PosDailyChart({ rows }: { rows: { d: string; count: number; amount: num
           const y = padT + innerH - bh;
           return (
             <rect key={r.d} x={x} y={y} width={barW} height={bh} fill="var(--moss)">
-              <title>{`${r.d} · ${fmtMoney(r.amount, 'USD')} · ${r.count} txns`}</title>
+              <title>{`${r.d} · ${fmtMoney(r.amount, 'USD')} · ${r.count} txns · v_finance_pos_transactions`}</title>
             </rect>
           );
         })}
@@ -388,7 +384,7 @@ function TopCategoriesChart({ rows }: { rows: [string, number][] }) {
               </text>
               <rect x={labelW} y={y + 4} width={barMaxW} height={14} fill="var(--paper-deep)" />
               <rect x={labelW} y={y + 4} width={barW} height={14} fill="var(--moss)">
-                <title>{`${k} · ${fmtMoney(v, 'USD')} · ${pct.toFixed(0)}%`}</title>
+                <title>{`${k} · ${fmtMoney(v, 'USD')} · ${pct.toFixed(0)}% · v_finance_pos_transactions`}</title>
               </rect>
               <text x={labelW + barMaxW + 4} y={y + 14} style={{ fontFamily: 'var(--mono)', fontSize: 10, fill: 'var(--ink-soft)' }}>
                 {fmtMoney(v, 'USD')}

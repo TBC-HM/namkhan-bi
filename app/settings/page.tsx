@@ -1,6 +1,6 @@
 // app/settings/page.tsx — REDESIGN 2026-05-05 (recovery)
 import Link from 'next/link';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
@@ -54,10 +54,7 @@ export default async function SettingsSnapshotPage() {
   const sectionsList = (sections ?? []) as Array<{ section_code: string; display_name: string; description: string | null; placeholder_count: number | null; row_count: number | null; }>;
 
   return (
-    <>
-      <PageHeader pillar="Settings" tab="Snapshot"
-        title={<>One source of truth <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>for the property</em>.</>}
-        lede={profile ? `${profile.trading_name ?? 'Property'} · ${roomsCount ?? 0} room types · ${sectionsList.length} editable sections · ${completePct.toFixed(0)}% complete` : `${roomsCount ?? 0} room types`} />
+    <Page eyebrow="Settings · Snapshot" title={<>One source of truth <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>for the property</em>.</>}>
       <GuestStatusHeader
         top={<>
           <StatusCell label="SOURCE"><StatusPill tone="active">marketing.property_profile</StatusPill><span style={metaDim}>· room_types · app_users · dq_known_issues</span></StatusCell>
@@ -85,12 +82,12 @@ export default async function SettingsSnapshotPage() {
         </>}
       />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
-        <KpiBox value={null} unit="text" valueText={profile?.trading_name ?? '—'} label="Property" />
-        <KpiBox value={roomsCount ?? 0} unit="count" label="Room types" />
-        <KpiBox value={completePct} unit="pct" label="Profile complete" />
-        <KpiBox value={sectionsList.length} unit="count" label="Editable sections" />
-        <KpiBox value={activeUsers ?? 0} unit="count" label="Active users" />
-        <KpiBox value={dqOpenCount ?? 0} unit="count" label="DQ open" />
+        <KpiBox value={null} unit="text" valueText={profile?.trading_name ?? '—'} label="Property" tooltip="Property trading_name from marketing.property_profile. Editable via /settings/property/property_identity." />
+        <KpiBox value={roomsCount ?? 0} unit="count" label="Room types"             tooltip="Distinct rows in public.room_types — feeds /revenue/pricing rate ladder + /revenue/inventory." />
+        <KpiBox value={completePct} unit="pct" label="Profile complete"             tooltip="Percent of property_profile fields that are not LOREM IPSUM/TODO. Drives marketing copy + AI agent context." />
+        <KpiBox value={sectionsList.length} unit="count" label="Editable sections"  tooltip="Settings panes available under /settings/property/[section]. Source: marketing.v_settings_sections_live." />
+        <KpiBox value={activeUsers ?? 0} unit="count" label="Active users"          tooltip="App users with active=true. Rows in public.app_users." />
+        <KpiBox value={dqOpenCount ?? 0} unit="count" label="DQ open"               tooltip="Open data-quality issues across the dashboard. Source: public.dq_known_issues." />
       </div>
       <div style={{ marginTop: 18 }}>
         <SectionHead title="Reference" emphasis="& architecture" sub="Owner-maintained platform map + live architecture diagram" source="content/settings/platform-map.md" />
@@ -161,6 +158,6 @@ export default async function SettingsSnapshotPage() {
           </div>
         )}
       </div>
-    </>
+    </Page>
   );
 }

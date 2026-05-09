@@ -1,7 +1,8 @@
 // /revenue/parity/agent-settings — read-only view of the parity agent metadata.
 // Schedule + budget + status come from governance.agents.
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { REVENUE_SUBPAGES } from '../../_subpages';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import { supabase } from '@/lib/supabase';
 import { fmtTableUsd, EMPTY } from '@/lib/format';
@@ -66,13 +67,7 @@ export default async function ParityAgentSettings() {
   ];
 
   return (
-    <>
-      <PageHeader
-        pillar="Revenue"
-        tab="Parity · Agent"
-        title="Agent metadata"
-        lede="Read-only configuration for parity_agent. Edit via SQL on governance.agents until the UI is built."
-      />
+    <Page eyebrow="Revenue · Parity · Agent" title="Agent metadata" subPages={REVENUE_SUBPAGES}>
       <div style={card}>
         <div style={cardHeader}>
           <div className="t-eyebrow">PARITY AGENT</div>
@@ -91,7 +86,7 @@ export default async function ParityAgentSettings() {
           </tbody>
         </table>
       </div>
-    </>
+    </Page>
   );
 }
 

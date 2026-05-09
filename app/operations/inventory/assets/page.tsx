@@ -2,7 +2,8 @@
 // Fixed-asset register — fa.assets joined to fa.categories.
 // Shows NBV (straight-line depreciation against in_service_date).
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { OPERATIONS_SUBPAGES } from '../../_subpages';
 import { fmtMoney, fmtDate, EMPTY } from '@/lib/format';
 import { getAssetRegister } from '../_data';
 
@@ -33,13 +34,11 @@ export default async function AssetsPage() {
   const totalDep = totalCost - totalNbv;
 
   return (
-    <>
-      <PageHeader
-        pillar="Operations"
-        tab="Inventory · Assets"
-        title={<>Fixed asset <em style={{ color: 'var(--brass)' }}>register</em></>}
-        lede={<>Building, FF&amp;E, plant, vehicles, IT/POS — net book value via straight-line depreciation against in-service date.</>}
-      />
+    <Page
+      eyebrow="Operations · Inventory · Assets"
+      title={<>Fixed asset <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>register</em></>}
+      subPages={OPERATIONS_SUBPAGES}
+    >
 
       <div style={{
         display: 'grid',
@@ -118,7 +117,7 @@ export default async function AssetsPage() {
           <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-lg)' }}>No assets registered yet.</div>
         </div>
       )}
-    </>
+    </Page>
   );
 }
 

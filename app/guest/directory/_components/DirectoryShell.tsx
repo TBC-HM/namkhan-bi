@@ -1,7 +1,8 @@
 // app/guest/directory/_components/DirectoryShell.tsx
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { CountryFacets } from "./CountryFacets";
 import { GuestTable } from "./GuestTable";
 import { ProfileDrawer } from "./ProfileDrawer";
@@ -28,6 +29,10 @@ type Facet = {
 };
 
 export type ArrivalWindow = "any" | "next_7" | "next_30" | "next_90";
+// PBS 2026-05-09 #8: stayed-since filter for marketing cohort selection.
+// City filter parked — guest.mv_guest_profile.city has 0 distinct values
+// today (Cloudbeds sync gap). Re-enable once city populates.
+export type StayedSince = "any" | "30d" | "90d" | "365d" | "730d";
 
 const SORTS = [
   { key: "lifetime_revenue.desc.nullslast", label: "Top revenue" },
@@ -44,6 +49,14 @@ const ARRIVAL_OPTS: { key: ArrivalWindow; label: string }[] = [
   { key: "next_90", label: "Next 90d" },
 ];
 
+const STAYED_SINCE_OPTS: { key: StayedSince; label: string }[] = [
+  { key: "any",   label: "Anytime"      },
+  { key: "30d",   label: "Last 30d"     },
+  { key: "90d",   label: "Last 90d"     },
+  { key: "365d",  label: "Last 12m"     },
+  { key: "730d",  label: "Last 24m"     },
+];
+
 export function DirectoryShell({
   facets,
   headline,
@@ -55,6 +68,7 @@ export function DirectoryShell({
   const [country, setCountry] = useState<string | null>(null);
   const [sort, setSort] = useState<string>(SORTS[0].key);
   const [arrival, setArrival] = useState<ArrivalWindow>("any");
+  const [stayedSince, setStayedSince] = useState<StayedSince>("any");
   const [repeatOnly, setRepeatOnly] = useState(false);
   const [contactableOnly, setContactableOnly] = useState(false);
 
@@ -73,6 +87,7 @@ export function DirectoryShell({
     setQuery("");
     setCountry(null);
     setArrival("any");
+    setStayedSince("any");
     setRepeatOnly(false);
     setContactableOnly(false);
   };
@@ -81,8 +96,57 @@ export function DirectoryShell({
     !!query ||
     !!country ||
     arrival !== "any" ||
+    stayedSince !== "any" ||
     repeatOnly ||
     contactableOnly;
+
+  // PBS 2026-05-09 (PR repair-list — JOB 4):
+  //   The "Send to marketing" CTA hands off the current filter spec via a
+  //   base64-encoded JSON blob. Marketing-side picks it up at
+  //   /marketing/audiences/new?from_guest_filter=<b64> and pre-populates the
+  //   audience builder. Encoding URL-safe base64 (replace +/ with -_) so it
+  //   round-trips through Next.js routing without escaping issues.
+  const filterSpec = useMemo(
+    () => ({
+      v: 1,
+      query: query || null,
+      country: country || null,
+      sort,
+      arrival,
+      stayedSince,
+      repeatOnly,
+      contactableOnly,
+      generated_at: new Date().toISOString(),
+      source: "guest.directory",
+    }),
+    [query, country, sort, arrival, stayedSince, repeatOnly, contactableOnly]
+  );
+
+  const sendToMarketingHref = useMemo(() => {
+    try {
+      const json = JSON.stringify(filterSpec);
+      const b64 = (typeof window !== "undefined"
+        ? window.btoa(unescape(encodeURIComponent(json)))
+        : Buffer.from(json, "utf8").toString("base64")
+      )
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
+      return `/marketing/audiences/new?from_guest_filter=${b64}`;
+    } catch {
+      return `/marketing/audiences/new`;
+    }
+  }, [filterSpec]);
+
+  // Country options sorted by guest_count desc (taken from facets).
+  const countryOptions = useMemo(
+    () =>
+      [...facets]
+        .filter((f) => f.country)
+        .sort((a, b) => b.guest_count - a.guest_count)
+        .map((f) => ({ value: f.country, label: `${f.country} · ${f.guest_count}` })),
+    [facets]
+  );
 
   return (
     <div className="space-y-8 px-8 py-6">
@@ -109,13 +173,25 @@ export function DirectoryShell({
         </div>
       </header>
 
-      {/* KPI strip — 5 cards, arrival breakdown is now native */}
-      <section className="grid grid-cols-2 gap-4 md:grid-cols-5">
-        <Kpi label="Total" value={headline.total.toLocaleString()} sub="all profiles" />
-        <Kpi
+      {/* KPI strip — every tile is a filter. PBS 2026-05-09 #3/4/5/6:
+          Contactable, Repeat, Next 7/30/90 all click to filter; Total
+          clears all filters. */}
+      <section className="grid grid-cols-2 gap-4 md:grid-cols-6">
+        <KpiClickable
+          label="Total"
+          value={headline.total.toLocaleString()}
+          sub={filtersActive ? 'click to clear filters' : 'all profiles'}
+          active={!filtersActive}
+          onClick={clearAll}
+          tone="stone"
+        />
+        <KpiClickable
           label="Repeat"
           value={headline.repeat_guests.toLocaleString()}
           sub={`${pct(headline.repeat_guests, headline.total)}% of base`}
+          active={repeatOnly}
+          onClick={() => setRepeatOnly(v => !v)}
+          tone="brass"
         />
         <KpiClickable
           label="Next 7 days"
@@ -133,15 +209,25 @@ export function DirectoryShell({
           onClick={() => setArrival(arrival === "next_30" ? "any" : "next_30")}
           tone="emerald"
         />
-        <Kpi
+        <KpiClickable
+          label="Next 90 days"
+          value={headline.next_90.toLocaleString()}
+          sub="arriving (cum.)"
+          active={arrival === "next_90"}
+          onClick={() => setArrival(arrival === "next_90" ? "any" : "next_90")}
+          tone="emerald"
+        />
+        <KpiClickable
           label="Contactable"
           value={headline.contactable.toLocaleString()}
           sub={
             headline.contactable === 0
-              ? "0 emails — getGuest sync pending"
+              ? "0 emails — Cloudbeds sync gap"
               : `${pct(headline.contactable, headline.total)}% of base`
           }
-          warn={headline.contactable === 0}
+          active={contactableOnly}
+          onClick={() => setContactableOnly(v => !v)}
+          tone="brass"
         />
       </section>
 
@@ -176,6 +262,49 @@ export function DirectoryShell({
                   {s.label}
                 </option>
               ))}
+            </select>
+
+            {/* Stayed-since (PBS 2026-05-09 #8 — last_stay_date filter) */}
+            <select
+              value={stayedSince}
+              onChange={(e) => setStayedSince(e.target.value as StayedSince)}
+              title="Stayed since"
+              className="rounded-sm border border-stone-300 bg-white px-3 py-1.5 text-sm"
+            >
+              {STAYED_SINCE_OPTS.map((o) => (
+                <option key={o.key} value={o.key}>
+                  Stayed: {o.label}
+                </option>
+              ))}
+            </select>
+
+            {/* Country select — duplicates the side-rail facet click but gives
+                marketing-handover a familiar dropdown. Driven off the same
+                guest.v_directory_facets payload, so no extra DB hit. */}
+            <select
+              value={country ?? ""}
+              onChange={(e) => setCountry(e.target.value || null)}
+              title="Country"
+              className="rounded-sm border border-stone-300 bg-white px-3 py-1.5 text-sm"
+            >
+              <option value="">All countries</option>
+              {countryOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+
+            {/* City select — parked. guest.mv_guest_profile.city has 0 distinct
+                values today (Cloudbeds sync gap). Render disabled so the
+                marketing handover surface is complete and the hint stays
+                visible. Re-enable as soon as enriched-guest sync populates. */}
+            <select
+              disabled
+              title="City filter — pending Cloudbeds enriched-guest sync (city has 0 distinct values today)"
+              className="cursor-not-allowed rounded-sm border border-stone-200 bg-stone-50 px-3 py-1.5 text-sm text-stone-400"
+            >
+              <option>City: pending sync</option>
             </select>
 
             {/* Arrival-window segmented control */}
@@ -227,6 +356,17 @@ export function DirectoryShell({
                 Clear all
               </button>
             )}
+
+            {/* Send-to-marketing CTA — PBS 2026-05-09 JOB 4. Hands the live
+                filter spec off to the audience builder via base64-encoded
+                JSON. ml-auto only when no Clear-all button is present. */}
+            <Link
+              href={sendToMarketingHref}
+              className={`${filtersActive ? "" : "ml-auto"} rounded-sm border border-emerald-700 bg-emerald-700 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.16em] text-white transition hover:bg-emerald-800`}
+              title="Send the current filter set to /marketing/audiences/new — pre-populates a new audience"
+            >
+              → Send to marketing
+            </Link>
           </div>
 
           <GuestTable
@@ -234,6 +374,7 @@ export function DirectoryShell({
             country={country}
             sort={sort}
             arrival={arrival}
+            stayedSince={stayedSince}
             repeatOnly={repeatOnly}
             contactableOnly={contactableOnly}
             onSelect={setSelectedGuestId}
@@ -295,18 +436,20 @@ function KpiClickable({
   sub?: string;
   active: boolean;
   onClick: () => void;
-  tone?: "emerald";
+  tone?: "emerald" | "brass" | "stone";
 }) {
+  const ringClass =
+    active
+      ? tone === "emerald"
+        ? "border-emerald-700 ring-1 ring-emerald-700/30"
+        : tone === "brass"
+          ? "border-amber-700 ring-1 ring-amber-700/30"
+          : "border-stone-900 ring-1 ring-stone-900/30"
+      : "border-stone-300 hover:border-stone-400";
   return (
     <button
       onClick={onClick}
-      className={`rounded-sm border bg-white p-4 text-left transition ${
-        active
-          ? tone === "emerald"
-            ? "border-emerald-700 ring-1 ring-emerald-700/30"
-            : "border-stone-900 ring-1 ring-stone-900/30"
-          : "border-stone-300 hover:border-stone-400"
-      }`}
+      className={`rounded-sm border bg-white p-4 text-left transition ${ringClass}`}
     >
       <p className="text-[10px] uppercase tracking-[0.16em] text-stone-500">
         {label}

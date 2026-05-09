@@ -2,8 +2,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { fmtUSD } from "@/lib/format";
-import { fetchGuestProfile } from "../_actions/fetchGuestProfile";
+import { fmtUSD, EMPTY } from "@/lib/format";
+import { fetchGuestProfile, type FallbackContact } from "../_actions/fetchGuestProfile";
 
 type Profile = {
   guest_id: string;
@@ -50,6 +50,8 @@ type Reservation = {
   phase: "upcoming" | "in_house" | "past" | "cancelled";
 };
 
+type Tab = "info" | "bookings";
+
 export function ProfileDrawer({
   guestId,
   onClose,
@@ -59,21 +61,31 @@ export function ProfileDrawer({
 }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [fallbackContact, setFallbackContact] = useState<FallbackContact>({
+    email: null,
+    phone: null,
+    source: null,
+  });
   const [loading, setLoading] = useState(false);
+  const [tab, setTab] = useState<Tab>("info");
+  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     if (!guestId) {
       setProfile(null);
       setReservations([]);
+      setFallbackContact({ email: null, phone: null, source: null });
       return;
     }
     let cancelled = false;
     setLoading(true);
+    setTab("info"); // reset to info whenever a new guest opens
     fetchGuestProfile(guestId)
       .then((res) => {
         if (cancelled) return;
         setProfile(res.profile);
         setReservations(res.reservations);
+        setFallbackContact(res.fallbackContact ?? { email: null, phone: null, source: null });
       })
       .finally(() => !cancelled && setLoading(false));
     return () => {
@@ -81,7 +93,19 @@ export function ProfileDrawer({
     };
   }, [guestId]);
 
+  // Toast auto-dismiss
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3500);
+    return () => clearTimeout(t);
+  }, [toast]);
+
   const open = guestId !== null;
+
+  // Booking-tab counts (independent of matview filters — derived from raw list)
+  const bookingsTotal = reservations.length;
+  const upcomingCount = reservations.filter((r) => r.phase === "upcoming").length;
+  const cancelledCount = reservations.filter((r) => r.phase === "cancelled").length;
 
   return (
     <>
@@ -118,15 +142,225 @@ export function ProfileDrawer({
         )}
 
         {profile && !loading && (
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex flex-1 flex-col overflow-hidden">
             <ProfileHero profile={profile} />
-            <ContactBlock profile={profile} />
-            <StatsBlock profile={profile} />
-            <ReservationTimeline reservations={reservations} />
+
+            {/* Action strip — Contactable · Repeat (PBS 2026-05-09 wiring) */}
+            <ActionStrip
+              profile={profile}
+              fallbackContact={fallbackContact}
+              onToggleRepeat={(next) => setProfile((p) => (p ? { ...p, is_repeat: next } : p))}
+              onToast={setToast}
+            />
+
+            {/* Tab strip — Information · Bookings */}
+            <nav
+              role="tablist"
+              aria-label="Guest profile sections"
+              className="flex gap-0 border-b border-stone-300 bg-white px-6"
+            >
+              <TabButton
+                label="Information"
+                active={tab === "info"}
+                onClick={() => setTab("info")}
+              />
+              <TabButton
+                label={`Bookings · ${bookingsTotal}`}
+                active={tab === "bookings"}
+                onClick={() => setTab("bookings")}
+                hint={
+                  upcomingCount > 0
+                    ? `${upcomingCount} upcoming`
+                    : cancelledCount === bookingsTotal && bookingsTotal > 0
+                    ? "all cancelled"
+                    : undefined
+                }
+              />
+            </nav>
+
+            <div className="flex-1 overflow-y-auto">
+              {tab === "info" ? (
+                <>
+                  <ContactBlock profile={profile} fallbackContact={fallbackContact} />
+                  <StatsBlock profile={profile} />
+                </>
+              ) : (
+                <ReservationTimeline reservations={reservations} />
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Toast — surfaces button feedback ("No reachable contact on file" etc) */}
+        {toast && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 rounded-sm bg-stone-900 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.16em] text-white shadow-lg"
+          >
+            {toast}
           </div>
         )}
       </aside>
     </>
+  );
+}
+
+// ============================================================================
+// Action strip — Contactable · Repeat (PBS 2026-05-09 directory wiring)
+// ============================================================================
+
+function ActionStrip({
+  profile,
+  fallbackContact,
+  onToggleRepeat,
+  onToast,
+}: {
+  profile: Profile;
+  fallbackContact: FallbackContact;
+  onToggleRepeat: (next: boolean) => void;
+  onToast: (msg: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  // Resolve a reachable contact channel.
+  // Priority: profile.email → fallback.email → wa.me (phone w/ country code) → tel.
+  // Anything matching "+<digits>" is treated as country-coded; we strip the +
+  // for the wa.me URL per WhatsApp's spec.
+  const resolveContact = (): {
+    href: string;
+    label: string;
+    target?: string;
+  } | null => {
+    const email = profile.email || fallbackContact.email;
+    if (email) {
+      return { href: `mailto:${email}`, label: `Email ${email}` };
+    }
+    const phone = profile.phone || fallbackContact.phone;
+    if (phone) {
+      const trimmed = phone.replace(/\s+/g, "");
+      if (/^\+\d{6,}/.test(trimmed)) {
+        // E.164 — preferred. WhatsApp wa.me URL.
+        const digits = trimmed.replace(/\D/g, "");
+        return {
+          href: `https://wa.me/${digits}`,
+          label: `WhatsApp ${trimmed}`,
+          target: "_blank",
+        };
+      }
+      // Local format — fall back to tel:.
+      return { href: `tel:${trimmed}`, label: `Call ${trimmed}` };
+    }
+    return null;
+  };
+
+  const handleContact = () => {
+    const r = resolveContact();
+    if (!r) {
+      onToast("No reachable contact on file");
+      return;
+    }
+    if (r.target === "_blank") {
+      window.open(r.href, "_blank", "noopener,noreferrer");
+    } else {
+      window.location.href = r.href;
+    }
+  };
+
+  const handleRepeat = async () => {
+    if (busy) return;
+    const next = !profile.is_repeat;
+    setBusy(true);
+    onToggleRepeat(next); // optimistic flip
+    try {
+      const res = await fetch(`/api/guest/${encodeURIComponent(profile.guest_id)}/repeat`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ is_repeat: next }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) {
+        onToggleRepeat(!next); // revert
+        onToast(json?.error ? `Repeat failed: ${json.error}` : "Repeat failed");
+      } else {
+        onToast(next ? "Marked as repeat" : "Repeat flag cleared");
+      }
+    } catch (e: any) {
+      onToggleRepeat(!next);
+      onToast(`Repeat failed: ${e?.message ?? "network error"}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const contact = resolveContact();
+  const contactDisabled = !contact;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-b border-stone-200 bg-white px-6 py-3">
+      <button
+        type="button"
+        onClick={handleContact}
+        title={contact?.label ?? "No email / phone on file — Cloudbeds returns anonymised contact"}
+        className={`rounded-sm border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.16em] transition ${
+          contactDisabled
+            ? "border-stone-200 bg-stone-50 text-stone-400 hover:bg-stone-100"
+            : "border-emerald-700 bg-emerald-700 text-white hover:bg-emerald-800"
+        }`}
+      >
+        Contactable
+      </button>
+      <button
+        type="button"
+        onClick={handleRepeat}
+        disabled={busy}
+        className={`rounded-sm border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.16em] transition disabled:opacity-50 ${
+          profile.is_repeat
+            ? "border-amber-700 bg-amber-700 text-white hover:bg-amber-800"
+            : "border-stone-300 bg-white text-stone-700 hover:bg-stone-50"
+        }`}
+      >
+        {profile.is_repeat ? "✓ Repeat" : "Mark as repeat"}
+      </button>
+      {fallbackContact.source === "reservation" && (
+        <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-stone-500">
+          fallback · reservation
+        </span>
+      )}
+    </div>
+  );
+}
+
+function TabButton({
+  label,
+  active,
+  onClick,
+  hint,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  hint?: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={`relative -mb-px border-b-2 px-3 py-3 font-mono text-[11px] uppercase tracking-[0.16em] transition-colors ${
+        active
+          ? "border-stone-900 text-stone-900"
+          : "border-transparent text-stone-500 hover:text-stone-800"
+      }`}
+    >
+      {label}
+      {hint && (
+        <span className="ml-2 rounded-sm bg-stone-100 px-1.5 py-0.5 text-[9px] text-stone-600">
+          {hint}
+        </span>
+      )}
+    </button>
   );
 }
 
@@ -164,13 +398,22 @@ function ProfileHero({ profile }: { profile: Profile }) {
   );
 }
 
-function ContactBlock({ profile }: { profile: Profile }) {
+function ContactBlock({
+  profile,
+  fallbackContact,
+}: {
+  profile: Profile;
+  fallbackContact: FallbackContact;
+}) {
+  const effEmail = profile.email || fallbackContact.email;
+  const effPhone = profile.phone || fallbackContact.phone;
   const hasAny =
-    profile.email ||
-    profile.phone ||
+    effEmail ||
+    effPhone ||
     profile.city ||
     profile.date_of_birth ||
-    profile.language;
+    profile.language ||
+    profile.gender;
 
   return (
     <section className="border-b border-stone-200 px-6 py-5">
@@ -183,43 +426,36 @@ function ContactBlock({ profile }: { profile: Profile }) {
         </span>
       </div>
 
-      {!hasAny ? (
-        <div className="rounded-sm border border-amber-300 bg-amber-50/60 p-4 text-sm text-amber-900">
+      {!hasAny && (
+        <div className="mb-3 rounded-sm border border-amber-300 bg-amber-50/60 p-3 text-xs text-amber-900">
           <p className="font-medium">No contact details on file.</p>
-          <p className="mt-1 text-xs text-amber-800">
-            Cloudbeds enriched-guest sync (<code>getGuest</code>) hasn&apos;t run
-            yet. Email, phone, city, DOB and language will populate once that
-            job is built.
+          <p className="mt-0.5 text-amber-800">
+            Cloudbeds enriched-guest sync (<code>getGuest</code>) hasn&apos;t
+            populated email / phone / city yet. Fields below show all the
+            tracked attributes — em-dashes mark genuinely missing values.
           </p>
         </div>
-      ) : (
-        <ul className="grid grid-cols-2 gap-3 text-sm">
-          {profile.email && (
-            <ContactItem
-              label="Email"
-              value={profile.email}
-              href={`mailto:${profile.email}`}
-            />
-          )}
-          {profile.phone && (
-            <ContactItem
-              label="Phone"
-              value={profile.phone}
-              href={`tel:${profile.phone}`}
-            />
-          )}
-          {profile.city && <ContactItem label="City" value={profile.city} />}
-          {profile.date_of_birth && (
-            <ContactItem label="Date of birth" value={profile.date_of_birth} />
-          )}
-          {profile.language && (
-            <ContactItem label="Language" value={profile.language} />
-          )}
-          {profile.gender && (
-            <ContactItem label="Gender" value={profile.gender} />
-          )}
-        </ul>
       )}
+
+      {/* Always render the full set of fields so PBS sees what's tracked.
+          Empty values display as em-dash per design spec. */}
+      <ul className="grid grid-cols-2 gap-3 text-sm">
+        <ContactItem
+          label={effEmail && !profile.email ? "Email · fallback" : "Email"}
+          value={effEmail}
+          href={effEmail ? `mailto:${effEmail}` : undefined}
+        />
+        <ContactItem
+          label={effPhone && !profile.phone ? "Phone · fallback" : "Phone"}
+          value={effPhone}
+          href={effPhone ? `tel:${effPhone}` : undefined}
+        />
+        <ContactItem label="Country" value={profile.country} />
+        <ContactItem label="City" value={profile.city} />
+        <ContactItem label="Date of birth" value={profile.date_of_birth} />
+        <ContactItem label="Language" value={profile.language} />
+        <ContactItem label="Gender" value={profile.gender} />
+      </ul>
     </section>
   );
 }
@@ -230,20 +466,24 @@ function ContactItem({
   href,
 }: {
   label: string;
-  value: string;
+  value: string | null | undefined;
   href?: string;
 }) {
+  const display = value && value.trim() !== "" ? value : EMPTY;
+  const isEmpty = display === EMPTY;
   return (
     <li>
       <p className="text-[10px] uppercase tracking-[0.14em] text-stone-500">
         {label}
       </p>
-      {href ? (
+      {href && !isEmpty ? (
         <a href={href} className="text-sm text-stone-900 hover:underline">
-          {value}
+          {display}
         </a>
       ) : (
-        <p className="text-sm text-stone-900">{value}</p>
+        <p className={`text-sm ${isEmpty ? "text-stone-400" : "text-stone-900"}`}>
+          {display}
+        </p>
       )}
     </li>
   );
@@ -257,25 +497,25 @@ function StatsBlock({ profile }: { profile: Profile }) {
         value={
           profile.lifetime_revenue
             ? fmtUSD(Number(profile.lifetime_revenue))
-            : "—"
+            : EMPTY
         }
       />
       <Stat
         label="Avg ADR"
-        value={profile.avg_adr ? fmtUSD(Number(profile.avg_adr)) : "—"}
+        value={profile.avg_adr ? fmtUSD(Number(profile.avg_adr)) : EMPTY}
       />
       <Stat label="Stays" value={String(profile.stays_count)} />
       <Stat
         label="Total nights"
-        value={profile.total_nights?.toString() ?? "—"}
+        value={profile.total_nights?.toString() ?? EMPTY}
       />
       <Stat label="Bookings" value={String(profile.bookings_count)} />
       <Stat
         label="Cancellations"
         value={String(profile.cancellations_count)}
       />
-      <Stat label="First stay" value={profile.first_stay_date ?? "—"} />
-      <Stat label="Last stay" value={profile.last_stay_date ?? "—"} />
+      <Stat label="First stay" value={profile.first_stay_date ?? EMPTY} />
+      <Stat label="Last stay" value={profile.last_stay_date ?? EMPTY} />
       {profile.upcoming_stay_date && (
         <Stat
           label="Next arrival"
@@ -344,7 +584,7 @@ function ReservationTimeline({ reservations }: { reservations: Reservation[] }) 
                   <span className="text-stone-400">· {r.nights}n</span>
                 </p>
                 <p className="mt-0.5 text-sm text-stone-900">
-                  {r.room_type_name}{" "}
+                  {r.room_type_name ?? EMPTY}{" "}
                   <span className="text-xs text-stone-500">
                     · {r.adults} adult{r.adults !== 1 ? "s" : ""}
                     {r.children > 0 && ` + ${r.children} child`}
@@ -356,14 +596,14 @@ function ReservationTimeline({ reservations }: { reservations: Reservation[] }) 
                   {r.total_amount ? (
                     fmtUSD(Number(r.total_amount))
                   ) : (
-                    <span className="text-stone-300">—</span>
+                    <span className="text-stone-300">{EMPTY}</span>
                   )}
                 </p>
                 <PhaseBadge phase={r.phase} />
               </div>
             </div>
             <p className="mt-1.5 text-[11px] uppercase tracking-wider text-stone-500">
-              {r.source_name} · {r.market_segment ?? "—"} · {r.rate_plan ?? "—"}
+              {r.source_name ?? EMPTY} · {r.market_segment ?? EMPTY} · {r.rate_plan ?? EMPTY}
             </p>
           </li>
         ))}

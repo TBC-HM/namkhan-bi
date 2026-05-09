@@ -18,7 +18,18 @@ export type WindowKey =
   | 'today' | '7d' | '30d' | '90d' | 'ytd' | 'l12m'
   | 'next7' | 'next30' | 'next90' | 'next180' | 'next365';
 
-export type CompareKey = 'none' | 'pp' | 'stly';
+// CompareKey: PBS 2026-05-09 expanded the set so every revenue/finance page
+// can offer last-week / last-month / SDLY / STLY / Budget compares alongside
+// the legacy "prior period" (pp) shim.
+//   none   → no compare
+//   pp     → prior period (same length, immediately before current window)  [legacy]
+//   stly   → same time last year (window shifted -1 calendar year)
+//   sdly   → same day(s) last year (alias of stly for now; reserved for future
+//            day-level offset logic that snaps to weekday rather than date)
+//   lw     → last week (window shifted -7 days)
+//   lm     → last month (window shifted -1 calendar month, approx -30 days)
+//   budget → compare against budget plan (data layer wires this; UI just sets cmpLabel)
+export type CompareKey = 'none' | 'pp' | 'stly' | 'sdly' | 'lw' | 'lm' | 'budget';
 // SegmentKey aligned to actual reservations.market_segment values
 // (verified 2026-05-01: Retail, Discount, DMC, Comp, Group Bookings, NULL).
 export type SegmentKey = 'all' | 'retail' | 'dmc' | 'group' | 'discount' | 'comp' | 'unsegmented';
@@ -55,7 +66,7 @@ export interface ResolvedPeriod {
 
 // ---------- Allowed values, defaults ----------
 const WIN_VALUES: WindowKey[] = ['today','7d','30d','90d','ytd','l12m','next7','next30','next90','next180','next365'];
-const CMP_VALUES: CompareKey[] = ['none','pp','stly'];
+const CMP_VALUES: CompareKey[] = ['none','pp','stly','sdly','lw','lm','budget'];
 const SEG_VALUES: SegmentKey[] = ['all','retail','dmc','group','discount','comp','unsegmented'];
 const CAP_VALUES: CapacityMode[] = ['selling','live','total'];
 
@@ -111,14 +122,23 @@ function windowRange(win: WindowKey, today = new Date()):
 
 // ---------- Compare range computation ----------
 function compareRange(cmp: CompareKey, from: Date, to: Date, days: number): { from: Date; to: Date } | null {
-  if (cmp === 'none') return null;
+  if (cmp === 'none' || cmp === 'budget') return null;
   if (cmp === 'pp') {
     // Prior period: shift back by `days` days
     return { from: addDays(from, -days), to: addDays(to, -days) };
   }
-  if (cmp === 'stly') {
-    // Same time last year: shift back by 1 calendar year
+  if (cmp === 'stly' || cmp === 'sdly') {
+    // Same time last year (calendar) / same day last year (placeholder = stly).
     return { from: addYears(from, -1), to: addYears(to, -1) };
+  }
+  if (cmp === 'lw') {
+    // Last week: shift back 7 days.
+    return { from: addDays(from, -7), to: addDays(to, -7) };
+  }
+  if (cmp === 'lm') {
+    // Last month: shift back ~30 days (calendar month is approximate; data layer
+    // can refine if needed).
+    return { from: addDays(from, -30), to: addDays(to, -30) };
   }
   return null;
 }
@@ -128,6 +148,10 @@ const CMP_LABELS: Record<CompareKey, string> = {
   none: '',
   pp: 'vs Prior period',
   stly: 'vs Same time last year',
+  sdly: 'vs Same day last year',
+  lw: 'vs Last week',
+  lm: 'vs Last month',
+  budget: 'vs Budget',
 };
 const SEG_LABELS: Record<SegmentKey, string> = {
   all: 'All segments',

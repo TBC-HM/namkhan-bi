@@ -1,7 +1,8 @@
 // app/revenue/rateplans/page.tsx — REDESIGN 2026-05-05 (recovery rewrite)
 // compset-style: PageHeader + status header + 3 graphs + KpiBox + DataTable.
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { REVENUE_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import { resolvePeriod } from '@/lib/period';
@@ -151,13 +152,20 @@ export default async function RatePlansPage({ searchParams }: Props) {
   const orphanRows: OrphanRow[] = (orphans ?? []) as OrphanRow[];
 
   return (
-    <>
-      <PageHeader
-        pillar="Revenue"
-        tab="Rate plans"
-        title={<>Sell the right <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>plan</em>, retire the dead ones.</>}
-        lede={`${period.label} · ${plansBookingInWindow}/${activeMasterCount} active plans booking · top 3 = ${top3Pct.toFixed(0)}% of revenue`}
-      />
+    <Page
+      eyebrow="Revenue · Rate plans"
+      title={<>Sell the right <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>plan</em>, retire the dead ones.</>}
+      subPages={REVENUE_SUBPAGES}
+      topRight={
+        <a href="/revenue/rateplans/dead" style={{
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+          fontSize: 11, letterSpacing: '0.10em', textTransform: 'uppercase', fontWeight: 700,
+          color: '#0a0a0a', background: '#a8854a',
+          border: '1px solid #2a2520', padding: '6px 12px',
+          borderRadius: 4, textDecoration: 'none',
+        }}>↗ Dead plans (90d)</a>
+      }
+    >
       <RatePlansStatusHeader
         lastBookingDate={lastBookingDate}
         activeMasterCount={activeMasterCount}
@@ -171,10 +179,10 @@ export default async function RatePlansPage({ searchParams }: Props) {
       />
       <RatePlansGraphs trend={trend} typeMix={typeRollup} cancel={cancelData} />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 14 }}>
-        <KpiBox value={null} unit="text" valueText={`${plansBookingInWindow}/${activeMasterCount}`} label={`Plans booking ${period.label}`} />
-        <KpiBox value={sleepingRows.length} unit="count" label="Sleeping plans 90d" />
-        <KpiBox value={top3Pct} unit="pct" label="Top 3 concentration" />
-        <KpiBox value={totalRev} unit="usd" label={`Revenue ${period.label}`} />
+        <KpiBox value={null} unit="text" valueText={`${plansBookingInWindow}/${activeMasterCount}`} label={`Plans booking ${period.label}`} tooltip={`Plans with at least one reservation in ${period.label} ÷ active master plans.`} />
+        <KpiBox value={sleepingRows.length} unit="count" label="Sleeping plans 90d" tooltip="Active plans with 0 bookings in the last 90 days. Click 'Dead plans' top-right for the cleanup list." />
+        <KpiBox value={top3Pct} unit="pct" label="Top 3 concentration" tooltip="Share of revenue captured by the top 3 plans. > 60% = healthy clarity, < 40% = scattered." />
+        <KpiBox value={totalRev} unit="usd" label={`Revenue ${period.label}`} tooltip="Sum of reservation total_amount attributed to a rate plan in this window." />
       </div>
       <div style={{ marginTop: 18 }}>
         <SectionHead title="Plans" emphasis="ranked by revenue" sub={`${period.label} · active master plans only${hiddenOrphanInWindow > 0 ? ` · ${hiddenOrphanInWindow} orphan/retired hidden — see below` : ''}`} source="v_rate_plan_perf" />
@@ -190,7 +198,7 @@ export default async function RatePlansPage({ searchParams }: Props) {
           <OrphansTable rows={orphanRows} />
         </div>
       </div>
-    </>
+    </Page>
   );
 }
 

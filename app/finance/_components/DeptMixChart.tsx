@@ -90,7 +90,7 @@ function Chart({ rows }: { rows: { dept: string; rev: number; profit: number }[]
             </text>
             <rect x={labelW} y={y + 4} width={barMaxW} height={14} fill="var(--paper-deep)" />
             <rect x={labelW} y={y + 4} width={barW} height={14} fill="var(--moss)">
-              <title>{`${r.dept} · rev ${fmtMoney(r.rev, 'USD')} · profit ${fmtMoney(r.profit, 'USD')} · ${pct.toFixed(0)}%`}</title>
+              <title>{`${r.dept} · rev ${fmtMoney(r.rev, 'USD')} · profit ${fmtMoney(r.profit, 'USD')} · ${pct.toFixed(0)}% · gl.v_usali_dept_summary`}</title>
             </rect>
             <text x={labelW + barMaxW + 4} y={y + 14} style={val}>
               {fmtMoney(r.rev, 'USD')} · {pct.toFixed(0)}%

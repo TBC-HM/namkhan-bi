@@ -1,7 +1,8 @@
 // app/operations/inventory/capex/page.tsx
 // CapEx pipeline — fa.capex_pipeline.
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { OPERATIONS_SUBPAGES } from '../../_subpages';
 import { fmtMoney, fmtDate, fmtPct, EMPTY } from '@/lib/format';
 import { getCapexPipeline } from '../_data';
 
@@ -28,13 +29,11 @@ export default async function CapexPipelinePage() {
   const sum = (arr: typeof rows) => arr.reduce((s, r) => s + (r.estimated_cost_usd ?? 0), 0);
 
   return (
-    <>
-      <PageHeader
-        pillar="Operations"
-        tab="Inventory · CapEx"
-        title={<>CapEx <em style={{ color: 'var(--brass)' }}>pipeline</em></>}
-        lede={<>Capital project pipeline — proposed → reviewed → approved → ordered → received. IRR and payback are operator entries; ROI tracking is post-conversion to fixed asset.</>}
-      />
+    <Page
+      eyebrow="Operations · Inventory · CapEx"
+      title={<>CapEx <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>pipeline</em></>}
+      subPages={OPERATIONS_SUBPAGES}
+    >
 
       <div style={{
         display: 'grid',
@@ -98,7 +97,7 @@ export default async function CapexPipelinePage() {
           </tbody>
         </table>
       </div>
-    </>
+    </Page>
   );
 }
 

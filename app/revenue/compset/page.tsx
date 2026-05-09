@@ -27,10 +27,14 @@
 // Per CLAUDE.md hard rules: this is a server component, all canonical components,
 // every section has an empty-state, zero hardcoded fontSize / hex / USD prefix.
 
-import PageHeader from '@/components/layout/PageHeader';
-import { supabase } from '@/lib/supabase';
+import Page from '@/components/page/Page';
+import Panel from '@/components/page/Panel';
+import ArtifactActions from '@/components/page/ArtifactActions';
+import { createClient } from '@supabase/supabase-js';
+import { REVENUE_SUBPAGES } from '../_subpages';
 import CompactAgentHeader from './_components/CompactAgentHeader';
 import CompsetGraphs from './_components/CompsetGraphs';
+import TopInsights from './_components/TopInsights';
 import SetTabs from './_components/SetTabs';
 import PropertyTable from './_components/PropertyTable';
 import AgentRunHistoryTable from './_components/AgentRunHistoryTable';
@@ -90,7 +94,22 @@ export default async function CompsetPage({ searchParams }: PageProps) {
 
   // --------------------------------------------------------------------------
   // Parallel data fetch — all queries kicked off together.
+  // 2026-05-09 PBS regression hunt: shared `lib/supabase` prefers service-role,
+  // but service_role currently LACKS SELECT on the underlying revenue.*
+  // tables/views (anon + authenticated have it). PostgREST therefore returns
+  // [] silently for service-role on every v_compset_* view → "wiring is gone"
+  // empty page. Anon, in contrast, sees all rows (verified via SQL with
+  // SET LOCAL ROLE anon: 4 sets, 14 props, 240 rates).
+  //
+  // Until the schema-side grants are fixed (out of scope for this UI session),
+  // pin the compset page to a local anon client. No secrets in repo; uses the
+  // same NEXT_PUBLIC_SUPABASE_ANON_KEY everything else uses.
   // --------------------------------------------------------------------------
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { persistSession: false } },
+  );
   const setSummaryP = supabase
     .from('v_compset_set_summary')
     .select('*');
@@ -103,9 +122,13 @@ export default async function CompsetPage({ searchParams }: PageProps) {
   const detailP = supabase
     .from('v_compset_competitor_property_detail')
     .select('*');
+  // PBS 2026-05-09: explicitly fetch up to 5000 rows so a wide comp set does
+  // not get truncated under PostgREST default limit. Was the cause of empty
+  // chart rendering even though data existed in the view.
   const rateMatrixP = supabase
     .from('v_compset_competitor_rate_matrix')
-    .select('*');
+    .select('*')
+    .limit(5000);
   const ratePlanMixP = supabase
     .from('v_compset_competitor_rate_plan_mix')
     .select('*');
@@ -419,38 +442,55 @@ export default async function CompsetPage({ searchParams }: PageProps) {
   // --------------------------------------------------------------------------
   // RENDER
   // --------------------------------------------------------------------------
+  const ctx = (kind: 'panel' | 'kpi' | 'brief' | 'table', title: string) => ({ kind, title, dept: 'revenue' as const });
+
   return (
-    <>
-      <PageHeader
-        pillar="Revenue"
-        tab="Comp Set"
-        title={
-          <>
-            See who is moving the{' '}
-            <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>
-              price line
-            </em>
-            , before they do.
-          </>
-        }
-        lede="Comp-set rate, ranking and rate-plan signals — refreshed nightly by the comp-set agent."
-      />
+    <Page
+      eyebrow="Revenue · Comp Set"
+      title={
+        <>
+          See who is moving the{' '}
+          <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>
+            price line
+          </em>
+          , before they do.
+        </>
+      }
+      subPages={REVENUE_SUBPAGES}
+    >
+      <Panel title="Comp-set agent" eyebrow="status · last run · next shop" actions={<ArtifactActions context={ctx('panel', 'Comp-set agent status')} />}>
+        <CompactAgentHeader
+          agent={agent}
+          lastRun={lastRun}
+          nextEvent={nextEvent}
+          pickDates={pickDates}
+          events={events}
+          settingsLinks={[
+            { href: '/revenue/compset/scoring-settings', label: 'Scoring' },
+            { href: '/revenue/compset/agent-settings', label: 'Agent' },
+          ]}
+        />
+      </Panel>
 
-      {/* COMPACT AGENT HEADER — replaces TopStrip + EventsStrip + ScrapeDates. */}
-      <CompactAgentHeader
-        agent={agent}
-        lastRun={lastRun}
-        nextEvent={nextEvent}
-        pickDates={pickDates}
-        events={events}
-        settingsLinks={[
-          { href: '/revenue/compset/scoring-settings', label: 'Scoring' },
-          { href: '/revenue/compset/agent-settings', label: 'Agent' },
-        ]}
-      />
+      <div style={{ height: 14 }} />
 
-      {/* 3-GRAPH ROW (rate trend · DoW positioning · promo intensity). */}
-      <CompsetGraphs calendar={calendar} dow={dow} tiles={graphTiles} />
+      <Panel
+        title="Top insights"
+        eyebrow="rates · last 30 stay-dates · namkhan vs comp set"
+        actions={<ArtifactActions context={ctx('panel', 'Top insights · compset rate trend')} />}
+      >
+        <TopInsights
+          propertyRows={allProps}
+          rateMatrix={rateMatrix}
+          namkhanCompId={NAMKHAN_COMP_ID}
+        />
+      </Panel>
+
+      <div style={{ height: 14 }} />
+
+      <Panel title="Rate trend · DoW · promo intensity" eyebrow="hero" actions={<ArtifactActions context={ctx('panel', 'Comp-set graphs')} />}>
+        <CompsetGraphs calendar={calendar} dow={dow} tiles={graphTiles} />
+      </Panel>
 
       {/* SET TABS — ?set= URL param. Hidden when zero sets. */}
       {orderedSets.length > 0 ? (
@@ -479,24 +519,24 @@ export default async function CompsetPage({ searchParams }: PageProps) {
         </section>
       )}
 
-      {/* AGENT RUN HISTORY — last 10 runs across compset_agent + discovery. */}
-      <section style={tableSection}>
-        <div style={sectionHeader}>
-          <div className="t-eyebrow">AGENT RUN HISTORY</div>
-          <div style={sectionTitle}>Last 10 runs</div>
-        </div>
-        <AgentRunHistoryTable rows={runHistory} />
-      </section>
+      <div style={{ height: 14 }} />
 
-      {/* PAGE-WIDE ANALYTICS — maturity banner, tiles, landscape, plan gaps. */}
-      <AnalyticsBlock
-        maturity={maturity}
-        landscape={landscape}
-        gaps={gaps}
-        promo={promo}
-        tiles={tiles}
-      />
-    </>
+      <Panel title="Agent run history · last 10" eyebrow="compset_agent · comp_discovery_agent" actions={<ArtifactActions context={ctx('table', 'Agent run history')} />}>
+        <AgentRunHistoryTable rows={runHistory} />
+      </Panel>
+
+      <div style={{ height: 14 }} />
+
+      <Panel title="Analytics" eyebrow="data maturity · landscape · gaps · promo" actions={<ArtifactActions context={ctx('panel', 'Comp-set analytics')} />}>
+        <AnalyticsBlock
+          maturity={maturity}
+          landscape={landscape}
+          gaps={gaps}
+          promo={promo}
+          tiles={tiles}
+        />
+      </Panel>
+    </Page>
   );
 }
 

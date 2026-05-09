@@ -201,7 +201,9 @@ export function channelMixTrendSvg(rows: ChannelMixWeekRow[]): string {
       const i = cumPrev.length - 1 - j;
       return `${(padL + i * xStep).toFixed(1)},${(padT + innerH - (v / 100) * innerH).toFixed(1)}`;
     }).join(' ');
-    return `<polygon points="${top} ${bot}" fill="${CAT_COLOR[cat] ?? MUTE}" opacity="0.85"/>`;
+    // PBS 2026-05-09: every chart band gets a hover title.
+    const latestPct = lookup[`${weeks[weeks.length - 1]}|${cat}`] ?? 0;
+    return `<polygon points="${top} ${bot}" fill="${CAT_COLOR[cat] ?? MUTE}" opacity="0.85"><title>${cat} · ${latestPct.toFixed(0)}% (latest week) · channel-mix trend · weekly · cloudbeds</title></polygon>`;
   }).join('');
 
   const xLbls = [0, Math.floor(weeks.length / 2), weeks.length - 1].map((i) => {
@@ -286,7 +288,14 @@ export function channelVelocity3LineSvg(rows: ChannelVelocityLineRow[]): string 
       const v = lookup[`${d}|${cat}`] ?? 0;
       return `${(padL + i * xStep).toFixed(1)},${(padT + innerH - (v / niceMax) * innerH).toFixed(1)}`;
     }).join(' ');
-    return `<polyline points="${pts}" fill="none" stroke="${CAT_COLOR[cat] ?? MUTE}" stroke-width="1.5"/>`;
+    // Per-day hover dots so PBS can read exact bookings on the line.
+    const dots = days.map((d, i) => {
+      const v = lookup[`${d}|${cat}`] ?? 0;
+      const x = (padL + i * xStep).toFixed(1);
+      const y = (padT + innerH - (v / niceMax) * innerH).toFixed(1);
+      return `<circle cx="${x}" cy="${y}" r="6" fill="${CAT_COLOR[cat] ?? MUTE}" fill-opacity="0"><title>${cat} · ${v} bookings · ${d} · daily velocity · cloudbeds</title></circle>`;
+    }).join('');
+    return `<polyline points="${pts}" fill="none" stroke="${CAT_COLOR[cat] ?? MUTE}" stroke-width="1.5"/>${dots}`;
   }).join('');
 
   const xLbls = [0, Math.floor(days.length / 2), days.length - 1].map((i) => {

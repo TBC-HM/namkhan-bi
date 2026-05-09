@@ -1,0 +1,67 @@
+# PBS 2026-05-09: agent-runner — picks up tickets from cockpit_tickets where
+# status='triaged' (chat-mode replies are status='triaged' but intent='advice'
+# and skipped) and arm IN ('dev','code') with intent='build', invokes the
+# Claude Agent SDK to write code, opens a PR with the preview deploy linked
+# back into the ticket. Approval gate is /api/cockpit/approve-deploy which
+# PBS triggers from the dept-entry Bugs box.
+#
+# Status: scaffold. Required to wire end-to-end:
+#   1) ANTHROPIC_API_KEY in repo secrets
+#   2) GITHUB_TOKEN with PR write (default has it)
+#   3) NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in repo secrets
+#   4) Pin the Claude Agent SDK version once installed in package.json
+#   5) Verify the queue-worker script runs locally (scripts/agent-runner.ts)
+#
+# Schedule: every 10 min. Hand-trigger via workflow_dispatch.
+
+name: agent-runner
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+    inputs:
+      ticket_id:
+        description: 'Run a specific ticket id (skips queue scan)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Run agent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # PBS 2026-05-09: repo already has SUPABASE_SERVICE_KEY +
+          # SUPABASE_URL from prior CI work. Reuse those names instead of
+          # requiring two extra secrets.
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          TICKET_ID: ${{ github.event.inputs.ticket_id }}
+        run: |
+          if [ -f "scripts/agent-runner.ts" ]; then
+            npx tsx scripts/agent-runner.ts
+          else
+            echo "scripts/agent-runner.ts not found — scaffold only. See docs/16_SESSION_HANDOFF.md."
+            exit 0
+          fi

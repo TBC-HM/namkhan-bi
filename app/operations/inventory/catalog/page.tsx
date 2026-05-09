@@ -8,7 +8,8 @@
 // Server component fetches; client subcomponent renders the DataTable
 // because column render/sortValue fns can't cross the server→client boundary.
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { OPERATIONS_SUBPAGES } from '../../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import UploadProductsButton from '../_components/UploadProductsButton';
 import SyncCloudbedsButton from '../_components/SyncCloudbedsButton';
@@ -83,14 +84,12 @@ export default async function CatalogAdminPage() {
   const items = await getItems();
 
   return (
-    <>
-      <PageHeader
-        pillar="Operations"
-        tab="Inventory · Catalog"
-        title={<>Item <em style={{ color: 'var(--brass)' }}>catalog</em></>}
-        lede={<>Source of truth for every product the property buys, sells, or stocks. Bulk-load via CSV; rows with existing SKU are updated, new SKUs are inserted.</>}
-        rightSlot={<><SyncPosterPosButton /><SyncCloudbedsButton /><UploadProductsButton /></>}
-      />
+    <Page
+      eyebrow="Operations · Inventory · Catalog"
+      title={<>Item <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>catalog</em></>}
+      subPages={OPERATIONS_SUBPAGES}
+      topRight={<><SyncPosterPosButton /><SyncCloudbedsButton /><UploadProductsButton /></>}
+    >
 
       <div style={{ marginTop: 18 }}>
         <CatalogTableClient rows={items} />
@@ -119,6 +118,6 @@ export default async function CatalogAdminPage() {
         <code style={{ fontFamily: 'var(--mono)' }}>category_code</code>&nbsp;(use codes shown in this table),&nbsp;
         <code style={{ fontFamily: 'var(--mono)' }}>unit_code</code>&nbsp;(default <code style={{ fontFamily: 'var(--mono)' }}>ea</code>),&nbsp;and any optional fields.
       </div>
-    </>
+    </Page>
   );
 }

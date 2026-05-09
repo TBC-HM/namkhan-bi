@@ -123,8 +123,8 @@
 html { scroll-behavior: smooth; }
 body {
   font-family: var(--sans);
-  background: var(--paper);
-  color: var(--ink);
+  background: #0a0a0a; /* dark canvas — matches <Page> shell + entry pages (PBS 2026-05-09: no brown sides) */
+  color: #e9e1ce;
   font-size: 14px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
@@ -2673,3 +2673,167 @@ body:has(.public-prop-bg) .main {
   color: var(--ink-soft);
   flex: 1;
 }
+
+/* ── /guest/directory dark-theme overrides (PBS 2026-05-09)
+ * DirectoryShell uses Tailwind stone-* light tokens authored before the
+ * dark canvas was the default. Surgically darken backgrounds + text inside
+ * the wrapper without rewriting the component tree. Also hide the
+ * component's redundant inner <header> (we render Page's eyebrow/title
+ * outside).
+ */
+.gst-dir-dark > div > header { display: none !important; }
+.gst-dir-dark .bg-white { background: #0f0d0a !important; }
+.gst-dir-dark .border-stone-300,
+.gst-dir-dark .border-stone-200,
+.gst-dir-dark [class*="border-stone-300/"] { border-color: #2a261d !important; }
+.gst-dir-dark .text-stone-900 { color: #e9e1ce !important; }
+.gst-dir-dark .text-stone-700 { color: #d8cca8 !important; }
+.gst-dir-dark .text-stone-600,
+.gst-dir-dark .text-stone-500,
+.gst-dir-dark .text-stone-400 { color: #9b907a !important; }
+.gst-dir-dark .bg-stone-50,
+.gst-dir-dark .bg-stone-100 { background: #15110b !important; }
+.gst-dir-dark .hover\:bg-stone-50:hover,
+.gst-dir-dark .hover\:bg-stone-100:hover { background: #1c160d !important; }
+.gst-dir-dark input[type="search"],
+.gst-dir-dark input[type="text"] {
+  background: #0a0a0a !important; color: #e9e1ce !important;
+  border-color: #2a261d !important;
+}
+
+/* ── Dark-canvas table readability (PBS 2026-05-09 — round 3)
+ * The earlier "force-align ALL legacy tables" block at line ~424 painted
+ * cells with `color: var(--ink) !important` (#1c1815) on `var(--paper-warm)`
+ * (#f4ecd8) — that's a LIGHT-THEME palette baked in with !important, so
+ * every override below it lost. The whole site is dark-theme now, so we
+ * neutralise that block here with stronger specificity + !important and
+ * paint tables for the dark canvas. PBS: "many tables still black".
+ */
+body table:not(.data-table),
+body table.tbl,
+body table {
+  color: #f0e5cb !important;
+  background: transparent !important;
+  font-size: 13px;
+}
+body table:not(.data-table) th,
+body table:not(.data-table) thead th,
+body table.tbl th,
+body table th {
+  color: #f4d99a !important;
+  background: #221a10 !important;
+  border-bottom: 2px solid #a8854a !important;
+  font-weight: 700 !important;
+  padding: 10px 10px !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  font-size: 11px !important;
+  white-space: nowrap;
+}
+body table:not(.data-table) tbody td,
+body table:not(.data-table) td,
+body table.tbl td,
+body table td {
+  color: #f0e5cb !important;
+  background: transparent !important;
+  border-bottom: 1px solid #2a2520 !important;
+  font-weight: 500 !important;
+  padding: 9px 10px !important;
+  font-size: 13px !important;
+}
+body table:not(.data-table) tbody tr:nth-child(even) td,
+body table.tbl tbody tr:nth-child(even) td,
+body table tbody tr:nth-child(even) td {
+  background: rgba(255,245,216,0.03) !important;
+}
+body table:not(.data-table) tbody tr:hover td,
+body table.tbl tbody tr:hover td,
+body table tbody tr:hover td {
+  background: rgba(168,133,74,0.20) !important;
+  color: #fff5d8 !important;
+}
+body table .lbl strong, body table td strong { color: #fff5d8 !important; }
+body table .text-mute, body table .ink-mute, body table td.text-mute, body table .lbl.text-mute { color: #b8a98a !important; }
+body table .num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+/* P/L USALI section rows (.pnl-page table.usali) keep their structural
+ * highlighting but use dark-friendly tones. */
+body .pnl-page table.usali tr.section td {
+  background: #1a140b !important;
+  color: #f4d99a !important;
+  font-family: var(--mono) !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.06em !important;
+}
+body .pnl-page table.usali tr.gop td,
+body .pnl-page table.usali tr.ebitda td {
+  background: #221a10 !important;
+  color: #fff5d8 !important;
+  font-weight: 700 !important;
+  border-top: 2px solid #a8854a !important;
+  border-bottom: 2px solid #a8854a !important;
+}
+
+/* PBS 2026-05-09 round 5 (replaces round 4): the round-4 sweeping body{}
+ * override flipped EVERY brand token, but `--paper-warm` and `--ink` are
+ * used as TEXT colors in places too (e.g. CashForecastPanel pill captions
+ * with `color: var(--paper-warm)`). Flipping them dark made that text
+ * invisible. Round 5 only overrides the surface-bg tokens that components
+ * use exclusively for backgrounds (`--surf-1/2/hover`, `--card`, `--rule`)
+ * and leaves the brand text-tokens (`--paper-warm`, `--ink`, `--ink-mute`)
+ * at their :root cream values. Targeted, not sweeping. */
+body {
+  --card:        #11110f !important;
+  --surf-1:      #15110b !important;
+  --surf-2:      #1a140b !important;
+  --surf-hover:  #221a10 !important;
+  --rule:        #2a2520 !important;
+}
+
+/* Inputs + selects on the dark canvas also need a baseline. */
+input[type="text"], input[type="search"], input[type="email"],
+input[type="number"], input[type="date"], input[type="tel"],
+input[type="url"], textarea, select {
+  background: #0f0d0a;
+  color: #e9e1ce;
+  border: 1px solid #2a261d;
+}
+input::placeholder, textarea::placeholder { color: #5a5448; }
+
+/* The legacy .panel-warm / .paper-warm backgrounds need to flip dark too */
+.panel-warm, [class*="bg-paper-warm"] { background: #0f0d0a; }
+
+/* ── /operations/staff dark overrides (PBS 2026-05-09)
+ * Same Tailwind stone-* light theme bleed as /guest/directory; flip the
+ * tokens inside .ops-staff-dark only.
+ */
+.ops-staff-dark .text-stone-900 { color: #e9e1ce !important; }
+.ops-staff-dark .text-stone-700 { color: #d8cca8 !important; }
+.ops-staff-dark .text-stone-600,
+.ops-staff-dark .text-stone-500,
+.ops-staff-dark .text-stone-400 { color: #9b907a !important; }
+.ops-staff-dark .bg-white { background: #0f0d0a !important; }
+.ops-staff-dark .border-stone-300,
+.ops-staff-dark .border-stone-200,
+.ops-staff-dark [class*="border-stone-300/"] { border-color: #2a261d !important; }
+
+/* ── PBS 2026-05-09 panel expand button.
+ * Native fullscreen first; CSS fallback when requestFullscreen rejects.
+ */
+[data-panel]:fullscreen {
+  background: #0a0a0a !important;
+  padding: 32px !important;
+  overflow: auto;
+}
+[data-panel].panel-fs {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #0a0a0a;
+  padding: 32px;
+  overflow: auto;
+  border-radius: 0;
+  border: none;
+}
+body.panel-fs-active { overflow: hidden; }

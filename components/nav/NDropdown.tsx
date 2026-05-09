@@ -16,18 +16,20 @@ interface MenuItem {
   group?: 'home' | 'pillars' | 'utility';
 }
 
+// 2026-05-08 PBS directive: Front Office, Knowledge, IT Cockpit removed
+// from the global N menu. They live under the user dropdown's "Tools"
+// section now. Settings stays here as a utility because it's also
+// reachable from the user dropdown — keep one obvious entry.
 const MENU: MenuItem[] = [
-  { href: '/',                        label: 'Home',         hint: 'Overview', group: 'home' },
-  { href: '/revenue',                 label: 'Revenue',      hint: 'Pulse · Pace · Channels',   group: 'pillars' },
-  { href: '/sales',                   label: 'Sales',        hint: 'Inquiries · B2B · Bookings', group: 'pillars' },
-  { href: '/marketing',               label: 'Marketing',    hint: 'Reach · campaigns · social', group: 'pillars' },
-  { href: '/operations',              label: 'Operations',   hint: 'Today · F&B · Spa',          group: 'pillars' },
-  { href: '/front-office/arrivals',   label: 'Front Office', hint: 'Arrivals · departures',      group: 'pillars' },
-  { href: '/guest',                   label: 'Guest',        hint: 'Directory · reviews · pre-arrival', group: 'pillars' },
-  { href: '/finance',                 label: 'Finance',      hint: 'P&L · cash · USALI',         group: 'pillars' },
-  { href: '/cockpit',                 label: 'IT Cockpit',   hint: 'Tickets · agents · deploys', group: 'utility' },
-  { href: '/knowledge',               label: 'Knowledge',    hint: 'KB · docs · skills',         group: 'utility' },
-  { href: '/settings',                label: 'Settings',     hint: 'Property · users · agents',  group: 'utility' },
+  { href: '/',           label: 'Home',       hint: 'Architect',                       group: 'home'    },
+  { href: '/revenue',    label: 'Revenue',    hint: 'Pulse · Pace · Channels',         group: 'pillars' },
+  { href: '/sales',      label: 'Sales',      hint: 'Inquiries · B2B · Bookings',      group: 'pillars' },
+  { href: '/marketing',  label: 'Marketing',  hint: 'Reach · campaigns · social',      group: 'pillars' },
+  { href: '/operations', label: 'Operations', hint: 'Today · F&B · Spa',               group: 'pillars' },
+  { href: '/guest',      label: 'Guest',      hint: 'Directory · reviews · pre-arrival', group: 'pillars' },
+  { href: '/finance',    label: 'Finance',    hint: 'P&L · cash · USALI',              group: 'pillars' },
+  { href: '/it',         label: 'IT',         hint: 'Tickets · agents · deploys',      group: 'pillars' },
+  { href: '/settings',   label: 'Settings',   hint: 'Property · users · agents',       group: 'utility' },
 ];
 
 export default function NDropdown() {
@@ -130,11 +132,13 @@ export default function NDropdown() {
                       </div>
                       {m.hint && (
                         <div style={{
+                          // PBS 2026-05-09 #25: brighter hint under dept names.
                           fontSize: 10,
-                          color: '#6b6b75',
+                          color: '#a8854a',
                           fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
-                          letterSpacing: '0.04em',
-                          marginTop: 2,
+                          letterSpacing: '0.06em',
+                          fontWeight: 600,
+                          marginTop: 3,
                         }}>
                           {m.hint}
                         </div>

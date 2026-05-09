@@ -2,8 +2,9 @@
 // Re-restored 2026-05-05 — SlimHero · 2 KpiStrips · 3 cards · P&L grid · GL detail · trend · raw POS.
 
 import FilterStrip from '@/components/nav/FilterStrip';
-import SlimHero from '@/components/sections/SlimHero';
 import KpiStrip, { type KpiStripItem } from '@/components/kpi/KpiStrip';
+import Page from '@/components/page/Page';
+import { OPERATIONS_SUBPAGES } from '../_subpages';
 import PnlGrid from '@/components/pl/PnlGrid';
 import DeptTrendChart from '@/components/pl/DeptTrendChart';
 import FnbGlBreakdown from '@/components/pl/FnbGlBreakdown';
@@ -46,9 +47,12 @@ export default async function SpaPage({ searchParams }: Props) {
   const recent30 = spa12?.by_month?.[spa12.by_month.length - 1];
 
   return (
-    <>
-      <FilterStrip showForward={false} showCompare={false} showSegment={false} liveSource="Cloudbeds · live" />
-      <SlimHero eyebrow={`Spa · ${period.label}`} title="Wellness" emphasis="treatments" sub="therapy · attached treatments · capture rate · per-occupied-roomnight" />
+    <Page
+      eyebrow={`Operations · Spa · ${period.label}`}
+      title={<>Wellness <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>treatments</em></>}
+      subPages={OPERATIONS_SUBPAGES}
+      topRight={<FilterStrip showForward={false} showCompare={false} showSegment={false} liveSource="Cloudbeds · live" />}
+    >
 
       <KpiStrip items={[
         { label: 'Spa Revenue',    value: Number(a30?.spa_revenue ?? 0), kind: 'money', tone: 'pos' },
@@ -94,6 +98,6 @@ export default async function SpaPage({ searchParams }: Props) {
         </summary>
         <FnbRawTransactions data={rawTxns} pageSize={200} />
       </details>
-    </>
+    </Page>
   );
 }

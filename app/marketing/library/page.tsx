@@ -4,11 +4,14 @@
 // Uses URL search params for filter state (server-component-friendly).
 
 import Link from 'next/link';
-import PanelHero from '@/components/sections/PanelHero';
+import Page from '@/components/page/Page';
 import Card from '@/components/sections/Card';
-import KpiCard from '@/components/kpi/KpiCard';
+import KpiBox from '@/components/kpi/KpiBox';
 import AssetGrid from '@/components/marketing/AssetGrid';
+import LibraryAiSearch from '@/components/marketing/LibraryAiSearch';
+import LibraryDropZone from '@/components/marketing/LibraryDropZone';
 import { getMediaReady, getMediaTierCounts, getTaxonomy, getCuratorPicks, getRoomTypeBuckets, getOtaPack, TIER_LABEL } from '@/lib/marketing';
+import { MARKETING_SUBPAGES } from '../_subpages';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -69,21 +72,24 @@ export default async function LibraryPage({ searchParams }: SP) {
   }
 
   return (
-    <>
-      <PanelHero
-        eyebrow="Brand · Marketing · library"
-        title="Media"
-        emphasis="library"
-        sub="Tagged · classified · render-ready · usage-tier sorted"
-        kpis={
-          <>
-            <KpiCard label="Total ready"    value={totalReady}  hint="all tiers" />
-            <KpiCard label="OTA profile"    value={otaCount}    hint="best of best" />
-            <KpiCard label="Website hero"   value={heroCount}   hint="thenamkhan.com" />
-            <KpiCard label="Social pool"    value={socialCount} hint="rotate weekly" />
-          </>
-        }
-      />
+    <Page
+      eyebrow="Marketing · Library"
+      title={<>Media <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>library</em>.</>}
+      subPages={MARKETING_SUBPAGES}
+    >
+      {/* AI search bar — routes to /cockpit/chat?dept=marketing so Lumen handles
+          natural-language asset queries. */}
+      <LibraryAiSearch />
+
+      {/* Drop zone — drag/drop new media straight into /api/marketing/upload. */}
+      <LibraryDropZone />
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
+        <KpiBox value={totalReady}   unit="count" label="Total ready"  tooltip="all tiers" />
+        <KpiBox value={Number(otaCount)}     unit="count" label="OTA profile"  tooltip="best of best" />
+        <KpiBox value={Number(heroCount)}    unit="count" label="Website hero" tooltip="thenamkhan.com" />
+        <KpiBox value={Number(socialCount)}  unit="count" label="Social pool"  tooltip="rotate weekly" />
+      </div>
 
       {/* Curator: Fresh & ready — top 12 by qc + brand-fit */}
       {curatorPicks.length > 0 && !tier && !tag && !q && (
@@ -189,10 +195,91 @@ export default async function LibraryPage({ searchParams }: SP) {
         sub={`${filtered.length} asset${filtered.length === 1 ? '' : 's'}${tier ? ` · ${TIER_LABEL[tier as keyof typeof TIER_LABEL] ?? tier}` : ''}${q ? ` · matching "${q}"` : ''}`}
         source="marketing.v_media_ready"
         actions={
-          <div style={{ display: 'flex', gap: 6 }}>
+          <form method="GET" action="/marketing/library" style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            {tag && <input type="hidden" name="tag" value={tag} />}
+            <label
+              style={{
+                fontFamily: 'var(--mono)',
+                fontSize: 'var(--t-xs)',
+                letterSpacing: 'var(--ls-extra)',
+                textTransform: 'uppercase',
+                color: 'var(--ink-mute)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              Tier
+              <select
+                name="tier"
+                aria-label="Filter library by tier"
+                defaultValue={tier}
+                style={{
+                  fontFamily: 'var(--mono)',
+                  fontSize: 'var(--t-xs)',
+                  letterSpacing: 'var(--ls-extra)',
+                  textTransform: 'uppercase',
+                  color: 'var(--ink)',
+                  background: 'var(--paper-warm)',
+                  border: '1px solid var(--line)',
+                  padding: '6px 8px',
+                  height: 32,
+                }}
+              >
+                {TIERS.map((t) => {
+                  const internalCount = Number(tierRows.find(r => r.primary_tier === 'tier_internal')?.total ?? 0);
+                  const cnt =
+                    t.key === ''                    ? totalReady :
+                    t.key === 'tier_ota_profile'    ? Number(otaCount) :
+                    t.key === 'tier_website_hero'   ? Number(heroCount) :
+                    t.key === 'tier_social_pool'    ? Number(socialCount) :
+                    t.key === 'tier_internal'       ? internalCount :
+                    t.key === 'tier_archive'        ? archiveCount :
+                    0;
+                  return (
+                    <option key={t.key || 'all'} value={t.key}>
+                      {t.label} · {cnt}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+            <input
+              type="search"
+              name="q"
+              defaultValue={q}
+              aria-label="Search media library"
+              placeholder="Search caption, alt-text, filename…"
+              style={{
+                fontFamily: 'var(--sans)',
+                fontSize: 'var(--t-sm)',
+                color: 'var(--ink)',
+                background: 'var(--paper-warm)',
+                border: '1px solid var(--line)',
+                padding: '6px 10px',
+                height: 32,
+                minWidth: 220,
+              }}
+            />
+            <button
+              type="submit"
+              className="btn"
+              style={{ fontSize: 'var(--t-xs)', height: 32 }}
+            >
+              Search
+            </button>
+            {(tier || q || tag) && (
+              <Link
+                href="/marketing/library"
+                className="btn"
+                style={{ fontSize: 'var(--t-xs)', height: 32, textDecoration: 'none' }}
+              >
+                Clear
+              </Link>
+            )}
             <Link href="/marketing/upload" className="btn" style={{ fontSize: "var(--t-sm)", textDecoration: 'none', background: 'var(--brass)', color: 'var(--paper-warm)', borderColor: 'var(--brass)' }}>upload ↗</Link>
             <Link href="/marketing/campaigns/new" className="btn" style={{ fontSize: "var(--t-sm)", textDecoration: 'none', background: 'var(--moss)', color: 'var(--paper-warm)', borderColor: 'var(--moss)' }}>+ new campaign</Link>
-          </div>
+          </form>
         }
       >
         {/* Tier pills */}
@@ -225,29 +312,8 @@ export default async function LibraryPage({ searchParams }: SP) {
           })}
         </div>
 
-        {/* Search */}
-        <form method="GET" action="/marketing/library" style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-          {tier && <input type="hidden" name="tier" value={tier} />}
-          {tag  && <input type="hidden" name="tag"  value={tag} />}
-          <input
-            name="q"
-            defaultValue={q}
-            placeholder="search caption, alt-text, filename…"
-            style={{
-              flex: 1,
-              fontSize: "var(--t-base)",
-              padding: '8px 12px',
-              border: '1px solid var(--line)',
-              borderRadius: 4,
-              background: 'var(--paper-warm)',
-              fontFamily: 'var(--sans)',
-            }}
-          />
-          <button type="submit" className="btn" style={{ fontSize: "var(--t-sm)" }}>search</button>
-          {q && <Link href="/marketing/library" className="btn" style={{ fontSize: "var(--t-sm)", textDecoration: 'none' }}>clear</Link>}
-        </form>
-
-        {/* Tag chip filter (single-tag for now) */}
+        {/* Tag chip filter (single-tag for now). Search + tier dropdown are
+            now in the Card header actions slot above. */}
         {tag && (
           <div style={{ marginBottom: 12, fontSize: "var(--t-sm)", color: 'var(--ink-soft)' }}>
             tag filter: <strong>{tag}</strong>
@@ -321,7 +387,7 @@ export default async function LibraryPage({ searchParams }: SP) {
           </div>
         </div>
       </Card>
-    </>
+    </Page>
   );
 }
 

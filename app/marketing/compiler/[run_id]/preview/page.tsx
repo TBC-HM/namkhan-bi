@@ -3,7 +3,8 @@
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { MARKETING_SUBPAGES } from '../../../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const dynamic = 'force-dynamic';
@@ -29,13 +30,7 @@ export default async function PreviewPage({ params }: { params: { run_id: string
   const live = deploys?.[0];
 
   return (
-    <>
-      <PageHeader
-        pillar="Marketing"
-        tab="Compiler · Preview"
-        title={<>Funnel <em style={{ color: 'var(--brass)' }}>preview</em></>}
-        lede="PDF render is stubbed. Funnel pages render live from web.retreats — deploy to publish."
-      />
+    <Page eyebrow="Marketing · Compiler · Preview" title={<>Funnel <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>preview</em></>} subPages={MARKETING_SUBPAGES}>
 
       <div style={{ marginTop: 22, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
         {[
@@ -79,6 +74,6 @@ export default async function PreviewPage({ params }: { params: { run_id: string
           ← Back to variants
         </Link>
       </div>
-    </>
+    </Page>
   );
 }

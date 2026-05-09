@@ -1,9 +1,21 @@
 // lib/dmc.ts
 // Data layer for /sales/b2b (DMC contracts + reconciliation + performance).
 // Schema: governance.dmc_contracts (+ v_dmc_contracts_listing view).
-// Reconciliation tables not yet applied — those queries return [] for now.
+//
+// 2026-05-09: switched from anon `supabase` to service-role admin client.
+// public.reservations + governance.dmc_contracts have RLS policies that
+// only the tenant_role / service can pass; anon returns 0 rows for both,
+// which is why /sales/b2b/reconciliation + performance rendered empty.
 
-import { supabase } from './supabase';
+import { getSupabaseAdmin } from './supabaseAdmin';
+// Lazy: only resolve service-role client when a function actually runs.
+// (Top-level `getSupabaseAdmin()` would throw at import time on any env
+// without SUPABASE_SERVICE_ROLE_KEY — including local `next build`.)
+const supabase = new Proxy({} as ReturnType<typeof getSupabaseAdmin>, {
+  get(_t, prop, receiver) {
+    return Reflect.get(getSupabaseAdmin(), prop, receiver);
+  },
+});
 
 export interface DmcContract {
   contract_id: string;

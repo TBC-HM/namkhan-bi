@@ -1,10 +1,16 @@
-// app/revenue/pace/page.tsx — REDESIGN 2026-05-05 (recovery rewrite)
-// compset-style: PageHeader + PaceStatusHeader + PaceGraphs (incl. real pace curve) + KpiBox + PaceTableClient.
+// app/revenue/pace/page.tsx — wired to <Page> shell (PBS manifesto 2026-05-09).
+// First real sub-page using Page + Panel + Brief + ArtifactActions.
+// Data fetching unchanged; chrome moved onto canonical primitives.
 //
 // SR-RM rule: backward windows make NO sense on Pace. CSS greys backward chips.
 
-import PageHeader from '@/components/layout/PageHeader';
 import KpiBox from '@/components/kpi/KpiBox';
+import Page from '@/components/page/Page';
+import Panel from '@/components/page/Panel';
+import Brief from '@/components/page/Brief';
+import ArtifactActions from '@/components/page/ArtifactActions';
+import TimeframeSelector from '@/components/page/TimeframeSelector';
+import CompareSelector from '@/components/page/CompareSelector';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import { resolvePeriod, type WindowKey } from '@/lib/period';
 import { capacityFor, capacityRnRange, CAPACITY_PIVOT, CAPACITY_PRE, CAPACITY_POST } from '@/lib/capacity';
@@ -13,6 +19,7 @@ import { getPaceCurve } from '@/lib/pulseData';
 import PaceStatusHeader from './_components/PaceStatusHeader';
 import PaceGraphs, { type BucketRow } from './_components/PaceGraphs';
 import PaceBucketsTable from './_components/PaceTableClient';
+import { REVENUE_SUBPAGES } from '../_subpages';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -24,7 +31,7 @@ interface PaceRow {
   cancelled_rooms: number;
 }
 
-interface SearchParams { win?: string; gran?: string }
+interface SearchParams { win?: string; gran?: string; cmp?: string }
 
 const VALID_FWD: WindowKey[] = ['next7', 'next30', 'next90', 'next180', 'next365'];
 
@@ -142,7 +149,9 @@ function fmtMonth(yyyymm: string) {
 export default async function PacePage({ searchParams }: { searchParams: SearchParams }) {
   const win = parseWin(searchParams.win);
   const gran = parseGran(searchParams.gran);
-  const period = resolvePeriod({ win });
+  // PBS 2026-05-09: forward `cmp` so the universal CompareSelector reflects
+  // the active state. Pace's own STLY proxy still drives compare numbers.
+  const period = resolvePeriod({ win, cmp: searchParams.cmp });
 
   const fromIso = period.from;
   const toIso = period.to;
@@ -165,7 +174,20 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
 
   const buckets = bucketRows(rows, gran, stlyMap, fromIso, toIso);
   const stlyRnTotal = buckets.reduce((s, b) => s + b.stlyRn, 0);
+  const stlyRevTotal = buckets.reduce((s, b) => s + b.stlyRev, 0);
   const stlyPctOverall = stlyRnTotal > 0 ? (totalRns / stlyRnTotal) * 100 : 0;
+
+  // PBS 2026-05-09: compare numbers for KpiBox `compare` prop. Pace doesn't
+  // use f_overview_kpis, so we derive deltas from the STLY proxy (mv_kpi_daily
+  // shifted -1y). Only meaningful when cmp != none and STLY had coverage.
+  const cmpActive = period.cmp !== 'none' && stlyRnTotal > 0;
+  const cmpLabel = period.cmpLabel ? period.cmpLabel.replace(/^vs\s+/i, '') : '';
+  const stlyAdr = stlyRnTotal > 0 ? stlyRevTotal / stlyRnTotal : 0;
+  const stlyOcc = capacityRn > 0 ? (stlyRnTotal / capacityRn) * 100 : 0;
+  const cmpRns = cmpActive ? totalRns - stlyRnTotal : null;
+  const cmpRev = cmpActive ? totalRev - stlyRevTotal : null;
+  const cmpAdrDelta = cmpActive ? adr - stlyAdr : null;
+  const cmpOccDelta = cmpActive ? occ - stlyOcc : null;
 
   const winLabels: Record<string, string> = {
     next7: 'Next 7d', next30: 'Next 30d', next90: 'Next 90d', next180: 'Next 180d', next365: 'Next 365d',
@@ -174,8 +196,34 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
 
   const formatLabel = (key: string) => (gran === 'month' ? fmtMonth(key) : key.slice(5));
 
+  // Brief — narrative read of the pace state for this window.
+  const briefSignal = `${winLabels[win]} · ${totalRns.toLocaleString()} OTB RN · OCC ${occ.toFixed(1)}% · ADR $${adr.toFixed(0)} · vs STLY ${stlyPctOverall.toFixed(0)}%`;
+  const briefBody = `${period.days} nights between ${fromIso} and ${toIso}. STLY coverage: ${stlyCoverage} of ${period.days} days.`;
+  const good: string[] = [];
+  const bad:  string[] = [];
+  if (stlyPctOverall >= 100) good.push(`Pace ${stlyPctOverall.toFixed(0)}% of STLY — protect rate ladder.`);
+  else if (stlyPctOverall < 90 && stlyRnTotal > 0) bad.push(`Pace ${stlyPctOverall.toFixed(0)}% of STLY — open BAR floor or push direct promo.`);
+  if (cxlRate > 8) bad.push(`Cancel rate ${cxlRate.toFixed(1)}% — review non-refundable mix.`);
+  else if (cxlRate < 4 && totalRns > 0) good.push(`Cancel rate ${cxlRate.toFixed(1)}% — healthy.`);
+  if (occ >= 75) good.push(`OTB occupancy ${occ.toFixed(0)}% — strong forward base.`);
+  if (occ < 50 && period.days > 7) bad.push(`OTB occupancy ${occ.toFixed(0)}% — pickup gap; check pricing & channel mix.`);
+  if (good.length === 0) good.push('No standout opportunities flagged for this window.');
+  if (bad.length === 0)  bad.push('No leakage signals flagged for this window.');
+
+  const ctx = (kind: 'panel' | 'kpi' | 'brief' | 'table', title: string, signal?: string) => ({ kind, title, signal, dept: 'revenue' as const });
+
   return (
-    <>
+    <Page
+      eyebrow="Revenue · Pace"
+      title={<>What&apos;s <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>on the books</em> ahead.</>}
+      subPages={REVENUE_SUBPAGES}
+      topRight={
+        <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <TimeframeSelector basePath="/revenue/pace" active={period.win} includeForward preserve={{ cmp: period.cmp, gran }} />
+          <CompareSelector  basePath="/revenue/pace" active={period.cmp}                  preserve={{ win: period.win, gran }} />
+        </div>
+      }
+    >
       <style>{`
         .filter-btn:not(.fwd):not([href*="seg="]):not([href*="cmp="]):not([href*="cap="]) {
           opacity: 0.35;
@@ -183,35 +231,47 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
         }
       `}</style>
 
-      <PageHeader
-        pillar="Revenue"
-        tab="Pace"
-        title={<>What's <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>on the books</em> ahead.</>}
-        lede={`${winLabels[win]} · ${period.days} nights · ${totalRns} OTB RN · OCC ${occ.toFixed(1)}% · ADR $${adr.toFixed(0)} · vs STLY ${stlyPctOverall.toFixed(0)}%`}
+      <Brief
+        brief={{ signal: briefSignal, body: briefBody, good, bad }}
+        actions={<ArtifactActions context={ctx('brief', `Pace · ${winLabels[win]}`, briefSignal)} />}
       />
 
-      <PaceStatusHeader
-        windowLabel={winLabels[win]}
-        rangeLabel={`${fromIso} → ${toIso}`}
-        capacityRn={capacityRn}
-        straddles={straddles}
-        capacityPivot={CAPACITY_PIVOT}
-        capacityPre={CAPACITY_PRE}
-        capacityPost={CAPACITY_POST}
-        stlySource="actuals_proxy"
-        stlyCoverage={stlyCoverage}
-        totalDays={period.days}
-      />
+      <Panel title="Pace status" eyebrow="evidence" actions={<ArtifactActions context={ctx('panel', 'Pace status')} />}>
+        <PaceStatusHeader
+          windowLabel={winLabels[win]}
+          rangeLabel={`${fromIso} → ${toIso}`}
+          capacityRn={capacityRn}
+          straddles={straddles}
+          capacityPivot={CAPACITY_PIVOT}
+          capacityPre={CAPACITY_PRE}
+          capacityPost={CAPACITY_POST}
+          stlySource="actuals_proxy"
+          stlyCoverage={stlyCoverage}
+          totalDays={period.days}
+        />
+      </Panel>
 
-      <PaceGraphs paceCurve={paceCurve} buckets={buckets} formatLabel={formatLabel} />
+      <div style={{ height: 14 }} />
+
+      <Panel title="Pace curves & buckets" eyebrow="hero" actions={<ArtifactActions context={ctx('panel', 'Pace curves & buckets', briefSignal)} />}>
+        <PaceGraphs paceCurve={paceCurve} buckets={buckets} formatLabel={formatLabel} />
+      </Panel>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
-        <KpiBox value={totalRns} unit="count" label="OTB room nights" />
-        <KpiBox value={totalRev} unit="usd" label="OTB revenue" />
-        <KpiBox value={adr} unit="usd" label="OTB ADR" />
-        <KpiBox value={occ} unit="pct" label="OTB occupancy" />
-        <KpiBox value={cxlRate} unit="pct" label="Cancel rate" />
-        <KpiBox value={stlyPctOverall} unit="pct" label="vs STLY" />
+        <KpiBox value={totalRns} unit="count" label="OTB room nights"
+          compare={cmpRns != null ? { value: cmpRns, unit: 'count', period: cmpLabel } : undefined}
+          tooltip="Sum of confirmed room-nights on the books for the forward window. Source: pace_otb (Cloudbeds)." />
+        <KpiBox value={totalRev} unit="usd"   label="OTB revenue"
+          compare={cmpRev != null ? { value: cmpRev, unit: 'usd', period: cmpLabel } : undefined}
+          tooltip="Confirmed forward revenue (USD) for this window. Source: pace_otb." />
+        <KpiBox value={adr} unit="usd"        label="OTB ADR"
+          compare={cmpAdrDelta != null ? { value: cmpAdrDelta, unit: 'usd', period: cmpLabel } : undefined}
+          tooltip="OTB revenue ÷ OTB room-nights. Reflects price already locked in." />
+        <KpiBox value={occ} unit="pct"        label="OTB occupancy"
+          compare={cmpOccDelta != null ? { value: cmpOccDelta, unit: 'pp', period: cmpLabel } : undefined}
+          tooltip="OTB room-nights ÷ capacity room-nights × 100." />
+        <KpiBox value={cxlRate} unit="pct"    label="Cancel rate"     tooltip="Cancelled reservations ÷ total reservations × 100, for this forward window." />
+        <KpiBox value={stlyPctOverall} unit="pct" label="vs STLY"     tooltip="OTB this window vs same time last year (% change)." />
       </div>
 
       {/* Granularity chips */}
@@ -251,25 +311,13 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
         </span>
       </div>
 
-      <div style={{ marginTop: 6 }}>
-        <SectionHead title="Pace by stay-bucket" emphasis={`${buckets.length} ${gran}s`} sub={`${winLabels[win]} · STLY = same dates last year (actuals proxy)`} source="v_otb_pace · mv_kpi_daily" />
+      <Panel
+        title={`Pace by stay-bucket · ${buckets.length} ${gran}s`}
+        eyebrow="v_otb_pace · mv_kpi_daily"
+        actions={<ArtifactActions context={ctx('table', `Pace by stay-bucket · ${gran}`)} />}
+      >
         <PaceBucketsTable rows={buckets} gran={gran} />
-      </div>
-    </>
-  );
-}
-
-function SectionHead({ title, emphasis, sub, source }: { title: string; emphasis?: string; sub?: string; source?: string }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12, marginBottom: 6, flexWrap: 'wrap' }}>
-      <div>
-        <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-xl)', fontWeight: 500, color: 'var(--ink)', lineHeight: 1.1 }}>
-          {title}
-          {emphasis && <span style={{ marginLeft: 8, fontFamily: 'var(--mono)', fontStyle: 'normal', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>{emphasis}</span>}
-        </div>
-        {sub && <div style={{ marginTop: 2, fontSize: 'var(--t-sm)', color: 'var(--ink-mute)' }}>{sub}</div>}
-      </div>
-      {source && <span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-loose)', textTransform: 'uppercase', color: 'var(--ink-faint)' }}>{source}</span>}
-    </div>
+      </Panel>
+    </Page>
   );
 }

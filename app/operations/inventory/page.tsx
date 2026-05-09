@@ -10,7 +10,8 @@
 //   5. Quick-link grid to sub-routes
 
 import Link from 'next/link';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { OPERATIONS_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import { fmtMoney, EMPTY } from '@/lib/format';
 import {
@@ -90,13 +91,11 @@ export default async function InventoryOverviewPage() {
   ]);
 
   return (
-    <>
-      <PageHeader
-        pillar="Operations"
-        tab="Inventory · Snapshot"
-        title={<>Property <em style={{ color: 'var(--brass)' }}>inventory</em></>}
-        lede={<>Catalog · stock · suppliers · purchasing · fixed assets. Live from <code style={{ fontFamily: 'var(--mono)' }}>inv</code> · <code style={{ fontFamily: 'var(--mono)' }}>fa</code> · <code style={{ fontFamily: 'var(--mono)' }}>suppliers</code> · <code style={{ fontFamily: 'var(--mono)' }}>proc</code> schemas.</>}
-      />
+    <Page
+      eyebrow="Operations · Inventory · Snapshot"
+      title={<>Property <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>inventory</em></>}
+      subPages={OPERATIONS_SUBPAGES}
+    >
 
       {/* === KPI strip — 6 tiles === */}
       <div style={{
@@ -116,7 +115,7 @@ export default async function InventoryOverviewPage() {
         <KpiBox value={snap.faNbvUsd} unit="usd" label="Fixed asset NBV" tooltip="Net book value, straight-line dep" />
         <KpiBox value={snap.capexApprovedUsd} unit="usd" label="CapEx approved" tooltip="Approved + not yet received" />
         <KpiBox value={snap.capexProposedUsd} unit="usd" label="CapEx proposed" tooltip="In pipeline, awaiting decision" />
-        <KpiBox value={snap.itemsActive} unit="count" label="Active SKUs" />
+        <KpiBox value={snap.itemsActive} unit="count" label="Active SKUs" tooltip="SKUs with status=active in inv.items. Inactive items are hidden from order forms." />
         <KpiBox value={snap.wastageValueMtdUsd} unit="usd" label="Wastage MTD" tooltip="inv.movements WHERE movement_type='write_off' AND date >= month start · valued at recorded total_cost_usd" />
         <KpiBox value={snap.stockTurnAnnualized} unit="nights" label="Stock turn" dp={2} tooltip={`Annualized: 90d cogs ($${Math.round(snap.cogs90dUsd).toLocaleString()}) × 365/90 ÷ on-hand value ($${Math.round(snap.inventoryValueUsd).toLocaleString()})`} />
       </div>
@@ -297,6 +296,6 @@ export default async function InventoryOverviewPage() {
           );
         })}
       </div>
-    </>
+    </Page>
   );
 }

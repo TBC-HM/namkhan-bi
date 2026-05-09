@@ -9,7 +9,8 @@ import DecisionQueue, { type DecisionRow } from '@/components/ops/DecisionQueue'
 import TacticalAlerts, { type TacticalAlert } from '@/components/ops/TacticalAlerts';
 import GuardrailsBanner from '@/components/ops/GuardrailsBanner';
 import DataNeededOverlay from '@/components/ops/DataNeededOverlay';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { OPERATIONS_SUBPAGES } from '../_subpages';
 
 import RoomBoard from './_components/RoomBoard';
 import LadderTable from './_components/LadderTable';
@@ -113,14 +114,11 @@ export default async function HousekeepingPage() {
   const dndStreakCount = dnd ? dnd.filter((d) => d.consecutive_days >= 3).length : null;
 
   return (
-    <>
-      {/* BLOCK 1: Breadcrumb + Title */}
-      <PageHeader
-        pillar="Operations"
-        tab="Housekeeping"
-        title={<>Housekeeping · ready by <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>when</em>.</>}
-        lede="Rooms, staff, linen, and laundry — one board, one decision per row."
-      />
+    <Page
+      eyebrow="Operations · Housekeeping"
+      title={<>Housekeeping · ready by <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>when</em>.</>}
+      subPages={OPERATIONS_SUBPAGES}
+    >
 
       {/* BLOCK 2: Filter bar (HK-specific shift toggle on top of the layout's FilterStrip) */}
       <div
@@ -252,7 +250,7 @@ export default async function HousekeepingPage() {
         Agents ship in approval-required mode by default — toggle in Settings ›
         Property only after audit-log review.
       </GuardrailsBanner>
-    </>
+    </Page>
   );
 }
 

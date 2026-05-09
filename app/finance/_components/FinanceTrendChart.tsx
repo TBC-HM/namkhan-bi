@@ -90,7 +90,7 @@ function Chart({ rows }: { rows: MonthSeriesPoint[] }) {
         const bh = yAt(0) - y;
         return (
           <rect key={r.period} x={x} y={y} width={barW} height={bh} fill="var(--moss)">
-            <title>{`${r.period} · income ${fmtMoney(r.income, 'USD')}${r.net != null ? ` · net ${fmtMoney(r.net, 'USD')}` : ''}${r.gop != null ? ` · GOP ${fmtMoney(r.gop, 'USD')}` : ''}`}</title>
+            <title>{`${r.period} · income ${fmtMoney(r.income, 'USD')}${r.net != null ? ` · net ${fmtMoney(r.net, 'USD')}` : ''}${r.gop != null ? ` · GOP ${fmtMoney(r.gop, 'USD')}` : ''} · gl.pl_section_monthly`}</title>
           </rect>
         );
       })}
@@ -106,7 +106,9 @@ function Chart({ rows }: { rows: MonthSeriesPoint[] }) {
             cy={yAt(r.net)}
             r={3}
             fill="var(--brass)"
-          />
+          >
+            <title>{`${r.period} · net ${fmtMoney(r.net, 'USD')} · gl.pl_section_monthly`}</title>
+          </circle>
         ) : null,
       )}
       {/* X axis labels — every other to avoid crowding */}

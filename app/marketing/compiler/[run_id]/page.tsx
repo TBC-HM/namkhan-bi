@@ -5,7 +5,8 @@
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { MARKETING_SUBPAGES } from '../../_subpages';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import { fmtIsoDate, EMPTY } from '@/lib/format';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -39,13 +40,12 @@ export default async function VariantsPage({ params }: { params: { run_id: strin
   const latestDeploy = deploys?.[0] ?? null;
 
   return (
-    <>
-      <PageHeader
-        pillar="Marketing"
-        tab="Compiler · Variants"
-        title={<>Compare <em style={{ color: 'var(--brass)' }}>variants</em></>}
-        rightSlot={<StatusPill tone={STATUS_TONE[run.status] ?? 'info'}>{run.status}</StatusPill>}
-      />
+    <Page
+      eyebrow="Marketing · Compiler · Variants"
+      title={<>Compare <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>variants</em></>}
+      subPages={MARKETING_SUBPAGES}
+      topRight={<StatusPill tone={STATUS_TONE[run.status] ?? 'info'}>{run.status}</StatusPill>}
+    >
 
       {/* Compact 2-row header (prompt + parsed spec + deploy link) */}
       <div style={headerWrap}>
@@ -94,7 +94,7 @@ export default async function VariantsPage({ params }: { params: { run_id: strin
         {' · '}
         <Link href={`/marketing/compiler/${run.id}/deploy`} style={{ color: 'var(--brass)' }}>DEPLOY HISTORY</Link>
       </div>
-    </>
+    </Page>
   );
 }
 

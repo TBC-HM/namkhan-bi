@@ -7,7 +7,10 @@ import B2bKpiStrip from '../_components/B2bKpiStrip';
 import MappingPicker from '../_components/MappingPicker';
 import { getLpaReservations, getDmcContracts, matchSourceToContract, getMappings, cloudbedsReservationUrl } from '@/lib/dmc';
 import { PROPERTY_ID } from '@/lib/supabase';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import Panel from '@/components/page/Panel';
+import ArtifactActions from '@/components/page/ArtifactActions';
+import { SALES_SUBPAGES } from '../../_subpages';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -59,18 +62,15 @@ export default async function ReconciliationPage() {
   const unconfirmed = enriched.filter((r) => !r.confirmed);
 
   return (
-    <>
-      <PageHeader
-        pillar="Sales"
-        tab="B2B / DMC › Reconciliation"
-        title={<>Reconciliation queue · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>{unconfirmed.length} pending · {confirmed.length} mapped</em></>}
-        lede={<>All <code>Leisure Partnership Agreement</code> reservations. Pick a contract from the dropdown and click <strong>Confirm</strong> — saves to <code>governance.dmc_reservation_mapping</code>. Reservation IDs deeplink to Cloudbeds.</>}
-      />
-
+    <Page
+      eyebrow="Sales · B2B / DMC › Reconciliation"
+      title={<>Reconciliation queue · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>{unconfirmed.length} pending · {confirmed.length} mapped</em></>}
+      subPages={SALES_SUBPAGES}
+    >
       <B2bSubNav />
       <B2bKpiStrip />
 
-      <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
+      <Panel title={`LPA reservations · ${reservations.length}`} eyebrow="public.reservations · governance.dmc_reservation_mapping" actions={<ArtifactActions context={{ kind: 'table', title: 'LPA reconciliation', dept: 'sales' }} />}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: "var(--t-base)" }}>
           <thead>
             <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -131,11 +131,11 @@ export default async function ReconciliationPage() {
             })}
           </tbody>
         </table>
-      </div>
+      </Panel>
 
       <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: "var(--t-sm)" }}>
         <strong>✓ Live.</strong> {reservations.length} LPA reservations · {confirmed.length} mapped · {unconfirmed.length} pending. Yellow rows = unmatched (no contract on file). Green rows = already confirmed. Click <strong>Confirm</strong> to persist to <code>governance.dmc_reservation_mapping</code>.
       </div>
-    </>
+    </Page>
   );
 }

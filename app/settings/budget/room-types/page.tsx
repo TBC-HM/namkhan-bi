@@ -5,7 +5,7 @@
 // fiscal year. Pulse "Occupancy by room type" chart picks up these rows
 // automatically — third Budget bar appears when present.
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
 import { supabase } from '@/lib/supabase';
 import BudgetForm from './BudgetForm';
 
@@ -46,17 +46,7 @@ export default async function BudgetRoomTypesPage({ searchParams }: { searchPara
   const existingById = new Map(existing.map((e) => [e.room_type_id, e.budget_occupancy_pct]));
 
   return (
-    <>
-      <PageHeader
-        pillar="Settings"
-        tab="Budget · Room types"
-        title={<>Per-room-type budget · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>occupancy %</em></>}
-        lede={<>
-          Enter the budgeted occupancy % per room type per month. Pulse "Occupancy by room type" chart adds a Budget series when rows exist for the active month.
-          Writes go to <code>plan.drivers</code> under the active <code>scenario_type=&apos;budget&apos;</code> scenario for the fiscal year.
-        </>}
-      />
-
+    <Page eyebrow="Settings · Budget · Room types" title={<>Per-room-type budget · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>occupancy %</em></>}>
       <BudgetForm
         year={year}
         month={month}
@@ -68,6 +58,6 @@ export default async function BudgetRoomTypesPage({ searchParams }: { searchPara
         <strong>{existing.length}</strong> room type{existing.length === 1 ? '' : 's'} have a budget for {year}-{String(month).padStart(2, '0')}.
         {existing.length === 0 && ' No Budget series will render on Pulse until at least one row is entered.'}
       </div>
-    </>
+    </Page>
   );
 }

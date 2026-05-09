@@ -8,7 +8,8 @@
 //
 // Source: public.v_vendor_dept_mapping + public.v_unmapped_accounts.
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { FINANCE_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -84,19 +85,11 @@ export default async function SupplierMappingPage() {
     .slice(0, 8);
 
   return (
-    <>
-      <PageHeader
-        pillar="Finance"
-        tab="Supplier mapping"
-        title={
-          <>
-            Vendor →{' '}
-            <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>USALI dept</em>{' '}
-            — fix the leaks.
-          </>
-        }
-        lede={`${summary.vendors} vendors (180d) · ${summary.multi_dept} multi-dept · ${summary.no_class_vendors} no-class · ${fmtMoney(summary.total_no_class_spend, 'USD')} leaking the P&L`}
-      />
+    <Page
+      eyebrow="Finance · Supplier mapping"
+      title={<>Vendor → <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>USALI dept</em> — fix the leaks.</>}
+      subPages={FINANCE_SUBPAGES}
+    >
 
       <FinanceStatusHeader
         top={
@@ -205,7 +198,7 @@ export default async function SupplierMappingPage() {
         <strong>Unmapped account</strong>: open <code style={{ fontFamily: 'var(--mono)' }}>/finance/mapping</code> and set <code style={{ fontFamily: 'var(--mono)' }}>usali_subcategory</code> + <code style={{ fontFamily: 'var(--mono)' }}>usali_line_label</code> on the account in <code style={{ fontFamily: 'var(--mono)' }}>gl.accounts</code>. <br />
         <strong>Multi-dept vendor</strong>: this isn't always wrong (a wholesaler legitimately sells food + cleaning), but it's worth confirming each line is class-tagged correctly so the P&amp;L doesn't pull spend into the wrong dept.
       </div>
-    </>
+    </Page>
   );
 }
 
@@ -263,10 +256,10 @@ function LeakChart({ rows }: { rows: VendorRow[] }) {
               </text>
               <rect x={labelW} y={y + 4} width={barMaxW} height={14} fill="var(--paper-deep)" />
               <rect x={labelW} y={y + 4} width={noClassW} height={14} fill="var(--st-bad)">
-                <title>{`${d.name} · no-class ${fmtMoney(d.no_class, 'USD')}`}</title>
+                <title>{`${d.name} · no-class ${fmtMoney(d.no_class, 'USD')} · 180d · v_supplier_mapping_leak`}</title>
               </rect>
               <rect x={labelW + noClassW} y={y + 4} width={unmappedW} height={14} fill="var(--brass)">
-                <title>{`${d.name} · unmapped acct ${fmtMoney(d.unmapped, 'USD')}`}</title>
+                <title>{`${d.name} · unmapped acct ${fmtMoney(d.unmapped, 'USD')} · 180d · v_supplier_mapping_leak`}</title>
               </rect>
               <text
                 x={labelW + barMaxW + 4}
