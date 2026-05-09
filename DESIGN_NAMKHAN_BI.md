@@ -406,6 +406,28 @@ If memory is wiped AND nothing above is reachable, the repo itself has a `CLAUDE
 
 Append-only. Newest at top. Date heading + bullet changes.
 
+### 2026-05-09 (final — frame strip + all /revenue + dept dashboards + /sales/inquiries on canonical primitives)
+
+Why: PBS rejected the brown/green dept-layout chrome ("AND TAKE OUT THE FRAME YOOU LEFT ARUND FOLLOW THE ENTRY PAGES"). Strip the layouts to thin `.panel` (centring only — no colour), wire all six /revenue sub-pages to `<Page>` + `<Panel>` + `<Brief>` + `<ArtifactActions>`, and lift the shared `EngineDashboard` onto the canonical primitives so all 5 dept dashboards inherit the new shell.
+
+**Files**
+- `app/revenue/_subpages.ts` — NEW. Single source of truth for the Revenue sub-pages strip used by every revenue route.
+- `app/revenue/{pulse,pace,channels,pricing,compset,demand}/page.tsx` — all six wired to `<Page subPages={REVENUE_SUBPAGES}>`. `<Brief>` at top with signal/good/bad derived from live OTB+STLY+capacity / occ+adr+revpar / direct mix / commission load / rate spread / pace vs STLY. Every panel carries `<ArtifactActions>`. Data fetching unchanged.
+- `app/{revenue,sales,marketing,operations,guest,finance}/layout.tsx` — Banner + SubNav + FilterStrip removed. Layouts now render `<div className="panel">{children}</div>` for sub-routes (entry route bypasses with `<>{children}</>`). `.panel` adds max-width centring only — no colour or border. Marketing keeps the global `<AssetDetailDrawer>` mounted.
+- `components/engine/EngineDashboard.tsx` — re-chromed onto `<Page>` + `<KpiBox>` + `<Panel>` + `<ArtifactActions>`. Same supabase view/column reads, same filter/order_by/limit semantics. Top-right slot carries the "Ask <HoD> ↗" link. All 5 dept dashboards inherit automatically.
+- `app/sales/inquiries/page.tsx` — the reference page off `<PageHeader>` and onto `<Page>` with the sales sub-pages strip.
+
+**Verification (post-deploy)**
+- `npx tsc --noEmit` exit 0.
+- 39 routes smoked, all 200: /, /revenue (+ all 6 sub-pages), /sales (+ inquiries, dashboard, leads, pipeline, groups, fit), /marketing (+ dashboard, campaigns, social, library), /operations (+ dashboard, staff, housekeeping, inventory), /guest (+ dashboard, journey, loyalty, directory), /finance (+ dashboard, pnl, budget, ledger), /it, /architect, /sample/2, /sample/3.
+
+**Wiring next** (in priority order):
+1. Other /sales sub-pages (pipeline, leads, b2b, fit, groups, packages — 14 files) — they currently render via `.panel` only with bare `<PageHeader>`. Move each to `<Page>` + Panels.
+2. /finance/pnl (1130 lines) and /operations/today (currently 307 redirect) — high-traffic.
+3. /marketing/{campaigns,social,reviews,library} sub-trees — visible artifacts.
+4. Remaining /guest, /finance, /operations sub-pages.
+5. Replace `window.dispatchEvent('artifact:*')` defaults with concrete handlers as the canvas matures.
+
 ### 2026-05-09 (later — page-by-page wiring pass starts: DeptEntry + ArtifactActions + /revenue/pace + Anthropic brief)
 
 Why: PBS asked for full-autonomy execution of the 4-step wiring plan after the manifesto landed. KPI calculations already exist in Supabase, so this pass only swaps chrome onto the canonical primitives and lights up the live agent path for non-BAR questions.
