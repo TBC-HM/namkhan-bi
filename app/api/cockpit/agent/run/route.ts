@@ -526,14 +526,45 @@ async function processTicket(ticketId: number) {
     return { ticketId, error: "triage missing recommended_agent" };
   }
 
+  const role = pickRole(triage);
+  const originalMessage = (ticket.parsed_summary ?? "").split("\n")[0] || ticket.email_body || "";
+
+  // PBS 2026-05-10: code-writing roles (frontend/backend/lead) are handled
+  // by the GH Action agent-runner — it polls status='triaged' arm IN
+  // ('dev','code') and writes real code via Claude Agent SDK. We must NOT
+  // mark these working/completed in the in-process callRoleAgent path or
+  // the runner never sees them. Short-circuit: leave status='triaged',
+  // tag metadata.role, return success.
+  const codeWriterRoles = ["frontend", "backend", "lead"];
+  if (codeWriterRoles.includes(role)) {
+    await supabase
+      .from("cockpit_tickets")
+      .update({
+        // NOTE: do NOT set processed_at — runner will stamp it.
+        metadata: {
+          ...(ticket.metadata ?? {}),
+          role,
+          handoff_to_runner: true,
+          handoff_at: new Date().toISOString(),
+        },
+      })
+      .eq("id", ticketId);
+    await supabase.from("cockpit_audit_log").insert({
+      ticket_id: ticketId,
+      agent: role,
+      action: "handoff_to_runner",
+      target: `ticket:${ticketId}`,
+      success: true,
+      reasoning: `triaged → ${role} → handed off to GH agent-runner for code writing`,
+    });
+    return { ticketId, role, status: "triaged", handoff: "agent-runner" };
+  }
+
   // Mark working so duplicate cron runs skip it.
   await supabase
     .from("cockpit_tickets")
     .update({ status: "working", iterations: (ticket.iterations ?? 0) + 1 })
     .eq("id", ticketId);
-
-  const role = pickRole(triage);
-  const originalMessage = (ticket.parsed_summary ?? "").split("\n")[0] || ticket.email_body || "";
 
   let runOutcome: Awaited<ReturnType<typeof callRoleAgent>>;
   try {
