@@ -406,6 +406,23 @@ If memory is wiped AND nothing above is reachable, the repo itself has a `CLAUDE
 
 Append-only. Newest at top. Date heading + bullet changes.
 
+### 2026-05-09 (sweep 3 — last 36 PageHeader pages migrated; zero <PageHeader> imports remain)
+
+Why: PBS said "DO THE REST IN ONE GO". Final cleanup of every remaining route still rendering through `<PageHeader>` inside the legacy `.panel` wrapper.
+
+**Files (36 total)**
+- **Settings (10)**: `/settings` (snapshot), `vat-rates`, `manual-entries`, `notifications`, `reports`, `integrations`, `users`, `channel-contacts`, `email-categories`, `budget/room-types` — all on `<Page eyebrow="Settings · X">` (no subPages strip; settings are utility pages).
+- **Finance (5)**: `/finance/agents`, `mapping`, `pos-transactions`, `poster`, `supplier-mapping` — all on `<Page subPages={FINANCE_SUBPAGES}>`.
+- **Revenue (8)**: `/revenue/agents`, `parity` (root + `agent-settings` + `scoring-settings`), `inventory`, `rates`, `rateplans`, `channels/[source]` (3 returns: BDC special-case, no-meta, normal), `compset/{agent-settings, scoring-settings}` — all on `<Page subPages={REVENUE_SUBPAGES}>`.
+- **Marketing/compiler (8)**: root, `[run_id]`, `[run_id]/edit`, `[run_id]/preview`, `[run_id]/deploy`, `pricelist`, `retreats`, `settings` — all on `<Page subPages={MARKETING_SUBPAGES}>`.
+- **Standalone (3)**: `/sales/inquiries/[id]`, `/admin/gmail-connect`, `/inbox`.
+
+**Hiccup mid-sweep**: `/marketing/compiler/{pricelist,retreats,settings}` 500'd post-deploy with digest 2584340420 ("Functions cannot be passed directly to Client Components"). Those three are async server components passing function props (`rowKey`, `render`, `sortValue`) to `<DataTable>` which is `'use client'`. Fixed by replacing each `<DataTable>` with an inline `<table>` rendered server-side. Commit ded3e0d.
+
+**Verification (post-deploy)** — `npx tsc --noEmit` exit 0. Sample of 32 newly-wired routes smoked, all 200. Zero `from '@/components/layout/PageHeader'` imports remain in `app/`.
+
+**Status**: every route in the app now renders inside `<Page>`. The shell is the only chrome. Sub-pages strip is consistent per dept. Layouts are pure passthroughs (with `.panel` for max-width centring on legacy routes). The wider canvas migration (replacing in-page custom containers with `<Panel>` and adding `<ArtifactActions>` overlays everywhere) is still incremental — but the structural foundation is complete.
+
 ### 2026-05-09 (sweep 2 — 39 dept sub-pages migrated to <Page subPages>)
 
 Why: PBS said "NOW" — continuing the page-by-page wiring pass with the priority list logged in KB id 491.
