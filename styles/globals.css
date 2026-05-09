@@ -2729,3 +2729,17 @@ input::placeholder, textarea::placeholder { color: #5a5448; }
 
 /* The legacy .panel-warm / .paper-warm backgrounds need to flip dark too */
 .panel-warm, [class*="bg-paper-warm"] { background: #0f0d0a; }
+
+/* ── /operations/staff dark overrides (PBS 2026-05-09)
+ * Same Tailwind stone-* light theme bleed as /guest/directory; flip the
+ * tokens inside .ops-staff-dark only.
+ */
+.ops-staff-dark .text-stone-900 { color: #e9e1ce !important; }
+.ops-staff-dark .text-stone-700 { color: #d8cca8 !important; }
+.ops-staff-dark .text-stone-600,
+.ops-staff-dark .text-stone-500,
+.ops-staff-dark .text-stone-400 { color: #9b907a !important; }
+.ops-staff-dark .bg-white { background: #0f0d0a !important; }
+.ops-staff-dark .border-stone-300,
+.ops-staff-dark .border-stone-200,
+.ops-staff-dark [class*="border-stone-300/"] { border-color: #2a261d !important; }

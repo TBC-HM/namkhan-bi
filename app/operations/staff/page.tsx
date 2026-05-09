@@ -21,6 +21,8 @@ import { ArchivedStaffTable, type ArchivedRow } from './_components/ArchivedStaf
 import DeptBreakdown, { type DeptRow } from './_components/DeptBreakdown';
 import PayrollTrend, { type PayrollTrendRow } from './_components/PayrollTrend';
 import UploadPayslipsButton from './_components/UploadPayslipsButton';
+import Page from '@/components/page/Page';
+import { OPERATIONS_SUBPAGES } from '../_subpages';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -139,11 +141,15 @@ export default async function StaffPage() {
   const lastPaidPeriod = trend.rows[0]?.period_month ?? '—';
 
   return (
-    <div className="space-y-10 px-8 py-6">
-      {/* Header */}
+    <Page
+      eyebrow={`Operations · Staff · ${totalActive} active · last paid ${lastPaidPeriod}`}
+      title={<>Staff <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>register</em></>}
+      subPages={OPERATIONS_SUBPAGES}
+      topRight={<UploadPayslipsButton />}
+    >
+    <div className="ops-staff-dark space-y-10 px-0 py-6">
       <header className="flex items-end justify-between border-b border-stone-300/30 pb-4">
         <div>
-          <h1 className="font-serif text-3xl tracking-tight text-stone-900">Staff</h1>
           <p className="mt-1 text-xs uppercase tracking-[0.18em] text-stone-500">
             {totalActive} active · {archived.length} archived · {fmtMoney(totalMonthlyLAK, 'LAK')} monthly base · last paid {lastPaidPeriod} {lastPaidUsd ? `· $${Math.round(lastPaidUsd).toLocaleString()}` : ''}
           </p>
@@ -155,7 +161,6 @@ export default async function StaffPage() {
               public.v_staff_register_extended · ops.v_payroll_dept_monthly
             </p>
           </div>
-          <UploadPayslipsButton />
         </div>
       </header>
 
@@ -253,5 +258,6 @@ export default async function StaffPage() {
         <ArchivedStaffTable rows={archived} />
       </section>
     </div>
+    </Page>
   );
 }
