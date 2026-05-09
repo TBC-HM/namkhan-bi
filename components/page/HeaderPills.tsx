@@ -16,6 +16,27 @@ interface HeaderPillsProps {
 
 const USER_NAME = 'PBS';
 
+// 7-day forecast preview (PBS 2026-05-09 #16+#17). Static placeholder until
+// Open-Meteo + IQAir hourly wiring lands. KBPopover renders k/v/d cards.
+const SEVEN_DAY_TEMP = [
+  { k: 'Today · Sat',  v: '32° / 24°', d: 'partly cloudy · 0 mm' },
+  { k: 'Sun',          v: '33° / 24°', d: 'thunderstorm PM · 4 mm' },
+  { k: 'Mon',          v: '31° / 23°', d: 'rain shower AM · 9 mm' },
+  { k: 'Tue',          v: '30° / 23°', d: 'overcast · 2 mm' },
+  { k: 'Wed',          v: '32° / 24°', d: 'sun + cloud · 0 mm' },
+  { k: 'Thu',          v: '34° / 25°', d: 'hot, dry · 0 mm' },
+  { k: 'Fri',          v: '33° / 24°', d: 'partly cloudy · 1 mm' },
+];
+const SEVEN_DAY_AIR = [
+  { k: 'Today · Sat',  v: 'AQI 42',   d: 'PM2.5 11 · UV 8 · 76% RH' },
+  { k: 'Sun',          v: 'AQI 38',   d: 'PM2.5 9 · UV 7 · 81% RH'  },
+  { k: 'Mon',          v: 'AQI 56',   d: 'PM2.5 16 · UV 6 · 84% RH' },
+  { k: 'Tue',          v: 'AQI 49',   d: 'PM2.5 13 · UV 7 · 78% RH' },
+  { k: 'Wed',          v: 'AQI 44',   d: 'PM2.5 12 · UV 8 · 73% RH' },
+  { k: 'Thu',          v: 'AQI 61',   d: 'PM2.5 18 · UV 9 · 65% RH' },
+  { k: 'Fri',          v: 'AQI 50',   d: 'PM2.5 14 · UV 8 · 72% RH' },
+];
+
 function todayLabel(): string {
   const d = new Date();
   return d.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' });
@@ -30,11 +51,15 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
 
   return (
     <>
-      {/* TEMP */}
-      <div style={{ position: 'relative' }}>
+      {/* TEMP — hover or click opens a 7-day forecast (PBS 2026-05-09 #16). */}
+      <div
+        style={{ position: 'relative' }}
+        onMouseEnter={() => { setTempOpen(true); setAirOpen(false); setUserOpen(false); }}
+        onMouseLeave={() => setTempOpen(false)}
+      >
         <button
           onClick={() => { setTempOpen(o => !o); setAirOpen(false); setUserOpen(false); }}
-          title="Temperature in Luang Prabang"
+          title="Temperature in Luang Prabang · hover for 7-day"
           aria-label="Temperature"
           style={S.chip}
         >
@@ -44,23 +69,22 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
         {tempOpen && (
           <KBPopover onClose={() => setTempOpen(false)}
             eyebrow="Temperature · Luang Prabang"
-            title="32°C · feels 36°"
-            rows={[
-              { k: 'Now',         v: '32°C',  d: 'partly cloudy' },
-              { k: 'Today high',  v: '34°C',  d: 'peaks ~14:00 ICT' },
-              { k: 'Tonight low', v: '24°C',  d: 'clear' },
-              { k: 'Tomorrow',    v: '33°C',  d: 'thunderstorms PM' },
-            ]}
+            title="Next 7 days · °C · rain mm"
+            rows={SEVEN_DAY_TEMP}
             footer="preview · Open-Meteo wiring TODO"
           />
         )}
       </div>
 
-      {/* AIR */}
-      <div style={{ position: 'relative' }}>
+      {/* AIR — same hover pattern, 7-day forecast (PBS 2026-05-09 #17). */}
+      <div
+        style={{ position: 'relative' }}
+        onMouseEnter={() => { setAirOpen(true); setTempOpen(false); setUserOpen(false); }}
+        onMouseLeave={() => setAirOpen(false)}
+      >
         <button
           onClick={() => { setAirOpen(o => !o); setTempOpen(false); setUserOpen(false); }}
-          title="Air quality + humidity"
+          title="Air quality + humidity · hover for 7-day"
           aria-label="Air"
           style={S.chip}
         >
@@ -70,13 +94,8 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
         {airOpen && (
           <KBPopover onClose={() => setAirOpen(false)}
             eyebrow="Air · Luang Prabang"
-            title="AQI 42 · good"
-            rows={[
-              { k: 'PM2.5',     v: '11 µg/m³', d: 'WHO guideline' },
-              { k: 'Humidity',  v: '76%',      d: 'high · seasonal' },
-              { k: 'UV index',  v: '8',        d: 'very high · 11–15h' },
-              { k: 'Wind',      v: '6 km/h',   d: 'WSW' },
-            ]}
+            title="Next 7 days · AQI · UV · humidity"
+            rows={SEVEN_DAY_AIR}
             footer="preview · IQAir wiring TODO"
           />
         )}

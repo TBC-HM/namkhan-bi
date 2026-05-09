@@ -177,6 +177,7 @@ const REVENUE_CFG: DeptCfg = {
   chatPlaceholder: 'e.g. how are we pacing for next weekend?',
   storageKeyPrefix: 'rev',
   subPages: [
+    // PBS 2026-05-09 (repair-list 11): Agents only reachable via /cockpit.
     { label: 'Pulse',      href: '/revenue/pulse'     },
     { label: 'Pace',       href: '/revenue/pace'      },
     { label: 'Channels',   href: '/revenue/channels'  },
@@ -184,7 +185,6 @@ const REVENUE_CFG: DeptCfg = {
     { label: 'Pricing',    href: '/revenue/pricing'   },
     { label: 'Comp Set',   href: '/revenue/compset'   },
     { label: 'Parity',     href: '/revenue/parity'    },
-    { label: 'Agents',     href: '/revenue/agents'    },
   ],
   quickChips: [
     { label: 'Pulse',    href: '/revenue/pulse'    },
@@ -242,6 +242,9 @@ const SALES_CFG: DeptCfg = {
   chatPlaceholder: 'e.g. which inquiries went silent past 48h?',
   storageKeyPrefix: 'sal',
   subPages: [
+    // PBS 2026-05-09 (repair-list 9/10/11): drop Roster (belongs to ops) +
+    // drop Agents (only reachable via /cockpit). No Dashboard tab — it was
+    // never in this list (the request was about other dept menus).
     { label: 'Inquiries', href: '/sales/inquiries' },
     { label: 'Leads',     href: '/sales/leads'     },
     { label: 'Groups',    href: '/sales/groups'    },
@@ -249,8 +252,6 @@ const SALES_CFG: DeptCfg = {
     { label: 'Packages',  href: '/sales/packages'  },
     { label: 'B2B / DMC', href: '/sales/b2b'       },
     { label: 'Pipeline',  href: '/sales/pipeline'  },
-    { label: 'Roster',    href: '/sales/roster'    },
-    { label: 'Agents',    href: '/sales/agents'    },
   ],
   quickChips: [
     { label: 'Inquiries', href: '/sales/inquiries' },
@@ -258,7 +259,6 @@ const SALES_CFG: DeptCfg = {
     { label: 'Packages',  href: '/sales/packages'  },
     { label: 'B2B / DMC', href: '/sales/b2b'       },
     { label: 'Pipeline',  href: '/sales/pipeline'  },
-    { label: 'Agents',    href: '/sales/agents'    },
   ],
   defaultAttn: [
     { id: 'l1', label: 'Inquiry → quote SLA breach (>48h) for 4 leads', severity: 'high',   kind: 'leakage'     },
@@ -306,6 +306,7 @@ const MARKETING_CFG: DeptCfg = {
   chatPlaceholder: 'e.g. which channel grew most this month?',
   storageKeyPrefix: 'mkt',
   subPages: [
+    // PBS 2026-05-09 (repair-list 11): Agents only reachable via /cockpit.
     { label: 'Snapshot',    href: '/marketing'             },
     { label: 'Audiences',   href: '/marketing/audiences'   },
     { label: 'Library',     href: '/marketing/library'     },
@@ -314,7 +315,6 @@ const MARKETING_CFG: DeptCfg = {
     { label: 'Social',      href: '/marketing/social'      },
     { label: 'Influencers', href: '/marketing/influencers' },
     { label: 'Taxonomy',    href: '/marketing/taxonomy'    },
-    { label: 'Agents',      href: '/marketing/agents'      },
   ],
   quickChips: [
     { label: 'Snapshot',  href: '/marketing'             },
@@ -429,6 +429,7 @@ const GUEST_CFG: DeptCfg = {
   chatPlaceholder: 'e.g. who is checking in this evening?',
   storageKeyPrefix: 'gst',
   subPages: [
+    // PBS 2026-05-09 (repair-list 11): Agents only reachable via /cockpit.
     { label: 'Snapshot',    href: '/guest'             },
     { label: 'Directory',   href: '/guest/directory'   },
     { label: 'Reputation',  href: '/guest/reputation'  },
@@ -436,7 +437,6 @@ const GUEST_CFG: DeptCfg = {
     { label: 'Loyalty',     href: '/guest/loyalty'     },
     { label: 'Messy data',  href: '/guest/messy-data'  },
     { label: 'Findings',    href: '/guest/findings'    },
-    { label: 'Agents',      href: '/guest/agents'      },
   ],
   quickChips: [
     { label: 'Snapshot',   href: '/guest'            },
