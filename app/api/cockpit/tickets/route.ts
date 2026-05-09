@@ -13,8 +13,8 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
-  process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "https://build-placeholder.supabase.co",
+  process.env.SUPABASE_SERVICE_ROLE_KEY || "build-placeholder-key",
 );
 
 // PBS 2026-05-09: 13 tables FK-reference cockpit_tickets; several without

@@ -19,8 +19,8 @@ export const maxDuration = 90;
 export const dynamic = "force-dynamic";
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
-  process.env.SUPABASE_SERVICE_ROLE_KEY ?? ""
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "https://build-placeholder.supabase.co",
+  process.env.SUPABASE_SERVICE_ROLE_KEY || "build-placeholder-key"
 );
 
 interface BriefPayload {
