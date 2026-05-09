@@ -368,22 +368,17 @@ Triage the request. Output ONLY a JSON object:
 
 async function triageMessageInline(message: string): Promise<Triage | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return null;
-  const { data: itPrompt } = await supabase
-    .from("cockpit_agent_prompts")
-    .select("prompt")
-    .eq("role", "it_manager")
-    .eq("active", true)
-    .single();
-  const rawPrompt = itPrompt?.prompt ?? IT_MANAGER_SYSTEM_PROMPT;
-  // PBS 2026-05-09: Kit's prompt has stacked CHAT MODE preambles (v6-v9)
-  // for the chat route. The agent-runner triage path needs strict JSON, not
-  // conversational prose. Strip ALL CHAT MODE blocks so Kit returns JSON.
-  // (Same fix as in app/api/cockpit/chat/route.ts.)
-  const systemPrompt = rawPrompt.replace(
-    /═══ CHAT MODE[\s\S]*?═══ END[^\n]*BLOCK[^\n]*═══\n\n/g,
-    "",
-  );
+  if (!apiKey) {
+    console.error("triage: ANTHROPIC_API_KEY missing");
+    return null;
+  }
+  // PBS 2026-05-10: triage path uses ONLY the hardcoded IT_MANAGER_SYSTEM_PROMPT.
+  // The DB prompt (cockpit_agent_prompts.it_manager v23) is a chat persona — 5
+  // stacked CHAT MODE blocks plus operator narrative — it doesn't include the
+  // JSON triage contract the parser expects. Stripping the chat blocks leaves
+  // narrative without a JSON output spec, so Kit returns prose and parsing
+  // fails. Hardcoded prompt = explicit JSON contract = reliable triage.
+  const systemPrompt = IT_MANAGER_SYSTEM_PROMPT;
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -398,13 +393,18 @@ async function triageMessageInline(message: string): Promise<Triage | null> {
       messages: [{ role: "user", content: message }],
     }),
   });
-  if (!res.ok) return null;
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => "");
+    console.error(`triage: anthropic ${res.status} ${errBody.slice(0, 300)}`);
+    return null;
+  }
   const json = await res.json();
   const text = json?.content?.[0]?.text ?? "";
   const cleaned = text.replace(/^```json\s*/i, "").replace(/```$/, "").trim();
   try {
     return JSON.parse(cleaned) as Triage;
-  } catch {
+  } catch (e) {
+    console.error(`triage: JSON parse failed — text head: ${cleaned.slice(0, 200)}`);
     return null;
   }
 }
