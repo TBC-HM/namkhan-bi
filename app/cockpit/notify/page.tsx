@@ -41,8 +41,8 @@ function relTime(iso: string): string {
 
 export default async function NotifyPage() {
   const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    (process.env.NEXT_PUBLIC_SUPABASE_URL || "https://build-placeholder.supabase.co"),
+    (process.env.SUPABASE_SERVICE_ROLE_KEY || "build-placeholder-key")
   );
   const { data, error } = await supabase
     .from("v_pbs_notifications_feed")

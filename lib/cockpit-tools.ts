@@ -57,8 +57,8 @@ function requireProdWriteApproval(skillName: string): void {
 }
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "https://build-placeholder.supabase.co",
+  process.env.SUPABASE_SERVICE_ROLE_KEY || "build-placeholder-key"
 );
 
 // Allowlist for query_supabase_view. Add views here as agents need them.
@@ -638,8 +638,8 @@ async function read_knowledge_base_semantic(args: {
   const scope = args.scope ?? null;
 
   // 1. Embed the query via the embed-kb edge function (gte-small, 384-dim).
-  const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supaKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  const supaUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || "https://build-placeholder.supabase.co");
+  const supaKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || "build-placeholder-key");
   const embRes = await fetch(`${supaUrl}/functions/v1/embed-kb`, {
     method: "POST",
     headers: {

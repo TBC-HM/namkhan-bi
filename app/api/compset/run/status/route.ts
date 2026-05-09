@@ -10,8 +10,8 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || "https://build-placeholder.supabase.co");
+const anonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "build-placeholder-anon");
 
 export async function GET(req: Request) {
   if (!url || !anonKey) {

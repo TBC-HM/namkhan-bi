@@ -20,8 +20,8 @@ import { supabase, PROPERTY_ID } from './supabase';
 // Local anon client for v_compset_* views (revenue.* schema is service-role
 // blind — see lib comment + app/revenue/compset/page.tsx lines 97-112).
 const compsetAnon = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  (process.env.NEXT_PUBLIC_SUPABASE_URL || "https://build-placeholder.supabase.co"),
+  (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "build-placeholder-anon"),
   { auth: { persistSession: false } },
 );
 
