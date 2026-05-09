@@ -406,6 +406,23 @@ If memory is wiped AND nothing above is reachable, the repo itself has a `CLAUDE
 
 Append-only. Newest at top. Date heading + bullet changes.
 
+### 2026-05-09 (sweep 2 — 39 dept sub-pages migrated to <Page subPages>)
+
+Why: PBS said "NOW" — continuing the page-by-page wiring pass with the priority list logged in KB id 491.
+
+**Files (per dept)**
+- **Sales** (10 files) — `/sales/_subpages.ts` shared strip; `inquiries`, `leads`, `b2b` (root + `performance` + `reconciliation`), `groups` (KpiBox + Panel), `roster` (KpiBox + Panel) all migrated. `_components/LoremPage.tsx` rewritten to render inside `<Page>` + `<Panel>` + `<KpiBox state="pending">` so `pipeline` / `fit` / `packages` upgrade for free.
+- **Finance** (5 files) — `/finance/_subpages.ts`; `pnl` (1130 lines), `budget`, `ledger`, `transactions` migrated.
+- **Marketing** (6 files) — `/marketing/_subpages.ts`; `campaigns`, `social`, `influencers`, `audiences`, `library` moved off `PanelHero` / `Card` / `KpiCard` onto `<Page>` + `<Panel>` + `<KpiBox>`.
+- **Operations** (13 files) — `/operations/_subpages.ts`; `housekeeping`, `maintenance`, `inventory` (root + `suppliers`/`[id]`, `catalog`, `requests`, `capex`, `orders`, `stock`, `assets`, `par`) all on `<Page subPages>`.
+- **Guest** (6 files) — `/guest/_subpages.ts`; `journey`, `reputation`, `loyalty`, `findings`, `messy-data` migrated.
+
+Each dept's `_subpages.ts` is the single source of truth for its strip.
+
+**Verification (post-deploy)** — `npx tsc --noEmit` exit 0. 59 production routes smoked, all 200 (every dept entry + every newly-wired sub-page + the 6 /revenue routes from sweep 1 + samples + architect + it).
+
+**Wiring next** (still PageHeader-bound, low priority): `/sales/inquiries/[id]`, `/sales/proposals/[id]/edit`, `/operations/staff/[staffId]`, `/operations/inventory/{items,assets}/[id]`, `/operations/inventory/orders/[po_id]`, `/operations/inventory/requests/[pr_id]`, `/operations/inventory/suppliers/[id]` (already done), `/marketing/campaigns/{[id], new}`, `/marketing/compiler/*`, `/marketing/upload`, `/admin/gmail-connect`, `/inbox`, `/settings/*` (10 pages), `/operations/staff`, `/operations/today` (currently 307 redirect). All non-critical detail / settings pages — defer until PBS asks.
+
 ### 2026-05-09 (final — frame strip + all /revenue + dept dashboards + /sales/inquiries on canonical primitives)
 
 Why: PBS rejected the brown/green dept-layout chrome ("AND TAKE OUT THE FRAME YOOU LEFT ARUND FOLLOW THE ENTRY PAGES"). Strip the layouts to thin `.panel` (centring only — no colour), wire all six /revenue sub-pages to `<Page>` + `<Panel>` + `<Brief>` + `<ArtifactActions>`, and lift the shared `EngineDashboard` onto the canonical primitives so all 5 dept dashboards inherit the new shell.
