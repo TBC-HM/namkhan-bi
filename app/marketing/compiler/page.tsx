@@ -23,12 +23,12 @@ const TEMPLATES = [
 async function loadAll() {
   const admin = getSupabaseAdmin();
   const [recent, pricelist, retreats] = await Promise.all([
-    admin.schema('compiler').from('runs')
-      .select('id, prompt, status, cost_eur, created_at, variants(count)')
+    admin.from('v_compiler_runs')
+      .select('id, prompt, status, cost_eur, created_at')
       .order('created_at', { ascending: false })
       .limit(20),
     admin.schema('pricing').from('pricelist').select('*', { head: true, count: 'exact' }).eq('is_active', true),
-    admin.schema('web').from('retreats').select('*', { head: true, count: 'exact' }).eq('status', 'published'),
+    admin.from('v_retreats').select('*', { head: true, count: 'exact' }).eq('status', 'published'),
   ]);
   return {
     recent: (recent.data ?? []) as RunRow[],

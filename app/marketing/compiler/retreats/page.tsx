@@ -38,7 +38,7 @@ const STATUS_TONE: Record<string, StatusTone> = {
 export default async function RetreatsListPage() {
   const admin = getSupabaseAdmin();
   const { data, error } = await admin
-    .schema('web').from('retreats')
+    .from('v_retreats')
     .select('id, slug, name, tagline, arrival_window_from, arrival_window_to, spots_total, spots_booked, spots_remaining, price_usd_from, status, series_slug, created_at')
     .order('created_at', { ascending: false });
   const rows = (data ?? []) as RetreatRow[];
