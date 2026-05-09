@@ -28,8 +28,8 @@ const HARD_CAP_FILES = 200;
 const HARD_CAP_BYTES = 10 * 1024 * 1024;
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+  process.env.SUPABASE_SERVICE_ROLE_KEY ?? ""
 );
 
 function extOf(name: string): string {

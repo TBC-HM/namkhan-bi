@@ -14,8 +14,8 @@ export const fetchCache = "force-no-store";
 export const revalidate = 0;
 
 const admin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+  process.env.SUPABASE_SERVICE_ROLE_KEY ?? ""
 );
 
 const NEUTRAL = "If this email is allowed, a sign-in link has been sent. Check your inbox.";
@@ -83,8 +83,8 @@ export async function POST(req: Request) {
   // The Supabase admin generateLink doesn't auto-send the email — it returns the
   // link payload. For v1, also call signInWithOtp to trigger the actual send.
   const userClient = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ""
   );
   await userClient.auth.signInWithOtp({
     email: raw,
