@@ -2775,6 +2775,29 @@ body .pnl-page table.usali tr.ebitda td {
   border-bottom: 2px solid #a8854a !important;
 }
 
+/* PBS 2026-05-09 round 4: /finance/pnl reverted to "all brown" because
+ * TwelveMonthPanel + CashForecastPanel + CommentaryPanel hard-code light-
+ * theme tokens like `var(--surf-2, #f5f1e7)` and `var(--card, #fff)`. The
+ * `:root` defines those tokens with cream values. Override them on `body`
+ * so every dark-canvas page resolves dark, AND override the inline-fallback
+ * pattern (#fff / #f5f1e7) by force-painting any element using these
+ * variables. This is intentionally sweeping — the whole app is dark-canvas. */
+body {
+  --card:        #11110f !important;
+  --surf-1:      #15110b !important;
+  --surf-2:      #1a140b !important;
+  --surf-hover:  #221a10 !important;
+  --rule:        #2a2520 !important;
+  --line:        #2a2520 !important;
+  --line-soft:   #1f1c15 !important;
+  --paper-warm:  #1a140b !important;
+  --paper-deep:  #11110f !important;
+  --ink:         #f0e5cb !important;
+  --ink-mute:    #b8a98a !important;
+  --ink-soft:    #d8cca8 !important;
+  --ink-faint:   #7d7565 !important;
+}
+
 /* Inputs + selects on the dark canvas also need a baseline. */
 input[type="text"], input[type="search"], input[type="email"],
 input[type="number"], input[type="date"], input[type="tel"],

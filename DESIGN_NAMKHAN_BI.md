@@ -2836,3 +2836,23 @@ PBS: "IN THE LEADS AREA DESIGN THE WHOLE CONCEPT IN BACKEND AND FRONTEND THAT WE
   - `POST /api/sales/leads/scraping-jobs {query: "...", target_category: "..."}` → HTTP 200, returns queued job id
 - **Skipped (per concurrent-agent fence).** `app/sales/b2b/**`, `app/sales/dmc/**`, `components/page/Panel.tsx`, `app/cockpit/page.tsx`, `scripts/agent-runner.ts`, `.github/workflows/**` — untouched. The other 3 sibling-WIP files (`app/revenue/pricing/page.tsx`, `app/sales/btb/page.tsx`, `components/page/Panel.tsx` deletion of `PanelExpander`) were also untouched; their pre-existing tsc errors are out of scope here.
 - KB row scope `design_system_log` source `session-2026-05-09` topic `leads_pipeline_unification`.
+
+### 2026-05-09 — Cockpit top tab bar consolidated: Knowledge · Deploys · Logs · Data → "🛠 Console"
+- **Why.** PBS: *"Maybe knowledge, deploy, logs and data in cockpit can be combined in one page somehow."* The cockpit top tab bar had ten tabs (Chat · Activity · Team · Knowledge · Docs · Deploys · Schedule · Logs · Data · Tools) — too dense; four of them are read-mostly ops surfaces that belong together.
+- **What.** Single new top tab `🛠 Console` containing a sub-tab strip (Knowledge · Deploys · Logs · Data). The four standalone top-level tabs are removed. Existing `KnowledgeTab` / `DeploysTab` / `LogsTab` / `DataTab` components are unchanged — just nested under a new `<ConsoleTab>` wrapper. Top tab count: **10 → 7** (Chat · Activity · Team · Docs · Schedule · Console · Tools).
+- **URL deep-link compatibility.** `?tab=knowledge|deploys|logs|data` still works — the `useEffect` reading `?tab=` now detects those legacy values and silently routes to the merged tab with the right sub-panel selected (no redirect; just internal state). New canonical form: `?tab=console&sub=<knowledge|deploys|logs|data>`. The `?tab=schedule` deep-link from earlier today is preserved untouched.
+- **Files touched.**
+  - `app/cockpit/page.tsx` — `Tab` type union narrowed (10 → 7 members), new `ConsoleSub` type + `CONSOLE_SUBS` constant, new `ConsoleTab` component (sub-strip + panel router, scoped `<style jsx>`), `useEffect` deep-link handler extended for legacy + `&sub=` form, top-tab-bar JSX trimmed, render switch trimmed.
+  - `DESIGN_NAMKHAN_BI.md` — this entry.
+- **Verification.** `npx tsc --noEmit` — `app/cockpit/page.tsx` clean (the 7 pre-existing sibling-agent tsc errors in pricing/sample-1/pdf_worker/DeptEntry/Panel are unchanged and out of scope). Deploy `dpl_Amw1dCXaNJZywFpCRNAZne9mTMNB` → `namkhan-bi.vercel.app`. Smoke (each with `?bust=$RANDOM`):
+  - `/cockpit?tab=console` → HTTP 200
+  - `/cockpit?tab=knowledge` → HTTP 200 (legacy → console + Knowledge sub)
+  - `/cockpit?tab=deploys` → HTTP 200 (legacy → console + Deploys sub)
+  - `/cockpit?tab=logs` → HTTP 200 (legacy → console + Logs sub)
+  - `/cockpit?tab=data` → HTTP 200 (legacy → console + Data sub)
+  - `/cockpit?tab=console&sub=logs` → HTTP 200
+  - `/cockpit?tab=schedule` → HTTP 200 (PBS's earlier deep-link still works)
+  - `curl /cockpit | grep -o '🛠 Console\|🧠 Knowledge\|🚀 Deploys\|📜 Logs\|🗄 Data'` → returns `🛠 Console` only (four old top-level tabs gone from the bar).
+- **Constraints honoured.** No hardcoded `fontSize:` JSX literals (CSS-in-`<style jsx>` `font-size` matches the existing `Tab` component's local pattern). `counts.schedule` / `counts.team` / `counts.logs` / `counts.data` props on `TopBar` left untouched — Logs/Data counts now surface (a) on the parent Console tab (`counts.logs + counts.data`, badge) and (b) on each sub-tab. Cost / Activity / Chat / Team / Docs / Schedule tabs untouched.
+- **Concurrent-agent fence.** `app/sales/leads/**`, `app/sales/pipeline/**`, `components/page/Panel.tsx`, `scripts/agent-runner.ts`, `.github/workflows/**` — untouched (sibling agent owns those).
+- KB row scope `design_system_log` source `session-2026-05-09` topic `cockpit_console_consolidation`.
