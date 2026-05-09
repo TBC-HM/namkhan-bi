@@ -158,11 +158,11 @@ async function callClaude(spec: string): Promise<AgentResponse | null> {
       max_tokens: 16000,
       system: SYSTEM_PROMPT,
       messages: [
+        // PBS 2026-05-10: claude-sonnet-4-6 returns 400 on assistant prefill
+        // ("This model does not support assistant message prefill"). So we
+        // keep a single user turn and rely on the strict system prompt +
+        // a robust JSON extractor below to handle prose preambles.
         { role: 'user', content: spec },
-        // Anthropic prefill: forces the model to continue from '{', so the
-        // response is guaranteed to start with valid JSON. We add the leading
-        // '{' back when parsing.
-        { role: 'assistant', content: '{' },
       ],
     }),
   });
@@ -172,13 +172,39 @@ async function callClaude(spec: string): Promise<AgentResponse | null> {
   }
   const data = (await res.json()) as { content: Array<{ type: string; text: string }> };
   const text = data.content?.find((c) => c.type === 'text')?.text ?? '';
+  // PBS 2026-05-10: extract the FIRST balanced JSON object from the response.
+  // Carla sometimes prefixes prose ("I need to look at...") even with strict
+  // prompt rules, since 4-6 can't be prefilled. Find the first '{' and
+  // bracket-balance to the matching '}', stripping markdown fences.
+  const openIdx = text.indexOf('{');
+  if (openIdx < 0) {
+    console.error('parse failed: no { in response:', text.slice(0, 300));
+    return null;
+  }
+  let depth = 0;
+  let inStr = false;
+  let escaped = false;
+  let endIdx = -1;
+  for (let i = openIdx; i < text.length; i++) {
+    const ch = text[i];
+    if (escaped) { escaped = false; continue; }
+    if (ch === '\\') { escaped = true; continue; }
+    if (ch === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) { endIdx = i; break; }
+    }
+  }
+  if (endIdx < 0) {
+    console.error('parse failed: unbalanced JSON:', text.slice(openIdx, openIdx + 300));
+    return null;
+  }
   try {
-    // Prefill '{' was sent as assistant turn; the response continues from there
-    // so we prepend '{' back. Also strip any trailing markdown fence.
-    const cleaned = ('{' + text).trim().replace(/\n?```$/, '');
-    return JSON.parse(cleaned) as AgentResponse;
+    return JSON.parse(text.slice(openIdx, endIdx + 1)) as AgentResponse;
   } catch (e) {
-    console.error('parse failed:', (e as Error).message, text.slice(0, 300));
+    console.error('parse failed:', (e as Error).message, text.slice(openIdx, openIdx + 300));
     return null;
   }
 }
