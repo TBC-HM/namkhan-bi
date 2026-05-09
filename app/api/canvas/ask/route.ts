@@ -109,13 +109,61 @@ function fallbackGenericBrief(question: string): BriefPayload {
 
 const SONNET = 'claude-sonnet-4-6';
 
+// Knowledge base — `cockpit_knowledge_base` columns are (topic, key_fact, scope, ...).
+// We pull manifesto + a question-keyword sample of all-other-scopes.
+
 async function fetchManifesto(): Promise<string> {
   const { data } = await supabase
     .from('cockpit_knowledge_base')
-    .select('title, content')
-    .eq('scope', 'design_system_manifesto');
+    .select('topic, key_fact')
+    .eq('scope', 'design_system_manifesto')
+    .eq('active', true);
   if (!data || data.length === 0) return '';
-  return data.map(r => `### ${r.title}\n${r.content}`).join('\n\n');
+  return data.map(r => `### ${r.topic}\n${r.key_fact}`).join('\n\n');
+}
+
+/**
+ * Pull up to 12 KB rows whose `topic` or `key_fact` matches any keyword from
+ * the question. Quick lexical match — embedding search is the upgrade path
+ * once cockpit_knowledge_base.embedding is populated for every row.
+ */
+async function fetchRelevantKb(question: string): Promise<string> {
+  const tokens = Array.from(new Set(
+    question.toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(t => t.length >= 4)
+  )).slice(0, 8);
+  if (tokens.length === 0) return '';
+
+  const orFilter = tokens
+    .flatMap(t => [`topic.ilike.%${t}%`, `key_fact.ilike.%${t}%`])
+    .join(',');
+
+  const { data } = await supabase
+    .from('cockpit_knowledge_base')
+    .select('scope, topic, key_fact, confidence')
+    .neq('scope', 'design_system_manifesto')
+    .eq('active', true)
+    .or(orFilter)
+    .order('updated_at', { ascending: false })
+    .limit(12);
+  if (!data || data.length === 0) return '';
+  return data.map(r => `- [${r.scope} · ${r.confidence ?? '?'}] **${r.topic}** — ${r.key_fact}`).join('\n');
+}
+
+async function fetchAgentRoster(): Promise<string> {
+  // governance.agents is exposed via supabase. Pull active agents only.
+  const { data } = await supabase
+    .schema('governance')
+    .from('agents')
+    .select('code, name, status, pillar, schedule_human, description')
+    .in('status', ['active', 'beta'])
+    .order('pillar')
+    .order('name')
+    .limit(60);
+  if (!data || data.length === 0) return '';
+  return data.map(r => `- ${r.code} (${r.pillar ?? '—'}) · ${r.status} · ${r.name}${r.description ? ` — ${r.description}` : ''}`).join('\n');
 }
 
 async function fetchRecentTicketContext(): Promise<string> {
@@ -132,7 +180,12 @@ async function generateBriefViaAnthropic(question: string): Promise<BriefPayload
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return null;
 
-  const [manifesto, tickets] = await Promise.all([fetchManifesto(), fetchRecentTicketContext()]);
+  const [manifesto, kb, agents, tickets] = await Promise.all([
+    fetchManifesto(),
+    fetchRelevantKb(question),
+    fetchAgentRoster(),
+    fetchRecentTicketContext(),
+  ]);
 
   const system = `You are Vector, the Namkhan canvas agent. PBS (operator) asks a question; you return ONE Brief in strict JSON.
 
@@ -144,7 +197,7 @@ async function generateBriefViaAnthropic(question: string): Promise<BriefPayload
   "bad":     string[],           // 1–4 bullets, each <= 110 chars, leakage / risk
   "proposals": [                 // 0–3 entries; each becomes a row in cockpit_proposals
     {
-      "agent_role":   string,    // e.g. revenue_hod, marketing_hod, ops_hod, finance_hod, guest_hod
+      "agent_role":   string,    // pick from the AI team roster below; never invent agent codes
       "action_type":  string,    // short_snake_case verb e.g. bar_adjust, send_direct_email, audit_pl
       "dept":         string,    // revenue | sales | marketing | operations | guest | finance | it
       "signal":       string,    // 1-line title of the proposal card
@@ -161,6 +214,13 @@ async function generateBriefViaAnthropic(question: string): Promise<BriefPayload
 
 # Design manifesto (binding)
 ${manifesto || '[manifesto unavailable]'}
+
+# AI team roster (governance.agents · active + beta)
+Use these codes verbatim for proposal.agent_role. If no agent fits, pick the best HoD (revenue_hod, sales_hod, marketing_hod, ops_hod, guest_hod, finance_hod, it_hod).
+${agents || '[no agents registered]'}
+
+# Knowledge base — entries matching the question
+${kb || '[no matching KB rows]'}
 
 # Recent tickets (context only, do not echo)
 ${tickets || '[none]'}`;

@@ -123,8 +123,8 @@
 html { scroll-behavior: smooth; }
 body {
   font-family: var(--sans);
-  background: var(--paper);
-  color: var(--ink);
+  background: #0a0a0a; /* dark canvas — matches <Page> shell + entry pages (PBS 2026-05-09: no brown sides) */
+  color: #e9e1ce;
   font-size: 14px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
