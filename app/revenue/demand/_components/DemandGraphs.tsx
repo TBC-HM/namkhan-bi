@@ -84,10 +84,10 @@ function PairedBars({ rows }: { rows: PaceRow[] }) {
         return (
           <g key={r.ci_month}>
             <rect x={x} y={y0 - otbH} width={barW} height={otbH} fill="var(--moss)">
-              <title>{`${r.ci_month.slice(0, 7)} · OTB ${r.otb_roomnights} RN`}</title>
+              <title>{`${r.ci_month.slice(0, 7)} · OTB ${r.otb_roomnights} RN · STLY ${r.stly_roomnights} RN · v_pace_monthly`}</title>
             </rect>
             <rect x={x + barW + 2} y={y0 - stlyH} width={barW} height={stlyH} fill="var(--ink-mute)" opacity={0.55}>
-              <title>{`${r.ci_month.slice(0, 7)} · STLY ${r.stly_roomnights} RN`}</title>
+              <title>{`${r.ci_month.slice(0, 7)} · STLY ${r.stly_roomnights} RN · OTB ${r.otb_roomnights} RN · v_pace_monthly`}</title>
             </rect>
             <text x={x + groupW / 2 - 2} y={h - 14} textAnchor="middle" style={axis}>
               {r.ci_month.slice(2, 7)}
@@ -130,7 +130,7 @@ function DeltaBars({ rows }: { rows: PaceRow[] }) {
         return (
           <g key={r.ci_month}>
             <rect x={x} y={y} width={barW} height={half} fill={fill}>
-              <title>{`${r.ci_month.slice(0, 7)} · ${pct >= 0 ? '+' : ''}${pct.toFixed(0)}% vs STLY`}</title>
+              <title>{`${r.ci_month.slice(0, 7)} · ${pct >= 0 ? '+' : ''}${pct.toFixed(0)}% vs STLY · OTB ${r.otb_roomnights} vs STLY ${r.stly_roomnights} RN · v_pace_monthly`}</title>
             </rect>
             <text x={x + barW / 2} y={h - 14} textAnchor="middle" style={axis}>
               {r.ci_month.slice(2, 7)}
@@ -163,10 +163,12 @@ function AdrLine({ rows }: { rows: PaceRow[] }) {
     <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', height: 180 }}>
       <text x={4} y={padT + 6} style={axis}>{fmtMoney(max, 'USD')}</text>
       <text x={4} y={padT + innerH} style={axis}>{fmtMoney(min, 'USD')}</text>
-      <path d={path} fill="none" stroke="var(--moss)" strokeWidth={2} />
+      <path d={path} fill="none" stroke="var(--moss)" strokeWidth={2}>
+        <title>{`OTB ADR series · ${data.length} months · v_pace_monthly`}</title>
+      </path>
       {data.map((d, i) => (
         <circle key={d.month} cx={xAt(i)} cy={yAt(d.adr)} r={3} fill="var(--moss)">
-          <title>{`${d.month.slice(0, 7)} · ADR ${fmtMoney(d.adr, 'USD')}`}</title>
+          <title>{`${d.month.slice(0, 7)} · ADR ${fmtMoney(d.adr, 'USD')} · v_pace_monthly`}</title>
         </circle>
       ))}
       {data.map((d, i) => (

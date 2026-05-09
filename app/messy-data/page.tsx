@@ -14,6 +14,11 @@ import Panel from '@/components/page/Panel';
 import KpiBox from '@/components/kpi/KpiBox';
 import ArtifactActions from '@/components/page/ArtifactActions';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { fmtMoney, fmtIsoDate, EMPTY } from '@/lib/format';
+import UnpaidBillsActions, {
+  type UnpaidBillRow,
+} from './_components/UnpaidBillsActions';
+import UnpaidBillStatusSelect from './_components/UnpaidBillStatusSelect';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -116,6 +121,61 @@ const SEVERITY_TONE: Record<string, { bg: string; fg: string; label: string }> =
   low:      { bg: '#1a1812', fg: '#9b907a', label: 'low'      },
 };
 
+async function getUnpaidBills(): Promise<UnpaidBillRow[]> {
+  const admin = getSupabaseAdmin();
+  const { data, error } = await admin
+    .schema('messy')
+    .from('unpaid_bills')
+    .select(
+      'id,supplier,due_date,amount_lak,balance_lak,status_raw,class_raw,location_raw,ai_classification,human_status,human_notes',
+    )
+    .order('due_date', { ascending: true, nullsFirst: false })
+    .order('id', { ascending: true })
+    .limit(1000);
+  if (error) {
+    console.error('getUnpaidBills error', error);
+    return [];
+  }
+  return (data ?? []) as UnpaidBillRow[];
+}
+
+// The "amount_lak" column is heuristically named: values >= 100k look like
+// genuine LAK amounts, smaller values are de-facto USD already (Google /
+// Booking.com / SiteMinder bills). We render both with a hint.
+function renderAmount(n: number) {
+  const looksLak = Math.abs(n) >= 100_000;
+  if (looksLak) {
+    // Stored as LAK -> display ₭ + $ equivalent
+    const usd = n / 21800;
+    return (
+      <span>
+        ₭{Math.round(n).toLocaleString('en-US')}
+        <span style={{ color: '#7d7565', marginLeft: 6, fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>
+          ({fmtMoney(usd, 'USD')})
+        </span>
+      </span>
+    );
+  }
+  // Treat as USD
+  return (
+    <span>
+      {fmtMoney(n, 'USD')}
+      <span style={{ color: '#7d7565', marginLeft: 6, fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>
+        (≈{fmtMoney(n, 'LAK')})
+      </span>
+    </span>
+  );
+}
+
+const HUMAN_STATUS_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: '',               label: '— unset —'      },
+  { value: 'open',           label: 'open'           },
+  { value: 'double',         label: 'double'         },
+  { value: 'wrong_entry',    label: 'wrong entry'    },
+  { value: 'paid_off_book',  label: 'paid off-book'  },
+  { value: 'reconciled',     label: 'reconciled'     },
+];
+
 async function getDqIssues(): Promise<DqIssue[]> {
   const admin = getSupabaseAdmin();
   const { data, error } = await admin
@@ -133,7 +193,18 @@ async function getDqIssues(): Promise<DqIssue[]> {
 }
 
 export default async function MessyDataPage() {
-  const dqIssues = await getDqIssues();
+  const [dqIssues, unpaidBills] = await Promise.all([
+    getDqIssues(),
+    getUnpaidBills(),
+  ]);
+  // amount_lak column is heuristically "the source amount" — small values
+  // (<100k) are de-facto USD already (Google / Booking.com / SiteMinder),
+  // larger values are LAK. We sum them as USD-equivalent for the eyebrow.
+  const totalUnpaidUsd = unpaidBills.reduce((acc, r) => {
+    const v = typeof r.balance_lak === 'number' ? r.balance_lak : 0;
+    if (Math.abs(v) >= 100_000) return acc + v / 21800;
+    return acc + v;
+  }, 0);
 
   const totalGaps = MANUAL_GAPS.length + dqIssues.length;
   const critical =
@@ -217,6 +288,72 @@ export default async function MessyDataPage() {
                   </tr>
                 );
               })}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+
+      <div style={{ height: 14 }} />
+
+      <Panel
+        title="Unpaid bills · finance"
+        eyebrow={`${unpaidBills.length} rows · ${fmtMoney(totalUnpaidUsd, 'USD')} balance`}
+        actions={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <UnpaidBillsActions rows={unpaidBills} />
+            <ArtifactActions
+              context={{ kind: 'panel', title: 'Messy data · unpaid bills', dept: 'finance' }}
+            />
+          </div>
+        }
+      >
+        <div style={{ fontSize: 12, color: '#7d7565', marginBottom: 8, maxWidth: 760 }}>
+          Imported from <code style={{ color: '#d8cca8' }}>Unpaid Bills.xls</code>
+          (253 source rows → 250 distinct natural keys).
+          <strong> AI classification</strong> column is a placeholder — the
+          messy-data agent fills it later.
+          <strong> Human status</strong> updates auto-save on change via
+          <code>/api/messy/unpaid-bills/update</code>.
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Supplier</th>
+                <th>Due</th>
+                <th style={{ textAlign: 'right' }}>Amount</th>
+                <th style={{ textAlign: 'right' }}>Balance</th>
+                <th>Status</th>
+                <th>Class</th>
+                <th>AI class</th>
+                <th>Human status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {unpaidBills.map((r) => (
+                <tr key={r.id}>
+                  <td className="lbl"><strong>{r.supplier}</strong></td>
+                  <td className="lbl text-mute" style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>
+                    {fmtIsoDate(r.due_date)}
+                  </td>
+                  <td className="lbl" style={{ textAlign: 'right' }}>
+                    {r.amount_lak == null ? EMPTY : renderAmount(r.amount_lak)}
+                  </td>
+                  <td className="lbl" style={{ textAlign: 'right' }}>
+                    {r.balance_lak == null ? EMPTY : renderAmount(r.balance_lak)}
+                  </td>
+                  <td className="lbl text-mute">{r.status_raw ?? EMPTY}</td>
+                  <td className="lbl text-mute">{r.class_raw ?? EMPTY}</td>
+                  <td className="lbl text-mute">{r.ai_classification ?? EMPTY}</td>
+                  <td className="lbl">
+                    <UnpaidBillStatusSelect
+                      id={r.id}
+                      initial={r.human_status ?? ''}
+                      options={HUMAN_STATUS_OPTIONS}
+                    />
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

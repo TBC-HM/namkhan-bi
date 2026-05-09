@@ -211,7 +211,6 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
               <div style={S.menuSection}>Tools</div>
               <a href="/cockpit"                   onClick={() => setUserOpen(false)} style={S.link}>IT cockpit</a>
               <a href="/cockpit/tasks"             onClick={() => setUserOpen(false)} style={S.link}>Tasks</a>
-              <a href="/knowledge"                 onClick={() => setUserOpen(false)} style={S.link}>Knowledge</a>
               <a href="/front-office/arrivals"     onClick={() => setUserOpen(false)} style={S.link}>Front office</a>
               <a href="/settings/email-categories" onClick={() => setUserOpen(false)} style={S.link}>Email categories</a>
               <a href="/settings/integrations"     onClick={() => setUserOpen(false)} style={S.link}>Integrations</a>

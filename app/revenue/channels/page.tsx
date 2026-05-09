@@ -115,6 +115,32 @@ export default async function ChannelsPage({ searchParams }: Props) {
   const leadWeighted = channels.reduce<number>((s, c) => s + Number(c.bookings || 0) * Number(c.avg_lead_days || 0), 0);
   const avgLead = totalBookings ? leadWeighted / totalBookings : 0;
 
+  // PBS 2026-05-09: compare deltas wired to KpiBox `compare` prop.
+  // Sign convention: positive = improvement (green), negative = degradation (red).
+  // For "good when down" metrics (commission $, channel cost / occ RN) we INVERT the
+  // raw delta so reductions render green.
+  const cmpRoomnights = cmpArr.reduce<number>((s, c) => s + Number(c.roomnights || 0), 0);
+  const cmpDirectMix2 = cmpDirectMix;
+  const cmpOtaMix2 = cmpOtaMix;
+  const cmpWholesaleRev = cmpArr.filter((c: any) => WHOLESALE_RX.test(String(c.source_name || ''))).reduce((s: number, c: any) => s + Number(c.gross_revenue || 0), 0);
+  const cmpWholesaleMix = cmpTotalRev ? (cmpWholesaleRev / cmpTotalRev) * 100 : 0;
+  const cmpAvgLead = (() => {
+    const totalB = cmpArr.reduce((s: number, c: any) => s + Number(c.bookings || 0), 0);
+    if (!totalB) return 0;
+    const w = cmpArr.reduce((s: number, c: any) => s + Number(c.bookings || 0) * Number(c.avg_lead_days || 0), 0);
+    return w / totalB;
+  })();
+  const cmpChannelCostPerOcc = cmpRoomnights ? cmpTotalCommission / cmpRoomnights : 0;
+
+  const cmpLabel2 = cmpPeriod ? period.cmpLabel.replace(/^vs\s+/i, '') : '';
+  // good when up
+  const dCommission   = cmpPeriod ? -(totalCommission - cmpTotalCommission) : null; // less commission $ = better
+  const dDirectMix    = cmpPeriod ? (directMix - cmpDirectMix2) : null;
+  const dOtaMix       = cmpPeriod ? -(otaMix - cmpOtaMix2) : null;                   // less OTA dependency = better
+  const dWholesaleMix = cmpPeriod ? -(wholesaleMix - cmpWholesaleMix) : null;        // less wholesale = better (leakage)
+  const dAvgLead      = cmpPeriod ? (avgLead - cmpAvgLead) : null;                   // longer lead = better
+  const dChannelCost  = cmpPeriod ? -(channelCostPerOcc - cmpChannelCostPerOcc) : null; // lower cost = better
+
   // Worst cancel-rate channel for the insight
   let worstCancel = { name: '', pct: 0 };
   channels.forEach(c => {
@@ -162,12 +188,24 @@ export default async function ChannelsPage({ searchParams }: Props) {
       />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
-        <KpiBox value={totalCommission}     unit="usd" label={`Commissions · ${period.label}`} tooltip={`Total commissions paid to channels in ${period.label}. Source: mv_channel_perf.commission_usd.`} />
-        <KpiBox value={directMix}            unit="pct" label="Direct mix"    tooltip="Direct revenue ÷ total channel revenue × 100. Direct = website + booking engine + email + walk-in. Target ≥ 30%." />
-        <KpiBox value={otaMix}               unit="pct" label="OTA mix"       tooltip="OTA revenue ÷ total channel revenue × 100. Booking.com + Expedia + Agoda + Airbnb." />
-        <KpiBox value={wholesaleMix}         unit="pct" label="Wholesale mix" tooltip="Wholesale / DMC revenue ÷ total channel revenue × 100." />
-        <KpiBox value={avgLead}              unit="nights" dp={0} label="Avg lead time" tooltip="Mean days from booking to arrival, weighted by reservation count." />
-        <KpiBox value={channelCostPerOcc}    unit="usd" label="Channel cost / occ RN" tooltip="Total commission ÷ occupied room-nights, USD per occ RN. Lower is better." />
+        <KpiBox value={totalCommission}     unit="usd" label={`Commissions · ${period.label}`}
+          compare={dCommission != null ? { value: dCommission, unit: 'usd', period: cmpLabel2 } : undefined}
+          tooltip={`Total commissions paid to channels in ${period.label}. Source: mv_channel_perf.commission_usd.`} />
+        <KpiBox value={directMix}            unit="pct" label="Direct mix"
+          compare={dDirectMix != null ? { value: dDirectMix, unit: 'pp', period: cmpLabel2 } : undefined}
+          tooltip="Direct revenue ÷ total channel revenue × 100. Direct = website + booking engine + email + walk-in. Target ≥ 30%." />
+        <KpiBox value={otaMix}               unit="pct" label="OTA mix"
+          compare={dOtaMix != null ? { value: dOtaMix, unit: 'pp', period: cmpLabel2 } : undefined}
+          tooltip="OTA revenue ÷ total channel revenue × 100. Booking.com + Expedia + Agoda + Airbnb." />
+        <KpiBox value={wholesaleMix}         unit="pct" label="Wholesale mix"
+          compare={dWholesaleMix != null ? { value: dWholesaleMix, unit: 'pp', period: cmpLabel2 } : undefined}
+          tooltip="Wholesale / DMC revenue ÷ total channel revenue × 100." />
+        <KpiBox value={avgLead}              unit="nights" dp={0} label="Avg lead time"
+          compare={dAvgLead != null ? { value: dAvgLead, unit: 'd', period: cmpLabel2 } : undefined}
+          tooltip="Mean days from booking to arrival, weighted by reservation count." />
+        <KpiBox value={channelCostPerOcc}    unit="usd" label="Channel cost / occ RN"
+          compare={dChannelCost != null ? { value: dChannelCost, unit: 'usd', period: cmpLabel2 } : undefined}
+          tooltip="Total commission ÷ occupied room-nights, USD per occ RN. Lower is better." />
       </div>
       {/* deltaHint helper kept to retain compare windows for callers; no UI yet. */}
       {void deltaHint /* eslint-disable-line @typescript-eslint/no-unused-vars */}

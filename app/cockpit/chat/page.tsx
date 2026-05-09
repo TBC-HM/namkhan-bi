@@ -16,17 +16,19 @@ type Persona = {
   emoji: string;
   mentionNickname: string;
   storageKey: string;
+  /** dept-entry storage prefix — used for "Create task" button to push into the right Tasks box. */
+  taskStorageKeyPrefix: string;
 };
 
 const PERSONAS: Record<string, Persona> = {
-  architect:  { role: 'lead',          displayName: 'Felix',       dept: 'Architect',   emoji: '🏛',  mentionNickname: 'felix',  storageKey: 'chat_thread_start_architect'  },
-  revenue:    { role: 'revenue_hod',   displayName: 'Vector',      dept: 'Revenue',     emoji: '📈', mentionNickname: 'vector', storageKey: 'chat_thread_start_revenue'    },
-  sales:      { role: 'sales_hod',     displayName: 'Mercer',      dept: 'Sales',       emoji: '📞', mentionNickname: 'mercer', storageKey: 'chat_thread_start_sales'      },
-  marketing:  { role: 'marketing_hod', displayName: 'Lumen',       dept: 'Marketing',   emoji: '✦',  mentionNickname: 'lumen',  storageKey: 'chat_thread_start_marketing'  },
-  operations: { role: 'operations_hod',displayName: 'Forge',       dept: 'Operations',  emoji: '⚙', mentionNickname: 'forge',  storageKey: 'chat_thread_start_operations' },
-  guest:      { role: 'lead',          displayName: 'Felix',       dept: 'Guest',       emoji: '🏛',  mentionNickname: 'felix',  storageKey: 'chat_thread_start_guest'      },
-  finance:    { role: 'finance_hod',   displayName: 'Intel',       dept: 'Finance',     emoji: '$',  mentionNickname: 'intel',  storageKey: 'chat_thread_start_finance'    },
-  it:         { role: 'it_manager',    displayName: 'Captain Kit', dept: 'IT',          emoji: '⌬',  mentionNickname: 'kit',    storageKey: 'chat_thread_start_it'         },
+  architect:  { role: 'lead',          displayName: 'Felix',       dept: 'Architect',   emoji: '🏛',  mentionNickname: 'felix',  storageKey: 'chat_thread_start_architect',  taskStorageKeyPrefix: 'arch' },
+  revenue:    { role: 'revenue_hod',   displayName: 'Vector',      dept: 'Revenue',     emoji: '📈', mentionNickname: 'vector', storageKey: 'chat_thread_start_revenue',    taskStorageKeyPrefix: 'rev'  },
+  sales:      { role: 'sales_hod',     displayName: 'Mercer',      dept: 'Sales',       emoji: '📞', mentionNickname: 'mercer', storageKey: 'chat_thread_start_sales',      taskStorageKeyPrefix: 'sal'  },
+  marketing:  { role: 'marketing_hod', displayName: 'Lumen',       dept: 'Marketing',   emoji: '✦',  mentionNickname: 'lumen',  storageKey: 'chat_thread_start_marketing',  taskStorageKeyPrefix: 'mkt'  },
+  operations: { role: 'operations_hod',displayName: 'Forge',       dept: 'Operations',  emoji: '⚙', mentionNickname: 'forge',  storageKey: 'chat_thread_start_operations', taskStorageKeyPrefix: 'ops'  },
+  guest:      { role: 'lead',          displayName: 'Felix',       dept: 'Guest',       emoji: '🏛',  mentionNickname: 'felix',  storageKey: 'chat_thread_start_guest',      taskStorageKeyPrefix: 'gst'  },
+  finance:    { role: 'finance_hod',   displayName: 'Intel',       dept: 'Finance',     emoji: '$',  mentionNickname: 'intel',  storageKey: 'chat_thread_start_finance',    taskStorageKeyPrefix: 'fin'  },
+  it:         { role: 'it_manager',    displayName: 'Captain Kit', dept: 'IT',          emoji: '⌬',  mentionNickname: 'kit',    storageKey: 'chat_thread_start_it',         taskStorageKeyPrefix: 'it'   },
 };
 
 const DEFAULT: Persona = PERSONAS.architect;
@@ -56,6 +58,7 @@ export default function CockpitChatPage({ searchParams }: Props) {
         emoji={persona.emoji}
         mentionNickname={persona.mentionNickname}
         storageKey={persona.storageKey}
+        taskStorageKeyPrefix={persona.taskStorageKeyPrefix}
         initialInput={initial}
         placeholder={`Ask ${persona.displayName}…`}
       />

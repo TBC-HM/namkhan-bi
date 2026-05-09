@@ -79,7 +79,11 @@ export function BarChart({ data }: { data: number[] }) {
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 160 }} preserveAspectRatio="xMidYMid meet">
       {data.map((v, i) => {
         const h = (v / max) * innerH;
-        return <rect key={i} x={padL + i * barW + 1} y={padT + innerH - h} width={Math.max(1, barW - 2)} height={h} fill="#a8854a" opacity={0.85} />;
+        return (
+          <rect key={i} x={padL + i * barW + 1} y={padT + innerH - h} width={Math.max(1, barW - 2)} height={h} fill="#a8854a" opacity={0.85}>
+            <title>{`Day -${data.length - 1 - i} · ${v} · daily revenue (sample mockup, hardcoded)`}</title>
+          </rect>
+        );
       })}
     </svg>
   );
@@ -100,7 +104,11 @@ export function DonutChart({ slices }: { slices: { label: string; v: number; col
           const x1 = cx + R * Math.cos(a1), y1 = cy + R * Math.sin(a1);
           const xi0 = cx + r * Math.cos(a1), yi0 = cy + r * Math.sin(a1);
           const xi1 = cx + r * Math.cos(a0), yi1 = cy + r * Math.sin(a0);
-          return <path key={s.label} d={`M${x0},${y0} A${R},${R} 0 ${large} 1 ${x1},${y1} L${xi0},${yi0} A${r},${r} 0 ${large} 0 ${xi1},${yi1} Z`} fill={s.color} opacity={0.9} />;
+          return (
+            <path key={s.label} d={`M${x0},${y0} A${R},${R} 0 ${large} 1 ${x1},${y1} L${xi0},${yi0} A${r},${r} 0 ${large} 0 ${xi1},${yi1} Z`} fill={s.color} opacity={0.9}>
+              <title>{`${s.label} · ${s.v} · ${((s.v / total) * 100).toFixed(1)}% of channel mix (sample mockup)`}</title>
+            </path>
+          );
         })}
       </svg>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11 }}>
@@ -125,7 +133,20 @@ export function LineChart({ series }: { series: { label: string; color: string; 
         {series.map((s, idx) => {
           const xStep = innerW / (s.data.length - 1 || 1);
           const pts = s.data.map((v, i) => `${(padL + i * xStep).toFixed(1)},${(padT + innerH - (v / allMax) * innerH).toFixed(1)}`).join(' ');
-          return <polyline key={s.label} points={pts} fill="none" stroke={s.color} strokeWidth={idx === 0 ? 2 : 1.4} strokeDasharray={idx === 0 ? undefined : '3,2'} />;
+          const lastV = s.data[s.data.length - 1] ?? 0;
+          const firstV = s.data[0] ?? 0;
+          return (
+            <g key={s.label}>
+              <polyline points={pts} fill="none" stroke={s.color} strokeWidth={idx === 0 ? 2 : 1.4} strokeDasharray={idx === 0 ? undefined : '3,2'}>
+                <title>{`${s.label} · ${s.data.length}d series · start ${firstV} → end ${lastV} · pace vs STLY (sample mockup)`}</title>
+              </polyline>
+              {s.data.map((v, i) => (
+                <circle key={i} cx={padL + i * xStep} cy={padT + innerH - (v / allMax) * innerH} r={1.5} fill={s.color} fillOpacity={0}>
+                  <title>{`${s.label} · day +${i} · ${v} · pace vs STLY (sample mockup)`}</title>
+                </circle>
+              ))}
+            </g>
+          );
         })}
       </svg>
       <div style={{ display: 'flex', gap: 14, fontSize: 11, marginTop: 4 }}>

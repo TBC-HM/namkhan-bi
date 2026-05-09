@@ -235,7 +235,7 @@ function FunnelChart({ rows, max }: { rows: { label: string; n: number }[]; max:
               </text>
               <rect x={labelW} y={y + 6} width={barMaxW} height={20} fill="var(--paper-deep)" />
               <rect x={labelW} y={y + 6} width={barW} height={20} fill="var(--moss)">
-                <title>{`${r.label} · ${r.n}${dropPct != null ? ` · ${dropPct.toFixed(0)}% of prior stage` : ''}`}</title>
+                <title>{`${r.label} · ${r.n.toLocaleString()} reservations${dropPct != null ? ` · ${dropPct.toFixed(1)}% of prior stage` : ''} · public.reservations`}</title>
               </rect>
               <text x={labelW + barMaxW + 4} y={y + 18} style={{ fontFamily: 'var(--mono)', fontSize: 10, fill: 'var(--ink-soft)', fontWeight: 600 }}>
                 {r.n}
@@ -285,7 +285,7 @@ function LeadTimeChart({ buckets, med, avg }: { buckets: { label: string; n: num
           return (
             <g key={b.label}>
               <rect x={x} y={y} width={barW} height={bh} fill={fill}>
-                <title>{`${b.label} · ${b.n} · ${total > 0 ? ((b.n / total) * 100).toFixed(0) : 0}%`}</title>
+                <title>{`Lead time ${b.label} · ${b.n.toLocaleString()} reservations · ${total > 0 ? ((b.n / total) * 100).toFixed(1) : '0.0'}% of ${total.toLocaleString()} · public.reservations`}</title>
               </rect>
               {b.n > 0 && (
                 <text x={x + barW / 2} y={y - 3} textAnchor="middle" style={{ fontFamily: 'var(--mono)', fontSize: 9, fill: 'var(--ink)' }}>
@@ -338,7 +338,7 @@ function CommCoverageChart({ withEmail, withPhone, total }: { withEmail: number;
               </text>
               <rect x={padL} y={y} width={barMaxW} height={barH} fill="var(--paper-deep)" />
               <rect x={padL} y={y} width={wPx} height={barH} fill={row.color}>
-                <title>{`${row.label} · ${row.n} of ${total} · ${row.pct.toFixed(0)}%`}</title>
+                <title>{`${row.label} contact · ${row.n.toLocaleString()} of ${total.toLocaleString()} reservations · ${row.pct.toFixed(1)}% · public.reservations`}</title>
               </rect>
               <text x={w - padR + 4} y={y + barH / 2 + 4} style={{ fontFamily: 'var(--mono)', fontSize: 11, fill: 'var(--ink)', fontWeight: 600 }}>
                 {row.pct.toFixed(0)}%

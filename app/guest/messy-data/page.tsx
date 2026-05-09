@@ -344,7 +344,7 @@ function IssueChart({ issueCounts, total }: { issueCounts: Map<Issue, number>; t
               </text>
               <rect x={labelW} y={y + 4} width={barMaxW} height={14} fill="var(--paper-deep)" />
               <rect x={labelW} y={y + 4} width={barW} height={14} fill={fill}>
-                <title>{`${ISSUE_LABEL[r.issue]} · ${r.n} guests · ${pct.toFixed(0)}% of base`}</title>
+                <title>{`${ISSUE_LABEL[r.issue]} · ${r.n.toLocaleString()} guests · ${pct.toFixed(1)}% of ${total.toLocaleString()} · guest.mv_guest_profile`}</title>
               </rect>
               <text x={labelW + barMaxW + 4} y={y + 14} style={{ fontFamily: 'var(--mono)', fontSize: 10, fill: 'var(--ink-soft)' }}>
                 {r.n}

@@ -51,10 +51,18 @@ export default async function RevenueReport({ params, searchParams }: Props) {
   ]);
 
   const cur = kpis.current;
+  const cmp = kpis.compare; // null when cmp=none/budget or data layer didn't return compare row
   const occ = Number(cur?.occupancy_pct ?? 0);
   const adr = Number(cur?.adr_usd ?? 0);
   const revpar = Number(cur?.revpar_usd ?? 0);
   const trevpar = Number(cur?.trevpar_usd ?? 0);
+
+  // PBS 2026-05-09: compare deltas wired (mirrors /revenue/pulse).
+  const cmpLabel = period.cmpLabel ? period.cmpLabel.replace(/^vs\s+/i, '') : '';
+  const cmpOcc     = cmp ? Number(cur?.occupancy_pct ?? 0) - Number(cmp?.occupancy_pct ?? 0) : null;
+  const cmpAdr     = cmp ? Number(cur?.adr_usd        ?? 0) - Number(cmp?.adr_usd        ?? 0) : null;
+  const cmpRevpar  = cmp ? Number(cur?.revpar_usd     ?? 0) - Number(cmp?.revpar_usd     ?? 0) : null;
+  const cmpTrevpar = cmp ? Number(cur?.trevpar_usd    ?? 0) - Number(cmp?.trevpar_usd    ?? 0) : null;
 
   const a30 = aggregateDaily(daily, period.capacityMode);
   const totalRevWindow = (rangeRev as any[]).reduce(
@@ -118,10 +126,18 @@ export default async function RevenueReport({ params, searchParams }: Props) {
 
       <Panel title="Headline KPIs" eyebrow="this period" hideExpander>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-          <KpiBox value={occ}     unit="pct" label="Occupancy" tooltip="Occupancy % across the period." />
-          <KpiBox value={adr}     unit="usd" label="ADR"       tooltip="Average daily rate in USD." />
-          <KpiBox value={revpar}  unit="usd" label="RevPAR"    tooltip="Revenue per available room." />
-          <KpiBox value={trevpar} unit="usd" label="TRevPAR"   tooltip="Total revenue per available room." />
+          <KpiBox value={occ}     unit="pct" label="Occupancy"
+            compare={cmpOcc != null ? { value: cmpOcc, unit: 'pp', period: cmpLabel } : undefined}
+            tooltip="Occupancy % across the period." />
+          <KpiBox value={adr}     unit="usd" label="ADR"
+            compare={cmpAdr != null ? { value: cmpAdr, unit: 'usd', period: cmpLabel } : undefined}
+            tooltip="Average daily rate in USD." />
+          <KpiBox value={revpar}  unit="usd" label="RevPAR"
+            compare={cmpRevpar != null ? { value: cmpRevpar, unit: 'usd', period: cmpLabel } : undefined}
+            tooltip="Revenue per available room." />
+          <KpiBox value={trevpar} unit="usd" label="TRevPAR"
+            compare={cmpTrevpar != null ? { value: cmpTrevpar, unit: 'usd', period: cmpLabel } : undefined}
+            tooltip="Total revenue per available room." />
           <KpiBox value={totalRevWindow} unit="usd" label="Total rev (window)" tooltip="Sum of revenue_actual_usd across the window. Source: getDailyRevenueForRange." />
           <KpiBox value={directShare}    unit="pct" label="Direct share" tooltip="Direct revenue ÷ total channel revenue × 100. Direct includes website, email, walk-in." />
         </div>

@@ -148,12 +148,15 @@ async function loadCalendar(opts: { days: number; channel: string; refundable: s
   return { cells, compRows, props: (propsRes.data ?? []) as CompProp[], channels };
 }
 
+// PBS 2026-05-09: brighten cell tones — earlier palette was too dark and the
+// grid read as a black wall. Use the brand cream / brass family with stronger
+// foreground contrast so each cell is legible even when comp data is sparse.
 function toneFor(diffPct: number | null): { bg: string; fg: string; label: string } {
-  if (diffPct == null) return { bg: '#1a1812', fg: '#7d7565', label: 'no data' };
-  if (diffPct >= 8)    return { bg: '#1a2e21', fg: '#7ad790', label: 'premium' };
-  if (diffPct >= -8)   return { bg: '#2a261d', fg: '#d8cca8', label: 'parity' };
-  if (diffPct >= -20)  return { bg: '#3a2a1c', fg: '#f4c179', label: 'soft' };
-  return { bg: '#3a1f1c', fg: '#ff8a8a', label: 'too cheap' };
+  if (diffPct == null) return { bg: '#3a3327', fg: '#d8cca8', label: 'no comp' };
+  if (diffPct >= 8)    return { bg: '#2c5b3d', fg: '#c9f5d5', label: 'premium' };
+  if (diffPct >= -8)   return { bg: '#5b4a2a', fg: '#fce8b5', label: 'parity' };
+  if (diffPct >= -20)  return { bg: '#7a4f1f', fg: '#ffd49a', label: 'soft' };
+  return { bg: '#7a2a22', fg: '#ffb0a8', label: 'too cheap' };
 }
 
 const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -298,32 +301,32 @@ export default async function PricingCalendarPage({ searchParams }: Props) {
                 title={`${c.date} · Namkhan $${c.namkhan ?? '—'} · Comp $${c.comp ? Math.round(c.comp) : '—'} · Δ ${c.diffPct != null ? c.diffPct.toFixed(1) + '%' : '—'} · ${tone.label}`}
                 style={{
                   background: tone.bg,
-                  border: '1px solid #1f1c15',
-                  borderRadius: 4,
+                  border: '1px solid rgba(255,255,255,0.10)',
+                  borderRadius: 6,
                   padding: '6px 8px',
-                  minHeight: 84,
+                  minHeight: 92,
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'space-between',
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                  <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 11, color: '#d8cca8', fontWeight: 700 }}>
+                  <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12, color: '#fff5d8', fontWeight: 700 }}>
                     {dayNum}{isFirstOfMonth ? ` ${month}` : ''}
                   </span>
                   {c.diffPct != null && (
-                    <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 9, fontWeight: 700, color: tone.fg }}>
+                    <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 10, fontWeight: 800, color: tone.fg }}>
                       {c.diffPct >= 0 ? '+' : ''}{c.diffPct.toFixed(0)}%
                     </span>
                   )}
                 </div>
                 <div>
-                  <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic', fontSize: 16, color: c.namkhan != null ? '#e9e1ce' : '#5a5448' }}>
+                  <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic', fontSize: 18, color: c.namkhan != null ? '#fff5d8' : '#a89a76', fontWeight: 600 }}>
                     {c.namkhan != null ? `$${Math.round(c.namkhan)}` : '—'}
-                    {c.flag === 'stop_sold' && <span style={{ marginLeft: 4, fontFamily: 'ui-monospace, monospace', fontSize: 8, color: '#ff8a8a', fontStyle: 'normal' }}>STOP</span>}
-                    {c.flag === 'sold_out'  && <span style={{ marginLeft: 4, fontFamily: 'ui-monospace, monospace', fontSize: 8, color: '#f4c179', fontStyle: 'normal' }}>FULL</span>}
+                    {c.flag === 'stop_sold' && <span style={{ marginLeft: 4, fontFamily: 'ui-monospace, monospace', fontSize: 9, color: '#ffb0a8', fontStyle: 'normal', fontWeight: 700 }}>STOP</span>}
+                    {c.flag === 'sold_out'  && <span style={{ marginLeft: 4, fontFamily: 'ui-monospace, monospace', fontSize: 9, color: '#ffd49a', fontStyle: 'normal', fontWeight: 700 }}>FULL</span>}
                   </div>
-                  <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 9, color: '#7d7565' }}>
+                  <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 10, color: 'rgba(255,245,216,0.65)' }}>
                     {c.comp != null ? `vs $${Math.round(c.comp)}` : 'no comp'}
                   </div>
                 </div>
@@ -333,13 +336,13 @@ export default async function PricingCalendarPage({ searchParams }: Props) {
         </div>
       </Panel>
 
-      <div style={{ marginTop: 14, fontSize: 11, color: '#7d7565', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+      <div style={{ marginTop: 14, fontSize: 11, color: '#a89a76', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
         <span>Legend:</span>
-        <span><span style={{ background: '#1a2e21', color: '#7ad790', padding: '1px 6px', borderRadius: 3, fontFamily: 'ui-monospace, monospace', marginRight: 4 }}>premium</span>≥ +8% vs comp</span>
-        <span><span style={{ background: '#2a261d', color: '#d8cca8', padding: '1px 6px', borderRadius: 3, fontFamily: 'ui-monospace, monospace', marginRight: 4 }}>parity</span>±8%</span>
-        <span><span style={{ background: '#3a2a1c', color: '#f4c179', padding: '1px 6px', borderRadius: 3, fontFamily: 'ui-monospace, monospace', marginRight: 4 }}>soft</span>−8 to −20%</span>
-        <span><span style={{ background: '#3a1f1c', color: '#ff8a8a', padding: '1px 6px', borderRadius: 3, fontFamily: 'ui-monospace, monospace', marginRight: 4 }}>too cheap</span>≥ −20%</span>
-        <span><span style={{ background: '#1a1812', color: '#7d7565', padding: '1px 6px', borderRadius: 3, fontFamily: 'ui-monospace, monospace', marginRight: 4 }}>no data</span>no comp obs.</span>
+        <span><span style={{ background: '#2c5b3d', color: '#c9f5d5', padding: '2px 8px', borderRadius: 3, fontFamily: 'ui-monospace, monospace', marginRight: 4, fontWeight: 700 }}>premium</span>≥ +8% vs comp</span>
+        <span><span style={{ background: '#5b4a2a', color: '#fce8b5', padding: '2px 8px', borderRadius: 3, fontFamily: 'ui-monospace, monospace', marginRight: 4, fontWeight: 700 }}>parity</span>±8%</span>
+        <span><span style={{ background: '#7a4f1f', color: '#ffd49a', padding: '2px 8px', borderRadius: 3, fontFamily: 'ui-monospace, monospace', marginRight: 4, fontWeight: 700 }}>soft</span>−8 to −20%</span>
+        <span><span style={{ background: '#7a2a22', color: '#ffb0a8', padding: '2px 8px', borderRadius: 3, fontFamily: 'ui-monospace, monospace', marginRight: 4, fontWeight: 700 }}>too cheap</span>≥ −20%</span>
+        <span><span style={{ background: '#3a3327', color: '#d8cca8', padding: '2px 8px', borderRadius: 3, fontFamily: 'ui-monospace, monospace', marginRight: 4, fontWeight: 700 }}>no comp</span>no comp obs.</span>
       </div>
 
       <div style={{ height: 14 }} />

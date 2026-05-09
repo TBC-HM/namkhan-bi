@@ -121,13 +121,24 @@ function BigPaceChart() {
       {[0.25, 0.5, 0.75].map((p) => (
         <line key={p} x1={padL} x2={W - padR} y1={padT + innerH * (1 - p)} y2={padT + innerH * (1 - p)} stroke="#2a261d" strokeDasharray="2,3" />
       ))}
-      <polyline points={stlyPts} fill="none" stroke="#7d7565" strokeWidth={1.4} strokeDasharray="3,3" />
-      <polyline points={otbPts}  fill="none" stroke="#a8854a" strokeWidth={2.2} />
+      <polyline points={stlyPts} fill="none" stroke="#7d7565" strokeWidth={1.4} strokeDasharray="3,3">
+        <title>{`STLY pace · 12mo · ${stly[0]} → ${stly[stly.length - 1]} room nights (sample mockup)`}</title>
+      </polyline>
+      <polyline points={otbPts}  fill="none" stroke="#a8854a" strokeWidth={2.2}>
+        <title>{`OTB pace · 12mo · ${otb[0]} → ${otb[otb.length - 1]} room nights (sample mockup)`}</title>
+      </polyline>
       {months.map((m, i) => (
         <text key={m} x={padL + i * xStep} y={H - 8} textAnchor="middle" fontSize="9" fill="#7d7565" fontFamily="'JetBrains Mono', monospace">{m}</text>
       ))}
       {otb.map((v, i) => (
-        <circle key={i} cx={padL + i * xStep} cy={padT + innerH - (v / max) * innerH} r={3.5} fill="#a8854a" />
+        <circle key={i} cx={padL + i * xStep} cy={padT + innerH - (v / max) * innerH} r={3.5} fill="#a8854a">
+          <title>{`OTB · ${months[i]} · ${v} room nights · STLY ${stly[i]} · Δ ${v - stly[i] >= 0 ? '+' : ''}${v - stly[i]} (sample mockup)`}</title>
+        </circle>
+      ))}
+      {stly.map((v, i) => (
+        <circle key={`stly-${i}`} cx={padL + i * xStep} cy={padT + innerH - (v / max) * innerH} r={3.5} fill="#7d7565" fillOpacity={0}>
+          <title>{`STLY · ${months[i]} · ${v} room nights (sample mockup)`}</title>
+        </circle>
       ))}
       <g transform={`translate(${padL}, ${padT})`}>
         <line x1={0} y1={0} x2={20} y2={0} stroke="#a8854a" strokeWidth={2} />
@@ -148,7 +159,11 @@ function BarChart({ data }: { data: number[] }) {
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 140 }} preserveAspectRatio="xMidYMid meet">
       {data.map((v, i) => {
         const h = (v / max) * innerH;
-        return <rect key={i} x={padL + i * barW + 1} y={padT + innerH - h} width={Math.max(1, barW - 2)} height={h} fill="#a8854a" opacity={0.85} />;
+        return (
+          <rect key={i} x={padL + i * barW + 1} y={padT + innerH - h} width={Math.max(1, barW - 2)} height={h} fill="#a8854a" opacity={0.85}>
+            <title>{`Day -${data.length - 1 - i} · ${v} (sample mockup, hardcoded)`}</title>
+          </rect>
+        );
       })}
     </svg>
   );
@@ -169,7 +184,11 @@ function DonutChart({ slices }: { slices: { label: string; v: number; color: str
           const x1 = cx + R * Math.cos(a1), y1 = cy + R * Math.sin(a1);
           const xi0 = cx + r * Math.cos(a1), yi0 = cy + r * Math.sin(a1);
           const xi1 = cx + r * Math.cos(a0), yi1 = cy + r * Math.sin(a0);
-          return <path key={s.label} d={`M${x0},${y0} A${R},${R} 0 ${large} 1 ${x1},${y1} L${xi0},${yi0} A${r},${r} 0 ${large} 0 ${xi1},${yi1} Z`} fill={s.color} opacity={0.9} />;
+          return (
+            <path key={s.label} d={`M${x0},${y0} A${R},${R} 0 ${large} 1 ${x1},${y1} L${xi0},${yi0} A${r},${r} 0 ${large} 0 ${xi1},${yi1} Z`} fill={s.color} opacity={0.9}>
+              <title>{`${s.label} · ${s.v} · ${((s.v / total) * 100).toFixed(1)}% (sample mockup)`}</title>
+            </path>
+          );
         })}
       </svg>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11 }}>

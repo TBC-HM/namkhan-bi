@@ -256,10 +256,10 @@ function LeakChart({ rows }: { rows: VendorRow[] }) {
               </text>
               <rect x={labelW} y={y + 4} width={barMaxW} height={14} fill="var(--paper-deep)" />
               <rect x={labelW} y={y + 4} width={noClassW} height={14} fill="var(--st-bad)">
-                <title>{`${d.name} · no-class ${fmtMoney(d.no_class, 'USD')}`}</title>
+                <title>{`${d.name} · no-class ${fmtMoney(d.no_class, 'USD')} · 180d · v_supplier_mapping_leak`}</title>
               </rect>
               <rect x={labelW + noClassW} y={y + 4} width={unmappedW} height={14} fill="var(--brass)">
-                <title>{`${d.name} · unmapped acct ${fmtMoney(d.unmapped, 'USD')}`}</title>
+                <title>{`${d.name} · unmapped acct ${fmtMoney(d.unmapped, 'USD')} · 180d · v_supplier_mapping_leak`}</title>
               </rect>
               <text
                 x={labelW + barMaxW + 4}

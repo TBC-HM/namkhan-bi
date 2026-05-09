@@ -67,12 +67,6 @@ const PILLARS: RailItem[] = [
 
 const UTILITY: RailItem[] = [
   {
-    href: '/knowledge',
-    glyph: 'K',
-    label: 'Knowledge',
-    matches: ['/knowledge', '/agents'],
-  },
-  {
     href: '/settings',
     glyph: 'S',
     label: 'Settings',

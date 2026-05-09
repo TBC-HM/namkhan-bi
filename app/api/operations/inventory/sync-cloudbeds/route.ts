@@ -15,6 +15,7 @@
 
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { PROPERTY_ID } from '@/lib/settings';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -116,6 +117,7 @@ export async function POST(req: Request) {
       continue;
     }
     candidates.push({
+      property_id: PROPERTY_ID,
       sku: `CB-${it.item_id}`,
       item_name: name.slice(0, 200),
       description: cbCat ? `Synced from Cloudbeds POS · category: ${cbCat}` : 'Synced from Cloudbeds POS',

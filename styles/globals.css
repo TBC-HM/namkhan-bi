@@ -2701,21 +2701,36 @@ body:has(.public-prop-bg) .main {
   border-color: #2a261d !important;
 }
 
-/* ── Dark-canvas table readability (PBS 2026-05-09)
- * Tables across the app inherit the legacy light .tbl class which set
- * stone-* colours. On the dark canvas (body #0a0a0a) those colours read
- * as nearly black-on-black until a hover lightens the row. Force every
- * table cell to render with the dark-friendly palette by default.
+/* ── Dark-canvas table readability (PBS 2026-05-09 — round 2)
+ * Earlier override left text dim against the near-black canvas. PBS:
+ * "the tables make 0 sense, nobody can read them". Brightened palette
+ * + zebra striping + bolder weights + thicker header underline so every
+ * table reads at a glance, regardless of which page loads it.
  */
-table { color: #d8cca8; }
+table { color: #f0e5cb; font-size: 13px; }
 table th {
-  color: #a8854a !important;
-  background: #15110b !important;
-  border-bottom: 1px solid #2a261d !important;
+  color: #f4d99a !important;
+  background: #221a10 !important;
+  border-bottom: 2px solid #a8854a !important;
+  font-weight: 700 !important;
+  padding: 10px 10px !important;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 11px;
 }
-table td { color: #d8cca8; border-bottom: 1px solid #1f1c15; }
+table td {
+  color: #f0e5cb;
+  border-bottom: 1px solid #2a2520;
+  font-weight: 500;
+  padding: 9px 10px;
+}
+table.tbl tbody tr:nth-child(even) td,
+table tbody tr:nth-child(even) td { background: rgba(255,245,216,0.03); }
 table.tbl tbody tr:hover td,
-table tbody tr:hover td { background: #1c160d; color: #f1e7d2; }
+table tbody tr:hover td { background: rgba(168,133,74,0.18); color: #fff5d8; }
+table .lbl strong, table td strong { color: #fff5d8; }
+table .text-mute, table .ink-mute, table td.text-mute, table .lbl.text-mute { color: #b8a98a !important; }
+table .num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
 
 /* Inputs + selects on the dark canvas also need a baseline. */
 input[type="text"], input[type="search"], input[type="email"],

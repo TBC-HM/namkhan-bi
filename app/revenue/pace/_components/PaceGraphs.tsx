@@ -32,11 +32,37 @@ function paceCurveSvg(rows: PaceCurveRow[]): string {
     rows.forEach((r, i) => { const v = (r as any)[key]; if (v != null) pts.push(`${pts.length === 0 ? 'M' : 'L'}${xy(i, Number(v))}`); });
     return pts.join(' ');
   };
+  // Build per-point invisible hit-circles carrying full tooltip text.
+  const pointCircles = rows
+    .map((r, i) => {
+      const cx = (padL + i * xStep).toFixed(1);
+      const date = r.day ?? (r as any).stay_date ?? (r as any).date ?? `i=${i}`;
+      const pieces: string[] = [String(date)];
+      if (r.rooms_actual != null) pieces.push(`actual ${Math.round(Number(r.rooms_actual))}`);
+      if (r.rooms_otb != null) pieces.push(`OTB ${Math.round(Number(r.rooms_otb))}`);
+      if (r.rooms_stly_daily_avg != null) pieces.push(`STLY ${Math.round(Number(r.rooms_stly_daily_avg))}`);
+      if (r.rooms_budget_daily_avg != null) pieces.push(`budget ${Math.round(Number(r.rooms_budget_daily_avg))}`);
+      pieces.push('v_pace_curve');
+      const txt = pieces.join(' · ').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+      // Stack 4 invisible circles at the four series y-values for that day.
+      const ys: string[] = [];
+      const pushY = (v: number | null | undefined) => {
+        if (v == null) return;
+        ys.push((padT + innerH - (Number(v) / max) * innerH).toFixed(1));
+      };
+      pushY(r.rooms_actual);
+      pushY(r.rooms_otb);
+      pushY(r.rooms_stly_daily_avg);
+      pushY(r.rooms_budget_daily_avg);
+      return ys.map((cy) => `<circle cx="${cx}" cy="${cy}" r="6" fill="transparent"><title>${txt}</title></circle>`).join('');
+    })
+    .join('');
   return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:200px">
-    <path d="${series('rooms_actual')}" fill="none" stroke="#1a2e21" stroke-width="2"/>
-    <path d="${series('rooms_otb')}" fill="none" stroke="#a8854a" stroke-width="1.5"/>
-    <path d="${series('rooms_stly_daily_avg')}" fill="none" stroke="#999" stroke-width="1" stroke-dasharray="3 2"/>
-    <path d="${series('rooms_budget_daily_avg')}" fill="none" stroke="#3B5BFF" stroke-width="1" stroke-dasharray="3 2"/>
+    <path d="${series('rooms_actual')}" fill="none" stroke="#1a2e21" stroke-width="2"><title>Pace · actual occupied · ${rows.length} days · v_pace_curve</title></path>
+    <path d="${series('rooms_otb')}" fill="none" stroke="#a8854a" stroke-width="1.5"><title>Pace · OTB · ${rows.length} days · v_pace_curve</title></path>
+    <path d="${series('rooms_stly_daily_avg')}" fill="none" stroke="#999" stroke-width="1" stroke-dasharray="3 2"><title>Pace · STLY daily avg · ${rows.length} days · v_pace_curve</title></path>
+    <path d="${series('rooms_budget_daily_avg')}" fill="none" stroke="#3B5BFF" stroke-width="1" stroke-dasharray="3 2"><title>Pace · budget daily avg · ${rows.length} days · v_pace_curve</title></path>
+    ${pointCircles}
     <text x="${padL}" y="${padT + 8}" font-size="9" fill="#7d7565">${max}</text>
     <text x="${padL}" y="${h - 6}" font-size="9" fill="#7d7565">0</text>
   </svg>`;
@@ -162,7 +188,7 @@ function BucketsChart({
         return (
           <g key={b.key}>
             <rect x={x} y={y} width={Math.max(2, barW - 3)} height={bh} fill={fill}>
-              <title>{`${formatLabel(b.key)} · ${b.rns} RN · ${occ.toFixed(0)}% occ · $${Math.round(b.rev).toLocaleString()}`}</title>
+              <title>{`${formatLabel(b.key)} · ${b.rns} RN · ${occ.toFixed(0)}% occ · $${Math.round(b.rev).toLocaleString()} rev · ${b.cxl} cxl · v_otb_pace`}</title>
             </rect>
             {b.rns > 0 && (
               <text
@@ -241,7 +267,7 @@ function StlyPaceChart({
         return (
           <g key={b.key}>
             <rect x={x} y={y} width={Math.max(2, barW - 3)} height={bh} fill={fill}>
-              <title>{`${formatLabel(b.key)} · OTB ${b.rns} vs STLY ${b.stlyRn} = ${pct.toFixed(0)}%`}</title>
+              <title>{`${formatLabel(b.key)} · OTB ${b.rns} vs STLY ${b.stlyRn} = ${pct.toFixed(0)}% · v_otb_pace`}</title>
             </rect>
             <text
               x={x + (barW - 3) / 2}

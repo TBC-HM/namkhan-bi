@@ -140,7 +140,9 @@ function BarChartH({ data }: { data: { k: string; v: number }[] }) {
         return (
           <g key={d.k}>
             <text x={padL - 6} y={y + rowH / 2 + 3} textAnchor="end" fontSize="10" fill="#9b907a" fontFamily="'JetBrains Mono', monospace">{d.k}</text>
-            <rect x={padL} y={y} width={w} height={Math.max(2, rowH - 6)} fill="#a8854a" opacity={0.85} rx={2} />
+            <rect x={padL} y={y} width={w} height={Math.max(2, rowH - 6)} fill="#a8854a" opacity={0.85} rx={2}>
+              <title>{`${d.k} · ${Math.round(d.v).toLocaleString()} · ${((d.v / data.reduce((s, x) => s + x.v, 0)) * 100).toFixed(1)}% mix (sample mockup)`}</title>
+            </rect>
             <text x={padL + w + 4} y={y + rowH / 2 + 3} fontSize="10" fill="#d8cca8">{Math.round(d.v).toLocaleString()}</text>
           </g>
         );
@@ -158,7 +160,20 @@ function SparkChart({ series }: { series: { label: string; color: string; data: 
         {series.map((s, idx) => {
           const xStep = innerW / (s.data.length - 1 || 1);
           const pts = s.data.map((v, i) => `${(padL + i * xStep).toFixed(1)},${(padT + innerH - (v / allMax) * innerH).toFixed(1)}`).join(' ');
-          return <polyline key={s.label} points={pts} fill="none" stroke={s.color} strokeWidth={idx === 0 ? 1.6 : 2.2} />;
+          const lastV = s.data[s.data.length - 1] ?? 0;
+          const firstV = s.data[0] ?? 0;
+          return (
+            <g key={s.label}>
+              <polyline points={pts} fill="none" stroke={s.color} strokeWidth={idx === 0 ? 1.6 : 2.2}>
+                <title>{`${s.label} · ${s.data.length}pt series · ${firstV} → ${lastV} (sample mockup)`}</title>
+              </polyline>
+              {s.data.map((v, i) => (
+                <circle key={i} cx={padL + i * xStep} cy={padT + innerH - (v / allMax) * innerH} r={1.5} fill={s.color} fillOpacity={0}>
+                  <title>{`${s.label} · pt ${i + 1} · ${v} (sample mockup)`}</title>
+                </circle>
+              ))}
+            </g>
+          );
         })}
       </svg>
       <div style={{ display: 'flex', gap: 14, fontSize: 11, marginTop: 4 }}>

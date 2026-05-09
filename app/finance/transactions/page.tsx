@@ -335,11 +335,23 @@ function DailyVolumeChart({ rows }: { rows: { d: string; count: number; sales: n
           const y = padT + innerH - bh;
           return (
             <rect key={r.d} x={x} y={y} width={barW} height={bh} fill="var(--moss)">
-              <title>{`${r.d} · ${r.count} txns · ${fmtMoney(r.sales, 'USD')} sales`}</title>
+              <title>{`${r.d} · ${r.count} txns · ${fmtMoney(r.sales, 'USD')} sales · v_finance_transactions`}</title>
             </rect>
           );
         })}
-        <path d={linePath} fill="none" stroke="var(--brass)" strokeWidth={1.5} />
+        <path d={linePath} fill="none" stroke="var(--brass)" strokeWidth={1.5}>
+          <title>{`Daily sales line · ${rows.length} days · max ${fmtMoney(maxSales, 'USD')} · v_finance_transactions`}</title>
+        </path>
+        {/* invisible hover dots for line points */}
+        {rows.map((r, i) => {
+          const cx = padL + i * groupW + groupW / 2;
+          const cy = padT + innerH - (r.sales / maxSales) * innerH;
+          return (
+            <circle key={`pt-${r.d}`} cx={cx} cy={cy} r={6} fill="var(--brass)" opacity={0}>
+              <title>{`${r.d} · sales ${fmtMoney(r.sales, 'USD')} · ${r.count} txns · v_finance_transactions`}</title>
+            </circle>
+          );
+        })}
         {/* x labels — sparse */}
         {rows.map((r, i) =>
           i % Math.max(1, Math.floor(rows.length / 6)) === 0 ? (

@@ -48,7 +48,7 @@ export default function FnbTopSellerTrend({ data }: Props) {
   // SVG sparkline maker
   const sparkW = 120;
   const sparkH = 28;
-  function sparkline(monthly: TopSellerTrend['monthly']) {
+  function sparkline(monthly: TopSellerTrend['monthly'], itemName: string) {
     const max = Math.max(...monthly.map((m) => m.revenue), 1);
     const dx = monthly.length > 1 ? sparkW / (monthly.length - 1) : sparkW;
     const points = monthly
@@ -56,8 +56,10 @@ export default function FnbTopSellerTrend({ data }: Props) {
       .join(' ');
     const lastIdx = monthly.length - 1;
     const lastY = sparkH - (monthly[lastIdx].revenue / max) * sparkH;
+    const summaryTitle = `${itemName} · ${monthly.length} months · peak ${fmtMoney(max)} · last ${fmtMoney(monthly[lastIdx]?.revenue ?? 0)} (${monthly[lastIdx]?.period ?? '—'}) · v_fnb_top_seller_trend`;
     return (
       <svg width={sparkW} height={sparkH} style={{ display: 'block' }}>
+        <title>{summaryTitle}</title>
         <polyline
           points={points}
           fill="none"
@@ -65,8 +67,21 @@ export default function FnbTopSellerTrend({ data }: Props) {
           strokeWidth={1.2}
           strokeLinejoin="round"
           strokeLinecap="round"
-        />
-        <circle cx={lastIdx * dx} cy={lastY} r={2} fill="var(--brass, #b48228)" />
+        >
+          <title>{summaryTitle}</title>
+        </polyline>
+        {monthly.map((m, i) => (
+          <circle
+            key={m.period}
+            cx={i * dx}
+            cy={sparkH - (m.revenue / max) * sparkH}
+            r={i === lastIdx ? 2 : 1.4}
+            fill="var(--brass, #b48228)"
+            fillOpacity={i === lastIdx ? 1 : 0}
+          >
+            <title>{`${itemName} · ${m.period} · ${fmtMoney(m.revenue)} · v_fnb_top_seller_trend`}</title>
+          </circle>
+        ))}
       </svg>
     );
   }
@@ -122,7 +137,7 @@ export default function FnbTopSellerTrend({ data }: Props) {
             return (
               <tr key={it.description}>
                 <td style={cellL}><strong>{it.description}</strong></td>
-                <td style={cellL}>{sparkline(it.monthly)}</td>
+                <td style={cellL}>{sparkline(it.monthly, it.description)}</td>
                 <td style={cell}>{fmtMoney(it.total_revenue_usd)}</td>
                 <td style={cell}>{fmtMoney(it.avg_rev_per_active_month)}</td>
                 <td style={cell}>{it.last_sold ?? '—'}</td>

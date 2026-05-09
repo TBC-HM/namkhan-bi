@@ -97,9 +97,15 @@ function RangeChart({ rows }: { rows: RoomTypeRow[] }) {
             <text x={labelW - 4} y={y + 14} textAnchor="end" style={lbl}>
               {r.name.slice(0, 18)}
             </text>
-            <line x1={xAt(r.min)} x2={xAt(r.max)} y1={y + 11} y2={y + 11} stroke="var(--paper-deep)" strokeWidth={6} />
-            <line x1={xAt(r.min)} x2={xAt(r.max)} y1={y + 11} y2={y + 11} stroke="var(--brass-soft)" strokeWidth={4} />
-            <circle cx={xAt(avg)} cy={y + 11} r={4} fill="var(--moss)" />
+            <line x1={xAt(r.min)} x2={xAt(r.max)} y1={y + 11} y2={y + 11} stroke="var(--paper-deep)" strokeWidth={6}>
+              <title>{`${r.name} · range ${fmtMoney(r.min, 'USD')} – ${fmtMoney(r.max, 'USD')} · ${r.rates.length} obs · v_rates_room_type`}</title>
+            </line>
+            <line x1={xAt(r.min)} x2={xAt(r.max)} y1={y + 11} y2={y + 11} stroke="var(--brass-soft)" strokeWidth={4}>
+              <title>{`${r.name} · ${fmtMoney(r.min, 'USD')} – ${fmtMoney(r.max, 'USD')} · avg ${fmtMoney(avg, 'USD')} · v_rates_room_type`}</title>
+            </line>
+            <circle cx={xAt(avg)} cy={y + 11} r={4} fill="var(--moss)">
+              <title>{`${r.name} · avg ${fmtMoney(avg, 'USD')} · min ${fmtMoney(r.min, 'USD')} · max ${fmtMoney(r.max, 'USD')} · v_rates_room_type`}</title>
+            </circle>
             <text x={w - 4} y={y + 14} textAnchor="end" style={val}>
               {fmtMoney(avg, 'USD')}
             </text>
@@ -136,7 +142,9 @@ function RestrictionsChart({ r }: { r: RestrictionRow }) {
         return (
           <g key={it.label}>
             <rect x={padL} y={y} width={barMaxW} height={lineH} fill="var(--paper-deep)" />
-            <rect x={padL} y={y} width={wPx} height={lineH} fill={it.color} />
+            <rect x={padL} y={y} width={wPx} height={lineH} fill={it.color}>
+              <title>{`${it.label} · ${it.count} of ${total} day-plans · ${total > 0 ? ((it.count / total) * 100).toFixed(0) : 0}% · v_rates_restrictions`}</title>
+            </rect>
             <text x={padL + 6} y={y + lineH / 2 + 4} style={{ fontFamily: 'var(--mono)', fontSize: 10, fill: 'var(--paper-warm)', fontWeight: 600 }}>
               {it.label}
             </text>
@@ -183,7 +191,7 @@ function DistributionChart({ rates }: { rates: number[] }) {
             height={bh}
             fill="var(--moss)"
           >
-            <title>{`${fmtMoney(min + i * step, 'USD')} – ${fmtMoney(min + (i + 1) * step, 'USD')} · ${c} days`}</title>
+            <title>{`${fmtMoney(min + i * step, 'USD')} – ${fmtMoney(min + (i + 1) * step, 'USD')} · ${c} of ${rates.length} obs · ${((c / rates.length) * 100).toFixed(0)}% · v_rates_distribution`}</title>
           </rect>
         );
       })}

@@ -160,12 +160,16 @@ function TrendCalendar({ rows }: { rows: DailyTrendRow[] }) {
               height={bh}
               fill={active ? 'var(--brass)' : 'var(--moss)'}
               opacity={hoverIdx == null || active ? 1 : 0.45}
-            />
+            >
+              <title>{`${d.day} · ${d.bookings} bookings · ${fmtMoney(d.revenue, 'USD')} rev · ADR $${Math.round(d.adr)} · v_rateplans_daily_trend`}</title>
+            </rect>
           );
         })}
 
         {/* Revenue overlay line */}
-        <path d={revPath} fill="none" stroke="var(--ink)" strokeWidth={1.2} opacity={0.5} />
+        <path d={revPath} fill="none" stroke="var(--ink)" strokeWidth={1.2} opacity={0.5}>
+          <title>{`Revenue series · ${data.length} days · max ${fmtMoney(maxRev, 'USD')} · v_rateplans_daily_trend`}</title>
+        </path>
 
         {/* Hover hit-areas (transparent overlay rects) */}
         {data.map((d, i) => {
@@ -179,7 +183,9 @@ function TrendCalendar({ rows }: { rows: DailyTrendRow[] }) {
               height={innerH}
               fill="transparent"
               onMouseEnter={() => setHoverIdx(i)}
-            />
+            >
+              <title>{`${d.day} · ${d.bookings} bookings · ${fmtMoney(d.revenue, 'USD')} rev · ADR $${Math.round(d.adr)} · v_rateplans_daily_trend`}</title>
+            </rect>
           );
         })}
 
@@ -313,7 +319,9 @@ function TypeMixChart({ rows }: { rows: TypeMixRow[] }) {
               {r.type.slice(0, 14)}
             </text>
             <rect x={labelW} y={y + 4} width={barMaxW} height={14} fill="var(--paper-deep)" />
-            <rect x={labelW} y={y + 4} width={barW} height={14} fill="var(--moss)" />
+            <rect x={labelW} y={y + 4} width={barW} height={14} fill="var(--moss)">
+              <title>{`${r.type} · ${fmtMoney(r.revenue, 'USD')} · ${r.mix.toFixed(0)}% mix · ${r.bookings} bookings · ${r.nights} nights · ADR $${Math.round(r.adr)} · v_rateplans_type_mix`}</title>
+            </rect>
             <text x={labelW + barMaxW + 4} y={y + 14} style={mixVal}>
               {fmtMoney(r.revenue, 'USD')} · {r.mix.toFixed(0)}%
             </text>
@@ -370,7 +378,9 @@ function CancelChart({ rows }: { rows: CancelRow[] }) {
               {r.name.slice(0, 18)}
             </text>
             <rect x={labelW} y={y + 3} width={barMaxW} height={11} fill="var(--paper-deep)" />
-            <rect x={labelW} y={y + 3} width={barW} height={11} fill={fill} />
+            <rect x={labelW} y={y + 3} width={barW} height={11} fill={fill}>
+              <title>{`${r.name} · cancel ${r.cancelPct.toFixed(0)}% · ${r.cancellations} cxl of ${r.bookings + r.cancellations} · v_rateplans_cancel_rate`}</title>
+            </rect>
             <text x={labelW + barMaxW + 4} y={y + 12} style={mixVal}>
               {r.cancelPct.toFixed(0)}%
             </text>

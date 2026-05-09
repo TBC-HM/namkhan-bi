@@ -277,7 +277,7 @@ function SourceMixChart({ rows, totalForSourceMix }: { rows: any[]; totalForSour
               </text>
               <rect x={labelW} y={y + 4} width={barMaxW} height={14} fill="var(--paper-deep)" />
               <rect x={labelW} y={y + 4} width={barW} height={14} fill={fill}>
-                <title>{`${SOURCE_LABEL[r.source] ?? r.source} · ${r.count} reviews · ${r.avg_rating ? Number(r.avg_rating).toFixed(2) : '—'}/5 · ${r.unanswered} unanswered`}</title>
+                <title>{`${SOURCE_LABEL[r.source] ?? r.source} · ${r.count.toLocaleString()} reviews · ${pct.toFixed(1)}% mix · avg ${r.avg_rating ? Number(r.avg_rating).toFixed(2) : '—'}/5 · ${r.unanswered.toLocaleString()} unanswered · 90d · marketing.reviews`}</title>
               </rect>
               <text x={labelW + barMaxW + 4} y={y + 14} style={{ fontFamily: 'var(--mono)', fontSize: 10, fill: 'var(--ink-soft)' }}>
                 {r.count} · {pct.toFixed(0)}%
@@ -317,7 +317,7 @@ function SentimentTrendChart({ rows }: { rows: { week: string; avg: number; n: n
         <path d={path} fill="none" stroke="var(--moss)" strokeWidth={2} />
         {rows.map((r, i) => (
           <circle key={r.week} cx={xAt(i)} cy={yAt(r.avg)} r={3} fill="var(--moss)">
-            <title>{`${r.week} · avg ${r.avg.toFixed(2)}/5 · ${r.n} review${r.n === 1 ? '' : 's'}`}</title>
+            <title>{`Week ${r.week} · avg ${r.avg.toFixed(2)}/5 · ${r.n.toLocaleString()} review${r.n === 1 ? '' : 's'} · marketing.reviews`}</title>
           </circle>
         ))}
         {rows.length > 0 && (
@@ -344,10 +344,10 @@ function ResponseQueueChart({ unanswered, answered }: { unanswered: number; answ
       <svg viewBox="0 0 320 200" style={{ width: '100%', height: 200 }}>
         <rect x={16} y={70} width={288} height={28} fill="var(--paper-deep)" />
         <rect x={16} y={70} width={(answered / total) * 288} height={28} fill="var(--moss)">
-          <title>{`Answered · ${answered} · ${responseRate.toFixed(0)}%`}</title>
+          <title>{`Answered · ${answered.toLocaleString()} of ${total.toLocaleString()} · ${responseRate.toFixed(1)}% · 30d · marketing.reviews`}</title>
         </rect>
         <rect x={16 + (answered / total) * 288} y={70} width={(unanswered / total) * 288} height={28} fill="var(--st-bad)">
-          <title>{`Unanswered · ${unanswered}`}</title>
+          <title>{`Unanswered · ${unanswered.toLocaleString()} of ${total.toLocaleString()} · ${(100 - responseRate).toFixed(1)}% · 30d · marketing.reviews`}</title>
         </rect>
         <text x={20} y={86} style={{ fontFamily: 'var(--mono)', fontSize: 11, fill: 'var(--paper-warm)', fontWeight: 600 }}>
           {answered} answered · {responseRate.toFixed(0)}%

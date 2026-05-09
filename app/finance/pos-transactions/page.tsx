@@ -327,7 +327,7 @@ function PosDailyChart({ rows }: { rows: { d: string; count: number; amount: num
           const y = padT + innerH - bh;
           return (
             <rect key={r.d} x={x} y={y} width={barW} height={bh} fill="var(--moss)">
-              <title>{`${r.d} · ${fmtMoney(r.amount, 'USD')} · ${r.count} txns`}</title>
+              <title>{`${r.d} · ${fmtMoney(r.amount, 'USD')} · ${r.count} txns · v_finance_pos_transactions`}</title>
             </rect>
           );
         })}
@@ -384,7 +384,7 @@ function TopCategoriesChart({ rows }: { rows: [string, number][] }) {
               </text>
               <rect x={labelW} y={y + 4} width={barMaxW} height={14} fill="var(--paper-deep)" />
               <rect x={labelW} y={y + 4} width={barW} height={14} fill="var(--moss)">
-                <title>{`${k} · ${fmtMoney(v, 'USD')} · ${pct.toFixed(0)}%`}</title>
+                <title>{`${k} · ${fmtMoney(v, 'USD')} · ${pct.toFixed(0)}% · v_finance_pos_transactions`}</title>
               </rect>
               <text x={labelW + barMaxW + 4} y={y + 14} style={{ fontFamily: 'var(--mono)', fontSize: 10, fill: 'var(--ink-soft)' }}>
                 {fmtMoney(v, 'USD')}

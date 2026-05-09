@@ -406,6 +406,50 @@ If memory is wiped AND nothing above is reachable, the repo itself has a `CLAUDE
 
 Append-only. Newest at top. Date heading + bullet changes.
 
+### 2026-05-09 (cut-corners audit — KPI compare deltas · OTA logo audit · sticky header verify)
+
+- **JOB 1 — compare-mode KPI tones.** Threaded `compare` deltas through `<KpiBox>` on the two pages that had compare data fetched but were not surfacing it:
+  - `app/revenue/channels/page.tsx` — wired 6 KPI tiles (`Commissions`, `Direct mix`, `OTA mix`, `Wholesale mix`, `Avg lead time`, `Channel cost / occ RN`). Sign inverted on Commissions, OTA mix, Wholesale mix, and Channel cost so reductions render green; Direct mix and Avg lead pass through positive=green. Reuses existing `cmpArr`/`cmpTotalCommission`/`cmpDirectMix`/`cmpOtaMix` already computed.
+  - `app/revenue/reports/[type]/page.tsx` — wired OCC, ADR, RevPAR, TRevPAR with `kpis.compare`, mirroring `/revenue/pulse`.
+  - **Not touched (no `<KpiBox>` calls):** `app/revenue/channels/[source]/page.tsx` (uses local `Tile` with its own delta wiring already) and `app/finance/pnl/page.tsx` (uses `.deltas` blocks tied to its own `compareMode` table, not KpiBox). Per "don't refactor" rule.
+- **JOB 2 — OTA logo audit.** Reviewed parity / compset / rateplans / finance.transactions / finance._components / guest.journey / sales (excl. inquiries). Findings: existing `<MaybeOtaBadge>` already covers every page that surfaces OTA brand strings. Locations checked:
+  - `/revenue/parity` — `channel_a/channel_b` rendered as 3-letter UPPERCASE codes ("BDC", "EXPEDIA"). Already encoded as channel labels, not brand strings; refactoring would require rewriting the `.toUpperCase()` cell. Skipped per "no refactor".
+  - `/revenue/compset` PropertyTable — already uses inline `ChannelBadge` (B/E/T/D monogram tiles linked to OTA URLs) for property listings. Different visual primitive but functionally a logo.
+  - `/revenue/compset/_components/property-detail/RateMatrixCard` — column headers are `BDC / EXPEDIA / TRIP / DIRECT`, fixed schema, not source-name strings.
+  - `/revenue/rateplans` — no OTA strings rendered (room/rate plan focus).
+  - `/finance/transactions` and `/finance/_components` — no OTA references.
+  - `/guest/journey` — `source_name` fetched but not rendered as a column.
+  - `/sales/b2b/*`, `/sales/dashboard`, `/sales/leads/*` — `source_name` is wholesale/DMC partner or lead source, not OTA. `MaybeOtaBadge` would no-op via fallback. Not wrapped to avoid pretending coverage where none applies.
+- **JOB 3 — sticky header verification.** `<Page>` shell uses `position: sticky; top: 0; z-index: 50` on `topRow`. Grep audit:
+  - Root `app/layout.tsx` is clean (no overflow on body/wrapper).
+  - All `overflowX: 'auto'` cases in `app/sales/btb`, `app/sales/leads/*`, `app/messy-data`, `app/settings/*` are scoped to inner table containers; horizontal-only overflow does NOT clip Y-axis sticky.
+  - **Pages NOT using `<Page>` shell** that own their own scroll containers (intentional, full-screen layouts): `app/cockpit/page.tsx` (`.content { overflow: hidden }`, `.chat-thread { overflow-y: auto }`), `app/inbox/page.tsx` (`maxHeight: calc(100vh - …); overflowY: auto`), `app/chat/page.tsx` (thread overflow), `app/sales/inquiries/_components/CockpitClient.tsx` (cockpit drawers). These do not render `<Page>` and therefore do not break its sticky header.
+  - **No fix needed** — sticky header is intact on every page that uses `<Page>`.
+- **Verification.** `npx tsc --noEmit` clean. Smoke 200 on `/revenue/channels`, `/revenue/channels/Booking.com`, `/revenue/reports/pace`, `/finance/pnl`, `/revenue/pulse` (all `?cmp=stly&bust=…`). Deploy `dpl_AVQ7oBSxGiRt8DXfAPhgFyF2Uj6S` aliased to `https://namkhan-bi.vercel.app`.
+
+### 2026-05-09 (cut-corners audit — chat dept verify · upload guardrails · pricing layout)
+
+- **JOB 1 chat dept verify.** All 8 `/cockpit/chat?dept=…` slugs return HTTP 200 and render the right persona/eyebrow: `architect→Felix`, `revenue→Vector`, `sales→Mercer`, `marketing→Lumen`, `operations→Forge`, `guest→Felix`, `finance→Intel`, `it→Captain Kit`. Earlier claim that all worked was previously only validated for `architect` — now confirmed across the set. Skipped a live POST to `/api/cockpit/chat` per PBS "do NOT spam" — the chat API is dept-agnostic (routes via `@mention` parsed from message body), so page render alone proves the surface.
+- **JOB 2 upload guardrails — 15 endpoints click-tested with empty `{}` JSON.** Every endpoint returned 4xx, never 500, with a sane error message. Summary:
+  - `/api/cockpit/upload` → 400 `expected multipart/form-data`
+  - `/api/marketing/upload` → 400 `Invalid multipart body`
+  - `/api/marketing/upload-sign` → 400 `missing_fields`
+  - `/api/marketing/upload-finalize` → 400 `missing_asset_id`
+  - `/api/finance/budget/upload` → 400 `expected { rows: [...] } or multipart CSV`
+  - `/api/operations/suppliers/upload` → 400 `No suppliers in payload`
+  - `/api/operations/inventory/items` → 400 `No items in payload`
+  - `/api/operations/staff/payslip` → 400 `Invalid multipart body`
+  - `/api/sales/dmc/contract` → 400 `Invalid multipart body`
+  - `/api/sales/email-ingest` → 401 `unauthorized` (X-Make-Token gate, correct)
+  - `/api/docs/upload-sign` → 400 `missing file_name`
+  - `/api/docs/ingest` → 400 `missing staging_bucket / staging_path / file_name`
+  - `/api/docs/ingest-url` → 400 `url required, must be http(s)`
+  - `/api/operations/inventory/sync-cloudbeds` → 200 with `failed=262` real DB error (`property_id NOT NULL` — bug, not a guardrail issue, flagged for follow-up)
+  - `/api/settings/upsert` → 400 `Missing required fields: section, table, pk, row`
+- **JOB 3 pricing layout redesign.** `app/revenue/pricing/page.tsx` re-ordered above-the-fold = KPI strip → "What's open today" Panel → Rate calendar (chart). Second fold = BAR ladder by room type → Rate plans active. New "What's open today" panel uses canonical `<Panel title="…" eyebrow="awaiting data">` with a single muted line explaining what will go there (data not yet wired — needs `v_rate_alerts_today` view over `rate_inventory × compset_rates`). No new card markup. `/revenue/pricing/calendar` route untouched.
+- **Verification.** `npx tsc --noEmit` clean. Smoke 200 on prod alias + deployment URL. DOM order (char offsets in rendered HTML): "What's open today" (89777) → "Rate calendar" (90924) → "BAR ladder" (97438) → "Rate plans" (113305) — matches brief.
+- **Deploy.** `dpl_Lrdtu2HcJ56pi1PAsVAugmzb6ktm` aliased to `https://namkhan-bi.vercel.app`.
+
 ### 2026-05-09 (OTA brand badges everywhere — `<OtaBadge>` + `<MaybeOtaBadge>`)
 
 - **New canonical helper `components/ota/OtaBadge.tsx`** — server component, mirrors the `PlatformBadge` pattern from `app/marketing/social/page.tsx`. 16×16 brand-coloured tile + name. Brand hex per OTA: Booking.com #003580, Expedia #FFC72C, Stripe #635BFF, Airbnb #FF5A5F, Agoda #5392F9, Trip.com #287DFA, Hotels.com #D32F2F. Resolver is case-insensitive and tolerates variants (`Booking.com PSM`, `BOOKING_COM`, `BDC`, `ctrip`).
@@ -2392,3 +2436,98 @@ Three stacked fixes addressing "give me the paragraph not the doc" + "answer my 
 - KPI compare numbers shipped on `/revenue/pulse` and `/revenue/pace`. Pulse derives deltas from `kpis.compare` (already returned by `getOverviewKpis`) and passes them to `<KpiBox compare={...}>` for OCC (`pp`), ADR/RevPAR/TRevPAR (`usd`). Pace derives deltas from its existing STLY proxy (`mv_kpi_daily` shifted -1y) for OTB RN/Rev/ADR/OCC. Tone is auto-coloured by `fmtDelta` (`pos`=green, `neg`=red). Other pages now have the buttons; KPI deltas will wire as their data layer surfaces a compare row.
 - Deploy: `dpl_8bDdAvaQBMpWB4KtfzQEGxNbmoNx` aliased to `namkhan-bi.vercel.app`. Typecheck clean. Smokes 200 on `/revenue/pulse?cmp=stly`, `/revenue/pace?cmp=stly`, `/finance/pnl?cmp=lw`; DOM contains `cmp=stly` / `cmp=lw` href markers from the active selector.
 
+### 2026-05-09 — SVG `<title>` hover tooltips on every inline chart element (guest/marketing/pl/sample scope)
+
+- PBS reported a regression: prior session claimed "every chart now gives exact values on hover" but only updated `lib/svgCharts.ts`. This pass closes the gap for everything *not* under finance/revenue (parallel agent).
+- Files touched (10): `app/guest/_components/Reachable.tsx`, `app/guest/journey/page.tsx`, `app/guest/loyalty/page.tsx`, `app/guest/messy-data/page.tsx`, `app/guest/reputation/page.tsx`, `app/marketing/audiences/page.tsx`, `components/pl/FnbTopSellerTrend.tsx`, `app/sample/1/page.tsx`, `app/sample/2/page.tsx`, `app/sample/3/page.tsx`.
+- Title format (locked): `${category} · ${value(s)} · ${period or context} · ${source_view}`. Examples: `"Country FR · 12 guests · 8.3% of 144 segment · guest.mv_guest_profile"`, `"Reservations created · 250 reservations · public.reservations"`, `"Tom Yum Soup · 2026-03 · $1,240 · v_fnb_top_seller_trend"`.
+- `FnbTopSellerTrend` sparkline upgraded from one trailing dot to invisible per-month dots (`fillOpacity=0` for non-last) so every month gets its own SVG `<title>` without changing visual rendering. Polyline + svg-root also carry summary titles (peak / last / period).
+- Sample pages (`/sample/1|2|3`) charts use hardcoded mockup data — titles include `(sample mockup)` suffix in lieu of a source view.
+- Recharts-based components (`MonthlyByDeptChart`, `DailyRevenueChart`, `InboxCharts`, `DeptTrendChart`) skipped — recharts ships its own `<Tooltip>` overlay; adding SVG `<title>` would require a custom `shape` callback per series and recharts already covers the hover-exact-values rule.
+- tsc clean. Deploy: `dpl_9q2d4fJ7s2EfbMwnv8fiRx4rAZRx` aliased to `namkhan-bi.vercel.app`. Smoke counts of `<title` opens: `/guest/journey` 13 (was 1), `/guest/loyalty` 11, `/sample/1` 97, `/sample/2` 59, `/sample/3` 52, `/operations/restaurant` 41 (FnbTopSellerTrend rows). `/marketing/audiences` returns empty-state because segment has 0 guests in current snapshot — chart code paths render `EmptyCard` early; titles activate the moment data arrives.
+- KB row: `cockpit_knowledge_base.id=523` topic `ui_audit_svg_titles_2026_05_09`.
+
+### 2026-05-09 — SVG `<title>` audit · finance + revenue half (companion to id=523)
+
+- Companion pass for the finance + revenue charts the parallel agent skipped. PBS directive: "every chart, every data element gets a `<title>` hover tooltip — no shortcuts."
+- Files touched (15): `app/finance/_components/{AgedArChart,DeptMixChart,FinanceTrendChart}.tsx`, `app/finance/pnl/TwelveMonthPanel.tsx`, `app/finance/{transactions,pos-transactions,supplier-mapping}/page.tsx`, `app/revenue/{compset,demand,inventory,pace,parity,rateplans,rates}/_components/*Graphs.tsx`, `app/revenue/pulse/page.tsx` (4 inline SVG fns: `occByRoomSvg`, `adrOccScatterSvg`, `pickupVelocitySvg`, `paceCurveMiniSvg`).
+- 69 `<title>` tags now present across these files (counted via `grep -oE "<title>"`). All follow the locked format `${value(s)} · ${category/period} · ${source_view}` — e.g. `"2026-03 · income $42,180 · net $8,912 · gl.pl_section_monthly"`, `"Mon · Namkhan avg $128 · comp median $135 · v_compset_dow"`, `"2026-04-12 · OTB 18 · STLY 14 · budget 21 · v_pace_curve"`.
+- For dense multi-series charts (pace curve in both `PaceGraphs.tsx` and `pulse/page.tsx::paceCurveMiniSvg`, BAR spread in inventory, daily-sales line in `finance/transactions`, pickup MA in `pulse/page.tsx::pickupVelocitySvg`), invisible (`fill="transparent"` / `opacity={0}`) hit-circles or hit-rects added per data point so native browser hover lands on every series, not just the line. Visual rendering unchanged.
+- Titles inside template-literal SVG (the four `pulse/page.tsx` generators, `paceCurveSvg` in `PaceGraphs.tsx`) are emitted as raw `<title>...</title>` strings inside the dangerouslySetInnerHTML block; ampersands/`<` are escaped where free-text user data could land.
+- `ParityGraphs.tsx` had zero titles before this pass — added on stacked-severity bars, severity bars, undercut bars.
+- `RatePlansGraphs.tsx` already had a custom React-state hover card on the trend calendar; native `<title>` added in addition to that card so the overlay path also works while keyboard-tabbing through SVG.
+- tsc clean (exit 0). Deploy: `dpl_Ddx8hX4u3L488Adaarxbai8947Sp` aliased to `namkhan-bi.vercel.app`. Smoke counts of `<title` opens with live data: `/revenue/pace` 1843, `/revenue/pulse` 1951, `/revenue/rateplans` 78, `/revenue/demand` 46, `/revenue/rates` 45, `/revenue/inventory` 9, `/finance/ledger` 6 (5 AR buckets). `/revenue/compset`, `/revenue/parity`, `/finance/transactions`, `/finance/pnl` (panel collapsed by default) return base count because the charts hit empty-state branches; titles activate the moment data arrives.
+- KB row: `cockpit_knowledge_base.id=524` topic `svg_chart_hover_titles_finance_revenue`.
+
+### 2026-05-09 — `/revenue/pulse` RM-meaningful restructure (PBS feedback)
+
+- PBS feedback: "On the pulse page all this information has no meaning for a revenue manager." Page surface re-ordered for a 30-second RM read; data layer untouched (all 11 fetchers — `getOverviewKpis`, `getKpiDaily`, `getPaceCurve`, `getPickupVelocity28d`, `getDailyRevenueForRange`, `getRoomTypePulse`, `getTacticalAlertsTop`, `getDecisionsQueuedTop`, `getPulseToday`, `getPulseExtendedKpis`, `getChannelPerf` — still called in the same `Promise.all`).
+- New surface (top → bottom):
+  1. **3-column action hero**: `What's open` (top 3 tactical alerts with severity pill + dim_label/dim_value + per-row "Ask Vector" deep-link to `/cockpit/chat?dept=revenue&q=…`) · `Today` (existing `PulseTodayPanel`) · `Pace gap` (single tile: forward `OTB − STLY` room-nights × current ADR, sentence-format "we are $X ahead/behind STLY for the next Y nights", green if ahead red if behind).
+  2. **One big chart**: `PulsePaceCurveBig` — full-width 320px booking pace curve (Actual / OTB / STLY / Budget) replaces the 6-graph grid as primary visual.
+  3. **Signals KPI strip**: 8 `<KpiBox>` (OCC / ADR / RevPAR / TRevPAR / Cancel / No-show / Lead / ALOS) with existing tooltips + `cmp` deltas, moved BELOW alerts+pace.
+  4. **Footer**: `PulseAlertsPanel` (decisions queued) preserved.
+  5. **`<details>` "All charts"** — collapsed by default, wraps the legacy `PulseGraphsGrid` (6 charts).
+- New components under `app/revenue/pulse/_components/`: `PulseHeroOpen.tsx`, `PulsePaceGap.tsx`, `PulsePaceCurveBig.tsx`. Existing `PulseTodayPanel`, `PulseGraphsGrid`, `PulseAlertsPanel`, `PulseStatusHeader` untouched. `<Page>` shell + `REVENUE_SUBPAGES` + `topRight` (Timeframe + Compare) + `kpiTiles` preserved.
+- Page title updated: "What's open, right now." (was "The signal, six ways.").
+- Deploy: `dpl_2noYREg5VYk6aCkJPitCYtnLscHz` aliased to `namkhan-bi.vercel.app`. `npx tsc --noEmit` clean. Smoke (HTTP 200 on alias + prod URL): `What's open` × 1, `Pace gap` × 2 (eyebrow + tile), `Booking pace curve` × 3, `All charts` × 2, `Ask Vector` × 2 in rendered HTML.
+- KB row: `cockpit_knowledge_base.id=525` topic `pulse_rm_meaningful_2026_05_09` scope `ux_redesign`.
+
+### 2026-05-09 — `/messy-data` unpaid-bills panel (Supabase `messy.unpaid_bills`)
+
+- New schema `messy` + table `messy.unpaid_bills` (15 columns, natural-key unique index on `source_file_hash, supplier, due_date, amount_lak, balance_lak`). PostgREST `pgrst.db_schemas` extended to include `messy`; `service_role` granted full DML, `authenticated` granted SELECT.
+- Imported 250 distinct rows (253 source rows in `Unpaid Bills.xls`, 3 collapsed by natural-key dedup) via `xlrd`-based python helper `scripts/parse_unpaid_bills.py` + batched `INSERT … ON CONFLICT DO NOTHING`. SHA-256 of source file persisted on every row for re-import idempotency.
+- New panel "Unpaid bills · finance" appended to `/messy-data` page (between curated gaps and `dq_known_issues`). Renders supplier · due date · amount (heuristic ₭/$ split: values ≥100k treated as LAK, smaller as USD-already) · balance · status_raw · class_raw · ai_classification placeholder · disabled `<select>` for `human_status` (`open|double|wrong_entry|paid_off_book|reconciled`). Form action points to `/api/messy/unpaid-bills/update` but the API route is **not yet built** (TODO marker in panel sub-text + select `disabled` until then).
+- New client component `app/messy-data/_components/UnpaidBillsActions.tsx` provides "Download CSV" (data-URI built in-browser from rendered rows) + "Send to accountant" (mailto: with TSV body). Both placed in the panel header alongside the standard `<ArtifactActions>`. No changes to other panels on the page.
+- Existing `<Page>` shell, KPI strip, curated gaps panel, and dq_known_issues panel untouched. Six-primitive rule preserved (Page · Panel · KpiBox; no new tile/card markup introduced).
+- KB row: see scope=`design_system_log` for the import receipt + the open API TODO.
+
+
+### 2026-05-09 — P/L 2025+2026 backfill + dept-entry "Bugs" box
+
+- `gl.pl_monthly` backfilled with 1497 rows across 17 periods (`2025-01..2026-05`) from `Green Tea P&L 2025/2026` xlsx files. Loaded as 28× 50-row `INSERT … ON CONFLICT (period_yyyymm, account_id) DO UPDATE SET amount_usd=EXCLUDED.amount_usd, …` chunks. Source-file SHA-256 persisted per row for idempotent re-import. 2026 = `955c0aad2630d06f`, 2025 = `de2fad62a3a50849`.
+- `/finance/pnl` `MonthDropdown` reads `Array.from(new Set(plSections.map(r => r.period_yyyymm)))` from the page (line 241), so new periods appear automatically without code change. Verified `2026-01..2026-04` listed; `2026-05` filtered by the existing closed-month rule (≥$1k income, exclude calendar-current month).
+- New `public.cockpit_bugs` table (id, dept_slug, body, status, fix_link, fix_label, created_at, acked_at, started_at, done_at, updated_at). RLS enabled with read/insert/update grants on `authenticated`, `service_role` full DML. Composite index on `(dept_slug, status, created_at DESC)`.
+- New API route `app/api/cockpit/bugs/route.ts` with `GET ?dept=…` (list 50 newest), `POST { dept, body }` (file new bug, status='new'), `PATCH { id, status, fix_link, fix_label }` (advance workflow, stamps `acked_at|started_at|done_at`), `DELETE ?id=…`.
+- New `<Container title="Bugs" hint="Kit watches">` appended to the dept-entry grid in `components/dept-entry/DeptEntry.tsx`, sitting alongside Leakage, Opportunity, Reports, My Tasks. Same Container/Row/Empty primitives — no new card markup. Each row: status dot (clickable to cycle) + body + (when done) `done · press →` link to `fix_link`.
+  - **Status palette** (locked): `new` `#c0584c` (red, with subtle red glow) → `acked` `#d68a3a` (orange) → `processing` `#a8d05a` (light green) → `done` `#3f8a4a` (dark green).
+  - New-bug modal: textarea, Cmd/Ctrl+Enter to submit, brass mono header in red `#c0584c`. Same modal chrome as the New-task modal so the two cards feel like siblings.
+  - Kit can poll `cockpit_bugs WHERE status='new'` to wake up; advancing status via PATCH writes the timestamp on the appropriate column. PR or commit URL goes in `fix_link` when work lands.
+- `/knowledge` route hidden from navigation: removed from `components/nav/LeftRail.tsx` (UTILITY rail), `components/nav/UserMenu.tsx` (Help & docs link), `components/page/HeaderPills.tsx` Tools section, and `components/dept-entry/DeptEntry.tsx` hamburger menu. Route still exists at `/knowledge` for direct URL access; just not surfaced in nav.
+- Deploy `dpl_3Lw1Qrck2MeucbAAmRBpk9t4oiy4` aliased to `namkhan-bi.vercel.app`. `npx tsc --noEmit` clean. Smoke HTTP 200 on `/finance/pnl`, `/revenue`, `/sales`, `/marketing`, `/guest`, `/finance`, `/messy-data`, `/revenue/pulse`. `/revenue` HTML grep confirms `>Bugs<` and `>My tasks<` both render.
+- KB row `cockpit_knowledge_base.id=527` topic `pl_2026_2025_backfill_plus_bugs_box` scope `design_system_log`.
+
+### 2026-05-09 — ChatShell: fresh-on-mount + "Create task" button + conversation context
+
+- **Fresh-on-mount.** `components/chat/ChatShell.tsx` no longer reads `chat_thread_start_<role>` from localStorage. `threadStart` initialises to `new Date().toISOString()` on every render, so leaving `/cockpit/chat?dept=…` and coming back shows an empty thread. The "＋ New chat" button is preserved for in-session reset (no localStorage write, just state).
+- **Real back-and-forth turns.** `send()` now builds `conversation_history` (last 20 user/assistant pairs from `stripTicketFraming(parsed_summary)`) and posts it to `/api/cockpit/chat` alongside `message`. The API already accepted that field — the client just was never filling it, so every turn was a one-shot ticket without context.
+- **"＋ Create task" button** added to topbar next to "＋ New chat". Writes the most-recent user ask as a task object (`{ id, label, done:false, created }`) into `nk.<prefix>.entry.tasks.v2` localStorage so it surfaces in the dept-entry "My tasks" box on next visit. The persona map in `app/cockpit/chat/page.tsx` was extended with `taskStorageKeyPrefix` (`arch | rev | sal | mkt | ops | gst | fin | it`) and threaded into `ChatShell`. Disabled state when `tickets.length === 0` or no prefix linked.
+- Smoke HTTP 200 on all 8 chat slugs (`architect, revenue, sales, marketing, operations, guest, finance, it`). Deploy `dpl_9sZQfrHm7F7eEBVJT8y7YPCb16EF` aliased to `namkhan-bi.vercel.app`. `npx tsc --noEmit` clean.
+- Smarter-prompts piece deferred. HoD system prompts already 16k-33k chars; the lever that was missing was conversation context (now wired). The `lead` (Felix / Architect) prompt is the shortest at 8857 chars — flagged for follow-up enrichment, separate from this fix.
+- KB row `cockpit_knowledge_base.id=530` topic `chat_shell_fresh_thread_plus_create_task_plus_history` scope `design_system_log`.
+
+### 2026-05-09 — All 7 personas: CHAT MODE preamble (Felix + 6 HoDs)
+
+- `cockpit_agent_prompts` updated for `lead`, `revenue_hod`, `sales_hod`, `marketing_hod`, `operations_hod`, `finance_hod`, `it_manager`. Each got a "CHAT MODE — DECIDE FIRST" preamble prepended to the existing doctrine. Old versions deactivated (uniqueness on `(role, active)` enforced) — new IDs `86, 87, 88, 89, 90, 91, 92`.
+- **Decision rule** the personas now apply at the top of every turn:
+  - Question / advice ask / conversation continuation → **CHAT MODE**: `summary_markdown` only (prose answer like Claude), `tasks=[]`, `triage.arm='chat'`, `intent='advice'`. No filler closes ("let me know if you need anything else" forbidden).
+  - Explicit build/run/decompose ask → **ACTION MODE**: existing doctrine fires.
+- When `conversation_history` is present in the payload (now wired via the same-day ChatShell fix), the persona treats it as the running thread — does NOT restart, does NOT repeat prior advice.
+- Why this was the missing lever: the old prompts hard-required JSON task arrays, so Felix and the HoDs always answered like a triage form even when PBS just wanted advice. The CHAT MODE block is a pure prepend — original doctrine is intact below.
+- Pair with KB rows `cockpit_knowledge_base.id=530` (ChatShell wiring) and `id=531` (this prompt batch).
+
+### 2026-05-09 — sync-cloudbeds property_id NOT NULL fix
+
+- `/api/operations/inventory/sync-cloudbeds` previously returned `ok:true` but wrote 0 rows: every upsert into `inv.items` violated the `property_id NOT NULL` constraint silently. The route handler at lines 118-128 omitted `property_id` from the candidate row builder.
+- Fix: import `PROPERTY_ID` from `lib/settings` and add `property_id: PROPERTY_ID` to the upsert payload. Single-line addition; everything else untouched.
+- Smoke POST `/api/operations/inventory/sync-cloudbeds` with `{onlyTangible:true}` now returns `summary.failed=0, updated=262` (was `failed=262`). 
+- KB row `cockpit_knowledge_base.id=532` topic `sync_cloudbeds_property_id_fix` scope `design_system_log`. Pairs with audit row #528 that flagged it.
+
+### 2026-05-09 — `/api/messy/unpaid-bills/update` wired + auto-save dropdown
+
+- New POST route `app/api/messy/unpaid-bills/update/route.ts`. Accepts JSON `{id, human_status, human_notes?}` or form-encoded equivalent. Validates `human_status` against the table CHECK enum (`open|double|wrong_entry|paid_off_book|reconciled|empty=null`). Service-role single-owner v1 — same pattern as `/api/marketing/upload`.
+- Replaced the disabled `<select>` on `/messy-data` unpaid-bills panel with a new client component `app/messy-data/_components/UnpaidBillStatusSelect.tsx`. Auto-saves on change via `fetch` + `router.refresh()`. Disabled state shows during in-flight save; reverts the UI value if the API rejects.
+- Removed the "API not wired yet" sub-text on the panel; replaced with "updates auto-save on change".
+- Smoke: row#1 set to `open` → 200 + DB persisted; bogus value → 400; missing id → 400; empty string → 200 + DB null.
+- Initial deploy hit a transient `sharp` linux native binding error on Vercel build env (affects `/api/marketing/upload`); retry succeeded on the second attempt — same code, no change needed.
+- KB row `cockpit_knowledge_base.id=533` topic `messy_unpaid_bills_update_route_wired` scope `design_system_log`. Closes the TODO from KB #526 (unpaid-bills panel shipping earlier today).

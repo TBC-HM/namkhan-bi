@@ -118,7 +118,11 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
   const totalInv = inventory.length;
   const stopSells = inventory.filter((r) => r.stop_sell).length;
   const minStayRows = inventory.filter((r) => (Number(r.minimum_stay) || 0) > 1).length;
-  const allRates = inventory.map((r) => Number(r.rate) || 0).filter((x) => x > 0);
+  // PBS 2026-05-09: filter junk rates < $10 (rate_inventory has 154 rows
+  // with rate=$0..$5 from derived plans). Without this floor, "Min BAR"
+  // shows $0 / $1 and the KPI looks broken.
+  const RATE_MIN = 10;
+  const allRates = inventory.map((r) => Number(r.rate) || 0).filter((x) => x >= RATE_MIN);
   const avgRate = allRates.length > 0 ? allRates.reduce((a, b) => a + b, 0) / allRates.length : 0;
   const minRate = allRates.length > 0 ? Math.min(...allRates) : 0;
   const maxRate = allRates.length > 0 ? Math.max(...allRates) : 0;
@@ -217,6 +221,10 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
         })}
       </div>
 
+      {/* PBS 2026-05-09 cut-corners audit: above-the-fold = KPI strip → "what's
+          open today" alerts panel → chart. BAR ladder + rate plans tables drop
+          to second fold. Calendar route at /revenue/pricing/calendar is the
+          actionable ladder; this page is the strategic overview. */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
         <KpiBox value={totalInv} unit="count" label="Inventory cells" tooltip="Distinct (room_type × day) cells in the window. Source: rate_inventory." />
         <KpiBox value={avgRate}  unit="usd"   label="Avg rate"        tooltip="Mean rate across all inventory cells in the window." />
@@ -226,37 +234,17 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
         <KpiBox value={minStayRows} unit="count" label="Min-stay"     tooltip="Cells with minimum_stay > 1. Filters short stays." />
       </div>
 
-      <Panel title="BAR ladder by room type" eyebrow="rate_inventory" actions={<ArtifactActions context={ctx('table', 'BAR ladder by room type')} />}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: "var(--t-base)" }}>
-          <thead>
-            <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              <th style={{ padding: '10px 12px' }}>Room type</th>
-              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Cells</th>
-              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Avg</th>
-              <th style={{ padding: '10px 12px', textAlign: 'right' }}>BAR floor</th>
-              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Max</th>
-              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Spread</th>
-              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Stop</th>
-              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Min-stay</th>
-              <th style={{ padding: '10px 12px', textAlign: 'right' }}>CTA/CTD</th>
-            </tr>
-          </thead>
-          <tbody>
-            {roomAggs.map((a) => (
-              <tr key={a.id} style={{ borderTop: '1px solid var(--paper-warm)' }}>
-                <td style={{ padding: '10px 12px', fontWeight: 500 }}>{a.rt}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>{a.count}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>${a.avg.toFixed(0)}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--moss-glow)' }}>${a.min.toFixed(0)}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--brass)' }}>${a.max.toFixed(0)}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>${(a.max - a.min).toFixed(0)}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: a.stops > 0 ? 'var(--st-bad)' : 'var(--ink-mute)' }}>{a.stops || '—'}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: a.minStays > 0 ? 'var(--brass)' : 'var(--ink-mute)' }}>{a.minStays || '—'}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>{a.cta || 0}/{a.ctd || 0}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* "What's open today" — top 3 same-day rate alerts. Mirrors the Pulse
+          hero pattern. Data source not yet wired (no rate-alert view in
+          rate_inventory). Placeholder per PBS directive: don't fabricate. */}
+      <Panel
+        title="What's open today"
+        eyebrow="awaiting data"
+        actions={<ArtifactActions context={ctx('panel', "What's open today")} />}
+      >
+        <div style={{ padding: '16px 4px', color: 'var(--ink-mute)', fontSize: 'var(--t-sm)', fontStyle: 'italic' }}>
+          Will surface the top 3 same-day rate alerts (cells where today's rate ≠ yesterday's, or comp gap exceeds threshold). Awaiting a `v_rate_alerts_today` view over `rate_inventory` × `compset_rates`.
+        </div>
       </Panel>
 
       <div style={{ height: 14 }} />
@@ -299,6 +287,41 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
           </tbody>
         </table>
         </div>
+      </Panel>
+
+      <div style={{ height: 14 }} />
+
+      <Panel title="BAR ladder by room type" eyebrow="rate_inventory · second fold" actions={<ArtifactActions context={ctx('table', 'BAR ladder by room type')} />}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: "var(--t-base)" }}>
+          <thead>
+            <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <th style={{ padding: '10px 12px' }}>Room type</th>
+              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Cells</th>
+              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Avg</th>
+              <th style={{ padding: '10px 12px', textAlign: 'right' }}>BAR floor</th>
+              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Max</th>
+              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Spread</th>
+              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Stop</th>
+              <th style={{ padding: '10px 12px', textAlign: 'right' }}>Min-stay</th>
+              <th style={{ padding: '10px 12px', textAlign: 'right' }}>CTA/CTD</th>
+            </tr>
+          </thead>
+          <tbody>
+            {roomAggs.map((a) => (
+              <tr key={a.id} style={{ borderTop: '1px solid var(--paper-warm)' }}>
+                <td style={{ padding: '10px 12px', fontWeight: 500 }}>{a.rt}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>{a.count}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>${a.avg.toFixed(0)}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--moss-glow)' }}>${a.min.toFixed(0)}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--brass)' }}>${a.max.toFixed(0)}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>${(a.max - a.min).toFixed(0)}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: a.stops > 0 ? 'var(--st-bad)' : 'var(--ink-mute)' }}>{a.stops || '—'}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: a.minStays > 0 ? 'var(--brass)' : 'var(--ink-mute)' }}>{a.minStays || '—'}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>{a.cta || 0}/{a.ctd || 0}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </Panel>
 
       <div style={{ height: 14 }} />

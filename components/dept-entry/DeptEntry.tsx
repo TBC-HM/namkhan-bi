@@ -39,6 +39,29 @@ interface DocItem       {
   email_time?: string;  // "HH:MM" 24-hour, ICT
 }
 interface TaskItem      { id: string; label: string; done: boolean; created?: string; due?: string; alert?: boolean }
+interface BugItem       {
+  id: number;
+  body: string;
+  status: 'new' | 'acked' | 'processing' | 'done';
+  fix_link?: string | null;
+  fix_label?: string | null;
+  created_at: string;
+  done_at?: string | null;
+}
+
+const BUG_STATUS_DOT: Record<BugItem['status'], string> = {
+  new:        '#c0584c',  // red — fresh, Kit hasn't seen it
+  acked:      '#d68a3a',  // orange — Kit has acknowledged
+  processing: '#a8d05a',  // light green — Kit is working
+  done:       '#3f8a4a',  // dark green — done, click to see fix
+};
+
+const BUG_STATUS_LABEL: Record<BugItem['status'], string> = {
+  new:        'new',
+  acked:      'acknowledged',
+  processing: 'in progress',
+  done:       'done',
+};
 
 // 2026-05-08 — Report types + dimension groups now come from cfg.reportTypes
 // (see lib/dept-cfg/index.ts). Each dept can ship its own taxonomy or
@@ -357,6 +380,12 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
   const [docs,      setDocs]      = useState<DocItem[]>(DEFAULT_DOCS);
   const [tasks,     setTasks]     = useState<TaskItem[]>(DEFAULT_TASKS);
 
+  // Bugs box (PBS 2026-05-09): Supabase-backed so Kit can pick them up.
+  // Workflow: new (red) → acked (orange) → processing (light green) → done (dark green + press link).
+  const [bugs,        setBugs]        = useState<BugItem[]>([]);
+  const [bugModal,    setBugModal]    = useState(false);
+  const [bugDraft,    setBugDraft]    = useState('');
+
   // Projects state
   const [projects,    setProjects]    = useState<ProjectRow[]>([]);
   const [activeProject, setActiveProject] = useState<ProjectRow | null>(null);
@@ -418,7 +447,57 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
         }
       })
       .catch(() => { /* silent — projects are optional */ });
+
+    // Hydrate bugs (PBS 2026-05-09)
+    fetch(`/api/cockpit/bugs?dept=${cfg.slug}`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(j => {
+        if (Array.isArray(j?.rows)) setBugs(j.rows as BugItem[]);
+      })
+      .catch(() => { /* silent */ });
   }, []);
+
+  async function reloadBugs() {
+    try {
+      const j = await fetch(`/api/cockpit/bugs?dept=${cfg.slug}`, { cache: 'no-store' }).then(r => r.json());
+      if (Array.isArray(j?.rows)) setBugs(j.rows as BugItem[]);
+    } catch { /* silent */ }
+  }
+  function openBugModal() {
+    setBugDraft('');
+    setBugModal(true);
+  }
+  async function submitBug() {
+    const text = bugDraft.trim();
+    if (!text) return;
+    setBugModal(false);
+    try {
+      await fetch('/api/cockpit/bugs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dept: cfg.slug, body: text }),
+      });
+      await reloadBugs();
+    } catch { /* silent */ }
+  }
+  async function delBug(id: number) {
+    setBugs(prev => prev.filter(b => b.id !== id));
+    try {
+      await fetch(`/api/cockpit/bugs?id=${id}`, { method: 'DELETE' });
+    } catch { /* silent */ }
+  }
+  async function cycleBugStatus(b: BugItem) {
+    const order: BugItem['status'][] = ['new', 'acked', 'processing', 'done'];
+    const next = order[(order.indexOf(b.status) + 1) % order.length];
+    setBugs(prev => prev.map(x => x.id === b.id ? { ...x, status: next } : x));
+    try {
+      await fetch('/api/cockpit/bugs', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: b.id, status: next }),
+      });
+    } catch { /* silent */ }
+  }
 
   function pickProject(p: ProjectRow | null) {
     setActiveProject(p);
@@ -910,7 +989,6 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
                 color: '#5a5448',
               }}>Tools</div>
               <a href="/cockpit"               onClick={() => setUserOpen(false)} style={menuLinkStyle()}>IT cockpit</a>
-              <a href="/knowledge"             onClick={() => setUserOpen(false)} style={menuLinkStyle()}>Knowledge</a>
               <a href="/front-office/arrivals" onClick={() => setUserOpen(false)} style={menuLinkStyle()}>Front office</a>
             </div>
             <div style={{ borderTop: '1px solid #2a261d', marginTop: 4, paddingTop: 6, display: 'flex', justifyContent: 'center', gap: 10 }}>
@@ -1464,6 +1542,82 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
           })}
           {tasks.length === 0 && <Empty label="Nothing on the list" />}
         </Container>
+
+        {/* BUGS — Supabase-backed; Kit watches for new ones (PBS 2026-05-09).
+         *   • paste a bug or change request → status='new' (red dot)
+         *   • Kit reads, sets status='acked' (orange)
+         *   • Kit working → 'processing' (light green)
+         *   • Kit done → 'done' (dark green) + fix_link → "press" link
+         *   Click the dot to manually cycle the state. × removes the row.
+         * ─────────────────────────────────────────────────────────────── */}
+        <Container
+          title="Bugs"
+          hint="Kit watches"
+          onAdd={openBugModal}
+        >
+          {bugs.map(b => (
+            <Row key={b.id} onDelete={() => delBug(b.id)}>
+              <button
+                onClick={() => cycleBugStatus(b)}
+                aria-label={`status: ${BUG_STATUS_LABEL[b.status]} — click to advance`}
+                title={`${BUG_STATUS_LABEL[b.status]} — click to advance`}
+                style={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: '50%',
+                  background: BUG_STATUS_DOT[b.status],
+                  border: 'none',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                  padding: 0,
+                  boxShadow: b.status === 'new' ? '0 0 6px rgba(192,88,76,0.6)' : 'none',
+                }}
+              />
+              <div style={{
+                flex: 1,
+                fontSize: 13,
+                color: '#c9bb96',
+                lineHeight: 1.4,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                flexWrap: 'wrap',
+              }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.body}</span>
+                {b.status === 'done' && b.fix_link && (
+                  <a
+                    href={b.fix_link}
+                    target={b.fix_link.startsWith('http') ? '_blank' : undefined}
+                    rel={b.fix_link.startsWith('http') ? 'noreferrer' : undefined}
+                    style={{
+                      fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+                      fontSize: 10,
+                      letterSpacing: '0.18em',
+                      textTransform: 'uppercase',
+                      color: '#3f8a4a',
+                      textDecoration: 'none',
+                      border: '1px solid #2a4a2e',
+                      borderRadius: 4,
+                      padding: '2px 8px',
+                    }}
+                  >
+                    done · press →
+                  </a>
+                )}
+                {b.status === 'done' && !b.fix_link && (
+                  <span style={{
+                    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+                    fontSize: 10,
+                    letterSpacing: '0.18em',
+                    textTransform: 'uppercase',
+                    color: '#3f8a4a',
+                  }}>done</span>
+                )}
+              </div>
+            </Row>
+          ))}
+          {bugs.length === 0 && <Empty label="No bugs reported" />}
+        </Container>
       </div>
 
       {/* Tasks AI-help inline advice (PBS 2026-05-08) */}
@@ -1911,6 +2065,73 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
                   fontFamily: "'JetBrains Mono', ui-monospace, monospace", letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 600,
                 }}
               >Save task</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New bug modal (PBS 2026-05-09) */}
+      {bugModal && (
+        <div
+          onClick={() => setBugModal(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 200,
+            background: 'rgba(0,0,0,0.6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 24,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#0f0d0a', border: '1px solid #3a3327', borderRadius: 12,
+              padding: 20, width: '100%', maxWidth: 520,
+              boxShadow: '0 20px 50px rgba(0,0,0,0.6)',
+              fontFamily: "'Inter Tight', system-ui, sans-serif",
+            }}
+          >
+            <div style={{
+              fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+              fontSize: 10, letterSpacing: '0.22em', textTransform: 'uppercase',
+              color: '#c0584c', marginBottom: 12,
+            }}>Report a bug · change request</div>
+
+            <textarea
+              autoFocus
+              value={bugDraft}
+              onChange={e => setBugDraft(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitBug(); }}
+              placeholder="Paste the bug or change request here. Kit will pick it up."
+              rows={6}
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                background: '#15110b', border: '1px solid #2a261d', borderRadius: 8,
+                color: '#efe6d3', padding: '10px 12px', fontSize: 14,
+                fontFamily: 'inherit', outline: 'none', marginBottom: 12, resize: 'vertical',
+              }}
+            />
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button
+                onClick={() => setBugModal(false)}
+                style={{
+                  background: 'transparent', border: '1px solid #2a261d', borderRadius: 8,
+                  color: '#9b907a', padding: '8px 14px', fontSize: 12, cursor: 'pointer',
+                  fontFamily: "'JetBrains Mono', ui-monospace, monospace", letterSpacing: '0.14em', textTransform: 'uppercase',
+                }}
+              >Cancel</button>
+              <button
+                onClick={submitBug}
+                disabled={!bugDraft.trim()}
+                style={{
+                  background: bugDraft.trim() ? '#c0584c' : '#1c160d',
+                  border: 'none', borderRadius: 8,
+                  color: bugDraft.trim() ? '#0a0a0a' : '#5a5448',
+                  padding: '8px 14px', fontSize: 12,
+                  cursor: bugDraft.trim() ? 'pointer' : 'not-allowed',
+                  fontFamily: "'JetBrains Mono', ui-monospace, monospace", letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 600,
+                }}
+              >Send to Kit</button>
             </div>
           </div>
         </div>

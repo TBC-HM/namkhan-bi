@@ -391,7 +391,7 @@ function CountryChart({ rows, total }: { rows: [string, number][]; total: number
               </text>
               <rect x={labelW} y={y + 4} width={barMaxW} height={14} fill="var(--paper-deep)" />
               <rect x={labelW} y={y + 4} width={barW} height={14} fill="var(--moss)">
-                <title>{`${c} · ${n} · ${pct.toFixed(0)}%`}</title>
+                <title>{`Country ${c} · ${n.toLocaleString()} guests · ${pct.toFixed(1)}% of ${total.toLocaleString()} segment · guest.mv_guest_profile`}</title>
               </rect>
               <text x={labelW + barMaxW + 4} y={y + 14} style={{ fontFamily: 'var(--mono)', fontSize: 10, fill: 'var(--ink-soft)' }}>
                 {n}
@@ -427,7 +427,7 @@ function SourceChart({ rows, total }: { rows: [string, number][]; total: number 
               </text>
               <rect x={labelW} y={y + 4} width={barMaxW} height={14} fill="var(--paper-deep)" />
               <rect x={labelW} y={y + 4} width={barW} height={14} fill="var(--brass)">
-                <title>{`${c} · ${n} · ${pct.toFixed(0)}%`}</title>
+                <title>{`Source ${c} · ${n.toLocaleString()} guests · ${pct.toFixed(1)}% of ${total.toLocaleString()} segment · guest.mv_guest_profile`}</title>
               </rect>
               <text x={labelW + barMaxW + 4} y={y + 14} style={{ fontFamily: 'var(--mono)', fontSize: 10, fill: 'var(--ink-soft)' }}>
                 {n}

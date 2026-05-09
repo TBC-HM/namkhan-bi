@@ -287,7 +287,7 @@ function RepeatDistChart({ rows, total }: { rows: { k: string; n: number }[]; to
           return (
             <g key={r.k}>
               <rect x={x} y={y} width={barW} height={bh} fill={fill}>
-                <title>{`${r.k}× · ${r.n} guests · ${pct.toFixed(0)}%`}</title>
+                <title>{`${r.k}× stays · ${r.n.toLocaleString()} guests · ${pct.toFixed(1)}% of ${total.toLocaleString()} · guest.mv_guest_profile`}</title>
               </rect>
               <text x={x + barW / 2} y={y - 3} textAnchor="middle" style={{ fontFamily: 'var(--mono)', fontSize: 9, fill: 'var(--ink)' }}>
                 {r.n}
@@ -328,7 +328,7 @@ function LtvCohortChart({ rows }: { rows: { label: string; n: number; sum: numbe
               </text>
               <rect x={labelW} y={y + 4} width={barMaxW} height={18} fill="var(--paper-deep)" />
               <rect x={labelW} y={y + 4} width={barW} height={18} fill={fill}>
-                <title>{`${r.label} · ${r.n} guests · sum ${fmtMoney(r.sum, 'USD')}`}</title>
+                <title>{`LTV ${r.label} · ${r.n.toLocaleString()} guests · ${pct.toFixed(1)}% · sum ${fmtMoney(r.sum, 'USD')} · guest.mv_guest_profile`}</title>
               </rect>
               <text x={labelW + barMaxW + 4} y={y + 16} style={{ fontFamily: 'var(--mono)', fontSize: 10, fill: 'var(--ink-soft)' }}>
                 {r.n} · {pct.toFixed(0)}%
@@ -382,7 +382,7 @@ function RecencyChart({ profiles, todayIso }: { profiles: ProfileRow[]; todayIso
           return (
             <g key={b.label}>
               <rect x={x} y={y} width={barW} height={bh} fill={fill}>
-                <title>{`${b.label} · ${b.n} guests · ${total > 0 ? ((b.n / total) * 100).toFixed(0) : 0}%`}</title>
+                <title>{`Recency ${b.label} · ${b.n.toLocaleString()} guests · ${total > 0 ? ((b.n / total) * 100).toFixed(1) : '0.0'}% of ${total.toLocaleString()} · guest.mv_guest_profile`}</title>
               </rect>
               {b.n > 0 && (
                 <text x={x + barW / 2} y={y - 3} textAnchor="middle" style={{ fontFamily: 'var(--mono)', fontSize: 9, fill: 'var(--ink)' }}>
