@@ -84,10 +84,7 @@ export default async function TransactionsPage({ searchParams }: Props) {
        `user_name.ilike.%${q}%`, `reservation_id.ilike.%${q}%`].join(',')
     );
   }
-  const listResult = await listQ.range(offset, offset + PAGE_SIZE - 1);
-  if (listResult.error) console.error('[finance/transactions] listQ error', listResult.error);
-  const rows = listResult.data ?? [];
-  const rowCount = listResult.count;
+  const { data: rows, count: rowCount } = await listQ.range(offset, offset + PAGE_SIZE - 1);
   const totalPages = Math.max(1, Math.ceil((rowCount ?? all.length) / PAGE_SIZE));
 
   // Daily volume series — wired from kpiRows by truncating transaction_date.
