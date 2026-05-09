@@ -4,11 +4,12 @@
 //   2. Prospects (cold) — table + manual add + CSV import + "Draft outreach" per row
 //   3. Recent outreach drafts — last 20 from sales.email_drafts (intent='outreach')
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
 import { listProspects, getProspectKpis, listIcpSegments, listGuestCohortsWithCounts } from '@/lib/sales-leads';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { PROPERTY_ID } from '@/lib/supabase';
 import LeadsClient from './_components/LeadsClient';
+import { SALES_SUBPAGES } from '../_subpages';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -32,14 +33,11 @@ export default async function LeadsPage({ searchParams }: { searchParams?: { sta
   ]);
 
   return (
-    <>
-      <PageHeader
-        pillar="Sales"
-        tab="Leads"
-        title={<>Lead engine · cold <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>and</em> warm</>}
-        lede="Cold prospects (B2B partners, retreat organisers, DMCs) and warm cohorts (past guests). One composer feeds both."
-      />
-
+    <Page
+      eyebrow="Sales · Leads"
+      title={<>Lead engine · cold <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>and</em> warm</>}
+      subPages={SALES_SUBPAGES}
+    >
       <LeadsClient
         prospects={prospects}
         kpis={kpis}
@@ -49,6 +47,6 @@ export default async function LeadsPage({ searchParams }: { searchParams?: { sta
         currentStatus={searchParams?.status ?? 'all'}
         currentQuery={searchParams?.q ?? ''}
       />
-    </>
+    </Page>
   );
 }

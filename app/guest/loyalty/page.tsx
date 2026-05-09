@@ -4,7 +4,8 @@
 // Every value wired. No invented cohorts.
 
 import Link from 'next/link';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { GUEST_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
@@ -136,19 +137,11 @@ export default async function LoyaltyPage() {
     : 0;
 
   return (
-    <>
-      <PageHeader
-        pillar="Guest"
-        tab="Loyalty"
-        title={
-          <>
-            Who comes{' '}
-            <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>back</em>{' '}
-            — and who's about to slip.
-          </>
-        }
-        lede={`${totalGuests} guests · ${repeatGuests} repeat (${repeatPct.toFixed(0)}%) · ${winback.length} win-back candidates · ${programMembers} loyalty members`}
-      />
+    <Page
+      eyebrow="Guest · Loyalty"
+      title={<>Who comes <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>back</em> — and who's about to slip.</>}
+      subPages={GUEST_SUBPAGES}
+    >
 
       <GuestStatusHeader
         top={
@@ -264,7 +257,7 @@ export default async function LoyaltyPage() {
           <GuestTable rows={vips} todayIso={todayIso} />
         )}
       </div>
-    </>
+    </Page>
   );
 }
 

@@ -2,7 +2,8 @@
 // Replaces /guest/reviews + /marketing/reviews (both redirect here).
 // compset-pattern: PageHeader + status header + 3 wired graphs + canonical KpiBox + review feed.
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { GUEST_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { getReviews, getReviewStatsBySource, getReviewSummary } from '@/lib/marketing';
@@ -71,19 +72,11 @@ export default async function ReputationPage() {
     .sort((a, b) => a.week.localeCompare(b.week));
 
   return (
-    <>
-      <PageHeader
-        pillar="Guest"
-        tab="Reputation"
-        title={
-          <>
-            What guests{' '}
-            <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>say</em>{' '}
-            — every channel, every reply.
-          </>
-        }
-        lede={`${total} reviews 30d · ${avgRating != null ? avgRating.toFixed(2) : '—'}/5 avg · ${unanswered} unanswered · ${responseRate.toFixed(0)}% response rate`}
-      />
+    <Page
+      eyebrow="Guest · Reputation"
+      title={<>What guests <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>say</em> — every channel, every reply.</>}
+      subPages={GUEST_SUBPAGES}
+    >
 
       <GuestStatusHeader
         top={
@@ -250,7 +243,7 @@ export default async function ReputationPage() {
           No reviews yet. Forward review notification emails to your Supabase webhook to populate <code>marketing.reviews</code>.
         </div>
       )}
-    </>
+    </Page>
   );
 }
 

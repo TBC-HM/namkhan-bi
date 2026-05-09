@@ -2,7 +2,8 @@
 // Guest · Journey — lifecycle funnel. Sources: reservations + guest.journey_events.
 // Every count wired. No invented data.
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { GUEST_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
@@ -98,19 +99,11 @@ export default async function JourneyPage({ searchParams }: Props) {
   const cancelRate = isReservation ? (canceled / isReservation) * 100 : 0;
 
   return (
-    <>
-      <PageHeader
-        pillar="Guest"
-        tab="Journey"
-        title={
-          <>
-            From{' '}
-            <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>inquiry</em>{' '}
-            to repeat — every touchpoint, every drop.
-          </>
-        }
-        lede={`Last ${days} days · ${isReservation} reservations · ${arrived} arrived · ${cancelRate.toFixed(0)}% cancel rate · ${events.length} comm events logged`}
-      />
+    <Page
+      eyebrow="Guest · Journey"
+      title={<>From <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>inquiry</em> to repeat — every touchpoint, every drop.</>}
+      subPages={GUEST_SUBPAGES}
+    >
 
       <GuestStatusHeader
         top={
@@ -214,7 +207,7 @@ export default async function JourneyPage({ searchParams }: Props) {
           </div>
         )}
       </div>
-    </>
+    </Page>
   );
 }
 

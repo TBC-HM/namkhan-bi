@@ -18,7 +18,8 @@ import {
   getCashForecast13w, getLatestCommentary,
 } from '../_data';
 import { priorPeriod, type PeriodWindow } from '@/lib/supabase-gl';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { FINANCE_SUBPAGES } from '../_subpages';
 import TwelveMonthPanel from './TwelveMonthPanel';
 import MonthDropdown from './MonthDropdown';
 import CompareDropdown, { type CompareMode } from './CompareDropdown';
@@ -421,14 +422,11 @@ export default async function PnLPage({ searchParams }: Props) {
   const fbOverPct = fbBudget > 0 ? ((fbLabour / fbBudget) - 1) * 100 : null;
 
   return (
-    <div className="pnl-page">
-      {/* ============== BLOCK 1 — Title + breadcrumb ============== */}
-      <PageHeader
-        pillar="Finance"
-        tab="P&L"
-        title={<>Profit &amp; loss · where the <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>margin</em> lives.</>}
-        lede="Where to act this week to defend GOP. USALI 11th ed."
-      />
+    <Page
+      eyebrow="Finance · P&L"
+      title={<>Profit &amp; loss · where the <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>margin</em> lives.</>}
+      subPages={FINANCE_SUBPAGES}
+    >
 
       {/* ============== BLOCK 2 — Period + write-policy banners ============== */}
       <div className="period-banner">
@@ -1125,6 +1123,6 @@ export default async function PnLPage({ searchParams }: Props) {
           Edit account-class assignments for <code>not_specified</code> entries at <a href="/finance/mapping" style={{ color: 'var(--brass)', textDecoration: 'underline' }}>/finance/mapping</a>.
         </div>
       </div>
-    </div>
+    </Page>
   );
 }

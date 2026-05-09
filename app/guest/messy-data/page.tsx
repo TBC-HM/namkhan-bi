@@ -4,7 +4,8 @@
 // cleanup. Every flag wired off real columns. No invented errors.
 
 import Link from 'next/link';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { GUEST_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
@@ -133,19 +134,11 @@ export default async function MessyDataPage() {
   const dupEmailCount = issueCounts.get('duplicate_email') ?? 0;
 
   return (
-    <>
-      <PageHeader
-        pillar="Guest"
-        tab="Messy data"
-        title={
-          <>
-            Fix it{' '}
-            <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>in the PMS</em>{' '}
-            — the materialised view follows.
-          </>
-        }
-        lede={`${total} profiles · ${flagged.length} flagged (${(100 - cleanPct).toFixed(0)}%) · ${noContactCount} unreachable · ${dupEmailCount} duplicate emails`}
-      />
+    <Page
+      eyebrow="Guest · Messy data"
+      title={<>Fix it <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>in the PMS</em> — the materialised view follows.</>}
+      subPages={GUEST_SUBPAGES}
+    >
 
       <GuestStatusHeader
         top={
@@ -308,7 +301,7 @@ export default async function MessyDataPage() {
         Open the guest in Cloudbeds (PMS) · merge duplicates via the guest profile screen · add missing email / phone / country.
         The materialised view <code style={{ fontFamily: 'var(--mono)' }}>guest.mv_guest_profile</code> refreshes via cron, so changes appear here on the next tick.
       </div>
-    </>
+    </Page>
   );
 }
 

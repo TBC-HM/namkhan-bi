@@ -1,7 +1,8 @@
 // app/finance/transactions/page.tsx
 // Finance · Transactions — full Cloudbeds + POS transactions with KPI grouping + search.
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { FINANCE_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
@@ -101,19 +102,11 @@ export default async function TransactionsPage({ searchParams }: Props) {
     .sort((a, b) => a.d.localeCompare(b.d));
 
   return (
-    <>
-      <PageHeader
-        pillar="Finance"
-        tab="Transactions"
-        title={
-          <>
-            All{' '}
-            <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>transactions</em>{' '}
-            · Cloudbeds + POS.
-          </>
-        }
-        lede={`${rowCount?.toLocaleString() ?? 0} matching transactions · ${since} → ${until}`}
-      />
+    <Page
+      eyebrow="Finance · Transactions"
+      title={<>All <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>transactions</em> · Cloudbeds + POS.</>}
+      subPages={FINANCE_SUBPAGES}
+    >
 
       <FinanceStatusHeader
         top={
@@ -272,7 +265,7 @@ export default async function TransactionsPage({ searchParams }: Props) {
           </div>
         )}
       </div>
-    </>
+    </Page>
   );
 }
 

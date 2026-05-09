@@ -1,11 +1,13 @@
 // app/marketing/social/page.tsx
 // Marketing · Social channels.
 
-import PanelHero from '@/components/sections/PanelHero';
-import Card from '@/components/sections/Card';
-import KpiCard from '@/components/kpi/KpiCard';
+import Page from '@/components/page/Page';
+import Panel from '@/components/page/Panel';
+import KpiBox from '@/components/kpi/KpiBox';
+import ArtifactActions from '@/components/page/ArtifactActions';
 import Insight from '@/components/sections/Insight';
 import { getSocialAccounts } from '@/lib/marketing';
+import { MARKETING_SUBPAGES } from '../_subpages';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 300;
@@ -44,29 +46,19 @@ export default async function SocialPage() {
   const synced = accounts.filter((a: any) => a.last_synced_at).length;
 
   return (
-    <>
-      <PanelHero
-        eyebrow="Social · channels"
-        title="Social"
-        emphasis="presence"
-        sub="Followers · posts · sync status across platforms"
-        kpis={
-          <>
-            <KpiCard label="Active Channels" value={accounts.length} hint="configured platforms" />
-            <KpiCard label="Total Followers" value={totalFollowers} hint="sum across platforms" />
-            <KpiCard label="Total Posts" value={totalPosts} hint="lifetime" />
-            <KpiCard
-              label="Auto-Synced"
-              value={`${synced} / ${accounts.length}`}
-              kind="text"
-              tone={synced === accounts.length ? 'pos' : synced > 0 ? 'warn' : 'neg'}
-              hint="API · rest manual"
-            />
-          </>
-        }
-      />
+    <Page
+      eyebrow="Marketing · Social"
+      title={<>Social <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>presence</em>.</>}
+      subPages={MARKETING_SUBPAGES}
+    >
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
+        <KpiBox value={accounts.length}    unit="count" label="Active channels" />
+        <KpiBox value={totalFollowers}     unit="count" label="Total followers" />
+        <KpiBox value={totalPosts}         unit="count" label="Total posts" />
+        <KpiBox value={null} unit="text" valueText={`${synced} / ${accounts.length}`} label="Auto-synced" tooltip="API · rest manual" />
+      </div>
 
-      <Card title="Channels" emphasis="all platforms" sub="Click handle to open profile" source="marketing.social_accounts">
+      <Panel title="Channels · all platforms" eyebrow="marketing.social_accounts" actions={<ArtifactActions context={{ kind: 'table', title: 'Social channels', dept: 'marketing' }} />}>
         {accounts.length === 0 ? (
           <div className="stub" style={{ padding: 32 }}>
             <h3>No accounts configured</h3>
@@ -112,13 +104,15 @@ export default async function SocialPage() {
             </tbody>
           </table>
         )}
-      </Card>
+      </Panel>
 
-      <Insight tone="info" eye="Manual entry">
-        <strong>Follower counts and last-synced timestamps are manual</strong> until platform APIs
-        are wired (Phase 2). To update, run SQL on <em>marketing.social_accounts</em> or edit via
-        the Supabase dashboard.
-      </Insight>
-    </>
+      <div style={{ marginTop: 14 }}>
+        <Insight tone="info" eye="Manual entry">
+          <strong>Follower counts and last-synced timestamps are manual</strong> until platform APIs
+          are wired (Phase 2). To update, run SQL on <em>marketing.social_accounts</em> or edit via
+          the Supabase dashboard.
+        </Insight>
+      </div>
+    </Page>
   );
 }

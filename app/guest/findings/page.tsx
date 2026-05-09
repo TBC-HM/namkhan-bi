@@ -3,7 +3,8 @@
 // pillar (review themes, sentiment shifts, segment anomalies, recovery cases).
 // No invented findings — page is honestly empty until agents start writing rows.
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { GUEST_SUBPAGES } from '../_subpages';
 import StatusPill from '@/components/ui/StatusPill';
 import { supabase } from '@/lib/supabase';
 import {
@@ -34,19 +35,11 @@ export default async function FindingsPage() {
   const totalRows = themesCount + casesCount + npsCount;
 
   return (
-    <>
-      <PageHeader
-        pillar="Guest"
-        tab="Findings"
-        title={
-          <>
-            What the data{' '}
-            <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>told us</em>{' '}
-            this week.
-          </>
-        }
-        lede={`Theme clusters · recovery cases · NPS responses — pending agent runs · ${totalRows} rows so far`}
-      />
+    <Page
+      eyebrow="Guest · Findings"
+      title={<>What the data <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>told us</em> this week.</>}
+      subPages={GUEST_SUBPAGES}
+    >
 
       <GuestStatusHeader
         top={
@@ -137,7 +130,7 @@ export default async function FindingsPage() {
           </div>
         </div>
       )}
-    </>
+    </Page>
   );
 }
 

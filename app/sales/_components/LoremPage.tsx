@@ -1,9 +1,13 @@
 // app/sales/_components/LoremPage.tsx
-// Reusable "lorem ipsum" page scaffold for unwired sub-tabs.
-// Shows the IA the user can expect, with explicit lorem placeholders so
-// stakeholders can see at a glance which sections are awaiting data.
+// Reusable scaffold for sub-tabs awaiting data. PBS manifesto 2026-05-09:
+// rendered inside <Page> with <Panel>; KPIs go through <KpiBox state="pending">.
 
 import { ReactNode } from 'react';
+import Page from '@/components/page/Page';
+import Panel from '@/components/page/Panel';
+import KpiBox from '@/components/kpi/KpiBox';
+import ArtifactActions from '@/components/page/ArtifactActions';
+import { SALES_SUBPAGES } from '../_subpages';
 
 export interface LoremBlock {
   scope: string;
@@ -21,43 +25,40 @@ interface Props {
 }
 
 export default function LoremPage({ pillar, tab, lede, kpis, sections, dataSourceNote }: Props) {
+  const ctx = (kind: 'panel' | 'brief' | 'table' | 'kpi', title: string) => ({ kind, title, dept: pillar.toLowerCase() });
   return (
-    <>
-      <div style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 14 }}>
-        <strong style={{ color: 'var(--ink-soft)' }}>{pillar}</strong> › {tab}
-      </div>
-      <h1 style={{ margin: '4px 0 2px', fontFamily: 'var(--serif)', fontWeight: 500, fontSize: "var(--t-3xl)", letterSpacing: '-0.01em' }}>
-        {tab} · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>not yet wired</em>
-      </h1>
-      <div style={{ fontSize: "var(--t-md)", color: 'var(--ink-soft)' }}>{lede}</div>
+    <Page
+      eyebrow={`${pillar} · ${tab}`}
+      title={<>{tab} · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>not yet wired</em></>}
+      subPages={SALES_SUBPAGES}
+    >
+      <div style={{ fontSize: 'var(--t-md)', color: 'var(--ink-soft)', marginBottom: 14 }}>{lede}</div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(kpis.length, 5)}, minmax(0, 1fr))`, gap: 10, margin: '14px 0' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
         {kpis.map((k) => (
-          <div
+          <KpiBox
             key={k.scope}
-            className="kpi-box"
-            data-tooltip={`${k.scope} · ${k.sub ?? 'awaiting data'}`}
-          >
-            <div className="kpi-tile-scope">{k.scope}</div>
-            <div className="kpi-tile-value lorem">{k.value ?? 'lorem'}</div>
-            <div className="kpi-tile-sub">{k.sub ?? '—'}</div>
-          </div>
+            value={null}
+            unit="count"
+            label={k.scope}
+            state="pending"
+            tooltip={`${k.scope} · ${k.sub ?? 'awaiting data'}`}
+          />
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
         {sections.map((s) => (
-          <div key={s.heading} className="panel">
-            <div className="kpi-tile-scope" style={{ marginBottom: 6 }}>{s.heading}</div>
-            <div style={{ fontSize: "var(--t-md)", color: 'var(--ink-faint)', fontStyle: 'italic', lineHeight: 1.6 }}>{s.body}</div>
-          </div>
+          <Panel key={s.heading} title={s.heading} eyebrow="awaiting data" actions={<ArtifactActions context={ctx('panel', s.heading)} />}>
+            <div style={{ fontSize: 'var(--t-md)', color: 'var(--ink-faint)', fontStyle: 'italic', lineHeight: 1.6 }}>{s.body}</div>
+          </Panel>
         ))}
       </div>
 
-      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-warn-bg)', border: '1px solid var(--st-warn-bd)', borderRadius: 6, color: 'var(--brass)', fontSize: "var(--t-sm)" }}>
+      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-warn-bg)', border: '1px solid var(--st-warn-bd)', borderRadius: 6, color: 'var(--brass)', fontSize: 'var(--t-sm)' }}>
         <strong>Not wired.</strong> {dataSourceNote}
       </div>
-    </>
+    </Page>
   );
 }
 

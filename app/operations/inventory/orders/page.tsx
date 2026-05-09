@@ -1,7 +1,8 @@
 // app/operations/inventory/orders/page.tsx
 // Purchase orders queue — proc.purchase_orders.
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { OPERATIONS_SUBPAGES } from '../../_subpages';
 import { fmtMoney, fmtDate, EMPTY } from '@/lib/format';
 import { getOpenPOs } from '../_data';
 
@@ -27,13 +28,11 @@ export default async function OrdersPage() {
   const overdueCount = rows.filter(r => r.expected_delivery_date && r.status !== 'received' && r.status !== 'closed' && new Date(r.expected_delivery_date) < new Date()).length;
 
   return (
-    <>
-      <PageHeader
-        pillar="Operations"
-        tab="Inventory · Orders"
-        title={<>Purchase <em style={{ color: 'var(--brass)' }}>orders</em></>}
-        lede={<>Live queue from <code style={{ fontFamily: 'var(--mono)' }}>proc.purchase_orders</code>. Issued POs flow draft → sent → partially_received → received → invoiced → closed.</>}
-      />
+    <Page
+      eyebrow="Operations · Inventory · Orders"
+      title={<>Purchase <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>orders</em></>}
+      subPages={OPERATIONS_SUBPAGES}
+    >
 
       <div style={{
         display: 'grid',
@@ -100,7 +99,7 @@ export default async function OrdersPage() {
           </tbody>
         </table>
       </div>
-    </>
+    </Page>
   );
 }
 

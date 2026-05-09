@@ -14,6 +14,7 @@ import TacticalAlerts, { type TacticalAlert } from '@/components/ops/TacticalAle
 import GuardrailsBanner from '@/components/ops/GuardrailsBanner';
 import DataNeededOverlay from '@/components/ops/DataNeededOverlay';
 import Page from '@/components/page/Page';
+import { SALES_SUBPAGES } from '../_subpages';
 
 import InquiryFeed from './_components/InquiryFeed';
 import AutoDraftTray from './_components/AutoDraftTray';
@@ -297,16 +298,7 @@ export default async function InquiriesPage({
     <Page
       eyebrow="Sales · Inquiries"
       title={<>Every inquiry, an <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>answer</em> before lunch.</>}
-      subPages={[
-        { label: 'Inquiries',  href: '/sales/inquiries' },
-        { label: 'Pipeline',   href: '/sales/pipeline'  },
-        { label: 'Leads',      href: '/sales/leads'     },
-        { label: 'B2B',        href: '/sales/b2b'       },
-        { label: 'FIT',        href: '/sales/fit'       },
-        { label: 'Groups',     href: '/sales/groups'    },
-        { label: 'Packages',   href: '/sales/packages'  },
-        { label: 'Dashboard',  href: '/sales/dashboard' },
-      ]}
+      subPages={SALES_SUBPAGES}
     >
 
       {/* BLOCK 2: Status pills (sales-specific, on top of layout's FilterStrip) */}

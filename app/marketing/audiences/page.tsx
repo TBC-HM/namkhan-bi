@@ -4,7 +4,8 @@
 // Every count wired off the materialized view. Filters via URL params.
 
 import Link from 'next/link';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { MARKETING_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
@@ -170,19 +171,11 @@ export default async function AudiencesPage({ searchParams }: Props) {
   const avgLtvMatched = matched.length > 0 ? matchedLtv / matched.length : 0;
 
   return (
-    <>
-      <PageHeader
-        pillar="Marketing"
-        tab="Audiences"
-        title={
-          <>
-            Pick the{' '}
-            <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>list</em>{' '}
-            — then write the message.
-          </>
-        }
-        lede={`${totalProfiles} guest profiles · ${withEmail} with email · ${SEGMENTS.length} pre-built segments · selected "${selectedSegment.label}" → ${matched.length} guests`}
-      />
+    <Page
+      eyebrow="Marketing · Audiences"
+      title={<>Pick the <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>list</em> — then write the message.</>}
+      subPages={MARKETING_SUBPAGES}
+    >
 
       <GuestStatusHeader
         top={
@@ -311,7 +304,7 @@ export default async function AudiencesPage({ searchParams }: Props) {
           </div>
         )}
       </div>
-    </>
+    </Page>
   );
 }
 

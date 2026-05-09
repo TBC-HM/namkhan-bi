@@ -4,7 +4,8 @@
 // Server component reads from inv.v_inv_stock_on_hand / v_inv_days_of_cover
 // / v_inv_slow_movers / v_inv_expiring_soon via service-role client.
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { OPERATIONS_SUBPAGES } from '../../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import {
   getStockOnHand,
@@ -58,13 +59,11 @@ export default async function StockPage() {
   const atRiskValue = expiring.reduce((s, r) => s + (r.at_risk_value_usd ?? 0), 0);
 
   return (
-    <>
-      <PageHeader
-        pillar="Operations"
-        tab="Inventory · Stock"
-        title={<>Stock <em style={{ color: 'var(--brass)' }}>health</em></>}
-        lede="On-hand value, burn rate, days of cover, slow movers, and what's about to expire."
-      />
+    <Page
+      eyebrow="Operations · Inventory · Stock"
+      title={<>Stock <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>health</em></>}
+      subPages={OPERATIONS_SUBPAGES}
+    >
 
       {/* KPI strip */}
       <div style={{
@@ -95,6 +94,6 @@ export default async function StockPage() {
       {/* Expiring soon */}
       <h2 style={sectionH}>Expiring within 30 days · {expiring.length} batches</h2>
       <ExpiringTable rows={expiring} />
-    </>
+    </Page>
   );
 }

@@ -1,7 +1,8 @@
 // app/operations/inventory/requests/page.tsx
 // Purchase request queue — proc.requests.
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { OPERATIONS_SUBPAGES } from '../../_subpages';
 import { fmtMoney, fmtDate, EMPTY } from '@/lib/format';
 import { getOpenRequests } from '../_data';
 
@@ -46,13 +47,11 @@ export default async function RequestsPage() {
   const overdue = rows.filter(r => r.needed_by_date && new Date(r.needed_by_date) < new Date() && !['approved','closed','rejected','converted_to_po','cancelled'].includes(r.status)).length;
 
   return (
-    <>
-      <PageHeader
-        pillar="Operations"
-        tab="Inventory · Requests"
-        title={<>Purchase <em style={{ color: 'var(--brass)' }}>requests</em></>}
-        lede={<>HOD purchase requests awaiting approval. Auto-approved ones bypass GM/owner; everything else routes through the configured workflow.</>}
-      />
+    <Page
+      eyebrow="Operations · Inventory · Requests"
+      title={<>Purchase <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>requests</em></>}
+      subPages={OPERATIONS_SUBPAGES}
+    >
 
       <div style={{
         display: 'grid',
@@ -142,7 +141,7 @@ export default async function RequestsPage() {
           </tbody>
         </table>
       </div>
-    </>
+    </Page>
   );
 }
 

@@ -10,7 +10,8 @@
 //   5. Quick-link grid to sub-routes
 
 import Link from 'next/link';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { OPERATIONS_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import { fmtMoney, EMPTY } from '@/lib/format';
 import {
@@ -90,13 +91,11 @@ export default async function InventoryOverviewPage() {
   ]);
 
   return (
-    <>
-      <PageHeader
-        pillar="Operations"
-        tab="Inventory · Snapshot"
-        title={<>Property <em style={{ color: 'var(--brass)' }}>inventory</em></>}
-        lede={<>Catalog · stock · suppliers · purchasing · fixed assets. Live from <code style={{ fontFamily: 'var(--mono)' }}>inv</code> · <code style={{ fontFamily: 'var(--mono)' }}>fa</code> · <code style={{ fontFamily: 'var(--mono)' }}>suppliers</code> · <code style={{ fontFamily: 'var(--mono)' }}>proc</code> schemas.</>}
-      />
+    <Page
+      eyebrow="Operations · Inventory · Snapshot"
+      title={<>Property <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>inventory</em></>}
+      subPages={OPERATIONS_SUBPAGES}
+    >
 
       {/* === KPI strip — 6 tiles === */}
       <div style={{
@@ -297,6 +296,6 @@ export default async function InventoryOverviewPage() {
           );
         })}
       </div>
-    </>
+    </Page>
   );
 }

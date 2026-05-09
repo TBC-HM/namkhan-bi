@@ -8,7 +8,8 @@ import B2bKpiStrip from './_components/B2bKpiStrip';
 import UploadContractButton from './_components/UploadContractButton';
 import B2bContractsTable, { type DisplayRow } from './_components/B2bContractsTable';
 import { getDmcContracts, getLpaReservations, matchSourceToContract } from '@/lib/dmc';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { SALES_SUBPAGES } from '../_subpages';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -94,15 +95,12 @@ export default async function B2bDmcContractsPage() {
   const allRows = [...contractRows, ...uncontractedRows];
 
   return (
-    <>
-      <PageHeader
-        pillar="Sales"
-        tab="B2B / DMC › Partners"
-        title={<>B2B / DMC · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>{contracts.length} on file · {uncontractedRows.length} uncontracted</em></>}
-        lede={<>Every partner with a contract <strong>or</strong> sending business via the LPA rate plan. Uncontracted sources highlighted — that's revenue with no anti-publication clause / parity guard / payment terms.</>}
-        rightSlot={<UploadContractButton />}
-      />
-
+    <Page
+      eyebrow="Sales · B2B / DMC › Partners"
+      title={<>B2B / DMC · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>{contracts.length} on file · {uncontractedRows.length} uncontracted</em></>}
+      subPages={SALES_SUBPAGES}
+      topRight={<UploadContractButton />}
+    >
       <B2bSubNav />
       <B2bKpiStrip />
 
@@ -111,6 +109,6 @@ export default async function B2bDmcContractsPage() {
       <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: "var(--t-sm)" }}>
         <strong>✓ Wired.</strong> {contractRows.length} contracts on file · {uncontractedRows.length} uncontracted sources sending LPA business. Yellow rows = revenue at risk — create contracts for them via Reconciliation queue.
       </div>
-    </>
+    </Page>
   );
 }

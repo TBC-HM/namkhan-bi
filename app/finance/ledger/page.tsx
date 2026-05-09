@@ -1,5 +1,6 @@
 // app/finance/ledger/page.tsx — REDESIGN 2026-05-05 (recovery)
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { FINANCE_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { getAgedAr } from '@/lib/data';
@@ -95,10 +96,11 @@ export default async function LedgerPage({ searchParams }: Props) {
     .gte('cancellation_date', new Date(Date.now() - 30 * 86400000).toISOString());
 
   return (
-    <>
-      <PageHeader pillar="Finance" tab="Ledger"
-        title={<>Who <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>owes</em> you, and who's about to.</>}
-        lede={`In-house ${inHouseCount} guest${inHouseCount === 1 ? '' : 's'} · ${aged.length} aged`} />
+    <Page
+      eyebrow="Finance · Ledger"
+      title={<>Who <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>owes</em> you, and who's about to.</>}
+      subPages={FINANCE_SUBPAGES}
+    >
       <FinanceStatusHeader
         top={<>
           <StatusCell label="SOURCE"><StatusPill tone="active">reservations · mv_aged_ar</StatusPill></StatusCell>
@@ -165,6 +167,6 @@ export default async function LedgerPage({ searchParams }: Props) {
           <KpiBox label="Cancellations 30d" unit="count" value={cancellations30d ?? 0} tooltip="Reservations canceled in the last 30 days" />
         </div>
       </div>
-    </>
+    </Page>
   );
 }

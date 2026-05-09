@@ -6,7 +6,8 @@ import B2bSubNav from '../_components/B2bSubNav';
 import B2bKpiStrip from '../_components/B2bKpiStrip';
 import B2bPerformanceTable, { type PerfRow } from '../_components/B2bPerformanceTable';
 import { getLpaReservations, getDmcContracts, matchSourceToContract } from '@/lib/dmc';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { SALES_SUBPAGES } from '../../_subpages';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -59,14 +60,11 @@ export default async function PerformancePage() {
   const totalRes = partners.reduce((s, p) => s + p.reservation_count, 0);
 
   return (
-    <>
-      <PageHeader
-        pillar="Sales"
-        tab="B2B / DMC › Performance"
-        title={<>Partner scorecard · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>all-time</em></>}
-        lede={<>{partners.length} unique sources on LPA rate plan. Aggregated from <code>public.reservations</code>.</>}
-      />
-
+    <Page
+      eyebrow="Sales · B2B / DMC › Performance"
+      title={<>Partner scorecard · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>all-time</em></>}
+      subPages={SALES_SUBPAGES}
+    >
       <B2bSubNav />
       <B2bKpiStrip />
 
@@ -75,6 +73,6 @@ export default async function PerformancePage() {
       <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: "var(--t-sm)" }}>
         <strong>✓ Wired.</strong> Real revenue + RNs from {partners.length} sources on LPA rate plan. Sources without contracts = revenue at risk (no anti-publication clause / parity guard / payment terms enforced).
       </div>
-    </>
+    </Page>
   );
 }

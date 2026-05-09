@@ -3,10 +3,11 @@
 // Par levels — items below par + reorder $ value, by location.
 // Source: inv.v_inv_par_status (joined to suppliers.suppliers for vendor name).
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
 import KpiBox from '@/components/kpi/KpiBox';
 import { getParStatus } from '../_data';
 import ParTableClient from './_ParTableClient';
+import { OPERATIONS_SUBPAGES } from '../../_subpages';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -26,13 +27,11 @@ export default async function ParPage() {
   const totalRows = rows.length;
 
   return (
-    <>
-      <PageHeader
-        pillar="Operations"
-        tab="Inventory · Par levels"
-        title={<>Par <em style={{ color: 'var(--brass)' }}>discipline</em></>}
-        lede="Reorder before stockout. Below-par lines first; sorted by % of par ascending."
-      />
+    <Page
+      eyebrow="Operations · Inventory · Par levels"
+      title={<>Par <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>discipline</em></>}
+      subPages={OPERATIONS_SUBPAGES}
+    >
 
       {/* KPIs */}
       <div style={{
@@ -51,6 +50,6 @@ export default async function ParPage() {
       <div style={{ marginTop: 22 }}>
         <ParTableClient rows={rows} />
       </div>
-    </>
+    </Page>
   );
 }

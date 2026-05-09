@@ -4,11 +4,12 @@
 // Uses URL search params for filter state (server-component-friendly).
 
 import Link from 'next/link';
-import PanelHero from '@/components/sections/PanelHero';
+import Page from '@/components/page/Page';
 import Card from '@/components/sections/Card';
-import KpiCard from '@/components/kpi/KpiCard';
+import KpiBox from '@/components/kpi/KpiBox';
 import AssetGrid from '@/components/marketing/AssetGrid';
 import { getMediaReady, getMediaTierCounts, getTaxonomy, getCuratorPicks, getRoomTypeBuckets, getOtaPack, TIER_LABEL } from '@/lib/marketing';
+import { MARKETING_SUBPAGES } from '../_subpages';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -69,21 +70,17 @@ export default async function LibraryPage({ searchParams }: SP) {
   }
 
   return (
-    <>
-      <PanelHero
-        eyebrow="Brand · Marketing · library"
-        title="Media"
-        emphasis="library"
-        sub="Tagged · classified · render-ready · usage-tier sorted"
-        kpis={
-          <>
-            <KpiCard label="Total ready"    value={totalReady}  hint="all tiers" />
-            <KpiCard label="OTA profile"    value={otaCount}    hint="best of best" />
-            <KpiCard label="Website hero"   value={heroCount}   hint="thenamkhan.com" />
-            <KpiCard label="Social pool"    value={socialCount} hint="rotate weekly" />
-          </>
-        }
-      />
+    <Page
+      eyebrow="Marketing · Library"
+      title={<>Media <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>library</em>.</>}
+      subPages={MARKETING_SUBPAGES}
+    >
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
+        <KpiBox value={totalReady}   unit="count" label="Total ready"  tooltip="all tiers" />
+        <KpiBox value={Number(otaCount)}     unit="count" label="OTA profile"  tooltip="best of best" />
+        <KpiBox value={Number(heroCount)}    unit="count" label="Website hero" tooltip="thenamkhan.com" />
+        <KpiBox value={Number(socialCount)}  unit="count" label="Social pool"  tooltip="rotate weekly" />
+      </div>
 
       {/* Curator: Fresh & ready — top 12 by qc + brand-fit */}
       {curatorPicks.length > 0 && !tier && !tag && !q && (
@@ -321,7 +318,7 @@ export default async function LibraryPage({ searchParams }: SP) {
           </div>
         </div>
       </Card>
-    </>
+    </Page>
   );
 }
 
