@@ -375,7 +375,15 @@ async function triageMessageInline(message: string): Promise<Triage | null> {
     .eq("role", "it_manager")
     .eq("active", true)
     .single();
-  const systemPrompt = itPrompt?.prompt ?? IT_MANAGER_SYSTEM_PROMPT;
+  const rawPrompt = itPrompt?.prompt ?? IT_MANAGER_SYSTEM_PROMPT;
+  // PBS 2026-05-09: Kit's prompt has stacked CHAT MODE preambles (v6-v9)
+  // for the chat route. The agent-runner triage path needs strict JSON, not
+  // conversational prose. Strip ALL CHAT MODE blocks so Kit returns JSON.
+  // (Same fix as in app/api/cockpit/chat/route.ts.)
+  const systemPrompt = rawPrompt.replace(
+    /═══ CHAT MODE[\s\S]*?═══ END[^\n]*BLOCK[^\n]*═══\n\n/g,
+    "",
+  );
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -385,7 +393,7 @@ async function triageMessageInline(message: string): Promise<Triage | null> {
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-6",
-      max_tokens: 800,
+      max_tokens: 1200,
       system: systemPrompt,
       messages: [{ role: "user", content: message }],
     }),
