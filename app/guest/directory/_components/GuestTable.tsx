@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { fmtUSD } from "@/lib/format";
 import { searchGuests } from "../_actions/searchGuests";
-import type { ArrivalWindow } from "./DirectoryShell";
+import type { ArrivalWindow, StayedSince } from "./DirectoryShell";
 
 type Row = {
   guest_id: string;
@@ -33,6 +33,7 @@ export function GuestTable({
   country,
   sort,
   arrival,
+  stayedSince,
   repeatOnly,
   contactableOnly,
   onSelect,
@@ -42,6 +43,7 @@ export function GuestTable({
   country: string | null;
   sort: string;
   arrival: ArrivalWindow;
+  stayedSince: StayedSince;
   repeatOnly: boolean;
   contactableOnly: boolean;
   onSelect: (id: string) => void;
@@ -55,7 +57,7 @@ export function GuestTable({
   // Reset page when filters change
   useEffect(
     () => setPage(0),
-    [query, country, sort, arrival, repeatOnly, contactableOnly]
+    [query, country, sort, arrival, stayedSince, repeatOnly, contactableOnly]
   );
 
   // Debounce query
@@ -73,6 +75,7 @@ export function GuestTable({
       country,
       sort,
       arrival,
+      stayedSince,
       repeatOnly,
       contactableOnly,
       page,
@@ -87,7 +90,7 @@ export function GuestTable({
     return () => {
       cancelled = true;
     };
-  }, [debounced, country, sort, arrival, repeatOnly, contactableOnly, page]);
+  }, [debounced, country, sort, arrival, stayedSince, repeatOnly, contactableOnly, page]);
 
   const lastPage = Math.max(0, Math.ceil(total / PAGE_SIZE) - 1);
 

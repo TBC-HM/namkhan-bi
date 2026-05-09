@@ -28,6 +28,10 @@ type Facet = {
 };
 
 export type ArrivalWindow = "any" | "next_7" | "next_30" | "next_90";
+// PBS 2026-05-09 #8: stayed-since filter for marketing cohort selection.
+// City filter parked — guest.mv_guest_profile.city has 0 distinct values
+// today (Cloudbeds sync gap). Re-enable once city populates.
+export type StayedSince = "any" | "30d" | "90d" | "365d" | "730d";
 
 const SORTS = [
   { key: "lifetime_revenue.desc.nullslast", label: "Top revenue" },
@@ -44,6 +48,14 @@ const ARRIVAL_OPTS: { key: ArrivalWindow; label: string }[] = [
   { key: "next_90", label: "Next 90d" },
 ];
 
+const STAYED_SINCE_OPTS: { key: StayedSince; label: string }[] = [
+  { key: "any",   label: "Anytime"      },
+  { key: "30d",   label: "Last 30d"     },
+  { key: "90d",   label: "Last 90d"     },
+  { key: "365d",  label: "Last 12m"     },
+  { key: "730d",  label: "Last 24m"     },
+];
+
 export function DirectoryShell({
   facets,
   headline,
@@ -55,6 +67,7 @@ export function DirectoryShell({
   const [country, setCountry] = useState<string | null>(null);
   const [sort, setSort] = useState<string>(SORTS[0].key);
   const [arrival, setArrival] = useState<ArrivalWindow>("any");
+  const [stayedSince, setStayedSince] = useState<StayedSince>("any");
   const [repeatOnly, setRepeatOnly] = useState(false);
   const [contactableOnly, setContactableOnly] = useState(false);
 
@@ -73,6 +86,7 @@ export function DirectoryShell({
     setQuery("");
     setCountry(null);
     setArrival("any");
+    setStayedSince("any");
     setRepeatOnly(false);
     setContactableOnly(false);
   };
@@ -81,6 +95,7 @@ export function DirectoryShell({
     !!query ||
     !!country ||
     arrival !== "any" ||
+    stayedSince !== "any" ||
     repeatOnly ||
     contactableOnly;
 
@@ -109,13 +124,25 @@ export function DirectoryShell({
         </div>
       </header>
 
-      {/* KPI strip — 5 cards, arrival breakdown is now native */}
-      <section className="grid grid-cols-2 gap-4 md:grid-cols-5">
-        <Kpi label="Total" value={headline.total.toLocaleString()} sub="all profiles" />
-        <Kpi
+      {/* KPI strip — every tile is a filter. PBS 2026-05-09 #3/4/5/6:
+          Contactable, Repeat, Next 7/30/90 all click to filter; Total
+          clears all filters. */}
+      <section className="grid grid-cols-2 gap-4 md:grid-cols-6">
+        <KpiClickable
+          label="Total"
+          value={headline.total.toLocaleString()}
+          sub={filtersActive ? 'click to clear filters' : 'all profiles'}
+          active={!filtersActive}
+          onClick={clearAll}
+          tone="stone"
+        />
+        <KpiClickable
           label="Repeat"
           value={headline.repeat_guests.toLocaleString()}
           sub={`${pct(headline.repeat_guests, headline.total)}% of base`}
+          active={repeatOnly}
+          onClick={() => setRepeatOnly(v => !v)}
+          tone="brass"
         />
         <KpiClickable
           label="Next 7 days"
@@ -133,15 +160,25 @@ export function DirectoryShell({
           onClick={() => setArrival(arrival === "next_30" ? "any" : "next_30")}
           tone="emerald"
         />
-        <Kpi
+        <KpiClickable
+          label="Next 90 days"
+          value={headline.next_90.toLocaleString()}
+          sub="arriving (cum.)"
+          active={arrival === "next_90"}
+          onClick={() => setArrival(arrival === "next_90" ? "any" : "next_90")}
+          tone="emerald"
+        />
+        <KpiClickable
           label="Contactable"
           value={headline.contactable.toLocaleString()}
           sub={
             headline.contactable === 0
-              ? "0 emails — getGuest sync pending"
+              ? "0 emails — Cloudbeds sync gap"
               : `${pct(headline.contactable, headline.total)}% of base`
           }
-          warn={headline.contactable === 0}
+          active={contactableOnly}
+          onClick={() => setContactableOnly(v => !v)}
+          tone="brass"
         />
       </section>
 
@@ -174,6 +211,20 @@ export function DirectoryShell({
               {SORTS.map((s) => (
                 <option key={s.key} value={s.key}>
                   {s.label}
+                </option>
+              ))}
+            </select>
+
+            {/* Stayed-since (PBS 2026-05-09 #8 — last_stay_date filter) */}
+            <select
+              value={stayedSince}
+              onChange={(e) => setStayedSince(e.target.value as StayedSince)}
+              title="Stayed since"
+              className="rounded-sm border border-stone-300 bg-white px-3 py-1.5 text-sm"
+            >
+              {STAYED_SINCE_OPTS.map((o) => (
+                <option key={o.key} value={o.key}>
+                  Stayed: {o.label}
                 </option>
               ))}
             </select>
@@ -234,6 +285,7 @@ export function DirectoryShell({
             country={country}
             sort={sort}
             arrival={arrival}
+            stayedSince={stayedSince}
             repeatOnly={repeatOnly}
             contactableOnly={contactableOnly}
             onSelect={setSelectedGuestId}
@@ -295,18 +347,20 @@ function KpiClickable({
   sub?: string;
   active: boolean;
   onClick: () => void;
-  tone?: "emerald";
+  tone?: "emerald" | "brass" | "stone";
 }) {
+  const ringClass =
+    active
+      ? tone === "emerald"
+        ? "border-emerald-700 ring-1 ring-emerald-700/30"
+        : tone === "brass"
+          ? "border-amber-700 ring-1 ring-amber-700/30"
+          : "border-stone-900 ring-1 ring-stone-900/30"
+      : "border-stone-300 hover:border-stone-400";
   return (
     <button
       onClick={onClick}
-      className={`rounded-sm border bg-white p-4 text-left transition ${
-        active
-          ? tone === "emerald"
-            ? "border-emerald-700 ring-1 ring-emerald-700/30"
-            : "border-stone-900 ring-1 ring-stone-900/30"
-          : "border-stone-300 hover:border-stone-400"
-      }`}
+      className={`rounded-sm border bg-white p-4 text-left transition ${ringClass}`}
     >
       <p className="text-[10px] uppercase tracking-[0.16em] text-stone-500">
         {label}
