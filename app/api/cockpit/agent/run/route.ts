@@ -622,9 +622,35 @@ export async function POST(req: Request) {
 }
 
 export async function GET(req: Request) {
-  if (!checkBearer(req)) {
+  // PBS 2026-05-09: Vercel cron hits this every 5 min via x-vercel-cron
+  // header (no Authorization possible from cron config). When called by cron,
+  // drain the queue — same logic as POST. Manual GET callers (with a Bearer
+  // token) still get the queue_depth probe.
+  const isVercelCron = req.headers.get("x-vercel-cron") === "1";
+  if (!isVercelCron && !checkBearer(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+
+  if (isVercelCron) {
+    noStore();
+    const { data: queued, error } = await supabase
+      .from("cockpit_tickets")
+      .select("id")
+      .in("status", ["new", "triaged"])
+      .is("processed_at", null)
+      .order("created_at", { ascending: true })
+      .limit(5);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!queued || queued.length === 0) {
+      return NextResponse.json({ ok: true, processed: 0, source: "vercel_cron" });
+    }
+    const results = [];
+    for (const row of queued) {
+      results.push(await processTicket(row.id));
+    }
+    return NextResponse.json({ ok: true, processed: results.length, results, source: "vercel_cron" });
+  }
+
   const { count } = await supabase
     .from("cockpit_tickets")
     .select("id", { count: "exact", head: true })
