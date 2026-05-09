@@ -84,6 +84,25 @@ const ALLOWED_VIEWS = new Set([
   "v_kit_performance",
   // From v2 brief context — already created elsewhere, allowlist for explicit access
   "v_agent_capabilities",
+  // PBS 2026-05-09: Felix + HoDs need to read the bug box, ticket queue,
+  // proposals, and project-related state directly. The dept Bugs box on
+  // every dept-entry page writes here; without read access, the personas
+  // can't answer "what's open in my bug box". Also expose tickets/proposals
+  // so personas can reason about WIP without going to the cockpit page.
+  "cockpit_bugs",
+  "cockpit_proposals",
+  "cockpit_plans",
+  "cockpit_plan_steps",
+  "cockpit_skill_calls",
+  "cockpit_notifications",
+  "cockpit_pbs_notifications",
+  "cockpit_knowledge_base",
+  // PBS 2026-05-09: targeting frameworks landed today — let personas reference
+  // ICP / firmographics / scoring weights when discussing leads + outreach.
+  "frameworks",
+  "framework_items",
+  "scoring_model",
+  "lead_scraping_fields",
 ]);
 
 type ToolResult = {

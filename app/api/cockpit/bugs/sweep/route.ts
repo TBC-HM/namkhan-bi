@@ -58,6 +58,16 @@ const TERMINAL_TICKET_STATUSES = new Set<string>([
   "done",
 ]);
 
+// PBS 2026-05-09: ticket statuses that mean "Kit choked" — sweep flips the
+// bug back to status='new' so the dot turns red again and a human (or a
+// retry sweep) can pick it up. Without this the bug sits at 'processing'
+// (light green) forever even though nothing is actually happening.
+const FAILED_TICKET_STATUSES = new Set<string>([
+  "triage_failed",
+  "failed",
+  "rolled_back",
+]);
+
 const SWEEP_LIMIT = 10;
 
 type SweepResult = {
@@ -223,6 +233,37 @@ async function runSweep(): Promise<SweepResult> {
           success: true,
           metadata: { bug_id: bug.id, ticket_status: tStatus },
           reasoning: `ticket #${ticket.id} status=${tStatus}; bug #${bug.id} flipped acked→processing`,
+        });
+      }
+    } else if (FAILED_TICKET_STATUSES.has(tStatus)) {
+      // PBS 2026-05-09: Kit triage failed — flip the bug BACK to 'new'
+      // (red dot) so the green-processing isn't fake. Clear acked_at +
+      // started_at so it looks fresh; record why in fix_label so the row
+      // surfaces the failure mode at a glance.
+      const reasonText = `triage failed (ticket #${ticket.id})`;
+      const { error: upErr } = await supabase
+        .from("cockpit_bugs")
+        .update({
+          status: "new",
+          acked_at: null,
+          started_at: null,
+          done_at: null,
+          fix_link: null,
+          fix_label: reasonText,
+          updated_at: nowIso,
+        })
+        .eq("id", bug.id)
+        .in("status", ["acked", "processing"]);
+      if (!upErr) {
+        promoted.push({ bug_id: bug.id, ticket_id: ticket.id as number, from: bug.status, to: "new" });
+        await supabase.from("cockpit_audit_log").insert({
+          ticket_id: ticket.id as number,
+          agent: "bugs_sweep",
+          action: "demote_failed",
+          target: `bug:${bug.id}`,
+          success: true,
+          metadata: { bug_id: bug.id, ticket_status: tStatus },
+          reasoning: `ticket #${ticket.id} status=${tStatus}; bug #${bug.id} flipped back to new (red dot) — fake-green guard`,
         });
       }
     }
