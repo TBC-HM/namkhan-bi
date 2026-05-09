@@ -74,9 +74,17 @@ export async function GET() {
     supabase
       .from("cockpit_audit_log")
       .select("agent, success, created_at")
-      .in("action", ["agent_run", "triage", "approve_and_spec", "meta_apply"])
+      // PBS 2026-05-09 architect bug #6: team page didn't show agents
+      // working — the action whitelist was too narrow. Widened to include
+      // chat / sweep / cron actions that fire most often today.
+      .in("action", [
+        "agent_run", "triage", "approve_and_spec", "meta_apply",
+        "unified_chat_response", "ack_and_route", "promote_processing",
+        "promote_done", "triage_fallback_markdown", "project_summarized",
+        "meta_propose", "ticket_routed", "skill_invoke", "skill_call",
+      ])
       .order("created_at", { ascending: false })
-      .limit(200),
+      .limit(400),
     supabase
       .from("cockpit_tickets")
       .select("id, status, arm")

@@ -27,7 +27,11 @@ interface HeaderPillsProps {
 }
 
 const USER_NAME = 'PBS';
-const HOVER_CLOSE_DELAY_MS = 80;
+// PBS 2026-05-09 (round 2): 80ms was too tight — popovers closed before
+// the cursor reached them on diagonal paths from the chip into the wider
+// popover content. Bumped to 250ms so any reasonable mouse move lands
+// safely; mouseEnter on either trigger or popover cancels the timer.
+const HOVER_CLOSE_DELAY_MS = 250;
 
 // 7-day forecast preview (PBS 2026-05-09 #16+#17). Static placeholder until
 // Open-Meteo + IQAir hourly wiring lands. KBPopover renders k/v/d cards.
@@ -285,13 +289,19 @@ const S: Record<string, React.CSSProperties> = {
   },
   chipText: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 11, fontWeight: 600 },
   // popoverHost is a transparent positioner that shares the close-delay
-  // handlers. Sits flush under the trigger (top: 100%) so there's NO
-  // pixel gap that could trigger mouseLeave during travel.
+  // handlers. Sits flush under the trigger (top: 100%). PBS 2026-05-09
+  // round-2: the chip is ~80px wide but the popover is ~360px and aligned
+  // right:0, so a cursor moving down-and-left into the popover crossed a
+  // horizontal "no man's land" outside both pillWrap and popoverHost rects.
+  // Fix: extend popoverHost leftward via paddingLeft so the rect covers
+  // the diagonal travel path. Padding is transparent and pointerEvents:auto
+  // so the cursor staying in the padded zone keeps the popover open.
   popoverHost: {
     position: 'absolute',
     top: '100%',
     right: 0,
-    paddingTop: 6,
+    paddingTop: 8,
+    paddingLeft: 280,   // diagonal hover bridge (chip 80 → popover 360)
     pointerEvents: 'auto',
     zIndex: 60,
   },
