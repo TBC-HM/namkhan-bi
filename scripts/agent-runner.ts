@@ -43,7 +43,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { execSync } from 'node:child_process';
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -149,7 +149,10 @@ async function callClaude(spec: string): Promise<AgentResponse | null> {
     },
     body: JSON.stringify({
       model: MODEL,
-      max_tokens: 4096,
+      // PBS 2026-05-10: 4096 tokens truncates mid-string for any non-trivial
+      // file (one full file edit ≈ 8-16k chars). Bumped so the agent can
+      // emit a complete JSON object.
+      max_tokens: 16000,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: spec }],
     }),
@@ -176,6 +179,12 @@ function gitSh(cmd: string): string {
 function applyEdit(edit: FileEdit, repoRoot: string): boolean {
   const full = join(repoRoot, edit.path);
   if (edit.contents != null) {
+    // PBS 2026-05-10: ensure parent dir exists for new files. Carla often
+    // proposes routes under app/api/<new-name>/route.ts where the dir
+    // doesn't exist yet; without mkdirSync recursive, writeFileSync throws
+    // ENOENT and the whole ticket fails.
+    const dir = full.substring(0, full.lastIndexOf('/'));
+    if (dir) mkdirSync(dir, { recursive: true });
     writeFileSync(full, edit.contents, 'utf8');
     return true;
   }
