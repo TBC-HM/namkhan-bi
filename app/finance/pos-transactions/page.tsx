@@ -72,7 +72,7 @@ export default async function PosTransactionsPage({ searchParams }: Props) {
   // ---- Listing ----
   let listQ = supabase
     .from('transactions')
-    .select('transaction_id, transaction_date, service_date, item_category_name, description, amount, currency, usali_dept, fb_meal_period, fb_outlet, user_name, reservation_id, quantity', { count: 'exact' })
+    .select('transaction_id, transaction_date, service_date, item_category_name, description, amount, currency, usali_dept, fb_meal_period, fb_outlet, user_name, reservation_id, quantity', { count: 'planned' })
     .eq('property_id', PROPERTY_ID)
     .in('usali_dept', POS_DEPTS)
     .not('category', 'in', `(${NON_POS_CATS.join(',')})`)
