@@ -10,6 +10,18 @@ import { VolumeByDayChart, MailboxVolumeChart, ResponseTimeChart } from '@/compo
 import TopSendersPanel from '@/components/inbox/TopSendersPanel';
 import { fmtIsoDate, EMPTY } from '@/lib/format';
 
+// /inbox lives next to /sales/inquiries — the inbox is the deep view of the
+// inquiries cockpit. Surface a sub-pages strip so the user always has a top
+// menu to escape back to the parent surfaces. PBS 2026-05-09 fix: "no top menu
+// in the email cockpit".
+const INBOX_SUBPAGES = [
+  { label: 'Inquiries cockpit', href: '/sales/inquiries' },
+  { label: 'Inbox',             href: '/inbox'           },
+  { label: 'Leads',             href: '/sales/leads'     },
+  { label: 'BTB',               href: '/sales/btb'       },
+  { label: 'Email categories',  href: '/settings/email-categories' },
+];
+
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
@@ -143,17 +155,21 @@ export default async function InboxPage({
   const activeBox = searchParams.box ?? 'all';
   const activeDir = searchParams.dir ?? 'all';
 
-  // PBS 2026-05-09: when a thread is selected the right pane becomes the
-  // "sub-page". Surface a ← Back to inbox link in the topRight slot so users
-  // always have a clear escape hatch from the thread view.
-  const backHref = (() => {
+  // PBS 2026-05-09: back button must always exist on the email cockpit.
+  // When a thread is selected, ← takes the user back to the unselected list;
+  // otherwise ← takes them up one level to /sales/inquiries (the parent
+  // surface that owns the funnel). Combined with subPages strip below this
+  // closes the "no back button and no top menu" gap.
+  const listHref = (() => {
     const p = new URLSearchParams();
     if (searchParams.box) p.set('box', searchParams.box);
     if (searchParams.dir) p.set('dir', searchParams.dir);
     const qs = p.toString();
     return qs ? `/inbox?${qs}` : '/inbox';
   })();
-  const topRight = searchParams.thread ? (
+  const backHref = searchParams.thread ? listHref : '/sales/inquiries';
+  const backLabel = searchParams.thread ? '← Back to inbox' : '← Back to cockpit';
+  const topRight = (
     <Link
       href={backHref}
       style={{
@@ -167,14 +183,15 @@ export default async function InboxPage({
         textDecoration: 'none',
       }}
     >
-      ← Back to inbox
+      {backLabel}
     </Link>
-  ) : undefined;
+  );
 
   return (
     <Page
       eyebrow="Operations · Inbox"
       title={<>Inbox · all <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>mail</em></>}
+      subPages={INBOX_SUBPAGES}
       topRight={topRight}
     >
 

@@ -7,6 +7,7 @@
 import FilterStrip from '@/components/nav/FilterStrip';
 import KpiStrip, { type KpiStripItem } from '@/components/kpi/KpiStrip';
 import Page from '@/components/page/Page';
+import Panel from '@/components/page/Panel';
 import { OPERATIONS_SUBPAGES } from '../_subpages';
 import PnlGrid from '@/components/pl/PnlGrid';
 import DeptTrendChart from '@/components/pl/DeptTrendChart';
@@ -84,55 +85,49 @@ export default async function FnbPage({ searchParams }: Props) {
         { label: 'Eff Food %',         value: effectiveFnbRev > 0 && tileSrc ? (tileSrc.food_cost / effectiveFnbRev) * 100 : 0, kind: 'pct', hint: 'target ≤ 30%' },
       ] satisfies KpiStripItem[]} />
 
-      {/* 3 explainer cards */}
+      {/* 3 explainer panels — wrapped in canonical <Panel> for dark canvas (PBS 2026-05-09) */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10, marginTop: 12 }}>
-        <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>Staff canteen</div>
-          <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-lg)', lineHeight: 1.15 }}>
-            ${canteen ? Math.round(canteen.total_usd).toLocaleString() : '—'} <span style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-soft)', fontStyle: 'normal' }}>· {period.label}</span>
+        <Panel title="Staff canteen" eyebrow={period.label} hideExpander>
+          <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-lg)', lineHeight: 1.15, color: 'var(--brass-pale)' }}>
+            ${canteen ? Math.round(canteen.total_usd).toLocaleString() : '—'}
           </div>
-          <div style={{ fontSize: 'var(--t-sm)', color: 'var(--ink)', lineHeight: 1.4 }}>
+          <div style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-faint)', lineHeight: 1.4 }}>
             <code style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>EMPLOYEE MEAL</code> + <code style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>STAFF CANTEEN MATERIALS</code> across all depts.
           </div>
           {canteen && canteen.by_dept.length > 0 && (
-            <div style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-soft)' }}>
+            <div style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>
               By dept: {canteen.by_dept.map(d => `${d.dept} $${Math.round(d.usd).toLocaleString()}`).join(' · ')}
             </div>
           )}
-          <div style={{ fontSize: 'var(--t-xs)', color: 'var(--bad, #b53a2a)', background: 'rgba(181, 58, 42, 0.08)', padding: '6px 8px', borderLeft: '2px solid var(--bad, #b53a2a)', marginTop: 'auto' }}>
+          <div style={{ fontSize: 'var(--t-xs)', color: '#ff8a8a', background: 'rgba(181, 58, 42, 0.12)', padding: '6px 8px', borderLeft: '2px solid #ff8a8a', marginTop: 4 }}>
             <strong>Watch:</strong> Mar / Apr 2026 reclassified F&amp;B → Undistributed. The &quot;labor drop&quot; is a posting reclass, not a real saving.
           </div>
-        </div>
+        </Panel>
 
-        <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>Breakfast allocation · USALI</div>
-          <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-lg)', lineHeight: 1.15 }}>
-            ${bkfst ? Math.round(bkfst.total_alloc_usd).toLocaleString() : '—'} <span style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-soft)', fontStyle: 'normal' }}>· to move Rooms → F&amp;B</span>
+        <Panel title="Breakfast allocation · USALI" eyebrow="rooms → f&b" hideExpander>
+          <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-lg)', lineHeight: 1.15, color: 'var(--brass-pale)' }}>
+            ${bkfst ? Math.round(bkfst.total_alloc_usd).toLocaleString() : '—'}
           </div>
-          <div style={{ fontSize: 'var(--t-sm)', color: 'var(--ink)', lineHeight: 1.4 }}>
+          <div style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-faint)', lineHeight: 1.4 }}>
             {bkfst ? <>{bkfst.adult_nights} adult-nights × $10 + {bkfst.child_nights} child-nights × $5 (fair value).</> : 'Pax-nights × $10/adult + $5/child.'}
             {' '}Configurable via <code style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>BREAKFAST_USD_ADULT</code>.
           </div>
           {effectiveLaborPct != null && tileSrc && (
-            <div style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-soft)' }}>
+            <div style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>
               Labor% drops {tileSrc.labor_cost_pct.toFixed(1)}% → {effectiveLaborPct.toFixed(1)}% if JE applied.
             </div>
           )}
-          <div style={{ fontSize: 'var(--t-xs)', color: 'var(--good, #2c7a4b)', background: 'rgba(44, 122, 75, 0.08)', padding: '6px 8px', borderLeft: '2px solid var(--good, #2c7a4b)', marginTop: 'auto' }}>
+          <div style={{ fontSize: 'var(--t-xs)', color: '#86d39c', background: 'rgba(44, 122, 75, 0.14)', padding: '6px 8px', borderLeft: '2px solid #86d39c', marginTop: 4 }}>
             <strong>Action:</strong> Monthly QB JE — <code style={{ fontFamily: 'var(--mono)' }}>DR Rooms Rev · CR Food Rev</code>. Zero P&amp;L impact, USALI-clean.
           </div>
-        </div>
+        </Panel>
 
-        <div style={{ background: 'var(--paper-warm)', border: '1px dashed var(--paper-deep)', borderRadius: 8, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8, opacity: 0.85 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <div style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>Menu engineering</div>
-            <span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)', border: '1px solid var(--brass)', padding: '1px 6px', borderRadius: 999 }}>Coming soon</span>
-          </div>
-          <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-lg)', lineHeight: 1.15 }}>Stars · Plowhorses · Puzzles · Dogs</div>
-          <div style={{ fontSize: 'var(--t-sm)', color: 'var(--ink)', lineHeight: 1.4 }}>
+        <Panel title="Menu engineering" eyebrow="coming soon" hideExpander>
+          <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-lg)', lineHeight: 1.15, color: 'var(--brass-pale)', opacity: 0.8 }}>Stars · Plowhorses · Puzzles · Dogs</div>
+          <div style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-faint)', lineHeight: 1.4 }}>
             Each dish on popularity × profitability. Needs POS qty + recipe sheets in <code style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>inv.recipes</code>.
           </div>
-        </div>
+        </Panel>
       </div>
 
       <h2 style={{ marginTop: 28, marginBottom: 6, fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>Monthly trend · revenue · costs · GOP %</h2>

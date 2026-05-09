@@ -6,7 +6,13 @@
 //
 // Mockup-data mode: sales schema not yet deployed. KPI tiles + tray + feed all
 // carry "data needed" tags pointing at the email-ingest webhook + sales.* tables.
+//
+// 2026-05-09 (PBS) — BLOCK 2 mailbox-routing row activated:
+//   • dead <span> pills replaced with <Link>s driving ?scope=<addr>
+//   • 5 canonical Namkhan inboxes pinned (book / reservations / plan / wm / xl)
+//   • selected pill highlighted from `cockpitScope` searchParam
 
+import Link from 'next/link';
 import OpsKpiTile from '@/components/ops/OpsKpiTile';
 import AgentStrip from '@/components/ops/AgentStrip';
 import DecisionQueue, { type DecisionRow } from '@/components/ops/DecisionQueue';
@@ -301,8 +307,11 @@ export default async function InquiriesPage({
       subPages={SALES_SUBPAGES}
     >
 
-      {/* BLOCK 2: Status pills (sales-specific, on top of layout's FilterStrip) */}
+      {/* BLOCK 2: Mailbox routing pills — drive ?scope=<address>.
+          5 canonical Namkhan inboxes pinned (book / reservations / plan / wm / xl).
+          Each <Link> sets cockpitScope which propagates to <EmailCockpit> below. */}
       <div
+        id="mailbox-router"
         style={{
           display: 'flex',
           gap: 8,
@@ -315,16 +324,29 @@ export default async function InquiriesPage({
           borderRadius: 8,
         }}
       >
-        <span style={pillActive}>All inquiries</span>
-        <span style={pill}>FIT</span>
-        <span style={pill}>Group</span>
-        <span style={pill}>Wedding</span>
-        <span style={pill}>Retreat</span>
-        <span style={pill}>Package</span>
-        <span style={pill}>B2B / DMC</span>
-        <span style={pill}>OTA pre-stay</span>
-        <span style={{ marginLeft: 'auto', fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>
-          Property + date + segment filters above (layout)
+        {(() => {
+          const items: Array<{ key: string; label: string }> = [
+            { key: 'all',                            label: 'All inquiries' },
+            { key: 'book@thenamkhan.com',            label: 'book@' },
+            { key: 'reservations@thenamkhan.com',    label: 'reservations@' },
+            { key: 'plan@thenamkhan.com',            label: 'plan@' },
+            { key: 'wm@thenamkhan.com',              label: 'wm@' },
+            { key: 'xl@thenamkhan.com',              label: 'xl@' },
+          ];
+          return items.map((it) => {
+            const active = (cockpitScope === it.key) || (it.key === 'all' && cockpitScope === 'all');
+            const params = new URLSearchParams();
+            if (it.key !== 'all') params.set('scope', it.key);
+            const href = '/sales/inquiries' + (params.toString() ? `?${params.toString()}` : '') + '#cockpit';
+            return (
+              <Link key={it.key} href={href} style={active ? pillActive : pill} prefetch={false}>
+                {it.label}
+              </Link>
+            );
+          });
+        })()}
+        <span style={{ marginLeft: 'auto', fontSize: 'var(--t-sm)', color: 'var(--ink-mute)' }}>
+          Routed via <code style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>sales.email_messages.intended_mailbox</code>
         </span>
       </div>
 
@@ -494,7 +516,10 @@ const pill: React.CSSProperties = {
   border: '1px solid var(--paper-deep)',
   borderRadius: 6,
   background: 'var(--paper-warm)',
-  fontSize: "var(--t-base)",
+  color: 'var(--ink)',
+  fontSize: 'var(--t-base)',
+  textDecoration: 'none',
+  cursor: 'pointer',
 };
 
 const pillActive: React.CSSProperties = {

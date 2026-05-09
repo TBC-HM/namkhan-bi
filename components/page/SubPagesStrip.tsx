@@ -33,7 +33,12 @@ export default function SubPagesStrip({ items }: { items: SubPageLink[] }) {
             aria-current={active ? 'page' : undefined}
             style={{
               ...S.link,
-              color: active ? '#a8854a' : '#d8cca8',
+              // PBS 2026-05-09 (repair #5): "make the words in the dropdown
+              // in the main menu below the main names like revenue or sales
+              // better to read". Bumped resting color from #d8cca8 (paper)
+              // to #f0e5cb (cream) for stronger contrast against the dark
+              // canvas. Active stays brass.
+              color: active ? '#a8854a' : '#f0e5cb',
               borderBottomColor: active ? '#a8854a' : 'transparent',
               // textShadow to fake bold weight without changing glyph
               // metrics — keeps every label the SAME width whether
@@ -47,7 +52,7 @@ export default function SubPagesStrip({ items }: { items: SubPageLink[] }) {
             }}
             onMouseLeave={(e) => {
               if (active) return;
-              e.currentTarget.style.color = '#d8cca8';
+              e.currentTarget.style.color = '#f0e5cb';
               e.currentTarget.style.borderBottomColor = 'transparent';
             }}
           >
@@ -79,10 +84,10 @@ const S: Record<string, React.CSSProperties> = {
     // can horizontally scroll rather than have items wrap.
   },
   link: {
-    // PBS 2026-05-09 #22: stronger contrast on the top menu (not bigger).
-    // Was #9b907a (low-contrast brown) → #d8cca8 (paper) for the resting
-    // state, brass on hover/active.
-    color:          '#d8cca8',
+    // PBS 2026-05-09 #22 → repair-list #5: stronger contrast on the top menu.
+    // History: #9b907a (brown, too dim) → #d8cca8 (paper, still too soft) →
+    // #f0e5cb (cream) for the resting state, brass on hover/active.
+    color:          '#f0e5cb',
     textDecoration: 'none',
     fontFamily:     "'JetBrains Mono', ui-monospace, monospace",
     fontSize:       10,

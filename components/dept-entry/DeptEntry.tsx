@@ -997,7 +997,7 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
             padding: 6, minWidth: 200, boxShadow: '0 12px 28px rgba(0,0,0,0.6)',
           }}>
             <a href="/settings/property" onClick={() => setUserOpen(false)} style={menuLinkStyle()}>Settings</a>
-            <a href="/settings/email-categories" onClick={() => setUserOpen(false)} style={menuLinkStyle()}>Email</a>
+            <a href="/cockpit?tab=email-categories" onClick={() => setUserOpen(false)} style={menuLinkStyle()}>Email</a>
             <a href="/cockpit/users" onClick={() => setUserOpen(false)} style={menuLinkStyle()}>Account</a>
             <div style={{ borderTop: '1px solid #2a261d', margin: '4px 0', paddingTop: 4 }}>
               <div style={{
@@ -1607,6 +1607,48 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
                 flexWrap: 'wrap',
               }}>
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.body}</span>
+                {b.status === 'processing' && b.fix_link && b.fix_link.startsWith('https://namkhan-') && b.fix_link.includes('vercel.app') && !b.fix_link.includes('namkhan-bi.vercel.app') && (
+                  // PBS 2026-05-09: when sweep links a preview deploy URL, surface
+                  // "Approve & Deploy" so PBS one-clicks promote-to-prod.
+                  <button
+                    onClick={async () => {
+                      if (!confirm(`Promote ${b.fix_link} to production?`)) return;
+                      try {
+                        const res = await fetch('/api/cockpit/approve-deploy', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ bug_id: b.id, deployment_url: b.fix_link, approver: 'PBS' }),
+                        });
+                        const j = await res.json();
+                        if (res.ok) {
+                          setAttachToast(`✓ Promoted to prod`);
+                          setTimeout(() => setAttachToast(null), 2400);
+                          await reloadBugs();
+                        } else {
+                          alert(`Promote failed: ${j.error ?? res.status}`);
+                        }
+                      } catch (e) {
+                        alert(`Promote failed: ${e instanceof Error ? e.message : String(e)}`);
+                      }
+                    }}
+                    style={{
+                      fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+                      fontSize: 10,
+                      letterSpacing: '0.18em',
+                      textTransform: 'uppercase',
+                      color: '#0a0a0a',
+                      background: '#a8d05a',
+                      border: 'none',
+                      borderRadius: 4,
+                      padding: '3px 10px',
+                      cursor: 'pointer',
+                      fontWeight: 700,
+                    }}
+                    title={`Approve preview ${b.fix_link} → promote to namkhan-bi.vercel.app`}
+                  >
+                    ✓ approve · deploy
+                  </button>
+                )}
                 {b.status === 'done' && b.fix_link && (
                   <a
                     href={b.fix_link}

@@ -36,12 +36,15 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/revenue/pricing',     label: 'Pricing' },
     { href: '/revenue/compset',     label: 'Comp Set' },
     { href: '/revenue/parity',      label: 'Parity',     isNew: true },
-    { href: '/revenue/agents',      label: 'Agents' },
+    // PBS 2026-05-09: agents only reachable via /cockpit.
   ],
 
   // ===== 02 Sales (added 2026-04-30) =====
   // First sub-tab Inquiries lands the inbound funnel; remaining tabs are placeholders
   // until each section's IA proposal is approved + shipped.
+  // PBS 2026-05-09 (repair list): Roster (was /sales/roster — staff roster
+  // duplicates /operations/staff) removed; Agents tab stripped — agents are
+  // only reachable via /cockpit now. Pages still exist; nav links gone.
   sales: [
     { href: '/sales/inquiries',  label: 'Inquiries', isNew: true },
     { href: '/sales/leads',      label: 'Leads',     isNew: true },
@@ -50,8 +53,6 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/sales/packages',   label: 'Packages',  isNew: true },
     { href: '/sales/b2b',        label: 'B2B / DMC', isNew: true },
     { href: '/sales/pipeline',   label: 'Pipeline',  coming: true },
-    { href: '/sales/roster',     label: 'Roster',    coming: true },
-    { href: '/sales/agents',     label: 'Agents' },
   ],
 
   // ===== 03 Marketing (restored 2026-04-30) =====
@@ -65,7 +66,7 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/marketing/social',       label: 'Social' },
     { href: '/marketing/influencers',  label: 'Influencers' },
     { href: '/marketing/taxonomy',     label: 'Taxonomy' },
-    { href: '/marketing/agents',       label: 'Agents' },
+    // PBS 2026-05-09: agents only reachable via /cockpit.
   ],
 
   // ===== 04 Operations =====
@@ -109,7 +110,7 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/guest/loyalty',          label: 'Loyalty',     isNew: true },
     { href: '/guest/messy-data',       label: 'Messy data',  isNew: true },
     { href: '/guest/findings',         label: 'Findings',    isNew: true },
-    { href: '/guest/agents',           label: 'Agents' },
+    // PBS 2026-05-09: agents only reachable via /cockpit.
   ],
 
   // ===== 04 Finance =====
@@ -126,17 +127,16 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/finance/cashflow',         label: 'Cashflow',        coming: true },
     { href: '/finance/variance',         label: 'Variance',        coming: true },
     { href: '/finance/apar',             label: 'AP / AR',         coming: true },
-    { href: '/finance/agents',           label: 'Agents' },
+    // PBS 2026-05-09: agents only reachable via /cockpit.
   ],
 
   // ===== Knowledge (utility) =====
+  // PBS 2026-05-09: /agents/{roster,run,history,settings} stripped — agents
+  // only reachable via /cockpit (Team tab + topbar quick-links). Pages still
+  // exist for direct URL access.
   knowledge: [
     { href: '/knowledge',          label: 'Snapshot' },
     { href: '/knowledge/alerts',   label: 'Alerts',          isNew: true },
-    { href: '/agents/roster',      label: 'Agents · Roster' },
-    { href: '/agents/run',         label: 'Agents · Run' },
-    { href: '/agents/history',     label: 'Agents · History' },
-    { href: '/agents/settings',    label: 'Agents · Settings' },
   ],
 
   // ===== Settings (utility) =====

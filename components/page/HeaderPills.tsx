@@ -19,7 +19,7 @@
 //   (c) popover sits flush under the trigger (top: 100%) and the wrapper
 //       carries a bridging paddingBottom so there is no dead-zone gap.
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface HeaderPillsProps {
   /** Optional per-dept KPI tiles shown when the user hovers the date pill. */
@@ -59,17 +59,74 @@ function todayLabel(): string {
   return d.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' });
 }
 
+// PBS 2026-05-09 (repair list #6): control-center inbox pill in the
+// header. Replaces the simple "Inbox" link that lived in the user
+// dropdown with an actionable badge + hover popover. Same hover-bridge
+// pattern as temp/air pills (paddingLeft 280 + 250ms close delay).
+interface InboxSummary {
+  unread: number;
+  unanswered: number;
+  spam: number;
+  inbound_24h: number;
+  outbound_24h: number;
+  top_senders_24h: Array<{
+    email: string;
+    name: string | null;
+    inbound_24h: number;
+    inbound_7d: number;
+    threads_24h: number;
+    last_msg: string | null;
+    is_automation: boolean;
+  }>;
+  generated_at: string;
+}
+const INBOX_EMPTY: InboxSummary = {
+  unread: 0, unanswered: 0, spam: 0,
+  inbound_24h: 0, outbound_24h: 0, top_senders_24h: [],
+  generated_at: '',
+};
+
+function formatRel(iso: string | null): string {
+  if (!iso) return '—';
+  const ms = Date.now() - new Date(iso).getTime();
+  const min = Math.round(ms / 60_000);
+  if (min < 1)   return 'just now';
+  if (min < 60)  return `${min}m ago`;
+  const h = Math.floor(min / 60);
+  if (h < 24)    return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
+
 export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
   const [tempOpen, setTempOpen] = useState(false);
   const [airOpen,  setAirOpen]  = useState(false);
   const [dateHover, setDateHover] = useState(false);
+  const [inboxOpen, setInboxOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const [lang, setLang] = useState<'en' | 'th'>('en');
+  const [inbox, setInbox] = useState<InboxSummary>(INBOX_EMPTY);
 
   // One close-timer per pill. mouseEnter on trigger OR popover cancels it.
-  const tempTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const airTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tempTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const airTimer   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dateTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inboxTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Fetch inbox summary on mount + every 60s. Cheap (one /api call) and the
+  // popover is always fresh whenever the operator hovers.
+  useEffect(() => {
+    let cancelled = false;
+    const fetchSummary = () => {
+      fetch('/api/inbox/summary', { cache: 'no-store' })
+        .then((r) => r.ok ? r.json() : INBOX_EMPTY)
+        .then((d: InboxSummary) => { if (!cancelled) setInbox(d ?? INBOX_EMPTY); })
+        .catch(() => { /* keep last value */ });
+    };
+    fetchSummary();
+    const id = setInterval(fetchSummary, 60_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
 
   function clearTimer(ref: React.MutableRefObject<ReturnType<typeof setTimeout> | null>) {
     if (ref.current) { clearTimeout(ref.current); ref.current = null; }
@@ -153,6 +210,45 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
         )}
       </div>
 
+      {/* INBOX — control-center pill (PBS 2026-05-09 repair-list #6).
+          Click → /inbox. Hover → popover with unread/unanswered/spam,
+          top senders 24h with drill-down counts. */}
+      <div
+        style={S.pillWrap}
+        onMouseEnter={() => {
+          clearTimer(inboxTimer);
+          setInboxOpen(true); setTempOpen(false); setAirOpen(false); setUserOpen(false);
+        }}
+        onMouseLeave={() => scheduleClose(inboxTimer, setInboxOpen)}
+      >
+        <a
+          href="/inbox"
+          title={`Inbox · ${inbox.unread} unread · ${inbox.unanswered} unanswered`}
+          aria-label="Inbox"
+          style={S.inboxChip}
+        >
+          <svg
+            width="13" height="13" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+            aria-hidden
+          >
+            <path d="M4 6h16v12H4z" />
+            <polyline points="4,7 12,13 20,7" />
+          </svg>
+          <span style={S.chipText}>{inbox.unread}</span>
+          {inbox.unread > 0 && <span style={S.inboxBubble}>{inbox.unread > 99 ? '99+' : inbox.unread}</span>}
+        </a>
+        {inboxOpen && (
+          <div
+            style={S.popoverHost}
+            onMouseEnter={() => clearTimer(inboxTimer)}
+            onMouseLeave={() => scheduleClose(inboxTimer, setInboxOpen)}
+          >
+            <InboxPopover summary={inbox} onClose={() => setInboxOpen(false)} />
+          </div>
+        )}
+      </div>
+
       {/* DATE — hover → KPI tiles + window/compare quick-jumps. */}
       <div
         style={S.pillWrap}
@@ -205,9 +301,9 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
         </button>
         {userOpen && (
           <div style={S.userMenu}>
-            {/* PBS 2026-05-09 #21: mailbox lives inside the user dropdown,
-                styled to the dark standard. */}
-            <a href="/inbox"                    onClick={() => setUserOpen(false)} style={S.link}>📬  Inbox</a>
+            {/* PBS 2026-05-09 #21 → repair-list #6: inbox left this dropdown
+                — now lives as the control-center pill above (hover popover
+                with unread/unanswered/spam + top-sender drill-down). */}
             <a href="/settings/property"        onClick={() => setUserOpen(false)} style={S.link}>Settings (Property)</a>
             <a href="/cockpit/users"             onClick={() => setUserOpen(false)} style={S.link}>Account</a>
             <div style={S.menuDivider}>
@@ -231,6 +327,83 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
         )}
       </div>
     </>
+  );
+}
+
+// PBS 2026-05-09 (repair-list #6): control-center inbox popover. Shows
+// the operator who replied in time, who is silent, spam volume, and the
+// top inbound senders of the last 24h with per-sender drill-down counts
+// (sends 7d, distinct threads, last activity).
+function InboxPopover({ summary, onClose }: { summary: InboxSummary; onClose: () => void }) {
+  const stats: Array<{ k: string; v: string; d: string; tone?: 'good' | 'warn' | 'bad' }> = [
+    { k: 'Unread',     v: String(summary.unread),     d: 'inquiries · status=new' },
+    { k: 'Unanswered', v: String(summary.unanswered), d: 'no outbound reply',         tone: summary.unanswered > 5 ? 'warn' : undefined },
+    { k: 'Spam',       v: String(summary.spam),       d: 'Gmail-filtered',            tone: summary.spam > 0 ? 'bad' : undefined },
+    { k: 'In · 24h',   v: String(summary.inbound_24h),  d: `${summary.outbound_24h} replies sent` },
+  ];
+  const senders = summary.top_senders_24h ?? [];
+  return (
+    <div style={S.inboxPopover}>
+      <div style={S.popHead}>
+        <div style={S.popEyebrow}>Inbox · control center</div>
+        <button onClick={onClose} aria-label="Close" style={S.popClose}>×</button>
+      </div>
+      <div style={S.popTitle}>
+        Last 24 hours · <em>{summary.inbound_24h} in / {summary.outbound_24h} out</em>
+      </div>
+
+      {/* Stats grid (4 KPI cells) */}
+      <div style={S.popGrid}>
+        {stats.map((s) => (
+          <div key={s.k} style={S.popCell}>
+            <div style={S.popCellK}>{s.k}</div>
+            <div style={{
+              ...S.popCellV,
+              color: s.tone === 'bad'  ? '#e08484'
+                   : s.tone === 'warn' ? '#f4d99a'
+                   : '#f0e5cb',
+            }}>{s.v}</div>
+            <div style={S.popCellD}>{s.d}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Top senders (last 24h) — drill-down per sender */}
+      <div style={S.inboxSendersHead}>Top senders · 24h</div>
+      {senders.length === 0 && (
+        <div style={S.inboxEmpty}>No inbound traffic in the last 24 hours.</div>
+      )}
+      {senders.length > 0 && (
+        <div style={S.inboxSenderList}>
+          {senders.map((s) => (
+            <div key={s.email} style={S.inboxSenderRow}>
+              <div style={S.inboxSenderHead}>
+                <span style={S.inboxSenderName}>
+                  {s.name ?? s.email}
+                  {s.is_automation && <span style={S.inboxBotTag}>BOT</span>}
+                </span>
+                <span style={S.inboxSenderCount}>{s.inbound_24h}× · 24h</span>
+              </div>
+              <div style={S.inboxSenderMeta}>
+                {s.email !== s.name && <span>{s.email}</span>}
+                <span style={S.inboxSenderDot}>·</span>
+                <span>{s.inbound_7d}/wk</span>
+                <span style={S.inboxSenderDot}>·</span>
+                <span>{s.threads_24h} thread{s.threads_24h === 1 ? '' : 's'}</span>
+                <span style={S.inboxSenderDot}>·</span>
+                <span>{formatRel(s.last_msg)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Footer CTA */}
+      <div style={S.inboxFooterRow}>
+        <a href="/inbox" style={S.inboxFooterLink}>Open inbox →</a>
+        <a href="/inbox?box=spam" style={S.inboxFooterMuted}>Spam ({summary.spam})</a>
+      </div>
+    </div>
   );
 }
 
@@ -389,5 +562,86 @@ const S: Record<string, React.CSSProperties> = {
     marginTop: 10, paddingTop: 8, borderTop: '1px solid #1f1c15',
     fontFamily: "'JetBrains Mono', ui-monospace, monospace",
     fontSize: 9, letterSpacing: '0.16em', color: '#5a5448', textAlign: 'right',
+  },
+
+  // ── Inbox control-center pill + popover (PBS 2026-05-09 repair #6) ──
+  inboxChip: {
+    display: 'flex', alignItems: 'center', gap: 6,
+    background: 'transparent', border: '1px solid #3a3327',
+    borderRadius: 999, padding: '4px 10px', cursor: 'pointer', color: '#f0e5cb',
+    textDecoration: 'none', position: 'relative',
+  },
+  inboxBubble: {
+    minWidth: 16, height: 16, padding: '0 5px', borderRadius: 8,
+    background: '#a8854a', color: '#0a0a0a',
+    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+    fontSize: 9, fontWeight: 700, letterSpacing: '0.04em',
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    lineHeight: 1, marginLeft: 2,
+  },
+  inboxPopover: {
+    background: '#0f0d0a', border: '1px solid #3a3327', borderRadius: 10,
+    padding: 14, width: 380, boxShadow: '0 12px 28px rgba(0,0,0,0.6)',
+  },
+  inboxSendersHead: {
+    marginTop: 14, marginBottom: 6,
+    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+    fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: '#a8854a',
+  },
+  inboxSenderList: {
+    display: 'flex', flexDirection: 'column', gap: 6,
+    maxHeight: 220, overflowY: 'auto',
+  },
+  inboxSenderRow: {
+    background: '#15110b', border: '1px solid #2a261d', borderRadius: 6,
+    padding: '8px 10px',
+  },
+  inboxSenderHead: {
+    display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8,
+  },
+  inboxSenderName: {
+    fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic',
+    fontSize: 14, color: '#f0e5cb',
+    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
+  },
+  inboxSenderCount: {
+    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+    fontSize: 10, fontWeight: 700, color: '#a8854a',
+    letterSpacing: '0.06em', whiteSpace: 'nowrap',
+  },
+  inboxSenderMeta: {
+    marginTop: 3,
+    display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4,
+    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+    fontSize: 9, color: '#9b907a', letterSpacing: '0.06em',
+  },
+  inboxSenderDot: { color: '#5a5448' },
+  inboxBotTag: {
+    marginLeft: 6, padding: '1px 5px',
+    background: '#2a261d', color: '#9b907a',
+    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+    fontSize: 8, fontWeight: 700, letterSpacing: '0.12em',
+    borderRadius: 3, verticalAlign: 'middle',
+  },
+  inboxEmpty: {
+    padding: '10px 0', color: '#7d7565',
+    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+    fontSize: 10, letterSpacing: '0.06em',
+  },
+  inboxFooterRow: {
+    marginTop: 12, paddingTop: 10, borderTop: '1px solid #1f1c15',
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+  },
+  inboxFooterLink: {
+    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+    fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase',
+    color: '#a8854a', background: 'transparent',
+    border: '1px solid #2a261d', padding: '5px 10px', borderRadius: 4,
+    textDecoration: 'none', fontWeight: 700,
+  },
+  inboxFooterMuted: {
+    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+    fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase',
+    color: '#7d7565', textDecoration: 'none',
   },
 };

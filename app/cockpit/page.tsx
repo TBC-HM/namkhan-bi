@@ -286,6 +286,9 @@ function TopBar({
       </div>
 
       <div className="topbar-right">
+        {/* PBS 2026-05-09 (repair list #4): repo link lives in cockpit
+            topbar (replaces the foyer REPO chip which was removed). */}
+        <a className="org-btn" href="https://github.com/TBC-HM/namkhan-bi" target="_blank" rel="noreferrer" title="GitHub repo · TBC-HM/namkhan-bi">⌥ Repo</a>
         <a className="org-btn" href="https://vercel.com/pbsbase-2825s-projects/namkhan-bi/deployments" target="_blank" rel="noreferrer" title="Latest preview deploys">🌐 Preview</a>
         <a className="org-btn" href="/" target="_blank" rel="noreferrer" title="Open the live BI app in a new tab">↗ App</a>
         <div className="system-pulse" style={{ background: `${healthColor}20`, borderColor: `${healthColor}50`, color: healthColor }}>

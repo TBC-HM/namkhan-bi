@@ -25,9 +25,25 @@ const PLATFORM_LABEL: Record<string, string> = {
   pinterest: 'Pinterest',
 };
 
-// PBS 2026-05-09 #29: OTAs (booking, expedia, agoda) live under
-// /sales/channels — they are NOT social. Filter them out here.
-const NON_SOCIAL = new Set(['booking', 'booking_com', 'expedia', 'agoda', 'hostelworld']);
+// PBS 2026-05-09 #29 (round 2 — repair list 2026-05-09):
+// "remove Booking or Expedia is not social media". OTAs live under
+// /sales/channels. Reviews platforms (TripAdvisor, Google Business) live
+// under /marketing/reviews. Strict allow-list of the 8 social channels
+// PBS named: Instagram, Facebook, TikTok, YouTube, X / Twitter, LinkedIn,
+// Pinterest, Threads. If we ever add a new social channel, add its slug
+// here AND give it a tint + label below.
+const SOCIAL_PLATFORMS = [
+  'instagram',
+  'facebook',
+  'tiktok',
+  'youtube',
+  'x',
+  'twitter',     // alias for x; keep both so legacy rows surface
+  'linkedin',
+  'pinterest',
+  'threads',
+] as const;
+const SOCIAL_SET = new Set<string>(SOCIAL_PLATFORMS as readonly string[]);
 
 // PBS 2026-05-09 #31: brand-coloured pill before each platform name.
 // Brand hex sourced from each platform's media kit, simplified to one
@@ -83,7 +99,28 @@ function formatDate(d: string | null): string {
 
 export default async function SocialPage() {
   const all = await getSocialAccounts();
-  const accounts = all.filter((a: any) => !NON_SOCIAL.has(a.platform));
+  // Strict allow-list — see SOCIAL_PLATFORMS above. Anything else (OTAs,
+  // review platforms) is excluded from this surface by design.
+  const dbAccounts = all.filter((a: any) => SOCIAL_SET.has(String(a.platform).toLowerCase()));
+
+  // Render a row even for platforms we don't yet have credentials for, so
+  // PBS can see the gap and the landing-page link still works (lands on
+  // an empty-state landing page with a "Set handle" CTA).
+  const byPlatform = new Map<string, any>();
+  for (const a of dbAccounts) byPlatform.set(String(a.platform).toLowerCase(), a);
+  const accounts = SOCIAL_PLATFORMS
+    .filter((p) => p !== 'twitter') // collapse legacy alias into 'x'
+    .map((p) => byPlatform.get(p) ?? {
+      id: `stub-${p}`,
+      platform: p,
+      handle: null,
+      url: null,
+      followers: 0,
+      posts: 0,
+      last_synced_at: null,
+      active: false,
+      _stub: true,
+    });
 
   const totalFollowers = accounts.reduce((sum: number, a: any) => sum + (a.followers ?? 0), 0);
   const totalPosts = accounts.reduce((sum: number, a: any) => sum + (a.posts ?? 0), 0);
@@ -134,6 +171,10 @@ export default async function SocialPage() {
                     </a>
                   </td>
                   <td className="lbl">
+                    {/* PBS repair 2026-05-09 #4: handle deep-links to the
+                        public profile page; if no URL is stored we show a
+                        "Set handle" CTA pointing at Supabase Studio. We do
+                        NOT fabricate handles. */}
                     {a.url ? (
                       <a
                         href={a.url}
@@ -143,8 +184,18 @@ export default async function SocialPage() {
                       >
                         {a.handle ?? 'open ↗'} ↗
                       </a>
+                    ) : a.handle ? (
+                      <span className="text-mute">{a.handle}</span>
                     ) : (
-                      <span className="text-mute">{a.handle ?? '—'}</span>
+                      <a
+                        href="https://supabase.com/dashboard/project/kpenyneooigsyuuomgct/editor"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: 'var(--brass-soft)', textDecoration: 'none', fontStyle: 'italic' }}
+                        title="No handle stored for this platform — opens marketing.social_accounts in Supabase"
+                      >
+                        Set handle ↗
+                      </a>
                     )}
                   </td>
                   <td className="num">{formatNum(a.followers)}</td>

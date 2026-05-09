@@ -15,6 +15,9 @@ interface TopNavItem {
     sub: string;
 }
 
+// PBS 2026-05-09 (repair list): /agents stripped from TopNav. Agents are
+// only reachable via /cockpit now. Page roster + run + history + settings
+// still exist for direct URL access.
 const ITEMS: TopNavItem[] = [
   { href: '/overview',    title: 'Overview',          sub: 'Owner' },
   { href: '/today',       title: "Today's Snapshot",  sub: 'Operations' },
@@ -23,7 +26,6 @@ const ITEMS: TopNavItem[] = [
   { href: '/departments', title: 'Departments',       sub: 'F&B · Spa · Activities' },
   { href: '/finance',     title: 'Finance',           sub: 'P&L · Budget · Ledger' },
   { href: '/marketing',   title: 'Marketing',         sub: 'Channels · Reviews' },
-  { href: '/agents',      title: 'Agents',            sub: 'AI · Automation' },
   ];
 
 export default function TopNav() {

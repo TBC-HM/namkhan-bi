@@ -311,6 +311,110 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
 
       <div style={{ height: 14 }} />
 
+      {/* PBS 2026-05-09 #36/#46: 14-day glance of cheapest sellable rate per
+          day, mirroring the screenshot the operator gave (Mon-Sun calendar
+          with rate badge + comp tone per cell). Full 30/60-day grid lives at
+          /revenue/pricing/calendar; this is the "see it without clicking
+          through" inline preview. Reuses the same toneFor logic via simple
+          inline rules so we don't dual-source. */}
+      {(() => {
+        const today = new Date(); today.setHours(0,0,0,0);
+        const RATE_MIN = 10;
+        // Group inventory by date, picking the cheapest sellable rate ≥ RATE_MIN.
+        const byDate = new Map<string, { rate: number | null; flag: 'sellable' | 'stop_sold' | 'sold_out' | null }>();
+        for (let d = 0; d < 14; d++) {
+          const dt = new Date(today); dt.setDate(today.getDate() + d);
+          byDate.set(dt.toISOString().slice(0,10), { rate: null, flag: null });
+        }
+        for (const r of inventory) {
+          const k = String((r as Record<string, unknown>).date ?? '').slice(0,10);
+          if (!byDate.has(k)) continue;
+          const rate = Number((r as Record<string, unknown>).rate);
+          const stopSell = Boolean((r as Record<string, unknown>).stop_sell);
+          if (rate >= RATE_MIN && !stopSell) {
+            const cur = byDate.get(k)!;
+            if (cur.rate == null || rate < cur.rate) byDate.set(k, { rate, flag: 'sellable' });
+          } else if (stopSell) {
+            const cur = byDate.get(k)!;
+            if (cur.rate == null) byDate.set(k, { rate: null, flag: 'stop_sold' });
+          }
+        }
+        const cells = Array.from(byDate.entries()).map(([d, v]) => ({ date: d, ...v }));
+        const dayLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+        function toneFor(rate: number | null, flag: string | null) {
+          if (flag === 'stop_sold' || flag === 'sold_out') return { bg: '#7a2a22', fg: '#ffb0a8', label: 'STOP' };
+          if (rate == null) return { bg: '#3a3327', fg: '#d8cca8', label: 'no data' };
+          if (rate >= 200) return { bg: '#2c5b3d', fg: '#c9f5d5', label: 'premium' };
+          if (rate >= 130) return { bg: '#5b4a2a', fg: '#fce8b5', label: 'mid' };
+          return { bg: '#7a4f1f', fg: '#ffd49a', label: 'soft' };
+        }
+        return (
+          <Panel
+            title="Two-week glance"
+            eyebrow="cheapest sellable rate per day · next 14d"
+            actions={<>
+              <a href="/revenue/pricing/calendar" style={{
+                fontSize: 'var(--t-xs)', color: 'var(--brass)', textDecoration: 'none',
+                fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.10em',
+                padding: '4px 10px', border: '1px solid var(--brass)', borderRadius: 4,
+              }}>↗ full calendar</a>
+              <ArtifactActions context={ctx('panel', 'Two-week glance')} />
+            </>}
+          >
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
+              {dayLabels.map((d) => (
+                <div key={d} style={{
+                  fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: '0.10em',
+                  textTransform: 'uppercase', color: '#a8854a', textAlign: 'center', paddingBottom: 4,
+                }}>{d}</div>
+              ))}
+              {(() => {
+                // Pad first row so the first cell aligns with the right weekday.
+                const first = new Date(cells[0].date);
+                const lead = (first.getDay() + 6) % 7; // Mon=0
+                const padded: Array<typeof cells[number] | null> = Array(lead).fill(null).concat(cells);
+                while (padded.length % 7 !== 0) padded.push(null);
+                return padded.map((c, i) => {
+                  if (!c) return <div key={`pad-${i}`} />;
+                  const tone = toneFor(c.rate, c.flag);
+                  const day = new Date(c.date).getDate();
+                  return (
+                    <div key={c.date} style={{
+                      background: tone.bg,
+                      border: '1px solid rgba(255,255,255,0.10)',
+                      borderRadius: 6,
+                      padding: '8px 6px',
+                      minHeight: 84,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                    }} title={`${c.date} · ${tone.label}${c.rate != null ? ` · $${c.rate.toFixed(0)}` : ''}`}>
+                      <div style={{
+                        background: '#fff5d8', color: '#1c160d',
+                        width: 22, height: 22, borderRadius: 4, fontWeight: 700,
+                        fontSize: 11, fontFamily: 'var(--mono)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>{day}</div>
+                      <div style={{
+                        fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic',
+                        fontSize: 18, color: '#fff5d8', fontWeight: 600, textAlign: 'right',
+                      }}>{c.flag === 'stop_sold' ? 'STOP' : (c.rate != null ? `$${c.rate.toFixed(0)}` : '—')}</div>
+                      <div style={{
+                        fontFamily: 'var(--mono)', fontSize: 9,
+                        letterSpacing: '0.10em', textTransform: 'uppercase',
+                        color: tone.fg, opacity: 0.85, textAlign: 'right',
+                      }}>{tone.label}</div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </Panel>
+        );
+      })()}
+
+      <div style={{ height: 14 }} />
+
       <Panel title={`Rate calendar · room × ${gran}`} eyebrow="terracotta=high · pale=low" actions={<ArtifactActions context={ctx('table', `Rate calendar · room × ${gran}`)} />}>
         <div style={{ overflowX: 'auto' }}>
         <table style={{ borderCollapse: 'collapse', fontSize: "var(--t-sm)", minWidth: '100%' }}>

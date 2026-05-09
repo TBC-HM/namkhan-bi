@@ -1,7 +1,8 @@
 // app/guest/directory/_components/DirectoryShell.tsx
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { CountryFacets } from "./CountryFacets";
 import { GuestTable } from "./GuestTable";
 import { ProfileDrawer } from "./ProfileDrawer";
@@ -98,6 +99,54 @@ export function DirectoryShell({
     stayedSince !== "any" ||
     repeatOnly ||
     contactableOnly;
+
+  // PBS 2026-05-09 (PR repair-list — JOB 4):
+  //   The "Send to marketing" CTA hands off the current filter spec via a
+  //   base64-encoded JSON blob. Marketing-side picks it up at
+  //   /marketing/audiences/new?from_guest_filter=<b64> and pre-populates the
+  //   audience builder. Encoding URL-safe base64 (replace +/ with -_) so it
+  //   round-trips through Next.js routing without escaping issues.
+  const filterSpec = useMemo(
+    () => ({
+      v: 1,
+      query: query || null,
+      country: country || null,
+      sort,
+      arrival,
+      stayedSince,
+      repeatOnly,
+      contactableOnly,
+      generated_at: new Date().toISOString(),
+      source: "guest.directory",
+    }),
+    [query, country, sort, arrival, stayedSince, repeatOnly, contactableOnly]
+  );
+
+  const sendToMarketingHref = useMemo(() => {
+    try {
+      const json = JSON.stringify(filterSpec);
+      const b64 = (typeof window !== "undefined"
+        ? window.btoa(unescape(encodeURIComponent(json)))
+        : Buffer.from(json, "utf8").toString("base64")
+      )
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
+      return `/marketing/audiences/new?from_guest_filter=${b64}`;
+    } catch {
+      return `/marketing/audiences/new`;
+    }
+  }, [filterSpec]);
+
+  // Country options sorted by guest_count desc (taken from facets).
+  const countryOptions = useMemo(
+    () =>
+      [...facets]
+        .filter((f) => f.country)
+        .sort((a, b) => b.guest_count - a.guest_count)
+        .map((f) => ({ value: f.country, label: `${f.country} · ${f.guest_count}` })),
+    [facets]
+  );
 
   return (
     <div className="space-y-8 px-8 py-6">
@@ -229,6 +278,35 @@ export function DirectoryShell({
               ))}
             </select>
 
+            {/* Country select — duplicates the side-rail facet click but gives
+                marketing-handover a familiar dropdown. Driven off the same
+                guest.v_directory_facets payload, so no extra DB hit. */}
+            <select
+              value={country ?? ""}
+              onChange={(e) => setCountry(e.target.value || null)}
+              title="Country"
+              className="rounded-sm border border-stone-300 bg-white px-3 py-1.5 text-sm"
+            >
+              <option value="">All countries</option>
+              {countryOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+
+            {/* City select — parked. guest.mv_guest_profile.city has 0 distinct
+                values today (Cloudbeds sync gap). Render disabled so the
+                marketing handover surface is complete and the hint stays
+                visible. Re-enable as soon as enriched-guest sync populates. */}
+            <select
+              disabled
+              title="City filter — pending Cloudbeds enriched-guest sync (city has 0 distinct values today)"
+              className="cursor-not-allowed rounded-sm border border-stone-200 bg-stone-50 px-3 py-1.5 text-sm text-stone-400"
+            >
+              <option>City: pending sync</option>
+            </select>
+
             {/* Arrival-window segmented control */}
             <div className="flex items-center gap-1 rounded-sm border border-stone-300 bg-white p-0.5">
               {ARRIVAL_OPTS.map((o) => (
@@ -278,6 +356,17 @@ export function DirectoryShell({
                 Clear all
               </button>
             )}
+
+            {/* Send-to-marketing CTA — PBS 2026-05-09 JOB 4. Hands the live
+                filter spec off to the audience builder via base64-encoded
+                JSON. ml-auto only when no Clear-all button is present. */}
+            <Link
+              href={sendToMarketingHref}
+              className={`${filtersActive ? "" : "ml-auto"} rounded-sm border border-emerald-700 bg-emerald-700 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.16em] text-white transition hover:bg-emerald-800`}
+              title="Send the current filter set to /marketing/audiences/new — pre-populates a new audience"
+            >
+              → Send to marketing
+            </Link>
           </div>
 
           <GuestTable

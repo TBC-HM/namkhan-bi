@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { fmtUSD, EMPTY } from "@/lib/format";
-import { fetchGuestProfile } from "../_actions/fetchGuestProfile";
+import { fetchGuestProfile, type FallbackContact } from "../_actions/fetchGuestProfile";
 
 type Profile = {
   guest_id: string;
@@ -61,13 +61,20 @@ export function ProfileDrawer({
 }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [fallbackContact, setFallbackContact] = useState<FallbackContact>({
+    email: null,
+    phone: null,
+    source: null,
+  });
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<Tab>("info");
+  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     if (!guestId) {
       setProfile(null);
       setReservations([]);
+      setFallbackContact({ email: null, phone: null, source: null });
       return;
     }
     let cancelled = false;
@@ -78,12 +85,20 @@ export function ProfileDrawer({
         if (cancelled) return;
         setProfile(res.profile);
         setReservations(res.reservations);
+        setFallbackContact(res.fallbackContact ?? { email: null, phone: null, source: null });
       })
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
     };
   }, [guestId]);
+
+  // Toast auto-dismiss
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3500);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   const open = guestId !== null;
 
@@ -130,6 +145,14 @@ export function ProfileDrawer({
           <div className="flex flex-1 flex-col overflow-hidden">
             <ProfileHero profile={profile} />
 
+            {/* Action strip — Contactable · Repeat (PBS 2026-05-09 wiring) */}
+            <ActionStrip
+              profile={profile}
+              fallbackContact={fallbackContact}
+              onToggleRepeat={(next) => setProfile((p) => (p ? { ...p, is_repeat: next } : p))}
+              onToast={setToast}
+            />
+
             {/* Tab strip — Information · Bookings */}
             <nav
               role="tablist"
@@ -158,7 +181,7 @@ export function ProfileDrawer({
             <div className="flex-1 overflow-y-auto">
               {tab === "info" ? (
                 <>
-                  <ContactBlock profile={profile} />
+                  <ContactBlock profile={profile} fallbackContact={fallbackContact} />
                   <StatsBlock profile={profile} />
                 </>
               ) : (
@@ -167,8 +190,144 @@ export function ProfileDrawer({
             </div>
           </div>
         )}
+
+        {/* Toast — surfaces button feedback ("No reachable contact on file" etc) */}
+        {toast && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 rounded-sm bg-stone-900 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.16em] text-white shadow-lg"
+          >
+            {toast}
+          </div>
+        )}
       </aside>
     </>
+  );
+}
+
+// ============================================================================
+// Action strip — Contactable · Repeat (PBS 2026-05-09 directory wiring)
+// ============================================================================
+
+function ActionStrip({
+  profile,
+  fallbackContact,
+  onToggleRepeat,
+  onToast,
+}: {
+  profile: Profile;
+  fallbackContact: FallbackContact;
+  onToggleRepeat: (next: boolean) => void;
+  onToast: (msg: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  // Resolve a reachable contact channel.
+  // Priority: profile.email → fallback.email → wa.me (phone w/ country code) → tel.
+  // Anything matching "+<digits>" is treated as country-coded; we strip the +
+  // for the wa.me URL per WhatsApp's spec.
+  const resolveContact = (): {
+    href: string;
+    label: string;
+    target?: string;
+  } | null => {
+    const email = profile.email || fallbackContact.email;
+    if (email) {
+      return { href: `mailto:${email}`, label: `Email ${email}` };
+    }
+    const phone = profile.phone || fallbackContact.phone;
+    if (phone) {
+      const trimmed = phone.replace(/\s+/g, "");
+      if (/^\+\d{6,}/.test(trimmed)) {
+        // E.164 — preferred. WhatsApp wa.me URL.
+        const digits = trimmed.replace(/\D/g, "");
+        return {
+          href: `https://wa.me/${digits}`,
+          label: `WhatsApp ${trimmed}`,
+          target: "_blank",
+        };
+      }
+      // Local format — fall back to tel:.
+      return { href: `tel:${trimmed}`, label: `Call ${trimmed}` };
+    }
+    return null;
+  };
+
+  const handleContact = () => {
+    const r = resolveContact();
+    if (!r) {
+      onToast("No reachable contact on file");
+      return;
+    }
+    if (r.target === "_blank") {
+      window.open(r.href, "_blank", "noopener,noreferrer");
+    } else {
+      window.location.href = r.href;
+    }
+  };
+
+  const handleRepeat = async () => {
+    if (busy) return;
+    const next = !profile.is_repeat;
+    setBusy(true);
+    onToggleRepeat(next); // optimistic flip
+    try {
+      const res = await fetch(`/api/guest/${encodeURIComponent(profile.guest_id)}/repeat`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ is_repeat: next }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.ok) {
+        onToggleRepeat(!next); // revert
+        onToast(json?.error ? `Repeat failed: ${json.error}` : "Repeat failed");
+      } else {
+        onToast(next ? "Marked as repeat" : "Repeat flag cleared");
+      }
+    } catch (e: any) {
+      onToggleRepeat(!next);
+      onToast(`Repeat failed: ${e?.message ?? "network error"}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const contact = resolveContact();
+  const contactDisabled = !contact;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-b border-stone-200 bg-white px-6 py-3">
+      <button
+        type="button"
+        onClick={handleContact}
+        title={contact?.label ?? "No email / phone on file — Cloudbeds returns anonymised contact"}
+        className={`rounded-sm border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.16em] transition ${
+          contactDisabled
+            ? "border-stone-200 bg-stone-50 text-stone-400 hover:bg-stone-100"
+            : "border-emerald-700 bg-emerald-700 text-white hover:bg-emerald-800"
+        }`}
+      >
+        Contactable
+      </button>
+      <button
+        type="button"
+        onClick={handleRepeat}
+        disabled={busy}
+        className={`rounded-sm border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.16em] transition disabled:opacity-50 ${
+          profile.is_repeat
+            ? "border-amber-700 bg-amber-700 text-white hover:bg-amber-800"
+            : "border-stone-300 bg-white text-stone-700 hover:bg-stone-50"
+        }`}
+      >
+        {profile.is_repeat ? "✓ Repeat" : "Mark as repeat"}
+      </button>
+      {fallbackContact.source === "reservation" && (
+        <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-stone-500">
+          fallback · reservation
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -239,10 +398,18 @@ function ProfileHero({ profile }: { profile: Profile }) {
   );
 }
 
-function ContactBlock({ profile }: { profile: Profile }) {
+function ContactBlock({
+  profile,
+  fallbackContact,
+}: {
+  profile: Profile;
+  fallbackContact: FallbackContact;
+}) {
+  const effEmail = profile.email || fallbackContact.email;
+  const effPhone = profile.phone || fallbackContact.phone;
   const hasAny =
-    profile.email ||
-    profile.phone ||
+    effEmail ||
+    effPhone ||
     profile.city ||
     profile.date_of_birth ||
     profile.language ||
@@ -274,14 +441,14 @@ function ContactBlock({ profile }: { profile: Profile }) {
           Empty values display as em-dash per design spec. */}
       <ul className="grid grid-cols-2 gap-3 text-sm">
         <ContactItem
-          label="Email"
-          value={profile.email}
-          href={profile.email ? `mailto:${profile.email}` : undefined}
+          label={effEmail && !profile.email ? "Email · fallback" : "Email"}
+          value={effEmail}
+          href={effEmail ? `mailto:${effEmail}` : undefined}
         />
         <ContactItem
-          label="Phone"
-          value={profile.phone}
-          href={profile.phone ? `tel:${profile.phone}` : undefined}
+          label={effPhone && !profile.phone ? "Phone · fallback" : "Phone"}
+          value={effPhone}
+          href={effPhone ? `tel:${effPhone}` : undefined}
         />
         <ContactItem label="Country" value={profile.country} />
         <ContactItem label="City" value={profile.city} />
