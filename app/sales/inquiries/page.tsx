@@ -13,7 +13,7 @@ import DecisionQueue, { type DecisionRow } from '@/components/ops/DecisionQueue'
 import TacticalAlerts, { type TacticalAlert } from '@/components/ops/TacticalAlerts';
 import GuardrailsBanner from '@/components/ops/GuardrailsBanner';
 import DataNeededOverlay from '@/components/ops/DataNeededOverlay';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
 
 import InquiryFeed from './_components/InquiryFeed';
 import AutoDraftTray from './_components/AutoDraftTray';
@@ -294,14 +294,20 @@ export default async function InquiriesPage({
   const dataNeed = SCHEMA_LIVE ? undefined : 'Data needed · sales schema';
 
   return (
-    <>
-      {/* BLOCK 1: Breadcrumb + Title */}
-      <PageHeader
-        pillar="Sales"
-        tab="Inquiries"
-        title={<>Every inquiry, an <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>answer</em> before lunch.</>}
-        lede="Triage, auto-quote, approve, send. The funnel starts here."
-      />
+    <Page
+      eyebrow="Sales · Inquiries"
+      title={<>Every inquiry, an <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>answer</em> before lunch.</>}
+      subPages={[
+        { label: 'Inquiries',  href: '/sales/inquiries' },
+        { label: 'Pipeline',   href: '/sales/pipeline'  },
+        { label: 'Leads',      href: '/sales/leads'     },
+        { label: 'B2B',        href: '/sales/b2b'       },
+        { label: 'FIT',        href: '/sales/fit'       },
+        { label: 'Groups',     href: '/sales/groups'    },
+        { label: 'Packages',   href: '/sales/packages'  },
+        { label: 'Dashboard',  href: '/sales/dashboard' },
+      ]}
+    >
 
       {/* BLOCK 2: Status pills (sales-specific, on top of layout's FilterStrip) */}
       <div
@@ -479,7 +485,7 @@ export default async function InquiriesPage({
         criteria, ≥85% confidence, within rate guardrails) move to auto. All
         Tier-2 actions and rate exceptions remain human-approval forever.
       </GuardrailsBanner>
-    </>
+    </Page>
   );
 }
 

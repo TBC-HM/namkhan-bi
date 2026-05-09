@@ -1,5 +1,12 @@
 // app/guest/layout.tsx
-// PBS 2026-05-09: pure passthrough — <Page> shell owns chrome on every page.
+// PBS 2026-05-09: layout chrome stripped. `.panel` retained for max-width
+// centring while pages migrate to <Page>.
+'use client';
+
+import { usePathname } from 'next/navigation';
+
 export default function GuestLayout({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
+  const pathname = usePathname() ?? '';
+  if (pathname === '/guest' || pathname === '/guest/') return <>{children}</>;
+  return <div className="panel">{children}</div>;
 }

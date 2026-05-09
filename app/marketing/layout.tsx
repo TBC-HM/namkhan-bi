@@ -1,15 +1,20 @@
 // app/marketing/layout.tsx
-// PBS 2026-05-09: pure passthrough — <Page> shell owns chrome on every page.
-// AssetDetailDrawer was hooked from this layout but is a global drawer; keep
-// it mounted so deep links open without a layout wrapper.
+// PBS 2026-05-09: layout chrome stripped. <Page> shell on each route owns the
+// frame. `.panel` retained for max-width centring of legacy pages that still
+// render via <PageHeader>. Global AssetDetailDrawer kept mounted.
 'use client';
 
+import { usePathname } from 'next/navigation';
 import AssetDetailDrawer from '@/components/marketing/AssetDetailDrawer';
 
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname() ?? '';
+  if (pathname === '/marketing' || pathname === '/marketing/') {
+    return <>{children}<AssetDetailDrawer /></>;
+  }
   return (
     <>
-      {children}
+      <div className="panel">{children}</div>
       <AssetDetailDrawer />
     </>
   );
