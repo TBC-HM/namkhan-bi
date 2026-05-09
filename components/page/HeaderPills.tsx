@@ -96,7 +96,7 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
           aria-label="Temperature"
           style={S.chip}
         >
-          <span style={{ color: '#c4a06b', fontSize: 12 }}>☀</span>
+          <span style={{ color: '#f4d99a', fontSize: 12 }}>☀</span>
           <span style={S.chipText}>32°</span>
         </button>
         {tempOpen && (
@@ -130,7 +130,7 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
           aria-label="Air"
           style={S.chip}
         >
-          <span style={{ color: '#c4a06b', fontSize: 12 }}>≈</span>
+          <span style={{ color: '#f4d99a', fontSize: 12 }}>≈</span>
           <span style={S.chipText}>AQI 42</span>
         </button>
         {airOpen && (
@@ -281,7 +281,7 @@ const S: Record<string, React.CSSProperties> = {
     // PBS 2026-05-09 #33: brighter temp/air pills.
     display: 'flex', alignItems: 'center', gap: 6,
     background: 'transparent', border: '1px solid #3a3327',
-    borderRadius: 999, padding: '4px 10px', cursor: 'pointer', color: '#d8cca8',
+    borderRadius: 999, padding: '4px 10px', cursor: 'pointer', color: '#f0e5cb',
   },
   chipText: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 11, fontWeight: 600 },
   // popoverHost is a transparent positioner that shares the close-delay
@@ -298,7 +298,7 @@ const S: Record<string, React.CSSProperties> = {
   dateText: {
     fontFamily: "'JetBrains Mono', ui-monospace, monospace",
     fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase',
-    color: '#d8cca8', fontWeight: 600, cursor: 'help',
+    color: '#f0e5cb', fontWeight: 600, cursor: 'help',
   },
   dateGrid: {
     position: 'absolute', top: '100%', right: 0, zIndex: 60,
@@ -310,7 +310,7 @@ const S: Record<string, React.CSSProperties> = {
   },
   dateCell: { background: '#15110b', border: '1px solid #2a261d', borderRadius: 6, padding: '8px 10px' },
   dateCellK: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 9, letterSpacing: '0.22em', color: '#7d7565', textTransform: 'uppercase' },
-  dateCellV: { fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic', fontSize: 22, color: '#d8cca8', marginTop: 2 },
+  dateCellV: { fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic', fontSize: 22, color: '#f0e5cb', marginTop: 2 },
   dateCellD: { fontSize: 10, color: '#9b907a', marginTop: 2 },
   dateFooter: { gridColumn: '1 / -1', fontSize: 10, color: '#5a5448', textAlign: 'right', fontFamily: "'JetBrains Mono', ui-monospace, monospace" },
   dateWindowRow: {
@@ -352,7 +352,7 @@ const S: Record<string, React.CSSProperties> = {
     pointerEvents: 'auto',
   },
   link: {
-    display: 'block', padding: '7px 12px', color: '#d8cca8',
+    display: 'block', padding: '7px 12px', color: '#f0e5cb',
     textDecoration: 'none', fontFamily: "'JetBrains Mono', ui-monospace, monospace",
     fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', borderRadius: 4,
   },
@@ -369,11 +369,11 @@ const S: Record<string, React.CSSProperties> = {
   popHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 },
   popEyebrow: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: '#a8854a' },
   popClose: { background: 'transparent', border: 'none', color: '#7d7565', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0 },
-  popTitle: { fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic', fontSize: 22, color: '#d8cca8', marginBottom: 12 },
+  popTitle: { fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic', fontSize: 22, color: '#f0e5cb', marginBottom: 12 },
   popGrid: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 },
   popCell: { background: '#15110b', border: '1px solid #2a261d', borderRadius: 6, padding: '8px 10px' },
   popCellK: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 9, letterSpacing: '0.18em', color: '#7d7565', textTransform: 'uppercase' },
-  popCellV: { fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic', fontSize: 18, color: '#d8cca8', marginTop: 2 },
+  popCellV: { fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic', fontSize: 18, color: '#f0e5cb', marginTop: 2 },
   popCellD: { fontSize: 10, color: '#9b907a', marginTop: 2 },
   popFooter: {
     marginTop: 10, paddingTop: 8, borderTop: '1px solid #1f1c15',

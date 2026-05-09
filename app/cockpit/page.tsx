@@ -128,6 +128,14 @@ export default function CockpitPage() {
   const [systemHealth, setSystemHealth] = useState<"green" | "yellow" | "red">("green");
   const [counts, setCounts] = useState({ schedule: 0, team: 0, logs: 0, data: 0 });
 
+  // PBS 2026-05-09: open the tab from ?tab= so /cockpit/schedule redirect
+  // (and any other deep link) lands on the right panel.
+  useEffect(() => {
+    const t = new URL(window.location.href).searchParams.get('tab');
+    const valid: Tab[] = ['chat','knowledge','tools','activity','docs','deploys','schedule','team','logs','data'];
+    if (t && valid.includes(t as Tab)) setTab(t as Tab);
+  }, []);
+
   // Top-level health probe — refreshed every 30s
   useEffect(() => {
     const probe = async () => {
