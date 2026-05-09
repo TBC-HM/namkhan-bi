@@ -5,7 +5,6 @@ import Link from 'next/link';
 import Page from '@/components/page/Page';
 import { MARKETING_SUBPAGES } from '../../_subpages';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
-import DataTable from '@/components/ui/DataTable';
 import { fmtIsoDate, fmtKpi } from '@/lib/format';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
@@ -55,49 +54,39 @@ export default async function RetreatsListPage() {
 
       <div style={{ marginTop: 16, marginBottom: 8 }} className="t-eyebrow">Published · {rows.length}</div>
 
-      <DataTable<RetreatRow>
-        rowKey={r => r.id}
-        rows={rows}
-        defaultSort={{ key: 'created_at', dir: 'desc' }}
-        emptyState={
-          <span style={{ color: 'var(--ink-mute)', fontStyle: 'italic', fontSize: 'var(--t-sm)' }}>
-            No retreats published yet. Compile + deploy from the home page.
-          </span>
-        }
-        columns={[
-          { key: 'name', header: 'Name', align: 'left', render: r => (
-            <Link href={`/r/${r.slug}`} target="_blank" style={{ color: 'var(--ink)', textDecoration: 'none' }}>
-              <strong>{r.name}</strong>
-              <div style={{ fontSize: 'var(--t-xs)', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>
-                /r/{r.slug} ↗
-              </div>
-            </Link>
-          ), sortValue: r => r.name },
-          { key: 'series_slug', header: 'Series', align: 'left', width: '130px',
-            render: r => r.series_slug ?? '—',
-            sortValue: r => r.series_slug ?? '' },
-          { key: 'window', header: 'Window', align: 'left', width: '180px',
-            render: r => `${fmtIsoDate(r.arrival_window_from)} → ${fmtIsoDate(r.arrival_window_to)}`,
-            sortValue: r => r.arrival_window_from,
-          },
-          { key: 'price_usd_from', header: 'From / pax', align: 'right', numeric: true, width: '110px',
-            render: r => fmtKpi(r.price_usd_from, 'usd', 0),
-            sortValue: r => r.price_usd_from,
-          },
-          { key: 'spots', header: 'Spots', align: 'right', numeric: true, width: '110px',
-            render: r => `${r.spots_remaining} / ${r.spots_total}`,
-            sortValue: r => r.spots_remaining,
-          },
-          { key: 'status', header: 'Status', align: 'center', width: '120px',
-            render: r => <StatusPill tone={STATUS_TONE[r.status] ?? 'info'}>{r.status}</StatusPill>,
-            sortValue: r => r.status,
-          },
-          { key: 'created_at', header: 'Deployed', align: 'right', width: '130px',
-            render: r => fmtIsoDate(r.created_at),
-            sortValue: r => r.created_at,
-          },
-        ]}
-      />
+      {rows.length === 0 ? (
+        <div style={{ color: 'var(--ink-mute)', fontStyle: 'italic', fontSize: 'var(--t-sm)', padding: 24 }}>
+          No retreats published yet. Compile + deploy from the home page.
+        </div>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--t-sm)' }}>
+          <thead>
+            <tr>
+              {['Name','Series','Window','From / pax','Spots','Status','Deployed'].map(h => (
+                <th key={h} style={{ textAlign: 'left', padding: '8px 12px', borderBottom: '1px solid var(--paper-deep)', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', textTransform: 'uppercase', letterSpacing: 'var(--ls-extra)', color: 'var(--brass)' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.id} style={{ borderBottom: '1px solid var(--paper-warm)' }}>
+                <td style={{ padding: '6px 12px' }}>
+                  <Link href={`/r/${r.slug}`} target="_blank" style={{ color: 'var(--ink)', textDecoration: 'none' }}>
+                    <strong>{r.name}</strong>
+                    <div style={{ fontSize: 'var(--t-xs)', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>/r/{r.slug} ↗</div>
+                  </Link>
+                </td>
+                <td style={{ padding: '6px 12px' }}>{r.series_slug ?? '—'}</td>
+                <td style={{ padding: '6px 12px' }}>{fmtIsoDate(r.arrival_window_from)} → {fmtIsoDate(r.arrival_window_to)}</td>
+                <td style={{ padding: '6px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{fmtKpi(r.price_usd_from, 'usd', 0)}</td>
+                <td style={{ padding: '6px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{r.spots_remaining} / {r.spots_total}</td>
+                <td style={{ padding: '6px 12px', textAlign: 'center' }}><StatusPill tone={STATUS_TONE[r.status] ?? 'info'}>{r.status}</StatusPill></td>
+                <td style={{ padding: '6px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{fmtIsoDate(r.created_at)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
 
       <div style={{ marginTop: 18, fontSize: 'var(--t-xs)', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>
         <Link href="/marketing/compiler" style={{ color: 'var(--brass)' }}>← BACK TO COMPILER</Link>

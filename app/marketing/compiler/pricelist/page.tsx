@@ -5,7 +5,6 @@ import Link from 'next/link';
 import Page from '@/components/page/Page';
 import { MARKETING_SUBPAGES } from '../../_subpages';
 import StatusPill from '@/components/ui/StatusPill';
-import DataTable from '@/components/ui/DataTable';
 import { fmtKpi, EMPTY } from '@/lib/format';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
@@ -57,53 +56,33 @@ export default async function PricelistPage() {
 
       <div style={{ marginTop: 18, marginBottom: 8 }} className="t-eyebrow">SKUs · {rows.length}</div>
 
-      <DataTable<PriceRow>
-        rowKey={r => r.sku}
-        rows={rows}
-        defaultSort={{ key: 'sku', dir: 'asc' }}
-        columns={[
-          { key: 'sku', header: 'SKU', align: 'left', width: '140px',
-            render: r => <span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>{r.sku}</span>,
-            sortValue: r => r.sku,
-          },
-          { key: 'item_name', header: 'Item', align: 'left', render: r => <strong>{r.item_name}</strong>, sortValue: r => r.item_name },
-          { key: 'source_table', header: 'Source', align: 'left', width: '170px',
-            render: r => <span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>{r.source_table}</span>,
-            sortValue: r => r.source_table,
-          },
-          { key: 'usali_category', header: 'USALI', align: 'left', width: '110px',
-            render: r => r.usali_category ?? EMPTY,
-            sortValue: r => r.usali_category ?? '',
-          },
-          { key: 'sell_price_usd', header: 'Sell', align: 'right', numeric: true, width: '90px',
-            render: r => fmtKpi(r.sell_price_usd, 'usd', 0),
-            sortValue: r => r.sell_price_usd,
-          },
-          { key: 'cost_lak', header: 'Cost ₭', align: 'right', numeric: true, width: '120px',
-            render: r => `₭${(r.cost_lak / 1000).toFixed(0)}k`,
-            sortValue: r => r.cost_lak,
-          },
-          { key: 'margin_pct', header: 'Margin', align: 'right', numeric: true, width: '90px',
-            render: r => fmtKpi(r.margin_pct, 'pct', 1),
-            sortValue: r => r.margin_pct,
-          },
-          { key: 'margin_floor_pct', header: 'Floor', align: 'right', numeric: true, width: '70px',
-            render: r => fmtKpi(r.margin_floor_pct, 'pct', 0),
-            sortValue: r => r.margin_floor_pct,
-          },
-          { key: 'tier_visibility', header: 'Tiers', align: 'left', width: '120px',
-            render: r => (
-              <span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>
-                {(r.tier_visibility ?? []).join(' · ')}
-              </span>
-            ),
-          },
-          { key: 'is_active', header: 'Status', align: 'center', width: '90px',
-            render: r => r.is_active ? <StatusPill tone="active">active</StatusPill> : <StatusPill tone="inactive">off</StatusPill>,
-            sortValue: r => r.is_active ? 1 : 0,
-          },
-        ]}
-      />
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--t-sm)' }}>
+        <thead>
+          <tr>
+            {['SKU','Item','Source','USALI','Sell','Cost ₭','Margin','Floor','Tiers','Status'].map(h => (
+              <th key={h} style={{ textAlign: 'left', padding: '8px 12px', borderBottom: '1px solid var(--paper-deep)', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', textTransform: 'uppercase', letterSpacing: 'var(--ls-extra)', color: 'var(--brass)' }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(r => (
+            <tr key={r.sku} style={{ borderBottom: '1px solid var(--paper-warm)' }}>
+              <td style={{ padding: '6px 12px', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>{r.sku}</td>
+              <td style={{ padding: '6px 12px' }}><strong>{r.item_name}</strong></td>
+              <td style={{ padding: '6px 12px', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>{r.source_table}</td>
+              <td style={{ padding: '6px 12px' }}>{r.usali_category ?? EMPTY}</td>
+              <td style={{ padding: '6px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{fmtKpi(r.sell_price_usd, 'usd', 0)}</td>
+              <td style={{ padding: '6px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>₭{(r.cost_lak / 1000).toFixed(0)}k</td>
+              <td style={{ padding: '6px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{fmtKpi(r.margin_pct, 'pct', 1)}</td>
+              <td style={{ padding: '6px 12px', textAlign: 'right', fontFamily: 'var(--mono)' }}>{fmtKpi(r.margin_floor_pct, 'pct', 0)}</td>
+              <td style={{ padding: '6px 12px', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>{(r.tier_visibility ?? []).join(' · ')}</td>
+              <td style={{ padding: '6px 12px', textAlign: 'center' }}>
+                {r.is_active ? <StatusPill tone="active">active</StatusPill> : <StatusPill tone="inactive">off</StatusPill>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
 
       <div style={{ marginTop: 18, fontSize: 'var(--t-xs)', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>
         <Link href="/marketing/compiler" style={{ color: 'var(--brass)' }}>← BACK TO COMPILER</Link>
