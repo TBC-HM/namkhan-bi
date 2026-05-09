@@ -25,10 +25,12 @@ export default async function JourneyPage({ searchParams }: Props) {
   const days = Number((searchParams.days as string) || 180);
   const since = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
 
-  // Reservation funnel — every stage wired off public.reservations
+  // Reservation funnel — every stage wired off public.reservations.
+  // (Note: public.reservations has no guest_phone column. Phone-coverage
+  // signals come from guest.mv_guest_profile via the messy-data page.)
   const { data: resRows } = await supabase
     .from('reservations')
-    .select('reservation_id, status, check_in_date, check_out_date, booking_date, guest_email, guest_phone, source_name, total_amount')
+    .select('reservation_id, status, check_in_date, check_out_date, booking_date, guest_email, source_name, total_amount')
     .eq('property_id', PROPERTY_ID)
     .gte('check_in_date', since);
 
@@ -42,9 +44,10 @@ export default async function JourneyPage({ searchParams }: Props) {
   const canceled = all.filter((r: any) => r.status === 'canceled').length;
   const noShow = all.filter((r: any) => r.status === 'no_show').length;
 
-  // Comm coverage — what fraction of reservations have an email/phone on file.
+  // Comm coverage — fraction of reservations with email on file.
+  // (guest_phone lives on guest.mv_guest_profile, not public.reservations.)
   const withEmail = all.filter((r: any) => !!r.guest_email).length;
-  const withPhone = all.filter((r: any) => !!r.guest_phone).length;
+  const withPhone = 0;
 
   // Lead time distribution (booking_date → check_in_date)
   const leads = all
