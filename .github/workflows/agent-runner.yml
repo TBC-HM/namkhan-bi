@@ -49,6 +49,13 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Configure git identity
+        # PBS 2026-05-10: agent-runner script does git commit; without an
+        # identity configured, the commit fails with "Author identity unknown".
+        run: |
+          git config --global user.name "carla-agent-runner"
+          git config --global user.email "carla@namkhan-bi.local"
+
       - name: Run agent
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
