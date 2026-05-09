@@ -2673,3 +2673,30 @@ body:has(.public-prop-bg) .main {
   color: var(--ink-soft);
   flex: 1;
 }
+
+/* ── /guest/directory dark-theme overrides (PBS 2026-05-09)
+ * DirectoryShell uses Tailwind stone-* light tokens authored before the
+ * dark canvas was the default. Surgically darken backgrounds + text inside
+ * the wrapper without rewriting the component tree. Also hide the
+ * component's redundant inner <header> (we render Page's eyebrow/title
+ * outside).
+ */
+.gst-dir-dark > div > header { display: none !important; }
+.gst-dir-dark .bg-white { background: #0f0d0a !important; }
+.gst-dir-dark .border-stone-300,
+.gst-dir-dark .border-stone-200,
+.gst-dir-dark [class*="border-stone-300/"] { border-color: #2a261d !important; }
+.gst-dir-dark .text-stone-900 { color: #e9e1ce !important; }
+.gst-dir-dark .text-stone-700 { color: #d8cca8 !important; }
+.gst-dir-dark .text-stone-600,
+.gst-dir-dark .text-stone-500,
+.gst-dir-dark .text-stone-400 { color: #9b907a !important; }
+.gst-dir-dark .bg-stone-50,
+.gst-dir-dark .bg-stone-100 { background: #15110b !important; }
+.gst-dir-dark .hover\:bg-stone-50:hover,
+.gst-dir-dark .hover\:bg-stone-100:hover { background: #1c160d !important; }
+.gst-dir-dark input[type="search"],
+.gst-dir-dark input[type="text"] {
+  background: #0a0a0a !important; color: #e9e1ce !important;
+  border-color: #2a261d !important;
+}
