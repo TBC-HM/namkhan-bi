@@ -501,13 +501,22 @@ type Triage = {
   estimated_minutes: number;
 };
 
-async function triageMessage(message: string, debug: { iterations: number; lastError: string | null; lastText: string | null; tokens_in: number; tokens_out: number; duration_ms: number } = { iterations: 0, lastError: null, lastText: null, tokens_in: 0, tokens_out: 0, duration_ms: 0 }, conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>): Promise<Triage | null> {
+async function triageMessage(
+  message: string,
+  debug: { iterations: number; lastError: string | null; lastText: string | null; tokens_in: number; tokens_out: number; duration_ms: number } = { iterations: 0, lastError: null, lastText: null, tokens_in: 0, tokens_out: 0, duration_ms: 0 },
+  conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>,
+  opts: { chatMode?: boolean; role?: string } = {},
+): Promise<Triage | null> {
   const t0 = Date.now();
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return null;
 
-  const systemPrompt = await loadPrompt("it_manager");
-  const skills = await loadSkillsForRole("it_manager");
+  // PBS 2026-05-09 (architect bug #2): in chat-mode, load the persona's
+  // own prompt (not always it_manager) so Felix/Vector/etc. answer in
+  // their own voice and skip the tool pipeline entirely.
+  const promptRole = opts.chatMode && opts.role ? opts.role : "it_manager";
+  const systemPrompt = await loadPrompt(promptRole);
+  const skills = opts.chatMode ? [] : await loadSkillsForRole("it_manager");
   const tools = skills.map((s) => ({
     name: s.name,
     description: s.description,
@@ -517,15 +526,40 @@ async function triageMessage(message: string, debug: { iterations: number; lastE
 
   type Msg = { role: "user" | "assistant"; content: unknown };
   // Prepend last 20 turns of conversation history if provided (KB #291).
-  const history: Msg[] = (conversationHistory ?? []).slice(-20).map((h) => ({ role: h.role, content: h.content }));
-  const messages: Msg[] = [...history, { role: "user", content: message }];
+  // PBS 2026-05-09 bug-fix: deduplicate adjacent same-role turns so
+  // Anthropic's strict alternation requirement isn't violated by stray
+  // optimistic / in-progress tickets that slipped through ChatShell.
+  const rawHistory: Msg[] = (conversationHistory ?? [])
+    .slice(-20)
+    .filter((h) => h && typeof h.content === "string" && h.content.trim().length > 0)
+    .map((h) => ({ role: h.role, content: h.content }));
+  const dedupedHistory: Msg[] = [];
+  for (const h of rawHistory) {
+    const last = dedupedHistory[dedupedHistory.length - 1];
+    if (last && last.role === h.role) {
+      // Merge consecutive same-role messages so alternation is preserved.
+      dedupedHistory[dedupedHistory.length - 1] = {
+        role: last.role,
+        content: `${last.content as string}\n\n${h.content as string}`,
+      };
+    } else {
+      dedupedHistory.push(h);
+    }
+  }
+  // Anthropic requires the conversation to start with a user message.
+  while (dedupedHistory.length > 0 && dedupedHistory[0].role !== "user") {
+    dedupedHistory.shift();
+  }
+  const messages: Msg[] = [...dedupedHistory, { role: "user", content: message }];
 
-  // Tool-use loop. Up to 10 iterations: IT Manager v5 may want to call
-  // read_knowledge_base + list_recent_tickets + search_repo + ... so be generous.
-  for (let iter = 0; iter < 10; iter++) {
+  // Iteration cap: chat-mode = 1 (no tools, single shot). Full pipeline = 10.
+  const maxIter = opts.chatMode ? 1 : 10;
+
+  for (let iter = 0; iter < maxIter; iter++) {
     const body: Record<string, unknown> = {
       model: "claude-sonnet-4-6",
-      max_tokens: 1000,
+      // Chat-mode answers are prose-y and longer; tool-using triage stays tight.
+      max_tokens: opts.chatMode ? 2000 : 1000,
       system: systemPrompt,
       messages,
     };
@@ -695,6 +729,24 @@ function isAuthorized(req: Request): boolean {
   return false;
 }
 
+// PBS 2026-05-09 (architect bug #2 fix): short conversational messages
+// should skip the heavy detectMeta + enrichment + tool-use pipeline. The
+// persona prompts already have a CHAT MODE preamble that produces the
+// right shape (summary_markdown only). Detect those here and short-circuit.
+function looksLikeChat(message: string): boolean {
+  const m = message.trim();
+  if (m.length === 0) return false;
+  if (m.length > 500) return false;
+  // Build / decompose / spec asks → full pipeline.
+  if (/\b(build|create|implement|refactor|migrate|deploy|spec|decompose|ticket|fix this|fix the|investigate|audit|sweep|run\s+\w+|activate|fire|approve|reject|open\s+(issue|pr))\b/i.test(m)) {
+    return false;
+  }
+  // Approval words handled below.
+  if (/^(approve|yes|apply|ok approve|ship it|reject|no)$/i.test(m.toLowerCase())) return false;
+  // Anything else short and prose-y → chat.
+  return true;
+}
+
 export async function POST(req: Request) {
   noStore();
   try {
@@ -713,16 +765,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "message required" }, { status: 400 });
     }
 
-    // KB #291 unified-chat enrichment — gathered up-front so triage + worker
-    // both see the full context. Server-side parsing of @mention as a fallback
-    // when the client doesn't send one.
     const mention = mentionFromUI ?? parseMention(message);
-    const enriched = await gatherEnrichment({ message, current_page_url, active_doc_id });
-    const enrichmentBlock = renderEnrichmentBlock(enriched, current_page_url);
+    const isChatMode = looksLikeChat(message);
+
+    // KB #291 unified-chat enrichment — only fire the heavy enrichment
+    // pipeline for non-chat messages. Chat-mode skips it (saves 1–3s).
+    const enriched = isChatMode
+      ? { kb_top5: [], doc_top5: [], page_data: null, active_doc: null, recent_tickets: [] }
+      : await gatherEnrichment({ message, current_page_url, active_doc_id });
+    const enrichmentBlock = isChatMode ? "" : renderEnrichmentBlock(enriched, current_page_url);
     const mentionHint = mention
       ? `\n[USER ADDRESSED: @${mention}] — set recommended_role="${mention}".`
       : "";
-    const enrichedMessage = `${enrichmentBlock}\n\nUSER MESSAGE:\n${message}${mentionHint}`;
+    const enrichedMessage = isChatMode
+      ? `${message}${mentionHint}`
+      : `${enrichmentBlock}\n\nUSER MESSAGE:\n${message}${mentionHint}`;
 
     // 0a. Standing-task activation: "run <slug>" or "activate <slug>" or
     //     "fire site_design_sweep" — fires a pre-defined task ticket.
@@ -775,7 +832,9 @@ export async function POST(req: Request) {
 
     // 0. Detect meta-mode: is the user refining an agent prompt rather than
     //    asking for work? If so, propose a patch and route to a different status.
-    const meta = await detectMeta(message);
+    //    PBS 2026-05-09 (architect bug #2): skip for chat-mode messages — they
+    //    are conversational, not prompt edits. Saves a full LLM call (~2s).
+    const meta = isChatMode ? { is_meta: false as const } : await detectMeta(message);
 
     if (meta.is_meta && meta.patch) {
       const patch = meta.patch;
@@ -866,10 +925,18 @@ export async function POST(req: Request) {
 
     if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
 
-    // 2. Triage via Anthropic (IT Manager role) — feeding the enriched message
-    //    so Kit can cite KB, see page data, recent tickets, active doc.
+    // 2. Triage via Anthropic (IT Manager role for full pipeline; persona
+    //    role for chat-mode so Felix/Vector/etc. answer in their own voice).
     const debug = { iterations: 0, lastError: null as string | null, lastText: null as string | null, tokens_in: 0, tokens_out: 0, duration_ms: 0 };
-    const triage = await triageMessage(enrichedMessage, debug, conversation_history);
+    // Resolve persona role: `mention` may be a nickname (sent by ChatShell)
+    // OR an already-resolved role-key (from parseMention). Try both.
+    const personaRole = mention
+      ? (NICKNAME_TO_ROLE[mention] ?? mention)
+      : "it_manager";
+    const triage = await triageMessage(enrichedMessage, debug, conversation_history, {
+      chatMode: isChatMode,
+      role: personaRole,
+    });
     if (triage && mention) {
       // @mention overrides whatever Kit recommended.
       (triage as Triage).recommended_agent = mention;
@@ -966,11 +1033,16 @@ export async function POST(req: Request) {
       // with the markdown surfaced via parsed_summary so the user sees the
       // actual response — a 502 hides a perfectly good answer.
       const fallbackText = (debug.lastText ?? "").trim();
+      // PBS 2026-05-09 (architect bug #2): in chat-mode the persona may
+      // skip JSON envelope and just answer in prose — that's a valid
+      // direct answer, not a triage failure. Accept any non-empty text.
       const looksLikeAnswer =
-        fallbackText.length >= 120 &&
-        (/^#{1,6}\s/m.test(fallbackText) ||      // markdown headings
-          /^\s*[-*]\s/m.test(fallbackText) ||    // bullets
-          /\|.*\|/.test(fallbackText));          // tables
+        isChatMode
+          ? fallbackText.length >= 5
+          : fallbackText.length >= 120 &&
+            (/^#{1,6}\s/m.test(fallbackText) ||      // markdown headings
+              /^\s*[-*]\s/m.test(fallbackText) ||    // bullets
+              /\|.*\|/.test(fallbackText));          // tables
 
       if (looksLikeAnswer) {
         const fakeTriage: Triage = {
