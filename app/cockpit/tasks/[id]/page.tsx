@@ -27,8 +27,8 @@ export default async function TicketPage({ params }: { params: { id: string } })
   if (!Number.isFinite(id)) return <main style={{ padding: 24, color: "white" }}>Invalid ticket id</main>;
 
   const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    (process.env.NEXT_PUBLIC_SUPABASE_URL || "https://build-placeholder.supabase.co"),
+    (process.env.SUPABASE_SERVICE_ROLE_KEY || "build-placeholder-key")
   );
 
   const { data: t, error } = await supabase

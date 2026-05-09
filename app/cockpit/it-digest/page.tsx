@@ -24,8 +24,8 @@ const EM = "—";
 
 async function getDigest(): Promise<DigestRow | null> {
   const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    (process.env.NEXT_PUBLIC_SUPABASE_URL || "https://build-placeholder.supabase.co"),
+    (process.env.SUPABASE_SERVICE_ROLE_KEY || "build-placeholder-key"),
     { auth: { persistSession: false } }
   );
   const { data, error } = await supabase.from("v_it_weekly_digest").select("*").maybeSingle();

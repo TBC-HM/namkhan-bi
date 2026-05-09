@@ -21,8 +21,8 @@ import { createClient } from "@supabase/supabase-js";
 import NotificationsBar from "@/components/cockpit/NotificationsBar";
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  (process.env.NEXT_PUBLIC_SUPABASE_URL || "https://build-placeholder.supabase.co"),
+  (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "build-placeholder-anon")
 );
 
 type Tab = "chat" | "schedule" | "team" | "tools" | "activity" | "docs" | "console";
