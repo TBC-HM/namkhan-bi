@@ -6,22 +6,22 @@
 //   eyebrow        small mono caps (e.g. "Canvas · the hotel")
 //   title          italic Fraunces (e.g. "What does the hotel need?")
 //   subPages?      horizontal strip rendered top-left, beside the global N
+//   topRight?      EXTRA top-right content (e.g. ⚙ Channel Settings) —
+//                  rendered LEFT of the always-on header pills.
+//   kpiTiles?      passed to <HeaderPills> for the date-hover popover.
+//   showHeaderPills (default true) — disable for chrome-less surfaces.
 //   children       page body
 //
 // Always rendered (unless explicitly disabled):
 //   • global N dropdown (top-left, fixed) — provided by app/layout.tsx
+//   • temp / air / date / user pills (consistent across every page —
+//     PBS 2026-05-09: "the air symbol, temperature, who is logged in
+//     is not on every page — header must be consistent throughout")
 //   • SLH affiliation footer + standard internal-BI line
-//
-// What we deliberately DO NOT put in here:
-//   • date+weather+user pill cluster — those belong to dept-entry-style
-//     pages and are already in <DeptEntry/>. Adding them here would put
-//     them on /sample/* and /design-system, which is wrong.
-//
-// Hard rule: no inline `style={{ fontSize / color: '#…' }}` literals
-// outside this shell. Use CSS variables in styles/globals.css :root.
 
 import type { ReactNode } from 'react';
 import SubPagesStrip from './SubPagesStrip';
+import HeaderPills from './HeaderPills';
 
 interface SubPageLink { label: string; href: string }
 interface PageProps {
@@ -30,26 +30,37 @@ interface PageProps {
   title?: ReactNode;
   /** Optional dept sub-pages strip rendered top-left, offset to clear the global N */
   subPages?: SubPageLink[];
-  /** Optional content rendered top-right (e.g. weather chips, user pill) */
+  /** Extra top-right content. Rendered LEFT of the always-on header pills. */
   topRight?: ReactNode;
+  /** KPI tiles shown in the date-hover popover (per-dept). */
+  kpiTiles?: Array<{ k: string; v: string; d: string }>;
+  /** Hide the temp/air/date/user pills (e.g. on /sample candidates). Default true. */
+  showHeaderPills?: boolean;
   /** Show standard footer (default true) */
   footer?: boolean;
   children: ReactNode;
 }
 
-export default function Page({ eyebrow, title, subPages, topRight, footer = true, children }: PageProps) {
+export default function Page({
+  eyebrow, title, subPages, topRight, kpiTiles,
+  showHeaderPills = true, footer = true, children,
+}: PageProps) {
   return (
     <div style={S.page}>
-      {/* TOP BAR — eyebrow / title on the left, top-right slot on the right.
-          When subPages is present we render the horizontal strip in place
-          of the eyebrow line so dept entries stay the way they are. */}
+      {/* TOP BAR — eyebrow / title on the left, header pills (always-on)
+          on the right, with optional `topRight` slot rendered first. */}
       <div style={S.topRow}>
         <div style={{ flex: 1, marginLeft: subPages ? 56 : 0 }}>
           {subPages && <SubPagesStrip items={subPages} />}
           {!subPages && eyebrow && <div style={S.eyebrow}>{eyebrow}</div>}
           {title && <h1 style={S.title}>{title}</h1>}
         </div>
-        {topRight && <div style={S.topRight}>{topRight}</div>}
+        {(topRight || showHeaderPills) && (
+          <div style={S.topRight}>
+            {topRight}
+            {showHeaderPills && <HeaderPills kpiTiles={kpiTiles} />}
+          </div>
+        )}
       </div>
 
       {/* BODY */}

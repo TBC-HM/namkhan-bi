@@ -923,8 +923,13 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
     </>
   );
 
+  // 2026-05-09: header pills (temp/air/date/user) now live in <Page> via
+  // <HeaderPills> — Page renders them automatically. DeptEntry just hands
+  // off cfg.kpiTiles so the date-hover popover can show per-dept numbers.
+  // The local topRightJSX is retained but unused; remove in a follow-up.
+  void topRightJSX;
   return (
-    <Page subPages={DEPT_LINKS} topRight={topRightJSX}>
+    <Page subPages={DEPT_LINKS} kpiTiles={cfg.kpiTiles}>
 
       {/* ── PROJECT BOX (PBS 2026-05-08) ───────────────────────────────────
        * Scopes chat + uploads to a project so the AI uses only global KB +

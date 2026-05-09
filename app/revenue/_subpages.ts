@@ -1,13 +1,8 @@
 // app/revenue/_subpages.ts
-// Shared sub-pages list rendered by the <Page subPages={REVENUE_SUBPAGES}> strip
-// on every revenue sub-route. Single source of truth so adding/removing a tab
-// changes one file.
+// Re-export from canonical DEPT_CFG so the strip is identical across the
+// dept entry page (rendered by <DeptEntry/>) and every sub-route (rendered
+// by <Page subPages>). PBS 2026-05-09: "main menu changes when I change
+// tabs — make sure they always sit on the same place".
 
-export const REVENUE_SUBPAGES = [
-  { label: 'Pulse',    href: '/revenue/pulse'    },
-  { label: 'Pace',     href: '/revenue/pace'     },
-  { label: 'Channels', href: '/revenue/channels' },
-  { label: 'Pricing',  href: '/revenue/pricing'  },
-  { label: 'Compset',  href: '/revenue/compset'  },
-  { label: 'Demand',   href: '/revenue/demand'   },
-];
+import { DEPT_CFG } from '@/lib/dept-cfg';
+export const REVENUE_SUBPAGES = DEPT_CFG.revenue.subPages;

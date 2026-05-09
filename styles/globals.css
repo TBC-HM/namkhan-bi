@@ -2700,3 +2700,32 @@ body:has(.public-prop-bg) .main {
   background: #0a0a0a !important; color: #e9e1ce !important;
   border-color: #2a261d !important;
 }
+
+/* ── Dark-canvas table readability (PBS 2026-05-09)
+ * Tables across the app inherit the legacy light .tbl class which set
+ * stone-* colours. On the dark canvas (body #0a0a0a) those colours read
+ * as nearly black-on-black until a hover lightens the row. Force every
+ * table cell to render with the dark-friendly palette by default.
+ */
+table { color: #d8cca8; }
+table th {
+  color: #a8854a !important;
+  background: #15110b !important;
+  border-bottom: 1px solid #2a261d !important;
+}
+table td { color: #d8cca8; border-bottom: 1px solid #1f1c15; }
+table.tbl tbody tr:hover td,
+table tbody tr:hover td { background: #1c160d; color: #f1e7d2; }
+
+/* Inputs + selects on the dark canvas also need a baseline. */
+input[type="text"], input[type="search"], input[type="email"],
+input[type="number"], input[type="date"], input[type="tel"],
+input[type="url"], textarea, select {
+  background: #0f0d0a;
+  color: #e9e1ce;
+  border: 1px solid #2a261d;
+}
+input::placeholder, textarea::placeholder { color: #5a5448; }
+
+/* The legacy .panel-warm / .paper-warm backgrounds need to flip dark too */
+.panel-warm, [class*="bg-paper-warm"] { background: #0f0d0a; }
