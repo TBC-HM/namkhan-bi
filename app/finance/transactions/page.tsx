@@ -5,7 +5,9 @@ import Page from '@/components/page/Page';
 import { FINANCE_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
-import { supabase, PROPERTY_ID } from '@/lib/supabase';
+// 2026-05-09: public.transactions has RLS blocking anon; use service role.
+import { PROPERTY_ID } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { fmtMoney } from '@/lib/format';
 import {
   FinanceStatusHeader,
@@ -33,6 +35,7 @@ export default async function TransactionsPage({ searchParams }: Props) {
   const offset  = (page - 1) * PAGE_SIZE;
 
   // ---- KPIs (window-scoped to the date filter) ----
+  const supabase = getSupabaseAdmin();
   const { data: kpiRows } = await supabase
     .from('transactions')
     .select('amount, transaction_type, category, usali_dept')

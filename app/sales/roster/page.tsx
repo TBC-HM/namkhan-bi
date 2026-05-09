@@ -2,7 +2,8 @@
 // Sales › Roster — staff & sales agents.
 // WIRED to public.v_staff_register_extended (proxy view, since 'ops' schema not API-exposed).
 
-import { supabase } from '@/lib/supabase';
+// 2026-05-09: anon RLS blocks v_staff_register_extended; use service role.
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import Page from '@/components/page/Page';
 import Panel from '@/components/page/Panel';
 import KpiBox from '@/components/kpi/KpiBox';
@@ -29,7 +30,7 @@ interface StaffRow {
 }
 
 async function getStaff() {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseAdmin()
     .from('v_staff_register_extended')
     .select('staff_id, full_name, position_title, dept_code, dept_name, employment_type, monthly_salary, salary_currency, hire_date, is_active, contract_hours_pw, skills')
     .eq('is_active', true)
