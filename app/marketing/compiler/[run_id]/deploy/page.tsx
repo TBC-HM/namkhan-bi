@@ -3,7 +3,8 @@
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { MARKETING_SUBPAGES } from '../../../_subpages';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import { fmtIsoDate } from '@/lib/format';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -34,13 +35,7 @@ export default async function DeployPage({ params }: { params: { run_id: string 
     .order('created_at', { ascending: false });
 
   return (
-    <>
-      <PageHeader
-        pillar="Marketing"
-        tab="Compiler · Deploy"
-        title={<>Deploy <em style={{ color: 'var(--brass)' }}>history</em></>}
-        lede="Each deploy publishes a web.retreats row. v1 routes to /r/[slug] on this domain."
-      />
+    <Page eyebrow="Marketing · Compiler · Deploy" title={<>Deploy <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>history</em></>} subPages={MARKETING_SUBPAGES}>
 
       <table className="data-table" style={{ marginTop: 22, width: '100%' }}>
         <thead>
@@ -78,6 +73,6 @@ export default async function DeployPage({ params }: { params: { run_id: string 
           ← Back to variants
         </Link>
       </div>
-    </>
+    </Page>
   );
 }

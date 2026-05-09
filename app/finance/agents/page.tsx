@@ -1,9 +1,10 @@
 // app/finance/agents/page.tsx — REDESIGN 2026-05-05 (recovery)
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { supabase } from '@/lib/supabase';
 import AgentsTable, { type AgentRow } from '@/app/revenue/agents/_components/AgentsTableClient';
+import { FINANCE_SUBPAGES } from '../_subpages';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -53,10 +54,7 @@ export default async function FinanceAgentsPage() {
   const totalSpent = rows.reduce((s, r) => s + (r.month_to_date_cost_usd ?? 0), 0);
 
   return (
-    <>
-      <PageHeader pillar="Finance" tab="Agents"
-        title={<>Finance <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>watchers</em> — variance, AR/AP, cash, close.</>}
-        lede={`${total} registered · ${active} active · MTD $${Math.round(totalSpent).toLocaleString()} of $${Math.round(totalBudget).toLocaleString()}`} />
+    <Page eyebrow="Finance · Agents" title={<>Finance <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>watchers</em> — variance, AR/AP, cash, close.</>} subPages={FINANCE_SUBPAGES}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'center', padding: '10px 16px', background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, marginTop: 14 }}>
         <span className="t-eyebrow">SOURCE</span>
         <StatusPill tone="active">governance.agents</StatusPill>
@@ -72,6 +70,6 @@ export default async function FinanceAgentsPage() {
         <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-xl)', fontWeight: 500, marginBottom: 6 }}>Agents</div>
         <AgentsTable rows={rows} />
       </div>
-    </>
+    </Page>
   );
 }

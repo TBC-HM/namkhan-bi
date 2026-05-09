@@ -2,7 +2,8 @@
 // Read-only view of pricing.pricelist — what the variant builder reads from.
 
 import Link from 'next/link';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { MARKETING_SUBPAGES } from '../../_subpages';
 import StatusPill from '@/components/ui/StatusPill';
 import DataTable from '@/components/ui/DataTable';
 import { fmtKpi, EMPTY } from '@/lib/format';
@@ -34,13 +35,7 @@ export default async function PricelistPage() {
   const rows = (data ?? []) as PriceRow[];
 
   return (
-    <>
-      <PageHeader
-        pillar="Marketing"
-        tab="Compiler · Pricelist"
-        title={<>Active <em style={{ color: 'var(--brass)' }}>pricelist</em></>}
-        lede="Cost stack the variant builder reads from. Rooms come from Cloudbeds rate_inventory directly — these are everything else (board, activities, spa, ceremonies, workshops, transport, addons)."
-      />
+    <Page eyebrow="Marketing · Compiler · Pricelist" title={<>Active <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>pricelist</em></>} subPages={MARKETING_SUBPAGES}>
 
       <div style={{
         marginTop: 14, padding: '10px 14px',
@@ -113,6 +108,6 @@ export default async function PricelistPage() {
       <div style={{ marginTop: 18, fontSize: 'var(--t-xs)', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>
         <Link href="/marketing/compiler" style={{ color: 'var(--brass)' }}>← BACK TO COMPILER</Link>
       </div>
-    </>
+    </Page>
   );
 }

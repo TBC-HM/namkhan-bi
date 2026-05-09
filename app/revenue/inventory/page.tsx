@@ -1,5 +1,6 @@
 // app/revenue/inventory/page.tsx — REDESIGN 2026-05-05 (recovery)
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { REVENUE_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { getRateInventoryCalendar } from '@/lib/data';
@@ -33,10 +34,7 @@ export default async function InventoryPage({ searchParams }: Props) {
   const lastShop = days.length ? days[days.length - 1].date : null;
 
   return (
-    <>
-      <PageHeader pillar="Revenue" tab="Inventory"
-        title={<>Sell what you <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>have</em>, push rate where it's tight.</>}
-        lede={`${period.label} · ${period.rangeLabel} · ${days.length} days`} />
+    <Page eyebrow="Revenue · Inventory" title={<>Sell what you <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>have</em>, push rate where it's tight.</>} subPages={REVENUE_SUBPAGES}>
       <div style={statusWrap}>
         <div style={statusRow1}>
           <div style={cell}><span className="t-eyebrow" style={{ marginRight: 8 }}>SOURCE</span><StatusPill tone="active">mv_rate_inventory_calendar</StatusPill></div>
@@ -67,7 +65,7 @@ export default async function InventoryPage({ searchParams }: Props) {
         <SectionHead title="Inventory" emphasis="per date" sub={`${days.length} days · sellable inventory + rate spread`} source="mv_rate_inventory_calendar" />
         <InventoryTable rows={days} />
       </div>
-    </>
+    </Page>
   );
 }
 

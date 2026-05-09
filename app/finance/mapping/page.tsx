@@ -1,5 +1,6 @@
 // app/finance/mapping/page.tsx — REDESIGN 2026-05-05 (recovery)
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { FINANCE_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { supabaseGl } from '@/lib/supabase-gl';
@@ -76,10 +77,7 @@ export default async function MappingPage() {
   const coveragePct = total > 0 ? ((total - unclear.length) / total) * 100 : 0;
 
   return (
-    <>
-      <PageHeader pillar="Finance" tab="Mapping"
-        title={<>Every account on a USALI <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>line</em> — or it's noise.</>}
-        lede={`${total} accounts · ${unclear.length} unclear · ${overridden.length} overridden · ${coveragePct.toFixed(0)}% coverage`} />
+    <Page eyebrow="Finance · Mapping" title={<>Every account on a USALI <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>line</em> — or it's noise.</>} subPages={FINANCE_SUBPAGES}>
       <FinanceStatusHeader
         top={<>
           <StatusCell label="SOURCE"><StatusPill tone="active">gl.v_account_class_status</StatusPill><span style={metaDim}>· classes</span></StatusCell>
@@ -121,6 +119,6 @@ export default async function MappingPage() {
           <div style={{ marginTop: 10 }}><MappingTable rows={standard} classes={classes} mode="standard" /></div>
         </details>
       </div>
-    </>
+    </Page>
   );
 }

@@ -1,5 +1,5 @@
 // app/settings/notifications/page.tsx — REDESIGN 2026-05-05 (recovery)
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
 import StatusPill from '@/components/ui/StatusPill';
 import { getCurrentUser } from '@/lib/currentUser';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
@@ -34,13 +34,7 @@ export default async function NotificationsPage() {
   const onCount = TOGGLES.filter((t) => isOn(t.key)).length;
 
   return (
-    <>
-      <PageHeader
-        pillar="Settings"
-        tab="Notifications"
-        title={<>Tell me when <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>it matters</em>.</>}
-        lede={`${onCount}/${TOGGLES.length} channels on · sent to ${user.email ?? 'registered email'}`}
-      />
+    <Page eyebrow="Settings · Notifications" title={<>Tell me when <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>it matters</em>.</>}>
       <div style={{ marginTop: 14, padding: '10px 16px', display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'center', background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8 }}>
         <span className="t-eyebrow">SOURCE</span>
         <StatusPill tone="active">app_settings</StatusPill>
@@ -78,7 +72,7 @@ export default async function NotificationsPage() {
       <div style={{ marginTop: 18, padding: '10px 14px', background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderLeft: '3px solid var(--brass)', borderRadius: 6, fontSize: 'var(--t-sm)', color: 'var(--ink-soft)' }}>
         Toggles are stored today; emails dispatch once SendGrid or Resend is wired. No live cron consuming this table yet.
       </div>
-    </>
+    </Page>
   );
 }
 

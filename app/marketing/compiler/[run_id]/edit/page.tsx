@@ -3,7 +3,8 @@
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { MARKETING_SUBPAGES } from '../../../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { fmtKpi } from '@/lib/format';
 
@@ -40,27 +41,20 @@ export default async function EditPage({
 
   if (!active) {
     return (
-      <>
-        <PageHeader pillar="Marketing" tab="Compiler · Edit" title="No variants" />
+      <Page eyebrow="Marketing · Compiler · Edit" title="No variants" subPages={MARKETING_SUBPAGES}>
         <div style={{ marginTop: 16 }}>
           <Link href={`/marketing/compiler/${params.run_id}`} style={{ color: 'var(--brass)' }}>
             ← Back to variants
           </Link>
         </div>
-      </>
+      </Page>
     );
   }
 
   const days = (active.day_structure ?? []) as Day[];
 
   return (
-    <>
-      <PageHeader
-        pillar="Marketing"
-        tab="Compiler · Edit"
-        title={<>Itinerary <em style={{ color: 'var(--brass)' }}>editor</em></>}
-        lede={<>Variant {active.label} · {active.room_category} · {fmtKpi(active.per_pax_usd, 'usd', 0)} per pax</>}
-      />
+    <Page eyebrow="Marketing · Compiler · Edit" title={<>Itinerary <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>editor</em></>} subPages={MARKETING_SUBPAGES}>
 
       <div style={{ marginTop: 16, display: 'flex', gap: 8, fontSize: 'var(--t-sm)' }}>
         {list.map(v => (
@@ -121,6 +115,6 @@ export default async function EditPage({
           ← Back to variants
         </Link>
       </div>
-    </>
+    </Page>
   );
 }

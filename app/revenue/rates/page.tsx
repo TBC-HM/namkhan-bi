@@ -1,5 +1,6 @@
 // app/revenue/rates/page.tsx — REDESIGN 2026-05-05 (recovery)
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { REVENUE_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { getRateInventoryCalendar } from '@/lib/data';
@@ -43,10 +44,7 @@ export default async function RatesPage({ searchParams }: Props) {
   const restrictionTotal = cta + ctd + stop + minStay;
 
   return (
-    <>
-      <PageHeader pillar="Revenue" tab="Rates"
-        title={<>BAR ladder, <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>spread</em>, and the levers around it.</>}
-        lede={`${period.label} · ${period.rangeLabel} · ${byType.length} room types · ${allRates.length} rate observations`} />
+    <Page eyebrow="Revenue · Rates" title={<>BAR ladder, <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>spread</em>, and the levers around it.</>} subPages={REVENUE_SUBPAGES}>
       <div style={statusWrap}>
         <div style={statusRow1}>
           <div style={cell}><span className="t-eyebrow" style={{ marginRight: 8 }}>SOURCE</span><StatusPill tone="active">mv_rate_inventory_calendar</StatusPill></div>
@@ -73,7 +71,7 @@ export default async function RatesPage({ searchParams }: Props) {
         <SectionHead title="BAR" emphasis="per room type" sub={`Min · avg · max · ${period.label}`} source="mv_rate_inventory_calendar" />
         <RatesTable rows={byType} />
       </div>
-    </>
+    </Page>
   );
 }
 

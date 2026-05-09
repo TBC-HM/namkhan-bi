@@ -1,5 +1,5 @@
 // app/settings/users/page.tsx — REDESIGN 2026-05-05 (recovery)
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
 import StatusPill from '@/components/ui/StatusPill';
 import { getCurrentUser, canEdit, roleLabel } from '@/lib/currentUser';
 import { supabase } from '@/lib/supabase';
@@ -12,14 +12,11 @@ export default async function UsersPage() {
 
   if (!canSee) {
     return (
-      <>
-        <PageHeader pillar="Settings" tab="Users & roles"
-          title={<>Who has <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>access</em>.</>}
-          lede="Owner-only" />
+      <Page eyebrow="Settings · Users & roles" title={<>Who has <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>access</em>.</>}>
         <div style={{ marginTop: 18, padding: 32, background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderLeft: '3px solid var(--st-bad)', borderRadius: 8 }}>
           <strong>Owner only.</strong> You're signed in as <strong>{roleLabel(user.role)}</strong>.
         </div>
-      </>
+      </Page>
     );
   }
 
@@ -33,10 +30,7 @@ export default async function UsersPage() {
   const seenLast30d = list.filter((u) => u.last_seen_at && new Date(u.last_seen_at) > new Date(Date.now() - 30 * 86_400_000)).length;
 
   return (
-    <>
-      <PageHeader pillar="Settings" tab="Users & roles"
-        title={<>Who has <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>access</em>.</>}
-        lede={`${list.length} users · ${active} active · ${owners} owner${owners === 1 ? '' : 's'} · ${seenLast30d} seen last 30d`} />
+    <Page eyebrow="Settings · Users & roles" title={<>Who has <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>access</em>.</>}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'center', padding: '10px 16px', background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, marginTop: 14 }}>
         <span className="t-eyebrow">SOURCE</span>
         <StatusPill tone="active">app_users</StatusPill>
@@ -66,7 +60,7 @@ export default async function UsersPage() {
           </table>
         </div>
       </div>
-    </>
+    </Page>
   );
 }
 

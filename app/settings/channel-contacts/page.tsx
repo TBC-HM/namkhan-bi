@@ -2,7 +2,7 @@
 // Admin form for editing revenue.channel_contacts (one row per OTA / channel).
 // Reads public.v_channel_contacts. Writes through public.f_set_channel_contact RPC.
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
 import { supabase } from '@/lib/supabase';
 import ContactsForm, { type ContactRow } from './ContactsForm';
 
@@ -51,14 +51,8 @@ export default async function ChannelContactsPage() {
   }
 
   return (
-    <>
-      <PageHeader
-        pillar="Settings"
-        tab="Channel contacts"
-        title={<>Channel <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>contacts</em></>}
-        lede={<>One contact card per OTA / channel. Writes through <code>public.f_set_channel_contact</code> · displayed on <code>/revenue/channels/[source]</code> as the left rail.</>}
-      />
+    <Page eyebrow="Settings · Channel contacts" title={<>Channel <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>contacts</em></>}>
       <ContactsForm rows={rows} />
-    </>
+    </Page>
   );
 }

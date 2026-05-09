@@ -1,5 +1,5 @@
 // app/settings/integrations/page.tsx — REDESIGN 2026-05-05 (recovery)
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
 import StatusPill from '@/components/ui/StatusPill';
 import KpiBox from '@/components/kpi/KpiBox';
 import { getCurrentUser, canEdit, roleLabel } from '@/lib/currentUser';
@@ -13,14 +13,11 @@ export default async function IntegrationsPage() {
 
   if (!canSee) {
     return (
-      <>
-        <PageHeader pillar="Settings" tab="Integrations"
-          title={<>What we're <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>plugged into</em>.</>}
-          lede="Owner-only" />
+      <Page eyebrow="Settings · Integrations" title={<>What we're <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>plugged into</em>.</>}>
         <div style={{ marginTop: 18, padding: 32, background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderLeft: '3px solid var(--st-bad)', borderRadius: 8 }}>
           <strong>Owner only.</strong> You're signed in as <strong>{roleLabel(user.role)}</strong>.
         </div>
-      </>
+      </Page>
     );
   }
 
@@ -62,10 +59,7 @@ export default async function IntegrationsPage() {
   const connectedCount = conns.filter((c) => c.ok).length;
 
   return (
-    <>
-      <PageHeader pillar="Settings" tab="Integrations"
-        title={<>What we're <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>plugged into</em>.</>}
-        lede={`${connectedCount}/${conns.length} services connected · ${agentCount ?? 0} agents registered · API keys live in Vercel env`} />
+    <Page eyebrow="Settings · Integrations" title={<>What we're <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>plugged into</em>.</>}>
       <div style={{ marginTop: 14, padding: '10px 16px', display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'center', background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8 }}>
         <span className="t-eyebrow">SOURCE</span>
         <StatusPill tone="active">app_settings · sync_log · governance.agents</StatusPill>
@@ -104,7 +98,7 @@ export default async function IntegrationsPage() {
       <div style={{ marginTop: 18, padding: '10px 14px', background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderLeft: '3px solid var(--brass)', borderRadius: 6, fontSize: 'var(--t-sm)', color: 'var(--ink-soft)' }}>
         API keys live in Vercel env vars for security. No write-back UI here — drift risk &gt; convenience. Update via Vercel dashboard.
       </div>
-    </>
+    </Page>
   );
 }
 

@@ -1,7 +1,7 @@
 // /settings/email-categories — operator-managed email category rules.
 // Edits update sales.email_categories + sales.email_category_rules via /api/sales/email-categories.
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import CategoriesEditor from './_components/CategoriesEditor';
 
@@ -34,14 +34,11 @@ async function load() {
 export default async function EmailCategoriesPage() {
   const { categories, rules } = await load();
   return (
-    <>
-      <PageHeader
-        pillar="Settings"
-        tab="Email categories"
-        title={<>Email cockpit · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>category rules</em></>}
-        lede="Edit which mail buckets into which kind. Add a sender pattern to push it into the bucket you want — first match wins."
-      />
+    <Page
+      eyebrow="Settings · Email categories"
+      title={<>Email cockpit · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>category rules</em></>}
+    >
       <CategoriesEditor categories={categories} rules={rules} />
-    </>
+    </Page>
   );
 }

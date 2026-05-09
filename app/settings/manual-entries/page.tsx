@@ -3,7 +3,7 @@
 // Mgmt Fees, Depreciation, Interest, Income Tax, FX, accruals.
 // Surfaces in /finance/pnl actuals via gl.v_actuals_with_manual once exposed.
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { revalidatePath } from 'next/cache';
 
@@ -86,13 +86,7 @@ export default async function ManualEntriesPage() {
   const defaultPeriod = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
 
   return (
-    <>
-      <PageHeader
-        pillar="Settings"
-        tab="Manual entries"
-        title={<>Manual <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>entries</em> · non-QB lines</>}
-        lede={`Use for P&L lines QuickBooks doesn't post: Mgmt Fees, Depreciation, Interest, Tax, FX, accruals. ${totalEntries} entries currently captured.`}
-      />
+    <Page eyebrow="Settings · Manual entries" title={<>Manual <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>entries</em> · non-QB lines</>}>
 
       {/* Add new */}
       <div className="panel" style={{ padding: 16, marginTop: 18 }}>
@@ -199,6 +193,6 @@ export default async function ManualEntriesPage() {
           For VAT rates see <a href="/settings/vat-rates">/settings/vat-rates</a>.
         </div>
       </div>
-    </>
+    </Page>
   );
 }

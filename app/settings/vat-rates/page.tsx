@@ -3,7 +3,7 @@
 // figures vs QuickBooks net actuals. Edit via inline form; writes via server
 // action; budget view re-renders on next request (force-dynamic).
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { revalidatePath } from 'next/cache';
 
@@ -56,13 +56,7 @@ export default async function VatRatesPage() {
   const list: VatRow[] = (rows ?? []) as VatRow[];
 
   return (
-    <>
-      <PageHeader
-        pillar="Settings"
-        tab="VAT rates"
-        title={<>VAT <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>rates</em> · per USALI subcategory</>}
-        lede="Used to bring gross plan.lines budget rows down to net for apples-to-apples vs QuickBooks (net) actuals. Default 10% Lao VAT for VAT-applicable subcategories. Edit + save to update P&L instantly."
-      />
+    <Page eyebrow="Settings · VAT rates" title={<>VAT <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>rates</em> · per USALI subcategory</>}>
 
       <div className="panel" style={{ padding: 18, marginTop: 18 }}>
         <table className="tbl">
@@ -135,6 +129,6 @@ export default async function VatRatesPage() {
           interest — anything VAT-exempt).
         </div>
       </div>
-    </>
+    </Page>
   );
 }

@@ -2,7 +2,8 @@
 // All retreats published from the compiler. Status / spots / link.
 
 import Link from 'next/link';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { MARKETING_SUBPAGES } from '../../_subpages';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import DataTable from '@/components/ui/DataTable';
 import { fmtIsoDate, fmtKpi } from '@/lib/format';
@@ -44,13 +45,7 @@ export default async function RetreatsListPage() {
   const rows = (data ?? []) as RetreatRow[];
 
   return (
-    <>
-      <PageHeader
-        pillar="Marketing"
-        tab="Compiler · Retreats"
-        title={<>Live <em style={{ color: 'var(--brass)' }}>retreats</em></>}
-        lede="All retreats published by the compiler. Click a slug to open the public page."
-      />
+    <Page eyebrow="Marketing · Compiler · Retreats" title={<>Live <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>retreats</em></>} subPages={MARKETING_SUBPAGES}>
 
       {error && (
         <div style={{ marginTop: 12, fontSize: 'var(--t-xs)', color: 'var(--st-bad)' }}>
@@ -107,6 +102,6 @@ export default async function RetreatsListPage() {
       <div style={{ marginTop: 18, fontSize: 'var(--t-xs)', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>
         <Link href="/marketing/compiler" style={{ color: 'var(--brass)' }}>← BACK TO COMPILER</Link>
       </div>
-    </>
+    </Page>
   );
 }

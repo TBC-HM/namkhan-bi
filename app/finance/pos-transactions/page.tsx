@@ -2,7 +2,8 @@
 // Finance · POS Transactions — F&B + Other Operated POS items only.
 // Filters out Rooms (room rate), tax, fee, payment, void, adjustment lines.
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { FINANCE_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
@@ -102,19 +103,11 @@ export default async function PosTransactionsPage({ searchParams }: Props) {
     .sort((a, b) => a.d.localeCompare(b.d));
 
   return (
-    <>
-      <PageHeader
-        pillar="Finance"
-        tab="POS"
-        title={
-          <>
-            Point-of-sale{' '}
-            <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>transactions</em>{' '}
-            — F&B · Spa · Retail · Transport.
-          </>
-        }
-        lede={`${rowCount?.toLocaleString() ?? 0} POS line items · ${since} → ${until} · ${fmtMoney(total$, 'USD')} sales`}
-      />
+    <Page
+      eyebrow="Finance · POS"
+      title={<>Point-of-sale <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>transactions</em> — F&B · Spa · Retail · Transport.</>}
+      subPages={FINANCE_SUBPAGES}
+    >
 
       <FinanceStatusHeader
         top={
@@ -279,7 +272,7 @@ export default async function PosTransactionsPage({ searchParams }: Props) {
           </div>
         )}
       </div>
-    </>
+    </Page>
   );
 }
 

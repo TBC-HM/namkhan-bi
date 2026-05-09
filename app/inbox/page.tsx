@@ -2,7 +2,7 @@
 // Reads sales.email_messages. All messages from all 3 mailboxes flow here.
 
 import Link from 'next/link';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import { listEmailThreads, getThreadMessages, listInboxTabs, getMailboxStats, getThreadResponseMap, getThreadResponseTime, getInboxVolumeByDay, getResponseTimeHistogram } from '@/lib/sales';
 import { VolumeByDayChart, MailboxVolumeChart, ResponseTimeChart } from '@/components/inbox/InboxCharts';
@@ -141,13 +141,7 @@ export default async function InboxPage({
   const activeDir = searchParams.dir ?? 'all';
 
   return (
-    <>
-      <PageHeader
-        pillar="Operations"
-        tab="Inbox"
-        title={<>Inbox · all <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>mail</em></>}
-        lede={`${tabsTotal} message${tabsTotal===1?'':'s'} across ${tabs.length} mailbox${tabs.length===1?'':'es'} · ${tabsUnread} unread`}
-      />
+    <Page eyebrow="Operations · Inbox" title={<>Inbox · all <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>mail</em></>}>
 
       {/* ANALYTICS STRIP */}
       <div style={{
@@ -507,6 +501,6 @@ export default async function InboxPage({
           )}
         </article>
       </div>
-    </>
+    </Page>
   );
 }

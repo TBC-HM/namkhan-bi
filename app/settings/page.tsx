@@ -1,6 +1,6 @@
 // app/settings/page.tsx — REDESIGN 2026-05-05 (recovery)
 import Link from 'next/link';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
@@ -54,10 +54,7 @@ export default async function SettingsSnapshotPage() {
   const sectionsList = (sections ?? []) as Array<{ section_code: string; display_name: string; description: string | null; placeholder_count: number | null; row_count: number | null; }>;
 
   return (
-    <>
-      <PageHeader pillar="Settings" tab="Snapshot"
-        title={<>One source of truth <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>for the property</em>.</>}
-        lede={profile ? `${profile.trading_name ?? 'Property'} · ${roomsCount ?? 0} room types · ${sectionsList.length} editable sections · ${completePct.toFixed(0)}% complete` : `${roomsCount ?? 0} room types`} />
+    <Page eyebrow="Settings · Snapshot" title={<>One source of truth <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>for the property</em>.</>}>
       <GuestStatusHeader
         top={<>
           <StatusCell label="SOURCE"><StatusPill tone="active">marketing.property_profile</StatusPill><span style={metaDim}>· room_types · app_users · dq_known_issues</span></StatusCell>
@@ -161,6 +158,6 @@ export default async function SettingsSnapshotPage() {
           </div>
         )}
       </div>
-    </>
+    </Page>
   );
 }

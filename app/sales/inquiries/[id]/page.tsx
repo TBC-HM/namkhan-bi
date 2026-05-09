@@ -3,7 +3,8 @@
 
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { SALES_SUBPAGES } from '../../_subpages';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import { getInquiry, createProposalFromInquiry } from '@/lib/sales';
 import { fmtIsoDate, EMPTY } from '@/lib/format';
@@ -37,14 +38,12 @@ export default async function InquiryDetail({ params }: { params: { id: string }
   const triageConf = inq.triage_conf ? `${(Number(inq.triage_conf) * 100).toFixed(0)}%` : EMPTY;
 
   return (
-    <>
-      <PageHeader
-        pillar="Sales"
-        tab="Inquiries"
-        title={<>{inq.guest_name ?? 'Unknown guest'} <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>· {inq.country ?? '—'}</em></>}
-        lede={`${inq.source} · ${fmtIsoDate(inq.date_in)} → ${fmtIsoDate(inq.date_out)} · ${inq.party_adults ?? 0}A ${inq.party_children ?? 0}C · ${inq.language}`}
-        rightSlot={<StatusPill tone={status.tone}>{status.label}</StatusPill>}
-      />
+    <Page
+      eyebrow="Sales · Inquiries · Detail"
+      title={<>{inq.guest_name ?? 'Unknown guest'} <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>· {inq.country ?? '—'}</em></>}
+      subPages={SALES_SUBPAGES}
+      topRight={<StatusPill tone={status.tone}>{status.label}</StatusPill>}
+    >
 
       <div className="card-grid-3" style={{ marginTop: 18 }}>
         <article className="panel">
@@ -89,6 +88,6 @@ export default async function InquiryDetail({ params }: { params: { id: string }
       <div style={{ marginTop: 18 }}>
         <Link href="/sales/inquiries" className="t-eyebrow" style={{ color: 'var(--ink-mute)' }}>← back to inquiries</Link>
       </div>
-    </>
+    </Page>
   );
 }

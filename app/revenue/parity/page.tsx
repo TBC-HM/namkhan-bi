@@ -14,7 +14,8 @@
 //   6. Agent run history
 //   7. Roadmap / what's measured today
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import { REVENUE_SUBPAGES } from '../_subpages';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import { supabase } from '@/lib/supabase';
 import { fmtTableUsd, fmtIsoDate, EMPTY } from '@/lib/format';
@@ -153,18 +154,11 @@ export default async function ParityPage() {
   const lastRun = data.runs[0] ?? null;
 
   return (
-    <>
-      <PageHeader
-        pillar="Revenue"
-        tab="Parity"
-        title={
-          <>
-            Watch the <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>price line</em>,
-            close the leaks.
-          </>
-        }
-        lede="Detect rate-parity breaches across channels — refundable vs non-refundable, OTA vs direct, day-over-day jumps."
-      />
+    <Page
+      eyebrow="Revenue · Parity"
+      title={<>Watch the <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>price line</em>, close the leaks.</>}
+      subPages={REVENUE_SUBPAGES}
+    >
 
       {/* COMPACT AGENT HEADER (replaces 5-cell TopStrip) */}
       <ParityCompactHeader
@@ -410,7 +404,7 @@ export default async function ParityPage() {
           </ul>
         </div>
       </div>
-    </>
+    </Page>
   );
 }
 

@@ -1,5 +1,5 @@
 // app/settings/reports/page.tsx — REDESIGN 2026-05-05 (recovery)
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
 import StatusPill from '@/components/ui/StatusPill';
 import { getCurrentUser, canEdit, roleLabel } from '@/lib/currentUser';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
@@ -12,14 +12,11 @@ export default async function ReportsPage() {
 
   if (!canSee) {
     return (
-      <>
-        <PageHeader pillar="Settings" tab="Reports"
-          title={<>Scheduled <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>reports</em>.</>}
-          lede="Owner-only" />
+      <Page eyebrow="Settings · Reports" title={<>Scheduled <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>reports</em>.</>}>
         <div style={{ marginTop: 18, padding: 32, background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderLeft: '3px solid var(--st-bad)', borderRadius: 8 }}>
           <strong>Owner only.</strong> You're signed in as <strong>{roleLabel(user.role)}</strong>.
         </div>
-      </>
+      </Page>
     );
   }
 
@@ -55,10 +52,7 @@ export default async function ReportsPage() {
   const onCount = rows.filter((r) => r.enabled).length;
 
   return (
-    <>
-      <PageHeader pillar="Settings" tab="Reports"
-        title={<>Scheduled <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>reports</em>.</>}
-        lede={`${rows.length} schedules · ${onCount} enabled · email dispatch not wired`} />
+    <Page eyebrow="Settings · Reports" title={<>Scheduled <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>reports</em>.</>}>
       <div style={{ marginTop: 14, padding: '10px 16px', display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'center', background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8 }}>
         <span className="t-eyebrow">SOURCE</span>
         <StatusPill tone="active">app_settings · reports.*</StatusPill>
@@ -94,7 +88,7 @@ export default async function ReportsPage() {
       <div style={{ marginTop: 18, padding: '10px 14px', background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderLeft: '3px solid var(--brass)', borderRadius: 6, fontSize: 'var(--t-sm)', color: 'var(--ink-soft)' }}>
         Reports belong as a top-level menu when the builder ships — they're listed under Settings for now since the schedule sits with property config.
       </div>
-    </>
+    </Page>
   );
 }
 
