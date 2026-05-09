@@ -222,23 +222,45 @@ async function runSweep(): Promise<SweepResult> {
           reasoning: `ticket #${ticket.id} reached ${tStatus}; bug #${bug.id} flipped to done`,
         });
       }
-    } else if (WORKING_TICKET_STATUSES.has(tStatus) && bug.status === "acked") {
-      const { error: upErr } = await supabase
-        .from("cockpit_bugs")
-        .update({ status: "processing", started_at: nowIso, updated_at: nowIso })
-        .eq("id", bug.id)
-        .eq("status", "acked");
-      if (!upErr) {
-        promoted.push({ bug_id: bug.id, ticket_id: ticket.id as number, from: "acked", to: "processing" });
-        await supabase.from("cockpit_audit_log").insert({
-          ticket_id: ticket.id as number,
-          agent: "bugs_sweep",
-          action: "promote_processing",
-          target: `bug:${bug.id}`,
-          success: true,
-          metadata: { bug_id: bug.id, ticket_status: tStatus },
-          reasoning: `ticket #${ticket.id} status=${tStatus}; bug #${bug.id} flipped acked→processing`,
-        });
+    } else if (WORKING_TICKET_STATUSES.has(tStatus)) {
+      // PBS 2026-05-09: when ticket reaches awaits_user (or any working state)
+      // and a preview_url exists, copy it onto the bug NOW so the dept-entry
+      // bug box can render the "✓ approve · deploy" button. Previously fix_link
+      // only got copied at TERMINAL — meaning approval was invisible to PBS.
+      const previewLink = (ticket.preview_url as string | null) || null;
+      const isAwaitsUser = tStatus === "awaits_user";
+      const wantsLink = isAwaitsUser && previewLink && previewLink.startsWith("https://");
+
+      const patch: Record<string, unknown> = { updated_at: nowIso };
+      let didFlip = false;
+      if (bug.status === "acked") {
+        patch.status = "processing";
+        patch.started_at = nowIso;
+        didFlip = true;
+      }
+      if (wantsLink) {
+        patch.fix_link = previewLink;
+        patch.fix_label = "preview · approve to promote";
+      }
+
+      // Only update if there's something to write
+      if (didFlip || wantsLink) {
+        const q = supabase.from("cockpit_bugs").update(patch).eq("id", bug.id);
+        const { error: upErr } = bug.status === "acked"
+          ? await q.eq("status", "acked")
+          : await q.in("status", ["acked", "processing"]);
+        if (!upErr && didFlip) {
+          promoted.push({ bug_id: bug.id, ticket_id: ticket.id as number, from: "acked", to: "processing" });
+          await supabase.from("cockpit_audit_log").insert({
+            ticket_id: ticket.id as number,
+            agent: "bugs_sweep",
+            action: "promote_processing",
+            target: `bug:${bug.id}`,
+            success: true,
+            metadata: { bug_id: bug.id, ticket_status: tStatus, preview_url: previewLink },
+            reasoning: `ticket #${ticket.id} status=${tStatus}; bug #${bug.id} flipped acked→processing${wantsLink ? ` + fix_link copied for approve` : ``}`,
+          });
+        }
       }
     } else if (FAILED_TICKET_STATUSES.has(tStatus)) {
       // PBS 2026-05-09: Kit triage failed — flip the bug BACK to 'new'

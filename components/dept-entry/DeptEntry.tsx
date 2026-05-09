@@ -47,6 +47,10 @@ interface BugItem       {
   fix_label?: string | null;
   created_at: string;
   done_at?: string | null;
+  // PBS 2026-05-09: virtual rows are tickets that reached awaits_user without
+  // a linked bug (chat-created tasks). Negative `id` + `ticket_id` set.
+  virtual?: boolean;
+  ticket_id?: number;
 }
 
 const BUG_STATUS_DOT: Record<BugItem['status'], string> = {
@@ -481,12 +485,26 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
     } catch { /* silent */ }
   }
   async function delBug(id: number) {
+    const target = bugs.find(b => b.id === id);
     setBugs(prev => prev.filter(b => b.id !== id));
+    if (target?.virtual && target.ticket_id) {
+      // PBS 2026-05-09: virtual rows are awaits_user tickets — "delete" =
+      // dismiss the approval (mark ticket rejected so it doesn't keep showing).
+      try {
+        await fetch('/api/cockpit/tickets/dismiss', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ticket_id: target.ticket_id, approver: 'PBS' }),
+        });
+      } catch { /* silent */ }
+      return;
+    }
     try {
       await fetch(`/api/cockpit/bugs?id=${id}`, { method: 'DELETE' });
     } catch { /* silent */ }
   }
   async function cycleBugStatus(b: BugItem) {
+    if (b.virtual) return; // virtual rows are ticket-driven; no manual cycle
     const order: BugItem['status'][] = ['new', 'acked', 'processing', 'done'];
     const next = order[(order.indexOf(b.status) + 1) % order.length];
     setBugs(prev => prev.map(x => x.id === b.id ? { ...x, status: next } : x));
@@ -1610,14 +1628,18 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
                 {b.status === 'processing' && b.fix_link && b.fix_link.startsWith('https://namkhan-') && b.fix_link.includes('vercel.app') && !b.fix_link.includes('namkhan-bi.vercel.app') && (
                   // PBS 2026-05-09: when sweep links a preview deploy URL, surface
                   // "Approve & Deploy" so PBS one-clicks promote-to-prod.
+                  // Virtual rows (chat-created tickets) carry ticket_id; real bugs use id.
                   <button
                     onClick={async () => {
                       if (!confirm(`Promote ${b.fix_link} to production?`)) return;
                       try {
+                        const payload: Record<string, unknown> = b.virtual
+                          ? { ticket_id: b.ticket_id, deployment_url: b.fix_link, approver: 'PBS' }
+                          : { bug_id: b.id, deployment_url: b.fix_link, approver: 'PBS' };
                         const res = await fetch('/api/cockpit/approve-deploy', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ bug_id: b.id, deployment_url: b.fix_link, approver: 'PBS' }),
+                          body: JSON.stringify(payload),
                         });
                         const j = await res.json();
                         if (res.ok) {
