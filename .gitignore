@@ -34,3 +34,6 @@ migration_phase2_*.sql
 
 # Phase 0 closure secrets — local only, never commit
 cockpit/PHASE_0_CLOSURE_GH_SECRETS.md
+
+# Vercel CLI staging worktree (PBS 2026-05-09)
+.vercel-staging/

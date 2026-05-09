@@ -2778,3 +2778,61 @@ PBS: "ON ALL TABLES AND GRAPHS MAKE THE EXPAND SIGN IN THE RIGHT CORNER THAT USE
   - `/revenue/demand` → HTTP 200, `data-expandable="true"` ×1 (extra spot-check)
 - **Follow-up.** `app/finance/pnl` should migrate its 3 local `*Panel` wrappers onto canonical `<Panel>` so they inherit the expand affordance. Out of scope for this batch.
 - KB row scope `design_system_log` source `session-2026-05-09` topic `panel_expand_modal`.
+
+### 2026-05-09 — Smart BTB unification page (MICE · DMC · Retreats · Groups)
+
+PBS: "IN BTB DMC AREA WE SHOULD BE ABLE TO DIFFERENTIATE BETWEEN MICE, DMC, RETREATS, GROUPS — MAKE ONE NEW SMART PAGE WHERE YOU COMBINE DROPDOWNS, CONTAINERS, ETC WANT TO AVOID TOO MUCH CLICKING".
+
+- **`/sales/btb` rebuilt as one smart page.** Replaces the per-segment URL-param tabbed view with a unified `<Account>` table + type pills (All · MICE · DMC · Retreats · Groups), filter dropdowns (country / status / channel), search box, and slide-in detail drawer. No more URL hop on every tab change — all client-side state.
+- **Server projection.** Three sources fan out into one shape: `governance.dmc_contracts` → `type=DMC`; `marketing.retreat_programs` → `type=Retreat`; `public.groups` split via name regex (offsite/leadership/incentive/conference/workshop/etc) → `type=MICE` else `type=Group`. No `type` column existed in any single source, so it is derived deterministically server-side.
+- **KPI strip.** 7 `<KpiBox>` tiles: Total accounts · Active/open · per-type counts (4) · Pipeline value (changes label + value when a type pill is selected, summing USD value where status = active|pending).
+- **Drawer pattern** mirrors `app/guest/directory/_components/ProfileDrawer.tsx` — right-side slide-in with eyebrow + Fraunces-italic name + status pill + key/value detail + optional "Open full record →" deep-link (DMC rows link to `/sales/b2b/partner/<id>`; retreats and groups have no dedicated detail page yet so the link is hidden).
+- **Empty-state CTAs.** When a tab has zero rows in source (today: MICE = 0, since no group_name in `public.groups` matches the regex) the empty-state message points the user at the relevant creation flow (`/sales/groups`, `/sales/b2b`, `/marketing/compiler/retreats`). Skipped/data-gap noted in the wired footer line.
+- **Canonical primitives only.** `<Page>` shell, `<KpiBox>`, `<Panel>`, `<DataTable>`, `<StatusPill>`, `<ArtifactActions>`. Em-dash for empty cells via `EMPTY` from `lib/format.ts`. Token sizes (`--t-xs/sm/md/2xl`, `--ls-extra/loose`) only — no hardcoded fontSize literals in the new code.
+- **Sub-pages strip.** Sales subPages strip already lists `BTB` (per `lib/dept-cfg/index.ts` since the morning's split between `/sales/b2b` deep contracts page and `/sales/btb` unified landing). Left untouched — this batch only re-implements the BTB page contents.
+- **Files touched.**
+  - `app/sales/btb/page.tsx` (rewritten — server projection of 3 sources into unified `Account[]`)
+  - `app/sales/btb/_components/SmartBtbClient.tsx` (NEW — pills, filters, search, sortable DataTable, slide-in drawer)
+- **Verification.** `npx tsc --noEmit` — BTB files clean; the same 7 pre-existing errors (`pdf_worker`, `sample/1`, `revenue/pricing`, `dept-entry/DeptEntry`) carry over from sibling-agent scope, none related to BTB. Deploy `dpl_DKMyCkyxFZwWf9YrB1Vhir7dkwfH` → `namkhan-bi.vercel.app`. Smoke:
+  - alias `/sales/btb?bust=$RANDOM` → HTTP 200, MICE ×8, DMC ×167, Retreats ×6, Groups ×4, Wired-line confirms 22 DMC · 3 retreats · 0 MICE · 20 groups
+  - deployment URL `/sales/btb?bust=$RANDOM` → HTTP 200
+- **Skipped (per concurrent-agent fence).** `app/sales/leads/**`, `app/sales/pipeline/**`, `components/page/Panel.tsx`, `app/cockpit/page.tsx`, `scripts/agent-runner.ts`, `.github/workflows/**` — untouched.
+- KB row scope `design_system_log` source `session-2026-05-09` topic `btb_smart_unification`.
+
+### 2026-05-09 — Leads + Pipeline merged workspace + CSV upload + scraping scaffolding
+
+PBS: "IN THE LEADS AREA DESIGN THE WHOLE CONCEPT IN BACKEND AND FRONTEND THAT WE CAN UPLOAD LEADS WE HAVE AND THE WHOLE LEAD GENERATION SCRAPING CONCEPT IS INTEGRATED" + "SHOULD LEADS AND PIPELINE BE BETTER ON ONE PAGE? IF SO PLEASE MAKE A SENSEFUL REDESIGN".
+
+- **Merged into `/sales/leads`** (kept the existing route since `_subpages` already points there and `/sales/pipeline` already 307-redirects to it). One funnel — raw → qualified → contacted → pipeline → won/lost — instead of two pages.
+- **New backend tables (sales schema).**
+  - `sales.leads` — 20 canonical fields mirroring `targeting.lead_scraping_fields` (lead_id · company_name · category · subcategory · country · city · language · website · instagram_url · decision_maker_name · decision_maker_role · email · phone_whatsapp · retreat_history · upcoming_retreat_signal · audience_size_proxy · price_level · icp_score 0-100 · intent_score 0-100 · final_priority) + `status raw|qualified|contacted|pipeline|won|lost|dropped` + `notes` + `source csv|scrape|manual` + `prospect_id` (uuid FK to `sales.prospects` for promotion) + `imported_at` + `created_at` + `updated_at`. Unique idx on `(property_id, lead_id)`. Distinct from `sales.prospects` which stays as the active outreach engine — a lead promotes to a prospect when it qualifies.
+  - `sales.scraping_jobs` — pure scaffolding for the agent-runner: `query` · `target_category` · `status queued|running|done|failed` · `lead_count` · timestamps. Cockpit_proposals owns the runner spec; this table is just the queue.
+  - RLS on, service_role policy + explicit GRANTs (sales schema doesn't auto-grant to service_role).
+- **CSV upload route (NEW).** `POST /api/sales/leads/upload` — parses CSV against the 20 canonical fields with header alias support (e.g. `company` → `company_name`, `instagram` → `instagram_url`). Per-row validation (company_name required), batch dedupe by `lead_id` and `lower(email)` against existing rows + within batch. Returns `{ parsed, valid, inserted, skipped_duplicates, errors[] }`. `GET` returns the canonical-field reference. `POST {}` → 400 `pass csv or rows`.
+- **Lead PATCH route (NEW).** `PATCH/DELETE /api/sales/leads/:id` — inline status flips from the queue. Whitelisted patchable fields, no schema escape.
+- **Scraping queue route (NEW).** `GET/POST /api/sales/leads/scraping-jobs` — list and enqueue. Empty `POST` → 400 `query is required`.
+- **Page anatomy** (locked):
+  1. KPI strip — Raw / Qualified / In pipeline / Won-30d / Lost-30d (canonical `<KpiBox>`, no hardcoded fontSize).
+  2. CSV upload zone — drag-drop or click, inline parse-result panel (parsed · valid · inserted · skipped duplicates · row-level errors).
+  3. Two-column body — left `<Panel>` leads queue (search + status pill filter + sort key + inline status flip) · right `<Panel>` pipeline kanban-by-stage (Qualified · Contacted · In pipeline · Won · Lost).
+  4. Scraping queue panel — recent jobs table + "↻ Run scrape" CTA (modal: query + category → enqueue). Honest "no agent wired yet" eyebrow.
+  5. Below: existing prospects + cohorts + outreach drafts pane preserved inside a `<Panel>` with `eyebrow="legacy — distinct from sales.leads"` so the email-draft engine isn't lost.
+- **Brand.** `<Page>`/`<Panel>`/`<KpiBox>` only. Em-dash via `EMPTY` for empty cells. Token-only sizing. No hardcoded hex outside `:root`.
+- **Files touched.**
+  - `app/sales/leads/page.tsx` (rewritten — adds `listLeads()` + `listScrapingJobs()`, wraps the new workspace + the legacy outreach client)
+  - `app/sales/leads/_components/LeadsPipelineWorkspace.tsx` (NEW — the 5-block workspace, kanban, upload zone, scrape modal)
+  - `app/api/sales/leads/upload/route.ts` (NEW — CSV → sales.leads)
+  - `app/api/sales/leads/[id]/route.ts` (NEW — PATCH/DELETE)
+  - `app/api/sales/leads/scraping-jobs/route.ts` (NEW — GET/POST queue)
+  - Migrations: `sales_leads_and_scraping_jobs`, `sales_leads_grants`
+- **Verification.** `npx tsc --noEmit` — leads files clean; same 7 pre-existing sibling-agent errors carry over (pricing, sample/1, pdf_worker, DeptEntry, Panel deletion). Deploy `dpl_HJViM2zxXh7vtR3Hpvs469nJwLob` → `namkhan-bi.vercel.app`. Smoke:
+  - `/sales/leads?bust=$RANDOM` → HTTP 200, renders KPI strip + kanban + uploaded test rows
+  - `/sales/pipeline?bust=$RANDOM` → HTTP 307 (still redirects)
+  - `POST /api/sales/leads/upload {}` → HTTP 400 `pass csv or rows`
+  - `POST /api/sales/leads/upload {csv: "company_name,...\nAcme Yoga,..."}` → HTTP 200 `inserted: 2`
+  - Re-upload same CSV → `skipped_duplicates: 2, inserted: 0`
+  - Missing `company_name` row → HTTP 400 with `errors: [{row: 2, reason: 'company_name is required'}]`
+  - `POST /api/sales/leads/scraping-jobs {}` → HTTP 400 `query is required`
+  - `POST /api/sales/leads/scraping-jobs {query: "...", target_category: "..."}` → HTTP 200, returns queued job id
+- **Skipped (per concurrent-agent fence).** `app/sales/b2b/**`, `app/sales/dmc/**`, `components/page/Panel.tsx`, `app/cockpit/page.tsx`, `scripts/agent-runner.ts`, `.github/workflows/**` — untouched. The other 3 sibling-WIP files (`app/revenue/pricing/page.tsx`, `app/sales/btb/page.tsx`, `components/page/Panel.tsx` deletion of `PanelExpander`) were also untouched; their pre-existing tsc errors are out of scope here.
+- KB row scope `design_system_log` source `session-2026-05-09` topic `leads_pipeline_unification`.
