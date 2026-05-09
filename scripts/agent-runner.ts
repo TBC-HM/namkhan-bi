@@ -129,6 +129,11 @@ async function fetchTickets(): Promise<Ticket[]> {
     .in('arm', ['dev', 'code'])
     .in('intent', ['build', 'spec', 'fix'])
     .is('preview_url', null)
+    // PBS 2026-05-09 hard rule: processed_at IS NULL ensures a ticket is
+    // never picked up twice. The DB trigger stamps processed_at on any
+    // terminal status flip; the agent-runner respects that as a permanent
+    // "do not re-process" mark even if status is later mutated.
+    .is('processed_at', null)
     .order('updated_at', { ascending: true })
     .limit(MAX_BATCH);
   return (data ?? []) as Ticket[];
@@ -282,6 +287,9 @@ async function processOne(t: Ticket): Promise<void> {
       pr_url: prevUrl,
       preview_url: prevUrl, // GitHub PR doubles as the link until vercel webhook lands
       iterations: 1,
+      // PBS 2026-05-09 rule: stamp processed_at so this ticket is locked
+      // from any future agent-runner pickup even if status is mutated.
+      processed_at: new Date().toISOString(),
       metadata: { ...(meta || {}), agent_runner: { branch, applied, model: MODEL, ts: new Date().toISOString() } },
     })
     .eq('id', t.id);

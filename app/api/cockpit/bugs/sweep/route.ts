@@ -163,10 +163,15 @@ async function runSweep(): Promise<SweepResult> {
   // as the join key so we don't need a schema migration.
   const promoted: SweepResult["promoted"] = [];
 
+  // PBS 2026-05-09 hard rule: explicitly exclude 'done' so the sweep can
+  // never re-pick up a finished bug, even if its linked ticket later flips
+  // status. The DB-side trigger blocks status reverts from done, so this is
+  // belt-and-braces.
   const { data: liveBugs, error: liveErr } = await supabase
     .from("cockpit_bugs")
     .select("id, status")
     .in("status", ["acked", "processing"])
+    .neq("status", "done")
     .order("id", { ascending: true })
     .limit(50);
 
