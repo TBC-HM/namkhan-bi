@@ -130,12 +130,16 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
         </button>
         {userOpen && (
           <div style={S.userMenu}>
+            {/* PBS 2026-05-09 #21: mailbox lives inside the user dropdown,
+                styled to the dark standard. */}
+            <a href="/inbox"                    onClick={() => setUserOpen(false)} style={S.link}>📬  Inbox</a>
             <a href="/settings/property"        onClick={() => setUserOpen(false)} style={S.link}>Settings</a>
-            <a href="/settings/email-categories" onClick={() => setUserOpen(false)} style={S.link}>Email</a>
+            <a href="/settings/email-categories" onClick={() => setUserOpen(false)} style={S.link}>Email categories</a>
             <a href="/cockpit/users"             onClick={() => setUserOpen(false)} style={S.link}>Account</a>
             <div style={S.menuDivider}>
               <div style={S.menuSection}>Tools</div>
               <a href="/cockpit"               onClick={() => setUserOpen(false)} style={S.link}>IT cockpit</a>
+              <a href="/cockpit/tasks"         onClick={() => setUserOpen(false)} style={S.link}>Tasks</a>
               <a href="/knowledge"             onClick={() => setUserOpen(false)} style={S.link}>Knowledge</a>
               <a href="/front-office/arrivals" onClick={() => setUserOpen(false)} style={S.link}>Front office</a>
             </div>

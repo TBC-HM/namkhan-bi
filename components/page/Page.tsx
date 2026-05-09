@@ -150,14 +150,16 @@ const S: Record<string, React.CSSProperties> = {
   },
   footerLeft:  { display: 'flex', alignItems: 'center', gap: 12 },
   footerRight: {
+    // PBS 2026-05-09 #22: stronger footer contrast (not bigger).
     display: 'flex', flexWrap: 'wrap', gap: 18,
     fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-    fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase', color: '#7d7565',
+    fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase',
+    color: '#b8a98a', fontWeight: 500,
   },
-  footerLink: { color: '#9b907a', textDecoration: 'none', transition: 'color 100ms ease' },
-  footerSep:  { color: '#3d3a32' },
+  footerLink: { color: '#d8cca8', textDecoration: 'none', fontWeight: 600, transition: 'color 100ms ease' },
+  footerSep:  { color: '#5a5448' },
   footerKick: {
     fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-    fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#5a5448',
+    fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#9b907a', fontWeight: 500,
   },
 };
