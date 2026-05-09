@@ -208,7 +208,7 @@ export default async function ChannelsPage({ searchParams }: Props) {
           tooltip="Total commission ÷ occupied room-nights, USD per occ RN. Lower is better." />
       </div>
       {/* deltaHint helper kept to retain compare windows for callers; no UI yet. */}
-      {void deltaHint /* eslint-disable-line @typescript-eslint/no-unused-vars */}
+      {void deltaHint}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12, marginBottom: 14 }}>
         <Panel title="Channel mix · weekly trend" eyebrow={period.label} actions={<ArtifactActions context={ctx('panel', 'Channel mix · weekly trend')} />}>
