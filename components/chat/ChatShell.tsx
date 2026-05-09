@@ -68,7 +68,11 @@ function stripTicketFraming(s: string | null): { user: string; agent: string } {
     agent = agent.replace(/^\*\*Triage\*\*[\s\S]*?(?=\n\n)/, '').trim();
     return { user: m[1].trim(), agent };
   }
-  return { user: '', agent: s };
+  // PBS 2026-05-09 bug-fix: an in-progress ticket has parsed_summary set to
+  // the raw user message (no **Request**: framing yet). Treat that as a
+  // user turn, NOT an agent turn — otherwise conversation_history flips
+  // user/assistant roles and breaks the next Anthropic call.
+  return { user: s, agent: '' };
 }
 
 function md(s: string): string {
@@ -137,6 +141,11 @@ export default function ChatShell({
   function buildConversationHistory(): Array<{ role: 'user' | 'assistant'; content: string }> {
     const turns: Array<{ role: 'user' | 'assistant'; content: string }> = [];
     for (const t of tickets) {
+      // PBS 2026-05-09 bug-fix: skip tickets that haven't been triaged yet.
+      // Their parsed_summary still holds the raw user message — including
+      // them double-counts the user turn AND can flip role alternation
+      // (Anthropic rejects messages where assistant follows assistant).
+      if (t.status === 'triaging' || t.status === 'new') continue;
       const split = stripTicketFraming(t.parsed_summary);
       if (split.user)  turns.push({ role: 'user',      content: split.user });
       if (split.agent) turns.push({ role: 'assistant', content: split.agent });
@@ -200,7 +209,18 @@ export default function ChatShell({
         return false;
       }
     });
-    setTickets(filtered.length > 0 ? filtered : all);
+    const real = filtered.length > 0 ? filtered : all;
+    // PBS 2026-05-09: keep optimistic (id<0) tickets visible only until a
+    // real ticket whose parsed_summary starts with the same text shows up.
+    // Otherwise we'd render the user's question twice in the thread.
+    setTickets((prev) => {
+      const optimistic = prev.filter((t) => t.id < 0);
+      const stillNeeded = optimistic.filter((o) => {
+        const head = (o.parsed_summary ?? '').slice(0, 80);
+        return !real.some((r) => (r.parsed_summary ?? '').slice(0, 80).startsWith(head.slice(0, 60)) || head.includes((r.parsed_summary ?? '').slice(0, 60)));
+      });
+      return [...real, ...stillNeeded];
+    });
   };
 
   useEffect(() => {
@@ -250,29 +270,51 @@ export default function ChatShell({
 
   const send = async () => {
     if (!input.trim() && attachments.length === 0) return;
+    // Auto-prefix @mention so the triage routes to this HoD.
+    let body = input;
+    if (mentionNickname && !body.match(/^@/)) {
+      body = `@${mentionNickname} ${body}`;
+    }
+    if (attachments.length > 0) {
+      const lines = attachments.map((a) => `📎 ${a.name} (${(a.size / 1024).toFixed(0)} KB) — ${a.public_url ?? a.path}`);
+      body = body ? `${body}\n\n${lines.join('\n')}` : lines.join('\n');
+    }
+    // PBS 2026-05-09 bug #2: clear input + show optimistic user bubble
+    // BEFORE awaiting fetch. Triage takes 5–15s; the UI must not block.
+    // Build conversation history from existing tickets (excludes the
+    // optimistic one we're about to add).
+    const conversation_history = buildConversationHistory();
+    const optimisticTicket: Ticket = {
+      id: -Date.now(), // negative so it never collides with a real id
+      status: 'triaging',
+      parsed_summary: body,
+      arm: 'triaging',
+      intent: 'triage',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      notes: null,
+    };
+    setTickets((prev) => [...prev, optimisticTicket]);
+    setInput('');
+    setAttachments([]);
     setSending(true);
     try {
-      // Auto-prefix @mention so the triage routes to this HoD.
-      let body = input;
-      if (mentionNickname && !body.match(/^@/)) {
-        body = `@${mentionNickname} ${body}`;
-      }
-      if (attachments.length > 0) {
-        const lines = attachments.map((a) => `📎 ${a.name} (${(a.size / 1024).toFixed(0)} KB) — ${a.public_url ?? a.path}`);
-        body = body ? `${body}\n\n${lines.join('\n')}` : lines.join('\n');
-      }
-      // PBS 2026-05-09: send prior turns so this is a real conversation, not
-      // a one-shot ticket. The API already supports `conversation_history` —
-      // ChatShell just wasn't filling it.
-      const conversation_history = buildConversationHistory();
       await fetch('/api/cockpit/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: body, attachments, mention: mentionNickname, conversation_history }),
       });
-      setInput('');
-      setAttachments([]);
+      // Reload so the real ticket replaces the optimistic one.
       load();
+    } catch {
+      // Surface a quiet failure on the optimistic bubble.
+      setTickets((prev) =>
+        prev.map((t) =>
+          t.id === optimisticTicket.id
+            ? { ...t, status: 'triage_failed', parsed_summary: `${body}\n\n_(network error — try again)_` }
+            : t,
+        ),
+      );
     } finally {
       setSending(false);
     }

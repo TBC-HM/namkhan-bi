@@ -1,8 +1,11 @@
 'use client';
 
 // app/revenue/pulse/_components/PulseTodayPanel.tsx
-// PBS 2026-05-09: today's bookings + cancellations with hover-detail.
-// Server fetches via lib/pulseToday.ts, this component renders both columns.
+// PBS 2026-05-09: today's bookings + cancellations with full reservation
+// detail on hover. Server fetches via lib/pulseToday.ts; this component
+// renders both columns as data-rows with the 6 PBS-mandated fields visible
+// on the row (source · roomnights · rate · total · rate_plan · guest_name)
+// and the full reservation row revealed on click via inline expansion.
 
 import { useState } from 'react';
 import { fmtUSD } from '@/lib/format';
@@ -53,38 +56,77 @@ function Column({
     <div>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
         <span style={{
-          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-          fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase',
-          color: '#a8854a',
+          fontFamily: 'var(--mono)',
+          fontSize: 'var(--t-xs)',
+          letterSpacing: 'var(--ls-extra)',
+          textTransform: 'uppercase',
+          color: 'var(--brass)',
         }}>{label}</span>
         <span style={{
-          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-          fontSize: 11, fontWeight: 700, color: accentText,
+          fontFamily: 'var(--mono)',
+          fontSize: 'var(--t-xs)',
+          fontWeight: 700,
+          color: accentText,
           background: accent,
-          padding: '2px 8px', borderRadius: 4,
+          padding: '2px 8px',
+          borderRadius: 4,
         }}>
           {rows.length} · {fmtUSD(revenue)}
         </span>
       </div>
+
       {rows.length === 0 ? (
         <div style={{
           padding: '14px 12px',
-          color: '#7d7565',
+          color: 'var(--ink-mute)',
           fontStyle: 'italic',
-          fontSize: 13,
+          fontSize: 'var(--t-sm)',
           background: '#0a0a0a',
           border: '1px dashed #2a2520',
           borderRadius: 6,
         }}>{emptyText}</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {/* Column header — locks the 6 PBS fields visible on every row. */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1.4fr 1.2fr 0.6fr 0.7fr 0.7fr 1fr',
+            gap: 8,
+            padding: '4px 10px',
+            fontFamily: 'var(--mono)',
+            fontSize: 'var(--t-xs)',
+            letterSpacing: 'var(--ls-extra)',
+            color: 'var(--ink-mute)',
+            textTransform: 'uppercase',
+          }}>
+            <span>Guest</span>
+            <span>Source</span>
+            <span style={{ textAlign: 'right' }}>RN</span>
+            <span style={{ textAlign: 'right' }}>Rate</span>
+            <span style={{ textAlign: 'right' }}>Total</span>
+            <span>Rate plan</span>
+          </div>
+
           {rows.map((r) => {
             const id = String(r.reservation_id ?? r.booking_id ?? Math.random());
             const isOpen = openId === id;
+            const nights = Number(r.nights ?? 0);
+            const total = Number(r.total_amount ?? 0);
+            // Per-night rate (ADR for this reservation). PBS asked for "rate"
+            // alongside total — the natural per-night view.
+            const rate = nights > 0 ? total / nights : 0;
+            const tooltip = [
+              `${r.guest_name ?? '—'} · ${r.source_name ?? r.source ?? '—'}`,
+              `${nights} night${nights === 1 ? '' : 's'} · ${fmtUSD(rate)}/night · ${fmtUSD(total)} total`,
+              `Rate plan: ${r.rate_plan ?? '—'}`,
+              `Reservation ${r.reservation_id ?? '—'} · ${r.status ?? '—'}`,
+              r.cancellation_date ? `Cancelled: ${String(r.cancellation_date).slice(0, 16)}` : `Booked: ${String(r.booking_date ?? '—').slice(0, 16)}`,
+            ].join('\n');
             return (
               <div
                 key={id}
                 onClick={() => setOpenId(isOpen ? null : id)}
+                title={tooltip}
                 style={{
                   cursor: 'pointer',
                   padding: '8px 10px',
@@ -94,31 +136,57 @@ function Column({
                   transition: 'background 0.12s ease',
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', fontSize: 12 }}>
-                  <span style={{ color: '#e9e1ce', fontWeight: 600 }}>{r.guest_name ?? '—'}</span>
-                  <span style={{ color: accentText, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontWeight: 700 }}>
-                    {fmtUSD(Number(r.total_amount ?? 0))}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1.4fr 1.2fr 0.6fr 0.7fr 0.7fr 1fr',
+                  gap: 8,
+                  alignItems: 'center',
+                  fontSize: 'var(--t-sm)',
+                }}>
+                  <span style={{ color: '#e9e1ce', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {r.guest_name ?? '—'}
+                  </span>
+                  <span style={{ color: '#9b907a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {r.source_name ?? r.source ?? '—'}
+                  </span>
+                  <span style={{ color: '#d8cca8', fontFamily: 'var(--mono)', textAlign: 'right' }}>
+                    {nights || '—'}
+                  </span>
+                  <span style={{ color: '#9b907a', fontFamily: 'var(--mono)', textAlign: 'right' }}>
+                    {nights > 0 ? fmtUSD(rate) : '—'}
+                  </span>
+                  <span style={{ color: accentText, fontFamily: 'var(--mono)', fontWeight: 700, textAlign: 'right' }}>
+                    {fmtUSD(total)}
+                  </span>
+                  <span style={{ color: '#9b907a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {r.rate_plan ?? '—'}
                   </span>
                 </div>
-                <div style={{ display: 'flex', gap: 10, fontSize: 11, color: '#9b907a', marginTop: 2 }}>
-                  <span>{r.source_name ?? r.source ?? '—'}</span>
-                  <span>·</span>
-                  <span>{Number(r.nights ?? 0)} night{Number(r.nights ?? 0) === 1 ? '' : 's'}</span>
-                  {r.rate_plan && <><span>·</span><span>{r.rate_plan}</span></>}
-                </div>
+
                 {isOpen && (
                   <div style={{
-                    marginTop: 8, paddingTop: 8, borderTop: '1px solid #1f1c15',
-                    fontSize: 11, color: '#9b907a',
-                    display: 'grid', gridTemplateColumns: '1fr 1fr', rowGap: 3, columnGap: 12,
+                    marginTop: 8,
+                    paddingTop: 8,
+                    borderTop: '1px solid #1f1c15',
+                    fontSize: 'var(--t-xs)',
+                    color: '#9b907a',
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    rowGap: 3,
+                    columnGap: 12,
                   }}>
                     <span><strong style={{ color: '#d8cca8' }}>Reservation:</strong> {r.reservation_id ?? '—'}</span>
                     <span><strong style={{ color: '#d8cca8' }}>Booking ID:</strong> {r.booking_id ?? '—'}</span>
                     <span><strong style={{ color: '#d8cca8' }}>Status:</strong> {r.status ?? '—'}</span>
-                    <span><strong style={{ color: '#d8cca8' }}>Booked:</strong> {r.booking_date ?? '—'}</span>
+                    <span><strong style={{ color: '#d8cca8' }}>Booked:</strong> {r.booking_date ? String(r.booking_date).slice(0, 16) : '—'}</span>
                     {r.cancellation_date && (
-                      <span><strong style={{ color: '#d8cca8' }}>Cancelled:</strong> {r.cancellation_date}</span>
+                      <span><strong style={{ color: '#d8cca8' }}>Cancelled:</strong> {String(r.cancellation_date).slice(0, 16)}</span>
                     )}
+                    <span><strong style={{ color: '#d8cca8' }}>Source:</strong> {r.source_name ?? r.source ?? '—'}</span>
+                    <span><strong style={{ color: '#d8cca8' }}>Rate plan:</strong> {r.rate_plan ?? '—'}</span>
+                    <span><strong style={{ color: '#d8cca8' }}>Nights:</strong> {nights || '—'}</span>
+                    <span><strong style={{ color: '#d8cca8' }}>Per-night rate:</strong> {nights > 0 ? fmtUSD(rate) : '—'}</span>
+                    <span><strong style={{ color: '#d8cca8' }}>Total:</strong> {fmtUSD(total)}</span>
                   </div>
                 )}
               </div>

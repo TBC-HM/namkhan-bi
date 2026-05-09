@@ -6,8 +6,12 @@
 import type { DeptCfg } from './types';
 
 // ─── Revenue ─────────────────────────────────────────────────────────────
+// PBS 2026-05-09 #report-builder repair: hrefBase now points at the
+// printable render route (`/revenue/reports/render?type=...`) instead of the
+// source/source-page URL. Pressing a saved report opens a print-ready doc,
+// not the live dashboard. Source pages remain reachable via the dept strip.
 const REVENUE_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
-  { value: 'pulse', label: 'Pulse', hrefBase: '/revenue/reports/pulse', dimGroups: [
+  { value: 'pulse', label: 'Pulse', hrefBase: '/revenue/reports/render?type=pulse', dimGroups: [
     { key: 'window',  label: 'Window',  options: [
       { value: 'today',     label: 'Today'    },
       { value: 'last_7d',   label: 'Last 7d'  },
@@ -30,7 +34,7 @@ const REVENUE_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
       { value: 'rate',   label: 'Rate plan'  },
     ]},
   ]},
-  { value: 'pace', label: 'Pace', hrefBase: '/revenue/reports/pace', dimGroups: [
+  { value: 'pace', label: 'Pace', hrefBase: '/revenue/reports/render?type=pace', dimGroups: [
     { key: 'horizon', label: 'Stay horizon', options: [
       { value: 'fwd_7d',   label: 'Next 7d'   },
       { value: 'fwd_30d',  label: 'Next 30d'  },
@@ -55,7 +59,7 @@ const REVENUE_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
       { value: 'month', label: 'Month' },
     ]},
   ]},
-  { value: 'channels', label: 'Channels', hrefBase: '/revenue/reports/channels', dimGroups: [
+  { value: 'channels', label: 'Channels', hrefBase: '/revenue/reports/render?type=channels', dimGroups: [
     { key: 'window', label: 'Window', options: [
       { value: 'last_7d',  label: 'Last 7d'  },
       { value: 'last_30d', label: 'Last 30d' },
@@ -83,7 +87,7 @@ const REVENUE_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
       { value: 'lm',   label: 'Last month' },
     ]},
   ]},
-  { value: 'pricing', label: 'Pricing', hrefBase: '/revenue/reports/pricing', dimGroups: [
+  { value: 'pricing', label: 'Pricing', hrefBase: '/revenue/reports/render?type=pricing', dimGroups: [
     { key: 'horizon', label: 'Date horizon', options: [
       { value: 'fwd_7d',  label: 'Next 7d'  },
       { value: 'fwd_30d', label: 'Next 30d' },
@@ -106,7 +110,7 @@ const REVENUE_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
       { value: 'ly_date', label: 'vs LY same date'  },
     ]},
   ]},
-  { value: 'comp_set', label: 'Comp Set', hrefBase: '/revenue/reports/comp_set', dimGroups: [
+  { value: 'comp_set', label: 'Comp Set', hrefBase: '/revenue/reports/render?type=comp_set', dimGroups: [
     { key: 'window', label: 'Window', options: [
       { value: 'last_7d',  label: 'Last 7d'  },
       { value: 'last_30d', label: 'Last 30d' },
@@ -130,7 +134,7 @@ const REVENUE_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
       { value: 'shop', label: 'Shop date' },
     ]},
   ]},
-  { value: 'forecast', label: 'Forecast', hrefBase: '/revenue/reports/forecast', dimGroups: [
+  { value: 'forecast', label: 'Forecast', hrefBase: '/revenue/reports/render?type=forecast', dimGroups: [
     { key: 'horizon', label: 'Horizon', options: [
       { value: 'fwd_7d',   label: 'Next 7d'   },
       { value: 'fwd_30d',  label: 'Next 30d'  },
@@ -151,7 +155,19 @@ const REVENUE_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
       { value: 'ly',     label: 'LY'     },
     ]},
   ]},
-  { value: 'all', label: 'All revenue', hrefBase: '/revenue', dimGroups: [
+  { value: 'pl-month', label: 'P&L · month', hrefBase: '/revenue/reports/render?type=pl-month', dimGroups: [
+    { key: 'window', label: 'Month', options: [
+      { value: 'this',  label: 'This month'   },
+      { value: 'prior', label: 'Last month'   },
+      { value: 'ytd',   label: 'YTD summary'  },
+    ]},
+    { key: 'compare', label: 'Compare', options: [
+      { value: 'mom', label: 'vs prior month' },
+      { value: 'yoy', label: 'vs same month LY' },
+      { value: 'budget', label: 'vs Budget' },
+    ]},
+  ]},
+  { value: 'all', label: 'All revenue', hrefBase: '/revenue/reports/render?type=pulse', dimGroups: [
     { key: 'window', label: 'Window', options: [
       { value: 'last_7d',  label: 'Last 7d'  },
       { value: 'last_30d', label: 'Last 30d' },
@@ -200,10 +216,15 @@ const REVENUE_CFG: DeptCfg = {
     { id: 'o1', label: 'Pace −14% vs STLY for next 30 days',           severity: 'medium', kind: 'opportunity' },
     { id: 'o2', label: 'Long-weekend BAR ladder under-priced vs comp', severity: 'medium', kind: 'opportunity' },
   ],
+  // PBS 2026-05-09 #report-builder repair: defaults now point at the
+  // printable render route. Pressing the tile pops a print-ready report
+  // open in a new tab (target=_blank handled in DeptEntry via /revenue
+  // prefix → same-origin link).
   defaultDocs: [
-    { id: 'd1', label: 'Revenue Strategy 2026',         href: '/revenue/strategy'    },
-    { id: 'd2', label: 'Channel Mix Report — Apr 2026', href: '/revenue/channel-mix' },
-    { id: 'd3', label: 'BAR Rate Grid',                 href: '/revenue/bar'         },
+    { id: 'd1', label: 'Pulse · last 30d',            href: '/revenue/reports/render?type=pulse&win=30d&cmp=stly',  kind: 'report', report_type: 'pulse'    },
+    { id: 'd2', label: 'Pace · −30d → +30d vs STLY',   href: '/revenue/reports/render?type=pace&win=30d&cmp=stly',   kind: 'report', report_type: 'pace'     },
+    { id: 'd3', label: 'Channel mix · last 30d',       href: '/revenue/reports/render?type=channels&win=30d',        kind: 'report', report_type: 'channels' },
+    { id: 'd4', label: 'P&L · current month',          href: '/revenue/reports/render?type=pl-month',                kind: 'report', report_type: 'pl-month' },
   ],
   defaultTasks: [
     { id: 't1', label: 'Review OTA parity alerts',    done: false, created: TODAY },

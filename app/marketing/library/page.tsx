@@ -8,6 +8,8 @@ import Page from '@/components/page/Page';
 import Card from '@/components/sections/Card';
 import KpiBox from '@/components/kpi/KpiBox';
 import AssetGrid from '@/components/marketing/AssetGrid';
+import LibraryAiSearch from '@/components/marketing/LibraryAiSearch';
+import LibraryDropZone from '@/components/marketing/LibraryDropZone';
 import { getMediaReady, getMediaTierCounts, getTaxonomy, getCuratorPicks, getRoomTypeBuckets, getOtaPack, TIER_LABEL } from '@/lib/marketing';
 import { MARKETING_SUBPAGES } from '../_subpages';
 
@@ -75,6 +77,13 @@ export default async function LibraryPage({ searchParams }: SP) {
       title={<>Media <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>library</em>.</>}
       subPages={MARKETING_SUBPAGES}
     >
+      {/* AI search bar — routes to /cockpit/chat?dept=marketing so Lumen handles
+          natural-language asset queries. */}
+      <LibraryAiSearch />
+
+      {/* Drop zone — drag/drop new media straight into /api/marketing/upload. */}
+      <LibraryDropZone />
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
         <KpiBox value={totalReady}   unit="count" label="Total ready"  tooltip="all tiers" />
         <KpiBox value={Number(otaCount)}     unit="count" label="OTA profile"  tooltip="best of best" />

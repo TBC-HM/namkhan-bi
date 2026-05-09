@@ -3,6 +3,7 @@
 
 import { resolvePeriod, type WindowKey } from '@/lib/period';
 import { getRoomTypes, getRatePlans, getRateInventory } from '@/lib/pricing';
+import { getPricingKpis } from '@/lib/pricingKpis';
 import Page from '@/components/page/Page';
 import Panel from '@/components/page/Panel';
 import Brief from '@/components/page/Brief';
@@ -18,6 +19,11 @@ export const revalidate = 60;
 interface SearchParams { win?: string; gran?: string; cmp?: string }
 
 const VALID_FWD: WindowKey[] = ['next7', 'next30', 'next90', 'next180', 'next365'];
+
+// PBS-locked capacity. v_kpi_daily.rooms_available reports 24 (active rooms);
+// 30 is the contractual capacity (24/30) — used as the denominator for
+// "occupancy fence" so the fence reflects total physical capacity.
+const CAPACITY_FIXED_LABEL = 30;
 
 function parseWin(raw: string | undefined): WindowKey {
   return (VALID_FWD.includes(raw as WindowKey) ? raw : 'next90') as WindowKey;
@@ -49,10 +55,11 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
   const gran = parseGran(searchParams.gran);
   const period = resolvePeriod({ win, cmp: searchParams.cmp });
 
-  const [roomTypes, ratePlans, inventory] = await Promise.all([
+  const [roomTypes, ratePlans, inventory, todayKpis] = await Promise.all([
     getRoomTypes(),
     getRatePlans(),
     getRateInventory(period.from, period.to),
+    getPricingKpis(),
   ]);
 
   type RoomAgg = { rt: string; min: number; max: number; sum: number; count: number; stops: number; minStays: number; cta: number; ctd: number };
@@ -221,10 +228,65 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
         })}
       </div>
 
-      {/* PBS 2026-05-09 cut-corners audit: above-the-fold = KPI strip → "what's
-          open today" alerts panel → chart. BAR ladder + rate plans tables drop
-          to second fold. Calendar route at /revenue/pricing/calendar is the
-          actionable ladder; this page is the strategic overview. */}
+      {/* PBS 2026-05-09: above-the-fold KPI strip wired to today's pricing
+          surface — Current BAR · Comp gap · Occupancy fence · Sellable count.
+          RATE_MIN=10 floor on rate_inventory, capacity-30 lock for occ fence.
+          Window aggregates (inventory cells / avg / floor / ceiling / stop /
+          min-stay) drop to the secondary strip below the actionable four. */}
+      {(() => {
+        const k = todayKpis;
+        const barDelta = (k.barToday != null && k.barYest != null) ? k.barToday - k.barYest : null;
+        const compGap = (k.barToday != null && k.compMedian != null) ? k.barToday - k.compMedian : null;
+        const compGapYest = (k.barYest != null && k.compMedianYest != null) ? k.barYest - k.compMedianYest : null;
+        const compGapDelta = (compGap != null && compGapYest != null) ? compGap - compGapYest : null;
+        const occDelta = (k.occPctToday != null && k.occPctYest != null) ? k.occPctToday - k.occPctYest : null;
+        const sellDelta = (k.sellable14d != null && k.sellable14dPrev != null) ? k.sellable14d - k.sellable14dPrev : null;
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 14 }}>
+            <KpiBox
+              value={k.barToday}
+              unit="usd"
+              label="Current BAR"
+              state={k.barToday == null ? 'data-needed' : 'live'}
+              needs={k.barToday == null ? 'rate_inventory · today · rate≥$10' : undefined}
+              delta={barDelta != null ? { value: barDelta, unit: 'usd', period: 'DoD' } : undefined}
+              tooltip="Today's lowest sellable rate (BAR) from rate_inventory · property 260955 · stop_sell=false · rate ≥ $10."
+            />
+            <KpiBox
+              value={compGap}
+              unit="usd"
+              label="Comp gap"
+              state={compGap == null ? 'data-needed' : 'live'}
+              needs={compGap == null ? 'v_compset_competitor_rate_matrix · today' : undefined}
+              delta={compGapDelta != null ? { value: compGapDelta, unit: 'usd', period: 'DoD' } : undefined}
+              tooltip={`Today's BAR minus median compset rate. ${k.compRows} comp rates today · positive = priced above comp · negative = priced below comp.`}
+            />
+            <KpiBox
+              value={k.occPctToday}
+              unit="pct"
+              label="Occupancy fence"
+              state={k.occPctToday == null ? 'data-needed' : 'live'}
+              needs={k.occPctToday == null ? 'v_kpi_daily · today' : undefined}
+              valueText={k.occPctToday != null && k.roomsSold != null
+                ? `${k.occPctToday.toFixed(0)}%`
+                : undefined}
+              delta={occDelta != null ? { value: occDelta, unit: 'pp', period: 'DoD' } : undefined}
+              tooltip={`Today's rooms sold ÷ ${CAPACITY_FIXED_LABEL} capacity. ${k.roomsSold ?? 0} / ${CAPACITY_FIXED_LABEL} sold.`}
+            />
+            <KpiBox
+              value={k.sellable14d}
+              unit="count"
+              label="Sellable · 14d"
+              state={k.sellable14d == null ? 'data-needed' : 'live'}
+              needs={k.sellable14d == null ? 'rate_inventory · next 14d · rate≥$10' : undefined}
+              delta={sellDelta != null ? { value: sellDelta, unit: 'count', period: 'vs prev 14d' } : undefined}
+              tooltip="Count of room-night cells with rate ≥ $10 and stop_sell=false over next 14 days. Source: rate_inventory."
+            />
+          </div>
+        );
+      })()}
+
+      {/* Secondary strip — window aggregates (was the only KPI strip pre-2026-05-09). */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
         <KpiBox value={totalInv} unit="count" label="Inventory cells" tooltip="Distinct (room_type × day) cells in the window. Source: rate_inventory." />
         <KpiBox value={avgRate}  unit="usd"   label="Avg rate"        tooltip="Mean rate across all inventory cells in the window." />

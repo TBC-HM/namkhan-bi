@@ -1,187 +1,221 @@
 // app/operations/suppliers/page.tsx
-// PBS 2026-05-09: "There used to be a Supplier tab in the Operations area; if
-// you don't find we must make a new one similar concept like channels just
-// suppliers". Lists the canonical supplier registry (suppliers.suppliers) +
-// top QB-based spend (public.v_finance_top_suppliers).
+//
+// Operations · Suppliers — list page (channels-pattern mirror).
+// PBS 2026-05-09: "There used to be a Supplier tab in the Operations area;
+// if you don't find we must make a new one similar concept like channels just
+// suppliers". Original page read from suppliers.suppliers (0 rows). Rewritten
+// to read the canonical QB-derived registry: gl.v_supplier_overview (135 rows)
+// joined with gl.vendors (terms / email / category) + messy.unpaid_bills
+// (open AP balance, exact name match where it lines up).
+//
+// Channels-pattern mirrored: <Page> shell + KPI strip + sortable supplier
+// table + each row links to /operations/suppliers/[supplier]. Sub-page strip
+// via OPERATIONS_SUBPAGES.
+//
+// Source eyebrow on the panel honours the PBS rule: "if ops.suppliers doesn't
+// exist and ap.suppliers is your best bet, surface that openly".
 
+import Link from 'next/link';
 import Page from '@/components/page/Page';
 import Panel from '@/components/page/Panel';
 import KpiBox from '@/components/kpi/KpiBox';
 import ArtifactActions from '@/components/page/ArtifactActions';
-import { fmtUSD } from '@/lib/format';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { FX_LAK_PER_USD, fmtMoney } from '@/lib/format';
 import { OPERATIONS_SUBPAGES } from '../_subpages';
+import SuppliersTable, { type SupplierRow } from './_components/SuppliersTable';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
-interface Supplier {
-  supplier_id: string;
-  code: string | null;
-  name: string;
-  supplier_type: string | null;
-  country: string | null;
-  city: string | null;
-  is_local_sourcing: boolean | null;
-  payment_terms: string | null;
-  payment_terms_days: number | null;
-  lead_time_days: number | null;
-  reliability_score: number | null;
-  quality_score: number | null;
-  sustainability_score: number | null;
-  status: string | null;
+interface OverviewRow {
+  vendor_name: string;
+  line_count: number | null;
+  active_periods: number | null;
+  first_txn_date: string | null;
+  last_txn_date: string | null;
+  gross_spend_usd: number | string | null;
+  net_amount_usd: number | string | null;
+  distinct_accounts: number | null;
+  distinct_classes: number | null;
+  currency_guess: string | null;
+  is_active_recent: boolean | null;
+}
+
+interface VendorMeta {
+  vendor_name: string;
+  category: string | null;
+  terms: string | null;
   email: string | null;
   phone: string | null;
+  is_active: boolean | null;
 }
 
-interface QBTopVendor {
-  vendor_name: string;
-  gross_spend_usd: number | string | null;
-  line_count: number | null;
-  rank_month: number | null;
+interface UnpaidAgg {
+  supplier: string;
+  open_lak: number;
+  open_count: number;
 }
 
-async function getSuppliers(): Promise<Supplier[]> {
+async function getSupplierOverview(): Promise<OverviewRow[]> {
   const admin = getSupabaseAdmin();
   const { data, error } = await admin
-    .schema('suppliers')
-    .from('suppliers')
-    .select('supplier_id,code,name,supplier_type,country,city,is_local_sourcing,payment_terms,payment_terms_days,lead_time_days,reliability_score,quality_score,sustainability_score,status,email,phone')
-    .order('name', { ascending: true })
+    .schema('gl')
+    .from('v_supplier_overview')
+    .select('vendor_name,line_count,active_periods,first_txn_date,last_txn_date,gross_spend_usd,net_amount_usd,distinct_accounts,distinct_classes,currency_guess,is_active_recent')
+    .order('gross_spend_usd', { ascending: false, nullsFirst: false })
     .limit(500);
   if (error) {
-    console.error('getSuppliers error', error);
+    console.error('getSupplierOverview error', error);
     return [];
   }
-  return (data ?? []) as Supplier[];
+  return (data ?? []) as OverviewRow[];
 }
 
-async function getQBTopVendors(): Promise<QBTopVendor[]> {
+async function getVendorMeta(): Promise<Map<string, VendorMeta>> {
   const admin = getSupabaseAdmin();
   const { data, error } = await admin
-    .from('v_finance_top_suppliers')
-    .select('vendor_name,gross_spend_usd,line_count,rank_month')
-    .order('rank_month', { ascending: true })
-    .limit(15);
+    .schema('gl')
+    .from('vendors')
+    .select('vendor_name,category,terms,email,phone,is_active')
+    .limit(1000);
   if (error) {
-    console.error('getQBTopVendors error', error);
-    return [];
+    console.error('getVendorMeta error', error);
+    return new Map();
   }
-  return (data ?? []) as QBTopVendor[];
+  const m = new Map<string, VendorMeta>();
+  for (const r of (data ?? []) as VendorMeta[]) m.set(r.vendor_name, r);
+  return m;
+}
+
+async function getUnpaidAgg(): Promise<Map<string, UnpaidAgg>> {
+  const admin = getSupabaseAdmin();
+  const { data, error } = await admin
+    .schema('messy')
+    .from('unpaid_bills')
+    .select('supplier,balance_lak,human_status')
+    .limit(2000);
+  if (error) {
+    console.error('getUnpaidAgg error', error);
+    return new Map();
+  }
+  const m = new Map<string, UnpaidAgg>();
+  for (const r of (data ?? []) as { supplier: string; balance_lak: number | string | null; human_status: string | null }[]) {
+    const status = r.human_status ?? 'open';
+    if (status === 'reconciled' || status === 'paid_off_book') continue;
+    const cur = m.get(r.supplier) ?? { supplier: r.supplier, open_lak: 0, open_count: 0 };
+    cur.open_lak += Number(r.balance_lak ?? 0);
+    cur.open_count += 1;
+    m.set(r.supplier, cur);
+  }
+  return m;
+}
+
+function daysSince(iso: string | null): number | null {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return null;
+  return Math.floor((Date.now() - t) / 86_400_000);
 }
 
 export default async function SuppliersPage() {
-  const [suppliers, topVendors] = await Promise.all([getSuppliers(), getQBTopVendors()]);
+  const [overview, vendorMap, unpaidMap] = await Promise.all([
+    getSupplierOverview(),
+    getVendorMeta(),
+    getUnpaidAgg(),
+  ]);
 
-  const active = suppliers.filter((s) => (s.status ?? 'active').toLowerCase() === 'active').length;
-  const local = suppliers.filter((s) => s.is_local_sourcing).length;
-  const avgLead = suppliers.length > 0
-    ? suppliers.reduce((s, v) => s + (v.lead_time_days ?? 0), 0) / suppliers.length
-    : 0;
-  const totalSpend = topVendors.reduce((s, v) => s + Number(v.gross_spend_usd ?? 0), 0);
+  // Build sortable rows. last_active_days = days since last QB transaction.
+  const rows: SupplierRow[] = overview.map((o) => {
+    const meta = vendorMap.get(o.vendor_name);
+    const unpaid = unpaidMap.get(o.vendor_name);
+    const lastDays = daysSince(o.last_txn_date);
+    return {
+      name: o.vendor_name,
+      category: meta?.category ?? null,
+      terms: meta?.terms ?? null,
+      email: meta?.email ?? null,
+      currency: o.currency_guess ?? null,
+      grossUsd: Number(o.gross_spend_usd ?? 0),
+      lineCount: Number(o.line_count ?? 0),
+      lastTxnDate: o.last_txn_date,
+      lastDays,
+      activeRecent: !!o.is_active_recent,
+      openBalanceLak: unpaid?.open_lak ?? 0,
+      openBalanceUsd: unpaid ? unpaid.open_lak / FX_LAK_PER_USD : 0,
+      openBillCount: unpaid?.open_count ?? 0,
+    };
+  });
+
+  // KPI aggregates
+  const total = rows.length;
+  const active90 = rows.filter((r) => r.lastDays != null && r.lastDays <= 90).length;
+  const totalOpenLak = rows.reduce((s, r) => s + r.openBalanceLak, 0);
+  const totalOpenUsd = totalOpenLak / FX_LAK_PER_USD;
+
+  // Top 90d spend
+  const since90Iso = new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10);
+  const top90 = rows
+    .filter((r) => r.lastTxnDate && r.lastTxnDate >= since90Iso)
+    .sort((a, b) => b.grossUsd - a.grossUsd)[0];
+
+  const totalSpendShown = rows.reduce((s, r) => s + r.grossUsd, 0);
 
   return (
     <Page
-      eyebrow="Operations · Suppliers"
-      title={<>Supplier <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>register</em></>}
+      eyebrow={`Operations · Suppliers · gl.v_supplier_overview · ${total} rows`}
+      title={<>Supplier <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>register</em>.</>}
       subPages={OPERATIONS_SUBPAGES}
     >
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
-        <KpiBox value={suppliers.length} unit="count" label="Registered"     tooltip="Rows in suppliers.suppliers (canonical supplier registry)." />
-        <KpiBox value={active}            unit="count" label="Active"        tooltip="Suppliers with status = active." />
-        <KpiBox value={local}             unit="count" label="Local sourcing" tooltip="Suppliers flagged is_local_sourcing = true. Lao Lao sustainability KPI." />
-        <KpiBox value={avgLead}           unit="nights" dp={1} label="Avg lead time (d)" tooltip="Mean lead_time_days across registered suppliers." />
-        <KpiBox value={topVendors.length} unit="count" label="QB vendors paid" tooltip="Distinct QuickBooks vendors with spend this month. Source: v_finance_top_suppliers." />
-        <KpiBox value={totalSpend}        unit="usd"   label="Spend (top vendors)" tooltip="Sum of gross_spend_usd across the top vendors this month." />
+        <KpiBox
+          value={total}
+          unit="count"
+          label="Total suppliers"
+          tooltip="Distinct vendors in gl.v_supplier_overview (QuickBooks-derived). Source: gl.v_supplier_overview."
+        />
+        <KpiBox
+          value={active90}
+          unit="count"
+          label="Active · 90d"
+          tooltip="Suppliers with at least one QB transaction in the last 90 days. Source: gl.v_supplier_overview.last_txn_date."
+        />
+        <KpiBox
+          value={totalSpendShown}
+          unit="usd"
+          label="Total spend · all-time"
+          tooltip="Sum of gross_spend_usd across all suppliers. Source: gl.v_supplier_overview."
+        />
+        <KpiBox
+          value={totalOpenUsd}
+          unit="usd"
+          label="Open AP · supplier debt"
+          tooltip={`Sum of unreconciled bill balances. ₭${totalOpenLak.toLocaleString('en-US')} converted at FX ${FX_LAK_PER_USD.toLocaleString('en-US')}. Source: messy.unpaid_bills.balance_lak.`}
+        />
+        <KpiBox
+          value={top90 ? top90.grossUsd : null}
+          unit="usd"
+          label="Top spend · 90d"
+          valueText={top90 ? <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-2xl)' }}>{fmtMoney(top90.grossUsd, 'USD')}</span>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', color: 'var(--ink-mute)', textTransform: 'none', letterSpacing: 0 }}>{top90.name}</span>
+          </span> : '—'}
+          tooltip={top90 ? `${top90.name} · ${top90.lineCount} lines in last-90d activity. Source: gl.v_supplier_overview.` : 'No suppliers with QB activity in last 90 days.'}
+        />
+        <KpiBox
+          value={unpaidMap.size}
+          unit="count"
+          label="Suppliers with debt"
+          tooltip="Distinct suppliers with at least one unreconciled bill. Source: messy.unpaid_bills."
+        />
       </div>
 
       <Panel
-        title="Supplier register · suppliers.suppliers"
-        eyebrow={`${suppliers.length} rows`}
+        title="Supplier register"
+        eyebrow="gl.v_supplier_overview · join gl.vendors · join messy.unpaid_bills"
         actions={<ArtifactActions context={{ kind: 'table', title: 'Supplier register', dept: 'operations' }} />}
       >
-        {suppliers.length === 0 ? (
-          <div style={{ padding: 24, color: '#7d7565', fontStyle: 'italic', textAlign: 'center' }}>
-            No suppliers registered yet. Add rows to <code>suppliers.suppliers</code> via Supabase
-            dashboard or the upcoming upload UI.
-          </div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Type</th>
-                  <th>Location</th>
-                  <th>Payment</th>
-                  <th className="num">Lead (d)</th>
-                  <th className="num">Reliability</th>
-                  <th className="num">Quality</th>
-                  <th className="num">Sustainability</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {suppliers.map((s) => (
-                  <tr key={s.supplier_id}>
-                    <td className="lbl">
-                      <strong>{s.name}</strong>
-                      {s.code && <span style={{ color: 'var(--ink-mute)', marginLeft: 6, fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>{s.code}</span>}
-                    </td>
-                    <td className="lbl text-mute">{s.supplier_type ?? '—'}</td>
-                    <td className="lbl text-mute">
-                      {[s.city, s.country].filter(Boolean).join(', ') || '—'}
-                      {s.is_local_sourcing && <span style={{ marginLeft: 6, color: '#7ad790', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>local</span>}
-                    </td>
-                    <td className="lbl text-mute">{s.payment_terms ?? (s.payment_terms_days ? `${s.payment_terms_days}d` : '—')}</td>
-                    <td className="num">{s.lead_time_days ?? '—'}</td>
-                    <td className="num">{s.reliability_score?.toFixed(1) ?? '—'}</td>
-                    <td className="num">{s.quality_score?.toFixed(1) ?? '—'}</td>
-                    <td className="num">{s.sustainability_score?.toFixed(1) ?? '—'}</td>
-                    <td className="lbl">{s.status ?? 'active'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
-
-      <div style={{ height: 14 }} />
-
-      <Panel
-        title="Top QB vendors (this month)"
-        eyebrow="public.v_finance_top_suppliers"
-        actions={<ArtifactActions context={{ kind: 'table', title: 'Top QB vendors', dept: 'operations' }} />}
-      >
-        {topVendors.length === 0 ? (
-          <div style={{ padding: 24, color: '#7d7565', fontStyle: 'italic', textAlign: 'center' }}>
-            No QB vendor activity this month.
-          </div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Vendor</th>
-                  <th className="num">Gross spend</th>
-                  <th className="num">Lines</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topVendors.map((v) => (
-                  <tr key={`${v.rank_month}-${v.vendor_name}`}>
-                    <td className="num">{v.rank_month}</td>
-                    <td className="lbl"><strong>{v.vendor_name}</strong></td>
-                    <td className="num">{fmtUSD(Number(v.gross_spend_usd ?? 0))}</td>
-                    <td className="num">{v.line_count ?? 0}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <SuppliersTable rows={rows} />
       </Panel>
     </Page>
   );

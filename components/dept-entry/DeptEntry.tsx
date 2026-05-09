@@ -767,8 +767,14 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
       .join(' · ') || 'defaults';
     const sched = reportSchedule === 'once' ? '' : ` · ↻ ${reportSchedule}`;
     const reportLabel = `${REPORT_LABEL[reportType]} report · ${dimSummary}${sched} · ${stamp}`;
+    // PBS 2026-05-09 #report-builder repair: hrefBase may already contain
+    // `?type=...` (now that builders point at /revenue/reports/render),
+    // so use `&` if it does and `?` otherwise.
     const queryString = new URLSearchParams(reportDims).toString();
-    const href = queryString ? `${REPORT_HREF_BASE[reportType]}?${queryString}` : REPORT_HREF_BASE[reportType];
+    const base = REPORT_HREF_BASE[reportType];
+    const href = queryString
+      ? `${base}${base.includes('?') ? '&' : '?'}${queryString}`
+      : base;
     const newDoc: DocItem = {
       id: uid(),
       label: reportLabel,
@@ -1443,12 +1449,17 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
           {docs.map(d => {
             const isRecurring = d.schedule && d.schedule !== 'once';
             const hasEmails = (d.email_recipients?.length ?? 0) > 0;
+            // PBS 2026-05-09 #report-builder repair: report-kind docs and any
+            // /reports/render URL pop in a new tab so the dept entry page
+            // stays anchored. Uploads + external URLs keep their behaviour.
+            const isReport = d.kind === 'report' || /\/reports\/render/.test(d.href ?? '');
+            const newTab = d.href?.startsWith('http') || isReport;
             return (
               <Row key={d.id} onDelete={() => delDoc(d.id)}>
                 <a
                   href={d.href}
-                  target={d.href?.startsWith('http') ? '_blank' : undefined}
-                  rel={d.href?.startsWith('http') ? 'noreferrer' : undefined}
+                  target={newTab ? '_blank' : undefined}
+                  rel={newTab ? 'noreferrer' : undefined}
                   style={{
                     flex:           1,
                     fontSize:       13,
@@ -1749,18 +1760,23 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
 
             <label style={modalLabelStyle}>Report type</label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, marginBottom: 6 }}>
-              {(['pulse','pace','channels','pricing','comp_set','forecast'] as ReportType[]).map(t => (
+              {/* PBS 2026-05-09: drive from cfg.reportTypes so new types
+                * (e.g. pl-month) appear automatically. The "all" tile is
+                * rendered separately below as it spans full width. */}
+              {REPORT_TYPES_LIST.filter(rt => rt.value !== 'all').map(rt => (
                 <button
-                  key={t}
-                  onClick={() => { setReportType(t); setReportDims({}); }}
-                  style={pillBtnStyle(reportType === t)}
-                >{REPORT_LABEL[t]}</button>
+                  key={rt.value}
+                  onClick={() => { setReportType(rt.value); setReportDims({}); }}
+                  style={pillBtnStyle(reportType === rt.value)}
+                >{rt.label}</button>
               ))}
             </div>
-            <button
-              onClick={() => { setReportType('all'); setReportDims({}); }}
-              style={{ ...pillBtnStyle(reportType === 'all'), width: '100%', marginBottom: 4 }}
-            >All — full revenue snapshot</button>
+            {REPORT_LABEL['all'] && (
+              <button
+                onClick={() => { setReportType('all'); setReportDims({}); }}
+                style={{ ...pillBtnStyle(reportType === 'all'), width: '100%', marginBottom: 4 }}
+              >All — full revenue snapshot</button>
+            )}
 
             {reportType && (
               <>
