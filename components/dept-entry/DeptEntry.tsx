@@ -1621,8 +1621,7 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
                         });
                         const j = await res.json();
                         if (res.ok) {
-                          setAttachToast(`✓ Promoted to prod`);
-                          setTimeout(() => setAttachToast(null), 2400);
+                          alert('✓ Promoted to prod');
                           await reloadBugs();
                         } else {
                           alert(`Promote failed: ${j.error ?? res.status}`);

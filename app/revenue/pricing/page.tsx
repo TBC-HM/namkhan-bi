@@ -334,10 +334,11 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
           byDate.set(dt.toISOString().slice(0,10), { rate: null, flag: null });
         }
         for (const r of inventory) {
-          const k = String((r as Record<string, unknown>).date ?? '').slice(0,10);
+          const ru = r as unknown as Record<string, unknown>;
+          const k = String(ru.date ?? '').slice(0,10);
           if (!byDate.has(k)) continue;
-          const rate = Number((r as Record<string, unknown>).rate);
-          const stopSell = Boolean((r as Record<string, unknown>).stop_sell);
+          const rate = Number(ru.rate);
+          const stopSell = Boolean(ru.stop_sell);
           if (rate >= RATE_MIN && !stopSell) {
             const cur = byDate.get(k)!;
             if (cur.rate == null || rate < cur.rate) byDate.set(k, { rate, flag: 'sellable' });

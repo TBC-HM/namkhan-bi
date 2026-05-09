@@ -9,7 +9,7 @@
 import { NextResponse } from "next/server";
 import { unstable_noStore as noStore } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
-import { loadSkillsForRole, dispatchSkill, dispatchSkillGated } from "@/lib/cockpit-tools";
+import { loadSkillsForRole, dispatchSkill, dispatchSkillGated, CHAT_MODE_TOOLS } from "@/lib/cockpit-tools";
 
 // ─── Unified-chat enrichment (KB #291) — added 2026-05-07 ──────────────────
 // Every chat request gets:
@@ -515,8 +515,22 @@ async function triageMessage(
   // own prompt (not always it_manager) so Felix/Vector/etc. answer in
   // their own voice and skip the tool pipeline entirely.
   const promptRole = opts.chatMode && opts.role ? opts.role : "it_manager";
-  const systemPrompt = await loadPrompt(promptRole);
-  const skills = opts.chatMode ? [] : await loadSkillsForRole("it_manager");
+  const rawPrompt = await loadPrompt(promptRole);
+  // PBS 2026-05-09 (triage_failed root cause): the CHAT MODE preamble at
+  // the top of every persona prompt makes the model output prose for short
+  // inputs. That's correct behaviour for chat mode — but TRIAGE mode (the
+  // bugs-sweep + ticket pipeline) calls the same prompt expecting strict
+  // JSON. Strip the CHAT MODE block when not in chatMode so triage gets the
+  // pristine doctrine + JSON contract section only.
+  const systemPrompt = opts.chatMode
+    ? rawPrompt
+    : rawPrompt.replace(/═══ CHAT MODE[\s\S]*?═══ END[^\n]*BLOCK[^\n]*═══\n\n/g, '');
+  // PBS 2026-05-09: chatMode used to load tools=[] (no skills). Now we
+  // expose a small whitelist (CHAT_MODE_TOOLS) — currently just create_task —
+  // so Felix + HoDs can convert a conversation into a cockpit_tickets row
+  // without leaving chat mode. Everything else stays no-tools to preserve
+  // the fast-path latency.
+  const skills = opts.chatMode ? CHAT_MODE_TOOLS : await loadSkillsForRole("it_manager");
   const tools = skills.map((s) => ({
     name: s.name,
     description: s.description,
@@ -552,8 +566,11 @@ async function triageMessage(
   }
   const messages: Msg[] = [...dedupedHistory, { role: "user", content: message }];
 
-  // Iteration cap: chat-mode = 1 (no tools, single shot). Full pipeline = 10.
-  const maxIter = opts.chatMode ? 1 : 10;
+  // Iteration cap: chat-mode = 3 (1 prose answer, or 1 tool call + 1 final
+  // answer, with a 3rd iter as safety buffer). Full pipeline = 10.
+  // PBS 2026-05-09: chatMode now allows create_task as the only write tool;
+  // need >1 iter so the model can call the tool then return the final reply.
+  const maxIter = opts.chatMode ? 3 : 10;
 
   for (let iter = 0; iter < maxIter; iter++) {
     const body: Record<string, unknown> = {

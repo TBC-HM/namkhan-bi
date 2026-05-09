@@ -15,8 +15,10 @@ import { PDFDocument } from "pdf-lib";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
-// Reserve memory for Chromium — 1024MB recommended by sparticuz docs.
-export const memory = 1024;
+// Memory reservation for Chromium (1024MB recommended by sparticuz docs)
+// is configured per-function via vercel.json — Next.js's route-segment
+// schema doesn't accept `memory` as a named export, and the strict type
+// validator was tripping CI. Removed the export.
 
 function authed(req: Request): boolean {
   const expected = process.env.PDF_WORKER_TOKEN;

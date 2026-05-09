@@ -69,8 +69,11 @@ export default function Sample1() {
 }
 
 // ─── chart helpers (kept inline until we extract to components/charts/) ──
+// Page route file: only the default export is permitted by Next.js. Mark
+// the helper as not-exported so route-segment typing stays clean. Imported
+// nowhere else; safe to drop the export.
 
-export function BarChart({ data }: { data: number[] }) {
+function BarChart({ data }: { data: number[] }) {
   const W = 480, H = 160, padL = 8, padR = 8, padB = 8, padT = 8;
   const innerW = W - padL - padR, innerH = H - padT - padB;
   const max = Math.max(...data) || 1;
@@ -88,7 +91,7 @@ export function BarChart({ data }: { data: number[] }) {
     </svg>
   );
 }
-export function DonutChart({ slices }: { slices: { label: string; v: number; color: string }[] }) {
+function DonutChart({ slices }: { slices: { label: string; v: number; color: string }[] }) {
   const total = slices.reduce((s, x) => s + x.v, 0) || 1;
   const r = 60, R = 88, cx = 110, cy = 90;
   let acc = 0;
@@ -123,7 +126,7 @@ export function DonutChart({ slices }: { slices: { label: string; v: number; col
     </div>
   );
 }
-export function LineChart({ series }: { series: { label: string; color: string; data: number[] }[] }) {
+function LineChart({ series }: { series: { label: string; color: string; data: number[] }[] }) {
   const W = 480, H = 160, padL = 8, padR = 8, padB = 8, padT = 8;
   const innerW = W - padL - padR, innerH = H - padT - padB;
   const allMax = Math.max(...series.flatMap((s) => s.data)) || 1;
