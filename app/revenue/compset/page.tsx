@@ -30,10 +30,11 @@
 import Page from '@/components/page/Page';
 import Panel from '@/components/page/Panel';
 import ArtifactActions from '@/components/page/ArtifactActions';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 import { REVENUE_SUBPAGES } from '../_subpages';
 import CompactAgentHeader from './_components/CompactAgentHeader';
 import CompsetGraphs from './_components/CompsetGraphs';
+import TopInsights from './_components/TopInsights';
 import SetTabs from './_components/SetTabs';
 import PropertyTable from './_components/PropertyTable';
 import AgentRunHistoryTable from './_components/AgentRunHistoryTable';
@@ -93,7 +94,22 @@ export default async function CompsetPage({ searchParams }: PageProps) {
 
   // --------------------------------------------------------------------------
   // Parallel data fetch — all queries kicked off together.
+  // 2026-05-09 PBS regression hunt: shared `lib/supabase` prefers service-role,
+  // but service_role currently LACKS SELECT on the underlying revenue.*
+  // tables/views (anon + authenticated have it). PostgREST therefore returns
+  // [] silently for service-role on every v_compset_* view → "wiring is gone"
+  // empty page. Anon, in contrast, sees all rows (verified via SQL with
+  // SET LOCAL ROLE anon: 4 sets, 14 props, 240 rates).
+  //
+  // Until the schema-side grants are fixed (out of scope for this UI session),
+  // pin the compset page to a local anon client. No secrets in repo; uses the
+  // same NEXT_PUBLIC_SUPABASE_ANON_KEY everything else uses.
   // --------------------------------------------------------------------------
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { persistSession: false } },
+  );
   const setSummaryP = supabase
     .from('v_compset_set_summary')
     .select('*');
@@ -453,6 +469,20 @@ export default async function CompsetPage({ searchParams }: PageProps) {
             { href: '/revenue/compset/scoring-settings', label: 'Scoring' },
             { href: '/revenue/compset/agent-settings', label: 'Agent' },
           ]}
+        />
+      </Panel>
+
+      <div style={{ height: 14 }} />
+
+      <Panel
+        title="Top insights"
+        eyebrow="rates · last 30 stay-dates · namkhan vs comp set"
+        actions={<ArtifactActions context={ctx('panel', 'Top insights · compset rate trend')} />}
+      >
+        <TopInsights
+          propertyRows={allProps}
+          rateMatrix={rateMatrix}
+          namkhanCompId={NAMKHAN_COMP_ID}
         />
       </Panel>
 

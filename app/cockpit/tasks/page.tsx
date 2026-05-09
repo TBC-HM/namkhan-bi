@@ -8,6 +8,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import Page from "@/components/page/Page";
+import { TicketRowActions, BulkClear } from "./_components/TicketActions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -125,8 +126,8 @@ export default async function TasksPage({ searchParams }: { searchParams?: { sta
         Every ticket — nothing hidden. SLA {SLA_HOURS}h from creation unless <code>metadata.due_at</code> overrides.
       </div>
 
-      {/* Status filter chips */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 24 }}>
+      {/* Status filter chips + bulk-clear actions (PBS 2026-05-09) */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 24 }}>
         <a
           href="/cockpit/tasks"
           style={{
@@ -162,6 +163,10 @@ export default async function TasksPage({ searchParams }: { searchParams?: { sta
               {s} <span style={{ opacity: 0.7 }}>· {n}</span>
             </a>
           ))}
+        <BulkClear
+          archivedCount={countByStatus['archived'] ?? 0}
+          completedCount={countByStatus['completed'] ?? 0}
+        />
       </div>
 
       {error ? (
@@ -239,6 +244,7 @@ export default async function TasksPage({ searchParams }: { searchParams?: { sta
                   <span style={{ color: "#777", fontSize: 11, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
                     {relTime(t.updated_at)} ago
                   </span>
+                  <TicketRowActions id={t.id} status={t.status} />
                 </summary>
 
                 <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid #232118", display: "grid", gap: 12 }}>

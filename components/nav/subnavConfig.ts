@@ -78,6 +78,7 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/operations/restaurant',       label: 'F&B' },
     { href: '/operations/spa',              label: 'Spa' },
     { href: '/operations/activities',       label: 'Activities' },
+    { href: '/operations/events',           label: 'Events',     isNew: true },
     // Housekeeping + Maintenance hidden — stub-only, hide until real content lands.
     { href: '/operations/inventory',        label: 'Inventory & Suppliers' },
     { href: '/operations/catalog-cleanup',  label: 'Catalog cleanup' },

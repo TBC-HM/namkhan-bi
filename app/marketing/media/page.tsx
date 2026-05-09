@@ -5,6 +5,7 @@ import PanelHero from '@/components/sections/PanelHero';
 import Card from '@/components/sections/Card';
 import KpiCard from '@/components/kpi/KpiCard';
 import { getMediaLinks } from '@/lib/marketing';
+import MediaFilterBar from './_components/MediaFilterBar';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 300;
@@ -28,20 +29,60 @@ function formatDate(d: string): string {
   return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-export default async function MediaPage() {
+function readParam(v: string | string[] | undefined): string {
+  if (Array.isArray(v)) return (v[0] ?? '').trim();
+  return (v ?? '').trim();
+}
+
+export default async function MediaPage({
+  searchParams,
+}: {
+  searchParams: { cat?: string | string[]; q?: string | string[] };
+}) {
   const links = await getMediaLinks();
 
-  const grouped = new Map<string, typeof links>();
+  const catFilter = readParam(searchParams.cat).toLowerCase();
+  const qFilter = readParam(searchParams.q).toLowerCase();
+
+  // Filter by URL params (in-memory; the underlying table is small).
+  const filtered = links.filter((l) => {
+    if (catFilter && (l.category ?? '').toLowerCase() !== catFilter) return false;
+    if (qFilter) {
+      const hay = `${l.label ?? ''} ${l.description ?? ''}`.toLowerCase();
+      if (!hay.includes(qFilter)) return false;
+    }
+    return true;
+  });
+
+  // Distinct category options derived from the full data set so the dropdown
+  // doesn't collapse as the user filters.
+  const catCounts = new Map<string, number>();
   for (const l of links) {
+    catCounts.set(l.category, (catCounts.get(l.category) ?? 0) + 1);
+  }
+  const orderedCats = [
+    ...CATEGORY_ORDER.filter((k) => catCounts.has(k)),
+    ...Array.from(catCounts.keys()).filter((k) => !CATEGORY_ORDER.includes(k)),
+  ];
+  const filterOptions = orderedCats.map((c) => ({
+    value: c,
+    label: CATEGORY_LABEL[c] ?? c,
+    count: catCounts.get(c) ?? 0,
+  }));
+
+  // Group the filtered list for the per-category Cards.
+  const grouped = new Map<string, typeof filtered>();
+  for (const l of filtered) {
     const arr = grouped.get(l.category) ?? [];
     arr.push(l);
     grouped.set(l.category, arr);
   }
-
   const orderedKeys = [
     ...CATEGORY_ORDER.filter((k) => grouped.has(k)),
     ...Array.from(grouped.keys()).filter((k) => !CATEGORY_ORDER.includes(k)),
   ];
+
+  const isFiltered = Boolean(catFilter || qFilter);
 
   return (
     <>
@@ -53,7 +94,7 @@ export default async function MediaPage() {
         kpis={
           <>
             <KpiCard label="Total Assets" value={links.length} hint="linked items" />
-            <KpiCard label="Categories" value={grouped.size} hint="in use" />
+            <KpiCard label="Categories" value={catCounts.size} hint="in use" />
             <KpiCard label="Storage" value="Drive" kind="text" hint="links open externally" />
             <KpiCard
               label="Last Added"
@@ -65,6 +106,21 @@ export default async function MediaPage() {
         }
       />
 
+      {links.length > 0 && (
+        <Card
+          title="Filter library"
+          sub={
+            isFiltered
+              ? `${filtered.length} of ${links.length} matching`
+              : `${links.length} assets`
+          }
+          actions={<MediaFilterBar options={filterOptions} total={links.length} />}
+          className="mt-22"
+        >
+          <div style={{ height: 0 }} />
+        </Card>
+      )}
+
       {links.length === 0 ? (
         <Card title="No media yet" sub="Awaiting first upload">
           <div className="stub" style={{ padding: 32 }}>
@@ -72,6 +128,18 @@ export default async function MediaPage() {
             <p>
               Add Drive folder URLs via Supabase → marketing.media_links table.
               Categories: photos, videos, reels, press_kit, logos, brand_guide, testimonials, other.
+            </p>
+          </div>
+        </Card>
+      ) : filtered.length === 0 ? (
+        <Card title="No matches" sub="No assets match the current filter" className="mt-22">
+          <div className="stub" style={{ padding: 24 }}>
+            <p style={{ color: 'var(--ink-mute)', fontSize: 'var(--t-base)' }}>
+              {catFilter && qFilter
+                ? `No items in "${CATEGORY_LABEL[catFilter] ?? catFilter}" matching "${qFilter}".`
+                : qFilter
+                ? `No items matching "${qFilter}".`
+                : `No items in "${CATEGORY_LABEL[catFilter] ?? catFilter}".`}
             </p>
           </div>
         </Card>

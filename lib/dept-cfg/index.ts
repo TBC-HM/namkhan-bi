@@ -374,6 +374,7 @@ const OPERATIONS_CFG: DeptCfg = {
     { label: 'F&B',              href: '/operations/restaurant'      },
     { label: 'Spa',              href: '/operations/spa'             },
     { label: 'Activities',       href: '/operations/activities'      },
+    { label: 'Events',           href: '/operations/events'          },
     { label: 'Inventory',        href: '/operations/inventory'       },
     { label: 'Suppliers',        href: '/operations/suppliers'       },
     { label: 'Catalog cleanup',  href: '/operations/catalog-cleanup' },

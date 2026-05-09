@@ -833,6 +833,18 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
     }];
     setTasks(next); saveLS(TASKS_KEY, next);
     setTaskModal(false);
+    // PBS 2026-05-09: also push the task into cockpit_tickets so it shows up
+    // in /cockpit/tasks and not just the local My-tasks box.
+    fetch('/api/cockpit/tickets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        summary: label,
+        intent: 'dept-task',
+        source: 'dept-entry',
+        dept: cfg.slug,
+      }),
+    }).catch(() => { /* silent — local copy still saved */ });
   }
   function toggleTask(id: string) {
     const next = tasks.map(t => t.id === id ? { ...t, done: !t.done } : t);
