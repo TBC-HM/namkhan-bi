@@ -1,11 +1,15 @@
 // app/revenue/demand/page.tsx — REDESIGN 2026-05-05 (recovery)
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import Panel from '@/components/page/Panel';
+import Brief from '@/components/page/Brief';
+import ArtifactActions from '@/components/page/ArtifactActions';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { getPaceOtb } from '@/lib/data';
 import { resolvePeriod } from '@/lib/period';
 import DemandGraphs from './_components/DemandGraphs';
 import DemandTable, { type DemandRow } from './_components/DemandTableClient';
+import { REVENUE_SUBPAGES } from '../_subpages';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -37,62 +41,68 @@ export default async function DemandPage({ searchParams }: Props) {
   const monthsAhead = rows.filter((r) => r.roomnights_delta > 0).length;
   const monthsBehind = rows.filter((r) => r.roomnights_delta < 0).length;
 
+  // Brief — narrative read of demand for this window.
+  const briefSignal = `${period.label} · ${rows.length} months · ${monthsAhead} ahead / ${monthsBehind} behind STLY · pace Δ ${paceΔ >= 0 ? '+' : ''}${paceΔ} RN`;
+  const briefBody = `OTB ${total.otb.toLocaleString()} RN ($${(total.rev / 1000).toFixed(1)}k). STLY ${total.stly.toLocaleString()} RN ($${(total.stlyRev / 1000).toFixed(1)}k). Revenue Δ ${revΔ >= 0 ? '+' : ''}$${(revΔ / 1000).toFixed(1)}k (${revΔPct.toFixed(1)}%).`;
+  const good: string[] = [];
+  const bad:  string[] = [];
+  if (paceΔPct >= 5)            good.push(`Pace ${paceΔPct.toFixed(1)}% ahead of STLY — protect rate.`);
+  if (paceΔPct <= -5)           bad.push(`Pace ${paceΔPct.toFixed(1)}% behind STLY — open BAR floor or push direct.`);
+  if (monthsBehind > monthsAhead) bad.push(`${monthsBehind} months behind STLY (vs ${monthsAhead} ahead).`);
+  if (biggest.month && Math.abs(biggest.delta) > 50) {
+    if (biggest.delta > 0) good.push(`${biggest.month} pace +${biggest.delta} RN — strongest month.`);
+    else                    bad.push(`${biggest.month} pace ${biggest.delta} RN — softest month, intervene.`);
+  }
+  if (good.length === 0) good.push('No standout strengths flagged for this window.');
+  if (bad.length === 0)  bad.push('No leakage signals flagged for this window.');
+
+  const ctx = (kind: 'panel' | 'kpi' | 'brief' | 'table', title: string, signal?: string) => ({ kind, title, signal, dept: 'revenue' as const });
+
   return (
-    <>
-      <PageHeader pillar="Revenue" tab="Demand"
-        title={<>Find the <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>gap</em> before the calendar gets soft.</>}
-        lede={`${period.label} · ${period.rangeLabel} · ${rows.length} months in view · pace vs STLY`} />
-      <div style={statusWrap}>
-        <div style={statusRow1}>
-          <div style={cell}><span className="t-eyebrow" style={{ marginRight: 8 }}>SOURCE</span><StatusPill tone="active">mv_pace_otb</StatusPill></div>
-          <div style={cell}><span className="t-eyebrow" style={{ marginRight: 6 }}>WINDOW</span><span style={meta}>{period.label}</span></div>
-          <div style={cell}><span className="t-eyebrow" style={{ marginRight: 6 }}>MONTHS</span><span style={metaStrong}>{rows.length}</span></div>
-          <span style={{ flex: 1 }} />
+    <Page
+      eyebrow={`Revenue · Demand · ${period.label}`}
+      title={<>Find the <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>gap</em> before the calendar gets soft.</>}
+      subPages={REVENUE_SUBPAGES}
+    >
+      <Brief
+        brief={{ signal: briefSignal, body: briefBody, good, bad }}
+        actions={<ArtifactActions context={ctx('brief', `Demand · ${period.label}`, briefSignal)} />}
+      />
+
+      <Panel title="Demand status" eyebrow="evidence" actions={<ArtifactActions context={ctx('panel', 'Demand status')} />}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap', marginBottom: 8 }}>
+          <span><span className="t-eyebrow" style={{ marginRight: 8 }}>SOURCE</span><StatusPill tone="active">mv_pace_otb</StatusPill></span>
+          <span><span className="t-eyebrow" style={{ marginRight: 6 }}>WINDOW</span><span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-sm)' }}>{period.label}</span></span>
+          <span><span className="t-eyebrow" style={{ marginRight: 6 }}>MONTHS</span><span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-sm)', fontWeight: 600 }}>{rows.length}</span></span>
         </div>
-        <div style={statusRow2}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 'var(--t-xs)' }}>
           <span className="t-eyebrow" style={{ marginRight: 6 }}>AHEAD</span><StatusPill tone="active">{monthsAhead}</StatusPill>
-          <span style={metaDim}>months &gt; STLY</span>
+          <span style={{ fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>months &gt; STLY</span>
           <span style={{ width: 16 }} />
           <span className="t-eyebrow" style={{ marginRight: 6 }}>BEHIND</span><StatusPill tone={monthsBehind > 0 ? 'expired' : 'inactive'}>{monthsBehind}</StatusPill>
-          <span style={metaDim}>months &lt; STLY</span>
-          <span style={{ flex: 1 }} />
-          {biggest.month && <span style={metaDim}>biggest: {biggest.month} {biggest.delta >= 0 ? '+' : ''}{biggest.delta} RN</span>}
+          <span style={{ fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>months &lt; STLY</span>
+          {biggest.month && <span style={{ fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>biggest: {biggest.month} {biggest.delta >= 0 ? '+' : ''}{biggest.delta} RN</span>}
         </div>
-      </div>
-      <DemandGraphs rows={rows} />
+      </Panel>
+
+      <div style={{ height: 14 }} />
+
+      <Panel title="Demand graphs" eyebrow="hero" actions={<ArtifactActions context={ctx('panel', 'Demand graphs', briefSignal)} />}>
+        <DemandGraphs rows={rows} />
+      </Panel>
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
         <KpiBox value={total.otb} unit="count" label="OTB Roomnights" />
         <KpiBox value={total.rev} unit="usd" label="OTB Revenue" />
         <KpiBox value={paceΔ} unit="count" label="Pace Δ Rn" delta={total.stly > 0 ? { value: paceΔPct, unit: 'pct', period: 'vs STLY' } : undefined} />
         <KpiBox value={revΔ} unit="usd" label="Pace Δ Rev" delta={total.stlyRev > 0 ? { value: revΔPct, unit: 'pct', period: 'vs STLY' } : undefined} />
       </div>
-      <div style={{ marginTop: 18 }}>
-        <SectionHead title="Pace" emphasis="by check-in month" sub={`${rows.length} months · OTB vs STLY · sortable`} source="mv_pace_otb" />
+
+      <div style={{ height: 14 }} />
+
+      <Panel title={`Pace by check-in month · ${rows.length} months`} eyebrow="mv_pace_otb · OTB vs STLY · sortable" actions={<ArtifactActions context={ctx('table', 'Pace by check-in month')} />}>
         <DemandTable rows={rows} />
-      </div>
-    </>
+      </Panel>
+    </Page>
   );
 }
-
-function SectionHead({ title, emphasis, sub, source }: { title: string; emphasis?: string; sub?: string; source?: string }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12, marginBottom: 6, flexWrap: 'wrap' }}>
-      <div>
-        <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-xl)', fontWeight: 500, color: 'var(--ink)', lineHeight: 1.1 }}>
-          {title}
-          {emphasis && <span style={{ marginLeft: 8, fontFamily: 'var(--mono)', fontStyle: 'normal', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>{emphasis}</span>}
-        </div>
-        {sub && <div style={{ marginTop: 2, fontSize: 'var(--t-sm)', color: 'var(--ink-mute)' }}>{sub}</div>}
-      </div>
-      {source && <span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-loose)', textTransform: 'uppercase', color: 'var(--ink-faint)' }}>{source}</span>}
-    </div>
-  );
-}
-
-const statusWrap: React.CSSProperties = { background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, marginTop: 14, overflow: 'hidden' };
-const statusRow1: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 18, padding: '10px 16px', borderBottom: '1px solid var(--paper-deep)', flexWrap: 'wrap' };
-const statusRow2: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', fontSize: 'var(--t-xs)', flexWrap: 'wrap' };
-const cell: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6 };
-const meta: React.CSSProperties = { fontFamily: 'var(--mono)', fontSize: 'var(--t-sm)', color: 'var(--ink)' };
-const metaStrong: React.CSSProperties = { fontFamily: 'var(--mono)', fontSize: 'var(--t-sm)', color: 'var(--ink)', fontWeight: 600 };
-const metaDim: React.CSSProperties = { fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', color: 'var(--ink-mute)', letterSpacing: 'var(--ls-loose)' };

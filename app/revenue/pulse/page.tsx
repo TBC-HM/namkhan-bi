@@ -1,8 +1,12 @@
 // app/revenue/pulse/page.tsx — REDESIGN 2026-05-05 (recovery rewrite)
 // compset-style: PageHeader + status header + 6-graph 2x3 grid + KpiBox row + alerts/decisions panel.
 
-import PageHeader from '@/components/layout/PageHeader';
 import KpiBox from '@/components/kpi/KpiBox';
+import Page from '@/components/page/Page';
+import Panel from '@/components/page/Panel';
+import Brief from '@/components/page/Brief';
+import ArtifactActions from '@/components/page/ArtifactActions';
+import { REVENUE_SUBPAGES } from '../_subpages';
 import { resolvePeriod } from '@/lib/period';
 import { getKpiDaily, getOverviewKpis, getChannelPerf } from '@/lib/data';
 import { getPulseExtendedKpis } from '@/lib/pulseExtended';
@@ -222,25 +226,53 @@ export default async function PulsePage({ searchParams }: Props) {
     { title: 'Booking pace curve', sub: '−30d → +30d · Actual / OTB / STLY / Budget', svg: paceCurveMiniSvg(paceCurve) },
   ];
 
+  // Brief — narrative read of the pulse for this period.
+  const briefSignal = `${period.label} · OCC ${occ.toFixed(0)}% · ADR $${adr.toFixed(0)} · RevPAR $${revpar.toFixed(0)} · TRevPAR $${trevpar.toFixed(0)}`;
+  const briefBody = `${alerts.length} tactical alert${alerts.length === 1 ? '' : 's'} live, ${decisions.length} decision${decisions.length === 1 ? '' : 's'} queued. Cancel ${(extended.cancelPct ?? 0).toFixed(1)}% · lead time ${(extended.leadTimeDays ?? 0).toFixed(0)}d · ALOS ${(extended.alosNights ?? 0).toFixed(1)}.`;
+  const good: string[] = [];
+  const bad:  string[] = [];
+  if (occ >= 70)        good.push(`Occupancy ${occ.toFixed(0)}% — strong base.`);
+  if (occ < 50)         bad.push(`Occupancy ${occ.toFixed(0)}% — soft; check pricing & channel mix.`);
+  if (adr >= 200)       good.push(`ADR $${adr.toFixed(0)} — premium pricing holding.`);
+  if (revpar >= 150)    good.push(`RevPAR $${revpar.toFixed(0)} — top-line healthy.`);
+  if ((extended.cancelPct ?? 0) > 10) bad.push(`Cancel rate ${(extended.cancelPct ?? 0).toFixed(1)}% — review non-refundable mix.`);
+  if (alerts.length > 0)    bad.push(`${alerts.length} tactical alerts open — review below.`);
+  if (decisions.length > 0) good.push(`${decisions.length} decisions queued for action.`);
+  if (good.length === 0) good.push('No standout strengths flagged for this period.');
+  if (bad.length === 0)  bad.push('No leakage signals flagged for this period.');
+
+  const ctx = (kind: 'panel' | 'kpi' | 'brief' | 'table', title: string, signal?: string) => ({ kind, title, signal, dept: 'revenue' as const });
+
   return (
-    <>
-      <PageHeader
-        pillar="Revenue"
-        tab="Pulse"
-        title={<>The <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>signal</em>, six ways.</>}
-        lede={`${period.label} · OCC ${occ.toFixed(0)}% · ADR $${adr.toFixed(0)} · RevPAR $${revpar.toFixed(0)} · TRevPAR $${trevpar.toFixed(0)}`}
+    <Page
+      eyebrow="Revenue · Pulse"
+      title={<>The <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>signal</em>, six ways.</>}
+      subPages={REVENUE_SUBPAGES}
+    >
+      <Brief
+        brief={{ signal: briefSignal, body: briefBody, good, bad }}
+        actions={<ArtifactActions context={ctx('brief', `Pulse · ${period.label}`, briefSignal)} />}
       />
-      <PulseStatusHeader
-        periodLabel={period.label}
-        rangeLabel={period.rangeLabel}
-        cmpLabel={period.cmpLabel}
-        segLabel={period.segLabel}
-        win={period.win}
-        days={period.days}
-        alertCount={alerts.length}
-        decisionCount={decisions.length}
-      />
-      <PulseGraphsGrid charts={charts} />
+
+      <Panel title="Pulse status" eyebrow="evidence" actions={<ArtifactActions context={ctx('panel', 'Pulse status')} />}>
+        <PulseStatusHeader
+          periodLabel={period.label}
+          rangeLabel={period.rangeLabel}
+          cmpLabel={period.cmpLabel}
+          segLabel={period.segLabel}
+          win={period.win}
+          days={period.days}
+          alertCount={alerts.length}
+          decisionCount={decisions.length}
+        />
+      </Panel>
+
+      <div style={{ height: 14 }} />
+
+      <Panel title="Six signals" eyebrow="hero" actions={<ArtifactActions context={ctx('panel', 'Six signals · Pulse', briefSignal)} />}>
+        <PulseGraphsGrid charts={charts} />
+      </Panel>
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
         <KpiBox value={occ} unit="pct" label="Occupancy" />
         <KpiBox value={adr} unit="usd" label="ADR" />
@@ -251,7 +283,12 @@ export default async function PulsePage({ searchParams }: Props) {
         <KpiBox value={extended.leadTimeDays ?? 0} unit="nights" dp={0} label="Lead time (d)" />
         <KpiBox value={extended.alosNights ?? 0} unit="nights" dp={1} label="ALOS" />
       </div>
-      <PulseAlertsPanel alerts={alerts} decisions={decisions} />
-    </>
+
+      <div style={{ height: 14 }} />
+
+      <Panel title="Alerts & decisions" eyebrow="actionable" actions={<ArtifactActions context={ctx('panel', 'Alerts & decisions')} />}>
+        <PulseAlertsPanel alerts={alerts} decisions={decisions} />
+      </Panel>
+    </Page>
   );
 }

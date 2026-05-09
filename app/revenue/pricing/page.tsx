@@ -3,7 +3,12 @@
 
 import { resolvePeriod, type WindowKey } from '@/lib/period';
 import { getRoomTypes, getRatePlans, getRateInventory } from '@/lib/pricing';
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import Panel from '@/components/page/Panel';
+import Brief from '@/components/page/Brief';
+import ArtifactActions from '@/components/page/ArtifactActions';
+import KpiBox from '@/components/kpi/KpiBox';
+import { REVENUE_SUBPAGES } from '../_subpages';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -140,22 +145,38 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
     next7: 'Next 7d', next30: 'Next 30d', next90: 'Next 90d', next180: 'Next 180d', next365: 'Next 365d',
   };
 
+  // Brief — narrative read of pricing surface for this window.
+  const briefSignal = `${winLabels[win]} · ${totalInv.toLocaleString()} inventory cells · avg $${avgRate.toFixed(0)} · BAR floor $${minRate.toFixed(0)} · ceiling $${maxRate.toFixed(0)}`;
+  const briefBody = `${roomTypes.length} room types × ${planAggs.length} rate plans across ${period.days} nights. ${stopSells} stop-sell cells, ${minStayRows} LOS-restricted.`;
+  const good: string[] = [];
+  const bad:  string[] = [];
+  if (maxRate / Math.max(1, minRate) > 1.5) good.push(`Spread $${minRate.toFixed(0)} → $${maxRate.toFixed(0)} — yieldable.`);
+  if (stopSells > 0)  bad.push(`${stopSells} stop-sell cells — review for missed demand.`);
+  if (minStayRows > 0) good.push(`${minStayRows} LOS-restricted nights — protecting peak.`);
+  if (totalInv === 0)  bad.push(`No inventory cells in window — check Cloudbeds sync.`);
+  if (good.length === 0) good.push('No standout strengths flagged for this window.');
+  if (bad.length === 0)  bad.push('No leakage signals flagged for this window.');
+
+  const ctx = (kind: 'panel' | 'kpi' | 'brief' | 'table', title: string, signal?: string) => ({ kind, title, signal, dept: 'revenue' as const });
+
   return (
-    <>
+    <Page
+      eyebrow={`Revenue · Pricing · ${winLabels[win]}`}
+      title={<>Pricing · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>{winLabels[win]} · by {gran}</em></>}
+      subPages={REVENUE_SUBPAGES}
+    >
       <style>{`
         .filter-btn:not(.fwd):not([href*="seg="]):not([href*="cmp="]):not([href*="cap="]) {
           opacity: 0.35; pointer-events: none;
         }
       `}</style>
 
-      <PageHeader
-        pillar="Revenue"
-        tab="Pricing"
-        title={<>Pricing · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>{winLabels[win]} · by {gran}</em></>}
-        lede={<>Forward inventory rates from <code>public.rate_inventory</code> ({totalInv.toLocaleString()} cells across {roomTypes.length} room types × {planAggs.length} rate plans). <span style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>Backward chips greyed — pricing is forward-only.</span></>}
+      <Brief
+        brief={{ signal: briefSignal, body: briefBody, good, bad }}
+        actions={<ArtifactActions context={ctx('brief', `Pricing · ${winLabels[win]}`, briefSignal)} />}
       />
 
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 12, marginBottom: 10 }}>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 10 }}>
         <span style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Granularity</span>
         {(['day', 'week', 'month'] as const).map((g) => {
           const active = g === gran;
@@ -173,19 +194,16 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
         })}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 10, marginBottom: 14 }}>
-        <Kpi scope="Inventory cells" value={totalInv.toLocaleString()} sub={`${period.days}n × ${roomTypes.length}rt × ${planAggs.length}rp`} />
-        <Kpi scope="Avg rate" value={`$${avgRate.toFixed(0)}`} sub="across all cells" />
-        <Kpi scope="Floor (BAR)" value={`$${minRate.toFixed(0)}`} sub="lowest non-zero" />
-        <Kpi scope="Ceiling" value={`$${maxRate.toFixed(0)}`} sub="highest" />
-        <Kpi scope="Stop-sell" value={stopSells.toLocaleString()} sub="closed cells" tone={stopSells > 0 ? 'warn' : 'flat'} />
-        <Kpi scope="Min-stay" value={minStayRows.toLocaleString()} sub="LOS restricted" />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
+        <KpiBox value={totalInv} unit="count" label="Inventory cells" />
+        <KpiBox value={avgRate}  unit="usd"   label="Avg rate" />
+        <KpiBox value={minRate}  unit="usd"   label="BAR floor" />
+        <KpiBox value={maxRate}  unit="usd"   label="Ceiling" />
+        <KpiBox value={stopSells} unit="count" label="Stop-sell" />
+        <KpiBox value={minStayRows} unit="count" label="Min-stay" />
       </div>
 
-      <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, marginBottom: 14, overflow: 'hidden' }}>
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--paper-deep)' }}>
-          <h2 style={{ margin: 0, fontFamily: 'var(--serif)', fontWeight: 500, fontSize: "var(--t-xl)" }}>BAR ladder by room type</h2>
-        </div>
+      <Panel title="BAR ladder by room type" eyebrow="rate_inventory" actions={<ArtifactActions context={ctx('table', 'BAR ladder by room type')} />}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: "var(--t-base)" }}>
           <thead>
             <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -216,13 +234,12 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
             ))}
           </tbody>
         </table>
-      </div>
+      </Panel>
 
-      <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px', marginBottom: 14, overflowX: 'auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
-          <h2 style={{ margin: 0, fontFamily: 'var(--serif)', fontWeight: 500, fontSize: "var(--t-xl)" }}>Rate calendar · room × {gran}</h2>
-          <span style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>Color = avg USD (terracotta=high, pale=low) · hover for details</span>
-        </div>
+      <div style={{ height: 14 }} />
+
+      <Panel title={`Rate calendar · room × ${gran}`} eyebrow="terracotta=high · pale=low" actions={<ArtifactActions context={ctx('table', `Rate calendar · room × ${gran}`)} />}>
+        <div style={{ overflowX: 'auto' }}>
         <table style={{ borderCollapse: 'collapse', fontSize: "var(--t-sm)", minWidth: '100%' }}>
           <thead>
             <tr>
@@ -258,12 +275,12 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
             ))}
           </tbody>
         </table>
-      </div>
-
-      <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, overflow: 'hidden' }}>
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--paper-deep)' }}>
-          <h2 style={{ margin: 0, fontFamily: 'var(--serif)', fontWeight: 500, fontSize: "var(--t-xl)" }}>Rate plans active in window ({planAggs.length})</h2>
         </div>
+      </Panel>
+
+      <div style={{ height: 14 }} />
+
+      <Panel title={`Rate plans active in window (${planAggs.length})`} eyebrow="rate_plans" actions={<ArtifactActions context={ctx('table', 'Rate plans active in window')} />}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: "var(--t-base)" }}>
           <thead>
             <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -295,22 +312,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
           </tbody>
         </table>
         {planAggs.length > 30 && <div style={{ padding: '8px 16px', fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>+ {planAggs.length - 30} more</div>}
-      </div>
-
-      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: "var(--t-sm)" }}>
-        <strong>✓ Wired.</strong> {totalInv.toLocaleString()} live inventory cells. KPIs · BAR ladder · heatmap · rate-plan breakdown all driven by URL <code>?win=</code> + <code>?gran=</code>.
-      </div>
-    </>
-  );
-}
-
-function Kpi({ scope, value, sub, tone = 'flat' }: { scope: string; value: string; sub: string; tone?: 'flat' | 'up' | 'warn' | 'bad' }) {
-  const cls = tone === 'up' ? 'pos' : tone === 'warn' ? 'warn' : tone === 'bad' ? 'neg' : '';
-  return (
-    <div className="kpi-box" data-tooltip={`${scope} · ${sub}`}>
-      <div className="kpi-tile-scope">{scope}</div>
-      <div className={`kpi-box-value ${cls}`.trim()}>{value}</div>
-      <div className="kpi-tile-sub">{sub}</div>
-    </div>
+      </Panel>
+    </Page>
   );
 }

@@ -13,9 +13,11 @@
 // Required SQL: sql/02_channel_economics_window.sql must be applied first.
 
 import Link from 'next/link';
-import PanelHero from '@/components/sections/PanelHero';
-import Card from '@/components/sections/Card';
-import KpiCard from '@/components/kpi/KpiCard';
+import Page from '@/components/page/Page';
+import Panel from '@/components/page/Panel';
+import Brief from '@/components/page/Brief';
+import ArtifactActions from '@/components/page/ArtifactActions';
+import KpiBox from '@/components/kpi/KpiBox';
 import Insight from '@/components/sections/Insight';
 import { resolvePeriod } from '@/lib/period';
 import {
@@ -24,6 +26,7 @@ import {
 } from '@/lib/data-channels';
 import { fmtMoney } from '@/lib/format';
 import { channelMixTrendSvg, channelNetValueBarsSvg, channelVelocity3LineSvg } from '@/lib/svgCharts';
+import { REVENUE_SUBPAGES } from '../_subpages';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -121,98 +124,67 @@ export default async function ChannelsPage({ searchParams }: Props) {
   // Pivot matrix
   const { sources: matSources, roomTypes: matRooms, cells, sourceTotals } = pivotChannelXRoom(matrix);
 
+  // Brief — narrative read of channel mix for the period.
+  const briefSignal = `${period.label} · Direct ${directMix.toFixed(0)}% · OTA ${otaMix.toFixed(0)}% · Wholesale ${wholesaleMix.toFixed(0)}% · Comm ${commissionPctOfRev.toFixed(1)}% of rev`;
+  const briefBody = `${channels.length} active sources, $${(totalRev / 1000).toFixed(1)}k gross. Avg lead ${avgLead.toFixed(0)}d. Channel cost / occ RN $${channelCostPerOcc.toFixed(0)}.`;
+  const good: string[] = [];
+  const bad:  string[] = [];
+  if (directMix >= 35)            good.push(`Direct mix ${directMix.toFixed(0)}% — above 35% target.`);
+  if (directMix < 35)             bad.push(`Direct mix ${directMix.toFixed(0)}% — below 35% target; push direct.`);
+  if (otaMix > 60)                bad.push(`OTA mix ${otaMix.toFixed(0)}% — heavy OTA dependency.`);
+  if (commissionPctOfRev > 12)    bad.push(`Commission ${commissionPctOfRev.toFixed(1)}% of rev — push direct to reduce.`);
+  if (wholesaleMix > 20)          bad.push(`Wholesale mix ${wholesaleMix.toFixed(0)}% — leakage risk.`);
+  if (worstCancel.name && worstCancel.pct > 25) bad.push(`${worstCancel.name} cancel rate ${worstCancel.pct.toFixed(1)}%.`);
+  if (channelCostPerOcc < 30 && totalRoomnights > 0) good.push(`Channel cost / occ RN $${channelCostPerOcc.toFixed(0)} — efficient.`);
+  if (good.length === 0) good.push('No standout strengths flagged for this window.');
+  if (bad.length === 0)  bad.push('No leakage signals flagged for this window.');
+
+  const ctx = (kind: 'panel' | 'kpi' | 'brief' | 'table', title: string, signal?: string) => ({ kind, title, signal, dept: 'revenue' as const });
+
   return (
-    <>
-      <PanelHero
-        eyebrow={`Channels · ${period.label}`}
-        title="Channel"
-        emphasis="performance"
-        sub={`${period.rangeLabel} · source mix · commission · ADR · cancel rate`}
-        kpis={
-          <>
-            <KpiCard
-              label={`Commissions ${period.label}`}
-              value={totalCommission}
-              kind="money"
-              tone={commissionPctOfRev > 12 ? 'warn' : 'neutral'}
-              hint={deltaHint(totalCommission, cmpTotalCommission, `${commissionPctOfRev.toFixed(1)}% of rev`)}
-            />
-            <KpiCard
-              label="Direct mix"
-              value={directMix}
-              kind="pct"
-              tone={directMix < 35 ? 'warn' : 'pos'}
-              hint={deltaHint(directMix, cmpDirectMix, 'Target 35%')}
-            />
-            <KpiCard
-              label="OTA mix"
-              value={otaMix}
-              kind="pct"
-              tone={otaMix > 60 ? 'warn' : 'neutral'}
-              hint={deltaHint(otaMix, cmpOtaMix, otaMix > 70 ? 'Heavy OTA' : 'stable')}
-            />
-            <KpiCard
-              label="Wholesale mix"
-              value={wholesaleMix}
-              kind="pct"
-              tone={wholesaleMix > 20 ? 'warn' : 'neutral'}
-              hint={wholesaleMix > 20 ? 'Risk: leakage to OTA' : '—'}
-            />
-            <KpiCard
-              label="Avg lead time"
-              value={avgLead.toFixed(0) + 'd'}
-              kind="text"
-              hint={`OTA: ${ota[0]?.avg_lead_days?.toFixed(0) ?? '—'}d · Direct: ${direct[0]?.avg_lead_days?.toFixed(0) ?? '—'}d`}
-            />
-            <KpiCard
-              label="Channel cost / occ rn"
-              value={channelCostPerOcc}
-              kind="money"
-              tone={channelCostPerOcc > 50 ? 'warn' : 'neutral'}
-              hint="Avg tax per booking"
-            />
-          </>
-        }
+    <Page
+      eyebrow={`Channels · ${period.label}`}
+      title={<>Channel <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>performance</em>.</>}
+      subPages={REVENUE_SUBPAGES}
+    >
+      <Brief
+        brief={{ signal: briefSignal, body: briefBody, good, bad }}
+        actions={<ArtifactActions context={ctx('brief', `Channels · ${period.label}`, briefSignal)} />}
       />
 
-      {/* 3 mini graphs · channel mix weekly · net $/booking · booking velocity 28d */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginTop: 12, marginBottom: 14 }}>
-        <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '12px 14px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-            <h3 style={{ margin: 0, fontFamily: 'var(--serif)', fontWeight: 500, fontSize: 'var(--t-md)' }}>Channel mix · <em style={{ color: 'var(--brass)' }}>weekly trend</em></h3>
-            <span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>{period.label}</span>
-          </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
+        <KpiBox value={totalCommission}     unit="usd" label={`Commissions · ${period.label}`} />
+        <KpiBox value={directMix}            unit="pct" label="Direct mix" />
+        <KpiBox value={otaMix}               unit="pct" label="OTA mix" />
+        <KpiBox value={wholesaleMix}         unit="pct" label="Wholesale mix" />
+        <KpiBox value={avgLead}              unit="nights" dp={0} label="Avg lead time" />
+        <KpiBox value={channelCostPerOcc}    unit="usd" label="Channel cost / occ RN" />
+      </div>
+      {/* deltaHint helper kept to retain compare windows for callers; no UI yet. */}
+      {void deltaHint /* eslint-disable-line @typescript-eslint/no-unused-vars */}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12, marginBottom: 14 }}>
+        <Panel title="Channel mix · weekly trend" eyebrow={period.label} actions={<ArtifactActions context={ctx('panel', 'Channel mix · weekly trend')} />}>
           {mixWeekly.length > 0
             ? <div dangerouslySetInnerHTML={{ __html: channelMixTrendSvg(mixWeekly) }} />
             : <div style={{ padding: 24, textAlign: 'center', color: 'var(--ink-mute)', fontSize: 'var(--t-sm)' }}>No mix data in window.</div>}
-        </div>
-
-        <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '12px 14px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-            <h3 style={{ margin: 0, fontFamily: 'var(--serif)', fontWeight: 500, fontSize: 'var(--t-md)' }}>Net $/booking · <em style={{ color: 'var(--brass)' }}>cancel-adjusted</em></h3>
-            <span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>{period.label}</span>
-          </div>
+        </Panel>
+        <Panel title="Net $/booking · cancel-adjusted" eyebrow={period.label} actions={<ArtifactActions context={ctx('panel', 'Net $/booking')} />}>
           {netValue.length > 0
             ? <div dangerouslySetInnerHTML={{ __html: channelNetValueBarsSvg(netValue) }} />
             : <div style={{ padding: 24, textAlign: 'center', color: 'var(--ink-mute)', fontSize: 'var(--t-sm)' }}>No net value data in window.</div>}
-        </div>
-
-        <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '12px 14px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-            <h3 style={{ margin: 0, fontFamily: 'var(--serif)', fontWeight: 500, fontSize: 'var(--t-md)' }}>Booking velocity · <em style={{ color: 'var(--brass)' }}>28d</em></h3>
-            <span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>by category</span>
-          </div>
+        </Panel>
+        <Panel title="Booking velocity · 28d" eyebrow="by category" actions={<ArtifactActions context={ctx('panel', 'Booking velocity · 28d')} />}>
           {velocity.length > 0
             ? <div dangerouslySetInnerHTML={{ __html: channelVelocity3LineSvg(velocity) }} />
             : <div style={{ padding: 24, textAlign: 'center', color: 'var(--ink-mute)', fontSize: 'var(--t-sm)' }}>No velocity data in last 28 days.</div>}
-        </div>
+        </Panel>
       </div>
 
-      <Card
-        title="Channel performance"
-        emphasis={period.label}
-        sub={`Source ranked by gross revenue · ${channels.length} active · click source to drill in`}
-        source="mv_channel_economics"
+      <Panel
+        title={`Channel performance · ${period.label}`}
+        eyebrow="mv_channel_economics"
+        actions={<ArtifactActions context={ctx('table', `Channel performance · ${period.label}`, briefSignal)} />}
       >
         {channels.length === 0 ? (
           <div style={{ padding: 24, color: 'var(--ink-mute)', fontStyle: 'italic' }}>
@@ -260,15 +232,16 @@ export default async function ChannelsPage({ searchParams }: Props) {
             </tbody>
           </table>
         )}
-      </Card>
+      </Panel>
 
       {matRooms.length > 0 && matSources.length > 0 && (
-        <Card
-          title="OTA × Room Type matrix"
-          emphasis={period.label}
-          sub="Where each source performs · which rooms convert · hover any cell for detail"
-          source="mv_channel_x_roomtype"
-        >
+        <>
+          <div style={{ height: 14 }} />
+          <Panel
+            title="OTA × Room Type matrix"
+            eyebrow={`mv_channel_x_roomtype · ${period.label}`}
+            actions={<ArtifactActions context={ctx('table', 'OTA × Room Type matrix')} />}
+          >
           <div style={{ overflowX: 'auto' }}>
             <table className="tbl matrix">
               <thead>
@@ -327,23 +300,28 @@ export default async function ChannelsPage({ searchParams }: Props) {
               </tbody>
             </table>
           </div>
-        </Card>
+        </Panel>
+        </>
       )}
 
       {worstCancel.name && (
-        <Insight tone={worstCancel.pct > 30 ? 'alert' : 'warn'} eye="Cancel watch">
-          <strong>{worstCancel.name}</strong> showing {worstCancel.pct.toFixed(1)}% cancellation in {period.label}.
-          Investigate rate plan, deposit policy, and lead-time profile.
-        </Insight>
+        <div style={{ marginTop: 14 }}>
+          <Insight tone={worstCancel.pct > 30 ? 'alert' : 'warn'} eye="Cancel watch">
+            <strong>{worstCancel.name}</strong> showing {worstCancel.pct.toFixed(1)}% cancellation in {period.label}.
+            Investigate rate plan, deposit policy, and lead-time profile.
+          </Insight>
+        </div>
       )}
 
       {commissionPctOfRev > 12 && (
-        <Insight tone="warn" eye="Commission load">
-          OTA commissions are <strong>{commissionPctOfRev.toFixed(1)}%</strong> of total revenue
-          ({fmtMoney(totalCommission, 'USD')} in {period.label}).
-          Push direct mix above 35% to reduce dependency.
-        </Insight>
+        <div style={{ marginTop: 10 }}>
+          <Insight tone="warn" eye="Commission load">
+            OTA commissions are <strong>{commissionPctOfRev.toFixed(1)}%</strong> of total revenue
+            ({fmtMoney(totalCommission, 'USD')} in {period.label}).
+            Push direct mix above 35% to reduce dependency.
+          </Insight>
+        </div>
       )}
-    </>
+    </Page>
   );
 }

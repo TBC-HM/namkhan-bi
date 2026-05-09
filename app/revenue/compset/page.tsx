@@ -27,8 +27,11 @@
 // Per CLAUDE.md hard rules: this is a server component, all canonical components,
 // every section has an empty-state, zero hardcoded fontSize / hex / USD prefix.
 
-import PageHeader from '@/components/layout/PageHeader';
+import Page from '@/components/page/Page';
+import Panel from '@/components/page/Panel';
+import ArtifactActions from '@/components/page/ArtifactActions';
 import { supabase } from '@/lib/supabase';
+import { REVENUE_SUBPAGES } from '../_subpages';
 import CompactAgentHeader from './_components/CompactAgentHeader';
 import CompsetGraphs from './_components/CompsetGraphs';
 import SetTabs from './_components/SetTabs';
@@ -419,38 +422,41 @@ export default async function CompsetPage({ searchParams }: PageProps) {
   // --------------------------------------------------------------------------
   // RENDER
   // --------------------------------------------------------------------------
+  const ctx = (kind: 'panel' | 'kpi' | 'brief' | 'table', title: string) => ({ kind, title, dept: 'revenue' as const });
+
   return (
-    <>
-      <PageHeader
-        pillar="Revenue"
-        tab="Comp Set"
-        title={
-          <>
-            See who is moving the{' '}
-            <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>
-              price line
-            </em>
-            , before they do.
-          </>
-        }
-        lede="Comp-set rate, ranking and rate-plan signals — refreshed nightly by the comp-set agent."
-      />
+    <Page
+      eyebrow="Revenue · Comp Set"
+      title={
+        <>
+          See who is moving the{' '}
+          <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>
+            price line
+          </em>
+          , before they do.
+        </>
+      }
+      subPages={REVENUE_SUBPAGES}
+    >
+      <Panel title="Comp-set agent" eyebrow="status · last run · next shop" actions={<ArtifactActions context={ctx('panel', 'Comp-set agent status')} />}>
+        <CompactAgentHeader
+          agent={agent}
+          lastRun={lastRun}
+          nextEvent={nextEvent}
+          pickDates={pickDates}
+          events={events}
+          settingsLinks={[
+            { href: '/revenue/compset/scoring-settings', label: 'Scoring' },
+            { href: '/revenue/compset/agent-settings', label: 'Agent' },
+          ]}
+        />
+      </Panel>
 
-      {/* COMPACT AGENT HEADER — replaces TopStrip + EventsStrip + ScrapeDates. */}
-      <CompactAgentHeader
-        agent={agent}
-        lastRun={lastRun}
-        nextEvent={nextEvent}
-        pickDates={pickDates}
-        events={events}
-        settingsLinks={[
-          { href: '/revenue/compset/scoring-settings', label: 'Scoring' },
-          { href: '/revenue/compset/agent-settings', label: 'Agent' },
-        ]}
-      />
+      <div style={{ height: 14 }} />
 
-      {/* 3-GRAPH ROW (rate trend · DoW positioning · promo intensity). */}
-      <CompsetGraphs calendar={calendar} dow={dow} tiles={graphTiles} />
+      <Panel title="Rate trend · DoW · promo intensity" eyebrow="hero" actions={<ArtifactActions context={ctx('panel', 'Comp-set graphs')} />}>
+        <CompsetGraphs calendar={calendar} dow={dow} tiles={graphTiles} />
+      </Panel>
 
       {/* SET TABS — ?set= URL param. Hidden when zero sets. */}
       {orderedSets.length > 0 ? (
@@ -479,24 +485,24 @@ export default async function CompsetPage({ searchParams }: PageProps) {
         </section>
       )}
 
-      {/* AGENT RUN HISTORY — last 10 runs across compset_agent + discovery. */}
-      <section style={tableSection}>
-        <div style={sectionHeader}>
-          <div className="t-eyebrow">AGENT RUN HISTORY</div>
-          <div style={sectionTitle}>Last 10 runs</div>
-        </div>
-        <AgentRunHistoryTable rows={runHistory} />
-      </section>
+      <div style={{ height: 14 }} />
 
-      {/* PAGE-WIDE ANALYTICS — maturity banner, tiles, landscape, plan gaps. */}
-      <AnalyticsBlock
-        maturity={maturity}
-        landscape={landscape}
-        gaps={gaps}
-        promo={promo}
-        tiles={tiles}
-      />
-    </>
+      <Panel title="Agent run history · last 10" eyebrow="compset_agent · comp_discovery_agent" actions={<ArtifactActions context={ctx('table', 'Agent run history')} />}>
+        <AgentRunHistoryTable rows={runHistory} />
+      </Panel>
+
+      <div style={{ height: 14 }} />
+
+      <Panel title="Analytics" eyebrow="data maturity · landscape · gaps · promo" actions={<ArtifactActions context={ctx('panel', 'Comp-set analytics')} />}>
+        <AnalyticsBlock
+          maturity={maturity}
+          landscape={landscape}
+          gaps={gaps}
+          promo={promo}
+          tiles={tiles}
+        />
+      </Panel>
+    </Page>
   );
 }
 

@@ -17,15 +17,7 @@ import { getPaceCurve } from '@/lib/pulseData';
 import PaceStatusHeader from './_components/PaceStatusHeader';
 import PaceGraphs, { type BucketRow } from './_components/PaceGraphs';
 import PaceBucketsTable from './_components/PaceTableClient';
-
-const REVENUE_SUBPAGES = [
-  { label: 'Pulse',    href: '/revenue/pulse'    },
-  { label: 'Pace',     href: '/revenue/pace'     },
-  { label: 'Channels', href: '/revenue/channels' },
-  { label: 'Pricing',  href: '/revenue/pricing'  },
-  { label: 'Compset',  href: '/revenue/compset'  },
-  { label: 'Demand',   href: '/revenue/demand'   },
-];
+import { REVENUE_SUBPAGES } from '../_subpages';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
