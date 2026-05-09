@@ -137,21 +137,14 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/agents/settings',    label: 'Agents · Settings' },
   ],
 
-  // ===== Settings (utility) — 2026-05-05 cleanup =====
-  // Removed: Budget (duplicate of /finance/budget), Agent guardrails (theatre).
-  // Agents are controlled 1:1 on each pillar's /agents page.
+  // ===== Settings (utility) =====
+  // PBS 2026-05-09 #26: only Property stays in settings. Users & roles, VAT,
+  // Manual entries, Integrations, Notifications, Reports, DQ engine, Platform
+  // map and the cockpit status page move to /cockpit (still reachable via
+  // direct URL until cockpit shell is updated to surface them).
   settings: [
-    { href: '/settings',                label: 'Snapshot' },
-    { href: '/settings/property',       label: 'Property' },
-    { href: '/settings/users',          label: 'Users & roles' },
-    { href: '/settings/vat-rates',      label: 'VAT rates' },
-    { href: '/settings/manual-entries', label: 'Manual entries' },
-    { href: '/settings/integrations',   label: 'Integrations' },
-    { href: '/settings/notifications',  label: 'Notifications' },
-    { href: '/settings/reports',        label: 'Reports' },
-    { href: '/settings/dq',             label: 'DQ engine' },
-    { href: '/settings/platform-map',   label: 'Platform map' },
-    { href: '/settings/cockpit',        label: 'Cockpit',  isNew: true },
+    { href: '/settings',          label: 'Snapshot' },
+    { href: '/settings/property', label: 'Property' },
   ],
 };
 

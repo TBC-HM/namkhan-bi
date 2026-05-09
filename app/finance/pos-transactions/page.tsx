@@ -166,17 +166,17 @@ export default async function PosTransactionsPage({ searchParams }: Props) {
 
 
       <div className="card-grid-6" style={{ marginTop: 18 }}>
-        <KpiBox label="POS Lines"      unit="count" value={totalCount} />
-        <KpiBox label="POS Revenue"    unit="usd"   value={total$} />
-        <KpiBox label="Avg Ticket"     unit="usd"   value={avgTicket} dp={2} />
-        <KpiBox label="F&B Lines"      unit="count" value={fb.length}    tooltip={`$${(sumAmt(fb)).toFixed(0)}`} />
-        <KpiBox label="Spa Lines"      unit="count" value={spa.length}   tooltip={`$${(sumAmt(spa)).toFixed(0)}`} />
-        <KpiBox label="Transport Lines" unit="count" value={trans.length} tooltip={`$${(sumAmt(trans)).toFixed(0)}`} />
+        <KpiBox label="POS Lines"      unit="count" value={totalCount} tooltip="Distinct POS transaction lines in the period. Source: public.transactions." />
+        <KpiBox label="POS Revenue"    unit="usd"   value={total$}     tooltip="Sum of POS line revenue in USD across all categories." />
+        <KpiBox label="Avg Ticket"     unit="usd"   value={avgTicket} dp={2} tooltip="Total POS revenue ÷ POS line count. A line ≠ a ticket — this is line-level avg." />
+        <KpiBox label="F&B Lines"      unit="count" value={fb.length}    tooltip={`$${(sumAmt(fb)).toFixed(0)} · F&B (USALI dept Food & Beverage).`} />
+        <KpiBox label="Spa Lines"      unit="count" value={spa.length}   tooltip={`$${(sumAmt(spa)).toFixed(0)} · Spa (Other Operated · Spa).`} />
+        <KpiBox label="Transport Lines" unit="count" value={trans.length} tooltip={`$${(sumAmt(trans)).toFixed(0)} · Transport (Other Operated · Transportation).`} />
       </div>
       <div className="card-grid-3" style={{ marginTop: 12 }}>
-        <KpiBox label="F&B $"    unit="usd" value={sumAmt(fb)} />
-        <KpiBox label="Spa $"    unit="usd" value={sumAmt(spa)} />
-        <KpiBox label="Other Op $" unit="usd" value={sumAmt(otherOp) + sumAmt(trans) + sumAmt(retail)} tooltip="Spa + Transport + Activities + Retail" />
+        <KpiBox label="F&B $"    unit="usd" value={sumAmt(fb)}    tooltip="Sum of F&B line revenue. Watch ratio to room nights for capture %." />
+        <KpiBox label="Spa $"    unit="usd" value={sumAmt(spa)}   tooltip="Sum of Spa line revenue. Watch ratio to room nights for spa capture %." />
+        <KpiBox label="Other Op $" unit="usd" value={sumAmt(otherOp) + sumAmt(trans) + sumAmt(retail)} tooltip="Spa + Transport + Activities + Retail combined (USALI 'Other Operated')." />
       </div>
 
       {/* Top categories */}

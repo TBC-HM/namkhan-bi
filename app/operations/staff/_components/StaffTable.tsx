@@ -5,6 +5,9 @@ import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { fmtMoney } from '@/lib/format';
 
+// PBS 2026-05-09: when onSelect is provided, row clicks open the drawer
+// instead of routing to /[staffId]. Falls back to old behaviour otherwise.
+
 type Row = {
   staff_id: string;
   emp_id: string;
@@ -23,7 +26,13 @@ type Row = {
   flag_contract_expiring: boolean;
 };
 
-export function StaffTable({ rows }: { rows: Row[] }) {
+interface StaffTableProps {
+  rows: Row[];
+  onSelect?: (id: string) => void;
+  selectedId?: string | null;
+}
+
+export function StaffTable({ rows, onSelect, selectedId }: StaffTableProps) {
   const router = useRouter();
   const [q, setQ] = useState('');
   const [dept, setDept] = useState<string>('all');
@@ -95,10 +104,13 @@ export function StaffTable({ rows }: { rows: Row[] }) {
             {filtered.map((r) => (
               <tr
                 key={r.staff_id}
-                onClick={() =>
-                  router.push(`/operations/staff/${encodeURIComponent(r.staff_id)}`)
-                }
-                className="cursor-pointer border-t border-stone-100 hover:bg-stone-50"
+                onClick={() => {
+                  if (onSelect) onSelect(r.staff_id);
+                  else router.push(`/operations/staff/${encodeURIComponent(r.staff_id)}`);
+                }}
+                className={`cursor-pointer border-t border-stone-100 hover:bg-stone-50 ${
+                  selectedId === r.staff_id ? 'bg-emerald-900/5' : ''
+                }`}
               >
                 <td className="px-4 py-3 font-mono text-xs text-stone-600">
                   {r.emp_id}

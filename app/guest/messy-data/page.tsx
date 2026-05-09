@@ -215,11 +215,11 @@ export default async function MessyDataPage() {
           marginTop: 14,
         }}
       >
-        <KpiBox value={total} unit="count" label="Total profiles" />
-        <KpiBox value={flagged.length} unit="count" label="Flagged" tooltip="One or more issues" />
-        <KpiBox value={cleanPct} unit="pct" label="Clean rate" />
-        <KpiBox value={noContactCount} unit="count" label="Unreachable" tooltip="No email AND no phone" />
-        <KpiBox value={dupEmailCount} unit="count" label="Duplicate emails" />
+        <KpiBox value={total} unit="count" label="Total profiles" tooltip="Distinct guest profiles. Source: guest.mv_guest_profile." />
+        <KpiBox value={flagged.length} unit="count" label="Flagged" tooltip="Profiles with one or more data-quality issues — see panel below." />
+        <KpiBox value={cleanPct} unit="pct" label="Clean rate" tooltip="Profiles with no flags ÷ total × 100. Track over time." />
+        <KpiBox value={noContactCount} unit="count" label="Unreachable" tooltip="Profiles with neither email nor phone — cannot be marketed to." />
+        <KpiBox value={dupEmailCount} unit="count" label="Duplicate emails" tooltip="Distinct email values appearing on > 1 guest profile — likely merge candidates." />
       </div>
 
       {/* TABLE */}

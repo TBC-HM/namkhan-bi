@@ -253,10 +253,10 @@ export default async function AudiencesPage({ searchParams }: Props) {
           marginTop: 14,
         }}
       >
-        <KpiBox value={matched.length} unit="count" label={`Segment · ${selectedSegment.label}`} />
-        <KpiBox value={matchedLtv} unit="usd" label="Matched LTV total" />
-        <KpiBox value={avgLtvMatched} unit="usd" label="Avg LTV / guest" />
-        <KpiBox value={byCountry.size} unit="count" label="Distinct countries" />
+        <KpiBox value={matched.length} unit="count" label={`Segment · ${selectedSegment.label}`} tooltip={`Guests matching the "${selectedSegment.label}" segment definition. Source: guest.mv_guest_profile filtered.`} />
+        <KpiBox value={matchedLtv}     unit="usd"   label="Matched LTV total" tooltip="Sum of lifetime_revenue for guests in this segment." />
+        <KpiBox value={avgLtvMatched}  unit="usd"   label="Avg LTV / guest"   tooltip="matched_ltv ÷ matched count." />
+        <KpiBox value={byCountry.size} unit="count" label="Distinct countries" tooltip="Number of distinct country values across the matched segment." />
       </div>
 
       {/* SEGMENT DETAIL TABLE */}

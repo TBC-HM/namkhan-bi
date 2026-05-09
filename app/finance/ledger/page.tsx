@@ -120,12 +120,12 @@ export default async function LedgerPage({ searchParams }: Props) {
         <AgedArChart rows={aged as any} title="AR aging" sub="Open balance per bucket · mv_aged_ar" />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
-        <KpiBox value={inHouseCount} unit="count" label="In-house guests" />
-        <KpiBox value={inHouseBalance} unit="usd" label="In-house balance" />
-        <KpiBox value={aged.length} unit="count" label="Checked-out unpaid" />
-        <KpiBox value={totalAr} unit="usd" label="Checked-out unpaid $" />
-        <KpiBox value={highBalFlags} unit="count" label="High-balance flags" />
-        <KpiBox value={missingEmailCount ?? 0} unit="count" label={`Missing email · ${period.label}`} />
+        <KpiBox value={inHouseCount} unit="count" label="In-house guests"      tooltip="Reservations currently checked-in (status='checked_in'). Source: public.reservations." />
+        <KpiBox value={inHouseBalance} unit="usd" label="In-house balance"      tooltip="Sum of open balance for currently in-house reservations." />
+        <KpiBox value={aged.length} unit="count" label="Checked-out unpaid"     tooltip="Reservations with checkout in the past + non-zero balance. Source: mv_aged_ar." />
+        <KpiBox value={totalAr} unit="usd" label="Checked-out unpaid $"         tooltip="Total open AR across all checked-out unpaid reservations." />
+        <KpiBox value={highBalFlags} unit="count" label="High-balance flags"    tooltip="Reservations with balance ≥ $500 — manual review recommended." />
+        <KpiBox value={missingEmailCount ?? 0} unit="count" label={`Missing email · ${period.label}`} tooltip="Reservations without a contact email — blocks invoicing and follow-up. Cloudbeds sync gap." />
       </div>
       <div style={{ marginTop: 18 }}>
         <SectionHead title="Aged receivables" emphasis={`${aged.length} resv`} sub={`Total open: ${fmtMoney(totalAr, 'USD')} · sortable`} source="mv_aged_ar" />

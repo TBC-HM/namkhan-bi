@@ -41,10 +41,10 @@ export default async function CampaignsPage({ searchParams }: SP) {
       subPages={MARKETING_SUBPAGES}
     >
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
-        <KpiBox value={counts.all}        unit="count" label="Total" />
-        <KpiBox value={counts.drafts}     unit="count" label="Drafts" />
-        <KpiBox value={counts.scheduled}  unit="count" label="Scheduled" />
-        <KpiBox value={counts.published}  unit="count" label="Published" />
+        <KpiBox value={counts.all}        unit="count" label="Total"      tooltip="All campaigns in marketing.campaigns regardless of status." />
+        <KpiBox value={counts.drafts}     unit="count" label="Drafts"     tooltip="status IN ('draft','curating','composing','pending_approval'). Awaiting human input." />
+        <KpiBox value={counts.scheduled}  unit="count" label="Scheduled"  tooltip="status='scheduled' — approved + queued to publish at a future time." />
+        <KpiBox value={counts.published}  unit="count" label="Published"  tooltip="status='published' — already live on a channel." />
       </div>
 
       <Panel

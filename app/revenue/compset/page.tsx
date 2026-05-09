@@ -106,9 +106,13 @@ export default async function CompsetPage({ searchParams }: PageProps) {
   const detailP = supabase
     .from('v_compset_competitor_property_detail')
     .select('*');
+  // PBS 2026-05-09: explicitly fetch up to 5000 rows so a wide comp set does
+  // not get truncated under PostgREST default limit. Was the cause of empty
+  // chart rendering even though data existed in the view.
   const rateMatrixP = supabase
     .from('v_compset_competitor_rate_matrix')
-    .select('*');
+    .select('*')
+    .limit(5000);
   const ratePlanMixP = supabase
     .from('v_compset_competitor_rate_plan_mix')
     .select('*');

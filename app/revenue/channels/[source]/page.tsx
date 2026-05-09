@@ -26,6 +26,7 @@ import BdcHeroStrip from '@/components/channels/BdcHeroStrip';
 import BdcKpiStrip from '@/components/channels/BdcKpiStrip';
 import BdcProfileTab from '@/components/channels/BdcProfileTab';
 import ChannelContactCard from '@/components/channels/ChannelContactCard';
+import { MaybeOtaBadge } from '@/components/ota/OtaBadge';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -84,7 +85,7 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
     return (
       <Page
         eyebrow={`Revenue · Channels · ${sourceName}`}
-        title={<>{sourceName}</>}
+        title={<MaybeOtaBadge name={sourceName} />}
         subPages={REVENUE_SUBPAGES}
         topRight={<Link href="/settings/channel-contacts" style={{
           padding: '8px 14px',
@@ -155,7 +156,7 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
     return (
       <Page
         eyebrow={`Revenue · Channels · ${sourceName}`}
-        title={<>{sourceName}</>}
+        title={<MaybeOtaBadge name={sourceName} />}
         subPages={REVENUE_SUBPAGES}
         topRight={<Link href="/settings/channel-contacts" style={{
           padding: '8px 14px',

@@ -17,6 +17,8 @@ import Page from '@/components/page/Page';
 import Panel from '@/components/page/Panel';
 import Brief from '@/components/page/Brief';
 import ArtifactActions from '@/components/page/ArtifactActions';
+import TimeframeSelector from '@/components/page/TimeframeSelector';
+import CompareSelector from '@/components/page/CompareSelector';
 import KpiBox from '@/components/kpi/KpiBox';
 import Insight from '@/components/sections/Insight';
 import { resolvePeriod } from '@/lib/period';
@@ -26,6 +28,7 @@ import {
 } from '@/lib/data-channels';
 import { fmtMoney } from '@/lib/format';
 import { channelMixTrendSvg, channelNetValueBarsSvg, channelVelocity3LineSvg } from '@/lib/svgCharts';
+import { MaybeOtaBadge } from '@/components/ota/OtaBadge';
 import { REVENUE_SUBPAGES } from '../_subpages';
 
 export const revalidate = 60;
@@ -146,6 +149,12 @@ export default async function ChannelsPage({ searchParams }: Props) {
       eyebrow={`Channels · ${period.label}`}
       title={<>Channel <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>performance</em>.</>}
       subPages={REVENUE_SUBPAGES}
+      topRight={
+        <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <TimeframeSelector basePath="/revenue/channels" active={period.win} preserve={{ cmp: period.cmp, seg: period.seg }} />
+          <CompareSelector  basePath="/revenue/channels" active={period.cmp} preserve={{ win: period.win, seg: period.seg }} />
+        </div>
+      }
     >
       <Brief
         brief={{ signal: briefSignal, body: briefBody, good, bad }}
@@ -153,12 +162,12 @@ export default async function ChannelsPage({ searchParams }: Props) {
       />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
-        <KpiBox value={totalCommission}     unit="usd" label={`Commissions · ${period.label}`} />
-        <KpiBox value={directMix}            unit="pct" label="Direct mix" />
-        <KpiBox value={otaMix}               unit="pct" label="OTA mix" />
-        <KpiBox value={wholesaleMix}         unit="pct" label="Wholesale mix" />
-        <KpiBox value={avgLead}              unit="nights" dp={0} label="Avg lead time" />
-        <KpiBox value={channelCostPerOcc}    unit="usd" label="Channel cost / occ RN" />
+        <KpiBox value={totalCommission}     unit="usd" label={`Commissions · ${period.label}`} tooltip={`Total commissions paid to channels in ${period.label}. Source: mv_channel_perf.commission_usd.`} />
+        <KpiBox value={directMix}            unit="pct" label="Direct mix"    tooltip="Direct revenue ÷ total channel revenue × 100. Direct = website + booking engine + email + walk-in. Target ≥ 30%." />
+        <KpiBox value={otaMix}               unit="pct" label="OTA mix"       tooltip="OTA revenue ÷ total channel revenue × 100. Booking.com + Expedia + Agoda + Airbnb." />
+        <KpiBox value={wholesaleMix}         unit="pct" label="Wholesale mix" tooltip="Wholesale / DMC revenue ÷ total channel revenue × 100." />
+        <KpiBox value={avgLead}              unit="nights" dp={0} label="Avg lead time" tooltip="Mean days from booking to arrival, weighted by reservation count." />
+        <KpiBox value={channelCostPerOcc}    unit="usd" label="Channel cost / occ RN" tooltip="Total commission ÷ occupied room-nights, USD per occ RN. Lower is better." />
       </div>
       {/* deltaHint helper kept to retain compare windows for callers; no UI yet. */}
       {void deltaHint /* eslint-disable-line @typescript-eslint/no-unused-vars */}
@@ -212,7 +221,7 @@ export default async function ChannelsPage({ searchParams }: Props) {
                 const pill = healthPill(c);
                 return (
                   <tr key={c.source_name}>
-                    <td className="lbl"><Link href={`/revenue/channels/${encodeURIComponent(c.source_name)}`} style={{ color: 'var(--brass)', textDecoration: 'none' }}><strong>{c.source_name}</strong></Link></td>
+                    <td className="lbl"><Link href={`/revenue/channels/${encodeURIComponent(c.source_name)}`} style={{ color: 'var(--brass)', textDecoration: 'none' }}><strong><MaybeOtaBadge name={c.source_name} /></strong></Link></td>
                     <td className="num">{c.bookings}</td>
                     <td className="num">{fmtMoney(Number(c.gross_revenue), 'USD')}</td>
                     <td className="num">{fmtMoney(Number(c.adr), 'USD')}</td>
@@ -248,7 +257,7 @@ export default async function ChannelsPage({ searchParams }: Props) {
                 <tr>
                   <th>Room Type</th>
                   {matSources.slice(0, 6).map(s => (
-                    <th key={s} className="num">{s}</th>
+                    <th key={s} className="num"><MaybeOtaBadge name={s} /></th>
                   ))}
                   <th className="num"><strong>TOTAL</strong></th>
                   <th>Strongest channel</th>
@@ -290,7 +299,7 @@ export default async function ChannelsPage({ searchParams }: Props) {
                       <td>
                         {strongest.src && (
                           <span className={`pill ${strongestPct >= 60 ? 'warn' : 'neutral'}`}>
-                            {strongest.src} {strongestPct.toFixed(0)}%
+                            <MaybeOtaBadge name={strongest.src} /> {strongestPct.toFixed(0)}%
                           </span>
                         )}
                       </td>

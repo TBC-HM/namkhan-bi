@@ -66,10 +66,10 @@ export default async function GroupsPage() {
     >
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
         <KpiBox value={groups.length} unit="count" label="Active blocks" tooltip={`${upcoming} upcoming`} />
-        <KpiBox value={totalRn} unit="count" label="Total room nights" />
-        <KpiBox value={pickedUp} unit="count" label="Picked up" tooltip={`${totalRn > 0 ? ((pickedUp / totalRn) * 100).toFixed(0) : 0}% of block`} />
-        <KpiBox value={avgPickupPct} unit="pct" label="Avg pickup" />
-        <KpiBox value={null} unit="usd" label="Margin floor" state="data-needed" needs="revenue + cost join" />
+        <KpiBox value={totalRn} unit="count" label="Total room nights" tooltip="Sum of block_size across active blocks." />
+        <KpiBox value={pickedUp} unit="count" label="Picked up" tooltip={`Pickup rooms confirmed · ${totalRn > 0 ? ((pickedUp / totalRn) * 100).toFixed(0) : 0}% of block. Source: public.groups.pickup.`} />
+        <KpiBox value={avgPickupPct} unit="pct" label="Avg pickup" tooltip="Average pickup_pct across active blocks. Watch ≥ 70% for healthy commitment." />
+        <KpiBox value={null} unit="usd" label="Margin floor" state="data-needed" needs="revenue + cost join" tooltip="Min margin guard for groups. Needs: contract revenue × cost-of-stay join (TODO)." />
       </div>
 
       <Panel title={`Group blocks · ${groups.length}`} eyebrow="public.groups" actions={<ArtifactActions context={ctx('table', 'Group blocks')} />}>

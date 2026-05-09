@@ -220,12 +220,12 @@ export default async function LoyaltyPage() {
           marginTop: 14,
         }}
       >
-        <KpiBox value={totalGuests} unit="count" label="Total guests" />
-        <KpiBox value={repeatGuests} unit="count" label="Repeat guests" tooltip="≥2 stays" />
-        <KpiBox value={repeatPct} unit="pct" label="Repeat rate" />
-        <KpiBox value={avgLtv} unit="usd" label="Avg LTV" tooltip="Across all guests" />
-        <KpiBox value={avgLtvRepeat} unit="usd" label="Avg LTV · repeat" tooltip="Repeat guests only" />
-        <KpiBox value={winback.length} unit="count" label="Win-back candidates" />
+        <KpiBox value={totalGuests}        unit="count" label="Total guests"        tooltip="Distinct guest profiles. Source: guest.mv_guest_profile." />
+        <KpiBox value={repeatGuests}       unit="count" label="Repeat guests"       tooltip="Guests with ≥ 2 stays — drives loyalty programs." />
+        <KpiBox value={repeatPct}          unit="pct"   label="Repeat rate"         tooltip="Repeat guests ÷ total guests × 100. Industry healthy ≥ 25%." />
+        <KpiBox value={avgLtv}             unit="usd"   label="Avg LTV"             tooltip="Mean lifetime revenue across all guest profiles." />
+        <KpiBox value={avgLtvRepeat}       unit="usd"   label="Avg LTV · repeat"    tooltip="Mean lifetime revenue restricted to repeat guests." />
+        <KpiBox value={winback.length}     unit="count" label="Win-back candidates" tooltip="Guests with last_stay_date 12-24 months ago — prime win-back targets." />
       </div>
 
       {/* WIN-BACK TABLE */}

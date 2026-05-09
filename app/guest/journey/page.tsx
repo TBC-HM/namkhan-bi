@@ -167,12 +167,12 @@ export default async function JourneyPage({ searchParams }: Props) {
           marginTop: 14,
         }}
       >
-        <KpiBox value={isReservation} unit="count" label="Reservations" />
-        <KpiBox value={confirmRate} unit="pct" label="Confirm rate" tooltip="confirmed ÷ all" />
-        <KpiBox value={arriveRate} unit="pct" label="Arrive rate" tooltip="arrived ÷ confirmed" />
-        <KpiBox value={cancelRate} unit="pct" label="Cancel rate" />
-        <KpiBox value={med ?? null} unit="d" label="Median lead" />
-        <KpiBox value={noShow} unit="count" label="No-shows" />
+        <KpiBox value={isReservation} unit="count" label="Reservations" tooltip="Total reservations created in window. Source: public.reservations." />
+        <KpiBox value={confirmRate} unit="pct" label="Confirm rate"   tooltip="Confirmed ÷ all reservations × 100." />
+        <KpiBox value={arriveRate}  unit="pct" label="Arrive rate"    tooltip="Arrived ÷ confirmed × 100. Cancellations + no-shows reduce this." />
+        <KpiBox value={cancelRate}  unit="pct" label="Cancel rate"    tooltip="Cancelled ÷ all reservations × 100. Watch ≤ 10%." />
+        <KpiBox value={med ?? null} unit="d"   label="Median lead"    tooltip="Median days from booking to arrival. Drives pacing strategy." />
+        <KpiBox value={noShow}      unit="count" label="No-shows"     tooltip="Reservations marked no-show in window. Should remain near 0." />
       </div>
 
       {/* STAGE TABLE — wired from journey_events */}

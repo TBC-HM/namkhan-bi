@@ -19,6 +19,8 @@ import {
 } from '../_data';
 import { priorPeriod, type PeriodWindow } from '@/lib/supabase-gl';
 import Page from '@/components/page/Page';
+import TimeframeSelector from '@/components/page/TimeframeSelector';
+import CompareSelector from '@/components/page/CompareSelector';
 import { FINANCE_SUBPAGES } from '../_subpages';
 import TwelveMonthPanel from './TwelveMonthPanel';
 import MonthDropdown from './MonthDropdown';
@@ -426,6 +428,12 @@ export default async function PnLPage({ searchParams }: Props) {
       eyebrow="Finance · P&L"
       title={<>Profit &amp; loss · where the <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>margin</em> lives.</>}
       subPages={FINANCE_SUBPAGES}
+      topRight={
+        <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <TimeframeSelector basePath="/finance/pnl" active={period.win} preserve={{ cmp: period.cmp, seg: period.seg }} />
+          <CompareSelector  basePath="/finance/pnl" active={period.cmp} preserve={{ win: period.win, seg: period.seg }} />
+        </div>
+      }
     >
 
       {/* ============== BLOCK 2 — Period + write-policy banners ============== */}

@@ -74,6 +74,31 @@ export default function Page({
 
 // ─── footer (SLH + version + © ──────────────────────────────────────────
 
+function HealthBarometer() {
+  // PBS 2026-05-09: replace static "Status" link with a small dot + label
+  // reflecting deployment env. green = live (production), amber = preview,
+  // grey = local. Glow via box-shadow.
+  const env = process.env.NEXT_PUBLIC_VERCEL_ENV ?? 'local';
+  const map: Record<string, { color: string; label: string }> = {
+    production: { color: '#3a8e5b', label: 'live' },
+    preview:    { color: '#c4a06b', label: 'preview' },
+    local:      { color: '#7d7565', label: 'local' },
+  };
+  const { color, label } = map[env] ?? map.local;
+  return (
+    <span style={S.healthWrap} title={`Deployment: ${env}`}>
+      <span
+        aria-hidden
+        style={{
+          display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
+          background: color, boxShadow: `0 0 6px ${color}`,
+        }}
+      />
+      <span>{label}</span>
+    </span>
+  );
+}
+
 function PageFooter() {
   const SLH = 'https://kpenyneooigsyuuomgct.supabase.co/storage/v1/object/public/documents-public/marketing/2026/marketing/slh-considerate-white-logo-moqc2u81.svg';
   const year = new Date().getFullYear();
@@ -82,19 +107,19 @@ function PageFooter() {
       <div style={S.footerLeft}>
         <a href="https://slh.com/hotels/the-namkhan/" target="_blank" rel="noreferrer" title="Member of Small Luxury Hotels of the World">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={SLH} alt="Member · Small Luxury Hotels" style={{ height: 28, opacity: 0.85 }} />
+          <img src={SLH} alt="Small Luxury Hotels of the World" style={{ height: 32, opacity: 1 }} />
         </a>
-        <span style={S.footerKick}>Member · Small Luxury Hotels</span>
+        <span style={S.footerKick}>A Beyond Circle Product</span>
       </div>
       <div style={S.footerRight}>
-        <a href="/cockpit"               style={S.footerLink}>Cockpit</a>
-        <a href="/knowledge"             style={S.footerLink}>Knowledge</a>
-        <a href="https://github.com/TBC-HM/namkhan-bi" target="_blank" rel="noreferrer" style={S.footerLink}>Repo ↗</a>
-        <a href="https://namkhan-bi.vercel.app" style={S.footerLink}>Status</a>
+        <HealthBarometer />
         <span style={S.footerSep}>·</span>
         <span>v{(process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ?? 'dev').slice(0, 7)}</span>
         <span>{process.env.NEXT_PUBLIC_VERCEL_ENV ?? 'local'}</span>
-        <span>© {year} The Namkhan</span>
+        <a
+          href="mailto:book@thenamkhan.com?subject=Namkhan%20BI%20—%20contact"
+          style={S.footerLink}
+        >© {year} The Namkhan</a>
       </div>
     </footer>
   );
@@ -117,7 +142,20 @@ const S: Record<string, React.CSSProperties> = {
     display:      'flex',
     flexDirection: 'column',
   },
-  topRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, gap: 16, flexWrap: 'wrap' },
+  topRow: {
+    // PBS 2026-05-09 #34: sticky top bar so eyebrow/title + header pills
+    // remain pinned while scrolling. Backdrop blur + semi-opaque bg so
+    // body content does not bleed through.
+    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+    gap: 16, flexWrap: 'wrap',
+    position: 'sticky', top: 0, zIndex: 50,
+    background: 'rgba(10, 10, 10, 0.82)',
+    backdropFilter: 'saturate(140%) blur(10px)',
+    WebkitBackdropFilter: 'saturate(140%) blur(10px)',
+    borderBottom: '1px solid rgba(31, 28, 21, 0.6)',
+    margin: '-32px -32px 24px',
+    padding: '20px 32px 14px',
+  },
   topRight: { display: 'flex', alignItems: 'center', gap: 14 },
   eyebrow: {
     fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
@@ -161,5 +199,9 @@ const S: Record<string, React.CSSProperties> = {
   footerKick: {
     fontFamily: "'JetBrains Mono', ui-monospace, monospace",
     fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#9b907a', fontWeight: 500,
+  },
+  healthWrap: {
+    display: 'inline-flex', alignItems: 'center', gap: 6,
+    color: '#d8cca8', fontWeight: 600,
   },
 };

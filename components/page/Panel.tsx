@@ -4,6 +4,7 @@
 // ad-hoc <div style={{ background, border, borderRadius }}> anywhere.
 
 import type { ReactNode } from 'react';
+import PanelExpander from './PanelExpander';
 
 interface PanelProps {
   title: string;
@@ -11,17 +12,20 @@ interface PanelProps {
   eyebrow?: string;
   /** Right-aligned action overlay (✦ AI · ⊕ Save · ↻ Schedule · 📁 Project) */
   actions?: ReactNode;
+  /** Hide the expand-to-fullscreen button (defaults to showing). */
+  hideExpander?: boolean;
   children: ReactNode;
 }
 
-export default function Panel({ title, eyebrow, actions, children }: PanelProps) {
+export default function Panel({ title, eyebrow, actions, hideExpander, children }: PanelProps) {
   return (
-    <div style={S.box}>
+    <div data-panel style={S.box}>
       <div style={S.head}>
         <div style={S.title}>{title}</div>
         <div style={S.headRight}>
           {eyebrow && <span style={S.eyebrow}>{eyebrow}</span>}
           {actions}
+          {!hideExpander && <PanelExpander />}
         </div>
       </div>
       <div>{children}</div>

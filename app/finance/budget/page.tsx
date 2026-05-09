@@ -76,10 +76,10 @@ export default async function BudgetPage() {
         </>}
       />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
-        <KpiBox value={totalRows} unit="count" label="Budget rows" />
-        <KpiBox value={grand} unit="usd" label="Annual total" state={grand > 0 ? 'live' : 'data-needed'} needs={grand === 0 ? 'awaiting upload' : undefined} />
-        <KpiBox value={null} unit="text" valueText={`${monthsCovered}/12`} label="Months covered" />
-        <KpiBox value={null} unit="text" valueText={`${subcatsCovered}/${SUBCAT_ORDER.length}`} label="Subcats covered" />
+        <KpiBox value={totalRows} unit="count" label="Budget rows"   tooltip="Distinct (subcategory × month) rows in plan.lines for the active budget year." />
+        <KpiBox value={grand} unit="usd" label="Annual total"        state={grand > 0 ? 'live' : 'data-needed'} needs={grand === 0 ? 'awaiting upload' : undefined} tooltip="Sum of budget across every subcategory + month in the active year." />
+        <KpiBox value={null} unit="text" valueText={`${monthsCovered}/12`} label="Months covered" tooltip="Distinct months that have at least one budget row populated for the active year." />
+        <KpiBox value={null} unit="text" valueText={`${subcatsCovered}/${SUBCAT_ORDER.length}`} label="Subcats covered" tooltip="Distinct USALI subcategories with at least one budget row this year." />
       </div>
       <BudgetUpload lastUploadAt={lastUpload} />
       <div style={{ marginTop: 18 }}>

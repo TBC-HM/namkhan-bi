@@ -61,10 +61,10 @@ export default async function FinanceAgentsPage() {
         <span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>· pillar=finance · {active} active · {failed} failed runs</span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
-        <KpiBox value={total} unit="count" label="Agents registered" />
-        <KpiBox value={active} unit="count" label="Active" />
-        <KpiBox value={totalSpent} unit="usd" label="MTD spend" />
-        <KpiBox value={totalBudget} unit="usd" label="Monthly budget" />
+        <KpiBox value={total} unit="count" label="Agents registered" tooltip="Rows in governance.agents filtered to pillar=finance." />
+        <KpiBox value={active} unit="count" label="Active"             tooltip="Agents with status=active. Inactive ones don't run on schedule." />
+        <KpiBox value={totalSpent} unit="usd" label="MTD spend"         tooltip="Sum of run costs (Sonnet pricing) for finance agents this month." />
+        <KpiBox value={totalBudget} unit="usd" label="Monthly budget"   tooltip="Sum of monthly_budget_usd across registered finance agents. Spend > budget = warn." />
       </div>
       <div style={{ marginTop: 18 }}>
         <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-xl)', fontWeight: 500, marginBottom: 6 }}>Agents</div>

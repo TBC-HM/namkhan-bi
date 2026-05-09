@@ -355,12 +355,14 @@ export default async function InquiriesPage({
           label="4 past 1h target"
           needs={dataNeed}
           valueColor="var(--st-bad)"
+          tooltip="Open inquiries / those past first-reply SLA (1h target). Source: sales.email_messages + sales.inquiry_status. Currently a placeholder."
         />
         <OpsKpiTile
           scope="Median time to first reply"
           value="2h 14m"
           label="target 1h · LM −18m"
           needs={dataNeed}
+          tooltip="Median minutes from inbound inquiry to first outbound reply. Target ≤ 1h. Source: v_thread_response."
         />
         <OpsKpiTile
           scope="Auto-offer hit rate"
@@ -368,18 +370,21 @@ export default async function InquiriesPage({
           label="sent without edit · target 75%"
           needs={dataNeed}
           valueColor="var(--brass)"
+          tooltip="Drafts the agent generated that were sent unedited ÷ total drafts. Target ≥ 75%. Source: sales.email_drafts.status."
         />
         <OpsKpiTile
           scope="Quote → Booking conv"
           value="27%"
           label="weighted 90d · LY +4 pts"
           needs={dataNeed}
+          tooltip="Quoted opportunities that converted to a confirmed booking, weighted by quote value over 90d. Target ≥ 30%."
         />
         <OpsKpiTile
           scope="Open pipeline value"
           value="$48,200"
           label="18 open quotes · weighted"
           needs={dataNeed}
+          tooltip="Sum of quote totals × win-probability for currently-open opportunities. Source: sales.opportunities (schema TODO)."
         />
         <OpsKpiTile
           scope="Sales revenue MTD"

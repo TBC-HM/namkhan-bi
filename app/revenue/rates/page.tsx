@@ -1,5 +1,7 @@
 // app/revenue/rates/page.tsx — REDESIGN 2026-05-05 (recovery)
 import Page from '@/components/page/Page';
+import TimeframeSelector from '@/components/page/TimeframeSelector';
+import CompareSelector from '@/components/page/CompareSelector';
 import { REVENUE_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
@@ -44,7 +46,12 @@ export default async function RatesPage({ searchParams }: Props) {
   const restrictionTotal = cta + ctd + stop + minStay;
 
   return (
-    <Page eyebrow="Revenue · Rates" title={<>BAR ladder, <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>spread</em>, and the levers around it.</>} subPages={REVENUE_SUBPAGES}>
+    <Page eyebrow="Revenue · Rates" title={<>BAR ladder, <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>spread</em>, and the levers around it.</>} subPages={REVENUE_SUBPAGES} topRight={
+      <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <TimeframeSelector basePath="/revenue/rates" active={period.win} includeForward preserve={{ cmp: period.cmp, seg: period.seg }} />
+        <CompareSelector  basePath="/revenue/rates" active={period.cmp}                   preserve={{ win: period.win, seg: period.seg }} />
+      </div>
+    }>
       <div style={statusWrap}>
         <div style={statusRow1}>
           <div style={cell}><span className="t-eyebrow" style={{ marginRight: 8 }}>SOURCE</span><StatusPill tone="active">mv_rate_inventory_calendar</StatusPill></div>
@@ -62,10 +69,10 @@ export default async function RatesPage({ searchParams }: Props) {
       </div>
       <RatesGraphs byType={byType} allRates={allRates} restrictions={{ cta, ctd, stop, minStay, open }} />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
-        <KpiBox value={overallMin} unit="usd" label="Min BAR" />
-        <KpiBox value={overallAvg} unit="usd" label="Avg BAR" />
-        <KpiBox value={overallMax} unit="usd" label="Max BAR" />
-        <KpiBox value={restrictionTotal} unit="count" label="Active restrictions" />
+        <KpiBox value={overallMin} unit="usd"   label="Min BAR"             tooltip="Lowest Best-Available-Rate observed in the window. Floor of the rate ladder." />
+        <KpiBox value={overallAvg} unit="usd"   label="Avg BAR"             tooltip="Mean BAR across room types and days." />
+        <KpiBox value={overallMax} unit="usd"   label="Max BAR"             tooltip="Ceiling BAR observed in the window — typically peak / high-demand days." />
+        <KpiBox value={restrictionTotal} unit="count" label="Active restrictions" tooltip="Stop-sell + closed-to-arrival + closed-to-departure + min-stay rules in effect." />
       </div>
       <div style={{ marginTop: 18 }}>
         <SectionHead title="BAR" emphasis="per room type" sub={`Min · avg · max · ${period.label}`} source="mv_rate_inventory_calendar" />

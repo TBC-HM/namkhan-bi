@@ -63,9 +63,9 @@ export default async function RosterPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
         <KpiBox value={display.length} unit="count" label="Active staff" tooltip={`of ${staff.length} total`} />
         <KpiBox value={8}              unit="count" label="AI agents" tooltip="inquiry, group, fit, dmc, etc." />
-        <KpiBox value={null}           unit="nights" label="Avg tenure" state="data-needed" needs="hire_date analytics" />
-        <KpiBox value={null}           unit="count"  label="Productivity" state="data-needed" needs="deal data" />
-        <KpiBox value={null}           unit="usd"    label="Comp accruals" state="data-needed" needs="payroll_monthly join" />
+        <KpiBox value={null}           unit="nights" label="Avg tenure" state="data-needed" needs="hire_date analytics" tooltip="Mean years from hire_date for active sales staff. Needs an analytics view." />
+        <KpiBox value={null}           unit="count"  label="Productivity" state="data-needed" needs="deal data" tooltip="Deals or quotes per active rep per month. Needs sales.opportunities schema." />
+        <KpiBox value={null}           unit="usd"    label="Comp accruals" state="data-needed" needs="payroll_monthly join" tooltip="Base + commission YTD per rep. Needs ops.payroll_monthly join keyed on rep id." />
       </div>
 
       <Panel title={`Roster · ${display.length} active`} eyebrow="v_staff_register_extended" actions={<ArtifactActions context={ctx('table', 'Roster')} />}>

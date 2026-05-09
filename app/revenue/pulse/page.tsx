@@ -6,10 +6,13 @@ import Page from '@/components/page/Page';
 import Panel from '@/components/page/Panel';
 import Brief from '@/components/page/Brief';
 import ArtifactActions from '@/components/page/ArtifactActions';
+import TimeframeSelector from '@/components/page/TimeframeSelector';
+import CompareSelector from '@/components/page/CompareSelector';
 import { REVENUE_SUBPAGES } from '../_subpages';
 import { resolvePeriod } from '@/lib/period';
 import { getKpiDaily, getOverviewKpis, getChannelPerf } from '@/lib/data';
 import { getPulseExtendedKpis } from '@/lib/pulseExtended';
+import { getPulseToday } from '@/lib/pulseToday';
 import {
   getRoomTypePulse,
   getPaceCurve,
@@ -27,6 +30,7 @@ import { dailyRevenue90dSvg, channelMix30dSvg } from '@/lib/svgCharts';
 import PulseStatusHeader from './_components/PulseStatusHeader';
 import PulseGraphsGrid from './_components/PulseGraphsGrid';
 import PulseAlertsPanel from './_components/PulseAlertsPanel';
+import PulseTodayPanel from './_components/PulseTodayPanel';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -175,6 +179,7 @@ export default async function PulsePage({ searchParams }: Props) {
     pickupVel,
     alerts,
     decisions,
+    today,
   ] = await Promise.all([
     getKpiDaily(period.from, period.to).catch(() => [] as any[]),
     getPulseExtendedKpis(period),
@@ -186,13 +191,25 @@ export default async function PulsePage({ searchParams }: Props) {
     getPickupVelocity28d().catch(() => [] as PickupVelocityRow[]),
     getTacticalAlertsTop().catch(() => []),
     getDecisionsQueuedTop().catch(() => []),
+    getPulseToday().catch(() => ({ booked: [], cancelled: [], bookedRevenue: 0, cancelledRevenue: 0 })),
   ]);
 
   const cur = kpis.current;
+  const cmp = kpis.compare; // null when cmp=none/budget or data layer didn't return compare row
   const occ = Number(cur?.occupancy_pct ?? 0);
   const adr = Number(cur?.adr_usd ?? 0);
   const revpar = Number(cur?.revpar_usd ?? 0);
   const trevpar = Number(cur?.trevpar_usd ?? 0);
+
+  // PBS 2026-05-09: compare deltas wired to KpiBox `compare` prop. Tone/colour
+  // is derived inside fmtDelta — positive delta on OCC/ADR/RevPAR/TRevPAR is
+  // green ("better"), negative is red ("worse"). Cancel% delta is inverted:
+  // less cancel = better, so we flip sign before passing.
+  const cmpLabel = period.cmpLabel ? period.cmpLabel.replace(/^vs\s+/i, '') : '';
+  const cmpOcc      = cmp ? Number(cur?.occupancy_pct ?? 0) - Number(cmp?.occupancy_pct ?? 0) : null;
+  const cmpAdr      = cmp ? Number(cur?.adr_usd        ?? 0) - Number(cmp?.adr_usd        ?? 0) : null;
+  const cmpRevpar   = cmp ? Number(cur?.revpar_usd     ?? 0) - Number(cmp?.revpar_usd     ?? 0) : null;
+  const cmpTrevpar  = cmp ? Number(cur?.trevpar_usd    ?? 0) - Number(cmp?.trevpar_usd    ?? 0) : null;
 
   // ─── Chart 1 — daily revenue (use lib helper) ───────────────────────────────
   const dailyRevPoints = (rangeRev.length > 0
@@ -248,6 +265,20 @@ export default async function PulsePage({ searchParams }: Props) {
       eyebrow="Revenue · Pulse"
       title={<>The <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>signal</em>, six ways.</>}
       subPages={REVENUE_SUBPAGES}
+      topRight={
+        <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <TimeframeSelector basePath="/revenue/pulse" active={period.win} preserve={{ cmp: period.cmp, seg: period.seg, cap: period.capacityMode }} />
+          <CompareSelector  basePath="/revenue/pulse" active={period.cmp} preserve={{ win: period.win, seg: period.seg, cap: period.capacityMode }} />
+        </div>
+      }
+      kpiTiles={[
+        { k: 'OCC',    v: `${occ.toFixed(0)}%`,        d: period.label },
+        { k: 'ADR',    v: `$${Math.round(adr).toLocaleString()}`,   d: period.label },
+        { k: 'RevPAR', v: `$${Math.round(revpar).toLocaleString()}`, d: period.label },
+        { k: 'TRevPAR',v: `$${Math.round(trevpar).toLocaleString()}`,d: period.label },
+        { k: 'Cancel', v: `${(extended.cancelPct ?? 0).toFixed(1)}%`, d: 'cancellations' },
+        { k: 'Lead',   v: `${Math.round(extended.leadTimeDays ?? 0)}d`, d: 'avg book→stay' },
+      ]}
     >
       <Brief
         brief={{ signal: briefSignal, body: briefBody, good, bad }}
@@ -269,19 +300,42 @@ export default async function PulsePage({ searchParams }: Props) {
 
       <div style={{ height: 14 }} />
 
+      <Panel
+        title="Today"
+        eyebrow={`${today.booked.length} new · ${today.cancelled.length} cancelled`}
+        actions={<ArtifactActions context={ctx('panel', `Today · ${today.booked.length} bookings / ${today.cancelled.length} cancellations`)} />}
+      >
+        <PulseTodayPanel
+          booked={today.booked}
+          cancelled={today.cancelled}
+          bookedRevenue={today.bookedRevenue}
+          cancelledRevenue={today.cancelledRevenue}
+        />
+      </Panel>
+
+      <div style={{ height: 14 }} />
+
       <Panel title="Six signals" eyebrow="hero" actions={<ArtifactActions context={ctx('panel', 'Six signals · Pulse', briefSignal)} />}>
         <PulseGraphsGrid charts={charts} />
       </Panel>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
-        <KpiBox value={occ} unit="pct" label="Occupancy" />
-        <KpiBox value={adr} unit="usd" label="ADR" />
-        <KpiBox value={revpar} unit="usd" label="RevPAR" />
-        <KpiBox value={trevpar} unit="usd" label="TRevPAR" />
-        <KpiBox value={extended.cancelPct ?? 0} unit="pct" label="Cancel %" />
-        <KpiBox value={extended.noShowPct ?? 0} unit="pct" label="No-show %" />
-        <KpiBox value={extended.leadTimeDays ?? 0} unit="nights" dp={0} label="Lead time (d)" />
-        <KpiBox value={extended.alosNights ?? 0} unit="nights" dp={1} label="ALOS" />
+        <KpiBox value={occ} unit="pct"  label="Occupancy"
+          compare={cmpOcc != null ? { value: cmpOcc, unit: 'pp', period: cmpLabel } : undefined}
+          tooltip={`Rooms sold ÷ rooms available × 100. Window: ${period.label}. Source: kpi_daily (Cloudbeds).`} />
+        <KpiBox value={adr} unit="usd"  label="ADR"
+          compare={cmpAdr != null ? { value: cmpAdr, unit: 'usd', period: cmpLabel } : undefined}
+          tooltip={`Average daily rate = rooms revenue ÷ rooms sold. Window: ${period.label}. Source: kpi_daily.`} />
+        <KpiBox value={revpar} unit="usd" label="RevPAR"
+          compare={cmpRevpar != null ? { value: cmpRevpar, unit: 'usd', period: cmpLabel } : undefined}
+          tooltip={`Revenue per available room = rooms revenue ÷ rooms available. Window: ${period.label}. Source: kpi_daily.`} />
+        <KpiBox value={trevpar} unit="usd" label="TRevPAR"
+          compare={cmpTrevpar != null ? { value: cmpTrevpar, unit: 'usd', period: cmpLabel } : undefined}
+          tooltip={`Total revenue per available room (rooms + F&B + spa + activities). Window: ${period.label}. Source: kpi_daily.`} />
+        <KpiBox value={extended.cancelPct ?? 0} unit="pct" label="Cancel %"   tooltip={`Cancelled reservations ÷ total reservations × 100. Window: ${period.label}. Watch ≤ 10%.`} />
+        <KpiBox value={extended.noShowPct ?? 0} unit="pct" label="No-show %"  tooltip={`No-show reservations ÷ total reservations × 100. Window: ${period.label}.`} />
+        <KpiBox value={extended.leadTimeDays ?? 0} unit="nights" dp={0} label="Lead time (d)" tooltip="Mean days from booking to arrival in this window." />
+        <KpiBox value={extended.alosNights ?? 0} unit="nights" dp={1} label="ALOS"            tooltip="Average length of stay (room-nights ÷ stays) in this window." />
       </div>
 
       <div style={{ height: 14 }} />

@@ -7,13 +7,15 @@ import Page from '@/components/page/Page';
 import Panel from '@/components/page/Panel';
 import Brief from '@/components/page/Brief';
 import ArtifactActions from '@/components/page/ArtifactActions';
+import TimeframeSelector from '@/components/page/TimeframeSelector';
+import CompareSelector from '@/components/page/CompareSelector';
 import KpiBox from '@/components/kpi/KpiBox';
 import { REVENUE_SUBPAGES } from '../_subpages';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
-interface SearchParams { win?: string; gran?: string }
+interface SearchParams { win?: string; gran?: string; cmp?: string }
 
 const VALID_FWD: WindowKey[] = ['next7', 'next30', 'next90', 'next180', 'next365'];
 
@@ -45,7 +47,7 @@ function rateColor(rate: number, min: number, max: number): string {
 export default async function PricingPage({ searchParams }: { searchParams: SearchParams }) {
   const win = parseWin(searchParams.win);
   const gran = parseGran(searchParams.gran);
-  const period = resolvePeriod({ win });
+  const period = resolvePeriod({ win, cmp: searchParams.cmp });
 
   const [roomTypes, ratePlans, inventory] = await Promise.all([
     getRoomTypes(),
@@ -164,6 +166,12 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
       eyebrow={`Revenue · Pricing · ${winLabels[win]}`}
       title={<>Pricing · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>{winLabels[win]} · by {gran}</em></>}
       subPages={REVENUE_SUBPAGES}
+      topRight={
+        <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <TimeframeSelector basePath="/revenue/pricing" active={period.win} includeForward preserve={{ cmp: period.cmp, gran }} />
+          <CompareSelector  basePath="/revenue/pricing" active={period.cmp}                  preserve={{ win: period.win, gran }} />
+        </div>
+      }
     >
       <style>{`
         .filter-btn:not(.fwd):not([href*="seg="]):not([href*="cmp="]):not([href*="cap="]) {
@@ -175,6 +183,21 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
         brief={{ signal: briefSignal, body: briefBody, good, bad }}
         actions={<ArtifactActions context={ctx('brief', `Pricing · ${winLabels[win]}`, briefSignal)} />}
       />
+
+      {/* PBS 2026-05-09 #34: prominent CTA to the new calendar view. */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+        <a href="/revenue/pricing/calendar" style={{
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+          fontSize: 11, letterSpacing: '0.10em', textTransform: 'uppercase',
+          fontWeight: 700,
+          background: '#a8854a', color: '#0a0a0a',
+          border: '1px solid #2a2520', padding: '6px 12px',
+          borderRadius: 4, textDecoration: 'none',
+        }}>
+          📅 Open calendar view (vs comp)
+        </a>
+        <span style={{ fontSize: 11, color: '#7d7565' }}>30-day grid · cheapest sellable rate per day · Δ vs comp avg</span>
+      </div>
 
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 10 }}>
         <span style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Granularity</span>
@@ -195,12 +218,12 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
-        <KpiBox value={totalInv} unit="count" label="Inventory cells" />
-        <KpiBox value={avgRate}  unit="usd"   label="Avg rate" />
-        <KpiBox value={minRate}  unit="usd"   label="BAR floor" />
-        <KpiBox value={maxRate}  unit="usd"   label="Ceiling" />
-        <KpiBox value={stopSells} unit="count" label="Stop-sell" />
-        <KpiBox value={minStayRows} unit="count" label="Min-stay" />
+        <KpiBox value={totalInv} unit="count" label="Inventory cells" tooltip="Distinct (room_type × day) cells in the window. Source: rate_inventory." />
+        <KpiBox value={avgRate}  unit="usd"   label="Avg rate"        tooltip="Mean rate across all inventory cells in the window." />
+        <KpiBox value={minRate}  unit="usd"   label="BAR floor"       tooltip="Lowest sellable rate in the window — the floor of the rate ladder." />
+        <KpiBox value={maxRate}  unit="usd"   label="Ceiling"         tooltip="Highest rate in the window — typically peak / high-demand days." />
+        <KpiBox value={stopSells} unit="count" label="Stop-sell"      tooltip="Cells with stop_sell = true. Cannot be booked even if rate is set." />
+        <KpiBox value={minStayRows} unit="count" label="Min-stay"     tooltip="Cells with minimum_stay > 1. Filters short stays." />
       </div>
 
       <Panel title="BAR ladder by room type" eyebrow="rate_inventory" actions={<ArtifactActions context={ctx('table', 'BAR ladder by room type')} />}>

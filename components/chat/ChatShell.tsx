@@ -53,6 +53,8 @@ interface ChatShellProps {
   placeholder?: string;
   /** localStorage key prefix so each chat shell has its own thread state. */
   storageKey?: string;
+  /** Initial input prefilled into the composer (used when /cockpit/chat?q=… opens with a question). */
+  initialInput?: string;
 }
 
 function stripTicketFraming(s: string | null): { user: string; agent: string } {
@@ -95,10 +97,11 @@ export default function ChatShell({
   mentionNickname,
   placeholder,
   storageKey,
+  initialInput,
 }: ChatShellProps) {
   const STORE_KEY = storageKey ?? `chat_thread_start_${role}`;
   const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState(initialInput ?? '');
   const [sending, setSending] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -293,7 +296,24 @@ export default function ChatShell({
               </div>
             )}
           </div>
-          <a href="/cockpit" style={S.topBtn}>cockpit ↗</a>
+          {role === 'it_manager' ? (
+            // PBS 2026-05-09: from Captain Kit's chat, surface a prominent
+            // brass CTA to the IT Cockpit. Replaces the muted generic link
+            // for it_manager only — every other persona keeps the subtle
+            // "cockpit ↗" affordance.
+            <a
+              href="/cockpit"
+              style={{
+                ...S.topBtn,
+                background: '#c79a6b',
+                color: '#0a0a0b',
+                border: 0,
+                fontWeight: 600,
+              }}
+            >↗ Open IT Cockpit</a>
+          ) : (
+            <a href="/cockpit" style={S.topBtn}>cockpit ↗</a>
+          )}
         </div>
       </div>
 

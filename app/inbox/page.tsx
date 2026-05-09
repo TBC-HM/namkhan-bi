@@ -3,9 +3,11 @@
 
 import Link from 'next/link';
 import Page from '@/components/page/Page';
+import Panel from '@/components/page/Panel';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
-import { listEmailThreads, getThreadMessages, listInboxTabs, getMailboxStats, getThreadResponseMap, getThreadResponseTime, getInboxVolumeByDay, getResponseTimeHistogram } from '@/lib/sales';
+import { listEmailThreads, getThreadMessages, listInboxTabs, getMailboxStats, getThreadResponseMap, getThreadResponseTime, getInboxVolumeByDay, getResponseTimeHistogram, getTopSenders } from '@/lib/sales';
 import { VolumeByDayChart, MailboxVolumeChart, ResponseTimeChart } from '@/components/inbox/InboxCharts';
+import TopSendersPanel from '@/components/inbox/TopSendersPanel';
 import { fmtIsoDate, EMPTY } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
@@ -85,12 +87,13 @@ export default async function InboxPage({
   if (searchParams.dir === 'in') filter.direction = 'inbound';
   if (searchParams.dir === 'out') filter.direction = 'outbound';
 
-  const [threads, tabs, mailboxStats, volumeByDay, respHisto] = await Promise.all([
+  const [threads, tabs, mailboxStats, volumeByDay, respHisto, topSenders] = await Promise.all([
     listEmailThreads(260955, 200, filter),
     listInboxTabs(260955),
     getMailboxStats(260955),
     getInboxVolumeByDay(260955, 30),
     getResponseTimeHistogram(260955),
+    getTopSenders(60, 20, 260955).catch(() => []),
   ]);
   const selectedId = searchParams.thread ?? threads[0]?.thread_id ?? null;
   const [messages, threadResponseMap, selectedRespMin] = await Promise.all([
@@ -140,8 +143,40 @@ export default async function InboxPage({
   const activeBox = searchParams.box ?? 'all';
   const activeDir = searchParams.dir ?? 'all';
 
+  // PBS 2026-05-09: when a thread is selected the right pane becomes the
+  // "sub-page". Surface a ← Back to inbox link in the topRight slot so users
+  // always have a clear escape hatch from the thread view.
+  const backHref = (() => {
+    const p = new URLSearchParams();
+    if (searchParams.box) p.set('box', searchParams.box);
+    if (searchParams.dir) p.set('dir', searchParams.dir);
+    const qs = p.toString();
+    return qs ? `/inbox?${qs}` : '/inbox';
+  })();
+  const topRight = searchParams.thread ? (
+    <Link
+      href={backHref}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        padding: '6px 12px', borderRadius: 6,
+        background: 'var(--paper-warm)',
+        border: '1px solid var(--paper-deep)',
+        color: 'var(--ink)',
+        fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
+        letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase',
+        textDecoration: 'none',
+      }}
+    >
+      ← Back to inbox
+    </Link>
+  ) : undefined;
+
   return (
-    <Page eyebrow="Operations · Inbox" title={<>Inbox · all <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>mail</em></>}>
+    <Page
+      eyebrow="Operations · Inbox"
+      title={<>Inbox · all <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>mail</em></>}
+      topRight={topRight}
+    >
 
       {/* ANALYTICS STRIP */}
       <div style={{
@@ -232,6 +267,16 @@ export default async function InboxPage({
           </div>
           <ResponseTimeChart data={respHisto} />
         </article>
+      </div>
+
+      {/* PBS 2026-05-09: senders drill-down per repair-list mailbox redesign. */}
+      <div style={{ marginTop: 14 }}>
+        <Panel
+          title="Top senders · drill-down"
+          eyebrow={`${topSenders.length} ranked · last 60d`}
+        >
+          <TopSendersPanel senders={topSenders} windowDays={60} />
+        </Panel>
       </div>
 
       <div

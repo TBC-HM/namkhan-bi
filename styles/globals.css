@@ -2743,3 +2743,23 @@ input::placeholder, textarea::placeholder { color: #5a5448; }
 .ops-staff-dark .border-stone-300,
 .ops-staff-dark .border-stone-200,
 .ops-staff-dark [class*="border-stone-300/"] { border-color: #2a261d !important; }
+
+/* ── PBS 2026-05-09 panel expand button.
+ * Native fullscreen first; CSS fallback when requestFullscreen rejects.
+ */
+[data-panel]:fullscreen {
+  background: #0a0a0a !important;
+  padding: 32px !important;
+  overflow: auto;
+}
+[data-panel].panel-fs {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #0a0a0a;
+  padding: 32px;
+  overflow: auto;
+  border-radius: 0;
+  border: none;
+}
+body.panel-fs-active { overflow: hidden; }

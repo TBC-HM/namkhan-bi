@@ -5,8 +5,9 @@
 // · GL detail (collapsed) · Top-seller trend · raw POS list.
 
 import FilterStrip from '@/components/nav/FilterStrip';
-import SlimHero from '@/components/sections/SlimHero';
 import KpiStrip, { type KpiStripItem } from '@/components/kpi/KpiStrip';
+import Page from '@/components/page/Page';
+import { OPERATIONS_SUBPAGES } from '../_subpages';
 import PnlGrid from '@/components/pl/PnlGrid';
 import DeptTrendChart from '@/components/pl/DeptTrendChart';
 import FnbGlBreakdown from '@/components/pl/FnbGlBreakdown';
@@ -54,9 +55,12 @@ export default async function FnbPage({ searchParams }: Props) {
   const effectiveGopPct = effectiveFnbRev > 0 && effectiveGopUsd != null ? (effectiveGopUsd / effectiveFnbRev) * 100 : null;
 
   return (
-    <>
-      <FilterStrip showForward={false} showCompare={false} showSegment={false} liveSource="Cloudbeds · live" />
-      <SlimHero eyebrow={`F&B · ${period.label}`} title="Roots" emphasis="restaurant" sub="revenue · cost ratios · covers · guest sat" />
+    <Page
+      eyebrow={`Operations · F&B · ${period.label}`}
+      title={<>Roots <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>restaurant</em></>}
+      subPages={OPERATIONS_SUBPAGES}
+      topRight={<FilterStrip showForward={false} showCompare={false} showSegment={false} liveSource="Cloudbeds · live" />}
+    >
 
       {/* Row 1 — Operating snapshot */}
       <KpiStrip items={[
@@ -157,6 +161,6 @@ export default async function FnbPage({ searchParams }: Props) {
         </summary>
         <FnbRawTransactions data={rawTxns} pageSize={200} />
       </details>
-    </>
+    </Page>
   );
 }

@@ -135,12 +135,13 @@ export default async function ReputationPage() {
           marginTop: 14,
         }}
       >
-        <KpiBox value={total} unit="count" label="Reviews 30d" tooltip="Across every source" />
+        <KpiBox value={total} unit="count" label="Reviews 30d" tooltip="Reviews received in the last 30 days across every source. Source: marketing.reviews." />
         <KpiBox
           value={avgRating}
           unit="nights"
           dp={2}
           label="Avg rating /5"
+          tooltip="Mean of rating_norm (normalised to /5). SLH brand target ≥ 4.6."
         />
         <KpiBox
           value={unanswered}

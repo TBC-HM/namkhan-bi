@@ -67,10 +67,10 @@ export default async function IntegrationsPage() {
         <span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>read-only · keys in Vercel env</span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
-        <KpiBox value={connectedCount} unit="count" label="Connected" />
-        <KpiBox value={conns.length - connectedCount} unit="count" label="Not connected" />
-        <KpiBox value={null} unit="text" valueText={cbAge != null ? `${cbAge}m` : '—'} label="Cloudbeds sync age" />
-        <KpiBox value={agentCount ?? 0} unit="count" label="Agents registered" />
+        <KpiBox value={connectedCount} unit="count" label="Connected"      tooltip="Integrations with status=connected — Cloudbeds, QB, Make.com, Anthropic API, etc." />
+        <KpiBox value={conns.length - connectedCount} unit="count" label="Not connected" tooltip="Integrations awaiting setup or with broken credentials. Each blocks a downstream pipeline." />
+        <KpiBox value={null} unit="text" valueText={cbAge != null ? `${cbAge}m` : '—'} label="Cloudbeds sync age" tooltip="Minutes since the last successful Cloudbeds sync. > 30m = stale, investigate." />
+        <KpiBox value={agentCount ?? 0} unit="count" label="Agents registered" tooltip="Total rows in governance.agents — controls every cron-driven Claude/agent task." />
       </div>
       <div style={{ marginTop: 18 }}>
         <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-xl)', fontWeight: 500, marginBottom: 6 }}>

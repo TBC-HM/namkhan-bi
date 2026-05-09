@@ -132,11 +132,13 @@ export default function NDropdown() {
                       </div>
                       {m.hint && (
                         <div style={{
+                          // PBS 2026-05-09 #25: brighter hint under dept names.
                           fontSize: 10,
-                          color: '#6b6b75',
+                          color: '#a8854a',
                           fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
-                          letterSpacing: '0.04em',
-                          marginTop: 2,
+                          letterSpacing: '0.06em',
+                          fontWeight: 600,
+                          marginTop: 3,
                         }}>
                           {m.hint}
                         </div>

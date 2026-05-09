@@ -21,6 +21,8 @@ export interface KpiStripItem {
   tone?: 'pos' | 'neg' | 'warn' | 'neutral';
   /** Format hint — applied if value is a number. */
   kind?: 'money' | 'pct' | 'count' | 'text';
+  /** Hover tooltip — same data-tooltip pattern as KpiBox. Falls back to label · hint. */
+  tooltip?: string;
 }
 
 interface Props {
@@ -98,13 +100,16 @@ export default function KpiStrip({ items, minWidth = 150 }: Props) {
 
   return (
     <div style={containerStyle} role="group" aria-label="KPI strip">
-      {items.map((it, i) => (
-        <div key={i} style={itemStyle}>
-          <span style={labelStyle}>{it.label}</span>
-          <span style={valueStyle(it.tone)}>{fmtValue(it)}</span>
-          {it.hint ? <span style={hintStyle}>{it.hint}</span> : null}
-        </div>
-      ))}
+      {items.map((it, i) => {
+        const tip = it.tooltip ?? [it.label, it.hint].filter(Boolean).join(' · ');
+        return (
+          <div key={i} style={itemStyle} data-tooltip={tip || undefined}>
+            <span style={labelStyle}>{it.label}</span>
+            <span style={valueStyle(it.tone)}>{fmtValue(it)}</span>
+            {it.hint ? <span style={hintStyle}>{it.hint}</span> : null}
+          </div>
+        );
+      })}
     </div>
   );
 }

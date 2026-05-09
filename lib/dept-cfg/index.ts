@@ -7,7 +7,7 @@ import type { DeptCfg } from './types';
 
 // ─── Revenue ─────────────────────────────────────────────────────────────
 const REVENUE_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
-  { value: 'pulse', label: 'Pulse', hrefBase: '/revenue/pulse', dimGroups: [
+  { value: 'pulse', label: 'Pulse', hrefBase: '/revenue/reports/pulse', dimGroups: [
     { key: 'window',  label: 'Window',  options: [
       { value: 'today',     label: 'Today'    },
       { value: 'last_7d',   label: 'Last 7d'  },
@@ -30,7 +30,7 @@ const REVENUE_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
       { value: 'rate',   label: 'Rate plan'  },
     ]},
   ]},
-  { value: 'pace', label: 'Pace', hrefBase: '/revenue/pace', dimGroups: [
+  { value: 'pace', label: 'Pace', hrefBase: '/revenue/reports/pace', dimGroups: [
     { key: 'horizon', label: 'Stay horizon', options: [
       { value: 'fwd_7d',   label: 'Next 7d'   },
       { value: 'fwd_30d',  label: 'Next 30d'  },
@@ -55,7 +55,7 @@ const REVENUE_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
       { value: 'month', label: 'Month' },
     ]},
   ]},
-  { value: 'channels', label: 'Channels', hrefBase: '/revenue/channels', dimGroups: [
+  { value: 'channels', label: 'Channels', hrefBase: '/revenue/reports/channels', dimGroups: [
     { key: 'window', label: 'Window', options: [
       { value: 'last_7d',  label: 'Last 7d'  },
       { value: 'last_30d', label: 'Last 30d' },
@@ -83,7 +83,7 @@ const REVENUE_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
       { value: 'lm',   label: 'Last month' },
     ]},
   ]},
-  { value: 'pricing', label: 'Pricing', hrefBase: '/revenue/pricing', dimGroups: [
+  { value: 'pricing', label: 'Pricing', hrefBase: '/revenue/reports/pricing', dimGroups: [
     { key: 'horizon', label: 'Date horizon', options: [
       { value: 'fwd_7d',  label: 'Next 7d'  },
       { value: 'fwd_30d', label: 'Next 30d' },
@@ -106,7 +106,7 @@ const REVENUE_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
       { value: 'ly_date', label: 'vs LY same date'  },
     ]},
   ]},
-  { value: 'comp_set', label: 'Comp Set', hrefBase: '/revenue/compset', dimGroups: [
+  { value: 'comp_set', label: 'Comp Set', hrefBase: '/revenue/reports/comp_set', dimGroups: [
     { key: 'window', label: 'Window', options: [
       { value: 'last_7d',  label: 'Last 7d'  },
       { value: 'last_30d', label: 'Last 30d' },
@@ -130,7 +130,7 @@ const REVENUE_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
       { value: 'shop', label: 'Shop date' },
     ]},
   ]},
-  { value: 'forecast', label: 'Forecast', hrefBase: '/revenue/forecast', dimGroups: [
+  { value: 'forecast', label: 'Forecast', hrefBase: '/revenue/reports/forecast', dimGroups: [
     { key: 'horizon', label: 'Horizon', options: [
       { value: 'fwd_7d',   label: 'Next 7d'   },
       { value: 'fwd_30d',  label: 'Next 30d'  },
@@ -242,23 +242,21 @@ const SALES_CFG: DeptCfg = {
   chatPlaceholder: 'e.g. which inquiries went silent past 48h?',
   storageKeyPrefix: 'sal',
   subPages: [
-    // PBS 2026-05-09 (repair-list 9/10/11): drop Roster (belongs to ops) +
-    // drop Agents (only reachable via /cockpit). No Dashboard tab — it was
-    // never in this list (the request was about other dept menus).
+    // PBS 2026-05-09: BTB is the unified MICE / DMC / Retreats / Groups
+    // command page. /sales/b2b stays for the deep DMC-contracts +
+    // LPA-reconciliation flow but is no longer in the dept menu.
     { label: 'Inquiries', href: '/sales/inquiries' },
     { label: 'Leads',     href: '/sales/leads'     },
+    { label: 'BTB',       href: '/sales/btb'       },
     { label: 'Groups',    href: '/sales/groups'    },
     { label: 'FIT',       href: '/sales/fit'       },
     { label: 'Packages',  href: '/sales/packages'  },
-    { label: 'B2B / DMC', href: '/sales/b2b'       },
-    { label: 'Pipeline',  href: '/sales/pipeline'  },
   ],
   quickChips: [
     { label: 'Inquiries', href: '/sales/inquiries' },
     { label: 'Leads',     href: '/sales/leads'     },
     { label: 'Packages',  href: '/sales/packages'  },
     { label: 'B2B / DMC', href: '/sales/b2b'       },
-    { label: 'Pipeline',  href: '/sales/pipeline'  },
   ],
   defaultAttn: [
     { id: 'l1', label: 'Inquiry → quote SLA breach (>48h) for 4 leads', severity: 'high',   kind: 'leakage'     },
@@ -307,7 +305,10 @@ const MARKETING_CFG: DeptCfg = {
   storageKeyPrefix: 'mkt',
   subPages: [
     // PBS 2026-05-09 (repair-list 11): Agents only reachable via /cockpit.
+    // PBS 2026-05-09 (new): Events schedule joins the strip — drives demand,
+    // marketing brief, content + retreat planning.
     { label: 'Snapshot',    href: '/marketing'             },
+    { label: 'Events',      href: '/marketing/events'      },
     { label: 'Audiences',   href: '/marketing/audiences'   },
     { label: 'Library',     href: '/marketing/library'     },
     { label: 'Campaigns',   href: '/marketing/campaigns'   },
@@ -374,6 +375,7 @@ const OPERATIONS_CFG: DeptCfg = {
     { label: 'Spa',              href: '/operations/spa'             },
     { label: 'Activities',       href: '/operations/activities'      },
     { label: 'Inventory',        href: '/operations/inventory'       },
+    { label: 'Suppliers',        href: '/operations/suppliers'       },
     { label: 'Catalog cleanup',  href: '/operations/catalog-cleanup' },
   ],
   quickChips: [
@@ -383,6 +385,7 @@ const OPERATIONS_CFG: DeptCfg = {
     { label: 'Spa',        href: '/operations/spa'         },
     { label: 'Activities', href: '/operations/activities'  },
     { label: 'Inventory',  href: '/operations/inventory'   },
+    { label: 'Suppliers',  href: '/operations/suppliers'   },
   ],
   defaultAttn: [
     { id: 'l1', label: 'F&B waste +18% vs last week',         severity: 'medium', kind: 'leakage'     },

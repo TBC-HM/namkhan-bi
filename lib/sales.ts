@@ -904,6 +904,66 @@ export async function getMailboxStats(propertyId: number = PROPERTY_ID): Promise
   }));
 }
 
+// PBS 2026-05-09: top-senders drill-down for the inbox control center.
+// Returns the top N inbound senders over the last `days` window with
+// counts, distinct threads, and last activity. Quick-and-dirty aggregation
+// done here in JS because there is no v_top_senders view yet.
+export interface TopSender {
+  sender_email: string;
+  sender_name: string | null;
+  inbound: number;
+  threads: number;
+  last_msg: string | null;
+  is_automation: boolean;
+}
+
+export async function getTopSenders(
+  days = 60,
+  limit = 20,
+  propertyId: number = PROPERTY_ID,
+): Promise<TopSender[]> {
+  const sb = getSupabaseAdmin();
+  const since = new Date(Date.now() - days * 86_400_000).toISOString();
+  const { data } = await sb.schema('sales').from('email_messages')
+    .select('from_email,from_name,thread_id,received_at,direction')
+    .eq('property_id', propertyId)
+    .eq('direction', 'inbound')
+    .gte('received_at', since)
+    .limit(5000);
+  const map = new Map<string, TopSender & { _threads: Set<string> }>();
+  for (const r of (data ?? []) as Array<{ from_email: string | null; from_name: string | null; thread_id: string | null; received_at: string }>) {
+    const email = (r.from_email || '(unknown)').toLowerCase();
+    let s = map.get(email);
+    if (!s) {
+      s = {
+        sender_email: email,
+        sender_name: r.from_name ?? null,
+        inbound: 0,
+        threads: 0,
+        last_msg: null,
+        is_automation: /noreply|no-reply|donotreply|do-not-reply|notification|mailer-daemon|drive-shares-dm/i.test(email),
+        _threads: new Set<string>(),
+      };
+      map.set(email, s);
+    }
+    s.inbound += 1;
+    if (r.thread_id) s._threads.add(r.thread_id);
+    if (!s.last_msg || r.received_at > s.last_msg) s.last_msg = r.received_at;
+    if (!s.sender_name && r.from_name) s.sender_name = r.from_name;
+  }
+  return Array.from(map.values())
+    .map((s) => ({
+      sender_email: s.sender_email,
+      sender_name:  s.sender_name,
+      inbound:      s.inbound,
+      threads:      s._threads.size,
+      last_msg:     s.last_msg,
+      is_automation: s.is_automation,
+    }))
+    .sort((a, b) => b.inbound - a.inbound)
+    .slice(0, limit);
+}
+
 export async function getThreadResponseTime(threadId: string, propertyId: number = PROPERTY_ID): Promise<number | null> {
   const sb = getSupabaseAdmin();
   const { data } = await sb.schema('sales').from('v_thread_response')

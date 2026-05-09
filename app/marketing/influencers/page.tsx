@@ -44,10 +44,10 @@ export default async function InfluencersPage() {
       subPages={MARKETING_SUBPAGES}
     >
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
-        <KpiBox value={list.length}            unit="count" label="Total campaigns" />
-        <KpiBox value={pending}                unit="count" label="Pending delivery" tooltip={`${delivered} delivered`} />
-        <KpiBox value={totalComp + totalPaid}  unit="usd"   label="Total investment" />
-        <KpiBox value={null} unit="text" valueText={formatNum(totalReach)} label="Estimated reach" />
+        <KpiBox value={list.length}            unit="count" label="Total campaigns" tooltip="Rows in marketing.influencers — every influencer engagement on the books." />
+        <KpiBox value={pending}                unit="count" label="Pending delivery" tooltip={`${delivered} delivered · ${pending} still outstanding deliverables.`} />
+        <KpiBox value={totalComp + totalPaid}  unit="usd"   label="Total investment" tooltip="Sum of comp_value_usd + paid_fee_usd across all influencers." />
+        <KpiBox value={null} unit="text" valueText={formatNum(totalReach)} label="Estimated reach" tooltip="Sum of estimated_reach (followers + organic reach) across all influencers. Manual estimate." />
       </div>
 
       <Panel title={`Influencer log · ${list.length}`} eyebrow="marketing.influencers" actions={<ArtifactActions context={{ kind: 'table', title: 'Influencer log', dept: 'marketing' }} />}>

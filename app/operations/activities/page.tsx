@@ -2,8 +2,9 @@
 // Re-restored 2026-05-05 — SlimHero · 2 KpiStrips · 3 cards · P&L grid · GL detail · trend · raw POS.
 
 import FilterStrip from '@/components/nav/FilterStrip';
-import SlimHero from '@/components/sections/SlimHero';
 import KpiStrip, { type KpiStripItem } from '@/components/kpi/KpiStrip';
+import Page from '@/components/page/Page';
+import { OPERATIONS_SUBPAGES } from '../_subpages';
 import PnlGrid from '@/components/pl/PnlGrid';
 import DeptTrendChart from '@/components/pl/DeptTrendChart';
 import FnbGlBreakdown from '@/components/pl/FnbGlBreakdown';
@@ -56,9 +57,12 @@ export default async function ActivitiesPage({ searchParams }: Props) {
   const transportRev = (transportRow.data ?? []).reduce((s: number, t: any) => s + Number(t.amount || 0), 0);
 
   return (
-    <>
-      <FilterStrip showForward={false} showCompare={false} showSegment={false} liveSource="Cloudbeds · live" />
-      <SlimHero eyebrow={`Activities · ${period.label}`} title="Excursions" emphasis="& experiences" sub="bookings · capture · per-occupied-roomnight · transport" />
+    <Page
+      eyebrow={`Operations · Activities · ${period.label}`}
+      title={<>Excursions <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>&amp; experiences</em></>}
+      subPages={OPERATIONS_SUBPAGES}
+      topRight={<FilterStrip showForward={false} showCompare={false} showSegment={false} liveSource="Cloudbeds · live" />}
+    >
 
       <KpiStrip items={[
         { label: 'Activity Revenue', value: Number(a30?.activity_revenue ?? 0), kind: 'money', tone: 'pos' },
@@ -104,6 +108,6 @@ export default async function ActivitiesPage({ searchParams }: Props) {
         </summary>
         <FnbRawTransactions data={rawTxns} pageSize={200} />
       </details>
-    </>
+    </Page>
   );
 }

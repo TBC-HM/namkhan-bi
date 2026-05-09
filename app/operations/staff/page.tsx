@@ -16,7 +16,7 @@
 import { supabase } from '@/lib/supabase';
 import { fmtMoney, FX_LAK_PER_USD } from '@/lib/format';
 import { AnomalyCard } from './_components/AnomalyCard';
-import { StaffTable } from './_components/StaffTable';
+import { StaffShell } from './_components/StaffShell';
 import { ArchivedStaffTable, type ArchivedRow } from './_components/ArchivedStaffTable';
 import DeptBreakdown, { type DeptRow } from './_components/DeptBreakdown';
 import PayrollTrend, { type PayrollTrendRow } from './_components/PayrollTrend';
@@ -240,7 +240,7 @@ export default async function StaffPage() {
             Supabase · live
           </span>
         </div>
-        <StaffTable rows={safeRows} />
+        <StaffShell rows={safeRows} />
       </section>
 
       {/* Archived staff */}

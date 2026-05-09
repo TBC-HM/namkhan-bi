@@ -406,6 +406,116 @@ If memory is wiped AND nothing above is reachable, the repo itself has a `CLAUDE
 
 Append-only. Newest at top. Date heading + bullet changes.
 
+### 2026-05-09 (OTA brand badges everywhere — `<OtaBadge>` + `<MaybeOtaBadge>`)
+
+- **New canonical helper `components/ota/OtaBadge.tsx`** — server component, mirrors the `PlatformBadge` pattern from `app/marketing/social/page.tsx`. 16×16 brand-coloured tile + name. Brand hex per OTA: Booking.com #003580, Expedia #FFC72C, Stripe #635BFF, Airbnb #FF5A5F, Agoda #5392F9, Trip.com #287DFA, Hotels.com #D32F2F. Resolver is case-insensitive and tolerates variants (`Booking.com PSM`, `BOOKING_COM`, `BDC`, `ctrip`).
+- **`<MaybeOtaBadge name=...>` wrapper** — does the lookup; returns the badge when recognised, else plain `{name}` so existing non-OTA labels (Direct, WhatsApp, Khiri Travel, etc.) render untouched. Drop-in replacement anywhere a source string lives in JSX.
+- **Applied surfaces:** channel-mix table source column on `/revenue/channels` (linked Source cell), the OTA × Room-type matrix headers (`<th>` per source), the strongest-channel pill in the same matrix, the page header on `/revenue/channels/[source]` (3 instances — BDC tab shell, no-meta fallback, default detail), and the source label in `app/sales/inquiries/_components/InquiryFeed.tsx`.
+- **Skipped intentionally:** `/sales/btb` (DMC partners aren't OTAs), `/operations/suppliers` (vendors), `/marketing/events` (already brand-coloured applies-to badges).
+- **Smoke:** prod HTML on `/revenue/channels` returns 95 hits across `OtaBadge|Booking.com|003580` and 3 confirmed `background:#003580` tiles. Deploy `dpl_5MKEHV5d6PepsBpKgc9SQMqCWY7K`.
+
+### 2026-05-09 (PBS repair-list batch 14 — settings + integrations tooltips + KpiStrip tooltip support)
+
+- **`/settings` + `/settings/integrations` tooltips** (10 tiles). Settings: Property / Room types / Profile complete / Editable sections / Active users / DQ open. Integrations: Connected / Not connected / Cloudbeds sync age / Agents registered. Each names the source view + meaning.
+- **KpiStrip gains `tooltip` prop with auto-fallback.** `components/kpi/KpiStrip.tsx` now renders `data-tooltip` on every tile (`item.tooltip ?? "label · hint"`). The same CSS rule that powers `<KpiBox>` hover (in `styles/globals.css [data-tooltip]:hover::after`) now also covers `/operations/restaurant`, `/operations/spa`, `/operations/activities`, `/finance/poster`, and every other consumer of KpiStrip — without touching the consumer pages. Smoke-test on `/operations/restaurant` confirmed `data-tooltip="F&B / Occ Rn · no data — try 30d+"` etc.
+- **Final tooltip mop-up.** `revenue/reports/[type]` (totalRev, directShare), `marketing/social/[platform]` (active status). Sample mockup pages skipped intentionally; LoremPage (placeholder generator) skipped.
+
+### 2026-05-09 (PBS repair-list batch 13 — finance + revenue + marketing tooltip sweep + chart hover)
+
+- **KPI tooltip sweep round 3.** Tooltips added across nine more pages: `/finance/mapping`, `/finance/ledger`, `/finance/agents`, `/finance/pos-transactions`, `/finance/budget`, `/revenue/demand`, `/revenue/inventory`, `/revenue/rates`, `/revenue/rateplans`, `/revenue/agents`, `/revenue/pricing`, `/marketing/influencers`, `/marketing/campaigns`, `/messy-data`, `/sales/roster`, `/guest/messy-data`, `/sales/leads/scraping`, `/operations/inventory`, `/marketing/events`. Each tooltip names formula, source view, and target where applicable. Combined with rounds 1+2 from earlier batches (Pulse / Pace / Channels / Inquiries / Suppliers / Groups / Journey / Loyalty / Reputation / Audiences / Social), virtually every dept dashboard now has hover-cited KPIs.
+- **Chart hover titles — final two SVGs.** `lib/svgCharts.ts → channelMixTrendSvg` polygons now carry per-band `<title>` showing `${cat} · ${pct}% (latest week) · channel-mix trend`. `channelVelocity3LineSvg` got per-day invisible 6px hover dots with `<title>${cat} · ${v} bookings · ${day} · daily velocity`. Combined with the existing `<title>` tooltips on dailyRevenue, channelMix30d, paceOtbStly, channelNetValueBars — every chart in `lib/svgCharts.ts` now gives PBS exact values on hover.
+
+### 2026-05-09 (PBS repair-list batch 12 — KPI tooltip sweep round 2 + dead rate plans CTA)
+
+- **KPI tooltip sweep round 2.** Tooltips added to KpiBox usages on `/operations/suppliers` (6 tiles), `/sales/groups` (4 tiles), `/guest/journey` (6 tiles), `/guest/loyalty` (6 tiles), `/guest/reputation` (2 tiles), `/marketing/audiences` (4 tiles), `/marketing/social` (4 tiles). Each tooltip names formula, source, and target where applicable. Pulse + Pace + Channels + Inquiries already covered in batch 8.
+- **Dead rate plans CTA (PBS new ask: "integrate CTAs … give you an example … dead rate plan").** New `/revenue/rateplans/dead` surfaces every active rate plan with zero reservations in the last 90 days (currently 144 of them). Per-row CTAs: **review** (deep-link to `/revenue/rateplans?rate_id=…`) and **↗ Ask Vector** (deep-link to `/cockpit/chat?dept=revenue&q=…` with the question prefilled). 5 KPI tiles for context. Linked from `/revenue/rateplans` via a brass `↗ Dead plans (90d)` button in the topRight slot.
+
+### 2026-05-09 (PBS repair-list batch 11 — pricing calendar + lead scraping concept)
+
+- **Task 34 — `/revenue/pricing/calendar` (PBS screenshot 12.22.18).** New 30-day Mon-Sun calendar grid. Each cell shows the cheapest sellable Namkhan rate for that day + Δ vs comp avg, colour-coded: premium ≥ +8% (green), parity ±8% (brass), soft −8 to −20% (amber), too-cheap ≥ −20% (red), no-data (muted). 6 KPI tiles (Avg Namkhan / Avg comp / Δ / Premium days / Too-cheap days / No-flex days) and 14d/30d/60d window selector. Data: `public.rate_inventory` (198 forward rows) + `v_compset_competitor_rate_matrix` (203 comp obs). Discoverable from `/revenue/pricing` via a prominent "📅 Open calendar view (vs comp)" CTA above the granularity selector.
+- **Lead scraping concept page (PBS new ask).** New `/sales/leads/scraping`. Shows the four-stage pipeline (Discover → Enrich → Score → Outreach) as cards with status pills, plus 7 KPI tiles (prospects total / contacted / replied / won / enriched % / scored % / targeting items) read live from `sales.prospects` + `sales_targeting.framework`. Quick actions row links Import CSV (existing /api/sales/prospects/import), BTB partners, and Messy data. Targeting framework summary panel groups items by framework (10 frameworks, 50 items). Latest 20 prospects table at the bottom.
+
+### 2026-05-09 (PBS repair-list batch 10 — events schedule + parity/compset verification)
+
+- **`/marketing/events` — new events schedule page (PBS screenshot 12.24.10).** Reads `marketing.calendar_events` (82 rows). 7 KPI tiles (Total / Upcoming / Next 7-30-90d / Confirmed / High demand). Month-grouped event list with type chip, applies-to badges (Rate / Marketing / Content / F&B / Retreat) colour-coded, tentative + high-demand pills, hashtag preview, build-up date. Wired into `MARKETING_SUBPAGES`.
+- **Parity + Compset verified live (PBS screenshots 12.25.00 + 12.26.09).** `/revenue/parity` and `/revenue/compset` both already render — no rebuild needed. Parity Watchdog renders breach tables; Compset renders comp-set summary. Backing cron jobs (`parity-check-daily` 44, `compset-agent-daily` 43) succeeding nightly. Specific calendar/graph layouts from PBS's screenshots can be tuned in a follow-up if PBS asks for tighter parity with the visuals.
+
+### 2026-05-09 (PBS repair-list batch 9 — BTB unified page + upload audit)
+
+- **`/sales/btb` — unified BTB command page (PBS: "make one new smart page combining dropdowns / containers, avoid too much clicking").** New route at `app/sales/btb/page.tsx` with `?seg=all|dmc|retreats|groups|mice`. Reads `governance.dmc_contracts` (22 contracts), `marketing.retreat_programs` (3 programs), `public.groups` (20 blocks). MICE is derived as a subset of groups (`block_size ≤ 25` + name/contact matches `/offsite|leadership|board|founder|exec|incentive|conference|meeting|mice|corporate|workshop/i`). 6 KPI tiles, segment chips, three conditional panels. Wired into `SALES_SUBPAGES` between Leads and Groups; old `/sales/b2b` kept for the deep DMC contracts + LPA reconciliation flow but pulled from the dept menu.
+- **Upload-paths audit.** Verified that every upload area PBS named has an API route + UI button mounted: marketing media (sign+finalize), cockpit, docs, finance budget, suppliers, inventory items, staff payslips, DMC contracts, leads CSV import. Functional check still requires PBS to drive an actual upload through the UI — not testable from the server side.
+
+### 2026-05-09 (PBS repair-list batch 8 — inbox senders + KPI tooltips + date popover hover-KPI)
+
+- **Inbox sender drill-down (PBS new ask: mailbox redesign).** New server fetcher `lib/sales.ts → getTopSenders(days, limit)` aggregates inbound senders client-side from `sales.email_messages` (no view yet). New client component `components/inbox/TopSendersPanel.tsx` mounted on `/inbox` between the volume charts and the thread list. Each row shows email, msg count, msgs/day, distinct threads, last activity, automation/bot tag. Click expands inline detail + quick CTAs (open in inbox, reply via mailto, find lead).
+- **KPI tooltips sweep — round 1.** Rich `tooltip` props added to:
+  - `/revenue/pulse` (8 KPI tiles — OCC/ADR/RevPAR/TRevPAR/Cancel/No-show/Lead/ALOS) — each tooltip names the formula, window, source view, target where applicable.
+  - `/revenue/pace` (6 OTB tiles).
+  - `/revenue/channels` (6 mix tiles).
+  - `/sales/inquiries` (5 OpsKpiTile entries — open/SLA/median reply/auto-offer/conversion/pipeline value).
+  Pattern reusable: pages built around `<KpiBox>` or `<OpsKpiTile>` get hover info "for free" once the prop is set; CSS in `styles/globals.css` already renders `[data-tooltip]:hover::after`.
+- **Task 20 — date pill hover popover surfaces dept KPIs + window/compare quick-jump.** `<Page>` already accepts a `kpiTiles` prop that flows into `HeaderPills`. Wired on `/revenue/pulse` as the first consumer (OCC/ADR/RevPAR/TRevPAR/Cancel/Lead). The date hover popover (`HeaderPills.tsx`) now also shows two rows of one-click jumps inside the popup itself: **window** → `?win=today|7d|30d|90d|ytd` and **compare** → `?cmp=stly|lw|lm|budget`. Per-page wiring of the compare param lands as needed.
+
+### 2026-05-09 (PBS repair-list batch 7 — Task 23 printable revenue report)
+
+- **Task 23 — printable revenue report.** New route `/revenue/reports/[type]/page.tsx` renders a print-friendly summary (brief + KPI strip + pace curve table + live alerts + Cloudbeds/QB metadata stamp). New client component `PrintControls` in the topRight slot with Print / Copy link / Email actions. `@media print` rules flatten colors and hide no-print chrome. `REVENUE_REPORT_TYPES.hrefBase` in `lib/dept-cfg/index.ts` repointed from `/revenue/{pulse,pace,…}` to `/revenue/reports/{pulse,pace,…}` so the "default report" card on `/revenue` (DeptEntry → `runReport`) now opens the report — not the live dashboard.
+
+### 2026-05-09 (PBS repair-list batch 6 — TimeframeSelector spread + task 32 verification)
+
+- **Task 13 partial — TimeframeSelector spread.** The TimeframeSelector component (built in batch 4) now mounts in the topRight slot on `/revenue/pace`, `/revenue/demand`, `/revenue/rates`, `/revenue/inventory`, `/revenue/pricing` (all with `includeForward` so next-7/30/90 windows are reachable) and `/finance/pnl` (back-looking only). Same `?win=today|7d|30d|90d|ytd|l12m|nextN` URL contract everywhere.
+- **Task 32 — Nimble compset + parity agents already alive.** `cron.job` jobid 43 (`compset-agent-daily`, 23:00 UTC) and jobid 44 (`parity-check-daily`, 23:15 UTC) both ACTIVE and succeeding nightly. They write to `signals.compset_observations` (2,786+ rows) and `revenue.parity_breaches`/`parity_observations`. PBS impression they were off was stale. No re-activation needed. (Marker for next session: confirm `/revenue/compset` and `/revenue/parity` actually render the data so PBS sees the agents working.)
+- **Task 19 — chat add-to-project effectively done by batch 4.** `ChatShell` already has the project-picker (lines 105-192). DeptEntry's submit-chat routes to `/cockpit/chat` which renders ChatShell, so the picker is reachable from every dept landing.
+
+### 2026-05-09 (PBS repair-list batch 5 — targeting schema, social/[platform], messy-data)
+
+- **Task 28 — Customer-targeting workbook → Supabase.**
+  - New schema `sales_targeting` with `framework` (50 rows, 10 framework labels) + `framework_overview` (12 rows). Public proxy views `v_sales_targeting_framework` and `v_sales_targeting_overview` so PostgREST anon can read without exposing the schema.
+  - Source: `namkhan_customer_targeting_definitions.xlsx` on PBS desktop. AI agents (lead_scraper, sales_outreach, brand_copy) now have a queryable canonical reference instead of guessing ICP/persona/intent definitions.
+- **Task 30 — Landing page per social platform.** Dynamic route `/marketing/social/[platform]/page.tsx`. Reads `marketing.social_accounts` for the matching platform; renders KPI tiles (followers/posts/last sync/status), Profile panel (handle, URL, sync history, notes), and Content actions panel with deep links into media library + campaigns. The `/marketing/social` table now wraps each platform badge in an anchor → `/marketing/social/{platform}`.
+- **Task 7 — `/messy-data` consolidation page.** New top-level route. Shows two tables:
+  - **Curated cross-page gaps** — manual list of 8 known data-quality issues that visibly break tiles/tables/charts elsewhere (Cloudbeds email/phone NULL, room_status missing, marketing.reviews 0 rows, etc.). Each row links back to the origin page so PBS can jump straight to the affected surface.
+  - **`dq_known_issues` live registry** — every open formal DQ issue with severity/owner/description.
+  - Linked from the user-dropdown Tools section as "Messy data".
+
+### 2026-05-09 (PBS repair-list batch 4 — chat 404 fix, expand buttons, pulse today, suppliers, pipeline merge, staff drawer)
+
+- **Task 15 — `/cockpit/chat` 404 fixed.** New `app/cockpit/chat/page.tsx` reads `?dept=&q=` and renders `<ChatShell>` with the right HoD persona (Felix / Vector / Mercer / Lumen / Forge / Intel / Captain Kit). `ChatShell` got an `initialInput` prop so `?q=` prefills the composer.
+- **New PBS ask — expand button on every Panel.** `components/page/PanelExpander.tsx` (client) calls `requestFullscreen()` on the closest `[data-panel]` ancestor, with a CSS-only `.panel-fs` fallback for browsers that refuse. Mounted unconditionally in `<Panel>` head; `hideExpander` prop available for opt-out. Styles in `styles/globals.css`.
+- **New PBS ask — `/revenue/pulse` today panel + timeframe selector.**
+  - `components/page/TimeframeSelector.tsx` — anchor-button group toggles `?win=today|7d|30d|90d|ytd|l12m`. Drop into any page using `resolvePeriod()`.
+  - `lib/pulseToday.ts` — fetches `public.reservations` rows where `booking_date` or `cancellation_date` falls in today; returns counts + revenue + row arrays.
+  - `app/revenue/pulse/_components/PulseTodayPanel.tsx` (client) — two-column "New bookings · today" / "Cancellations · today" with click-to-expand row detail (reservation_id, booking_id, status, source, nights, rate_plan, total).
+- **New PBS ask — Suppliers tab in Operations.** `app/operations/suppliers/page.tsx` reads `suppliers.suppliers` + `public.v_finance_top_suppliers`. Wired into `OPERATIONS_SUBPAGES`. Empty-state nudge shown until the supplier registry is populated.
+- **New PBS ask — Pipeline merged into Leads.** `app/sales/pipeline/page.tsx` now `redirect("/sales/leads?view=pipeline")`. Dropped Pipeline from `SALES_CFG.subPages`/`quickChips`.
+- **New PBS ask — Staff drawer.** `/operations/staff` row click now opens a right-side drawer (mirrors `/guest/directory` pattern) instead of routing.
+  - `app/operations/staff/_actions/fetchStaffDetail.ts` — server action against `v_staff_detail`.
+  - `app/operations/staff/_components/StaffDrawer.tsx` (client) — scrim + ESC-to-close + identity/comp/docs/skills/DQ sections + "open full profile →" link to the existing `/[staffId]` page.
+  - `StaffShell.tsx` wraps `StaffTable` and owns `selectedStaffId` state; passes `onSelect` + `selectedId` props.
+  - `StaffTable` keeps backwards compat: if `onSelect` not provided, falls back to `router.push`.
+
+### 2026-05-09 (PBS repair-list batch 3 — settings nav restructure)
+
+- **Task 26 — settings nav slimmed.** `components/nav/subnavConfig.ts`: `settings` subnav trimmed to `[Snapshot, Property]` only. The other nine entries (Users & roles, VAT rates, Manual entries, Integrations, Notifications, Reports, DQ engine, Platform map, Cockpit status) move into the user-dropdown "Tools" section (`components/page/HeaderPills.tsx`). Settings sub-routes still resolve via direct URL — no routes deleted — so deep links and bookmarks keep working until the cockpit shell is updated to surface them natively (PBS noted "we clean cockpit tonight").
+- **Task 27 — settings/property wiring verified.** `app/settings/property/[section]/page.tsx` reads via `getSupabaseAdmin()` (service role) and writes through `/api/settings/upsert` which validates section against `SECTION_TO_TABLE` map in `lib/settings.ts`. Already correctly wired — no change required.
+- **Task 1 — /marketing/library status.** Renders 80 assets out of 180 ready in `marketing.v_media_ready`, with working text search + tag/tier chip filters. May have been a stale-state report from PBS; marked PARTIAL pending re-verification.
+
+### 2026-05-09 (PBS repair-list batch 2 — /cockpit/tasks expand + ops Page-shell migration)
+
+- **Task 24 — `/cockpit/tasks` expandable rows + SLA countdown.** Wrapped in `<Page>`. Replaced flat table with `<details>` cards. Click expands full `parsed_summary`, original email subject+body (320px scroll), notes, action links (PR / preview / GitHub / full ticket page), nested metadata JSON. SLA default 48h from `created_at`; `metadata.due_at` overrides. Pill: green "due in Xd", amber "due in <6h", red "overdue Xh", muted "closed Xd ago" for terminal statuses.
+- **`/operations/restaurant`, `/operations/spa`, `/operations/activities` migrated to `<Page>` shell.** Removed `<SlimHero>` (shell already provides eyebrow + Fraunces italic title). `<FilterStrip>` moved to the `topRight` slot. Sub-pages strip is now consistent across the operations dept.
+- **Verification:** `npx tsc --noEmit` clean. HTTP 200 on all four routes. 418 `<details>` elements + 216 "due in" + 4 "overdue" pills on `/cockpit/tasks`.
+
+### 2026-05-09 (PBS repair-list batch — chrome legibility + /marketing/social cleanup)
+
+PBS punch-list tasks 25, 29, 31, 33:
+
+- **Task 33 — header pills brighter (`components/page/HeaderPills.tsx`).** Chip border `#2a2520 → #3a3327`, chip text color `#a89e7d → #d8cca8` and weight 500→600. Date pill text color `#a89e7d → #d8cca8` weight 600. User dropdown trigger color `#c4a16a → #d9bf8e` weight 700, border `#2a2520 → #3a3327`. Reason: PBS — "I had to read the same the footer". The pills must be the most consistent thing on every page (PBS 2026-05-09 manifesto rule #3) — they were the dimmest. Now legible without hover.
+- **Task 25 — N-dropdown sub-hints brighter (`components/nav/NDropdown.tsx`).** Sub-line under each dept name (Pulse · Pace · Channels …) recoloured `#6b6b75 → #a8854a` (brand brass), weight 500 → 600, letter-spacing `0.06em`. Reason: PBS — "Make the words in the dropdown in the main menu below the main names like revenue or sales better to read." Same color anchor as eyebrow → uniform brass tier across nav, eyebrow, footer right-rail.
+- **Task 29 — `/marketing/social` cleanup.** Drop OTAs (booking, expedia, agoda, hostelworld) from the social table — they live on `/sales/channels`. Made each handle a clickable link to the actual `url` column (not the redundant trailing "Link" column, which was removed). Filter applied client-side via `NON_SOCIAL` set; rows still in `marketing.social_accounts` so other features can see them.
+- **Task 31 — platform tint badges next to platform name.** Added `<PlatformBadge>` inline component: 18×18 brand-coloured square with first letter, brand hex per platform (`#E4405F` instagram, `#1877F2` facebook, `#25F4EE` tiktok, `#4285F4` google, `#34E0A1` tripadvisor, `#FF0000` youtube, etc.). Lightweight stand-in for full SVG logos until a logo asset bucket is set up.
+- **No new primitives** introduced. PlatformBadge is page-local because no other page lists social platforms today; promote to `components/social/` only if a second consumer appears.
+- **Verification:** `npx tsc --noEmit` clean, deployed `--force` per locked deploy protocol.
+
 ### 2026-05-09 (mass page-empty fix — anon RLS root cause + PostgREST schema cache)
 
 PBS feedback storm: "all transaction pages cloudbeds also empty", "every f...page guests all pages nothing wired", "ledger and p/l and staff salaries", "DMC reconciliation empty", "media library empty". Real diagnosis after audit:
@@ -2260,4 +2370,25 @@ Three stacked fixes addressing "give me the paragraph not the doc" + "answer my 
 **Routing convention:** any page under `/cockpit/*` or `/settings/*` uses Cockpit theme. Any page under `/revenue`, `/sales`, `/marketing`, `/operations`, `/finance` (the Engine front-of-house) uses Workspace theme.
 
 **Why Option 3:** preserves both design intents, no reskin work needed, gives users a psychological cue (front-stage = premium dark, back-stage = brass functional). Long-term cost = 2 systems to maintain — accepted.
+
+### 2026-05-09 — inbox back-link + Kit cockpit CTA
+
+- `/inbox` (`app/inbox/page.tsx`): added a "← Back to inbox" link rendered in the `<Page>` `topRight` slot whenever `?thread=` is set. Preserves `box` and `dir` filters. Fixes PBS report "no back button and no top menu in the email cockpit" — the global N + sticky topbar were already present, but the thread sub-view had no clear escape affordance.
+- Captain Kit chat (`components/chat/ChatShell.tsx`): when `role === 'it_manager'`, the muted `cockpit ↗` link is replaced with a brass-styled `↗ Open IT Cockpit` CTA matching the `+ New chat` button treatment. All other personas keep the subtle outline link unchanged. Visible at `/it` and `/cockpit/chat?dept=it`.
+- KB row: `cockpit_knowledge_base.id=517` scope `design_system_log`. Deploy `dpl_D6qPqjsapt1MRgEg3Vd8vXHJpK5D`. Smokes 200 on `/it`, `/cockpit/chat?dept=it`, `/inbox`, `/inbox?thread=…`. CTA strings verified in HTML.
+
+### 2026-05-09 — popover hover-leave fix + sub-page strip stabilisation
+
+- `components/page/HeaderPills.tsx`: temp / air / date popovers used to close the moment the cursor left the trigger pill (PBS: "unusable"). Restructured each pill into a single relative `pillWrap` container — `onMouseLeave` lives on the wrapper, popover renders INSIDE the wrapper at `top: 100%`. Wrapper has `paddingBottom: 6` (with negative `marginBottom` to keep layout footprint identical) and the popoverHost has matching `paddingTop: 6` so there is no dead-zone gap. Per-pill `setTimeout` ref with `HOVER_CLOSE_DELAY_MS = 80` and `clearTimer` on `mouseEnter` of either trigger or popover. User dropdown stays click-toggle (untouched logically) and now uses the same `top: 100%` positioning for consistency.
+- `components/page/SubPagesStrip.tsx`: PBS "the menu changes when you press the pricing tab" — the strip now uses `flexWrap: nowrap` + `whiteSpace: nowrap` + `flexShrink: 0` per link so neighbours never reflow. Active route detected via `usePathname` (handles exact match AND nested like `/revenue/pricing/calendar`). Active item gets brass color + brass `borderBottom` + `textShadow` (fakes bold without shifting glyph metrics). `aria-current="page"` set on the active link for a11y.
+- KB row: `cockpit_knowledge_base.id=519` scope `ui_bugfix`. Deploy `dpl_7EvTcPG9jaVYMYuxSNEcQtVjQTKq` aliased to `namkhan-bi.vercel.app`. Smokes 200 on `/revenue/pricing` and `/revenue/pulse`; DOM contains `aria-current` and `whiteSpace:nowrap` markers.
+
+### 2026-05-09 — universal CompareSelector across Revenue + Finance
+
+- New `components/page/CompareSelector.tsx`: anchor-button group mirroring `TimeframeSelector`'s style (1px brand border, mono caps, brass-active state). Toggles `?cmp=none|lw|lm|sdly|stly|budget`. Preserves `win`, `seg`, `cap`, `gran` on every link. PBS spec: "compare button (last month / last week / SDLY / STLY) on every revenue page".
+- `lib/period.ts`: `CompareKey` extended from `none|pp|stly` to `none|pp|stly|sdly|lw|lm|budget`. `compareRange` shifts -7d for `lw`, -30d for `lm`, -1y for `stly`/`sdly`. `budget` returns `null` (data layer wires separately). New `CMP_LABELS` for each.
+- `lib/data.ts`: `CMP_MAP` extended with the new keys — `sdly→YOY`, `lw|lm→PREV_PERIOD`, `budget→NONE` so `f_overview_kpis` keeps working until the SQL function gains explicit support for the new buckets.
+- Wired into `topRight` (alongside existing `TimeframeSelector` in a `display:inline-flex; gap:8` wrapper) on: `/revenue/pulse`, `/revenue/pace`, `/revenue/channels`, `/revenue/demand`, `/revenue/rates`, `/revenue/inventory`, `/revenue/pricing`, `/finance/pnl`. Pages that previously bypassed `period.cmp` (`/revenue/pace`, `/revenue/pricing`) now plumb `searchParams.cmp` into `resolvePeriod`.
+- KPI compare numbers shipped on `/revenue/pulse` and `/revenue/pace`. Pulse derives deltas from `kpis.compare` (already returned by `getOverviewKpis`) and passes them to `<KpiBox compare={...}>` for OCC (`pp`), ADR/RevPAR/TRevPAR (`usd`). Pace derives deltas from its existing STLY proxy (`mv_kpi_daily` shifted -1y) for OTB RN/Rev/ADR/OCC. Tone is auto-coloured by `fmtDelta` (`pos`=green, `neg`=red). Other pages now have the buttons; KPI deltas will wire as their data layer surfaces a compare row.
+- Deploy: `dpl_8bDdAvaQBMpWB4KtfzQEGxNbmoNx` aliased to `namkhan-bi.vercel.app`. Typecheck clean. Smokes 200 on `/revenue/pulse?cmp=stly`, `/revenue/pace?cmp=stly`, `/finance/pnl?cmp=lw`; DOM contains `cmp=stly` / `cmp=lw` href markers from the active selector.
 

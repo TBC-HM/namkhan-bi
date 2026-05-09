@@ -3,6 +3,8 @@ import Page from '@/components/page/Page';
 import Panel from '@/components/page/Panel';
 import Brief from '@/components/page/Brief';
 import ArtifactActions from '@/components/page/ArtifactActions';
+import TimeframeSelector from '@/components/page/TimeframeSelector';
+import CompareSelector from '@/components/page/CompareSelector';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { getPaceOtb } from '@/lib/data';
@@ -63,6 +65,12 @@ export default async function DemandPage({ searchParams }: Props) {
       eyebrow={`Revenue · Demand · ${period.label}`}
       title={<>Find the <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>gap</em> before the calendar gets soft.</>}
       subPages={REVENUE_SUBPAGES}
+      topRight={
+        <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <TimeframeSelector basePath="/revenue/demand" active={period.win} includeForward preserve={{ cmp: period.cmp, seg: period.seg }} />
+          <CompareSelector  basePath="/revenue/demand" active={period.cmp}                   preserve={{ win: period.win, seg: period.seg }} />
+        </div>
+      }
     >
       <Brief
         brief={{ signal: briefSignal, body: briefBody, good, bad }}
@@ -92,10 +100,10 @@ export default async function DemandPage({ searchParams }: Props) {
       </Panel>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
-        <KpiBox value={total.otb} unit="count" label="OTB Roomnights" />
-        <KpiBox value={total.rev} unit="usd" label="OTB Revenue" />
-        <KpiBox value={paceΔ} unit="count" label="Pace Δ Rn" delta={total.stly > 0 ? { value: paceΔPct, unit: 'pct', period: 'vs STLY' } : undefined} />
-        <KpiBox value={revΔ} unit="usd" label="Pace Δ Rev" delta={total.stlyRev > 0 ? { value: revΔPct, unit: 'pct', period: 'vs STLY' } : undefined} />
+        <KpiBox value={total.otb} unit="count" label="OTB Roomnights" tooltip="On-the-books room nights for the forward window. Source: pace_otb." />
+        <KpiBox value={total.rev} unit="usd"   label="OTB Revenue"    tooltip="OTB revenue (USD) for the forward window." />
+        <KpiBox value={paceΔ} unit="count"     label="Pace Δ Rn"      delta={total.stly > 0 ? { value: paceΔPct, unit: 'pct', period: 'vs STLY' } : undefined} tooltip="OTB room-nights vs same time last year. Positive = ahead of pace." />
+        <KpiBox value={revΔ}  unit="usd"       label="Pace Δ Rev"     delta={total.stlyRev > 0 ? { value: revΔPct, unit: 'pct', period: 'vs STLY' } : undefined} tooltip="OTB revenue vs same time last year. Positive = ahead of pace." />
       </div>
 
       <div style={{ height: 14 }} />
