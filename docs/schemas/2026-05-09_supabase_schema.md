@@ -344,3 +344,49 @@ SELECT jobid, schedule, jobname, active FROM cron.job ORDER BY jobid;
 ```
 
 Generated: 2026-05-09 by backup agent. Source: `mcp__claude_ai_Supabase__execute_sql` against `kpenyneooigsyuuomgct`.
+
+---
+
+## End-of-session 2026-05-09 update
+
+This block is appended at end-of-session — read alongside the original snapshot above.
+
+### New schemas / tables landed today
+
+| Schema.Table | Purpose | Source |
+|---|---|---|
+| `targeting.frameworks` (13) | Customer-targeting framework taxonomy | xlsx upload |
+| `targeting.framework_items` (52) | Items per framework (target customer / ICP / firmographics / …) | xlsx upload |
+| `targeting.scoring_model` (5) | Lead scoring weights (ICP fit 0.25 · Intent 0.25 · Commercial 0.20 · Reach 0.15) | xlsx upload |
+| `targeting.lead_scraping_fields` (20) | Canonical lead-record fields for scraper | xlsx upload |
+| `messy.unpaid_bills` (200) | QB Unpaid Bills.xls parked here pending reconciliation | Desktop xlsx |
+| `public.cockpit_bugs` | Bugs box backing store with 4-state workflow | new feature |
+| `public.v_parity_grid` | Date × OTA pivot view feeding `/revenue/parity` | new feature |
+| `sales.scraping_jobs` | Scraping queue scaffold (queued/running/done/failed) | new feature |
+| `gl.pl_monthly_archive_20260509` (1,057) | Pre-backfill snapshot preserved before P/L overwrite | safety |
+
+### Mutations
+- `gl.pl_monthly` 1,057 → 1,497 rows (2025+2026 backfilled from Green Tea P&L workbook; 2025 marked `is_final=false`)
+- `cockpit_agent_prompts` — 7 chat personas v+1 with v6 CHAT MODE preamble (active ids 93–99)
+- `cockpit_knowledge_base` 525 → 561 (28 new rows this session, scope `design_system_log` / `system_architecture` / `repair_list_status`)
+
+### Schema gotchas to remember
+- `gl.gl_entries.amount_usd` and `has_class` are GENERATED — never INSERT them
+- `gl.gl_entries.upload_id` is NOT NULL FK to `gl.uploads` — every batch needs an uploads row first
+- `gl.gl_entries.account_id` only matches P&L (60xxxx-66xxxx). Balance-sheet QB rows fail FK
+- `gl.gl_entries.class_id` enum values are lowercase: `not_specified | undistributed | fb | rooms | spa | transport | imekong`
+- `cockpit_tickets` has 13 inbound FKs — `DELETE` needs cascade cleanup (route handler at `/api/cockpit/tickets` does it)
+- Several `v_compset_*` views are anon-grant-only; UI workaround = local anon `createClient` instead of shared service-role client (see `app/revenue/compset/page.tsx` + `lib/pricingKpis.ts`)
+
+### Cron / autonomy state
+- `*/5 * * * *` `/api/cockpit/bugs/sweep` — bug→ticket linking + status flips
+- `compset-agent-daily` (cron 43) · `parity-check-daily` (cron 44)
+- `*/10 * * * *` GitHub Actions `agent-runner` (scaffolded today; runner script `scripts/agent-runner.ts` shipped — needs `ANTHROPIC_API_KEY` + `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` in repo secrets to activate)
+
+### Backup checklist
+- [x] Schema doc updated (this file)
+- [x] KB rows logged for every batch (525-561)
+- [x] `DESIGN_NAMKHAN_BI.md` changelog appended for every UI batch
+- [x] `docs/CHANGELOG.md` 2026-05-09 entry written
+- [ ] Migrations dump for today's MCP-applied DDL — `supabase db dump --schema-only > supabase/migrations/20260509_session_state.sql` recommended next session
+- [ ] GitHub push — `git push origin chore/schema-snapshot-2026-05-09` (committed locally, not pushed)

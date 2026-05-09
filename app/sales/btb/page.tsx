@@ -1,127 +1,252 @@
 // app/sales/btb/page.tsx
+//
+// Sales · BTB — one smart page that unifies MICE / DMC / Retreats / Groups.
+//
 // PBS 2026-05-09: "IN BTB DMC AREA WE SHOULD BE ABLE TO DIFFERENTIATE BETWEEN
 // MICE, DMC, RETREATS, GROUPS, MAKE ONE NEW SMART PAGE WHERE YOU COMBINE
 // DROPDOWNS, CONTAINERS … WANT TO AVOID TOO MUCH CLICKING".
 //
-// One page, four tabs. Each tab pulls its own source:
-//   - DMC      → governance.dmc_contracts
-//   - Retreats → marketing.retreat_programs
-//   - Groups   → public.groups
-//   - MICE     → public.groups WHERE block_size <= 20 AND notes/raw mentions offsite/leadership
-//                (no dedicated table yet; flagged as DATA_NEEDED if empty)
+// Architecture:
+//   • Server component fetches three sources and projects each into a unified
+//     `Account` row with a derived `type` column (no `type` column exists in
+//     any single source — DMC contracts are typed via `partner_type`, retreats
+//     via the table's nature, groups split into MICE vs Group via name regex).
+//   • Client component owns: type pills, country/status/channel dropdowns,
+//     search box, sortable <DataTable>, slide-in drawer.
+//   • Empty tabs render with a CTA pointing at the relevant creation flow.
 //
-// Switching segment is a URL param (?seg=dmc|retreats|groups|mice|all),
-// so deep links work and the tabs stay sticky on refresh.
+// Sources (all queried via service-role admin):
+//   • governance.dmc_contracts          → type = DMC  (partner_type ∈ DMC/TO/OTA)
+//   • marketing.retreat_programs        → type = Retreat
+//   • public.groups                     → type = MICE | Group (regex on name)
 
-import Link from 'next/link';
 import Page from '@/components/page/Page';
-import Panel from '@/components/page/Panel';
-import KpiBox from '@/components/kpi/KpiBox';
-import ArtifactActions from '@/components/page/ArtifactActions';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { fmtUSD, fmtIsoDate } from '@/lib/format';
 import { SALES_SUBPAGES } from '../_subpages';
+import SmartBtbClient, { type Account, type AccountType } from './_components/SmartBtbClient';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
-type Seg = 'all' | 'dmc' | 'retreats' | 'groups' | 'mice';
-
 interface DmcRow {
   contract_id: string;
-  partner_name: string;
+  partner_short_name: string;
+  partner_legal_name: string | null;
+  partner_type: string | null;
+  country: string | null;
+  country_flag: string | null;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  effective_date: string | null;
+  expiry_date: string | null;
+  signed_date: string | null;
   status: string | null;
-  commission_pct: number | null;
-  effective_from: string | null;
-  effective_to: string | null;
-  contract_url: string | null;
+  pricing_model: string | null;
+  group_surcharge_pct: number | null;
+  notes: string | null;
 }
 
 interface RetreatRow {
-  retreat_id: string;
+  retreat_id: number;
   code: string | null;
   display_name: string;
   short_pitch: string | null;
-  ideal_for: string | null;
+  ideal_for: string[] | null;
   min_nights: number | null;
   max_nights: number | null;
+  pricing_basis: string | null;
   is_active: boolean | null;
+  notes: string | null;
 }
 
 interface GroupRow {
   group_id: string;
-  group_name: string;
+  group_name: string | null;
   contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
   block_size: number | null;
   pickup: number | null;
   pickup_pct: number | null;
   arrival_date: string | null;
   departure_date: string | null;
+  cutoff_date: string | null;
   status: string | null;
 }
 
-const SEGMENTS: Array<{ key: Seg; label: string; description: string }> = [
-  { key: 'all',      label: 'All',      description: 'Every BTB partner / cohort across the four segments.' },
-  { key: 'dmc',      label: 'DMC',      description: 'Travel agencies, tour operators, luxury advisors. governance.dmc_contracts.' },
-  { key: 'retreats', label: 'Retreats', description: 'Wellness / yoga / curated retreats. marketing.retreat_programs.' },
-  { key: 'groups',   label: 'Groups',   description: 'Block bookings ≥ 5 rooms. public.groups (Cloudbeds).' },
-  { key: 'mice',     label: 'MICE',     description: 'Meetings, incentives, conferences, exhibitions. Sub-set of groups; small leadership offsites.' },
-];
+// Regex used to split groups into MICE vs general Group. We don't fabricate;
+// if a group has no MICE-flag tokens it stays as type=Group.
+const MICE_RE = /\b(mice|offsite|leadership|board|founders?|exec|incentive|conference|conf|meeting|corporate|workshop|summit|company|team\s*build)\b/i;
+const RETREAT_RE = /\b(retreat|yoga)\b/i;
 
-async function getDmcRows(): Promise<DmcRow[]> {
+async function fetchAll(): Promise<{ dmc: DmcRow[]; retreats: RetreatRow[]; groups: GroupRow[] }> {
   const sb = getSupabaseAdmin();
-  const { data } = await sb
-    .schema('governance')
-    .from('dmc_contracts')
-    .select('contract_id,partner_name,status,commission_pct,effective_from,effective_to,contract_url')
-    .order('partner_name', { ascending: true });
-  return (data ?? []) as DmcRow[];
-}
+  const [dmcRes, retreatsRes, groupsRes] = await Promise.all([
+    sb.schema('governance')
+      .from('dmc_contracts')
+      .select('contract_id,partner_short_name,partner_legal_name,partner_type,country,country_flag,contact_name,contact_email,contact_phone,effective_date,expiry_date,signed_date,status,pricing_model,group_surcharge_pct,notes')
+      .order('partner_short_name', { ascending: true }),
+    sb.schema('marketing')
+      .from('retreat_programs')
+      .select('retreat_id,code,display_name,short_pitch,ideal_for,min_nights,max_nights,pricing_basis,is_active,notes')
+      .order('display_name', { ascending: true }),
+    sb.from('groups')
+      .select('group_id,group_name,contact_name,contact_email,contact_phone,block_size,pickup,pickup_pct,arrival_date,departure_date,cutoff_date,status')
+      .order('arrival_date', { ascending: false, nullsFirst: false }),
+  ]);
 
-async function getRetreatRows(): Promise<RetreatRow[]> {
-  const sb = getSupabaseAdmin();
-  const { data } = await sb
-    .schema('marketing')
-    .from('retreat_programs')
-    .select('retreat_id,code,display_name,short_pitch,ideal_for,min_nights,max_nights,is_active')
-    .order('display_name', { ascending: true });
-  return (data ?? []) as RetreatRow[];
-}
+  if (dmcRes.error) console.error('[btb] dmc_contracts', dmcRes.error);
+  if (retreatsRes.error) console.error('[btb] retreat_programs', retreatsRes.error);
+  if (groupsRes.error) console.error('[btb] groups', groupsRes.error);
 
-async function getGroupRows(): Promise<GroupRow[]> {
-  const sb = getSupabaseAdmin();
-  const { data } = await sb
-    .from('groups')
-    .select('group_id,group_name,contact_name,block_size,pickup,pickup_pct,arrival_date,departure_date,status')
-    .order('arrival_date', { ascending: true, nullsFirst: false });
-  return (data ?? []) as GroupRow[];
-}
-
-interface Props {
-  searchParams?: { seg?: Seg };
-}
-
-export default async function BtbPage({ searchParams }: Props) {
-  const seg: Seg = (searchParams?.seg as Seg) ?? 'all';
-
-  const [dmc, retreats, groups] = await Promise.all([getDmcRows(), getRetreatRows(), getGroupRows()]);
-
-  // MICE = subset of groups: block_size 5-20 (small) and group_name hints at corporate/offsite/leadership.
-  const isMICE = (g: GroupRow): boolean => {
-    if ((g.block_size ?? 0) > 25) return false;
-    const t = `${g.group_name ?? ''} ${g.contact_name ?? ''}`.toLowerCase();
-    return /offsite|leadership|board|founders?|exec|incentive|conference|meeting|mice|corporate|workshop/.test(t);
+  return {
+    dmc: (dmcRes.data ?? []) as DmcRow[],
+    retreats: (retreatsRes.data ?? []) as RetreatRow[],
+    groups: (groupsRes.data ?? []) as GroupRow[],
   };
-  const mice = groups.filter(isMICE);
+}
 
-  // Headline KPIs — across everything.
-  const dmcActive = dmc.filter(d => (d.status ?? '').toLowerCase() === 'active').length;
-  const retreatsActive = retreats.filter(r => r.is_active !== false).length;
-  const next90 = (() => {
-    const today = new Date(); const cutoff = new Date(today.getTime() + 90 * 86_400_000);
-    return groups.filter(g => g.arrival_date && new Date(g.arrival_date) >= today && new Date(g.arrival_date) <= cutoff);
-  })();
-  const totalBlock = groups.reduce((s, g) => s + Number(g.block_size ?? 0), 0);
+function statusFromDmc(s: string | null): Account['status'] {
+  if (!s) return 'inactive';
+  const lc = s.toLowerCase();
+  if (lc === 'active') return 'active';
+  if (lc === 'expiring' || lc === 'pending' || lc === 'draft') return 'pending';
+  if (lc === 'expired') return 'expired';
+  if (lc === 'suspended' || lc === 'inactive') return 'inactive';
+  return 'info';
+}
+
+function statusFromGroup(s: string | null): Account['status'] {
+  if (!s) return 'inactive';
+  const lc = s.toLowerCase();
+  if (lc === 'open' || lc === 'confirmed' || lc === 'active') return 'active';
+  if (lc === 'tentative' || lc === 'pending') return 'pending';
+  if (lc === 'closed') return 'inactive';
+  if (lc === 'cancelled' || lc === 'canceled') return 'expired';
+  return 'info';
+}
+
+function classifyGroup(g: GroupRow): { type: AccountType; channel: string } {
+  const name = `${g.group_name ?? ''} ${g.contact_name ?? ''}`;
+  if (MICE_RE.test(name)) return { type: 'MICE', channel: 'MICE inbound' };
+  if (RETREAT_RE.test(name)) return { type: 'Group', channel: 'Retreat group' };
+  return { type: 'Group', channel: 'Group block' };
+}
+
+export default async function BtbPage() {
+  const { dmc, retreats, groups } = await fetchAll();
+
+  // ── DMC rows ──────────────────────────────────────────────────────────
+  const dmcRows: Account[] = dmc.map((d) => {
+    const detail: Array<{ k: string; v: string | null }> = [
+      { k: 'Partner type',  v: d.partner_type ?? null },
+      { k: 'Legal name',    v: d.partner_legal_name },
+      { k: 'Country',       v: d.country },
+      { k: 'Effective',     v: d.effective_date },
+      { k: 'Expiry',        v: d.expiry_date },
+      { k: 'Signed',        v: d.signed_date },
+      { k: 'Pricing model', v: d.pricing_model },
+      { k: 'Group surcharge', v: d.group_surcharge_pct != null ? `${d.group_surcharge_pct}%` : null },
+      { k: 'Contact name',  v: d.contact_name },
+      { k: 'Contact email', v: d.contact_email },
+      { k: 'Contact phone', v: d.contact_phone },
+      { k: 'Status (raw)',  v: d.status },
+      { k: 'Notes',         v: d.notes },
+    ];
+    return {
+      key: `DMC:${d.contract_id}`,
+      type: 'DMC',
+      name: d.partner_short_name,
+      country: d.country,
+      flag: d.country_flag,
+      status: statusFromDmc(d.status),
+      statusLabel: d.status ?? 'unknown',
+      value: d.group_surcharge_pct != null ? Number(d.group_surcharge_pct) : null,
+      valueKind: d.group_surcharge_pct != null ? 'pct' : null,
+      anchorDate: d.effective_date,
+      contact: d.contact_name,
+      leadSource: d.partner_type ?? 'DMC',
+      detail,
+      deepLink: `/sales/b2b/partner/${d.contract_id}`,
+    };
+  });
+
+  // ── Retreat rows ──────────────────────────────────────────────────────
+  const retreatRows: Account[] = retreats.map((r) => {
+    const idealFor = r.ideal_for && r.ideal_for.length ? r.ideal_for.join(', ') : null;
+    const detail: Array<{ k: string; v: string | null }> = [
+      { k: 'Code',           v: r.code },
+      { k: 'Pitch',          v: r.short_pitch },
+      { k: 'Ideal for',      v: idealFor },
+      { k: 'Min nights',     v: r.min_nights != null ? String(r.min_nights) : null },
+      { k: 'Max nights',     v: r.max_nights != null ? String(r.max_nights) : null },
+      { k: 'Pricing basis',  v: r.pricing_basis },
+      { k: 'Active',         v: r.is_active === false ? 'no' : 'yes' },
+      { k: 'Notes',          v: r.notes },
+    ];
+    return {
+      key: `Retreat:${r.retreat_id}`,
+      type: 'Retreat',
+      name: r.display_name,
+      country: null,
+      flag: null,
+      status: r.is_active === false ? 'inactive' : 'active',
+      statusLabel: r.is_active === false ? 'inactive' : 'active',
+      value: r.max_nights ?? null,
+      valueKind: r.max_nights != null ? 'count' : null,
+      anchorDate: null,
+      contact: null,
+      leadSource: 'Wellness program',
+      detail,
+      deepLink: null,
+    };
+  });
+
+  // ── Group + MICE rows ─────────────────────────────────────────────────
+  const groupRows: Account[] = groups.map((g) => {
+    const cls = classifyGroup(g);
+    const detail: Array<{ k: string; v: string | null }> = [
+      { k: 'Group ID',       v: g.group_id },
+      { k: 'Block size',     v: g.block_size != null ? String(g.block_size) : null },
+      { k: 'Pickup',         v: g.pickup != null ? String(g.pickup) : null },
+      { k: 'Pickup %',       v: g.pickup_pct != null ? `${g.pickup_pct}%` : null },
+      { k: 'Arrival',        v: g.arrival_date },
+      { k: 'Departure',      v: g.departure_date },
+      { k: 'Cutoff',         v: g.cutoff_date },
+      { k: 'Contact name',   v: g.contact_name },
+      { k: 'Contact email',  v: g.contact_email },
+      { k: 'Contact phone',  v: g.contact_phone },
+      { k: 'Status (raw)',   v: g.status },
+    ];
+    const valueIsBlock = g.block_size != null && g.block_size > 0;
+    return {
+      key: `${cls.type}:${g.group_id}`,
+      type: cls.type,
+      name: g.group_name?.trim() || g.group_id,
+      country: null,
+      flag: null,
+      status: statusFromGroup(g.status),
+      statusLabel: g.status ?? 'unknown',
+      value: valueIsBlock ? g.block_size : null,
+      valueKind: valueIsBlock ? 'count' : null,
+      anchorDate: g.arrival_date,
+      contact: g.contact_name,
+      leadSource: cls.channel,
+      detail,
+      deepLink: null,
+    };
+  });
+
+  const allRows: Account[] = [...dmcRows, ...retreatRows, ...groupRows];
+
+  // Skipped report — what we did not infer.
+  const skipped = {
+    dmcWithoutCountry: dmc.filter((d) => !d.country).length,
+    groupsUnclassified: groups.filter((g) => !classifyGroup(g).type).length, // always 0 — defensive
+    groupsWithoutBlock: groups.filter((g) => g.block_size == null).length,
+    retreatsInactive:   retreats.filter((r) => r.is_active === false).length,
+  };
 
   return (
     <Page
@@ -129,180 +254,19 @@ export default async function BtbPage({ searchParams }: Props) {
       title={<>Partners, <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>cohorts</em>, and groups in one place</>}
       subPages={SALES_SUBPAGES}
     >
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
-        <KpiBox value={dmc.length}      unit="count" label="DMC partners"       tooltip={`${dmcActive} active contracts. Source: governance.dmc_contracts.`} />
-        <KpiBox value={retreats.length} unit="count" label="Retreat programs"   tooltip={`${retreatsActive} active. Source: marketing.retreat_programs.`} />
-        <KpiBox value={groups.length}   unit="count" label="Group blocks"       tooltip={`${next90.length} arriving next 90d, ${totalBlock} total room-nights blocked. Source: public.groups.`} />
-        <KpiBox value={mice.length}     unit="count" label="MICE leads"         tooltip="Subset of groups: small leadership / offsite / corporate / incentive / conference signals." />
-        <KpiBox value={next90.length}   unit="count" label="Arrivals next 90d"  tooltip="Group blocks with arrival_date within 90 days of today." />
-        <KpiBox value={totalBlock}      unit="count" label="Total RN blocked"   tooltip="Sum of block_size across all group records." />
+      <SmartBtbClient rows={allRows} />
+
+      <div style={{
+        marginTop: 16, padding: '10px 14px',
+        background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)',
+        borderRadius: 6, color: 'var(--moss)',
+        fontSize: 'var(--t-sm)',
+      }}>
+        <strong>✓ Wired.</strong> {dmcRows.length} DMC · {retreatRows.length} retreats · {groupRows.filter(r => r.type === 'MICE').length} MICE · {groupRows.filter(r => r.type === 'Group').length} groups.
+        Sources: <code>governance.dmc_contracts</code>, <code>marketing.retreat_programs</code>, <code>public.groups</code>.
+        Type column derived: DMC from <code>partner_type</code>; MICE/Group split via name regex (offsite/leadership/incentive/conference/etc).
+        Skipped: {skipped.dmcWithoutCountry} DMC with no country; {skipped.groupsWithoutBlock} groups with no block_size (Cloudbeds sync gap).
       </div>
-
-      {/* Segment chips */}
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-        {SEGMENTS.map((s) => {
-          const isActive = seg === s.key;
-          return (
-            <Link
-              key={s.key}
-              href={`/sales/btb?seg=${s.key}`}
-              style={{
-                padding: '6px 12px',
-                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                fontSize: 11, letterSpacing: '0.10em', textTransform: 'uppercase',
-                fontWeight: 700,
-                background: isActive ? '#a8854a' : 'transparent',
-                color: isActive ? '#0a0a0a' : '#d8cca8',
-                border: '1px solid #2a2520',
-                borderRadius: 4, textDecoration: 'none',
-              }}
-              prefetch={false}
-            >
-              {s.label}
-            </Link>
-          );
-        })}
-      </div>
-
-      <div style={{ marginBottom: 14, fontSize: 12, color: '#7d7565', maxWidth: 760 }}>
-        {SEGMENTS.find(s => s.key === seg)?.description}
-      </div>
-
-      {(seg === 'all' || seg === 'dmc') && (
-        <Panel
-          title="DMC partners"
-          eyebrow={`${dmc.length} contracts`}
-          actions={<ArtifactActions context={{ kind: 'table', title: 'DMC partners', dept: 'sales' }} />}
-        >
-          {dmc.length === 0 ? <Empty msg="No DMC contracts on file." /> : (
-            <div style={{ overflowX: 'auto' }}>
-              <table className="tbl">
-                <thead>
-                  <tr>
-                    <th>Partner</th>
-                    <th>Status</th>
-                    <th className="num">Commission</th>
-                    <th>Effective</th>
-                    <th>Contract</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dmc.map((d) => (
-                    <tr key={d.contract_id}>
-                      <td className="lbl"><strong>{d.partner_name}</strong></td>
-                      <td className="lbl text-mute">{d.status ?? '—'}</td>
-                      <td className="num">{d.commission_pct != null ? `${d.commission_pct}%` : '—'}</td>
-                      <td className="lbl text-mute">
-                        {d.effective_from ? fmtIsoDate(d.effective_from) : '—'} → {d.effective_to ? fmtIsoDate(d.effective_to) : 'open'}
-                      </td>
-                      <td className="lbl">
-                        {d.contract_url ? <a href={d.contract_url} target="_blank" rel="noopener noreferrer" style={S.link}>view ↗</a> : <span className="text-mute">—</span>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Panel>
-      )}
-
-      {(seg === 'all' || seg === 'retreats') && (
-        <>
-          <div style={{ height: 12 }} />
-          <Panel
-            title="Retreat programs"
-            eyebrow={`${retreats.length} programs`}
-            actions={<ArtifactActions context={{ kind: 'table', title: 'Retreat programs', dept: 'sales' }} />}
-          >
-            {retreats.length === 0 ? <Empty msg="No retreat programs configured." /> : (
-              <div style={{ overflowX: 'auto' }}>
-                <table className="tbl">
-                  <thead>
-                    <tr>
-                      <th>Program</th>
-                      <th>Pitch</th>
-                      <th>Ideal for</th>
-                      <th className="num">Nights</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {retreats.map((r) => (
-                      <tr key={r.retreat_id}>
-                        <td className="lbl">
-                          <strong>{r.display_name}</strong>
-                          {r.code && <span style={S.codeBadge}>{r.code}</span>}
-                        </td>
-                        <td className="lbl text-mute" style={{ maxWidth: 360 }}>{r.short_pitch ?? '—'}</td>
-                        <td className="lbl text-mute">{r.ideal_for ?? '—'}</td>
-                        <td className="num">{r.min_nights ?? '—'}–{r.max_nights ?? '—'}</td>
-                        <td className="lbl">{r.is_active === false ? 'inactive' : 'active'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Panel>
-        </>
-      )}
-
-      {(seg === 'all' || seg === 'groups' || seg === 'mice') && (
-        <>
-          <div style={{ height: 12 }} />
-          <Panel
-            title={seg === 'mice' ? 'MICE leads' : 'Group blocks'}
-            eyebrow={seg === 'mice' ? `${mice.length} matches` : `${groups.length} blocks · ${next90.length} next 90d`}
-            actions={<ArtifactActions context={{ kind: 'table', title: seg === 'mice' ? 'MICE leads' : 'Group blocks', dept: 'sales' }} />}
-          >
-            {(seg === 'mice' ? mice : groups).length === 0 ? <Empty msg={seg === 'mice' ? 'No MICE-flagged blocks. Tag corporate/offsite groups in the group_name to surface them here.' : 'No groups blocked.'} /> : (
-              <div style={{ overflowX: 'auto' }}>
-                <table className="tbl">
-                  <thead>
-                    <tr>
-                      <th>Group</th>
-                      <th>Contact</th>
-                      <th className="num">Block</th>
-                      <th className="num">Pickup</th>
-                      <th>Arrival</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(seg === 'mice' ? mice : groups).map((g) => (
-                      <tr key={g.group_id}>
-                        <td className="lbl"><strong>{g.group_name}</strong></td>
-                        <td className="lbl text-mute">{g.contact_name ?? '—'}</td>
-                        <td className="num">{g.block_size ?? '—'}</td>
-                        <td className="num">{g.pickup ?? 0} {g.pickup_pct != null && <span style={{ color: 'var(--ink-mute)' }}>({g.pickup_pct}%)</span>}</td>
-                        <td className="lbl text-mute">
-                          {g.arrival_date ? fmtIsoDate(g.arrival_date) : '—'}
-                          {g.departure_date && <span style={{ color: 'var(--ink-mute)' }}> → {fmtIsoDate(g.departure_date)}</span>}
-                        </td>
-                        <td className="lbl">{g.status ?? '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Panel>
-        </>
-      )}
     </Page>
   );
 }
-
-function Empty({ msg }: { msg: string }) {
-  return (
-    <div style={{ padding: 24, color: '#7d7565', fontStyle: 'italic', textAlign: 'center' }}>
-      {msg}
-    </div>
-  );
-}
-
-const S: Record<string, React.CSSProperties> = {
-  link: { color: 'var(--brass)', textDecoration: 'none', fontWeight: 600 },
-  codeBadge: { marginLeft: 6, fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' },
-};

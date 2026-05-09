@@ -195,19 +195,26 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
         actions={<ArtifactActions context={ctx('brief', `Pricing · ${winLabels[win]}`, briefSignal)} />}
       />
 
-      {/* PBS 2026-05-09 #34: prominent CTA to the new calendar view. */}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
-        <a href="/revenue/pricing/calendar" style={{
-          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-          fontSize: 11, letterSpacing: '0.10em', textTransform: 'uppercase',
-          fontWeight: 700,
-          background: '#a8854a', color: '#0a0a0a',
-          border: '1px solid #2a2520', padding: '6px 12px',
-          borderRadius: 4, textDecoration: 'none',
-        }}>
-          📅 Open calendar view (vs comp)
-        </a>
-        <span style={{ fontSize: 11, color: '#7d7565' }}>30-day grid · cheapest sellable rate per day · Δ vs comp avg</span>
+      {/* PBS 2026-05-09 #35 (pricing top-menu adapt): secondary nav strip
+          for pricing-internal sub-pages so the parent revenue strip stays
+          consistent and PBS gets a second-tier menu while inside Pricing. */}
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 14, borderBottom: '1px solid rgba(168,133,74,0.18)', paddingBottom: 8 }}>
+        {[
+          { href: '/revenue/pricing',          label: 'Overview',     active: true  },
+          { href: '/revenue/pricing/calendar', label: 'Calendar',     active: false },
+          { href: '/revenue/parity',           label: 'Parity ↗',     active: false },
+          { href: '/revenue/compset',          label: 'Compset ↗',    active: false },
+        ].map((t) => (
+          <a key={t.label} href={t.href} style={{
+            padding: '6px 12px',
+            fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+            fontSize: 11, letterSpacing: '0.10em', textTransform: 'uppercase', fontWeight: 600,
+            color: t.active ? '#0a0a0a' : '#f0e5cb',
+            background: t.active ? '#a8854a' : 'transparent',
+            border: '1px solid ' + (t.active ? '#a8854a' : '#2a2520'),
+            borderRadius: 4, textDecoration: 'none',
+          }}>{t.label}</a>
+        ))}
       </div>
 
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 10 }}>
