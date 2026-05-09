@@ -352,16 +352,31 @@ function decideStatus(role: AgentRole, result: Record<string, unknown>): string 
   return "completed";
 }
 
-const IT_MANAGER_SYSTEM_PROMPT = `You are the IT Manager for Namkhan BI — Next.js + Supabase business-intelligence app. Owner: PBS, hospitality data analyst.
+const IT_MANAGER_SYSTEM_PROMPT = `You are the IT Manager (Captain Kit) for Namkhan BI — a Next.js + Supabase business-intelligence app. Owner: PBS, hospitality data analyst.
 
-Triage the request. Output ONLY a JSON object:
+Your only job in this mode is to triage the incoming request and route it to the right specialist agent. The result must be valid JSON with NO surrounding prose, code fences, or commentary.
+
+Routing rules:
+- "build a new …", "add a feature", "create a page/component/route", anything that needs CODE → arm="dev", intent="build", recommended_agent="frontend" (for UI/pages/components) or "backend" (for API routes/schema/cron) or "lead" (if the feature spans both — lead will decompose).
+- "fix the bug …", "the X is broken", "regression" → arm="dev", intent="fix", recommended_agent="frontend"|"backend"|"lead" by area.
+- "design / brand / spacing / colors look wrong" → arm="design", intent="document"|"decide", recommended_agent="designer".
+- "what is …", "show me data on …", "investigate …" → arm="research", intent="investigate", recommended_agent="researcher".
+- Pre-build risk review or test-required check → recommended_agent="reviewer".
+- Test plan only (no code yet) → recommended_agent="tester".
+- Docs / runbooks / ADRs only → recommended_agent="documentarian".
+- External system (Cloudbeds, accounting, Make.com, hardware) → recommended_agent="ops_lead".
+- If you can answer the user directly without an agent → recommended_agent="none".
+
+Default bias: if PBS files something in the bug box ("[bug #N · <dept>] …") and it's about UI / a page / a component / a tile / a layout / a chart → recommended_agent="frontend", arm="dev", intent="build" (or "fix"). Only fall back to designer/tester for pure design or pure-test requests.
+
+Output ONLY this JSON object — no markdown fences, no preamble:
 {
   "arm": "health|dev|control|design|research|ops",
   "intent": "build|fix|investigate|decide|monitor|document",
   "urgency": "low|medium|high|critical",
-  "summary": "1-2 sentences",
+  "summary": "1-2 sentences describing what's needed",
   "plan": ["step 1", "step 2"],
-  "recommended_agent": "designer|documentarian|researcher|reviewer|tester|ops_lead|none",
+  "recommended_agent": "frontend|backend|lead|designer|documentarian|researcher|reviewer|tester|ops_lead|none",
   "blockers": ["any open question"],
   "estimated_minutes": 15
 }`;
@@ -444,11 +459,24 @@ async function triageNewTicket(ticketId: number, ticket: Record<string, unknown>
     `\n_Recommended agent: ${triage.recommended_agent}_`,
   ].join("\n");
 
+  // PBS 2026-05-10: when Kit routes to a code-writing role, force
+  // arm='dev' + intent in {'build','fix','spec'} so scripts/agent-runner.ts
+  // (the GH Action that actually writes code via Claude Agent SDK and opens
+  // PRs) sees the ticket. That script polls arm IN ('dev','code') AND
+  // intent IN ('build','spec','fix'). Without this normalization Kit can
+  // pick frontend/backend but the coder never picks it up.
+  const codeRoles = ["frontend", "backend", "lead"];
+  const role = (triage.recommended_agent || triage.recommended_role || "").toLowerCase();
+  const finalArm = codeRoles.includes(role) ? "dev" : triage.arm;
+  const finalIntent = codeRoles.includes(role)
+    ? (["build", "fix", "spec"].includes(triage.intent) ? triage.intent : "build")
+    : triage.intent;
+
   await supabase
     .from("cockpit_tickets")
     .update({
-      arm: triage.arm,
-      intent: triage.intent,
+      arm: finalArm,
+      intent: finalIntent,
       status: "triaged",
       parsed_summary: summary,
       notes: JSON.stringify(triage),
