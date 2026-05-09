@@ -102,7 +102,13 @@ async function runSweep(): Promise<SweepResult> {
         source: "cockpit_bugs",
         arm: bug.dept_slug ?? "ops",
         intent: "triage",
-        status: "triaging",
+        // PBS 2026-05-09: status='new' (not 'triaging') — the agent/run POST
+        // queue scanner filters status IN ('new','triaged') and skips
+        // 'triaging'. Using 'triaging' here meant bug-spawned tickets sat
+        // forever and were never picked up for triage. The chain was: bug→
+        // ticket(triaging)→[NOTHING]. Fix: bug→ticket(new)→queue drainer
+        // triages → triaged → agent-runner cron writes code.
+        status: "new",
         parsed_summary: summary,
         email_subject: summary.slice(0, 140),
         email_body: bug.body ?? "",
