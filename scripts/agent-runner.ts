@@ -91,20 +91,23 @@ interface AgentResponse {
   notes?: string;
 }
 
-const SYSTEM_PROMPT = `You are the code-writer for Namkhan BI. Given a spec
+const SYSTEM_PROMPT = `You are the code-writer for Namkhan BI (Carla). Given a spec
 from cockpit_tickets, produce a minimal, surgical patch.
 
-Rules:
-- Output ONLY a single JSON object matching this TypeScript:
-  { edits: Array<{ path: string; old_string?: string; new_string?: string; replace_all?: boolean; contents?: string }>; branch_name: string; pr_title: string; pr_body: string; notes?: string }
+CRITICAL OUTPUT FORMAT — FAILURE TO FOLLOW MEANS THE TICKET FAILS:
+- Your FIRST character must be '{'.
+- Output ONLY a single JSON object — no preamble, no "I need to...", no "Let me check...", no markdown fences, no commentary. JUST the JSON.
+- TypeScript shape: { edits: Array<{ path: string; old_string?: string; new_string?: string; replace_all?: boolean; contents?: string }>; branch_name: string; pr_title: string; pr_body: string; notes?: string }
+- If you don't know enough to write code, return { edits: [], notes: "<concrete reason — what info is missing>" }. Even then, FIRST character is '{'.
+- If the spec is already implemented (the change you'd make is already in the codebase), return { edits: [], notes: "already implemented at <file>:<line>" }.
+
+Edit rules:
 - Each edit is either a string replacement (old_string + new_string) on an EXISTING file, or a full-contents write of a file.
 - Keep changes small and reversible. Prefer editing existing files over creating new ones.
 - Branch name format: 'autorun/ticket-<id>-<3-word-slug>'
 - PR title: '<verb>: <one-line summary> (ticket #<id>)'
 - PR body: 2-3 short paragraphs covering what, why, how to verify. Include a "Rollback" line.
-- Do NOT output markdown, prose, or explanation outside the JSON.
 - Do NOT touch: .env*, supabase/migrations/*, package.json (unless spec is a dep change), .github/workflows/* (unless spec is a CI change).
-- If the spec is unclear or risky, output { edits: [], notes: "<why we won't auto-implement>" }.
 
 Brand:
 - $ for USD, ₭ for LAK. Em-dash — for empty. Italic Fraunces for KPI values.
@@ -154,7 +157,13 @@ async function callClaude(spec: string): Promise<AgentResponse | null> {
       // emit a complete JSON object.
       max_tokens: 16000,
       system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: spec }],
+      messages: [
+        { role: 'user', content: spec },
+        // Anthropic prefill: forces the model to continue from '{', so the
+        // response is guaranteed to start with valid JSON. We add the leading
+        // '{' back when parsing.
+        { role: 'assistant', content: '{' },
+      ],
     }),
   });
   if (!res.ok) {
@@ -164,7 +173,9 @@ async function callClaude(spec: string): Promise<AgentResponse | null> {
   const data = (await res.json()) as { content: Array<{ type: string; text: string }> };
   const text = data.content?.find((c) => c.type === 'text')?.text ?? '';
   try {
-    const cleaned = text.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
+    // Prefill '{' was sent as assistant turn; the response continues from there
+    // so we prepend '{' back. Also strip any trailing markdown fence.
+    const cleaned = ('{' + text).trim().replace(/\n?```$/, '');
     return JSON.parse(cleaned) as AgentResponse;
   } catch (e) {
     console.error('parse failed:', (e as Error).message, text.slice(0, 300));
@@ -268,16 +279,23 @@ async function processOne(t: Ticket): Promise<void> {
 
   gitSh(`git add -A`);
   const commitMsg = `${out.pr_title}\n\n${out.pr_body}\n\n[ticket #${t.id}]`;
-  // shell-escape the commit message
-  const escaped = commitMsg.replace(/"/g, '\\"');
-  gitSh(`git commit -m "${escaped}"`);
+  // PBS 2026-05-10: write commit message to a temp file (-F) so backticks,
+  // single quotes, and shell metachars don't break the commit. Previously
+  // multi-paragraph PR bodies with backticks broke `git commit -m "..."`.
+  const msgPath = `/tmp/commit-msg-${t.id}-${Date.now()}.txt`;
+  writeFileSync(msgPath, commitMsg, 'utf8');
+  gitSh(`git commit -F "${msgPath}"`);
 
   // Push + open PR if gh is available + token set.
   let prevUrl: string | null = null;
   try {
     gitSh(`git push -u origin ${branch}`);
     if (process.env.GITHUB_TOKEN) {
-      const prOut = execSync(`gh pr create --title "${out.pr_title.replace(/"/g, '\\"')}" --body "${out.pr_body.replace(/"/g, '\\"')}" --head ${branch} --base main`, {
+      const titlePath = `/tmp/pr-title-${t.id}-${Date.now()}.txt`;
+      const bodyPath = `/tmp/pr-body-${t.id}-${Date.now()}.txt`;
+      writeFileSync(titlePath, out.pr_title, 'utf8');
+      writeFileSync(bodyPath, out.pr_body, 'utf8');
+      const prOut = execSync(`gh pr create --title "$(cat "${titlePath}")" --body-file "${bodyPath}" --head ${branch} --base main`, {
         encoding: 'utf8',
         env: { ...process.env, GH_TOKEN: process.env.GITHUB_TOKEN },
       }).trim();
