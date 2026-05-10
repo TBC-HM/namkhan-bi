@@ -79,6 +79,8 @@ interface InboxSummary {
     is_automation: boolean;
   }>;
   generated_at: string;
+  /** Set by the API when the underlying query threw — lets the UI warn the operator. */
+  _error?: boolean;
 }
 const INBOX_EMPTY: InboxSummary = {
   unread: 0, unanswered: 0, spam: 0,

@@ -144,8 +144,13 @@ export async function GET() {
       generated_at:     new Date().toISOString(),
     };
     return NextResponse.json(payload);
-  } catch {
-    // Never break the header on a transient query failure.
-    return NextResponse.json(EMPTY);
+  } catch (err) {
+    // Log so the failure is visible in Vercel/server logs; return a sentinel
+    // so the frontend can distinguish "real zero" from "fetch error".
+    console.error('[inbox/summary] query failed:', err);
+    return NextResponse.json(
+      { ...EMPTY, generated_at: new Date().toISOString(), _error: true },
+      { status: 200 }, // keep 200 so the header never breaks
+    );
   }
 }
