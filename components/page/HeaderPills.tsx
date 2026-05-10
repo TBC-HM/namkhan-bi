@@ -1,6 +1,14 @@
 'use client';
 
 // components/page/HeaderPills.tsx
+// ── DateRangeQuickPicker ─────────────────────────────────────────────────────
+// Ticket #657: replace the static ?win / ?cmp anchor links in the date-pill
+// popup with a proper client component that:
+//   • reads current params via useSearchParams()
+//   • calls router.replace() (preserving all other params) on click
+//   • highlights the active selection
+//   • uses semantic slugs: win = today|7d|30d|90d|ytd, cmp = stly|pp|none
+// Defaults: win=30d, cmp=none (matches lib/period.ts DEFAULT_WIN / DEFAULT_CMP)
 // Shared header pills rendered top-right on every <Page>: temperature,
 // air/AQI, today's date, user dropdown. Lifted out of DeptEntry so the
 // header is consistent across dept-entry pages AND every sub-page (PBS
@@ -19,7 +27,8 @@
 //   (c) popover sits flush under the trigger (top: 100%) and the wrapper
 //       carries a bridging paddingBottom so there is no dead-zone gap.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 
 interface HeaderPillsProps {
   /** Optional per-dept KPI tiles shown when the user hovers the date pill. */
@@ -269,24 +278,9 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
                 <div style={S.dateCellD}>{t.d}</div>
               </div>
             ))}
-            {/* PBS 2026-05-09 #20: window + compare quick-jumps inside the
-                date popup so the operator can pivot the dashboard without
-                leaving the hover. */}
-            <div style={S.dateWindowRow}>
-              <span style={S.dateWindowLabel}>window</span>
-              <a href="?win=today" style={S.dateWindowLink}>today</a>
-              <a href="?win=7d"    style={S.dateWindowLink}>7d</a>
-              <a href="?win=30d"   style={S.dateWindowLink}>30d</a>
-              <a href="?win=90d"   style={S.dateWindowLink}>90d</a>
-              <a href="?win=ytd"   style={S.dateWindowLink}>YTD</a>
-            </div>
-            <div style={S.dateWindowRow}>
-              <span style={S.dateWindowLabel}>compare</span>
-              <a href="?cmp=stly"   style={S.dateWindowLink}>STLY</a>
-              <a href="?cmp=lw"     style={S.dateWindowLink}>LW</a>
-              <a href="?cmp=lm"     style={S.dateWindowLink}>LM</a>
-              <a href="?cmp=budget" style={S.dateWindowLink}>BUD</a>
-            </div>
+            {/* PBS / ticket #657: window + compare quick-jumps wired to
+                URL params so server-rendered pages re-render automatically. */}
+            <DateRangeQuickPicker />
           </div>
         )}
       </div>
@@ -330,6 +324,143 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
   );
 }
 
+// ── DateRangeQuickPicker ─────────────────────────────────────────────────────
+// Ticket #657: two button-group rows (Window + Compare) that read the current
+// ?win / ?cmp URL params and router.replace() with updated values on click.
+// All other search params (seg, cap, …) are preserved.
+// Defaults match lib/period.ts: win=30d, cmp=none.
+
+const WIN_OPTS: Array<{ v: string; label: string }> = [
+  { v: 'today', label: 'Today' },
+  { v: '7d',    label: '7d' },
+  { v: '30d',   label: '30d' },
+  { v: '90d',   label: '90d' },
+  { v: 'ytd',   label: 'YTD' },
+];
+
+const CMP_OPTS: Array<{ v: string; label: string }> = [
+  { v: 'none',  label: 'None' },
+  { v: 'stly',  label: 'STLY' },
+  { v: 'pp',    label: 'Prior' },
+];
+
+function DateRangeQuickPicker() {
+  const router   = useRouter();
+  const pathname = usePathname();
+  const params   = useSearchParams();
+
+  const activeWin = params.get('win') ?? '30d';
+  const activeCmp = params.get('cmp') ?? 'none';
+
+  const navigate = useCallback((key: 'win' | 'cmp', value: string) => {
+    const next = new URLSearchParams(params.toString());
+    next.set(key, value);
+    router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+  }, [router, pathname, params]);
+
+  return (
+    <div style={DQ.root}>
+      {/* Window row */}
+      <div style={DQ.row}>
+        <span style={DQ.rowLabel}>window</span>
+        <div style={DQ.btnGroup}>
+          {WIN_OPTS.map(o => {
+            const isActive = activeWin === o.v;
+            return (
+              <button
+                key={o.v}
+                onClick={() => navigate('win', o.v)}
+                style={{
+                  ...DQ.btn,
+                  background:  isActive ? '#a8854a' : 'transparent',
+                  color:       isActive ? '#0a0a0a' : '#d8cca8',
+                  fontWeight:  isActive ? 700 : 500,
+                  borderColor: isActive ? '#a8854a' : '#3a3327',
+                }}
+                title={`Switch window to ${o.label}`}
+                aria-pressed={isActive}
+              >
+                {o.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Compare row */}
+      <div style={DQ.row}>
+        <span style={DQ.rowLabel}>compare</span>
+        <div style={DQ.btnGroup}>
+          {CMP_OPTS.map(o => {
+            const isActive = activeCmp === o.v;
+            return (
+              <button
+                key={o.v}
+                onClick={() => navigate('cmp', o.v)}
+                style={{
+                  ...DQ.btn,
+                  background:  isActive ? '#5a7a6a' : 'transparent',
+                  color:       isActive ? '#e9f5ec' : '#d8cca8',
+                  fontWeight:  isActive ? 700 : 500,
+                  borderColor: isActive ? '#5a7a6a' : '#3a3327',
+                }}
+                title={`Compare mode: ${o.label}`}
+                aria-pressed={isActive}
+              >
+                {o.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Styles scoped to DateRangeQuickPicker only (avoids polluting the big S map).
+const DQ: Record<string, React.CSSProperties> = {
+  root: {
+    gridColumn: '1 / -1',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTop: '1px solid #2a261d',
+  },
+  row: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+  },
+  rowLabel: {
+    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+    fontSize: 9,
+    letterSpacing: '0.1em',
+    textTransform: 'uppercase',
+    color: '#7d7565',
+    width: 46,
+    flexShrink: 0,
+  },
+  btnGroup: {
+    display: 'flex',
+    gap: 4,
+  },
+  btn: {
+    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+    fontSize: 10,
+    letterSpacing: '0.06em',
+    textTransform: 'uppercase',
+    border: '1px solid #3a3327',
+    borderRadius: 4,
+    padding: '3px 8px',
+    cursor: 'pointer',
+    transition: 'background 0.12s, color 0.12s',
+    lineHeight: 1.4,
+  },
+};
+
+// ── InboxPopover ──────────────────────────────────────────────────────────────
 // PBS 2026-05-09 (repair-list #6): control-center inbox popover. Shows
 // the operator who replied in time, who is silent, spam volume, and the
 // top inbound senders of the last 24h with per-sender drill-down counts
