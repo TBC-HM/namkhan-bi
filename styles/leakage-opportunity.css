@@ -1,0 +1,103 @@
+/* -------------------------------------------------------
+   LeakageBox + OpportunityBox shared styles
+   Ticket #590 — relative timestamps & case links
+-------------------------------------------------------- */
+
+/* --- Leakage --- */
+.leakage-box,
+.opportunity-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 0.5rem);
+}
+
+.leakage-box__header,
+.opportunity-box__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2, 0.5rem);
+}
+
+.leakage-box__title,
+.opportunity-box__title {
+  font-size: var(--t-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink, #1a1a1a);
+}
+
+.leakage-box__kpi,
+.opportunity-box__kpi {
+  font-family: 'Fraunces', serif;
+  font-style: italic;
+  font-size: var(--t-base);
+  color: var(--brass, #b5813b);
+}
+
+.leakage-box__list,
+.opportunity-box__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1, 0.25rem);
+}
+
+/* Each row — default (no link) */
+.leakage-box__row,
+.opportunity-box__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2, 0.5rem);
+  padding: var(--space-1, 0.25rem) 0;
+  border-bottom: 1px solid var(--rule, #e8e3d9);
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Linked rows get hover affordance */
+.leakage-box__row--link,
+.opportunity-box__row--link {
+  cursor: pointer;
+  border-radius: 4px;
+  padding-inline: var(--space-1, 0.25rem);
+  transition: background 0.15s ease;
+}
+
+.leakage-box__row--link:hover,
+.opportunity-box__row--link:hover {
+  background: var(--surface-hover, rgba(181, 129, 59, 0.06));
+  text-decoration: none;
+}
+
+.leakage-box__msg,
+.opportunity-box__msg {
+  font-size: var(--t-sm);
+  color: var(--ink, #1a1a1a);
+  flex: 1;
+}
+
+.leakage-box__meta,
+.opportunity-box__meta {
+  font-size: var(--t-xs, 0.75rem);
+  color: var(--ink-muted, #6b6560);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.leakage-box__cta,
+.opportunity-box__cta {
+  color: var(--brass, #b5813b);
+  font-weight: 500;
+}
+
+.leakage-box__empty,
+.opportunity-box__empty {
+  font-size: var(--t-sm);
+  color: var(--ink-muted, #6b6560);
+  font-style: italic;
+}
