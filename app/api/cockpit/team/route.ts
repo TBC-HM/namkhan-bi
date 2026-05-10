@@ -215,7 +215,10 @@ function deriveState(rs: { runs: number; last_run_at: string | null }): "idle" |
   if (rs.runs === 0) return "idle";
   if (!rs.last_run_at) return "idle";
   const ageMin = (Date.now() - new Date(rs.last_run_at).getTime()) / 60000;
-  if (ageMin < 10) return "active";
-  if (ageMin < 60 * 24) return "idle";
-  return "attention";
+  // Active: ran within the last 30 minutes.
+  if (ageMin < 30) return "active";
+  // Attention: ran within the last 24 hours but not recently.
+  if (ageMin < 60 * 24) return "attention";
+  // Idle: no run in the last 24 hours.
+  return "idle";
 }
