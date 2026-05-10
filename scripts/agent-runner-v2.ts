@@ -37,8 +37,12 @@ const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY!;
 const TICKET_ID = process.env.TICKET_ID;
 const MAX_BATCH = Number(process.env.AGENT_RUNNER_BATCH ?? '5');
-const MAX_TURNS = Number(process.env.AGENT_RUNNER_MAX_TURNS ?? '12');
-const FORCE_ACT_AFTER = 4; // PBS 2026-05-10: after N turns of pure read/grep without an edit, inject a system warning forcing edit-or-abort decision
+// PBS 2026-05-10 v7: HARDCODED 10. Env override AGENT_RUNNER_MAX_TURNS was
+// set to 25 somewhere in repo settings, bypassing every v3/v4/v5 guardrail.
+// 10 is enough for: explore (3) → edit (1) → run_tsc (1) → finalize (1) +
+// generous slack (4). If it can't ship in 10, abort and surface to PBS.
+const MAX_TURNS = Math.min(10, Number(process.env.AGENT_RUNNER_MAX_TURNS ?? '10'));
+const FORCE_ACT_AFTER = 4;
 const MODEL = process.env.AGENT_RUNNER_MODEL ?? 'claude-sonnet-4-6';
 
 if (!SUPABASE_URL || !SERVICE_ROLE) {
