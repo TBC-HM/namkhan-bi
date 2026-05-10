@@ -263,6 +263,14 @@ async function processOne(t: Ticket): Promise<void> {
   console.log(`\n=== ticket #${t.id} ===`);
   const repoRoot = process.cwd();
 
+  // PBS 2026-05-10: extract the triage role so audit log entries show under
+  // frontend/backend/lead instead of an opaque agent_runner bucket.
+  let triageRole: string = 'agent_runner';
+  try {
+    const triageObj = JSON.parse(t.notes ?? '{}');
+    triageRole = (triageObj.recommended_agent || triageObj.recommended_role || 'agent_runner').toLowerCase();
+  } catch { /* keep default */ }
+
   // Build spec text from whatever the ticket carries.
   const meta = (t.metadata ?? {}) as Record<string, unknown>;
   const spec = [
@@ -277,16 +285,16 @@ async function processOne(t: Ticket): Promise<void> {
     t.notes ? `## Notes\n${t.notes}` : '',
   ].join('\n');
 
-  await audit(t.id, 'agent_run_start', { model: MODEL });
+  await audit(t.id, 'agent_run_start', { model: MODEL, role: triageRole }, triageRole);
 
   const out = await callClaude(spec);
   if (!out) {
-    await audit(t.id, 'agent_run_failed', { reason: 'anthropic call failed' });
+    await audit(t.id, 'agent_run_failed', { reason: 'anthropic call failed' }, triageRole);
     return;
   }
   if (!out.edits || out.edits.length === 0) {
     console.log(`note: ${out.notes ?? 'no edits proposed'}`);
-    await audit(t.id, 'agent_run_no_edits', { notes: out.notes ?? null });
+    await audit(t.id, 'agent_run_no_edits', { notes: out.notes ?? null }, triageRole);
     return;
   }
 
@@ -305,7 +313,7 @@ async function processOne(t: Ticket): Promise<void> {
   }
   if (applied === 0) {
     console.log('no edits applied — aborting commit');
-    await audit(t.id, 'agent_run_no_apply', { proposed: out.edits.length });
+    await audit(t.id, 'agent_run_no_apply', { proposed: out.edits.length }, triageRole);
     gitSh(`git checkout - || true`);
     return;
   }
@@ -355,7 +363,7 @@ async function processOne(t: Ticket): Promise<void> {
 
   if (!tscOk) {
     console.error(`ticket #${t.id} aborted by tsc gate after retry. Final errors:\n${tscErrors}`);
-    await audit(t.id, 'agent_run_tsc_failed', { applied, tsc_output: tscErrors.slice(0, 4000), retried: true });
+    await audit(t.id, 'agent_run_tsc_failed', { applied, tsc_output: tscErrors.slice(0, 4000), retried: true }, triageRole);
     try { gitSh('git checkout main'); gitSh(`git branch -D ${branch}`); } catch { /* nm */ }
     return;
   }
@@ -415,15 +423,18 @@ async function processOne(t: Ticket): Promise<void> {
     })
     .eq('id', t.id);
 
-  await audit(t.id, 'agent_run_pr_opened', { branch, applied, pr_url: prevUrl });
+  await audit(t.id, 'agent_run_pr_opened', { branch, applied, pr_url: prevUrl }, triageRole);
   console.log(`✓ ticket #${t.id} branched + PR queued (${applied} edits)`);
 }
 
-async function audit(ticketId: number, action: string, notes: Record<string, unknown>) {
+async function audit(ticketId: number, action: string, notes: Record<string, unknown>, role?: string) {
+  // PBS 2026-05-10: log with the role's name (frontend/backend/lead) so the
+  // team page shows Carla under the right specialist instead of all under
+  // an opaque 'agent_runner' bucket.
   await supa.from('cockpit_audit_log').insert({
-    agent: 'agent_runner',
+    agent: role ?? 'agent_runner',
     action,
-    success: true,
+    success: action !== 'agent_run_failed' && action !== 'agent_run_tsc_failed',
     ticket_id: ticketId,
     notes: JSON.stringify(notes),
   });
