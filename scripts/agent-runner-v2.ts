@@ -38,6 +38,7 @@ const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY!;
 const TICKET_ID = process.env.TICKET_ID;
 const MAX_BATCH = Number(process.env.AGENT_RUNNER_BATCH ?? '5');
 const MAX_TURNS = Number(process.env.AGENT_RUNNER_MAX_TURNS ?? '12');
+const FORCE_ACT_AFTER = 4; // PBS 2026-05-10: after N turns of pure read/grep without an edit, inject a system warning forcing edit-or-abort decision
 const MODEL = process.env.AGENT_RUNNER_MODEL ?? 'claude-sonnet-4-6';
 
 if (!SUPABASE_URL || !SERVICE_ROLE) {
@@ -316,6 +317,8 @@ async function carlaSession(ticket: Ticket): Promise<{ pr_url: string | null; ab
   let prUrl: string | null = null;
   let aborted = false;
   let abortReason: string | null = null;
+  let turnsSinceEdit = 0;
+  let everEdited = false;
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -358,6 +361,12 @@ async function carlaSession(ticket: Ticket): Promise<{ pr_url: string | null; ab
       console.log(`  tool=${tu.name} result=${result.slice(0, 120).replace(/\n/g, ' | ')}`);
       results.push({ type: 'tool_result', tool_use_id: tu.id ?? '', content: result.slice(0, 8000) });
       // Detect terminal tools
+      if (tu.name === 'edit_file' || tu.name === 'write_file') {
+        if (typeof result === 'string' && result.startsWith('ok')) {
+          everEdited = true;
+          turnsSinceEdit = 0;
+        }
+      }
       if (tu.name === 'finalize') {
         try {
           const parsed = JSON.parse(result);
@@ -372,7 +381,13 @@ async function carlaSession(ticket: Ticket): Promise<{ pr_url: string | null; ab
         } catch { /* nm */ }
       }
     }
-    messages.push({ role: 'user', content: results });
+    // PBS 2026-05-10 emergency: append force-act nudge to tool_results when we hit FORCE_ACT_AFTER turns without edit.
+    // Type-cast to allow mixed tool_result + text blocks in same user content array.
+    let userContent: unknown = results;
+    if (!everEdited && turn === FORCE_ACT_AFTER) {
+      userContent = [...results, { type: 'text', text: `[ENFORCEMENT] You have used ${turn + 1} turns without a single edit_file or write_file call. On your NEXT turn you MUST do exactly one of: (1) call edit_file or write_file with a concrete change, or (2) call abort with reason="spec_too_vague". Do NOT call grep or read_file again. No more investigation.` }];
+    }
+    messages.push({ role: 'user', content: userContent });
 
     if (prUrl) break;
     if (aborted) break;
