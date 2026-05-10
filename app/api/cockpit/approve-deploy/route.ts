@@ -66,10 +66,26 @@ async function resolveDeployment(input: {
     return d as VercelDeploymentLite;
   }
   if (input.deployment_url) {
-    // Strip protocol + path so we can look up by URL.
+    // PBS 2026-05-10: previous /v13/deployments/<host> lookup returned 404
+    // when the URL has the team-scoped suffix. Use /v6/deployments?meta-* +
+    // url filter instead — that endpoint accepts the deployment hostname
+    // directly. Fallback to alias lookup if the direct match fails.
     const host = input.deployment_url.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-    const d = await vercelGet(`/v13/deployments/${encodeURIComponent(host)}`);
-    return d as VercelDeploymentLite;
+    // Try /v6/deployments listing filtered by url
+    const list = await vercelGet(`/v6/deployments?app=namkhan-bi&limit=20`) as {
+      deployments?: Array<{ uid: string; url: string; state: string; target?: string }>;
+    };
+    const match = (list.deployments ?? []).find((d) => d.url === host);
+    if (match) {
+      return { uid: match.uid, url: match.url, state: match.state, target: match.target };
+    }
+    // Fallback: try /v13/deployments/<host> directly (rarely works for previews)
+    try {
+      const d = await vercelGet(`/v13/deployments/${encodeURIComponent(host)}`);
+      return d as VercelDeploymentLite;
+    } catch (e) {
+      throw new Error(`could not resolve deployment for url=${host}: ${(e as Error).message}`);
+    }
   }
   throw new Error('deployment_id or deployment_url required');
 }
