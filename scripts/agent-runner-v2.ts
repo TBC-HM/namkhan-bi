@@ -319,6 +319,8 @@ async function carlaSession(ticket: Ticket): Promise<{ pr_url: string | null; ab
   let abortReason: string | null = null;
   let turnsSinceEdit = 0;
   let everEdited = false;
+  // PBS 2026-05-10 emergency v3: count tool calls by name across ALL turns (not just current turn)
+  const toolCallsByName: Record<string, number> = { grep: 0, read_file: 0, edit_file: 0, write_file: 0, run_tsc: 0, finalize: 0, abort: 0 };
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -361,6 +363,10 @@ async function carlaSession(ticket: Ticket): Promise<{ pr_url: string | null; ab
       console.log(`  tool=${tu.name} result=${result.slice(0, 120).replace(/\n/g, ' | ')}`);
       results.push({ type: 'tool_result', tool_use_id: tu.id ?? '', content: result.slice(0, 8000) });
       // Detect terminal tools
+      // PBS 2026-05-10 emergency v3: count every tool call by name
+      if (tu.name && tu.name in toolCallsByName) {
+        toolCallsByName[tu.name] = (toolCallsByName[tu.name] ?? 0) + 1;
+      }
       if (tu.name === 'edit_file' || tu.name === 'write_file') {
         if (typeof result === 'string' && result.startsWith('ok')) {
           everEdited = true;
@@ -381,18 +387,18 @@ async function carlaSession(ticket: Ticket): Promise<{ pr_url: string | null; ab
         } catch { /* nm */ }
       }
     }
-    // PBS 2026-05-10 emergency v2: append force-act nudge EVERY turn once we pass FORCE_ACT_AFTER without an edit.
-    // The first version used === which only fired once and the model ignored it. >= keeps escalating until edit or abort.
+    // PBS 2026-05-10 emergency v3: count TOOL CALLS not turns. Model batches multiple tools per turn,
+    // so turn-based counting under-counts work done. Per-tool-call cap is the only reliable signal.
     let userContent: unknown = results;
-    if (!everEdited && turn >= FORCE_ACT_AFTER) {
-      const escalation = turn >= FORCE_ACT_AFTER + 2 ? 'FINAL WARNING — your next response will be cut off if it is not edit_file/write_file/abort.' : '';
-      userContent = [...results, { type: 'text', text: `[ENFORCEMENT TURN ${turn + 1}] You have used ${turn + 1} turns without ANY successful edit_file or write_file call. ${escalation} You MUST now do exactly one of: (1) call edit_file or write_file with a concrete change to a real file you have already read, or (2) call abort with reason="spec_too_vague" or "no_matching_code". DO NOT call grep. DO NOT call read_file. ANY further investigation tool calls are an error.` }];
+    const totalInvestigationCalls = toolCallsByName.grep + toolCallsByName.read_file;
+    if (!everEdited && totalInvestigationCalls >= 6) {
+      userContent = [...results, { type: 'text', text: `[ENFORCEMENT] You have made ${totalInvestigationCalls} grep/read_file calls and ZERO edit_file or write_file calls. STOP investigating. Your NEXT response MUST contain exactly one of: (1) edit_file with a concrete old_string/new_string change, (2) write_file to create a new file, or (3) abort with a reason. DO NOT use grep. DO NOT use read_file. Any further investigation is a critical error.` }];
     }
-    // PBS 2026-05-10 emergency v2: hard cap — if 7 turns have passed without any edit, force-abort the ticket from the runner side.
-    if (!everEdited && turn >= 6) {
-      console.log(`  [FORCE-ABORT] turn=${turn}, no edits made, terminating session`);
+    // PBS 2026-05-10 emergency v3: hard runner-side abort when investigation tool calls exceed cap with zero edits.
+    if (!everEdited && totalInvestigationCalls >= 10) {
+      console.log(`  [FORCE-ABORT] ${totalInvestigationCalls} investigation calls without an edit, terminating session`);
       aborted = true;
-      abortReason = 'runner_force_abort: 7 turns without an edit';
+      abortReason = `runner_force_abort: ${totalInvestigationCalls} grep/read_file calls without any edit_file`;
     }
     messages.push({ role: 'user', content: userContent });
 
