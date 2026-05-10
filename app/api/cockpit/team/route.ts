@@ -82,6 +82,12 @@ export async function GET() {
         "unified_chat_response", "ack_and_route", "promote_processing",
         "promote_done", "triage_fallback_markdown", "project_summarized",
         "meta_propose", "ticket_routed", "skill_invoke", "skill_call",
+        // PBS 2026-05-10: include the agent_runner script's actions so the
+        // team page reflects Carla actually working. Without these the page
+        // looked idle even when the runner was processing tickets.
+        "agent_run_start", "agent_run_pr_opened", "agent_run_no_edits",
+        "agent_run_no_apply", "agent_run_failed", "agent_run_tsc_failed",
+        "handoff_to_runner",
       ])
       .order("created_at", { ascending: false })
       .limit(400),
