@@ -400,6 +400,34 @@ async function carlaSession(ticket: Ticket): Promise<{ pr_url: string | null; ab
       aborted = true;
       abortReason = `runner_force_abort: ${totalInvestigationCalls} grep/read_file calls without any edit_file`;
     }
+
+    // PBS 2026-05-10 emergency v4: after edits exist, push the model toward finalize.
+    // If model has edited but not finalized, count turns since last edit and force action.
+    const editsThisTurn = (results as Array<{ tool_use_id?: string }>).some((_, idx) => {
+      const tu = toolUses[idx];
+      return tu && (tu.name === 'edit_file' || tu.name === 'write_file');
+    });
+    if (everEdited && !editsThisTurn) {
+      turnsSinceEdit++;
+    } else if (editsThisTurn) {
+      turnsSinceEdit = 0;
+    }
+
+    // Nudge: 2 turns after last edit and not finalized — push for run_tsc + finalize
+    if (everEdited && !prUrl && !aborted && turnsSinceEdit === 2) {
+      const ranTsc = toolCallsByName.run_tsc > 0;
+      const nudge = ranTsc
+        ? `[ENFORCEMENT] You have edits and run_tsc has been called. Your NEXT call MUST be finalize() with branch_name, pr_title, pr_body. Do not edit further unless tsc failed.`
+        : `[ENFORCEMENT] You have edits but have not run tsc. Your NEXT call MUST be run_tsc(). After it passes, call finalize() immediately.`;
+      userContent = [...(Array.isArray(userContent) ? userContent : results), { type: 'text', text: nudge }];
+    }
+
+    // Hard abort: 4 turns after last edit and still not finalized — abort with branch ref so PBS can recover
+    if (everEdited && !prUrl && !aborted && turnsSinceEdit >= 4) {
+      console.log(`  [FORCE-ABORT-POST-EDIT] ${turnsSinceEdit} turns since last edit, no finalize, terminating`);
+      aborted = true;
+      abortReason = `runner_force_abort: edited ${toolCallsByName.edit_file + toolCallsByName.write_file} files but did not finalize within 4 turns. Files staged in working tree (not pushed).`;
+    }
     messages.push({ role: 'user', content: userContent });
 
     if (prUrl) break;
