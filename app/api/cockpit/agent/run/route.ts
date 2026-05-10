@@ -626,6 +626,48 @@ async function processTicket(ticketId: number) {
   return { ticketId, role, status: newStatus };
 }
 
+async function maybeDispatchRunner(): Promise<void> {
+  // PBS 2026-05-10: GH Actions schedule cron is unreliable for newly-added
+  // workflows; fire workflow_dispatch from Vercel cron when there are
+  // triaged dev tickets waiting for Carla. No-op if nothing is queued or
+  // GITHUB_TOKEN missing.
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) return;
+  const { count } = await supabase
+    .from("cockpit_tickets")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "triaged")
+    .in("arm", ["dev", "code"])
+    .in("intent", ["build", "fix", "spec"])
+    .is("preview_url", null)
+    .is("processed_at", null);
+  if (!count || count === 0) return;
+  // Don't fire if a runner is already running. Cheap check via runs list.
+  try {
+    const runs = await fetch(
+      "https://api.github.com/repos/TBC-HM/namkhan-bi/actions/workflows/agent-runner.yml/runs?status=in_progress&per_page=1",
+      { headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" } },
+    );
+    if (runs.ok) {
+      const json = await runs.json();
+      if ((json.total_count ?? 0) > 0) return; // already running
+    }
+  } catch { /* keep going */ }
+  // Dispatch
+  await fetch(
+    "https://api.github.com/repos/TBC-HM/namkhan-bi/actions/workflows/agent-runner.yml/dispatches",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ ref: "main" }),
+    },
+  ).catch((e) => console.error("dispatch runner failed:", e));
+}
+
 function checkBearer(req: Request): boolean {
   const expected = process.env.COCKPIT_AGENT_TOKEN;
   if (!expected) return false;
@@ -692,21 +734,34 @@ export async function GET(req: Request) {
 
   if (isVercelCron) {
     noStore();
+    // PBS 2026-05-10: skip tickets already handed off to the GH runner
+    // (metadata.handoff_to_runner=true) so the triage drainer doesn't keep
+    // re-triaging the same tickets in a loop.
     const { data: queued, error } = await supabase
       .from("cockpit_tickets")
-      .select("id")
+      .select("id, metadata")
       .in("status", ["new", "triaged"])
       .is("processed_at", null)
       .order("created_at", { ascending: true })
-      .limit(5);
+      .limit(20);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    if (!queued || queued.length === 0) {
+    const filtered = (queued ?? []).filter((q) => {
+      const m = (q.metadata ?? {}) as Record<string, unknown>;
+      return !m.handoff_to_runner;
+    }).slice(0, 5);
+    if (filtered.length === 0) {
+      // No triage work — but still trigger the GH runner if there are
+      // handed-off tickets waiting. PBS 2026-05-10: GH cron isn't firing
+      // reliably for newly-added schedules; we trigger via Vercel cron.
+      await maybeDispatchRunner();
       return NextResponse.json({ ok: true, processed: 0, source: "vercel_cron" });
     }
     const results = [];
-    for (const row of queued) {
+    for (const row of filtered) {
       results.push(await processTicket(row.id));
     }
+    // After triage, fire the runner if any tickets reached the handoff state.
+    await maybeDispatchRunner();
     return NextResponse.json({ ok: true, processed: results.length, results, source: "vercel_cron" });
   }
 
