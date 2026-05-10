@@ -197,19 +197,35 @@ export default function ChatShell({
       .gte('created_at', threadStart)
       .order('created_at', { ascending: true })
       .limit(40);
-    // Filter to tickets that touch this role (notes may carry recommended_role).
+    // PBS 2026-05-10: Filter was too strict — second/third messages whose
+    // triage returned a different recommended_role (or none) got dropped,
+    // making it look like the agent "stopped answering" after one turn.
+    // Now: catch-all lead/it_manager surfaces everything; persona HoDs
+    // ALWAYS see ALL tickets in the thread window (matched OR fallback).
     const all = (data as Ticket[]) ?? [];
-    const filtered = all.filter((t) => {
-      if (!mentionNickname && role === 'it_manager') return true; // Kit catches everything
+    const isCatchAll = role === 'lead' || role === 'it_manager';
+    const matched = all.filter((t) => {
       try {
         const n = t.notes ? JSON.parse(t.notes) : {};
-        const r = (n?.recommended_role || n?.recommended_agent || n?.triage?.recommended_role || n?.triage?.recommended_agent || '').toString();
+        const r = (
+          n?.recommended_role ||
+          n?.recommended_agent ||
+          n?.triage?.recommended_role ||
+          n?.triage?.recommended_agent ||
+          ''
+        ).toString();
         return r === role || r === mentionNickname;
       } catch {
         return false;
       }
     });
-    const real = filtered.length > 0 ? filtered : all;
+    // Catch-all roles always get the full thread.
+    // Persona HoDs get matched tickets ALWAYS, plus all unrouted tickets in
+    // the same thread window so a follow-up question always shows the reply.
+    const real = isCatchAll
+      ? all
+      : (matched.length === 0 ? all : Array.from(new Map([...matched, ...all].map((t) => [t.id, t])).values())
+          .sort((a, b) => (a.created_at < b.created_at ? -1 : 1)));
     // PBS 2026-05-09: keep optimistic (id<0) tickets visible only until a
     // real ticket whose parsed_summary starts with the same text shows up.
     // Otherwise we'd render the user's question twice in the thread.
