@@ -269,35 +269,71 @@ async function runSweep(): Promise<SweepResult> {
         }
       }
     } else if (FAILED_TICKET_STATUSES.has(tStatus)) {
-      // PBS 2026-05-09: Kit triage failed — flip the bug BACK to 'new'
-      // (red dot) so the green-processing isn't fake. Clear acked_at +
-      // started_at so it looks fresh; record why in fix_label so the row
-      // surfaces the failure mode at a glance.
-      const reasonText = `triage failed (ticket #${ticket.id})`;
-      const { error: upErr } = await supabase
-        .from("cockpit_bugs")
-        .update({
-          status: "new",
-          acked_at: null,
-          started_at: null,
-          done_at: null,
-          fix_link: null,
-          fix_label: reasonText,
-          updated_at: nowIso,
-        })
-        .eq("id", bug.id)
-        .in("status", ["acked", "processing"]);
-      if (!upErr) {
-        promoted.push({ bug_id: bug.id, ticket_id: ticket.id as number, from: bug.status, to: "new" });
-        await supabase.from("cockpit_audit_log").insert({
-          ticket_id: ticket.id as number,
-          agent: "bugs_sweep",
-          action: "demote_failed",
-          target: `bug:${bug.id}`,
-          success: true,
-          metadata: { bug_id: bug.id, ticket_status: tStatus },
-          reasoning: `ticket #${ticket.id} status=${tStatus}; bug #${bug.id} flipped back to new (red dot) — fake-green guard`,
-        });
+      // PBS 2026-05-10 v5: cap the retry loop at 3 attempts.
+      // Previously: failure → bug back to 'new' → sweep creates duplicate ticket
+      // → if that also fails → another duplicate → infinite loop.
+      // Now: count linked failed tickets via metadata.cockpit_bug_id. If >=3,
+      // mark bug 'wont_fix' so sweep stops re-spawning. PBS can manually
+      // re-open by setting bug.status='new' if they want another try.
+      const { count: failedCount } = await supabase
+        .from("cockpit_tickets")
+        .select("id", { count: "exact", head: true })
+        .eq("metadata->>cockpit_bug_id", String(bug.id))
+        .in("status", Array.from(FAILED_TICKET_STATUSES));
+
+      const totalFailures = failedCount ?? 1;
+      const reasonText = `triage failed (ticket #${ticket.id}) — attempt ${totalFailures}/3`;
+
+      if (totalFailures >= 3) {
+        // Stop the loop. Bug stays visible but sweep will not pick it up again.
+        const { error: upErr } = await supabase
+          .from("cockpit_bugs")
+          .update({
+            status: "wont_fix",
+            updated_at: nowIso,
+            fix_label: `auto-paused after ${totalFailures} failed attempts — PBS to review`,
+          })
+          .eq("id", bug.id)
+          .in("status", ["acked", "processing"]);
+        if (!upErr) {
+          promoted.push({ bug_id: bug.id, ticket_id: ticket.id as number, from: bug.status, to: "wont_fix" });
+          await supabase.from("cockpit_audit_log").insert({
+            ticket_id: ticket.id as number,
+            agent: "bugs_sweep",
+            action: "auto_pause_failed_loop",
+            target: `bug:${bug.id}`,
+            success: true,
+            metadata: { bug_id: bug.id, ticket_status: tStatus, failure_count: totalFailures },
+            reasoning: `bug #${bug.id} hit ${totalFailures} failed attempts; auto-paused to break runner loop. PBS can flip bug.status='new' to retry.`,
+          });
+        }
+      } else {
+        // Normal failure flip: bug back to 'new' so the loop can try again.
+        const { error: upErr } = await supabase
+          .from("cockpit_bugs")
+          .update({
+            status: "new",
+            acked_at: null,
+            started_at: null,
+            done_at: null,
+            fix_link: null,
+            fix_label: reasonText,
+            updated_at: nowIso,
+          })
+          .eq("id", bug.id)
+          .in("status", ["acked", "processing"]);
+        if (!upErr) {
+          promoted.push({ bug_id: bug.id, ticket_id: ticket.id as number, from: bug.status, to: "new" });
+          await supabase.from("cockpit_audit_log").insert({
+            ticket_id: ticket.id as number,
+            agent: "bugs_sweep",
+            action: "demote_failed",
+            target: `bug:${bug.id}`,
+            success: true,
+            metadata: { bug_id: bug.id, ticket_status: tStatus, failure_count: totalFailures },
+            reasoning: `ticket #${ticket.id} status=${tStatus}; bug #${bug.id} flipped back to new (attempt ${totalFailures}/3) — fake-green guard`,
+          });
+        }
       }
     }
   }
