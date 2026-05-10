@@ -37,8 +37,10 @@ const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY!;
 const TICKET_ID = process.env.TICKET_ID;
 const MAX_BATCH = Number(process.env.AGENT_RUNNER_BATCH ?? '5');
-const MAX_TURNS = Number(process.env.AGENT_RUNNER_MAX_TURNS ?? '12');
-const FORCE_ACT_AFTER = 4; // PBS 2026-05-10: after N turns of pure read/grep without an edit, inject a system warning forcing edit-or-abort decision
+// PBS 2026-05-10 v7: HARDCODED 10 cap. Env override AGENT_RUNNER_MAX_TURNS=25
+// somewhere in repo settings was bypassing all enforcement. Now math.min'd.
+const MAX_TURNS = Math.min(10, Number(process.env.AGENT_RUNNER_MAX_TURNS ?? '10'));
+const FORCE_ACT_AFTER = 4;
 const MODEL = process.env.AGENT_RUNNER_MODEL ?? 'claude-sonnet-4-6';
 
 if (!SUPABASE_URL || !SERVICE_ROLE) {
@@ -245,7 +247,12 @@ function toolRunTsc(): string {
 interface FinalizeArgs { branch_name: string; pr_title: string; pr_body: string; }
 
 async function toolFinalize(args: FinalizeArgs, ticketId: number): Promise<{ ok: boolean; pr_url: string | null; err?: string }> {
-  const branch = args.branch_name.replace(/[^a-zA-Z0-9/_-]/g, '-').slice(0, 80);
+  // PBS 2026-05-10 v7: append timestamp suffix so reruns don't collide with
+  // existing remote branches from failed previous runs (the cause of the
+  // "non-fast-forward rejected" error on ticket #710).
+  const sanitized = args.branch_name.replace(/[^a-zA-Z0-9/_-]/g, '-').slice(0, 60);
+  const ts = Date.now().toString(36).slice(-6);
+  const branch = `${sanitized}-${ts}`;
   try {
     try { gitSh(`git checkout -b ${branch}`); }
     catch { gitSh(`git checkout -B ${branch}`); }
@@ -412,7 +419,17 @@ async function carlaSession(ticket: Ticket): Promise<{ pr_url: string | null; ab
         try {
           const parsed = JSON.parse(result);
           if (parsed.ok && parsed.pr_url) prUrl = parsed.pr_url as string;
-          if (!parsed.ok) console.error(`finalize failed: ${parsed.err}`);
+          if (!parsed.ok) {
+            console.error(`finalize failed: ${parsed.err}`);
+            // PBS 2026-05-10 v7: prevent infinite retry-finalize loop. After 2
+            // failed finalize calls in a single session, give up and abort —
+            // the model can't recover from infrastructure errors (push rejected,
+            // gh auth, etc.) by retrying the same command.
+            if (toolCallsByName.finalize >= 2) {
+              aborted = true;
+              abortReason = `runner_finalize_unrecoverable: ${parsed.err ?? 'unknown'} (failed ${toolCallsByName.finalize}x)`;
+            }
+          }
         } catch { /* nm */ }
       }
       if (tu.name === 'abort') {
