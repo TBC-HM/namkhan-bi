@@ -1,0 +1,59 @@
+.bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 0 14px;
+}
+
+.selectWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--t-sm);
+}
+
+.selectLabel {
+  color: var(--ink-muted, #7a6a55);
+  font-size: var(--t-sm);
+  white-space: nowrap;
+}
+
+.select {
+  padding: 5px 10px;
+  border: 1px solid var(--border, #d4c9b0);
+  border-radius: 6px;
+  background: var(--surface, #fff);
+  color: var(--ink, #2b2318);
+  font-size: var(--t-sm);
+  cursor: pointer;
+}
+
+.select:focus {
+  outline: 2px solid var(--brass, #b8952a);
+  outline-offset: 1px;
+}
+
+.divider {
+  width: 1px;
+  height: 24px;
+  background: var(--border, #d4c9b0);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+.clearAll {
+  margin-left: auto;
+  padding: 5px 10px;
+  border: 1px solid var(--border, #d4c9b0);
+  border-radius: 6px;
+  background: none;
+  color: var(--brass, #b8952a);
+  font-size: var(--t-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.clearAll:hover {
+  background: var(--surface-alt, #f7f3ec);
+}
