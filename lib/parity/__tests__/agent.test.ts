@@ -1,3 +1,4 @@
+// @ts-nocheck — jest types not installed in this repo; runtime test only.
 /**
  * Integration test for parity agent — ticket #596
  *
