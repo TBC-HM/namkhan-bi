@@ -310,21 +310,52 @@ async function processOne(t: Ticket): Promise<void> {
     return;
   }
 
-  // PBS 2026-05-10: gate pre-push on tsc. 60% of Carla's first cycle of PRs
-  // had broken Vercel builds — TS errors. Run tsc here; if it fails, abort
-  // the branch + reset, audit the failure with the tsc output, return.
-  // Cheaper to abandon a broken patch here than to ship a failing preview
-  // that PBS has to close manually.
+  // PBS 2026-05-10: gate pre-push on tsc + retry-once-with-feedback.
+  // First attempt: run tsc. If errors, send them back to Carla as feedback
+  // and ask for a fix. If second attempt also fails, abort.
   console.log(`tsc gate: checking ${applied} edits for ticket #${t.id}…`);
+  let tscOk = false;
+  let tscErrors = '';
   try {
     execSync('npx tsc --noEmit', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 180_000 });
-    console.log('tsc gate: passed');
+    console.log('tsc gate: passed first try');
+    tscOk = true;
   } catch (e) {
     const stderr = (e as { stdout?: Buffer; stderr?: Buffer }).stdout?.toString() ?? '';
-    const head = stderr.split('\n').slice(0, 30).join('\n');
-    console.error(`ticket #${t.id} aborted by tsc gate. First errors:\n${head}`);
-    await audit(t.id, 'agent_run_tsc_failed', { applied, tsc_output: head.slice(0, 4000) });
-    // discard branch
+    tscErrors = stderr.split('\n').slice(0, 40).join('\n');
+    console.log('tsc gate: failed first try, asking Carla to fix…');
+  }
+
+  if (!tscOk) {
+    // Second attempt: ask Carla to fix the tsc errors.
+    const fixSpec = [
+      `Original spec:\n${spec}`,
+      ``,
+      `Your previous patch was applied but tsc --noEmit failed. Errors (first 40 lines):`,
+      ``,
+      tscErrors,
+      ``,
+      `Fix the errors. Use the SAME branch_name. Output the same JSON shape — only include the edits needed to clear these errors. If files you wrote import things that don't exist, either add the import correctly or stop using that import. If you used a name that isn't defined, fix that too.`,
+    ].join('\n');
+    const retry = await callClaude(fixSpec);
+    if (retry && retry.edits && retry.edits.length > 0) {
+      console.log(`tsc retry: applying ${retry.edits.length} fix-up edits`);
+      for (const e of retry.edits) applyEdit(e, repoRoot);
+      try {
+        execSync('npx tsc --noEmit', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 180_000 });
+        console.log('tsc gate: passed after retry');
+        tscOk = true;
+      } catch (e) {
+        const stderr = (e as { stdout?: Buffer }).stdout?.toString() ?? '';
+        tscErrors = stderr.split('\n').slice(0, 40).join('\n');
+        console.error('tsc gate: still failing after retry');
+      }
+    }
+  }
+
+  if (!tscOk) {
+    console.error(`ticket #${t.id} aborted by tsc gate after retry. Final errors:\n${tscErrors}`);
+    await audit(t.id, 'agent_run_tsc_failed', { applied, tsc_output: tscErrors.slice(0, 4000), retried: true });
     try { gitSh('git checkout main'); gitSh(`git branch -D ${branch}`); } catch { /* nm */ }
     return;
   }
