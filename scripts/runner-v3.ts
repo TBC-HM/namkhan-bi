@@ -164,32 +164,31 @@ Stack: Next.js 14 App Router + Supabase + Vercel. Repo: TBC-HM/namkhan-bi.
 
 You will be given:
 - The ticket spec
-- A short view of the repo file tree (top-level dirs)
+- A list of real file paths in the repo
 
-You MUST output a valid unified diff that can be applied with \`git apply\`.
-Output ONLY the diff, no commentary, no markdown fences.
+Your job: output the FULL NEW CONTENT of one or more files.
 
 Rules:
-- Surgical patches only. Minimal scope. One ticket = one focused change.
-- **PATHS**: Use ONLY file paths that appear in the file tree provided below. NEVER invent paths. If you cannot find a relevant existing file, output NO_DIFF.
+- Surgical patches only. Touch as few files as possible (usually 1-3).
+- **PATHS**: Use ONLY file paths that appear in the file tree provided below. NEVER invent paths. If you cannot find a relevant existing file, output: NO_DIFF
 - Match existing code style. Tailwind for styling. TypeScript strict.
 - Never touch: .env*, package.json, .github/workflows/*, supabase/migrations/*.
 - Brand: '$' for USD, '₭' for LAK, em-dash '—' for empty. Italic Fraunces for KPI values.
 - NEVER push back. If the spec is thin, pick reasonable defaults and ship something.
-- If you cannot produce a useful diff against existing files, output the single line: NO_DIFF
 
-OUTPUT FORMAT — ONLY THE DIFF:
-\`\`\`
-diff --git a/path/to/file.tsx b/path/to/file.tsx
---- a/path/to/file.tsx
-+++ b/path/to/file.tsx
-@@ -10,3 +10,6 @@
- existing line
-+new line
-+another new line
- existing line
-\`\`\`
-(but without the markdown fences — just raw diff)`;
+OUTPUT FORMAT — strict. For each file you want to change, emit:
+
+<<<FILE path=path/to/file.tsx>>>
+(complete new file content here, exactly as you want it written to disk)
+<<<END>>>
+
+You can emit multiple <<<FILE>>>...<<<END>>> blocks for multiple files.
+For a NEW file, just use the same format with a path that doesn't exist yet.
+For DELETING a file, emit: <<<DELETE path=path/to/file.tsx>>>
+
+If you cannot do useful work, output the single literal line: NO_DIFF
+
+Do NOT output explanations, markdown fences, or anything outside the <<<FILE>>> blocks.`;
 
 function repoSnapshot(): string {
   try {
@@ -217,7 +216,7 @@ async function callClaude(userPrompt: string): Promise<string> {
     },
     body: JSON.stringify({
       model: CLAUDE_MODEL,
-      max_tokens: 4096,
+      max_tokens: 16384,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userPrompt }],
     }),
@@ -264,35 +263,86 @@ async function processTicket(t: Ticket): Promise<RunResult> {
       return { ticket_id: t.id, outcome: 'no_change', duration_ms: Date.now() - t0 };
     }
 
-    // Try to extract diff if wrapped in fences
-    let diff = text.trim();
-    const fenceMatch = diff.match(/```(?:diff)?\n([\s\S]*?)\n```/);
-    if (fenceMatch) diff = fenceMatch[1];
+    // Parse <<<FILE path=...>>>...<<<END>>> blocks (and <<<DELETE path=...>>>)
+    const fileBlocks: Array<{ op: 'write'; path: string; content: string } | { op: 'delete'; path: string }> = [];
+    const fileRe = /<<<FILE path=([^>]+)>>>\s*\n([\s\S]*?)\n<<<END>>>/g;
+    const delRe = /<<<DELETE path=([^>]+)>>>/g;
+    let m: RegExpExecArray | null;
+    while ((m = fileRe.exec(text)) !== null) {
+      fileBlocks.push({ op: 'write', path: m[1].trim(), content: m[2] });
+    }
+    while ((m = delRe.exec(text)) !== null) {
+      fileBlocks.push({ op: 'delete', path: m[1].trim() });
+    }
 
-    // Apply diff
+    if (fileBlocks.length === 0) {
+      console.error(`no file blocks parsed for #${t.id}`);
+      await audit(t.id, 'agent_run_diff_failed', false, {
+        error: 'no FILE blocks in claude output',
+        text_preview: text.slice(0, 500),
+      });
+      await supa.from('cockpit_tickets').update({
+        status: 'awaits_user',
+        processed_at: new Date().toISOString(),
+        notes: JSON.stringify({ kind: 'no_file_blocks', text_preview: text.slice(0, 500) }),
+      }).eq('id', t.id);
+      return { ticket_id: t.id, outcome: 'error', error: 'no file blocks', duration_ms: Date.now() - t0 };
+    }
+
+    // Validate paths — must not touch forbidden areas
+    const forbidden = (p: string) =>
+      p.startsWith('.env') ||
+      p === 'package.json' ||
+      p === 'package-lock.json' ||
+      p.startsWith('.github/workflows/') ||
+      p.startsWith('supabase/migrations/');
+    const badPath = fileBlocks.find((b) => forbidden(b.path));
+    if (badPath) {
+      await audit(t.id, 'agent_run_diff_failed', false, {
+        error: 'forbidden path: ' + badPath.path,
+      });
+      await supa.from('cockpit_tickets').update({
+        status: 'awaits_user',
+        processed_at: new Date().toISOString(),
+        notes: JSON.stringify({ kind: 'forbidden_path', path: badPath.path }),
+      }).eq('id', t.id);
+      return { ticket_id: t.id, outcome: 'error', error: 'forbidden path', duration_ms: Date.now() - t0 };
+    }
+
+    // Create branch and apply file writes
     const slug = String(t.id) + '-' + Math.random().toString(36).slice(2, 8);
     const branch = `autorun/ticket-${slug}`;
     sh(`git checkout -b ${branch}`, { quiet: true });
 
-    const diffPath = `/tmp/ticket-${t.id}.diff`;
-    writeFileSync(diffPath, diff + '\n');
-    
+    for (const b of fileBlocks) {
+      if (b.op === 'write') {
+        const fullPath = b.path;
+        // Make sure parent dir exists
+        const parentDir = fullPath.includes('/') ? fullPath.split('/').slice(0, -1).join('/') : '.';
+        sh(`mkdir -p "${parentDir}"`, { quiet: true });
+        writeFileSync(fullPath, b.content);
+      } else if (b.op === 'delete') {
+        sh(`rm -f "${b.path}"`, { quiet: true });
+      }
+    }
+    sh('git add -A', { quiet: true });
+
+    // Detect if anything changed
     try {
-      sh(`git apply --check ${diffPath}`, { quiet: true });
-    } catch (e) {
-      console.error(`diff did not apply cleanly for #${t.id}`);
+      sh('git diff --cached --quiet --exit-code', { quiet: true });
+      // exit code 0 = no diff. Claude wrote files but content matched main.
+      console.log(`no actual changes for #${t.id}`);
       sh(`git checkout main && git branch -D ${branch}`, { quiet: true });
-      await audit(t.id, 'agent_run_diff_failed', false, { error: (e as Error).message });
+      await audit(t.id, 'agent_run_no_diff', true, { reason: 'files written but content identical to main' });
       await supa.from('cockpit_tickets').update({
         status: 'awaits_user',
         processed_at: new Date().toISOString(),
-        notes: JSON.stringify({ kind: 'diff_failed', diff_preview: diff.slice(0, 500) }),
+        notes: JSON.stringify({ kind: 'no_change', files: fileBlocks.map((b) => b.path) }),
       }).eq('id', t.id);
-      return { ticket_id: t.id, outcome: 'error', error: 'diff did not apply', duration_ms: Date.now() - t0 };
+      return { ticket_id: t.id, outcome: 'no_change', duration_ms: Date.now() - t0 };
+    } catch {
+      // non-zero exit = there IS a diff. Good.
     }
-    
-    sh(`git apply ${diffPath}`, { quiet: true });
-    sh('git add -A', { quiet: true });
     
     // Commit
     const commitMsg = `runner_v3: ticket #${t.id} — ${(t.email_subject ?? 'auto').slice(0, 60)}`;
