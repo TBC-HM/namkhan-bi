@@ -55,8 +55,12 @@ export async function GET() {
     const since24h = new Date(Date.now() - 86_400_000).toISOString();
     const since7d  = new Date(Date.now() - 7 * 86_400_000).toISOString();
 
-    // Run the four reads in parallel.
-    const [unreadRes, statsRes, msgRes, msg7Res] = await Promise.all([
+    // Run the five reads in parallel.
+    // NOTE: outbound messages are sent by the hotel and do NOT have a
+    // received_at value (it stays NULL). They carry a created_at timestamp
+    // instead, so we count them in a separate query to avoid the NULL filter
+    // silently dropping every outbound row from the 24h window.
+    const [unreadRes, statsRes, msgRes, msg7Res, outboundRes] = await Promise.all([
       // Unread = inquiries.status='new' for this property.
       sb.schema('sales').from('inquiries')
         .select('id', { count: 'exact', head: true })
@@ -64,10 +68,13 @@ export async function GET() {
       // Mailbox aggregate (spam + unanswered roll-ups).
       sb.schema('sales').from('v_mailbox_stats')
         .select('spam,unanswered').eq('property_id', PROPERTY_ID),
-      // Last-24h messages (inbound + outbound) for top-sender ranking.
+      // Last-24h INBOUND messages for top-sender ranking.
+      // Only inbound rows have a non-NULL received_at.
       sb.schema('sales').from('email_messages')
         .select('from_email,from_name,thread_id,received_at,direction')
-        .eq('property_id', PROPERTY_ID).gte('received_at', since24h)
+        .eq('property_id', PROPERTY_ID)
+        .eq('direction', 'inbound')
+        .gte('received_at', since24h)
         .limit(2000),
       // Last-7d inbound counts per sender (drill-down "sends per day").
       sb.schema('sales').from('email_messages')
@@ -75,6 +82,13 @@ export async function GET() {
         .eq('property_id', PROPERTY_ID).eq('direction', 'inbound')
         .gte('received_at', since7d)
         .limit(5000),
+      // Last-24h OUTBOUND messages counted via created_at (received_at is
+      // NULL for rows we sent ourselves).
+      sb.schema('sales').from('email_messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('property_id', PROPERTY_ID)
+        .eq('direction', 'outbound')
+        .gte('created_at', since24h),
     ]);
 
     const stats = (statsRes.data ?? []) as Array<{ spam: number; unanswered: number }>;
@@ -82,15 +96,17 @@ export async function GET() {
     const totalUnanswered = stats.reduce((s, r) => s + (r.unanswered ?? 0), 0);
 
     // 24h sender aggregation.
+    // msgRes now contains only inbound rows (direction filter applied in query).
+    // outboundRes.count holds the outbound total counted via created_at.
     const msgs24 = (msgRes.data ?? []) as Array<{
       from_email: string | null; from_name: string | null;
       thread_id: string | null; received_at: string;
       direction: 'inbound' | 'outbound';
     }>;
-    let inbound24 = 0, outbound24 = 0;
+    let inbound24 = 0;
+    const outbound24 = outboundRes.count ?? 0;
     const senders = new Map<string, SenderSummary & { _threads: Set<string> }>();
     for (const r of msgs24) {
-      if (r.direction === 'outbound') { outbound24 += 1; continue; }
       inbound24 += 1;
       const email = (r.from_email || '(unknown)').toLowerCase();
       let s = senders.get(email);
