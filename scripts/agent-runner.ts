@@ -317,15 +317,26 @@ async function processOne(t: Ticket): Promise<void> {
   try {
     gitSh(`git push -u origin ${branch}`);
     if (process.env.GITHUB_TOKEN) {
-      const titlePath = `/tmp/pr-title-${t.id}-${Date.now()}.txt`;
       const bodyPath = `/tmp/pr-body-${t.id}-${Date.now()}.txt`;
-      writeFileSync(titlePath, out.pr_title, 'utf8');
       writeFileSync(bodyPath, out.pr_body, 'utf8');
-      const prOut = execSync(`gh pr create --title "$(cat "${titlePath}")" --body-file "${bodyPath}" --head ${branch} --base main`, {
-        encoding: 'utf8',
-        env: { ...process.env, GH_TOKEN: process.env.GITHUB_TOKEN },
-      }).trim();
-      prevUrl = prOut.match(/https:\/\/[^\s]+/)?.[0] ?? null;
+      // PBS 2026-05-10: PR title is a single-line ASCII string. Sanitize:
+      // strip newlines + control chars, escape double quotes. Body via file.
+      const safeTitle = String(out.pr_title || `agent ticket #${t.id}`)
+        .replace(/[\r\n\t]+/g, ' ')
+        .replace(/"/g, "'")
+        .slice(0, 200);
+      try {
+        const prOut = execSync(`gh pr create --title "${safeTitle}" --body-file "${bodyPath}" --head ${branch} --base main`, {
+          encoding: 'utf8',
+          env: { ...process.env, GH_TOKEN: process.env.GITHUB_TOKEN },
+        }).trim();
+        prevUrl = prOut.match(/https:\/\/[^\s]+/)?.[0] ?? null;
+        console.log(`gh pr create → ${prevUrl ?? prOut.slice(0, 200)}`);
+      } catch (e) {
+        const stdout = (e as { stdout?: Buffer }).stdout?.toString() ?? '';
+        const stderr = (e as { stderr?: Buffer }).stderr?.toString() ?? '';
+        console.error(`gh pr create failed for ticket #${t.id}: stderr=${stderr.slice(0, 400)} stdout=${stdout.slice(0, 200)}`);
+      }
     }
   } catch (e) {
     console.error('push/pr failed:', (e as Error).message);
