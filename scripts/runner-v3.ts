@@ -171,12 +171,12 @@ Output ONLY the diff, no commentary, no markdown fences.
 
 Rules:
 - Surgical patches only. Minimal scope. One ticket = one focused change.
+- **PATHS**: Use ONLY file paths that appear in the file tree provided below. NEVER invent paths. If you cannot find a relevant existing file, output NO_DIFF.
 - Match existing code style. Tailwind for styling. TypeScript strict.
 - Never touch: .env*, package.json, .github/workflows/*, supabase/migrations/*.
 - Brand: '$' for USD, '₭' for LAK, em-dash '—' for empty. Italic Fraunces for KPI values.
 - NEVER push back. If the spec is thin, pick reasonable defaults and ship something.
-- If you cannot produce a useful diff, output the single line: NO_DIFF
-  (Do this only when the request would require creating new pages/routes from scratch with no signal where.)
+- If you cannot produce a useful diff against existing files, output the single line: NO_DIFF
 
 OUTPUT FORMAT — ONLY THE DIFF:
 \`\`\`
@@ -193,10 +193,15 @@ diff --git a/path/to/file.tsx b/path/to/file.tsx
 
 function repoSnapshot(): string {
   try {
-    const dirs = sh('ls -la', { quiet: true });
-    const appDirs = sh('ls app/ 2>/dev/null || true', { quiet: true });
-    const componentsDirs = sh('ls components/ 2>/dev/null || true', { quiet: true });
-    return `Top-level:\n${dirs}\n\napp/:\n${appDirs}\n\ncomponents/:\n${componentsDirs}`;
+    // Full file tree excluding noise. This is THE critical piece — Claude must see
+    // every file path that exists before generating a diff, or it guesses paths
+    // like "components/layout/Footer.tsx" that don't exist → git apply fails.
+    const tree = sh(
+      `find app components lib scripts -type f \\( -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" -o -name "*.css" -o -name "*.json" \\) 2>/dev/null | grep -v node_modules | sort | head -300`,
+      { quiet: true }
+    );
+    const topLevel = sh('ls -la 2>/dev/null', { quiet: true });
+    return `Full file tree (real paths — use ONLY these, do not invent):\n${tree}\n\nTop level:\n${topLevel}`;
   } catch (e) {
     return 'repo snapshot failed';
   }
