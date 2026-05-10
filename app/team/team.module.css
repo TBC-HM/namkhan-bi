@@ -1,0 +1,22 @@
+/* ── team page layout ───────────────────────────────────────── */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.empty {
+  margin: 0;
+  font-size: var(--t-sm);
+  color: var(--text-muted, #9999b3);
+  text-align: center;
+  padding: 24px 0;
+}
+
+/* ── single-column on very small screens ────────────────────── */
+@media (max-width: 400px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
