@@ -290,11 +290,31 @@ async function processOne(t: Ticket): Promise<void> {
   const out = await callClaude(spec);
   if (!out) {
     await audit(t.id, 'agent_run_failed', { reason: 'anthropic call failed' }, triageRole);
+    // Lock against re-pickup; transient anthropic failures can be re-queued
+    // by clearing processed_at manually if needed.
+    await supa
+      .from('cockpit_tickets')
+      .update({
+        status: 'triage_failed',
+        processed_at: new Date().toISOString(),
+        notes: JSON.stringify({ kind: 'anthropic_call_failed' }),
+      })
+      .eq('id', t.id);
     return;
   }
   if (!out.edits || out.edits.length === 0) {
     console.log(`note: ${out.notes ?? 'no edits proposed'}`);
     await audit(t.id, 'agent_run_no_edits', { notes: out.notes ?? null }, triageRole);
+    // PBS 2026-05-10: lock so this doesn't get re-picked endlessly. Mark
+    // as awaits_user with the reason so PBS can see it in the bug box.
+    await supa
+      .from('cockpit_tickets')
+      .update({
+        status: 'awaits_user',
+        processed_at: new Date().toISOString(),
+        notes: JSON.stringify({ kind: 'agent_no_edits', reason: out.notes ?? 'Carla refused — needs more spec' }),
+      })
+      .eq('id', t.id);
     return;
   }
 
@@ -314,6 +334,15 @@ async function processOne(t: Ticket): Promise<void> {
   if (applied === 0) {
     console.log('no edits applied — aborting commit');
     await audit(t.id, 'agent_run_no_apply', { proposed: out.edits.length }, triageRole);
+    // PBS 2026-05-10: lock against re-pickup
+    await supa
+      .from('cockpit_tickets')
+      .update({
+        status: 'triage_failed',
+        processed_at: new Date().toISOString(),
+        notes: JSON.stringify({ kind: 'agent_no_apply', proposed: out.edits.length }),
+      })
+      .eq('id', t.id);
     gitSh(`git checkout - || true`);
     return;
   }
@@ -365,6 +394,17 @@ async function processOne(t: Ticket): Promise<void> {
     console.error(`ticket #${t.id} aborted by tsc gate after retry. Final errors:\n${tscErrors}`);
     await audit(t.id, 'agent_run_tsc_failed', { applied, tsc_output: tscErrors.slice(0, 4000), retried: true }, triageRole);
     try { gitSh('git checkout main'); gitSh(`git branch -D ${branch}`); } catch { /* nm */ }
+    // PBS 2026-05-10: stamp processed_at so this ticket is not re-picked
+    // forever. Carla failed twice — block until PBS reviews. The bug-sweep
+    // demote_failed branch will surface this back to the bug box.
+    await supa
+      .from('cockpit_tickets')
+      .update({
+        status: 'triage_failed',
+        processed_at: new Date().toISOString(),
+        notes: JSON.stringify({ ...((t.notes as unknown as object) ?? {}), tsc_failed: true, tsc_errors: tscErrors.slice(0, 2000) }),
+      })
+      .eq('id', t.id);
     return;
   }
 
