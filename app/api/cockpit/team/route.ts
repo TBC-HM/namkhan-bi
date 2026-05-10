@@ -77,6 +77,9 @@ export async function GET() {
       // PBS 2026-05-09 architect bug #6: team page didn't show agents
       // working — the action whitelist was too narrow. Widened to include
       // chat / sweep / cron actions that fire most often today.
+      // PBS ticket #660: also filter to last 24 h so the limit:400 cap
+      // doesn't crowd out recent runs with old rows when activity is high.
+      .gte("created_at", new Date(Date.now() - 86400_000).toISOString())
       .in("action", [
         "agent_run", "triage", "approve_and_spec", "meta_apply",
         "unified_chat_response", "ack_and_route", "promote_processing",
@@ -212,10 +215,12 @@ function roleHumanLabel(role: string): string {
 }
 
 function deriveState(rs: { runs: number; last_run_at: string | null }): "idle" | "active" | "attention" {
-  if (rs.runs === 0) return "idle";
-  if (!rs.last_run_at) return "idle";
+  if (rs.runs === 0 || !rs.last_run_at) return "idle";
   const ageMin = (Date.now() - new Date(rs.last_run_at).getTime()) / 60000;
-  if (ageMin < 10) return "active";
-  if (ageMin < 60 * 24) return "idle";
-  return "attention";
+  // Active:    ran within the last 2 hours  → green pulse
+  // Attention: ran within the last 24 hours → amber (recently worked, now quiet)
+  // Idle:      nothing in 24 hours          → grey
+  if (ageMin < 120) return "active";
+  if (ageMin < 60 * 24) return "attention";
+  return "idle";
 }
