@@ -262,17 +262,27 @@ async function toolFinalize(args: FinalizeArgs, ticketId: number): Promise<{ ok:
       try {
         const out = execSync(
           `gh pr create --title "${safeTitle}" --body-file "${bodyPath}" --head ${branch} --base main`,
-          { encoding: 'utf8', env: { ...process.env, GH_TOKEN: process.env.GITHUB_TOKEN } },
+          { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, GH_TOKEN: process.env.GITHUB_TOKEN } },
         ).trim();
         prUrl = out.match(/https:\/\/[^\s]+/)?.[0] ?? null;
+        if (!prUrl) {
+          console.error(`gh pr create produced no URL. raw output: ${out.slice(0, 400)}`);
+          return { ok: false, pr_url: null, err: `gh pr create returned no URL: ${out.slice(0, 400)}` };
+        }
       } catch (e) {
-        const stderr = (e as { stderr?: Buffer }).stderr?.toString() ?? '';
-        return { ok: false, pr_url: null, err: `gh pr create failed: ${stderr.slice(0, 400)}` };
+        const err = e as { stderr?: string | Buffer; stdout?: string | Buffer; message?: string };
+        const stderr = (typeof err.stderr === 'string' ? err.stderr : err.stderr?.toString()) ?? '';
+        const stdout = (typeof err.stdout === 'string' ? err.stdout : err.stdout?.toString()) ?? '';
+        const msg = `gh pr create failed: ${stderr.slice(0, 300)} | stdout: ${stdout.slice(0, 100)}`;
+        console.error(msg);
+        return { ok: false, pr_url: null, err: msg };
       }
     }
     return { ok: true, pr_url: prUrl };
   } catch (e) {
-    return { ok: false, pr_url: null, err: (e as Error).message };
+    const msg = (e as Error).message ?? String(e);
+    console.error(`toolFinalize outer error: ${msg}`);
+    return { ok: false, pr_url: null, err: msg };
   }
 }
 
@@ -370,8 +380,17 @@ async function carlaSession(ticket: Ticket): Promise<{ pr_url: string | null; ab
       if (tu.name === 'finalize') {
         try {
           const parsed = JSON.parse(result);
-          if (parsed.ok && parsed.pr_url) prUrl = parsed.pr_url as string;
-          if (!parsed.ok) console.error(`finalize failed: ${parsed.err}`);
+          if (parsed.ok && parsed.pr_url) {
+            prUrl = parsed.pr_url as string;
+          } else if (!parsed.ok) {
+            // Surface the error loudly and mark as aborted so the runner
+            // records it properly rather than silently falling through to
+            // the "no_finalize" path (the original bug: 14/16 tickets lost).
+            const errMsg = parsed.err ?? 'finalize returned ok=false with no error detail';
+            console.error(`finalize FAILED (ticket #${ticket.id}): ${errMsg}`);
+            aborted = true;
+            abortReason = `finalize_failed: ${errMsg}`;
+          }
         } catch { /* nm */ }
       }
       if (tu.name === 'abort') {
