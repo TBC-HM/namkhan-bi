@@ -1,0 +1,72 @@
+/*
+ * DateRangePicker styles — Ticket #600
+ * Uses existing Namkhan design tokens exclusively.
+ */
+
+.drp {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 0.75rem);
+  padding: var(--space-4, 1rem);
+  min-width: 18rem;
+}
+
+.drp__fieldset {
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+
+.drp__legend {
+  font-size: var(--t-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+  margin-bottom: var(--space-2, 0.5rem);
+}
+
+.drp__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1, 0.25rem);
+}
+
+.drp__btn {
+  /* ghost pill — matches existing HeaderPills chip style */
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--ink-2);
+  font-size: var(--t-sm);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+  white-space: nowrap;
+}
+
+.drp__btn:hover {
+  background: var(--surface-2);
+  border-color: var(--brass);
+  color: var(--ink-1);
+}
+
+.drp__btn:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: 2px;
+}
+
+/* Active / selected pill — accent fill */
+.drp__btn--active {
+  background: var(--brass);
+  border-color: var(--brass);
+  color: var(--on-brass, #fff);
+  font-weight: 600;
+}
+
+.drp__btn--active:hover {
+  background: var(--brass-dark, var(--brass));
+  border-color: var(--brass-dark, var(--brass));
+}
