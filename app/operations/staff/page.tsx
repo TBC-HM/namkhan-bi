@@ -1,240 +1,265 @@
-import { createClient } from '@/lib/supabase/server'
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
-import { Suspense } from 'react'
-import Link from 'next/link'
+// app/operations/staff/page.tsx
+// Re-restored 2026-05-05 — full staff cockpit:
+//   1. Header KPI strip (active · archived · last payroll · monthly LAK)
+//   2. Anomalies & alerts (5 cards)
+//   3. Dept breakdown (last paid month) — DeptBreakdown
+//   4. 4-month payroll trend — PayrollTrend
+//   5. Active staff register — StaffTable (click row → drilldown)
+//   6. Archived staff — ArchivedStaffTable
+//
+// Source views:
+//   public.v_staff_register_extended — register
+//   public.v_staff_anomalies         — DQ
+//   ops.v_payroll_dept_monthly       — dept breakdown
+// FX from gl.fx_rates fallback to env constant.
 
-// Icons
-import { 
-  Calendar, 
-  Users, 
-  Wind, 
-  Thermometer,
-  AlertCircle,
-  User,
-  ChevronRight
-} from 'lucide-react'
+import { supabase } from '@/lib/supabase';
+import { fmtMoney, FX_LAK_PER_USD } from '@/lib/format';
+import { AnomalyCard } from './_components/AnomalyCard';
+import { StaffShell } from './_components/StaffShell';
+import { ArchivedStaffTable, type ArchivedRow } from './_components/ArchivedStaffTable';
+import DeptBreakdown, { type DeptRow } from './_components/DeptBreakdown';
+import PayrollTrend, { type PayrollTrendRow } from './_components/PayrollTrend';
+import UploadPayslipsButton from './_components/UploadPayslipsButton';
+import Page from '@/components/page/Page';
+import { OPERATIONS_SUBPAGES } from '../_subpages';
 
-interface StaffMember {
-  staff_id: string
-  full_name: string
-  position: string | null
-  department: string | null
-  status: string
-  hire_date: string | null
-  profile_photo_url: string | null
+export const revalidate = 60;
+export const dynamic = 'force-dynamic';
+
+type Anomaly = { issue: string; staff_id: string; full_name: string; dept_name: string; };
+
+type Row = {
+  staff_id: string;
+  emp_id: string;
+  full_name: string;
+  position_title: string;
+  dept_code: string;
+  dept_name: string;
+  employment_type: string;
+  monthly_salary: number;
+  hourly_cost_lak: number;
+  hire_date: string | null;
+  last_payroll_period: string | null;
+  last_payroll_total_usd: number | null;
+  payslip_pdf_status: 'current' | 'overdue' | 'never';
+  flag_missing_hire_date: boolean;
+  flag_missing_contract: boolean;
+  flag_contract_expiring: boolean;
+};
+
+const ISSUE_META: Record<string, { label: string; sub: string }> = {
+  missing_hire_date: { label: 'Missing hire date', sub: 'Contract import gap — separate handover.' },
+  missing_contract: { label: 'Missing contract PDF', sub: 'Upload signed contract to docs.hr_docs.' },
+  contract_expiring: { label: 'Contract expiring', sub: 'End date ≤ 60 days. Renew or release.' },
+  no_payslip_pdf_last_closed_month: { label: 'Payslip PDF missing', sub: 'Upload last closed-month payslip.' },
+  no_calculated_payroll_last_closed_month: { label: 'Payroll not run', sub: 'ops.payroll_monthly has no row for last month.' },
+};
+
+async function getDeptBreakdown(): Promise<DeptRow[]> {
+  const { data } = await supabase
+    .schema('ops')
+    .from('v_payroll_dept_monthly')
+    .select('*')
+    .order('period_month', { ascending: false })
+    .limit(60);
+  if (!data || data.length === 0) return [];
+  const latest = (data[0] as any).period_month;
+  return (data as any[]).filter(r => r.period_month === latest) as DeptRow[];
 }
 
-interface HeaderPillsProps {
-  date: string
-  userCount: number
-  airQuality: string
-  temperature: string
-}
-
-function HeaderPills({ date, userCount, airQuality, temperature }: HeaderPillsProps) {
-  return (
-    <div className="flex items-center gap-3 text-sm text-slate-600">
-      <div className="flex items-center gap-1.5">
-        <Calendar className="w-4 h-4" />
-        <span>{date}</span>
-      </div>
-      <div className="w-px h-4 bg-slate-300" />
-      <div className="flex items-center gap-1.5">
-        <Users className="w-4 h-4" />
-        <span>{userCount}</span>
-      </div>
-      <div className="w-px h-4 bg-slate-300" />
-      <div className="flex items-center gap-1.5">
-        <Wind className="w-4 h-4" />
-        <span>{airQuality}</span>
-      </div>
-      <div className="w-px h-4 bg-slate-300" />
-      <div className="flex items-center gap-1.5">
-        <Thermometer className="w-4 h-4" />
-        <span>{temperature}</span>
-      </div>
-    </div>
-  )
-}
-
-function StaffTable({ staff }: { staff: StaffMember[] }) {
-  if (staff.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 text-slate-400">
-        <AlertCircle className="w-12 h-12 mb-3" />
-        <p className="text-sm">No staff members found</p>
-      </div>
-    )
+async function getPayrollTrend(): Promise<{ rows: PayrollTrendRow[]; window: string[] }> {
+  const { data } = await supabase
+    .schema('ops')
+    .from('v_payroll_dept_monthly')
+    .select('period_month, headcount, total_grand_usd, total_net_lak, total_sc_lak, total_allow_lak')
+    .order('period_month', { ascending: false })
+    .limit(200);
+  // Group by period_month, sum across depts
+  const byMonth = new Map<string, PayrollTrendRow>();
+  for (const r of (data ?? []) as any[]) {
+    const k = r.period_month;
+    const cur = byMonth.get(k) ?? { period_month: k, headcount: 0, total_grand_usd: 0, total_net_lak: 0, total_sc_lak: 0, total_allow_lak: 0 };
+    cur.headcount += Number(r.headcount || 0);
+    cur.total_grand_usd += Number(r.total_grand_usd || 0);
+    cur.total_net_lak += Number(r.total_net_lak || 0);
+    cur.total_sc_lak += Number(r.total_sc_lak || 0);
+    cur.total_allow_lak += Number(r.total_allow_lak || 0);
+    byMonth.set(k, cur);
   }
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full">
-        <thead>
-          <tr className="border-b border-slate-200">
-            <th className="text-left py-3 px-4 text-xs font-medium text-slate-500 uppercase tracking-wider">
-              Name
-            </th>
-            <th className="text-left py-3 px-4 text-xs font-medium text-slate-500 uppercase tracking-wider">
-              Position
-            </th>
-            <th className="text-left py-3 px-4 text-xs font-medium text-slate-500 uppercase tracking-wider">
-              Department
-            </th>
-            <th className="text-left py-3 px-4 text-xs font-medium text-slate-500 uppercase tracking-wider">
-              Status
-            </th>
-            <th className="text-left py-3 px-4 text-xs font-medium text-slate-500 uppercase tracking-wider">
-              Hire Date
-            </th>
-            <th className="w-10"></th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {staff.map((member) => (
-            <tr
-              key={member.staff_id}
-              className="hover:bg-slate-50 transition-colors"
-            >
-              <td className="py-3 px-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center overflow-hidden flex-shrink-0">
-                    {member.profile_photo_url ? (
-                      <img
-                        src={member.profile_photo_url}
-                        alt={member.full_name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <User className="w-4 h-4 text-slate-400" />
-                    )}
-                  </div>
-                  <span className="font-medium text-slate-900">
-                    {member.full_name}
-                  </span>
-                </div>
-              </td>
-              <td className="py-3 px-4 text-slate-600">
-                {member.position || '—'}
-              </td>
-              <td className="py-3 px-4 text-slate-600">
-                {member.department || '—'}
-              </td>
-              <td className="py-3 px-4">
-                <span
-                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    member.status === 'active'
-                      ? 'bg-green-100 text-green-800'
-                      : member.status === 'inactive'
-                      ? 'bg-slate-100 text-slate-600'
-                      : 'bg-amber-100 text-amber-800'
-                  }`}
-                >
-                  {member.status}
-                </span>
-              </td>
-              <td className="py-3 px-4 text-slate-600">
-                {member.hire_date
-                  ? new Date(member.hire_date).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric'
-                    })
-                  : '—'}
-              </td>
-              <td className="py-3 px-4">
-                <Link
-                  href={`/operations/staff/${member.staff_id}`}
-                  className="text-slate-400 hover:text-slate-600 transition-colors"
-                >
-                  <ChevronRight className="w-5 h-5" />
-                </Link>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
+  const rows = [...byMonth.values()].sort((a, b) => b.period_month.localeCompare(a.period_month));
+  // Build a 4-month rolling window ending at the latest paid month
+  const latest = rows[0]?.period_month;
+  const win: string[] = [];
+  if (latest) {
+    const [y, m] = latest.split('-').map(Number);
+    for (let i = 3; i >= 0; i--) {
+      const d = new Date(Date.UTC(y, m - 1 - i, 1));
+      win.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-01`);
+    }
+  }
+  return { rows, window: win };
 }
 
-async function StaffContent() {
-  const cookieStore = cookies()
-  const supabase = createClient(cookieStore)
-
-  const { data: staff, error } = await supabase
-    .from('staff')
-    .select('staff_id, full_name, position, department, status, hire_date, profile_photo_url')
-    .order('full_name', { ascending: true })
-
-  if (error) {
-    console.error('Error fetching staff:', error)
-    return (
-      <div className="flex flex-col items-center justify-center py-16 text-red-500">
-        <AlertCircle className="w-12 h-12 mb-3" />
-        <p className="text-sm">Failed to load staff data</p>
-      </div>
-    )
-  }
-
-  return <StaffTable staff={staff || []} />
+async function getArchivedStaff(): Promise<ArchivedRow[]> {
+  const { data } = await supabase
+    .from('v_staff_register_extended')
+    .select('staff_id, emp_id, full_name, position_title, dept_name, hire_date, end_date, monthly_salary, bank_name, bank_account_no, bank_account_name, notes')
+    .eq('is_active', false)
+    .order('end_date', { ascending: false });
+  return (data as unknown as ArchivedRow[]) ?? [];
 }
 
 export default async function StaffPage() {
-  const cookieStore = cookies()
-  const supabase = createClient(cookieStore)
+  const [{ data: rows }, { data: anomalies }, deptRows, trend, archived] = await Promise.all([
+    supabase
+      .from('v_staff_register_extended')
+      .select(
+        'staff_id, emp_id, full_name, position_title, dept_code, dept_name, ' +
+          'employment_type, monthly_salary, hourly_cost_lak, hire_date, ' +
+          'last_payroll_period, last_payroll_total_usd, payslip_pdf_status, ' +
+          'flag_missing_hire_date, flag_missing_contract, flag_contract_expiring'
+      )
+      .eq('is_active', true)
+      .order('emp_id'),
+    supabase.from('v_staff_anomalies').select('issue, staff_id, full_name, dept_name'),
+    getDeptBreakdown(),
+    getPayrollTrend(),
+    getArchivedStaff(),
+  ]);
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const safeRows: Row[] = (rows as unknown as Row[]) ?? [];
+  const safeAnoms: Anomaly[] = (anomalies as unknown as Anomaly[]) ?? [];
 
-  if (!user) {
-    redirect('/login')
-  }
+  const grouped: Record<string, Anomaly[]> = {};
+  for (const a of safeAnoms) (grouped[a.issue] ||= []).push(a);
 
-  // Mock data for header pills
-  const today = new Date().toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric'
-  })
-
-  const { count } = await supabase
-    .from('staff')
-    .select('*', { count: 'exact', head: true })
-    .eq('status', 'active')
+  const totalFlags = safeAnoms.length;
+  const totalActive = safeRows.length;
+  const totalMonthlyLAK = safeRows.reduce((s, r) => s + Number(r.monthly_salary || 0), 0);
+  const lastPaidUsd = trend.rows[0]?.total_grand_usd ?? 0;
+  const lastPaidPeriod = trend.rows[0]?.period_month ?? '—';
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Header */}
-      <div className="border-b border-slate-200 px-8 py-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-slate-900">Staff</h1>
-            <p className="text-sm text-slate-500 mt-1">
-              Team roster and employee directory
+    <Page
+      eyebrow={`Operations · Staff · ${totalActive} active · last paid ${lastPaidPeriod}`}
+      title={<>Staff <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>register</em></>}
+      subPages={OPERATIONS_SUBPAGES}
+      topRight={<UploadPayslipsButton />}
+      kpiTiles={[]}
+      showHeaderPills={true}
+    >
+    <div className="ops-staff-dark space-y-10 px-0 py-6">
+      <header className="flex items-end justify-between border-b border-stone-300/30 pb-4">
+        <div>
+          <p className="mt-1 text-xs uppercase tracking-[0.18em] text-stone-500">
+            {totalActive} active · {archived.length} archived · {fmtMoney(totalMonthlyLAK, 'LAK')} monthly base · last paid {lastPaidPeriod} {lastPaidUsd ? `· $${Math.round(lastPaidUsd).toLocaleString()}` : ''}
+          </p>
+        </div>
+        <div className="flex items-end gap-4">
+          <div className="text-right">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-stone-500">Source</p>
+            <p className="font-mono text-xs text-stone-700">
+              public.v_staff_register_extended · ops.v_payroll_dept_monthly
             </p>
           </div>
-          <HeaderPills
-            date={today}
-            userCount={count || 0}
-            airQuality="Good"
-            temperature="28°C"
-          />
         </div>
-      </div>
+      </header>
 
-      {/* Content */}
-      <div className="px-8 py-6">
-        <Suspense
-          fallback={
-            <div className="flex items-center justify-center py-16">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900" />
-            </div>
-          }
-        >
-          <StaffContent />
-        </Suspense>
-      </div>
+      {/* Anomalies & alerts */}
+      <section>
+        <div className="mb-3 flex items-baseline justify-between">
+          <div>
+            <h2 className="font-serif text-xl text-stone-900">Anomalies &amp; alerts</h2>
+            <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-stone-500">
+              Live data-quality flags. Owner action required.
+            </p>
+          </div>
+          <span className="font-serif text-2xl text-amber-700">{totalFlags} flags</span>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+          {Object.entries(ISSUE_META).map(([key, meta]) => (
+            <AnomalyCard
+              key={key}
+              title={meta.label}
+              subtitle={meta.sub}
+              count={grouped[key]?.length ?? 0}
+              people={grouped[key] ?? []}
+            />
+          ))}
+        </div>
+      </section>
+
+      {/* Department breakdown */}
+      <section>
+        <div className="mb-3 flex items-baseline justify-between">
+          <h2 className="font-serif text-xl text-stone-900">
+            Department breakdown · <em className="font-serif">{lastPaidPeriod}</em>
+          </h2>
+          <span className="rounded-sm bg-emerald-900/10 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-emerald-900">
+            ops.v_payroll_dept_monthly
+          </span>
+        </div>
+        {deptRows.length === 0 ? (
+          <div className="panel dashed" style={{ padding: 16, color: 'var(--ink-mute)', fontStyle: 'italic', textAlign: 'center' }}>
+            No payroll rows yet for any closed period.
+          </div>
+        ) : (
+          <DeptBreakdown rows={deptRows} fx={FX_LAK_PER_USD} />
+        )}
+      </section>
+
+      {/* 4-month payroll trend */}
+      <section>
+        <div className="mb-3 flex items-baseline justify-between">
+          <h2 className="font-serif text-xl text-stone-900">4-month payroll trend</h2>
+          <span className="rounded-sm bg-emerald-900/10 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-emerald-900">
+            USD primary · LAK secondary
+          </span>
+        </div>
+        {trend.window.length === 0 ? (
+          <div className="panel dashed" style={{ padding: 16, color: 'var(--ink-mute)', fontStyle: 'italic', textAlign: 'center' }}>
+            No payroll history yet.
+          </div>
+        ) : (
+          <PayrollTrend windowMonths={trend.window} data={trend.rows} fx={FX_LAK_PER_USD} />
+        )}
+      </section>
+
+      {/* Active staff register */}
+      <section>
+        <div className="mb-3 flex items-baseline justify-between">
+          <div>
+            <h2 className="font-serif text-xl text-stone-900">
+              Staff register · <em className="font-serif">{totalActive} active</em>
+            </h2>
+            <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-stone-500">
+              Click any row to drill down.
+            </p>
+          </div>
+          <span className="rounded-sm bg-emerald-900/10 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-emerald-900">
+            Supabase · live
+          </span>
+        </div>
+        <StaffShell rows={safeRows} />
+      </section>
+
+      {/* Archived staff */}
+      <section>
+        <div className="mb-3 flex items-baseline justify-between">
+          <div>
+            <h2 className="font-serif text-xl text-stone-900">
+              Archived staff · <em className="font-serif">{archived.length}</em>
+            </h2>
+            <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-stone-500">
+              Departed employees · payroll history + bank info retained for record.
+            </p>
+          </div>
+        </div>
+        <ArchivedStaffTable rows={archived} />
+      </section>
     </div>
-  )
+    </Page>
+  );
 }
