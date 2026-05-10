@@ -785,6 +785,99 @@ export async function POST(req: Request) {
     const mention = mentionFromUI ?? parseMention(message);
     const isChatMode = looksLikeChat(message);
 
+    // ─────────────────────────────────────────────────────────────────────
+    // CHAT-MODE SHORT-CIRCUIT (PBS 2026-05-10):
+    // For conversational messages ("hi", "how are you", "what does X mean"),
+    // skip the entire triage pipeline. Direct LLM call with a persona system
+    // prompt. The reply is stored as a triaged ticket with the agent's prose
+    // in parsed_summary so ChatShell renders it as the next assistant turn.
+    //
+    // This kills two bugs at once:
+    //   1. "User greeted Felix. No actionable request detected." JSON leakage
+    //   2. 30-sec wait + ticket-card UI for a plain "hello"
+    // ─────────────────────────────────────────────────────────────────────
+    if (isChatMode) {
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      const personaRole = mention
+        ? (NICKNAME_TO_ROLE[mention] ?? mention)
+        : "lead";
+      const personaMap: Record<string, { name: string; voice: string }> = {
+        lead:           { name: "Felix",       voice: "You are Felix, the cockpit lead at The Namkhan (luxury boutique hotel in Luang Prabang, Laos). Conversational, direct, warm. No jargon. No internal JSON. No \"recommended_agent\" or plans — that is for tickets, not chat. Reply in 1–3 short sentences unless asked to elaborate. If the user just greeted you, greet them back and ask what they want to work on." },
+          architect:    { name: "Felix",       voice: "You are Felix, the architect/cockpit lead at The Namkhan. Conversational, direct, warm. No jargon. No internal JSON. Reply in 1–3 short sentences unless asked to elaborate." },
+          it_manager:   { name: "Captain Kit", voice: "You are Captain Kit, the IT manager at The Namkhan. Direct, technical, no fluff. Reply in 1–3 short sentences unless asked to elaborate." },
+          revenue_hod:  { name: "Vector",      voice: "You are Vector, the Revenue HoD at The Namkhan. Numbers-first, dry, sharp. Reply in 1–3 short sentences." },
+          sales_hod:    { name: "Mercer",      voice: "You are Mercer, the Sales HoD at The Namkhan. Warm but firm. Reply in 1–3 short sentences." },
+          marketing_hod:{ name: "Lumen",       voice: "You are Lumen, the Marketing HoD at The Namkhan. Brand-aware, casual luxury tone. Reply in 1–3 short sentences." },
+          operations_hod:{name: "Forge",       voice: "You are Forge, the Operations HoD at The Namkhan. Practical, no-nonsense. Reply in 1–3 short sentences." },
+          finance_hod:  { name: "Intel",       voice: "You are Intel, the Finance HoD at The Namkhan. USALI-aware, blunt. Reply in 1–3 short sentences." },
+      };
+      const persona = personaMap[personaRole] ?? personaMap.lead;
+
+      // Build messages array from prior history.
+      const priorTurns = (conversation_history ?? []).slice(-12);
+      const messages = [
+        ...priorTurns.map((t) => ({ role: t.role, content: t.content })),
+        { role: "user" as const, content: message },
+      ];
+
+      let replyText = `Hi — I'm here. What do you want to work on?`;
+      if (apiKey) {
+        try {
+          const r = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "x-api-key": apiKey,
+              "anthropic-version": "2023-06-01",
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "claude-sonnet-4-5-20250929",
+              max_tokens: 600,
+              system: persona.voice,
+              messages,
+            }),
+          });
+          if (r.ok) {
+            const j = await r.json();
+            const t = j?.content?.[0]?.text;
+            if (typeof t === "string" && t.trim().length > 0) {
+              replyText = t.trim();
+            }
+          }
+        } catch {
+          // fall through with default replyText
+        }
+      }
+
+      // Persist as a normal triaged ticket so ChatShell's existing
+      // subscription/render path works without modification.
+      const { data: chatTicket } = await supabase
+        .from("cockpit_tickets")
+        .insert({
+          source: "cockpit_chat",
+          arm: "chat",
+          intent: "chat",
+          status: "triaged",
+          parsed_summary: `${message}\n\n---\n\n**${persona.name}**\n\n${replyText}`,
+          notes: JSON.stringify({
+            chat_reply: true,
+            recommended_role: personaRole,
+            recommended_agent: personaRole,
+            persona: persona.name,
+          }),
+          iterations: 0,
+        })
+        .select()
+        .single();
+
+      return NextResponse.json({
+        ticket: chatTicket,
+        chat_mode: true,
+        persona: persona.name,
+      });
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
     // KB #291 unified-chat enrichment — only fire the heavy enrichment
     // pipeline for non-chat messages. Chat-mode skips it (saves 1–3s).
     const enriched = isChatMode
