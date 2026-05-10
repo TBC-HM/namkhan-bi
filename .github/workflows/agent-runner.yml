@@ -18,7 +18,10 @@ name: agent-runner
 
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    # PBS 2026-05-10 morning: bump from */10 to */5 so the runner fires
+    # twice as often. Each run picks 5 tickets (~5 min). Vercel cron
+    # auto-dispatch was unreliable; this is the reliable backbone.
+    - cron: '*/5 * * * *'
   workflow_dispatch:
     inputs:
       ticket_id:
