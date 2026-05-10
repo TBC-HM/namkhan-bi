@@ -413,20 +413,50 @@ async function carlaSession(ticket: Ticket): Promise<{ pr_url: string | null; ab
       turnsSinceEdit = 0;
     }
 
-    // Nudge: 2 turns after last edit and not finalized — push for run_tsc + finalize
-    if (everEdited && !prUrl && !aborted && turnsSinceEdit === 2) {
+    // Nudge: every turn after edit (2-5), escalating tone — push for run_tsc + finalize.
+    // At turn 6, the runner auto-finalizes (see below).
+    if (everEdited && !prUrl && !aborted && turnsSinceEdit >= 2 && turnsSinceEdit <= 5) {
       const ranTsc = toolCallsByName.run_tsc > 0;
+      const remaining = 6 - turnsSinceEdit;
       const nudge = ranTsc
-        ? `[ENFORCEMENT] You have edits and run_tsc has been called. Your NEXT call MUST be finalize() with branch_name, pr_title, pr_body. Do not edit further unless tsc failed.`
-        : `[ENFORCEMENT] You have edits but have not run tsc. Your NEXT call MUST be run_tsc(). After it passes, call finalize() immediately.`;
+        ? `[ENFORCEMENT] You have edits and run_tsc has been called. Your NEXT call MUST be finalize() with branch_name, pr_title, pr_body. Do not edit further unless tsc failed. Runner will auto-finalize in ${remaining} turn(s) if you don't.`
+        : `[ENFORCEMENT] You have edits but have not run tsc. Your NEXT call MUST be run_tsc(). After it passes, call finalize() immediately. Runner will auto-finalize in ${remaining} turn(s) if you don't.`;
       userContent = [...(Array.isArray(userContent) ? userContent : results), { type: 'text', text: nudge }];
     }
 
-    // Hard abort: 4 turns after last edit and still not finalized — abort with branch ref so PBS can recover
-    if (everEdited && !prUrl && !aborted && turnsSinceEdit >= 4) {
-      console.log(`  [FORCE-ABORT-POST-EDIT] ${turnsSinceEdit} turns since last edit, no finalize, terminating`);
-      aborted = true;
-      abortReason = `runner_force_abort: edited ${toolCallsByName.edit_file + toolCallsByName.write_file} files but did not finalize within 4 turns. Files staged in working tree (not pushed).`;
+    // PBS 2026-05-10 emergency v5: AUTO-FINALIZE instead of abort.
+    // After 6 turns since last edit with no finalize, the runner takes over:
+    // it constructs branch/title/body from ticket context and calls toolFinalize
+    // directly — committing + pushing + opening PR with whatever's staged.
+    // Reasoning: v4 aborted with files-staged-not-pushed (worse than useless —
+    // edits exist but nothing user-visible). v5 ships the work the model
+    // actually completed. If tsc fails on the PR, that's CI's job to flag.
+    if (everEdited && !prUrl && !aborted && turnsSinceEdit >= 6) {
+      console.log(`  [AUTO-FINALIZE] ${turnsSinceEdit} turns since last edit, runner taking over to ship staged work`);
+      const editedCount = toolCallsByName.edit_file + toolCallsByName.write_file;
+      const subject = (ticket.email_subject ?? `ticket-${ticket.id}`).toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+      const branchName = `autorun/ticket-${ticket.id}-${subject || 'fix'}`;
+      const prTitle = `[ticket #${ticket.id}] ${(ticket.email_subject ?? 'auto-finalize').slice(0, 80)}`;
+      const prBody = [
+        `Auto-finalized by agent-runner v5 — model made ${editedCount} file edit(s) but did not call finalize().`,
+        ``,
+        `**Ticket**: #${ticket.id}`,
+        `**Subject**: ${ticket.email_subject ?? '(none)'}`,
+        `**Tool calls**: ${JSON.stringify(toolCallsByName)}`,
+        ``,
+        `Runner shipped the staged edits as-is. Review carefully before merge — tsc may not have been run.`,
+      ].join('\n');
+      const r = await toolFinalize({ branch_name: branchName, pr_title: prTitle, pr_body: prBody }, ticket.id);
+      if (r.ok && r.pr_url) {
+        prUrl = r.pr_url;
+        console.log(`  [AUTO-FINALIZE] success: ${r.pr_url}`);
+      } else {
+        // Auto-finalize itself failed — fall back to abort with the actual error
+        aborted = true;
+        abortReason = `runner_auto_finalize_failed: ${r.err ?? 'unknown'}. Edits staged in working tree but not pushed.`;
+        console.error(`  [AUTO-FINALIZE-FAILED] ${r.err}`);
+      }
     }
     messages.push({ role: 'user', content: userContent });
 
