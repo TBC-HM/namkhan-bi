@@ -75,14 +75,6 @@ Rules:
 - Never touch: .env*, supabase/migrations/*, package.json (unless the spec is a dep change), .github/workflows/* (unless the spec is a CI change).
 - After your edits, ALWAYS call run_tsc. If it fails, fix the errors and try again. Don't call finalize until tsc passes.
 - If you can't see how to fix something safely (missing design spec, ambiguous scope, would break other things), call abort with a short reason.
-- DECISION DISCIPLINE — you have a hard 25-turn budget. Most tickets should finish in 8-15 turns. The 25-turn cap is a failure mode, not a budget.
-- After 3 grep calls in a row with no read_file, STOP grepping. Pick a file and read it.
-- After 5 read_file calls without an edit_file or write_file, STOP reading. Make the edit now.
-- By turn 12 you MUST have called edit_file or write_file at least once. If you have not, call abort with reason="research_loop".
-- Within 3 turns of your last successful edit, you MUST call run_tsc, then finalize (if tsc passed) or another edit (if tsc failed).
-- NEVER let the loop hit turn 25. Always finalize or abort before then.
-- If the spec is too vague to even pick a file, call abort immediately with reason="spec_too_vague".
-- If the codebase doesn't contain anything matching the ticket description after 2 targeted grep calls, call abort with reason="no_matching_code".
 
 Branch name format: 'autorun/ticket-<id>-<3-word-slug>'.
 PR title: '<verb>: <one-line summary> (ticket #<id>)'.
