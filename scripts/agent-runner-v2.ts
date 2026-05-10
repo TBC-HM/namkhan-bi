@@ -381,11 +381,18 @@ async function carlaSession(ticket: Ticket): Promise<{ pr_url: string | null; ab
         } catch { /* nm */ }
       }
     }
-    // PBS 2026-05-10 emergency: append force-act nudge to tool_results when we hit FORCE_ACT_AFTER turns without edit.
-    // Type-cast to allow mixed tool_result + text blocks in same user content array.
+    // PBS 2026-05-10 emergency v2: append force-act nudge EVERY turn once we pass FORCE_ACT_AFTER without an edit.
+    // The first version used === which only fired once and the model ignored it. >= keeps escalating until edit or abort.
     let userContent: unknown = results;
-    if (!everEdited && turn === FORCE_ACT_AFTER) {
-      userContent = [...results, { type: 'text', text: `[ENFORCEMENT] You have used ${turn + 1} turns without a single edit_file or write_file call. On your NEXT turn you MUST do exactly one of: (1) call edit_file or write_file with a concrete change, or (2) call abort with reason="spec_too_vague". Do NOT call grep or read_file again. No more investigation.` }];
+    if (!everEdited && turn >= FORCE_ACT_AFTER) {
+      const escalation = turn >= FORCE_ACT_AFTER + 2 ? 'FINAL WARNING — your next response will be cut off if it is not edit_file/write_file/abort.' : '';
+      userContent = [...results, { type: 'text', text: `[ENFORCEMENT TURN ${turn + 1}] You have used ${turn + 1} turns without ANY successful edit_file or write_file call. ${escalation} You MUST now do exactly one of: (1) call edit_file or write_file with a concrete change to a real file you have already read, or (2) call abort with reason="spec_too_vague" or "no_matching_code". DO NOT call grep. DO NOT call read_file. ANY further investigation tool calls are an error.` }];
+    }
+    // PBS 2026-05-10 emergency v2: hard cap — if 7 turns have passed without any edit, force-abort the ticket from the runner side.
+    if (!everEdited && turn >= 6) {
+      console.log(`  [FORCE-ABORT] turn=${turn}, no edits made, terminating session`);
+      aborted = true;
+      abortReason = 'runner_force_abort: 7 turns without an edit';
     }
     messages.push({ role: 'user', content: userContent });
 
