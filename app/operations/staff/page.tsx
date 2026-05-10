@@ -147,7 +147,6 @@ export default async function StaffPage() {
       subPages={OPERATIONS_SUBPAGES}
       topRight={<UploadPayslipsButton />}
       kpiTiles={[]}
-      showHeaderPills={true}
     >
     <div className="ops-staff-dark space-y-10 px-0 py-6">
       <header className="flex items-end justify-between border-b border-stone-300/30 pb-4">
