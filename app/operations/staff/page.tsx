@@ -146,6 +146,7 @@ export default async function StaffPage() {
       title={<>Staff <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>register</em></>}
       subPages={OPERATIONS_SUBPAGES}
       topRight={<UploadPayslipsButton />}
+      kpiTiles={[]}
       showHeaderPills={true}
     >
     <div className="ops-staff-dark space-y-10 px-0 py-6">
