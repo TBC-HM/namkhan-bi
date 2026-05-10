@@ -25,7 +25,7 @@ const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY!;
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN!;
 const TICKET_ID = process.env.TICKET_ID;
-const BATCH = Number(process.env.RUNNER_BATCH ?? '3');
+const BATCH = Number(process.env.RUNNER_BATCH ?? '1');
 const TICKET_TIMEOUT_MS = 8 * 60 * 1000; // 8 minutes hard wall
 const CLAUDE_MODEL = process.env.RUNNER_MODEL ?? 'claude-sonnet-4-5-20250929';
 
