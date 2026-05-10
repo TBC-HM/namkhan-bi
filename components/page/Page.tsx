@@ -105,9 +105,9 @@ function PageFooter() {
   return (
     <footer style={S.footer}>
       <div style={S.footerLeft}>
-        <a href="https://slh.com/hotels/the-namkhan/" target="_blank" rel="noreferrer" title="Member of Small Luxury Hotels of the World">
+        <a href="https://slh.com/hotels/the-namkhan/" target="_blank" rel="noreferrer">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={SLH} alt="Small Luxury Hotels of the World" style={{ height: 32, opacity: 1 }} />
+          <img src={SLH} alt="" style={{ height: 32, opacity: 1 }} />
         </a>
         <span style={S.footerKick}>A Beyond Circle Product</span>
       </div>
