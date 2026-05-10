@@ -90,9 +90,23 @@ DB trigger blocks `done` → other states. Sweep can flip processing → new on 
 | #232 | Retry once with tsc errors fed back as feedback. |
 
 ### What's still open
-- Carla still aborts ~60% on first try due to TS errors. Retry loop in #232 should help; need to measure.
-- 3 PRs from earlier tonight had broken Vercel builds and were closed (#224 #229 #230) — re-queued for retry.
-- 50+ triaged tickets waiting in queue.
+- Carla aborts on most attempts because she writes blind. Even with tsc-retry-once (PR #232), retry usually fails — she rewrites stuff that breaks differently. The next session must add file-context (option **a** in §1 below — the high-impact fix).
+- ~49 triaged dev tickets queued for Carla (status='triaged' arm='dev').
+- ~5 PRs landed for review tonight: #224 (closed broken), #227 ✅ #19 KpiBox hover (LIVE in prod), #228 ✅ #17 parity agent (LIVE in prod), #229 (closed broken), #230 (closed broken), #234 #235 #239 #240 #241 (open, awaiting review).
+- Vercel cron now auto-dispatches the GH Action runner (PR #237). GH's own schedule cron has not fired once tonight — Vercel cron is the reliable trigger.
+- Failed tickets now lock with processed_at on every terminal outcome (PR #238) — no more loops.
+
+### TOMORROW: top priority fix (PBS request)
+**Give Carla file-context BEFORE she writes (option a from §1).** Concrete plan:
+- In `scripts/agent-runner.ts` `processOne()`, after fetching the ticket but BEFORE `callClaude(spec)`:
+  - Extract candidate keywords from the spec body (component names, route paths, helper names — anything matching `[A-Z][a-zA-Z]+` or `/[a-z][a-z-]+`).
+  - For each keyword, run `grep -rl --include='*.tsx' --include='*.ts' "<keyword>" app components lib styles` (limit 3 matches each, dedupe).
+  - For each top-3 matched file, read the file (cap 2000 chars per file) and embed in the spec under "## Existing context (read this BEFORE editing)".
+- This grounds Carla in the actual codebase she's editing — eliminates the "imports things that don't exist" and "references components that don't exist" failure modes.
+- Estimated impact: tsc pass rate jumps from ~30% → ~70%. Most of the queued 49 tickets will ship cleanly.
+- Estimated effort: 30 min. No new dependencies. Pure addition to `processOne`.
+
+After file-context lands, the queue will drain on its own via Vercel cron. PBS just opens the resulting PRs in the bug box approve buttons.
 
 ## What a specialist should look at next
 
