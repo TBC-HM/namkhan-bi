@@ -75,9 +75,16 @@ jobs:
           # contents:write + pull-requests:write perms set above.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ -f "scripts/agent-runner.ts" ]; then
+          # PBS 2026-05-10: switched to v2 — multi-turn agent with file-tools.
+          # v1 was single-shot blind code-gen, ~80% tsc fail rate. v2 explores
+          # the codebase via grep/read_file before editing, runs tsc itself,
+          # only finalizes when tsc passes.
+          if [ -f "scripts/agent-runner-v2.ts" ]; then
+            npx tsx scripts/agent-runner-v2.ts
+          elif [ -f "scripts/agent-runner.ts" ]; then
+            echo "v2 not found — falling back to v1"
             npx tsx scripts/agent-runner.ts
           else
-            echo "scripts/agent-runner.ts not found — scaffold only. See docs/16_SESSION_HANDOFF.md."
+            echo "no runner script found"
             exit 0
           fi
