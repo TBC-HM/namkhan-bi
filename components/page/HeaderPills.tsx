@@ -20,6 +20,7 @@
 //       carries a bridging paddingBottom so there is no dead-zone gap.
 
 import { useEffect, useRef, useState } from 'react';
+import DateRangePicker from './DateRangePicker';
 
 interface HeaderPillsProps {
   /** Optional per-dept KPI tiles shown when the user hovers the date pill. */
@@ -269,24 +270,11 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
                 <div style={S.dateCellD}>{t.d}</div>
               </div>
             ))}
-            {/* PBS 2026-05-09 #20: window + compare quick-jumps inside the
-                date popup so the operator can pivot the dashboard without
-                leaving the hover. */}
-            <div style={S.dateWindowRow}>
-              <span style={S.dateWindowLabel}>window</span>
-              <a href="?win=today" style={S.dateWindowLink}>today</a>
-              <a href="?win=7d"    style={S.dateWindowLink}>7d</a>
-              <a href="?win=30d"   style={S.dateWindowLink}>30d</a>
-              <a href="?win=90d"   style={S.dateWindowLink}>90d</a>
-              <a href="?win=ytd"   style={S.dateWindowLink}>YTD</a>
-            </div>
-            <div style={S.dateWindowRow}>
-              <span style={S.dateWindowLabel}>compare</span>
-              <a href="?cmp=stly"   style={S.dateWindowLink}>STLY</a>
-              <a href="?cmp=lw"     style={S.dateWindowLink}>LW</a>
-              <a href="?cmp=lm"     style={S.dateWindowLink}>LM</a>
-              <a href="?cmp=budget" style={S.dateWindowLink}>BUD</a>
-            </div>
+            {/* PBS 2026-05-09 #20 / ticket #691: window + compare quick-jumps
+                wired to ?win + ?cmp URL params so server pages re-render.
+                Active state driven by current params; all other params
+                (property, segment, etc.) are preserved in the URL. */}
+            <DateRangePicker onAfterSelect={() => setDateHover(false)} />
           </div>
         )}
       </div>
