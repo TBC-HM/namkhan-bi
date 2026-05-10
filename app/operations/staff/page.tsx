@@ -1,166 +1,240 @@
-import { createServerClient } from '@/lib/supabase-server'
+import { createClient } from '@/lib/supabase/server'
+import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { Suspense } from 'react'
 import Link from 'next/link'
-import { formatInTimeZone } from 'date-fns-tz'
 
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
+// Icons
+import { 
+  Calendar, 
+  Users, 
+  Wind, 
+  Thermometer,
+  AlertCircle,
+  User,
+  ChevronRight
+} from 'lucide-react'
 
 interface StaffMember {
-  id: string
+  staff_id: string
   full_name: string
-  position: string
-  department: string
+  position: string | null
+  department: string | null
   status: string
-  hire_date: string
-  phone?: string
-  emergency_contact?: string
-  photo_url?: string
+  hire_date: string | null
+  profile_photo_url: string | null
 }
 
-export default async function StaffPage() {
-  const supabase = createServerClient()
+interface HeaderPillsProps {
+  date: string
+  userCount: number
+  airQuality: string
+  temperature: string
+}
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  // Fetch staff
-  const { data: staff, error } = await supabase
-    .from('staff')
-    .select('*')
-    .order('full_name')
-
-  if (error) {
-    console.error('Staff fetch error:', error)
-  }
-
-  const activeStaff = staff?.filter((s) => s.status === 'active') || []
-  const inactiveStaff = staff?.filter((s) => s.status !== 'active') || []
-
-  // Fetch live data for header pills
-  const tz = 'Asia/Vientiane'
-  const now = new Date()
-  const formattedDate = formatInTimeZone(now, tz, 'd MMM yyyy')
-  const formattedTime = formatInTimeZone(now, tz, 'HH:mm')
-
-  let airQuality = '—'
-  let temperature = '—'
-
-  try {
-    const { data: airData } = await supabase
-      .from('live_airquality')
-      .select('aqi')
-      .order('captured_at', { ascending: false })
-      .limit(1)
-      .single()
-    if (airData?.aqi) {
-      airQuality = String(airData.aqi)
-    }
-  } catch (e) {
-    // silent
-  }
-
-  try {
-    const { data: weatherData } = await supabase
-      .from('live_weather')
-      .select('temp_c')
-      .order('captured_at', { ascending: false })
-      .limit(1)
-      .single()
-    if (weatherData?.temp_c != null) {
-      temperature = `${Math.round(weatherData.temp_c)}°C`
-    }
-  } catch (e) {
-    // silent
-  }
-
+function HeaderPills({ date, userCount, airQuality, temperature }: HeaderPillsProps) {
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white p-8">
-      {/* Header */}
-      <div className="flex items-start justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-light mb-2">Staff Directory</h1>
-          <p className="text-zinc-400 text-sm">
-            {activeStaff.length} active · {inactiveStaff.length} inactive
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3 text-sm text-zinc-400">
-          <span>{formattedDate}</span>
-          <span>·</span>
-          <span>{user.email?.split('@')[0] || 'user'}</span>
-          <span>·</span>
-          <span title="Air Quality Index">AQI {airQuality}</span>
-          <span>·</span>
-          <span>{temperature}</span>
-        </div>
+    <div className="flex items-center gap-3 text-sm text-slate-600">
+      <div className="flex items-center gap-1.5">
+        <Calendar className="w-4 h-4" />
+        <span>{date}</span>
       </div>
-
-      {/* Active Staff */}
-      {activeStaff.length > 0 && (
-        <section className="mb-12">
-          <h2 className="text-xl font-light mb-4 text-zinc-300">Active Staff</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {activeStaff.map((member) => (
-              <StaffCard key={member.id} member={member} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Inactive Staff */}
-      {inactiveStaff.length > 0 && (
-        <section>
-          <h2 className="text-xl font-light mb-4 text-zinc-500">Inactive Staff</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 opacity-50">
-            {inactiveStaff.map((member) => (
-              <StaffCard key={member.id} member={member} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {!staff || staff.length === 0 ? (
-        <div className="text-center text-zinc-500 py-12">No staff records found.</div>
-      ) : null}
+      <div className="w-px h-4 bg-slate-300" />
+      <div className="flex items-center gap-1.5">
+        <Users className="w-4 h-4" />
+        <span>{userCount}</span>
+      </div>
+      <div className="w-px h-4 bg-slate-300" />
+      <div className="flex items-center gap-1.5">
+        <Wind className="w-4 h-4" />
+        <span>{airQuality}</span>
+      </div>
+      <div className="w-px h-4 bg-slate-300" />
+      <div className="flex items-center gap-1.5">
+        <Thermometer className="w-4 h-4" />
+        <span>{temperature}</span>
+      </div>
     </div>
   )
 }
 
-function StaffCard({ member }: { member: StaffMember }) {
+function StaffTable({ staff }: { staff: StaffMember[] }) {
+  if (staff.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+        <AlertCircle className="w-12 h-12 mb-3" />
+        <p className="text-sm">No staff members found</p>
+      </div>
+    )
+  }
+
   return (
-    <Link
-      href={`/operations/staff/${member.id}`}
-      className="block bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded p-4 transition-colors"
-    >
-      <div className="flex items-start gap-3">
-        {member.photo_url ? (
-          <img
-            src={member.photo_url}
-            alt={member.full_name}
-            className="w-12 h-12 rounded-full object-cover"
-          />
-        ) : (
-          <div className="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-500 text-sm">
-            {member.full_name
-              .split(' ')
-              .map((n) => n[0])
-              .join('')
-              .toUpperCase()
-              .slice(0, 2)}
+    <div className="overflow-x-auto">
+      <table className="w-full">
+        <thead>
+          <tr className="border-b border-slate-200">
+            <th className="text-left py-3 px-4 text-xs font-medium text-slate-500 uppercase tracking-wider">
+              Name
+            </th>
+            <th className="text-left py-3 px-4 text-xs font-medium text-slate-500 uppercase tracking-wider">
+              Position
+            </th>
+            <th className="text-left py-3 px-4 text-xs font-medium text-slate-500 uppercase tracking-wider">
+              Department
+            </th>
+            <th className="text-left py-3 px-4 text-xs font-medium text-slate-500 uppercase tracking-wider">
+              Status
+            </th>
+            <th className="text-left py-3 px-4 text-xs font-medium text-slate-500 uppercase tracking-wider">
+              Hire Date
+            </th>
+            <th className="w-10"></th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {staff.map((member) => (
+            <tr
+              key={member.staff_id}
+              className="hover:bg-slate-50 transition-colors"
+            >
+              <td className="py-3 px-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center overflow-hidden flex-shrink-0">
+                    {member.profile_photo_url ? (
+                      <img
+                        src={member.profile_photo_url}
+                        alt={member.full_name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <User className="w-4 h-4 text-slate-400" />
+                    )}
+                  </div>
+                  <span className="font-medium text-slate-900">
+                    {member.full_name}
+                  </span>
+                </div>
+              </td>
+              <td className="py-3 px-4 text-slate-600">
+                {member.position || '—'}
+              </td>
+              <td className="py-3 px-4 text-slate-600">
+                {member.department || '—'}
+              </td>
+              <td className="py-3 px-4">
+                <span
+                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    member.status === 'active'
+                      ? 'bg-green-100 text-green-800'
+                      : member.status === 'inactive'
+                      ? 'bg-slate-100 text-slate-600'
+                      : 'bg-amber-100 text-amber-800'
+                  }`}
+                >
+                  {member.status}
+                </span>
+              </td>
+              <td className="py-3 px-4 text-slate-600">
+                {member.hire_date
+                  ? new Date(member.hire_date).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric'
+                    })
+                  : '—'}
+              </td>
+              <td className="py-3 px-4">
+                <Link
+                  href={`/operations/staff/${member.staff_id}`}
+                  className="text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </Link>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+async function StaffContent() {
+  const cookieStore = cookies()
+  const supabase = createClient(cookieStore)
+
+  const { data: staff, error } = await supabase
+    .from('staff')
+    .select('staff_id, full_name, position, department, status, hire_date, profile_photo_url')
+    .order('full_name', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching staff:', error)
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-red-500">
+        <AlertCircle className="w-12 h-12 mb-3" />
+        <p className="text-sm">Failed to load staff data</p>
+      </div>
+    )
+  }
+
+  return <StaffTable staff={staff || []} />
+}
+
+export default async function StaffPage() {
+  const cookieStore = cookies()
+  const supabase = createClient(cookieStore)
+
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    redirect('/login')
+  }
+
+  // Mock data for header pills
+  const today = new Date().toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  })
+
+  const { count } = await supabase
+    .from('staff')
+    .select('*', { count: 'exact', head: true })
+    .eq('status', 'active')
+
+  return (
+    <div className="min-h-screen bg-white">
+      {/* Header */}
+      <div className="border-b border-slate-200 px-8 py-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold text-slate-900">Staff</h1>
+            <p className="text-sm text-slate-500 mt-1">
+              Team roster and employee directory
+            </p>
           </div>
-        )}
-        <div className="flex-1 min-w-0">
-          <h3 className="font-medium truncate">{member.full_name}</h3>
-          <p className="text-sm text-zinc-400 truncate">{member.position}</p>
-          <p className="text-xs text-zinc-500 mt-1">{member.department}</p>
+          <HeaderPills
+            date={today}
+            userCount={count || 0}
+            airQuality="Good"
+            temperature="28°C"
+          />
         </div>
       </div>
-      {member.phone && (
-        <div className="mt-3 text-xs text-zinc-500 truncate">📞 {member.phone}</div>
-      )}
-    </Link>
+
+      {/* Content */}
+      <div className="px-8 py-6">
+        <Suspense
+          fallback={
+            <div className="flex items-center justify-center py-16">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900" />
+            </div>
+          }
+        >
+          <StaffContent />
+        </Suspense>
+      </div>
+    </div>
   )
 }
