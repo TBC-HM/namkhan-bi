@@ -164,22 +164,25 @@ Stack: Next.js 14 App Router + Supabase + Vercel. Repo: TBC-HM/namkhan-bi.
 
 You will be given:
 - The ticket spec
+- The full current contents of files most likely involved (under <<<EXISTING path=...>>> ... <<<END>>> markers)
 - A list of real file paths in the repo
 
-Your job: output the FULL NEW CONTENT of one or more files.
-
-Rules:
-- Surgical patches only. Touch as few files as possible (usually 1-3).
-- **PATHS**: Use ONLY file paths that appear in the file tree provided below. NEVER invent paths. If you cannot find a relevant existing file, output: NO_DIFF
-- Match existing code style. Tailwind for styling. TypeScript strict.
-- Never touch: .env*, package.json, .github/workflows/*, supabase/migrations/*.
-- Brand: '$' for USD, '₭' for LAK, em-dash '—' for empty. Italic Fraunces for KPI values.
-- NEVER push back. If the spec is thin, pick reasonable defaults and ship something.
+CRITICAL RULES — preserve existing code:
+1. The <<<EXISTING>>> blocks are the REAL current content. Do NOT invent or hallucinate file structures.
+2. Make the MINIMUM edit needed. Keep all existing imports, components, props, exports, comments, and code that is unrelated to the ticket. NEVER rewrite a file from scratch.
+3. If you are rewriting more than ~30% of an EXISTING file, you are doing it wrong. Stop and produce a smaller change.
+4. If the ticket asks for a UI change, change ONLY the affected JSX/CSS. Leave data-fetching, types, helper components, and unrelated sections exactly as they are.
+5. Surgical: usually you touch ONE file. Two files MAX unless the ticket explicitly demands more.
+6. **PATHS**: Use ONLY file paths that appear in EXISTING blocks or the file tree below. NEVER invent paths.
+7. Match existing code style. Tailwind for styling. TypeScript strict.
+8. Never touch: .env*, package.json, .github/workflows/*, supabase/migrations/*.
+9. Brand: '$' for USD, '₭' for LAK, em-dash '—' for empty. Italic Fraunces for KPI values.
+10. NEVER push back. If the spec is thin, pick reasonable defaults and ship something — but still minimal.
 
 OUTPUT FORMAT — strict. For each file you want to change, emit:
 
 <<<FILE path=path/to/file.tsx>>>
-(complete new file content here, exactly as you want it written to disk)
+(complete new file content here, exactly as you want it written to disk — must be the EXISTING file with your minimal edit applied)
 <<<END>>>
 
 You can emit multiple <<<FILE>>>...<<<END>>> blocks for multiple files.
@@ -204,6 +207,76 @@ function repoSnapshot(): string {
   } catch (e) {
     return 'repo snapshot failed';
   }
+}
+
+/**
+ * Heuristic: scan ticket text for things that look like repo file paths or URL
+ * paths under /app, and convert them to candidate file paths to feed Claude as
+ * EXISTING blocks. This gives Carla the real current content so she can do
+ * surgical edits instead of rewriting from scratch.
+ */
+function extractFilePaths(text: string): string[] {
+  const candidates = new Set<string>();
+  if (!text) return [];
+
+  // 1. Direct path mentions like app/operations/staff/page.tsx
+  const directRe = /\b((?:app|components|lib|scripts)\/[A-Za-z0-9_\-./\[\]]+\.(?:tsx?|jsx?|css|json))\b/g;
+  let m: RegExpExecArray | null;
+  while ((m = directRe.exec(text))) candidates.add(m[1]);
+
+  // 2. URL mentions like /operations/staff or namkhan-bi.vercel.app/operations/staff
+  //    → map to app/<route>/page.tsx
+  const urlRe = /(?:vercel\.app)?\/((?:[a-z0-9_-]+\/)+[a-z0-9_-]+)\b/gi;
+  while ((m = urlRe.exec(text))) {
+    const route = m[1].replace(/^\/+|\/+$/g, '');
+    if (!route) continue;
+    // ignore non-route stuff
+    if (/^(api|http|https|www|github|pull|tree)\b/i.test(route)) continue;
+    candidates.add(`app/${route}/page.tsx`);
+  }
+
+  // 3. Bare /word/word route mention at start of line or after whitespace
+  const routeRe = /(?:^|\s)\/([a-z0-9_-]+(?:\/[a-z0-9_-]+){0,3})(?=[\s.,)]|$)/gi;
+  while ((m = routeRe.exec(text))) {
+    const route = m[1];
+    if (/^(api|http|https|www|github)\b/i.test(route)) continue;
+    candidates.add(`app/${route}/page.tsx`);
+  }
+
+  return Array.from(candidates).slice(0, 8);
+}
+
+/**
+ * Reads up to N candidate files from disk, returns concatenated EXISTING blocks.
+ * Skips files that don't exist or are too big (>20k chars).
+ */
+function readExistingFiles(paths: string[]): string {
+  const fs = require('fs') as typeof import('fs');
+  const blocks: string[] = [];
+  let totalChars = 0;
+  const MAX_TOTAL = 60_000; // ~15k tokens — leaves room for spec + tree + output
+  const MAX_PER_FILE = 20_000;
+
+  for (const p of paths) {
+    if (totalChars >= MAX_TOTAL) break;
+    try {
+      if (!fs.existsSync(p)) continue;
+      const stat = fs.statSync(p);
+      if (!stat.isFile()) continue;
+      let content = fs.readFileSync(p, 'utf-8');
+      if (content.length > MAX_PER_FILE) {
+        content = content.slice(0, MAX_PER_FILE) + '\n\n/* …file truncated… */';
+      }
+      blocks.push(`<<<EXISTING path=${p}>>>\n${content}\n<<<END>>>`);
+      totalChars += content.length;
+    } catch {
+      /* skip */
+    }
+  }
+
+  return blocks.length
+    ? `Current file contents (preserve everything not directly related to the ticket):\n\n${blocks.join('\n\n')}`
+    : '';
 }
 
 async function callClaude(userPrompt: string): Promise<string> {
@@ -242,7 +315,13 @@ async function processTicket(t: Ticket): Promise<RunResult> {
     sh('git reset --hard origin/main', { quiet: true });
 
     // Single-shot Claude call with timeout
-    const userPrompt = `TICKET #${t.id}\n\nSubject: ${t.email_subject ?? ''}\n\nSummary:\n${t.parsed_summary ?? ''}\n\nNotes (PBS answers if any):\n${t.notes ?? ''}\n\n---\n\nRepo snapshot:\n${repoSnapshot()}`;
+    // Pull current contents of any files the ticket references — gives Claude
+    // the real code to edit surgically instead of rewriting from scratch.
+    const ticketText = `${t.email_subject ?? ''}\n${t.parsed_summary ?? ''}\n${t.notes ?? ''}`;
+    const candidatePaths = extractFilePaths(ticketText);
+    const existing = readExistingFiles(candidatePaths);
+
+    const userPrompt = `TICKET #${t.id}\n\nSubject: ${t.email_subject ?? ''}\n\nSummary:\n${t.parsed_summary ?? ''}\n\nNotes (PBS answers if any):\n${t.notes ?? ''}\n\n---\n\n${existing}\n\n---\n\nRepo snapshot:\n${repoSnapshot()}`;
 
     const response = await Promise.race([
       callClaude(userPrompt),
