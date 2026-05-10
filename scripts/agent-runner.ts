@@ -310,6 +310,25 @@ async function processOne(t: Ticket): Promise<void> {
     return;
   }
 
+  // PBS 2026-05-10: gate pre-push on tsc. 60% of Carla's first cycle of PRs
+  // had broken Vercel builds — TS errors. Run tsc here; if it fails, abort
+  // the branch + reset, audit the failure with the tsc output, return.
+  // Cheaper to abandon a broken patch here than to ship a failing preview
+  // that PBS has to close manually.
+  console.log(`tsc gate: checking ${applied} edits for ticket #${t.id}…`);
+  try {
+    execSync('npx tsc --noEmit', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 180_000 });
+    console.log('tsc gate: passed');
+  } catch (e) {
+    const stderr = (e as { stdout?: Buffer; stderr?: Buffer }).stdout?.toString() ?? '';
+    const head = stderr.split('\n').slice(0, 30).join('\n');
+    console.error(`ticket #${t.id} aborted by tsc gate. First errors:\n${head}`);
+    await audit(t.id, 'agent_run_tsc_failed', { applied, tsc_output: head.slice(0, 4000) });
+    // discard branch
+    try { gitSh('git checkout main'); gitSh(`git branch -D ${branch}`); } catch { /* nm */ }
+    return;
+  }
+
   gitSh(`git add -A`);
   const commitMsg = `${out.pr_title}\n\n${out.pr_body}\n\n[ticket #${t.id}]`;
   // PBS 2026-05-10: write commit message to a temp file (-F) so backticks,
