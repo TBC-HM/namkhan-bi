@@ -758,6 +758,12 @@ function looksLikeChat(message: string): boolean {
   if (/\b(build|create|implement|refactor|migrate|deploy|spec|decompose|ticket|fix this|fix the|investigate|audit|sweep|run\s+\w+|activate|fire|approve|reject|open\s+(issue|pr))\b/i.test(m)) {
     return false;
   }
+  // Investigative / data-lookup verbs → triage (Felix can't query DBs in chat mode).
+  // "check supabase", "show me revenue", "what's the occupancy", "when did X happen",
+  // "how many bookings", "is the sync running", "are we missing emails", "list X", "find X"
+  if (/\b(check\s+(in\s+|the\s+|on\s+|with\s+)?(supabase|cloudbeds|database|db|logs|sync|status)|show\s+me|how\s+many|when\s+(did|was|last)|is\s+(the\s+|there\s+)?(sync|cron|job|integration)|are\s+we|list\s+(all|the)|find\s+(all|the))\b/i.test(m)) {
+    return false;
+  }
   // Approval words handled below.
   if (/^(approve|yes|apply|ok approve|ship it|reject|no)$/i.test(m.toLowerCase())) return false;
   // Anything else short and prose-y → chat.
@@ -802,14 +808,14 @@ export async function POST(req: Request) {
         ? (NICKNAME_TO_ROLE[mention] ?? mention)
         : "lead";
       const personaMap: Record<string, { name: string; voice: string }> = {
-        lead:           { name: "Felix",       voice: "You are Felix, the cockpit lead at The Namkhan (luxury boutique hotel in Luang Prabang, Laos). Conversational, direct, warm. No jargon. No internal JSON. No \"recommended_agent\" or plans — that is for tickets, not chat. Reply in 1–3 short sentences unless asked to elaborate. If the user just greeted you, greet them back and ask what they want to work on." },
-          architect:    { name: "Felix",       voice: "You are Felix, the architect/cockpit lead at The Namkhan. Conversational, direct, warm. No jargon. No internal JSON. Reply in 1–3 short sentences unless asked to elaborate." },
-          it_manager:   { name: "Captain Kit", voice: "You are Captain Kit, the IT manager at The Namkhan. Direct, technical, no fluff. Reply in 1–3 short sentences unless asked to elaborate." },
-          revenue_hod:  { name: "Vector",      voice: "You are Vector, the Revenue HoD at The Namkhan. Numbers-first, dry, sharp. Reply in 1–3 short sentences." },
-          sales_hod:    { name: "Mercer",      voice: "You are Mercer, the Sales HoD at The Namkhan. Warm but firm. Reply in 1–3 short sentences." },
-          marketing_hod:{ name: "Lumen",       voice: "You are Lumen, the Marketing HoD at The Namkhan. Brand-aware, casual luxury tone. Reply in 1–3 short sentences." },
-          operations_hod:{name: "Forge",       voice: "You are Forge, the Operations HoD at The Namkhan. Practical, no-nonsense. Reply in 1–3 short sentences." },
-          finance_hod:  { name: "Intel",       voice: "You are Intel, the Finance HoD at The Namkhan. USALI-aware, blunt. Reply in 1–3 short sentences." },
+        lead:           { name: "Felix",       voice: "You are Felix, the cockpit lead at The Namkhan (luxury boutique hotel in Luang Prabang, Laos). Conversational, direct, warm. Reply in 1-3 short sentences unless asked to elaborate. NEVER say you will check logs, query Supabase, look up data, fetch a status, or run anything — you have NO tools in chat mode and CANNOT execute lookups. If the user asks for live data (sync status, counts, last-run times, KPIs), reply with EXACTLY: \"I can't query data from chat — phrase it as a task and I'll route it to the right agent. E.g. 'check the last Cloudbeds sync' will create a ticket.\" If the user just greeted you, greet them back and ask what they want to work on. No JSON. No \"recommended_agent\". No plans." },
+          architect:    { name: "Felix",       voice: "You are Felix, the architect/cockpit lead at The Namkhan. Conversational, direct, warm. Reply in 1-3 short sentences. NEVER say you will check logs, query Supabase, look up data, or run anything — you have NO tools in chat mode. If asked for live data, say: \"I can't query data from chat — phrase it as a task and I'll route it.\" No JSON, no plans." },
+          it_manager:   { name: "Captain Kit", voice: "You are Captain Kit, the IT manager at The Namkhan. Direct, technical, no fluff. Reply in 1-3 short sentences. You CANNOT query logs or run commands in chat mode — say so plainly if asked." },
+          revenue_hod:  { name: "Vector",      voice: "You are Vector, the Revenue HoD at The Namkhan. Numbers-first, dry, sharp. Reply in 1-3 short sentences. You CANNOT query the database in chat mode — if asked for numbers, say: \"Phrase it as a task and I'll pull the data.\"" },
+          sales_hod:    { name: "Mercer",      voice: "You are Mercer, the Sales HoD at The Namkhan. Warm but firm. Reply in 1-3 short sentences. You CANNOT query the database in chat mode — say so plainly if asked." },
+          marketing_hod:{ name: "Lumen",       voice: "You are Lumen, the Marketing HoD at The Namkhan. Brand-aware, casual luxury tone. Reply in 1-3 short sentences. You CANNOT query the database or external platforms in chat mode — say so plainly if asked." },
+          operations_hod:{name: "Forge",       voice: "You are Forge, the Operations HoD at The Namkhan. Practical, no-nonsense. Reply in 1-3 short sentences. You CANNOT query the database in chat mode — say so plainly if asked." },
+          finance_hod:  { name: "Intel",       voice: "You are Intel, the Finance HoD at The Namkhan. USALI-aware, blunt. Reply in 1-3 short sentences. You CANNOT query the database in chat mode — say so plainly if asked." },
       };
       const persona = personaMap[personaRole] ?? personaMap.lead;
 
@@ -851,6 +857,9 @@ export async function POST(req: Request) {
 
       // Persist as a normal triaged ticket so ChatShell's existing
       // subscription/render path works without modification.
+      // IMPORTANT: parsed_summary MUST use the `**Request**: <user>\n\n<agent>`
+      // framing that stripTicketFraming() in ChatShell.tsx parses, otherwise
+      // both user message + agent reply collapse into a single user-side bubble.
       const { data: chatTicket } = await supabase
         .from("cockpit_tickets")
         .insert({
@@ -858,7 +867,7 @@ export async function POST(req: Request) {
           arm: "chat",
           intent: "chat",
           status: "triaged",
-          parsed_summary: `${message}\n\n---\n\n**${persona.name}**\n\n${replyText}`,
+          parsed_summary: `**Request**: ${message}\n\n${replyText}`,
           notes: JSON.stringify({
             chat_reply: true,
             recommended_role: personaRole,
