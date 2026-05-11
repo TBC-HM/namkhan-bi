@@ -597,7 +597,7 @@ triggers, not convention.
 | What | Table | Who writes |
 |---|---|---|
 | Every agent action / tool call / merge / sync run | `cockpit_audit_log` | All agents, runner, chat |
-| Every state change (DDL, code merge to main, important memory writes, integration changes) | `cockpit_change_log` (planned) | DDL event trigger + manual hooks |
+| Every state change (DDL, code merge to main, important memory writes, integration changes) | `cockpit_change_log` | DDL event trigger (live since 2026-05-11) + manual hooks |
 | Significant architectural decisions | `cockpit_decisions` (ADR table, planned) | Architect (PBS), agents proposing |
 | End-of-session handoffs | `documentation.documents` + `document_versions` | Last agent / session close |
 | Agent learnings, rules, preferences | `cockpit_agent_memory` (importance-weighted) | Agents on insight; PBS on policy |
@@ -703,23 +703,56 @@ No new tools without an ADR.
 
 ---
 
-## 19. Security baseline (ADR-002 — planned)
+## 19. Security + reliability baseline
 
-Headline rules to be ratified before public launch:
+### 19a. What is LIVE today
 
-- `gitleaks` pre-commit hook (local) + CI step before any PR can merge.
-- GitHub push protection enabled.
-- Per-tenant credentials in Supabase Vault, accessed only via
-  `SECURITY DEFINER` functions.
-- `service_role` key never reaches the browser.
-- Anthropic Zero Data Retention enabled for production API calls.
-- Audit log redaction layer: regex scrub of known token patterns before
-  insert.
-- Tenant key rotation policy: on churn, all credentials rotated within
-  24h.
-- Public chat hardening: prompt injection guardrails, per-IP rate
+| Control | Status | Where |
+|---|---|---|
+| **Daily backups** (7-day retention) | ✅ ON | Supabase Pro default |
+| **Point-in-Time Recovery (PITR)** | ✅ ON (7-day window) | Enabled 2026-05-11. Restore to any second in last 7 days. ~$100/mo. |
+| **DDL audit trail** | ✅ ON | `cockpit_change_log` + event triggers `cockpit_log_ddl_end` / `cockpit_log_sql_drop`. View: `v_change_log_recent`. 90-day retention, daily prune. |
+| **Compute headroom** | ✅ Medium (4 GB RAM) | Upgraded 2026-05-11 from Micro. Headroom for materialized view refreshes + Donna onboarding load. |
+| **RLS on operational tables** | ✅ Partial | Multi-tenant Phase 2.x migrations (2026-05-05) added `tenant_id` columns + policies across operational schemas. Full RLS sweep pending Phase 1 close-out. |
+| **Service-role key boundary** | ✅ Enforced | Never reaches the browser; server-side routes only. |
+| **GitHub secret scanning + push protection** | ✅ ON | Default GitHub features. |
+| **Vercel log redaction** | ✅ ON | Default Vercel Pro behaviour. |
+
+### 19b. What is PLANNED (ADR-002 — to ratify before public launch)
+
+- **`gitleaks` pre-commit hook (local) + CI step** before any PR can merge.
+- **Per-tenant credentials in Supabase Vault**, accessed only via
+  `SECURITY DEFINER` functions. Replace any tokens currently in env vars.
+- **Anthropic Zero Data Retention** enabled for production API calls.
+- **Audit log redaction layer**: regex scrub of known token patterns
+  before insert into `cockpit_audit_log`.
+- **Tenant key rotation policy**: on churn, all credentials rotated
+  within 24h. Documented runbook.
+- **Public chat hardening**: prompt injection guardrails, per-IP rate
   limits + token budget caps, human reviewer queue, watermarking on
   free outputs.
+- **2FA enforcement** on every Supabase org member (owner + developer).
+  Owner = `data@thedonnaportals.com` is single point of failure.
+- **Network restrictions** (IP allowlist) for direct DB connections —
+  currently open.
+- **Spending cap + usage alerts** at org level to prevent runaway-query
+  cost surprises.
+- **Disk autoscale**: currently capped at 8 GB by spend cap. Must raise
+  to 16+ GB and disable cap before Donna onboarding (Donna ~15× data
+  volume).
+
+### 19c. Backup posture in plain language
+
+| Failure mode | What recovers it | RPO (data lost) | RTO (time to recover) |
+|---|---|---|---|
+| Bad migration / silent corruption noticed within 7 days | PITR restore to the second before | seconds | ~30 min |
+| Bad migration noticed after 7 days | Daily backup (oldest = 7 days) | up to 24h | ~30 min |
+| Entire project wipe / region outage | Daily backup, restore to a new project | up to 24h | ~hours |
+| Cloudbeds reservation data lost | Re-sync from Cloudbeds API (source of truth) | none | hours, watermark-driven |
+| Manually-entered platform data (USALI maps, budgets, agent memory, docs) lost beyond PITR window | Weekly off-Supabase dumps (planned — `cockpit/snapshots/*.sql.gz` in repo) | up to 7 days | minutes |
+
+Phase 1: this is acceptable. Phase 2 (public, paying clients): tighten
+RPO via 14-day PITR or self-hosted replica.
 
 ---
 
@@ -737,6 +770,7 @@ in `cockpit_decisions` (planned ADR table).
 | ADR-005 | Single-run engine (Tier 3) — in-chat upsell, not separate engine | Planned |
 | ADR-006 | Public chat conversion funnel + visitor/lead/tenant mode | Planned |
 | ADR-007 | Multi-language strategy (EN, ES, LO, DE day-one) | Planned |
+| ADR-008 | Infra baseline: Medium compute, 7-day PITR, DDL audit (`cockpit_change_log`) | Live (2026-05-11) |
 
 ---
 
@@ -763,3 +797,4 @@ elsewhere.
 |---|---|---|
 | 2026-05-11 | Initial draft v0.1 | PBS + Claude |
 | 2026-05-11 | v0.2 — product-led restructure: chat is the surface; phased build (Phase 1/2/3); shared structure isolated content; onboarding data contracts; multi-language; agents in two knowledge modes; conversion funnel | PBS + Claude |
+| 2026-05-11 | v0.3 — infra baseline live: compute Micro→Medium, 7-day PITR enabled, `cockpit_change_log` + DDL event triggers shipped. §19 split into Live/Planned. ADR-008 added. | PBS + Claude |

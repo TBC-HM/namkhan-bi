@@ -1,0 +1,191 @@
+name: Weekly platform snapshot
+
+# Off-Supabase backup of the irreplaceable platform layer.
+# Runs every Sunday 02:17 UTC (matches the cockpit prune schedule offset).
+# Commits a compressed SQL dump to `cockpit/snapshots/YYYY-Www.sql.gz` so
+# we have a second copy of the manually-authored layer (docs, agent memory,
+# decisions, change_log) in version control. Cloudbeds-sourced data is NOT
+# included — Cloudbeds is its own source of truth and can be re-synced.
+#
+# See ARCHITECTURE.md §19c "Backup posture" — this closes the gap for
+# "manually-entered platform data lost beyond PITR window".
+
+on:
+  schedule:
+    - cron: '17 2 * * 0'   # Sundays at 02:17 UTC
+  workflow_dispatch:       # Allow manual trigger from Actions tab
+
+permissions:
+  contents: write          # Needs to commit the dump file
+
+jobs:
+  snapshot:
+    name: Dump platform tables + commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_DB_HOST: ${{ secrets.SUPABASE_DB_HOST }}   # optional; falls back to ref
+
+    steps:
+      - name: Guard — required secrets
+        id: guard
+        run: |
+          if [ -z "$SUPABASE_PROJECT_REF" ] || [ -z "$SUPABASE_DB_PASSWORD" ]; then
+            echo "::warning::Supabase secrets not configured. Skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.guard.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 1
+
+      - name: Install PostgreSQL 17 client
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+          pg_dump --version
+
+      - name: Compute filename + dump platform tables
+        if: steps.guard.outputs.skip != 'true'
+        id: dump
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          # ISO week — e.g. 2026-W19
+          WEEK=$(date -u +%Y-W%V)
+          OUTDIR="cockpit/snapshots"
+          OUTFILE="${OUTDIR}/${WEEK}.sql"
+          mkdir -p "$OUTDIR"
+
+          # Host: prefer explicit secret, fallback to standard Supabase pattern
+          if [ -n "${SUPABASE_DB_HOST:-}" ]; then
+            HOST="$SUPABASE_DB_HOST"
+          else
+            HOST="aws-0-eu-central-1.pooler.supabase.com"
+          fi
+
+          # NOTE: the pooler uses port 6543 (transaction mode); direct DB uses 5432
+          # For pg_dump we want the direct connection (5432) so we get a consistent
+          # snapshot. The "Session pooler" (5432) on supabase.com is fine.
+          # If SUPABASE_DB_HOST secret is set, we trust it as-is.
+
+          echo "Dumping to $OUTFILE from $HOST..."
+
+          # Platform tables we cannot re-sync from upstream:
+          #   - documentation.* (architecture docs, ADRs, handoffs)
+          #   - cockpit_agent_memory (learned rules, importance≥8)
+          #   - cockpit_decisions (architectural decisions log)
+          #   - cockpit_change_log (DDL audit trail)
+          #   - cockpit_audit_log (agent action history — last 7 days only,
+          #     full table is huge and largely heartbeats)
+          #   - cockpit_tickets, cockpit_proposals, cockpit_projects
+          #     (operator workflow state)
+          #   - cockpit_agent_prompts, cockpit_agent_skills,
+          #     cockpit_agent_identity (agent definitions)
+          #   - cockpit_knowledge_base (KB rules + embeddings)
+          #   - cockpit_standing_tasks (cron specs)
+          #
+          # We DO NOT dump: reservations, transactions, guests, payroll, etc.
+          # Those rebuild from Cloudbeds + QuickBooks + Factorial syncs.
+
+          pg_dump \
+            --host="$HOST" \
+            --port=5432 \
+            --username="postgres.${SUPABASE_PROJECT_REF}" \
+            --dbname=postgres \
+            --no-owner \
+            --no-privileges \
+            --no-comments \
+            --schema=documentation \
+            --table=public.cockpit_agent_memory \
+            --table=public.cockpit_decisions \
+            --table=public.cockpit_change_log \
+            --table=public.cockpit_tickets \
+            --table=public.cockpit_proposals \
+            --table=public.cockpit_projects \
+            --table=public.cockpit_agent_prompts \
+            --table=public.cockpit_agent_skills \
+            --table=public.cockpit_agent_identity \
+            --table=public.cockpit_knowledge_base \
+            --table=public.cockpit_standing_tasks \
+            > "$OUTFILE" 2>dump_err.log || {
+              echo "::error::pg_dump failed. stderr:"
+              cat dump_err.log
+              exit 1
+            }
+
+          # Append a slim audit_log slice (last 30 days only — full table is mostly heartbeats)
+          echo "" >> "$OUTFILE"
+          echo "-- cockpit_audit_log (last 30 days, slim slice)" >> "$OUTFILE"
+          psql \
+            "host=$HOST port=5432 user=postgres.${SUPABASE_PROJECT_REF} dbname=postgres sslmode=require" \
+            --no-psqlrc --no-align --tuples-only --quiet \
+            -c "COPY (SELECT * FROM public.cockpit_audit_log WHERE created_at > now() - interval '30 days') TO STDOUT WITH (FORMAT csv, HEADER true)" \
+            > "${OUTFILE%.sql}_audit_log_30d.csv" 2>>dump_err.log || true
+
+          # Compress
+          gzip -9 "$OUTFILE"
+          gzip -9 "${OUTFILE%.sql}_audit_log_30d.csv" || true
+
+          # Stats
+          SIZE=$(du -h "${OUTFILE}.gz" | cut -f1)
+          LINES=$(zcat "${OUTFILE}.gz" | wc -l)
+          echo "Dump complete: ${OUTFILE}.gz ($SIZE, $LINES lines)"
+          echo "filename=${OUTFILE}.gz" >> "$GITHUB_OUTPUT"
+          echo "audit_csv=${OUTFILE%.sql}_audit_log_30d.csv.gz" >> "$GITHUB_OUTPUT"
+          echo "size=$SIZE" >> "$GITHUB_OUTPUT"
+          echo "lines=$LINES" >> "$GITHUB_OUTPUT"
+          echo "week=$WEEK" >> "$GITHUB_OUTPUT"
+
+      - name: Prune snapshots older than 26 weeks (6 months)
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          find cockpit/snapshots -name '*.sql.gz' -type f -mtime +182 -print -delete 2>/dev/null || true
+          find cockpit/snapshots -name '*_audit_log_30d.csv.gz' -type f -mtime +182 -print -delete 2>/dev/null || true
+
+      - name: Commit + push if changed
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          git config user.name  "namkhan-bi-bot"
+          git config user.email "data@thedonnaportals.com"
+
+          git add cockpit/snapshots/
+          if git diff --cached --quiet; then
+            echo "No changes to commit (snapshot identical to previous?)"
+            exit 0
+          fi
+
+          git commit -m "chore(snapshot): weekly platform snapshot ${{ steps.dump.outputs.week }}
+
+Automated weekly off-Supabase backup of irreplaceable platform tables.
+File: ${{ steps.dump.outputs.filename }} (${{ steps.dump.outputs.size }}, ${{ steps.dump.outputs.lines }} lines)
+Plus 30-day audit_log slice: ${{ steps.dump.outputs.audit_csv }}
+
+See ARCHITECTURE.md §19c for backup posture. This protects against the
+'manually-entered platform data lost beyond PITR window' failure mode."
+
+          git push origin HEAD:main
+
+      - name: Log to Supabase change_log
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          HOST="${SUPABASE_DB_HOST:-aws-0-eu-central-1.pooler.supabase.com}"
+          psql \
+            "host=$HOST port=5432 user=postgres.${SUPABASE_PROJECT_REF} dbname=postgres sslmode=require" \
+            --no-psqlrc \
+            -c "INSERT INTO public.cockpit_change_log (command_tag, object_type, schema_name, object_identity, session_user_name, current_user_name, application_name, statement, metadata) VALUES ('BACKUP SNAPSHOT', 'platform_snapshot', 'cockpit', 'cockpit/snapshots/${{ steps.dump.outputs.week }}.sql.gz', 'github_actions', 'namkhan-bi-bot', 'weekly_snapshot_workflow', 'Weekly off-Supabase backup of platform tables committed to repo.', jsonb_build_object('week', '${{ steps.dump.outputs.week }}', 'size', '${{ steps.dump.outputs.size }}', 'lines', '${{ steps.dump.outputs.lines }}', 'workflow_run', '${{ github.run_id }}'));"
