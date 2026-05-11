@@ -80,7 +80,14 @@ function md(s: string): string {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/```([\s\S]*?)```/g, '<pre style="background:#0a0a0b;border:1px solid #25252d;border-radius:6px;padding:10px;overflow:auto;font-size:12px"><code>$1</code></pre>')
+    // PBS 2026-05-11: Empty fenced code blocks were rendering as a black
+    // rectangle in chat replies. Strip empty/whitespace-only fences before
+    // the substitution runs.
+    .replace(/```\s*```/g, '')
+    .replace(/```([\s\S]*?)```/g, (_m, code: string) => {
+      if (!code || !code.trim()) return '';
+      return `<pre style="background:#0a0a0b;border:1px solid #25252d;border-radius:6px;padding:10px;overflow:auto;font-size:12px"><code>${code}</code></pre>`;
+    })
     .replace(/`([^`]+)`/g, '<code style="background:#1a1a20;padding:2px 5px;border-radius:3px;font-size:13px">$1</code>')
     .replace(/^### (.+)$/gm, '<h3 style="font-family:\'Cooper\',Georgia,serif;font-size:18px;margin:14px 0 6px;color:#ededf0;font-weight:400">$1</h3>')
     .replace(/^## (.+)$/gm, '<h2 style="font-family:\'Cooper\',Georgia,serif;font-size:22px;margin:16px 0 8px;color:#ededf0;font-weight:400">$1</h2>')
