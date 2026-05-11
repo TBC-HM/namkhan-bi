@@ -1,185 +1,267 @@
 # CLAUDE.md — instructions for AI coding agents working on this repo
 
-> Most AI agents (Claude Code, Cursor, Copilot, future Claude sessions) auto-read this file before doing anything. Anything written here applies to every AI-assisted change in this repo.
-
-## STOP — before you touch any UI code, READ THIS
-
-1. **Open `DESIGN_NAMKHAN_BI.md` (repo root)** — full canonical design system reference.
-2. **Open `docs/11_BRAND_AND_UI_STANDARDS.md`** — full spec for `<KpiBox>`, `<DataTable>`, `<StatusPill>`, `<PageHeader>`.
-3. Use canonical components only. Don't introduce new tile/table markup, hardcoded fontSize literals, hex colors, or `USD ` prefixes.
-4. **Read the design-system manifesto** (locked 2026-05-09 — see § "Design system manifesto" below). PBS directive: *the canvas at `/` is the primary UI; sub-page dashboards are the exception*. **Every** route renders inside `<Page>`; six canonical primitives only; no data cemetery.
-
-## Design system manifesto (locked 2026-05-09)
-
-Persisted in `cockpit_knowledge_base WHERE scope = 'design_system_manifesto'` so every agent that consults KB reads it before touching UI. Seven entries (ids 483–489); never overwrite.
-
-### The 7 binding rules
-
-1. **Canvas first.** Primary UI = the canvas at `/`. PBS asks → agent returns a Brief (signal · good · bad · proposals) → 3-state kanban (proposal · in_process · done). Sub-page dashboards are the **exception**, not the default. When a question is best answered by a viz, render one of the 3 sample dashboard layouts (`/sample/1|2|3`); otherwise return a Brief.
-
-2. **`<Page>` shell mandatory.** Every route renders inside `components/page/Page.tsx`. The shell owns page padding (32px sides, 64px bottom, max-width 1280, centered), eyebrow + Fraunces italic title, optional sub-pages strip, optional topRight slot for weather/user/date pills, and the SLH-affiliation footer. **Pages do not reinvent header/footer/chrome.** If you find yourself writing `<div style={{ minHeight: '100vh', padding: ... }}>`, stop and use `<Page>`.
-
-3. **Six primitives, nothing else:**
-   - `<Page>` — shell (`components/page/Page.tsx`)
-   - `<KpiBox>` — locked KPI tile (`components/kpi/KpiBox.tsx`)
-   - `<Panel>` — card around any chart/table/list (`components/page/Panel.tsx`)
-   - `<DataTable>` — sortable rows (`components/ui/DataTable.tsx`)
-   - `<Brief>` — signal+good+bad+proposals (`components/page/Brief.tsx`)
-   - `<Lane>` + `<ProposalCard>` — 3-state kanban (`components/page/{Lane,ProposalCard}.tsx`)
-   
-   Hard rule: **no ad-hoc `<div style={{ background, border, borderRadius }}>` mimicking these.** Wrap content in `<Panel>` instead.
-
-4. **Action overlay everywhere.** Every artifact (chart, table, KPI, brief) carries the same 4 actions, always: `✦ AI` · `⊕ Save to Reports` · `↻ Schedule` · `📁 Add to Project`. Single `<ArtifactActions>` component (TODO when wiring page-by-page). Each calls existing `/api/cockpit/*` endpoints. Never add a one-off action button outside this set.
-
-5. **Tokens locked in `:root`.** Use CSS variables in `styles/globals.css`: `--t-xs` (10px) → `--t-3xl` (30px) for typography; brand palette `--paper`, `--paper-warm`, `--ink`, `--brass`, `--moss`. **No** inline `style={{ fontSize: 14 }}`. **No** hex colors outside `:root`. **No** system-font fallbacks (Georgia/Helvetica/Arial inline) — use Fraunces / Inter Tight / JetBrains Mono. CI greps from DESIGN_NAMKHAN_BI.md verification recipes are binding.
-
-6. **Proposal lifecycle.** `cockpit_proposals` table is the atomic unit of agent work: `signal` + `agent_role` + `action_type` + `body` + `action_payload` + `status` (proposal | in_process | done | rejected). Trigger `proposals_bump_trust` auto-bumps `agent_trust` counters on status flips. Trust unlocks auto-run per `(agent_role, action_type)` pair after threshold (default 10) approves with zero rejects; one rejection re-locks. **Approval-required-always at start; trust meter UNLOCKS auto-run, never the other way around.**
-
-7. **No data cemetery.** A signal without a proposal is data cemetery. A proposal without state is a chat that goes nowhere. **Every** surface answers four questions in the same language: WHAT (signal) · WHY (body) · WHAT NEXT (proposals) · WHERE WE ARE (lane state). When designing any new surface, write it as a Brief first; only fall back to a dashboard layout if the Brief literally cannot carry the answer.
-
-## Mandatory session ritual (locked 2026-05-03)
-
-This is non-negotiable per the user. **Every** AI session that touches `app/`, `components/`, `styles/`, `lib/format.ts`, or talks about UI/design MUST:
-
-### At session START
-- Read `DESIGN_NAMKHAN_BI.md` end-to-end before any UI work
-- If a verification grep is needed, run it (recipes in the doc, "Verification gates" section)
-
-### At session END (before declaring work done)
-- Run `date +%Y-%m-%d` to get today's date — never invent it
-- Append a `### YYYY-MM-DD` heading + bullet list of changes to the "Update history" section at the bottom of `DESIGN_NAMKHAN_BI.md`
-- Commit the doc update with the deploy commit
-- **DO NOT skip this step.** The doc is the only authoritative source of truth across sessions; without the changelog, the next session has no idea what's canonical and rebuilds from scratch.
-
-## Canonical components (use these, never replicate)
-
-| Concern | Component | Path |
-|---|---|---|
-| KPI tile | `<KpiBox>` | `components/kpi/KpiBox.tsx` |
-| Table | `<DataTable>` | `components/ui/DataTable.tsx` (must wrap in `'use client'`) |
-| Status pill | `<StatusPill>` | `components/ui/StatusPill.tsx` |
-| Page header | `<PageHeader>` | `components/layout/PageHeader.tsx` |
-| Currency / date / empty | helpers | `lib/format.ts` (`fmtKpi`, `fmtTableUsd`, `fmtIsoDate`, `EMPTY`, ...) |
-
-Reference page: https://namkhan-bi.vercel.app/sales/inquiries — every other page must match this typography / hierarchy / surface.
-
-## Hard rules (no exceptions)
-
-1. `$` prefix for currency, never `USD `. Truncate `>$1k` to `$X.Xk`, `>$1M` to `$X.XM`.
-2. `₭` prefix for LAK (locked).
-3. ISO `YYYY-MM-DD` for every date.
-4. `—` (em-dash) for every empty cell — never `N/A`, `null`, blank, or `0`.
-5. True minus `−` (U+2212) for negatives, never ASCII hyphen.
-6. Italic Fraunces serif `var(--t-2xl)` for every KPI value.
-7. Mono uppercase brass-letterspaced (`var(--t-xs)`, `var(--ls-extra)`, `var(--brass)`) for every header/scope label.
-8. Zero hardcoded `fontSize` numeric literals. Use `var(--t-xs)`/`--t-sm`/etc.
-9. Zero hardcoded brand-color hex outside `:root`. Use CSS variables.
-10. Zero pre-formatted currency/pct/date strings passed where a typed prop + helper would work.
-
-## Verification recipes (run before claiming consistency)
-
-```bash
-# 1. Type-check
-npx tsc --noEmit
-
-# 2. Zero hardcoded fontSize
-grep -rE "fontSize:\s*[0-9]" app/ components/ | grep -v fuse_hidden | wc -l   # must be 0
-
-# 3. Zero `USD ` prefix in JSX
-grep -rE 'USD \{|USD [0-9]' app/ components/ | grep -v 'fuse_hidden\|//' | wc -l   # must be 0
-
-# 4. Zero hardcoded fontFamily
-grep -rE "fontFamily:\s*'(Georgia|Menlo|Helvetica|Arial)" app/ components/ | wc -l   # must be 0
-
-# 5. CDN cache check before debugging
-# Always test with `?bust=$RANDOM` on Vercel — `revalidate=60` + `force-dynamic` still cache HTML.
-```
-
-## Deploy
-
-CLI only. `npx vercel --prod --yes` — see `DEPLOY.md`. GitHub auto-deploy is OFF.
-
-## Concurrent-session warning
-
-Another session is running schema/data work on this repo. Once it silently reverted CSS in commit `27e4126` (subject said "audit: getDqIssues uses v_dq_open" but diff also dropped tokens). Mitigation:
-- Always re-run verification greps after `git pull`
-- Use belt-and-braces (both global `:root` aliases AND scoped fallbacks) so a single revert doesn't break a page
-- Coordinate or branch if doing parallel UI work
-
-## If memory entries are missing or stale
-
-If the AI session can't find the design system memory entries (`reference_namkhan_bi_design_system.md` or `feedback_namkhan_bi_design_session_ritual.md`), recreate them from `DESIGN_NAMKHAN_BI.md` § "Bootstrap if memory is wiped". The doc is the recovery source of truth.
+> This file is auto-read by Claude Code, Cursor, and similar AI coding
+> tools at the start of every session.
+>
+> It is the **operating manual** for AI agents working on this codebase.
+> Architectural truth lives in `ARCHITECTURE.md`. Design / UI rules
+> live in `DESIGN_NAMKHAN_BI.md`. Live system state lives in Supabase.
+>
+> Version: 2.0. Last updated: 2026-05-11.
 
 ---
 
-## Cockpit operating rules (added 2026-05-05)
+## 0. STOP — READ FIRST, in this order
 
-This repo is wired into the **IT Department Cockpit** runbook (`cockpit/` folder, `.claude/agents/`, `.github/workflows/`, Make.com scenarios, Supabase ops tables). The rules below apply on top of the design-system rules above. They are scoped to operational/agent behavior — they never override anything in the sections above.
+Before any code edit, schema change, or significant chat reply:
 
-### Operator
-PBS — self-employed hospitality data analyst, Spain. Communication: direct, short, structured. Bullets and tables over prose. Push back when logic is weak.
+1. **`ARCHITECTURE.md`** (repo root) — what we are building, why, the
+   multi-tenant + modular + phased structure. Non-negotiable context.
+2. **`DESIGN_NAMKHAN_BI.md`** (repo root) — the design system, only if
+   touching UI, styles, components, or `lib/format.ts`.
+3. **Supabase live state** — query before any DB work:
+   ```sql
+   SELECT * FROM v_session_context;            -- where we are right now (planned view)
+   SELECT * FROM cockpit_agent_memory
+     WHERE importance >= 9 ORDER BY id DESC;   -- standing rules + recent learnings
+   ```
+4. **The actual code.**
 
-### What this repo is
-The Namkhan BI app — business intelligence surface for The Namkhan boutique hotel (Laos, SLH-affiliated). Sole revenue source: Cloudbeds PMS. Production URL: `namkhan-bi.vercel.app` (custom domain TBD).
+Skipping these is the single biggest cause of regressions in this repo.
 
-### Stack (authoritative)
-| Layer | Tech |
+---
+
+## 1. Identity
+
+**This repo:** Namkhan BI — the reference implementation of The Beyond
+Circle's hospitality intelligence platform. First of multiple
+properties.
+
+**Operator:** PBS (Paul Bauer) — architect of The Beyond Circle.
+
+**Communication style:** blunt, bullets and tables, lead with the
+answer, push back when logic is weak, show 2–3 alternatives when
+relevant. Never flatter. Never propose stopping or sleeping. ROI-
+focused. Senior consultant tone.
+
+---
+
+## 2. Multi-tenant rules (P1 — non-negotiable)
+
+This platform serves multiple properties under multiple tenants. The
+Namkhan (Laos) and Donna Portals (Spain) are two distinct tenants
+today. External clients come in Phase 2.
+
+**Every operational query MUST be tenant-scoped.**
+
+| Rule | Why |
 |---|---|
-| Frontend | Next.js / React |
-| Hosting | Vercel (Pro) — `namkhan-bi` on team `pbsbase-2825s-projects` |
-| Database | Supabase (Pro) — project `namkhan-pms` |
-| PMS | Cloudbeds (TODO: cockpit wiring) |
-| CI/CD | GitHub Actions + Vercel CLI deploys (auto-deploy OFF) |
-| Monitoring | Vercel Speed Insights, Web Analytics, Vercel Agent |
-| Automation | Make.com (Pro) |
-| AI orchestration | Claude Code + Agent Teams (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`) |
+| Every operational table carries `tenant_id` AND `property_id` | Isolation enforced by RLS |
+| Every SQL operation against operational data filters by both columns | Cross-tenant leak is the platform-killing bug |
+| Cross-tenant joins happen only in Beyond Circle aggregation views (`SECURITY DEFINER` + explicit GRANT) | All other code paths see one tenant at a time |
+| Never hardcode `property_id = 260955` past 2026-05-11 | The Namkhan is one property of many |
+| Source-of-truth columns dispatch logic | `tenancy.properties.pms_source` decides Cloudbeds vs Mews; never assume |
 
-Do not introduce new tools without an ADR in `cockpit/decisions/`.
+If you find yourself writing `WHERE property_id = 260955`, stop — the
+property must come from session context, not the source code.
 
-### Reading order for any task
-1. This file end-to-end
-2. `DESIGN_NAMKHAN_BI.md` (repo root) — canonical design system, rules above
-3. `cockpit/glossary.md` — what terms mean
-4. `cockpit/constraints.md` — what you cannot do
-5. `cockpit/standards/` — task-specific standard (`brand-namkhan.md`, `usali.md`, `hotel-rules.md`, `security.md`, `code.md`)
-6. `cockpit/decisions/` — recent ADRs
-7. The actual code
+---
 
-`cockpit/standards/design-tokens.md` defers to `DESIGN_NAMKHAN_BI.md` for this repo. The locked design rules in the sections above win on any conflict.
+## 3. Database discipline (P1 — added 2026-05-11)
 
-### Hard constraints (never violate)
+The Supabase DB has 158+ tables across 19 schemas plus extensive
+materialized views. **Discovering before creating is mandatory.**
+
+### 3a. Before creating ANY new DB object
+
+Run discovery first:
+
+```sql
+-- Functions / RPCs
+SELECT n.nspname || '.' || p.proname AS fn
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE p.proname ILIKE '%<domain>%' AND n.nspname NOT IN ('pg_catalog','information_schema');
+
+-- Tables / views
+SELECT n.nspname AS schema, c.relname, c.relkind
+FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE c.relname ILIKE '%<domain>%' AND c.relkind IN ('r','v','m')
+  AND n.nspname NOT IN ('pg_catalog','information_schema','pg_toast');
+
+-- Columns of existing tables (verify names + types — never assume)
+SELECT column_name, data_type FROM information_schema.columns
+WHERE table_schema='<schema>' AND table_name='<table>';
+
+-- Enum values / status strings (verify actual values, never assume)
+SELECT status, COUNT(*) FROM <table> GROUP BY status ORDER BY 2 DESC;
+```
+
+If a comparable object exists, **use it** — do not wrap it in a new
+function unless the wrapper adds genuinely new logic.
+
+### 3b. Canonical views — source of truth, do NOT duplicate
+
+| View | What it returns |
+|---|---|
+| `mv_kpi_today` | Today's snapshot per property |
+| `v_kpi_daily` | Daily KPI series, USALI-aligned (USD) |
+| `v_revenue_usali` | Revenue by USALI department |
+| `kpi.v_occupancy_base` | Occupancy base view |
+| `kpi.v_capture_rate_daily` | Daily capture rate |
+| `kpi.v_ancillary_daily` | Daily ancillary revenue |
+| `sync_watermarks` | Per-entity Cloudbeds → Supabase sync state |
+| `mv_kpi_daily_by_segment` | Daily KPIs by segment |
+
+If you build a function or view that duplicates the math in any of
+these, you are creating drift between chat answers and dashboards. Use
+the canonical view as a building block.
+
+### 3c. Verified facts (do not assume — verify)
+
+| Concern | Reality |
+|---|---|
+| `reservations.status` values | `checked_out`, `canceled` (not `cancelled`), `no_show`, `confirmed`, `checked_in` |
+| `cockpit_tickets.status` values | `triaged`, `completed` (not `done`), `awaits_user`, `archived` |
+| `reservation_rooms.rate` currency | USD (NOT LAK, despite Namkhan being in Laos) |
+| `cockpit_agent_memory.memory_type` enum | `observation`, `decision`, `outcome`, `pattern`, `preference`, `fact` |
+| Property timezone | `Asia/Vientiane` for Namkhan; tenant-scoped going forward |
+| Operating currencies | LAK (Namkhan), EUR (Donna), USD (Beyond Circle reporting) |
+
+### 3d. Never assume
+
+- Column names — verify in `information_schema.columns`
+- Enum / status values — `SELECT DISTINCT … FROM table`
+- Currency — verify what's actually stored; label correctly
+- Existence — `pg_class` / `pg_proc` lookups before any DDL
+
+---
+
+## 4. Forward-writing discipline
+
+Every significant change writes itself forward so the next session,
+next agent, and next property build inherits context. **If it isn't in
+one of these tables, it didn't happen.**
+
+| What | Table |
+|---|---|
+| Every agent action, tool call, merge, sync run | `cockpit_audit_log` |
+| Every DDL change + significant state change | `cockpit_change_log` (planned) |
+| Significant architectural decisions | `cockpit_decisions` (ADR table, planned) |
+| End-of-session handoffs | `documentation.documents` + `document_versions` |
+| Agent learnings, standing rules | `cockpit_agent_memory` (importance ≥ 9 for rules) |
+
+### Session end (before declaring work done)
+
+1. Run `date -u +%Y-%m-%dT%H:%M:%SZ` — never invent timestamps.
+2. Write a handoff entry to `documentation.documents` summarising what
+   changed, what's in flight, what's blocked.
+3. If a new rule was learned, write it to `cockpit_agent_memory` with
+   appropriate importance.
+4. Commit doc updates with the deploy commit.
+
+**Do not skip this step.** Tonight's sessions have surfaced repeatedly
+that agents start cold because handoffs weren't written.
+
+---
+
+## 5. Design system rules
+
+If you are touching UI, styles, or `lib/format.ts`:
+
+1. Read `DESIGN_NAMKHAN_BI.md` end-to-end before any UI work.
+2. Use the six canonical primitives only: `<Page>`, `<KpiBox>`,
+   `<Panel>`, `<DataTable>`, `<Brief>`, `<Lane>` + `<ProposalCard>`.
+3. No hardcoded `fontSize` numeric literals — use `var(--t-*)`.
+4. No hex colors outside `:root` — use brand CSS variables.
+5. No `USD ` prefix — use `$` for USD, `₭` for LAK, `€` for EUR.
+6. Em-dash `—` for empty cells, never `N/A` / `null` / `0`.
+7. True minus `−` (U+2212) for negatives, never ASCII hyphen.
+
+Verification greps (CI-enforced):
+
+```bash
+npx tsc --noEmit
+grep -rE "fontSize:\s*[0-9]" app/ components/ | grep -v fuse_hidden | wc -l   # must be 0
+grep -rE 'USD \{|USD [0-9]' app/ components/ | grep -v 'fuse_hidden\|//' | wc -l  # must be 0
+grep -rE "fontFamily:\s*'(Georgia|Menlo|Helvetica|Arial)" app/ components/ | wc -l  # must be 0
+```
+
+For everything else design-related, defer to `DESIGN_NAMKHAN_BI.md`.
+
+---
+
+## 6. Hard constraints (no exceptions)
+
+### Code
+
+- Never invent Cloudbeds fields, endpoints, or response shapes —
+  cross-reference Cloudbeds API docs or developer forum; flag if
+  unverified.
 - Never push directly to `main` — always PR.
-- Never modify production database schema without approval.
-- Never touch payment, auth, or booking-write code without approval.
-- Never commit secrets or `.env` files.
-- Never invent data — if Supabase or Cloudbeds doesn't return it, say so.
+- Admin-bypass merges are for emergencies only, logged in audit_log
+  with reason.
+- Never modify production schema without PBS approval.
 - Never disable tests to make a PR green.
-- Never auto-merge PRs touching: `/auth/`, `/payment/`, `/booking/`, `/api/admin/`, schema migrations.
-- Always include a rollback plan in PR description.
+- Never commit secrets or `.env` files — `.gitignore` already covers
+  them. `gitleaks` pre-commit hook coming (ADR-002).
+- Never touch payment, auth, or booking-write code without approval.
 
-### Hotel/business rules
-- Follow USALI for any accounting/reporting (see `cockpit/standards/usali.md`).
-- Cloudbeds is the sole revenue source for Namkhan — never propose changes that bypass it.
-- Currency: LAK base, USD reporting. Prefix `$` for USD, `₭` for LAK (matches design rules above).
-- Prioritize occupancy without rate erosion or distribution-control loss.
-- Direct booking growth is a primary KPI — never reduce it.
-- Never invent room counts, prices, or guest data — query Cloudbeds or Supabase.
+### Data
 
-### Brand
-- Active brand for this repo: **Namkhan** — see `cockpit/standards/brand-namkhan.md` and the locked rules in `DESIGN_NAMKHAN_BI.md`.
-- `cockpit/standards/brand-donna.md` is parked in the folder for future cross-repo reuse but is NOT active here.
+- Never invent values. If Supabase or Cloudbeds doesn't return it, say
+  so. Never fabricate numbers.
+- Never cross tenant boundaries in queries outside Beyond Circle
+  internal aggregation views.
+- Never write tenant data without `tenant_id` AND `property_id`.
 
-### Output format when responding to PBS
-- Bullets and tables, not paragraphs.
-- Lead with the answer, not the reasoning.
-- If something in PBS's idea is wrong, say so directly with reasoning.
-- Never apologize unnecessarily or add filler.
-- Show 2–3 alternatives when relevant.
+### Agents / chat
 
-### Agent roles (when running as a team)
+- Never give particular advice in public visitor mode without enough
+  property context (Phase 2 rule, but design code for it now).
+- Never claim auto-run for an action that hasn't reached its trust
+  threshold.
+- Never bypass the proposal lifecycle (proposal → in_process → done).
+
+---
+
+## 7. Hospitality / business rules
+
+- **USALI 11th edition** is the accounting standard for all reporting.
+- **Cloudbeds is the sole PMS-revenue source** for properties where
+  `pms_source = 'cloudbeds'`. Never propose changes that bypass it.
+- **Direct booking growth** is a primary KPI. Never propose changes that
+  reduce it.
+- **Currency:** operating currency varies per property (LAK, EUR, ...);
+  reporting currency = USD for all TBC tenants; Beyond Circle
+  consolidates in USD.
+- **Multi-language:** day-one EN, ES, LO, DE. Agent generates in
+  user's language. UI translated via i18n catalogs. Brand-voiced
+  content per property per language.
+- **Brand:** Namkhan, Donna Portals, and future client properties each
+  have distinct brand voices and visual identities. Same schema, fully
+  separated content. Never blend.
+
+---
+
+## 8. Output style when responding to PBS
+
+- Bullets and tables; not paragraphs.
+- Lead with the answer, then the reasoning.
+- If PBS's logic is wrong, say so directly with reasoning.
+- Never apologise unnecessarily or add filler.
+- Show 2–3 alternatives when a real choice exists.
+- Be willing to be unpopular when correct.
+
+This is also captured in `cockpit_agent_memory` at importance=10 — do
+not let it drift.
+
+---
+
+## 9. Agent roles when running as a team
+
 | Role | Owns | Cannot do |
 |---|---|---|
-| Lead | Decomposition, synthesis, final PR | Direct code (delegates) |
+| Lead (Felix) | Decomposition, dispatch, synthesis, audit log writes | Direct code commits — delegates |
 | Frontend | UI, components, styling | Backend logic, schema |
 | Backend | API routes, business logic | UI, schema migrations without approval |
 | Designer (read-only) | Design-token + brand enforcement | Modify code — flags only |
@@ -187,18 +269,68 @@ Do not introduce new tools without an ADR in `cockpit/decisions/`.
 | Reviewer | Security, deps, perf, correctness | Modify code — flags only |
 | Researcher | Investigation, analysis | Modify code |
 
-### Email / ticket conventions (Dev Arm)
-- Tickets are created from email (intake address: TODO — `dev@` alias not yet set).
+Specialist HoD agents (Vector, Lumen, Intel, Forge, Mercer) are bound
+to modules — see `ARCHITECTURE.md` §17.
+
+---
+
+## 10. Stack (authoritative)
+
+| Layer | Tech |
+|---|---|
+| Frontend | Next.js 14 (App Router) / React |
+| Hosting | Vercel (Pro) — team `pbsbase-2825s-projects`, project `namkhan-bi` |
+| Database | Supabase (Pro) — `namkhan-pms` (id `kpenyneooigsyuuomgct`), eu-central-1 |
+| Integration ETL | Make.com (Pro) |
+| AI | Anthropic Claude (Sonnet 4.5 — ZDR for prod, ADR-002) |
+| CI/CD | GitHub Actions + Vercel auto-deploy from `main` |
+| Monitoring | Vercel Speed Insights, Web Analytics, Vercel Agent |
+| Secret storage | GitHub Secrets, Vercel env vars, Supabase Vault, Make Connections |
+| Billing (Phase 2+) | Stripe |
+
+No new tools without an ADR.
+
+---
+
+## 11. Email / ticket conventions (Dev Arm)
+
+- Tickets are created from chat or from email (intake address: TBD).
 - Digest / alert email: `data@thedonnaportals.com`.
-- If ticket intent is unclear, ask 1–3 clarifying questions before building.
-- Always ship a preview URL, never auto-merge to production for non-trivial changes.
-- Reply format: brief summary → what was done → preview link → what PBS needs to decide.
+- If ticket intent is unclear, ask 1–3 clarifying questions before
+  building.
+- Always ship a preview URL; never auto-merge to production for
+  non-trivial changes.
+- Reply format: brief summary → what was done → preview link → what
+  PBS needs to decide.
 
-### When you're stuck
-1. Re-read this file and `cockpit/glossary.md`.
-2. Check `cockpit/decisions/` for prior similar work.
-3. Query Supabase `cockpit_tickets` for related past tickets.
-4. Still stuck: stop, document the blocker in the ticket, escalate via email — don't guess.
+---
 
-### Updating this file
-Append updates with a date heading at the bottom of the relevant section and a reason. Don't rewrite history. Major changes need an ADR in `cockpit/decisions/`.
+## 12. When you're stuck
+
+1. Re-read this file + `ARCHITECTURE.md`.
+2. Query Supabase: `cockpit_agent_memory` (rules), `cockpit_audit_log`
+   (recent activity), `documentation.documents` (prior handoffs).
+3. Check `cockpit/decisions/` and `cockpit_decisions` table for ADRs.
+4. Search `cockpit_tickets` for similar past tickets.
+5. Still stuck: document the blocker in the ticket; escalate via chat
+   or email — do not guess.
+
+---
+
+## 13. Updating this file
+
+- Append updates with a date heading at the bottom of the relevant
+  section + a reason.
+- Don't rewrite history.
+- Major changes need an ADR in `cockpit_decisions`.
+
+---
+
+## Update history
+
+| Date | Change | Author |
+|---|---|---|
+| 2026-05-03 | Mandatory session ritual locked | PBS |
+| 2026-05-05 | Cockpit operating rules added | PBS |
+| 2026-05-09 | Design system manifesto locked | PBS |
+| 2026-05-11 | v2.0 — restructured: leads with reading order; multi-tenant rules as P1; database-discipline section added (tonight's lessons); points at ARCHITECTURE.md instead of duplicating; design rules trimmed and deferred to DESIGN_NAMKHAN_BI.md; stale rules removed (deploy-CLI-only line dropped) | PBS + Claude |
