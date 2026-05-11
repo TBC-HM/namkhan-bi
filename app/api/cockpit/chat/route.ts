@@ -802,55 +802,155 @@ export async function POST(req: Request) {
         ? (NICKNAME_TO_ROLE[mention] ?? mention)
         : "lead";
       const personaMap: Record<string, { name: string; voice: string }> = {
-        lead:           { name: "Felix",       voice: "You are Felix, the cockpit lead at The Namkhan (luxury boutique hotel in Luang Prabang, Laos). Conversational, direct, warm. No jargon. No internal JSON. No \"recommended_agent\" or plans — that is for tickets, not chat. Reply in 1–3 short sentences unless asked to elaborate. If the user just greeted you, greet them back and ask what they want to work on." },
-          architect:    { name: "Felix",       voice: "You are Felix, the architect/cockpit lead at The Namkhan. Conversational, direct, warm. No jargon. No internal JSON. Reply in 1–3 short sentences unless asked to elaborate." },
-          it_manager:   { name: "Captain Kit", voice: "You are Captain Kit, the IT manager at The Namkhan. Direct, technical, no fluff. Reply in 1–3 short sentences unless asked to elaborate." },
-          revenue_hod:  { name: "Vector",      voice: "You are Vector, the Revenue HoD at The Namkhan. Numbers-first, dry, sharp. Reply in 1–3 short sentences." },
+        lead:           { name: "Felix",       voice: "You are Felix, the cockpit lead at The Namkhan (luxury boutique hotel in Luang Prabang, Laos). Conversational, direct, warm. No jargon. No internal JSON. No \"recommended_agent\" or plans — that is for tickets, not chat. Reply in 1–3 short sentences unless asked to elaborate. If the user asks a question that can be answered from the data tools, USE THE TOOLS — never make up numbers. If you don't have a tool for the question, say so." },
+          architect:    { name: "Felix",       voice: "You are Felix, the architect/cockpit lead at The Namkhan. Conversational, direct, warm. No jargon. No internal JSON. Reply in 1–3 short sentences unless asked to elaborate. If the user asks a question that can be answered from the data tools, USE THE TOOLS — never make up numbers." },
+          it_manager:   { name: "Captain Kit", voice: "You are Captain Kit, the IT manager at The Namkhan. Direct, technical, no fluff. Reply in 1–3 short sentences. Use the data tools when asked about sync status, KPIs, or backlog." },
+          revenue_hod:  { name: "Vector",      voice: "You are Vector, the Revenue HoD at The Namkhan. Numbers-first, dry, sharp. Reply in 1–3 short sentences. Use the data tools for ADR/RevPAR/occupancy questions — never invent numbers." },
           sales_hod:    { name: "Mercer",      voice: "You are Mercer, the Sales HoD at The Namkhan. Warm but firm. Reply in 1–3 short sentences." },
           marketing_hod:{ name: "Lumen",       voice: "You are Lumen, the Marketing HoD at The Namkhan. Brand-aware, casual luxury tone. Reply in 1–3 short sentences." },
           operations_hod:{name: "Forge",       voice: "You are Forge, the Operations HoD at The Namkhan. Practical, no-nonsense. Reply in 1–3 short sentences." },
-          finance_hod:  { name: "Intel",       voice: "You are Intel, the Finance HoD at The Namkhan. USALI-aware, blunt. Reply in 1–3 short sentences." },
+          finance_hod:  { name: "Intel",       voice: "You are Intel, the Finance HoD at The Namkhan. USALI-aware, blunt. Reply in 1–3 short sentences. Use the data tools for revenue and KPI questions." },
       };
       const persona = personaMap[personaRole] ?? personaMap.lead;
 
-      // Build messages array from prior history.
+      // ────── Tool catalog: allowlisted Supabase RPCs ──────────────────────
+      // The model can only call these by name. Each maps to a SECURITY DEFINER
+      // function in Postgres (see migration felix_chat_query_tools_v1).
+      const tools = [
+        {
+          name: "cloudbeds_sync_status",
+          description: "Returns per-entity Cloudbeds → Supabase sync freshness (last sync time, minutes ago, status: fresh/ok/stale/very_stale). Use when the user asks 'when did the last sync run', 'is Cloudbeds syncing', 'sync status'.",
+          input_schema: { type: "object", properties: {}, required: [] },
+        },
+        {
+          name: "kpi_today",
+          description: "Returns today's hotel KPIs: arrivals, departures, in-house guests, occupancy %, ADR, rooms revenue, available rooms. Use for 'how are we doing today', 'occupancy today', 'arrivals today'.",
+          input_schema: { type: "object", properties: {}, required: [] },
+        },
+        {
+          name: "kpi_period",
+          description: "Returns KPIs for a named period: occupancy, ADR, RevPAR, nights sold, rooms revenue. Use for 'MTD occupancy', 'last 30 days revenue', 'YTD ADR'.",
+          input_schema: {
+            type: "object",
+            properties: {
+              period: {
+                type: "string",
+                enum: ["mtd", "last_7", "last_30", "ytd"],
+                description: "Named period. mtd = month-to-date, last_7 = trailing 7 days, last_30 = trailing 30 days, ytd = year-to-date.",
+              },
+            },
+            required: ["period"],
+          },
+        },
+        {
+          name: "ticket_status_summary",
+          description: "Returns the cockpit ticket backlog: total open, triaged, awaiting user, completed in last 24h, completed today. Use for 'what's in the backlog', 'how many open tickets', 'what was shipped today'.",
+          input_schema: { type: "object", properties: {}, required: [] },
+        },
+      ];
+
+      // ────── Tool executor: maps tool_name → Postgres RPC ─────────────────
+      async function runTool(name: string, input: Record<string, unknown>): Promise<string> {
+        try {
+          if (name === "cloudbeds_sync_status") {
+            const { data, error } = await supabase.rpc("felix_cloudbeds_sync_status");
+            if (error) return `ERROR: ${error.message}`;
+            return JSON.stringify(data ?? []);
+          }
+          if (name === "kpi_today") {
+            const { data, error } = await supabase.rpc("felix_kpi_today");
+            if (error) return `ERROR: ${error.message}`;
+            return JSON.stringify(data ?? []);
+          }
+          if (name === "kpi_period") {
+            const period = typeof input.period === "string" ? input.period : "mtd";
+            const { data, error } = await supabase.rpc("felix_kpi_period", { p_period: period });
+            if (error) return `ERROR: ${error.message}`;
+            return JSON.stringify(data ?? []);
+          }
+          if (name === "ticket_status_summary") {
+            const { data, error } = await supabase.rpc("felix_ticket_status_summary");
+            if (error) return `ERROR: ${error.message}`;
+            return JSON.stringify(data ?? []);
+          }
+          return `ERROR: unknown tool "${name}"`;
+        } catch (e) {
+          return `ERROR: ${(e as Error).message}`;
+        }
+      }
+
+      // ────── Conversation history + initial messages ──────────────────────
       const priorTurns = (conversation_history ?? []).slice(-12);
-      const messages = [
+      type ChatMsg = { role: "user" | "assistant"; content: unknown };
+      const conv: ChatMsg[] = [
         ...priorTurns.map((t) => ({ role: t.role, content: t.content })),
         { role: "user" as const, content: message },
       ];
 
       let replyText = `Hi — I'm here. What do you want to work on?`;
+      const toolsUsed: string[] = [];
+
       if (apiKey) {
-        try {
-          const r = await fetch("https://api.anthropic.com/v1/messages", {
-            method: "POST",
-            headers: {
-              "x-api-key": apiKey,
-              "anthropic-version": "2023-06-01",
-              "content-type": "application/json",
-            },
-            body: JSON.stringify({
-              model: "claude-sonnet-4-5-20250929",
-              max_tokens: 600,
-              system: persona.voice,
-              messages,
-            }),
-          });
-          if (r.ok) {
-            const j = await r.json();
-            const t = j?.content?.[0]?.text;
-            if (typeof t === "string" && t.trim().length > 0) {
-              replyText = t.trim();
-            }
+        // Up to 3 iterations of tool use.
+        for (let iter = 0; iter < 3; iter++) {
+          let r: Response;
+          try {
+            r = await fetch("https://api.anthropic.com/v1/messages", {
+              method: "POST",
+              headers: {
+                "x-api-key": apiKey,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+              },
+              body: JSON.stringify({
+                model: "claude-sonnet-4-5-20250929",
+                max_tokens: 1024,
+                system: persona.voice,
+                tools,
+                messages: conv,
+              }),
+            });
+          } catch {
+            break;
           }
-        } catch {
-          // fall through with default replyText
+          if (!r.ok) break;
+          const j = await r.json();
+          const blocks = Array.isArray(j?.content) ? j.content : [];
+          const stopReason = j?.stop_reason;
+
+          // Collect text + tool_use blocks
+          const textParts: string[] = [];
+          const toolUses: Array<{ id: string; name: string; input: Record<string, unknown> }> = [];
+          for (const b of blocks) {
+            if (b.type === "text" && typeof b.text === "string") textParts.push(b.text);
+            if (b.type === "tool_use") toolUses.push({ id: b.id, name: b.name, input: b.input ?? {} });
+          }
+          if (textParts.length > 0) replyText = textParts.join("\n").trim();
+
+          if (stopReason !== "tool_use" || toolUses.length === 0) {
+            // Final reply, no more tools requested.
+            break;
+          }
+
+          // Push the assistant's mixed block as-is, then provide tool_result blocks.
+          conv.push({ role: "assistant", content: blocks });
+          const toolResults = [];
+          for (const tu of toolUses) {
+            toolsUsed.push(tu.name);
+            const result = await runTool(tu.name, tu.input);
+            toolResults.push({ type: "tool_result", tool_use_id: tu.id, content: result });
+          }
+          conv.push({ role: "user", content: toolResults });
         }
       }
 
-      // Persist as a normal triaged ticket so ChatShell's existing
-      // subscription/render path works without modification.
+      // Optional subtle tool-use footer so PBS can see what was checked.
+      const toolFooter = toolsUsed.length > 0
+        ? `\n\n_checked: ${[...new Set(toolsUsed)].join(", ")}_`
+        : "";
+
+      // Persist using ChatShell's expected **Request**: framing so the user
+      // message renders as one bubble and the reply as a separate bubble.
       const { data: chatTicket } = await supabase
         .from("cockpit_tickets")
         .insert({
@@ -858,12 +958,13 @@ export async function POST(req: Request) {
           arm: "chat",
           intent: "chat",
           status: "triaged",
-          parsed_summary: `${message}\n\n---\n\n**${persona.name}**\n\n${replyText}`,
+          parsed_summary: `**Request**: ${message}\n\n${replyText}${toolFooter}`,
           notes: JSON.stringify({
             chat_reply: true,
             recommended_role: personaRole,
             recommended_agent: personaRole,
             persona: persona.name,
+            tools_used: toolsUsed,
           }),
           iterations: 0,
         })
@@ -874,6 +975,7 @@ export async function POST(req: Request) {
         ticket: chatTicket,
         chat_mode: true,
         persona: persona.name,
+        tools_used: toolsUsed,
       });
     }
     // ─────────────────────────────────────────────────────────────────────
