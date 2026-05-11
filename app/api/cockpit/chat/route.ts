@@ -758,12 +758,12 @@ function looksLikeChat(message: string): boolean {
   if (/\b(build|create|implement|refactor|migrate|deploy|spec|decompose|ticket|fix this|fix the|investigate|audit|sweep|run\s+\w+|activate|fire|approve|reject|open\s+(issue|pr))\b/i.test(m)) {
     return false;
   }
-  // Investigative / data-lookup verbs → triage (Felix can't query DBs in chat mode).
-  // "check supabase", "show me revenue", "what's the occupancy", "when did X happen",
-  // "how many bookings", "is the sync running", "are we missing emails", "list X", "find X"
-  if (/\b(check\s+(in\s+|the\s+|on\s+|with\s+)?(supabase|cloudbeds|database|db|logs|sync|status)|show\s+me|how\s+many|when\s+(did|was|last)|is\s+(the\s+|there\s+)?(sync|cron|job|integration)|are\s+we|list\s+(all|the)|find\s+(all|the))\b/i.test(m)) {
-    return false;
-  }
+  // (Removed 2026-05-11): the data-lookup regex (check supabase / show me /
+  // how many / when did) was forcing data questions into the full triage
+  // pipeline, which output a "Plan / Blockers / Recommended agent" card
+  // instead of a conversational reply. Felix doesn't have DB tools wired
+  // yet, but should answer in prose ("I can't query that directly yet — try
+  // the cockpit health page") rather than spawning a triage card.
   // Approval words handled below.
   if (/^(approve|yes|apply|ok approve|ship it|reject|no)$/i.test(m.toLowerCase())) return false;
   // Anything else short and prose-y → chat.
