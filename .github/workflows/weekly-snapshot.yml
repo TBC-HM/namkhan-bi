@@ -168,19 +168,17 @@ jobs:
             exit 0
           fi
 
-          git commit -m "chore(snapshot): weekly platform snapshot ${{ steps.dump.outputs.week }}
-
-Automated weekly off-Supabase backup of irreplaceable platform tables.
-File: ${{ steps.dump.outputs.filename }} (${{ steps.dump.outputs.size }}, ${{ steps.dump.outputs.lines }} lines)
-Plus 30-day audit_log slice: ${{ steps.dump.outputs.audit_csv }}
-
-See ARCHITECTURE.md §19c for backup posture. This protects against the
-'manually-entered platform data lost beyond PITR window' failure mode."
+          git commit \
+            -m "chore(snapshot): weekly platform snapshot ${{ steps.dump.outputs.week }}" \
+            -m "Automated weekly off-Supabase backup of irreplaceable platform tables." \
+            -m "File: ${{ steps.dump.outputs.filename }} (${{ steps.dump.outputs.size }}, ${{ steps.dump.outputs.lines }} lines)" \
+            -m "Plus 30-day audit_log slice: ${{ steps.dump.outputs.audit_csv }}" \
+            -m "See ARCHITECTURE.md §19c for backup posture. Closes the 'manually-entered platform data lost beyond PITR window' failure mode."
 
           git push origin HEAD:main
 
       - name: Log to Supabase change_log
-        if: steps.guard.outputs.skip != 'true'
+        if: success() && steps.guard.outputs.skip != 'true'
         env:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
