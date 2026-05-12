@@ -18,7 +18,7 @@ import Panel from '@/components/page/Panel';
  *   • black background, brass + paper accents (brand)
  * ────────────────────────────────────────────────────────────────────────── */
 
-interface AttentionItem { id: string; label: string; severity: 'high' | 'medium' | 'low'; kind: 'leakage' | 'opportunity' }
+interface AttentionItem { id: string; label: string; severity: 'high' | 'medium' | 'low'; kind: 'leakage' | 'opportunity'; created_at?: string }
 interface DocItem       {
   id: string;
   label: string;
@@ -2345,6 +2345,23 @@ function AttnRow({
           lineHeight:     1.4,
         }}
       >{item.label}</a>
+      {item.created_at && (
+        <span
+          title={`Flagged ${new Date(item.created_at).toISOString().slice(0,16).replace('T',' ')} UTC`}
+          style={{
+            fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+            fontSize: 10,
+            letterSpacing: '0.08em',
+            color: 'var(--text-dim, #7d7565)',
+            padding: '1px 6px',
+            border: '1px solid var(--border-2, #2a261d)',
+            borderRadius: 999,
+            flexShrink: 0,
+          }}
+        >
+          {humanAge(item.created_at)}
+        </span>
+      )}
       <button
         onClick={onAsk}
         title="Ask Vector about this"
@@ -2453,4 +2470,16 @@ function KBPopover({
       )}
     </div>
   );
+}
+
+// Intake #6 (2026-05-12): compact age string for AttnRow timestamp chip.
+// Returns "Nm" (<1h), "Nh" (<1d), "Nd" (otherwise). Negative deltas read "now".
+function humanAge(iso: string): string {
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return '';
+  const delta = Math.max(0, Date.now() - t);
+  if (delta < 60_000) return 'now';
+  if (delta < 3_600_000) return `${Math.round(delta / 60_000)}m`;
+  if (delta < 86_400_000) return `${Math.round(delta / 3_600_000)}h`;
+  return `${Math.round(delta / 86_400_000)}d`;
 }

@@ -12,6 +12,10 @@ export interface DeptAttentionItem {
   label: string;
   severity: 'high' | 'medium' | 'low';
   kind: 'leakage' | 'opportunity';
+  // Intake #6 (2026-05-12): optional ISO timestamp. When present, AttnRow
+  // shows "Nm/Nh/Nd ago" next to the label so PBS sees how long the item
+  // has been sitting unaddressed. Seeded defaults can omit it.
+  created_at?: string;
 }
 export interface DeptDocItem {
   id: string;

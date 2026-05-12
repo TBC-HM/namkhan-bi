@@ -40,12 +40,19 @@ interface InboxSummary {
   outbound_24h: number;
   top_senders_24h: SenderSummary[];
   generated_at: string;
+  // Intake #15 (2026-05-12): expose Gmail poller freshness so the popover
+  // can distinguish "really 0 emails" from "pipeline stalled". null when
+  // no row exists; otherwise ISO timestamp of the last poll attempt.
+  poller_last_run_at: string | null;
+  poller_minutes_since: number | null;
 }
 
 const EMPTY: InboxSummary = {
   unread: 0, unanswered: 0, spam: 0,
   inbound_24h: 0, outbound_24h: 0, top_senders_24h: [],
   generated_at: new Date().toISOString(),
+  poller_last_run_at: null,
+  poller_minutes_since: null,
 };
 
 export async function GET() {
@@ -56,7 +63,7 @@ export async function GET() {
     const since7d  = new Date(Date.now() - 7 * 86_400_000).toISOString();
 
     // Run the four reads in parallel.
-    const [unreadRes, statsRes, msgRes, msg7Res] = await Promise.all([
+    const [unreadRes, statsRes, msgRes, msg7Res, pollerRes] = await Promise.all([
       // Unread = inquiries.status='new' for this property.
       sb.schema('sales').from('inquiries')
         .select('id', { count: 'exact', head: true })
@@ -75,6 +82,11 @@ export async function GET() {
         .eq('property_id', PROPERTY_ID).eq('direction', 'inbound')
         .gte('received_at', since7d)
         .limit(5000),
+      // Latest Gmail poller run — used to detect a stalled pipeline (intake #15).
+      sb.schema('sales').from('gmail_poll_runs')
+        .select('started_at')
+        .order('started_at', { ascending: false })
+        .limit(1),
     ]);
 
     const stats = (statsRes.data ?? []) as Array<{ spam: number; unanswered: number }>;
@@ -134,14 +146,23 @@ export async function GET() {
       .sort((a, b) => b.inbound_24h - a.inbound_24h)
       .slice(0, 5);
 
+    // Poller freshness (intake #15).
+    const pollerRow = ((pollerRes.data ?? []) as Array<{ started_at: string }>)[0] ?? null;
+    const pollerLast = pollerRow?.started_at ?? null;
+    const pollerMinSince = pollerLast
+      ? Math.round((Date.now() - new Date(pollerLast).getTime()) / 60_000)
+      : null;
+
     const payload: InboxSummary = {
-      unread:           unreadRes.count ?? 0,
-      unanswered:       totalUnanswered,
-      spam:             totalSpam,
-      inbound_24h:      inbound24,
-      outbound_24h:     outbound24,
+      unread:               unreadRes.count ?? 0,
+      unanswered:           totalUnanswered,
+      spam:                 totalSpam,
+      inbound_24h:          inbound24,
+      outbound_24h:         outbound24,
       top_senders_24h,
-      generated_at:     new Date().toISOString(),
+      generated_at:         new Date().toISOString(),
+      poller_last_run_at:   pollerLast,
+      poller_minutes_since: pollerMinSince,
     };
     return NextResponse.json(payload);
   } catch {

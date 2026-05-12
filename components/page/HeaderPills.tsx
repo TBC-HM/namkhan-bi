@@ -81,11 +81,16 @@ interface InboxSummary {
     is_automation: boolean;
   }>;
   generated_at: string;
+  // Intake #15: Gmail poller freshness (null when no row).
+  poller_last_run_at?: string | null;
+  poller_minutes_since?: number | null;
 }
 const INBOX_EMPTY: InboxSummary = {
   unread: 0, unanswered: 0, spam: 0,
   inbound_24h: 0, outbound_24h: 0, top_senders_24h: [],
   generated_at: '',
+  poller_last_run_at: null,
+  poller_minutes_since: null,
 };
 
 function formatRel(iso: string | null): string {
@@ -364,6 +369,50 @@ function InboxPopover({ summary, onClose }: { summary: InboxSummary; onClose: ()
       <div style={S.popTitle}>
         Last 24 hours · <em>{summary.inbound_24h} in / {summary.outbound_24h} out</em>
       </div>
+
+      {/* Intake #15 (2026-05-12): warn when Gmail poller looks stalled so
+          "0 in / 0 out" doesn't read as real silence. Threshold 30 min. */}
+      {(() => {
+        const m = summary.poller_minutes_since;
+        if (m == null) {
+          return (
+            <div
+              style={{
+                margin: '6px 0 10px',
+                padding: '6px 10px',
+                background: 'rgba(184, 84, 42, 0.08)',
+                border: '1px solid rgba(192, 88, 76, 0.35)',
+                borderRadius: 6,
+                fontSize: 11,
+                color: 'var(--accent-3, #c2a572)',
+              }}
+            >
+              ⚠ Gmail poller never ran — counts above may be empty. See <a href="/admin/gmail-connect" style={{ color: 'var(--accent, #a8854a)' }}>/admin/gmail-connect</a>.
+            </div>
+          );
+        }
+        if (m > 30) {
+          const txt = m < 60 ? `${m}m ago`
+                    : m < 1440 ? `${Math.round(m/60)}h ago`
+                    : `${Math.round(m/1440)}d ago`;
+          return (
+            <div
+              style={{
+                margin: '6px 0 10px',
+                padding: '6px 10px',
+                background: 'rgba(184, 84, 42, 0.08)',
+                border: '1px solid rgba(192, 88, 76, 0.35)',
+                borderRadius: 6,
+                fontSize: 11,
+                color: 'var(--accent-3, #c2a572)',
+              }}
+            >
+              ⚠ Last Gmail poll {txt} — counts above may be stale. <a href="/admin/gmail-connect" style={{ color: 'var(--accent, #a8854a)' }}>Reconnect</a>.
+            </div>
+          );
+        }
+        return null;
+      })()}
 
       {/* Stats grid (4 KPI cells) */}
       <div style={S.popGrid}>
