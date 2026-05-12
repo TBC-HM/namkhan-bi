@@ -491,32 +491,12 @@ function InboxPopover({ summary, onClose }: { summary: InboxSummary; onClose: ()
         Last 24 hours · <em>{summary.inbound_24h} in / {summary.outbound_24h} out</em>
       </div>
 
-      {/* 2026-05-12: not-connected notice for properties without a Gmail OAuth
-          row (Donna today). Replaces the "stale poll" banner — there is no
-          poll to be stale on. */}
-      {summary.connected === false && (
-        <div
-          style={{
-            margin: '6px 0 10px',
-            padding: '10px 12px',
-            background: 'rgba(168, 133, 74, 0.08)',
-            border: '1px solid var(--accent, #a8854a)',
-            borderRadius: 6,
-            fontSize: 12,
-            color: 'var(--text-1, #f0e5cb)',
-            lineHeight: 1.5,
-          }}
-        >
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--accent, #a8854a)', marginBottom: 4 }}>
-            Not connected yet
-          </div>
-          This property has no Gmail OAuth connection. Inbound and outbound
-          counts will stay at zero until <a href="/admin/gmail-connect" style={{ color: 'var(--accent, #a8854a)' }}>/admin/gmail-connect</a> is wired for this property.
-        </div>
-      )}
+      {/* 2026-05-12 (PBS clarification): no "Not connected" notice here.
+          That belongs on the inquiry page where per-mailbox feeds live.
+          Header inbox chip is the property-mailbox aggregate; keep it lean. */}
 
-      {/* Last-email-ago line. Always shown when connected and we have a row. */}
-      {summary.connected !== false && summary.last_email_minutes_since != null && (
+      {/* Last-email-ago line. Surfaces when connected and we have a row. */}
+      {summary.last_email_minutes_since != null && (
         <div
           style={{
             margin: '4px 0 4px',
@@ -536,9 +516,8 @@ function InboxPopover({ summary, onClose }: { summary: InboxSummary; onClose: ()
       )}
 
       {/* Intake #15 (2026-05-12): warn when Gmail poller looks stalled so
-          "0 in / 0 out" doesn't read as real silence. Threshold 30 min.
-          Skipped when connected=false (no poll to stale). */}
-      {summary.connected !== false && (() => {
+          "0 in / 0 out" doesn't read as real silence. Threshold 30 min. */}
+      {(() => {
         const m = summary.poller_minutes_since;
         if (m == null) {
           return (
