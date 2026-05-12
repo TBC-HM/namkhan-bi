@@ -109,6 +109,15 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Case C: /cockpit-v2 → /h/[active]/it/cockpit (Prompt 6 — cockpit-v2-rework)
+  if (pathname === "/cockpit-v2" || pathname.startsWith("/cockpit-v2/")) {
+    const cookieValue = req.cookies.get(PROPERTY_COOKIE)?.value;
+    const activeProperty = cookieValue ?? String(DEFAULT_PROPERTY);
+    const url = req.nextUrl.clone();
+    url.pathname = `/h/${activeProperty}/it/cockpit`;
+    return NextResponse.redirect(url);
+  }
+
   return NextResponse.next();
 }
 
