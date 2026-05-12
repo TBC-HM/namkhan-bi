@@ -101,6 +101,23 @@ export async function POST(req: Request) {
     );
   }
 
+  // Property-scope enforcement: if the prompt row is bound to a specific
+  // property and the request is for a different property, refuse.
+  // (Holding-scope prompts have property_id=null and serve every property.)
+  if (
+    prompt.property_id !== null &&
+    body.property_id !== undefined &&
+    prompt.property_id !== body.property_id
+  ) {
+    return new Response(
+      JSON.stringify({
+        error: 'property_scope_mismatch',
+        detail: `agent ${prompt.role} is scoped to property ${prompt.property_id}, request was for ${body.property_id}`,
+      }),
+      { status: 403 },
+    );
+  }
+
   const trivial = isTrivial(message);
   const historyLimit = trivial ? 6 : 20;
   const history = (body.conversation_history ?? []).slice(-historyLimit);
