@@ -390,6 +390,22 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
   const [bugModal,    setBugModal]    = useState(false);
   const [bugDraft,    setBugDraft]    = useState('');
 
+  // Intake #16 (2026-05-12) — Messages box. Reads cockpit.exec_notifications
+  // (via public.cockpit_notifications view). Each row = a system event or an
+  // agent-pushed message for PBS. Click to ack (sets seen_at + seen_by).
+  interface MsgRow {
+    id: number;
+    created_at: string;
+    kind: string | null;
+    title: string;
+    url: string | null;
+    ticket_id: number | null;
+    pr_number: number | null;
+    branch: string | null;
+    seen_at: string | null;
+  }
+  const [messages, setMessages] = useState<MsgRow[]>([]);
+
   // Projects state
   const [projects,    setProjects]    = useState<ProjectRow[]>([]);
   const [activeProject, setActiveProject] = useState<ProjectRow | null>(null);
@@ -459,7 +475,33 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
         if (Array.isArray(j?.rows)) setBugs(j.rows as BugItem[]);
       })
       .catch(() => { /* silent */ });
+
+    // Intake #16 — hydrate Messages (cockpit_notifications). Auto-refresh
+    // every 60s so new agent pushes appear without a page reload.
+    const reloadMsgs = () => {
+      fetch('/api/cockpit/messages', { cache: 'no-store' })
+        .then((r) => r.ok ? r.json() : null)
+        .then((j) => {
+          if (j?.ok && Array.isArray(j.unseen)) setMessages(j.unseen as MsgRow[]);
+        })
+        .catch(() => { /* silent */ });
+    };
+    reloadMsgs();
+    const msgTimer = setInterval(reloadMsgs, 60_000);
+    return () => clearInterval(msgTimer);
   }, []);
+
+  async function ackMessage(id: number) {
+    // Optimistic: drop the row immediately, then post the ack.
+    setMessages((prev) => prev.filter((m) => m.id !== id));
+    try {
+      await fetch('/api/cockpit/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action: 'ack' }),
+      });
+    } catch { /* silent — next reload will reconcile */ }
+  }
 
   async function reloadBugs() {
     try {
@@ -1703,6 +1745,99 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
             </Row>
           ))}
           {bugs.length === 0 && <Empty label="No bugs reported" />}
+        </Container>
+
+        {/* MESSAGES — Intake #16 (2026-05-12). Reads cockpit.exec_notifications
+         *   via public.cockpit_notifications. Each row = system event or
+         *   agent push for PBS. Click ✓ to ack (sets seen_at + seen_by),
+         *   row disappears. Optional link button if msg has a url. */}
+        <Container
+          title="Messages"
+          hint="agents push"
+        >
+          {messages.map((m) => (
+            <Row key={m.id} onDelete={() => ackMessage(m.id)}>
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: 'var(--accent, #a8854a)',
+                  flexShrink: 0,
+                }}
+                aria-hidden
+              />
+              <div
+                style={{
+                  flex: 1,
+                  fontSize: 13,
+                  color: 'var(--text-3, #c9bb96)',
+                  lineHeight: 1.4,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  flexWrap: 'wrap',
+                  overflow: 'hidden',
+                }}
+              >
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.title}</span>
+                {m.kind && (
+                  <span
+                    style={{
+                      fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+                      fontSize: 9,
+                      letterSpacing: '0.12em',
+                      textTransform: 'uppercase',
+                      color: 'var(--text-dim, #7d7565)',
+                      border: '1px solid var(--border-2, #2a261d)',
+                      borderRadius: 3,
+                      padding: '1px 6px',
+                    }}
+                  >
+                    {m.kind}
+                  </span>
+                )}
+                {m.url && (
+                  <a
+                    href={m.url}
+                    target={m.url.startsWith('http') ? '_blank' : undefined}
+                    rel={m.url.startsWith('http') ? 'noreferrer' : undefined}
+                    style={{
+                      fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+                      fontSize: 10,
+                      letterSpacing: '0.15em',
+                      textTransform: 'uppercase',
+                      color: 'var(--accent, #a8854a)',
+                      textDecoration: 'none',
+                      border: '1px solid var(--accent, #a8854a)',
+                      borderRadius: 4,
+                      padding: '2px 8px',
+                    }}
+                  >
+                    open
+                  </a>
+                )}
+              </div>
+              <button
+                onClick={() => ackMessage(m.id)}
+                title="Mark as read"
+                aria-label="Mark as read"
+                style={{
+                  background: 'transparent',
+                  border: '1px solid var(--border-2, #2a261d)',
+                  color: 'var(--text-mute, #9b907a)',
+                  borderRadius: 999,
+                  padding: '2px 10px',
+                  fontSize: 11,
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                }}
+              >
+                ✓
+              </button>
+            </Row>
+          ))}
+          {messages.length === 0 && <Empty label="Nothing new" />}
         </Container>
       </div>
 
