@@ -80,17 +80,17 @@ const WIN_MAP: Record<string, string> = {
   next180: 'NEXT_90',     // non-canonical; coerce
   next365: 'NEXT_90',     // non-canonical; coerce
 };
-// PBS 2026-05-09: extended cmp keys for the universal compare selector.
-// New keys (sdly/lw/lm/budget) are not yet first-class in f_overview_kpis;
-// they coerce to the closest existing enum so the function call still
-// succeeds. Once the SQL function gains explicit support, swap the values.
+// 2026-05-12: compare_bounds() now natively understands STLY/SDLY/LW/LM as
+// distinct ranges. Was previously collapsing both STLY+SDLY → YOY and both
+// LW+LM → PREV_PERIOD, which made compare deltas identical across multiple
+// selector buttons. Pass-through the keys; SQL handles case-insensitively.
 const CMP_MAP: Record<string, string> = {
   none:   'NONE',
   pp:     'PREV_PERIOD',
-  stly:   'YOY',
-  sdly:   'YOY',          // alias of stly until f_overview_kpis adds a SDLY enum
-  lw:     'PREV_PERIOD',  // last-week ≈ prior period for the function
-  lm:     'PREV_PERIOD',  // last-month ≈ prior period for the function
+  stly:   'STLY',
+  sdly:   'SDLY',
+  lw:     'LW',
+  lm:     'LM',
   budget: 'NONE',         // budget compare is wired via separate views, not f_overview_kpis
 };
 // SegmentKey -> reservations.market_segment text the function expects.
