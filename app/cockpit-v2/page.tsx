@@ -293,7 +293,7 @@ const TOKENS = {
 // COMPONENTS
 // ============================================================================
 
-const Pill = ({ children, color, bg }) => (
+const Pill = ({ children, color, bg }: { children: React.ReactNode; color?: string; bg?: string }) => (
   <span style={{
     display: 'inline-block', padding: '2px 8px', borderRadius: 999,
     fontSize: 10, fontWeight: 600, letterSpacing: 0.4,
