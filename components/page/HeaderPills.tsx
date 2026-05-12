@@ -66,6 +66,10 @@ function todayLabel(): string {
 // dropdown with an actionable badge + hover popover. Same hover-bridge
 // pattern as temp/air pills (paddingLeft 280 + 250ms close delay).
 interface InboxSummary {
+  property_id?: number;
+  // 2026-05-12: false when the active property has no Gmail OAuth row.
+  // Frontend shows a "not connected yet" notice instead of zero counts.
+  connected?: boolean;
   unread: number;
   unanswered: number;
   spam: number;
@@ -84,13 +88,21 @@ interface InboxSummary {
   // Intake #15: Gmail poller freshness (null when no row).
   poller_last_run_at?: string | null;
   poller_minutes_since?: number | null;
+  // 2026-05-12: last actually-received inbound email for this property.
+  // Surfaces "Last mail 8d ago" so 0/0 doesn't look like a display bug.
+  last_email_at?: string | null;
+  last_email_minutes_since?: number | null;
 }
 const INBOX_EMPTY: InboxSummary = {
+  property_id: undefined,
+  connected: true, // default optimistic so legacy paths show counts not banner
   unread: 0, unanswered: 0, spam: 0,
   inbound_24h: 0, outbound_24h: 0, top_senders_24h: [],
   generated_at: '',
   poller_last_run_at: null,
   poller_minutes_since: null,
+  last_email_at: null,
+  last_email_minutes_since: null,
 };
 
 function formatRel(iso: string | null): string {
@@ -187,10 +199,13 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
 
   // Fetch inbox summary on mount + every 60s. Cheap (one /api call) and the
   // popover is always fresh whenever the operator hovers.
+  // 2026-05-12: now property-scoped — re-fetches when pathname changes so
+  // switching to Donna shows Donna's inbox (or the "not connected" notice).
   useEffect(() => {
     let cancelled = false;
+    const propertyId = readActiveProperty(pathname ?? null);
     const fetchSummary = () => {
-      fetch('/api/inbox/summary', { cache: 'no-store' })
+      fetch(`/api/inbox/summary?property_id=${propertyId}`, { cache: 'no-store' })
         .then((r) => r.ok ? r.json() : INBOX_EMPTY)
         .then((d: InboxSummary) => { if (!cancelled) setInbox(d ?? INBOX_EMPTY); })
         .catch(() => { /* keep last value */ });
@@ -198,7 +213,7 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
     fetchSummary();
     const id = setInterval(fetchSummary, 60_000);
     return () => { cancelled = true; clearInterval(id); };
-  }, []);
+  }, [pathname]);
 
   // Fetch weather + AQI on mount and whenever the active property changes.
   // Refresh every 10 minutes — weather doesn't move fast and we want light
@@ -476,9 +491,54 @@ function InboxPopover({ summary, onClose }: { summary: InboxSummary; onClose: ()
         Last 24 hours · <em>{summary.inbound_24h} in / {summary.outbound_24h} out</em>
       </div>
 
+      {/* 2026-05-12: not-connected notice for properties without a Gmail OAuth
+          row (Donna today). Replaces the "stale poll" banner — there is no
+          poll to be stale on. */}
+      {summary.connected === false && (
+        <div
+          style={{
+            margin: '6px 0 10px',
+            padding: '10px 12px',
+            background: 'rgba(168, 133, 74, 0.08)',
+            border: '1px solid var(--accent, #a8854a)',
+            borderRadius: 6,
+            fontSize: 12,
+            color: 'var(--text-1, #f0e5cb)',
+            lineHeight: 1.5,
+          }}
+        >
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--accent, #a8854a)', marginBottom: 4 }}>
+            Not connected yet
+          </div>
+          This property has no Gmail OAuth connection. Inbound and outbound
+          counts will stay at zero until <a href="/admin/gmail-connect" style={{ color: 'var(--accent, #a8854a)' }}>/admin/gmail-connect</a> is wired for this property.
+        </div>
+      )}
+
+      {/* Last-email-ago line. Always shown when connected and we have a row. */}
+      {summary.connected !== false && summary.last_email_minutes_since != null && (
+        <div
+          style={{
+            margin: '4px 0 4px',
+            fontSize: 11,
+            color: 'var(--text-mute, #9b907a)',
+            fontFamily: "'JetBrains Mono', monospace",
+            letterSpacing: '0.04em',
+          }}
+        >
+          Last mail received {(() => {
+            const m = summary.last_email_minutes_since ?? 0;
+            if (m < 60) return `${m}m ago`;
+            if (m < 1440) return `${Math.round(m/60)}h ago`;
+            return `${Math.round(m/1440)}d ago`;
+          })()}
+        </div>
+      )}
+
       {/* Intake #15 (2026-05-12): warn when Gmail poller looks stalled so
-          "0 in / 0 out" doesn't read as real silence. Threshold 30 min. */}
-      {(() => {
+          "0 in / 0 out" doesn't read as real silence. Threshold 30 min.
+          Skipped when connected=false (no poll to stale). */}
+      {summary.connected !== false && (() => {
         const m = summary.poller_minutes_since;
         if (m == null) {
           return (

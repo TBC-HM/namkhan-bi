@@ -14,7 +14,7 @@
 // Read-only. Uses the property scope (260955) consistent with the rest
 // of the inbox page. Returns 200 with empty arrays on any failure so the
 // popover never blocks the header.
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { unstable_noStore as noStore } from 'next/cache';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { PROPERTY_ID } from '@/lib/supabase';
@@ -33,6 +33,11 @@ interface SenderSummary {
 }
 
 interface InboxSummary {
+  property_id: number;
+  // 2026-05-12: distinguishes "no Gmail OAuth for this property" from
+  // "connected but 0 emails / poller stalled". Frontend uses this to
+  // show a "not connected yet" notice instead of zero counts.
+  connected: boolean;
   unread: number;
   unanswered: number;
   spam: number;
@@ -45,47 +50,77 @@ interface InboxSummary {
   // no row exists; otherwise ISO timestamp of the last poll attempt.
   poller_last_run_at: string | null;
   poller_minutes_since: number | null;
+  // Last actually-received email regardless of last-24h window.
+  // Lets the popover say "Last email 8d ago" so 0/0 doesn't look like a bug.
+  last_email_at: string | null;
+  last_email_minutes_since: number | null;
 }
 
-const EMPTY: InboxSummary = {
-  unread: 0, unanswered: 0, spam: 0,
-  inbound_24h: 0, outbound_24h: 0, top_senders_24h: [],
-  generated_at: new Date().toISOString(),
-  poller_last_run_at: null,
-  poller_minutes_since: null,
-};
+function makeEmpty(propertyId: number, connected: boolean): InboxSummary {
+  return {
+    property_id: propertyId,
+    connected,
+    unread: 0, unanswered: 0, spam: 0,
+    inbound_24h: 0, outbound_24h: 0, top_senders_24h: [],
+    generated_at: new Date().toISOString(),
+    poller_last_run_at: null,
+    poller_minutes_since: null,
+    last_email_at: null,
+    last_email_minutes_since: null,
+  };
+}
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   noStore();
+  const propertyId = Number(req.nextUrl.searchParams.get('property_id')) || PROPERTY_ID;
   try {
     const sb = getSupabaseAdmin();
+
+    // Connected = at least one sales.gmail_connections row for this property.
+    // Donna (1000001) currently has no rows → connected=false → frontend
+    // shows "not connected yet" instead of zero counts.
+    const { count: connCount } = await sb.schema('sales').from('gmail_connections')
+      .select('id', { count: 'exact', head: true })
+      .eq('property_id', propertyId);
+    const connected = (connCount ?? 0) > 0;
+    if (!connected) {
+      return NextResponse.json(makeEmpty(propertyId, false));
+    }
+
     const since24h = new Date(Date.now() - 86_400_000).toISOString();
     const since7d  = new Date(Date.now() - 7 * 86_400_000).toISOString();
 
     // Run the four reads in parallel.
-    const [unreadRes, statsRes, msgRes, msg7Res, pollerRes] = await Promise.all([
+    const [unreadRes, statsRes, msgRes, msg7Res, pollerRes, lastEmailRes] = await Promise.all([
       // Unread = inquiries.status='new' for this property.
       sb.schema('sales').from('inquiries')
         .select('id', { count: 'exact', head: true })
-        .eq('property_id', PROPERTY_ID).eq('status', 'new'),
+        .eq('property_id', propertyId).eq('status', 'new'),
       // Mailbox aggregate (spam + unanswered roll-ups).
       sb.schema('sales').from('v_mailbox_stats')
-        .select('spam,unanswered').eq('property_id', PROPERTY_ID),
+        .select('spam,unanswered').eq('property_id', propertyId),
       // Last-24h messages (inbound + outbound) for top-sender ranking.
       sb.schema('sales').from('email_messages')
         .select('from_email,from_name,thread_id,received_at,direction')
-        .eq('property_id', PROPERTY_ID).gte('received_at', since24h)
+        .eq('property_id', propertyId).gte('received_at', since24h)
         .limit(2000),
       // Last-7d inbound counts per sender (drill-down "sends per day").
       sb.schema('sales').from('email_messages')
         .select('from_email,received_at')
-        .eq('property_id', PROPERTY_ID).eq('direction', 'inbound')
+        .eq('property_id', propertyId).eq('direction', 'inbound')
         .gte('received_at', since7d)
         .limit(5000),
       // Latest Gmail poller run — used to detect a stalled pipeline (intake #15).
       sb.schema('sales').from('gmail_poll_runs')
         .select('started_at')
         .order('started_at', { ascending: false })
+        .limit(1),
+      // Last inbound email regardless of window — surfaces "Last mail 8d ago"
+      // when the 24h count looks suspiciously like a bug.
+      sb.schema('sales').from('email_messages')
+        .select('received_at')
+        .eq('property_id', propertyId).eq('direction', 'inbound')
+        .order('received_at', { ascending: false })
         .limit(1),
     ]);
 
@@ -149,24 +184,36 @@ export async function GET() {
     // Poller freshness (intake #15).
     const pollerRow = ((pollerRes.data ?? []) as Array<{ started_at: string }>)[0] ?? null;
     const pollerLast = pollerRow?.started_at ?? null;
+
+    const lastEmailRow = ((lastEmailRes.data ?? []) as Array<{ received_at: string }>)[0] ?? null;
+    const lastEmailAt = lastEmailRow?.received_at ?? null;
+    const lastEmailMinSince = lastEmailAt
+      ? Math.round((Date.now() - new Date(lastEmailAt).getTime()) / 60_000)
+      : null;
     const pollerMinSince = pollerLast
       ? Math.round((Date.now() - new Date(pollerLast).getTime()) / 60_000)
       : null;
 
     const payload: InboxSummary = {
-      unread:               unreadRes.count ?? 0,
-      unanswered:           totalUnanswered,
-      spam:                 totalSpam,
-      inbound_24h:          inbound24,
-      outbound_24h:         outbound24,
+      property_id:              propertyId,
+      connected:                true,
+      unread:                   unreadRes.count ?? 0,
+      unanswered:               totalUnanswered,
+      spam:                     totalSpam,
+      inbound_24h:              inbound24,
+      outbound_24h:             outbound24,
       top_senders_24h,
-      generated_at:         new Date().toISOString(),
-      poller_last_run_at:   pollerLast,
-      poller_minutes_since: pollerMinSince,
+      generated_at:             new Date().toISOString(),
+      poller_last_run_at:       pollerLast,
+      poller_minutes_since:     pollerMinSince,
+      last_email_at:            lastEmailAt,
+      last_email_minutes_since: lastEmailMinSince,
     };
     return NextResponse.json(payload);
   } catch {
-    // Never break the header on a transient query failure.
-    return NextResponse.json(EMPTY);
+    // Never break the header on a transient query failure. Report as
+    // "connected but errored" — frontend still hides the not-connected
+    // notice and just keeps the last known values.
+    return NextResponse.json(makeEmpty(propertyId, true));
   }
 }
