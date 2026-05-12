@@ -37,3 +37,6 @@ cockpit/PHASE_0_CLOSURE_GH_SECRETS.md
 
 # Vercel CLI staging worktree (PBS 2026-05-09)
 .vercel-staging/
+
+# Claude Code local IDE settings (never commit — contains permission allow-list)
+.claude/settings.local.json
