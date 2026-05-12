@@ -23,7 +23,7 @@ import KpiBox from '@/components/kpi/KpiBox';
 import Insight from '@/components/sections/Insight';
 import { resolvePeriod } from '@/lib/period';
 import {
-  getChannelEconomics, getChannelXRoomtype, pivotChannelXRoom,
+  getChannelEconomics, getChannelEconomicsForRange, getChannelXRoomtype, pivotChannelXRoom,
   getChannelMixWeeklyTrend, getChannelNetValueForRange, getChannelVelocity28dByCat,
 } from '@/lib/data-channels';
 import { fmtMoney } from '@/lib/format';
@@ -64,10 +64,16 @@ export default async function ChannelsPage({ searchParams }: Props) {
     ? { ...period, from: period.compareFrom, to: period.compareTo, cmp: 'none' as const }
     : null;
 
+  // 2026-05-12: compare path was calling getChannelEconomics(cmpPeriod) which
+  // re-buckets by period.win (still '30d' etc.) and returns the CURRENT rolling
+  // 30-day numbers — not the year-ago range. Switched to the range-based
+  // RPC so SDLY/STLY/etc. actually compare against the right window.
   const [channelsRaw, matrixRaw, channelsCmp, mixWeekly, netValue, velocity] = await Promise.all([
     getChannelEconomics(period).catch(() => [] as Awaited<ReturnType<typeof getChannelEconomics>>),
     getChannelXRoomtype(period).catch(() => [] as Awaited<ReturnType<typeof getChannelXRoomtype>>),
-    cmpPeriod ? getChannelEconomics(cmpPeriod).catch(() => []) : Promise.resolve([] as any[]),
+    cmpPeriod
+      ? getChannelEconomicsForRange(cmpPeriod.from, cmpPeriod.to).catch(() => [])
+      : Promise.resolve([] as any[]),
     getChannelMixWeeklyTrend(period.from, period.to).catch(() => []),
     getChannelNetValueForRange(period.from, period.to).catch(() => []),
     getChannelVelocity28dByCat().catch(() => []),
@@ -177,8 +183,27 @@ export default async function ChannelsPage({ searchParams }: Props) {
       subPages={REVENUE_SUBPAGES}
       topRight={
         <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <TimeframeSelector basePath="/revenue/channels" active={period.win} preserve={{ cmp: period.cmp, seg: period.seg }} />
-          <CompareSelector  basePath="/revenue/channels" active={period.cmp} preserve={{ win: period.win, seg: period.seg }} />
+          {/* PBS 2026-05-12: Channels = last 7 / 30 / 90 only. Compare = None or SDLY
+              (same window last year). Other options removed to avoid noise. */}
+          <TimeframeSelector
+            basePath="/revenue/channels"
+            active={period.win}
+            options={[
+              { win: '7d',  label: '7d' },
+              { win: '30d', label: '30d' },
+              { win: '90d', label: '90d' },
+            ]}
+            preserve={{ cmp: period.cmp, seg: period.seg }}
+          />
+          <CompareSelector
+            basePath="/revenue/channels"
+            active={period.cmp}
+            options={[
+              { cmp: 'none', label: 'None' },
+              { cmp: 'sdly', label: 'SDLY' },
+            ]}
+            preserve={{ win: period.win, seg: period.seg }}
+          />
         </div>
       }
     >
