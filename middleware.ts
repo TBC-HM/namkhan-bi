@@ -97,8 +97,11 @@ export async function middleware(req: NextRequest) {
     return res;
   }
 
-  // Case B: Legacy /settings/* or / — redirect to /h/[active]/...
-  if (pathname.startsWith("/settings") || pathname === "/") {
+  // Case B: / or /settings/property* — redirect to /h/[active]/...
+  // Other /settings/X routes (cockpit, agents, budget, dq, etc.) are NOT yet
+  // migrated to /h/ — pass through to the legacy app/settings/X/page.tsx.
+  const isPropertyOrRoot = pathname === "/" || pathname === "/settings/property" || pathname.startsWith("/settings/property/");
+  if (isPropertyOrRoot) {
     const cookieValue = req.cookies.get(PROPERTY_COOKIE)?.value;
     const activeProperty = cookieValue ?? String(DEFAULT_PROPERTY);
     const url = req.nextUrl.clone();
