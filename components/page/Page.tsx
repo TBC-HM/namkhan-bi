@@ -133,8 +133,12 @@ function PageFooter() {
 const S: Record<string, React.CSSProperties> = {
   page: {
     minHeight:    '100vh',
-    background:   '#0a0a0a',
-    color:        '#e9e1ce',
+    // 2026-05-12: CSS vars driven by ThemeInjector so non-Namkhan properties
+    // (Donna, future tenants) get their own page background. Fallbacks
+    // preserve Namkhan's existing dark theme for legacy /<dept> routes that
+    // sit outside /h/[id]/ and never hit ThemeInjector.
+    background:   'var(--page-bg, #0a0a0a)',
+    color:        'var(--page-fg, #e9e1ce)',
     fontFamily:   "'Inter Tight', system-ui, sans-serif",
     padding:      '32px 32px 64px',
     maxWidth:     1280,
@@ -149,10 +153,10 @@ const S: Record<string, React.CSSProperties> = {
     display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
     gap: 16, flexWrap: 'wrap',
     position: 'sticky', top: 0, zIndex: 50,
-    background: 'rgba(10, 10, 10, 0.82)',
+    background: 'var(--topbar-bg, rgba(10, 10, 10, 0.82))',
     backdropFilter: 'saturate(140%) blur(10px)',
     WebkitBackdropFilter: 'saturate(140%) blur(10px)',
-    borderBottom: '1px solid rgba(31, 28, 21, 0.6)',
+    borderBottom: '1px solid var(--topbar-border, rgba(31, 28, 21, 0.6))',
     margin: '-32px -32px 24px',
     padding: '20px 32px 14px',
   },

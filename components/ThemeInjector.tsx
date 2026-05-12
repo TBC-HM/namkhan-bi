@@ -42,6 +42,15 @@ function isLight(hex: string): boolean {
   return yiq >= 160;
 }
 
+function hexToRgba(hex: string, alpha: number): string {
+  const h = hex.replace('#', '');
+  if (h.length !== 6) return `rgba(0,0,0,${alpha})`;
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 export default function ThemeInjector({
   palette,
   children,
@@ -50,6 +59,24 @@ export default function ThemeInjector({
   children: ReactNode;
 }) {
   const t = roleToVar(palette);
+
+  // 2026-05-12 — properties whose palette declares an explicit `background`
+  // role (Donna et al.) opt their pages into a light theme. Properties
+  // without it (Namkhan — palette only has `background_dark`) keep the
+  // legacy hardcoded #0a0a0a Page background.
+  const hasLightPageBg = !!palette?.find((p) => p.role === 'background');
+
+  const pageBgLine = hasLightPageBg
+    ? [
+        `--page-bg: ${t.bg};`,
+        `--page-fg: ${t.primary};`,
+        // Sticky top bar — semi-opaque tint of the page bg so it stays readable
+        // when scrolled. We can't override every inline #0f0d0a box style on a
+        // dark-built component tree, but the top bar is the most prominent.
+        `--topbar-bg: ${hexToRgba(t.bg, 0.85)};`,
+        `--topbar-border: ${hexToRgba(t.primary, 0.15)};`,
+      ].join('\n      ')
+    : '';
 
   const cssVars = `
     :root {
@@ -60,6 +87,7 @@ export default function ThemeInjector({
       --sand: ${t.sand};
       --terracotta: ${t.terracotta};
       --neutral: ${t.neutral};
+      ${pageBgLine}
     }
     body { background-color: var(--bg); }
   `;
