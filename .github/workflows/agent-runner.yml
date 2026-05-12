@@ -44,9 +44,13 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Node
+        # 2026-05-12: bumped 20 -> 22. @supabase/supabase-js v2 requires
+        # native WebSocket at SupabaseClient construct time, which Node 20
+        # doesn't ship. Crashed runner-v3 every run after the realtime-js
+        # ws-factory update. Node 22 has native WebSocket.
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install
