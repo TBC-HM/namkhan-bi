@@ -1,10 +1,10 @@
-// app/p/[property_id]/layout.tsx
-// Wraps every /p/[property_id]/... route with PropertyProvider.
-// Server-side: fetches property name + module statuses, validates user access.
+// app/h/[property_id]/layout.tsx
+// v2: Adds parallel fetch for property.brand + wraps children in <ThemeInjector>.
 
-import { redirect, notFound } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { PropertyProvider, type ModuleStatus } from '@/lib/property-context';
+import ThemeInjector from '@/components/ThemeInjector';
 import type { ReactNode } from 'react';
 
 const KNOWN_PROPERTIES = [
@@ -28,10 +28,10 @@ export default async function PropertyLayout({
 
   const supabase = createClient();
 
-  // Fetch module statuses for this property
-  const { data: modulesRaw } = await supabase.rpc('get_property_modules', {
-    p_property_id: propertyId,
-  });
+  const [{ data: modulesRaw }, { data: brand }] = await Promise.all([
+    supabase.rpc('get_property_modules', { p_property_id: propertyId }),
+    supabase.schema('property').from('brand').select('brand_palette, logo_url').eq('property_id', propertyId).maybeSingle(),
+  ]);
 
   const modules: Record<string, ModuleStatus> = {};
   (modulesRaw ?? []).forEach((row: { module_code: string; status: string }) => {
@@ -39,14 +39,17 @@ export default async function PropertyLayout({
   });
 
   return (
-    <PropertyProvider
-      value={{
-        propertyId,
-        propertyName: known.display_name,
-        modules,
-      }}
-    >
-      {children}
-    </PropertyProvider>
+    <ThemeInjector palette={brand?.brand_palette ?? null}>
+      <PropertyProvider
+        value={{
+          propertyId,
+          propertyName: known.display_name,
+          modules,
+          logoUrl: brand?.logo_url ?? null,
+        }}
+      >
+        {children}
+      </PropertyProvider>
+    </ThemeInjector>
   );
 }

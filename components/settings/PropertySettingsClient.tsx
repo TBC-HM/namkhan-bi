@@ -1,4 +1,5 @@
 // components/settings/PropertySettingsClient.tsx
+// v2: Adds Team tab (12th) showing GM + HODs from tenancy.property_users
 'use client';
 
 import { useState } from 'react';
@@ -13,6 +14,7 @@ import SeasonsPanel from './panels/SeasonsPanel';
 import CertificationsPanel from './panels/CertificationsPanel';
 import ContactsPanel from './panels/ContactsPanel';
 import SocialPanel from './panels/SocialPanel';
+import TeamPanel from './panels/TeamPanel';
 
 type Tab =
   | 'identity'
@@ -25,7 +27,8 @@ type Tab =
   | 'seasons'
   | 'certifications'
   | 'contacts'
-  | 'social';
+  | 'social'
+  | 'team';
 
 const TABS: { key: Tab; label: string; subtitle: string; count: (d: any) => number | null }[] = [
   { key: 'identity', label: 'Identity', subtitle: 'Legal & licensing', count: () => null },
@@ -39,6 +42,7 @@ const TABS: { key: Tab; label: string; subtitle: string; count: (d: any) => numb
   { key: 'certifications', label: 'Certifications', subtitle: 'SLH, ASEAN Green, etc', count: (d) => d.certifications.length },
   { key: 'contacts', label: 'Contacts', subtitle: 'Reservations, GM, owner', count: (d) => d.contacts.length },
   { key: 'social', label: 'Social', subtitle: 'IG, FB, TripAdvisor, etc', count: (d) => d.social.length },
+  { key: 'team', label: 'Team', subtitle: 'GM & department heads', count: (d) => d.team?.length ?? 0 },
 ];
 
 export default function PropertySettingsClient({ data, propertyId }: { data: any; propertyId: number }) {
@@ -99,6 +103,7 @@ export default function PropertySettingsClient({ data, propertyId }: { data: any
           {active === 'certifications' && <CertificationsPanel data={data.certifications} />}
           {active === 'contacts' && <ContactsPanel data={data.contacts} />}
           {active === 'social' && <SocialPanel data={data.social} />}
+          {active === 'team' && <TeamPanel data={data.team ?? []} />}
         </div>
       </main>
     </div>

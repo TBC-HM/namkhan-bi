@@ -1,5 +1,5 @@
 // lib/property-context.tsx
-// Active property context. Provides current property + module status to all children.
+// Active property context. v2: adds optional logoUrl.
 
 'use client';
 
@@ -10,7 +10,8 @@ export type ModuleStatus = 'active' | 'planned' | 'disabled';
 export type PropertyContextValue = {
   propertyId: number;
   propertyName: string;
-  modules: Record<string, ModuleStatus>; // module_code -> status
+  modules: Record<string, ModuleStatus>;
+  logoUrl?: string | null;
 };
 
 const PropertyContext = createContext<PropertyContextValue | null>(null);
