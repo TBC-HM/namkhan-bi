@@ -20,6 +20,8 @@
 //       carries a bridging paddingBottom so there is no dead-zone gap.
 
 import { useEffect, useRef, useState } from 'react';
+import { usePathname } from 'next/navigation';
+import PropertySwitcher from '@/components/PropertySwitcher';
 
 interface HeaderPillsProps {
   /** Optional per-dept KPI tiles shown when the user hovers the date pill. */
@@ -99,6 +101,8 @@ function formatRel(iso: string | null): string {
 }
 
 export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
+  const pathname = usePathname();
+  const inPropertyTree = pathname?.startsWith("/h/") ?? false;
   const [tempOpen, setTempOpen] = useState(false);
   const [airOpen,  setAirOpen]  = useState(false);
   const [dateHover, setDateHover] = useState(false);
@@ -141,6 +145,14 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
 
   return (
     <>
+      {inPropertyTree && (
+        <PropertySwitcher
+          options={[
+            { property_id: 260955,  display_name: 'The Namkhan' },
+            { property_id: 1000001, display_name: 'Donna Portals' },
+          ]}
+        />
+      )}
       {/* TEMP — wrapper carries onMouseLeave so cursor stays inside it as
           it moves from pill to popover. (PBS 2026-05-09 hover-leave fix). */}
       <div

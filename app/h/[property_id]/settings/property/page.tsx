@@ -1,35 +1,20 @@
-// app/settings/property/page.tsx
-// Property Settings — master configuration page
-// 11 tabs, one per property.* table
-// ADR-021 + stopgap multi-property via ?property= query param.
-// Full /p/[property_id]/... routing comes in next iteration.
+// app/p/[property_id]/settings/property/page.tsx
+// Property Settings — now under /p/[property_id]/... routing.
+// Property comes from the URL, not a hardcoded constant.
+// ADR-021 + ADR-024.
 
 import { createClient } from '@/lib/supabase/server';
 import PropertySettingsClient from '@/components/settings/PropertySettingsClient';
-import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-
-const NAMKHAN_PROPERTY_ID = 260955;
-const DONNA_PROPERTY_ID   = 1000001;
-const KNOWN_PROPERTIES    = [NAMKHAN_PROPERTY_ID, DONNA_PROPERTY_ID];
 
 async function getPropertyData(propertyId: number) {
   const supabase = createClient();
 
   const [
-    identity,
-    location,
-    brand,
-    policies,
-    rooms,
-    facilities,
-    activities,
-    seasons,
-    certifications,
-    contacts,
-    social,
+    identity, location, brand, policies,
+    rooms, facilities, activities, seasons, certifications, contacts, social,
   ] = await Promise.all([
     supabase.schema('property').from('identity').select('*').eq('property_id', propertyId).maybeSingle(),
     supabase.schema('property').from('location').select('*').eq('property_id', propertyId).maybeSingle(),
@@ -59,20 +44,12 @@ async function getPropertyData(propertyId: number) {
   };
 }
 
-function propertyLabel(id: number): string {
-  if (id === NAMKHAN_PROPERTY_ID) return 'The Namkhan';
-  if (id === DONNA_PROPERTY_ID)   return 'Donna Portals';
-  return `Property ${id}`;
-}
-
 export default async function PropertySettingsPage({
-  searchParams,
+  params,
 }: {
-  searchParams?: { property?: string };
+  params: { property_id: string };
 }) {
-  const requested = Number(searchParams?.property);
-  const propertyId = KNOWN_PROPERTIES.includes(requested) ? requested : NAMKHAN_PROPERTY_ID;
-
+  const propertyId = Number(params.property_id);
   const data = await getPropertyData(propertyId);
 
   return (
@@ -85,7 +62,7 @@ export default async function PropertySettingsPage({
                 Settings · Property
               </p>
               <h1 className="text-3xl font-serif text-[var(--primary,#1F3A2E)]">
-                {data.identity?.trading_name ?? propertyLabel(propertyId)} Settings
+                {data.identity?.trading_name ?? 'Property'} Settings
               </h1>
               <p className="text-sm text-[var(--primary,#1F3A2E)]/60 mt-1">
                 {data.identity?.legal_name}
@@ -93,28 +70,8 @@ export default async function PropertySettingsPage({
                 {data.location?.city && ` · ${data.location.city}, ${data.location.country}`}
               </p>
             </div>
-            <div className="text-right space-y-2">
-              {/* Property switcher (stopgap until /p/[property_id]/... routing) */}
-              <div className="flex gap-2 justify-end">
-                {KNOWN_PROPERTIES.map((id) => {
-                  const active = id === propertyId;
-                  return (
-                    <Link
-                      key={id}
-                      href={`/settings/property?property=${id}`}
-                      prefetch={false}
-                      className={
-                        active
-                          ? 'px-3 py-1 rounded-full text-xs font-medium bg-[var(--primary,#1F3A2E)] text-white'
-                          : 'px-3 py-1 rounded-full text-xs font-medium bg-[var(--primary,#1F3A2E)]/10 text-[var(--primary,#1F3A2E)] hover:bg-[var(--primary,#1F3A2E)]/20 transition'
-                      }
-                    >
-                      {propertyLabel(id)}
-                    </Link>
-                  );
-                })}
-              </div>
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-[var(--primary,#1F3A2E)]/5 text-[var(--primary,#1F3A2E)]/70">
+            <div className="text-right">
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-[var(--primary,#1F3A2E)]/10 text-[var(--primary,#1F3A2E)]">
                 Property ID: {propertyId}
               </span>
             </div>
