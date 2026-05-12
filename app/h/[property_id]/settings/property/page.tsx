@@ -5,6 +5,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import PropertySettingsClient from '@/components/settings/PropertySettingsClient';
+import Page from '@/components/page/Page';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -53,33 +54,17 @@ export default async function PropertySettingsPage({
   const data = await getPropertyData(propertyId);
 
   return (
-    <div className="min-h-screen bg-[var(--bg,#F4EFE2)]">
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <header className="mb-8 pb-6 border-b border-[var(--sand,#B8A878)]/40">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--sand,#B8A878)] font-medium mb-2">
-                Settings · Property
-              </p>
-              <h1 className="text-3xl font-serif text-[var(--primary,#1F3A2E)]">
-                {data.identity?.trading_name ?? 'Property'} Settings
-              </h1>
-              <p className="text-sm text-[var(--primary,#1F3A2E)]/60 mt-1">
-                {data.identity?.legal_name}
-                {data.identity?.star_rating && ` · ${'★'.repeat(data.identity.star_rating)}`}
-                {data.location?.city && ` · ${data.location.city}, ${data.location.country}`}
-              </p>
-            </div>
-            <div className="text-right">
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-[var(--primary,#1F3A2E)]/10 text-[var(--primary,#1F3A2E)]">
-                Property ID: {propertyId}
-              </span>
-            </div>
-          </div>
-        </header>
-
-        <PropertySettingsClient data={data} propertyId={propertyId} />
+    <Page
+      eyebrow="Settings · Property"
+      title={<>{data.identity?.trading_name ?? 'Property'} <em style={{ color: 'var(--brass)' }}>Settings</em></>}
+    >
+      <div style={{ padding: '0 0 16px 0', fontSize: 12, color: 'var(--ink-soft)' }}>
+        {data.identity?.legal_name}
+        {data.identity?.star_rating && ` · ${'★'.repeat(data.identity.star_rating)}`}
+        {data.location?.city && ` · ${data.location.city}, ${data.location.country}`}
+        {` · Property ID: ${propertyId}`}
       </div>
-    </div>
+      <PropertySettingsClient data={data} propertyId={propertyId} />
+    </Page>
   );
 }
