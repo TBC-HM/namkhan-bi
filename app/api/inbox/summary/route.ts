@@ -79,8 +79,9 @@ export async function GET(req: NextRequest) {
     // Connected = at least one sales.gmail_connections row for this property.
     // Donna (1000001) currently has no rows → connected=false → frontend
     // shows "not connected yet" instead of zero counts.
+    // (PK column is `email`, not `id` — gotcha caught 2026-05-12.)
     const { count: connCount } = await sb.schema('sales').from('gmail_connections')
-      .select('id', { count: 'exact', head: true })
+      .select('email', { count: 'exact', head: true })
       .eq('property_id', propertyId);
     const connected = (connCount ?? 0) > 0;
     if (!connected) {
