@@ -3,14 +3,14 @@
 // Queries `reservations` directly. Each metric is wrapped in try/catch so a missing column
 // or RLS denial returns null and the Pulse page falls back to the mockup placeholder value.
 //
-// OPEN: confirmed Cloudbeds-mirror table name + columns. Defaults assume:
-//   reservations.status         text   — values include 'cancelled' / 'no_show' / 'confirmed' / 'checked_in' / etc.
-//   reservations.no_show         boolean (optional — may be encoded into status instead)
-//   reservations.created_at     timestamptz — booking date
-//   reservations.arrival_date    date    — check-in date
-//   reservations.nights          int     — length of stay
-//   reservations.property_id     bigint  — for our scope
-// If actual columns differ, this returns null and the mockup placeholders stay.
+// 2026-05-12 audit: actual columns in public.reservations view (over pms.reservations):
+//   status            text   — values: confirmed / checked_in / checked_out / canceled / no_show
+//   booking_date      timestamptz — when the booking was made (NOT created_at, which is row insert)
+//   check_in_date     date  (NOT arrival_date — was the bug)
+//   check_out_date    date
+//   nights            int
+//   property_id       bigint
+// Previous code used `arrival_date` / `created_at` → query silently returned nulls.
 
 import { supabase, PROPERTY_ID } from './supabase';
 import type { ResolvedPeriod } from './period';
@@ -35,13 +35,13 @@ export async function getPulseExtendedKpis(period: ResolvedPeriod): Promise<Puls
   };
 
   try {
-    // Pull reservations whose arrival_date overlaps the period window.
+    // Pull reservations whose check_in_date overlaps the period window.
     const { data, error } = await supabase
       .from('reservations')
-      .select('status, created_at, arrival_date, nights')
+      .select('status, booking_date, check_in_date, nights')
       .eq('property_id', PROPERTY_ID)
-      .gte('arrival_date', period.from)
-      .lte('arrival_date', period.to);
+      .gte('check_in_date', period.from)
+      .lte('check_in_date', period.to);
 
     if (error || !data || data.length === 0) return result;
 
@@ -55,13 +55,14 @@ export async function getPulseExtendedKpis(period: ResolvedPeriod): Promise<Puls
 
     for (const r of data as Array<Record<string, unknown>>) {
       const status = String(r.status ?? '').toLowerCase();
-      if (status.includes('cancel')) cancelled++;
-      if (status.includes('no_show') || status.includes('no-show')) noShow++;
+      // pms.reservations.status uses 'canceled' (one L) — startsWith catches both 'canceled' and 'cancelled'
+      if (status.startsWith('cancel')) cancelled++;
+      if (status === 'no_show' || status === 'no-show') noShow++;
 
-      const created = r.created_at ? new Date(String(r.created_at)) : null;
-      const arrival = r.arrival_date ? new Date(String(r.arrival_date)) : null;
-      if (created && arrival && !isNaN(created.getTime()) && !isNaN(arrival.getTime())) {
-        const days = Math.max(0, Math.round((arrival.getTime() - created.getTime()) / 86_400_000));
+      const booked = r.booking_date ? new Date(String(r.booking_date)) : null;
+      const arrival = r.check_in_date ? new Date(String(r.check_in_date)) : null;
+      if (booked && arrival && !isNaN(booked.getTime()) && !isNaN(arrival.getTime())) {
+        const days = Math.max(0, Math.round((arrival.getTime() - booked.getTime()) / 86_400_000));
         leadSum += days;
         leadN++;
       }
