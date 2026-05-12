@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useCallback } from 'react';
+import Page from '@/components/page/Page';
 // === Inline SVG icons (replaces lucide-react to avoid npm install) ===
 // Generated from lucide v0.x glyph paths; stroke-width 2, currentColor.
 const _IconBase = ({ size = 16, children, ...p }) => (
@@ -268,24 +269,24 @@ const COSTS = [
 // ============================================================================
 
 const TOKENS = {
-  bg: 'var(--paper)',           // sand-cream ground
-  bgRaised: '#FAF6EB',     // raised surface
-  bgDeep: '#EAE4D2',       // recessed
-  ink: 'var(--moss)',          // primary (forest)
-  inkSoft: '#3A5A4D',
-  text: '#1F1B14',
-  text2: '#5A5448',
-  text3: '#8A8170',
-  border: '#D5CDB8',
-  borderSoft: '#E6DFCB',
-  sand: 'var(--brass)',
-  brass: '#A8854A',
+  bg:         'var(--paper)',         // sand-cream ground
+  bgRaised:   'var(--paper-warm)',    // raised surface
+  bgDeep:     'var(--paper-deep)',    // recessed
+  ink:        'var(--moss)',          // primary forest
+  inkSoft:    'var(--moss-mid)',
+  text:       'var(--ink)',
+  text2:      'var(--ink-soft)',
+  text3:      'var(--ink-mute)',
+  border:     'var(--line)',
+  borderSoft: 'var(--line-soft)',
+  sand:       'var(--brass)',
+  brass:      'var(--brass)',
   terracotta: 'var(--oxblood-mid)',
-  ochre: '#C8964A',
-  oxblood: '#8A2A1F',
-  forest: 'var(--moss)',
-  moss: '#4A6B4F',
-  sky: '#3A5577',
+  ochre:      'var(--brass-soft)',
+  oxblood:    'var(--oxblood)',
+  forest:     'var(--moss)',
+  moss:       'var(--moss-glow)',
+  sky:        'var(--moss-mid)',      // no blue in brand palette — use moss
 };
 
 // ============================================================================
@@ -1004,37 +1005,16 @@ export default function CockpitV2Page() {
   ];
 
   return (
-    <div style={{
-      minHeight: '100vh', background: TOKENS.bg, color: TOKENS.text,
-      fontFamily: '"Inter", "Helvetica Neue", system-ui, sans-serif',
-      WebkitFontSmoothing: 'antialiased',
-    }}>
-      {/* Header */}
-      <header style={{
-        background: TOKENS.ink, color: TOKENS.bg, padding: '20px 32px',
-        borderBottom: `1px solid ${TOKENS.borderSoft}`,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-          <div>
-            <div style={{ fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', opacity: 0.7, marginBottom: 4 }}>The Beyond Circle</div>
-            <div style={{ fontSize: 32, fontFamily: '"Fraunces", "Times New Roman", serif', fontWeight: 500, letterSpacing: 0.5, lineHeight: 1 }}>
-              Cockpit <span style={{ fontSize: 14, opacity: 0.5, marginLeft: 8, letterSpacing: 1, fontFamily: 'JetBrains Mono, ui-monospace, monospace' }}>v1.0</span>
-            </div>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-            <div style={{ fontSize: 11, opacity: 0.7, fontFamily: 'JetBrains Mono, ui-monospace, monospace' }}>kpenyneooigsyuuomgct · eu-central-1 · PG17</div>
-            <div style={{ fontSize: 10, opacity: 0.5, fontFamily: 'JetBrains Mono, ui-monospace, monospace' }}>snapshot: {SNAPSHOT_TS}</div>
-          </div>
-        </div>
-        {/* Status strip */}
-        <div style={{ marginTop: 18, display: 'flex', gap: 24, fontSize: 11, fontFamily: 'JetBrains Mono, ui-monospace, monospace', opacity: 0.85 }}>
-          <span><StatusDot status="active" />supabase</span>
-          <span style={{ color: TOKENS.ochre }}><StatusDot status="urgent" />cloudbeds sync — key invalid</span>
-          <span style={{ color: TOKENS.oxblood }}><StatusDot status="critical" />P0: rotate GitHub PAT</span>
-          <span style={{ marginLeft: 'auto', opacity: 0.6 }}>{AGENTS.filter(a => a.status === 'active').length} of {AGENTS.length} agents online</span>
-        </div>
-      </header>
-
+    <Page
+      eyebrow="cockpit · v2 preview"
+      title={<em>What&apos;s in the system right now?</em>}
+      kpiTiles={[
+        { k: 'AGENTS', v: String(AGENTS.length), d: 'identities' },
+        { k: 'SCHEMAS', v: String(SCHEMAS.length), d: 'in DB' },
+        { k: 'INTAKE', v: String(INTAKE.length), d: 'open bugs' },
+      ]}
+    >
+      <div style={{ fontFamily: 'var(--sans)', color: 'var(--ink)' }}>
       {/* Tab bar */}
       <nav style={{
         background: TOKENS.bgRaised, borderBottom: `1px solid ${TOKENS.border}`,
@@ -1075,17 +1055,7 @@ export default function CockpitV2Page() {
         {tab === 'activity' && <ActivityTab />}
       </main>
 
-      {/* Footer */}
-      <footer style={{
-        padding: '20px 32px', borderTop: `1px solid ${TOKENS.border}`,
-        background: TOKENS.bgRaised, marginTop: 40,
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        fontSize: 11, color: TOKENS.text3, fontFamily: 'JetBrains Mono, ui-monospace, monospace',
-      }}>
-        <span>Source of truth · Supabase</span>
-        <span>edits in this view are local-only · wire auth for write-back</span>
-        <span>v1.0 · pbsbase / TBC-HM</span>
-      </footer>
-    </div>
+      </div>
+    </Page>
   );
 }
