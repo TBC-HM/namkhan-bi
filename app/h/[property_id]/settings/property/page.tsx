@@ -1,7 +1,6 @@
-// app/p/[property_id]/settings/property/page.tsx
-// Property Settings — now under /p/[property_id]/... routing.
-// Property comes from the URL, not a hardcoded constant.
-// ADR-021 + ADR-024.
+// app/h/[property_id]/settings/property/page.tsx
+// v2: Adds team data fetch from tenancy.property_users for the Team tab.
+// Uses <Page> shell so HeaderPills + PropertySwitcher render.
 
 import { createClient } from '@/lib/supabase/server';
 import PropertySettingsClient from '@/components/settings/PropertySettingsClient';
@@ -16,6 +15,7 @@ async function getPropertyData(propertyId: number) {
   const [
     identity, location, brand, policies,
     rooms, facilities, activities, seasons, certifications, contacts, social,
+    team,
   ] = await Promise.all([
     supabase.schema('property').from('identity').select('*').eq('property_id', propertyId).maybeSingle(),
     supabase.schema('property').from('location').select('*').eq('property_id', propertyId).maybeSingle(),
@@ -28,6 +28,12 @@ async function getPropertyData(propertyId: number) {
     supabase.schema('property').from('certifications').select('*').eq('property_id', propertyId).order('certification_name'),
     supabase.schema('property').from('contacts').select('*').eq('property_id', propertyId).order('purpose'),
     supabase.schema('property').from('social').select('*').eq('property_id', propertyId).order('platform'),
+    supabase.schema('tenancy').from('property_users')
+      .select('full_name, email, role, department, status')
+      .eq('property_id', propertyId)
+      .eq('status', 'active')
+      .order('role', { ascending: true })
+      .order('department', { ascending: true }),
   ]);
 
   return {
@@ -42,6 +48,7 @@ async function getPropertyData(propertyId: number) {
     certifications: certifications.data ?? [],
     contacts: contacts.data ?? [],
     social: social.data ?? [],
+    team: team.data ?? [],
   };
 }
 
