@@ -105,6 +105,65 @@ function formatRel(iso: string | null): string {
   return `${d}d ago`;
 }
 
+// Build the 7-row daily forecast payload for KBPopover from Open-Meteo's
+// `daily` envelope. Returns null when the payload is missing — caller falls
+// back to the SEVEN_DAY_TEMP placeholder.
+function buildWeatherRows(daily?: {
+  time?: string[];
+  temperature_2m_max?: number[];
+  temperature_2m_min?: number[];
+  precipitation_sum?: number[];
+}): Array<{ k: string; v: string; d: string }> | null {
+  if (!daily?.time || !daily.time.length) return null;
+  const dows = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  return daily.time.slice(0, 7).map((iso, i) => {
+    const dt = new Date(iso + 'T12:00:00Z');
+    const isToday = i === 0;
+    const max = daily.temperature_2m_max?.[i];
+    const min = daily.temperature_2m_min?.[i];
+    const rain = daily.precipitation_sum?.[i];
+    return {
+      k: isToday ? `Today · ${dows[dt.getUTCDay()]}` : dows[dt.getUTCDay()],
+      v: max != null && min != null ? `${Math.round(max)}° / ${Math.round(min)}°` : '—',
+      d: rain != null ? `${rain.toFixed(1)} mm rain` : '—',
+    };
+  });
+}
+
+// Read the active property from URL (/h/[id]/...) or fall back to the
+// tbc.active_property cookie (set by middleware) or Namkhan default.
+function readActiveProperty(pathname: string | null): number {
+  const m = pathname?.match(/^\/h\/(\d+)/);
+  if (m) return Number(m[1]);
+  if (typeof document !== 'undefined') {
+    const c = document.cookie.split('; ').find((row) => row.startsWith('tbc.active_property='));
+    if (c) {
+      const n = Number(c.split('=')[1]);
+      if (Number.isFinite(n)) return n;
+    }
+  }
+  return 260955;
+}
+
+interface WeatherSnapshot {
+  temp: number | null;
+  city: string;
+  daily?: {
+    time?: string[];
+    temperature_2m_max?: number[];
+    temperature_2m_min?: number[];
+    precipitation_sum?: number[];
+    weather_code?: number[];
+  };
+}
+interface AirSnapshot {
+  aqi: number | null;
+  city: string;
+  band: string;
+  pm25?: number | null;
+  humidity?: number | null;
+}
+
 export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
   const pathname = usePathname();
   const inPropertyTree = pathname?.startsWith("/h/") ?? false;
@@ -115,6 +174,10 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
   const [userOpen, setUserOpen] = useState(false);
   const [lang, setLang] = useState<'en' | 'th'>('en');
   const [inbox, setInbox] = useState<InboxSummary>(INBOX_EMPTY);
+
+  // 2026-05-12: live weather + AQI fetched per active property
+  const [weather, setWeather] = useState<WeatherSnapshot | null>(null);
+  const [air, setAir] = useState<AirSnapshot | null>(null);
 
   // One close-timer per pill. mouseEnter on trigger OR popover cancels it.
   const tempTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -136,6 +199,43 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
     const id = setInterval(fetchSummary, 60_000);
     return () => { cancelled = true; clearInterval(id); };
   }, []);
+
+  // Fetch weather + AQI on mount and whenever the active property changes.
+  // Refresh every 10 minutes — weather doesn't move fast and we want light
+  // API spend on Open-Meteo (free but still polite).
+  useEffect(() => {
+    let cancelled = false;
+    const propertyId = readActiveProperty(pathname ?? null);
+    const fetchWeather = () => {
+      fetch(`/api/live/weather?property_id=${propertyId}`, { cache: 'no-store' })
+        .then((r) => r.ok ? r.json() : null)
+        .then((d) => {
+          if (cancelled || !d?.ok) return;
+          setWeather({
+            temp: d.current?.temperature_2m ?? null,
+            city: d.location?.name ?? '—',
+            daily: d.daily,
+          });
+        })
+        .catch(() => { /* keep last value */ });
+      fetch(`/api/live/airquality?property_id=${propertyId}`, { cache: 'no-store' })
+        .then((r) => r.ok ? r.json() : null)
+        .then((d) => {
+          if (cancelled || !d?.ok) return;
+          setAir({
+            aqi: d.current?.us_aqi ?? null,
+            city: d.location?.name ?? '—',
+            band: d.band ?? 'unknown',
+            pm25: d.current?.pm2_5 ?? null,
+            humidity: d.current?.humidity_2m ?? null,
+          });
+        })
+        .catch(() => { /* keep last value */ });
+    };
+    fetchWeather();
+    const id = setInterval(fetchWeather, 10 * 60_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [pathname]);
 
   function clearTimer(ref: React.MutableRefObject<ReturnType<typeof setTimeout> | null>) {
     if (ref.current) { clearTimeout(ref.current); ref.current = null; }
@@ -170,12 +270,14 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
       >
         <button
           onClick={() => { setTempOpen(o => !o); setAirOpen(false); setUserOpen(false); }}
-          title="Temperature in Luang Prabang · hover for 7-day"
+          title={`Temperature in ${weather?.city ?? '—'} · hover for 7-day`}
           aria-label="Temperature"
           style={S.chip}
         >
           <span style={{ color: '#f4d99a', fontSize: 12 }}>☀</span>
-          <span style={S.chipText}>32°</span>
+          <span style={S.chipText}>
+            {weather?.temp != null ? `${Math.round(weather.temp)}°` : '—°'}
+          </span>
         </button>
         {tempOpen && (
           <div
@@ -184,10 +286,10 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
             onMouseLeave={() => scheduleClose(tempTimer, setTempOpen)}
           >
             <KBPopover onClose={() => setTempOpen(false)}
-              eyebrow="Temperature · Luang Prabang"
+              eyebrow={`Temperature · ${weather?.city ?? '—'}`}
               title="Next 7 days · °C · rain mm"
-              rows={SEVEN_DAY_TEMP}
-              footer="preview · Open-Meteo wiring TODO"
+              rows={buildWeatherRows(weather?.daily) ?? SEVEN_DAY_TEMP}
+              footer="Open-Meteo · live"
             />
           </div>
         )}
@@ -204,12 +306,14 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
       >
         <button
           onClick={() => { setAirOpen(o => !o); setTempOpen(false); setUserOpen(false); }}
-          title="Air quality + humidity · hover for 7-day"
+          title={`Air quality in ${air?.city ?? '—'} · ${air?.band ?? 'unknown'}`}
           aria-label="Air"
           style={S.chip}
         >
           <span style={{ color: '#f4d99a', fontSize: 12 }}>≈</span>
-          <span style={S.chipText}>AQI 42</span>
+          <span style={S.chipText}>
+            {air?.aqi != null ? `AQI ${Math.round(air.aqi)}` : 'AQI —'}
+          </span>
         </button>
         {airOpen && (
           <div
@@ -218,10 +322,12 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
             onMouseLeave={() => scheduleClose(airTimer, setAirOpen)}
           >
             <KBPopover onClose={() => setAirOpen(false)}
-              eyebrow="Air · Luang Prabang"
-              title="Next 7 days · AQI · UV · humidity"
+              eyebrow={`Air · ${air?.city ?? '—'}`}
+              title={air?.aqi != null
+                ? `US AQI ${Math.round(air.aqi)} · ${air.band} · PM2.5 ${air.pm25 != null ? air.pm25.toFixed(1) : '—'}`
+                : 'Next 7 days · AQI · PM2.5'}
               rows={SEVEN_DAY_AIR}
-              footer="preview · IQAir wiring TODO"
+              footer="Open-Meteo Air Quality · live"
             />
           </div>
         )}

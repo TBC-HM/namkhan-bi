@@ -1,5 +1,6 @@
 // app/api/live/airquality/route.ts
-// GET /api/live/airquality  — current air quality for The Namkhan via Open-Meteo (free, no key).
+// GET /api/live/airquality?property_id=NNN — current air quality.
+// Coords from property.location; falls back to Luang Prabang.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -7,32 +8,44 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function GET(_req: NextRequest) {
+const NAMKHAN_PROPERTY_ID = 260955;
+const FALLBACK_LAT = 19.867528;
+const FALLBACK_LNG = 102.213611;
+const FALLBACK_CITY = 'Luang Prabang';
+const FALLBACK_TZ = 'Asia/Vientiane';
+
+export async function GET(req: NextRequest) {
   let admin;
   try { admin = getSupabaseAdmin(); }
   catch (e: any) { return NextResponse.json({ ok: false, error: e.message }, { status: 500 }); }
 
-  let lat = 19.867528, lng = 102.213611, locationName = 'Luang Prabang';
+  const propertyId = Number(req.nextUrl.searchParams.get('property_id')) || NAMKHAN_PROPERTY_ID;
+
+  let lat = FALLBACK_LAT, lng = FALLBACK_LNG;
+  let locationName = FALLBACK_CITY;
+  let tz = FALLBACK_TZ;
   try {
-    const { data } = await admin.schema('marketing').from('property_profile')
-      .select('latitude, longitude, city').eq('property_id', 260955).maybeSingle();
+    const { data } = await admin.schema('property').from('location')
+      .select('latitude, longitude, city, country, timezone')
+      .eq('property_id', propertyId).maybeSingle();
     if (data?.latitude && data?.longitude) {
-      lat = Number(data.latitude); lng = Number(data.longitude);
-      locationName = data.city || locationName;
+      lat = Number(data.latitude);
+      lng = Number(data.longitude);
+      locationName = data.city ? (data.country ? `${data.city}, ${data.country}` : data.city) : locationName;
+      if (data.timezone) tz = data.timezone;
     }
-  } catch {}
+  } catch { /* fall back */ }
 
   const url =
     `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lng}` +
     `&current=us_aqi,european_aqi,pm10,pm2_5,carbon_monoxide,ozone,nitrogen_dioxide,sulphur_dioxide` +
-    `&hourly=pm2_5,pm10,us_aqi&timezone=Asia%2FBangkok&forecast_days=2`;
+    `&hourly=pm2_5,pm10,us_aqi&timezone=${encodeURIComponent(tz)}&forecast_days=2`;
   const resp = await fetch(url, { cache: 'no-store' });
   if (!resp.ok) {
     return NextResponse.json({ ok: false, error: `open-meteo-air ${resp.status}` }, { status: 502 });
   }
   const data = await resp.json();
 
-  // Tag the AQI band so UI can color-code
   const aqi = data.current?.us_aqi as number | undefined;
   let band = 'unknown';
   if (typeof aqi === 'number') {
@@ -46,7 +59,7 @@ export async function GET(_req: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    location: { name: locationName, lat, lng },
+    location: { name: locationName, lat, lng, timezone: tz, property_id: propertyId },
     current: data.current,
     band,
     hourly: data.hourly,
