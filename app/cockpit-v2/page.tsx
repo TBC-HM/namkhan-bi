@@ -269,24 +269,24 @@ const COSTS = [
 // ============================================================================
 
 const TOKENS = {
-  bg:         'var(--paper)',         // sand-cream ground
-  bgRaised:   'var(--paper-warm)',    // raised surface
-  bgDeep:     'var(--paper-deep)',    // recessed
-  ink:        'var(--moss)',          // primary forest
-  inkSoft:    'var(--moss-mid)',
-  text:       'var(--ink)',
-  text2:      'var(--ink-soft)',
-  text3:      'var(--ink-mute)',
-  border:     'var(--line)',
-  borderSoft: 'var(--line-soft)',
-  sand:       'var(--brass)',
-  brass:      'var(--brass)',
-  terracotta: 'var(--oxblood-mid)',
-  ochre:      'var(--brass-soft)',
-  oxblood:    'var(--oxblood)',
-  forest:     'var(--moss)',
-  moss:       'var(--moss-glow)',
-  sky:        'var(--moss-mid)',      // no blue in brand palette — use moss
+  bg:         '#0a0a0a',                  // page bg (matches <Page> shell)
+  bgRaised:   '#13110e',                  // raised surface
+  bgDeep:     '#0e0e0c',                  // recessed (matches N dropdown)
+  ink:        '#e9e1ce',                  // primary text (sand-cream)
+  inkSoft:    'rgba(233,225,206,0.78)',
+  text:       '#e9e1ce',
+  text2:      'rgba(233,225,206,0.6)',
+  text3:      'rgba(233,225,206,0.4)',
+  border:     'rgba(199,154,107,0.25)',   // brass-tinted hairline
+  borderSoft: 'rgba(199,154,107,0.12)',
+  sand:       '#bfa980',
+  brass:      '#a8854a',                  // matches Page eyebrow brass
+  terracotta: '#b85f4e',
+  ochre:      '#c4a06b',
+  oxblood:    '#8e3a35',
+  forest:     '#7a9b6a',
+  moss:       '#6b9379',
+  sky:        '#9a8866',                  // no blue in brand — SLH gold
 };
 
 // ============================================================================
@@ -1014,7 +1014,7 @@ export default function CockpitV2Page() {
         { k: 'INTAKE', v: String(INTAKE.length), d: 'open bugs' },
       ]}
     >
-      <div style={{ fontFamily: 'var(--sans)', color: 'var(--ink)' }}>
+      <div style={{ fontFamily: 'var(--sans)', color: '#e9e1ce' }}>
       {/* Tab bar */}
       <nav style={{
         background: TOKENS.bgRaised, borderBottom: `1px solid ${TOKENS.border}`,
