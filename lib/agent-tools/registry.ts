@@ -12,6 +12,8 @@
 // to with a structured `tool_not_implemented` result. Implementing each
 // handler is per-skill work tracked separately.
 
+import { route_to_hod, request_peer_consult, type HandoffContext, MAX_HOPS } from './handlers/handoff';
+
 // Inline Tool / InputSchema shapes — we hit Anthropic via raw fetch, not the
 // SDK, so the type doesn't need to come from @anthropic-ai/sdk.
 export interface AnthropicInputSchema {
@@ -114,19 +116,28 @@ const REG: Record<string, ToolSpec> = {
   // ─── Coordination / routing ─────────────────────────────────────────────
   route_to_hod: {
     name: 'route_to_hod',
-    description: 'Route this conversation to a department HoD. Max 3 hops per user message.',
+    description: `Hand the conversation to a department HoD. The target answers the user's original message; you step aside. Max ${MAX_HOPS} hops per user message. Property-scoped agents can only route to agents in the same property or holding-scope agents.`,
     input_schema: {
       type: 'object',
       properties: {
         target_role: { type: 'string', enum: ['revenue_hod','sales_hod','marketing_hod','operations_hod','finance_hod','it_manager'] },
-        reason: { type: 'string' },
+        reason: { type: 'string', description: 'One-sentence reason for the handoff' },
       },
       required: ['target_role', 'reason'],
+    },
+    handler: async (input, ctx) => {
+      const handoffCtx: HandoffContext = {
+        agent_role: ctx.role,
+        property_id: ctx.propertyId ?? null,
+        hop_count: 0, // tool dispatcher should pass real hop count via ctx in future
+        user_message: '',
+      };
+      return route_to_hod(input as { target_role: string; reason?: string }, handoffCtx);
     },
   },
   request_peer_consult: {
     name: 'request_peer_consult',
-    description: 'Ask a peer HoD for a one-shot opinion without handing off the conversation.',
+    description: `Ask a peer agent for a one-shot opinion without handing off the conversation. Peer's answer comes back as a quoted block in your reply. Max ${MAX_HOPS} hops per user message.`,
     input_schema: {
       type: 'object',
       properties: {
@@ -134,6 +145,15 @@ const REG: Record<string, ToolSpec> = {
         question: { type: 'string' },
       },
       required: ['peer_role', 'question'],
+    },
+    handler: async (input, ctx) => {
+      const handoffCtx: HandoffContext = {
+        agent_role: ctx.role,
+        property_id: ctx.propertyId ?? null,
+        hop_count: 0,
+        user_message: '',
+      };
+      return request_peer_consult(input as { peer_role: string; question: string }, handoffCtx);
     },
   },
   open_pbs_ticket: {
