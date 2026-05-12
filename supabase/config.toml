@@ -8,7 +8,7 @@ project_id = "namkhan-bi"
 [api]
 enabled = true
 port = 54321
-schemas = ["public", "graphql_public"]
+schemas = ["public", "graphql_public", "property"]
 extra_search_path = ["public", "extensions"]
 max_rows = 1000
 
