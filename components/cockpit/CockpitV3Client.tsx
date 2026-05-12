@@ -71,7 +71,7 @@ export default function CockpitV3Client({ propertyId, scope, roster, runs }: Pro
       {tab === 'team' && <TeamTab roster={roster} propertyId={propertyId} />}
       {tab === 'skills' && (
         <Suspense fallback={<div style={{ color: 'var(--text-mute, #9b907a)', padding: 24 }}>Loading skills…</div>}>
-          <SkillsTab roster={roster} />
+          <SkillsTab />
         </Suspense>
       )}
       {tab === 'activity' && <ActivityTab runs={runs} />}
