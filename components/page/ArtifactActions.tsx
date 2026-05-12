@@ -110,9 +110,9 @@ const S: Record<string, React.CSSProperties> = {
   row: { display: 'flex', alignItems: 'center', gap: 4 },
   btn: {
     background:    'transparent',
-    border:        '1px solid #2a261d',
+    border:        '1px solid var(--border-2, #2a261d)',
     borderRadius:  4,
-    color:         '#9b907a',
+    color:         'var(--text-mute, #9b907a)',
     cursor:        'pointer',
     fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
     fontSize:      9,
@@ -124,14 +124,14 @@ const S: Record<string, React.CSSProperties> = {
   },
   sched: {
     position: 'absolute', top: 26, right: 0, zIndex: 60,
-    background: '#0f0d0a', border: '1px solid #2a261d', borderRadius: 6,
+    background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-2, #2a261d)', borderRadius: 6,
     padding: 4, minWidth: 110, boxShadow: '0 12px 28px rgba(0,0,0,0.6)',
     display: 'flex', flexDirection: 'column',
   },
   schedItem: {
     background:    'transparent',
     border:        'none',
-    color:         '#d8cca8',
+    color:         'var(--text-2, #d8cca8)',
     cursor:        'pointer',
     fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
     fontSize:      10,

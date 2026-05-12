@@ -35,24 +35,24 @@ export default function SubPagesStrip({ items }: { items: SubPageLink[] }) {
               ...S.link,
               // PBS 2026-05-09 (repair #5): "make the words in the dropdown
               // in the main menu below the main names like revenue or sales
-              // better to read". Bumped resting color from #d8cca8 (paper)
-              // to #f0e5cb (cream) for stronger contrast against the dark
+              // better to read". Bumped resting color from var(--text-2, #d8cca8) (paper)
+              // to var(--text-1, #f0e5cb) (cream) for stronger contrast against the dark
               // canvas. Active stays brass.
-              color: active ? '#a8854a' : '#f0e5cb',
-              borderBottomColor: active ? '#a8854a' : 'transparent',
+              color: active ? 'var(--accent, #a8854a)' : 'var(--text-1, #f0e5cb)',
+              borderBottomColor: active ? 'var(--accent, #a8854a)' : 'transparent',
               // textShadow to fake bold weight without changing glyph
               // metrics — keeps every label the SAME width whether
               // active or not, so neighbours don't shift.
-              textShadow: active ? '0 0 0.4px #a8854a' : 'none',
+              textShadow: active ? '0 0 0.4px var(--accent, #a8854a)' : 'none',
             }}
             onMouseEnter={(e) => {
               if (active) return;
-              e.currentTarget.style.color = '#a8854a';
-              e.currentTarget.style.borderBottomColor = '#a8854a';
+              e.currentTarget.style.color = 'var(--accent, #a8854a)';
+              e.currentTarget.style.borderBottomColor = 'var(--accent, #a8854a)';
             }}
             onMouseLeave={(e) => {
               if (active) return;
-              e.currentTarget.style.color = '#f0e5cb';
+              e.currentTarget.style.color = 'var(--text-1, #f0e5cb)';
               e.currentTarget.style.borderBottomColor = 'transparent';
             }}
           >
@@ -85,9 +85,9 @@ const S: Record<string, React.CSSProperties> = {
   },
   link: {
     // PBS 2026-05-09 #22 → repair-list #5: stronger contrast on the top menu.
-    // History: #9b907a (brown, too dim) → #d8cca8 (paper, still too soft) →
-    // #f0e5cb (cream) for the resting state, brass on hover/active.
-    color:          '#f0e5cb',
+    // History: var(--text-mute, #9b907a) (brown, too dim) → var(--text-2, #d8cca8) (paper, still too soft) →
+    // var(--text-1, #f0e5cb) (cream) for the resting state, brass on hover/active.
+    color:          'var(--text-1, #f0e5cb)',
     textDecoration: 'none',
     fontFamily:     "'JetBrains Mono', ui-monospace, monospace",
     fontSize:       10,

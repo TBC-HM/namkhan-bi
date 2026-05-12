@@ -102,8 +102,8 @@ function computeNextRun(schedule: 'once' | 'daily' | 'weekly' | 'monthly'): stri
 
 const SEVERITY_DOT: Record<string, string> = {
   high:   '#c0584c',
-  medium: '#c4a06b',
-  low:    '#7d7565',
+  medium: 'var(--accent-2, #c4a06b)',
+  low:    'var(--text-dim, #7d7565)',
 };
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -129,7 +129,7 @@ function menuLinkStyle(): React.CSSProperties {
   return {
     display:        'block',
     padding:        '7px 12px',
-    color:          '#d8cca8',
+    color:          'var(--text-2, #d8cca8)',
     textDecoration: 'none',
     fontFamily:     "'JetBrains Mono', ui-monospace, monospace",
     fontSize:       11,
@@ -140,8 +140,8 @@ function menuLinkStyle(): React.CSSProperties {
 }
 function langFlagStyle(active: boolean): React.CSSProperties {
   return {
-    background:   active ? '#1c160d' : 'transparent',
-    border:       `1px solid ${active ? '#a8854a' : '#2a261d'}`,
+    background:   active ? 'var(--surf-3, #1c160d)' : 'transparent',
+    border:       `1px solid ${active ? 'var(--accent, #a8854a)' : 'var(--border-2, #2a261d)'}`,
     borderRadius: 4,
     padding:      '3px 8px',
     cursor:       'pointer',
@@ -156,11 +156,11 @@ function weatherChipStyle(): React.CSSProperties {
     alignItems:   'center',
     gap:          6,
     background:   'transparent',
-    border:       '1px solid #2a261d',
+    border:       '1px solid var(--border-2, #2a261d)',
     borderRadius: 999,
     padding:      '4px 10px',
     cursor:       'pointer',
-    color:        '#9b907a',
+    color:        'var(--text-mute, #9b907a)',
   };
 }
 
@@ -171,17 +171,17 @@ const modalLabelStyle: React.CSSProperties = {
   fontSize:       10,
   letterSpacing:  '0.14em',
   textTransform:  'uppercase',
-  color:          '#9b907a',
+  color:          'var(--text-mute, #9b907a)',
   marginBottom:   4,
   marginTop:      10,
 };
 const modalInputStyle: React.CSSProperties = {
   width:        '100%',
   boxSizing:    'border-box',
-  background:   '#15110b',
-  border:       '1px solid #2a261d',
+  background:   'var(--surf-2, #15110b)',
+  border:       '1px solid var(--border-2, #2a261d)',
   borderRadius: 8,
-  color:        '#efe6d3',
+  color:        'var(--text-4, #efe6d3)',
   padding:      '9px 12px',
   fontSize:     13,
   fontFamily:   "'Inter Tight', system-ui, sans-serif",
@@ -191,9 +191,9 @@ const modalInputStyle: React.CSSProperties = {
 };
 const modalCancelStyle: React.CSSProperties = {
   background:    'transparent',
-  border:        '1px solid #2a261d',
+  border:        '1px solid var(--border-2, #2a261d)',
   borderRadius:  8,
-  color:         '#9b907a',
+  color:         'var(--text-mute, #9b907a)',
   padding:       '8px 14px',
   fontSize:      11,
   cursor:        'pointer',
@@ -222,8 +222,8 @@ const modalOverlayStyle: React.CSSProperties = {
   padding:         24,
 };
 const modalCardStyle: React.CSSProperties = {
-  background:   '#0f0d0a',
-  border:       '1px solid #3a3327',
+  background:   'var(--surf-1, #0f0d0a)',
+  border:       '1px solid var(--border-3, #3a3327)',
   borderRadius: 12,
   padding:      22,
   width:        '100%',
@@ -235,13 +235,13 @@ const modalEyebrowStyle: React.CSSProperties = {
   fontSize:      10,
   letterSpacing: '0.22em',
   textTransform: 'uppercase',
-  color:         '#a8854a',
+  color:         'var(--accent, #a8854a)',
   marginBottom:  14,
 };
 const docChoiceBtnStyle: React.CSSProperties = {
   width:        '100%',
-  background:   '#15110b',
-  border:       '1px solid #2a261d',
+  background:   'var(--surf-2, #15110b)',
+  border:       '1px solid var(--border-2, #2a261d)',
   borderRadius: 10,
   padding:      '14px 16px',
   cursor:       'pointer',
@@ -252,10 +252,10 @@ const docChoiceBtnStyle: React.CSSProperties = {
 // outline, "..." while busy, disabled when not enough input.
 function aiAssistBtnStyle(busy: boolean): React.CSSProperties {
   return {
-    background:    busy ? '#1c160d' : 'transparent',
-    border:        '1px solid #2a261d',
+    background:    busy ? 'var(--surf-3, #1c160d)' : 'transparent',
+    border:        '1px solid var(--border-2, #2a261d)',
     borderRadius:  999,
-    color:         '#a8854a',
+    color:         'var(--accent, #a8854a)',
     cursor:        busy ? 'wait' : 'pointer',
     fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
     fontSize:      9,
@@ -268,10 +268,10 @@ function aiAssistBtnStyle(busy: boolean): React.CSSProperties {
 }
 function pillBtnStyle(active: boolean): React.CSSProperties {
   return {
-    background:    active ? '#1c160d' : 'transparent',
-    border:        `1px solid ${active ? '#a8854a' : '#2a261d'}`,
+    background:    active ? 'var(--surf-3, #1c160d)' : 'transparent',
+    border:        `1px solid ${active ? 'var(--accent, #a8854a)' : 'var(--border-2, #2a261d)'}`,
     borderRadius:  18,
-    color:         active ? '#c4a06b' : '#9b907a',
+    color:         active ? 'var(--accent-2, #c4a06b)' : 'var(--text-mute, #9b907a)',
     padding:       '5px 12px',
     fontSize:      11,
     cursor:        'pointer',
@@ -289,7 +289,7 @@ function cardChipStyle(color: string): React.CSSProperties {
     letterSpacing: '0.12em',
     textTransform: 'uppercase',
     color,
-    border:        '1px solid #2a261d',
+    border:        '1px solid var(--border-2, #2a261d)',
     borderRadius:  999,
     padding:       '1px 6px',
     flexShrink:    0,
@@ -892,7 +892,7 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
           aria-label="Temperature"
           style={weatherChipStyle()}
         >
-          <span style={{ color: '#c4a06b', fontSize: 12 }}>☀</span>
+          <span style={{ color: 'var(--accent-2, #c4a06b)', fontSize: 12 }}>☀</span>
           <span style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 11 }}>32°</span>
         </button>
         {tempOpen && (
@@ -919,7 +919,7 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
           aria-label="Air"
           style={weatherChipStyle()}
         >
-          <span style={{ color: '#c4a06b', fontSize: 12 }}>≈</span>
+          <span style={{ color: 'var(--accent-2, #c4a06b)', fontSize: 12 }}>≈</span>
           <span style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 11 }}>AQI 42</span>
         </button>
         {airOpen && (
@@ -949,7 +949,7 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
           fontSize:      10,
           letterSpacing: '0.18em',
           textTransform: 'uppercase',
-          color:         '#9b907a',
+          color:         'var(--text-mute, #9b907a)',
           cursor:        'help',
         }}>
           {todayLabel()}
@@ -957,28 +957,28 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
         {dateHover && (
           <div style={{
             position: 'absolute', top: 26, right: 0, zIndex: 60,
-            background: '#0f0d0a', border: '1px solid #3a3327', borderRadius: 8,
+            background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-3, #3a3327)', borderRadius: 8,
             padding: 12, minWidth: 360,
             boxShadow: '0 12px 28px rgba(0,0,0,0.6)',
             display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8,
           }}>
             {(cfg.kpiTiles ?? []).map(t => (
               <div key={t.k} style={{
-                background: '#15110b', border: '1px solid #2a261d', borderRadius: 6,
+                background: 'var(--surf-2, #15110b)', border: '1px solid var(--border-2, #2a261d)', borderRadius: 6,
                 padding: '8px 10px',
               }}>
                 <div style={{
                   fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-                  fontSize: 9, letterSpacing: '0.22em', color: '#7d7565', textTransform: 'uppercase',
+                  fontSize: 9, letterSpacing: '0.22em', color: 'var(--text-dim, #7d7565)', textTransform: 'uppercase',
                 }}>{t.k}</div>
                 <div style={{
                   fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic',
-                  fontSize: 22, color: '#d8cca8', marginTop: 2,
+                  fontSize: 22, color: 'var(--text-2, #d8cca8)', marginTop: 2,
                 }}>{t.v}</div>
-                <div style={{ fontSize: 10, color: '#9b907a', marginTop: 2 }}>{t.d}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-mute, #9b907a)', marginTop: 2 }}>{t.d}</div>
               </div>
             ))}
-            <div style={{ gridColumn: '1 / -1', fontSize: 10, color: '#5a5448', textAlign: 'right', fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>
+            <div style={{ gridColumn: '1 / -1', fontSize: 10, color: 'var(--text-place, #5a5448)', textAlign: 'right', fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>
               preview · live wiring TODO
             </div>
           </div>
@@ -989,9 +989,9 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
       <div style={{ position: 'relative' }}>
         <button onClick={() => setUserOpen(o => !o)} style={{
           background:    'transparent',
-          border:        '1px solid #2a261d',
+          border:        '1px solid var(--border-2, #2a261d)',
           borderRadius:  6,
-          color:         '#c4a06b',
+          color:         'var(--accent-2, #c4a06b)',
           padding:       '5px 12px',
           cursor:        'pointer',
           fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
@@ -1002,8 +1002,8 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
           display:       'flex', alignItems: 'center', gap: 6,
         }}>
           <span style={{
-            width: 18, height: 18, borderRadius: '50%', background: '#a8854a',
-            color: '#0a0a0a', fontSize: 9, fontWeight: 700,
+            width: 18, height: 18, borderRadius: '50%', background: 'var(--accent, #a8854a)',
+            color: 'var(--surf-0, #0a0a0a)', fontSize: 9, fontWeight: 700,
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           }}>{(USER_NAME[0] ?? '?').toUpperCase()}</span>
           {USER_NAME} ▾
@@ -1011,23 +1011,23 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
         {userOpen && (
           <div style={{
             position: 'absolute', right: 0, top: 36, zIndex: 60,
-            background: '#0f0d0a', border: '1px solid #2a261d', borderRadius: 6,
+            background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-2, #2a261d)', borderRadius: 6,
             padding: 6, minWidth: 200, boxShadow: '0 12px 28px rgba(0,0,0,0.6)',
           }}>
             <a href="/settings/property" onClick={() => setUserOpen(false)} style={menuLinkStyle()}>Settings</a>
             <a href="/cockpit?tab=email-categories" onClick={() => setUserOpen(false)} style={menuLinkStyle()}>Email</a>
             <a href="/cockpit/users" onClick={() => setUserOpen(false)} style={menuLinkStyle()}>Account</a>
-            <div style={{ borderTop: '1px solid #2a261d', margin: '4px 0', paddingTop: 4 }}>
+            <div style={{ borderTop: '1px solid var(--border-2, #2a261d)', margin: '4px 0', paddingTop: 4 }}>
               <div style={{
                 padding: '4px 12px',
                 fontFamily: "'JetBrains Mono', ui-monospace, monospace",
                 fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase',
-                color: '#5a5448',
+                color: 'var(--text-place, #5a5448)',
               }}>Tools</div>
               <a href="/cockpit"               onClick={() => setUserOpen(false)} style={menuLinkStyle()}>IT cockpit</a>
               <a href="/front-office/arrivals" onClick={() => setUserOpen(false)} style={menuLinkStyle()}>Front office</a>
             </div>
-            <div style={{ borderTop: '1px solid #2a261d', marginTop: 4, paddingTop: 6, display: 'flex', justifyContent: 'center', gap: 10 }}>
+            <div style={{ borderTop: '1px solid var(--border-2, #2a261d)', marginTop: 4, paddingTop: 6, display: 'flex', justifyContent: 'center', gap: 10 }}>
               <button onClick={() => setLang('en')} title="English" style={langFlagStyle(lang === 'en')}>🇬🇧</button>
               <button onClick={() => setLang('th')} title="ไทย" style={langFlagStyle(lang === 'th')}>🇹🇭</button>
             </div>
@@ -1054,10 +1054,10 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
           <button
             onClick={() => { setProjOpen(o => !o); setHelpOpen(false); }}
             style={{
-              background:    activeProject ? '#1c160d' : 'transparent',
-              border:        '1px solid #3a3327',
+              background:    activeProject ? 'var(--surf-3, #1c160d)' : 'transparent',
+              border:        '1px solid var(--border-3, #3a3327)',
               borderRadius:  18,
-              color:         activeProject ? '#d8cca8' : '#9b907a',
+              color:         activeProject ? 'var(--text-2, #d8cca8)' : 'var(--text-mute, #9b907a)',
               padding:       '5px 14px',
               cursor:        'pointer',
               fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
@@ -1076,31 +1076,31 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
           {projOpen && (
             <div style={{
               position: 'absolute', left: 0, top: 36, zIndex: 60,
-              background: '#0f0d0a', border: '1px solid #2a261d', borderRadius: 8,
+              background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-2, #2a261d)', borderRadius: 8,
               padding: 6, minWidth: 280, maxHeight: 360, overflowY: 'auto',
               boxShadow: '0 12px 28px rgba(0,0,0,0.6)',
             }}>
               {projects.length === 0 && (
-                <div style={{ padding: '8px 10px', fontSize: 11, color: '#7d7565', fontStyle: 'italic' }}>
+                <div style={{ padding: '8px 10px', fontSize: 11, color: 'var(--text-dim, #7d7565)', fontStyle: 'italic' }}>
                   No projects yet. Create the first one.
                 </div>
               )}
               {projects.map(p => (
                 <div key={p.id} style={{
                   display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px',
-                  background: activeProject?.id === p.id ? '#1c160d' : 'transparent', borderRadius: 6,
+                  background: activeProject?.id === p.id ? 'var(--surf-3, #1c160d)' : 'transparent', borderRadius: 6,
                 }}>
                   <button
                     onClick={() => pickProject(p)}
                     style={{
                       flex: 1, textAlign: 'left', background: 'transparent', border: 'none',
-                      color: activeProject?.id === p.id ? '#c4a06b' : '#d8cca8', cursor: 'pointer',
+                      color: activeProject?.id === p.id ? 'var(--accent-2, #c4a06b)' : 'var(--text-2, #d8cca8)', cursor: 'pointer',
                       padding: '4px 6px', fontSize: 12,
                     }}
                   >{p.name}</button>
                   <button
                     onClick={() => archiveProject(p)}
-                    style={{ background: 'transparent', border: 'none', color: '#7d7565', cursor: 'pointer', fontSize: 14, padding: '0 4px' }}
+                    style={{ background: 'transparent', border: 'none', color: 'var(--text-dim, #7d7565)', cursor: 'pointer', fontSize: 14, padding: '0 4px' }}
                     title="Archive (gone)"
                   >×</button>
                 </div>
@@ -1110,20 +1110,20 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
                   onClick={() => pickProject(null)}
                   style={{
                     width: '100%', marginTop: 6, padding: '6px 10px',
-                    background: 'transparent', border: '1px dashed #3a3327', borderRadius: 6,
-                    color: '#9b907a', cursor: 'pointer', fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase',
+                    background: 'transparent', border: '1px dashed var(--border-3, #3a3327)', borderRadius: 6,
+                    color: 'var(--text-mute, #9b907a)', cursor: 'pointer', fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase',
                   }}
                 >
                   Leave project context
                 </button>
               )}
-              <div style={{ marginTop: 8, padding: '6px 4px 0', borderTop: '1px solid #2a261d' }}>
+              <div style={{ marginTop: 8, padding: '6px 4px 0', borderTop: '1px solid var(--border-2, #2a261d)' }}>
                 <button
                   onClick={openProjectModal}
                   style={{
                     width: '100%', padding: '7px 10px',
-                    background: 'transparent', border: '1px dashed #3a3327', borderRadius: 6,
-                    color: '#a8854a', cursor: 'pointer',
+                    background: 'transparent', border: '1px dashed var(--border-3, #3a3327)', borderRadius: 6,
+                    color: 'var(--accent, #a8854a)', cursor: 'pointer',
                     fontFamily: "'JetBrains Mono', ui-monospace, monospace",
                     fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase',
                   }}
@@ -1139,8 +1139,8 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
             onClick={() => { setHelpOpen(o => !o); setProjOpen(false); }}
             style={{
               width: 22, height: 22, borderRadius: '50%',
-              background: 'transparent', border: '1px solid #3a3327',
-              color: '#7d7565', cursor: 'pointer', fontSize: 11, lineHeight: 1,
+              background: 'transparent', border: '1px solid var(--border-3, #3a3327)',
+              color: 'var(--text-dim, #7d7565)', cursor: 'pointer', fontSize: 11, lineHeight: 1,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontFamily: "'JetBrains Mono', ui-monospace, monospace",
             }}
@@ -1149,13 +1149,13 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
           {helpOpen && (
             <div style={{
               position: 'absolute', left: 0, top: 30, zIndex: 60,
-              background: '#0f0d0a', border: '1px solid #3a3327', borderRadius: 8,
-              padding: 14, width: 360, fontSize: 12, color: '#d8cca8', lineHeight: 1.5,
+              background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-3, #3a3327)', borderRadius: 8,
+              padding: 14, width: 360, fontSize: 12, color: 'var(--text-2, #d8cca8)', lineHeight: 1.5,
               boxShadow: '0 12px 28px rgba(0,0,0,0.6)',
             }}>
               <div style={{
                 fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 9,
-                letterSpacing: '0.22em', textTransform: 'uppercase', color: '#a8854a', marginBottom: 8,
+                letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--accent, #a8854a)', marginBottom: 8,
               }}>Projects = scoped memory</div>
               <p style={{ margin: '0 0 8px' }}>
                 When a project is active, every message you send and every file you upload becomes part of that project.
@@ -1170,8 +1170,8 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
               <button
                 onClick={() => setHelpOpen(false)}
                 style={{
-                  background: 'transparent', border: '1px solid #3a3327', borderRadius: 4,
-                  color: '#9b907a', padding: '4px 10px', fontSize: 10, letterSpacing: '0.12em',
+                  background: 'transparent', border: '1px solid var(--border-3, #3a3327)', borderRadius: 4,
+                  color: 'var(--text-mute, #9b907a)', padding: '4px 10px', fontSize: 10, letterSpacing: '0.12em',
                   textTransform: 'uppercase', cursor: 'pointer',
                 }}
               >Got it</button>
@@ -1184,8 +1184,8 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
             onClick={summariseProject}
             disabled={summarising}
             style={{
-              background: 'transparent', border: '1px solid #3a3327', borderRadius: 18,
-              color: '#9b907a', padding: '5px 12px', cursor: summarising ? 'wait' : 'pointer',
+              background: 'transparent', border: '1px solid var(--border-3, #3a3327)', borderRadius: 18,
+              color: 'var(--text-mute, #9b907a)', padding: '5px 12px', cursor: summarising ? 'wait' : 'pointer',
               fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 10,
               letterSpacing: '0.16em', textTransform: 'uppercase',
               opacity: summarising ? 0.5 : 1,
@@ -1200,16 +1200,16 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
       {summary && (
         <div style={{
           maxWidth: 720, width: '100%', margin: '0 auto 24px',
-          padding: 14, background: '#15110b', border: '1px solid #3a3327', borderRadius: 8,
-          fontSize: 12, lineHeight: 1.55, color: '#d8cca8', whiteSpace: 'pre-wrap',
+          padding: 14, background: 'var(--surf-2, #15110b)', border: '1px solid var(--border-3, #3a3327)', borderRadius: 8,
+          fontSize: 12, lineHeight: 1.55, color: 'var(--text-2, #d8cca8)', whiteSpace: 'pre-wrap',
         }}>
           <div style={{
             fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 9,
-            letterSpacing: '0.22em', textTransform: 'uppercase', color: '#a8854a',
+            letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--accent, #a8854a)',
             display: 'flex', justifyContent: 'space-between', marginBottom: 8,
           }}>
             <span>RETRO · {activeProject?.name}</span>
-            <button onClick={() => setSummary(null)} style={{ background: 'transparent', border: 'none', color: '#7d7565', cursor: 'pointer', fontSize: 12 }}>×</button>
+            <button onClick={() => setSummary(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-dim, #7d7565)', cursor: 'pointer', fontSize: 12 }}>×</button>
           </div>
           {summary}
         </div>
@@ -1233,11 +1233,11 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
           fontWeight:    300,
           fontSize:      'clamp(20px, 2.4vw, 28px)',
           letterSpacing: '-0.01em',
-          color:         '#e9e1ce',
+          color:         'var(--text-0, #e9e1ce)',
           textAlign:     'center',
           margin:        0,
         }}>
-          {greeting}, <span style={{ color: '#c4a06b' }}>Boss</span>.
+          {greeting}, <span style={{ color: 'var(--accent-2, #c4a06b)' }}>Boss</span>.
         </div>
         <div style={{
           fontFamily:    "'Fraunces', Georgia, serif",
@@ -1245,7 +1245,7 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
           fontWeight:    300,
           fontSize:      'clamp(22px, 3vw, 32px)',
           letterSpacing: '-0.015em',
-          color:         '#d8cca8',
+          color:         'var(--text-2, #d8cca8)',
           textAlign:     'center',
           maxWidth:      720,
         }}>
@@ -1259,16 +1259,16 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
               {attachments.map((a, i) => (
                 <div key={`${a.path}-${i}`} style={{
                   display: 'flex', alignItems: 'center', gap: 6,
-                  background: '#15110b', border: '1px solid #2a261d', borderRadius: 999,
-                  padding: '4px 10px', fontSize: 11, color: '#d8cca8',
+                  background: 'var(--surf-2, #15110b)', border: '1px solid var(--border-2, #2a261d)', borderRadius: 999,
+                  padding: '4px 10px', fontSize: 11, color: 'var(--text-2, #d8cca8)',
                 }}>
                   <span>{a.name}</span>
-                  <span style={{ color: '#5a5448' }}>{(a.size / 1024).toFixed(0)} KB</span>
+                  <span style={{ color: 'var(--text-place, #5a5448)' }}>{(a.size / 1024).toFixed(0)} KB</span>
                   <button
                     type="button"
                     onClick={() => setAttachments(prev => prev.filter((_, j) => j !== i))}
                     aria-label={`Remove ${a.name}`}
-                    style={{ background: 'transparent', border: 'none', color: '#7d7565', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0 }}
+                    style={{ background: 'transparent', border: 'none', color: 'var(--text-dim, #7d7565)', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0 }}
                   >×</button>
                 </div>
               ))}
@@ -1280,9 +1280,9 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
           <div style={{
             display:      'flex',
             alignItems:   'center',
-            border:       `1px solid ${chatFocused ? '#a8854a' : '#3a3327'}`,
+            border:       `1px solid ${chatFocused ? 'var(--accent, #a8854a)' : 'var(--border-3, #3a3327)'}`,
             borderRadius: 16,
-            background:   '#15110b',
+            background:   'var(--surf-2, #15110b)',
             boxShadow:    chatFocused
               ? '0 0 0 3px rgba(168,133,74,0.12), 0 8px 24px rgba(0,0,0,0.4)'
               : '0 8px 20px rgba(0,0,0,0.35)',
@@ -1307,7 +1307,7 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
               style={{
                 background:   'transparent',
                 border:       'none',
-                color:        uploading ? '#5a5448' : '#a8854a',
+                color:        uploading ? 'var(--text-place, #5a5448)' : 'var(--accent, #a8854a)',
                 cursor:       uploading ? 'wait' : 'pointer',
                 width:        40,
                 height:       40,
@@ -1335,7 +1335,7 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
                 background: 'transparent',
                 border:     'none',
                 outline:    'none',
-                color:      '#efe6d3',
+                color:      'var(--text-4, #efe6d3)',
                 fontFamily: "'Inter Tight', system-ui, sans-serif",
                 fontSize:   16,
                 lineHeight: 1.4,
@@ -1348,9 +1348,9 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
               disabled={!chatValue.trim() && attachments.length === 0}
               aria-label="Send"
               style={{
-                background:    chatValue.trim() || attachments.length > 0 ? '#a8854a' : '#1c160d',
+                background:    chatValue.trim() || attachments.length > 0 ? 'var(--accent, #a8854a)' : 'var(--surf-3, #1c160d)',
                 border:        'none',
-                color:         chatValue.trim() || attachments.length > 0 ? '#0a0a0a' : '#5a5448',
+                color:         chatValue.trim() || attachments.length > 0 ? 'var(--surf-0, #0a0a0a)' : 'var(--text-place, #5a5448)',
                 width:         40,
                 height:        40,
                 borderRadius:  12,
@@ -1382,9 +1382,9 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
               href={c.href}
               style={{
                 background:     'transparent',
-                border:         '1px solid #2a261d',
+                border:         '1px solid var(--border-2, #2a261d)',
                 borderRadius:   18,
-                color:          '#9b907a',
+                color:          'var(--text-mute, #9b907a)',
                 fontFamily:     "'JetBrains Mono', ui-monospace, monospace",
                 fontSize:       10,
                 letterSpacing:  '0.18em',
@@ -1481,7 +1481,7 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
                   style={{
                     flex:           1,
                     fontSize:       13,
-                    color:          '#c9bb96',
+                    color:          'var(--text-3, #c9bb96)',
                     textDecoration: 'none',
                     lineHeight:     1.4,
                     display:        'flex',
@@ -1494,14 +1494,14 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
                     {d.label}
                   </span>
                   {isRecurring && (
-                    <span title={d.next_run ? `Next run ${d.next_run} ICT` : undefined} style={cardChipStyle('#a8854a')}>
+                    <span title={d.next_run ? `Next run ${d.next_run} ICT` : undefined} style={cardChipStyle('var(--accent, #a8854a)')}>
                       ↻ {d.schedule}
                     </span>
                   )}
                   {hasEmails && (
                     <span
                       title={`Emails: ${d.email_recipients!.join(', ')}${d.email_time ? ` at ${d.email_time} ICT` : ''}`}
-                      style={cardChipStyle('#9b907a')}
+                      style={cardChipStyle('var(--text-mute, #9b907a)')}
                     >
                       ✉ {d.email_recipients!.length}{d.email_time ? ` · ${d.email_time}` : ''}
                     </span>
@@ -1537,8 +1537,8 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
                     width:           14,
                     height:          14,
                     borderRadius:    3,
-                    border:          `1px solid ${t.done ? '#5a5040' : '#7d7565'}`,
-                    background:      t.done ? '#a8854a' : 'transparent',
+                    border:          `1px solid ${t.done ? 'var(--border-4, #5a5040)' : 'var(--text-dim, #7d7565)'}`,
+                    background:      t.done ? 'var(--accent, #a8854a)' : 'transparent',
                     cursor:          'pointer',
                     display:         'flex',
                     alignItems:      'center',
@@ -1546,7 +1546,7 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
                     flexShrink:      0,
                     padding:         0,
                     fontSize:        10,
-                    color:           '#0a0a0a',
+                    color:           'var(--surf-0, #0a0a0a)',
                     fontWeight:      700,
                   }}
                 >
@@ -1555,7 +1555,7 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
                 <div style={{
                   flex:           1,
                   fontSize:       13,
-                  color:          t.done ? '#7d7565' : '#c9bb96',
+                  color:          t.done ? 'var(--text-dim, #7d7565)' : 'var(--text-3, #c9bb96)',
                   textDecoration: t.done ? 'line-through' : 'none',
                   lineHeight:     1.4,
                   display:        'flex',
@@ -1567,7 +1567,7 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
                   {t.due && (
                     <span style={{
                       fontSize: 11,
-                      color: overdue ? '#c0584c' : '#7d7565',
+                      color: overdue ? '#c0584c' : 'var(--text-dim, #7d7565)',
                       fontFamily: "'JetBrains Mono', ui-monospace, monospace",
                       letterSpacing: '0.04em',
                     }}>
@@ -1575,7 +1575,7 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
                     </span>
                   )}
                   {t.alert && (
-                    <span title="Alert on" style={{ fontSize: 11, color: '#a8854a' }}>🔔</span>
+                    <span title="Alert on" style={{ fontSize: 11, color: 'var(--accent, #a8854a)' }}>🔔</span>
                   )}
                 </div>
               </Row>
@@ -1617,7 +1617,7 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
               <div style={{
                 flex: 1,
                 fontSize: 13,
-                color: '#c9bb96',
+                color: 'var(--text-3, #c9bb96)',
                 lineHeight: 1.4,
                 display: 'flex',
                 alignItems: 'center',
@@ -1657,7 +1657,7 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
                       fontSize: 10,
                       letterSpacing: '0.18em',
                       textTransform: 'uppercase',
-                      color: '#0a0a0a',
+                      color: 'var(--surf-0, #0a0a0a)',
                       background: '#a8d05a',
                       border: 'none',
                       borderRadius: 4,
@@ -1710,16 +1710,16 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
       {tasksAdvice && (
         <div style={{
           maxWidth: 1200, width: '100%', margin: '20px auto 0',
-          padding: 14, background: '#15110b', border: '1px solid #3a3327', borderRadius: 8,
-          fontSize: 12, lineHeight: 1.55, color: '#d8cca8', whiteSpace: 'pre-wrap',
+          padding: 14, background: 'var(--surf-2, #15110b)', border: '1px solid var(--border-3, #3a3327)', borderRadius: 8,
+          fontSize: 12, lineHeight: 1.55, color: 'var(--text-2, #d8cca8)', whiteSpace: 'pre-wrap',
         }}>
           <div style={{
             fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 9,
-            letterSpacing: '0.22em', textTransform: 'uppercase', color: '#a8854a',
+            letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--accent, #a8854a)',
             display: 'flex', justifyContent: 'space-between', marginBottom: 8,
           }}>
             <span>✦ Tasks · Help</span>
-            <button onClick={() => setTasksAdvice(null)} style={{ background: 'transparent', border: 'none', color: '#7d7565', cursor: 'pointer', fontSize: 12 }}>×</button>
+            <button onClick={() => setTasksAdvice(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-dim, #7d7565)', cursor: 'pointer', fontSize: 12 }}>×</button>
           </div>
           {tasksAdvice}
         </div>
@@ -1764,9 +1764,9 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
 
             {docAnalyze.answer !== null && (
               <div style={{
-                marginTop: 12, padding: 12, background: '#15110b',
-                border: '1px solid #2a261d', borderRadius: 8,
-                fontSize: 12, color: '#d8cca8', whiteSpace: 'pre-wrap', lineHeight: 1.55,
+                marginTop: 12, padding: 12, background: 'var(--surf-2, #15110b)',
+                border: '1px solid var(--border-2, #2a261d)', borderRadius: 8,
+                fontSize: 12, color: 'var(--text-2, #d8cca8)', whiteSpace: 'pre-wrap', lineHeight: 1.55,
                 maxHeight: 360, overflowY: 'auto',
               }}>
                 {docAnalyze.answer}
@@ -1780,8 +1780,8 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
                 disabled={!docAnalyze.doc || !docAnalyze.question.trim() || aiBusy === 'doc'}
                 style={{
                   ...modalSaveStyle,
-                  background: (docAnalyze.doc && docAnalyze.question.trim()) ? '#a8854a' : '#1c160d',
-                  color:      (docAnalyze.doc && docAnalyze.question.trim()) ? '#0a0a0a' : '#5a5448',
+                  background: (docAnalyze.doc && docAnalyze.question.trim()) ? 'var(--accent, #a8854a)' : 'var(--surf-3, #1c160d)',
+                  color:      (docAnalyze.doc && docAnalyze.question.trim()) ? 'var(--surf-0, #0a0a0a)' : 'var(--text-place, #5a5448)',
                   cursor:     aiBusy === 'doc' ? 'wait' : ((docAnalyze.doc && docAnalyze.question.trim()) ? 'pointer' : 'not-allowed'),
                   opacity:    aiBusy === 'doc' ? 0.7 : 1,
                 }}
@@ -1798,13 +1798,13 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
             <div style={modalEyebrowStyle}>Add to My docs</div>
             <button onClick={startUploadFlow} style={docChoiceBtnStyle}>
               <div style={{ fontSize: 22, marginBottom: 4 }}>📎</div>
-              <div style={{ fontSize: 13, color: '#d8cca8' }}>Upload from computer</div>
-              <div style={{ fontSize: 11, color: '#7d7565', marginTop: 2 }}>md · pdf · xlsx · png · 25 MB max</div>
+              <div style={{ fontSize: 13, color: 'var(--text-2, #d8cca8)' }}>Upload from computer</div>
+              <div style={{ fontSize: 11, color: 'var(--text-dim, #7d7565)', marginTop: 2 }}>md · pdf · xlsx · png · 25 MB max</div>
             </button>
             <button onClick={startReportBuilder} style={{ ...docChoiceBtnStyle, marginTop: 8 }}>
               <div style={{ fontSize: 22, marginBottom: 4 }}>📊</div>
-              <div style={{ fontSize: 13, color: '#d8cca8' }}>Build a report</div>
-              <div style={{ fontSize: 11, color: '#7d7565', marginTop: 2 }}>pace · channels · pricing · comp set · …</div>
+              <div style={{ fontSize: 13, color: 'var(--text-2, #d8cca8)' }}>Build a report</div>
+              <div style={{ fontSize: 11, color: 'var(--text-dim, #7d7565)', marginTop: 2 }}>pace · channels · pricing · comp set · …</div>
             </button>
             <button onClick={() => setDocChoiceOpen(false)} style={{ ...modalCancelStyle, width: '100%', marginTop: 12 }}>Cancel</button>
           </div>
@@ -1843,8 +1843,8 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
 
             {reportType && (
               <>
-                <div style={{ borderTop: '1px solid #1f1c15', margin: '14px 0 4px' }} />
-                <div style={{ fontSize: 11, color: '#7d7565', marginBottom: 8 }}>
+                <div style={{ borderTop: '1px solid var(--border-1, #1f1c15)', margin: '14px 0 4px' }} />
+                <div style={{ fontSize: 11, color: 'var(--text-dim, #7d7565)', marginBottom: 8 }}>
                   Narrow down — these are the dimensions {REPORT_LABEL[reportType]} accepts.
                   Click a chip to set, click again to clear (defaults apply).
                 </div>
@@ -1866,7 +1866,7 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
                 ))}
 
                 {/* Schedule — once / daily / weekly / monthly */}
-                <div style={{ borderTop: '1px solid #1f1c15', margin: '8px 0 6px' }} />
+                <div style={{ borderTop: '1px solid var(--border-1, #1f1c15)', margin: '8px 0 6px' }} />
                 <label style={modalLabelStyle}>Schedule</label>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {SCHEDULE_OPTIONS.map(s => (
@@ -1878,15 +1878,15 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
                   ))}
                 </div>
                 {reportSchedule !== 'once' && (
-                  <div style={{ fontSize: 11, color: '#7d7565', marginTop: 6 }}>
-                    Next run: <span style={{ color: '#c4a06b' }}>{computeNextRun(reportSchedule)}</span> ICT
+                  <div style={{ fontSize: 11, color: 'var(--text-dim, #7d7565)', marginTop: 6 }}>
+                    Next run: <span style={{ color: 'var(--accent-2, #c4a06b)' }}>{computeNextRun(reportSchedule)}</span> ICT
                   </div>
                 )}
 
                 {/* Email delivery (PBS 2026-05-08): recipients + time */}
-                <div style={{ borderTop: '1px solid #1f1c15', margin: '12px 0 6px' }} />
+                <div style={{ borderTop: '1px solid var(--border-1, #1f1c15)', margin: '12px 0 6px' }} />
                 <label style={modalLabelStyle}>
-                  Email delivery <span style={{ color: '#5a5448', textTransform: 'none', letterSpacing: 0 }}>(optional — leave empty to keep in Reports only)</span>
+                  Email delivery <span style={{ color: 'var(--text-place, #5a5448)', textTransform: 'none', letterSpacing: 0 }}>(optional — leave empty to keep in Reports only)</span>
                 </label>
 
                 {/* recipient chips */}
@@ -1895,14 +1895,14 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
                     {reportEmails.map(e => (
                       <span key={e} style={{
                         display: 'flex', alignItems: 'center', gap: 6,
-                        background: '#15110b', border: '1px solid #2a261d', borderRadius: 999,
-                        padding: '3px 10px', fontSize: 11, color: '#d8cca8',
+                        background: 'var(--surf-2, #15110b)', border: '1px solid var(--border-2, #2a261d)', borderRadius: 999,
+                        padding: '3px 10px', fontSize: 11, color: 'var(--text-2, #d8cca8)',
                       }}>
                         ✉ {e}
                         <button
                           onClick={() => removeReportEmail(e)}
                           aria-label={`Remove ${e}`}
-                          style={{ background: 'transparent', border: 'none', color: '#7d7565', cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: 0 }}
+                          style={{ background: 'transparent', border: 'none', color: 'var(--text-dim, #7d7565)', cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: 0 }}
                         >×</button>
                       </span>
                     ))}
@@ -1932,8 +1932,8 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
                     disabled={!emailDraft.trim()}
                     style={{
                       ...modalSaveStyle,
-                      background: emailDraft.trim() ? '#a8854a' : '#1c160d',
-                      color:      emailDraft.trim() ? '#0a0a0a' : '#5a5448',
+                      background: emailDraft.trim() ? 'var(--accent, #a8854a)' : 'var(--surf-3, #1c160d)',
+                      color:      emailDraft.trim() ? 'var(--surf-0, #0a0a0a)' : 'var(--text-place, #5a5448)',
                       cursor:     emailDraft.trim() ? 'pointer' : 'not-allowed',
                     }}
                   >Add</button>
@@ -1941,7 +1941,7 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
 
                 {reportEmails.length > 0 && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
-                    <label style={{ fontSize: 11, color: '#9b907a', fontFamily: "'JetBrains Mono', ui-monospace, monospace", letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                    <label style={{ fontSize: 11, color: 'var(--text-mute, #9b907a)', fontFamily: "'JetBrains Mono', ui-monospace, monospace", letterSpacing: '0.12em', textTransform: 'uppercase' }}>
                       Send at
                     </label>
                     <input
@@ -1949,12 +1949,12 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
                       value={reportEmailTime}
                       onChange={e => setReportEmailTime(e.target.value)}
                       style={{
-                        background: '#15110b', border: '1px solid #2a261d', borderRadius: 6,
-                        color: '#efe6d3', padding: '6px 10px', fontSize: 12, fontFamily: 'inherit',
+                        background: 'var(--surf-2, #15110b)', border: '1px solid var(--border-2, #2a261d)', borderRadius: 6,
+                        color: 'var(--text-4, #efe6d3)', padding: '6px 10px', fontSize: 12, fontFamily: 'inherit',
                         outline: 'none', colorScheme: 'dark',
                       }}
                     />
-                    <span style={{ fontSize: 11, color: '#7d7565' }}>ICT · matches the schedule above</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-dim, #7d7565)' }}>ICT · matches the schedule above</span>
                   </div>
                 )}
               </>
@@ -1967,8 +1967,8 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
                 disabled={!reportType}
                 style={{
                   ...modalSaveStyle,
-                  background: reportType ? '#a8854a' : '#1c160d',
-                  color:      reportType ? '#0a0a0a' : '#5a5448',
+                  background: reportType ? 'var(--accent, #a8854a)' : 'var(--surf-3, #1c160d)',
+                  color:      reportType ? 'var(--surf-0, #0a0a0a)' : 'var(--text-place, #5a5448)',
                   cursor:     reportType ? 'pointer' : 'not-allowed',
                 }}
               >{reportSchedule === 'once' ? 'Generate' : `Schedule ${reportSchedule}`}</button>
@@ -1993,7 +1993,7 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
           <div
             onClick={e => e.stopPropagation()}
             style={{
-              background: '#0f0d0a', border: '1px solid #3a3327', borderRadius: 12,
+              background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-3, #3a3327)', borderRadius: 12,
               padding: 22, width: '100%', maxWidth: 460,
               boxShadow: '0 20px 50px rgba(0,0,0,0.6)',
               fontFamily: "'Inter Tight', system-ui, sans-serif",
@@ -2002,7 +2002,7 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
             <div style={{
               fontFamily: "'JetBrains Mono', ui-monospace, monospace",
               fontSize: 10, letterSpacing: '0.22em', textTransform: 'uppercase',
-              color: '#a8854a', marginBottom: 14,
+              color: 'var(--accent, #a8854a)', marginBottom: 14,
             }}>New project</div>
 
             <label style={modalLabelStyle}>Name</label>
@@ -2033,7 +2033,7 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <label style={{ ...modalLabelStyle, marginBottom: 0 }}>
-                What about <span style={{ color: '#5a5448', textTransform: 'none', letterSpacing: 0 }}>(background)</span>
+                What about <span style={{ color: 'var(--text-place, #5a5448)', textTransform: 'none', letterSpacing: 0 }}>(background)</span>
               </label>
               <button
                 type="button"
@@ -2058,8 +2058,8 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
                 disabled={creating || !projDraft.name.trim()}
                 style={{
                   ...modalSaveStyle,
-                  background: projDraft.name.trim() ? '#a8854a' : '#1c160d',
-                  color:      projDraft.name.trim() ? '#0a0a0a' : '#5a5448',
+                  background: projDraft.name.trim() ? 'var(--accent, #a8854a)' : 'var(--surf-3, #1c160d)',
+                  color:      projDraft.name.trim() ? 'var(--surf-0, #0a0a0a)' : 'var(--text-place, #5a5448)',
                   cursor:     creating ? 'wait' : (projDraft.name.trim() ? 'pointer' : 'not-allowed'),
                   opacity:    creating ? 0.7 : 1,
                 }}
@@ -2083,7 +2083,7 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
           <div
             onClick={e => e.stopPropagation()}
             style={{
-              background: '#0f0d0a', border: '1px solid #3a3327', borderRadius: 12,
+              background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-3, #3a3327)', borderRadius: 12,
               padding: 20, width: '100%', maxWidth: 420,
               boxShadow: '0 20px 50px rgba(0,0,0,0.6)',
               fontFamily: "'Inter Tight', system-ui, sans-serif",
@@ -2092,7 +2092,7 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
             <div style={{
               fontFamily: "'JetBrains Mono', ui-monospace, monospace",
               fontSize: 10, letterSpacing: '0.22em', textTransform: 'uppercase',
-              color: '#a8854a', marginBottom: 12,
+              color: 'var(--accent, #a8854a)', marginBottom: 12,
             }}>New task</div>
 
             <input
@@ -2103,14 +2103,14 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
               placeholder="What needs doing…"
               style={{
                 width: '100%', boxSizing: 'border-box',
-                background: '#15110b', border: '1px solid #2a261d', borderRadius: 8,
-                color: '#efe6d3', padding: '10px 12px', fontSize: 14,
+                background: 'var(--surf-2, #15110b)', border: '1px solid var(--border-2, #2a261d)', borderRadius: 8,
+                color: 'var(--text-4, #efe6d3)', padding: '10px 12px', fontSize: 14,
                 fontFamily: 'inherit', outline: 'none', marginBottom: 12,
               }}
             />
 
-            <label style={{ display: 'block', fontSize: 11, color: '#9b907a', marginBottom: 4, fontFamily: "'JetBrains Mono', ui-monospace, monospace", letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-              Due date <span style={{ color: '#5a5448' }}>(optional)</span>
+            <label style={{ display: 'block', fontSize: 11, color: 'var(--text-mute, #9b907a)', marginBottom: 4, fontFamily: "'JetBrains Mono', ui-monospace, monospace", letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+              Due date <span style={{ color: 'var(--text-place, #5a5448)' }}>(optional)</span>
             </label>
             <input
               type="date"
@@ -2118,19 +2118,19 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
               onChange={e => setTaskDraft(d => ({ ...d, due: e.target.value }))}
               style={{
                 width: '100%', boxSizing: 'border-box',
-                background: '#15110b', border: '1px solid #2a261d', borderRadius: 8,
-                color: '#efe6d3', padding: '8px 12px', fontSize: 13,
+                background: 'var(--surf-2, #15110b)', border: '1px solid var(--border-2, #2a261d)', borderRadius: 8,
+                color: 'var(--text-4, #efe6d3)', padding: '8px 12px', fontSize: 13,
                 fontFamily: 'inherit', outline: 'none', marginBottom: 12,
                 colorScheme: 'dark',
               }}
             />
 
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#c9bb96', cursor: 'pointer', marginBottom: 16 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-3, #c9bb96)', cursor: 'pointer', marginBottom: 16 }}>
               <input
                 type="checkbox"
                 checked={taskDraft.alert}
                 onChange={e => setTaskDraft(d => ({ ...d, alert: e.target.checked }))}
-                style={{ accentColor: '#a8854a', width: 16, height: 16 }}
+                style={{ accentColor: 'var(--accent, #a8854a)', width: 16, height: 16 }}
               />
               <span>Alert me when due</span>
             </label>
@@ -2139,8 +2139,8 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
               <button
                 onClick={() => setTaskModal(false)}
                 style={{
-                  background: 'transparent', border: '1px solid #2a261d', borderRadius: 8,
-                  color: '#9b907a', padding: '8px 14px', fontSize: 12, cursor: 'pointer',
+                  background: 'transparent', border: '1px solid var(--border-2, #2a261d)', borderRadius: 8,
+                  color: 'var(--text-mute, #9b907a)', padding: '8px 14px', fontSize: 12, cursor: 'pointer',
                   fontFamily: "'JetBrains Mono', ui-monospace, monospace", letterSpacing: '0.14em', textTransform: 'uppercase',
                 }}
               >Cancel</button>
@@ -2148,9 +2148,9 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
                 onClick={saveTask}
                 disabled={!taskDraft.label.trim()}
                 style={{
-                  background: taskDraft.label.trim() ? '#a8854a' : '#1c160d',
+                  background: taskDraft.label.trim() ? 'var(--accent, #a8854a)' : 'var(--surf-3, #1c160d)',
                   border: 'none', borderRadius: 8,
-                  color: taskDraft.label.trim() ? '#0a0a0a' : '#5a5448',
+                  color: taskDraft.label.trim() ? 'var(--surf-0, #0a0a0a)' : 'var(--text-place, #5a5448)',
                   padding: '8px 14px', fontSize: 12,
                   cursor: taskDraft.label.trim() ? 'pointer' : 'not-allowed',
                   fontFamily: "'JetBrains Mono', ui-monospace, monospace", letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 600,
@@ -2175,7 +2175,7 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
           <div
             onClick={e => e.stopPropagation()}
             style={{
-              background: '#0f0d0a', border: '1px solid #3a3327', borderRadius: 12,
+              background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-3, #3a3327)', borderRadius: 12,
               padding: 20, width: '100%', maxWidth: 520,
               boxShadow: '0 20px 50px rgba(0,0,0,0.6)',
               fontFamily: "'Inter Tight', system-ui, sans-serif",
@@ -2196,8 +2196,8 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
               rows={6}
               style={{
                 width: '100%', boxSizing: 'border-box',
-                background: '#15110b', border: '1px solid #2a261d', borderRadius: 8,
-                color: '#efe6d3', padding: '10px 12px', fontSize: 14,
+                background: 'var(--surf-2, #15110b)', border: '1px solid var(--border-2, #2a261d)', borderRadius: 8,
+                color: 'var(--text-4, #efe6d3)', padding: '10px 12px', fontSize: 14,
                 fontFamily: 'inherit', outline: 'none', marginBottom: 12, resize: 'vertical',
               }}
             />
@@ -2206,8 +2206,8 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
               <button
                 onClick={() => setBugModal(false)}
                 style={{
-                  background: 'transparent', border: '1px solid #2a261d', borderRadius: 8,
-                  color: '#9b907a', padding: '8px 14px', fontSize: 12, cursor: 'pointer',
+                  background: 'transparent', border: '1px solid var(--border-2, #2a261d)', borderRadius: 8,
+                  color: 'var(--text-mute, #9b907a)', padding: '8px 14px', fontSize: 12, cursor: 'pointer',
                   fontFamily: "'JetBrains Mono', ui-monospace, monospace", letterSpacing: '0.14em', textTransform: 'uppercase',
                 }}
               >Cancel</button>
@@ -2215,9 +2215,9 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
                 onClick={submitBug}
                 disabled={!bugDraft.trim()}
                 style={{
-                  background: bugDraft.trim() ? '#c0584c' : '#1c160d',
+                  background: bugDraft.trim() ? '#c0584c' : 'var(--surf-3, #1c160d)',
                   border: 'none', borderRadius: 8,
-                  color: bugDraft.trim() ? '#0a0a0a' : '#5a5448',
+                  color: bugDraft.trim() ? 'var(--surf-0, #0a0a0a)' : 'var(--text-place, #5a5448)',
                   padding: '8px 14px', fontSize: 12,
                   cursor: bugDraft.trim() ? 'pointer' : 'not-allowed',
                   fontFamily: "'JetBrains Mono', ui-monospace, monospace", letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 600,
@@ -2248,9 +2248,9 @@ function Container({
           aria-label="Add"
           style={{
             background:    'transparent',
-            border:        '1px solid #2a261d',
+            border:        '1px solid var(--border-2, #2a261d)',
             borderRadius:  4,
-            color:         '#a8854a',
+            color:         'var(--accent, #a8854a)',
             cursor:        'pointer',
             fontSize:      13,
             lineHeight:    1,
@@ -2292,7 +2292,7 @@ function Row({ children, onDelete }: { children: React.ReactNode; onDelete: () =
         style={{
           background:   'transparent',
           border:       'none',
-          color:        '#5a5040',
+          color:        'var(--border-4, #5a5040)',
           cursor:       'pointer',
           fontSize:     14,
           lineHeight:   1,
@@ -2328,7 +2328,7 @@ function AttnRow({
         background:   'transparent',
         transition:   'background 0.12s',
       }}
-      onMouseEnter={e => { e.currentTarget.style.background = '#1c160d'; }}
+      onMouseEnter={e => { e.currentTarget.style.background = 'var(--surf-3, #1c160d)'; }}
       onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
     >
       <span style={{
@@ -2340,7 +2340,7 @@ function AttnRow({
         style={{
           flex:           1,
           fontSize:       13,
-          color:          '#c9bb96',
+          color:          'var(--text-3, #c9bb96)',
           textDecoration: 'none',
           lineHeight:     1.4,
         }}
@@ -2351,9 +2351,9 @@ function AttnRow({
         aria-label="Ask Vector"
         style={{
           background:    'transparent',
-          border:        '1px solid #2a261d',
+          border:        '1px solid var(--border-2, #2a261d)',
           borderRadius:  999,
-          color:         '#a8854a',
+          color:         'var(--accent, #a8854a)',
           cursor:        'pointer',
           fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
           fontSize:      9,
@@ -2370,7 +2370,7 @@ function AttnRow({
         style={{
           background:   'transparent',
           border:       'none',
-          color:        '#5a5040',
+          color:        'var(--border-4, #5a5040)',
           cursor:       'pointer',
           fontSize:     14,
           lineHeight:   1,
@@ -2388,7 +2388,7 @@ function Empty({ label }: { label: string }) {
       fontFamily:    "'Fraunces', Georgia, serif",
       fontStyle:     'italic',
       fontSize:      12,
-      color:         '#5a5040',
+      color:         'var(--border-4, #5a5040)',
       padding:       '12px 4px',
       textAlign:     'center',
     }}>
@@ -2411,44 +2411,44 @@ function KBPopover({
   return (
     <div style={{
       position: 'absolute', top: 32, right: 0, zIndex: 60,
-      background: '#0f0d0a', border: '1px solid #3a3327', borderRadius: 10,
+      background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-3, #3a3327)', borderRadius: 10,
       padding: 14, minWidth: 320, boxShadow: '0 12px 28px rgba(0,0,0,0.6)',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
         <div style={{
           fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-          fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: '#a8854a',
+          fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--accent, #a8854a)',
         }}>{eyebrow}</div>
         <button onClick={onClose} aria-label="Close" style={{
-          background: 'transparent', border: 'none', color: '#7d7565', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0,
+          background: 'transparent', border: 'none', color: 'var(--text-dim, #7d7565)', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0,
         }}>×</button>
       </div>
       <div style={{
         fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic',
-        fontSize: 22, color: '#d8cca8', marginBottom: 12,
+        fontSize: 22, color: 'var(--text-2, #d8cca8)', marginBottom: 12,
       }}>{title}</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
         {rows.map(r => (
           <div key={r.k} style={{
-            background: '#15110b', border: '1px solid #2a261d', borderRadius: 6, padding: '8px 10px',
+            background: 'var(--surf-2, #15110b)', border: '1px solid var(--border-2, #2a261d)', borderRadius: 6, padding: '8px 10px',
           }}>
             <div style={{
               fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-              fontSize: 9, letterSpacing: '0.18em', color: '#7d7565', textTransform: 'uppercase',
+              fontSize: 9, letterSpacing: '0.18em', color: 'var(--text-dim, #7d7565)', textTransform: 'uppercase',
             }}>{r.k}</div>
             <div style={{
               fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic',
-              fontSize: 18, color: '#d8cca8', marginTop: 2,
+              fontSize: 18, color: 'var(--text-2, #d8cca8)', marginTop: 2,
             }}>{r.v}</div>
-            <div style={{ fontSize: 10, color: '#9b907a', marginTop: 2 }}>{r.d}</div>
+            <div style={{ fontSize: 10, color: 'var(--text-mute, #9b907a)', marginTop: 2 }}>{r.d}</div>
           </div>
         ))}
       </div>
       {footer && (
         <div style={{
-          marginTop: 10, paddingTop: 8, borderTop: '1px solid #1f1c15',
+          marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--border-1, #1f1c15)',
           fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-          fontSize: 9, letterSpacing: '0.16em', color: '#5a5448', textAlign: 'right',
+          fontSize: 9, letterSpacing: '0.16em', color: 'var(--text-place, #5a5448)', textAlign: 'right',
         }}>{footer}</div>
       )}
     </div>

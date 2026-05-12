@@ -81,8 +81,8 @@ function HealthBarometer() {
   const env = process.env.NEXT_PUBLIC_VERCEL_ENV ?? 'local';
   const map: Record<string, { color: string; label: string }> = {
     production: { color: '#3a8e5b', label: 'live' },
-    preview:    { color: '#c4a06b', label: 'preview' },
-    local:      { color: '#7d7565', label: 'local' },
+    preview:    { color: 'var(--accent-2, #c4a06b)', label: 'preview' },
+    local:      { color: 'var(--text-dim, #7d7565)', label: 'local' },
   };
   const { color, label } = map[env] ?? map.local;
   return (
@@ -166,7 +166,7 @@ const S: Record<string, React.CSSProperties> = {
     fontSize:      10,
     letterSpacing: '0.22em',
     textTransform: 'uppercase',
-    color:         '#a8854a',
+    color:         'var(--accent, #a8854a)',
     marginBottom:  6,
     marginLeft:    56, // clear the global N
   },
@@ -175,7 +175,7 @@ const S: Record<string, React.CSSProperties> = {
     fontStyle:     'italic',
     fontWeight:    300,
     fontSize:      'clamp(28px, 3.5vw, 40px)',
-    color:         '#e9e1ce',
+    color:         'var(--text-0, #e9e1ce)',
     margin:        0,
     marginLeft:    56,
   },
@@ -183,7 +183,7 @@ const S: Record<string, React.CSSProperties> = {
   footer: {
     marginTop:      56,
     paddingTop:     18,
-    borderTop:      '1px solid #1f1c15',
+    borderTop:      '1px solid var(--border-1, #1f1c15)',
     display:        'flex',
     flexWrap:       'wrap',
     gap:            16,
@@ -196,16 +196,16 @@ const S: Record<string, React.CSSProperties> = {
     display: 'flex', flexWrap: 'wrap', gap: 18,
     fontFamily: "'JetBrains Mono', ui-monospace, monospace",
     fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase',
-    color: '#b8a98a', fontWeight: 500,
+    color: 'var(--text-soft, #b8a98a)', fontWeight: 500,
   },
-  footerLink: { color: '#d8cca8', textDecoration: 'none', fontWeight: 600, transition: 'color 100ms ease' },
-  footerSep:  { color: '#5a5448' },
+  footerLink: { color: 'var(--text-2, #d8cca8)', textDecoration: 'none', fontWeight: 600, transition: 'color 100ms ease' },
+  footerSep:  { color: 'var(--text-place, #5a5448)' },
   footerKick: {
     fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-    fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#9b907a', fontWeight: 500,
+    fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--text-mute, #9b907a)', fontWeight: 500,
   },
   healthWrap: {
     display: 'inline-flex', alignItems: 'center', gap: 6,
-    color: '#d8cca8', fontWeight: 600,
+    color: 'var(--text-2, #d8cca8)', fontWeight: 600,
   },
 };

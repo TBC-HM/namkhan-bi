@@ -322,7 +322,7 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
               {/* PBS 2026-05-09 #26: settings sub-pages live under cockpit now. */}
               <div style={S.menuSection}>Tools</div>
               <a href="/cockpit"                   onClick={() => setUserOpen(false)} style={S.link}>IT cockpit</a>
-              <a href="/cockpit-v2"                onClick={() => setUserOpen(false)} style={S.link}>Cockpit v2 <span style={{ fontSize: 9, color: '#a8854a', marginLeft: 6, letterSpacing: '0.14em', textTransform: 'uppercase' }}>preview</span></a>
+              <a href="/cockpit-v2"                onClick={() => setUserOpen(false)} style={S.link}>Cockpit v2 <span style={{ fontSize: 9, color: 'var(--accent, #a8854a)', marginLeft: 6, letterSpacing: '0.14em', textTransform: 'uppercase' }}>preview</span></a>
               <a href="/cockpit/tasks"             onClick={() => setUserOpen(false)} style={S.link}>Tasks</a>
               <a href="/front-office/arrivals"     onClick={() => setUserOpen(false)} style={S.link}>Front office</a>
               <a href="/settings/email-categories" onClick={() => setUserOpen(false)} style={S.link}>Email categories</a>
@@ -374,7 +374,7 @@ function InboxPopover({ summary, onClose }: { summary: InboxSummary; onClose: ()
               ...S.popCellV,
               color: s.tone === 'bad'  ? '#e08484'
                    : s.tone === 'warn' ? '#f4d99a'
-                   : '#f0e5cb',
+                   : 'var(--text-1, #f0e5cb)',
             }}>{s.v}</div>
             <div style={S.popCellD}>{s.d}</div>
           </div>
@@ -447,8 +447,8 @@ function KBPopover({ onClose, eyebrow, title, rows, footer }: {
 
 function langFlag(active: boolean): React.CSSProperties {
   return {
-    background:   active ? '#1c160d' : 'transparent',
-    border:       `1px solid ${active ? '#a8854a' : '#2a261d'}`,
+    background:   active ? 'var(--surf-3, #1c160d)' : 'transparent',
+    border:       `1px solid ${active ? 'var(--accent, #a8854a)' : 'var(--border-2, #2a261d)'}`,
     borderRadius: 4,
     padding:      '3px 8px',
     cursor:       'pointer',
@@ -470,8 +470,8 @@ const S: Record<string, React.CSSProperties> = {
   chip: {
     // PBS 2026-05-09 #33: brighter temp/air pills.
     display: 'flex', alignItems: 'center', gap: 6,
-    background: 'transparent', border: '1px solid #3a3327',
-    borderRadius: 999, padding: '4px 10px', cursor: 'pointer', color: '#f0e5cb',
+    background: 'transparent', border: '1px solid var(--border-3, #3a3327)',
+    borderRadius: 999, padding: '4px 10px', cursor: 'pointer', color: 'var(--text-1, #f0e5cb)',
   },
   chipText: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 11, fontWeight: 600 },
   // popoverHost is a transparent positioner that shares the close-delay
@@ -494,119 +494,119 @@ const S: Record<string, React.CSSProperties> = {
   dateText: {
     fontFamily: "'JetBrains Mono', ui-monospace, monospace",
     fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase',
-    color: '#f0e5cb', fontWeight: 600, cursor: 'help',
+    color: 'var(--text-1, #f0e5cb)', fontWeight: 600, cursor: 'help',
   },
   dateGrid: {
     position: 'absolute', top: '100%', right: 0, zIndex: 60,
     marginTop: 6,
-    background: '#0f0d0a', border: '1px solid #3a3327', borderRadius: 8,
+    background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-3, #3a3327)', borderRadius: 8,
     padding: 12, minWidth: 360, boxShadow: '0 12px 28px rgba(0,0,0,0.6)',
     display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8,
     pointerEvents: 'auto',
   },
-  dateCell: { background: '#15110b', border: '1px solid #2a261d', borderRadius: 6, padding: '8px 10px' },
-  dateCellK: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 9, letterSpacing: '0.22em', color: '#7d7565', textTransform: 'uppercase' },
-  dateCellV: { fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic', fontSize: 22, color: '#f0e5cb', marginTop: 2 },
-  dateCellD: { fontSize: 10, color: '#9b907a', marginTop: 2 },
-  dateFooter: { gridColumn: '1 / -1', fontSize: 10, color: '#5a5448', textAlign: 'right', fontFamily: "'JetBrains Mono', ui-monospace, monospace" },
+  dateCell: { background: 'var(--surf-2, #15110b)', border: '1px solid var(--border-2, #2a261d)', borderRadius: 6, padding: '8px 10px' },
+  dateCellK: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 9, letterSpacing: '0.22em', color: 'var(--text-dim, #7d7565)', textTransform: 'uppercase' },
+  dateCellV: { fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic', fontSize: 22, color: 'var(--text-1, #f0e5cb)', marginTop: 2 },
+  dateCellD: { fontSize: 10, color: 'var(--text-mute, #9b907a)', marginTop: 2 },
+  dateFooter: { gridColumn: '1 / -1', fontSize: 10, color: 'var(--text-place, #5a5448)', textAlign: 'right', fontFamily: "'JetBrains Mono', ui-monospace, monospace" },
   dateWindowRow: {
     gridColumn: '1 / -1',
     display: 'flex', alignItems: 'center', gap: 6,
     paddingTop: 8, marginTop: 4,
-    borderTop: '1px solid #2a261d',
+    borderTop: '1px solid var(--border-2, #2a261d)',
   },
   dateWindowLabel: {
     fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-    fontSize: 9, letterSpacing: '0.22em', color: '#7d7565', textTransform: 'uppercase',
+    fontSize: 9, letterSpacing: '0.22em', color: 'var(--text-dim, #7d7565)', textTransform: 'uppercase',
     minWidth: 56,
   },
   dateWindowLink: {
     fontFamily: "'JetBrains Mono', ui-monospace, monospace",
     fontSize: 10, letterSpacing: '0.10em', textTransform: 'uppercase',
-    color: '#a8854a', background: 'transparent',
-    border: '1px solid #2a261d', padding: '3px 7px', borderRadius: 4,
+    color: 'var(--accent, #a8854a)', background: 'transparent',
+    border: '1px solid var(--border-2, #2a261d)', padding: '3px 7px', borderRadius: 4,
     textDecoration: 'none', fontWeight: 700,
   },
   userBtn: {
     // PBS 2026-05-09 #33: brighter user-name pill.
-    background: 'transparent', border: '1px solid #3a3327', borderRadius: 6,
-    color: '#d9bf8e', padding: '5px 12px', cursor: 'pointer',
+    background: 'transparent', border: '1px solid var(--border-3, #3a3327)', borderRadius: 6,
+    color: 'var(--text-warm, #d9bf8e)', padding: '5px 12px', cursor: 'pointer',
     fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 10,
     letterSpacing: '0.16em', textTransform: 'uppercase', fontWeight: 700,
     display: 'flex', alignItems: 'center', gap: 6,
   },
   avatar: {
-    width: 18, height: 18, borderRadius: '50%', background: '#a8854a',
-    color: '#0a0a0a', fontSize: 9, fontWeight: 700,
+    width: 18, height: 18, borderRadius: '50%', background: 'var(--accent, #a8854a)',
+    color: 'var(--surf-0, #0a0a0a)', fontSize: 9, fontWeight: 700,
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
   },
   userMenu: {
     position: 'absolute', right: 0, top: '100%', zIndex: 60,
     marginTop: 6,
-    background: '#0f0d0a', border: '1px solid #2a261d', borderRadius: 6,
+    background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-2, #2a261d)', borderRadius: 6,
     padding: 6, minWidth: 200, boxShadow: '0 12px 28px rgba(0,0,0,0.6)',
     pointerEvents: 'auto',
   },
   link: {
-    display: 'block', padding: '7px 12px', color: '#f0e5cb',
+    display: 'block', padding: '7px 12px', color: 'var(--text-1, #f0e5cb)',
     textDecoration: 'none', fontFamily: "'JetBrains Mono', ui-monospace, monospace",
     fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', borderRadius: 4,
   },
-  menuDivider: { borderTop: '1px solid #2a261d', margin: '4px 0', paddingTop: 4 },
+  menuDivider: { borderTop: '1px solid var(--border-2, #2a261d)', margin: '4px 0', paddingTop: 4 },
   menuSection: {
     padding: '4px 12px', fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-    fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#5a5448',
+    fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--text-place, #5a5448)',
   },
-  langRow: { borderTop: '1px solid #2a261d', marginTop: 4, paddingTop: 6, display: 'flex', justifyContent: 'center', gap: 10 },
+  langRow: { borderTop: '1px solid var(--border-2, #2a261d)', marginTop: 4, paddingTop: 6, display: 'flex', justifyContent: 'center', gap: 10 },
   popover: {
-    background: '#0f0d0a', border: '1px solid #3a3327', borderRadius: 10,
+    background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-3, #3a3327)', borderRadius: 10,
     padding: 14, minWidth: 320, boxShadow: '0 12px 28px rgba(0,0,0,0.6)',
   },
   popHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 },
-  popEyebrow: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: '#a8854a' },
-  popClose: { background: 'transparent', border: 'none', color: '#7d7565', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0 },
-  popTitle: { fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic', fontSize: 22, color: '#f0e5cb', marginBottom: 12 },
+  popEyebrow: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--accent, #a8854a)' },
+  popClose: { background: 'transparent', border: 'none', color: 'var(--text-dim, #7d7565)', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0 },
+  popTitle: { fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic', fontSize: 22, color: 'var(--text-1, #f0e5cb)', marginBottom: 12 },
   popGrid: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 },
-  popCell: { background: '#15110b', border: '1px solid #2a261d', borderRadius: 6, padding: '8px 10px' },
-  popCellK: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 9, letterSpacing: '0.18em', color: '#7d7565', textTransform: 'uppercase' },
-  popCellV: { fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic', fontSize: 18, color: '#f0e5cb', marginTop: 2 },
-  popCellD: { fontSize: 10, color: '#9b907a', marginTop: 2 },
+  popCell: { background: 'var(--surf-2, #15110b)', border: '1px solid var(--border-2, #2a261d)', borderRadius: 6, padding: '8px 10px' },
+  popCellK: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 9, letterSpacing: '0.18em', color: 'var(--text-dim, #7d7565)', textTransform: 'uppercase' },
+  popCellV: { fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic', fontSize: 18, color: 'var(--text-1, #f0e5cb)', marginTop: 2 },
+  popCellD: { fontSize: 10, color: 'var(--text-mute, #9b907a)', marginTop: 2 },
   popFooter: {
-    marginTop: 10, paddingTop: 8, borderTop: '1px solid #1f1c15',
+    marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--border-1, #1f1c15)',
     fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-    fontSize: 9, letterSpacing: '0.16em', color: '#5a5448', textAlign: 'right',
+    fontSize: 9, letterSpacing: '0.16em', color: 'var(--text-place, #5a5448)', textAlign: 'right',
   },
 
   // ── Inbox control-center pill + popover (PBS 2026-05-09 repair #6) ──
   inboxChip: {
     display: 'flex', alignItems: 'center', gap: 6,
-    background: 'transparent', border: '1px solid #3a3327',
-    borderRadius: 999, padding: '4px 10px', cursor: 'pointer', color: '#f0e5cb',
+    background: 'transparent', border: '1px solid var(--border-3, #3a3327)',
+    borderRadius: 999, padding: '4px 10px', cursor: 'pointer', color: 'var(--text-1, #f0e5cb)',
     textDecoration: 'none', position: 'relative',
   },
   inboxBubble: {
     minWidth: 16, height: 16, padding: '0 5px', borderRadius: 8,
-    background: '#a8854a', color: '#0a0a0a',
+    background: 'var(--accent, #a8854a)', color: 'var(--surf-0, #0a0a0a)',
     fontFamily: "'JetBrains Mono', ui-monospace, monospace",
     fontSize: 9, fontWeight: 700, letterSpacing: '0.04em',
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
     lineHeight: 1, marginLeft: 2,
   },
   inboxPopover: {
-    background: '#0f0d0a', border: '1px solid #3a3327', borderRadius: 10,
+    background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-3, #3a3327)', borderRadius: 10,
     padding: 14, width: 380, boxShadow: '0 12px 28px rgba(0,0,0,0.6)',
   },
   inboxSendersHead: {
     marginTop: 14, marginBottom: 6,
     fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-    fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: '#a8854a',
+    fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--accent, #a8854a)',
   },
   inboxSenderList: {
     display: 'flex', flexDirection: 'column', gap: 6,
     maxHeight: 220, overflowY: 'auto',
   },
   inboxSenderRow: {
-    background: '#15110b', border: '1px solid #2a261d', borderRadius: 6,
+    background: 'var(--surf-2, #15110b)', border: '1px solid var(--border-2, #2a261d)', borderRadius: 6,
     padding: '8px 10px',
   },
   inboxSenderHead: {
@@ -614,47 +614,47 @@ const S: Record<string, React.CSSProperties> = {
   },
   inboxSenderName: {
     fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic',
-    fontSize: 14, color: '#f0e5cb',
+    fontSize: 14, color: 'var(--text-1, #f0e5cb)',
     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
   },
   inboxSenderCount: {
     fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-    fontSize: 10, fontWeight: 700, color: '#a8854a',
+    fontSize: 10, fontWeight: 700, color: 'var(--accent, #a8854a)',
     letterSpacing: '0.06em', whiteSpace: 'nowrap',
   },
   inboxSenderMeta: {
     marginTop: 3,
     display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4,
     fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-    fontSize: 9, color: '#9b907a', letterSpacing: '0.06em',
+    fontSize: 9, color: 'var(--text-mute, #9b907a)', letterSpacing: '0.06em',
   },
-  inboxSenderDot: { color: '#5a5448' },
+  inboxSenderDot: { color: 'var(--text-place, #5a5448)' },
   inboxBotTag: {
     marginLeft: 6, padding: '1px 5px',
-    background: '#2a261d', color: '#9b907a',
+    background: 'var(--border-2, #2a261d)', color: 'var(--text-mute, #9b907a)',
     fontFamily: "'JetBrains Mono', ui-monospace, monospace",
     fontSize: 8, fontWeight: 700, letterSpacing: '0.12em',
     borderRadius: 3, verticalAlign: 'middle',
   },
   inboxEmpty: {
-    padding: '10px 0', color: '#7d7565',
+    padding: '10px 0', color: 'var(--text-dim, #7d7565)',
     fontFamily: "'JetBrains Mono', ui-monospace, monospace",
     fontSize: 10, letterSpacing: '0.06em',
   },
   inboxFooterRow: {
-    marginTop: 12, paddingTop: 10, borderTop: '1px solid #1f1c15',
+    marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--border-1, #1f1c15)',
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
   },
   inboxFooterLink: {
     fontFamily: "'JetBrains Mono', ui-monospace, monospace",
     fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase',
-    color: '#a8854a', background: 'transparent',
-    border: '1px solid #2a261d', padding: '5px 10px', borderRadius: 4,
+    color: 'var(--accent, #a8854a)', background: 'transparent',
+    border: '1px solid var(--border-2, #2a261d)', padding: '5px 10px', borderRadius: 4,
     textDecoration: 'none', fontWeight: 700,
   },
   inboxFooterMuted: {
     fontFamily: "'JetBrains Mono', ui-monospace, monospace",
     fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase',
-    color: '#7d7565', textDecoration: 'none',
+    color: 'var(--text-dim, #7d7565)', textDecoration: 'none',
   },
 };

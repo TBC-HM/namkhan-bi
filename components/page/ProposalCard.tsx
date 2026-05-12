@@ -31,9 +31,9 @@ export default function ProposalCard({ p, cta = [], variant = 'brief', actions }
     <div style={card(inProcess, compact)}>
       <div style={agentRow}>
         <div style={agentLine}>
-          <span style={{ color: '#a8854a' }}>{p.agent_role}</span>
-          <span style={{ color: '#5a5448' }}>·</span>
-          <span style={{ color: '#7d7565' }}>{p.action_type}</span>
+          <span style={{ color: 'var(--accent, #a8854a)' }}>{p.agent_role}</span>
+          <span style={{ color: 'var(--text-place, #5a5448)' }}>·</span>
+          <span style={{ color: 'var(--text-dim, #7d7565)' }}>{p.action_type}</span>
         </div>
         {actions && <div>{actions}</div>}
       </div>
@@ -55,8 +55,8 @@ export default function ProposalCard({ p, cta = [], variant = 'brief', actions }
 }
 
 const card = (inProcess: boolean, compact: boolean): React.CSSProperties => ({
-  background:   compact ? '#0a0a0a' : '#15110b',
-  border:       `1px solid ${inProcess ? '#a8854a' : '#2a261d'}`,
+  background:   compact ? 'var(--surf-0, #0a0a0a)' : 'var(--surf-2, #15110b)',
+  border:       `1px solid ${inProcess ? 'var(--accent, #a8854a)' : 'var(--border-2, #2a261d)'}`,
   borderRadius: compact ? 8 : 10,
   padding:      compact ? '8px 10px' : '12px 14px',
   display:      'flex',
@@ -70,15 +70,15 @@ const agentLine: React.CSSProperties = {
   display: 'flex', gap: 6,
 };
 const signal = (compact: boolean): React.CSSProperties => ({
-  fontSize: compact ? 12 : 14, color: compact ? '#d8cca8' : '#e9e1ce',
+  fontSize: compact ? 12 : 14, color: compact ? 'var(--text-2, #d8cca8)' : 'var(--text-0, #e9e1ce)',
   lineHeight: 1.4, fontWeight: compact ? 400 : 500,
 });
-const body: React.CSSProperties = { fontSize: 12, color: '#9b907a', lineHeight: 1.5 };
+const body: React.CSSProperties = { fontSize: 12, color: 'var(--text-mute, #9b907a)', lineHeight: 1.5 };
 const ctaRow: React.CSSProperties = { display: 'flex', gap: 6, marginTop: 6 };
 const ctaBtn = (primary: boolean, compact: boolean): React.CSSProperties => ({
-  background: primary ? (compact ? '#1c160d' : '#a8854a') : 'transparent',
-  border: `1px solid ${primary ? (compact ? '#2a261d' : '#a8854a') : '#3a3327'}`,
-  color: primary ? (compact ? '#a8854a' : '#0a0a0a') : (compact ? '#7d7565' : '#9b907a'),
+  background: primary ? (compact ? 'var(--surf-3, #1c160d)' : 'var(--accent, #a8854a)') : 'transparent',
+  border: `1px solid ${primary ? (compact ? 'var(--border-2, #2a261d)' : 'var(--accent, #a8854a)') : 'var(--border-3, #3a3327)'}`,
+  color: primary ? (compact ? 'var(--accent, #a8854a)' : 'var(--surf-0, #0a0a0a)') : (compact ? 'var(--text-dim, #7d7565)' : 'var(--text-mute, #9b907a)'),
   borderRadius: compact ? 6 : 8,
   padding: compact ? '3px 8px' : '5px 12px',
   fontFamily: "'JetBrains Mono', ui-monospace, monospace",
@@ -86,7 +86,7 @@ const ctaBtn = (primary: boolean, compact: boolean): React.CSSProperties => ({
   fontWeight: primary ? 600 : 500, cursor: 'pointer',
 });
 const inProcessTag: React.CSSProperties = {
-  color: '#c79a6b',
+  color: 'var(--accent-4, #c79a6b)',
   fontSize: 11, fontFamily: "'JetBrains Mono', ui-monospace, monospace",
   letterSpacing: '0.16em', textTransform: 'uppercase',
 };

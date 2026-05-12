@@ -117,7 +117,7 @@ export default function Panel({
 }
 
 const S: Record<string, React.CSSProperties> = {
-  box:  { background: '#0f0d0a', border: '1px solid #1f1c15', borderRadius: 10, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 },
+  box:  { background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-1, #1f1c15)', borderRadius: 10, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 },
   head: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 14 },
   title: {
     fontFamily: "'JetBrains Mono', ui-monospace, monospace",
@@ -126,11 +126,11 @@ const S: Record<string, React.CSSProperties> = {
   headRight: { display: 'flex', alignItems: 'center', gap: 8 },
   eyebrow: {
     fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-    fontSize: 'var(--t-xs)', letterSpacing: '0.18em', textTransform: 'uppercase', color: '#5a5448',
+    fontSize: 'var(--t-xs)', letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--text-place, #5a5448)',
   },
   expandBtn: {
     background: 'transparent',
-    border: '1px solid #2a2520',
+    border: '1px solid var(--border-2b, #2a2520)',
     color: 'var(--brass, #a8854a)',
     cursor: 'pointer',
     width: 22,
@@ -156,8 +156,8 @@ const S: Record<string, React.CSSProperties> = {
     overflow: 'auto',
   },
   modal: {
-    background: '#0a0a0a',
-    border: '1px solid #1f1c15',
+    background: 'var(--surf-0, #0a0a0a)',
+    border: '1px solid var(--border-1, #1f1c15)',
     borderRadius: 10,
     width: '100%',
     maxWidth: 1600,
@@ -168,6 +168,6 @@ const S: Record<string, React.CSSProperties> = {
     gap: 16,
     boxShadow: '0 30px 80px rgba(0,0,0,0.55)',
   },
-  modalHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 14, paddingBottom: 8, borderBottom: '1px solid #1f1c15' },
+  modalHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 14, paddingBottom: 8, borderBottom: '1px solid var(--border-1, #1f1c15)' },
   modalBody: { flex: 1 },
 };

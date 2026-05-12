@@ -28,12 +28,12 @@ export default function Lane({ label, accent, count, emptyLabel = 'nothing here'
 
 const S: Record<string, React.CSSProperties> = {
   col: {
-    background: '#0f0d0a', border: '1px solid #1f1c15', borderRadius: 12,
+    background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-1, #1f1c15)', borderRadius: 12,
     padding: '12px 14px', display: 'flex', flexDirection: 'column', minHeight: 220,
   },
   head: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-    marginBottom: 10, paddingBottom: 6, borderBottom: '1px solid #1f1c15',
+    marginBottom: 10, paddingBottom: 6, borderBottom: '1px solid var(--border-1, #1f1c15)',
   },
   label: {
     fontFamily: "'JetBrains Mono', ui-monospace, monospace",
@@ -41,8 +41,8 @@ const S: Record<string, React.CSSProperties> = {
   },
   count: {
     fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-    fontSize: 10, color: '#5a5448',
+    fontSize: 10, color: 'var(--text-place, #5a5448)',
   },
   body: { display: 'flex', flexDirection: 'column', gap: 8 },
-  empty: { fontSize: 12, color: '#5a5040', fontStyle: 'italic', padding: '8px 4px' },
+  empty: { fontSize: 12, color: 'var(--border-4, #5a5040)', fontStyle: 'italic', padding: '8px 4px' },
 };

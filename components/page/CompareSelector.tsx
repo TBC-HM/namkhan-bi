@@ -45,7 +45,7 @@ export default function CompareSelector({
     <div style={{
       display: 'inline-flex',
       gap: 0,
-      border: '1px solid #2a2520',
+      border: '1px solid var(--border-2b, #2a2520)',
       borderRadius: 4,
       overflow: 'hidden',
       fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
@@ -67,9 +67,9 @@ export default function CompareSelector({
             prefetch={false}
             style={{
               padding: '6px 10px',
-              background: isActive ? '#a8854a' : 'transparent',
-              color: isActive ? '#0a0a0a' : '#d8cca8',
-              borderRight: '1px solid #2a2520',
+              background: isActive ? 'var(--accent, #a8854a)' : 'transparent',
+              color: isActive ? 'var(--surf-0, #0a0a0a)' : 'var(--text-2, #d8cca8)',
+              borderRight: '1px solid var(--border-2b, #2a2520)',
               textDecoration: 'none',
               fontWeight: isActive ? 700 : 600,
             }}
