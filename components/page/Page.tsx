@@ -47,20 +47,37 @@ export default function Page({
 }: PageProps) {
   return (
     <div style={S.page}>
-      {/* TOP BAR — eyebrow / title on the left, header pills (always-on)
-          on the right, with optional `topRight` slot rendered first. */}
-      <div style={S.topRow}>
-        <div style={{ flex: 1, marginLeft: subPages ? 56 : 0 }}>
-          {subPages && <SubPagesStrip items={subPages} />}
-          {!subPages && eyebrow && <div style={S.eyebrow}>{eyebrow}</div>}
-          {title && <h1 style={S.title}>{title}</h1>}
-        </div>
-        {(topRight || showHeaderPills) && (
-          <div style={S.topRight}>
-            {topRight}
-            {showHeaderPills && <HeaderPills kpiTiles={kpiTiles} />}
+      {/* TOP BAR — two layers stacked inside one sticky container.
+          Intake (2026-05-12): HeaderPills used to sit alongside subPages +
+          title + page topRight controls. On dense pages (e.g. /revenue/pricing
+          where topRight has 9-tab TimeframeSelector + 5-tab CompareSelector)
+          the row flex-wrapped and the pills dropped BELOW the title on the
+          left. Fix: HeaderPills now always renders in its own row at the
+          very top, right-aligned, with flex-shrink:0 so it can never be
+          pushed below. Page-specific topRight controls sit on the second
+          row alongside the title. */}
+      <div style={S.topBar}>
+        {/* Row 1 — HeaderPills (always-on, always top-right). Rendered only
+            when showHeaderPills=true; pages can opt-out (e.g. /sample). */}
+        {showHeaderPills && (
+          <div style={S.topRowPills}>
+            <HeaderPills kpiTiles={kpiTiles} />
           </div>
         )}
+
+        {/* Row 2 — eyebrow/subPages + title (left), page-specific topRight (right) */}
+        <div style={S.topRowTitle}>
+          <div style={{ flex: 1, marginLeft: subPages ? 56 : 0, minWidth: 0 }}>
+            {subPages && <SubPagesStrip items={subPages} />}
+            {!subPages && eyebrow && <div style={S.eyebrow}>{eyebrow}</div>}
+            {title && <h1 style={S.title}>{title}</h1>}
+          </div>
+          {topRight && (
+            <div style={S.topRight}>
+              {topRight}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* BODY */}
@@ -148,21 +165,35 @@ const S: Record<string, React.CSSProperties> = {
     display:      'flex',
     flexDirection: 'column',
   },
-  topRow: {
-    // PBS 2026-05-09 #34: sticky top bar so eyebrow/title + header pills
-    // remain pinned while scrolling. Backdrop blur + semi-opaque bg so
-    // body content does not bleed through.
-    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-    gap: 16, flexWrap: 'wrap',
+  // 2026-05-12: replaced single topRow with topBar (sticky container) +
+  // topRowPills (HeaderPills, always-on top) + topRowTitle (subPages/title
+  // + page-specific topRight controls). Locks HeaderPills into the top-right
+  // position regardless of how wide the page-specific controls get.
+  topBar: {
     position: 'sticky', top: 0, zIndex: 50,
     background: 'var(--topbar-bg, rgba(10, 10, 10, 0.82))',
     backdropFilter: 'saturate(140%) blur(10px)',
     WebkitBackdropFilter: 'saturate(140%) blur(10px)',
     borderBottom: '1px solid var(--topbar-border, rgba(31, 28, 21, 0.6))',
     margin: '-32px -32px 24px',
-    padding: '20px 32px 14px',
+    padding: '12px 32px 12px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
   },
-  topRight: { display: 'flex', alignItems: 'center', gap: 14 },
+  topRowPills: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  topRowTitle: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 16,
+    flexWrap: 'wrap',
+  },
+  topRight: { display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', justifyContent: 'flex-end' },
   eyebrow: {
     fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
     fontSize:      10,
