@@ -3,8 +3,7 @@ import Page from '@/components/page/Page';
 import Panel from '@/components/page/Panel';
 import Brief from '@/components/page/Brief';
 import ArtifactActions from '@/components/page/ArtifactActions';
-import TimeframeSelector from '@/components/page/TimeframeSelector';
-import CompareSelector from '@/components/page/CompareSelector';
+import PeriodSelectorRow from '@/components/page/PeriodSelectorRow';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { getPaceOtb } from '@/lib/data';
@@ -65,12 +64,6 @@ export default async function DemandPage({ searchParams }: Props) {
       eyebrow={`Revenue · Demand · ${period.label}`}
       title={<>Find the <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>gap</em> before the calendar gets soft.</>}
       subPages={REVENUE_SUBPAGES}
-      topRight={
-        <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <TimeframeSelector basePath="/revenue/demand" active={period.win} includeForward preserve={{ cmp: period.cmp, seg: period.seg }} />
-          <CompareSelector  basePath="/revenue/demand" active={period.cmp}                   preserve={{ win: period.win, seg: period.seg }} />
-        </div>
-      }
     >
       <Brief
         brief={{ signal: briefSignal, body: briefBody, good, bad }}
@@ -105,6 +98,16 @@ export default async function DemandPage({ searchParams }: Props) {
         <KpiBox value={paceΔ} unit="count"     label="Pace Δ Rn"      delta={total.stly > 0 ? { value: paceΔPct, unit: 'pct', period: 'vs STLY' } : undefined} tooltip="OTB room-nights vs same time last year. Positive = ahead of pace." />
         <KpiBox value={revΔ}  unit="usd"       label="Pace Δ Rev"     delta={total.stlyRev > 0 ? { value: revΔPct, unit: 'pct', period: 'vs STLY' } : undefined} tooltip="OTB revenue vs same time last year. Positive = ahead of pace." />
       </div>
+
+      {/* Canonical period chooser — under the KPI tile row. */}
+      <PeriodSelectorRow
+        basePath="/revenue/demand"
+        win={period.win}
+        cmp={period.cmp}
+        includeForward
+        preserve={{ seg: period.seg }}
+      />
+
 
       <div style={{ height: 14 }} />
 

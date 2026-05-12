@@ -1,7 +1,6 @@
 // app/revenue/inventory/page.tsx — REDESIGN 2026-05-05 (recovery)
 import Page from '@/components/page/Page';
-import TimeframeSelector from '@/components/page/TimeframeSelector';
-import CompareSelector from '@/components/page/CompareSelector';
+import PeriodSelectorRow from '@/components/page/PeriodSelectorRow';
 import { REVENUE_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
@@ -36,12 +35,7 @@ export default async function InventoryPage({ searchParams }: Props) {
   const lastShop = days.length ? days[days.length - 1].date : null;
 
   return (
-    <Page eyebrow="Revenue · Inventory" title={<>Sell what you <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>have</em>, push rate where it's tight.</>} subPages={REVENUE_SUBPAGES} topRight={
-      <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <TimeframeSelector basePath="/revenue/inventory" active={period.win} includeForward preserve={{ cmp: period.cmp, seg: period.seg }} />
-        <CompareSelector  basePath="/revenue/inventory" active={period.cmp}                   preserve={{ win: period.win, seg: period.seg }} />
-      </div>
-    }>
+    <Page eyebrow="Revenue · Inventory" title={<>Sell what you <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>have</em>, push rate where it's tight.</>} subPages={REVENUE_SUBPAGES}>
       <div style={statusWrap}>
         <div style={statusRow1}>
           <div style={cell}><span className="t-eyebrow" style={{ marginRight: 8 }}>SOURCE</span><StatusPill tone="active">mv_rate_inventory_calendar</StatusPill></div>
@@ -68,6 +62,16 @@ export default async function InventoryPage({ searchParams }: Props) {
         <KpiBox value={tightDays}   unit="count" label="Tight days (≤3)" tooltip="Days where availability ≤ 3 rooms — push rate / close-to-arrival opportunity." />
         <KpiBox value={sellouts}    unit="count" label="Sellouts"        tooltip="Days where availability = 0. Confirm against pickup before celebrating." />
       </div>
+
+      {/* Canonical period chooser — under the KPI tile row. */}
+      <PeriodSelectorRow
+        basePath="/revenue/inventory"
+        win={period.win}
+        cmp={period.cmp}
+        includeForward
+        preserve={{ seg: period.seg }}
+      />
+
       <div style={{ marginTop: 18 }}>
         <SectionHead title="Inventory" emphasis="per date" sub={`${days.length} days · sellable inventory + rate spread`} source="mv_rate_inventory_calendar" />
         <InventoryTable rows={days} />

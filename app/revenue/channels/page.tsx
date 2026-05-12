@@ -17,8 +17,7 @@ import Page from '@/components/page/Page';
 import Panel from '@/components/page/Panel';
 import Brief from '@/components/page/Brief';
 import ArtifactActions from '@/components/page/ArtifactActions';
-import TimeframeSelector from '@/components/page/TimeframeSelector';
-import CompareSelector from '@/components/page/CompareSelector';
+import PeriodSelectorRow from '@/components/page/PeriodSelectorRow';
 import KpiBox from '@/components/kpi/KpiBox';
 import Insight from '@/components/sections/Insight';
 import { resolvePeriod } from '@/lib/period';
@@ -181,31 +180,6 @@ export default async function ChannelsPage({ searchParams }: Props) {
       eyebrow={`Channels · ${period.label}`}
       title={<>Channel <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>performance</em>.</>}
       subPages={REVENUE_SUBPAGES}
-      topRight={
-        <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* PBS 2026-05-12: Channels = last 7 / 30 / 90 only. Compare = None or SDLY
-              (same window last year). Other options removed to avoid noise. */}
-          <TimeframeSelector
-            basePath="/revenue/channels"
-            active={period.win}
-            options={[
-              { win: '7d',  label: '7d' },
-              { win: '30d', label: '30d' },
-              { win: '90d', label: '90d' },
-            ]}
-            preserve={{ cmp: period.cmp, seg: period.seg }}
-          />
-          <CompareSelector
-            basePath="/revenue/channels"
-            active={period.cmp}
-            options={[
-              { cmp: 'none', label: 'None' },
-              { cmp: 'sdly', label: 'SDLY' },
-            ]}
-            preserve={{ win: period.win, seg: period.seg }}
-          />
-        </div>
-      }
     >
       <Brief
         brief={{ signal: briefSignal, body: briefBody, good, bad }}
@@ -232,6 +206,24 @@ export default async function ChannelsPage({ searchParams }: Props) {
           compare={dChannelCost != null ? { value: dChannelCost, unit: 'usd', period: cmpLabel2 } : undefined}
           tooltip="Total commission ÷ occupied room-nights, USD per occ RN. Lower is better." />
       </div>
+
+      {/* Canonical period chooser — under the KPI tile row.
+          Channels = last 7 / 30 / 90 only · compare = None or SDLY. */}
+      <PeriodSelectorRow
+        basePath="/revenue/channels"
+        win={period.win}
+        cmp={period.cmp}
+        timeOptions={[
+          { win: '7d',  label: '7d' },
+          { win: '30d', label: '30d' },
+          { win: '90d', label: '90d' },
+        ]}
+        compareOptions={[
+          { cmp: 'none', label: 'None' },
+          { cmp: 'sdly', label: 'SDLY' },
+        ]}
+        preserve={{ seg: period.seg }}
+      />
       {/* deltaHint helper kept to retain compare windows for callers; no UI yet. */}
       {void deltaHint}
 

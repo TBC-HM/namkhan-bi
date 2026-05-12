@@ -14,8 +14,7 @@ import Page from '@/components/page/Page';
 import Panel from '@/components/page/Panel';
 import Brief from '@/components/page/Brief';
 import ArtifactActions from '@/components/page/ArtifactActions';
-import TimeframeSelector from '@/components/page/TimeframeSelector';
-import CompareSelector from '@/components/page/CompareSelector';
+import PeriodSelectorRow from '@/components/page/PeriodSelectorRow';
 import { REVENUE_SUBPAGES } from '../_subpages';
 import { resolvePeriod } from '@/lib/period';
 import { getKpiDaily, getOverviewKpis, getChannelPerf } from '@/lib/data';
@@ -297,12 +296,6 @@ export default async function PulsePage({ searchParams }: Props) {
       eyebrow="Revenue · Pulse"
       title={<>What's <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>open</em>, right now.</>}
       subPages={REVENUE_SUBPAGES}
-      topRight={
-        <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <TimeframeSelector basePath="/revenue/pulse" active={period.win} preserve={{ cmp: period.cmp, seg: period.seg, cap: period.capacityMode }} />
-          <CompareSelector  basePath="/revenue/pulse" active={period.cmp} preserve={{ win: period.win, seg: period.seg, cap: period.capacityMode }} />
-        </div>
-      }
       kpiTiles={[
         { k: 'OCC',    v: `${occ.toFixed(0)}%`,        d: period.label },
         { k: 'ADR',    v: `$${Math.round(adr).toLocaleString()}`,   d: period.label },
@@ -408,6 +401,15 @@ export default async function PulsePage({ searchParams }: Props) {
           <KpiBox value={extended.leadTimeDays ?? 0} unit="nights" dp={0} label="Lead time (d)" tooltip="Mean days from booking to arrival in this window." />
           <KpiBox value={extended.alosNights ?? 0} unit="nights" dp={1} label="ALOS"            tooltip="Average length of stay (room-nights ÷ stays) in this window." />
         </div>
+
+      {/* Canonical period chooser — under the KPI tile row. */}
+      <PeriodSelectorRow
+        basePath="/revenue/pulse"
+        win={period.win}
+        cmp={period.cmp}
+        preserve={{ seg: period.seg, cap: period.capacityMode }}
+      />
+
       </Panel>
 
       <div style={{ height: 14 }} />

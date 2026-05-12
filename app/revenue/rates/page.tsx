@@ -1,7 +1,6 @@
 // app/revenue/rates/page.tsx — REDESIGN 2026-05-05 (recovery)
 import Page from '@/components/page/Page';
-import TimeframeSelector from '@/components/page/TimeframeSelector';
-import CompareSelector from '@/components/page/CompareSelector';
+import PeriodSelectorRow from '@/components/page/PeriodSelectorRow';
 import { REVENUE_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
@@ -46,12 +45,7 @@ export default async function RatesPage({ searchParams }: Props) {
   const restrictionTotal = cta + ctd + stop + minStay;
 
   return (
-    <Page eyebrow="Revenue · Rates" title={<>BAR ladder, <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>spread</em>, and the levers around it.</>} subPages={REVENUE_SUBPAGES} topRight={
-      <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <TimeframeSelector basePath="/revenue/rates" active={period.win} includeForward preserve={{ cmp: period.cmp, seg: period.seg }} />
-        <CompareSelector  basePath="/revenue/rates" active={period.cmp}                   preserve={{ win: period.win, seg: period.seg }} />
-      </div>
-    }>
+    <Page eyebrow="Revenue · Rates" title={<>BAR ladder, <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>spread</em>, and the levers around it.</>} subPages={REVENUE_SUBPAGES}>
       <div style={statusWrap}>
         <div style={statusRow1}>
           <div style={cell}><span className="t-eyebrow" style={{ marginRight: 8 }}>SOURCE</span><StatusPill tone="active">mv_rate_inventory_calendar</StatusPill></div>
@@ -74,6 +68,16 @@ export default async function RatesPage({ searchParams }: Props) {
         <KpiBox value={overallMax} unit="usd"   label="Max BAR"             tooltip="Ceiling BAR observed in the window — typically peak / high-demand days." />
         <KpiBox value={restrictionTotal} unit="count" label="Active restrictions" tooltip="Stop-sell + closed-to-arrival + closed-to-departure + min-stay rules in effect." />
       </div>
+
+      {/* Canonical period chooser — under the KPI tile row. */}
+      <PeriodSelectorRow
+        basePath="/revenue/rates"
+        win={period.win}
+        cmp={period.cmp}
+        includeForward
+        preserve={{ seg: period.seg }}
+      />
+
       <div style={{ marginTop: 18 }}>
         <SectionHead title="BAR" emphasis="per room type" sub={`Min · avg · max · ${period.label}`} source="mv_rate_inventory_calendar" />
         <RatesTable rows={byType} />

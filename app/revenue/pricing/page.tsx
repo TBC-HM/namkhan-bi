@@ -8,8 +8,7 @@ import Page from '@/components/page/Page';
 import Panel from '@/components/page/Panel';
 import Brief from '@/components/page/Brief';
 import ArtifactActions from '@/components/page/ArtifactActions';
-import TimeframeSelector from '@/components/page/TimeframeSelector';
-import CompareSelector from '@/components/page/CompareSelector';
+import PeriodSelectorRow from '@/components/page/PeriodSelectorRow';
 import KpiBox from '@/components/kpi/KpiBox';
 import { REVENUE_SUBPAGES } from '../_subpages';
 
@@ -177,12 +176,6 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
       eyebrow={`Revenue · Pricing · ${winLabels[win]}`}
       title={<>Pricing · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>{winLabels[win]} · by {gran}</em></>}
       subPages={REVENUE_SUBPAGES}
-      topRight={
-        <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <TimeframeSelector basePath="/revenue/pricing" active={period.win} includeForward preserve={{ cmp: period.cmp, gran }} />
-          <CompareSelector  basePath="/revenue/pricing" active={period.cmp}                  preserve={{ win: period.win, gran }} />
-        </div>
-      }
     >
       <style>{`
         .filter-btn:not(.fwd):not([href*="seg="]):not([href*="cmp="]):not([href*="cap="]) {
@@ -302,6 +295,15 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
         <KpiBox value={stopSells} unit="count" label="Stop-sell"      tooltip="Cells with stop_sell = true. Cannot be booked even if rate is set." />
         <KpiBox value={minStayRows} unit="count" label="Min-stay"     tooltip="Cells with minimum_stay > 1. Filters short stays." />
       </div>
+
+      {/* Canonical period chooser — always under the KPI tile row. */}
+      <PeriodSelectorRow
+        basePath="/revenue/pricing"
+        win={period.win}
+        cmp={period.cmp}
+        includeForward
+        preserve={{ gran }}
+      />
 
       {/* "What's open today" — top 3 same-day rate alerts. Mirrors the Pulse
           hero pattern. Data source not yet wired (no rate-alert view in

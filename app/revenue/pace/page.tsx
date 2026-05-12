@@ -9,8 +9,7 @@ import Page from '@/components/page/Page';
 import Panel from '@/components/page/Panel';
 import Brief from '@/components/page/Brief';
 import ArtifactActions from '@/components/page/ArtifactActions';
-import TimeframeSelector from '@/components/page/TimeframeSelector';
-import CompareSelector from '@/components/page/CompareSelector';
+import PeriodSelectorRow from '@/components/page/PeriodSelectorRow';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import { resolvePeriod, type WindowKey } from '@/lib/period';
 import { capacityFor, capacityRnRange, CAPACITY_PIVOT, CAPACITY_PRE, CAPACITY_POST } from '@/lib/capacity';
@@ -217,12 +216,6 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
       eyebrow="Revenue · Pace"
       title={<>What&apos;s <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>on the books</em> ahead.</>}
       subPages={REVENUE_SUBPAGES}
-      topRight={
-        <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <TimeframeSelector basePath="/revenue/pace" active={period.win} includeForward preserve={{ cmp: period.cmp, gran }} />
-          <CompareSelector  basePath="/revenue/pace" active={period.cmp}                  preserve={{ win: period.win, gran }} />
-        </div>
-      }
     >
       <style>{`
         .filter-btn:not(.fwd):not([href*="seg="]):not([href*="cmp="]):not([href*="cap="]) {
@@ -273,6 +266,16 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
         <KpiBox value={cxlRate} unit="pct"    label="Cancel rate"     tooltip="Cancelled reservations ÷ total reservations × 100, for this forward window." />
         <KpiBox value={stlyPctOverall} unit="pct" label="vs STLY"     tooltip="OTB this window vs same time last year (% change)." />
       </div>
+
+      {/* Canonical period chooser — under the KPI tile row. */}
+      <PeriodSelectorRow
+        basePath="/revenue/pace"
+        win={period.win}
+        cmp={period.cmp}
+        includeForward
+        preserve={{ gran }}
+      />
+
 
       {/* Granularity chips */}
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 18, marginBottom: 8 }}>
