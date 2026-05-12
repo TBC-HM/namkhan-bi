@@ -310,6 +310,7 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
               {/* PBS 2026-05-09 #26: settings sub-pages live under cockpit now. */}
               <div style={S.menuSection}>Tools</div>
               <a href="/cockpit"                   onClick={() => setUserOpen(false)} style={S.link}>IT cockpit</a>
+              <a href="/cockpit-v2"                onClick={() => setUserOpen(false)} style={S.link}>Cockpit v2 <span style={{ fontSize: 9, color: '#a8854a', marginLeft: 6, letterSpacing: '0.14em', textTransform: 'uppercase' }}>preview</span></a>
               <a href="/cockpit/tasks"             onClick={() => setUserOpen(false)} style={S.link}>Tasks</a>
               <a href="/front-office/arrivals"     onClick={() => setUserOpen(false)} style={S.link}>Front office</a>
               <a href="/settings/email-categories" onClick={() => setUserOpen(false)} style={S.link}>Email categories</a>

@@ -2877,3 +2877,17 @@ PBS: "IN THE LEADS AREA DESIGN THE WHOLE CONCEPT IN BACKEND AND FRONTEND THAT WE
   - `SELECT count(*), count(DISTINCT class_id), count(DISTINCT account_id) FROM gl.pl_summary_monthly WHERE period_yyyymm = '2026-04'` → 191, 9, 118.
   - `SELECT min(txn_date), max(txn_date), count(*) FROM gl.gl_entries` → 2025-01-15, 2026-05-09, 3,757 total.
 - **Constraints honoured.** No new schemas / tables. The transient helper function was created and dropped within the session. No service-role key written to repo. No deploy. Design ritual: this changelog entry is the end-of-session deliverable.
+
+### 2026-05-12 — Cockpit v2 preview route added at `/cockpit-v2` (additive, snapshot-only)
+
+- **Why.** PBS uploaded a 91 KB single-file Next.js page (`cockpit-v2-page.tsx`) from a Cowork session that produced a visual redesign of the cockpit. Goal: preview the redesign side-by-side with the existing `/cockpit` route to decide whether to promote the design language. Per the handover doc, route is additive — `/cockpit` is **not** replaced or modified.
+- **What.** New route `app/cockpit-v2/page.tsx` (single file, 91,307 bytes). Four tabs: Team (72-agent org tree with property filter + dormant collapse), Schemas (46 schemas with search + category filter), Knowledge (8 docs + 13 memories + 10 ADRs with inline edit — local component state only), Activity (20 intake items + recent DDL + cost panel). No live data — all snapshot constants embedded in the file. No Supabase calls, no auth, no fetch.
+- **Design tokens honoured.** Uses existing repo palette (paper / moss / brass / oxblood), Fraunces (serif italic) for numerics, Inter Tight for body, JetBrains Mono for labels — same tokens the live `/cockpit` uses. No new fonts or colours introduced.
+- **Dependencies.** Zero new npm deps. Lucide icons are inlined as `_IconBase` SVG components in the same file to avoid adding `lucide-react`.
+- **Files touched.**
+  - `app/cockpit-v2/page.tsx` — new file.
+  - `DESIGN_NAMKHAN_BI.md` — this entry.
+- **Verification.** Local `npm install --silent && npm run build` clean (Next 14 App Router, route appears in the build manifest). Vercel preview deployment triggered automatically on branch push (`feat/cockpit-v2-preview`). PR #297 open.
+- **Constraints honoured.** No hardcoded `fontSize:` JSX literals. No new dependencies. No DB / RLS / view changes. No public-view `security_invoker` exposure (per the locked 2026-05-11 security baseline in CLAUDE.md v2.8). `/cockpit/**`, `/finance/**`, `/sales/**`, `app/api/**`, `components/**`, `lib/**` — untouched.
+- **Out of scope (deliberately deferred to PBS decision).** Live data fetches, auth gate, write-back to Supabase, replacement of `/cockpit`. Once PBS reviews the Vercel preview, decision options: keep `/cockpit-v2` as parallel preview indefinitely · promote design language into `/cockpit` via proper intake · discard.
+- **Refs.** cockpit intake #3 / #4 / #5 (referenced in commit body, not closing). PR https://github.com/TBC-HM/namkhan-bi/pull/297. Source handover at `~/Documents/Claude/Projects/cloudbeds Vercel portal/cockpit-v2-deploy/HANDOVER.md`.
