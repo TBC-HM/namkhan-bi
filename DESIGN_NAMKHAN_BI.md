@@ -406,6 +406,15 @@ If memory is wiped AND nothing above is reachable, the repo itself has a `CLAUDE
 
 Append-only. Newest at top. Date heading + bullet changes.
 
+### 2026-05-13 (Donna HR — work_status + contract_pattern pills wired into staff register)
+
+- 2026-05-13 — Donna HR: wired work_status + contract_pattern pills into staff register (table + drawer + KPI strip).
+  Pills use canonical StatusPill 5-tone palette only — no new tones introduced. New columns surfaced from
+  ops.staff_employment via public.v_staff_register_extended + public.v_staff_detail (migration
+  staff_views_expose_factorial_status_columns). Drawer LeaveGrid now reads vacation_days_entitled from
+  Factorial when present, falls back to property statutory minimum. New KPI tiles "12-month workforce"
+  and "9-month / seasonal" added to staff register; render only when contract_pattern data is available.
+
 ### 2026-05-09 (social area redesign — strict 8-platform allow-list + landing pages)
 
 - **JOB.** PBS repair-list (marketing/social): four items. **JOB 1** audit the area. **JOB 2** drop OTAs / review platforms — strict social allow-list. **JOB 3** account names link to actual public profiles. **JOB 4** channels-style landing page per social profile. **JOB 5** verify dark-canvas table readability after round-3 CSS.

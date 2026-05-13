@@ -7,6 +7,34 @@
 
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
+
+// PBS 2026-05-13: pill mappers for Factorial-derived status columns.
+// 5-tone palette only (canonical StatusPill — no new tones per design rules).
+function workStatusPill(v: string | null | undefined): { tone: StatusTone; label: string } | null {
+  if (!v) return null;
+  switch (v) {
+    case 'active':           return { tone: 'active',   label: 'Active' };
+    case 'active_rotating':  return { tone: 'active',   label: 'Rotating' };
+    case 'new_hire':         return { tone: 'info',     label: 'New hire' };
+    case 'silent_recent':    return { tone: 'pending',  label: 'Silent 30d+' };
+    case 'silent_long':      return { tone: 'expired',  label: 'Silent 90d+' };
+    case 'never_clocked':    return { tone: 'expired',  label: 'Never clocked' };
+    case 'terminated':       return { tone: 'inactive', label: 'Terminated' };
+    default:                 return { tone: 'inactive', label: v };
+  }
+}
+function contractPatternPill(v: string | null | undefined): { tone: StatusTone; label: string } | null {
+  if (!v) return null;
+  switch (v) {
+    case '12mo_year_round':       return { tone: 'inactive', label: '12 mo · year-round' };
+    case '9mo_fijo_discontinuo':  return { tone: 'active',   label: '9 mo · fijo discont.' };
+    case 'seasonal_5_7mo':        return { tone: 'pending',  label: 'Seasonal · 5–7 mo' };
+    case 'short_1_4mo':           return { tone: 'pending',  label: 'Short · 1–4 mo' };
+    case 'no_clock_2025':         return { tone: 'info',     label: 'New season hire' };
+    default:                      return { tone: 'inactive', label: v };
+  }
+}
 
 type Row = {
   staff_id: string;
@@ -28,6 +56,11 @@ type Row = {
   flag_missing_hire_date: boolean;
   flag_missing_contract: boolean;
   flag_contract_expiring: boolean;
+  // PBS 2026-05-13: Factorial-derived status columns (Donna)
+  work_status?: string | null;
+  contract_pattern?: string | null;
+  months_worked_2025?: number | null;
+  last_clock_date?: string | null;
 };
 
 interface StaffTableProps {
@@ -187,6 +220,7 @@ export function StaffTable({ rows, onSelect, selectedId }: StaffTableProps) {
               <th style={tableStyles.th}>Position</th>
               <th style={tableStyles.th}>Department</th>
               <th style={tableStyles.th}>Type</th>
+              <th style={tableStyles.th}>Status · Contract</th>
               <th style={{ ...tableStyles.th, ...tableStyles.thRight }}>Base</th>
               <th style={{ ...tableStyles.th, ...tableStyles.thRight }}>Gross · last</th>
               <th style={{ ...tableStyles.th, ...tableStyles.thRight }}>Net · last</th>
@@ -231,6 +265,9 @@ export function StaffTable({ rows, onSelect, selectedId }: StaffTableProps) {
                     color: 'var(--ink-mute)',
                   }}>
                     {r.employment_type || '—'}
+                  </td>
+                  <td style={tableStyles.td}>
+                    <StaffStatusCell row={r} />
                   </td>
                   <td style={{ ...tableStyles.td, ...tableStyles.tdRight }}>
                     {fmtSalary(r.monthly_salary, r.salary_currency)}
@@ -282,6 +319,31 @@ function PayslipBadge({ status }: { status: Row['payslip_pdf_status'] }) {
       letterSpacing: '0.12em', textTransform: 'uppercase',
       border: '1px solid var(--kpi-frame)',
     }}>{v.t}</span>
+  );
+}
+
+// PBS 2026-05-13 — status + contract pills from Factorial-derived columns.
+// Empty cell (em-dash) for properties without these columns (e.g. Namkhan).
+function StaffStatusCell({ row }: { row: Row }) {
+  const ws = workStatusPill(row.work_status);
+  const cp = contractPatternPill(row.contract_pattern);
+  if (!ws && !cp) return <span style={{ color: 'var(--ink-faint)' }}>—</span>;
+  const months = row.months_worked_2025;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+        {ws && <StatusPill tone={ws.tone}>{ws.label}</StatusPill>}
+        {cp && <StatusPill tone={cp.tone}>{cp.label}</StatusPill>}
+      </div>
+      {months != null && months > 0 && (
+        <span style={{
+          fontFamily: 'var(--mono)', fontSize: 9,
+          color: 'var(--ink-mute)', letterSpacing: '0.10em',
+        }}>
+          {months} mo · 2025
+        </span>
+      )}
+    </div>
   );
 }
 

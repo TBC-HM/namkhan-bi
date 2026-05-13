@@ -62,6 +62,15 @@ export interface StaffDetail {
   punctuality_shifts_90d: number | null;
   punctuality_no_show_90d: number | null;
   punctuality_late_15_90d: number | null;
+  // Factorial-derived status pills + entitlement (added 2026-05-13)
+  work_status: string | null;
+  contract_pattern: string | null;
+  months_worked_2025: number | null;
+  last_clock_date: string | null;
+  vacation_days_entitled: number | null;
+  vacation_days_type: string | null;
+  timeoff_policy_name: string | null;
+  es_contract_type_id: string | null;
   // Last raise + extra pay (added 2026-05-13)
   last_raise_date: string | null;
   last_raise_delta_lak: number | null;

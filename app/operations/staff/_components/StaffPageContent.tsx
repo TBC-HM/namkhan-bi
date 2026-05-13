@@ -45,6 +45,11 @@ type Row = {
   flag_missing_hire_date: boolean;
   flag_missing_contract: boolean;
   flag_contract_expiring: boolean;
+  // PBS 2026-05-13 — Factorial-derived status columns (Donna)
+  work_status: string | null;
+  contract_pattern: string | null;
+  months_worked_2025: number | null;
+  last_clock_date: string | null;
 };
 
 // USD per 1 unit — rough static rates. Real rates should come from gl.fx_rates.
@@ -167,12 +172,15 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
 
   const [{ data: rows }, { data: anomalies }, archived] = await Promise.all([
     supabase
+      .schema('public')
       .from('v_staff_register_extended')
       .select(
         'staff_id, emp_id, full_name, position_title, dept_code, dept_name, ' +
           'employment_type, monthly_salary, salary_currency, hourly_cost_lak, hire_date, ' +
           'last_payroll_period, last_payroll_total_usd, last_payroll_cost_lak, last_payroll_net_lak, payslip_pdf_status, ' +
-          'flag_missing_hire_date, flag_missing_contract, flag_contract_expiring'
+          'flag_missing_hire_date, flag_missing_contract, flag_contract_expiring, ' +
+          // PBS 2026-05-13: Factorial-derived status columns
+          'work_status, contract_pattern, months_worked_2025, last_clock_date'
       )
       .eq('property_id', propertyId)
       .eq('is_active', true)
@@ -374,6 +382,16 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
   const dominantCcy = Object.entries(ccyCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'LAK';
   const totalFlags = safeAnoms.length;
 
+  // PBS 2026-05-13: workforce-mix counts from Factorial contract_pattern.
+  // Only populated for Donna today; Namkhan rows have null → tiles read 0/0.
+  const cnt12mo = safeRows.filter((r) => r.contract_pattern === '12mo_year_round').length;
+  const cntSeasonal = safeRows.filter((r) =>
+    r.contract_pattern === '9mo_fijo_discontinuo'
+    || r.contract_pattern === 'seasonal_5_7mo'
+    || r.contract_pattern === 'short_1_4mo'
+  ).length;
+  const hasContractPattern = safeRows.some((r) => r.contract_pattern != null);
+
   // Dept options for the chart filter — union of every dept seen across
   // monthlyRows (Namkhan real payroll) and the current register (both props).
   const deptSeen = new Map<string, { code: string; name: string; hc: number }>();
@@ -413,6 +431,12 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
         { label: 'Active', value: totalActive, kind: 'count', hint: 'on register' },
         { label: 'Archived', value: archived.length, kind: 'count', hint: 'departed' },
         { label: 'Headcount paid', value: selHc, kind: 'count', hint: fmtPeriodLabel(selectedMonth) },
+        // PBS 2026-05-13: workforce mix from Factorial contract_pattern.
+        // Only shown when data is available (Donna today).
+        ...(hasContractPattern ? [
+          { label: '12-month workforce', value: cnt12mo,    kind: 'count' as const, tone: 'pos' as const,     hint: 'year-round (≥11 mo · 2025)' },
+          { label: '9-month / seasonal', value: cntSeasonal, kind: 'count' as const, tone: 'neutral' as const, hint: 'fijo discontinuo + seasonal' },
+        ] : []),
         // PBS 2026-05-13: KPI money in native currency (€ for Donna, $ for Namkhan).
         // selCost / selCph stored as USD internally — convert back for display.
         { label: 'Company cost', value: fmtCcyShort(usdToCcy(selCost, dominantCcy), dominantCcy), tone: 'neutral', hint: fmtPeriodLabel(selectedMonth) },

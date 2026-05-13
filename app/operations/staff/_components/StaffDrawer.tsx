@@ -17,6 +17,33 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { fetchStaffDetail, type StaffDetail } from '../_actions/fetchStaffDetail';
 import { SkillsEditor } from './SkillsEditor';
+import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
+
+// PBS 2026-05-13 — pill mappers for Factorial work_status + contract_pattern.
+function workStatusPill(v: string | null | undefined): { tone: StatusTone; label: string } | null {
+  if (!v) return null;
+  switch (v) {
+    case 'active':           return { tone: 'active',   label: 'Active' };
+    case 'active_rotating':  return { tone: 'active',   label: 'Rotating' };
+    case 'new_hire':         return { tone: 'info',     label: 'New hire' };
+    case 'silent_recent':    return { tone: 'pending',  label: 'Silent 30d+' };
+    case 'silent_long':      return { tone: 'expired',  label: 'Silent 90d+' };
+    case 'never_clocked':    return { tone: 'expired',  label: 'Never clocked' };
+    case 'terminated':       return { tone: 'inactive', label: 'Terminated' };
+    default:                 return { tone: 'inactive', label: v };
+  }
+}
+function contractPatternPill(v: string | null | undefined): { tone: StatusTone; label: string } | null {
+  if (!v) return null;
+  switch (v) {
+    case '12mo_year_round':       return { tone: 'inactive', label: '12 mo · year-round' };
+    case '9mo_fijo_discontinuo':  return { tone: 'active',   label: '9 mo · fijo discont.' };
+    case 'seasonal_5_7mo':        return { tone: 'pending',  label: 'Seasonal · 5–7 mo' };
+    case 'short_1_4mo':           return { tone: 'pending',  label: 'Short · 1–4 mo' };
+    case 'no_clock_2025':         return { tone: 'info',     label: 'New season hire' };
+    default:                      return { tone: 'inactive', label: v };
+  }
+}
 
 // Annual-leave entitlement per property — statutory minimums.
 //   Namkhan (260955) = 15 days (Lao Labor Law Art. 38)
@@ -94,6 +121,14 @@ export function StaffDrawer({ staffId, onClose }: Props) {
             <ContactStrip detail={detail} onToast={setToast} />
 
             <div style={S.body}>
+              {/* PBS 2026-05-13: Workforce status pills — Donna only (Factorial-derived).
+                  Hides cleanly on Namkhan rows where these columns are null. */}
+              {(detail.work_status || detail.contract_pattern) && (
+                <Section title="Workforce status">
+                  <StatusPillsRow detail={detail} />
+                </Section>
+              )}
+
               {/* 3. IDENTITY */}
               <Section title="Identity">
                 <Field label="Employee ID"     value={detail.emp_id ?? '—'} mono />
@@ -403,12 +438,22 @@ function ContactCell({
 
 function LeaveGrid({ detail }: { detail: StaffDetail }) {
   const used = detail.annual_leave_used_ytd ?? 0;
-  const entitlement = entitlementFor(detail.property_id);
+  // PBS 2026-05-13: prefer Factorial's per-employee entitlement; fall back
+  // to the property-level statutory minimum.
+  const fxEnt = Number(detail.vacation_days_entitled ?? NaN);
+  const entitlement = Number.isFinite(fxEnt) && fxEnt > 0 ? fxEnt : entitlementFor(detail.property_id);
   const open = Math.max(0, entitlement - used);
+  // Factorial day-type → human label. natural_days_only_range = días naturales
+  const dayType = detail.vacation_days_type === 'natural_days_only_range' ? 'días naturales'
+                : detail.vacation_days_type === 'working_days'             ? 'días laborables'
+                : null;
+  const entHint = dayType
+    ? `of ${entitlement}d entitlement · ${dayType}`
+    : `of ${entitlement}d entitlement`;
   return (
     <div style={S.leaveGrid}>
       <LeaveTile label="Annual leave used" value={used} unit="d" tone={used > entitlement * 0.8 ? 'warn' : 'neutral'} />
-      <LeaveTile label="Open balance" value={open} unit="d" tone="good" hint={`of ${entitlement}d entitlement`} />
+      <LeaveTile label="Open balance" value={open} unit="d" tone="good" hint={entHint} />
       <LeaveTile label="Public holidays" value={detail.public_holiday_ytd ?? 0} unit="d" />
       <LeaveTile label="Sick days" value={detail.sick_days_ytd ?? 0} unit="d" tone={(detail.sick_days_ytd ?? 0) > 10 ? 'warn' : 'neutral'} hint={detail.sick_days_ytd == null ? 'not tracked yet' : undefined} />
       <LeaveTile label="Days worked" value={detail.days_worked_ytd ?? 0} unit="d" />
@@ -547,6 +592,36 @@ function DayBox({ label, v }: { label: string; v: number }) {
     }}>
       <div style={{ fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--brass)' }}>{label}</div>
       <div style={{ fontWeight: 600, color: v > 0 ? 'var(--ink)' : 'var(--ink-faint)', fontSize: 13 }}>{v}</div>
+    </div>
+  );
+}
+
+// ===== Workforce status (Factorial-derived pills) =============================
+// PBS 2026-05-13 — top of drawer body for Donna employees. Shows the two
+// canonical pills + months worked 2025 caption + timeoff policy line.
+
+function StatusPillsRow({ detail }: { detail: StaffDetail }) {
+  const ws = workStatusPill(detail.work_status);
+  const cp = contractPatternPill(detail.contract_pattern);
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+        {ws && <StatusPill tone={ws.tone}>{ws.label}</StatusPill>}
+        {cp && <StatusPill tone={cp.tone}>{cp.label}</StatusPill>}
+      </div>
+      {detail.months_worked_2025 != null && detail.months_worked_2025 > 0 && (
+        <Field
+          label="Months worked"
+          value={`${detail.months_worked_2025} mo · 2025`}
+          mono
+        />
+      )}
+      {detail.last_clock_date && (
+        <Field label="Last clock-in" value={detail.last_clock_date} mono />
+      )}
+      {detail.timeoff_policy_name && (
+        <Field label="Time-off policy" value={detail.timeoff_policy_name} />
+      )}
     </div>
   );
 }
