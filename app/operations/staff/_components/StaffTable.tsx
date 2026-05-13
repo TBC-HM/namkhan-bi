@@ -185,7 +185,7 @@ export function StaffTable({ rows, onSelect, selectedId }: StaffTableProps) {
               <th style={tableStyles.th}>Department</th>
               <th style={tableStyles.th}>Type</th>
               <th style={{ ...tableStyles.th, ...tableStyles.thRight }}>Monthly</th>
-              <th style={{ ...tableStyles.th, ...tableStyles.thRight }}>Hourly LAK</th>
+              <th style={{ ...tableStyles.th, ...tableStyles.thRight }}>Hourly</th>
               <th style={tableStyles.th}>Hire date</th>
               <th style={tableStyles.th}>Last payslip</th>
               <th style={tableStyles.th}>Flags</th>
