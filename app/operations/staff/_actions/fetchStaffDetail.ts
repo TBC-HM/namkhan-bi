@@ -57,10 +57,21 @@ export interface StaffDetail {
   attendance_hours_30d: number | null;
   attendance_hours_ytd: number | null;
   attendance_events_30d: number | null;
+  // Last raise + extra pay (added 2026-05-13)
+  last_raise_date: string | null;
+  last_raise_delta_lak: number | null;
+  last_raise_old_lak: number | null;
+  last_raise_new_lak: number | null;
+  last_raise_pct: number | null;
+  extra_adjustments_pos_ytd: number | null;
+  extra_adjustments_neg_ytd: number | null;
+  extra_deductions_ytd: number | null;
+  extra_events_count: number | null;
 }
 
 export async function fetchStaffDetail(staffId: string): Promise<StaffDetail | null> {
-  const [{ data, error }, scoreRes] = await Promise.all([
+  const thisYear = new Date().getUTCFullYear();
+  const [{ data, error }, scoreRes, raiseRes, extraRes] = await Promise.all([
     supabase
       .from('v_staff_detail')
       .select('*')
@@ -72,6 +83,19 @@ export async function fetchStaffDetail(staffId: string): Promise<StaffDetail | n
       .select('attendance_score, hours_30d, hours_ytd, events_30d')
       .eq('staff_id', staffId)
       .maybeSingle(),
+    supabase
+      .schema('ops')
+      .from('v_staff_last_raise')
+      .select('raise_date, delta_lak, old_base_lak, new_base_lak, delta_pct')
+      .eq('staff_id', staffId)
+      .maybeSingle(),
+    supabase
+      .schema('ops')
+      .from('v_staff_extra_pay')
+      .select('adjustments_pos_ytd, adjustments_neg_ytd, deductions_ytd, events_count')
+      .eq('staff_id', staffId)
+      .eq('year', thisYear)
+      .maybeSingle(),
   ]);
   if (error) {
     console.error('fetchStaffDetail error', error);
@@ -79,11 +103,22 @@ export async function fetchStaffDetail(staffId: string): Promise<StaffDetail | n
   }
   if (!data) return null;
   const sc = scoreRes.data as any;
+  const rs = raiseRes.data as any;
+  const ex = extraRes.data as any;
   return {
     ...(data as any),
     attendance_score:      sc?.attendance_score ?? null,
     attendance_hours_30d:  sc?.hours_30d ?? null,
     attendance_hours_ytd:  sc?.hours_ytd ?? null,
     attendance_events_30d: sc?.events_30d ?? null,
+    last_raise_date:       rs?.raise_date ?? null,
+    last_raise_delta_lak:  rs?.delta_lak ?? null,
+    last_raise_old_lak:    rs?.old_base_lak ?? null,
+    last_raise_new_lak:    rs?.new_base_lak ?? null,
+    last_raise_pct:        rs?.delta_pct ?? null,
+    extra_adjustments_pos_ytd: ex?.adjustments_pos_ytd ?? null,
+    extra_adjustments_neg_ytd: ex?.adjustments_neg_ytd ?? null,
+    extra_deductions_ytd:      ex?.deductions_ytd ?? null,
+    extra_events_count:        ex?.events_count ?? null,
   } as StaffDetail;
 }

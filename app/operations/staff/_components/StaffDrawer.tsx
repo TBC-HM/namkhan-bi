@@ -129,7 +129,36 @@ export function StaffDrawer({ staffId, onClose }: Props) {
                 <Field label="Last payroll" value={detail.last_payroll_period ?? '—'} mono />
                 <Field label="Last paid USD" value={detail.last_payroll_total_usd != null ? `$${Math.round(detail.last_payroll_total_usd).toLocaleString()}` : '—'} mono />
                 <Field label="Days worked"   value={detail.last_payroll_days_worked != null ? String(detail.last_payroll_days_worked) : '—'} />
-                <Field label="Last raise"    value="—" hint="salary-history not tracked yet" />
+                {detail.last_raise_date ? (
+                  <Field
+                    label="Last raise"
+                    value={
+                      detail.last_raise_pct != null && detail.last_raise_delta_lak != null
+                        ? `${detail.last_raise_pct >= 0 ? '+' : ''}${detail.last_raise_pct}% · ${fmtNative(Math.abs(detail.last_raise_delta_lak), 'LAK')}`
+                        : '—'
+                    }
+                    mono
+                    hint={`${detail.last_raise_date.slice(0, 7)} · ${fmtNative(detail.last_raise_old_lak ?? 0, 'LAK')} → ${fmtNative(detail.last_raise_new_lak ?? 0, 'LAK')}`}
+                  />
+                ) : (
+                  <Field label="Last raise" value="—" hint="no salary changes recorded" />
+                )}
+                {(detail.extra_adjustments_pos_ytd != null && detail.extra_adjustments_pos_ytd > 0) && (
+                  <Field
+                    label="Extra pay · YTD"
+                    value={`+${fmtNative(detail.extra_adjustments_pos_ytd, 'LAK')}`}
+                    mono
+                    hint={`${detail.extra_events_count ?? 0} event${(detail.extra_events_count ?? 0) === 1 ? '' : 's'} (bonus/hospital/insurance — lump-summed)`}
+                  />
+                )}
+                {(detail.extra_deductions_ytd != null && detail.extra_deductions_ytd > 0) && (
+                  <Field
+                    label="Deductions · YTD"
+                    value={`−${fmtNative(detail.extra_deductions_ytd, 'LAK')}`}
+                    mono
+                    hint="advances · fines · other"
+                  />
+                )}
               </Section>
 
               {/* 4b. PAYSLIP BREAKDOWN — from payroll_12m[0] latest month */}
