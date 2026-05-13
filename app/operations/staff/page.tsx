@@ -17,7 +17,7 @@ import { fmtMoney, FX_LAK_PER_USD } from '@/lib/format';
 import { AnomalyCard } from './_components/AnomalyCard';
 import { StaffShell } from './_components/StaffShell';
 import { ArchivedStaffTable, type ArchivedRow } from './_components/ArchivedStaffTable';
-import DeptBreakdown, { type DeptRow } from './_components/DeptBreakdown';
+import DeptBreakdown, { type DeptRow, type DeptEmployee } from './_components/DeptBreakdown';
 import StaffMiniCharts, { type StaffTrendPoint } from './_components/StaffMiniCharts';
 import MonthPicker, { fmtPeriodLabel } from './_components/MonthPicker';
 import UploadPayslipsButton from './_components/UploadPayslipsButton';
@@ -150,6 +150,26 @@ export default async function StaffPage({ searchParams }: Props) {
   const grouped: Record<string, Anomaly[]> = {};
   for (const a of safeAnoms) (grouped[a.issue] ||= []).push(a);
 
+  // Active employees grouped by dept_code — used to expand dept rows
+  const employeesByDept: Record<string, DeptEmployee[]> = {};
+  for (const r of safeRows) {
+    const k = r.dept_code;
+    (employeesByDept[k] ||= []).push({
+      staff_id: r.staff_id,
+      emp_id: r.emp_id,
+      full_name: r.full_name,
+      position_title: r.position_title,
+      dept_code: r.dept_code,
+      employment_type: r.employment_type,
+      monthly_salary: Number(r.monthly_salary || 0),
+      hire_date: r.hire_date,
+    });
+  }
+  // Sort each dept's employee list by emp_id
+  for (const k of Object.keys(employeesByDept)) {
+    employeesByDept[k].sort((a, b) => a.emp_id.localeCompare(b.emp_id));
+  }
+
   // KPI numbers for selected month
   const selPoint = byMonth.get(selectedMonth);
   const selHc = selPoint?.headcount ?? 0;
@@ -250,7 +270,11 @@ export default async function StaffPage({ searchParams }: Props) {
             No payroll rows for {fmtPeriodLabel(selectedMonth)}.
           </div>
         ) : (
-          <DeptBreakdown rows={deptRows} fx={FX_LAK_PER_USD} />
+          <DeptBreakdown
+            rows={deptRows}
+            fx={FX_LAK_PER_USD}
+            employeesByDept={employeesByDept}
+          />
         )}
       </section>
 
