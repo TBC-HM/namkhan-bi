@@ -274,9 +274,19 @@ export default async function PulsePage({ searchParams }: Props) {
 
   const ctx = (kind: 'panel' | 'kpi' | 'brief' | 'table', title: string, signal?: string) => ({ kind, title, signal, dept: 'revenue' as const });
 
+  const pulseEyebrow = [
+    'Revenue · Pulse',
+    period.label,
+    period.rangeLabel,
+    period.cmpLabel,
+    period.segLabel,
+    `${alerts.length} alert${alerts.length === 1 ? '' : 's'}`,
+    `${decisions.length} decision${decisions.length === 1 ? '' : 's'}`,
+  ].filter(Boolean).join(' · ');
+
   return (
     <Page
-      eyebrow="Revenue · Pulse"
+      eyebrow={pulseEyebrow}
       title={<>What's <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>open</em>, right now.</>}
       subPages={REVENUE_SUBPAGES}
     >

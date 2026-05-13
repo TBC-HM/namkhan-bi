@@ -19,8 +19,9 @@ import {
 } from '../_data';
 import { priorPeriod, type PeriodWindow } from '@/lib/supabase-gl';
 import Page from '@/components/page/Page';
-import TimeframeSelector from '@/components/page/TimeframeSelector';
-import CompareSelector from '@/components/page/CompareSelector';
+import Panel from '@/components/page/Panel';
+import PeriodSelectorRow from '@/components/page/PeriodSelectorRow';
+import KpiBox from '@/components/kpi/KpiBox';
 import { FINANCE_SUBPAGES } from '../_subpages';
 import TwelveMonthPanel from './TwelveMonthPanel';
 import MonthDropdown from './MonthDropdown';
@@ -214,17 +215,37 @@ export default async function PnLPage({ searchParams }: Props) {
                                             : compareMode === 'ly'      ? lyLines
                                             : budgetCur;
 
-  // Driver lookups: budget vs actuals from plan.drivers
+  // Driver lookups: budget vs actuals from plan.drivers.
+  // PBS 2026-05-13 audit fix: v_drivers_stack returns one row per room-type
+  // for room_nights / occupancy_pct (10 rows in 2026-04), not a house total.
+  // .find() returned the first row — wrong number. Aggregate by driver_key:
+  //   - room_nights → SUM (additive)
+  //   - occupancy_pct → AVG (mean across room types; weighted average needs
+  //                          capacity per type which the view doesn't expose)
+  //   - adr_usd → AVG (single house row in practice, but AVG is safe)
   function pickDriver(scenario: string, key: string): number | null {
-    const r = drivers.find(d => d.scenario_name === scenario && d.driver_key === key);
-    return r ? Number(r.value_numeric) : null;
+    const rows = drivers.filter(d => d.scenario_name === scenario && d.driver_key === key);
+    if (rows.length === 0) return null;
+    if (key === 'room_nights') {
+      return rows.reduce((s, r) => s + Number(r.value_numeric || 0), 0);
+    }
+    // occupancy_pct + adr_usd → arithmetic mean.
+    const sum = rows.reduce((s, r) => s + Number(r.value_numeric || 0), 0);
+    return sum / rows.length;
   }
   const budgetRoomNights = pickDriver('Budget 2026 v1', 'room_nights');
   const budgetOccPct     = pickDriver('Budget 2026 v1', 'occupancy_pct');
   const budgetAdr        = pickDriver('Budget 2026 v1', 'adr_usd');
-  const ytdRoomNights    = pickDriver('Actuals 2026 YTD', 'room_nights');
-  const ytdOccPct        = pickDriver('Actuals 2026 YTD', 'occupancy_pct');
-  const ytdAdr           = pickDriver('Actuals 2026 YTD', 'adr_usd');
+  // PBS 2026-05-13: 'Actuals 2026 YTD' scenario does not yet exist in
+  // plan.drivers. Fall back to mv_kpi_daily aggregates (already fetched
+  // as `agg`) so the Actual YTD KPIs are populated from real data.
+  const aggAny: any = agg as any;
+  const ytdRoomNights    = pickDriver('Actuals 2026 YTD', 'room_nights')
+                           ?? (aggAny && aggAny.rooms_sold != null ? Number(aggAny.rooms_sold) : null);
+  const ytdOccPct        = pickDriver('Actuals 2026 YTD', 'occupancy_pct')
+                           ?? (aggAny && aggAny.occupancy_pct != null ? Number(aggAny.occupancy_pct) : null);
+  const ytdAdr           = pickDriver('Actuals 2026 YTD', 'adr_usd')
+                           ?? (aggAny && aggAny.adr != null ? Number(aggAny.adr) : null);
   // Materiality drives tactical alert breach thresholds (replaces hardcoded constants)
   const matPct  = materiality?.pct ?? 5;
   const matAbs  = materiality?.abs_usd ?? 1000;
@@ -423,292 +444,268 @@ export default async function PnLPage({ searchParams }: Props) {
   const fbBudget = fbRevWindow * 0.30; // proxy "budget" = 30% of revenue
   const fbOverPct = fbBudget > 0 ? ((fbLabour / fbBudget) - 1) * 100 : null;
 
+  const pnlEyebrow = [
+    'Finance · P&L',
+    `${monthLabel} (MTD)`,
+    period.rangeLabel,
+    freshness ? `data ${freshness.stale_count}/${freshness.matview_count} stale` : null,
+    dqSummary ? `DQ ${dqSummary.open_total} open` : null,
+    materiality ? `mat ${materiality.pct}% / $${materiality.abs_usd}` : null,
+  ].filter(Boolean).join(' · ');
+
+  const ctx = (kind: 'panel' | 'kpi' | 'brief' | 'table', title: string, signal?: string) => ({ kind, title, signal, dept: 'finance' as const });
+  void ctx; // surface for future ArtifactActions wiring
+  void fbOverPct; void priorLabel; void latestMonth; // computed but currently unused after refactor
+
   return (
     <Page
-      eyebrow="Finance · P&L"
+      eyebrow={pnlEyebrow}
       title={<>Profit &amp; loss · where the <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>margin</em> lives.</>}
       subPages={FINANCE_SUBPAGES}
-      topRight={
-        <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <TimeframeSelector basePath="/finance/pnl" active={period.win} preserve={{ cmp: period.cmp, seg: period.seg }} />
-          <CompareSelector  basePath="/finance/pnl" active={period.cmp} preserve={{ win: period.win, seg: period.seg }} />
-        </div>
-      }
     >
+      {/* ─── 1. KPI TILES ─────────────────────────────────────────────── */}
 
-      {/* ============== BLOCK 2 — Period + write-policy banners ============== */}
-      <div className="period-banner">
-        <span>
-          Active period: <b>{period.rangeLabel}</b> · {monthLabel} (MTD)
-        </span>
-        <span className="meta-token">
-          win={period.win} · cmp={period.cmp} · ccy=usd · seg={period.seg}
-        </span>
-        {freshness && (
-          <span className="meta-token" title={`${freshness.matview_count} matviews tracked · ${freshness.stale_count} stale · most-fresh ${Math.round(freshness.freshest_minutes)}m ago`}>
-            data: {freshness.stale_count}/{freshness.matview_count} stale · last refresh {freshness.latest_refresh_at ? new Date(freshness.latest_refresh_at).toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' }) : '—'}
-          </span>
-        )}
-        {materiality && (
-          <span className="meta-token" title="gl.materiality_thresholds — drives tactical alert thresholds + variance highlighting">
-            materiality: {materiality.pct}% AND ${materiality.abs_usd}
-          </span>
-        )}
-        {dqSummary && (
-          <span className="meta-token" style={{ color: dqSummary.open_critical > 0 ? '#b34939' : (dqSummary.open_warning > 0 ? '#a17a4f' : 'inherit') }} title={`dq.violations: ${dqSummary.open_critical} critical · ${dqSummary.open_warning} warning · ${dqSummary.open_info} info`}>
-            DQ: {dqSummary.open_total} open ({dqSummary.open_critical} crit · {dqSummary.open_warning} warn)
-          </span>
-        )}
-      </div>
-
-      {/* ============== BLOCK 2.5 — Driver strip (room nights / occ% / ADR) ============== */}
+      {/* Drivers row — volume / mix / rate */}
       {(budgetRoomNights != null || ytdRoomNights != null) && (
-        <div className="kpi-section">
-          <div className="kpi-row">
-            <div className="kpi">
-              <div className="scope">Volume</div>
-              <div className="val">{budgetRoomNights != null ? budgetRoomNights.toFixed(0) : 'xx'}</div>
-              <div className="deltas"><span className="neu">plan.drivers · room_nights</span></div>
-              <div className="lbl">Budget room nights ({monthLabel})</div>
-            </div>
-            <div className="kpi">
-              <div className="scope">Volume</div>
-              <div className="val">{ytdRoomNights != null ? ytdRoomNights.toFixed(0) : 'xx'}</div>
-              <div className="deltas">
-                <span className={(ytdRoomNights != null && budgetRoomNights != null && ytdRoomNights >= budgetRoomNights) ? 'pos' : 'neg'}>
-                  {(ytdRoomNights != null && budgetRoomNights != null) ? `${(((ytdRoomNights - budgetRoomNights) / budgetRoomNights) * 100).toFixed(1)}% vs budget` : '—'}
-                </span>
-              </div>
-              <div className="lbl">Actual YTD room nights</div>
-            </div>
-            <div className="kpi">
-              <div className="scope">Mix</div>
-              <div className="val">{budgetOccPct != null ? `${budgetOccPct.toFixed(1)}%` : 'xx'}</div>
-              <div className="deltas"><span className="neu">budget · occupancy_pct</span></div>
-              <div className="lbl">Budget occupancy</div>
-            </div>
-            <div className="kpi">
-              <div className="scope">Mix</div>
-              <div className="val">{ytdOccPct != null ? `${ytdOccPct.toFixed(1)}%` : 'xx'}</div>
-              <div className="deltas">
-                <span className={(ytdOccPct != null && budgetOccPct != null && ytdOccPct >= budgetOccPct) ? 'pos' : 'neg'}>
-                  {(ytdOccPct != null && budgetOccPct != null) ? `${(ytdOccPct - budgetOccPct).toFixed(1)} pp vs bgt` : '—'}
-                </span>
-              </div>
-              <div className="lbl">Actual YTD occupancy</div>
-            </div>
-            <div className="kpi">
-              <div className="scope">Rate</div>
-              <div className="val">{budgetAdr != null ? `$${budgetAdr.toFixed(0)}` : 'xx'}</div>
-              <div className="deltas"><span className="neu">budget · adr_usd</span></div>
-              <div className="lbl">Budget ADR</div>
-            </div>
-            <div className="kpi">
-              <div className="scope">Rate</div>
-              <div className="val">{ytdAdr != null ? `$${ytdAdr.toFixed(0)}` : 'xx'}</div>
-              <div className="deltas">
-                <span className={(ytdAdr != null && budgetAdr != null && ytdAdr >= budgetAdr) ? 'pos' : 'neg'}>
-                  {(ytdAdr != null && budgetAdr != null) ? `${(((ytdAdr - budgetAdr) / budgetAdr) * 100).toFixed(1)}% vs bgt` : '—'}
-                </span>
-              </div>
-              <div className="lbl">Actual YTD ADR</div>
-            </div>
-          </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+          <KpiBox value={budgetRoomNights} unit="count" dp={0} label={`Budget RN · ${monthLabel}`} tooltip="plan.drivers · scenario=Budget 2026 v1 · room_nights" />
+          <KpiBox value={ytdRoomNights} unit="count" dp={0} label="Actual YTD RN"
+            compare={(ytdRoomNights != null && budgetRoomNights != null && budgetRoomNights > 0)
+              ? { value: ((ytdRoomNights - budgetRoomNights) / budgetRoomNights) * 100, unit: 'pct', period: 'vs Bgt' }
+              : undefined}
+            tooltip="plan.drivers · scenario=Actuals 2026 YTD · room_nights" />
+          <KpiBox value={budgetOccPct} unit="pct" label="Budget occupancy" tooltip="plan.drivers · Budget 2026 v1 · occupancy_pct" />
+          <KpiBox value={ytdOccPct} unit="pct" label="Actual YTD occupancy"
+            compare={(ytdOccPct != null && budgetOccPct != null)
+              ? { value: ytdOccPct - budgetOccPct, unit: 'pp', period: 'vs Bgt' }
+              : undefined}
+            tooltip="plan.drivers · Actuals 2026 YTD · occupancy_pct" />
+          <KpiBox value={budgetAdr} unit="usd" dp={0} label="Budget ADR" tooltip="plan.drivers · Budget 2026 v1 · adr_usd" />
+          <KpiBox value={ytdAdr} unit="usd" dp={0} label="Actual YTD ADR"
+            compare={(ytdAdr != null && budgetAdr != null && budgetAdr > 0)
+              ? { value: ((ytdAdr - budgetAdr) / budgetAdr) * 100, unit: 'pct', period: 'vs Bgt' }
+              : undefined}
+            tooltip="plan.drivers · Actuals 2026 YTD · adr_usd" />
         </div>
       )}
 
-      <div className="warn-banner">
-        ⚠ <b>Cloudbeds write policy — pilot phase.</b>{' '}
-        Agent-proposed reclassifications, JE proposals, and RFQs always require explicit human approval.
-        Variance Composer never auto-publishes commentary. Controller Agent never posts to GL. Procurement
-        Agent has no PO authority. After validation against 90 days of decisions, only Tier-1 actions
-        (parity resync, &lt;$2k impact, ≥85% confidence) move to auto. Configure in <code>⚙ Agent Guardrails</code>.
+      <div style={{ height: 10 }} />
+
+      {/* Main KPI grid — P&L vitals */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+        <KpiBox value={totalRev} unit="usd" dp={0} label={`Total revenue · ${monthLabel}`}
+          compare={priorTotalRev > 0 ? { value: revVsPriorPct, unit: 'pct', period: 'vs prior mo' } : undefined}
+          tooltip={`Sum of gl.pl_sections.amount_usd where section='income' for ${cur}.`} />
+        <KpiBox value={gop} unit="usd" dp={0} label="GOP $"
+          state={gop == null ? 'data-needed' : 'live'}
+          needs={gop == null ? 'load gl_entries' : undefined}
+          tooltip="gl.v_usali_house_summary.gop — total revenue minus dept expenses minus undistributed operating expenses." />
+        <KpiBox value={gopMargin} unit="pct" label="GOP margin"
+          state={gopMargin == null ? 'data-needed' : 'live'}
+          tooltip="gop ÷ total_revenue × 100." />
+        <KpiBox value={ebitda} unit="usd" dp={0} label="EBITDA"
+          state={ebitda == null ? 'data-needed' : 'live'}
+          tooltip="gop − depreciation − interest − income_tax." />
+        <KpiBox value={revVsLyPct} unit="pct" label="Revenue vs LY"
+          state={revVsLyPct == null ? 'data-needed' : 'live'}
+          needs={revVsLyPct == null ? 'no LY row' : undefined}
+          tooltip="Current month revenue vs same month last year. Source: gl.pnl_snapshot." />
+        <KpiBox value={null} unit="usd" label="Cash on hand"
+          state="data-needed" needs="bank feed not connected"
+          tooltip="Gap 4 — bank statement integration not yet wired." />
+        <KpiBox value={labourPct} unit="pct" label="Labour cost %"
+          state={labourPct == null ? 'data-needed' : 'live'}
+          tooltip="Total payroll ÷ total revenue (closed-month scope). Target ≤ 35%." />
+        <KpiBox value={fbLabourPct} unit="pct" label="F&B labour %"
+          state={fbLabourPct == null ? 'data-needed' : 'live'}
+          tooltip="F&B payroll ÷ F&B revenue. Industry norm 28–32%." />
+        <KpiBox value={channelsCommissionPct ?? (agg && agg.commission_pct != null ? Number(agg.commission_pct) : null)} unit="pct" label="Distribution cost %"
+          state={(channelsCommissionPct == null && (!agg || agg.commission_pct == null)) ? 'data-needed' : 'live'}
+          tooltip="OTA commissions (gl.account_id 624*) ÷ total revenue." />
+        <KpiBox value={agTotalWindow} unit="usd" dp={0} label="A&G $"
+          state={agTotalWindow === 0 ? 'data-needed' : 'live'}
+          tooltip="mv_usali_pl_monthly · A&G subcategory, closed-month scope." />
+        <KpiBox value={dqUnmapped} unit="count" label="USALI mapping gaps" tooltip="DQ-04-UNMAPPED open violations. Fix at /finance/mapping." />
+        {payrollMonth && (
+          <KpiBox value={Number(payrollMonth.staff_count)} unit="count" label="Staff on roll"
+            tooltip={`Payroll ${monthLabel}: $${(Number(payrollMonth.gross_payroll_usd) / 1000).toFixed(1)}k gross · ${payrollMonth.total_days_worked} days worked.`} />
+        )}
       </div>
 
-      {/* ============== BLOCK 4 — KPI grid (primary 6 + secondary 5) ============== */}
-      <div className="kpi-section">
-        {/* Primary 6 */}
-        <div className="kpi-row">
-          <div className="kpi">
-            <div className="scope">Property</div>
-            <div className="val">{fmtK(totalRev, 0)}</div>
-            <div className="deltas">
-              <span className={revVsPriorPct >= 0 ? 'pos' : 'neg'}>
-                {revVsPriorPct >= 0 ? '▲' : '▼'} {fmtPctV(revVsPriorPct)} vs prior mo
-              </span>
-            </div>
-            <div className="lbl">Total Revenue</div>
+      {/* ─── 2. SELECTORS + DROPDOWNS ────────────────────────────────── */}
+      <PeriodSelectorRow
+        basePath="/finance/pnl"
+        win={period.win}
+        cmp={period.cmp}
+        preserve={{ seg: period.seg, month: cur, compare: compareMode, varBase: varianceBase }}
+        rightSlot={
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <CompareDropdown value={compareMode} />
+            <MonthDropdown value={cur} options={monthOptions} />
           </div>
-          <div className={'kpi ' + (gop == null ? 'dim' : '')}>
-            <div className="scope">P&amp;L</div>
-            <div className="val">{fmtK(gop)}</div>
-            <div className="deltas"><span className="neu">{gop == null ? 'awaiting gl_entries load' : 'gl.v_usali_house_summary.gop'}</span></div>
-            <div className="lbl">GOP $</div>
-            {gop == null && <span className="needs" title="Run qb-deploy/gl_entries_load.sql">load gl_entries</span>}
-          </div>
-          <div className={'kpi ' + (gopMargin == null ? 'dim' : '')}>
-            <div className="scope">P&amp;L</div>
-            <div className="val">{fmtPctV(gopMargin)}</div>
-            <div className="deltas"><span className="neu">{gopMargin == null ? 'awaiting GOP$' : 'gop / total_revenue'}</span></div>
-            <div className="lbl">GOP margin</div>
-          </div>
-          <div className={'kpi ' + (revVsLyPct == null ? 'dim' : '')}>
-            <div className="scope">Flow</div>
-            <div className="val">{revVsLyPct == null ? 'xx' : fmtPctV(revVsLyPct)}</div>
-            <div className="deltas"><span className="neu">{revVsLyPct == null ? 'no LY data this month' : 'rev vs same month LY · pnl_snapshot'}</span></div>
-            <div className="lbl">Revenue vs LY</div>
-            {revVsLyPct == null && <span className="needs" title="gl.pnl_snapshot has no row for this period">no LY row</span>}
-          </div>
-          <div className={'kpi ' + (ebitda == null ? 'dim' : '')}>
-            <div className="scope">P&amp;L</div>
-            <div className="val">{fmtK(ebitda)}</div>
-            <div className="deltas"><span className="neu">{ebitda == null ? 'awaiting GOP$' : 'gop − depr − interest − tax'}</span></div>
-            <div className="lbl">EBITDA</div>
-          </div>
-          <div className="kpi dim">
-            <div className="scope">Cash</div>
-            <div className="val">xx</div>
-            <div className="deltas"><span className="neu">bank feed not connected</span></div>
-            <div className="lbl">Cash on hand</div>
-            <span className="needs" title="Gap 4 — gl.cash_forecast_weekly empty">not wired</span>
-          </div>
-        </div>
+        }
+      />
 
-        {/* Secondary 5 */}
-        <div className="kpi-row secondary">
-          <div className={'kpi secondary ' + (labourPct == null ? 'dim' : '')}>
-            <div className="scope">Ops</div>
-            <div className="val">{fmtPctV(labourPct)}</div>
-            <div className="deltas"><span className="neu">{labourPct == null ? 'awaiting gl_entries' : 'payroll ÷ revenue (window)'}</span></div>
-            <div className="lbl">Labour cost %</div>
-          </div>
-          <div className={'kpi secondary ' + (fbLabourPct == null ? 'dim' : '')}>
-            <div className="scope">F&amp;B</div>
-            <div className="val">{fmtPctV(fbLabourPct)}</div>
-            <div className="deltas"><span className="neu">{fbLabourPct == null ? 'awaiting gl_entries' : 'F&B payroll ÷ F&B revenue'}</span></div>
-            <div className="lbl">F&amp;B labour %</div>
-          </div>
-          <div className={'kpi secondary ' + (channelsCommissionPct == null && (!agg || agg.commission_pct == null) ? 'dim' : '')}>
-            <div className="scope">Channels</div>
-            <div className="val">{channelsCommissionPct != null ? fmtPctV(channelsCommissionPct) : (agg && agg.commission_pct != null ? fmtPctV(agg.commission_pct as number) : '—')}</div>
-            <div className="deltas"><span className="neu">{channelsCommissionPct != null ? 'gl.account_id LIKE 624%' : 'channels.commission_pct (legacy)'}</span></div>
-            <div className="lbl">Distribution cost %</div>
-          </div>
-          <div className={'kpi secondary ' + (agTotalWindow === 0 ? 'dim' : '')}>
-            <div className="scope">P&amp;L</div>
-            <div className="val">{fmtK(agTotalWindow)}</div>
-            <div className="deltas"><span className="neu">{agTotalWindow === 0 ? 'awaiting gl_entries' : 'mv_usali_pl_monthly · A&G'}</span></div>
-            <div className="lbl">A&amp;G $</div>
-          </div>
-          <div className="kpi secondary">
-            <div className="scope">Audit</div>
-            <div className="val">{dqUnmapped}</div>
-            <div className="deltas"><span className="neu">DQ-04-UNMAPPED open</span></div>
-            <div className="lbl">USALI mapping gaps</div>
-          </div>
-          {payrollMonth && (
-            <div className="kpi secondary">
-              <div className="scope">HR</div>
-              <div className="val">{payrollMonth.staff_count}</div>
-              <div className="deltas">
-                <span className="neu">${(Number(payrollMonth.gross_payroll_usd) / 1000).toFixed(1)}k gross · {payrollMonth.total_days_worked} days</span>
-              </div>
-              <div className="lbl">Payroll · staff on roll</div>
-            </div>
-          )}
-        </div>
-      </div>
+      {/* ─── 3. GRAPHS ──────────────────────────────────────────────── */}
 
-      {/* ============== BLOCK 5 — Agent strip ============== */}
-      <div className="agent-strip">
-        <span className="heading"><span className="dot" /> Finance agents <span className="new-badge" title="agents.runs not connected to runtime yet">configured · idle</span></span>
-        <span className="chip" title="Trigger: daily 06:00 ICT. Output writes to governance.decision_queue."><span className="dot idle" />P&amp;L Detector</span>
-        <span className="chip" title="Trigger: on-demand. Output writes to gl.commentary_drafts."><span className="dot idle" />Variance Composer</span>
-        <span className="chip" title="Trigger: weekly Mon 07:00. Output writes JE proposals to governance.decision_queue."><span className="dot idle" />Controller Agent</span>
-        <span className="chip" title="Trigger: weekly Wed 09:00. Output writes RFQ drafts to governance.decision_queue."><span className="dot idle" />Procurement Agent</span>
-        <button type="button" className="fire" disabled>⚡ Fire all</button>
-      </div>
-
-      {/* ============== BLOCK 6 — Decision queue ============== */}
-      <div className="section-head">
-        <h3>Decisions <em>queued</em> for you</h3>
-        <span className="meta">{decisions.length} pending · ranked by $ impact · source <code>governance.decision_queue</code></span>
-      </div>
-      {decisions.length === 0 ? (
-        <div className="panel" style={{ padding: 16, textAlign: 'center', color: 'var(--ink-mute)' }}>
-          ✓ No pending decisions. Items appear here when an agent (P&amp;L Detector / Variance Composer / Controller / Procurement) writes to <code>governance.decision_queue</code>.
-        </div>
-      ) : (
-        <div className="queue">
-          {decisions.map((d, i) => {
-            const impact = d.impact_usd_estimate != null ? `+$${Math.round(Number(d.impact_usd_estimate)).toLocaleString()}` : '—';
-            const title = String(d.title || (d as any).description || `Decision ${(d.id || '').toString().slice(0, 8)}`);
-            const meta = `governance.decision_queue · ${(d as any).agent_code || ''} · status=${d.status || ''}`;
+      <Panel title={`Top variances · ${VAR_LABEL[varianceBase]}`} eyebrow="v_usali_dept_summary">
+        <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+          {(['mom', 'budget', 'forecast', 'ly'] as const).map((b) => {
+            const active = varianceBase === b;
+            const params = new URLSearchParams({
+              ...(period.win !== '30d' ? { win: period.win } : {}),
+              ...(period.cmp !== 'none' ? { cmp: period.cmp } : {}),
+              ...(monthValid ? { month: cur } : {}),
+              ...(compareMode !== 'budget' ? { compare: compareMode } : {}),
+              ...(b !== 'mom' ? { varBase: b } : {}),
+            });
             return (
-              <div className="qrow" key={i}>
-                <div className="impact pos">{impact}</div>
-                <div>
-                  <div className="title">{title}</div>
-                  <div className="meta-line">{meta}</div>
-                </div>
-                <div className="actions">
-                  <button type="button" className="btn primary" disabled>Approve</button>
-                  <button type="button" className="btn" disabled>Send back</button>
-                  <button type="button" className="btn" disabled>Snooze</button>
-                  <button type="button" className="btn" disabled>Open</button>
-                </div>
+              <a key={b} href={`/finance/pnl${params.toString() ? '?' + params.toString() : ''}`} style={{
+                padding: '4px 12px', borderRadius: 4, border: '1px solid var(--paper-deep)',
+                background: active ? 'var(--moss)' : 'var(--paper-warm)',
+                color: active ? 'var(--paper-warm)' : 'var(--ink-soft)',
+                fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
+                letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase',
+                fontWeight: 600, textDecoration: 'none',
+              }}>{b}</a>
+            );
+          })}
+        </div>
+        <div className="waterfall">
+          {variances.length === 0 ? (
+            <div className="meta" style={{ padding: 8 }}>No dept rows for {cur} or comparison base.</div>
+          ) : variances.map(v => {
+            const pct = (Math.abs(v.delta) / maxAbsVar) * 100;
+            const cls = v.delta >= 0 ? 'pos' : 'neg';
+            const sign = v.delta >= 0 ? '+' : '−';
+            return (
+              <div className="wfr" key={v.dept}>
+                <div className="lbl">{v.dept} dept profit</div>
+                <div><div className={`bar ${cls}`} style={{ width: `${pct.toFixed(0)}%` }} /></div>
+                <div className={`num ${cls}`}>{sign}${(Math.abs(v.delta)/1000).toFixed(1)}k</div>
               </div>
             );
           })}
         </div>
-      )}
-      <div style={{ marginTop: 6, fontSize: "var(--t-sm)", color: 'var(--ink-mute, #8a8170)' }}>
-        Action handlers (Approve/Snooze) require server actions wiring — defer to Phase 3.
-      </div>
+      </Panel>
 
-      {/* ============== BLOCK 7 — Tactical alerts ============== */}
-      <div className="section-head" style={{ marginTop: 24 }}>
-        <h3>Tactical <em>alerts</em></h3>
-        <span className="meta">
-          Computed from <code>v_usali_dept_summary</code> + <code>v_usali_house_summary</code> · period={cur}.
-          Thresholds: F&amp;B cost &gt; 32% · Labour &gt; 35% · A&amp;G or Utilities MoM &gt; ±{(matPct * 3).toFixed(0)}% (3× materiality from <code>gl.materiality_thresholds</code>).
-          {alerts.length === 0 ? ' All within bounds.' : ` ${alerts.length} breach${alerts.length > 1 ? 'es' : ''}.`}
-        </span>
-      </div>
-      {alerts.length === 0 ? (
-        <div className="panel" style={{ padding: 16, textAlign: 'center', color: 'var(--ink-mute)' }}>
-          ✓ No tactical breaches this period — all monitored thresholds clean.
+      <div style={{ height: 14 }} />
+
+      <Panel title="13-week cash forecast" eyebrow="gl.v_cash_forecast_13w">
+        <div style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)', marginBottom: 8 }}>
+          OTB reservations + AR aging − fixed costs (payroll/utilities/A&G) − supplier estimate. Override starting cash via <code>?cash0=</code>.
         </div>
-      ) : (
-        <div className="alerts">
-          {alerts.map((a, i) => (
-            <div key={i} className={`alert ${a.sev}`}>
-              <h4>{a.title} <span className="imp">{a.impact}</span></h4>
-              <div className="dims">{a.dims}</div>
-              <div className="reason">{a.reason}</div>
-              <div className="tactic"><b>Composer:</b> {a.tactic}</div>
-              <div className="handoffs">
-                <button type="button" className="btn" disabled>{a.handoff}</button>
-              </div>
-            </div>
+        <CashForecastPanel rows={cashForecast} startingCash={cashStart} />
+      </Panel>
+
+      <div style={{ height: 14 }} />
+
+      <Panel title="Margin leak heatmap" eyebrow={`$k dept profit · ${heatmapPeriodsRev[0]} → ${cur}`}>
+        <div className="heatmap">
+          {heatmapDepts.map(dept => (
+            <React.Fragment key={`row-${dept}`}>
+              <div className="hm-lbl">{dept}</div>
+              {heatmapPeriodsRev.map(p => {
+                const c = heatmapCell(dept, p);
+                const display = c.val == null ? '—' : `${c.val < 0 ? '-' : ''}${(Math.abs(c.val)/1000).toFixed(1)}`;
+                return (
+                  <div
+                    key={`${dept}-${p}`}
+                    className="hm"
+                    title={`${dept} · ${p} · ${dept === 'A&G' ? 'A&G overhead' : 'departmental_profit'}: ${c.val == null ? 'no data' : '$' + c.val.toLocaleString()}`}
+                    style={{ background: c.bg, color: c.color }}
+                  >
+                    {display}
+                  </div>
+                );
+              })}
+            </React.Fragment>
           ))}
         </div>
-      )}
+      </Panel>
 
-      {/* ============== BLOCK 8 — Core panels ============== */}
-      <div className="panels" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 12, marginTop: 24 }}>
-        {/* LEFT — USALI grid */}
-        <div className="panel">
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginBottom: 4, flexWrap: 'wrap' }}>
-            <h3 style={{ margin: 0 }}>USALI department <em>schedule</em> · {monthLabel} (MTD) <span style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-mute)', fontStyle: 'normal', marginLeft: 6 }}>vs {compareLabel}</span></h3>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-              <CompareDropdown value={compareMode} />
-              <MonthDropdown value={cur} options={monthOptions} />
-            </div>
-          </div>
+      <div style={{ height: 14 }} />
+
+      <Panel title={`Variance commentary · ${cur}`} eyebrow={latestCommentary ? 'LLM draft' : 'auto-draft'}>
+        <CommentaryPanel
+          period={cur}
+          draftBody={latestCommentary?.body ?? null}
+          draftCreatedAt={latestCommentary?.created_at ?? null}
+          hasApiKey={Boolean(process.env.ANTHROPIC_API_KEY)}
+          payload={{
+            monthLabel,
+            totalRev,
+            priorTotalRev,
+            revVsPriorPct,
+            gop,
+            gopMomDelta,
+            gopMomPct,
+            revVsLyPct,
+            agTotal: topAg,
+            agPrior,
+            fbLabour,
+            fbRev: fbRevWindow,
+            fbLabourPct,
+            fbCogsPct: fbCur && Number(fbCur.revenue) > 0 ? (Number(fbCur.cost_of_sales) / Number(fbCur.revenue)) * 100 : null,
+            utilCur,
+            utilPrior,
+            occPct: ytdOccPct,
+            adr: ytdAdr,
+            topVariances: variances.slice(0, 4).map(v => ({ dept: v.dept, delta: v.delta })),
+          }}
+          fallback={
+            <>
+              <h4>Headline</h4>
+              <p>
+                {monthLabel} closes with revenue {totalRev > priorTotalRev ? 'up' : 'down'}{' '}
+                <strong>{Math.abs(revVsPriorPct).toFixed(1)}%</strong> vs prior (${(totalRev/1000).toFixed(1)}k vs ${(priorTotalRev/1000).toFixed(1)}k).{' '}
+                {gop != null ? <>GOP $${(gop/1000).toFixed(1)}k {gopMomDelta != null && gopMomPct != null && (
+                  <>({gopMomDelta >= 0 ? '+' : '−'}${Math.abs(gopMomDelta/1000).toFixed(1)}k MoM, {gopMomPct >= 0 ? '+' : ''}{gopMomPct.toFixed(0)}%)</>
+                )}.</> : <>GOP awaiting expense load.</>}
+                {' '}{revVsLyPct != null ? <>vs LY: <strong>{revVsLyPct >= 0 ? '+' : ''}{revVsLyPct.toFixed(1)}%</strong>.</> : <>No LY comparable yet.</>}
+              </p>
+              {topAg > 0 && (
+                <>
+                  <h4>A&amp;G</h4>
+                  <p>
+                    A&amp;G ran <strong>${(topAg/1000).toFixed(1)}k</strong> this month (
+                    {agPrior > 0 ? <>{topAg > agPrior ? 'up' : 'down'} {Math.abs(((topAg - agPrior)/agPrior)*100).toFixed(0)}% vs ${(agPrior/1000).toFixed(1)}k prior</> : 'no prior comparable'}
+                    ). Top accounts in <a href="/finance/mapping">/finance/mapping</a>.
+                  </p>
+                </>
+              )}
+              {fbCur && Number(fbCur.revenue) > 0 && (
+                <>
+                  <h4>F&amp;B</h4>
+                  <p>
+                    F&amp;B labour <strong>${(fbLabour/1000).toFixed(1)}k</strong> vs revenue ${(fbRevWindow/1000).toFixed(1)}k → ratio{' '}
+                    <strong>{fbLabourPct != null ? fbLabourPct.toFixed(1) : '—'}%</strong>{' '}
+                    {fbLabourPct != null && (fbLabourPct > 35 ? '(above 28–32% norm)' : '(within 28–32% norm)')}.
+                  </p>
+                </>
+              )}
+            </>
+          }
+        />
+      </Panel>
+
+      <div style={{ height: 14 }} />
+
+      <Panel title="12-month rollup" eyebrow="actual · budget · forecast · ly">
+        <TwelveMonthPanel rows={twelveMonth} fy={fy2026} demand={demandFy} />
+      </Panel>
+
+      {/* ─── 4. TABLES ──────────────────────────────────────────────── */}
+
+      <div style={{ height: 14 }} />
+
+      <Panel
+        title={`USALI department schedule · ${monthLabel} (MTD) · vs ${compareLabel}`}
+        eyebrow={compareSource}
+      >
           <div className="meta">
             Materiality: 5% AND $1,000. Coloring — green ≤5% · amber 5–10% · red &gt;10% AND &gt;$1k.
-            Expense rows tagged <b>Gap 2</b> until <code>gl.usali_expense_map</code> ships. Comparison source: <code>{compareSource}</code>.
+            Expense rows tagged <b>Gap 2</b> until <code>gl.usali_expense_map</code> ships.
           </div>
           <table className="usali">
             <thead>
@@ -977,134 +974,85 @@ export default async function PnLPage({ searchParams }: Props) {
               })()}
             </tbody>
           </table>
-        </div>
+      </Panel>
 
-        {/* RIGHT — sidekick stack */}
-        <div>
-          <div className="panel">
-            <h3>Top <em>variances</em> · MoM dept profit</h3>
-            <div className="meta">{cur} vs {prior} · departmental_profit per <code>v_usali_dept_summary</code>. Budget-variance switches on once <code>gl.budgets</code> ships.</div>
-            <div className="waterfall">
-              {variances.length === 0 ? (
-                <div className="meta" style={{ padding: 8 }}>No dept rows for {cur} or {prior}.</div>
-              ) : variances.map(v => {
-                const pct = (Math.abs(v.delta) / maxAbsVar) * 100;
-                const cls = v.delta >= 0 ? 'pos' : 'neg';
-                const sign = v.delta >= 0 ? '+' : '−';
-                return (
-                  <div className="wfr" key={v.dept}>
-                    <div className="lbl">{v.dept} dept profit</div>
-                    <div><div className={`bar ${cls}`} style={{ width: `${pct.toFixed(0)}%` }} /></div>
-                    <div className={`num ${cls}`}>{sign}${(Math.abs(v.delta)/1000).toFixed(1)}k</div>
+      <div style={{ height: 14 }} />
+
+      <Panel
+        title="Decisions queued for you"
+        eyebrow={`${decisions.length} pending · governance.decision_queue`}
+      >
+        {decisions.length === 0 ? (
+          <div style={{ padding: 16, textAlign: 'center', color: 'var(--ink-mute)', fontStyle: 'italic' }}>
+            ✓ No pending decisions. Items appear here when P&amp;L Detector / Variance Composer / Controller / Procurement writes to <code>governance.decision_queue</code>.
+          </div>
+        ) : (
+          <div className="queue">
+            {decisions.map((d, i) => {
+              const impact = d.impact_usd_estimate != null ? `+$${Math.round(Number(d.impact_usd_estimate)).toLocaleString()}` : '—';
+              const title = String(d.title || (d as any).description || `Decision ${(d.id || '').toString().slice(0, 8)}`);
+              const meta = `governance.decision_queue · ${(d as any).agent_code || ''} · status=${d.status || ''}`;
+              return (
+                <div className="qrow" key={i}>
+                  <div className="impact pos">{impact}</div>
+                  <div>
+                    <div className="title">{title}</div>
+                    <div className="meta-line">{meta}</div>
                   </div>
-                );
-              })}
-            </div>
-            <div className="meta" style={{ marginTop: 8 }}>Sorted by absolute Δ. Switches to vs-Budget once <code>gl.budgets</code> populated.</div>
+                  <div className="actions">
+                    <button type="button" className="btn primary" disabled>Approve</button>
+                    <button type="button" className="btn" disabled>Send back</button>
+                    <button type="button" className="btn" disabled>Snooze</button>
+                    <button type="button" className="btn" disabled>Open</button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
+        )}
+      </Panel>
 
-          <div className="panel" style={{ marginTop: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-              <h3 style={{ margin: 0 }}>13-week <em>cash</em> forecast</h3>
-              <span className="meta" style={{ fontSize: 'var(--t-xs)' }}>source: <code>gl.v_cash_forecast_13w</code></span>
-            </div>
-            <div className="meta">OTB reservations + AR aging schedule − fixed costs (payroll/utilities/A&G) − supplier estimate. Override starting cash via <code>?cash0=</code>.</div>
-            <CashForecastPanel rows={cashForecast} startingCash={cashStart} />
-          </div>
+      <div style={{ height: 14 }} />
 
-          <div className="panel" style={{ marginTop: 10 }}>
-            <h3>Margin leak <em>heatmap</em></h3>
-            <div className="meta">$k departmental_profit · dept × month · last 12 months · {heatmapPeriodsRev[0]} → {cur}. Source: <code>v_usali_dept_summary</code> (A&amp;G from <code>v_usali_house_summary</code>).</div>
-            <div className="heatmap">
-              {heatmapDepts.map(dept => (
-                <React.Fragment key={`row-${dept}`}>
-                  <div className="hm-lbl">{dept}</div>
-                  {heatmapPeriodsRev.map(p => {
-                    const c = heatmapCell(dept, p);
-                    const display = c.val == null ? '—' : `${c.val < 0 ? '-' : ''}${(Math.abs(c.val)/1000).toFixed(1)}`;
-                    return (
-                      <div
-                        key={`${dept}-${p}`}
-                        className="hm"
-                        title={`${dept} · ${p} · ${dept === 'A&G' ? 'A&G overhead' : 'departmental_profit'}: ${c.val == null ? 'no data' : '$' + c.val.toLocaleString()}`}
-                        style={{ background: c.bg, color: c.color }}
-                      >
-                        {display}
-                      </div>
-                    );
-                  })}
-                </React.Fragment>
-              ))}
-            </div>
-          </div>
-
-          <div className="panel" style={{ marginTop: 10 }}>
-            <h3>Variance <em>commentary</em> · {latestCommentary ? 'LLM' : 'auto-draft'}</h3>
-            <CommentaryPanel
-              period={cur}
-              draftBody={latestCommentary?.body ?? null}
-              draftCreatedAt={latestCommentary?.created_at ?? null}
-              hasApiKey={Boolean(process.env.ANTHROPIC_API_KEY)}
-              payload={{
-                monthLabel,
-                totalRev,
-                priorTotalRev,
-                revVsPriorPct,
-                gop,
-                gopMomDelta,
-                gopMomPct,
-                revVsLyPct,
-                agTotal: topAg,
-                agPrior,
-                fbLabour,
-                fbRev: fbRevWindow,
-                fbLabourPct,
-                fbCogsPct: fbCur && Number(fbCur.revenue) > 0 ? (Number(fbCur.cost_of_sales) / Number(fbCur.revenue)) * 100 : null,
-                utilCur,
-                utilPrior,
-                occPct: ytdOccPct,
-                adr: ytdAdr,
-                topVariances: variances.slice(0, 4).map(v => ({ dept: v.dept, delta: v.delta })),
-              }}
-              fallback={
-                <>
-                  <h4>Headline</h4>
-                  <p>
-                    {monthLabel} closes with revenue {totalRev > priorTotalRev ? 'up' : 'down'}{' '}
-                    <strong>{Math.abs(revVsPriorPct).toFixed(1)}%</strong> vs {priorLabel} (${(totalRev/1000).toFixed(1)}k vs ${(priorTotalRev/1000).toFixed(1)}k).{' '}
-                    {gop != null ? <>GOP $${(gop/1000).toFixed(1)}k {gopMomDelta != null && gopMomPct != null && (
-                      <>({gopMomDelta >= 0 ? '+' : '−'}${Math.abs(gopMomDelta/1000).toFixed(1)}k MoM, {gopMomPct >= 0 ? '+' : ''}{gopMomPct.toFixed(0)}%)</>
-                    )}.</> : <>GOP awaiting expense load.</>}
-                    {' '}{revVsLyPct != null ? <>vs LY same month: <strong>{revVsLyPct >= 0 ? '+' : ''}{revVsLyPct.toFixed(1)}%</strong>.</> : <>No LY comparable yet.</>}
-                  </p>
-                  {topAg > 0 && (
-                    <>
-                      <h4>A&amp;G</h4>
-                      <p>
-                        A&amp;G ran <strong>${(topAg/1000).toFixed(1)}k</strong> this month (
-                        {agPrior > 0 ? <>{topAg > agPrior ? 'up' : 'down'} {Math.abs(((topAg - agPrior)/agPrior)*100).toFixed(0)}% vs ${(agPrior/1000).toFixed(1)}k prior</> : 'no prior comparable'}
-                        ). Top accounts in <a href="/finance/mapping">/finance/mapping</a>.
-                      </p>
-                    </>
-                  )}
-                  {fbCur && Number(fbCur.revenue) > 0 && (
-                    <>
-                      <h4>F&amp;B</h4>
-                      <p>
-                        F&amp;B labour <strong>${(fbLabour/1000).toFixed(1)}k</strong> vs revenue ${(fbRevWindow/1000).toFixed(1)}k → ratio{' '}
-                        <strong>{fbLabourPct != null ? fbLabourPct.toFixed(1) : '—'}%</strong>{' '}
-                        {fbLabourPct != null && (fbLabourPct > 35 ? '(above 28–32% norm)' : '(within 28–32% norm)')}.
-                      </p>
-                    </>
-                  )}
-                </>
-              }
-            />
-          </div>
+      <Panel
+        title="Tactical alerts"
+        eyebrow={`v_usali_dept_summary · period=${cur} · ${alerts.length === 0 ? 'all clean' : `${alerts.length} breach${alerts.length > 1 ? 'es' : ''}`}`}
+      >
+        <div style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)', marginBottom: 10 }}>
+          Thresholds: F&amp;B cost &gt; 32% · Labour &gt; 35% · A&amp;G or Utilities MoM &gt; ±{(matPct * 3).toFixed(0)}% (3× materiality).
         </div>
+        {alerts.length === 0 ? (
+          <div style={{ padding: 16, textAlign: 'center', color: 'var(--ink-mute)', fontStyle: 'italic' }}>
+            ✓ No tactical breaches this period — all monitored thresholds clean.
+          </div>
+        ) : (
+          <div className="alerts">
+            {alerts.map((a, i) => (
+              <div key={i} className={`alert ${a.sev}`}>
+                <h4>{a.title} <span className="imp">{a.impact}</span></h4>
+                <div className="dims">{a.dims}</div>
+                <div className="reason">{a.reason}</div>
+                <div className="tactic"><b>Composer:</b> {a.tactic}</div>
+                <div className="handoffs">
+                  <button type="button" className="btn" disabled>{a.handoff}</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Panel>
+
+      <div style={{ height: 18 }} />
+
+      {/* ─── Policy notices ─────────────────────────────────────────── */}
+      <div className="warn-banner">
+        ⚠ <b>Cloudbeds write policy — pilot phase.</b>{' '}
+        Agent-proposed reclassifications, JE proposals, and RFQs always require explicit human approval.
+        Variance Composer never auto-publishes commentary. Controller Agent never posts to GL. Procurement
+        Agent has no PO authority. After validation against 90 days of decisions, only Tier-1 actions
+        (parity resync, &lt;$2k impact, ≥85% confidence) move to auto.
       </div>
 
-      {/* ============== BLOCK 9 — Guardrails banner ============== */}
       <div className="guard">
         <b>Agent guardrails — finance writes are always approval-required.</b>{' '}
         Until the GL→USALI mapping is locked and variance-materiality thresholds are calibrated against
@@ -1112,9 +1060,6 @@ export default async function PnLPage({ searchParams }: Props) {
         explicit human approval. After validation, only Tier-1 actions (defined criteria, ≥85% confidence,
         audit-logged) move to auto. <b>P&amp;L policy: Tier-1 auto disabled — financial reporting always Tier-2.</b>
       </div>
-
-      {/* ============== BLOCK 10 — 12-month rollup ============== */}
-      <TwelveMonthPanel rows={twelveMonth} fy={fy2026} demand={demandFy} />
 
       <div className="legend-foot">
         <div style={{ marginBottom: 8 }}><b>WIRED (real numbers from gl.* + governance.*):</b></div>

@@ -11,18 +11,10 @@
 import Page from '@/components/page/Page';
 import { FINANCE_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
-import StatusPill from '@/components/ui/StatusPill';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import VendorMappingTable, { type VendorRow } from './_VendorMappingTable';
 import UnmappedAccountsTable, { type AccountRow } from './_UnmappedAccountsTable';
-import {
-  FinanceStatusHeader,
-  StatusCell,
-  SectionHead,
-  metaSm,
-  metaStrong,
-  metaDim,
-} from '../_components/FinanceShell';
+import { SectionHead } from '../_components/FinanceShell';
 import { fmtMoney } from '@/lib/format';
 
 export const revalidate = 0;
@@ -84,47 +76,34 @@ export default async function SupplierMappingPage() {
     )
     .slice(0, 8);
 
+  const supEyebrow = [
+    'Finance · Supplier mapping',
+    'v_vendor_dept_mapping · 180d',
+    `${summary.vendors} vendors`,
+    `${summary.multi_dept} multi-dept`,
+    `${summary.no_class_vendors} no-class (${fmtMoney(summary.total_no_class_spend, 'USD')} leaking)`,
+    `${summary.unmapped_accounts} unmapped (${fmtMoney(summary.unmapped_accounts_spend, 'USD')} stuck)`,
+  ].filter(Boolean).join(' · ');
+
   return (
     <Page
-      eyebrow="Finance · Supplier mapping"
+      eyebrow={supEyebrow}
       title={<>Vendor → <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>USALI dept</em> — fix the leaks.</>}
       subPages={FINANCE_SUBPAGES}
     >
+      {/* ─── 1. KPI tiles ───────────────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
+        <KpiBox value={summary.vendors}              unit="count" label="Vendors (180d)" tooltip="Distinct vendor names with at least one bill / cheque / expense in the last 180d" />
+        <KpiBox value={summary.multi_dept}           unit="count" label="Multi-dept" tooltip="Vendors whose spend hit more than one USALI department — need a primary-dept override" />
+        <KpiBox value={summary.unmapped_acct_vendors} unit="count" label="Unmapped account" tooltip="Vendors with at least one bill on an account that has no USALI line" />
+        <KpiBox value={summary.no_class_vendors}     unit="count" label="No QB class" tooltip="Vendors with at least one bill posted without a QuickBooks class — drops out of mv_usali_pl_monthly" />
+        <KpiBox value={summary.total_no_class_spend} unit="usd"   label="No-class spend" tooltip="USD spend with no QB class set — invisible in the USALI P&L until corrected in QuickBooks" />
+        <KpiBox value={summary.unmapped_accounts}    unit="count" label="Unmapped accts" tooltip="Distinct GL accounts with postings but no USALI line on gl.accounts" />
+      </div>
 
-      <FinanceStatusHeader
-        top={
-          <>
-            <StatusCell label="SOURCE">
-              <StatusPill tone="active">v_vendor_dept_mapping</StatusPill>
-              <span style={metaDim}>· v_unmapped_accounts · 180d window</span>
-            </StatusCell>
-            <StatusCell label="VENDORS">
-              <span style={metaStrong}>{summary.vendors}</span>
-            </StatusCell>
-            <StatusCell label="MULTI-DEPT">
-              <StatusPill tone={summary.multi_dept > 0 ? 'pending' : 'inactive'}>{summary.multi_dept}</StatusPill>
-              <span style={metaDim}>need primary-dept override</span>
-            </StatusCell>
-            <span style={{ flex: 1 }} />
-          </>
-        }
-        bottom={
-          <>
-            <StatusCell label="NO QB CLASS">
-              <StatusPill tone={summary.no_class_vendors > 0 ? 'expired' : 'active'}>{summary.no_class_vendors}</StatusPill>
-              <span style={metaDim}>{fmtMoney(summary.total_no_class_spend, 'USD')} leaking</span>
-            </StatusCell>
-            <StatusCell label="UNMAPPED ACCT">
-              <StatusPill tone={summary.unmapped_accounts > 0 ? 'pending' : 'inactive'}>{summary.unmapped_accounts}</StatusPill>
-              <span style={metaDim}>{fmtMoney(summary.unmapped_accounts_spend, 'USD')} stuck</span>
-            </StatusCell>
-            <span style={{ flex: 1 }} />
-            <span style={metaDim}>fix in QuickBooks (class) or /finance/mapping (USALI line)</span>
-          </>
-        }
-      />
+      {/* No period selector — page scope is fixed 180d trailing window. */}
 
-      {/* WIRED GRAPH — top leakers by $ */}
+      {/* ─── 3. Graphs ──────────────────────────────────────────────── */}
       {topLeakers.length > 0 && (
         <div
           style={{
@@ -138,23 +117,7 @@ export default async function SupplierMappingPage() {
         </div>
       )}
 
-      {/* KPI ROW */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
-          gap: 12,
-          marginTop: 14,
-        }}
-      >
-        <KpiBox value={summary.vendors}              unit="count" label="Vendors (180d)" tooltip="Distinct vendor names with at least one bill / cheque / expense in the last 180d" />
-        <KpiBox value={summary.multi_dept}           unit="count" label="Multi-dept" tooltip="Vendors whose spend hit more than one USALI department — need a primary-dept override" />
-        <KpiBox value={summary.unmapped_acct_vendors} unit="count" label="Unmapped account" tooltip="Vendors with at least one bill on an account that has no USALI line" />
-        <KpiBox value={summary.no_class_vendors}     unit="count" label="No QB class" tooltip="Vendors with at least one bill posted without a QuickBooks class — drops out of mv_usali_pl_monthly" />
-        <KpiBox value={summary.total_no_class_spend} unit="usd"   label="No-class spend" tooltip="USD spend with no QB class set — invisible in the USALI P&L until corrected in QuickBooks" />
-        <KpiBox value={summary.unmapped_accounts}    unit="count" label="Unmapped accts" tooltip="Distinct GL accounts with postings but no USALI line on gl.accounts" />
-      </div>
-
+      {/* ─── 4. Tables ──────────────────────────────────────────────── */}
       <div style={{ marginTop: 18 }}>
         <SectionHead
           title="Vendor queue"

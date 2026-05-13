@@ -15,18 +15,18 @@ interface Props { params: { po_id: string } }
 export default async function PoDetailPage({ params }: Props) {
   const [{ data: po }, { data: items }, { data: receipts }] = await Promise.all([
     supabase
-      .schema('proc')
+      .schema('procurement')
       .from('purchase_orders')
       .select('*, vendor:vendor_id(name), location:delivery_location_id(location_name)')
       .eq('po_id', params.po_id)
       .maybeSingle(),
     supabase
-      .schema('proc')
+      .schema('procurement')
       .from('po_items')
       .select('*, item:item_id(sku, item_name)')
       .eq('po_id', params.po_id),
     supabase
-      .schema('proc')
+      .schema('procurement')
       .from('receipts')
       .select('*')
       .eq('po_id', params.po_id)

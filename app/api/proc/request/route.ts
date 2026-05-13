@@ -46,7 +46,7 @@ export async function POST(req: Request) {
 
   // 1. Insert PR header (status='draft' until proc_pr_submit lifts it)
   const { data: pr, error: pErr } = await admin
-    .schema('proc')
+    .schema('procurement')
     .from('requests')
     .insert({
       pr_title: body.pr_title,
@@ -70,12 +70,12 @@ export async function POST(req: Request) {
     unit_cost_lak: l.unit_cost_lak != null ? Number(l.unit_cost_lak) : null,
     preferred_supplier_id: l.preferred_supplier_id ?? null,
   }));
-  const { error: lErr } = await admin.schema('proc').from('request_items').insert(lines);
+  const { error: lErr } = await admin.schema('procurement').from('request_items').insert(lines);
   if (lErr) return NextResponse.json({ error: lErr.message, pr_id: pr.pr_id }, { status: 500 });
 
   // 3. Submit + auto-route via RPC (returns 'auto_approved' | 'pending_gm' | 'pending_owner')
   const { data: status, error: rpcErr } = await admin
-    .schema('proc')
+    .schema('procurement')
     .rpc('proc_pr_submit', { p_pr_id: pr.pr_id });
   if (rpcErr) return NextResponse.json({ error: rpcErr.message, pr_id: pr.pr_id }, { status: 500 });
 

@@ -5,18 +5,10 @@
 import Page from '@/components/page/Page';
 import { FINANCE_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
-import StatusPill from '@/components/ui/StatusPill';
 // 2026-05-09: public.transactions has RLS blocking anon; use service role.
 import { PROPERTY_ID } from '@/lib/supabase';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { fmtMoney } from '@/lib/format';
-import {
-  FinanceStatusHeader,
-  StatusCell,
-  metaSm,
-  metaStrong,
-  metaDim,
-} from '../_components/FinanceShell';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -105,98 +97,35 @@ export default async function PosTransactionsPage({ searchParams }: Props) {
     .map(([d, v]) => ({ d, ...v }))
     .sort((a, b) => a.d.localeCompare(b.d));
 
+  const posEyebrow = [
+    'Finance · POS',
+    `${since} → ${until}`,
+    `${rowCount?.toLocaleString() ?? 0} rows · ${dailyPos.length} days`,
+    `F&B ${fmtMoney(sumAmt(fb), 'USD')}`,
+    `Spa ${fmtMoney(sumAmt(spa), 'USD')}`,
+    `avg ticket ${avgTicket != null ? fmtMoney(avgTicket, 'USD') : '—'}`,
+  ].filter(Boolean).join(' · ');
+
   return (
     <Page
-      eyebrow="Finance · POS"
+      eyebrow={posEyebrow}
       title={<>Point-of-sale <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>transactions</em> — F&B · Spa · Retail · Transport.</>}
       subPages={FINANCE_SUBPAGES}
     >
-
-      <FinanceStatusHeader
-        top={
-          <>
-            <StatusCell label="SOURCE">
-              <StatusPill tone="active">transactions</StatusPill>
-              <span style={metaDim}>· usali_dept ∈ {POS_DEPTS.join(' / ')}</span>
-            </StatusCell>
-            <StatusCell label="WINDOW">
-              <span style={metaSm}>{since} → {until}</span>
-            </StatusCell>
-            <StatusCell label="ROWS">
-              <span style={metaStrong}>{rowCount?.toLocaleString() ?? 0}</span>
-              <span style={metaDim}>{dailyPos.length} days w/ activity</span>
-            </StatusCell>
-            <span style={{ flex: 1 }} />
-          </>
-        }
-        bottom={
-          <>
-            <StatusCell label="F&B">
-              <span style={metaSm}>{fmtMoney(sumAmt(fb), 'USD')}</span>
-              <span style={metaDim}>{fb.length} txns</span>
-            </StatusCell>
-            <StatusCell label="SPA">
-              <span style={metaSm}>{fmtMoney(sumAmt(spa), 'USD')}</span>
-              <span style={metaDim}>{spa.length} txns</span>
-            </StatusCell>
-            <StatusCell label="TRANSPORT">
-              <span style={metaSm}>{fmtMoney(sumAmt(trans), 'USD')}</span>
-            </StatusCell>
-            <StatusCell label="RETAIL">
-              <span style={metaSm}>{fmtMoney(sumAmt(retail), 'USD')}</span>
-            </StatusCell>
-            <span style={{ flex: 1 }} />
-            <span style={metaDim}>avg ticket {avgTicket != null ? fmtMoney(avgTicket, 'USD') : '—'}</span>
-          </>
-        }
-      />
-
-      {/* WIRED GRAPHS — daily POS sales + top categories */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
-          gap: 12,
-          marginTop: 14,
-        }}
-      >
-        <PosDailyChart rows={dailyPos} />
-        <TopCategoriesChart rows={topCats} />
-      </div>
-
-
-      <div className="card-grid-6" style={{ marginTop: 18 }}>
+      {/* ─── 1. KPI tiles ───────────────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
         <KpiBox label="POS Lines"      unit="count" value={totalCount} tooltip="Distinct POS transaction lines in the period. Source: public.transactions." />
         <KpiBox label="POS Revenue"    unit="usd"   value={total$}     tooltip="Sum of POS line revenue in USD across all categories." />
         <KpiBox label="Avg Ticket"     unit="usd"   value={avgTicket} dp={2} tooltip="Total POS revenue ÷ POS line count. A line ≠ a ticket — this is line-level avg." />
         <KpiBox label="F&B Lines"      unit="count" value={fb.length}    tooltip={`$${(sumAmt(fb)).toFixed(0)} · F&B (USALI dept Food & Beverage).`} />
         <KpiBox label="Spa Lines"      unit="count" value={spa.length}   tooltip={`$${(sumAmt(spa)).toFixed(0)} · Spa (Other Operated · Spa).`} />
         <KpiBox label="Transport Lines" unit="count" value={trans.length} tooltip={`$${(sumAmt(trans)).toFixed(0)} · Transport (Other Operated · Transportation).`} />
-      </div>
-      <div className="card-grid-3" style={{ marginTop: 12 }}>
         <KpiBox label="F&B $"    unit="usd" value={sumAmt(fb)}    tooltip="Sum of F&B line revenue. Watch ratio to room nights for capture %." />
         <KpiBox label="Spa $"    unit="usd" value={sumAmt(spa)}   tooltip="Sum of Spa line revenue. Watch ratio to room nights for spa capture %." />
         <KpiBox label="Other Op $" unit="usd" value={sumAmt(otherOp) + sumAmt(trans) + sumAmt(retail)} tooltip="Spa + Transport + Activities + Retail combined (USALI 'Other Operated')." />
       </div>
 
-      {/* Top categories */}
-      {topCats.length > 0 && (
-        <div className="panel" style={{ padding: 14, marginTop: 14 }}>
-          <div className="t-eyebrow" style={{ marginBottom: 8 }}>Top categories ({since} → {until})</div>
-          <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
-            {topCats.map(([cat, total]) => (
-              <div key={cat} style={{ minWidth: 160 }}>
-                <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-xl)', color: 'var(--ink)' }}>
-                  {fmtMoney(total, 'USD')}
-                </div>
-                <div className="t-eyebrow" style={{ marginTop: 2 }}>{cat}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Filter / search */}
+      {/* ─── 2. Filter form (selector row) ──────────────────────────── */}
       <form method="GET" className="panel" style={{ padding: 14, marginTop: 14 }}>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <label style={{ flex: '2 1 240px' }}>
@@ -229,6 +158,20 @@ export default async function PosTransactionsPage({ searchParams }: Props) {
         </div>
       </form>
 
+      {/* ─── 3. Graphs ──────────────────────────────────────────────── */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+          gap: 12,
+          marginTop: 14,
+        }}
+      >
+        <PosDailyChart rows={dailyPos} />
+        <TopCategoriesChart rows={topCats} />
+      </div>
+
+      {/* ─── 4. Tables ──────────────────────────────────────────────── */}
       <div className="panel" style={{ marginTop: 14, overflowX: 'auto' }}>
         <table className="tbl">
           <thead>

@@ -33,7 +33,7 @@ export async function POST(req: Request) {
   }
 
   const { data, error } = await admin
-    .schema('proc')
+    .schema('procurement')
     .from('new_item_proposals')
     .insert({
       proposed_name: body.proposed_name,

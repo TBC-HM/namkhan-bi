@@ -4,18 +4,10 @@
 import Page from '@/components/page/Page';
 import { FINANCE_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
-import StatusPill from '@/components/ui/StatusPill';
 // 2026-05-09: public.transactions has RLS blocking anon; use service role.
 import { PROPERTY_ID } from '@/lib/supabase';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { fmtMoney } from '@/lib/format';
-import {
-  FinanceStatusHeader,
-  StatusCell,
-  metaSm,
-  metaStrong,
-  metaDim,
-} from '../_components/FinanceShell';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -106,76 +98,38 @@ export default async function TransactionsPage({ searchParams }: Props) {
     .map(([d, v]) => ({ d, ...v }))
     .sort((a, b) => a.d.localeCompare(b.d));
 
+  const txnEyebrow = [
+    'Finance · Transactions',
+    `${since} → ${until}`,
+    `${rowCount?.toLocaleString() ?? 0} rows`,
+    `${debits.length.toLocaleString()} debit / ${credits.length.toLocaleString()} credit`,
+    `sales ${fmtMoney(sumAmt(sales), 'USD')}`,
+    q ? `q="${q}"` : null,
+    dept ? `dept=${dept}` : null,
+    txnType ? `type=${txnType}` : null,
+  ].filter(Boolean).join(' · ');
+
   return (
     <Page
-      eyebrow="Finance · Transactions"
+      eyebrow={txnEyebrow}
       title={<>All <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>transactions</em> · Cloudbeds + POS.</>}
       subPages={FINANCE_SUBPAGES}
     >
-
-      <FinanceStatusHeader
-        top={
-          <>
-            <StatusCell label="SOURCE">
-              <StatusPill tone="active">transactions</StatusPill>
-              <span style={metaDim}>· Cloudbeds + POS · property {PROPERTY_ID}</span>
-            </StatusCell>
-            <StatusCell label="WINDOW">
-              <span style={metaSm}>{since} → {until}</span>
-            </StatusCell>
-            <StatusCell label="ROWS">
-              <span style={metaStrong}>{rowCount?.toLocaleString() ?? 0}</span>
-              <span style={metaDim}>matching · {dailySeries.length} days w/ activity</span>
-            </StatusCell>
-            <span style={{ flex: 1 }} />
-          </>
-        }
-        bottom={
-          <>
-            <StatusCell label="DEBITS">
-              <span style={metaSm}>{debits.length.toLocaleString()}</span>
-            </StatusCell>
-            <StatusCell label="CREDITS">
-              <span style={metaSm}>{credits.length.toLocaleString()}</span>
-            </StatusCell>
-            <StatusCell label="SALES">
-              <span style={metaSm}>{fmtMoney(sumAmt(sales), 'USD')}</span>
-            </StatusCell>
-            <span style={{ flex: 1 }} />
-            <span style={metaDim}>{q ? `q="${q}"` : 'no search'} · dept={dept || 'all'} · type={txnType || 'all'}</span>
-          </>
-        }
-      />
-
-      {/* WIRED GRAPH — daily transaction volume + sales */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
-          gap: 12,
-          marginTop: 14,
-        }}
-      >
-        <DailyVolumeChart rows={dailySeries} />
-      </div>
-
-      {/* KPI groupings */}
-      <div className="card-grid-6" style={{ marginTop: 18 }}>
+      {/* ─── 1. KPI tiles ───────────────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
         <KpiBox label="Total Txns"    unit="count" value={totalCount} tooltip="All transactions in window" />
         <KpiBox label="Sales $"       unit="usd"   value={sumAmt(sales)}   tooltip="Debits ex tax/fee/void/adjustment" />
         <KpiBox label="Payments $"    unit="usd"   value={sumAmt(payments)}tooltip="Credits · category=payment" />
         <KpiBox label="Refunds $"     unit="usd"   value={sumAmt(refunds)} tooltip="Credits · category=refund" />
         <KpiBox label="Tax $"         unit="usd"   value={sumAmt(taxes)}   tooltip="Debits · category=tax (VAT, service charge)" />
         <KpiBox label="Adjustments $" unit="usd"   value={sumAmt(adjustments)} tooltip="Debits · category in (adjustment, void)" />
-      </div>
-      <div className="card-grid-3" style={{ marginTop: 12 }}>
         <KpiBox label="Rooms Sales $" unit="usd" value={roomsSales} tooltip="Sales tagged usali_dept=Rooms" />
         <KpiBox label="F&B Sales $"   unit="usd" value={fbSales}    tooltip={`${fbCount} F&B transactions`} />
         <KpiBox label="Other Op $"    unit="usd" value={otherSales} tooltip="Spa, Cruise, Activities, Transport" />
       </div>
 
-      {/* Filter / search bar */}
-      <form method="GET" className="panel" style={{ padding: 14, marginTop: 18 }}>
+      {/* ─── 2. Filter form (acts as selector/dropdown row) ─────────── */}
+      <form method="GET" className="panel" style={{ padding: 14, marginTop: 14 }}>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <label style={{ flex: '2 1 240px' }}>
             <span className="t-eyebrow" style={{ display: 'block', marginBottom: 4 }}>Search</span>
@@ -219,7 +173,19 @@ export default async function TransactionsPage({ searchParams }: Props) {
         </div>
       </form>
 
-      {/* Listing */}
+      {/* ─── 3. Graph ───────────────────────────────────────────────── */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+          gap: 12,
+          marginTop: 14,
+        }}
+      >
+        <DailyVolumeChart rows={dailySeries} />
+      </div>
+
+      {/* ─── 4. Tables ──────────────────────────────────────────────── */}
       <div className="panel" style={{ marginTop: 14, overflowX: 'auto' }}>
         <table className="tbl">
           <thead>

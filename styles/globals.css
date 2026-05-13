@@ -72,6 +72,22 @@
   --dot-paused:  var(--brass);
   --dot-err:     var(--oxblood);
 
+  /* ===== Canonical table + panel theme tokens (PBS 2026-05-13) =====
+   * Defaults assume the dark Namkhan theme. ThemeInjector overrides these
+   * when a property's palette declares a `background` role (Donna). This is
+   * the single source of truth for any element with a tabular UI: .panel,
+   * .tbl, .queue, .alerts. Never hardcode #f4ecd8 / #1c1815 / etc. inside
+   * a table or panel — use these tokens so the surface flips per property.
+   */
+  --tbl-bg:         #15110c;
+  --tbl-bg-elev:    #1f1a13;
+  --tbl-fg:         #e9e1ce;
+  --tbl-fg-mute:    #a59a82;
+  --tbl-fg-strong:  #f4ecd8;
+  --tbl-border:     rgba(232, 225, 206, 0.10);
+  --tbl-border-strong: rgba(232, 225, 206, 0.18);
+  --tbl-row-hover:  rgba(232, 225, 206, 0.05);
+
   /* Status-tint backgrounds + borders for badges, cells, alerts.
    * Use these instead of inline hex tints so the success/warn/bad
    * vocabulary stays unified across pages. */
@@ -757,10 +773,11 @@ table:not(.data-table) tbody tr:hover td {
  * `style={{ background, border, borderRadius, padding }}` pattern that
  * litters every page right now. */
 .panel {
-  background: var(--paper-warm);
-  border: 1px solid var(--paper-deep);
+  background: var(--tbl-bg);
+  border: 1px solid var(--tbl-border);
   border-radius: 8px;
   padding: 14px 16px;
+  color: var(--tbl-fg);
 }
 .panel.flush  { padding: 0; overflow: hidden; }      /* tables that go edge-to-edge */
 .panel.dashed { border-style: dashed; }
@@ -773,13 +790,13 @@ table:not(.data-table) tbody tr:hover td {
   font-weight: 500;
   font-size: var(--t-md);
   letter-spacing: var(--ls-tight);
-  color: var(--ink);
+  color: var(--tbl-fg-strong);
 }
 .panel-head-title em { color: var(--brass); font-style: italic; }
 .panel-head-meta {
   font-family: var(--mono);
   font-size: var(--t-xs);
-  color: var(--ink-mute);
+  color: var(--tbl-fg-mute);
   letter-spacing: 0.04em;
 }
 
@@ -915,36 +932,38 @@ table:not(.data-table) tbody tr:hover td {
 }
 
 /* ===== TABLE ===== */
-.tbl { width: 100%; border-collapse: collapse; font-family: var(--sans); }
+.tbl { width: 100%; border-collapse: collapse; font-family: var(--sans); color: var(--tbl-fg); }
 .tbl thead th {
   text-align: left; padding: 0 10px 10px;
   font-family: var(--mono); font-size: 9.5px;
   letter-spacing: 0.22em; text-transform: uppercase;
-  color: var(--ink-mute); font-weight: 600;
-  border-bottom: 1px solid var(--line);
+  color: var(--tbl-fg-mute); font-weight: 600;
+  border-bottom: 1px solid var(--tbl-border-strong);
 }
 .tbl thead th.num { text-align: right; }
-.tbl tbody tr { border-bottom: 1px solid var(--line-soft); }
-.tbl tbody tr:hover { background: rgba(31, 53, 40, 0.04); }
+.tbl tbody tr { border-bottom: 1px solid var(--tbl-border); }
+.tbl tbody tr:hover { background: var(--tbl-row-hover); }
 .tbl tbody td { padding: 11px 10px; vertical-align: middle; }
 .tbl tbody td.lbl strong {
   font-family: var(--serif); font-style: italic;
-  font-size: 13px; color: var(--ink); font-weight: 500;
+  font-size: 13px; color: var(--tbl-fg-strong); font-weight: 500;
 }
 .tbl tbody td.lbl small {
   display: block; font-family: var(--mono);
-  font-size: 9.5px; color: var(--ink-mute);
+  font-size: 9.5px; color: var(--tbl-fg-mute);
   letter-spacing: 0.12em; text-transform: uppercase;
   margin-top: 3px; font-weight: 500;
 }
 .tbl tbody td.num {
   text-align: right; font-family: var(--mono);
-  font-size: 11px; color: var(--ink); font-weight: 500;
+  font-size: 11px; color: var(--tbl-fg); font-weight: 500;
 }
 .tbl tbody td.lbl {
   font-family: var(--mono); font-size: 11px;
-  color: var(--ink); font-weight: 500;
+  color: var(--tbl-fg); font-weight: 500;
 }
+.tbl tbody td.lbl.text-mute { color: var(--tbl-fg-mute); }
+.tbl .text-mute, .tbl .text-mono { color: var(--tbl-fg-mute); }
 
 /* ===== INSIGHT ===== */
 .insight {

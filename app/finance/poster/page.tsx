@@ -14,17 +14,9 @@ import Link from 'next/link';
 import FilterStrip from '@/components/nav/FilterStrip';
 import Page from '@/components/page/Page';
 import { FINANCE_SUBPAGES } from '../_subpages';
-import StatusPill from '@/components/ui/StatusPill';
 import KpiStrip, { type KpiStripItem } from '@/components/kpi/KpiStrip';
 import PosterReceiptsTable from '@/components/poster/PosterReceiptsTable';
 import { resolvePeriod } from '@/lib/period';
-import {
-  FinanceStatusHeader,
-  StatusCell,
-  metaSm,
-  metaStrong,
-  metaDim,
-} from '../_components/FinanceShell';
 import { fmtMoney } from '@/lib/format';
 import {
   getPosterPeriodTotals,
@@ -86,63 +78,54 @@ export default async function PosterPage({ searchParams }: Props) {
   const sumPmCheck  = card.order_usd + cash.order_usd + wire.order_usd + room.order_usd + intl.order_usd + free.order_usd + office.order_usd + house.order_usd;
   const tipsDelta   = paidClosed - orderClosed;        // service charge / tips collected on top of orders
 
+  const posterEyebrow = [
+    'Finance · Poster POS',
+    `${periodLabel} · ${period.rangeLabel}`,
+    `${totals.receipts_total.toLocaleString()} receipts (${totals.closed_n} closed · ${totals.open_n} open)`,
+    `order ${fmtMoney(orderClosed, 'USD')} · paid ${fmtMoney(paidClosed, 'USD')}`,
+    `room recon ${greenPct.toFixed(0)}%`,
+    totals.deleted_n > 0 ? `${totals.deleted_n} deleted` : null,
+  ].filter(Boolean).join(' · ');
+
   return (
     <Page
-      eyebrow="Finance · Poster POS"
+      eyebrow={posterEyebrow}
       title={<>Every <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>receipt</em> — and where it lands.</>}
       subPages={FINANCE_SUBPAGES}
     >
-
-      <FinanceStatusHeader
-        top={
-          <>
-            <StatusCell label="SOURCE">
-              <StatusPill tone="active">pos.poster_receipts</StatusPill>
-              <span style={metaDim}>· static export · 18,122 rows · May 2023 → May 2026</span>
-            </StatusCell>
-            <StatusCell label="WINDOW">
-              <span style={metaSm}>{periodLabel}</span>
-              <span style={metaDim}>· {period.rangeLabel}</span>
-            </StatusCell>
-            <StatusCell label="RECEIPTS">
-              <span style={metaStrong}>{totals.receipts_total.toLocaleString()}</span>
-              <span style={metaDim}>{totals.closed_n} closed · {totals.open_n} open</span>
-            </StatusCell>
-            <span style={{ flex: 1 }} />
-          </>
-        }
-        bottom={
-          <>
-            <StatusCell label="ORDER">
-              <span style={metaSm}>{fmtMoney(orderClosed, 'USD')}</span>
-            </StatusCell>
-            <StatusCell label="PAID">
-              <span style={metaSm}>{fmtMoney(paidClosed, 'USD')}</span>
-              <span style={metaDim}>Δ {tipsDelta >= 0 ? '+' : ''}{fmtMoney(tipsDelta, 'USD')} tips/sc</span>
-            </StatusCell>
-            <StatusCell label="ROOM RECON">
-              <StatusPill tone={greenPct >= 80 ? 'active' : greenPct >= 50 ? 'pending' : 'expired'}>
-                {greenPct.toFixed(0)}%
-              </StatusPill>
-              <span style={metaDim}>{recon.matched_green_n} of {recon.charge_room_n} green · {matchPct.toFixed(0)}% any match</span>
-            </StatusCell>
-            <span style={{ flex: 1 }} />
-            <span style={metaDim}>
-              {totals.deleted_n} deleted · service charge {fmtMoney(totals.service_charge_usd, 'USD')}
-            </span>
-          </>
-        }
+      {/* ─── 1. KPI tiles ───────────────────────────────────────────── */}
+      <KpiStrip
+        items={[
+          { label: 'Receipts',     value: totals.receipts_total, kind: 'count', hint: `closed ${totals.closed_n}` },
+          { label: 'Order $',      value: orderClosed, kind: 'money', tone: 'pos' },
+          { label: 'Paid $',       value: paidClosed,  kind: 'money', tone: 'pos', hint: `Δ ${tipsDelta >= 0 ? '+' : ''}$${Math.round(tipsDelta).toLocaleString()} tips/sc` },
+          { label: 'Service charge', value: totals.service_charge_usd, kind: 'money' },
+          { label: 'Open',         value: totals.open_n, kind: 'count', tone: totals.open_n > 0 ? 'warn' : 'pos', hint: 'never closed — hygiene fix' },
+          { label: 'Deleted',      value: totals.deleted_n, kind: 'count', tone: totals.deleted_n > 50 ? 'warn' : 'neutral' },
+        ] satisfies KpiStripItem[]}
       />
 
-      <FilterStrip
-        showForward={false}
-        showCompare={false}
-        showSegment={false}
-        liveSource="Poster · static export"
+      <KpiStrip
+        items={[
+          { label: 'Charge to room',   value: room.order_usd, kind: 'money', tone: 'pos', hint: `${room.closed_n} receipts → reconcile vs Cloudbeds` },
+          { label: 'Card',             value: card.order_usd, kind: 'money', hint: `${card.closed_n} receipts` },
+          { label: 'Cash',             value: cash.order_usd, kind: 'money', hint: `${cash.closed_n} receipts` },
+          { label: 'Bank transfer',    value: wire.order_usd, kind: 'money', hint: `${wire.closed_n} receipts` },
+          { label: 'Internal / staff', value: intl.order_usd, kind: 'money', tone: 'warn', hint: `${intl.closed_n} comped/staff` },
+          { label: 'Without payment',  value: free.order_usd, kind: 'money', tone: free.order_usd > 5000 ? 'neg' : 'warn', hint: `${free.closed_n} closed · audit` },
+        ] satisfies KpiStripItem[]}
       />
 
-      {/* Report → action queue */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -6, marginBottom: 8 }}>
+      {/* ─── 2. Selector + report action ─────────────────────────────── */}
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
+        <div style={{ flex: 1, minWidth: 280 }}>
+          <FilterStrip
+            showForward={false}
+            showCompare={false}
+            showSegment={false}
+            liveSource="Poster · static export"
+          />
+        </div>
         <Link
           href="/finance/poster/report"
           style={{
@@ -165,31 +148,7 @@ export default async function PosterPage({ searchParams }: Props) {
         </Link>
       </div>
 
-      {/* Strip 1 — Period totals */}
-      <KpiStrip
-        items={[
-          { label: 'Receipts',     value: totals.receipts_total, kind: 'count', hint: `closed ${totals.closed_n}` },
-          { label: 'Order $',      value: orderClosed, kind: 'money', tone: 'pos' },
-          { label: 'Paid $',       value: paidClosed,  kind: 'money', tone: 'pos', hint: `Δ ${tipsDelta >= 0 ? '+' : ''}$${Math.round(tipsDelta).toLocaleString()} tips/sc` },
-          { label: 'Service charge', value: totals.service_charge_usd, kind: 'money' },
-          { label: 'Open',         value: totals.open_n, kind: 'count', tone: totals.open_n > 0 ? 'warn' : 'pos', hint: 'never closed — hygiene fix' },
-          { label: 'Deleted',      value: totals.deleted_n, kind: 'count', tone: totals.deleted_n > 50 ? 'warn' : 'neutral' },
-        ] satisfies KpiStripItem[]}
-      />
-
-      {/* Strip 2 — Payment-method breakdown */}
-      <KpiStrip
-        items={[
-          { label: 'Charge to room',   value: room.order_usd, kind: 'money', tone: 'pos', hint: `${room.closed_n} receipts → reconcile vs Cloudbeds` },
-          { label: 'Card',             value: card.order_usd, kind: 'money', hint: `${card.closed_n} receipts` },
-          { label: 'Cash',             value: cash.order_usd, kind: 'money', hint: `${cash.closed_n} receipts` },
-          { label: 'Bank transfer',    value: wire.order_usd, kind: 'money', hint: `${wire.closed_n} receipts` },
-          { label: 'Internal / staff', value: intl.order_usd, kind: 'money', tone: 'warn', hint: `${intl.closed_n} comped/staff` },
-          { label: 'Without payment',  value: free.order_usd, kind: 'money', tone: free.order_usd > 5000 ? 'neg' : 'warn', hint: `${free.closed_n} closed · audit` },
-        ] satisfies KpiStripItem[]}
-      />
-
-      {/* 3 explainer cards */}
+      {/* ─── 3. Graphs (explainer cards) ─────────────────────────────── */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
@@ -277,7 +236,7 @@ export default async function PosterPage({ searchParams }: Props) {
         </div>
       </div>
 
-      {/* Top-bucket tables */}
+      {/* ─── 4. Tables ──────────────────────────────────────────────── */}
       <section style={{ marginTop: 22, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
         {[
           { title: 'Top order sources', rows: topSrc },

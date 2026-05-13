@@ -280,7 +280,7 @@ export async function getInvOverview() {
       .from('count_lines')
       .select('variance_value_usd'),
     supabase
-      .schema('proc')
+      .schema('procurement')
       .from('purchase_orders')
       .select('po_id', { count: 'exact', head: true })
       .in('status', ['sent', 'partially_received']),
@@ -293,7 +293,7 @@ export async function getInvOverview() {
       .order('estimated_cost_usd', { ascending: false })
       .limit(10),
     supabase.schema('fa').from('v_fa_depreciation_current').select('*'),
-    supabase.schema('proc').from('v_proc_open_requests').select('*').limit(5),
+    supabase.schema('procurement').from('v_proc_open_requests').select('*').limit(5),
     supabase
       .schema('inv')
       .from('v_inv_expiring_soon')
@@ -424,7 +424,7 @@ export async function getShopCatalog(filter: { categoryId?: number; q?: string }
 
 export async function getRequests(filter: { status?: string[]; createdBy?: string } = {}) {
   let q = supabase
-    .schema('proc')
+    .schema('procurement')
     .from('requests')
     .select(
       `pr_id, pr_number, pr_title, requesting_dept, priority,
@@ -445,17 +445,17 @@ export async function getRequests(filter: { status?: string[]; createdBy?: strin
 export async function getRequestDetail(prId: string) {
   const [pr, items, log] = await Promise.all([
     supabase
-      .schema('proc')
+      .schema('procurement')
       .from('requests')
       .select('*, location:delivery_location_id(location_name)')
       .eq('pr_id', prId)
       .maybeSingle(),
     supabase
-      .schema('proc')
+      .schema('procurement')
       .from('request_items')
       .select('*, item:item_id(sku, item_name), supplier:preferred_supplier_id(name)')
       .eq('pr_id', prId),
-    supabase.schema('proc').from('approval_log').select('*').eq('pr_id', prId).order('occurred_at'),
+    supabase.schema('procurement').from('approval_log').select('*').eq('pr_id', prId).order('occurred_at'),
   ]);
   return {
     pr: pr.data as any,
@@ -470,7 +470,7 @@ export async function getRequestDetail(prId: string) {
 
 export async function getPurchaseOrders(filter: { status?: string[] } = {}) {
   let q = supabase
-    .schema('proc')
+    .schema('procurement')
     .from('purchase_orders')
     .select(
       `po_id, po_number, total_usd, expected_delivery_date, status, qb_bill_ref,
@@ -488,22 +488,22 @@ export async function getPurchaseOrders(filter: { status?: string[] } = {}) {
 export async function getPoKpis() {
   const [openPrs, openPos, awaiting, leadTime] = await Promise.all([
     supabase
-      .schema('proc')
+      .schema('procurement')
       .from('requests')
       .select('pr_id', { count: 'exact', head: true })
       .eq('status', 'approved')
       .is('converted_to_po_id', null),
     supabase
-      .schema('proc')
+      .schema('procurement')
       .from('purchase_orders')
       .select('po_id', { count: 'exact', head: true })
       .in('status', ['draft', 'sent', 'partially_received']),
     supabase
-      .schema('proc')
+      .schema('procurement')
       .from('purchase_orders')
       .select('po_id', { count: 'exact', head: true })
       .in('status', ['sent', 'partially_received']),
-    supabase.schema('suppliers').from('suppliers').select('lead_time_days'),
+    supabase.schema('procurement').from('suppliers').select('lead_time_days'),
   ]);
   const leadDays = (leadTime.data ?? [])
     .map((r: any) => Number(r.lead_time_days))
@@ -523,7 +523,7 @@ export async function getPoKpis() {
 
 export async function getCatalogProposals(status: 'pending_review' | 'approved' | 'rejected' = 'pending_review') {
   const { data, error } = await supabase
-    .schema('proc')
+    .schema('procurement')
     .from('new_item_proposals')
     .select(
       `proposal_id, proposed_name, proposed_description, estimated_unit_cost_usd,
@@ -711,7 +711,7 @@ export async function getInvCategories() {
 
 export async function getSuppliers() {
   const { data } = await supabase
-    .schema('suppliers')
+    .schema('procurement')
     .from('suppliers')
     .select('supplier_id, code, name, lead_time_days, payment_terms, currency, status')
     .eq('status', 'active')

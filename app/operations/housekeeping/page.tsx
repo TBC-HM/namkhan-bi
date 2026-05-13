@@ -120,31 +120,7 @@ export default async function HousekeepingPage() {
       subPages={OPERATIONS_SUBPAGES}
     >
 
-      {/* BLOCK 2: Filter bar (HK-specific shift toggle on top of the layout's FilterStrip) */}
-      <div
-        style={{
-          display: 'flex',
-          gap: 8,
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          marginTop: 14,
-          padding: '10px 12px',
-          background: 'var(--paper-warm)',
-          border: '1px solid var(--paper-deep)',
-          borderRadius: 8,
-        }}
-      >
-        <span style={shiftPillActive}>AM shift</span>
-        <span style={shiftPill}>PM shift</span>
-        <span style={shiftPill}>Night</span>
-        <span style={shiftPill}>All categories</span>
-        <span style={shiftPill}>All staff</span>
-        <span style={{ marginLeft: 'auto', fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>
-          Property + date + segment filters above (layout)
-        </span>
-      </div>
-
-      {/* BLOCK 4: KPI row — 6 tiles */}
+      {/* BLOCK 4: KPI row — 6 tiles · canonical order: KPIs first */}
       <div
         style={{
           display: 'grid',
@@ -196,6 +172,31 @@ export default async function HousekeepingPage() {
           needs={dnd ? undefined : 'Data needed · Gap-H5'}
           valueColor="var(--brass)"
         />
+      </div>
+
+      {/* HK-specific filter row — sits UNDER KPIs per canonical order.
+          Pills are placeholders until ops.hk_assignments ships. */}
+      <div
+        style={{
+          display: 'flex',
+          gap: 8,
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          marginTop: 14,
+          padding: '10px 12px',
+          background: 'var(--paper-warm)',
+          border: '1px solid var(--paper-deep)',
+          borderRadius: 8,
+        }}
+      >
+        <span style={shiftPillActive}>AM shift</span>
+        <span style={shiftPill}>PM shift</span>
+        <span style={shiftPill}>Night</span>
+        <span style={shiftPill}>All categories</span>
+        <span style={shiftPill}>All staff</span>
+        <span style={{ marginLeft: 'auto', fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>
+          Property + date + segment filters above (layout)
+        </span>
       </div>
 
       {/* BLOCK 5: Agent strip */}

@@ -228,6 +228,40 @@ export default async function ChannelsPage({ searchParams }: Props) {
         eyebrow="mv_channel_economics"
         actions={<ArtifactActions context={ctx('table', `Channel performance · ${period.label}`)} />}
       >
+        {(worstCancel.name && worstCancel.pct > 25) || commissionPctOfRev > 12 ? (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+            {worstCancel.name && worstCancel.pct > 25 && (
+              <span
+                title={`${worstCancel.name} showing ${worstCancel.pct.toFixed(1)}% cancellation in ${period.label}. Investigate rate plan, deposit policy, and lead-time profile.`}
+                style={{
+                  fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
+                  letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase',
+                  padding: '4px 10px', borderRadius: 4,
+                  background: worstCancel.pct > 30 ? 'rgba(122,42,34,0.20)' : 'rgba(168,133,74,0.18)',
+                  color: worstCancel.pct > 30 ? 'var(--st-bad)' : 'var(--brass)',
+                  border: `1px solid ${worstCancel.pct > 30 ? 'var(--st-bad)' : 'var(--brass)'}`,
+                }}
+              >
+                ⚠ Cancel watch · <strong>{worstCancel.name}</strong> {worstCancel.pct.toFixed(1)}%
+              </span>
+            )}
+            {commissionPctOfRev > 12 && (
+              <span
+                title={`OTA commissions are ${commissionPctOfRev.toFixed(1)}% of total revenue (${fmtMoney(totalCommission, 'USD')} in ${period.label}). Push direct mix above 35% to reduce dependency.`}
+                style={{
+                  fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
+                  letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase',
+                  padding: '4px 10px', borderRadius: 4,
+                  background: 'rgba(168,133,74,0.18)',
+                  color: 'var(--brass)',
+                  border: '1px solid var(--brass)',
+                }}
+              >
+                ⚠ Commission load · {commissionPctOfRev.toFixed(1)}% of rev ({fmtMoney(totalCommission, 'USD')})
+              </span>
+            )}
+          </div>
+        ) : null}
         {channels.length === 0 ? (
           <div style={{ padding: 24, color: 'var(--ink-mute)', fontStyle: 'italic' }}>
             No channel data in selected window. Apply sql/02_channel_economics_window.sql first.

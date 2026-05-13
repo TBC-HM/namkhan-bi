@@ -40,7 +40,7 @@ export async function POST(req: Request) {
 
   // Read PO + line for context (vendor_id, item_id, location)
   const { data: po, error: poErr } = await admin
-    .schema('proc')
+    .schema('procurement')
     .from('purchase_orders')
     .select('po_id, vendor_id, delivery_location_id, status')
     .eq('po_id', b.po_id)
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
   }
 
   const { data: line, error: lErr } = await admin
-    .schema('proc')
+    .schema('procurement')
     .from('po_items')
     .select('po_item_id, item_id, quantity_ordered, quantity_received, unit_cost_usd, unit_cost_lak, fx_rate_used')
     .eq('po_item_id', b.po_item_id)
@@ -85,7 +85,7 @@ export async function POST(req: Request) {
 
   // 2. Insert proc.receipts row, link to movement
   const { error: rcErr } = await admin
-    .schema('proc')
+    .schema('procurement')
     .from('receipts')
     .insert({
       po_id: po.po_id,
@@ -104,14 +104,14 @@ export async function POST(req: Request) {
   // 3. Update po_items.quantity_received
   const newReceived = Number(line.quantity_received ?? 0) + Number(b.received_qty);
   await admin
-    .schema('proc')
+    .schema('procurement')
     .from('po_items')
     .update({ quantity_received: newReceived })
     .eq('po_item_id', b.po_item_id);
 
   // 4. Check whether all lines are fully received → mark PO 'received'
   const { data: allLines } = await admin
-    .schema('proc')
+    .schema('procurement')
     .from('po_items')
     .select('quantity_ordered, quantity_received')
     .eq('po_id', po.po_id);
@@ -119,9 +119,9 @@ export async function POST(req: Request) {
     (ln: any) => Number(ln.quantity_received ?? 0) >= Number(ln.quantity_ordered ?? 0),
   );
   if (allReceived && po.status !== 'received' && po.status !== 'invoiced' && po.status !== 'closed') {
-    await admin.schema('proc').from('purchase_orders').update({ status: 'received' }).eq('po_id', po.po_id);
+    await admin.schema('procurement').from('purchase_orders').update({ status: 'received' }).eq('po_id', po.po_id);
   } else if (Number(b.received_qty) > 0 && po.status === 'sent') {
-    await admin.schema('proc').from('purchase_orders').update({ status: 'partially_received' }).eq('po_id', po.po_id);
+    await admin.schema('procurement').from('purchase_orders').update({ status: 'partially_received' }).eq('po_id', po.po_id);
   }
 
   return NextResponse.json({ ok: true, movement_id: mov.movement_id });

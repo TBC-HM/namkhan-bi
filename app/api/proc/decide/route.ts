@@ -35,7 +35,7 @@ export async function POST(req: Request) {
   const actorRole = body.actor_role ?? 'owner';
 
   const { data, error } = await admin
-    .schema('proc')
+    .schema('procurement')
     .rpc('proc_pr_decide', {
       p_pr_id: body.pr_id,
       p_actor_id: null,

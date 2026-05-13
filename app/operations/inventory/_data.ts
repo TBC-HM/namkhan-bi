@@ -57,9 +57,9 @@ export async function getInventorySnapshot(): Promise<InvSnapshotKpis> {
     safe(admin.schema('inv').from('items').select('item_id, last_unit_cost_usd, is_active').then(r => r.data ?? []), [] as any[]),
     safe(admin.schema('inv').from('stock_balance').select('item_id, location_id, quantity_on_hand, last_movement_at').then(r => r.data ?? []), [] as any[]),
     safe(admin.schema('inv').from('par_levels').select('item_id, location_id, par_quantity').then(r => r.data ?? []), [] as any[]),
-    safe(admin.schema('proc').from('purchase_orders').select('total_usd, status').in('status', ['draft','sent','partially_received']).then(r => r.data ?? []), [] as any[]),
-    safe(admin.schema('proc').from('requests').select('pr_id, status').in('status', ['submitted','pending_gm','pending_owner']).then(r => r.data ?? []), [] as any[]),
-    safe(admin.schema('suppliers').from('suppliers').select('supplier_id, status, is_local_sourcing').eq('status', 'active').then(r => r.data ?? []), [] as any[]),
+    safe(admin.schema('procurement').from('purchase_orders').select('total_usd, status').in('status', ['draft','sent','partially_received']).then(r => r.data ?? []), [] as any[]),
+    safe(admin.schema('procurement').from('requests').select('pr_id, status').in('status', ['submitted','pending_gm','pending_owner']).then(r => r.data ?? []), [] as any[]),
+    safe(admin.schema('procurement').from('suppliers').select('supplier_id, status, is_local_sourcing').eq('status', 'active').then(r => r.data ?? []), [] as any[]),
     safe(admin.schema('fa').from('capex_pipeline').select('estimated_cost_usd, status').then(r => r.data ?? []), [] as any[]),
     safe(admin.schema('fa').from('assets').select('purchase_cost_usd, residual_value_usd, in_service_date, useful_life_years, status').eq('status', 'in_service').then(r => r.data ?? []), [] as any[]),
     safe(admin.schema('inv').from('movements').select('total_cost_usd').eq('movement_type', 'write_off').gte('movement_date', monthStartIso).then(r => r.data ?? []), [] as any[]),
@@ -320,8 +320,8 @@ export async function getOpenPOs(): Promise<PoRow[]> {
   let admin;
   try { admin = getSupabaseAdmin(); } catch { return []; }
   const [pos, sups, locs] = await Promise.all([
-    safe(admin.schema('proc').from('purchase_orders').select('po_number, vendor_id, delivery_location_id, expected_delivery_date, total_usd, status, issued_at').order('issued_at', { ascending: false }).then(r => r.data ?? []), [] as any[]),
-    safe(admin.schema('suppliers').from('suppliers').select('supplier_id, name').then(r => r.data ?? []), [] as any[]),
+    safe(admin.schema('procurement').from('purchase_orders').select('po_number, vendor_id, delivery_location_id, expected_delivery_date, total_usd, status, issued_at').order('issued_at', { ascending: false }).then(r => r.data ?? []), [] as any[]),
+    safe(admin.schema('procurement').from('suppliers').select('supplier_id, name').then(r => r.data ?? []), [] as any[]),
     safe(admin.schema('inv').from('locations').select('location_id, location_name').then(r => r.data ?? []), [] as any[]),
   ]);
   const supMap = new Map<string, string>();
@@ -355,7 +355,7 @@ export async function getOpenRequests(): Promise<PrRow[]> {
   let admin;
   try { admin = getSupabaseAdmin(); } catch { return []; }
   const [prs, locs] = await Promise.all([
-    safe(admin.schema('proc').from('requests').select('pr_number, pr_title, requesting_dept, delivery_location_id, needed_by_date, priority, total_estimated_usd, status, submitted_at').order('submitted_at', { ascending: false }).then(r => r.data ?? []), [] as any[]),
+    safe(admin.schema('procurement').from('requests').select('pr_number, pr_title, requesting_dept, delivery_location_id, needed_by_date, priority, total_estimated_usd, status, submitted_at').order('submitted_at', { ascending: false }).then(r => r.data ?? []), [] as any[]),
     safe(admin.schema('inv').from('locations').select('location_id, location_name').then(r => r.data ?? []), [] as any[]),
   ]);
   const locMap = new Map<number, string>();
@@ -389,7 +389,7 @@ export interface SupplierRow {
 export async function getSuppliers(): Promise<SupplierRow[]> {
   let admin;
   try { admin = getSupabaseAdmin(); } catch { return []; }
-  const { data } = await safe(admin.schema('suppliers').from('suppliers')
+  const { data } = await safe(admin.schema('procurement').from('suppliers')
     .select('code, name, supplier_type, country, city, is_local_sourcing, reliability_score, quality_score, lead_time_days, payment_terms_days')
     .eq('status', 'active').order('reliability_score', { ascending: false }), { data: [] as any[] });
   return (data ?? []).map((s: any) => ({
@@ -614,7 +614,7 @@ export async function getParStatus(): Promise<ParStatusRow[]> {
       .select('item_id, sku, item_name, location_id, location_name, par_quantity, effective_min, effective_max, on_hand, par_status, pct_of_par, short_quantity, last_unit_cost_usd, reorder_value_usd, primary_vendor_id')
       .order('pct_of_par', { ascending: true, nullsFirst: true }),
       { data: [] as any[] }),
-    safe(admin.schema('suppliers').from('suppliers').select('supplier_id, name'),
+    safe(admin.schema('procurement').from('suppliers').select('supplier_id, name'),
       { data: [] as any[] }),
   ]);
   const supMap = new Map<string, string>();
@@ -673,7 +673,7 @@ export async function getSupplierSummaries(): Promise<SupplierSummaryRow[]> {
   let admin;
   try { admin = getSupabaseAdmin(); } catch { return []; }
   const { data } = await safe(
-    admin.schema('suppliers').from('v_supplier_summary')
+    admin.schema('procurement').from('v_supplier_summary')
       .select('supplier_id, code, name, legal_name, supplier_type, country, city, distance_km, is_local_sourcing, email, phone, website, payment_terms_days, currency, lead_time_days, reliability_score, quality_score, sustainability_score, status, contact_count, items_supplied, last_price_update, alternate_count')
       .order('reliability_score', { ascending: false, nullsFirst: false }),
     { data: [] as any[] }
@@ -716,7 +716,7 @@ export async function getLocalSourcing(): Promise<LocalSourcingRow> {
   let admin;
   try { admin = getSupabaseAdmin(); } catch { return empty; }
   const { data } = await safe(
-    admin.schema('suppliers').from('v_local_sourcing_pct').select('*').limit(1).single(),
+    admin.schema('procurement').from('v_local_sourcing_pct').select('*').limit(1).single(),
     { data: null as any }
   );
   if (!data) return empty;
@@ -786,18 +786,18 @@ export async function getSupplierDetail(supplierId: string): Promise<SupplierDet
   try { admin = getSupabaseAdmin(); } catch { return empty; }
 
   const [summaryRes, contactsRes, pricesRes, altsRes, itemsRes, catsRes, allSupsRes] = await Promise.all([
-    safe(admin.schema('suppliers').from('v_supplier_summary').select('*').eq('supplier_id', supplierId).limit(1).maybeSingle(),
+    safe(admin.schema('procurement').from('v_supplier_summary').select('*').eq('supplier_id', supplierId).limit(1).maybeSingle(),
       { data: null as any }),
-    safe(admin.schema('suppliers').from('contacts').select('contact_id, name, title, email, phone, whatsapp, is_primary, notes').eq('supplier_id', supplierId).order('is_primary', { ascending: false }).order('name'),
+    safe(admin.schema('procurement').from('contacts').select('contact_id, name, title, email, phone, whatsapp, is_primary, notes').eq('supplier_id', supplierId).order('is_primary', { ascending: false }).order('name'),
       { data: [] as any[] }),
-    safe(admin.schema('suppliers').from('price_history').select('price_id, effective_date, inv_sku, unit_price_usd, unit_price_lak, min_order_qty, source, source_ref, notes').eq('supplier_id', supplierId).order('effective_date', { ascending: false }).limit(200),
+    safe(admin.schema('procurement').from('price_history').select('price_id, effective_date, inv_sku, unit_price_usd, unit_price_lak, min_order_qty, source, source_ref, notes').eq('supplier_id', supplierId).order('effective_date', { ascending: false }).limit(200),
       { data: [] as any[] }),
-    safe(admin.schema('suppliers').from('alternates').select('alt_id, alternate_supplier_id, preference_rank, notes').eq('primary_supplier_id', supplierId).order('preference_rank'),
+    safe(admin.schema('procurement').from('alternates').select('alt_id, alternate_supplier_id, preference_rank, notes').eq('primary_supplier_id', supplierId).order('preference_rank'),
       { data: [] as any[] }),
     safe(admin.schema('inv').from('items').select('item_id, sku, item_name, category_id, last_unit_cost_usd, primary_vendor_id, alternate_vendor_id').or(`primary_vendor_id.eq.${supplierId},alternate_vendor_id.eq.${supplierId}`),
       { data: [] as any[] }),
     safe(admin.schema('inv').from('categories').select('category_id, name'), { data: [] as any[] }),
-    safe(admin.schema('suppliers').from('suppliers').select('supplier_id, code, name'), { data: [] as any[] }),
+    safe(admin.schema('procurement').from('suppliers').select('supplier_id, code, name'), { data: [] as any[] }),
   ]);
 
   const summary = summaryRes.data ?? null;

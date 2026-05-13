@@ -37,7 +37,7 @@ export async function POST(req: Request) {
   // Reject / more_info_needed — just update proposal
   if (body.decision !== 'approve') {
     const { error } = await admin
-      .schema('proc')
+      .schema('procurement')
       .from('new_item_proposals')
       .update({
         status: body.decision === 'reject' ? 'rejected' : 'more_info_needed',
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
 
   // Approve flow: read proposal, create item, link back
   const { data: prop, error: rErr } = await admin
-    .schema('proc')
+    .schema('procurement')
     .from('new_item_proposals')
     .select('*')
     .eq('proposal_id', body.proposal_id)
@@ -83,7 +83,7 @@ export async function POST(req: Request) {
   if (iErr || !item) return NextResponse.json({ error: iErr?.message ?? 'Insert item failed' }, { status: 500 });
 
   await admin
-    .schema('proc')
+    .schema('procurement')
     .from('new_item_proposals')
     .update({
       status: 'approved',

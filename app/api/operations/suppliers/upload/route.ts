@@ -154,7 +154,7 @@ export async function POST(req: Request) {
 
   const codes = valid.map(v => v.code);
   const { data: existing, error: existingErr } = await admin
-    .schema('suppliers').from('suppliers')
+    .schema('procurement').from('suppliers')
     .select('code')
     .in('code', codes);
   if (existingErr) {
@@ -163,7 +163,7 @@ export async function POST(req: Request) {
   const existingSet = new Set<string>((existing ?? []).map((r: any) => r.code));
 
   const { data: upserted, error: upsertErr } = await admin
-    .schema('suppliers').from('suppliers')
+    .schema('procurement').from('suppliers')
     .upsert(valid, { onConflict: 'code' })
     .select('code');
 

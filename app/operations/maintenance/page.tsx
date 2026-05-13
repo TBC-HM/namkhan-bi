@@ -114,33 +114,7 @@ export default async function MaintenancePage() {
       subPages={OPERATIONS_SUBPAGES}
     >
 
-      {/* BLOCK 2 */}
-      <div
-        style={{
-          display: 'flex',
-          gap: 8,
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          marginTop: 14,
-          padding: '10px 12px',
-          background: 'var(--paper-warm)',
-          border: '1px solid var(--paper-deep)',
-          borderRadius: 8,
-        }}
-      >
-        <span style={pillActive}>Last 30 days</span>
-        <span style={pill}>7d</span>
-        <span style={pill}>90d</span>
-        <span style={pill}>YTD</span>
-        <span style={pill}>All categories</span>
-        <span style={pill}>All priorities</span>
-        <span style={pill}>All vendors</span>
-        <span style={{ marginLeft: 'auto', fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>
-          Property + segment filters above (layout)
-        </span>
-      </div>
-
-      {/* BLOCK 4 */}
+      {/* BLOCK 4 — KPIs first per canonical order. */}
       <div
         style={{
           display: 'grid',
@@ -193,6 +167,33 @@ export default async function MaintenancePage() {
           label="must-do + should-do"
           needs={capex ? undefined : 'Data needed · Gap-M9'}
         />
+      </div>
+
+      {/* Maintenance-specific filter row — sits UNDER KPIs per canonical order.
+          Pills are placeholders until ops.maintenance_tickets ships. */}
+      <div
+        style={{
+          display: 'flex',
+          gap: 8,
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          marginTop: 14,
+          padding: '10px 12px',
+          background: 'var(--paper-warm)',
+          border: '1px solid var(--paper-deep)',
+          borderRadius: 8,
+        }}
+      >
+        <span style={pillActive}>Last 30 days</span>
+        <span style={pill}>7d</span>
+        <span style={pill}>90d</span>
+        <span style={pill}>YTD</span>
+        <span style={pill}>All categories</span>
+        <span style={pill}>All priorities</span>
+        <span style={pill}>All vendors</span>
+        <span style={{ marginLeft: 'auto', fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>
+          Property + segment filters above (layout)
+        </span>
       </div>
 
       {/* BLOCK 5 */}

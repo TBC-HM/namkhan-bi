@@ -85,7 +85,7 @@ export async function POST(req: Request) {
 
   // Verify the supplier exists (cheap sanity check; helpful error vs FK violation)
   const { data: sup, error: supErr } = await admin
-    .schema('suppliers')
+    .schema('procurement')
     .from('suppliers')
     .select('supplier_id')
     .eq('supplier_id', supplier_id)
@@ -124,7 +124,7 @@ export async function POST(req: Request) {
   };
 
   const { data: inserted, error: insErr } = await admin
-    .schema('suppliers')
+    .schema('procurement')
     .from('price_history')
     .insert(insertRow)
     .select('price_id')

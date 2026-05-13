@@ -2,13 +2,9 @@
 import Page from '@/components/page/Page';
 import { FINANCE_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
-import StatusPill from '@/components/ui/StatusPill';
 import { supabaseGl } from '@/lib/supabase-gl';
 import MappingTable, { type ClassOption, type MappingRow } from './MappingTable';
-import {
-  FinanceStatusHeader, StatusCell, SectionHead,
-  metaSm, metaStrong, metaDim,
-} from '../_components/FinanceShell';
+import { SectionHead } from '../_components/FinanceShell';
 
 export const revalidate = 0;
 export const dynamic = 'force-dynamic';
@@ -76,28 +72,27 @@ export default async function MappingPage() {
   const total = rows.length;
   const coveragePct = total > 0 ? ((total - unclear.length) / total) * 100 : 0;
 
+  const mappingEyebrow = [
+    'Finance · Mapping',
+    'gl.v_account_class_status',
+    `${total} accounts`,
+    `${unclear.length} unclear (${fmtUsd(unclearTotal)})`,
+    `${coveragePct.toFixed(0)}% coverage`,
+  ].filter(Boolean).join(' · ');
+
   return (
-    <Page eyebrow="Finance · Mapping" title={<>Every account on a USALI <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>line</em> — or it's noise.</>} subPages={FINANCE_SUBPAGES}>
-      <FinanceStatusHeader
-        top={<>
-          <StatusCell label="SOURCE"><StatusPill tone="active">gl.v_account_class_status</StatusPill><span style={metaDim}>· classes</span></StatusCell>
-          <StatusCell label="ACCOUNTS"><span style={metaStrong}>{total}</span></StatusCell>
-          <StatusCell label="UNCLEAR"><StatusPill tone={unclear.length > 0 ? 'pending' : 'active'}>{unclear.length}</StatusPill><span style={metaDim}>{fmtUsd(unclearTotal)} pending</span></StatusCell>
-          <span style={{ flex: 1 }} />
-        </>}
-        bottom={<>
-          <StatusCell label="OVERRIDDEN"><span style={metaSm}>{overridden.length}</span><span style={metaDim}>{fmtUsd(overriddenTotal)}</span></StatusCell>
-          <StatusCell label="STANDARD"><span style={metaSm}>{standard.length}</span><span style={metaDim}>QB-classified</span></StatusCell>
-          <span style={{ flex: 1 }} />
-          <span style={metaDim}>USALI coverage {coveragePct.toFixed(0)}%</span>
-        </>}
-      />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
+    <Page eyebrow={mappingEyebrow} title={<>Every account on a USALI <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>line</em> — or it's noise.</>} subPages={FINANCE_SUBPAGES}>
+      {/* ─── 1. KPI tiles ───────────────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
         <KpiBox value={unclear.length} unit="count" label="Unclear accounts" tooltip="QB accounts with no USALI mapping yet — fall into 'Other / unmapped' on the P&L. Investigate weekly." />
         <KpiBox value={overridden.length} unit="count" label="Overridden"      tooltip="Accounts with a manual USALI override (preserved across re-syncs)." />
         <KpiBox value={standard.length} unit="count" label="Standard"          tooltip="Accounts mapped via the standard rule set in gl.account_mapping_rules." />
         <KpiBox value={total} unit="count" label="Total accounts"              tooltip="All QB accounts active in the chart of accounts." />
+        <KpiBox value={coveragePct} unit="pct" label="USALI coverage"          tooltip="(total − unclear) ÷ total × 100." />
+        <KpiBox value={unclearTotal} unit="usd" label="Unclear $ exposure"     tooltip="Σ |usd_total| across unclear accounts — money landing on 'Other / unmapped' until classified." />
       </div>
+
+      {/* No period selector — page works on full QB chart-of-accounts snapshot. */}
       {unclear.length > 0 && (
         <div style={{ marginTop: 18 }}>
           <SectionHead title="Needs your attention" emphasis={`${unclear.length} accounts`} sub="Pick a class · Save updates every gl_entry · refreshes mv_usali_pl_monthly" source="gl.v_account_class_status" />
