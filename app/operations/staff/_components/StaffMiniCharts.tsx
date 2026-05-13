@@ -24,9 +24,10 @@ const C = {
   brass:  'var(--brass, #a8854a)',
   moss:   '#1c4d3a',
   good:   '#2c7a4b',
-  bg:     'var(--surf-1, #fbf9f2)',
+  bg:     'var(--paper-warm, #f4ecd8)',
   border: 'var(--kpi-frame, rgba(168,133,74,0.45))',
   label:  'var(--ink, #1c1815)',
+  labelMute: 'var(--ink-mute, #7d7565)',
 };
 
 function monthLabel(iso: string): string {
@@ -35,29 +36,50 @@ function monthLabel(iso: string): string {
   return `${names[Number(m) - 1]} ${y.slice(2)}`;
 }
 
-function fmtUsdShort(v: number): string {
+const SYM: Record<string, string> = { USD: '$', EUR: '€', LAK: '₭' };
+function fmtCcyShort(v: number, ccy: string): string {
+  const sym = SYM[ccy] ?? '$';
   const abs = Math.abs(v);
-  if (abs >= 1_000_000) return `$${(abs / 1_000_000).toFixed(1)}M`;
-  if (abs >= 1_000)     return `$${Math.round(abs / 1_000)}k`;
-  return `$${Math.round(abs)}`;
+  if (ccy === 'LAK') {
+    if (abs >= 1_000_000_000) return `${sym}${(abs / 1_000_000_000).toFixed(1)}B`;
+    if (abs >= 1_000_000) return `${sym}${(abs / 1_000_000).toFixed(1)}M`;
+    if (abs >= 1_000) return `${sym}${Math.round(abs / 1_000)}k`;
+    return `${sym}${Math.round(abs)}`;
+  }
+  if (abs >= 1_000_000) return `${sym}${(abs / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000)     return `${sym}${Math.round(abs / 1_000)}k`;
+  return `${sym}${Math.round(abs)}`;
+}
+
+// USD per 1 unit — mirrors StaffPageContent. Charts feed USD; we render in native.
+const FROM_USD: Record<string, number> = { USD: 1, EUR: 1/1.08, LAK: 21800 };
+function usdToCcy(usd: number, ccy: string): number {
+  return usd * (FROM_USD[ccy] ?? 1);
 }
 
 export default function StaffMiniCharts({
   rows,
   selectedMonth,
+  nativeCurrency = 'USD',
 }: {
   rows: StaffTrendPoint[];
   selectedMonth: string;
+  nativeCurrency?: string;
 }) {
   const series = [...rows]
     .sort((a, b) => a.period_month.localeCompare(b.period_month))
-    .map(r => ({
-      m: monthLabel(r.period_month),
-      iso: r.period_month,
-      hc: Number(r.headcount || 0),
-      cost: Number(r.total_grand_usd || 0),
-      cph: r.headcount > 0 ? Number(r.total_grand_usd || 0) / r.headcount : 0,
-    }));
+    .map(r => {
+      const costUsd = Number(r.total_grand_usd || 0);
+      const costNative = usdToCcy(costUsd, nativeCurrency);
+      const cphNative = r.headcount > 0 ? costNative / r.headcount : 0;
+      return {
+        m: monthLabel(r.period_month),
+        iso: r.period_month,
+        hc: Number(r.headcount || 0),
+        cost: costNative,
+        cph: cphNative,
+      };
+    });
 
   if (series.length === 0) {
     return (
@@ -67,14 +89,19 @@ export default function StaffMiniCharts({
     );
   }
 
-  // Tooltip style + label
-  const tooltipStyle = {
+  // Tooltip style + label — explicit itemStyle/labelStyle so the dark Recharts
+  // default doesn't bleed through on Donna's cream theme.
+  const tooltipStyle: React.CSSProperties = {
     background: C.bg,
     border: `1px solid ${C.border}`,
     borderRadius: 4,
+    padding: '6px 10px',
     color: C.label,
     fontSize: 12,
+    boxShadow: '0 4px 12px rgba(0,0,0,0.18)',
   };
+  const itemStyle: React.CSSProperties  = { color: C.label, fontFamily: 'var(--sans)' };
+  const labelStyle: React.CSSProperties = { color: C.labelMute, fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 4 };
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
@@ -84,7 +111,7 @@ export default function StaffMiniCharts({
             <CartesianGrid stroke={C.grid} strokeDasharray="2 4" vertical={false} />
             <XAxis dataKey="m" tick={{ fill: C.axis, fontSize: 10 }} interval="preserveStartEnd" />
             <YAxis tick={{ fill: C.axis, fontSize: 10 }} domain={['auto','auto']} />
-            <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`${v}`, 'Headcount']} />
+            <Tooltip contentStyle={tooltipStyle} itemStyle={itemStyle} labelStyle={labelStyle} cursor={{ stroke: C.brass, strokeWidth: 1 }} formatter={(v: any) => [`${v}`, 'Headcount']} />
             <Line type="monotone" dataKey="hc" stroke={C.moss} strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 4 }} />
             <ReferenceDot
               x={series.find(s => s.iso === selectedMonth)?.m ?? ''}
@@ -95,13 +122,13 @@ export default function StaffMiniCharts({
         </ResponsiveContainer>
       </ChartCard>
 
-      <ChartCard title="Total cost · USD">
+      <ChartCard title={`Total cost · ${nativeCurrency}`}>
         <ResponsiveContainer>
           <LineChart data={series} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
             <CartesianGrid stroke={C.grid} strokeDasharray="2 4" vertical={false} />
             <XAxis dataKey="m" tick={{ fill: C.axis, fontSize: 10 }} interval="preserveStartEnd" />
-            <YAxis tick={{ fill: C.axis, fontSize: 10 }} tickFormatter={fmtUsdShort} />
-            <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [fmtUsdShort(Number(v)), 'Total cost']} />
+            <YAxis tick={{ fill: C.axis, fontSize: 10 }} tickFormatter={(v: number) => fmtCcyShort(v, nativeCurrency)} />
+            <Tooltip contentStyle={tooltipStyle} itemStyle={itemStyle} labelStyle={labelStyle} cursor={{ stroke: C.brass, strokeWidth: 1 }} formatter={(v: any) => [fmtCcyShort(Number(v), nativeCurrency), 'Total cost']} />
             <Line type="monotone" dataKey="cost" stroke={C.brass} strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 4 }} />
             <ReferenceDot
               x={series.find(s => s.iso === selectedMonth)?.m ?? ''}
@@ -112,13 +139,13 @@ export default function StaffMiniCharts({
         </ResponsiveContainer>
       </ChartCard>
 
-      <ChartCard title="Cost / head · USD">
+      <ChartCard title={`Cost / head · ${nativeCurrency}`}>
         <ResponsiveContainer>
           <LineChart data={series} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
             <CartesianGrid stroke={C.grid} strokeDasharray="2 4" vertical={false} />
             <XAxis dataKey="m" tick={{ fill: C.axis, fontSize: 10 }} interval="preserveStartEnd" />
-            <YAxis tick={{ fill: C.axis, fontSize: 10 }} tickFormatter={fmtUsdShort} />
-            <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [fmtUsdShort(Number(v)), 'Per head']} />
+            <YAxis tick={{ fill: C.axis, fontSize: 10 }} tickFormatter={(v: number) => fmtCcyShort(v, nativeCurrency)} />
+            <Tooltip contentStyle={tooltipStyle} itemStyle={itemStyle} labelStyle={labelStyle} cursor={{ stroke: C.brass, strokeWidth: 1 }} formatter={(v: any) => [fmtCcyShort(Number(v), nativeCurrency), 'Per head']} />
             <Line type="monotone" dataKey="cph" stroke={C.good} strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 4 }} />
             <ReferenceDot
               x={series.find(s => s.iso === selectedMonth)?.m ?? ''}

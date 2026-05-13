@@ -52,6 +52,24 @@ function salaryToUsd(amount: number, ccy: string | null | undefined): number {
   const rate = TO_USD[(ccy ?? 'LAK').toUpperCase()] ?? (1 / 21800);
   return amount * rate;
 }
+function usdToCcy(usd: number, ccy: string): number {
+  const rate = TO_USD[ccy.toUpperCase()] ?? 1;
+  return rate > 0 ? usd / rate : 0;
+}
+function fmtCcyShort(amount: number, ccy: string): string {
+  const abs = Math.abs(amount);
+  const sign = amount < 0 ? '−' : '';
+  const sym = ccy === 'EUR' ? '€' : ccy === 'LAK' ? '₭' : '$';
+  if (ccy === 'LAK') {
+    if (abs >= 1_000_000_000) return `${sign}${sym}${(abs / 1_000_000_000).toFixed(1)}B`;
+    if (abs >= 1_000_000) return `${sign}${sym}${(abs / 1_000_000).toFixed(1)}M`;
+    if (abs >= 1_000) return `${sign}${sym}${Math.round(abs / 1_000)}k`;
+    return `${sign}${sym}${Math.round(abs)}`;
+  }
+  if (abs >= 1_000_000) return `${sign}${sym}${(abs / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000) return `${sign}${sym}${(abs / 1_000).toFixed(1)}k`;
+  return `${sign}${sym}${Math.round(abs).toLocaleString('en-US')}`;
+}
 
 const ISSUE_META: Record<string, { label: string; sub: string }> = {
   missing_hire_date: { label: 'Missing hire date', sub: 'Contract import gap — separate handover.' },
@@ -357,14 +375,16 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
         { label: 'Active', value: totalActive, kind: 'count', hint: 'on register' },
         { label: 'Archived', value: archived.length, kind: 'count', hint: 'departed' },
         { label: 'Headcount paid', value: selHc, kind: 'count', hint: fmtPeriodLabel(selectedMonth) },
-        { label: 'Company cost', value: selCost, kind: 'money', tone: 'neutral', hint: fmtPeriodLabel(selectedMonth) },
-        { label: 'Cost / head', value: selCph, kind: 'money', hint: 'USD this month' },
-        { label: 'Monthly base', value: totalMonthlyUSD, kind: 'money', hint: `register sum · USD (from ${dominantCcy})` },
+        // PBS 2026-05-13: KPI money in native currency (€ for Donna, $ for Namkhan).
+        // selCost / selCph stored as USD internally — convert back for display.
+        { label: 'Company cost', value: fmtCcyShort(usdToCcy(selCost, dominantCcy), dominantCcy), tone: 'neutral', hint: fmtPeriodLabel(selectedMonth) },
+        { label: 'Cost / head', value: fmtCcyShort(usdToCcy(selCph, dominantCcy), dominantCcy), hint: `${dominantCcy} this month` },
+        { label: 'Monthly base', value: fmtCcyShort(usdToCcy(totalMonthlyUSD, dominantCcy), dominantCcy), hint: `register sum · ${dominantCcy}` },
         { label: 'DQ flags', value: totalFlags, kind: 'count', tone: totalFlags > 0 ? 'warn' : 'pos', hint: 'anomalies' },
       ] satisfies KpiStripItem[]} />
 
       <div style={{ marginTop: 20 }}>
-        <StaffMiniCharts rows={trendPoints} selectedMonth={selectedMonth} />
+        <StaffMiniCharts rows={trendPoints} selectedMonth={selectedMonth} nativeCurrency={dominantCcy} />
       </div>
 
       {noData && (
