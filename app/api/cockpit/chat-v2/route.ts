@@ -244,11 +244,65 @@ async function dispatch(req: DispatchRequest): Promise<DispatchResult> {
           continue;
         }
 
-        // request_peer_consult: handler validates target + counts a hop;
-        // model then has to compose the peer question in its reply. We
-        // pass the validated peer info back as the tool result. (A future
-        // pass can fire the peer Anthropic call inline and inject the
-        // answer — keeping the simpler shape for now to avoid runaway hops.)
+        // request_peer_consult: auto-fire the peer's Anthropic call with
+        // the question + peer's prompt, return the answer text inline as
+        // tool_result so the originating agent can quote it.
+        if (tu.name === 'request_peer_consult') {
+          const r = result as { ok: boolean; target_role?: string; target_display?: string; hop_count?: number; question?: string; error?: string };
+          if (r.ok && r.target_role && r.question) {
+            const peerHop = r.hop_count ?? localHop + 1;
+            if (peerHop > MAX_HOPS) {
+              toolResults.push({
+                type: 'tool_result',
+                tool_use_id: tu.id,
+                content: JSON.stringify({ ok: false, error: 'hop_limit_exceeded' }),
+              });
+              continue;
+            }
+            try {
+              const peerPrompt = await loadPromptByRole(r.target_role, propertyId);
+              const peerResponse = await callAnthropic(
+                peerPrompt,
+                [{ role: 'user', content: r.question }],
+                apiKey,
+              );
+              const peerText = (peerResponse.content
+                .filter(b => b.type === 'text') as TextBlock[])
+                .map(b => b.text).join('\n').trim();
+              agentsTouched.push({ role: peerPrompt.role, display_name: peerPrompt.display_name });
+              toolResults.push({
+                type: 'tool_result',
+                tool_use_id: tu.id,
+                content: JSON.stringify({
+                  ok: true,
+                  peer_role: r.target_role,
+                  peer_display: r.target_display,
+                  question: r.question,
+                  answer: peerText || '(peer returned no text)',
+                }),
+              });
+              localHop += 1;
+              ctx.hopCount = localHop;
+              continue;
+            } catch (err) {
+              toolResults.push({
+                type: 'tool_result',
+                tool_use_id: tu.id,
+                content: JSON.stringify({ ok: false, error: 'peer_call_failed', detail: (err as Error).message }),
+              });
+              continue;
+            }
+          }
+          // peer validation failed — pass the error back
+          toolResults.push({
+            type: 'tool_result',
+            tool_use_id: tu.id,
+            content: JSON.stringify(result),
+          });
+          continue;
+        }
+
+        // Default: push tool result back, let model react.
         toolResults.push({
           type: 'tool_result',
           tool_use_id: tu.id,

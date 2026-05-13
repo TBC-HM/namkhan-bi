@@ -13,6 +13,7 @@
 // handler is per-skill work tracked separately.
 
 import { route_to_hod, request_peer_consult, type HandoffContext, MAX_HOPS } from './handlers/handoff';
+import { query_supabase_view, read_knowledge_base, list_recent_tickets } from './handlers/dataAccess';
 
 // Inline Tool / InputSchema shapes — we hit Anthropic via raw fetch, not the
 // SDK, so the type doesn't need to come from @anthropic-ai/sdk.
@@ -52,25 +53,27 @@ const REG: Record<string, ToolSpec> = {
   // ─── Read-only reference & data ─────────────────────────────────────────
   query_supabase_view: {
     name: 'query_supabase_view',
-    description: 'Run a read-only SELECT against a whitelisted Supabase view. Property-scoped.',
+    description: 'Run a read-only SELECT against a whitelisted Supabase view. Filters use PostgREST operators (gt./gte./lt./lte./like./ilike./neq.) or plain equality. Returns at most 100 rows.',
     input_schema: {
       type: 'object',
       properties: {
-        view: { type: 'string', description: 'View name (must be in allowed list)' },
-        filters: { type: 'object', description: 'PostgREST-style filter object' },
+        view: { type: 'string', description: 'View name (must be in the allowed list — try query_supabase_view with view="_help" or a wrong name to see options)' },
+        filters: { type: 'object', description: 'PostgREST-style filter object (e.g. { property_id: 260955, night_date: "gte.2026-04-01" })' },
         limit: { type: 'integer', minimum: 1, maximum: 100 },
       },
       required: ['view'],
     },
+    handler: async (input) => query_supabase_view(input as { view: string; filters?: Record<string, string | number | boolean>; limit?: number }),
   },
   read_knowledge_base: {
     name: 'read_knowledge_base',
-    description: 'Lookup the curated KB by topic or key fact (exact match).',
+    description: 'Look up curated KB entries by topic. Returns top entries (max 20) sorted by importance × recency.',
     input_schema: {
       type: 'object',
       properties: { topic: { type: 'string' }, limit: { type: 'integer' } },
       required: ['topic'],
     },
+    handler: async (input) => read_knowledge_base(input as { topic: string; limit?: number }),
   },
   read_knowledge_base_semantic: {
     name: 'read_knowledge_base_semantic',
@@ -91,11 +94,12 @@ const REG: Record<string, ToolSpec> = {
   },
   list_recent_tickets: {
     name: 'list_recent_tickets',
-    description: 'List the most recent cockpit_tickets for the current scope.',
+    description: 'List the most recent cockpit_tickets (newest first, max 50).',
     input_schema: {
       type: 'object',
       properties: { limit: { type: 'integer', minimum: 1, maximum: 50 } },
     },
+    handler: async (input) => list_recent_tickets(input as { limit?: number }),
   },
   read_audit_log: {
     name: 'read_audit_log',
