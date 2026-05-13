@@ -36,6 +36,17 @@ interface UnmappedRow {
   days_active: number;
 }
 
+interface RecentRow {
+  staff_id: string | null;
+  external_employee_id: string;
+  full_name: string | null;
+  dept_name: string | null;
+  clock_in_at: string;
+  clock_out_at: string | null;
+  hours: number | null;
+  method: string | null;
+}
+
 function timeAgo(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
   const h = Math.floor(ms / 3_600_000);
@@ -79,12 +90,26 @@ const HEADER_TITLE: React.CSSProperties = {
   color: 'var(--brass)',
 };
 
+const NO_PROFILE_BADGE: React.CSSProperties = {
+  background: 'var(--oxblood, #6b1f1f)',
+  color: '#fff',
+  padding: '2px 7px',
+  borderRadius: 3,
+  fontFamily: 'var(--mono)',
+  fontSize: 9,
+  letterSpacing: '0.12em',
+  textTransform: 'uppercase',
+  fontWeight: 700,
+  whiteSpace: 'nowrap',
+};
+
 export function OnShiftAndUnmapped({
-  openShifts, unmapped, scores,
+  openShifts, unmapped, scores, recent,
 }: {
   openShifts: OpenRow[];
   unmapped: UnmappedRow[];
   scores: ScoreRow[];
+  recent: RecentRow[];
 }) {
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
   const handleClose = useCallback(() => setSelectedStaffId(null), []);
@@ -120,14 +145,23 @@ export function OnShiftAndUnmapped({
               <tbody>
                 {openShifts.map((r, i) => {
                   const clickable = !!r.staff_id;
+                  const unmappedFlag = !r.staff_id;
+                  const rowBg = unmappedFlag ? 'rgba(178,60,42,0.10)' : undefined;
                   return (
                     <tr key={i}
                         onClick={() => clickable && setSelectedStaffId(r.staff_id)}
-                        style={{ cursor: clickable ? 'pointer' : 'default' }}>
+                        style={{ cursor: clickable ? 'pointer' : 'default', background: rowBg }}>
                       <td style={{ ...COMMON_TD, fontWeight: 500 }}>
-                        {r.full_name ?? <span style={{ color: 'var(--ink-faint)' }}>{`#${r.external_employee_id}`}</span>}
+                        {r.full_name ?? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <span style={NO_PROFILE_BADGE}>NO PROFILE</span>
+                            <span style={{ fontFamily: 'var(--mono)', color: 'var(--oxblood-soft)' }}>#{r.external_employee_id}</span>
+                          </span>
+                        )}
                       </td>
-                      <td style={{ ...COMMON_TD, color: 'var(--ink-soft)' }}>{r.dept_name ?? '—'}</td>
+                      <td style={{ ...COMMON_TD, color: unmappedFlag ? 'var(--oxblood-soft)' : 'var(--ink-soft)' }}>
+                        {r.dept_name ?? (unmappedFlag ? '— follow up' : '—')}
+                      </td>
                       <td style={{ ...COMMON_TD, fontFamily: 'var(--mono)', fontSize: 12 }}>{fmtClock(r.clock_in_at)}</td>
                       <td style={{ ...COMMON_TD, fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--st-good, #2c7a4b)' }}>
                         {timeAgo(r.clock_in_at)}
@@ -183,6 +217,76 @@ export function OnShiftAndUnmapped({
                     </td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </details>
+
+      {/* Recent activity — ALL clock events, mapped + unmapped, last 7d */}
+      <details open style={{ marginTop: 16 }}>
+        <summary style={HEADER_TITLE}>
+          ▾ Recent clock activity · last 7 days · {recent.length} events
+          {' '}
+          <span style={{ textTransform: 'none', letterSpacing: 'normal', color: 'var(--oxblood-soft)' }}>
+            ({recent.filter(r => !r.staff_id).length} unprofiled — red rows need follow-up)
+          </span>
+        </summary>
+        <div style={{ ...WRAPPER, marginTop: 10, maxHeight: 480, overflowY: 'auto' }}>
+          {recent.length === 0 ? (
+            <div style={{ padding: 16, color: 'var(--ink-mute)', fontStyle: 'italic', textAlign: 'center' }}>
+              No clock events in the last 7 days.
+            </div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead style={{ position: 'sticky', top: 0, background: 'var(--paper)', zIndex: 1 }}>
+                <tr>
+                  <th style={COMMON_TH}>Date</th>
+                  <th style={COMMON_TH}>Name</th>
+                  <th style={COMMON_TH}>Department</th>
+                  <th style={COMMON_TH}>Clock in</th>
+                  <th style={COMMON_TH}>Clock out</th>
+                  <th style={{ ...COMMON_TH, textAlign: 'right' }}>Hours</th>
+                  <th style={COMMON_TH}>Method</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recent.map((r, i) => {
+                  const clickable = !!r.staff_id;
+                  const unmappedFlag = !r.staff_id;
+                  const rowBg = unmappedFlag ? 'rgba(178,60,42,0.10)' : undefined;
+                  const stillOn = !r.clock_out_at;
+                  return (
+                    <tr key={i}
+                        onClick={() => clickable && setSelectedStaffId(r.staff_id)}
+                        style={{ cursor: clickable ? 'pointer' : 'default', background: rowBg }}>
+                      <td style={{ ...COMMON_TD, fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--ink-mute)' }}>
+                        {new Date(r.clock_in_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </td>
+                      <td style={{ ...COMMON_TD, fontWeight: 500 }}>
+                        {r.full_name ?? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <span style={NO_PROFILE_BADGE}>NO PROFILE</span>
+                            <span style={{ fontFamily: 'var(--mono)', color: 'var(--oxblood-soft)' }}>#{r.external_employee_id}</span>
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ ...COMMON_TD, color: unmappedFlag ? 'var(--oxblood-soft)' : 'var(--ink-soft)' }}>
+                        {r.dept_name ?? (unmappedFlag ? '— follow up' : '—')}
+                      </td>
+                      <td style={{ ...COMMON_TD, fontFamily: 'var(--mono)', fontSize: 12 }}>{fmtClock(r.clock_in_at)}</td>
+                      <td style={{ ...COMMON_TD, fontFamily: 'var(--mono)', fontSize: 12, color: stillOn ? 'var(--st-good, #2c7a4b)' : 'var(--ink-soft)' }}>
+                        {r.clock_out_at ? fmtClock(r.clock_out_at) : 'on shift'}
+                      </td>
+                      <td style={{ ...COMMON_TD, textAlign: 'right', fontFamily: 'var(--mono)', fontSize: 12 }}>
+                        {r.hours != null ? `${Number(r.hours).toFixed(1)}h` : '—'}
+                      </td>
+                      <td style={{ ...COMMON_TD, fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                        {r.method ?? '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}

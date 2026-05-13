@@ -41,6 +41,17 @@ interface OpenRow {
   method: string | null;
 }
 
+interface RecentRow {
+  staff_id: string | null;
+  external_employee_id: string;
+  full_name: string | null;
+  dept_name: string | null;
+  clock_in_at: string;
+  clock_out_at: string | null;
+  hours: number | null;
+  method: string | null;
+}
+
 interface UnmappedRow {
   ext_id: string;
   clock_events: number;
@@ -58,12 +69,20 @@ export default async function AttendancePageContent({
   propertyId: number;
   propertyLabel?: string;
 }) {
-  const [kpiRes, dailyRes, scoresRes, openRes, unmappedRes] = await Promise.all([
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const [kpiRes, dailyRes, scoresRes, openRes, unmappedRes, recentRes] = await Promise.all([
     supabase.schema('ops').from('v_attendance_kpis').select('*').eq('property_id', propertyId).maybeSingle(),
     supabase.schema('ops').from('v_attendance_daily_trend').select('*').eq('property_id', propertyId).order('work_date'),
     supabase.schema('ops').from('v_staff_attendance_score').select('*').eq('property_id', propertyId).order('hours_30d', { ascending: false }),
     supabase.schema('ops').from('v_timeclock_enriched').select('staff_id, external_employee_id, full_name, dept_name, clock_in_at, method').eq('property_id', propertyId).is('clock_out_at', null).gte('clock_in_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()).order('clock_in_at', { ascending: false }),
     supabase.schema('ops').from('v_staff_unmapped').select('*').eq('property_id', propertyId).order('events_30d', { ascending: false }),
+    // Recent activity — ALL clock events last 7 days, mapped + unmapped
+    supabase.schema('ops').from('v_timeclock_enriched')
+      .select('staff_id, external_employee_id, full_name, dept_name, clock_in_at, clock_out_at, hours, method')
+      .eq('property_id', propertyId)
+      .gte('clock_in_at', sevenDaysAgo)
+      .order('clock_in_at', { ascending: false })
+      .limit(300),
   ]);
 
   const kpi   = (kpiRes.data as KpiRow | null) ?? null;
@@ -71,6 +90,7 @@ export default async function AttendancePageContent({
   const scores = (scoresRes.data as ScoreRow[] | null) ?? [];
   const openShifts = (openRes.data as OpenRow[] | null) ?? [];
   const unmapped = (unmappedRes.data as UnmappedRow[] | null) ?? [];
+  const recent = (recentRes.data as RecentRow[] | null) ?? [];
 
   const top10: TopEmployee[] = scores.slice(0, 10).map(s => ({ full_name: s.full_name, hours: Number(s.hours_30d) }));
 
@@ -119,7 +139,7 @@ export default async function AttendancePageContent({
             <AttendanceCharts daily={daily} topEmployees={top10} />
           </div>
 
-          <OnShiftAndUnmapped openShifts={openShifts} unmapped={unmapped} scores={scores} />
+          <OnShiftAndUnmapped openShifts={openShifts} unmapped={unmapped} scores={scores} recent={recent} />
         </>
       )}
     </Page>
