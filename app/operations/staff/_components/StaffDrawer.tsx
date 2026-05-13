@@ -16,6 +16,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { fetchStaffDetail, type StaffDetail } from '../_actions/fetchStaffDetail';
+import { SkillsEditor } from './SkillsEditor';
 
 // Annual-leave entitlement per property — statutory minimums.
 //   Namkhan (260955) = 15 days (Lao Labor Law Art. 38)
@@ -210,9 +211,17 @@ export function StaffDrawer({ staffId, onClose }: Props) {
                 <EvaluationStub />
               </Section>
 
-              {/* Skills — always visible per PBS 2026-05-13. Em-dash when empty so the
-                  section is consistent across all employees. */}
-              <Section title="Skills">
+              {/* Skills — always visible with inline editor (PBS 2026-05-13). */}
+              <section style={S.section}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <div style={S.sectionTitle}>Skills</div>
+                  <SkillsEditor
+                    staffId={detail.staff_id}
+                    propertyId={detail.property_id}
+                    initialSkills={detail.skills ?? []}
+                    onSaved={(next) => setDetail((prev) => (prev ? { ...prev, skills: next } : prev))}
+                  />
+                </div>
                 {detail.skills && detail.skills.length > 0 ? (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {detail.skills.map((s) => (
@@ -221,10 +230,10 @@ export function StaffDrawer({ staffId, onClose }: Props) {
                   </div>
                 ) : (
                   <div style={{ fontSize: 12, color: 'var(--ink-faint)', fontStyle: 'italic' }}>
-                    — no skills tagged yet
+                    — no skills tagged yet · click Edit to add
                   </div>
                 )}
-              </Section>
+              </section>
 
               {/* DQ flags */}
               {detail.dq_flags && detail.dq_flags.length > 0 && (
