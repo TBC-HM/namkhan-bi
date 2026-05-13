@@ -93,6 +93,14 @@
   --tbl-border-strong: rgba(232, 225, 206, 0.18);
   --tbl-row-hover:  rgba(232, 225, 206, 0.05);
 
+  /* PBS 2026-05-13: visible brass-tinted frame for KPI tiles + panels.
+   * Light enough to read as a luxury accent, strong enough to delineate
+   * each box on the dark canvas. Donna ThemeInjector overrides to brass
+   * at lower opacity for the cream theme so the frame stays subtle.
+   */
+  --kpi-frame:        rgba(168, 133, 74, 0.32);
+  --kpi-frame-hover:  rgba(168, 133, 74, 0.55);
+
   /* Status-tint backgrounds + borders for badges, cells, alerts.
    * Use these instead of inline hex tints so the success/warn/bad
    * vocabulary stays unified across pages. */
@@ -611,7 +619,7 @@ table:not(.data-table) tbody tr:hover td {
 .kpi-box {
   position: relative;
   background: var(--tbl-bg);
-  border: 1px solid var(--tbl-border);
+  border: 1px solid var(--kpi-frame);
   border-radius: 8px;
   padding: 14px 16px;
   min-height: 108px;
@@ -623,7 +631,7 @@ table:not(.data-table) tbody tr:hover td {
 }
 .kpi-box:hover {
   box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.45);
-  border-color: var(--brass-soft);
+  border-color: var(--kpi-frame-hover);
   transform: translateY(-1px);
 }
 .kpi-box[data-state="data-needed"] {
@@ -720,7 +728,7 @@ table:not(.data-table) tbody tr:hover td {
  */
 .kpi-tile {
   background: var(--tbl-bg);
-  border: 1px solid var(--tbl-border);
+  border: 1px solid var(--kpi-frame);
   color: var(--tbl-fg);
   border-radius: 8px;
   padding: 14px 16px;
@@ -733,8 +741,8 @@ table:not(.data-table) tbody tr:hover td {
   position: relative;
 }
 .kpi-tile:hover {
-  box-shadow: 0 6px 18px -8px rgba(28, 24, 21, 0.18);
-  border-color: var(--brass-soft);
+  box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.45);
+  border-color: var(--kpi-frame-hover);
   transform: translateY(-1px);
 }
 .kpi-tile-scope {
@@ -786,7 +794,7 @@ table:not(.data-table) tbody tr:hover td {
  * litters every page right now. */
 .panel {
   background: var(--tbl-bg);
-  border: 1px solid var(--tbl-border);
+  border: 1px solid var(--kpi-frame);
   border-radius: 8px;
   padding: 14px 16px;
   color: var(--tbl-fg);
@@ -1139,8 +1147,10 @@ table tbody td { padding: 11px 10px; vertical-align: middle; }
 
 .kpi-tile {
   padding: 16px;
-  background: var(--paper-warm);
-  border: 1px solid var(--line);
+  background: var(--tbl-bg);
+  border: 1px solid var(--kpi-frame);
+  border-radius: 8px;
+  color: var(--tbl-fg);
   display: flex;
   flex-direction: column;
   min-height: 92px;

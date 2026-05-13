@@ -198,6 +198,10 @@ export default function ThemeInjector({
       --accent-3: ${L.accent3};
       --accent-4: ${L.accent4};
 
+      /* KPI canonical frame on Donna — subtle brass on cream. */
+      --kpi-frame:       rgba(168, 133, 74, 0.45);
+      --kpi-frame-hover: rgba(168, 133, 74, 0.75);
+
       /* Canonical table tokens (PBS 2026-05-13) — light override. */
       --tbl-bg: ${L.surf1};
       --tbl-bg-elev: ${L.surf2};
