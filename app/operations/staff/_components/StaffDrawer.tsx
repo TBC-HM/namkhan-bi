@@ -478,6 +478,9 @@ function PayslipBreakdown({ detail }: { detail: StaffDetail }) {
       <PayslipRow label="Internet allowance" value={net}   ccy={ccy} tone="pos" />
       {other > 0 && <PayslipRow label="Other allowance" value={other} ccy={ccy} tone="pos" />}
       {adj !== 0 && <PayslipRow label="Adjustment" value={adj} ccy={ccy} tone={adj >= 0 ? 'pos' : 'neg'} />}
+      {/* GROSS subtotal — sum of all earnings before deductions */}
+      <div style={{ height: 1, background: 'var(--line-soft)', margin: '6px 0' }} />
+      <PayslipRow label="GROSS" value={base + ot15 + ot2x + sc + gas + net + other + adj} ccy={ccy} bold />
       {dedn > 0 && <PayslipRow label="Deduction"  value={-dedn} ccy={ccy} tone="neg" />}
       {sso > 0  && <PayslipRow label="SSO 5.5%"   value={-sso}  ccy={ccy} tone="neg" />}
       {tax > 0  && <PayslipRow label="Income tax" value={-tax}  ccy={ccy} tone="neg" />}

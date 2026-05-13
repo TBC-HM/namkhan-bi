@@ -21,6 +21,9 @@ type Row = {
   hourly_cost_lak: number;
   hire_date: string | null;
   last_payroll_period: string | null;
+  last_payroll_total_usd?: number | null;
+  last_payroll_cost_lak?: number | null;
+  last_payroll_net_lak?: number | null;
   payslip_pdf_status: 'current' | 'overdue' | 'never';
   flag_missing_hire_date: boolean;
   flag_missing_contract: boolean;
@@ -184,8 +187,9 @@ export function StaffTable({ rows, onSelect, selectedId }: StaffTableProps) {
               <th style={tableStyles.th}>Position</th>
               <th style={tableStyles.th}>Department</th>
               <th style={tableStyles.th}>Type</th>
-              <th style={{ ...tableStyles.th, ...tableStyles.thRight }}>Monthly</th>
-              <th style={{ ...tableStyles.th, ...tableStyles.thRight }}>Hourly</th>
+              <th style={{ ...tableStyles.th, ...tableStyles.thRight }}>Base</th>
+              <th style={{ ...tableStyles.th, ...tableStyles.thRight }}>Gross · last</th>
+              <th style={{ ...tableStyles.th, ...tableStyles.thRight }}>Net · last</th>
               <th style={tableStyles.th}>Hire date</th>
               <th style={tableStyles.th}>Last payslip</th>
               <th style={tableStyles.th}>Flags</th>
@@ -231,8 +235,11 @@ export function StaffTable({ rows, onSelect, selectedId }: StaffTableProps) {
                   <td style={{ ...tableStyles.td, ...tableStyles.tdRight }}>
                     {fmtSalary(r.monthly_salary, r.salary_currency)}
                   </td>
+                  <td style={{ ...tableStyles.td, ...tableStyles.tdRight, fontWeight: 600 }}>
+                    {fmtSalary(r.last_payroll_cost_lak ?? null, r.salary_currency)}
+                  </td>
                   <td style={{ ...tableStyles.td, ...tableStyles.tdRight, ...tableStyles.tdMuted }}>
-                    {fmtSalary(r.hourly_cost_lak, 'LAK')}
+                    {fmtSalary(r.last_payroll_net_lak ?? null, r.salary_currency)}
                   </td>
                   <td style={{ ...tableStyles.td, ...tableStyles.tdMono }}>
                     {r.hire_date || <span style={tableStyles.emDash}>—</span>}

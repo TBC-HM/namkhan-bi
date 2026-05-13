@@ -38,6 +38,8 @@ type Row = {
   hire_date: string | null;
   last_payroll_period: string | null;
   last_payroll_total_usd: number | null;
+  last_payroll_cost_lak: number | null;
+  last_payroll_net_lak: number | null;
   payslip_pdf_status: 'current' | 'overdue' | 'never';
   flag_missing_hire_date: boolean;
   flag_missing_contract: boolean;
@@ -168,7 +170,7 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
       .select(
         'staff_id, emp_id, full_name, position_title, dept_code, dept_name, ' +
           'employment_type, monthly_salary, salary_currency, hourly_cost_lak, hire_date, ' +
-          'last_payroll_period, last_payroll_total_usd, payslip_pdf_status, ' +
+          'last_payroll_period, last_payroll_total_usd, last_payroll_cost_lak, last_payroll_net_lak, payslip_pdf_status, ' +
           'flag_missing_hire_date, flag_missing_contract, flag_contract_expiring'
       )
       .eq('property_id', propertyId)
