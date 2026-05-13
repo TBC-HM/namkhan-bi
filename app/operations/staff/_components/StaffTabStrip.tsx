@@ -7,11 +7,12 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-interface Tab { label: string; slug: '' | 'attendance' | 'schedule'; }
+interface Tab { label: string; slug: '' | 'attendance' | 'schedule' | 'holidays'; }
 const TABS: Tab[] = [
   { label: 'Register',   slug: ''           },
   { label: 'Attendance', slug: 'attendance' },
   { label: 'Schedule',   slug: 'schedule'   },
+  { label: 'Holidays',   slug: 'holidays'   },
 ];
 
 export default function StaffTabStrip({ propertyId }: { propertyId: number }) {
@@ -21,6 +22,7 @@ export default function StaffTabStrip({ propertyId }: { propertyId: number }) {
   const activeSlug: Tab['slug'] =
     pathname.endsWith('/attendance') ? 'attendance' :
     pathname.endsWith('/schedule')   ? 'schedule'   :
+    pathname.endsWith('/holidays')   ? 'holidays'   :
     '';
 
   return (
