@@ -6,7 +6,7 @@
 'use client';
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { fmtMoney, EMPTY } from '@/lib/format';
+import { EMPTY } from '@/lib/format';
 import NativeAmount from './NativeAmount';
 import { StaffDrawer } from './StaffDrawer';
 
@@ -162,6 +162,7 @@ export default function DeptBreakdown({ rows, fx, nativeCurrency = 'LAK', employ
                 row={r}
                 cell={cell}
                 fx={fx}
+                nativeCurrency={nativeCurrency}
                 isOpen={isOpen}
                 employees={employees}
                 onToggle={() => toggle(r.dept_code)}
@@ -185,11 +186,12 @@ export default function DeptBreakdown({ rows, fx, nativeCurrency = 'LAK', employ
 }
 
 function FragmentRow({
-  row, cell, fx, isOpen, employees, onToggle, onSelectStaff,
+  row, cell, fx, nativeCurrency, isOpen, employees, onToggle, onSelectStaff,
 }: {
   row: DeptRow;
   cell: (lak: number | null, tone?: 'pos' | 'neg' | 'default') => React.ReactNode;
   fx: number;
+  nativeCurrency: string;
   isOpen: boolean;
   employees: DeptEmployee[];
   onToggle: () => void;
@@ -228,7 +230,7 @@ function FragmentRow({
       {isOpen && (
         <tr>
           <td colSpan={10} style={{ padding: 0, background: 'rgba(168,133,74,0.03)', borderTop: '1px solid var(--line-soft, rgba(168,133,74,0.15))' }}>
-            <DeptEmployeeList employees={employees} onSelect={onSelectStaff} />
+            <DeptEmployeeList employees={employees} onSelect={onSelectStaff} nativeCurrency={nativeCurrency} />
           </td>
         </tr>
       )}
@@ -236,7 +238,7 @@ function FragmentRow({
   );
 }
 
-function DeptEmployeeList({ employees, onSelect }: { employees: DeptEmployee[]; onSelect: (id: string) => void }) {
+function DeptEmployeeList({ employees, onSelect, nativeCurrency }: { employees: DeptEmployee[]; onSelect: (id: string) => void; nativeCurrency: string }) {
   if (employees.length === 0) {
     return (
       <div style={{ padding: 16, fontStyle: 'italic', color: 'var(--ink-mute)', fontSize: 12 }}>
@@ -279,7 +281,9 @@ function DeptEmployeeList({ employees, onSelect }: { employees: DeptEmployee[]; 
               <td style={{ padding: '6px 8px', color: 'var(--ink)', fontWeight: 500 }}>{e.full_name}</td>
               <td style={{ padding: '6px 8px', color: 'var(--ink)' }}>{e.position_title ?? EMPTY}</td>
               <td style={{ padding: '6px 8px', fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: 'var(--ls-extra)' }}>{e.employment_type ?? EMPTY}</td>
-              <td style={{ padding: '6px 8px', textAlign: 'right', color: 'var(--ink)' }}>{fmtMoney(e.monthly_salary, 'LAK')}</td>
+              <td style={{ padding: '6px 8px', textAlign: 'right', color: 'var(--ink)' }}>
+                <NativeAmount value={e.monthly_salary} currency={nativeCurrency} hideUsd />
+              </td>
               <td style={{ padding: '6px 8px', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--ink-mute)' }}>{e.hire_date ?? EMPTY}</td>
             </tr>
           ))}
