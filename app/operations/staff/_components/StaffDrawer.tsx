@@ -17,7 +17,15 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { fetchStaffDetail, type StaffDetail } from '../_actions/fetchStaffDetail';
 
-const ANNUAL_LEAVE_ENTITLEMENT = 30; // Spain default; Laos varies — config later
+// Annual-leave entitlement per property — statutory minimums.
+//   Namkhan (260955) = 15 days (Lao Labor Law Art. 38)
+//   Donna   (1000001) = 30 calendar days (Spain — Estatuto de los Trabajadores Art. 38)
+// Default 30 for unknown properties so we don't under-credit.
+function entitlementFor(propertyId: number | null | undefined): number {
+  if (propertyId === 260955) return 15;
+  if (propertyId === 1000001) return 30;
+  return 30;
+}
 
 // Native-currency formatter — handles EUR (Donna), LAK (Namkhan), USD (default).
 // Replaces fmtMoney which only supports LAK/USD.
@@ -318,11 +326,12 @@ function ContactCell({
 
 function LeaveGrid({ detail }: { detail: StaffDetail }) {
   const used = detail.annual_leave_used_ytd ?? 0;
-  const open = Math.max(0, ANNUAL_LEAVE_ENTITLEMENT - used);
+  const entitlement = entitlementFor(detail.property_id);
+  const open = Math.max(0, entitlement - used);
   return (
     <div style={S.leaveGrid}>
-      <LeaveTile label="Annual leave used" value={used} unit="d" tone={used > ANNUAL_LEAVE_ENTITLEMENT * 0.8 ? 'warn' : 'neutral'} />
-      <LeaveTile label="Open balance" value={open} unit="d" tone="good" hint={`of ${ANNUAL_LEAVE_ENTITLEMENT}d entitlement`} />
+      <LeaveTile label="Annual leave used" value={used} unit="d" tone={used > entitlement * 0.8 ? 'warn' : 'neutral'} />
+      <LeaveTile label="Open balance" value={open} unit="d" tone="good" hint={`of ${entitlement}d entitlement`} />
       <LeaveTile label="Public holidays" value={detail.public_holiday_ytd ?? 0} unit="d" />
       <LeaveTile label="Sick days" value={detail.sick_days_ytd ?? 0} unit="d" tone={(detail.sick_days_ytd ?? 0) > 10 ? 'warn' : 'neutral'} hint={detail.sick_days_ytd == null ? 'not tracked yet' : undefined} />
       <LeaveTile label="Days worked" value={detail.days_worked_ytd ?? 0} unit="d" />
