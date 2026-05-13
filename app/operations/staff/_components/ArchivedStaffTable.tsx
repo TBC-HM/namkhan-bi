@@ -1,10 +1,11 @@
 // app/operations/staff/_components/ArchivedStaffTable.tsx
 // Staff who left the property — kept for record (payroll history, bank info, end date).
+// PBS 2026-05-13: bank info moved out of the table — only visible in slide-in drawer.
 'use client';
 
-import { useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import UsdLak from './UsdLak';
+import { StaffDrawer } from './StaffDrawer';
 
 export type ArchivedRow = {
   staff_id: string;
@@ -22,8 +23,15 @@ export type ArchivedRow = {
 };
 
 export function ArchivedStaffTable({ rows }: { rows: ArchivedRow[] }) {
-  const router = useRouter();
   const [q, setQ] = useState('');
+  const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
+  const handleClose = useCallback(() => setSelectedStaffId(null), []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && handleClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [handleClose]);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -32,8 +40,7 @@ export function ArchivedStaffTable({ rows }: { rows: ArchivedRow[] }) {
       r.full_name.toLowerCase().includes(needle) ||
       r.emp_id.toLowerCase().includes(needle) ||
       (r.position_title || '').toLowerCase().includes(needle) ||
-      (r.dept_name || '').toLowerCase().includes(needle) ||
-      (r.bank_account_no || '').includes(needle)
+      (r.dept_name || '').toLowerCase().includes(needle)
     );
   }, [rows, q]);
 
@@ -50,11 +57,12 @@ export function ArchivedStaffTable({ rows }: { rows: ArchivedRow[] }) {
   }
 
   return (
+    <>
     <div className="rounded-sm border border-stone-300 bg-white">
       <div className="flex flex-wrap items-center gap-3 border-b border-stone-200 px-4 py-3">
         <input
           type="text"
-          placeholder="Search archived (name, account no, position)…"
+          placeholder="Search archived (name, position, department)…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           className="w-72 rounded-sm border border-stone-300 px-3 py-1.5 text-sm focus:border-stone-700 focus:outline-none"
@@ -74,16 +82,16 @@ export function ArchivedStaffTable({ rows }: { rows: ArchivedRow[] }) {
               <th className="px-4 py-2">Hired</th>
               <th className="px-4 py-2">Left</th>
               <th className="px-4 py-2 text-right">Last salary</th>
-              <th className="px-4 py-2">Bank</th>
-              <th className="px-4 py-2">Account no.</th>
             </tr>
           </thead>
           <tbody>
             {sorted.map((r) => (
               <tr
                 key={r.staff_id}
-                onClick={() => router.push(`/operations/staff/${encodeURIComponent(r.staff_id)}`)}
-                className="cursor-pointer border-t border-stone-100 hover:bg-stone-50"
+                onClick={() => setSelectedStaffId(r.staff_id)}
+                className={`cursor-pointer border-t border-stone-100 hover:bg-stone-50 ${
+                  selectedStaffId === r.staff_id ? 'bg-emerald-900/5' : ''
+                }`}
               >
                 <td className="px-4 py-2 font-mono text-xs text-stone-600">{r.emp_id}</td>
                 <td className="px-4 py-2 font-medium text-stone-700" style={{ fontStyle: 'italic' }}>
@@ -100,13 +108,13 @@ export function ArchivedStaffTable({ rows }: { rows: ArchivedRow[] }) {
                 <td className="px-4 py-2 text-right tabular-nums">
                   {r.monthly_salary > 0 ? <UsdLak lak={Number(r.monthly_salary)} /> : <span className="text-stone-300">—</span>}
                 </td>
-                <td className="px-4 py-2 text-stone-600 text-xs">{r.bank_name || '—'}</td>
-                <td className="px-4 py-2 font-mono text-xs text-stone-600">{r.bank_account_no || '—'}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
     </div>
+    <StaffDrawer staffId={selectedStaffId} onClose={handleClose} />
+    </>
   );
 }

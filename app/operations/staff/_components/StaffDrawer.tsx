@@ -80,6 +80,15 @@ export function StaffDrawer({ staffId, onClose }: Props) {
                 <Field label="Last slip"  value={detail.last_payslip_period ?? '—'} mono />
               </section>
 
+              {(detail.bank_name || detail.bank_account_no || detail.bank_account_name) && (
+                <section style={S.section}>
+                  <div style={S.sectionTitle}>Bank</div>
+                  <Field label="Bank"         value={detail.bank_name ?? '—'} />
+                  <Field label="Account no."  value={detail.bank_account_no ?? '—'} mono />
+                  <Field label="Account name" value={detail.bank_account_name ?? '—'} />
+                </section>
+              )}
+
               {detail.skills && detail.skills.length > 0 && (
                 <section style={S.section}>
                   <div style={S.sectionTitle}>Skills</div>

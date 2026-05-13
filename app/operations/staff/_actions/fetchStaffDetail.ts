@@ -35,6 +35,9 @@ export interface StaffDetail {
   attendance_90d: any[] | null;
   availability: any[] | null;
   dq_flags: string[] | null;
+  bank_name: string | null;
+  bank_account_no: string | null;
+  bank_account_name: string | null;
 }
 
 export async function fetchStaffDetail(staffId: string): Promise<StaffDetail | null> {
