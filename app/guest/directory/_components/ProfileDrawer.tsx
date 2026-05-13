@@ -18,6 +18,9 @@ type Profile = {
   address: string | null;
   document_type: string | null;
   document_number: string | null;
+  language_alt: string | null;
+  language_source: "cloudbeds" | "inferred" | "unknown";
+  language_confidence: number;
   bookings_count: number;
   stays_count: number;
   cancellations_count: number;
@@ -464,7 +467,22 @@ function ContactBlock({
         <ContactItem label="Address" value={profile.address} />
         <ContactItem label="Document" value={docCombined} />
         <ContactItem label="Date of birth" value={profile.date_of_birth} />
-        <ContactItem label="Language" value={profile.language} />
+        <ContactItem
+          label={
+            profile.language_source === "inferred"
+              ? "Language · inferred"
+              : profile.language_source === "cloudbeds"
+              ? "Language"
+              : "Language"
+          }
+          value={
+            profile.language
+              ? profile.language_alt
+                ? `${profile.language} / ${profile.language_alt}`
+                : profile.language
+              : null
+          }
+        />
         <ContactItem label="Gender" value={profile.gender} />
       </ul>
     </section>

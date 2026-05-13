@@ -16,7 +16,7 @@ export async function fetchGuestProfile(guestId: string) {
   // mv_guest_profile doesn't expose address / document fields. Single-row
   // PK lookup — performance impact negligible. Avoids dropping + recreating
   // the MV plus its dependent v_directory_facets.
-  const [{ data: profile }, { data: reservations }, { data: extras }] = await Promise.all([
+  const [{ data: profile }, { data: reservations }, { data: extras }, { data: lang }] = await Promise.all([
     sb
       .schema("guest")
       .from("mv_guest_profile")
@@ -35,6 +35,15 @@ export async function fetchGuestProfile(guestId: string) {
       .select("address, document_type, document_number, total_stays, total_spent, last_stay_date")
       .eq("guest_id", guestId)
       .maybeSingle(),
+    // PBS 2026-05-13: language now comes from guest.v_inferred_language —
+    // resolves with Cloudbeds value first, country-heuristic second, returns
+    // source + confidence so the drawer can flag inferred ones.
+    sb
+      .schema("guest")
+      .from("v_inferred_language")
+      .select("language, language_alt, language_source, confidence")
+      .eq("guest_id", guestId)
+      .maybeSingle(),
   ]);
 
   const mergedProfile = profile
@@ -43,6 +52,13 @@ export async function fetchGuestProfile(guestId: string) {
         address: extras?.address ?? null,
         document_type: extras?.document_type ?? null,
         document_number: extras?.document_number ?? null,
+        language: lang?.language ?? profile.language ?? null,
+        language_alt: lang?.language_alt ?? null,
+        language_source: (lang?.language_source ?? "unknown") as
+          | "cloudbeds"
+          | "inferred"
+          | "unknown",
+        language_confidence: lang?.confidence ?? 0,
       }
     : profile;
 
