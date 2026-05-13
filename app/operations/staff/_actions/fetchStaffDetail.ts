@@ -52,17 +52,38 @@ export interface StaffDetail {
   public_holiday_ytd: number | null;
   sick_days_ytd: number | null;
   days_worked_ytd: number | null;
+  // Attendance score from ops.v_staff_attendance_score (added 2026-05-13)
+  attendance_score: number | null;
+  attendance_hours_30d: number | null;
+  attendance_hours_ytd: number | null;
+  attendance_events_30d: number | null;
 }
 
 export async function fetchStaffDetail(staffId: string): Promise<StaffDetail | null> {
-  const { data, error } = await supabase
-    .from('v_staff_detail')
-    .select('*')
-    .eq('staff_id', staffId)
-    .maybeSingle();
+  const [{ data, error }, scoreRes] = await Promise.all([
+    supabase
+      .from('v_staff_detail')
+      .select('*')
+      .eq('staff_id', staffId)
+      .maybeSingle(),
+    supabase
+      .schema('ops')
+      .from('v_staff_attendance_score')
+      .select('attendance_score, hours_30d, hours_ytd, events_30d')
+      .eq('staff_id', staffId)
+      .maybeSingle(),
+  ]);
   if (error) {
     console.error('fetchStaffDetail error', error);
     return null;
   }
-  return data as StaffDetail | null;
+  if (!data) return null;
+  const sc = scoreRes.data as any;
+  return {
+    ...(data as any),
+    attendance_score:      sc?.attendance_score ?? null,
+    attendance_hours_30d:  sc?.hours_30d ?? null,
+    attendance_hours_ytd:  sc?.hours_ytd ?? null,
+    attendance_events_30d: sc?.events_30d ?? null,
+  } as StaffDetail;
 }

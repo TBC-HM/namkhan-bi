@@ -136,6 +136,13 @@ export function StaffDrawer({ staffId, onClose }: Props) {
                 <LeaveGrid detail={detail} />
               </Section>
 
+              {/* 6b. ATTENDANCE SCORE — from ops.v_staff_attendance_score */}
+              {detail.attendance_score != null && (
+                <Section title="Attendance · last 30 days">
+                  <AttendanceScoreBlock detail={detail} />
+                </Section>
+              )}
+
               {/* 7. EVALUATION & QUALITY — stub block, no source yet */}
               <Section title="Evaluation & quality">
                 <EvaluationStub />
@@ -345,6 +352,31 @@ function LeaveTile({
         {unit && <span style={S.leaveUnit}>{unit}</span>}
       </div>
       {hint && <div style={S.contactSub}>{hint}</div>}
+    </div>
+  );
+}
+
+// ===== Attendance score block =================================================
+
+function AttendanceScoreBlock({ detail }: { detail: StaffDetail }) {
+  const score = detail.attendance_score ?? 0;
+  const color =
+    score >= 80 ? 'var(--st-good, #2c7a4b)' :
+    score >= 50 ? 'var(--brass)' :
+    'var(--oxblood-soft)';
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+        <div style={{ flex: 1, height: 8, background: 'var(--paper-deep)', borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
+          <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${score}%`, background: color }} />
+        </div>
+        <div style={{ fontFamily: 'var(--sans)', fontWeight: 600, fontSize: 20, color, minWidth: 50, textAlign: 'right' }}>
+          {score}<span style={{ fontSize: 11, color: 'var(--ink-mute)', fontWeight: 400 }}>/100</span>
+        </div>
+      </div>
+      <Field label="Events · 30d" value={String(detail.attendance_events_30d ?? 0)} mono />
+      <Field label="Hours · 30d"  value={`${Number(detail.attendance_hours_30d ?? 0).toFixed(1)}h`} mono />
+      <Field label="Hours · YTD"  value={`${Number(detail.attendance_hours_ytd ?? 0).toFixed(0)}h`} mono />
     </div>
   );
 }
