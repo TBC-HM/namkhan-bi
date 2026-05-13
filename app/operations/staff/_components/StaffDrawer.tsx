@@ -200,12 +200,19 @@ export function StaffDrawer({ staffId, onClose }: Props) {
                 <LeaveGrid detail={detail} />
               </Section>
 
-              {/* 6b. ATTENDANCE SCORE — only show for properties with timeclock wired.
-                  Donna uses Factorial; Namkhan does not yet have one.
-                  Compare with Number() — Supabase can return bigint as string.
-                  Fallback: if we got back an attendance score row (events column
-                  is non-null), show it regardless — that signals timeclock data. */}
-              {(Number(detail.property_id) === 1000001 || detail.attendance_events_30d != null) && (
+              {/* 6b. ATTENDANCE SCORE — show whenever ANY attendance field
+                  came back from the score query. v_staff_attendance_score
+                  now LEFT JOINs from staff_employment so every active staff
+                  has a row (score=0 for never-clocked). Block stays hidden
+                  for Namkhan because no row exists (property doesn't use
+                  timeclock yet). Multiple OR conditions defend against
+                  bigint-string quirks from supabase-js. */}
+              {(
+                Number(detail.property_id) === 1000001
+                || detail.attendance_events_30d != null
+                || detail.attendance_score != null
+                || detail.attendance_hours_30d != null
+              ) && (
                 <Section title="Attendance · last 30 days">
                   <AttendanceScoreBlock detail={detail} />
                 </Section>
