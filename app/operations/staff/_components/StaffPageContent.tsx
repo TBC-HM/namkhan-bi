@@ -14,6 +14,7 @@ import { ArchivedStaffTable, type ArchivedRow } from './ArchivedStaffTable';
 import DeptBreakdown, { type DeptRow, type DeptEmployee } from './DeptBreakdown';
 import StaffMiniCharts, { type StaffTrendPoint } from './StaffMiniCharts';
 import MonthPicker from './MonthPicker';
+import DeptPicker from './DeptPicker';
 import { fmtPeriodLabel } from './period-utils';
 import UploadPayslipsButton from './UploadPayslipsButton';
 import KpiStrip, { type KpiStripItem } from '@/components/kpi/KpiStrip';
@@ -137,10 +138,18 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
     distinctMonths[0] ||
     availableMonths[0];
 
+  // PBS 2026-05-13: dept filter for the 3 trend charts. ?dept=CODE (or 'all').
+  const requestedDept = typeof searchParams?.dept === 'string' ? searchParams.dept : null;
+  const selectedDept = requestedDept ?? 'all';
+
   let deptRows: DeptRow[] = monthlyRows.filter(r => r.period_month === selectedMonth) as DeptRow[];
 
+  // Trend computation honors selectedDept — narrow monthlyRows when dept != 'all'.
+  const trendSource = selectedDept === 'all'
+    ? monthlyRows
+    : monthlyRows.filter((r) => r.dept_code === selectedDept);
   const byMonth = new Map<string, StaffTrendPoint>();
-  for (const r of monthlyRows) {
+  for (const r of trendSource) {
     const cur = byMonth.get(r.period_month) ?? {
       period_month: r.period_month,
       headcount: 0,
@@ -258,9 +267,13 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
       return true;
     };
 
-    // Trend: one synthetic point per month in availableMonths
+    // Trend: one synthetic point per month in availableMonths.
+    // selectedDept (from URL) optionally narrows to a single department.
+    const trendRows = selectedDept === 'all'
+      ? allRows
+      : allRows.filter((r) => r.dept_code === selectedDept);
     trendPoints = availableMonths.map((monthIso) => {
-      const activeRows = allRows.filter((r) => activeAt(r, monthIso));
+      const activeRows = trendRows.filter((r) => activeAt(r, monthIso));
       const costUsd = activeRows.reduce(
         (s, r) => s + salaryToUsd(r.monthly_salary, r.salary_currency),
         0
@@ -357,6 +370,26 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
   const dominantCcy = Object.entries(ccyCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'LAK';
   const totalFlags = safeAnoms.length;
 
+  // Dept options for the chart filter — union of every dept seen across
+  // monthlyRows (Namkhan real payroll) and the current register (both props).
+  const deptSeen = new Map<string, { code: string; name: string; hc: number }>();
+  for (const r of monthlyRows) {
+    if (r.dept_code && !deptSeen.has(r.dept_code)) {
+      deptSeen.set(r.dept_code, { code: r.dept_code, name: r.dept_name ?? r.dept_code, hc: 0 });
+    }
+  }
+  for (const r of safeRows) {
+    if (r.dept_code) {
+      const cur = deptSeen.get(r.dept_code) ?? { code: r.dept_code, name: r.dept_name ?? r.dept_code, hc: 0 };
+      cur.hc += 1;
+      deptSeen.set(r.dept_code, cur);
+    }
+  }
+  const deptOptions = [...deptSeen.values()].sort((a, b) => b.hc - a.hc || a.name.localeCompare(b.name));
+  const selectedDeptName = selectedDept === 'all'
+    ? 'All departments'
+    : (deptSeen.get(selectedDept)?.name ?? selectedDept);
+
   const eyebrow = propertyLabel
     ? `Operations · Staff · ${propertyLabel} · ${fmtPeriodLabel(selectedMonth)}`
     : `Operations · Staff · ${fmtPeriodLabel(selectedMonth)}`;
@@ -384,6 +417,18 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
       ] satisfies KpiStripItem[]} />
 
       <div style={{ marginTop: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
+          <h2 style={{
+            fontFamily: 'var(--mono)',
+            fontSize: 'var(--t-xs)',
+            letterSpacing: 'var(--ls-extra)',
+            textTransform: 'uppercase',
+            color: 'var(--brass)',
+          }}>
+            Trend · {selectedDeptName}
+          </h2>
+          <DeptPicker options={deptOptions} selected={selectedDept} />
+        </div>
         <StaffMiniCharts rows={trendPoints} selectedMonth={selectedMonth} nativeCurrency={dominantCcy} />
       </div>
 
