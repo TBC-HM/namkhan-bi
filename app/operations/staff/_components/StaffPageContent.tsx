@@ -20,6 +20,7 @@ import UploadPayslipsButton from './UploadPayslipsButton';
 import KpiStrip, { type KpiStripItem } from '@/components/kpi/KpiStrip';
 import Page from '@/components/page/Page';
 import { OPERATIONS_SUBPAGES } from '../../_subpages';
+import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 
 type Anomaly = { issue: string; staff_id: string; full_name: string; dept_name: string; };
 
@@ -401,7 +402,7 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
     <Page
       eyebrow={eyebrow}
       title={<>Staff <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>register</em></>}
-      subPages={OPERATIONS_SUBPAGES}
+      subPages={rewriteSubPagesForProperty(OPERATIONS_SUBPAGES, propertyId)}
       topRight={<UploadPayslipsButton />}
     >
       <KpiStrip items={[

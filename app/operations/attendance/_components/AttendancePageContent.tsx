@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import KpiStrip, { type KpiStripItem } from '@/components/kpi/KpiStrip';
 import Page from '@/components/page/Page';
 import { OPERATIONS_SUBPAGES } from '../../_subpages';
+import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { AttendanceCharts, type DailyPoint, type TopEmployee } from './AttendanceCharts';
 import { OnShiftAndUnmapped } from './OnShiftAndUnmapped';
 
@@ -83,7 +84,7 @@ export default async function AttendancePageContent({
     <Page
       eyebrow={eyebrow}
       title={<>Clock-in / <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>out</em></>}
-      subPages={OPERATIONS_SUBPAGES}
+      subPages={rewriteSubPagesForProperty(OPERATIONS_SUBPAGES, propertyId)}
     >
       <KpiStrip items={[
         { label: 'Clocked in NOW', value: kpi?.clocked_in_now ?? 0, kind: 'count', tone: (kpi?.clocked_in_now ?? 0) > 0 ? 'pos' : 'neutral', hint: 'last 24h, no clock-out' },
