@@ -1,16 +1,15 @@
 // app/operations/staff/page.tsx
-// Re-restored 2026-05-05 — full staff cockpit:
-//   1. Header KPI strip (active · archived · last payroll · monthly LAK)
-//   2. Anomalies & alerts (5 cards)
-//   3. Dept breakdown (last paid month) — DeptBreakdown
-//   4. 4-month payroll trend — PayrollTrend
-//   5. Active staff register — StaffTable (click row → drilldown)
-//   6. Archived staff — ArchivedStaffTable
+// PBS 2026-05-13 — canonical rebuild:
+//   1. KPI strip at the top (canonical KpiStrip with brass frame)
+//   2. FilterStrip-style month picker on the Department breakdown header
+//   3. 3 mini line charts side-by-side (headcount · cost · cost/head)
+//   4. Anomalies & alerts cards
+//   5. Collapsible Staff register + Archived staff (<details>/<summary>)
 //
 // Source views:
 //   public.v_staff_register_extended — register
 //   public.v_staff_anomalies         — DQ
-//   ops.v_payroll_dept_monthly       — dept breakdown
+//   ops.v_payroll_dept_monthly       — dept breakdown + trend
 // FX from gl.fx_rates fallback to env constant.
 
 import { supabase } from '@/lib/supabase';
@@ -19,8 +18,10 @@ import { AnomalyCard } from './_components/AnomalyCard';
 import { StaffShell } from './_components/StaffShell';
 import { ArchivedStaffTable, type ArchivedRow } from './_components/ArchivedStaffTable';
 import DeptBreakdown, { type DeptRow } from './_components/DeptBreakdown';
-import PayrollTrend, { type PayrollTrendRow } from './_components/PayrollTrend';
+import StaffMiniCharts, { type StaffTrendPoint } from './_components/StaffMiniCharts';
+import MonthPicker, { fmtPeriodLabel } from './_components/MonthPicker';
 import UploadPayslipsButton from './_components/UploadPayslipsButton';
+import KpiStrip, { type KpiStripItem } from '@/components/kpi/KpiStrip';
 import Page from '@/components/page/Page';
 import { OPERATIONS_SUBPAGES } from '../_subpages';
 
@@ -56,62 +57,72 @@ const ISSUE_META: Record<string, { label: string; sub: string }> = {
   no_calculated_payroll_last_closed_month: { label: 'Payroll not run', sub: 'ops.payroll_monthly has no row for last month.' },
 };
 
-async function getDeptBreakdown(): Promise<DeptRow[]> {
-  const { data } = await supabase
+/** Build available months Jan 2025 → latest paid month present in the data. */
+function buildMonthList(actualMonths: string[]): string[] {
+  // Available months sorted desc. Always include Jan 2025 floor.
+  const have = new Set(actualMonths);
+  const out: string[] = [];
+  const start = new Date(Date.UTC(2025, 0, 1));
+  const end = actualMonths[0]
+    ? new Date(actualMonths[0] + 'T00:00:00Z')
+    : new Date(Date.UTC(2026, 11, 1));
+  for (
+    let d = new Date(end);
+    d.getTime() >= start.getTime();
+    d.setUTCMonth(d.getUTCMonth() - 1)
+  ) {
+    const iso = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-01`;
+    out.push(iso);
+    if (out.length > 60) break;
+  }
+  // Always include months we actually have, even if outside the inferred window
+  for (const m of actualMonths) if (!out.includes(m)) out.push(m);
+  return out.sort((a, b) => b.localeCompare(a));
+}
+
+interface Props {
+  searchParams: Record<string, string | string[] | undefined>;
+}
+
+export default async function StaffPage({ searchParams }: Props) {
+  // Pull EVERY paid month so we can build the dropdown + trend in one query
+  const { data: allMonthly } = await supabase
     .schema('ops')
     .from('v_payroll_dept_monthly')
     .select('*')
     .order('period_month', { ascending: false })
-    .limit(60);
-  if (!data || data.length === 0) return [];
-  const latest = (data[0] as any).period_month;
-  return (data as any[]).filter(r => r.period_month === latest) as DeptRow[];
-}
+    .limit(1000);
 
-async function getPayrollTrend(): Promise<{ rows: PayrollTrendRow[]; window: string[] }> {
-  const { data } = await supabase
-    .schema('ops')
-    .from('v_payroll_dept_monthly')
-    .select('period_month, headcount, total_grand_usd, total_net_lak, total_sc_lak, total_allow_lak')
-    .order('period_month', { ascending: false })
-    .limit(200);
-  // Group by period_month, sum across depts
-  const byMonth = new Map<string, PayrollTrendRow>();
-  for (const r of (data ?? []) as any[]) {
-    const k = r.period_month;
-    const cur = byMonth.get(k) ?? { period_month: k, headcount: 0, total_grand_usd: 0, total_net_lak: 0, total_sc_lak: 0, total_allow_lak: 0 };
+  const monthlyRows = (allMonthly as any[]) ?? [];
+  const distinctMonths = [...new Set(monthlyRows.map(r => r.period_month))].sort((a, b) => b.localeCompare(a));
+  const availableMonths = buildMonthList(distinctMonths);
+
+  // Resolve selected month: ?month=YYYY-MM-01 → query → latest in data → fallback
+  const requested = typeof searchParams?.month === 'string' ? searchParams.month : null;
+  const selectedMonth =
+    (requested && availableMonths.includes(requested) && requested) ||
+    distinctMonths[0] ||
+    availableMonths[0];
+
+  // Slice dept breakdown to selected month
+  const deptRows: DeptRow[] = monthlyRows.filter(r => r.period_month === selectedMonth) as DeptRow[];
+
+  // Build trend points (one row per month, summed across depts)
+  const byMonth = new Map<string, StaffTrendPoint>();
+  for (const r of monthlyRows) {
+    const cur = byMonth.get(r.period_month) ?? {
+      period_month: r.period_month,
+      headcount: 0,
+      total_grand_usd: 0,
+    };
     cur.headcount += Number(r.headcount || 0);
     cur.total_grand_usd += Number(r.total_grand_usd || 0);
-    cur.total_net_lak += Number(r.total_net_lak || 0);
-    cur.total_sc_lak += Number(r.total_sc_lak || 0);
-    cur.total_allow_lak += Number(r.total_allow_lak || 0);
-    byMonth.set(k, cur);
+    byMonth.set(r.period_month, cur);
   }
-  const rows = [...byMonth.values()].sort((a, b) => b.period_month.localeCompare(a.period_month));
-  // Build a 4-month rolling window ending at the latest paid month
-  const latest = rows[0]?.period_month;
-  const win: string[] = [];
-  if (latest) {
-    const [y, m] = latest.split('-').map(Number);
-    for (let i = 3; i >= 0; i--) {
-      const d = new Date(Date.UTC(y, m - 1 - i, 1));
-      win.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-01`);
-    }
-  }
-  return { rows, window: win };
-}
+  const trendPoints = [...byMonth.values()];
 
-async function getArchivedStaff(): Promise<ArchivedRow[]> {
-  const { data } = await supabase
-    .from('v_staff_register_extended')
-    .select('staff_id, emp_id, full_name, position_title, dept_name, hire_date, end_date, monthly_salary, bank_name, bank_account_no, bank_account_name, notes')
-    .eq('is_active', false)
-    .order('end_date', { ascending: false });
-  return (data as unknown as ArchivedRow[]) ?? [];
-}
-
-export default async function StaffPage() {
-  const [{ data: rows }, { data: anomalies }, deptRows, trend, archived] = await Promise.all([
+  // Pull register, anomalies, archived in parallel
+  const [{ data: rows }, { data: anomalies }, archived] = await Promise.all([
     supabase
       .from('v_staff_register_extended')
       .select(
@@ -123,9 +134,14 @@ export default async function StaffPage() {
       .eq('is_active', true)
       .order('emp_id'),
     supabase.from('v_staff_anomalies').select('issue, staff_id, full_name, dept_name'),
-    getDeptBreakdown(),
-    getPayrollTrend(),
-    getArchivedStaff(),
+    (async (): Promise<ArchivedRow[]> => {
+      const { data } = await supabase
+        .from('v_staff_register_extended')
+        .select('staff_id, emp_id, full_name, position_title, dept_name, hire_date, end_date, monthly_salary, bank_name, bank_account_no, bank_account_name, notes')
+        .eq('is_active', false)
+        .order('end_date', { ascending: false });
+      return (data as unknown as ArchivedRow[]) ?? [];
+    })(),
   ]);
 
   const safeRows: Row[] = (rows as unknown as Row[]) ?? [];
@@ -134,50 +150,62 @@ export default async function StaffPage() {
   const grouped: Record<string, Anomaly[]> = {};
   for (const a of safeAnoms) (grouped[a.issue] ||= []).push(a);
 
-  const totalFlags = safeAnoms.length;
+  // KPI numbers for selected month
+  const selPoint = byMonth.get(selectedMonth);
+  const selHc = selPoint?.headcount ?? 0;
+  const selCost = selPoint?.total_grand_usd ?? 0;
+  const selCph = selHc > 0 ? selCost / selHc : 0;
+
   const totalActive = safeRows.length;
   const totalMonthlyLAK = safeRows.reduce((s, r) => s + Number(r.monthly_salary || 0), 0);
-  const lastPaidUsd = trend.rows[0]?.total_grand_usd ?? 0;
-  const lastPaidPeriod = trend.rows[0]?.period_month ?? '—';
+  const totalFlags = safeAnoms.length;
 
   return (
     <Page
-      eyebrow={`Operations · Staff · ${totalActive} active · last paid ${lastPaidPeriod}`}
+      eyebrow={`Operations · Staff · ${fmtPeriodLabel(selectedMonth)}`}
       title={<>Staff <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>register</em></>}
       subPages={OPERATIONS_SUBPAGES}
       topRight={<UploadPayslipsButton />}
-      kpiTiles={[]}
     >
-    <div className="ops-staff-dark space-y-10 px-0 py-6">
-      <header className="flex items-end justify-between border-b border-stone-300/30 pb-4">
-        <div>
-          <p className="mt-1 text-xs uppercase tracking-[0.18em] text-stone-500">
-            {totalActive} active · {archived.length} archived · {fmtMoney(totalMonthlyLAK, 'LAK')} monthly base · last paid {lastPaidPeriod} {lastPaidUsd ? `· $${Math.round(lastPaidUsd).toLocaleString()}` : ''}
-          </p>
-        </div>
-        <div className="flex items-end gap-4">
-          <div className="text-right">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-stone-500">Source</p>
-            <p className="font-mono text-xs text-stone-700">
-              public.v_staff_register_extended · ops.v_payroll_dept_monthly
-            </p>
-          </div>
-        </div>
-      </header>
+      {/* ============================================================
+          1. CANONICAL KPI STRIP — top of the page
+          ============================================================ */}
+      <KpiStrip items={[
+        { label: 'Active', value: totalActive, kind: 'count', hint: 'on register' },
+        { label: 'Archived', value: archived.length, kind: 'count', hint: 'departed' },
+        { label: 'Headcount paid', value: selHc, kind: 'count', hint: fmtPeriodLabel(selectedMonth) },
+        { label: 'Company cost', value: selCost, kind: 'money', tone: 'neutral', hint: fmtPeriodLabel(selectedMonth) },
+        { label: 'Cost / head', value: selCph, kind: 'money', hint: 'USD this month' },
+        { label: 'Monthly base', value: totalMonthlyLAK / FX_LAK_PER_USD, kind: 'money', hint: 'register sum · USD' },
+        { label: 'DQ flags', value: totalFlags, kind: 'count', tone: totalFlags > 0 ? 'warn' : 'pos', hint: 'anomalies' },
+      ] satisfies KpiStripItem[]} />
 
-      {/* Anomalies & alerts */}
-      <section>
-        <div className="mb-3 flex items-baseline justify-between">
-          <div>
-            <h2 className="font-serif text-xl text-stone-900">Anomalies &amp; alerts</h2>
-            <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-stone-500">
-              Live data-quality flags. Owner action required.
-            </p>
-          </div>
-          <span className="font-serif text-2xl text-amber-700">{totalFlags} flags</span>
-        </div>
+      {/* ============================================================
+          2. 3 MINI CHARTS — under KPIs, above tables (canonical)
+          ============================================================ */}
+      <div style={{ marginTop: 20 }}>
+        <StaffMiniCharts rows={trendPoints} selectedMonth={selectedMonth} />
+      </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+      {/* ============================================================
+          3. ANOMALIES & ALERTS
+          ============================================================ */}
+      <section style={{ marginTop: 28 }}>
+        <div style={{ marginBottom: 10, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+          <h2 style={{
+            fontFamily: 'var(--mono)',
+            fontSize: 'var(--t-xs)',
+            letterSpacing: 'var(--ls-extra)',
+            textTransform: 'uppercase',
+            color: 'var(--brass)',
+          }}>
+            Anomalies &amp; alerts
+          </h2>
+          <span style={{ fontFamily: 'var(--serif)', fontSize: 'var(--t-xl)', color: totalFlags > 0 ? 'var(--brass)' : 'var(--good, #2c7a4b)' }}>
+            {totalFlags} flag{totalFlags === 1 ? '' : 's'}
+          </span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
           {Object.entries(ISSUE_META).map(([key, meta]) => (
             <AnomalyCard
               key={key}
@@ -190,75 +218,81 @@ export default async function StaffPage() {
         </div>
       </section>
 
-      {/* Department breakdown */}
-      <section>
-        <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="font-serif text-xl text-stone-900">
-            Department breakdown · <em className="font-serif">{lastPaidPeriod}</em>
-          </h2>
-          <span className="rounded-sm bg-emerald-900/10 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-emerald-900">
+      {/* ============================================================
+          4. DEPARTMENT BREAKDOWN with month dropdown
+          ============================================================ */}
+      <section style={{ marginTop: 28 }}>
+        <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <h2 style={{
+              fontFamily: 'var(--mono)',
+              fontSize: 'var(--t-xs)',
+              letterSpacing: 'var(--ls-extra)',
+              textTransform: 'uppercase',
+              color: 'var(--brass)',
+            }}>
+              Department breakdown
+            </h2>
+            <MonthPicker months={availableMonths} selected={selectedMonth} />
+          </div>
+          <span style={{
+            fontFamily: 'var(--mono)',
+            fontSize: 10,
+            letterSpacing: 'var(--ls-extra)',
+            textTransform: 'uppercase',
+            color: 'var(--ink-mute)',
+          }}>
             ops.v_payroll_dept_monthly
           </span>
         </div>
         {deptRows.length === 0 ? (
           <div className="panel dashed" style={{ padding: 16, color: 'var(--ink-mute)', fontStyle: 'italic', textAlign: 'center' }}>
-            No payroll rows yet for any closed period.
+            No payroll rows for {fmtPeriodLabel(selectedMonth)}.
           </div>
         ) : (
           <DeptBreakdown rows={deptRows} fx={FX_LAK_PER_USD} />
         )}
       </section>
 
-      {/* 4-month payroll trend */}
-      <section>
-        <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="font-serif text-xl text-stone-900">4-month payroll trend</h2>
-          <span className="rounded-sm bg-emerald-900/10 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-emerald-900">
-            USD primary · LAK secondary
-          </span>
+      {/* ============================================================
+          5. STAFF REGISTER — collapsible
+          ============================================================ */}
+      <details open style={{ marginTop: 28 }}>
+        <summary style={{
+          cursor: 'pointer',
+          padding: '8px 0',
+          fontFamily: 'var(--mono)',
+          fontSize: 'var(--t-xs)',
+          letterSpacing: 'var(--ls-extra)',
+          textTransform: 'uppercase',
+          color: 'var(--brass)',
+        }}>
+          Staff register · {totalActive} active ▾ <span style={{ textTransform: 'none', letterSpacing: 'normal', color: 'var(--ink-mute)' }}>click row to drill down · {fmtMoney(totalMonthlyLAK, 'LAK')} monthly base</span>
+        </summary>
+        <div style={{ marginTop: 10 }}>
+          <StaffShell rows={safeRows} />
         </div>
-        {trend.window.length === 0 ? (
-          <div className="panel dashed" style={{ padding: 16, color: 'var(--ink-mute)', fontStyle: 'italic', textAlign: 'center' }}>
-            No payroll history yet.
-          </div>
-        ) : (
-          <PayrollTrend windowMonths={trend.window} data={trend.rows} fx={FX_LAK_PER_USD} />
-        )}
-      </section>
+      </details>
 
-      {/* Active staff register */}
-      <section>
-        <div className="mb-3 flex items-baseline justify-between">
-          <div>
-            <h2 className="font-serif text-xl text-stone-900">
-              Staff register · <em className="font-serif">{totalActive} active</em>
-            </h2>
-            <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-stone-500">
-              Click any row to drill down.
-            </p>
-          </div>
-          <span className="rounded-sm bg-emerald-900/10 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-emerald-900">
-            Supabase · live
-          </span>
+      {/* ============================================================
+          6. ARCHIVED STAFF — collapsible, default closed
+          ============================================================ */}
+      <details style={{ marginTop: 16 }}>
+        <summary style={{
+          cursor: 'pointer',
+          padding: '8px 0',
+          fontFamily: 'var(--mono)',
+          fontSize: 'var(--t-xs)',
+          letterSpacing: 'var(--ls-extra)',
+          textTransform: 'uppercase',
+          color: 'var(--brass)',
+        }}>
+          Archived staff · {archived.length} ▾ <span style={{ textTransform: 'none', letterSpacing: 'normal', color: 'var(--ink-mute)' }}>departed · payroll history retained</span>
+        </summary>
+        <div style={{ marginTop: 10 }}>
+          <ArchivedStaffTable rows={archived} />
         </div>
-        <StaffShell rows={safeRows} />
-      </section>
-
-      {/* Archived staff */}
-      <section>
-        <div className="mb-3 flex items-baseline justify-between">
-          <div>
-            <h2 className="font-serif text-xl text-stone-900">
-              Archived staff · <em className="font-serif">{archived.length}</em>
-            </h2>
-            <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-stone-500">
-              Departed employees · payroll history + bank info retained for record.
-            </p>
-          </div>
-        </div>
-        <ArchivedStaffTable rows={archived} />
-      </section>
-    </div>
+      </details>
     </Page>
   );
 }
