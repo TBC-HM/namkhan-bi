@@ -124,6 +124,9 @@ export function StaffDrawer({ staffId, onClose }: Props) {
                 <Field label="Last raise"    value="—" hint="salary-history not tracked yet" />
               </Section>
 
+              {/* 4b. PAYSLIP BREAKDOWN — from payroll_12m[0] latest month */}
+              <PayslipBreakdown detail={detail} />
+
               {/* 5. DOCUMENTS */}
               <Section title="Documents">
                 <Field label="Contract"   value={detail.contract_doc_id ? '✓ uploaded' : '— missing'} mono />
@@ -352,6 +355,109 @@ function LeaveTile({
         {unit && <span style={S.leaveUnit}>{unit}</span>}
       </div>
       {hint && <div style={S.contactSub}>{hint}</div>}
+    </div>
+  );
+}
+
+// ===== Payslip breakdown (benefits, OT, deductions) ===========================
+
+function PayslipBreakdown({ detail }: { detail: StaffDetail }) {
+  // payroll_12m is an array sorted desc by period_month — [0] is the latest.
+  const latest = (detail.payroll_12m && detail.payroll_12m.length > 0)
+    ? detail.payroll_12m[0]
+    : null;
+  if (!latest) return null;
+
+  const period = (latest.period_month ?? '').slice(0, 7); // YYYY-MM
+  const base   = Number(latest.base_salary_lak ?? 0);
+  const ot15   = Number(latest.overtime_15x_lak ?? 0);
+  const ot2x   = Number(latest.overtime_2x_lak ?? 0);
+  const sc     = Number(latest.service_charge_lak ?? 0);
+  const gas    = Number(latest.gasoline_allow_lak ?? 0);
+  const net    = Number(latest.internet_allow_lak ?? 0);
+  const other  = Number(latest.other_allow_lak ?? 0);
+  const adj    = Number(latest.adjustment_lak ?? 0);
+  const dedn   = Number(latest.deduction_lak ?? 0);
+  const sso    = Number(latest.sso_5_5_lak ?? 0);
+  const tax    = Number(latest.tax_lak ?? 0);
+  const netPay = Number(latest.net_salary_lak ?? 0);
+  const totalUsd = Number(latest.grand_total_usd ?? 0);
+
+  // Compute days
+  const dWorked = latest.days_worked  ?? 0;
+  const dOff    = latest.days_off     ?? 0;
+  const dAL     = latest.days_annual_leave    ?? 0;
+  const dPH     = latest.days_public_holiday  ?? 0;
+  const dSick   = latest.days_sick    ?? 0;
+
+  // Currency for this slip — Namkhan = LAK, Donna would be EUR when wired
+  const ccy = 'LAK';
+
+  return (
+    <Section title={`Latest payslip · ${period || '—'}`}>
+      <PayslipRow label="Base salary"        value={base}  ccy={ccy} />
+      {(ot15 + ot2x) > 0 && (
+        <PayslipRow label={`Overtime${ot15 > 0 ? ' 1.5x' : ''}${ot2x > 0 ? (ot15 > 0 ? ' + 2x' : ' 2x') : ''}`} value={ot15 + ot2x} ccy={ccy} tone="pos" />
+      )}
+      <PayslipRow label="Service charge"     value={sc}    ccy={ccy} tone="pos" />
+      <PayslipRow label="Gasoline allowance" value={gas}   ccy={ccy} tone="pos" />
+      <PayslipRow label="Internet allowance" value={net}   ccy={ccy} tone="pos" />
+      {other > 0 && <PayslipRow label="Other allowance" value={other} ccy={ccy} tone="pos" />}
+      {adj !== 0 && <PayslipRow label="Adjustment" value={adj} ccy={ccy} tone={adj >= 0 ? 'pos' : 'neg'} />}
+      {dedn > 0 && <PayslipRow label="Deduction"  value={-dedn} ccy={ccy} tone="neg" />}
+      {sso > 0  && <PayslipRow label="SSO 5.5%"   value={-sso}  ccy={ccy} tone="neg" />}
+      {tax > 0  && <PayslipRow label="Income tax" value={-tax}  ccy={ccy} tone="neg" />}
+      <div style={{ height: 1, background: 'var(--line)', margin: '8px 0' }} />
+      <PayslipRow label="Net to employee"    value={netPay} ccy={ccy} bold />
+      <PayslipRow label="Company cost · USD" value={totalUsd} ccy="USD" bold />
+
+      <div style={{
+        marginTop: 10, paddingTop: 8, borderTop: '1px dashed var(--line-soft)',
+        display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 4,
+        fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--ink-mute)',
+      }}>
+        <DayBox label="Worked" v={Number(dWorked)} />
+        <DayBox label="Off"    v={Number(dOff)} />
+        <DayBox label="AL"     v={Number(dAL)} />
+        <DayBox label="PH"     v={Number(dPH)} />
+        <DayBox label="Sick"   v={Number(dSick)} />
+      </div>
+    </Section>
+  );
+}
+
+function PayslipRow({
+  label, value, ccy, tone, bold,
+}: {
+  label: string;
+  value: number;
+  ccy: 'LAK' | 'USD' | 'EUR';
+  tone?: 'pos' | 'neg';
+  bold?: boolean;
+}) {
+  const isZero = value === 0;
+  const display = isZero ? '—' : fmtNative(value, ccy);
+  const color = isZero
+    ? 'var(--ink-faint)'
+    : tone === 'pos' ? 'var(--st-good, #2c7a4b)'
+    : tone === 'neg' ? 'var(--oxblood-soft)'
+    : 'var(--ink)';
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 12, padding: '3px 0' }}>
+      <span style={{ color: 'var(--ink-mute)' }}>{label}</span>
+      <span style={{ fontFamily: 'var(--mono)', color, fontWeight: bold ? 600 : 400, fontVariantNumeric: 'tabular-nums' }}>{display}</span>
+    </div>
+  );
+}
+
+function DayBox({ label, v }: { label: string; v: number }) {
+  return (
+    <div style={{
+      background: 'var(--paper-deep)', borderRadius: 3, padding: '3px 6px',
+      textAlign: 'center', border: '1px solid var(--kpi-frame)',
+    }}>
+      <div style={{ fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--brass)' }}>{label}</div>
+      <div style={{ fontWeight: 600, color: v > 0 ? 'var(--ink)' : 'var(--ink-faint)', fontSize: 13 }}>{v}</div>
     </div>
   );
 }
