@@ -366,16 +366,18 @@ function Field({ label, value, mono, hint }: { label: string; value: string; mon
 
 const S: Record<string, React.CSSProperties> = {
   scrim: {
-    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
     zIndex: 9000, backdropFilter: 'blur(2px)',
   },
   drawer: {
+    /* PBS 2026-05-13 rev4: theme-adaptive. Uses canonical tokens that
+     * ThemeInjector overrides per property (Donna = cream, Namkhan = dark). */
     position: 'fixed', top: 0, right: 0, bottom: 0,
     width: 'min(560px, 100vw)',
-    background: '#0e0e0c',
+    background: 'var(--paper)',
     color: 'var(--ink)',
     borderLeft: '1px solid var(--kpi-frame, rgba(168,133,74,0.45))',
-    boxShadow: '-12px 0 40px rgba(0,0,0,0.55)',
+    boxShadow: '-12px 0 40px rgba(0,0,0,0.45)',
     zIndex: 9001,
     display: 'flex', flexDirection: 'column',
     overflow: 'hidden',
@@ -383,7 +385,8 @@ const S: Record<string, React.CSSProperties> = {
   header: {
     display: 'flex', alignItems: 'center', gap: 14,
     padding: '18px 20px',
-    borderBottom: '1px solid var(--line-soft)',
+    background: 'var(--paper)',
+    borderBottom: '1px solid var(--line)',
   },
   avatar: {
     width: 56, height: 56, borderRadius: '50%',
@@ -420,24 +423,26 @@ const S: Record<string, React.CSSProperties> = {
     display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
   },
   badgeArchived: {
-    background: '#2a261d', color: 'var(--oxblood-soft)',
+    background: 'var(--paper-deep)', color: 'var(--oxblood-soft)',
     padding: '1px 6px', borderRadius: 3,
     fontFamily: 'var(--mono)',
     fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.12em',
+    border: '1px solid var(--kpi-frame)',
   },
   badgeActive: {
-    background: 'rgba(107,147,121,0.15)', color: 'var(--st-good, #82ad8c)',
+    background: 'var(--paper-deep)', color: 'var(--st-good, #2c7a4b)',
     padding: '1px 6px', borderRadius: 3,
     fontFamily: 'var(--mono)',
     fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.12em',
+    border: '1px solid var(--kpi-frame)',
   },
   contactStrip: {
     display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1,
-    background: 'var(--kpi-frame)',
-    borderBottom: '1px solid var(--line-soft)',
+    background: 'var(--kpi-frame, rgba(168,133,74,0.45))',
+    borderBottom: '1px solid var(--line)',
   },
   contactCell: {
-    background: '#14120d',
+    background: 'var(--paper-warm)',
     padding: '10px 14px',
     display: 'flex', flexDirection: 'column', gap: 2,
     minHeight: 56,
@@ -471,15 +476,15 @@ const S: Record<string, React.CSSProperties> = {
   fieldLabel: { color: 'var(--ink-mute)' },
   fieldValue: { color: 'var(--ink)' },
   chip: {
-    background: '#1a1812', border: '1px solid var(--kpi-frame)',
+    background: 'var(--paper-deep)', border: '1px solid var(--kpi-frame)',
     padding: '2px 8px', borderRadius: 4,
-    fontSize: 11, color: 'var(--ink-soft)',
+    fontSize: 11, color: 'var(--ink)',
   },
   leaveGrid: {
     display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(95px, 1fr))', gap: 8,
   },
   leaveTile: {
-    background: '#14120d',
+    background: 'var(--paper-warm)',
     border: '1px solid var(--kpi-frame)',
     borderRadius: 6,
     padding: '10px 12px',
@@ -493,21 +498,21 @@ const S: Record<string, React.CSSProperties> = {
   },
   leaveUnit: { fontSize: 11, color: 'var(--ink-mute)', fontWeight: 400 },
   evalBox: {
-    background: '#14120d',
+    background: 'var(--paper-warm)',
     border: '1px dashed var(--kpi-frame)',
     borderRadius: 6,
     padding: '12px 14px',
   },
   code: {
     fontFamily: 'var(--mono)', fontSize: 11,
-    background: '#1f1a13', padding: '1px 5px', borderRadius: 3,
-    color: 'var(--brass-soft)',
+    background: 'var(--paper-deep)', padding: '1px 5px', borderRadius: 3,
+    color: 'var(--brass)',
   },
-  fullLink: { color: 'var(--brass-soft)', fontSize: 12, fontWeight: 600, textDecoration: 'none' },
+  fullLink: { color: 'var(--brass)', fontSize: 12, fontWeight: 600, textDecoration: 'none' },
   toast: {
     position: 'absolute', bottom: 14, left: '50%',
     transform: 'translateX(-50%)',
-    background: '#1a1812', border: '1px solid var(--kpi-frame)',
+    background: 'var(--paper-deep)', border: '1px solid var(--kpi-frame)',
     padding: '6px 12px', borderRadius: 4,
     fontFamily: 'var(--mono)', fontSize: 11,
     color: 'var(--ink)', letterSpacing: '0.12em', textTransform: 'uppercase',

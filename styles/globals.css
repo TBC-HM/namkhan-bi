@@ -19,23 +19,23 @@
   --paper:        #1a160f;
   --paper-deep:   #1f1a13;
   --paper-warm:   #15110c;
-  /* PBS 2026-05-13 rev3: bumped brightness — previous tokens were too
-   * dim against the dark page bg. Now all four text tiers stay above
-   * WCAG AA on Namkhan-dark. */
-  --ink:          #f5efe0;  /* primary text — near white-cream */
-  --ink-soft:     #dccfaf;  /* secondary */
-  --ink-mute:     #b9ad8d;  /* muted but still readable */
-  --ink-faint:    #8a7f63;  /* faint — was 6b6248, way too dim */
-  --line:         rgba(245, 239, 224, 0.22);
-  --line-soft:    rgba(245, 239, 224, 0.13);
+  /* PBS 2026-05-13 rev4: bumped brightness AGAIN — drawer + table text
+   * was still hard to read on Namkhan dark. All four tiers now sit
+   * brighter on the dark page bg. */
+  --ink:          #fbf6e9;  /* primary text — bright cream */
+  --ink-soft:     #ead9b4;  /* secondary */
+  --ink-mute:     #cfc3a3;  /* muted but clearly readable */
+  --ink-faint:    #a59a7d;  /* faint — still visible */
+  --line:         rgba(251, 246, 233, 0.26);
+  --line-soft:    rgba(251, 246, 233, 0.15);
   --moss:         #1a2e21;
   --moss-deep:    #0a1810;
   --moss-mid:     #2b4936;
   --moss-glow:    #82ad8c;       /* +brightness on dark */
   --sage:         #a3b59c;       /* +brightness */
-  --brass:        #c89a5a;       /* was #a8854a — too dim on dark */
-  --brass-soft:   #d9b67a;       /* was #c4a06b */
-  --brass-pale:   #ead096;       /* was #d9bf8e */
+  --brass:        #d4a866;       /* rev4: brighter golden brass */
+  --brass-soft:   #e3c089;       /* rev4 */
+  --brass-pale:   #f0d5a3;       /* rev4 */
   --oxblood:      #6b1f1f;
   --oxblood-mid:  #8e3a35;
   --oxblood-soft: #b85f4e;
