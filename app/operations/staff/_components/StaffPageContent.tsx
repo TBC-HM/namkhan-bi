@@ -180,7 +180,7 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
       dept_code: string | null;
       dept_name: string | null;
     };
-    const allRows: AllRow[] = [
+    const rawRows: AllRow[] = [
       ...(safeRows as any[]).map((r) => ({
         hire_date: r.hire_date, end_date: null, // active = no end
         monthly_salary: Number(r.monthly_salary || 0),
@@ -196,6 +196,37 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
         dept_name: r.dept_name ?? null,
       })),
     ];
+
+    // Fill missing salaries with the dept-average so 100% of the register
+    // contributes to the trend. Without this, ~60% of Donna rows would
+    // contribute €0 and the line would understate cost dramatically.
+    const deptSalarySum: Record<string, number> = {};
+    const deptSalaryN:   Record<string, number> = {};
+    for (const r of rawRows) {
+      if (r.monthly_salary > 0 && r.dept_code) {
+        deptSalarySum[r.dept_code] = (deptSalarySum[r.dept_code] ?? 0) + r.monthly_salary;
+        deptSalaryN[r.dept_code]   = (deptSalaryN[r.dept_code] ?? 0) + 1;
+      }
+    }
+    const globalAvg = (() => {
+      const filled = rawRows.filter((r) => r.monthly_salary > 0);
+      if (filled.length === 0) return 0;
+      return filled.reduce((s, r) => s + r.monthly_salary, 0) / filled.length;
+    })();
+    const dominantSalaryCcy = rawRows.find((r) => r.monthly_salary > 0)?.salary_currency ?? 'LAK';
+
+    const allRows: AllRow[] = rawRows.map((r) => {
+      if (r.monthly_salary > 0) return r;
+      const deptAvg = r.dept_code && deptSalaryN[r.dept_code]
+        ? deptSalarySum[r.dept_code] / deptSalaryN[r.dept_code]
+        : globalAvg;
+      return {
+        ...r,
+        monthly_salary: deptAvg,
+        // Use dominant currency if row has none — Factorial doesn't always set it.
+        salary_currency: r.salary_currency ?? dominantSalaryCcy,
+      };
+    });
 
     // Active-on-month-end predicate
     const activeAt = (r: AllRow, monthIso: string) => {
