@@ -15,10 +15,29 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { fmtMoney } from '@/lib/format';
 import { fetchStaffDetail, type StaffDetail } from '../_actions/fetchStaffDetail';
 
 const ANNUAL_LEAVE_ENTITLEMENT = 30; // Spain default; Laos varies — config later
+
+// Native-currency formatter — handles EUR (Donna), LAK (Namkhan), USD (default).
+// Replaces fmtMoney which only supports LAK/USD.
+function fmtNative(n: number | null | undefined, ccy: string | null | undefined): string {
+  if (n == null || n === 0) return '—';
+  const c = (ccy ?? 'LAK').toUpperCase();
+  if (c === 'EUR') {
+    if (Math.abs(n) >= 1000) return `€${(n / 1000).toFixed(1)}k`;
+    return `€${Math.round(n).toLocaleString('de-DE')}`;
+  }
+  if (c === 'USD') {
+    if (Math.abs(n) >= 1000) return `$${(n / 1000).toFixed(1)}k`;
+    return `$${Math.round(n).toLocaleString('en-US')}`;
+  }
+  // LAK
+  if (Math.abs(n) >= 1_000_000_000) return `₭${(n / 1_000_000_000).toFixed(1)}B`;
+  if (Math.abs(n) >= 1_000_000) return `₭${(n / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(n) >= 1000) return `₭${Math.round(n / 1000).toLocaleString('en-US')}k`;
+  return `₭${Math.round(n).toLocaleString('en-US')}`;
+}
 
 interface Props {
   staffId: string | null;
@@ -88,8 +107,17 @@ export function StaffDrawer({ staffId, onClose }: Props) {
 
               {/* 4. COMPENSATION */}
               <Section title="Compensation">
-                <Field label="Monthly base" value={fmtMoney(detail.monthly_salary, (detail.salary_currency === 'USD' ? 'USD' : 'LAK'))} mono />
-                <Field label="Hourly cost"  value={fmtMoney(detail.hourly_cost_lak, 'LAK')} mono />
+                <Field
+                  label={`Monthly base${detail.salary_currency ? ' · ' + detail.salary_currency : ''}`}
+                  value={fmtNative(detail.monthly_salary, detail.salary_currency)}
+                  mono
+                />
+                <Field
+                  label="Hourly cost"
+                  value={detail.hourly_cost_lak ? fmtNative(detail.hourly_cost_lak, 'LAK') : '—'}
+                  mono
+                  hint={detail.hourly_cost_lak ? undefined : (detail.salary_currency === 'EUR' ? 'derived from monthly · not tracked' : undefined)}
+                />
                 <Field label="Last payroll" value={detail.last_payroll_period ?? '—'} mono />
                 <Field label="Last paid USD" value={detail.last_payroll_total_usd != null ? `$${Math.round(detail.last_payroll_total_usd).toLocaleString()}` : '—'} mono />
                 <Field label="Days worked"   value={detail.last_payroll_days_worked != null ? String(detail.last_payroll_days_worked) : '—'} />
