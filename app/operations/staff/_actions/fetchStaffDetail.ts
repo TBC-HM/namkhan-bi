@@ -67,6 +67,11 @@ export interface StaffDetail {
   extra_adjustments_neg_ytd: number | null;
   extra_deductions_ytd: number | null;
   extra_events_count: number | null;
+  // Benefit YTD totals (added 2026-05-13)
+  service_charge_ytd_lak: number | null;
+  gasoline_ytd_lak: number | null;
+  internet_ytd_lak: number | null;
+  benefits_total_ytd_lak: number | null;
 }
 
 export async function fetchStaffDetail(staffId: string): Promise<StaffDetail | null> {
@@ -92,7 +97,7 @@ export async function fetchStaffDetail(staffId: string): Promise<StaffDetail | n
     supabase
       .schema('ops')
       .from('v_staff_extra_pay')
-      .select('adjustments_pos_ytd, adjustments_neg_ytd, deductions_ytd, events_count')
+      .select('adjustments_pos_ytd, adjustments_neg_ytd, deductions_ytd, events_count, service_charge_ytd_lak, gasoline_ytd_lak, internet_ytd_lak, benefits_total_ytd_lak')
       .eq('staff_id', staffId)
       .eq('year', thisYear)
       .maybeSingle(),
@@ -120,5 +125,9 @@ export async function fetchStaffDetail(staffId: string): Promise<StaffDetail | n
     extra_adjustments_neg_ytd: ex?.adjustments_neg_ytd ?? null,
     extra_deductions_ytd:      ex?.deductions_ytd ?? null,
     extra_events_count:        ex?.events_count ?? null,
+    service_charge_ytd_lak:    ex?.service_charge_ytd_lak ?? null,
+    gasoline_ytd_lak:          ex?.gasoline_ytd_lak ?? null,
+    internet_ytd_lak:          ex?.internet_ytd_lak ?? null,
+    benefits_total_ytd_lak:    ex?.benefits_total_ytd_lak ?? null,
   } as StaffDetail;
 }

@@ -159,6 +159,28 @@ export function StaffDrawer({ staffId, onClose }: Props) {
                     hint="advances · fines · other"
                   />
                 )}
+                {(detail.service_charge_ytd_lak != null && detail.service_charge_ytd_lak > 0) && (
+                  <Field
+                    label="Service charge · YTD"
+                    value={fmtNative(detail.service_charge_ytd_lak, 'LAK')}
+                    mono
+                    hint={`${new Date().getUTCFullYear()} · F&B tip pool`}
+                  />
+                )}
+                {(detail.gasoline_ytd_lak != null && detail.gasoline_ytd_lak > 0) && (
+                  <Field
+                    label="Gasoline · YTD"
+                    value={fmtNative(detail.gasoline_ytd_lak, 'LAK')}
+                    mono
+                  />
+                )}
+                {(detail.internet_ytd_lak != null && detail.internet_ytd_lak > 0) && (
+                  <Field
+                    label="Internet · YTD"
+                    value={fmtNative(detail.internet_ytd_lak, 'LAK')}
+                    mono
+                  />
+                )}
               </Section>
 
               {/* 4b. PAYSLIP BREAKDOWN — from payroll_12m[0] latest month */}
@@ -188,16 +210,21 @@ export function StaffDrawer({ staffId, onClose }: Props) {
                 <EvaluationStub />
               </Section>
 
-              {/* Skills (if any) */}
-              {detail.skills && detail.skills.length > 0 && (
-                <Section title="Skills">
+              {/* Skills — always visible per PBS 2026-05-13. Em-dash when empty so the
+                  section is consistent across all employees. */}
+              <Section title="Skills">
+                {detail.skills && detail.skills.length > 0 ? (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {detail.skills.map((s) => (
                       <span key={s} style={S.chip}>{s}</span>
                     ))}
                   </div>
-                </Section>
-              )}
+                ) : (
+                  <div style={{ fontSize: 12, color: 'var(--ink-faint)', fontStyle: 'italic' }}>
+                    — no skills tagged yet
+                  </div>
+                )}
+              </Section>
 
               {/* DQ flags */}
               {detail.dq_flags && detail.dq_flags.length > 0 && (
