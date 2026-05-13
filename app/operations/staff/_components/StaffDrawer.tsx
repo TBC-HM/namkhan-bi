@@ -20,12 +20,13 @@ import { SkillsEditor } from './SkillsEditor';
 
 // Annual-leave entitlement per property — statutory minimums.
 //   Namkhan (260955) = 15 days (Lao Labor Law Art. 38)
-//   Donna   (1000001) = 30 calendar days (Spain — Estatuto de los Trabajadores Art. 38)
-// Default 30 for unknown properties so we don't under-credit.
+//   Donna   (1000001) = 35 days (PBS update 2026-05-13 — per applicable
+//                                Balearic hospitality convenio / new law).
+// Default 35 for unknown properties so we don't under-credit.
 function entitlementFor(propertyId: number | null | undefined): number {
   if (propertyId === 260955) return 15;
-  if (propertyId === 1000001) return 30;
-  return 30;
+  if (propertyId === 1000001) return 35;
+  return 35;
 }
 
 // Native-currency formatter — handles EUR (Donna), LAK (Namkhan), USD (default).
