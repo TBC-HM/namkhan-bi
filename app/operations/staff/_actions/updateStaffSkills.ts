@@ -24,17 +24,33 @@ export async function updateStaffSkills(staffId: string, skills: string[]): Prom
 }
 
 export async function fetchSkillCatalog(propertyId: number): Promise<string[]> {
-  const { data, error } = await supabase
-    .schema('ops')
-    .from('staff_employment')
-    .select('skills')
-    .eq('property_id', propertyId);
-  if (error) {
-    console.error('fetchSkillCatalog error', error);
-    return [];
-  }
+  // PBS 2026-05-13: catalog is the UNION of:
+  //   (a) canonical `ops.skills` rows tagged for this property (seeded list),
+  //   (b) any free-text skill already saved on an employee
+  //       (`staff_employment.skills` text[]).
+  // Donna had no employees tagged → catalog was empty. Seeding ops.skills
+  // alone now flows into the popup without needing tag-by-tag onboarding.
+  const [catalogRes, tagsRes] = await Promise.all([
+    supabase
+      .schema('ops')
+      .from('skills')
+      .select('code')
+      .eq('property_id', propertyId),
+    supabase
+      .schema('ops')
+      .from('staff_employment')
+      .select('skills')
+      .eq('property_id', propertyId),
+  ]);
+  if (catalogRes.error) console.error('fetchSkillCatalog ops.skills error', catalogRes.error);
+  if (tagsRes.error)    console.error('fetchSkillCatalog tags error', tagsRes.error);
+
   const set = new Set<string>();
-  for (const row of (data as { skills: string[] | null }[]) ?? []) {
+  for (const row of (catalogRes.data as { code: string | null }[]) ?? []) {
+    const t = (row.code ?? '').trim();
+    if (t) set.add(t);
+  }
+  for (const row of (tagsRes.data as { skills: string[] | null }[]) ?? []) {
     if (Array.isArray(row.skills)) {
       for (const s of row.skills) {
         const t = (s ?? '').trim();
