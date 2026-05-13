@@ -97,7 +97,20 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
     .limit(1000);
 
   const monthlyRows = (allMonthly as any[]) ?? [];
-  const distinctMonths = [...new Set(monthlyRows.map(r => r.period_month))].sort((a, b) => b.localeCompare(a));
+  let distinctMonths = [...new Set(monthlyRows.map(r => r.period_month))].sort((a, b) => b.localeCompare(a));
+  const hasRealPayroll = distinctMonths.length > 0;
+  // For properties without ops.payroll_monthly data (Donna today), the
+  // dropdown still spans Jan 2025 → current month so the page is usable.
+  if (!hasRealPayroll) {
+    const today = new Date();
+    today.setUTCDate(1);
+    distinctMonths = [];
+    for (let i = 0; i < 18; i++) {
+      const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - i, 1));
+      const iso = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-01`;
+      if (iso >= '2025-01-01') distinctMonths.push(iso);
+    }
+  }
   const availableMonths = buildMonthList(distinctMonths);
 
   const requested = typeof searchParams?.month === 'string' ? searchParams.month : null;
@@ -106,7 +119,7 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
     distinctMonths[0] ||
     availableMonths[0];
 
-  const deptRows: DeptRow[] = monthlyRows.filter(r => r.period_month === selectedMonth) as DeptRow[];
+  let deptRows: DeptRow[] = monthlyRows.filter(r => r.period_month === selectedMonth) as DeptRow[];
 
   const byMonth = new Map<string, StaffTrendPoint>();
   for (const r of monthlyRows) {
@@ -119,7 +132,7 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
     cur.total_grand_usd += Number(r.total_grand_usd || 0);
     byMonth.set(r.period_month, cur);
   }
-  const trendPoints = [...byMonth.values()];
+  let trendPoints = [...byMonth.values()];
 
   const [{ data: rows }, { data: anomalies }, archived] = await Promise.all([
     supabase
@@ -137,19 +150,121 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
       .from('v_staff_anomalies')
       .select('issue, staff_id, full_name, dept_name')
       .eq('property_id', propertyId),
-    (async (): Promise<ArchivedRow[]> => {
+    (async (): Promise<(ArchivedRow & { dept_code?: string | null; monthly_salary: number; hire_date: string | null; end_date: string | null })[]> => {
       const { data } = await supabase
         .from('v_staff_register_extended')
-        .select('staff_id, emp_id, full_name, position_title, dept_name, hire_date, end_date, monthly_salary, salary_currency, bank_name, bank_account_no, bank_account_name, notes')
+        .select('staff_id, emp_id, full_name, position_title, dept_code, dept_name, hire_date, end_date, monthly_salary, salary_currency, bank_name, bank_account_no, bank_account_name, notes')
         .eq('property_id', propertyId)
         .eq('is_active', false)
         .order('end_date', { ascending: false });
-      return (data as unknown as ArchivedRow[]) ?? [];
+      return (data as any[]) ?? [];
     })(),
   ]);
 
   const safeRows: Row[] = (rows as unknown as Row[]) ?? [];
   const safeAnoms: Anomaly[] = (anomalies as unknown as Anomaly[]) ?? [];
+
+  // ============================================================
+  // SYNTHETIC TREND + DEPT BREAKDOWN
+  // When ops.payroll_monthly has no rows for this property (Donna today),
+  // derive monthly headcount + cost from staff_employment.hire_date / end_date
+  // and constant monthly_salary. Same KPIs/charts populate immediately.
+  // Real payroll data, when it lands, overrides via the !hasRealPayroll guard.
+  // ============================================================
+  if (!hasRealPayroll) {
+    type AllRow = {
+      hire_date: string | null;
+      end_date: string | null;
+      monthly_salary: number;
+      salary_currency: string | null;
+      dept_code: string | null;
+      dept_name: string | null;
+    };
+    const allRows: AllRow[] = [
+      ...(safeRows as any[]).map((r) => ({
+        hire_date: r.hire_date, end_date: null, // active = no end
+        monthly_salary: Number(r.monthly_salary || 0),
+        salary_currency: r.salary_currency ?? null,
+        dept_code: r.dept_code ?? null,
+        dept_name: r.dept_name ?? null,
+      })),
+      ...(archived as any[]).map((r) => ({
+        hire_date: r.hire_date, end_date: r.end_date,
+        monthly_salary: Number(r.monthly_salary || 0),
+        salary_currency: r.salary_currency ?? null,
+        dept_code: r.dept_code ?? null,
+        dept_name: r.dept_name ?? null,
+      })),
+    ];
+
+    // Active-on-month-end predicate
+    const activeAt = (r: AllRow, monthIso: string) => {
+      // Last day of month (approx — using 28+ heuristic): use first of next month minus 1ms
+      const [y, m] = monthIso.split('-').map(Number);
+      const eom = new Date(Date.UTC(y, m, 0)); // last day of month
+      const eomStr = `${eom.getUTCFullYear()}-${String(eom.getUTCMonth() + 1).padStart(2, '0')}-${String(eom.getUTCDate()).padStart(2, '0')}`;
+      if (!r.hire_date) return false;
+      if (r.hire_date > eomStr) return false;
+      if (r.end_date && r.end_date < monthIso) return false;
+      return true;
+    };
+
+    // Trend: one synthetic point per month in availableMonths
+    trendPoints = availableMonths.map((monthIso) => {
+      const activeRows = allRows.filter((r) => activeAt(r, monthIso));
+      const costUsd = activeRows.reduce(
+        (s, r) => s + salaryToUsd(r.monthly_salary, r.salary_currency),
+        0
+      );
+      return {
+        period_month: monthIso,
+        headcount: activeRows.length,
+        total_grand_usd: costUsd,
+      };
+    });
+
+    // Dept breakdown for selected month — group by dept_code from current state
+    const byDept = new Map<string, { dept_code: string; dept_name: string; headcount: number; total_lak: number }>();
+    for (const r of allRows.filter((r) => activeAt(r, selectedMonth))) {
+      const code = r.dept_code ?? '—';
+      const name = r.dept_name ?? 'Unassigned';
+      const cur = byDept.get(code) ?? { dept_code: code, dept_name: name, headcount: 0, total_lak: 0 };
+      cur.headcount += 1;
+      // For DeptBreakdown UI, total_base_lak stores native amount; UsdLak still applies LAK->USD,
+      // but for Donna's EUR rows the displayed USD reads through salaryToUsd. We feed the
+      // already-converted USD into total_canonical_cost_usd so the grand-cost column is correct.
+      cur.total_lak += r.monthly_salary; // native amount (EUR for Donna, LAK for Namkhan)
+      byDept.set(code, cur);
+    }
+    // Re-populate byMonth from synthetic trend so KPI tiles read synthetic values
+    byMonth.clear();
+    for (const p of trendPoints) byMonth.set(p.period_month, p);
+
+    deptRows = [...byDept.values()].map((d) => {
+      // Convert the dominant currency sum into USD for the grand-cost column.
+      // Use the property's native currency (taken from any row).
+      const ccy = (allRows[0]?.salary_currency ?? 'LAK') as string;
+      const costUsd = salaryToUsd(d.total_lak, ccy);
+      return {
+        dept_code: d.dept_code,
+        dept_name: d.dept_name,
+        headcount: d.headcount,
+        total_base_lak: d.total_lak,
+        total_overtime_lak: null,
+        total_sc_lak: null,
+        total_allow_lak: null,
+        total_sso_lak: null,
+        total_tax_lak: null,
+        total_net_lak: d.total_lak,
+        total_grand_usd: costUsd,
+        total_canonical_net_lak: d.total_lak,
+        total_canonical_net_usd: costUsd,
+        total_canonical_cost_lak: d.total_lak,
+        total_canonical_cost_usd: costUsd,
+        total_benefits_lak: null,
+      } satisfies DeptRow;
+    });
+  }
 
   const grouped: Record<string, Anomaly[]> = {};
   for (const a of safeAnoms) (grouped[a.issue] ||= []).push(a);
