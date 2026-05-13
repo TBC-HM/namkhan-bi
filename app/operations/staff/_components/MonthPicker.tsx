@@ -5,13 +5,10 @@
 'use client';
 
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
-
-const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-export function fmtPeriodLabel(iso: string): string {
-  const [y, m] = iso.split('-');
-  return `${MONTH_NAMES[Number(m) - 1]} ${y}`;
-}
+import { fmtPeriodLabel } from './period-utils';
+// re-export so older imports `from './MonthPicker'` still resolve (not used
+// by server components — they import from period-utils directly).
+export { fmtPeriodLabel };
 
 export default function MonthPicker({
   months,
