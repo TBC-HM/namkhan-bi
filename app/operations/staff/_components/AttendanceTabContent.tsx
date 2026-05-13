@@ -75,7 +75,13 @@ export default async function AttendanceTabContent({
 
   const kpi    = (kpiRes.data as KpiRow | null) ?? null;
   const daily  = (dailyRes.data as DailyPoint[] | null) ?? [];
-  const scores = (scoresRes.data as ScoreRow[] | null) ?? [];
+  // PBS 2026-05-13: filter out ghost rows from the LEFT JOIN rebuild —
+  // active staff with zero clock-in events in last 30d. Otherwise the
+  // scoreboard count disagrees with the "Active · 30d" KPI tile.
+  // Ghost rows are surfaced separately via the Unmapped/No-clock signals.
+  const allScores  = (scoresRes.data as ScoreRow[] | null) ?? [];
+  const scores     = allScores.filter((s) => Number(s.events_30d || 0) > 0);
+  const ghostCount = allScores.length - scores.length;
   const openShifts = (openRes.data as OpenRow[] | null) ?? [];
   const unmapped = (unmappedRes.data as UnmappedRow[] | null) ?? [];
   const recent   = (recentRes.data as RecentRow[] | null) ?? [];
@@ -103,6 +109,7 @@ export default async function AttendanceTabContent({
         { label: 'Hours · 7d',     value: `${kpi?.hours_7d ?? 0}h` },
         { label: 'Hours · 30d',    value: `${kpi?.hours_30d ?? 0}h` },
         { label: 'Avg shift',      value: kpi?.avg_shift_h_30d != null ? `${kpi.avg_shift_h_30d}h` : '—', hint: '30d avg duration' },
+        { label: 'No-clock active', value: ghostCount, kind: 'count', tone: ghostCount > 0 ? 'warn' : 'pos', hint: 'active staff · 0 events 30d' },
         { label: 'Unmapped',       value: unmapped.length, kind: 'count', tone: unmapped.length > 0 ? 'warn' : 'pos', hint: 'clock-in / no profile' },
       ] satisfies KpiStripItem[]} />
 
