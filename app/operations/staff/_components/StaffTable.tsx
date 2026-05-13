@@ -1,12 +1,12 @@
 // app/operations/staff/_components/StaffTable.tsx
+// PBS 2026-05-13 — theme-adaptive. Uses --paper / --ink / --kpi-frame tokens
+// so the SAME table renders cream on Donna and dark on Namkhan, both legible.
+// Salary cell honors salary_currency (LAK for Namkhan, EUR for Donna, USD …).
+
 'use client';
 
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { fmtMoney } from '@/lib/format';
-
-// PBS 2026-05-09: when onSelect is provided, row clicks open the drawer
-// instead of routing to /[staffId]. Falls back to old behaviour otherwise.
 
 type Row = {
   staff_id: string;
@@ -17,6 +17,7 @@ type Row = {
   dept_name: string;
   employment_type: string;
   monthly_salary: number;
+  salary_currency?: string | null;
   hourly_cost_lak: number;
   hire_date: string | null;
   last_payroll_period: string | null;
@@ -32,13 +33,107 @@ interface StaffTableProps {
   selectedId?: string | null;
 }
 
+// ---- formatting helpers -----------------------------------------------------
+
+function fmtSalary(n: number | null | undefined, ccy: string | null | undefined): string {
+  if (n == null || n === 0) return '—';
+  const c = (ccy ?? 'LAK').toUpperCase();
+  if (c === 'EUR') {
+    if (n >= 1000) return `€${(n / 1000).toFixed(1)}k`;
+    return `€${Math.round(n)}`;
+  }
+  if (c === 'USD') {
+    if (n >= 1000) return `$${(n / 1000).toFixed(1)}k`;
+    return `$${Math.round(n)}`;
+  }
+  // LAK
+  if (n >= 1_000_000_000) return `₭${(n / 1_000_000_000).toFixed(1)}B`;
+  if (n >= 1_000_000) return `₭${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1000) return `₭${Math.round(n / 1000)}k`;
+  return `₭${Math.round(n)}`;
+}
+
+// ---- styles -----------------------------------------------------------------
+
+const tableStyles: Record<string, React.CSSProperties> = {
+  wrapper: {
+    borderRadius: 4,
+    border: '1px solid var(--kpi-frame, rgba(168,133,74,0.45))',
+    background: 'var(--paper-warm)',
+    overflow: 'hidden',
+  },
+  filterRow: {
+    display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12,
+    borderBottom: '1px solid var(--line-soft)',
+    padding: '10px 14px',
+    background: 'var(--paper)',
+  },
+  input: {
+    background: 'var(--paper-warm)',
+    border: '1px solid var(--kpi-frame)',
+    color: 'var(--ink)',
+    borderRadius: 4,
+    padding: '6px 10px',
+    fontSize: 13,
+    width: 260,
+    outline: 'none',
+  },
+  select: {
+    background: 'var(--paper-warm)',
+    border: '1px solid var(--kpi-frame)',
+    color: 'var(--ink)',
+    borderRadius: 4,
+    padding: '6px 10px',
+    fontSize: 13,
+    cursor: 'pointer',
+  },
+  counter: {
+    marginLeft: 'auto',
+    fontFamily: 'var(--mono)',
+    fontSize: 11,
+    color: 'var(--ink-mute)',
+    letterSpacing: '0.08em',
+  },
+  th: {
+    textAlign: 'left' as const,
+    padding: '10px 12px',
+    fontFamily: 'var(--mono)',
+    fontSize: 10,
+    letterSpacing: '0.16em',
+    textTransform: 'uppercase' as const,
+    color: 'var(--brass)',
+    fontWeight: 600,
+    whiteSpace: 'nowrap' as const,
+    borderBottom: '1px solid var(--kpi-frame)',
+  },
+  thRight: { textAlign: 'right' as const },
+  td: {
+    padding: '10px 12px',
+    fontSize: 13,
+    color: 'var(--ink)',
+    borderTop: '1px solid var(--line-soft)',
+    verticalAlign: 'middle' as const,
+  },
+  tdMono: {
+    fontFamily: 'var(--mono)',
+    fontSize: 12,
+    color: 'var(--ink-soft)',
+  },
+  tdMuted: { color: 'var(--ink-mute)' },
+  tdStrong: { color: 'var(--ink)', fontWeight: 500 },
+  tdRight: { textAlign: 'right' as const, fontVariantNumeric: 'tabular-nums' as const },
+  emDash: { color: 'var(--ink-faint)' },
+};
+
+// ---- component --------------------------------------------------------------
+
 export function StaffTable({ rows, onSelect, selectedId }: StaffTableProps) {
   const router = useRouter();
   const [q, setQ] = useState('');
   const [dept, setDept] = useState<string>('all');
 
   const depts = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.dept_name))).sort(),
+    () => Array.from(new Set(rows.map((r) => r.dept_name).filter(Boolean))).sort(),
     [rows]
   );
 
@@ -48,102 +143,113 @@ export function StaffTable({ rows, onSelect, selectedId }: StaffTableProps) {
       if (dept !== 'all' && r.dept_name !== dept) return false;
       if (!needle) return true;
       return (
-        r.full_name.toLowerCase().includes(needle) ||
-        r.emp_id.toLowerCase().includes(needle) ||
-        r.position_title.toLowerCase().includes(needle)
+        (r.full_name || '').toLowerCase().includes(needle) ||
+        (r.emp_id || '').toLowerCase().includes(needle) ||
+        (r.position_title || '').toLowerCase().includes(needle)
       );
     });
   }, [rows, q, dept]);
 
   return (
-    <div className="rounded-sm border border-stone-300 bg-white">
-      {/* Filter row */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-stone-200 px-4 py-3">
+    <div style={tableStyles.wrapper}>
+      <div style={tableStyles.filterRow}>
         <input
           type="text"
           placeholder="Search name, code, position…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          className="w-64 rounded-sm border border-stone-300 px-3 py-1.5 text-sm focus:border-stone-700 focus:outline-none"
+          style={tableStyles.input}
         />
         <select
           value={dept}
           onChange={(e) => setDept(e.target.value)}
-          className="rounded-sm border border-stone-300 bg-white px-3 py-1.5 text-sm"
+          style={tableStyles.select}
         >
           <option value="all">All departments</option>
           {depts.map((d) => (
-            <option key={d} value={d}>
-              {d}
-            </option>
+            <option key={d} value={d}>{d}</option>
           ))}
         </select>
-        <span className="ml-auto text-xs text-stone-500">
+        <span style={tableStyles.counter}>
           {filtered.length} of {rows.length} shown
         </span>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr className="text-left text-[10px] uppercase tracking-[0.16em] text-stone-500">
-              <th className="px-4 py-3">Emp ID</th>
-              <th className="px-4 py-3">Name</th>
-              <th className="px-4 py-3">Position</th>
-              <th className="px-4 py-3">Department</th>
-              <th className="px-4 py-3">Type</th>
-              <th className="px-4 py-3 text-right">Monthly LAK</th>
-              <th className="px-4 py-3 text-right">Hourly LAK</th>
-              <th className="px-4 py-3">Hire Date</th>
-              <th className="px-4 py-3">Last Payslip</th>
-              <th className="px-4 py-3">Flags</th>
+            <tr>
+              <th style={tableStyles.th}>Emp ID</th>
+              <th style={tableStyles.th}>Name</th>
+              <th style={tableStyles.th}>Position</th>
+              <th style={tableStyles.th}>Department</th>
+              <th style={tableStyles.th}>Type</th>
+              <th style={{ ...tableStyles.th, ...tableStyles.thRight }}>Monthly</th>
+              <th style={{ ...tableStyles.th, ...tableStyles.thRight }}>Hourly LAK</th>
+              <th style={tableStyles.th}>Hire date</th>
+              <th style={tableStyles.th}>Last payslip</th>
+              <th style={tableStyles.th}>Flags</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((r) => (
-              <tr
-                key={r.staff_id}
-                onClick={() => {
-                  if (onSelect) onSelect(r.staff_id);
-                  else router.push(`/operations/staff/${encodeURIComponent(r.staff_id)}`);
-                }}
-                className={`cursor-pointer border-t border-stone-100 hover:bg-stone-50 ${
-                  selectedId === r.staff_id ? 'bg-emerald-900/5' : ''
-                }`}
-              >
-                <td className="px-4 py-3 font-mono text-xs text-stone-600">
-                  {r.emp_id}
-                </td>
-                <td className="px-4 py-3 font-medium text-stone-900">
-                  {r.full_name}
-                </td>
-                <td className="px-4 py-3 text-stone-700">{r.position_title}</td>
-                <td className="px-4 py-3 text-stone-600">{r.dept_name}</td>
-                <td className="px-4 py-3 font-mono text-[10px] uppercase tracking-wider text-stone-500">
-                  {r.employment_type}
-                </td>
-                <td className="px-4 py-3 text-right tabular-nums">
-                  {fmtMoney(r.monthly_salary, 'LAK')}
-                </td>
-                <td className="px-4 py-3 text-right tabular-nums text-stone-600">
-                  {fmtMoney(r.hourly_cost_lak, 'LAK')}
-                </td>
-                <td className="px-4 py-3 text-stone-700">
-                  {r.hire_date ?? <span className="text-stone-300">—</span>}
-                </td>
-                <td className="px-4 py-3">
-                  <PayslipBadge status={r.payslip_pdf_status} />
-                </td>
-                <td className="px-4 py-3">
-                  <FlagDots row={r} />
-                </td>
-              </tr>
-            ))}
+            {filtered.map((r) => {
+              const isSelected = selectedId === r.staff_id;
+              return (
+                <tr
+                  key={r.staff_id}
+                  onClick={() => {
+                    if (onSelect) onSelect(r.staff_id);
+                    else router.push(`/operations/staff/${encodeURIComponent(r.staff_id)}`);
+                  }}
+                  style={{
+                    cursor: 'pointer',
+                    background: isSelected ? 'var(--kpi-frame)' : undefined,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected) e.currentTarget.style.background = 'rgba(168,133,74,0.06)';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected) e.currentTarget.style.background = '';
+                  }}
+                >
+                  <td style={{ ...tableStyles.td, ...tableStyles.tdMono }}>{r.emp_id || '—'}</td>
+                  <td style={{ ...tableStyles.td, ...tableStyles.tdStrong }}>{r.full_name || '—'}</td>
+                  <td style={tableStyles.td}>
+                    {r.position_title || <span style={tableStyles.emDash}>—</span>}
+                  </td>
+                  <td style={tableStyles.td}>
+                    {r.dept_name || <span style={tableStyles.emDash}>—</span>}
+                  </td>
+                  <td style={{
+                    ...tableStyles.td,
+                    fontFamily: 'var(--mono)', fontSize: 10,
+                    letterSpacing: '0.12em', textTransform: 'uppercase',
+                    color: 'var(--ink-mute)',
+                  }}>
+                    {r.employment_type || '—'}
+                  </td>
+                  <td style={{ ...tableStyles.td, ...tableStyles.tdRight }}>
+                    {fmtSalary(r.monthly_salary, r.salary_currency)}
+                  </td>
+                  <td style={{ ...tableStyles.td, ...tableStyles.tdRight, ...tableStyles.tdMuted }}>
+                    {fmtSalary(r.hourly_cost_lak, 'LAK')}
+                  </td>
+                  <td style={{ ...tableStyles.td, ...tableStyles.tdMono }}>
+                    {r.hire_date || <span style={tableStyles.emDash}>—</span>}
+                  </td>
+                  <td style={tableStyles.td}>
+                    <PayslipBadge status={r.payslip_pdf_status} />
+                  </td>
+                  <td style={tableStyles.td}>
+                    <FlagDots row={r} />
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
         {filtered.length === 0 && (
-          <div className="p-8 text-center text-sm text-stone-500">
+          <div style={{ padding: 24, textAlign: 'center', color: 'var(--ink-mute)', fontStyle: 'italic', fontSize: 13 }}>
             No staff match the filter.
           </div>
         )}
@@ -152,54 +258,38 @@ export function StaffTable({ rows, onSelect, selectedId }: StaffTableProps) {
   );
 }
 
+// ---- atoms ------------------------------------------------------------------
+
 function PayslipBadge({ status }: { status: Row['payslip_pdf_status'] }) {
-  const map = {
-    current: { c: 'bg-emerald-100 text-emerald-900', t: 'current' },
-    overdue: { c: 'bg-amber-100 text-amber-900', t: 'overdue' },
-    never: { c: 'bg-stone-100 text-stone-500', t: 'never' },
-  } as const;
-  const v = map[status];
+  const map: Record<Row['payslip_pdf_status'], { bg: string; fg: string; t: string }> = {
+    current:  { bg: 'rgba(107,147,121,0.18)', fg: 'var(--st-good, #82ad8c)', t: 'current' },
+    overdue:  { bg: 'rgba(168,133,74,0.18)',  fg: 'var(--brass)',            t: 'overdue' },
+    never:    { bg: 'var(--paper-deep)',      fg: 'var(--ink-mute)',         t: 'never'   },
+  };
+  const v = map[status] ?? map.never;
   return (
-    <span
-      className={`rounded-sm px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider ${v.c}`}
-    >
-      {v.t}
-    </span>
+    <span style={{
+      background: v.bg, color: v.fg,
+      padding: '2px 8px', borderRadius: 3,
+      fontFamily: 'var(--mono)', fontSize: 10,
+      letterSpacing: '0.12em', textTransform: 'uppercase',
+      border: '1px solid var(--kpi-frame)',
+    }}>{v.t}</span>
   );
 }
 
 function FlagDots({ row }: { row: Row }) {
-  const flags: { key: string; label: string; on: boolean; color: string }[] = [
-    {
-      key: 'h',
-      label: 'Missing hire date',
-      on: row.flag_missing_hire_date,
-      color: 'bg-amber-500',
-    },
-    {
-      key: 'c',
-      label: 'Missing contract',
-      on: row.flag_missing_contract,
-      color: 'bg-rose-500',
-    },
-    {
-      key: 'x',
-      label: 'Contract expiring',
-      on: row.flag_contract_expiring,
-      color: 'bg-orange-500',
-    },
+  const flags = [
+    { key: 'h', label: 'Missing hire date',   on: row.flag_missing_hire_date,   color: 'var(--brass)' },
+    { key: 'c', label: 'Missing contract',    on: row.flag_missing_contract,    color: 'var(--oxblood-soft)' },
+    { key: 'x', label: 'Contract expiring',   on: row.flag_contract_expiring,   color: '#e98257' },
   ];
   return (
-    <div className="flex gap-1">
-      {flags.map((f) =>
-        f.on ? (
-          <span
-            key={f.key}
-            title={f.label}
-            className={`h-2 w-2 rounded-full ${f.color}`}
-          />
-        ) : null
-      )}
+    <div style={{ display: 'flex', gap: 4 }}>
+      {flags.map((f) => f.on ? (
+        <span key={f.key} title={f.label}
+              style={{ width: 8, height: 8, borderRadius: '50%', background: f.color, display: 'inline-block' }} />
+      ) : null)}
     </div>
   );
 }

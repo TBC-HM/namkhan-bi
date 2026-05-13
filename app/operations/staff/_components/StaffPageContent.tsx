@@ -140,7 +140,7 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
     (async (): Promise<ArchivedRow[]> => {
       const { data } = await supabase
         .from('v_staff_register_extended')
-        .select('staff_id, emp_id, full_name, position_title, dept_name, hire_date, end_date, monthly_salary, bank_name, bank_account_no, bank_account_name, notes')
+        .select('staff_id, emp_id, full_name, position_title, dept_name, hire_date, end_date, monthly_salary, salary_currency, bank_name, bank_account_no, bank_account_name, notes')
         .eq('property_id', propertyId)
         .eq('is_active', false)
         .order('end_date', { ascending: false });
