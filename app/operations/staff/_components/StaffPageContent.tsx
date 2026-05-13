@@ -16,6 +16,7 @@ import StaffMiniCharts, { type StaffTrendPoint } from './StaffMiniCharts';
 import MonthPicker from './MonthPicker';
 import DeptPicker from './DeptPicker';
 import { fmtPeriodLabel } from './period-utils';
+import StaffTabStrip from './StaffTabStrip';
 import UploadPayslipsButton from './UploadPayslipsButton';
 import KpiStrip, { type KpiStripItem } from '@/components/kpi/KpiStrip';
 import Page from '@/components/page/Page';
@@ -407,6 +408,7 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
       subPages={rewriteSubPagesForProperty(OPERATIONS_SUBPAGES, propertyId)}
       topRight={<UploadPayslipsButton />}
     >
+      <StaffTabStrip propertyId={propertyId} />
       <KpiStrip items={[
         { label: 'Active', value: totalActive, kind: 'count', hint: 'on register' },
         { label: 'Archived', value: archived.length, kind: 'count', hint: 'departed' },

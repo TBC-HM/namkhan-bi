@@ -392,7 +392,7 @@ const OPERATIONS_CFG: DeptCfg = {
   subPages: [
     { label: 'Snapshot',         href: '/operations'                 },
     { label: 'Staff',            href: '/operations/staff'           },
-    { label: 'Attendance',       href: '/operations/attendance'      },
+    // PBS 2026-05-13: Attendance + Schedule moved INSIDE Staff as tabs.
     { label: 'F&B',              href: '/operations/restaurant'      },
     { label: 'Spa',              href: '/operations/spa'             },
     { label: 'Activities',       href: '/operations/activities'      },

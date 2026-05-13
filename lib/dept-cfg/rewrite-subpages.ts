@@ -18,7 +18,8 @@ export interface SubPage {
 const PROPERTY_SCOPED_HREFS: ReadonlySet<string> = new Set([
   '/operations',
   '/operations/staff',
-  '/operations/attendance',
+  // PBS 2026-05-13: /operations/attendance retired; Attendance + Schedule
+  // are now sub-tabs of /operations/staff.
   // TODO: add /operations/restaurant, /operations/spa, /operations/activities,
   // /operations/events, /operations/inventory, /operations/suppliers,
   // /operations/catalog-cleanup once those pages are property-scoped.

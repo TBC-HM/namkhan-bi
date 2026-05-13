@@ -1,10 +1,9 @@
-// app/operations/attendance/page.tsx — Namkhan default
-import AttendancePageContent from './_components/AttendancePageContent';
-import { NAMKHAN_PROPERTY_ID } from '@/lib/dept-cfg/by-property';
+// app/operations/attendance/page.tsx
+// PBS 2026-05-13 — Attendance moved INSIDE /operations/staff as a tab.
+// Old URL redirects to the new tab so existing bookmarks / external links
+// don't 404.
+import { redirect } from 'next/navigation';
 
-export const revalidate = 60;
-export const dynamic = 'force-dynamic';
-
-export default async function AttendancePage() {
-  return <AttendancePageContent propertyId={NAMKHAN_PROPERTY_ID} propertyLabel="Namkhan" />;
+export default function RedirectLegacyAttendance() {
+  redirect('/operations/staff/attendance');
 }
