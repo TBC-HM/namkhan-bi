@@ -110,6 +110,8 @@ export function GuestTable({
           <thead>
             <tr className="text-left text-[10px] uppercase tracking-[0.16em] text-stone-500">
               <th className="px-4 py-3">Name</th>
+              <th className="px-4 py-3">Email</th>
+              <th className="px-4 py-3">Phone</th>
               <th className="px-4 py-3">Country</th>
               <th className="px-4 py-3 text-right">Stays</th>
               <th className="px-4 py-3 text-right">LTV</th>
@@ -139,6 +141,32 @@ export function GuestTable({
                       </span>
                     )}
                   </div>
+                </td>
+                <td className="px-4 py-3 max-w-[220px] truncate text-xs text-stone-700" title={r.email ?? undefined}>
+                  {r.email ? (
+                    <a
+                      href={`mailto:${r.email}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="hover:underline"
+                    >
+                      {r.email}
+                    </a>
+                  ) : (
+                    <span className="text-stone-300">—</span>
+                  )}
+                </td>
+                <td className="px-4 py-3 font-mono text-xs text-stone-700" title={r.phone ?? undefined}>
+                  {r.phone ? (
+                    <a
+                      href={`tel:${r.phone.replace(/\s+/g, "")}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="hover:underline"
+                    >
+                      {r.phone}
+                    </a>
+                  ) : (
+                    <span className="text-stone-300">—</span>
+                  )}
                 </td>
                 <td className="px-4 py-3 font-mono text-xs text-stone-600">
                   {r.country ?? "—"}
