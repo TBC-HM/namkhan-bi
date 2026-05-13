@@ -444,6 +444,7 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
           <DeptBreakdown
             rows={deptRows}
             fx={FX_LAK_PER_USD}
+            nativeCurrency={dominantCcy}
             employeesByDept={employeesByDept}
           />
         )}

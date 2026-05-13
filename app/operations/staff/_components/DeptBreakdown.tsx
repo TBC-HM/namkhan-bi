@@ -6,8 +6,8 @@
 'use client';
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { fmtMoney, fmtTableUsd, EMPTY, FX_LAK_PER_USD } from '@/lib/format';
-import UsdLak from './UsdLak';
+import { fmtMoney, EMPTY } from '@/lib/format';
+import NativeAmount from './NativeAmount';
 import { StaffDrawer } from './StaffDrawer';
 
 export type DeptRow = {
@@ -42,13 +42,15 @@ export type DeptEmployee = {
 
 interface Props {
   rows: DeptRow[];
-  /** LAK per USD — used to convert LAK column totals into USD primary display. */
+  /** LAK per USD — kept for back compat. Use `nativeCurrency` to format properly. */
   fx: number;
+  /** Native currency of the row totals — 'LAK' for Namkhan, 'EUR' for Donna. */
+  nativeCurrency?: string;
   /** Active employees keyed by dept_code. Rendered inline on expand. */
   employeesByDept: Record<string, DeptEmployee[]>;
 }
 
-export default function DeptBreakdown({ rows, fx, employeesByDept }: Props) {
+export default function DeptBreakdown({ rows, fx, nativeCurrency = 'LAK', employeesByDept }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState<string>('grand');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -100,9 +102,11 @@ export default function DeptBreakdown({ rows, fx, employeesByDept }: Props) {
     else { setSortKey(k); setSortDir('desc'); }
   };
 
-  const cell = (lak: number | null, tone: 'pos' | 'neg' | 'default' = 'default') => {
-    if (lak == null || lak === 0) return <span style={{ color: 'var(--ink-faint)' }}>{EMPTY}</span>;
-    return <UsdLak lak={Number(lak)} fx={fx} tone={tone} />;
+  const cell = (amount: number | null, tone: 'pos' | 'neg' | 'default' = 'default') => {
+    if (amount == null || amount === 0) return <span style={{ color: 'var(--ink-faint)' }}>{EMPTY}</span>;
+    // Map old `default` tone to NativeAmount's neutral default.
+    const ntone = tone === 'default' ? undefined : tone;
+    return <NativeAmount value={Number(amount)} currency={nativeCurrency} tone={ntone} />;
   };
 
   const headers: { key: string; label: string; align?: 'right' }[] = [
@@ -213,7 +217,12 @@ function FragmentRow({
         <td style={{ ...summaryTd, textAlign: 'right' }}>{cell(Number(row.total_tax_lak), 'neg')}</td>
         <td style={{ ...summaryTd, textAlign: 'right' }}>{cell(Number(row.total_canonical_net_lak ?? row.total_net_lak))}</td>
         <td style={{ ...summaryTd, textAlign: 'right', fontWeight: 600, color: 'var(--ink)' }}>
-          {fmtTableUsd(Number(row.total_canonical_cost_usd ?? row.total_grand_usd))}
+          <NativeAmount
+            value={Number(row.total_canonical_cost_usd ?? row.total_grand_usd ?? 0)}
+            currency="USD"
+            hideUsd
+            bold
+          />
         </td>
       </tr>
       {isOpen && (
