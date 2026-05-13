@@ -83,19 +83,21 @@ export default function KpiStrip({ items, minWidth = 150 }: Props) {
     lineHeight: 1.1,
   };
   const valueStyle = (tone?: KpiStripItem['tone']): CSSProperties => ({
-    fontFamily: 'var(--serif)',
-    fontStyle: 'italic',
+    /* PBS 2026-05-13: dropped italic serif — hard to read on dark.
+     * Sans semibold for clear legibility. */
+    fontFamily: 'var(--sans)',
+    fontWeight: 600,
     fontSize: 'var(--t-lg)',
-    lineHeight: 1.05,
+    lineHeight: 1.1,
     fontVariantNumeric: 'tabular-nums',
     color: tone ? toneColor[tone] : toneColor.neutral,
   });
   const hintStyle: CSSProperties = {
     fontFamily: 'var(--mono)',
     fontSize: 'var(--t-xs)',
-    color: 'var(--ink-soft, #6b675f)',
+    color: 'var(--ink-soft)',
     lineHeight: 1.1,
-    opacity: 0.85,
+    opacity: 0.95,
   };
 
   return (
