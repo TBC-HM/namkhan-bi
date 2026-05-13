@@ -15,6 +15,9 @@ type Profile = {
   language: string | null;
   date_of_birth: string | null;
   gender: string | null;
+  address: string | null;
+  document_type: string | null;
+  document_number: string | null;
   bookings_count: number;
   stays_count: number;
   cancellations_count: number;
@@ -407,13 +410,19 @@ function ContactBlock({
 }) {
   const effEmail = profile.email || fallbackContact.email;
   const effPhone = profile.phone || fallbackContact.phone;
+  const docCombined =
+    profile.document_type && profile.document_number
+      ? `${profile.document_type} · ${profile.document_number}`
+      : profile.document_number ?? profile.document_type ?? null;
   const hasAny =
     effEmail ||
     effPhone ||
     profile.city ||
+    profile.address ||
     profile.date_of_birth ||
     profile.language ||
-    profile.gender;
+    profile.gender ||
+    docCombined;
 
   return (
     <section className="border-b border-stone-200 px-6 py-5">
@@ -452,6 +461,8 @@ function ContactBlock({
         />
         <ContactItem label="Country" value={profile.country} />
         <ContactItem label="City" value={profile.city} />
+        <ContactItem label="Address" value={profile.address} />
+        <ContactItem label="Document" value={docCombined} />
         <ContactItem label="Date of birth" value={profile.date_of_birth} />
         <ContactItem label="Language" value={profile.language} />
         <ContactItem label="Gender" value={profile.gender} />

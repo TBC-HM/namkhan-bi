@@ -12,7 +12,11 @@ export type FallbackContact = {
 export async function fetchGuestProfile(guestId: string) {
   const sb = createClient();
 
-  const [{ data: profile }, { data: reservations }] = await Promise.all([
+  // PBS 2026-05-13: extras pulled direct from pms.guests_cb because
+  // mv_guest_profile doesn't expose address / document fields. Single-row
+  // PK lookup — performance impact negligible. Avoids dropping + recreating
+  // the MV plus its dependent v_directory_facets.
+  const [{ data: profile }, { data: reservations }, { data: extras }] = await Promise.all([
     sb
       .schema("guest")
       .from("mv_guest_profile")
@@ -25,7 +29,22 @@ export async function fetchGuestProfile(guestId: string) {
       .select("*")
       .eq("guest_id", guestId)
       .order("check_in_date", { ascending: false }),
+    sb
+      .schema("pms")
+      .from("guests_cb")
+      .select("address, document_type, document_number, total_stays, total_spent, last_stay_date")
+      .eq("guest_id", guestId)
+      .maybeSingle(),
   ]);
+
+  const mergedProfile = profile
+    ? {
+        ...profile,
+        address: extras?.address ?? null,
+        document_type: extras?.document_type ?? null,
+        document_number: extras?.document_number ?? null,
+      }
+    : profile;
 
   // PBS 2026-05-09 (PR repair-list — JOB 1):
   //   The Contactable button needs a fallback when guest.email/phone are NULL
@@ -56,7 +75,7 @@ export async function fetchGuestProfile(guestId: string) {
   }
 
   return {
-    profile: profile as any,
+    profile: mergedProfile as any,
     reservations: (reservations as any[]) ?? [],
     fallbackContact: fallback,
   };
