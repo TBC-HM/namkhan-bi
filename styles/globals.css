@@ -2753,10 +2753,13 @@ body:has(.public-prop-bg) .main {
  * neutralise that block here with stronger specificity + !important and
  * paint tables for the dark canvas. PBS: "many tables still black".
  */
+/* PBS 2026-05-13 rev5: theme-adaptive — was hardcoded Namkhan-cream
+ * which rendered invisible on Donna's cream theme. Tokens now flip
+ * automatically via ThemeInjector. */
 body table:not(.data-table),
 body table.tbl,
 body table {
-  color: #f0e5cb !important;
+  color: var(--ink) !important;
   background: transparent !important;
   font-size: 13px;
 }
@@ -2764,9 +2767,9 @@ body table:not(.data-table) th,
 body table:not(.data-table) thead th,
 body table.tbl th,
 body table th {
-  color: #f4d99a !important;
-  background: #221a10 !important;
-  border-bottom: 2px solid #a8854a !important;
+  color: var(--brass) !important;
+  background: var(--paper-deep) !important;
+  border-bottom: 2px solid var(--kpi-frame, rgba(168,133,74,0.45)) !important;
   font-weight: 700 !important;
   padding: 10px 10px !important;
   letter-spacing: 0.06em !important;
@@ -2778,9 +2781,9 @@ body table:not(.data-table) tbody td,
 body table:not(.data-table) td,
 body table.tbl td,
 body table td {
-  color: #f0e5cb !important;
+  color: var(--ink) !important;
   background: transparent !important;
-  border-bottom: 1px solid #2a2520 !important;
+  border-bottom: 1px solid var(--line-soft) !important;
   font-weight: 500 !important;
   padding: 9px 10px !important;
   font-size: 13px !important;
@@ -2788,16 +2791,16 @@ body table td {
 body table:not(.data-table) tbody tr:nth-child(even) td,
 body table.tbl tbody tr:nth-child(even) td,
 body table tbody tr:nth-child(even) td {
-  background: rgba(255,245,216,0.03) !important;
+  background: rgba(168,133,74,0.04) !important;
 }
 body table:not(.data-table) tbody tr:hover td,
 body table.tbl tbody tr:hover td,
 body table tbody tr:hover td {
-  background: rgba(168,133,74,0.20) !important;
-  color: #fff5d8 !important;
+  background: rgba(168,133,74,0.10) !important;
+  color: var(--ink) !important;
 }
-body table .lbl strong, body table td strong { color: #fff5d8 !important; }
-body table .text-mute, body table .ink-mute, body table td.text-mute, body table .lbl.text-mute { color: #b8a98a !important; }
+body table .lbl strong, body table td strong { color: var(--ink) !important; font-weight: 600; }
+body table .text-mute, body table .ink-mute, body table td.text-mute, body table .lbl.text-mute { color: var(--ink-mute) !important; }
 body table .num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
 /* P/L USALI section rows (.pnl-page table.usali) keep their structural
  * highlighting but use dark-friendly tones. */
