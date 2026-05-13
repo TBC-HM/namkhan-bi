@@ -541,23 +541,25 @@ export default async function ScheduleTabContent({
               }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                   <span style={{
-                    width: 22, height: 6, borderRadius: 2,
-                    background: 'var(--brass)', display: 'inline-block', opacity: 0.7,
-                  }} /> Scheduled
+                    width: 22, height: 14, borderRadius: 3,
+                    background: 'var(--brass)22',
+                    border: '1.5px dashed var(--brass)',
+                    display: 'inline-block',
+                  }} /> Scheduled (expected)
                 </span>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                   <span style={{
-                    width: 22, height: 6, borderRadius: 2,
-                    background: 'transparent', border: '1px solid var(--ink)',
+                    width: 22, height: 8, borderRadius: 2,
+                    background: 'var(--brass)',
                     display: 'inline-block',
                   }} /> Actual clock-in / out
                 </span>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                   <span style={{
-                    width: 22, height: 6, borderRadius: 2,
-                    background: 'repeating-linear-gradient(45deg, var(--brass) 0 4px, rgba(0,0,0,0.2) 4px 6px)',
+                    width: 22, height: 8, borderRadius: 2,
+                    background: 'repeating-linear-gradient(45deg, var(--st-bad, #c97b6a) 0 4px, transparent 4px 8px)',
                     display: 'inline-block',
-                  }} /> Unconfirmed shift
+                  }} /> No clock-in (past shift)
                 </span>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ color: 'var(--st-good, #2c7a4b)' }}>●</span> ≥80 on time
@@ -615,9 +617,10 @@ function EmpRow({
 }) {
   return (
     <div style={{
-      display: 'grid', gridTemplateColumns: '220px 1fr',
-      alignItems: 'center', minHeight: 28, marginBottom: 2,
+      display: 'grid', gridTemplateColumns: '260px 1fr',
+      alignItems: 'center', minHeight: 36, marginBottom: 3,
     }}>
+      {/* LEFT COLUMN — name + dept + sched/actual times printed in full */}
       <div style={{ paddingRight: 10, overflow: 'hidden' }}>
         <div style={{
           fontSize: 12, fontWeight: 500,
@@ -627,37 +630,79 @@ function EmpRow({
           {emp.name}
         </div>
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 6,
+          display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
           fontFamily: 'var(--mono)', fontSize: 9,
-          letterSpacing: '0.12em', textTransform: 'uppercase',
+          letterSpacing: '0.10em', textTransform: 'uppercase',
           color: 'var(--ink-mute)',
-          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         }}>
           <span>{emp.deptName}</span>
           {emp.avgPunctuality90d != null && (
             <span style={{ color: scoreColor(emp.avgPunctuality90d), fontWeight: 600 }}>
-              · {Math.round(emp.avgPunctuality90d)}/100
+              · 90d {Math.round(emp.avgPunctuality90d)}/100
             </span>
           )}
         </div>
+        {/* Per-shift timestamps — undeniable proof of clock-in time */}
+        {emp.shifts.map((sh) => {
+          const isFuture = sh.actual_clock_in == null && sh.punctuality_score == null;
+          const isNoShow = sh.actual_clock_in == null && sh.punctuality_score === 0;
+          return (
+            <div key={'ts-' + sh.shift_id} style={{
+              marginTop: 3, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
+              fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--ink)',
+              lineHeight: 1.1,
+            }}>
+              <span style={{ color: 'var(--ink-mute)' }}>S</span>
+              <span style={{ fontWeight: 500 }}>{fmtTime(sh.start_at, tz)}</span>
+              <span style={{ color: 'var(--ink-faint)' }}>→</span>
+              {sh.actual_clock_in ? (
+                <>
+                  <span style={{ color: 'var(--ink-mute)' }}>A</span>
+                  <span style={{
+                    fontWeight: 600,
+                    color: scoreColor(sh.punctuality_score),
+                  }}>
+                    {fmtTime(sh.actual_clock_in, tz)}
+                  </span>
+                  <span style={{
+                    color: scoreColor(sh.punctuality_score),
+                    fontWeight: 600,
+                  }}>
+                    {deltaLabel(sh.start_delta_minutes)}
+                  </span>
+                </>
+              ) : isNoShow ? (
+                <span style={{ color: 'var(--st-bad, #c97b6a)', fontWeight: 600 }}>
+                  NO CLOCK-IN
+                </span>
+              ) : isFuture ? (
+                <span style={{ color: 'var(--ink-faint)' }}>not yet</span>
+              ) : (
+                <span style={{ color: 'var(--ink-faint)' }}>—</span>
+              )}
+            </div>
+          );
+        })}
       </div>
+
+      {/* RIGHT COLUMN — gantt track. Scheduled = thin dashed outline,
+          Actual = solid bar coloured by punctuality. */}
       <div style={{
-        position: 'relative', height: 26,
+        position: 'relative', minHeight: 34,
         background: 'repeating-linear-gradient(to right, transparent, transparent calc(100%/' + totalSpan + ' - 1px), var(--line-soft) calc(100%/' + totalSpan + ' - 1px), var(--line-soft) calc(100%/' + totalSpan + '))',
         borderRadius: 3,
       }}>
         {emp.shifts.map((sh) => {
           const sH = hoursInTz(sh.start_at, tz);
           const eH = hoursInTz(sh.end_at, tz);
-          // clip to visible window
           const clipL = Math.max(minH, sH);
           const clipR = Math.min(minH + totalSpan, eH);
           const left  = ((clipL - minH) / totalSpan) * 100;
           const width = Math.max(2, ((clipR - clipL) / totalSpan) * 100);
-          const c = colorForDept(emp.deptCode);
+          const deptC = colorForDept(emp.deptCode);
           const isUnconfirmed = (sh.status ?? '').toLowerCase() !== 'confirmed';
 
-          // Actual overlay
+          // Actual position
           let actualLeft: number | null = null;
           let actualWidth: number | null = null;
           if (sh.actual_clock_in) {
@@ -666,58 +711,90 @@ function EmpRow({
             const aL = Math.max(minH, aS);
             const aR = Math.min(minH + totalSpan, aE);
             actualLeft  = ((aL - minH) / totalSpan) * 100;
-            actualWidth = Math.max(1, ((aR - aL) / totalSpan) * 100);
+            actualWidth = Math.max(1.2, ((aR - aL) / totalSpan) * 100);
           }
+          const scoreC = scoreColor(sh.punctuality_score);
 
           return (
             <div key={sh.shift_id} style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }}>
-              {/* Scheduled bar */}
+              {/* Scheduled "expected zone" — dashed outline, dept colour */}
               <div
                 title={`Scheduled ${fmtTime(sh.start_at, tz)}–${fmtTime(sh.end_at, tz)} · ${emp.deptName}${sh.status ? ' · ' + sh.status : ''}${sh.notes ? ' · ' + sh.notes : ''}`}
                 style={{
                   position: 'absolute', left: `${left}%`, width: `${width}%`,
-                  top: 2, height: 11,
+                  top: 4, height: 26,
                   background: isUnconfirmed
-                    ? `repeating-linear-gradient(45deg, ${c} 0 6px, rgba(0,0,0,0.10) 6px 8px)`
-                    : c,
-                  opacity: 0.55,
-                  borderRadius: 3,
+                    ? `repeating-linear-gradient(45deg, ${deptC}22 0 6px, transparent 6px 8px)`
+                    : `${deptC}22`,
+                  border: `1.5px dashed ${deptC}`,
+                  borderRadius: 4,
                   display: 'flex', alignItems: 'center',
                   paddingLeft: 6, paddingRight: 6,
-                  color: '#fff', fontFamily: 'var(--mono)', fontSize: 9,
+                  color: 'var(--ink)',
+                  fontFamily: 'var(--mono)', fontSize: 10,
                   fontWeight: 600,
                   whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                 }}
               >
                 {fmtTime(sh.start_at, tz)}–{fmtTime(sh.end_at, tz)}
               </div>
-              {/* Actual overlay */}
+
+              {/* Actual clock-in/out — solid bar, prominent, score-coloured */}
               {actualLeft != null && actualWidth != null && (
                 <div
-                  title={`Actual ${fmtTime(sh.actual_clock_in, tz)}${sh.actual_clock_out ? '–' + fmtTime(sh.actual_clock_out, tz) : ' (still in)'} · Δ ${deltaLabel(sh.start_delta_minutes)} · score ${sh.punctuality_score ?? '—'}`}
+                  title={`Actual ${fmtTime(sh.actual_clock_in, tz)}${sh.actual_clock_out ? '–' + fmtTime(sh.actual_clock_out, tz) : ' (still in)'} · Δ ${deltaLabel(sh.start_delta_minutes)} · score ${sh.punctuality_score ?? '—'}/100`}
                   style={{
                     position: 'absolute', left: `${actualLeft}%`, width: `${actualWidth}%`,
-                    top: 14, height: 9,
-                    background: 'transparent',
-                    border: `1.5px solid ${scoreColor(sh.punctuality_score)}`,
+                    top: 10, height: 14,
+                    background: scoreC,
                     borderRadius: 3,
+                    display: 'flex', alignItems: 'center',
+                    paddingLeft: 4, paddingRight: 4,
+                    color: '#fff',
+                    fontFamily: 'var(--mono)', fontSize: 9,
+                    fontWeight: 700,
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.25)',
                   }}
-                />
+                >
+                  {fmtTime(sh.actual_clock_in, tz)}{sh.actual_clock_out ? '–' + fmtTime(sh.actual_clock_out, tz) : ''}
+                </div>
               )}
-              {/* Punctuality badge (right of scheduled bar) */}
+
+              {/* No-show marker — past shift, no actual */}
+              {!actualLeft && sh.punctuality_score === 0 && (
+                <div
+                  title="No clock-in recorded for this shift"
+                  style={{
+                    position: 'absolute',
+                    left: `${left}%`, width: `${width}%`,
+                    top: 10, height: 14,
+                    background: 'repeating-linear-gradient(45deg, var(--st-bad, #c97b6a) 0 4px, transparent 4px 8px)',
+                    borderRadius: 3,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: 'var(--st-bad, #c97b6a)',
+                    fontFamily: 'var(--mono)', fontSize: 9,
+                    fontWeight: 700,
+                  }}
+                >
+                  NO CLOCK
+                </div>
+              )}
+
+              {/* Punctuality score chip — right of bar */}
               {sh.punctuality_score != null && (
                 <div style={{
                   position: 'absolute',
-                  left: `${Math.min(95, left + width + 0.5)}%`,
-                  top: 2, height: 11,
+                  left: `${Math.min(94, left + width + 0.5)}%`,
+                  top: 10, height: 14,
                   display: 'flex', alignItems: 'center',
                   fontFamily: 'var(--mono)', fontSize: 9,
-                  fontWeight: 600,
-                  color: scoreColor(sh.punctuality_score),
+                  fontWeight: 700,
+                  color: scoreC,
                   whiteSpace: 'nowrap',
                   paddingLeft: 4,
                 }}>
-                  {deltaLabel(sh.start_delta_minutes)}
+                  {sh.punctuality_score}
                 </div>
               )}
             </div>
