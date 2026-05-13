@@ -82,10 +82,14 @@ export async function fetchStaffDetail(staffId: string): Promise<StaffDetail | n
       .select('*')
       .eq('staff_id', staffId)
       .maybeSingle(),
+    // PBS 2026-05-13: pull property_id too so we can reuse it for the
+    // drawer property-aware section visibility (skip Attendance block
+    // for Namkhan since no timeclock is wired). View is now LEFT JOIN'd
+    // against staff_employment so every active staff has a row.
     supabase
       .schema('ops')
       .from('v_staff_attendance_score')
-      .select('attendance_score, hours_30d, hours_ytd, events_30d')
+      .select('attendance_score, hours_30d, hours_ytd, events_30d, property_id')
       .eq('staff_id', staffId)
       .maybeSingle(),
     supabase

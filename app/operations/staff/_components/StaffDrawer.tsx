@@ -199,8 +199,9 @@ export function StaffDrawer({ staffId, onClose }: Props) {
                 <LeaveGrid detail={detail} />
               </Section>
 
-              {/* 6b. ATTENDANCE SCORE — from ops.v_staff_attendance_score */}
-              {detail.attendance_score != null && (
+              {/* 6b. ATTENDANCE SCORE — only show for properties with timeclock wired.
+                  Donna uses Factorial; Namkhan does not yet have one. */}
+              {detail.property_id === 1000001 && (
                 <Section title="Attendance · last 30 days">
                   <AttendanceScoreBlock detail={detail} />
                 </Section>
