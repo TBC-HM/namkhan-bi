@@ -118,7 +118,7 @@ export default function DeptBreakdown({ rows, fx, nativeCurrency = 'LAK', employ
     { key: 'sso',      label: 'SSO',               align: 'right' },
     { key: 'tax',      label: 'Tax',               align: 'right' },
     { key: 'net',      label: 'Net to employees',  align: 'right' },
-    { key: 'grand',    label: 'Company cost (USD)', align: 'right' },
+    { key: 'grand',    label: `Company cost (${nativeCurrency})`, align: 'right' },
   ];
 
   return (
@@ -219,12 +219,14 @@ function FragmentRow({
         <td style={{ ...summaryTd, textAlign: 'right' }}>{cell(Number(row.total_tax_lak), 'neg')}</td>
         <td style={{ ...summaryTd, textAlign: 'right' }}>{cell(Number(row.total_canonical_net_lak ?? row.total_net_lak))}</td>
         <td style={{ ...summaryTd, textAlign: 'right', fontWeight: 600, color: 'var(--ink)' }}>
-          <NativeAmount
-            value={Number(row.total_canonical_cost_usd ?? row.total_grand_usd ?? 0)}
-            currency="USD"
-            hideUsd
-            bold
-          />
+          {(() => {
+            // USD per 1 unit (mirrors StaffPageContent.TO_USD)
+            const TO_USD: Record<string, number> = { USD: 1, EUR: 1.08, LAK: 1 / 21800 };
+            const rate = TO_USD[nativeCurrency.toUpperCase()] ?? 1;
+            const usd = Number(row.total_canonical_cost_usd ?? row.total_grand_usd ?? 0);
+            const native = rate > 0 ? usd / rate : 0;
+            return <NativeAmount value={native} currency={nativeCurrency} hideUsd bold />;
+          })()}
         </td>
       </tr>
       {isOpen && (
