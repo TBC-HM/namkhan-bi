@@ -69,7 +69,7 @@ const S: Record<string, React.CSSProperties> = {
   good: { background: 'var(--surf-ok, #0a1f12)', border: '1px solid #1c3526', borderRadius: 10, padding: '12px 14px' },
   bad:  { background: 'var(--surf-warn, #1f0e0c)', border: '1px solid #5a2825', borderRadius: 10, padding: '12px 14px' },
   goodEyebrow: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: '#7c9a6b', marginBottom: 8 },
-  badEyebrow:  { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: '#f5b1ad', marginBottom: 8 },
+  badEyebrow:  { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--st-bad-bd)', marginBottom: 8 },
   list: { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 6 },
   itemGood: { fontSize: 13, color: 'var(--text-2, #d8cca8)', lineHeight: 1.5, paddingLeft: 12, borderLeft: '2px solid #7c9a6b', paddingTop: 2, paddingBottom: 2 },
   itemBad:  { fontSize: 13, color: 'var(--text-2, #d8cca8)', lineHeight: 1.5, paddingLeft: 12, borderLeft: '2px solid #c0584c', paddingTop: 2, paddingBottom: 2 },

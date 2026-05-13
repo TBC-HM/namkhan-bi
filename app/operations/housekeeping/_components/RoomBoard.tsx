@@ -13,11 +13,11 @@ const stateStyle: Record<
   RoomStatusValue,
   { bg: string; bd: string; color?: string }
 > = {
-  clean: { bg: '#e6f0ea', bd: '#bfddc5' },
-  dirty: { bg: '#fee2e2', bd: '#fca5a5' },
+  clean: { bg: 'var(--st-good-bg)', bd: 'var(--st-good-bd)' },
+  dirty: { bg: 'var(--st-bad-bg)', bd: 'var(--st-bad-bd)' },
   inspect: { bg: '#dbeafe', bd: '#93c5fd' },
-  ooo: { bg: '#e5e7eb', bd: '#cbd5e1', color: '#64748b' },
-  dnd: { bg: '#fdf6e7', bd: '#f3d57a' },
+  ooo: { bg: 'var(--paper-deep)', bd: 'var(--line-soft)', color: 'var(--ink-mute)' },
+  dnd: { bg: 'var(--paper-warm)', bd: 'var(--brass-soft)' },
   inhouse: { bg: 'var(--paper-warm)', bd: '#cdc0a0' },
 };
 
@@ -113,7 +113,7 @@ export default function RoomBoard({ rooms }: Props) {
                     {r.is_complaint && (
                       <span
                         style={{
-                          background: '#a02d2d',
+                          background: 'var(--oxblood)',
                           color: 'var(--paper-warm)',
                           padding: '1px 5px',
                           borderRadius: 3,

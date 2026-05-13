@@ -25,8 +25,8 @@ interface Props {
 }
 
 const sevColor: Record<AlertSeverity, { left: string; bg: string; impColor: string }> = {
-  hi: { left: '#a02d2d', bg: '#fdf3f0', impColor: '#a02d2d' },
-  med: { left: '#a87024', bg: '#fdf6e7', impColor: '#a87024' },
+  hi: { left: 'var(--oxblood)', bg: 'var(--st-bad-bg)', impColor: 'var(--oxblood)' },
+  med: { left: '#a87024', bg: 'var(--paper-warm)', impColor: '#a87024' },
   low: { left: '#a89c80', bg: 'var(--paper-warm)', impColor: '#8a8170' },
 };
 
@@ -138,7 +138,7 @@ export default function TacticalAlerts({ alerts }: Props) {
                       <span
                         style={{
                           fontSize: "var(--t-xs)",
-                          background: '#fef3c7',
+                          background: 'var(--st-warn-bg)',
                           border: '1px solid #f3d57a',
                           color: '#5e4818',
                           padding: '1px 5px',

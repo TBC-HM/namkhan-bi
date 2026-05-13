@@ -36,7 +36,7 @@ export default function ComingSoon({ tab, proposalLine }: Props) {
         style={{
           marginTop: 18,
           padding: '14px 16px',
-          background: '#fef3c7',
+          background: 'var(--st-warn-bg)',
           border: '1px solid #f3d57a',
           borderRadius: 8,
           color: '#5e4818',

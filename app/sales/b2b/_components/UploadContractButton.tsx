@@ -181,7 +181,7 @@ export default function UploadContractButton() {
               </Field>
             </div>
 
-            <div style={{ marginTop: 16, padding: 14, background: '#f9f5e8', border: '1px solid #e6dfc9', borderRadius: 4 }}>
+            <div style={{ marginTop: 16, padding: 14, background: 'var(--paper-warm)', border: '1px solid #e6dfc9', borderRadius: 4 }}>
               <Field label="Contract PDF (optional · max 25 MB)">
                 <input name="pdf" type="file" accept="application/pdf" style={{ fontSize: "var(--t-base)" }} />
               </Field>
@@ -191,7 +191,7 @@ export default function UploadContractButton() {
             </div>
 
             {error && (
-              <div style={{ marginTop: 14, padding: '10px 14px', background: '#f7d9d9', border: '1px solid #e2a8a8', color: '#7a1f1f', borderRadius: 4, fontSize: "var(--t-base)" }}>
+              <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-bad-bg)', border: '1px solid #e2a8a8', color: '#7a1f1f', borderRadius: 4, fontSize: "var(--t-base)" }}>
                 <strong>Error:</strong> {error}
                 {/SUPABASE_SERVICE_ROLE_KEY/.test(error) && (
                   <div style={{ marginTop: 6, fontSize: "var(--t-sm)" }}>

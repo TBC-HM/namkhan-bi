@@ -186,7 +186,7 @@ export default async function RevenueReport({ params, searchParams }: Props) {
             No tactical alerts at this moment.
           </div>
         ) : (
-          <ul style={{ margin: 0, paddingLeft: 18, color: '#d8cca8', fontSize: 13, lineHeight: 1.7 }}>
+          <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--line-soft)', fontSize: 13, lineHeight: 1.7 }}>
             {alerts.map((a: any, i: number) => (
               <li key={i}>{a.title ?? a.label ?? JSON.stringify(a).slice(0, 200)}</li>
             ))}

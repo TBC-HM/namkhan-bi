@@ -50,7 +50,7 @@ export default function UnpaidBillStatusSelect({ id, initial, options }: Props) 
       disabled={busy}
       style={{
         background: '#1a1812',
-        color: busy ? '#7d7565' : '#d8cca8',
+        color: busy ? '#7d7565' : 'var(--line-soft)',
         border: '1px solid #2a261d',
         borderRadius: 4,
         fontFamily: 'var(--mono)',

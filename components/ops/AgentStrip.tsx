@@ -25,7 +25,7 @@ const dotColors: Record<AgentStatus, string> = {
   run: '#2f6f4a',
   idle: '#a89c80',
   paused: '#a87024',
-  err: '#a02d2d',
+  err: 'var(--oxblood)',
 };
 
 export default function AgentStrip({ agents, pageScope }: Props) {

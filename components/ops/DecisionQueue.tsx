@@ -25,7 +25,7 @@ interface Props {
 }
 
 const impactColor: Record<DecisionUrgency, string> = {
-  urg: '#a02d2d',
+  urg: 'var(--oxblood)',
   med: '#a87024',
   neu: '#8a8170',
 };

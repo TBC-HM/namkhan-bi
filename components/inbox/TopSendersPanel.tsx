@@ -45,7 +45,7 @@ export default function TopSendersPanel({ senders, windowDays }: Props) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
         <span style={{ fontSize: 12, color: '#9b907a' }}>
           Top {senders.length} senders · last {windowDays}d · {total.toLocaleString()} inbound msgs ·{' '}
-          <strong style={{ color: automationPct >= 50 ? '#f4c179' : '#7ad790' }}>
+          <strong style={{ color: automationPct >= 50 ? 'var(--brass-soft)' : '#7ad790' }}>
             {automationPct.toFixed(0)}% automated
           </strong>
         </span>
@@ -78,13 +78,13 @@ export default function TopSendersPanel({ senders, windowDays }: Props) {
                 <span style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
                   {s.is_automation && (
                     <span title="Automation" style={{
-                      background: '#2a261d', color: '#f4c179',
+                      background: '#2a261d', color: 'var(--brass-soft)',
                       padding: '1px 5px', borderRadius: 3,
                       fontFamily: 'ui-monospace, monospace',
                       fontSize: 9, fontWeight: 700, textTransform: 'uppercase',
                     }}>bot</span>
                   )}
-                  <strong style={{ color: '#e9e1ce', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <strong style={{ color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {display}
                   </strong>
                   {s.sender_name && (
@@ -93,7 +93,7 @@ export default function TopSendersPanel({ senders, windowDays }: Props) {
                     </span>
                   )}
                 </span>
-                <span style={{ color: '#d8cca8', fontFamily: 'ui-monospace, monospace', textAlign: 'right' }}>
+                <span style={{ color: 'var(--line-soft)', fontFamily: 'ui-monospace, monospace', textAlign: 'right' }}>
                   {s.inbound.toLocaleString()}
                 </span>
                 <span style={{ color: '#9b907a', fontFamily: 'ui-monospace, monospace', textAlign: 'right' }}>
@@ -122,13 +122,13 @@ export default function TopSendersPanel({ senders, windowDays }: Props) {
                   gap: 8,
                 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', rowGap: 4, columnGap: 16 }}>
-                    <span><strong style={{ color: '#d8cca8' }}>Email:</strong> {s.sender_email}</span>
-                    <span><strong style={{ color: '#d8cca8' }}>Name:</strong> {s.sender_name ?? '—'}</span>
-                    <span><strong style={{ color: '#d8cca8' }}>Inbound:</strong> {s.inbound.toLocaleString()}</span>
-                    <span><strong style={{ color: '#d8cca8' }}>Threads:</strong> {s.threads}</span>
-                    <span><strong style={{ color: '#d8cca8' }}>Per day:</strong> {perDay.toFixed(2)}</span>
-                    <span><strong style={{ color: '#d8cca8' }}>Last msg:</strong> {s.last_msg ? new Date(s.last_msg).toLocaleString() : '—'}</span>
-                    <span><strong style={{ color: '#d8cca8' }}>Type:</strong> {s.is_automation ? 'automation / bulk' : 'human'}</span>
+                    <span><strong style={{ color: 'var(--line-soft)' }}>Email:</strong> {s.sender_email}</span>
+                    <span><strong style={{ color: 'var(--line-soft)' }}>Name:</strong> {s.sender_name ?? '—'}</span>
+                    <span><strong style={{ color: 'var(--line-soft)' }}>Inbound:</strong> {s.inbound.toLocaleString()}</span>
+                    <span><strong style={{ color: 'var(--line-soft)' }}>Threads:</strong> {s.threads}</span>
+                    <span><strong style={{ color: 'var(--line-soft)' }}>Per day:</strong> {perDay.toFixed(2)}</span>
+                    <span><strong style={{ color: 'var(--line-soft)' }}>Last msg:</strong> {s.last_msg ? new Date(s.last_msg).toLocaleString() : '—'}</span>
+                    <span><strong style={{ color: 'var(--line-soft)' }}>Type:</strong> {s.is_automation ? 'automation / bulk' : 'human'}</span>
                   </div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
                     <a href={`/inbox?q=${encodeURIComponent(s.sender_email)}`} style={btnLink()}>open in inbox</a>
@@ -151,7 +151,7 @@ function btnLink(): React.CSSProperties {
     fontSize: 10,
     letterSpacing: '0.10em',
     textTransform: 'uppercase',
-    color: '#d8cca8',
+    color: 'var(--line-soft)',
     background: '#1a1812',
     border: '1px solid #2a2520',
     padding: '4px 8px',

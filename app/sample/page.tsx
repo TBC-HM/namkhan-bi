@@ -5,7 +5,7 @@ import Link from 'next/link';
 export default function SampleIndex() {
   return (
     <div style={{
-      minHeight: '100vh', background: '#0a0a0a', color: '#e9e1ce',
+      minHeight: '100vh', background: '#0a0a0a', color: 'var(--ink)',
       fontFamily: "'Inter Tight', system-ui, sans-serif", padding: '64px 48px',
     }}>
       <div style={{ maxWidth: 720, margin: '0 auto' }}>
@@ -16,7 +16,7 @@ export default function SampleIndex() {
         }}>3 candidate templates</div>
         <h1 style={{
           fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic',
-          fontWeight: 300, fontSize: 36, color: '#e9e1ce',
+          fontWeight: 300, fontSize: 36, color: 'var(--ink)',
           marginBottom: 12,
         }}>Sub-page samples</h1>
         <p style={{ color: '#9b907a', fontSize: 14, lineHeight: 1.6, marginBottom: 32 }}>
@@ -53,7 +53,7 @@ function Card({ href, eyebrow, title, body }: { href: string; eyebrow: string; t
       }}>{eyebrow}</div>
       <div style={{
         fontFamily: "'Fraunces', Georgia, serif",
-        fontSize: 22, color: '#d8cca8', marginBottom: 8,
+        fontSize: 22, color: 'var(--line-soft)', marginBottom: 8,
       }}>{title}</div>
       <div style={{ fontSize: 13, color: '#9b907a', lineHeight: 1.55 }}>{body}</div>
     </Link>

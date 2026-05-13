@@ -8,20 +8,20 @@ import {
 } from 'recharts';
 
 const C = {
-  grid:     '#d8cca8',  // --line-soft
+  grid:     'var(--line-soft)',  // --line-soft
   axis:     '#7d7565',  // --ink-mute
   bg:       '#1c1815',  // --ink
   border:   '#4a443c',  // --ink-soft
   label:    '#c4a06b',  // --brass-soft
   brass:    '#a8854a',  // --brass
   moss:     '#6b9379',  // --moss-glow
-  bad:      '#a02d2d',  // --st-bad
+  bad:      'var(--oxblood)',  // --st-bad
 };
 
 const tooltipStyle = {
   background: C.bg, border: `1px solid ${C.border}`,
   fontSize: '11px', fontFamily: 'JetBrains Mono, ui-monospace, monospace',
-  color: '#f4ecd8', borderRadius: 4, padding: '8px 12px',
+  color: 'var(--paper-warm)', borderRadius: 4, padding: '8px 12px',
 };
 const labelStyle = { color: C.label, marginBottom: 4, fontWeight: 600 };
 

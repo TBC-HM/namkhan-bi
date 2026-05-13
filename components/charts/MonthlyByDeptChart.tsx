@@ -17,14 +17,14 @@ export function MonthlyByDeptChart({ rows }: { rows: any[] }) {
   const series = Object.values(grouped).sort((a: any, b: any) => a.month.localeCompare(b.month));
   // Brand-palette resolved hex (recharts can't read CSS vars).
   const c = {
-    grid:   '#d8cca8', // --line-soft
+    grid:   'var(--line-soft)', // --line-soft
     axis:   '#7d7565', // --ink-mute
     bg:     '#1c1815', // --ink
     border: '#4a443c', // --ink-soft
     label:  '#c4a06b', // --brass-soft
     rooms:  '#a8854a', // --brass
     fnb:    '#6b9379', // --moss-glow
-    other:  '#d9bf8e', // --brass-pale
+    other:  'var(--brass-soft)', // --brass-pale
     retail: '#8e3a35', // --st-bad
   };
   return (
@@ -38,7 +38,7 @@ export function MonthlyByDeptChart({ rows }: { rows: any[] }) {
           contentStyle={{
             background: c.bg, border: `1px solid ${c.border}`,
             fontSize: "var(--t-sm)", fontFamily: 'JetBrains Mono, ui-monospace, monospace',
-            color: '#f4ecd8', borderRadius: 4, padding: '8px 12px',
+            color: 'var(--paper-warm)', borderRadius: 4, padding: '8px 12px',
           }}
           labelStyle={{ color: c.label, marginBottom: 4, fontWeight: 600 }}
           labelFormatter={(m: string) => `${m?.slice(0, 7)} · USD · USALI`}

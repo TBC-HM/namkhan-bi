@@ -13,7 +13,7 @@ import {
 import type { DeptPlRow } from '@/lib/data';
 
 const C = {
-  grid:    '#d8cca8',
+  grid:    'var(--line-soft)',
   axis:    '#7d7565',
   food:    '#a8854a', // brass
   bev:     '#6b9379', // moss-glow
@@ -22,7 +22,7 @@ const C = {
   payroll: '#c4a06b', // brass-soft
   gop:     '#1c4d3a', // moss
   bg:      '#fbf9f2',
-  border:  '#d8cca8',
+  border:  'var(--line-soft)',
   label:   '#1c1815',
 };
 

@@ -143,13 +143,13 @@ function Column({
                   alignItems: 'center',
                   fontSize: 'var(--t-sm)',
                 }}>
-                  <span style={{ color: '#e9e1ce', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span style={{ color: 'var(--ink)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {r.guest_name ?? '—'}
                   </span>
                   <span style={{ color: '#9b907a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {r.source_name ?? r.source ?? '—'}
                   </span>
-                  <span style={{ color: '#d8cca8', fontFamily: 'var(--mono)', textAlign: 'right' }}>
+                  <span style={{ color: 'var(--line-soft)', fontFamily: 'var(--mono)', textAlign: 'right' }}>
                     {nights || '—'}
                   </span>
                   <span style={{ color: '#9b907a', fontFamily: 'var(--mono)', textAlign: 'right' }}>
@@ -175,18 +175,18 @@ function Column({
                     rowGap: 3,
                     columnGap: 12,
                   }}>
-                    <span><strong style={{ color: '#d8cca8' }}>Reservation:</strong> {r.reservation_id ?? '—'}</span>
-                    <span><strong style={{ color: '#d8cca8' }}>Booking ID:</strong> {r.booking_id ?? '—'}</span>
-                    <span><strong style={{ color: '#d8cca8' }}>Status:</strong> {r.status ?? '—'}</span>
-                    <span><strong style={{ color: '#d8cca8' }}>Booked:</strong> {r.booking_date ? String(r.booking_date).slice(0, 16) : '—'}</span>
+                    <span><strong style={{ color: 'var(--line-soft)' }}>Reservation:</strong> {r.reservation_id ?? '—'}</span>
+                    <span><strong style={{ color: 'var(--line-soft)' }}>Booking ID:</strong> {r.booking_id ?? '—'}</span>
+                    <span><strong style={{ color: 'var(--line-soft)' }}>Status:</strong> {r.status ?? '—'}</span>
+                    <span><strong style={{ color: 'var(--line-soft)' }}>Booked:</strong> {r.booking_date ? String(r.booking_date).slice(0, 16) : '—'}</span>
                     {r.cancellation_date && (
-                      <span><strong style={{ color: '#d8cca8' }}>Cancelled:</strong> {String(r.cancellation_date).slice(0, 16)}</span>
+                      <span><strong style={{ color: 'var(--line-soft)' }}>Cancelled:</strong> {String(r.cancellation_date).slice(0, 16)}</span>
                     )}
-                    <span><strong style={{ color: '#d8cca8' }}>Source:</strong> {r.source_name ?? r.source ?? '—'}</span>
-                    <span><strong style={{ color: '#d8cca8' }}>Rate plan:</strong> {r.rate_plan ?? '—'}</span>
-                    <span><strong style={{ color: '#d8cca8' }}>Nights:</strong> {nights || '—'}</span>
-                    <span><strong style={{ color: '#d8cca8' }}>Per-night rate:</strong> {nights > 0 ? fmtUSD(rate) : '—'}</span>
-                    <span><strong style={{ color: '#d8cca8' }}>Total:</strong> {fmtUSD(total)}</span>
+                    <span><strong style={{ color: 'var(--line-soft)' }}>Source:</strong> {r.source_name ?? r.source ?? '—'}</span>
+                    <span><strong style={{ color: 'var(--line-soft)' }}>Rate plan:</strong> {r.rate_plan ?? '—'}</span>
+                    <span><strong style={{ color: 'var(--line-soft)' }}>Nights:</strong> {nights || '—'}</span>
+                    <span><strong style={{ color: 'var(--line-soft)' }}>Per-night rate:</strong> {nights > 0 ? fmtUSD(rate) : '—'}</span>
+                    <span><strong style={{ color: 'var(--line-soft)' }}>Total:</strong> {fmtUSD(total)}</span>
                   </div>
                 )}
               </div>

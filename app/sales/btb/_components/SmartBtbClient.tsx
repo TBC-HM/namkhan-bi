@@ -437,7 +437,7 @@ const ST: Record<string, React.CSSProperties> = {
   pillIdle: {
     background: 'transparent',
     border: '1px solid #2a2520',
-    color: '#d8cca8',
+    color: 'var(--line-soft)',
     padding: '6px 12px',
     fontFamily: 'var(--mono)',
     fontSize: 'var(--t-xs)',
@@ -475,7 +475,7 @@ const ST: Record<string, React.CSSProperties> = {
   search: {
     background: '#0f0d0a',
     border: '1px solid #2a2520',
-    color: '#d8cca8',
+    color: 'var(--line-soft)',
     padding: '6px 10px',
     fontFamily: 'var(--mono)',
     fontSize: 'var(--t-sm)',
@@ -486,7 +486,7 @@ const ST: Record<string, React.CSSProperties> = {
   select: {
     background: '#0f0d0a',
     border: '1px solid #2a2520',
-    color: '#d8cca8',
+    color: 'var(--line-soft)',
     padding: '6px 10px',
     fontFamily: 'var(--mono)',
     fontSize: 'var(--t-xs)',
@@ -618,7 +618,7 @@ const ST: Record<string, React.CSSProperties> = {
     fontFamily: "'Fraunces', Georgia, serif",
     fontStyle: 'italic',
     fontWeight: 400,
-    color: '#e9e1ce',
+    color: 'var(--ink)',
     fontSize: 'var(--t-2xl)',
     margin: 0,
     marginBottom: 6,
@@ -646,7 +646,7 @@ const ST: Record<string, React.CSSProperties> = {
     color: 'var(--brass)',
   },
   kvVal: {
-    color: '#d8cca8',
+    color: 'var(--line-soft)',
     fontSize: 'var(--t-sm)',
   },
   deepLink: {

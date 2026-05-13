@@ -154,7 +154,7 @@ export default async function EngineDashboard({ cfg }: { cfg: EngineConfig }) {
                       {rows.map((row, ri) => (
                         <tr key={ri} style={{ borderBottom: '1px solid #1f1c15' }}>
                           {p.columns.map((c) => (
-                            <td key={c.key} style={{ padding: '8px 10px', color: '#d8cca8' }}>{fmt(row[c.key], c.format)}</td>
+                            <td key={c.key} style={{ padding: '8px 10px', color: 'var(--line-soft)' }}>{fmt(row[c.key], c.format)}</td>
                           ))}
                         </tr>
                       ))}

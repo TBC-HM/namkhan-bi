@@ -99,7 +99,7 @@ export default async function FnbPage({ searchParams }: Props) {
               By dept: {canteen.by_dept.map(d => `${d.dept} $${Math.round(d.usd).toLocaleString()}`).join(' · ')}
             </div>
           )}
-          <div style={{ fontSize: 'var(--t-xs)', color: '#ff8a8a', background: 'rgba(181, 58, 42, 0.12)', padding: '6px 8px', borderLeft: '2px solid #ff8a8a', marginTop: 4 }}>
+          <div style={{ fontSize: 'var(--t-xs)', color: 'var(--oxblood-soft)', background: 'rgba(181, 58, 42, 0.12)', padding: '6px 8px', borderLeft: '2px solid #ff8a8a', marginTop: 4 }}>
             <strong>Watch:</strong> Mar / Apr 2026 reclassified F&amp;B → Undistributed. The &quot;labor drop&quot; is a posting reclass, not a real saving.
           </div>
         </Panel>

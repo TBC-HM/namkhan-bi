@@ -272,9 +272,9 @@ const TOKENS = {
   bg:         '#0a0a0a',                  // page bg (matches <Page> shell)
   bgRaised:   '#13110e',                  // raised surface
   bgDeep:     '#0e0e0c',                  // recessed (matches N dropdown)
-  ink:        '#e9e1ce',                  // primary text (sand-cream)
+  ink:        'var(--ink)',                  // primary text (sand-cream)
   inkSoft:    'rgba(233,225,206,0.78)',
-  text:       '#e9e1ce',
+  text:       'var(--ink)',
   text2:      'rgba(233,225,206,0.6)',
   text3:      'rgba(233,225,206,0.4)',
   border:     'rgba(199,154,107,0.25)',   // brass-tinted hairline
@@ -1014,7 +1014,7 @@ export default function CockpitV2Page() {
         { k: 'INTAKE', v: String(INTAKE.length), d: 'open bugs' },
       ]}
     >
-      <div style={{ fontFamily: 'var(--sans)', color: '#e9e1ce' }}>
+      <div style={{ fontFamily: 'var(--sans)', color: 'var(--ink)' }}>
       {/* Tab bar */}
       <nav style={{
         background: TOKENS.bgRaised, borderBottom: `1px solid ${TOKENS.border}`,

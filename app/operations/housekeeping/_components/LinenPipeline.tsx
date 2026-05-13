@@ -40,7 +40,7 @@ export default function LinenPipeline({ rows }: Props) {
           const tone =
             r.par_pct < 70 ? 'bad' : r.par_pct < 85 ? 'warn' : 'ok';
           const fill =
-            tone === 'bad' ? '#a02d2d' : tone === 'warn' ? '#a87024' : '#2f6f4a';
+            tone === 'bad' ? 'var(--oxblood)' : tone === 'warn' ? '#a87024' : '#2f6f4a';
           return (
             <div
               key={r.item}
@@ -68,7 +68,7 @@ export default function LinenPipeline({ rows }: Props) {
                 style={{
                   height: 10,
                   borderRadius: 3,
-                  background: '#e0d6b3',
+                  background: 'var(--paper-deep)',
                   overflow: 'hidden',
                 }}
               >

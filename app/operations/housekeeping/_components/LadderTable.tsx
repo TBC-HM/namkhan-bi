@@ -93,7 +93,7 @@ export default function LadderTable({ rows }: Props) {
                   textAlign: 'right',
                   color:
                     r.variance_vs_target > 4
-                      ? '#a02d2d'
+                      ? 'var(--oxblood)'
                       : r.variance_vs_target > 0
                       ? '#a87024'
                       : '#2f6f4a',

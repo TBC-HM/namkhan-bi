@@ -108,7 +108,7 @@ export default function CompBreakdown({ row }: Props) {
       <div style={{
         marginTop: 16,
         background: 'var(--moss)',
-        color: '#f4ecd8',
+        color: 'var(--paper-warm)',
         borderRadius: 8,
         overflow: 'hidden',
       }}>
@@ -163,7 +163,7 @@ export default function CompBreakdown({ row }: Props) {
             fontFamily: 'var(--mono)',
             fontSize: 'var(--t-sm)',
             fontVariantNumeric: 'tabular-nums',
-            color: '#f4ecd8',
+            color: 'var(--paper-warm)',
           }}>
             ${Math.round(costUsd).toLocaleString('en-US')}
             <span style={{ marginLeft: 6, color: '#c4a06b', fontSize: 'var(--t-xs)' }}>

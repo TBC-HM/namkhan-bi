@@ -156,7 +156,7 @@ export default function NDButton() {
             padding: 10,
             zIndex: 9999,
             boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
-            color: '#f5efe3',
+            color: 'var(--paper-warm)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -177,7 +177,7 @@ export default function NDButton() {
                 onChange={(e) => setComposeText(e.target.value)}
                 placeholder="Describe what you want shipped…"
                 rows={3}
-                style={{ width: '100%', background: '#000', color: '#f5efe3', border: '1px solid #444', borderRadius: 3, padding: 6, fontFamily: 'inherit', fontSize: 13, resize: 'vertical' }}
+                style={{ width: '100%', background: '#000', color: 'var(--paper-warm)', border: '1px solid #444', borderRadius: 3, padding: 6, fontFamily: 'inherit', fontSize: 13, resize: 'vertical' }}
               />
               <div style={{ display: 'flex', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
                 <button onClick={() => setComposeOpen(false)} style={btnStyle()}>Cancel</button>
@@ -205,7 +205,7 @@ export default function NDButton() {
             >
               <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, color: '#f5efe3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div style={{ fontSize: 13, color: 'var(--paper-warm)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {r.is_new && <span style={{ color: '#a8854a', fontWeight: 700, marginRight: 6, animation: 'nd-flash 0.9s linear infinite' }}>NEW</span>}
                     {r.title}
                   </div>
@@ -234,7 +234,7 @@ function btnStyle(): React.CSSProperties {
   return {
     padding: '4px 8px',
     background: 'rgba(255,255,255,0.06)',
-    color: '#f5efe3',
+    color: 'var(--paper-warm)',
     border: '1px solid rgba(168,133,74,0.4)',
     borderRadius: 3,
     fontSize: 11,

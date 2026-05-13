@@ -86,7 +86,7 @@ function Brief() {
         <div style={{ fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: '#a8854a', marginBottom: 8 }}>
           ✦ Vector · brief
         </div>
-        <p style={{ margin: 0, fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic', fontSize: 18, lineHeight: 1.55, color: '#e9e1ce' }}>
+        <p style={{ margin: 0, fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic', fontSize: 18, lineHeight: 1.55, color: 'var(--ink)' }}>
           Direct grew 2.1pp share month-on-month — first time in 6 months. BDC is still the volume leader but the commission gap (vs Direct) is 14pp at $0.18/rev. Push direct via the spring email next week; protect the BAR ladder on Premium.
         </p>
         <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
@@ -104,7 +104,7 @@ function Brief() {
 }
 function Tag({ tone, label }: { tone: 'risk' | 'lead' | 'on'; label: string }) {
   const map = {
-    risk: { bg: '#1f0e0c', fg: '#f5b1ad', bd: '#5a2825' },
+    risk: { bg: '#1f0e0c', fg: 'var(--st-bad-bd)', bd: '#5a2825' },
     lead: { bg: '#1f1810', fg: '#c4a06b', bd: '#3a2e1a' },
     on:   { bg: '#0f1e15', fg: '#7c9a6b', bd: '#1c3526' },
   } as const;

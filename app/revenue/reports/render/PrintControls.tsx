@@ -98,7 +98,7 @@ function btnStyle(busy = false): React.CSSProperties {
   return {
     background: 'transparent',
     border: '1px solid #2a2520',
-    color: busy ? '#7d7565' : '#d8cca8',
+    color: busy ? '#7d7565' : 'var(--line-soft)',
     cursor: busy ? 'wait' : 'pointer',
     padding: '6px 10px',
     borderRadius: 4,

@@ -39,21 +39,21 @@ const QUICK_LINKS: Array<{ href: string; label: string; description: string; sta
 ];
 
 const STATUS_COLORS: Record<string, { bg: string; fg: string }> = {
-  draft:               { bg: '#eee9d8', fg: '#6c5d2a' },
-  sent:                { bg: '#fbecc4', fg: '#7d5a18' },
-  partially_received:  { bg: '#d6e6f1', fg: '#1f4f6e' },
-  received:            { bg: '#dcebe0', fg: '#2f6f3a' },
-  invoiced:            { bg: '#dcebe0', fg: '#2f6f3a' },
-  closed:              { bg: '#e3dfd3', fg: 'var(--ink-soft)' },
-  cancelled:           { bg: '#f5d4d0', fg: '#8a3026' },
-  submitted:           { bg: '#fbecc4', fg: '#7d5a18' },
-  pending_gm:          { bg: '#fbecc4', fg: '#7d5a18' },
-  pending_owner:       { bg: '#fbecc4', fg: '#7d5a18' },
-  auto_approved:       { bg: '#dcebe0', fg: '#2f6f3a' },
-  approved:            { bg: '#dcebe0', fg: '#2f6f3a' },
-  rejected:            { bg: '#f5d4d0', fg: '#8a3026' },
-  proposed:            { bg: '#eee9d8', fg: '#6c5d2a' },
-  under_review:        { bg: '#fbecc4', fg: '#7d5a18' },
+  draft:               { bg: 'var(--paper-deep)', fg: '#6c5d2a' },
+  sent:                { bg: 'var(--st-warn-bg)', fg: '#7d5a18' },
+  partially_received:  { bg: 'var(--st-info-bg)', fg: '#1f4f6e' },
+  received:            { bg: 'var(--st-good-bg)', fg: '#2f6f3a' },
+  invoiced:            { bg: 'var(--st-good-bg)', fg: '#2f6f3a' },
+  closed:              { bg: 'var(--line-soft)', fg: 'var(--ink-soft)' },
+  cancelled:           { bg: 'var(--st-bad-bg)', fg: '#8a3026' },
+  submitted:           { bg: 'var(--st-warn-bg)', fg: '#7d5a18' },
+  pending_gm:          { bg: 'var(--st-warn-bg)', fg: '#7d5a18' },
+  pending_owner:       { bg: 'var(--st-warn-bg)', fg: '#7d5a18' },
+  auto_approved:       { bg: 'var(--st-good-bg)', fg: '#2f6f3a' },
+  approved:            { bg: 'var(--st-good-bg)', fg: '#2f6f3a' },
+  rejected:            { bg: 'var(--st-bad-bg)', fg: '#8a3026' },
+  proposed:            { bg: 'var(--paper-deep)', fg: '#6c5d2a' },
+  under_review:        { bg: 'var(--st-warn-bg)', fg: '#7d5a18' },
 };
 
 const PRIORITY_COLORS: Record<string, string> = {

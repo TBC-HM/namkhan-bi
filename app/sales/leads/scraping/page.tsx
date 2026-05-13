@@ -149,11 +149,11 @@ export default async function LeadScrapingPage() {
                 fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase',
                 color: '#a8854a', fontWeight: 700,
               }}>{s.label}</div>
-              <div style={{ color: '#e9e1ce', fontSize: 13 }}>{s.desc}</div>
+              <div style={{ color: 'var(--ink)', fontSize: 13 }}>{s.desc}</div>
               <div style={{ fontSize: 11, color: '#9b907a' }}>{s.sources}</div>
               <div style={{
                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                fontSize: 10, color: s.status.startsWith('wired') ? '#7ad790' : '#f4c179',
+                fontSize: 10, color: s.status.startsWith('wired') ? '#7ad790' : 'var(--brass-soft)',
                 background: s.status.startsWith('wired') ? '#1a2e21' : '#2a261d',
                 padding: '2px 8px', borderRadius: 3, alignSelf: 'flex-start',
                 textTransform: 'uppercase', letterSpacing: '0.10em', fontWeight: 700,
@@ -183,7 +183,7 @@ export default async function LeadScrapingPage() {
               background: '#0f0d0a', border: '1px solid #1f1c15', borderRadius: 6,
               padding: '8px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             }}>
-              <span style={{ color: '#d8cca8', fontSize: 12 }}>{f.framework}</span>
+              <span style={{ color: 'var(--line-soft)', fontSize: 12 }}>{f.framework}</span>
               <span style={{
                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                 fontSize: 11, color: '#a8854a', fontWeight: 700,
@@ -265,7 +265,7 @@ const S: Record<string, React.CSSProperties> = {
   cta: {
     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
     fontSize: 11, letterSpacing: '0.10em', textTransform: 'uppercase', fontWeight: 700,
-    color: '#d8cca8', background: 'transparent',
+    color: 'var(--line-soft)', background: 'transparent',
     border: '1px solid #2a2520', padding: '6px 12px', borderRadius: 4, textDecoration: 'none',
   },
   ctaPrimary: {

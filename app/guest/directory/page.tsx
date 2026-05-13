@@ -44,7 +44,7 @@ export default async function GuestDirectoryPage() {
           borderRadius: 6,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
         }}>
-          <div style={{ fontSize: 13, color: '#f5b1ad' }}>
+          <div style={{ fontSize: 13, color: 'var(--st-bad-bd)' }}>
             <strong style={{ color: '#fff' }}>{noContactCount.toLocaleString()}</strong>{' '}
             guest profile{noContactCount === 1 ? ' is' : 's are'} <em>unreachable</em> — no email + no phone.
           </div>
@@ -62,7 +62,7 @@ export default async function GuestDirectoryPage() {
       {/* Force dark-friendly text inside DirectoryShell (it uses Tailwind
           stone-* light tokens which are invisible on the dark canvas).
           Wrap in a div with the .gst-dir-dark class — see globals.css overrides. */}
-      <div className="gst-dir-dark" style={{ marginTop: 14, color: '#e9e1ce' }}>
+      <div className="gst-dir-dark" style={{ marginTop: 14, color: 'var(--ink)' }}>
         <DirectoryShell facets={(facets as Parameters<typeof DirectoryShell>[0]['facets']) ?? []} headline={headline} />
       </div>
     </Page>

@@ -9,14 +9,14 @@ interface Props {
 }
 
 const healthBg: Record<AssetHealth, string> = {
-  green: '#e6f0ea',
-  amber: '#fdf6e7',
-  red: '#fee2e2',
+  green: 'var(--st-good-bg)',
+  amber: 'var(--paper-warm)',
+  red: 'var(--st-bad-bg)',
 };
 const healthBd: Record<AssetHealth, string> = {
-  green: '#bfddc5',
-  amber: '#f3d57a',
-  red: '#fca5a5',
+  green: 'var(--st-good-bd)',
+  amber: 'var(--brass-soft)',
+  red: 'var(--st-bad-bd)',
 };
 
 export default function AssetHeatMap({ cells }: Props) {

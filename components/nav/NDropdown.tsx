@@ -90,7 +90,7 @@ export default function NDropdown() {
             borderRadius: 8,
             padding: 8,
             boxShadow: '0 16px 50px rgba(0,0,0,0.6)',
-            color: '#ededf0',
+            color: 'var(--paper-deep)',
           }}
         >
           {(['home', 'pillars', 'utility'] as const).map((g, idx) => {
@@ -125,7 +125,7 @@ export default function NDropdown() {
                         fontFamily: "'Cooper','Source Serif Pro',Georgia,serif",
                         fontStyle: 'italic',
                         fontSize: 15,
-                        color: active ? '#c79a6b' : '#ededf0',
+                        color: active ? '#c79a6b' : 'var(--paper-deep)',
                         lineHeight: 1.2,
                       }}>
                         {m.label}

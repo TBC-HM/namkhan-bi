@@ -425,7 +425,7 @@ export default function ChatShell({
                     style={{
                       width: '100%', textAlign: 'left',
                       background: 'transparent', border: 'none', cursor: 'pointer',
-                      color: '#ededf0', padding: '7px 10px', fontSize: 13, borderRadius: 4,
+                      color: 'var(--paper-deep)', padding: '7px 10px', fontSize: 13, borderRadius: 4,
                     }}
                   >{p.name}</button>
                 ))}
@@ -456,7 +456,7 @@ export default function ChatShell({
       <div style={S.thread}>
         {tickets.length === 0 && (
           <div style={S.welcome}>
-            <div style={{ fontFamily: "'Cooper',Georgia,serif", fontSize: 32, color: '#ededf0', marginBottom: 8, fontStyle: 'italic' }}>
+            <div style={{ fontFamily: "'Cooper',Georgia,serif", fontSize: 32, color: 'var(--paper-deep)', marginBottom: 8, fontStyle: 'italic' }}>
               Hallo Paul
             </div>
             <div style={{ color: '#a1a1aa', fontSize: 14, lineHeight: 1.6, maxWidth: 540, margin: '0 auto' }}>
@@ -535,7 +535,7 @@ export default function ChatShell({
         <div style={{
           position: 'fixed', bottom: 24, right: 24, zIndex: 300,
           background: '#0f0d0a', border: '1px solid #3a3327', borderRadius: 8,
-          padding: '10px 14px', fontSize: 12, color: '#d8cca8',
+          padding: '10px 14px', fontSize: 12, color: 'var(--line-soft)',
           boxShadow: '0 12px 28px rgba(0,0,0,0.5)',
         }}>
           📁 {attachToast}
@@ -551,7 +551,7 @@ export default function ChatShell({
 }
 
 const S: Record<string, React.CSSProperties> = {
-  body: { background: '#0a0a0b', color: '#ededf0', minHeight: '100vh', display: 'flex', flexDirection: 'column', fontFamily: '-apple-system, BlinkMacSystemFont, Inter, system-ui, sans-serif', fontSize: 14 },
+  body: { background: '#0a0a0b', color: 'var(--paper-deep)', minHeight: '100vh', display: 'flex', flexDirection: 'column', fontFamily: '-apple-system, BlinkMacSystemFont, Inter, system-ui, sans-serif', fontSize: 14 },
   topbar: { height: 54, padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #1a1a20' },
   logo: { fontWeight: 500, fontSize: 14, display: 'flex', alignItems: 'center', gap: 10, color: '#a1a1aa' },
   topbarRight: { display: 'flex', gap: 8 },
@@ -564,7 +564,7 @@ const S: Record<string, React.CSSProperties> = {
   userAvatar: { width: 28, height: 28, borderRadius: '50%', background: '#15151a', border: '1px solid #25252d', color: '#a1a1aa', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600, flexShrink: 0 },
   agentRow: { display: 'flex', gap: 10, alignItems: 'flex-start' },
   agentAvatar: { width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg, #c79a6b, #b88556)', color: '#0a0a0b', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  agentBubble: { background: '#15151a', padding: '12px 16px', borderRadius: '14px 14px 14px 4px', maxWidth: 'calc(100% - 50px)', fontSize: 14, lineHeight: 1.6, color: '#ededf0' },
+  agentBubble: { background: '#15151a', padding: '12px 16px', borderRadius: '14px 14px 14px 4px', maxWidth: 'calc(100% - 50px)', fontSize: 14, lineHeight: 1.6, color: 'var(--paper-deep)' },
   thinking: { display: 'flex', alignItems: 'center' },
   dot: { width: 6, height: 6, borderRadius: '50%', background: '#c79a6b', margin: '0 2px', animation: 'blink 1.2s infinite' },
   composer: { position: 'fixed', bottom: 0, left: 0, right: 0, padding: '12px 24px 16px', background: 'linear-gradient(to top, #0a0a0b 80%, transparent)', borderTop: '1px solid #1a1a20' },
@@ -573,7 +573,7 @@ const S: Record<string, React.CSSProperties> = {
   attachX: { background: 'transparent', border: 0, color: '#6b6b75', cursor: 'pointer', marginLeft: 4 },
   inputRow: { display: 'flex', gap: 8, alignItems: 'flex-end', maxWidth: 820, margin: '0 auto' },
   attachBtn: { background: '#15151a', border: '1px solid #25252d', color: '#a1a1aa', padding: '10px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 16 },
-  textarea: { flex: 1, background: '#15151a', border: '1px solid #25252d', color: '#ededf0', padding: '12px 14px', borderRadius: 12, fontSize: 14, fontFamily: 'inherit', resize: 'none', minHeight: 22, maxHeight: 200 },
+  textarea: { flex: 1, background: '#15151a', border: '1px solid #25252d', color: 'var(--paper-deep)', padding: '12px 14px', borderRadius: 12, fontSize: 14, fontFamily: 'inherit', resize: 'none', minHeight: 22, maxHeight: 200 },
   sendBtn: { background: '#c79a6b', color: '#0a0a0b', border: 0, borderRadius: 8, padding: '12px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 16, minWidth: 50 },
   hint: { fontSize: 10, color: '#3d3d45', textAlign: 'center', marginTop: 6, maxWidth: 820, margin: '6px auto 0' },
 };

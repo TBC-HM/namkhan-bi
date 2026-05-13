@@ -115,9 +115,9 @@ const MANUAL_GAPS: ManualGap[] = [
 ];
 
 const SEVERITY_TONE: Record<string, { bg: string; fg: string; label: string }> = {
-  critical: { bg: '#3a1f1c', fg: '#ff8a8a', label: 'critical' },
-  high:     { bg: '#3a2a1c', fg: '#f4c179', label: 'high'     },
-  medium:   { bg: '#2a261d', fg: '#d8cca8', label: 'medium'   },
+  critical: { bg: '#3a1f1c', fg: 'var(--oxblood-soft)', label: 'critical' },
+  high:     { bg: '#3a2a1c', fg: 'var(--brass-soft)', label: 'high'     },
+  medium:   { bg: '#2a261d', fg: 'var(--line-soft)', label: 'medium'   },
   low:      { bg: '#1a1812', fg: '#9b907a', label: 'low'      },
 };
 
@@ -226,7 +226,7 @@ export default async function MessyDataPage() {
       <div style={{ marginBottom: 14, fontSize: 13, color: '#9b907a', maxWidth: 760 }}>
         One page for every known gap that visibly breaks a tile, table, or chart elsewhere in the
         dashboard. Each row links back to the page it originates from. Add formal entries to
-        <code style={{ margin: '0 4px', color: '#d8cca8' }}>public.dq_known_issues</code>
+        <code style={{ margin: '0 4px', color: 'var(--line-soft)' }}>public.dq_known_issues</code>
         once an owner accepts ownership.
       </div>
 
@@ -308,7 +308,7 @@ export default async function MessyDataPage() {
         }
       >
         <div style={{ fontSize: 12, color: '#7d7565', marginBottom: 8, maxWidth: 760 }}>
-          Imported from <code style={{ color: '#d8cca8' }}>Unpaid Bills.xls</code>
+          Imported from <code style={{ color: 'var(--line-soft)' }}>Unpaid Bills.xls</code>
           (253 source rows → 250 distinct natural keys).
           <strong> AI classification</strong> column is a placeholder — the
           messy-data agent fills it later.

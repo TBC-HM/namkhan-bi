@@ -46,7 +46,7 @@ export default function B2bSubNav() {
             {t.badge ? (
               <span
                 style={{
-                  background: '#fef3c7',
+                  background: 'var(--st-warn-bg)',
                   border: '1px solid #f3d57a',
                   color: '#5e4818',
                   borderRadius: 10,

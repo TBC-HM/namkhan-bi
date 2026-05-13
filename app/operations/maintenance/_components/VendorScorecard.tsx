@@ -12,7 +12,7 @@ const ratingColor: Record<VendorScorecardRow['rating'], string> = {
   A: '#2f6f4a',
   B: '#1f3d2e',
   C: '#a87024',
-  D: '#a02d2d',
+  D: 'var(--oxblood)',
 };
 
 export default function VendorScorecard({ rows }: Props) {
@@ -94,7 +94,7 @@ export default function VendorScorecard({ rows }: Props) {
                 style={{
                   fontFamily: 'ui-monospace, Menlo, monospace',
                   textAlign: 'right',
-                  color: r.on_time_pct < 80 ? '#a02d2d' : '#1c1c1a',
+                  color: r.on_time_pct < 80 ? 'var(--oxblood)' : '#1c1c1a',
                 }}
               >
                 {r.on_time_pct}%
@@ -111,7 +111,7 @@ export default function VendorScorecard({ rows }: Props) {
                 style={{
                   fontFamily: 'ui-monospace, Menlo, monospace',
                   textAlign: 'right',
-                  color: r.rework_pct > 10 ? '#a02d2d' : '#1c1c1a',
+                  color: r.rework_pct > 10 ? 'var(--oxblood)' : '#1c1c1a',
                 }}
               >
                 {r.rework_pct}%

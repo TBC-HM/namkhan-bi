@@ -12,7 +12,7 @@ const statusColor: Record<PpmTaskRow['status'], string> = {
   scheduled: '#8a8170',
   in_progress: '#1f3d2e',
   completed: '#2f6f4a',
-  overdue: '#a02d2d',
+  overdue: 'var(--oxblood)',
 };
 
 export default function PpmCalendar({ rows }: Props) {

@@ -384,7 +384,7 @@ function EmptyShell({ err }: { err?: string }) {
       borderRadius: 10,
       textAlign: 'center',
     }}>
-      <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-2xl)', color: '#fff5d8', marginBottom: 8 }}>
+      <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-2xl)', color: 'var(--paper-warm)', marginBottom: 8 }}>
         No audiences yet.
       </div>
       <div style={{ fontSize: 'var(--t-md)', color: '#b8a98a', maxWidth: 540, margin: '0 auto 18px' }}>

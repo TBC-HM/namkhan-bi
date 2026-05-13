@@ -8,7 +8,7 @@ interface Props {
 }
 
 const priorityColor: Record<TicketPriority, string> = {
-  urgent: '#a02d2d',
+  urgent: 'var(--oxblood)',
   corrective: '#a87024',
   cosmetic: '#8a8170',
 };
@@ -108,7 +108,7 @@ export default function TicketQueue({ rows }: Props) {
                   color:
                     r.hours_to_sla_breach !== null && r.hours_to_sla_breach !== undefined
                       ? r.hours_to_sla_breach < 4
-                        ? '#a02d2d'
+                        ? 'var(--oxblood)'
                         : r.hours_to_sla_breach < 24
                         ? '#a87024'
                         : '#2f6f4a'

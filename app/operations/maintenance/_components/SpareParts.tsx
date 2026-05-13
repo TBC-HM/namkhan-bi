@@ -65,7 +65,7 @@ export default function SpareParts({ rows }: Props) {
                 style={{
                   fontFamily: 'ui-monospace, Menlo, monospace',
                   textAlign: 'right',
-                  color: low ? '#a02d2d' : '#1c1c1a',
+                  color: low ? 'var(--oxblood)' : '#1c1c1a',
                   fontWeight: low ? 700 : 400,
                 }}
               >

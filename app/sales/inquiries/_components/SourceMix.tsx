@@ -73,7 +73,7 @@ export default function SourceMix() {
             <div
               style={{
                 height: 8,
-                background: '#f4ecd8',
+                background: 'var(--paper-warm)',
                 borderRadius: 4,
                 overflow: 'hidden',
               }}

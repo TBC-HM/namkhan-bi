@@ -289,7 +289,7 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
           aria-label="Temperature"
           style={S.chip}
         >
-          <span style={{ color: '#f4d99a', fontSize: 12 }}>☀</span>
+          <span style={{ color: 'var(--brass-soft)', fontSize: 12 }}>☀</span>
           <span style={S.chipText}>
             {weather?.temp != null ? `${Math.round(weather.temp)}°` : '—°'}
           </span>
@@ -325,7 +325,7 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
           aria-label="Air"
           style={S.chip}
         >
-          <span style={{ color: '#f4d99a', fontSize: 12 }}>≈</span>
+          <span style={{ color: 'var(--brass-soft)', fontSize: 12 }}>≈</span>
           <span style={S.chipText}>
             {air?.aqi != null ? `AQI ${Math.round(air.aqi)}` : 'AQI —'}
           </span>
@@ -567,7 +567,7 @@ function InboxPopover({ summary, onClose }: { summary: InboxSummary; onClose: ()
             <div style={{
               ...S.popCellV,
               color: s.tone === 'bad'  ? '#e08484'
-                   : s.tone === 'warn' ? '#f4d99a'
+                   : s.tone === 'warn' ? 'var(--brass-soft)'
                    : 'var(--text-1, #f0e5cb)',
             }}>{s.v}</div>
             <div style={S.popCellD}>{s.d}</div>

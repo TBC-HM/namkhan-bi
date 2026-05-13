@@ -49,8 +49,8 @@ export default function DndTracker({ rows }: Props) {
             <div
               key={r.room_no}
               style={{
-                background: r.flagged_for_welfare ? '#fdf3f0' : '#faf6ec',
-                border: `1px solid ${r.flagged_for_welfare ? '#a02d2d' : '#e6dfc9'}`,
+                background: r.flagged_for_welfare ? 'var(--st-bad-bg)' : 'var(--paper-warm)',
+                border: `1px solid ${r.flagged_for_welfare ? 'var(--oxblood)' : 'var(--line-soft)'}`,
                 borderRadius: 6,
                 padding: 10,
                 fontSize: "var(--t-sm)",
@@ -69,7 +69,7 @@ export default function DndTracker({ rows }: Props) {
                 style={{
                   fontFamily: 'ui-monospace, Menlo, monospace',
                   fontSize: "var(--t-sm)",
-                  color: '#a02d2d',
+                  color: 'var(--oxblood)',
                   fontWeight: 600,
                 }}
               >

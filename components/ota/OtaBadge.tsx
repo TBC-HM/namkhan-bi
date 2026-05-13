@@ -15,13 +15,13 @@ type Tint = { bg: string; fg: string; letter: string };
 
 // Keys are the canonical lower-case slug. Lookups normalise input first.
 const OTA_TINT: Record<string, Tint> = {
-  booking:   { bg: '#003580', fg: '#ffffff', letter: 'B' },
+  booking:   { bg: '#003580', fg: 'var(--paper-warm)', letter: 'B' },
   expedia:   { bg: '#FFC72C', fg: '#000000', letter: 'E' },
-  stripe:    { bg: '#635BFF', fg: '#ffffff', letter: 'S' },
-  airbnb:    { bg: '#FF5A5F', fg: '#ffffff', letter: 'A' },
-  agoda:     { bg: '#5392F9', fg: '#ffffff', letter: 'A' },
-  trip:      { bg: '#287DFA', fg: '#ffffff', letter: 'T' },
-  hotels:    { bg: '#D32F2F', fg: '#ffffff', letter: 'H' },
+  stripe:    { bg: '#635BFF', fg: 'var(--paper-warm)', letter: 'S' },
+  airbnb:    { bg: '#FF5A5F', fg: 'var(--paper-warm)', letter: 'A' },
+  agoda:     { bg: '#5392F9', fg: 'var(--paper-warm)', letter: 'A' },
+  trip:      { bg: '#287DFA', fg: 'var(--paper-warm)', letter: 'T' },
+  hotels:    { bg: '#D32F2F', fg: 'var(--paper-warm)', letter: 'H' },
 };
 
 // Map raw user-facing strings to the slug keys above. Whitespace and

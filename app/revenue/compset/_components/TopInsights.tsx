@@ -29,11 +29,11 @@ const PALETTE = {
   comp4:     '#6b9379', // --moss-glow / --st-good
   comp5:     '#7d7565', // --ink-mute
   axis:      '#b3a888', // --ink-faint
-  grid:      '#d8cca8', // --line-soft
+  grid:      'var(--line-soft)', // --line-soft
   ink:       '#1c1815', // --ink
   inkSoft:   '#4a443c', // --ink-soft
   inkMute:   '#7d7565', // --ink-mute
-  paperWarm: '#f4ecd8', // --paper-warm
+  paperWarm: 'var(--paper-warm)', // --paper-warm
 };
 
 const COMP_COLORS = [

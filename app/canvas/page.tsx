@@ -235,9 +235,9 @@ const composerBtn = (disabled: boolean): React.CSSProperties => ({
 const errBanner: React.CSSProperties = {
   maxWidth: 880, margin: '0 auto 14px', padding: '8px 12px',
   background: '#2a1614', border: '1px solid #5a2825', borderRadius: 8,
-  color: '#f5b1ad', fontSize: 12, display: 'flex', justifyContent: 'space-between',
+  color: 'var(--st-bad-bd)', fontSize: 12, display: 'flex', justifyContent: 'space-between',
 };
-const errClose: React.CSSProperties = { background: 'transparent', border: 'none', color: '#f5b1ad', cursor: 'pointer', fontSize: 16 };
+const errClose: React.CSSProperties = { background: 'transparent', border: 'none', color: 'var(--st-bad-bd)', cursor: 'pointer', fontSize: 16 };
 
 const proposalGrid: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10 };
 
@@ -245,7 +245,7 @@ const lanesWrap: React.CSSProperties = { maxWidth: 1200, margin: '32px auto 0' }
 const lanesGrid: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 };
 const rejectedEyebrow: React.CSSProperties = {
   fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-  fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: '#f5b1ad', marginBottom: 6,
+  fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--st-bad-bd)', marginBottom: 6,
 };
 const rejectChip: React.CSSProperties = {
   background: '#1f0e0c', border: '1px solid #3a1a18', color: '#9b907a',
@@ -258,6 +258,6 @@ const trustPill = (unlocked: boolean): React.CSSProperties => ({
   border: `1px solid ${unlocked ? '#1c3526' : '#2a261d'}`,
   borderRadius: 999, padding: '4px 12px',
   fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-  fontSize: 10, color: '#d8cca8',
+  fontSize: 10, color: 'var(--line-soft)',
   display: 'flex', gap: 8, alignItems: 'center',
 });

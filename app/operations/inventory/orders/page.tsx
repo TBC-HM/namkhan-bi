@@ -10,13 +10,13 @@ export const revalidate = 60;
 export const dynamic = 'force-dynamic';
 
 const STATUS_COLORS: Record<string, { bg: string; fg: string }> = {
-  draft:               { bg: '#eee9d8', fg: '#6c5d2a' },
-  sent:                { bg: '#fbecc4', fg: '#7d5a18' },
-  partially_received:  { bg: '#d6e6f1', fg: '#1f4f6e' },
-  received:            { bg: '#dcebe0', fg: '#2f6f3a' },
-  invoiced:            { bg: '#dcebe0', fg: '#2f6f3a' },
-  closed:              { bg: '#e3dfd3', fg: 'var(--ink-soft)' },
-  cancelled:           { bg: '#f5d4d0', fg: '#8a3026' },
+  draft:               { bg: 'var(--paper-deep)', fg: '#6c5d2a' },
+  sent:                { bg: 'var(--st-warn-bg)', fg: '#7d5a18' },
+  partially_received:  { bg: 'var(--st-info-bg)', fg: '#1f4f6e' },
+  received:            { bg: 'var(--st-good-bg)', fg: '#2f6f3a' },
+  invoiced:            { bg: 'var(--st-good-bg)', fg: '#2f6f3a' },
+  closed:              { bg: 'var(--line-soft)', fg: 'var(--ink-soft)' },
+  cancelled:           { bg: 'var(--st-bad-bg)', fg: '#8a3026' },
 };
 
 export default async function OrdersPage() {

@@ -196,7 +196,7 @@ function DonutChart({ slices }: { slices: { label: string; v: number; color: str
           <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ width: 10, height: 10, background: s.color, display: 'inline-block', borderRadius: 2 }} />
             <span style={{ color: '#9b907a', minWidth: 70 }}>{s.label}</span>
-            <span style={{ color: '#d8cca8' }}>{((s.v / total) * 100).toFixed(0)}%</span>
+            <span style={{ color: 'var(--line-soft)' }}>{((s.v / total) * 100).toFixed(0)}%</span>
           </div>
         ))}
       </div>

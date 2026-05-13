@@ -9,10 +9,10 @@ interface Props {
 }
 
 const HEALTH_COLORS: Record<string, { bg: string; fg: string; label: string }> = {
-  ok:        { bg: '#dcebe0', fg: '#2f6f3a', label: 'OK' },
-  low:       { bg: '#fbecc4', fg: '#7d5a18', label: 'LOW' },
-  out:       { bg: '#f5d4d0', fg: '#8a3026', label: 'OUT' },
-  overstock: { bg: '#d6e6f1', fg: '#1f4f6e', label: 'OVR' },
+  ok:        { bg: 'var(--st-good-bg)', fg: '#2f6f3a', label: 'OK' },
+  low:       { bg: 'var(--st-warn-bg)', fg: '#7d5a18', label: 'LOW' },
+  out:       { bg: 'var(--st-bad-bg)', fg: '#8a3026', label: 'OUT' },
+  overstock: { bg: 'var(--st-info-bg)', fg: '#1f4f6e', label: 'OVR' },
   empty:     { bg: 'transparent', fg: 'var(--ink-faint)', label: '—' },
 };
 

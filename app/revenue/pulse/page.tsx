@@ -259,7 +259,7 @@ export default async function PulsePage({ searchParams }: Props) {
     { label: 'Direct', pct: pct(direct), color: '#1a2e21' },
     { label: 'OTA', pct: pct(ota), color: '#a8854a' },
     { label: 'Wholesale', pct: pct(wholesale), color: '#7d7565' },
-    { label: 'Other', pct: pct(other), color: '#d8cca8' },
+    { label: 'Other', pct: pct(other), color: 'var(--line-soft)' },
   ].filter((s) => s.pct > 0);
   const channelMixSvg = totalChRev > 0 && slices.length > 0 ? channelMix30dSvg(slices) : '';
 

@@ -16,9 +16,9 @@ type Status =
   | 'DONE';
 
 const STATUS_META: Record<Status, { label: string; bg: string; line: string; ink: string; dot: string }> = {
-  LIVE:    { label: 'Live',    bg: '#e6efe8', line: '#2d6a4f', ink: '#1f3a2e', dot: '🟢' },
-  READY:   { label: 'Ready',   bg: '#e6efe8', line: '#2d6a4f', ink: '#1f3a2e', dot: '🟢' },
-  DONE:    { label: 'Done',    bg: '#e6efe8', line: '#2d6a4f', ink: '#1f3a2e', dot: '✅' },
+  LIVE:    { label: 'Live',    bg: 'var(--st-good-bg)', line: '#2d6a4f', ink: '#1f3a2e', dot: '🟢' },
+  READY:   { label: 'Ready',   bg: 'var(--st-good-bg)', line: '#2d6a4f', ink: '#1f3a2e', dot: '🟢' },
+  DONE:    { label: 'Done',    bg: 'var(--st-good-bg)', line: '#2d6a4f', ink: '#1f3a2e', dot: '✅' },
   PARTIAL: { label: 'Partial', bg: '#f4ead0', line: '#a87b3a', ink: '#6a4a16', dot: '🟡' },
   NEXT:    { label: 'Next',    bg: '#f7ead4', line: '#c8893a', ink: '#a06020', dot: '🟠' },
   GAP:     { label: 'Gap',     bg: '#f5e3df', line: '#a13c2f', ink: '#8a2c20', dot: '🔴' },

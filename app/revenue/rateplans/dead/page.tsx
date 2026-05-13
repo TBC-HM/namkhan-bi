@@ -185,7 +185,7 @@ const S: Record<string, React.CSSProperties> = {
   cta: {
     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
     fontSize: 10, letterSpacing: '0.10em', textTransform: 'uppercase', fontWeight: 700,
-    color: '#d8cca8', background: 'transparent',
+    color: 'var(--line-soft)', background: 'transparent',
     border: '1px solid #2a2520', padding: '4px 8px', borderRadius: 3, textDecoration: 'none',
   },
   ctaPrimary: {

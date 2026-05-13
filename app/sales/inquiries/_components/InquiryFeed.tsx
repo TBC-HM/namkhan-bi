@@ -119,11 +119,11 @@ const typeColor: Record<InquiryType, string> = {
 };
 
 const statusBg: Record<InquiryRow['status'], string> = {
-  New: '#fef3c7',
-  'Auto-drafted': '#e8f0e6',
-  'In review': '#fdf6e7',
-  Sent: '#f4ecd8',
-  Stale: '#fdf3f0',
+  New: 'var(--st-warn-bg)',
+  'Auto-drafted': 'var(--st-good-bg)',
+  'In review': 'var(--paper-warm)',
+  Sent: 'var(--paper-warm)',
+  Stale: 'var(--st-bad-bg)',
 };
 
 export default function InquiryFeed({ overlay }: { overlay?: ReactNode }) {
@@ -255,7 +255,7 @@ export default function InquiryFeed({ overlay }: { overlay?: ReactNode }) {
             style={{
               fontFamily: 'ui-monospace, Menlo, monospace',
               fontWeight: 600,
-              color: r.value.startsWith('−') ? '#a02d2d' : '#1c1815',
+              color: r.value.startsWith('−') ? 'var(--oxblood)' : '#1c1815',
             }}
           >
             {r.value}

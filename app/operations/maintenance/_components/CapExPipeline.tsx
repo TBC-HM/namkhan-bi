@@ -13,7 +13,7 @@ interface Props {
 }
 
 const catColor: Record<CapExItemRow['category'], string> = {
-  'must-do': '#a02d2d',
+  'must-do': 'var(--oxblood)',
   'should-do': '#a87024',
   'could-do': '#8a8170',
 };
@@ -115,7 +115,7 @@ export default function CapExPipeline({ rows }: Props) {
                 fontSize: "var(--t-sm)",
                 padding: '5px 10px',
                 borderRadius: 5,
-                background: promoted.has(r.id) ? '#e6dfc9' : '#a17a4f',
+                background: promoted.has(r.id) ? 'var(--line-soft)' : '#a17a4f',
                 color: promoted.has(r.id) ? '#8a8170' : 'var(--paper-warm)',
                 border: 0,
                 cursor: promoted.has(r.id) ? 'default' : 'pointer',

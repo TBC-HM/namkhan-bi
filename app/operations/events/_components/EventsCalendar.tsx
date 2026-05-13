@@ -28,11 +28,11 @@ interface Props {
 
 // ─── category palette (locked: brand tints only, no orange) ───────────────
 const CATEGORY_STYLE: Record<string, { bg: string; fg: string; border: string }> = {
-  lunar:     { bg: 'rgba(168, 133,  74, 0.18)', fg: '#d9bf8e', border: 'rgba(168, 133, 74, 0.55)' },  // brass
+  lunar:     { bg: 'rgba(168, 133,  74, 0.18)', fg: 'var(--brass-soft)', border: 'rgba(168, 133, 74, 0.55)' },  // brass
   national:  { bg: 'rgba(107, 147, 121, 0.16)', fg: '#a4c5b1', border: 'rgba(107, 147, 121, 0.50)' },  // moss-glow
   property:  { bg: 'rgba(196, 160, 107, 0.18)', fg: '#e6d3a8', border: 'rgba(196, 160, 107, 0.55)' },  // brass-soft
   religious: { bg: 'rgba(166,  88,  62, 0.18)', fg: '#d9a48a', border: 'rgba(166,  88, 62, 0.50)' },   // copper-rust
-  seasonal:  { bg: 'rgba(230, 218, 192, 0.14)', fg: '#d8cca8', border: 'rgba(230, 218, 192, 0.45)' },  // paper-deep
+  seasonal:  { bg: 'rgba(230, 218, 192, 0.14)', fg: 'var(--line-soft)', border: 'rgba(230, 218, 192, 0.45)' },  // paper-deep
 };
 const FALLBACK_STYLE = { bg: 'rgba(168, 133, 74, 0.14)', fg: '#c4a06b', border: 'rgba(168, 133, 74, 0.45)' };
 
@@ -289,7 +289,7 @@ const S: Record<string, React.CSSProperties> = {
   },
   filterBtn: {
     display: 'inline-flex', alignItems: 'center', gap: 6,
-    background: '#0f0d0a', color: '#e9e1ce',
+    background: '#0f0d0a', color: 'var(--ink)',
     border: '1px solid #1f1c15', borderRadius: 6,
     padding: '6px 10px',
     fontFamily: "'Inter Tight', system-ui, sans-serif",
@@ -315,7 +315,7 @@ const S: Record<string, React.CSSProperties> = {
   dropdownRow: {
     display: 'flex', alignItems: 'center', gap: 8,
     padding: '5px 8px', borderRadius: 4, cursor: 'pointer',
-    color: '#e9e1ce',
+    color: 'var(--ink)',
   },
   linkBtn: {
     background: 'transparent', border: 'none',
@@ -324,7 +324,7 @@ const S: Record<string, React.CSSProperties> = {
     fontSize: 'var(--t-xs)', letterSpacing: '0.14em', textTransform: 'uppercase',
   },
   monthNav: {
-    background: '#0f0d0a', color: '#e9e1ce',
+    background: '#0f0d0a', color: 'var(--ink)',
     border: '1px solid #1f1c15', borderRadius: 6,
     width: 28, height: 28, lineHeight: 1, cursor: 'pointer',
     fontFamily: "'Inter Tight', system-ui, sans-serif",
@@ -335,11 +335,11 @@ const S: Record<string, React.CSSProperties> = {
     fontFamily: "'Fraunces', Georgia, serif",
     fontStyle: 'italic',
     fontSize: 'var(--t-xl)',
-    color: '#e9e1ce',
+    color: 'var(--ink)',
   },
   addBtn: {
     background: 'rgba(168, 133, 74, 0.18)',
-    color: '#d9bf8e',
+    color: 'var(--brass-soft)',
     border: '1px solid rgba(168, 133, 74, 0.55)',
     borderRadius: 6,
     padding: '6px 12px',

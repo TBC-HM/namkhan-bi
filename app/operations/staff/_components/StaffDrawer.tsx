@@ -93,8 +93,8 @@ export function StaffDrawer({ staffId, onClose }: Props) {
 
               {detail.dq_flags && detail.dq_flags.length > 0 && (
                 <section style={S.section}>
-                  <div style={{ ...S.sectionTitle, color: '#ff8a8a' }}>Data quality flags</div>
-                  <ul style={{ margin: 0, paddingLeft: 18, color: '#ff8a8a', fontSize: 12 }}>
+                  <div style={{ ...S.sectionTitle, color: 'var(--oxblood-soft)' }}>Data quality flags</div>
+                  <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--oxblood-soft)', fontSize: 12 }}>
                     {detail.dq_flags.map((f) => <li key={f}>{f}</li>)}
                   </ul>
                 </section>
@@ -131,7 +131,7 @@ const S: Record<string, React.CSSProperties> = {
     position: 'fixed', top: 0, right: 0, bottom: 0,
     width: 'min(520px, 100vw)',
     background: '#0e0e0c',
-    color: '#e9e1ce',
+    color: 'var(--ink)',
     borderLeft: '1px solid #2a2520',
     boxShadow: '-12px 0 40px rgba(0,0,0,0.55)',
     zIndex: 9001,
@@ -145,7 +145,7 @@ const S: Record<string, React.CSSProperties> = {
   },
   close: {
     background: 'transparent', border: '1px solid #2a2520',
-    color: '#d8cca8', cursor: 'pointer',
+    color: 'var(--line-soft)', cursor: 'pointer',
     width: 28, height: 28, borderRadius: 4,
     fontSize: 14, lineHeight: 1,
   },
@@ -156,11 +156,11 @@ const S: Record<string, React.CSSProperties> = {
   },
   title: {
     fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic',
-    fontSize: 24, fontWeight: 400, margin: 0, color: '#e9e1ce',
+    fontSize: 24, fontWeight: 400, margin: 0, color: 'var(--ink)',
   },
   sub: { fontSize: 12, color: '#9b907a', marginTop: 4 },
   badgeArchived: {
-    background: '#2a261d', color: '#ff8a8a',
+    background: '#2a261d', color: 'var(--oxblood-soft)',
     padding: '1px 6px', borderRadius: 3, marginLeft: 6,
     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
     fontSize: 9, textTransform: 'uppercase',
@@ -178,11 +178,11 @@ const S: Record<string, React.CSSProperties> = {
   },
   field: { display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 12, padding: '3px 0' },
   fieldLabel: { color: '#7d7565' },
-  fieldValue: { color: '#e9e1ce' },
+  fieldValue: { color: 'var(--ink)' },
   chip: {
     background: '#1a1812', border: '1px solid #2a2520',
     padding: '2px 8px', borderRadius: 4,
-    fontSize: 11, color: '#d8cca8',
+    fontSize: 11, color: 'var(--line-soft)',
   },
-  fullLink: { color: '#d9bf8e', fontSize: 12, fontWeight: 600, textDecoration: 'none' },
+  fullLink: { color: 'var(--brass-soft)', fontSize: 12, fontWeight: 600, textDecoration: 'none' },
 };

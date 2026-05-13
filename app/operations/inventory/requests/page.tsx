@@ -10,17 +10,17 @@ export const revalidate = 60;
 export const dynamic = 'force-dynamic';
 
 const STATUS_COLORS: Record<string, { bg: string; fg: string }> = {
-  draft:            { bg: '#eee9d8', fg: '#6c5d2a' },
-  submitted:        { bg: '#fbecc4', fg: '#7d5a18' },
-  pending_gm:       { bg: '#fbecc4', fg: '#7d5a18' },
-  pending_owner:    { bg: '#fbecc4', fg: '#7d5a18' },
-  auto_approved:    { bg: '#dcebe0', fg: '#2f6f3a' },
-  approved:         { bg: '#dcebe0', fg: '#2f6f3a' },
-  sent_back:        { bg: '#f5d4d0', fg: '#8a3026' },
-  rejected:         { bg: '#f5d4d0', fg: '#8a3026' },
-  converted_to_po:  { bg: '#d6e6f1', fg: '#1f4f6e' },
-  closed:           { bg: '#e3dfd3', fg: 'var(--ink-soft)' },
-  cancelled:        { bg: '#f5d4d0', fg: '#8a3026' },
+  draft:            { bg: 'var(--paper-deep)', fg: '#6c5d2a' },
+  submitted:        { bg: 'var(--st-warn-bg)', fg: '#7d5a18' },
+  pending_gm:       { bg: 'var(--st-warn-bg)', fg: '#7d5a18' },
+  pending_owner:    { bg: 'var(--st-warn-bg)', fg: '#7d5a18' },
+  auto_approved:    { bg: 'var(--st-good-bg)', fg: '#2f6f3a' },
+  approved:         { bg: 'var(--st-good-bg)', fg: '#2f6f3a' },
+  sent_back:        { bg: 'var(--st-bad-bg)', fg: '#8a3026' },
+  rejected:         { bg: 'var(--st-bad-bg)', fg: '#8a3026' },
+  converted_to_po:  { bg: 'var(--st-info-bg)', fg: '#1f4f6e' },
+  closed:           { bg: 'var(--line-soft)', fg: 'var(--ink-soft)' },
+  cancelled:        { bg: 'var(--st-bad-bg)', fg: '#8a3026' },
 };
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -31,8 +31,8 @@ const PRIORITY_COLORS: Record<string, string> = {
 };
 
 const DEPT_COLORS: Record<string, { bg: string; fg: string }> = {
-  fb:           { bg: '#dcebe0', fg: '#2f6f3a' },
-  hk:           { bg: '#d6e6f1', fg: '#1f4f6e' },
+  fb:           { bg: 'var(--st-good-bg)', fg: '#2f6f3a' },
+  hk:           { bg: 'var(--st-info-bg)', fg: '#1f4f6e' },
   spa:          { bg: '#f0e0e6', fg: '#7a3850' },
   engineering:  { bg: '#eee0c6', fg: '#7d5418' },
   frontoffice:  { bg: '#e9eed8', fg: '#5e6c2a' },

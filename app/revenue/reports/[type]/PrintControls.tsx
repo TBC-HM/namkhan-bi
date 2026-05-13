@@ -40,7 +40,7 @@ function btnStyle(): React.CSSProperties {
   return {
     background: 'transparent',
     border: '1px solid #2a2520',
-    color: '#d8cca8',
+    color: 'var(--line-soft)',
     cursor: 'pointer',
     padding: '6px 10px',
     borderRadius: 4,

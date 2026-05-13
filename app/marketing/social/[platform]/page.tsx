@@ -296,7 +296,7 @@ export default async function SocialPlatformPage({ params }: Props) {
         eyebrow="quick links"
         actions={<ArtifactActions context={{ kind: 'panel', title: `${label} content actions`, dept: 'marketing' }} />}
       >
-        <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#d8cca8', lineHeight: 1.7 }}>
+        <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: 'var(--line-soft)', lineHeight: 1.7 }}>
           <li>
             <Link href={`/marketing/library?tag=${encodeURIComponent(account.platform)}`} style={S.link}>
               Browse media library tagged for {label} →
@@ -320,6 +320,6 @@ export default async function SocialPlatformPage({ params }: Props) {
 
 const S: Record<string, React.CSSProperties> = {
   dt: { color: '#7d7565', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.10em' },
-  dd: { color: '#e9e1ce', margin: 0 },
+  dd: { color: 'var(--ink)', margin: 0 },
   link: { color: 'var(--brass)', textDecoration: 'none', fontWeight: 600 },
 };

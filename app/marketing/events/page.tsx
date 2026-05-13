@@ -61,7 +61,7 @@ const APPLIES_LABEL: Array<{ key: keyof EventRow; label: string; tone: string }>
   { key: 'applies_to_marketing', label: 'Marketing', tone: '#34E0A1' },
   { key: 'applies_to_content',   label: 'Content',   tone: '#1877F2' },
   { key: 'applies_to_fnb',       label: 'F&B',       tone: '#E4405F' },
-  { key: 'applies_to_retreat',   label: 'Retreat',   tone: '#d8cca8' },
+  { key: 'applies_to_retreat',   label: 'Retreat',   tone: 'var(--line-soft)' },
 ];
 
 export default async function EventsSchedulePage() {
@@ -127,7 +127,7 @@ export default async function EventsSchedulePage() {
                       </div>
                       <div style={S.titleCol}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          <strong style={{ color: '#e9e1ce' }}>{e.display_name}</strong>
+                          <strong style={{ color: 'var(--ink)' }}>{e.display_name}</strong>
                           {e.type_code && <span style={S.typeChip}>{e.type_code}</span>}
                           {e.is_confirmed === false && <span style={S.unconfirmed}>tentative</span>}
                           {(e.demand_score_override ?? 0) >= 80 && <span style={S.high}>high demand</span>}
@@ -188,13 +188,13 @@ const S: Record<string, React.CSSProperties> = {
   titleCol: { display: 'flex', flexDirection: 'column', gap: 6 },
   brief: { fontSize: 12, color: '#9b907a', lineHeight: 1.5 },
   typeChip: {
-    background: '#1a1812', color: '#d8cca8',
+    background: '#1a1812', color: 'var(--line-soft)',
     padding: '1px 6px', borderRadius: 3,
     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
     fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase',
   },
   unconfirmed: {
-    background: '#2a261d', color: '#f4c179',
+    background: '#2a261d', color: 'var(--brass-soft)',
     padding: '1px 6px', borderRadius: 3,
     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
     fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 700,

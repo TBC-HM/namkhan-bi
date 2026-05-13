@@ -321,11 +321,11 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
         const cells = Array.from(byDate.entries()).map(([d, v]) => ({ date: d, ...v }));
         const dayLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
         function toneFor(rate: number | null, flag: string | null) {
-          if (flag === 'stop_sold' || flag === 'sold_out') return { bg: '#7a2a22', fg: '#ffb0a8', label: 'STOP' };
-          if (rate == null) return { bg: '#3a3327', fg: '#d8cca8', label: 'no data' };
+          if (flag === 'stop_sold' || flag === 'sold_out') return { bg: '#7a2a22', fg: 'var(--st-bad-bd)', label: 'STOP' };
+          if (rate == null) return { bg: '#3a3327', fg: 'var(--line-soft)', label: 'no data' };
           if (rate >= 200) return { bg: '#2c5b3d', fg: '#c9f5d5', label: 'premium' };
-          if (rate >= 130) return { bg: '#5b4a2a', fg: '#fce8b5', label: 'mid' };
-          return { bg: '#7a4f1f', fg: '#ffd49a', label: 'soft' };
+          if (rate >= 130) return { bg: '#5b4a2a', fg: 'var(--st-warn-bg)', label: 'mid' };
+          return { bg: '#7a4f1f', fg: 'var(--brass-soft)', label: 'soft' };
         }
         return (
           <Panel
@@ -369,14 +369,14 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
                       justifyContent: 'space-between',
                     }} title={`${c.date} · ${tone.label}${c.rate != null ? ` · $${c.rate.toFixed(0)}` : ''}`}>
                       <div style={{
-                        background: '#fff5d8', color: '#1c160d',
+                        background: 'var(--paper-warm)', color: '#1c160d',
                         width: 22, height: 22, borderRadius: 4, fontWeight: 700,
                         fontSize: 11, fontFamily: 'var(--mono)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                       }}>{day}</div>
                       <div style={{
                         fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic',
-                        fontSize: 18, color: '#fff5d8', fontWeight: 600, textAlign: 'right',
+                        fontSize: 18, color: 'var(--paper-warm)', fontWeight: 600, textAlign: 'right',
                       }}>{c.flag === 'stop_sold' ? 'STOP' : (c.rate != null ? `$${c.rate.toFixed(0)}` : '—')}</div>
                       <div style={{
                         fontFamily: 'var(--mono)', fontSize: 9,

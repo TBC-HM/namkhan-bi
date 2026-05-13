@@ -91,7 +91,7 @@ export default function EnergyDash({ rows }: Props) {
               <span
                 style={{
                   fontSize: "var(--t-xs)",
-                  color: r.anomaly_flag ? '#a02d2d' : '#8a8170',
+                  color: r.anomaly_flag ? 'var(--oxblood)' : '#8a8170',
                   textAlign: 'right',
                   fontWeight: 700,
                   textTransform: 'uppercase',

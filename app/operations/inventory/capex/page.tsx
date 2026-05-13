@@ -10,13 +10,13 @@ export const revalidate = 60;
 export const dynamic = 'force-dynamic';
 
 const STATUS_COLORS: Record<string, { bg: string; fg: string }> = {
-  proposed:     { bg: '#eee9d8', fg: '#6c5d2a' },
-  under_review: { bg: '#fbecc4', fg: '#7d5a18' },
-  approved:     { bg: '#dcebe0', fg: '#2f6f3a' },
-  ordered:      { bg: '#d6e6f1', fg: '#1f4f6e' },
-  received:     { bg: '#dcebe0', fg: '#2f6f3a' },
-  rejected:     { bg: '#f5d4d0', fg: '#8a3026' },
-  cancelled:    { bg: '#f5d4d0', fg: '#8a3026' },
+  proposed:     { bg: 'var(--paper-deep)', fg: '#6c5d2a' },
+  under_review: { bg: 'var(--st-warn-bg)', fg: '#7d5a18' },
+  approved:     { bg: 'var(--st-good-bg)', fg: '#2f6f3a' },
+  ordered:      { bg: 'var(--st-info-bg)', fg: '#1f4f6e' },
+  received:     { bg: 'var(--st-good-bg)', fg: '#2f6f3a' },
+  rejected:     { bg: 'var(--st-bad-bg)', fg: '#8a3026' },
+  cancelled:    { bg: 'var(--st-bad-bg)', fg: '#8a3026' },
 };
 
 export default async function CapexPipelinePage() {

@@ -20,7 +20,7 @@ export function DailyRevenueChart({ data }: { data: any[] }) {
   // Color values are the resolved brand palette hex (recharts can't read CSS vars).
   // Source: styles/globals.css :root.
   const c = {
-    grid:     '#d8cca8',  // --line-soft
+    grid:     'var(--line-soft)',  // --line-soft
     axis:     '#7d7565',  // --ink-mute
     bg:       '#1c1815',  // --ink
     border:   '#4a443c',  // --ink-soft
@@ -28,7 +28,7 @@ export function DailyRevenueChart({ data }: { data: any[] }) {
     rooms:    '#a8854a',  // --brass
     fnb:      '#6b9379',  // --moss-glow
     spa:      '#8a9d83',  // --sage
-    activity: '#d9bf8e',  // --brass-pale
+    activity: 'var(--brass-soft)',  // --brass-pale
   };
   const fmtDate = (d: string) => {
     if (!d) return '';
@@ -46,7 +46,7 @@ export function DailyRevenueChart({ data }: { data: any[] }) {
           contentStyle={{
             background: c.bg, border: `1px solid ${c.border}`,
             fontSize: "var(--t-sm)", fontFamily: 'JetBrains Mono, ui-monospace, monospace',
-            color: '#f4ecd8', borderRadius: 4, padding: '8px 12px',
+            color: 'var(--paper-warm)', borderRadius: 4, padding: '8px 12px',
           }}
           labelStyle={{ color: c.label, marginBottom: 4, fontWeight: 600 }}
           labelFormatter={(d: string) => `${fmtDate(d)} · USD · cloudbeds`}

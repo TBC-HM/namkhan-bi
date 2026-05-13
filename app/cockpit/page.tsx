@@ -1020,7 +1020,7 @@ function ChatTab() {
                             style={{
                               width: '100%', textAlign: 'left',
                               background: 'transparent', border: 'none', cursor: 'pointer',
-                              color: '#d8cca8', padding: '6px 10px', fontSize: 12, borderRadius: 4,
+                              color: 'var(--line-soft)', padding: '6px 10px', fontSize: 12, borderRadius: 4,
                             }}
                           >{p.name}</button>
                         ))}

@@ -72,7 +72,7 @@ export default function FunnelSnapshot() {
           <div
             style={{
               height: 8,
-              background: '#f4ecd8',
+              background: 'var(--paper-warm)',
               borderRadius: 4,
               overflow: 'hidden',
             }}
@@ -102,7 +102,7 @@ export default function FunnelSnapshot() {
         <span
           style={{
             fontFamily: 'ui-monospace, Menlo, monospace',
-            color: '#a02d2d',
+            color: 'var(--oxblood)',
           }}
         >
           {LOST}
