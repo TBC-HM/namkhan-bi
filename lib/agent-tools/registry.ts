@@ -29,12 +29,23 @@ export interface AnthropicTool {
   input_schema: AnthropicInputSchema;
 }
 
+export interface ToolDispatchCtx {
+  propertyId?: number;
+  role: string;
+  /** Live hop counter — chat-v2 increments this when it recurses. */
+  hopCount?: number;
+  /** The original user message that started the current dispatch chain. */
+  userMessage?: string;
+  /** Conversation UUID for audit-trail correlation, optional. */
+  conversationId?: string;
+}
+
 export interface ToolSpec {
   name: string;
   description: string;
   input_schema: AnthropicInputSchema;
   /** Optional handler. If absent, tool calls return tool_not_implemented. */
-  handler?: (input: Record<string, unknown>, ctx: { propertyId?: number; role: string }) => Promise<unknown>;
+  handler?: (input: Record<string, unknown>, ctx: ToolDispatchCtx) => Promise<unknown>;
 }
 
 const REG: Record<string, ToolSpec> = {
@@ -129,8 +140,9 @@ const REG: Record<string, ToolSpec> = {
       const handoffCtx: HandoffContext = {
         agent_role: ctx.role,
         property_id: ctx.propertyId ?? null,
-        hop_count: 0, // tool dispatcher should pass real hop count via ctx in future
-        user_message: '',
+        hop_count: ctx.hopCount ?? 0,
+        conversation_id: ctx.conversationId,
+        user_message: ctx.userMessage ?? '',
       };
       return route_to_hod(input as { target_role: string; reason?: string }, handoffCtx);
     },
@@ -150,8 +162,9 @@ const REG: Record<string, ToolSpec> = {
       const handoffCtx: HandoffContext = {
         agent_role: ctx.role,
         property_id: ctx.propertyId ?? null,
-        hop_count: 0,
-        user_message: '',
+        hop_count: ctx.hopCount ?? 0,
+        conversation_id: ctx.conversationId,
+        user_message: ctx.userMessage ?? '',
       };
       return request_peer_consult(input as { peer_role: string; question: string }, handoffCtx);
     },
