@@ -631,13 +631,13 @@ table:not(.data-table) tbody tr:hover td {
   gap: 10px;
   font-family: var(--sans);
   font-size: var(--t-xs);
-  color: var(--ink-mute);
+  color: var(--tbl-fg-mute);
   letter-spacing: 0.02em;
 }
 .kpi-box-delta { white-space: nowrap; }
-.kpi-box-delta.pos { color: var(--moss); }
-.kpi-box-delta.neg { color: var(--st-bad); }
-.kpi-box-delta.flat { color: var(--ink-mute); }
+.kpi-box-delta.pos { color: var(--moss-glow); }
+.kpi-box-delta.neg { color: var(--oxblood-soft); }
+.kpi-box-delta.flat { color: var(--tbl-fg-mute); }
 
 /* Primary value + label — KpiBox uses .kpi-tile-value + .kpi-tile-scope so
  * existing .kpi-tile rules apply. Override layout only: value above label,
@@ -655,23 +655,24 @@ table:not(.data-table) tbody tr:hover td {
   font-size: var(--t-2xl);
   letter-spacing: var(--ls-tight);
   line-height: 1.1;
-  color: var(--ink);
+  color: var(--tbl-fg-strong);
   margin-top: 4px;
 }
 .kpi-box-value.lorem,
-.kpi-box-value.greyed { color: var(--ink-faint); }
-.kpi-box-value.pos    { color: var(--moss); }
-.kpi-box-value.neg    { color: var(--st-bad); }
+.kpi-box-value.greyed { color: var(--tbl-fg-mute); }
+.kpi-box-value.pos    { color: var(--moss-glow); }
+.kpi-box-value.neg    { color: var(--oxblood-soft); }
 .kpi-box-value.warn   { color: var(--brass); }
 
 .kpi-box-needs {
   font-family: var(--sans);
   font-size: var(--t-xs);
-  color: var(--ink-mute);
+  color: var(--tbl-fg-mute);
   font-style: italic;
   margin-top: auto;
   line-height: 1.4;
 }
+.kpi-box-sub-label { color: var(--tbl-fg-mute); }
 .kpi-box-pill {
   position: absolute;
   bottom: 10px;
@@ -736,7 +737,7 @@ table:not(.data-table) tbody tr:hover td {
   font-size: var(--t-xs);
   letter-spacing: var(--ls-loose);
   text-transform: uppercase;
-  color: var(--ink-mute);
+  color: var(--tbl-fg-mute);
   font-weight: 600;
 }
 .kpi-tile-value {
@@ -746,18 +747,18 @@ table:not(.data-table) tbody tr:hover td {
   font-size: 22px;
   letter-spacing: var(--ls-tight);
   line-height: 1.1;
-  color: var(--ink);
+  color: var(--tbl-fg-strong);
   margin-top: 2px;
 }
 .kpi-tile-value.lorem,
-.kpi-tile-value.greyed { color: var(--ink-faint); }
-.kpi-tile-value.pos    { color: var(--moss); }
-.kpi-tile-value.neg    { color: var(--st-bad); }
+.kpi-tile-value.greyed { color: var(--tbl-fg-mute); }
+.kpi-tile-value.pos    { color: var(--moss-glow); }
+.kpi-tile-value.neg    { color: var(--oxblood-soft); }
 .kpi-tile-value.warn   { color: var(--brass); }
 .kpi-tile-sub {
   font-family: var(--sans);
   font-size: 11px;
-  color: var(--ink-mute);
+  color: var(--tbl-fg-mute);
   letter-spacing: 0.02em;
 }
 .kpi-tile-delta {
@@ -765,7 +766,11 @@ table:not(.data-table) tbody tr:hover td {
   font-size: var(--t-xs);
   letter-spacing: 0.04em;
   font-weight: 600;
+  color: var(--tbl-fg);
 }
+.kpi-tile-delta.pos { color: var(--moss-glow); }
+.kpi-tile-delta.neg { color: var(--oxblood-soft); }
+.kpi-tile-delta.neu, .kpi-tile-delta.flat { color: var(--tbl-fg-mute); }
 .kpi-tile-delta.pos { color: var(--moss); }
 .kpi-tile-delta.neg { color: var(--st-bad); }
 .kpi-tile-delta.neu { color: var(--ink-mute); }
