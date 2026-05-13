@@ -200,8 +200,11 @@ export function StaffDrawer({ staffId, onClose }: Props) {
               </Section>
 
               {/* 6b. ATTENDANCE SCORE — only show for properties with timeclock wired.
-                  Donna uses Factorial; Namkhan does not yet have one. */}
-              {detail.property_id === 1000001 && (
+                  Donna uses Factorial; Namkhan does not yet have one.
+                  Compare with Number() — Supabase can return bigint as string.
+                  Fallback: if we got back an attendance score row (events column
+                  is non-null), show it regardless — that signals timeclock data. */}
+              {(Number(detail.property_id) === 1000001 || detail.attendance_events_30d != null) && (
                 <Section title="Attendance · last 30 days">
                   <AttendanceScoreBlock detail={detail} />
                 </Section>

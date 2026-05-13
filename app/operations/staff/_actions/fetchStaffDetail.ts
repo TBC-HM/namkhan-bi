@@ -77,7 +77,12 @@ export interface StaffDetail {
 export async function fetchStaffDetail(staffId: string): Promise<StaffDetail | null> {
   const thisYear = new Date().getUTCFullYear();
   const [{ data, error }, scoreRes, raiseRes, extraRes] = await Promise.all([
+    // PBS 2026-05-13: pin schema to `public` — there is a duplicate
+    // `ops.v_staff_detail` (older, no property_id). Without the schema
+    // pin PostgREST sometimes resolves to the wrong one, which broke the
+    // drawer's property_id-gated attendance block for many Donna staff.
     supabase
+      .schema('public')
       .from('v_staff_detail')
       .select('*')
       .eq('staff_id', staffId)
