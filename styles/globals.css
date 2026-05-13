@@ -605,23 +605,24 @@ table:not(.data-table) tbody tr:hover td {
  */
 .kpi-box {
   position: relative;
-  background: var(--paper-warm);
-  border: 1px solid var(--paper-deep);
+  background: var(--tbl-bg);
+  border: 1px solid var(--tbl-border);
   border-radius: 8px;
   padding: 14px 16px;
   min-height: 108px;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  color: var(--tbl-fg);
   transition: box-shadow 140ms ease, transform 140ms ease, border-color 140ms ease;
 }
 .kpi-box:hover {
-  box-shadow: 0 6px 18px -8px rgba(28, 24, 21, 0.18);
+  box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.45);
   border-color: var(--brass-soft);
   transform: translateY(-1px);
 }
 .kpi-box[data-state="data-needed"] {
-  background: var(--paper-deep);
+  background: var(--tbl-bg-elev);
   border-style: dashed;
 }
 .kpi-box-deltas {
@@ -712,8 +713,9 @@ table:not(.data-table) tbody tr:hover td {
  *   </div>
  */
 .kpi-tile {
-  background: var(--paper-warm);
-  border: 1px solid var(--paper-deep);
+  background: var(--tbl-bg);
+  border: 1px solid var(--tbl-border);
+  color: var(--tbl-fg);
   border-radius: 8px;
   padding: 14px 16px;
   min-height: 96px;

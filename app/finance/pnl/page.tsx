@@ -463,6 +463,11 @@ export default async function PnLPage({ searchParams }: Props) {
       title={<>Profit &amp; loss · where the <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>margin</em> lives.</>}
       subPages={FINANCE_SUBPAGES}
     >
+      {/* PBS 2026-05-13: pnl-page wrapper brings back the 196 globals.css
+          rules scoped to .pnl-page (variance bars, USALI table tones,
+          warn-banner, etc.) that were lost when the page was rewrapped
+          in <Page>. Single-class fix, no JSX restructure. */}
+      <div className="pnl-page">
       {/* ─── 1. KPI TILES ─────────────────────────────────────────────── */}
 
       {/* Drivers row — volume / mix / rate */}
@@ -1076,6 +1081,7 @@ export default async function PnLPage({ searchParams }: Props) {
           Edit account-class assignments for <code>not_specified</code> entries at <a href="/finance/mapping" style={{ color: 'var(--brass)', textDecoration: 'underline' }}>/finance/mapping</a>.
         </div>
       </div>
+      </div>{/* /.pnl-page */}
     </Page>
   );
 }
