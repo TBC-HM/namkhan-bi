@@ -10,15 +10,21 @@ const PROPERTY_LABELS: Record<number, string> = {
   [DONNA_PROPERTY_ID]:   'Donna Portals',
 };
 
-export default async function StaffScheduleScoped({ params }: { params: { property_id: string } }) {
+interface Props {
+  params: { property_id: string };
+  searchParams: Record<string, string | string[] | undefined>;
+}
+
+export default async function StaffScheduleScoped({ params, searchParams }: Props) {
   const propertyId = Number(params.property_id);
   if (!Number.isFinite(propertyId)) {
-    return <ScheduleTabContent propertyId={NAMKHAN_PROPERTY_ID} propertyLabel="Namkhan" />;
+    return <ScheduleTabContent propertyId={NAMKHAN_PROPERTY_ID} propertyLabel="Namkhan" searchParams={searchParams} />;
   }
   return (
     <ScheduleTabContent
       propertyId={propertyId}
       propertyLabel={PROPERTY_LABELS[propertyId] ?? `Property ${propertyId}`}
+      searchParams={searchParams}
     />
   );
 }
