@@ -7,7 +7,7 @@
 // property_id in migration `staff_views_expose_property_id`.
 
 import { supabase } from '@/lib/supabase';
-import { fmtMoney, FX_LAK_PER_USD } from '@/lib/format';
+import { FX_LAK_PER_USD } from '@/lib/format';
 import { AnomalyCard } from './AnomalyCard';
 import { StaffShell } from './StaffShell';
 import { ArchivedStaffTable, type ArchivedRow } from './ArchivedStaffTable';
@@ -31,6 +31,7 @@ type Row = {
   dept_name: string;
   employment_type: string;
   monthly_salary: number;
+  salary_currency: string | null;
   hourly_cost_lak: number;
   hire_date: string | null;
   last_payroll_period: string | null;
@@ -40,6 +41,17 @@ type Row = {
   flag_missing_contract: boolean;
   flag_contract_expiring: boolean;
 };
+
+// USD per 1 unit — rough static rates. Real rates should come from gl.fx_rates.
+const TO_USD: Record<string, number> = {
+  USD: 1,
+  EUR: 1.08,
+  LAK: 1 / 21800,
+};
+function salaryToUsd(amount: number, ccy: string | null | undefined): number {
+  const rate = TO_USD[(ccy ?? 'LAK').toUpperCase()] ?? (1 / 21800);
+  return amount * rate;
+}
 
 const ISSUE_META: Record<string, { label: string; sub: string }> = {
   missing_hire_date: { label: 'Missing hire date', sub: 'Contract import gap — separate handover.' },
@@ -114,7 +126,7 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
       .from('v_staff_register_extended')
       .select(
         'staff_id, emp_id, full_name, position_title, dept_code, dept_name, ' +
-          'employment_type, monthly_salary, hourly_cost_lak, hire_date, ' +
+          'employment_type, monthly_salary, salary_currency, hourly_cost_lak, hire_date, ' +
           'last_payroll_period, last_payroll_total_usd, payslip_pdf_status, ' +
           'flag_missing_hire_date, flag_missing_contract, flag_contract_expiring'
       )
@@ -166,7 +178,19 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
   const selCph = selHc > 0 ? selCost / selHc : 0;
 
   const totalActive = safeRows.length;
-  const totalMonthlyLAK = safeRows.reduce((s, r) => s + Number(r.monthly_salary || 0), 0);
+  // Currency-aware sum: each row converts via its own salary_currency.
+  // Namkhan rows are LAK, Donna rows are EUR — same KPI in USD for both.
+  const totalMonthlyUSD = safeRows.reduce(
+    (s, r) => s + salaryToUsd(Number(r.monthly_salary || 0), r.salary_currency),
+    0
+  );
+  // Dominant currency for display labels
+  const ccyCounts: Record<string, number> = {};
+  for (const r of safeRows) {
+    const c = (r.salary_currency ?? 'LAK').toUpperCase();
+    ccyCounts[c] = (ccyCounts[c] ?? 0) + 1;
+  }
+  const dominantCcy = Object.entries(ccyCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'LAK';
   const totalFlags = safeAnoms.length;
 
   const eyebrow = propertyLabel
@@ -189,7 +213,7 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
         { label: 'Headcount paid', value: selHc, kind: 'count', hint: fmtPeriodLabel(selectedMonth) },
         { label: 'Company cost', value: selCost, kind: 'money', tone: 'neutral', hint: fmtPeriodLabel(selectedMonth) },
         { label: 'Cost / head', value: selCph, kind: 'money', hint: 'USD this month' },
-        { label: 'Monthly base', value: totalMonthlyLAK / FX_LAK_PER_USD, kind: 'money', hint: 'register sum · USD' },
+        { label: 'Monthly base', value: totalMonthlyUSD, kind: 'money', hint: `register sum · USD (from ${dominantCcy})` },
         { label: 'DQ flags', value: totalFlags, kind: 'count', tone: totalFlags > 0 ? 'warn' : 'pos', hint: 'anomalies' },
       ] satisfies KpiStripItem[]} />
 
@@ -289,7 +313,7 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
           textTransform: 'uppercase',
           color: 'var(--brass)',
         }}>
-          Staff register · {totalActive} active ▾ <span style={{ textTransform: 'none', letterSpacing: 'normal', color: 'var(--ink-mute)' }}>click row to drill down · {fmtMoney(totalMonthlyLAK, 'LAK')} monthly base</span>
+          Staff register · {totalActive} active ▾ <span style={{ textTransform: 'none', letterSpacing: 'normal', color: 'var(--ink-mute)' }}>click row to drill down · ${Math.round(totalMonthlyUSD).toLocaleString()} monthly base (USD from {dominantCcy})</span>
         </summary>
         <div style={{ marginTop: 10 }}>
           <StaffShell rows={safeRows} />
