@@ -1,11 +1,9 @@
 // app/revenue/demand/page.tsx — REDESIGN 2026-05-05 (recovery)
 import Page from '@/components/page/Page';
 import Panel from '@/components/page/Panel';
-import Brief from '@/components/page/Brief';
 import ArtifactActions from '@/components/page/ArtifactActions';
 import PeriodSelectorRow from '@/components/page/PeriodSelectorRow';
 import KpiBox from '@/components/kpi/KpiBox';
-import StatusPill from '@/components/ui/StatusPill';
 import { getPaceOtb } from '@/lib/data';
 import { resolvePeriod } from '@/lib/period';
 import DemandGraphs from './_components/DemandGraphs';
@@ -37,25 +35,6 @@ export default async function DemandPage({ searchParams }: Props) {
   const paceΔPct = total.stly ? (paceΔ / total.stly) * 100 : 0;
   const revΔ = total.rev - total.stlyRev;
   const revΔPct = total.stlyRev ? (revΔ / total.stlyRev) * 100 : 0;
-  let biggest = { month: '', delta: 0 };
-  rows.forEach((r) => { if (Math.abs(r.roomnights_delta) > Math.abs(biggest.delta)) biggest = { month: r.ci_month.slice(0, 7), delta: r.roomnights_delta }; });
-  const monthsAhead = rows.filter((r) => r.roomnights_delta > 0).length;
-  const monthsBehind = rows.filter((r) => r.roomnights_delta < 0).length;
-
-  // Brief — narrative read of demand for this window.
-  const briefSignal = `${period.label} · ${rows.length} months · ${monthsAhead} ahead / ${monthsBehind} behind STLY · pace Δ ${paceΔ >= 0 ? '+' : ''}${paceΔ} RN`;
-  const briefBody = `OTB ${total.otb.toLocaleString()} RN ($${(total.rev / 1000).toFixed(1)}k). STLY ${total.stly.toLocaleString()} RN ($${(total.stlyRev / 1000).toFixed(1)}k). Revenue Δ ${revΔ >= 0 ? '+' : ''}$${(revΔ / 1000).toFixed(1)}k (${revΔPct.toFixed(1)}%).`;
-  const good: string[] = [];
-  const bad:  string[] = [];
-  if (paceΔPct >= 5)            good.push(`Pace ${paceΔPct.toFixed(1)}% ahead of STLY — protect rate.`);
-  if (paceΔPct <= -5)           bad.push(`Pace ${paceΔPct.toFixed(1)}% behind STLY — open BAR floor or push direct.`);
-  if (monthsBehind > monthsAhead) bad.push(`${monthsBehind} months behind STLY (vs ${monthsAhead} ahead).`);
-  if (biggest.month && Math.abs(biggest.delta) > 50) {
-    if (biggest.delta > 0) good.push(`${biggest.month} pace +${biggest.delta} RN — strongest month.`);
-    else                    bad.push(`${biggest.month} pace ${biggest.delta} RN — softest month, intervene.`);
-  }
-  if (good.length === 0) good.push('No standout strengths flagged for this window.');
-  if (bad.length === 0)  bad.push('No leakage signals flagged for this window.');
 
   const ctx = (kind: 'panel' | 'kpi' | 'brief' | 'table', title: string, signal?: string) => ({ kind, title, signal, dept: 'revenue' as const });
 
@@ -65,33 +44,6 @@ export default async function DemandPage({ searchParams }: Props) {
       title={<>Find the <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>gap</em> before the calendar gets soft.</>}
       subPages={REVENUE_SUBPAGES}
     >
-      <Brief
-        brief={{ signal: briefSignal, body: briefBody, good, bad }}
-        actions={<ArtifactActions context={ctx('brief', `Demand · ${period.label}`, briefSignal)} />}
-      />
-
-      <Panel title="Demand status" eyebrow="evidence" actions={<ArtifactActions context={ctx('panel', 'Demand status')} />}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap', marginBottom: 8 }}>
-          <span><span className="t-eyebrow" style={{ marginRight: 8 }}>SOURCE</span><StatusPill tone="active">mv_pace_otb</StatusPill></span>
-          <span><span className="t-eyebrow" style={{ marginRight: 6 }}>WINDOW</span><span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-sm)' }}>{period.label}</span></span>
-          <span><span className="t-eyebrow" style={{ marginRight: 6 }}>MONTHS</span><span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-sm)', fontWeight: 600 }}>{rows.length}</span></span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 'var(--t-xs)' }}>
-          <span className="t-eyebrow" style={{ marginRight: 6 }}>AHEAD</span><StatusPill tone="active">{monthsAhead}</StatusPill>
-          <span style={{ fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>months &gt; STLY</span>
-          <span style={{ width: 16 }} />
-          <span className="t-eyebrow" style={{ marginRight: 6 }}>BEHIND</span><StatusPill tone={monthsBehind > 0 ? 'expired' : 'inactive'}>{monthsBehind}</StatusPill>
-          <span style={{ fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>months &lt; STLY</span>
-          {biggest.month && <span style={{ fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>biggest: {biggest.month} {biggest.delta >= 0 ? '+' : ''}{biggest.delta} RN</span>}
-        </div>
-      </Panel>
-
-      <div style={{ height: 14 }} />
-
-      <Panel title="Demand graphs" eyebrow="hero" actions={<ArtifactActions context={ctx('panel', 'Demand graphs', briefSignal)} />}>
-        <DemandGraphs rows={rows} />
-      </Panel>
-
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
         <KpiBox value={total.otb} unit="count" label="OTB Roomnights" tooltip="On-the-books room nights for the forward window. Source: pace_otb." />
         <KpiBox value={total.rev} unit="usd"   label="OTB Revenue"    tooltip="OTB revenue (USD) for the forward window." />
@@ -108,6 +60,9 @@ export default async function DemandPage({ searchParams }: Props) {
         preserve={{ seg: period.seg }}
       />
 
+      <Panel title="Demand graphs" eyebrow="hero" actions={<ArtifactActions context={ctx('panel', 'Demand graphs')} />}>
+        <DemandGraphs rows={rows} />
+      </Panel>
 
       <div style={{ height: 14 }} />
 

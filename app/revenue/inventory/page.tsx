@@ -3,10 +3,8 @@ import Page from '@/components/page/Page';
 import PeriodSelectorRow from '@/components/page/PeriodSelectorRow';
 import { REVENUE_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
-import StatusPill from '@/components/ui/StatusPill';
 import { getRateInventoryCalendar } from '@/lib/data';
 import { resolvePeriod } from '@/lib/period';
-import { fmtIsoDate } from '@/lib/format';
 import InventoryGraphs from './_components/InventoryGraphs';
 import InventoryTable, { type DayRow } from './_components/InventoryTableClient';
 
@@ -36,26 +34,6 @@ export default async function InventoryPage({ searchParams }: Props) {
 
   return (
     <Page eyebrow="Revenue · Inventory" title={<>Sell what you <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>have</em>, push rate where it's tight.</>} subPages={REVENUE_SUBPAGES}>
-      <div style={statusWrap}>
-        <div style={statusRow1}>
-          <div style={cell}><span className="t-eyebrow" style={{ marginRight: 8 }}>SOURCE</span><StatusPill tone="active">mv_rate_inventory_calendar</StatusPill></div>
-          <div style={cell}><span className="t-eyebrow" style={{ marginRight: 6 }}>WINDOW</span><span style={meta}>{period.label}</span><span style={metaDim}>· {period.rangeLabel}</span></div>
-          <div style={cell}><span className="t-eyebrow" style={{ marginRight: 6 }}>LAST DATE</span><span style={meta}>{fmtIsoDate(lastShop)}</span></div>
-          <span style={{ flex: 1 }} />
-        </div>
-        <div style={statusRow2}>
-          <span className="t-eyebrow" style={{ marginRight: 6 }}>SELLOUTS</span>
-          <StatusPill tone={sellouts > 0 ? 'expired' : 'active'}>{sellouts}</StatusPill>
-          <span style={metaDim}>· 0 rooms</span>
-          <span style={{ width: 16 }} />
-          <span className="t-eyebrow" style={{ marginRight: 6 }}>TIGHT</span>
-          <StatusPill tone={tightDays > 5 ? 'pending' : 'inactive'}>{tightDays}</StatusPill>
-          <span style={metaDim}>· 1–3 rooms · push rate</span>
-          <span style={{ flex: 1 }} />
-          <span style={metaDim}>{days.length} days · avg {avgAvail.toFixed(1)} avail</span>
-        </div>
-      </div>
-      <InventoryGraphs rows={days} />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
         <KpiBox value={days.length} unit="count" label="Days in window" tooltip="Distinct inventory_date values in the window. Source: rate_inventory." />
         <KpiBox value={avgAvail}    unit="nights" label="Avg available" tooltip="Mean available_rooms across all room types per day in the window." />
@@ -71,6 +49,8 @@ export default async function InventoryPage({ searchParams }: Props) {
         includeForward
         preserve={{ seg: period.seg }}
       />
+
+      <InventoryGraphs rows={days} />
 
       <div style={{ marginTop: 18 }}>
         <SectionHead title="Inventory" emphasis="per date" sub={`${days.length} days · sellable inventory + rate spread`} source="mv_rate_inventory_calendar" />

@@ -2,12 +2,12 @@
 // compset-style: PageHeader + status header + 3 graphs + KpiBox + DataTable.
 
 import Page from '@/components/page/Page';
+import PeriodSelectorRow from '@/components/page/PeriodSelectorRow';
 import { REVENUE_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import { resolvePeriod } from '@/lib/period';
 
-import RatePlansStatusHeader from './_components/RatePlansStatusHeader';
 import RatePlansGraphs, {
   type DailyTrendRow,
   type TypeMixRow,
@@ -49,11 +49,6 @@ export default async function RatePlansPage({ searchParams }: Props) {
       .filter((n: string) => n && masterNames.has(n)),
   );
   const activeMasterCount = activeMasterNames.size;
-  const lastBookingDate = (recent90 ?? [])
-    .map((r: any) => (r.booking_date as string)?.slice(0, 10))
-    .filter(Boolean)
-    .sort()
-    .at(-1) ?? null;
 
   const { data: windowRows } = await supabase
     .from('v_rate_plan_perf')
@@ -166,24 +161,23 @@ export default async function RatePlansPage({ searchParams }: Props) {
         }}>↗ Dead plans (90d)</a>
       }
     >
-      <RatePlansStatusHeader
-        lastBookingDate={lastBookingDate}
-        activeMasterCount={activeMasterCount}
-        bookingInWindow={plansBookingInWindow}
-        sleepingCount={sleepingRows.length}
-        orphanCount={orphanRows.length}
-        topTypes={typeRollup.slice(0, 5).map((t) => ({ type: t.type, mix: t.mix }))}
-        top3Pct={top3Pct}
-        periodLabel={period.label}
-        rangeLabel={period.rangeLabel}
-      />
-      <RatePlansGraphs trend={trend} typeMix={typeRollup} cancel={cancelData} />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 14 }}>
         <KpiBox value={null} unit="text" valueText={`${plansBookingInWindow}/${activeMasterCount}`} label={`Plans booking ${period.label}`} tooltip={`Plans with at least one reservation in ${period.label} ÷ active master plans.`} />
         <KpiBox value={sleepingRows.length} unit="count" label="Sleeping plans 90d" tooltip="Active plans with 0 bookings in the last 90 days. Click 'Dead plans' top-right for the cleanup list." />
         <KpiBox value={top3Pct} unit="pct" label="Top 3 concentration" tooltip="Share of revenue captured by the top 3 plans. > 60% = healthy clarity, < 40% = scattered." />
         <KpiBox value={totalRev} unit="usd" label={`Revenue ${period.label}`} tooltip="Sum of reservation total_amount attributed to a rate plan in this window." />
       </div>
+
+      {/* Canonical period chooser — under the KPI tile row. */}
+      <PeriodSelectorRow
+        basePath="/revenue/rateplans"
+        win={period.win}
+        cmp={period.cmp}
+        preserve={{ seg: period.seg }}
+      />
+
+      <RatePlansGraphs trend={trend} typeMix={typeRollup} cancel={cancelData} />
+
       <div style={{ marginTop: 18 }}>
         <SectionHead title="Plans" emphasis="ranked by revenue" sub={`${period.label} · active master plans only${hiddenOrphanInWindow > 0 ? ` · ${hiddenOrphanInWindow} orphan/retired hidden — see below` : ''}`} source="v_rate_plan_perf" />
         <PlansTable rows={planRows} />

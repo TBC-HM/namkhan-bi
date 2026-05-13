@@ -6,7 +6,6 @@ import { getRoomTypes, getRatePlans, getRateInventory } from '@/lib/pricing';
 import { getPricingKpis } from '@/lib/pricingKpis';
 import Page from '@/components/page/Page';
 import Panel from '@/components/page/Panel';
-import Brief from '@/components/page/Brief';
 import ArtifactActions from '@/components/page/ArtifactActions';
 import PeriodSelectorRow from '@/components/page/PeriodSelectorRow';
 import KpiBox from '@/components/kpi/KpiBox';
@@ -157,18 +156,6 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
     next7: 'Next 7d', next30: 'Next 30d', next90: 'Next 90d', next180: 'Next 180d', next365: 'Next 365d',
   };
 
-  // Brief — narrative read of pricing surface for this window.
-  const briefSignal = `${winLabels[win]} · ${totalInv.toLocaleString()} inventory cells · avg $${avgRate.toFixed(0)} · BAR floor $${minRate.toFixed(0)} · ceiling $${maxRate.toFixed(0)}`;
-  const briefBody = `${roomTypes.length} room types × ${planAggs.length} rate plans across ${period.days} nights. ${stopSells} stop-sell cells, ${minStayRows} LOS-restricted.`;
-  const good: string[] = [];
-  const bad:  string[] = [];
-  if (maxRate / Math.max(1, minRate) > 1.5) good.push(`Spread $${minRate.toFixed(0)} → $${maxRate.toFixed(0)} — yieldable.`);
-  if (stopSells > 0)  bad.push(`${stopSells} stop-sell cells — review for missed demand.`);
-  if (minStayRows > 0) good.push(`${minStayRows} LOS-restricted nights — protecting peak.`);
-  if (totalInv === 0)  bad.push(`No inventory cells in window — check Cloudbeds sync.`);
-  if (good.length === 0) good.push('No standout strengths flagged for this window.');
-  if (bad.length === 0)  bad.push('No leakage signals flagged for this window.');
-
   const ctx = (kind: 'panel' | 'kpi' | 'brief' | 'table', title: string, signal?: string) => ({ kind, title, signal, dept: 'revenue' as const });
 
   return (
@@ -182,51 +169,6 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
           opacity: 0.35; pointer-events: none;
         }
       `}</style>
-
-      <Brief
-        brief={{ signal: briefSignal, body: briefBody, good, bad }}
-        actions={<ArtifactActions context={ctx('brief', `Pricing · ${winLabels[win]}`, briefSignal)} />}
-      />
-
-      {/* PBS 2026-05-09 #35 (pricing top-menu adapt): secondary nav strip
-          for pricing-internal sub-pages so the parent revenue strip stays
-          consistent and PBS gets a second-tier menu while inside Pricing. */}
-      <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 14, borderBottom: '1px solid rgba(168,133,74,0.18)', paddingBottom: 8 }}>
-        {[
-          { href: '/revenue/pricing',          label: 'Overview',     active: true  },
-          { href: '/revenue/pricing/calendar', label: 'Calendar',     active: false },
-          { href: '/revenue/parity',           label: 'Parity ↗',     active: false },
-          { href: '/revenue/compset',          label: 'Compset ↗',    active: false },
-        ].map((t) => (
-          <a key={t.label} href={t.href} style={{
-            padding: '6px 12px',
-            fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-            fontSize: 11, letterSpacing: '0.10em', textTransform: 'uppercase', fontWeight: 600,
-            color: t.active ? '#0a0a0a' : '#f0e5cb',
-            background: t.active ? '#a8854a' : 'transparent',
-            border: '1px solid ' + (t.active ? '#a8854a' : '#2a2520'),
-            borderRadius: 4, textDecoration: 'none',
-          }}>{t.label}</a>
-        ))}
-      </div>
-
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 10 }}>
-        <span style={{ fontSize: "var(--t-sm)", color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Granularity</span>
-        {(['day', 'week', 'month'] as const).map((g) => {
-          const active = g === gran;
-          const params = new URLSearchParams();
-          if (win !== 'next90') params.set('win', win);
-          if (g !== 'month') params.set('gran', g);
-          const href = `/revenue/pricing${params.toString() ? '?' + params.toString() : ''}`;
-          return (
-            <a key={g} href={href} style={{
-              padding: '4px 12px', borderRadius: 4, border: '1px solid var(--line-soft)',
-              background: active ? 'var(--ink-soft)' : 'var(--paper-warm)', color: active ? 'var(--paper-warm)' : 'var(--ink-soft)',
-              fontSize: "var(--t-base)", textDecoration: 'none', textTransform: 'capitalize',
-            }}>{g}</a>
-          );
-        })}
-      </div>
 
       {/* PBS 2026-05-09: above-the-fold KPI strip wired to today's pricing
           surface — Current BAR · Comp gap · Occupancy fence · Sellable count.
@@ -296,27 +238,54 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
         <KpiBox value={minStayRows} unit="count" label="Min-stay"     tooltip="Cells with minimum_stay > 1. Filters short stays." />
       </div>
 
-      {/* Canonical period chooser — always under the KPI tile row. */}
+      {/* Canonical period chooser + dropdowns + sub-nav — under the KPI tile row. */}
       <PeriodSelectorRow
         basePath="/revenue/pricing"
         win={period.win}
         cmp={period.cmp}
         includeForward
         preserve={{ gran }}
+        rightSlot={
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span className="t-eyebrow" style={{ color: 'var(--ink-mute)' }}>GRANULARITY</span>
+            {(['day', 'week', 'month'] as const).map((g) => {
+              const active = g === gran;
+              const params = new URLSearchParams();
+              if (win !== 'next90') params.set('win', win);
+              if (g !== 'month') params.set('gran', g);
+              const href = `/revenue/pricing${params.toString() ? '?' + params.toString() : ''}`;
+              return (
+                <a key={g} href={href} style={{
+                  padding: '4px 12px', borderRadius: 4, border: '1px solid var(--paper-deep)',
+                  background: active ? 'var(--moss)' : 'var(--paper-warm)',
+                  color: active ? 'var(--paper-warm)' : 'var(--ink-soft)',
+                  fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
+                  letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase',
+                  fontWeight: 600, textDecoration: 'none',
+                }}>{g}</a>
+              );
+            })}
+            <span style={{ width: 8 }} />
+            {[
+              { href: '/revenue/pricing',          label: 'Overview',     active: true  },
+              { href: '/revenue/pricing/calendar', label: 'Calendar',     active: false },
+              { href: '/revenue/parity',           label: 'Parity ↗',     active: false },
+              { href: '/revenue/compset',          label: 'Compset ↗',    active: false },
+            ].map((t) => (
+              <a key={t.label} href={t.href} style={{
+                padding: '4px 12px',
+                fontFamily: 'var(--mono)',
+                fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)',
+                textTransform: 'uppercase', fontWeight: 600,
+                color: t.active ? 'var(--paper-warm)' : 'var(--ink-soft)',
+                background: t.active ? 'var(--brass)' : 'var(--paper-warm)',
+                border: '1px solid ' + (t.active ? 'var(--brass)' : 'var(--paper-deep)'),
+                borderRadius: 4, textDecoration: 'none',
+              }}>{t.label}</a>
+            ))}
+          </div>
+        }
       />
-
-      {/* "What's open today" — top 3 same-day rate alerts. Mirrors the Pulse
-          hero pattern. Data source not yet wired (no rate-alert view in
-          rate_inventory). Placeholder per PBS directive: don't fabricate. */}
-      <Panel
-        title="What's open today"
-        eyebrow="awaiting data"
-        actions={<ArtifactActions context={ctx('panel', "What's open today")} />}
-      >
-        <div style={{ padding: '16px 4px', color: 'var(--ink-mute)', fontSize: 'var(--t-sm)', fontStyle: 'italic' }}>
-          Will surface the top 3 same-day rate alerts (cells where today's rate ≠ yesterday's, or comp gap exceeds threshold). Awaiting a `v_rate_alerts_today` view over `rate_inventory` × `compset_rates`.
-        </div>
-      </Panel>
 
       <div style={{ height: 14 }} />
 

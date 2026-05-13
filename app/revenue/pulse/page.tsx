@@ -12,7 +12,6 @@
 import KpiBox from '@/components/kpi/KpiBox';
 import Page from '@/components/page/Page';
 import Panel from '@/components/page/Panel';
-import Brief from '@/components/page/Brief';
 import ArtifactActions from '@/components/page/ArtifactActions';
 import PeriodSelectorRow from '@/components/page/PeriodSelectorRow';
 import { REVENUE_SUBPAGES } from '../_subpages';
@@ -34,7 +33,6 @@ import {
 } from '@/lib/pulseData';
 import { dailyRevenue90dSvg, channelMix30dSvg } from '@/lib/svgCharts';
 
-import PulseStatusHeader from './_components/PulseStatusHeader';
 import PulseGraphsGrid from './_components/PulseGraphsGrid';
 import PulseAlertsPanel from './_components/PulseAlertsPanel';
 import PulseTodayPanel from './_components/PulseTodayPanel';
@@ -274,21 +272,6 @@ export default async function PulsePage({ searchParams }: Props) {
     { title: 'Booking pace curve', sub: '−30d → +30d · Actual / OTB / STLY / Budget', svg: paceCurveMiniSvg(paceCurve) },
   ];
 
-  // Brief — narrative read of the pulse for this period.
-  const briefSignal = `${period.label} · OCC ${occ.toFixed(0)}% · ADR $${adr.toFixed(0)} · RevPAR $${revpar.toFixed(0)} · TRevPAR $${trevpar.toFixed(0)}`;
-  const briefBody = `${alerts.length} tactical alert${alerts.length === 1 ? '' : 's'} live, ${decisions.length} decision${decisions.length === 1 ? '' : 's'} queued. Cancel ${(extended.cancelPct ?? 0).toFixed(1)}% · lead time ${(extended.leadTimeDays ?? 0).toFixed(0)}d · ALOS ${(extended.alosNights ?? 0).toFixed(1)}.`;
-  const good: string[] = [];
-  const bad:  string[] = [];
-  if (occ >= 70)        good.push(`Occupancy ${occ.toFixed(0)}% — strong base.`);
-  if (occ < 50)         bad.push(`Occupancy ${occ.toFixed(0)}% — soft; check pricing & channel mix.`);
-  if (adr >= 200)       good.push(`ADR $${adr.toFixed(0)} — premium pricing holding.`);
-  if (revpar >= 150)    good.push(`RevPAR $${revpar.toFixed(0)} — top-line healthy.`);
-  if ((extended.cancelPct ?? 0) > 10) bad.push(`Cancel rate ${(extended.cancelPct ?? 0).toFixed(1)}% — review non-refundable mix.`);
-  if (alerts.length > 0)    bad.push(`${alerts.length} tactical alerts open — review below.`);
-  if (decisions.length > 0) good.push(`${decisions.length} decisions queued for action.`);
-  if (good.length === 0) good.push('No standout strengths flagged for this period.');
-  if (bad.length === 0)  bad.push('No leakage signals flagged for this period.');
-
   const ctx = (kind: 'panel' | 'kpi' | 'brief' | 'table', title: string, signal?: string) => ({ kind, title, signal, dept: 'revenue' as const });
 
   return (
@@ -296,36 +279,36 @@ export default async function PulsePage({ searchParams }: Props) {
       eyebrow="Revenue · Pulse"
       title={<>What's <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>open</em>, right now.</>}
       subPages={REVENUE_SUBPAGES}
-      kpiTiles={[
-        { k: 'OCC',    v: `${occ.toFixed(0)}%`,        d: period.label },
-        { k: 'ADR',    v: `$${Math.round(adr).toLocaleString()}`,   d: period.label },
-        { k: 'RevPAR', v: `$${Math.round(revpar).toLocaleString()}`, d: period.label },
-        { k: 'TRevPAR',v: `$${Math.round(trevpar).toLocaleString()}`,d: period.label },
-        { k: 'Cancel', v: `${(extended.cancelPct ?? 0).toFixed(1)}%`, d: 'cancellations' },
-        { k: 'Lead',   v: `${Math.round(extended.leadTimeDays ?? 0)}d`, d: 'avg book→stay' },
-      ]}
     >
-      <Brief
-        brief={{ signal: briefSignal, body: briefBody, good, bad }}
-        actions={<ArtifactActions context={ctx('brief', `Pulse · ${period.label}`, briefSignal)} />}
+      {/* ─── KPI strip ───────────────────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+        <KpiBox value={occ} unit="pct"  label="Occupancy"
+          compare={cmpOcc != null ? { value: cmpOcc, unit: 'pp', period: cmpLabel } : undefined}
+          tooltip={`Rooms sold ÷ rooms available × 100. Window: ${period.label}. Source: kpi_daily (Cloudbeds).`} />
+        <KpiBox value={adr} unit="usd"  label="ADR"
+          compare={cmpAdr != null ? { value: cmpAdr, unit: 'usd', period: cmpLabel } : undefined}
+          tooltip={`Average daily rate = rooms revenue ÷ rooms sold. Window: ${period.label}. Source: kpi_daily.`} />
+        <KpiBox value={revpar} unit="usd" label="RevPAR"
+          compare={cmpRevpar != null ? { value: cmpRevpar, unit: 'usd', period: cmpLabel } : undefined}
+          tooltip={`Revenue per available room = rooms revenue ÷ rooms available. Window: ${period.label}. Source: kpi_daily.`} />
+        <KpiBox value={trevpar} unit="usd" label="TRevPAR"
+          compare={cmpTrevpar != null ? { value: cmpTrevpar, unit: 'usd', period: cmpLabel } : undefined}
+          tooltip={`Total revenue per available room (rooms + F&B + spa + activities). Window: ${period.label}. Source: kpi_daily.`} />
+        <KpiBox value={extended.cancelPct ?? 0} unit="pct" label="Cancel %"   tooltip={`Cancelled reservations ÷ total reservations × 100. Window: ${period.label}. Watch ≤ 10%.`} />
+        <KpiBox value={extended.noShowPct ?? 0} unit="pct" label="No-show %"  tooltip={`No-show reservations ÷ total reservations × 100. Window: ${period.label}.`} />
+        <KpiBox value={extended.leadTimeDays ?? 0} unit="nights" dp={0} label="Lead time (d)" tooltip="Mean days from booking to arrival in this window." />
+        <KpiBox value={extended.alosNights ?? 0} unit="nights" dp={1} label="ALOS"            tooltip="Average length of stay (room-nights ÷ stays) in this window." />
+      </div>
+
+      {/* Canonical period chooser — under the KPI tile row. */}
+      <PeriodSelectorRow
+        basePath="/revenue/pulse"
+        win={period.win}
+        cmp={period.cmp}
+        preserve={{ seg: period.seg, cap: period.capacityMode }}
       />
 
-      <Panel title="Pulse status" eyebrow="evidence" actions={<ArtifactActions context={ctx('panel', 'Pulse status')} />}>
-        <PulseStatusHeader
-          periodLabel={period.label}
-          rangeLabel={period.rangeLabel}
-          cmpLabel={period.cmpLabel}
-          segLabel={period.segLabel}
-          win={period.win}
-          days={period.days}
-          alertCount={alerts.length}
-          decisionCount={decisions.length}
-        />
-      </Panel>
-
-      <div style={{ height: 14 }} />
-
-      {/* ─── First fold: 3-column action hero ─────────────────────────── */}
+      {/* ─── Graphs: 3-col hero ─────────────────────────────────────── */}
       <div
         style={{
           display: 'grid',
@@ -366,7 +349,7 @@ export default async function PulsePage({ searchParams }: Props) {
 
       <div style={{ height: 14 }} />
 
-      {/* ─── Second fold: ONE big pace curve ───────────────────────────── */}
+      {/* ─── Graphs: big pace curve ─────────────────────────────────── */}
       <Panel
         title="Pace"
         eyebrow="single chart"
@@ -377,57 +360,20 @@ export default async function PulsePage({ searchParams }: Props) {
 
       <div style={{ height: 14 }} />
 
-      {/* ─── Third fold: 8-tile signals strip ──────────────────────────── */}
-      <Panel
-        title="Signals"
-        eyebrow="kpi strip"
-        actions={<ArtifactActions context={ctx('panel', 'Signals · 8 KPIs', briefSignal)} />}
-      >
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-          <KpiBox value={occ} unit="pct"  label="Occupancy"
-            compare={cmpOcc != null ? { value: cmpOcc, unit: 'pp', period: cmpLabel } : undefined}
-            tooltip={`Rooms sold ÷ rooms available × 100. Window: ${period.label}. Source: kpi_daily (Cloudbeds).`} />
-          <KpiBox value={adr} unit="usd"  label="ADR"
-            compare={cmpAdr != null ? { value: cmpAdr, unit: 'usd', period: cmpLabel } : undefined}
-            tooltip={`Average daily rate = rooms revenue ÷ rooms sold. Window: ${period.label}. Source: kpi_daily.`} />
-          <KpiBox value={revpar} unit="usd" label="RevPAR"
-            compare={cmpRevpar != null ? { value: cmpRevpar, unit: 'usd', period: cmpLabel } : undefined}
-            tooltip={`Revenue per available room = rooms revenue ÷ rooms available. Window: ${period.label}. Source: kpi_daily.`} />
-          <KpiBox value={trevpar} unit="usd" label="TRevPAR"
-            compare={cmpTrevpar != null ? { value: cmpTrevpar, unit: 'usd', period: cmpLabel } : undefined}
-            tooltip={`Total revenue per available room (rooms + F&B + spa + activities). Window: ${period.label}. Source: kpi_daily.`} />
-          <KpiBox value={extended.cancelPct ?? 0} unit="pct" label="Cancel %"   tooltip={`Cancelled reservations ÷ total reservations × 100. Window: ${period.label}. Watch ≤ 10%.`} />
-          <KpiBox value={extended.noShowPct ?? 0} unit="pct" label="No-show %"  tooltip={`No-show reservations ÷ total reservations × 100. Window: ${period.label}.`} />
-          <KpiBox value={extended.leadTimeDays ?? 0} unit="nights" dp={0} label="Lead time (d)" tooltip="Mean days from booking to arrival in this window." />
-          <KpiBox value={extended.alosNights ?? 0} unit="nights" dp={1} label="ALOS"            tooltip="Average length of stay (room-nights ÷ stays) in this window." />
-        </div>
-
-      {/* Canonical period chooser — under the KPI tile row. */}
-      <PeriodSelectorRow
-        basePath="/revenue/pulse"
-        win={period.win}
-        cmp={period.cmp}
-        preserve={{ seg: period.seg, cap: period.capacityMode }}
-      />
-
-      </Panel>
-
-      <div style={{ height: 14 }} />
-
-      {/* ─── Footer: decisions queued ──────────────────────────────────── */}
-      <Panel title="Decisions queued" eyebrow="actionable" actions={<ArtifactActions context={ctx('panel', 'Decisions queued')} />}>
-        <PulseAlertsPanel alerts={alerts} decisions={decisions} />
-      </Panel>
-
-      <div style={{ height: 14 }} />
-
-      {/* ─── All charts (collapsed by default) ─────────────────────────── */}
+      {/* ─── Graphs: all charts (collapsed) ─────────────────────────── */}
       <details style={detailsStyle}>
         <summary style={summaryStyle}>All charts <span style={summaryHint}>· daily rev · channel mix · OCC by RT · ADR×OCC · pickup · pace mini</span></summary>
         <div style={{ marginTop: 12 }}>
           <PulseGraphsGrid charts={charts} />
         </div>
       </details>
+
+      <div style={{ height: 14 }} />
+
+      {/* ─── Tables: decisions queued ───────────────────────────────── */}
+      <Panel title="Decisions queued" eyebrow="actionable" actions={<ArtifactActions context={ctx('panel', 'Decisions queued')} />}>
+        <PulseAlertsPanel alerts={alerts} decisions={decisions} />
+      </Panel>
     </Page>
   );
 }

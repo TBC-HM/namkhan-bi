@@ -7,15 +7,13 @@
 import KpiBox from '@/components/kpi/KpiBox';
 import Page from '@/components/page/Page';
 import Panel from '@/components/page/Panel';
-import Brief from '@/components/page/Brief';
 import ArtifactActions from '@/components/page/ArtifactActions';
 import PeriodSelectorRow from '@/components/page/PeriodSelectorRow';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import { resolvePeriod, type WindowKey } from '@/lib/period';
-import { capacityFor, capacityRnRange, CAPACITY_PIVOT, CAPACITY_PRE, CAPACITY_POST } from '@/lib/capacity';
+import { capacityFor, capacityRnRange } from '@/lib/capacity';
 import { getPaceCurve } from '@/lib/pulseData';
 
-import PaceStatusHeader from './_components/PaceStatusHeader';
 import PaceGraphs, { type BucketRow } from './_components/PaceGraphs';
 import PaceBucketsTable from './_components/PaceTableClient';
 import { REVENUE_SUBPAGES } from '../_subpages';
@@ -168,8 +166,6 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
   const capacityRn = capacityRnRange(fromIso, toIso);
   const occ = capacityRn > 0 ? (totalRns / capacityRn) * 100 : 0;
   const cxlRate = totalRns + totalCxl > 0 ? (totalCxl / (totalRns + totalCxl)) * 100 : 0;
-  const straddles = fromIso < CAPACITY_PIVOT && toIso >= CAPACITY_PIVOT;
-  const stlyCoverage = stlyMap.size;
 
   const buckets = bucketRows(rows, gran, stlyMap, fromIso, toIso);
   const stlyRnTotal = buckets.reduce((s, b) => s + b.stlyRn, 0);
@@ -188,26 +184,9 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
   const cmpAdrDelta = cmpActive ? adr - stlyAdr : null;
   const cmpOccDelta = cmpActive ? occ - stlyOcc : null;
 
-  const winLabels: Record<string, string> = {
-    next7: 'Next 7d', next30: 'Next 30d', next90: 'Next 90d', next180: 'Next 180d', next365: 'Next 365d',
-  };
   const granLabels: Record<string, string> = { day: 'Day', week: 'Week', month: 'Month' };
 
   const formatLabel = (key: string) => (gran === 'month' ? fmtMonth(key) : key.slice(5));
-
-  // Brief — narrative read of the pace state for this window.
-  const briefSignal = `${winLabels[win]} · ${totalRns.toLocaleString()} OTB RN · OCC ${occ.toFixed(1)}% · ADR $${adr.toFixed(0)} · vs STLY ${stlyPctOverall.toFixed(0)}%`;
-  const briefBody = `${period.days} nights between ${fromIso} and ${toIso}. STLY coverage: ${stlyCoverage} of ${period.days} days.`;
-  const good: string[] = [];
-  const bad:  string[] = [];
-  if (stlyPctOverall >= 100) good.push(`Pace ${stlyPctOverall.toFixed(0)}% of STLY — protect rate ladder.`);
-  else if (stlyPctOverall < 90 && stlyRnTotal > 0) bad.push(`Pace ${stlyPctOverall.toFixed(0)}% of STLY — open BAR floor or push direct promo.`);
-  if (cxlRate > 8) bad.push(`Cancel rate ${cxlRate.toFixed(1)}% — review non-refundable mix.`);
-  else if (cxlRate < 4 && totalRns > 0) good.push(`Cancel rate ${cxlRate.toFixed(1)}% — healthy.`);
-  if (occ >= 75) good.push(`OTB occupancy ${occ.toFixed(0)}% — strong forward base.`);
-  if (occ < 50 && period.days > 7) bad.push(`OTB occupancy ${occ.toFixed(0)}% — pickup gap; check pricing & channel mix.`);
-  if (good.length === 0) good.push('No standout opportunities flagged for this window.');
-  if (bad.length === 0)  bad.push('No leakage signals flagged for this window.');
 
   const ctx = (kind: 'panel' | 'kpi' | 'brief' | 'table', title: string, signal?: string) => ({ kind, title, signal, dept: 'revenue' as const });
 
@@ -223,32 +202,6 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
           pointer-events: none;
         }
       `}</style>
-
-      <Brief
-        brief={{ signal: briefSignal, body: briefBody, good, bad }}
-        actions={<ArtifactActions context={ctx('brief', `Pace · ${winLabels[win]}`, briefSignal)} />}
-      />
-
-      <Panel title="Pace status" eyebrow="evidence" actions={<ArtifactActions context={ctx('panel', 'Pace status')} />}>
-        <PaceStatusHeader
-          windowLabel={winLabels[win]}
-          rangeLabel={`${fromIso} → ${toIso}`}
-          capacityRn={capacityRn}
-          straddles={straddles}
-          capacityPivot={CAPACITY_PIVOT}
-          capacityPre={CAPACITY_PRE}
-          capacityPost={CAPACITY_POST}
-          stlySource="actuals_proxy"
-          stlyCoverage={stlyCoverage}
-          totalDays={period.days}
-        />
-      </Panel>
-
-      <div style={{ height: 14 }} />
-
-      <Panel title="Pace curves & buckets" eyebrow="hero" actions={<ArtifactActions context={ctx('panel', 'Pace curves & buckets', briefSignal)} />}>
-        <PaceGraphs paceCurve={paceCurve} buckets={buckets} formatLabel={formatLabel} />
-      </Panel>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
         <KpiBox value={totalRns} unit="count" label="OTB room nights"
@@ -267,52 +220,53 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
         <KpiBox value={stlyPctOverall} unit="pct" label="vs STLY"     tooltip="OTB this window vs same time last year (% change)." />
       </div>
 
-      {/* Canonical period chooser — under the KPI tile row. */}
+      {/* Canonical period chooser + granularity dropdown — under the KPI tile row. */}
       <PeriodSelectorRow
         basePath="/revenue/pace"
         win={period.win}
         cmp={period.cmp}
         includeForward
         preserve={{ gran }}
+        rightSlot={
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <span className="t-eyebrow">GRANULARITY</span>
+            {(['day', 'week', 'month'] as const).map((g) => {
+              const active = g === gran;
+              const params = new URLSearchParams();
+              if (win !== 'next90') params.set('win', win);
+              if (g !== 'month') params.set('gran', g);
+              const href = `/revenue/pace${params.toString() ? '?' + params.toString() : ''}`;
+              return (
+                <a
+                  key={g}
+                  href={href}
+                  style={{
+                    padding: '4px 12px',
+                    borderRadius: 4,
+                    border: '1px solid var(--paper-deep)',
+                    background: active ? 'var(--moss)' : 'var(--paper-warm)',
+                    color: active ? 'var(--paper-warm)' : 'var(--ink-soft)',
+                    fontFamily: 'var(--mono)',
+                    fontSize: 'var(--t-xs)',
+                    letterSpacing: 'var(--ls-extra)',
+                    textTransform: 'uppercase',
+                    fontWeight: 600,
+                    textDecoration: 'none',
+                  }}
+                >
+                  {granLabels[g]}
+                </a>
+              );
+            })}
+          </div>
+        }
       />
 
+      <Panel title="Pace curves & buckets" eyebrow="hero" actions={<ArtifactActions context={ctx('panel', 'Pace curves & buckets')} />}>
+        <PaceGraphs paceCurve={paceCurve} buckets={buckets} formatLabel={formatLabel} />
+      </Panel>
 
-      {/* Granularity chips */}
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 18, marginBottom: 8 }}>
-        <span className="t-eyebrow">GRANULARITY</span>
-        {(['day', 'week', 'month'] as const).map((g) => {
-          const active = g === gran;
-          const params = new URLSearchParams();
-          if (win !== 'next90') params.set('win', win);
-          if (g !== 'month') params.set('gran', g);
-          const href = `/revenue/pace${params.toString() ? '?' + params.toString() : ''}`;
-          return (
-            <a
-              key={g}
-              href={href}
-              style={{
-                padding: '4px 12px',
-                borderRadius: 4,
-                border: '1px solid var(--paper-deep)',
-                background: active ? 'var(--moss)' : 'var(--paper-warm)',
-                color: active ? 'var(--paper-warm)' : 'var(--ink-soft)',
-                fontFamily: 'var(--mono)',
-                fontSize: 'var(--t-xs)',
-                letterSpacing: 'var(--ls-extra)',
-                textTransform: 'uppercase',
-                fontWeight: 600,
-                textDecoration: 'none',
-              }}
-            >
-              {granLabels[g]}
-            </a>
-          );
-        })}
-        <span style={{ flex: 1 }} />
-        <span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>
-          {buckets.length} bucket{buckets.length === 1 ? '' : 's'} · forward windows in top filter strip ↑
-        </span>
-      </div>
+      <div style={{ height: 14 }} />
 
       <Panel
         title={`Pace by stay-bucket · ${buckets.length} ${gran}s`}

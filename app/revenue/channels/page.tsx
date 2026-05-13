@@ -15,11 +15,9 @@
 import Link from 'next/link';
 import Page from '@/components/page/Page';
 import Panel from '@/components/page/Panel';
-import Brief from '@/components/page/Brief';
 import ArtifactActions from '@/components/page/ArtifactActions';
 import PeriodSelectorRow from '@/components/page/PeriodSelectorRow';
 import KpiBox from '@/components/kpi/KpiBox';
-import Insight from '@/components/sections/Insight';
 import { resolvePeriod } from '@/lib/period';
 import {
   getChannelEconomics, getChannelEconomicsForRange, getChannelXRoomtype, pivotChannelXRoom,
@@ -158,21 +156,6 @@ export default async function ChannelsPage({ searchParams }: Props) {
   // Pivot matrix
   const { sources: matSources, roomTypes: matRooms, cells, sourceTotals } = pivotChannelXRoom(matrix);
 
-  // Brief — narrative read of channel mix for the period.
-  const briefSignal = `${period.label} · Direct ${directMix.toFixed(0)}% · OTA ${otaMix.toFixed(0)}% · Wholesale ${wholesaleMix.toFixed(0)}% · Comm ${commissionPctOfRev.toFixed(1)}% of rev`;
-  const briefBody = `${channels.length} active sources, $${(totalRev / 1000).toFixed(1)}k gross. Avg lead ${avgLead.toFixed(0)}d. Channel cost / occ RN $${channelCostPerOcc.toFixed(0)}.`;
-  const good: string[] = [];
-  const bad:  string[] = [];
-  if (directMix >= 35)            good.push(`Direct mix ${directMix.toFixed(0)}% — above 35% target.`);
-  if (directMix < 35)             bad.push(`Direct mix ${directMix.toFixed(0)}% — below 35% target; push direct.`);
-  if (otaMix > 60)                bad.push(`OTA mix ${otaMix.toFixed(0)}% — heavy OTA dependency.`);
-  if (commissionPctOfRev > 12)    bad.push(`Commission ${commissionPctOfRev.toFixed(1)}% of rev — push direct to reduce.`);
-  if (wholesaleMix > 20)          bad.push(`Wholesale mix ${wholesaleMix.toFixed(0)}% — leakage risk.`);
-  if (worstCancel.name && worstCancel.pct > 25) bad.push(`${worstCancel.name} cancel rate ${worstCancel.pct.toFixed(1)}%.`);
-  if (channelCostPerOcc < 30 && totalRoomnights > 0) good.push(`Channel cost / occ RN $${channelCostPerOcc.toFixed(0)} — efficient.`);
-  if (good.length === 0) good.push('No standout strengths flagged for this window.');
-  if (bad.length === 0)  bad.push('No leakage signals flagged for this window.');
-
   const ctx = (kind: 'panel' | 'kpi' | 'brief' | 'table', title: string, signal?: string) => ({ kind, title, signal, dept: 'revenue' as const });
 
   return (
@@ -181,11 +164,6 @@ export default async function ChannelsPage({ searchParams }: Props) {
       title={<>Channel <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>performance</em>.</>}
       subPages={REVENUE_SUBPAGES}
     >
-      <Brief
-        brief={{ signal: briefSignal, body: briefBody, good, bad }}
-        actions={<ArtifactActions context={ctx('brief', `Channels · ${period.label}`, briefSignal)} />}
-      />
-
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
         <KpiBox value={totalCommission}     unit="usd" label={`Commissions · ${period.label}`}
           compare={dCommission != null ? { value: dCommission, unit: 'usd', period: cmpLabel2 } : undefined}
@@ -248,7 +226,7 @@ export default async function ChannelsPage({ searchParams }: Props) {
       <Panel
         title={`Channel performance · ${period.label}`}
         eyebrow="mv_channel_economics"
-        actions={<ArtifactActions context={ctx('table', `Channel performance · ${period.label}`, briefSignal)} />}
+        actions={<ArtifactActions context={ctx('table', `Channel performance · ${period.label}`)} />}
       >
         {channels.length === 0 ? (
           <div style={{ padding: 24, color: 'var(--ink-mute)', fontStyle: 'italic' }}>
@@ -368,24 +346,6 @@ export default async function ChannelsPage({ searchParams }: Props) {
         </>
       )}
 
-      {worstCancel.name && (
-        <div style={{ marginTop: 14 }}>
-          <Insight tone={worstCancel.pct > 30 ? 'alert' : 'warn'} eye="Cancel watch">
-            <strong>{worstCancel.name}</strong> showing {worstCancel.pct.toFixed(1)}% cancellation in {period.label}.
-            Investigate rate plan, deposit policy, and lead-time profile.
-          </Insight>
-        </div>
-      )}
-
-      {commissionPctOfRev > 12 && (
-        <div style={{ marginTop: 10 }}>
-          <Insight tone="warn" eye="Commission load">
-            OTA commissions are <strong>{commissionPctOfRev.toFixed(1)}%</strong> of total revenue
-            ({fmtMoney(totalCommission, 'USD')} in {period.label}).
-            Push direct mix above 35% to reduce dependency.
-          </Insight>
-        </div>
-      )}
     </Page>
   );
 }

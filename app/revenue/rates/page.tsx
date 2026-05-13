@@ -3,7 +3,6 @@ import Page from '@/components/page/Page';
 import PeriodSelectorRow from '@/components/page/PeriodSelectorRow';
 import { REVENUE_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
-import StatusPill from '@/components/ui/StatusPill';
 import { getRateInventoryCalendar } from '@/lib/data';
 import { resolvePeriod } from '@/lib/period';
 import RatesGraphs from './_components/RatesGraphs';
@@ -46,22 +45,6 @@ export default async function RatesPage({ searchParams }: Props) {
 
   return (
     <Page eyebrow="Revenue · Rates" title={<>BAR ladder, <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>spread</em>, and the levers around it.</>} subPages={REVENUE_SUBPAGES}>
-      <div style={statusWrap}>
-        <div style={statusRow1}>
-          <div style={cell}><span className="t-eyebrow" style={{ marginRight: 8 }}>SOURCE</span><StatusPill tone="active">mv_rate_inventory_calendar</StatusPill></div>
-          <div style={cell}><span className="t-eyebrow" style={{ marginRight: 6 }}>WINDOW</span><span style={meta}>{period.label}</span><span style={metaDim}>· {period.rangeLabel}</span></div>
-          <div style={cell}><span className="t-eyebrow" style={{ marginRight: 6 }}>ROOM TYPES</span><span style={metaStrong}>{byType.length}</span></div>
-          <span style={{ flex: 1 }} />
-        </div>
-        <div style={statusRow2}>
-          <span className="t-eyebrow" style={{ marginRight: 6 }}>RESTRICTIONS</span>
-          <StatusPill tone={restrictionTotal > 30 ? 'pending' : 'inactive'}>{restrictionTotal}</StatusPill>
-          <span style={metaDim}>CTA · CTD · stop-sell · min-stay</span>
-          <span style={{ flex: 1 }} />
-          <span style={metaDim}>BAR range ${Math.round(overallMin).toLocaleString()} — ${Math.round(overallMax).toLocaleString()}</span>
-        </div>
-      </div>
-      <RatesGraphs byType={byType} allRates={allRates} restrictions={{ cta, ctd, stop, minStay, open }} />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
         <KpiBox value={overallMin} unit="usd"   label="Min BAR"             tooltip="Lowest Best-Available-Rate observed in the window. Floor of the rate ladder." />
         <KpiBox value={overallAvg} unit="usd"   label="Avg BAR"             tooltip="Mean BAR across room types and days." />
@@ -77,6 +60,8 @@ export default async function RatesPage({ searchParams }: Props) {
         includeForward
         preserve={{ seg: period.seg }}
       />
+
+      <RatesGraphs byType={byType} allRates={allRates} restrictions={{ cta, ctd, stop, minStay, open }} />
 
       <div style={{ marginTop: 18 }}>
         <SectionHead title="BAR" emphasis="per room type" sub={`Min · avg · max · ${period.label}`} source="mv_rate_inventory_calendar" />
