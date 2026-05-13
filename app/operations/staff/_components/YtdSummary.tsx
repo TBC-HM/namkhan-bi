@@ -6,7 +6,7 @@
 // Built so an HR manager can answer "is this person on track?" at a glance.
 
 import UsdLak from './UsdLak';
-import type { PayrollRow } from '../[staffId]/page';
+import type { PayrollRow } from './staff-detail-types';
 
 interface Props {
   rows: PayrollRow[];

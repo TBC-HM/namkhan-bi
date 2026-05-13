@@ -6,7 +6,7 @@
 // Source: ops.payroll_monthly via v_staff_detail.payroll_12m[0].
 
 import UsdLak from './UsdLak';
-import type { PayrollRow } from '../[staffId]/page';
+import type { PayrollRow } from './staff-detail-types';
 
 interface Props {
   /** The most recent payroll row, if any. */

@@ -1,7 +1,7 @@
 // app/operations/staff/_components/PayrollHistory.tsx
 'use client';
 
-import type { PayrollRow } from '../[staffId]/page';
+import type { PayrollRow } from './staff-detail-types';
 import { fmtMoney } from '@/lib/format';
 
 export function PayrollHistory({ rows }: { rows: PayrollRow[] }) {

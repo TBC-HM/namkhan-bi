@@ -1,7 +1,7 @@
 // app/operations/staff/_components/AttendanceCalendar.tsx
 "use client";
 
-import type { AttendanceRow } from "../[staffId]/page";
+import type { AttendanceRow } from "./staff-detail-types";
 
 const CODE_COLOR: Record<string, string> = {
   D: "bg-emerald-600",

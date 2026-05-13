@@ -1,7 +1,7 @@
 // app/operations/staff/_components/AvailabilityGrid.tsx
 "use client";
 
-import type { AvailabilityRow } from "../[staffId]/page";
+import type { AvailabilityRow } from "./staff-detail-types";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
