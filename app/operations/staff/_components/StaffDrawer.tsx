@@ -552,19 +552,72 @@ function AttendanceScoreBlock({ detail }: { detail: StaffDetail }) {
     score >= 80 ? 'var(--st-good, #2c7a4b)' :
     score >= 50 ? 'var(--brass)' :
     'var(--oxblood-soft)';
+
+  // PBS 2026-05-13: second score = punctuality (90d avg).
+  const punct = detail.punctuality_avg_90d == null ? null : Math.round(Number(detail.punctuality_avg_90d));
+  const punctColor = punct == null ? 'var(--ink-mute)' :
+    punct >= 80 ? 'var(--st-good, #2c7a4b)' :
+    punct >= 50 ? 'var(--brass)' :
+    'var(--oxblood-soft)';
+  const punctShifts = detail.punctuality_shifts_90d ?? 0;
+  const punctNoShow = detail.punctuality_no_show_90d ?? 0;
+  const punctLate   = detail.punctuality_late_15_90d ?? 0;
+
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-        <div style={{ flex: 1, height: 8, background: 'var(--paper-deep)', borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
-          <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${score}%`, background: color }} />
+      {/* Two-score header — primary attendance + smaller punctuality next to it */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 10 }}>
+        {/* Primary: attendance score with bar */}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ flex: 1, height: 8, background: 'var(--paper-deep)', borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
+            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${score}%`, background: color }} />
+          </div>
+          <div style={{ fontFamily: 'var(--sans)', fontWeight: 600, fontSize: 20, color, minWidth: 50, textAlign: 'right' }}>
+            {score}<span style={{ fontSize: 11, color: 'var(--ink-mute)', fontWeight: 400 }}>/100</span>
+          </div>
         </div>
-        <div style={{ fontFamily: 'var(--sans)', fontWeight: 600, fontSize: 20, color, minWidth: 50, textAlign: 'right' }}>
-          {score}<span style={{ fontSize: 11, color: 'var(--ink-mute)', fontWeight: 400 }}>/100</span>
+
+        {/* Secondary: smaller punctuality chip */}
+        <div title={`Punctuality · 90d avg · ${punctShifts} shifts · ${punctLate} late ≥15m · ${punctNoShow} no-show`}
+          style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            minWidth: 64, padding: '4px 8px',
+            border: '1px solid var(--kpi-frame, rgba(168,133,74,0.45))',
+            borderRadius: 4, background: 'var(--paper)',
+          }}>
+          <div style={{
+            fontFamily: 'var(--mono)', fontSize: 8,
+            letterSpacing: '0.14em', textTransform: 'uppercase',
+            color: 'var(--ink-mute)',
+          }}>
+            Punctuality
+          </div>
+          <div style={{
+            fontFamily: 'var(--sans)', fontWeight: 600, fontSize: 14,
+            color: punctColor, marginTop: 1, lineHeight: 1,
+          }}>
+            {punct == null ? '—' : punct}
+            {punct != null && <span style={{ fontSize: 9, color: 'var(--ink-mute)', fontWeight: 400 }}>/100</span>}
+          </div>
+          <div style={{
+            fontFamily: 'var(--mono)', fontSize: 8,
+            color: 'var(--ink-mute)', marginTop: 1,
+          }}>
+            90d · {punctShifts}sh
+          </div>
         </div>
       </div>
+
+      {/* Field rows — keep existing attendance stats + add punctuality breakdown */}
       <Field label="Events · 30d" value={String(detail.attendance_events_30d ?? 0)} mono />
       <Field label="Hours · 30d"  value={`${Number(detail.attendance_hours_30d ?? 0).toFixed(1)}h`} mono />
       <Field label="Hours · YTD"  value={`${Number(detail.attendance_hours_ytd ?? 0).toFixed(0)}h`} mono />
+      {punctShifts > 0 && (
+        <>
+          <Field label="Late ≥15m · 90d"  value={String(punctLate)}   mono hint={`${punctShifts} shifts`} />
+          <Field label="No-show · 90d"    value={String(punctNoShow)} mono hint={punctNoShow > 0 ? 'flag for HR' : ''} />
+        </>
+      )}
     </div>
   );
 }

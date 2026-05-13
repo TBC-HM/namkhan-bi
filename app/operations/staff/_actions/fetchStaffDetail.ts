@@ -57,6 +57,11 @@ export interface StaffDetail {
   attendance_hours_30d: number | null;
   attendance_hours_ytd: number | null;
   attendance_events_30d: number | null;
+  // Punctuality score from ops.v_staff_punctuality (added 2026-05-13)
+  punctuality_avg_90d: number | null;
+  punctuality_shifts_90d: number | null;
+  punctuality_no_show_90d: number | null;
+  punctuality_late_15_90d: number | null;
   // Last raise + extra pay (added 2026-05-13)
   last_raise_date: string | null;
   last_raise_delta_lak: number | null;
@@ -76,7 +81,7 @@ export interface StaffDetail {
 
 export async function fetchStaffDetail(staffId: string): Promise<StaffDetail | null> {
   const thisYear = new Date().getUTCFullYear();
-  const [{ data, error }, scoreRes, raiseRes, extraRes] = await Promise.all([
+  const [{ data, error }, scoreRes, raiseRes, extraRes, punctRes] = await Promise.all([
     // PBS 2026-05-13: pin schema to `public` — there is a duplicate
     // `ops.v_staff_detail` (older, no property_id). Without the schema
     // pin PostgREST sometimes resolves to the wrong one, which broke the
@@ -110,6 +115,14 @@ export async function fetchStaffDetail(staffId: string): Promise<StaffDetail | n
       .eq('staff_id', staffId)
       .eq('year', thisYear)
       .maybeSingle(),
+    // PBS 2026-05-13: punctuality score (90d) per staff for the second
+    // mini score in the drawer's attendance block.
+    supabase
+      .schema('ops')
+      .from('v_staff_punctuality')
+      .select('avg_score, shifts_90d, no_show_90d, late_15_90d')
+      .eq('staff_id', staffId)
+      .maybeSingle(),
   ]);
   if (error) {
     console.error('fetchStaffDetail error', error);
@@ -119,12 +132,17 @@ export async function fetchStaffDetail(staffId: string): Promise<StaffDetail | n
   const sc = scoreRes.data as any;
   const rs = raiseRes.data as any;
   const ex = extraRes.data as any;
+  const pu = punctRes.data as any;
   return {
     ...(data as any),
     attendance_score:      sc?.attendance_score ?? null,
     attendance_hours_30d:  sc?.hours_30d ?? null,
     attendance_hours_ytd:  sc?.hours_ytd ?? null,
     attendance_events_30d: sc?.events_30d ?? null,
+    punctuality_avg_90d:     pu?.avg_score ?? null,
+    punctuality_shifts_90d:  pu?.shifts_90d ?? null,
+    punctuality_no_show_90d: pu?.no_show_90d ?? null,
+    punctuality_late_15_90d: pu?.late_15_90d ?? null,
     last_raise_date:       rs?.raise_date ?? null,
     last_raise_delta_lak:  rs?.delta_lak ?? null,
     last_raise_old_lak:    rs?.old_base_lak ?? null,
