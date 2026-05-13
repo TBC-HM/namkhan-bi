@@ -60,7 +60,6 @@ export default async function FnbPage({ searchParams }: Props) {
       eyebrow={`Operations · F&B · ${period.label}`}
       title={<>Roots <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>restaurant</em></>}
       subPages={OPERATIONS_SUBPAGES}
-      topRight={<FilterStrip showForward={false} showCompare={false} showSegment={false} liveSource="Cloudbeds · live" />}
     >
 
       {/* Row 1 — Operating snapshot */}
@@ -84,6 +83,11 @@ export default async function FnbPage({ searchParams }: Props) {
         { label: 'Eff Labor %',        value: Number(effectiveLaborPct ?? 0), kind: 'pct', hint: 'target ≤ 35%' },
         { label: 'Eff Food %',         value: effectiveFnbRev > 0 && tileSrc ? (tileSrc.food_cost / effectiveFnbRev) * 100 : 0, kind: 'pct', hint: 'target ≤ 30%' },
       ] satisfies KpiStripItem[]} />
+
+      {/* Canonical: selectors UNDER KPI tiles. */}
+      <div style={{ marginTop: 14 }}>
+        <FilterStrip showForward={false} showCompare={false} showSegment={false} liveSource="Cloudbeds · live" />
+      </div>
 
       {/* 3 explainer panels — wrapped in canonical <Panel> for dark canvas (PBS 2026-05-09) */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10, marginTop: 12 }}>

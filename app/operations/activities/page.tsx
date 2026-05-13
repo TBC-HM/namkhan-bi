@@ -61,7 +61,6 @@ export default async function ActivitiesPage({ searchParams }: Props) {
       eyebrow={`Operations · Activities · ${period.label}`}
       title={<>Excursions <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>&amp; experiences</em></>}
       subPages={OPERATIONS_SUBPAGES}
-      topRight={<FilterStrip showForward={false} showCompare={false} showSegment={false} liveSource="Cloudbeds · live" />}
     >
 
       <KpiStrip items={[
@@ -81,6 +80,11 @@ export default async function ActivitiesPage({ searchParams }: Props) {
         { label: 'Payroll', value: tileSrc ? tileSrc.payroll : 0, kind: 'money' },
         { label: 'GOP', value: tileSrc ? tileSrc.gop : 0, kind: 'money', tone: tileSrc && tileSrc.gop >= 0 ? 'pos' : 'neg' },
       ] satisfies KpiStripItem[]} />
+
+      {/* Canonical: selectors UNDER KPI tiles. */}
+      <div style={{ marginTop: 14 }}>
+        <FilterStrip showForward={false} showCompare={false} showSegment={false} liveSource="Cloudbeds · live" />
+      </div>
 
       <h2 style={{ marginTop: 28, marginBottom: 6, fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>Monthly trend · revenue · costs · GOP %</h2>
       <DeptTrendChart rows={pl} dept="activities" />

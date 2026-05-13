@@ -51,7 +51,6 @@ export default async function SpaPage({ searchParams }: Props) {
       eyebrow={`Operations · Spa · ${period.label}`}
       title={<>Wellness <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>treatments</em></>}
       subPages={OPERATIONS_SUBPAGES}
-      topRight={<FilterStrip showForward={false} showCompare={false} showSegment={false} liveSource="Cloudbeds · live" />}
     >
 
       <KpiStrip items={[
@@ -71,6 +70,11 @@ export default async function SpaPage({ searchParams }: Props) {
         { label: 'Spa COGS',   value: tileSrc ? tileSrc.spa_cost : 0, kind: 'money' },
         { label: 'Payroll',    value: tileSrc ? tileSrc.payroll : 0, kind: 'money' },
       ] satisfies KpiStripItem[]} />
+
+      {/* Canonical: selectors UNDER KPI tiles. */}
+      <div style={{ marginTop: 14 }}>
+        <FilterStrip showForward={false} showCompare={false} showSegment={false} liveSource="Cloudbeds · live" />
+      </div>
 
       <h2 style={{ marginTop: 28, marginBottom: 6, fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>Monthly trend · revenue · costs · GOP %</h2>
       <DeptTrendChart rows={pl} dept="spa" />
