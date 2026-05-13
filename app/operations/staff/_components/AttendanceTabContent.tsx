@@ -54,7 +54,7 @@ export default async function AttendanceTabContent({
   propertyLabel?: string;
 }) {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  const [kpiRes, dailyRes, scoresRes, openRes, unmappedRes, recentRes] = await Promise.all([
+  const [kpiRes, dailyRes, scoresRes, openRes, unmappedRes, recentRes, registerRes] = await Promise.all([
     supabase.schema('ops').from('v_attendance_kpis').select('*').eq('property_id', propertyId).maybeSingle(),
     supabase.schema('ops').from('v_attendance_daily_trend').select('*').eq('property_id', propertyId).order('work_date'),
     supabase.schema('ops').from('v_staff_attendance_score').select('*').eq('property_id', propertyId).order('hours_30d', { ascending: false }),
@@ -71,6 +71,15 @@ export default async function AttendanceTabContent({
       .gte('clock_in_at', sevenDaysAgo)
       .order('clock_in_at', { ascending: false })
       .limit(300),
+    // PBS 2026-05-13: pull contract_hours_pw per staff so we can render
+    // utilization bars (actual hours vs contracted 30d expected hours).
+    // Pin schema('public') — same duplicate-view caveat as v_staff_detail.
+    supabase
+      .schema('public')
+      .from('v_staff_register_extended')
+      .select('staff_id, contract_hours_pw, dept_name')
+      .eq('property_id', propertyId)
+      .eq('is_active', true),
   ]);
 
   const kpi    = (kpiRes.data as KpiRow | null) ?? null;
@@ -87,6 +96,36 @@ export default async function AttendanceTabContent({
   const recent   = (recentRes.data as RecentRow[] | null) ?? [];
 
   const top10: TopEmployee[] = scores.slice(0, 10).map(s => ({ full_name: s.full_name, hours: Number(s.hours_30d) }));
+
+  // PBS 2026-05-13: build utilization rows for the expandable view.
+  // expected_30d_hours = contract_hours_pw × 30/7.
+  // Default full-time fallback (40h/wk) when contract is NULL — typical
+  // for Donna; ~33 of 82 active staff have NULL contract.
+  type RegisterRow = { staff_id: string; contract_hours_pw: number | null; dept_name: string | null };
+  const registerRows = (registerRes.data as RegisterRow[] | null) ?? [];
+  const contractByStaff = new Map<string, { hours_pw: number; dept_name: string }>();
+  for (const r of registerRows) {
+    contractByStaff.set(r.staff_id, {
+      hours_pw: Number(r.contract_hours_pw ?? 40),
+      dept_name: r.dept_name ?? '—',
+    });
+  }
+  const utilization = scores.map((s) => {
+    const reg = contractByStaff.get(s.staff_id);
+    const hoursPw = reg?.hours_pw ?? 40;
+    const expected30d = hoursPw * 30 / 7;
+    const actual30d = Number(s.hours_30d || 0);
+    const pct = expected30d > 0 ? (actual30d / expected30d) * 100 : 0;
+    return {
+      staff_id: s.staff_id,
+      full_name: s.full_name,
+      dept_name: reg?.dept_name ?? '—',
+      hours_30d: actual30d,
+      expected_30d: expected30d,
+      pct,
+      contract_known: contractByStaff.has(s.staff_id) && (registerRows.find(r => r.staff_id === s.staff_id)?.contract_hours_pw ?? null) != null,
+    };
+  }).sort((a, b) => b.pct - a.pct);
 
   const eyebrow = propertyLabel
     ? `Operations · Staff · Attendance · ${propertyLabel}`
@@ -133,7 +172,7 @@ export default async function AttendanceTabContent({
       {hasData && (
         <>
           <div style={{ marginTop: 20 }}>
-            <AttendanceCharts daily={daily} topEmployees={top10} />
+            <AttendanceCharts daily={daily} topEmployees={top10} utilization={utilization} />
           </div>
           <OnShiftAndUnmapped openShifts={openShifts} unmapped={unmapped} scores={scores} recent={recent} />
         </>
