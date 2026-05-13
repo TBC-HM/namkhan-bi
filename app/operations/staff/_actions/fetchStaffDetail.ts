@@ -24,6 +24,8 @@ export interface StaffDetail {
   hire_date: string | null;
   end_date: string | null;
   is_active: boolean;
+  photo_path: string | null;
+  phone: string | null;
   contract_doc_id: string | null;
   last_payslip_period: string | null;
   payslip_pdf_status: 'current' | 'overdue' | 'never' | null;
@@ -38,6 +40,18 @@ export interface StaffDetail {
   bank_name: string | null;
   bank_account_no: string | null;
   bank_account_name: string | null;
+  // PBS 2026-05-13 drawer redesign — contact + leave fields
+  email: string | null;
+  personal_email: string | null;
+  phone_canonical: string | null;
+  date_of_birth: string | null;
+  seniority_date: string | null;
+  nationality: string | null;
+  property_id: number | null;
+  annual_leave_used_ytd: number | null;
+  public_holiday_ytd: number | null;
+  sick_days_ytd: number | null;
+  days_worked_ytd: number | null;
 }
 
 export async function fetchStaffDetail(staffId: string): Promise<StaffDetail | null> {
