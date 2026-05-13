@@ -12,15 +12,19 @@
 @tailwind utilities;
 
 :root {
-  --paper:        #efe6d3;
-  --paper-deep:   #e6daC0;
-  --paper-warm:   #f4ecd8;
-  --ink:          #1c1815;
-  --ink-soft:     #4a443c;
-  --ink-mute:     #7d7565;
-  --ink-faint:    #b3a888;
-  --line:         #c9bb96;
-  --line-soft:    #d8cca8;
+  /* PBS 2026-05-13: defaults are Namkhan-dark (the primary property).
+   * Donna's ThemeInjector emits light overrides on /h/1000001/* routes;
+   * everything else inherits these dark tokens so the SVG charts /
+   * inline `var(--ink)` refs render readable text on the dark page bg. */
+  --paper:        #1a160f;
+  --paper-deep:   #1f1a13;
+  --paper-warm:   #15110c;
+  --ink:          #e9e1ce;
+  --ink-soft:     #c4bba0;
+  --ink-mute:     #a59a82;
+  --ink-faint:    #6b6248;
+  --line:         rgba(232, 225, 206, 0.18);
+  --line-soft:    rgba(232, 225, 206, 0.10);
   --moss:         #1a2e21;
   --moss-deep:    #0a1810;
   --moss-mid:     #2b4936;
@@ -47,6 +51,7 @@
    * If any page needs to override, scope it (e.g. .my-page { --card: … }).
    * NOTE: re-applied 2026-05-03 after concurrent revert in commit 27e4126.
    */
+  --bg:          #0a0a0a;
   --body:        var(--ink-soft);
   --muted:       var(--ink-mute);
   --border:      var(--line-soft);

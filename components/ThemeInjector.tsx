@@ -133,28 +133,23 @@ export default function ThemeInjector({
   // light theme. Properties without it (Namkhan today) keep dark fallbacks.
   const hasLightPageBg = !!palette?.find((p) => p.role === 'background');
 
-  // PBS 2026-05-13: when the property is dark (no `background` role), the
-  // legacy --paper-* / --ink-* / --line* tokens still resolve to their
-  // hardcoded LIGHT values from globals.css :root. Every inline
-  // `style={{ background: 'var(--paper-warm)' }}` or
-  // `color: 'var(--ink-mute)'` then renders cream-on-cream or dark-on-dark
-  // text — unreadable. Re-map the legacy family to dark equivalents so
-  // existing inline references flip without per-file edits. Donna keeps
-  // the light defaults from globals.css because we only emit this block
-  // when hasLightPageBg === false.
-  let darkLegacyVars = '';
-  if (!hasLightPageBg) {
-    darkLegacyVars = `
-      --bg:           #0a0a0a;
-      --paper:        #1a160f;
-      --paper-warm:   #15110c;
-      --paper-deep:   #1f1a13;
-      --ink:          #e9e1ce;
-      --ink-soft:     #c4bba0;
-      --ink-mute:     #a59a82;
-      --ink-faint:    #6b6248;
-      --line:         rgba(232, 225, 206, 0.18);
-      --line-soft:    rgba(232, 225, 206, 0.10);
+  // PBS 2026-05-13 rev2: :root now defaults to Namkhan-dark. Donna's
+  // ThemeInjector path explicitly restores the LIGHT legacy values so her
+  // routes render cream-themed. Namkhan routes (and any legacy
+  // non-ThemeInjector path) inherit the dark defaults — readable
+  // everywhere without per-page wrappers.
+  let lightLegacyVars = '';
+  if (hasLightPageBg) {
+    lightLegacyVars = `
+      --paper:        #efe6d3;
+      --paper-deep:   #e6daC0;
+      --paper-warm:   #f4ecd8;
+      --ink:          #1c1815;
+      --ink-soft:     #4a443c;
+      --ink-mute:     #7d7565;
+      --ink-faint:    #b3a888;
+      --line:         #c9bb96;
+      --line-soft:    #d8cca8;
       --card:         var(--paper-warm);
       --bg-sub:       var(--paper-deep);
       --body:         var(--ink-soft);
@@ -224,7 +219,7 @@ export default function ThemeInjector({
       --sand: ${t.sand};
       --terracotta: ${t.terracotta};
       --neutral: ${t.neutral};
-      ${darkLegacyVars}
+      ${lightLegacyVars}
       ${lightVars}
     }
     body { background-color: var(--bg); }
