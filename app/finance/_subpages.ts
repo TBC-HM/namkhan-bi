@@ -1,58 +1,12 @@
-// Finance module subpages configuration
 export const financeSubpages = [
-  {
-    label: 'Dashboard',
-    href: '/finance/dashboard',
-    icon: 'LayoutDashboard',
-  },
-  {
-    label: 'P&L',
-    href: '/finance/pnl',
-    icon: 'TrendingUp',
-  },
-  {
-    label: 'Ledger',
-    href: '/finance/ledger',
-    icon: 'BookOpen',
-  },
-  {
-    label: 'Budget',
-    href: '/finance/budget',
-    icon: 'Target',
-  },
-  {
-    label: 'Mapping',
-    href: '/finance/mapping',
-    icon: 'GitBranch',
-  },
-  {
-    label: 'Supplier Mapping',
-    href: '/finance/supplier-mapping',
-    icon: 'Users',
-  },
-  {
-    label: 'Transactions',
-    href: '/finance/transactions',
-    icon: 'Receipt',
-  },
-  {
-    label: 'POS Transactions',
-    href: '/finance/pos-transactions',
-    icon: 'ShoppingCart',
-  },
-  {
-    label: 'Poster',
-    href: '/finance/poster',
-    icon: 'FileText',
-  },
-  {
-    label: 'Agents',
-    href: '/finance/agents',
-    icon: 'Bot',
-  },
-  {
-    label: 'Cockpit',
-    href: '/finance/cockpit',
-    icon: 'Settings',
-  },
+  { href: '/finance/dashboard', label: 'OVERVIEW', icon: 'LayoutDashboard' },
+  { href: '/finance/pnl', label: 'P&L', icon: 'TrendingUp' },
+  { href: '/finance/reports', label: 'REPORTS', icon: 'FileText' },
+  { href: '/finance/ledger', label: 'LEDGER', icon: 'BookOpen' },
+  { href: '/finance/budget', label: 'BUDGET', icon: 'Target' },
+  { href: '/finance/mapping', label: 'MAPPING', icon: 'Map' },
+  { href: '/finance/transactions', label: 'TRANSACTIONS', icon: 'Receipt' },
+  { href: '/finance/poster', label: 'POSTER', icon: 'Store' },
+  { href: '/finance/agents', label: 'AGENTS', icon: 'Bot' },
+  { href: '/finance/cockpit', label: 'COCKPIT', icon: 'Terminal' },
 ] as const;
