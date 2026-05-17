@@ -1,5 +1,14 @@
 // app/api/cockpit/tickets/route.ts
-// PBS 2026-05-09: cockpit_tickets needs delete (days-old tasks pile up).
+//
+// PBS 2026-05-17 EMERGENCY FIX: cockpit_tickets is a VIEW over cockpit.exec_tickets.
+// Deleting from a view via PostgREST returns 204 with 0 rows affected — looked like
+// success in the UI, did nothing in the DB. Same problem with the 8 dependent
+// tables (all views over cockpit.* and cockpit.aud_audit_log). All paths now route
+// through SECURITY DEFINER SQL functions that hit the real underlying tables:
+//   public.fn_delete_ticket(bigint)
+//   public.fn_delete_tickets_by_status(text)
+//   public.fn_patch_ticket(bigint, text)
+//
 // DELETE ?id=N           — single
 // DELETE ?status=archived — bulk
 // PATCH  { id, status }   — re-status single (e.g. archive)
@@ -13,69 +22,40 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || "https://build-placeholder.supabase.co",
-  process.env.SUPABASE_SERVICE_ROLE_KEY || "build-placeholder-key",
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://build-placeholder.supabase.co',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || 'build-placeholder-key',
 );
-
-// PBS 2026-05-09: 13 tables FK-reference cockpit_tickets; several without
-// ON DELETE clauses. A naive DELETE fails with FK violation when a ticket
-// has audit_log/skill_calls/decisions rows. Clean dependents first.
-async function deleteTicketIds(ids: number[]): Promise<{ deleted: number; error?: string }> {
-  if (ids.length === 0) return { deleted: 0 };
-  const dependents = [
-    'cockpit_audit_log',
-    'cockpit_decisions',
-    'cockpit_skill_calls',
-    'cockpit_skill_approvals',
-    'cockpit_notifications',
-    'cockpit_mismatches',
-    'cockpit_plan_steps',
-    'cockpit_plans',
-  ];
-  for (const tbl of dependents) {
-    const colname = tbl === 'cockpit_plans' ? 'parent_ticket_id' : 'ticket_id';
-    const { error } = await supabase.from(tbl).delete().in(colname, ids);
-    if (error) return { deleted: 0, error: `dependent ${tbl}: ${error.message}` };
-  }
-  // Tables with ON DELETE SET NULL (cockpit_agent_prompts, cockpit_knowledge_base.source_ticket_id,
-  // cockpit_departments.created_from_ticket_id, cockpit_agent_memory.source_ticket_id,
-  // cockpit_proposals.ticket_id) handle themselves automatically — skip.
-  const { error, count } = await supabase
-    .from('cockpit_tickets')
-    .delete({ count: 'exact' })
-    .in('id', ids);
-  if (error) return { deleted: 0, error: error.message };
-  return { deleted: count ?? 0 };
-}
 
 export async function DELETE(req: Request) {
   noStore();
   const url = new URL(req.url);
   const id = url.searchParams.get('id');
   const status = url.searchParams.get('status');
+
   if (id) {
     const n = Number(id);
     if (!n) return NextResponse.json({ error: 'bad id' }, { status: 400 });
-    const r = await deleteTicketIds([n]);
-    if (r.error) return NextResponse.json({ error: r.error }, { status: 500 });
-    return NextResponse.json({ ok: true, deleted: r.deleted });
-  }
-  if (status) {
-    const allowed = ['archived', 'completed', 'triage_failed', 'blocked'];
-    if (!allowed.includes(status)) {
-      return NextResponse.json({ error: `bulk delete only allowed for: ${allowed.join(', ')}` }, { status: 400 });
+    const { data, error } = await supabase.rpc('fn_delete_ticket', { p_id: n });
+    if (error) {
+      console.error('[cockpit/tickets DELETE id] rpc error', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
-    const { data: rows, error: pickErr } = await supabase
-      .from('cockpit_tickets')
-      .select('id')
-      .eq('status', status);
-    if (pickErr) return NextResponse.json({ error: pickErr.message }, { status: 500 });
-    const ids = (rows ?? []).map((r: { id: number }) => r.id);
-    if (ids.length === 0) return NextResponse.json({ ok: true, deleted: 0 });
-    const r = await deleteTicketIds(ids);
-    if (r.error) return NextResponse.json({ error: r.error }, { status: 500 });
-    return NextResponse.json({ ok: true, deleted: r.deleted });
+    const deleted = (data as any)?.deleted ?? 0;
+    if (deleted === 0) {
+      return NextResponse.json({ ok: false, error: `ticket #${n} not found`, raw: data }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true, deleted, dependents: (data as any)?.dependents });
   }
+
+  if (status) {
+    const { data, error } = await supabase.rpc('fn_delete_tickets_by_status', { p_status: status });
+    if (error) {
+      console.error('[cockpit/tickets DELETE status] rpc error', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, deleted: (data as any)?.deleted ?? 0, ids: (data as any)?.ids });
+  }
+
   return NextResponse.json({ error: 'id or status required' }, { status: 400 });
 }
 
@@ -85,11 +65,17 @@ export async function PATCH(req: Request) {
   const id = Number(body.id);
   const status = body.status;
   if (!id || !status) return NextResponse.json({ error: 'id and status required' }, { status: 400 });
-  const patch: Record<string, unknown> = { status, updated_at: new Date().toISOString() };
-  if (status === 'archived' || status === 'completed') patch.closed_at = new Date().toISOString();
-  const { error } = await supabase.from('cockpit_tickets').update(patch).eq('id', id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
+
+  const { data, error } = await supabase.rpc('fn_patch_ticket', { p_id: id, p_status: status });
+  if (error) {
+    console.error('[cockpit/tickets PATCH] rpc error', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  const updated = (data as any)?.updated ?? 0;
+  if (updated === 0) {
+    return NextResponse.json({ ok: false, error: `ticket #${id} not found` }, { status: 404 });
+  }
+  return NextResponse.json({ ok: true, updated });
 }
 
 export async function POST(req: Request) {
@@ -102,8 +88,15 @@ export async function POST(req: Request) {
   };
   const summary = (body.summary ?? '').trim();
   if (!summary) return NextResponse.json({ error: 'summary required' }, { status: 400 });
+
+  // INSERT into the real table via the cockpit schema (uses .schema()).
+  // The exec_tickets table is writable via service role even though PostgREST
+  // doesn't expose the schema by default — .schema('cockpit').from() works
+  // because supabase-js routes through the underlying REST endpoint that
+  // can accept a schema header.
   const { data, error } = await supabase
-    .from('cockpit_tickets')
+    .schema('cockpit')
+    .from('exec_tickets')
     .insert({
       status: 'new',
       arm: body.dept ?? null,
@@ -115,6 +108,9 @@ export async function POST(req: Request) {
     })
     .select('id')
     .single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, id: data?.id });
+  if (error) {
+    console.error('[cockpit/tickets POST] insert error', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  return NextResponse.json({ ok: true, id: (data as any)?.id });
 }
