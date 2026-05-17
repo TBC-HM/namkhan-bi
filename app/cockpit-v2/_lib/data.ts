@@ -176,12 +176,14 @@ export async function fetchPromptForRole(role: string): Promise<Prompt | null> {
 
 // --- documents --------------------------------------------------------------
 
+// PBS 2026-05-17: surface ALL 11 published doc_types in documentation.documents
+// (was hardcoded to 3). The /cockpit-v2/docs page is the single navigable
+// surface for every doc an agent might reference. Categories grouped client-side.
 export async function fetchDocs(): Promise<Document[]> {
   const { data, error } = await sbDocs
     .from('documents')
     .select('id, doc_type, title, content_md, version, status, last_updated_by, last_updated_at')
     .eq('status', 'published')
-    .in('doc_type', ['claude_md', 'architecture', 'factorial_md'])
     .order('doc_type', { ascending: true })
     .order('version', { ascending: false });
   if (error) {
