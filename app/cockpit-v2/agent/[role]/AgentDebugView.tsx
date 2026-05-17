@@ -79,10 +79,22 @@ export function AgentDebugView({ bundle }: { bundle: Bundle }) {
 
       {/* Tagline */}
       {a?.tagline && (
-        <p style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 14, color: TOKENS.text2, margin: '0 0 18px' }}>
+        <p style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 14, color: TOKENS.text2, margin: '0 0 8px' }}>
           {a.tagline}
         </p>
       )}
+
+      {/* Quick links */}
+      <div style={{ marginBottom: 18, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <Link href={`/cockpit-v2/agent/${bundle.role}/runs`}
+              style={{
+                padding: '4px 10px', fontFamily: 'var(--mono, monospace)', fontSize: 11,
+                color: TOKENS.brass, border: `1px solid ${TOKENS.brass}`,
+                borderRadius: 2, textDecoration: 'none', letterSpacing: '0.1em', textTransform: 'uppercase',
+              }}>
+          View runs · feedback →
+        </Link>
+      </div>
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
