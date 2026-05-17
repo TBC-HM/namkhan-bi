@@ -7,6 +7,7 @@
 
 import Link from 'next/link';
 import { fetchTicket } from '../../_lib/data-port';
+import { ActionsBar } from './ActionsBar';
 import { TOKENS, SERIF, MONO } from '../../_components/tokens';
 
 export const dynamic = 'force-dynamic';
@@ -144,6 +145,8 @@ export default async function CockpitV2TicketPage({
           {t.iterations !== null && <> · {t.iterations} iter</>}
         </div>
       </header>
+
+      <ActionsBar id={t.id} status={t.status} />
 
       {(prUrl || previewUrl || t.github_issue_url) && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>

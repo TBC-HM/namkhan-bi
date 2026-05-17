@@ -4,7 +4,7 @@
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { sbCockpit } from '../../_lib/supabase-cockpit';
 import { TOKENS, SERIF, MONO } from '../../_components/tokens';
 
 export const dynamic = 'force-dynamic';
@@ -15,9 +15,6 @@ interface PageProps { params: { id: string } }
 export default async function SkillDetailPage({ params }: PageProps) {
   const skillId = Number(params.id);
   if (!skillId) notFound();
-
-  const sb = getSupabaseAdmin();
-  const sbCockpit = sb.schema('cockpit');
 
   const [{ data: skill }, { data: grants }, { data: calls }] = await Promise.all([
     sbCockpit.from('cap_skills')

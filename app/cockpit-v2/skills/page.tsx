@@ -1,9 +1,12 @@
 // app/cockpit-v2/skills/page.tsx
 //
-// PBS 2026-05-17: real Skills cockpit. List, filter, click → detail.
+// Skills cockpit — uses the cockpit-scoped supabase client (sbCockpit)
+// which has `db: { schema: 'cockpit' }` set, so PostgREST resolves the
+// cockpit schema correctly. Earlier version used getSupabaseAdmin()
+// .schema('cockpit') which silently returns [] (claude_md §0.5).
 
 import Link from 'next/link';
-import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { sbCockpit } from '../_lib/supabase-cockpit';
 import { TOKENS, SERIF, MONO } from '../_components/tokens';
 import { SkillsTable } from './SkillsTable';
 
@@ -11,9 +14,6 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 async function fetchSkillsData() {
-  const sb = getSupabaseAdmin();
-  const sbCockpit = sb.schema('cockpit');
-
   const [{ data: skills }, { data: agentSkills }, { data: calls7d }] = await Promise.all([
     sbCockpit.from('cap_skills')
       .select('id, name, description, category, authority_level, requires_pbs_approval, estimated_cost_usd_milli, cost_class, active, implementation_type, archived_at, handler, error_codes')
@@ -75,12 +75,8 @@ export default async function SkillsPage() {
   return (
     <div style={{ color: TOKENS.text }}>
       <header style={{ marginBottom: 14, display: 'flex', alignItems: 'baseline', gap: 12 }}>
-        <h1 style={{ fontFamily: SERIF, fontSize: 26, color: TOKENS.ink, margin: 0, fontWeight: 500 }}>
-          Skills catalog
-        </h1>
-        <span style={{ fontFamily: MONO, fontSize: 11, color: TOKENS.text3 }}>
-          cockpit.cap_skills · {d.total} rows
-        </span>
+        <h1 style={{ fontFamily: SERIF, fontSize: 26, color: TOKENS.ink, margin: 0, fontWeight: 500 }}>Skills catalog</h1>
+        <span style={{ fontFamily: MONO, fontSize: 11, color: TOKENS.text3 }}>cockpit.cap_skills · {d.total} rows</span>
       </header>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 18 }}>
