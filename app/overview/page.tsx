@@ -66,7 +66,7 @@ export default async function OverviewPage({ searchParams }: Props) {
         }
       />
 
-      <FilterStrip liveSource="Cloudbeds · Supabase · live" />
+      <FilterStrip liveSource="PMS · Supabase · live" />
 
       <div className="panel">
         {/* Hero strip — headline + 4 today KPIs (LIVE, period-independent) */}

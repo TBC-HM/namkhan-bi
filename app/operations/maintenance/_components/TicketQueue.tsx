@@ -38,7 +38,7 @@ export default function TicketQueue({ rows }: Props) {
         <DataNeededOverlay
           gap="Gap-M1"
           table="ops.maintenance_tickets"
-          reason="Table exists empty per arch doc. Cloudbeds room.note.created bridge + staff intake form pending."
+          reason="Table exists empty per arch doc. PMS room.note.created bridge + staff intake form pending."
         />
       ) : (
         <>

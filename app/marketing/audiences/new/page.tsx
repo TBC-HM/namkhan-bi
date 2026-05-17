@@ -188,7 +188,7 @@ export default async function NewAudienceFromGuestFilter({ searchParams }: Props
           value={addressable}
           unit="count"
           label="Email addressable"
-          tooltip="Subset with email IS NOT NULL — Cloudbeds anonymises today, so this is 0 until enriched-guest sync wires."
+          tooltip="Subset with email IS NOT NULL — PMS anonymises today, so this is 0 until enriched-guest sync wires."
         />
       </div>
 

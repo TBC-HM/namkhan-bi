@@ -84,12 +84,38 @@ export async function middleware(req: NextRequest) {
 
   // ===== LAYER 2: MULTI-TENANT ROUTING =====
 
-  // Case A: URL already has /h/[id]/... — set cookie, continue
+  // Case A: URL already has /h/[id]/... — set cookie, continue.
+  // PBS Apple note #31 (2026-05-13): /h/0/... is the holding sentinel
+  // — rewrite to /holding so visitors that deep-link to /h/0/* still
+  // land on Felix's surface rather than 404 on a non-existent property.
   const propertyMatch = pathname.match(/^\/h\/(\d+)(\/.*)?$/);
   if (propertyMatch) {
     const propertyId = propertyMatch[1];
+    if (propertyId === "0") {
+      const url = req.nextUrl.clone();
+      url.pathname = "/holding";
+      const res = NextResponse.redirect(url);
+      res.cookies.set(PROPERTY_COOKIE, "0", {
+        path: "/",
+        sameSite: "lax",
+        maxAge: 60 * 60 * 24 * 90,
+      });
+      return res;
+    }
     const res = NextResponse.next();
     res.cookies.set(PROPERTY_COOKIE, propertyId, {
+      path: "/",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 90,
+    });
+    return res;
+  }
+
+  // PBS Apple note #31: visiting /holding refreshes the cookie so the
+  // operator's last-active scope persists across refreshes.
+  if (pathname === "/holding" || pathname.startsWith("/holding/")) {
+    const res = NextResponse.next();
+    res.cookies.set(PROPERTY_COOKIE, "0", {
       path: "/",
       sameSite: "lax",
       maxAge: 60 * 60 * 24 * 90,
@@ -104,19 +130,32 @@ export async function middleware(req: NextRequest) {
   if (isPropertyOrRoot) {
     const cookieValue = req.cookies.get(PROPERTY_COOKIE)?.value;
     const activeProperty = cookieValue ?? String(DEFAULT_PROPERTY);
+    // PBS Apple note #31: holding cookie short-circuits the redirect
+    // directly to /holding (avoids /h/0 → /holding double-hop).
+    if (activeProperty === "0" && pathname === "/") {
+      const url = req.nextUrl.clone();
+      url.pathname = "/holding";
+      return NextResponse.redirect(url);
+    }
     const url = req.nextUrl.clone();
     url.pathname = pathname === "/" ? `/h/${activeProperty}` : `/h/${activeProperty}${pathname}`;
     return NextResponse.redirect(url);
   }
 
-  // Case C: /cockpit-v2 → /h/[active]/it/cockpit (Prompt 6 — cockpit-v2-rework)
-  if (pathname === "/cockpit-v2" || pathname.startsWith("/cockpit-v2/")) {
-    const cookieValue = req.cookies.get(PROPERTY_COOKIE)?.value;
-    const activeProperty = cookieValue ?? String(DEFAULT_PROPERTY);
+  // Case B2: /TBC (uppercase legacy) → /tbc (lowercase canonical).
+  // 2026-05-14: PBS hit /tbc and got 404 because the original Agent O shipped
+  // the folder as app/TBC. Renamed to app/tbc; redirect old links here.
+  if (pathname === "/TBC" || pathname.startsWith("/TBC/")) {
     const url = req.nextUrl.clone();
-    url.pathname = `/h/${activeProperty}/it/cockpit`;
-    return NextResponse.redirect(url);
+    url.pathname = pathname.replace(/^\/TBC/, "/tbc");
+    return NextResponse.redirect(url, 308);
   }
+
+  // Case C: /cockpit-v2 stays at /cockpit-v2 — Ask 1/2/3 (2026-05-13) rewires
+  // /cockpit-v2 to live segment routing (team/knowledge/docs/schemas/activity).
+  // The old redirect to /h/[active]/it/cockpit was from the prior Prompt 6 plan
+  // and is now removed. /h/[property_id]/it/cockpit still exists as an
+  // alternate property-scoped view and is NOT touched.
 
   return NextResponse.next();
 }

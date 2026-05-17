@@ -1,155 +1,176 @@
 'use client';
 
 // components/nav/NDropdown.tsx
-// The N — brass square monogram, click → dropdown menu of every dept entry page.
-// Replaces <LeftRail /> globally per PBS directive 2026-05-08.
-// Style follows EngineDashboard's logoMark spec (22×22, brass gradient).
+// PBS 2026-05-14 — the top-left brass mark is now BC (Beyond Circle) and
+// acts as the global PROPERTY SWITCHER. Click → menu of:
+//   • Beyond Circle · Holding (Felix landing at /holding)
+//   • The Namkhan (260955 — Cloudbeds / LAK)
+//   • Donna Portals (1000001 — Mews / EUR)
+//
+// History:
+//   • 2026-05-08 — N replaced the LeftRail and opened a dept-menu popover.
+//   • 2026-05-13 — N became a passive home link (dropdown stripped).
+//   • 2026-05-14 — rebranded N→BC, dropdown reinstated as property switcher.
+//
+// The duplicate switcher inside HeaderPills was removed in the same change.
 
-import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 
-interface MenuItem {
-  href: string;
-  label: string;
-  hint?: string;
-  group?: 'home' | 'pillars' | 'utility';
+const HOLDING_PROPERTY_ID = 0;
+
+interface PropertyOption {
+  property_id: number;
+  display_name: string;
+  tagline: string;
 }
 
-// 2026-05-08 PBS directive: Front Office, Knowledge, IT Cockpit removed
-// from the global N menu. They live under the user dropdown's "Tools"
-// section now. Settings stays here as a utility because it's also
-// reachable from the user dropdown — keep one obvious entry.
-const MENU: MenuItem[] = [
-  { href: '/',           label: 'Home',       hint: 'Architect',                       group: 'home'    },
-  { href: '/revenue',    label: 'Revenue',    hint: 'Pulse · Pace · Channels',         group: 'pillars' },
-  { href: '/sales',      label: 'Sales',      hint: 'Inquiries · B2B · Bookings',      group: 'pillars' },
-  { href: '/marketing',  label: 'Marketing',  hint: 'Reach · campaigns · social',      group: 'pillars' },
-  { href: '/operations', label: 'Operations', hint: 'Today · F&B · Spa',               group: 'pillars' },
-  { href: '/guest',      label: 'Guest',      hint: 'Directory · reviews · pre-arrival', group: 'pillars' },
-  { href: '/finance',    label: 'Finance',    hint: 'P&L · cash · USALI',              group: 'pillars' },
-  { href: '/it',         label: 'IT',         hint: 'Tickets · agents · deploys',      group: 'pillars' },
-  { href: '/settings',   label: 'Settings',   hint: 'Property · users · agents',       group: 'utility' },
+const ALL_PROPERTIES: PropertyOption[] = [
+  { property_id: HOLDING_PROPERTY_ID, display_name: 'Beyond Circle',  tagline: 'Holding · Felix' },
+  { property_id: 260955,              display_name: 'The Namkhan',    tagline: 'Luang Prabang · PMS' },
+  { property_id: 1000001,             display_name: 'Donna Portals',  tagline: 'Mallorca · Mews' },
 ];
 
+function activePropertyFromPath(pathname: string): number | null {
+  if (pathname.startsWith('/holding') || pathname === '/h/0' || pathname.startsWith('/h/0/')) {
+    return HOLDING_PROPERTY_ID;
+  }
+  const m = pathname.match(/^\/h\/(\d+)(\/|$)/);
+  if (m) return Number(m[1]);
+  return null;
+}
+
 export default function NDropdown() {
-  const [open, setOpen] = useState(false);
+  const router = useRouter();
   const pathname = usePathname() ?? '/';
+  const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const activeId = activePropertyFromPath(pathname);
 
-  // Close on outside click + on navigation
   useEffect(() => {
-    if (!open) return;
-    const onClick = (e: MouseEvent) => {
+    function onClickAway(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
-    document.addEventListener('mousedown', onClick);
-    document.addEventListener('keydown', onKey);
+    }
+    function onEsc(e: KeyboardEvent) { if (e.key === 'Escape') setOpen(false); }
+    document.addEventListener('mousedown', onClickAway);
+    document.addEventListener('keydown', onEsc);
     return () => {
-      document.removeEventListener('mousedown', onClick);
-      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', onClickAway);
+      document.removeEventListener('keydown', onEsc);
     };
-  }, [open]);
+  }, []);
 
-  useEffect(() => { setOpen(false); }, [pathname]);
+  function switchTo(id: number) {
+    setOpen(false);
+    if (id === activeId) return;
+    document.cookie = `tbc.active_property=${id}; path=/; max-age=${60 * 60 * 24 * 90}; samesite=lax`;
+    if (id === HOLDING_PROPERTY_ID) {
+      router.push('/holding');
+      return;
+    }
+    // Preserve the current dept sub-path when switching between properties.
+    const newPath = pathname.startsWith('/h/')
+      ? pathname.replace(/^\/h\/\d+/, `/h/${id}`)
+      : pathname.startsWith('/holding')
+        ? `/h/${id}`
+        : `/h/${id}`;
+    router.push(newPath);
+  }
 
   return (
     <div ref={ref} style={{ position: 'fixed', top: 14, left: 14, zIndex: 1000 }}>
       <button
-        onClick={() => setOpen((o) => !o)}
-        aria-label="Open department menu"
-        title="Departments"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label="Beyond Circle — switch property"
+        title="Switch property"
         style={{
-          width: 36, height: 36, borderRadius: 8,
+          width: 44,
+          height: 36,
+          borderRadius: 8,
           background: 'linear-gradient(135deg, #c79a6b, #b88556)',
           color: '#1a1a1a',
-          fontSize: 17, fontWeight: 700,
+          fontWeight: 700,
           fontFamily: "'Cooper','Source Serif Pro',Georgia,serif",
           fontStyle: 'italic',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          textDecoration: 'none',
+          boxShadow: '0 3px 10px rgba(0,0,0,0.4)',
           border: 'none',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
           cursor: 'pointer',
-          boxShadow: open ? '0 6px 20px rgba(199,154,107,0.45)' : '0 3px 10px rgba(0,0,0,0.4)',
-          transition: 'box-shadow 0.18s ease',
+          fontSize: 15,
+          letterSpacing: '0.02em',
+          lineHeight: 1,
+          padding: 0,
         }}
       >
-        N
+        BC
       </button>
 
       {open && (
-        <nav
+        <div
+          role="listbox"
           style={{
             position: 'absolute',
-            top: 'calc(100% + 8px)',
+            top: '100%',
             left: 0,
-            width: 280,
-            maxHeight: 'calc(100vh - 80px)', overflowY: 'auto',
-            background: '#0e0e0c',
-            border: '1px solid rgba(199,154,107,0.35)',
-            borderRadius: 8,
-            padding: 8,
-            boxShadow: '0 16px 50px rgba(0,0,0,0.6)',
-            color: 'var(--paper-deep)',
+            marginTop: 6,
+            minWidth: 240,
+            background: 'var(--paper-warm)',
+            border: '1px solid var(--line)',
+            borderRadius: 10,
+            boxShadow: '0 12px 28px rgba(0,0,0,0.25)',
+            overflow: 'hidden',
+            colorScheme: 'light',
           }}
         >
-          {(['home', 'pillars', 'utility'] as const).map((g, idx) => {
-            const items = MENU.filter((m) => m.group === g);
+          <div
+            style={{
+              padding: '8px 12px',
+              fontFamily: 'var(--mono)',
+              fontSize: 10,
+              letterSpacing: '0.18em',
+              textTransform: 'uppercase',
+              color: 'var(--brass)',
+              borderBottom: '1px solid var(--line-soft)',
+            }}
+          >
+            Switch property
+          </div>
+          {ALL_PROPERTIES.map((opt) => {
+            const active = opt.property_id === activeId;
             return (
-              <div key={g}>
-                {idx > 0 && (
-                  <div style={{
-                    height: 1,
-                    background: 'rgba(199,154,107,0.18)',
-                    margin: '6px 4px',
-                  }} />
-                )}
-                {items.map((m) => {
-                  const active = m.href === '/'
-                    ? (pathname === '/' || pathname === '/overview')
-                    : pathname.startsWith(m.href);
-                  return (
-                    <Link
-                      key={m.href}
-                      href={m.href}
-                      style={{
-                        display: 'block',
-                        padding: '8px 10px',
-                        borderRadius: 5,
-                        textDecoration: 'none',
-                        background: active ? 'rgba(199,154,107,0.10)' : 'transparent',
-                        marginBottom: 2,
-                      }}
-                    >
-                      <div style={{
-                        fontFamily: "'Cooper','Source Serif Pro',Georgia,serif",
-                        fontStyle: 'italic',
-                        fontSize: 15,
-                        color: active ? '#c79a6b' : 'var(--paper-deep)',
-                        lineHeight: 1.2,
-                      }}>
-                        {m.label}
-                      </div>
-                      {m.hint && (
-                        <div style={{
-                          // PBS 2026-05-09 #25: brighter hint under dept names.
-                          fontSize: 10,
-                          color: '#a8854a',
-                          fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
-                          letterSpacing: '0.06em',
-                          fontWeight: 600,
-                          marginTop: 3,
-                        }}>
-                          {m.hint}
-                        </div>
-                      )}
-                    </Link>
-                  );
-                })}
-              </div>
+              <button
+                key={opt.property_id}
+                onClick={() => switchTo(opt.property_id)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'baseline',
+                  justifyContent: 'space-between',
+                  width: '100%',
+                  padding: '10px 14px',
+                  background: active ? 'var(--paper-deep)' : 'transparent',
+                  color: active ? 'var(--brass)' : 'var(--ink)',
+                  fontWeight: active ? 600 : 400,
+                  fontSize: 14,
+                  fontFamily: 'var(--sans)',
+                  textAlign: 'left',
+                  border: 'none',
+                  cursor: 'pointer',
+                  borderBottom: '1px solid var(--line-soft)',
+                }}
+              >
+                <span>{opt.display_name}</span>
+                <span style={{ fontSize: 10, color: 'var(--ink-mute)', fontFamily: 'var(--mono)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                  {active ? '· active' : opt.tagline}
+                </span>
+              </button>
             );
           })}
-        </nav>
+        </div>
       )}
     </div>
   );

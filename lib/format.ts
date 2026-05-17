@@ -72,6 +72,7 @@ const MINUS = '−'; // U+2212 true minus, not ASCII hyphen
 
 export type KpiUnit =
   | 'usd'
+  | 'eur'
   | 'lak'
   | 'pct'
   | 'pp'
@@ -94,6 +95,12 @@ export function fmtKpi(n: number | null | undefined, unit: KpiUnit, dp = 1): str
       if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
       if (abs >= 1_000)     return `${sign}$${(abs / 1_000).toFixed(1)}k`;
       return `${sign}$${Math.round(abs).toLocaleString('en-US')}`;
+    }
+    case 'eur': {
+      // EUR uses € prefix — Donna operating currency (PBS 2026-05-16).
+      if (abs >= 1_000_000) return `${sign}€${(abs / 1_000_000).toFixed(1)}M`;
+      if (abs >= 1_000)     return `${sign}€${(abs / 1_000).toFixed(1)}k`;
+      return `${sign}€${Math.round(abs).toLocaleString('en-US')}`;
     }
     case 'lak': {
       // LAK uses ₭ prefix (locked decision per user 2026-05-03).

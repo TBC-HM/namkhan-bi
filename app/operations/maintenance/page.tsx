@@ -244,7 +244,7 @@ export default async function MaintenancePage() {
       {/* BLOCK 9 */}
       <GuardrailsBanner>
         <strong>No external vendor write or PO ever auto-fired.</strong>{' '}
-        Maintenance ops are internal — no Cloudbeds write endpoint. Vendor
+        Maintenance ops are internal — no PMS write endpoint. Vendor
         dispatch, replacement orders, and CapEx promotion are all behind
         explicit human approval. CapEx "Promote" writes only to{' '}
         <code>governance.budget_proposals</code> for /finance/budget review.

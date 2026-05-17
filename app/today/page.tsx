@@ -46,7 +46,7 @@ export default async function TodayPage() {
         }
       />
 
-      <FilterStrip liveSource="Cloudbeds · live" />
+      <FilterStrip liveSource="PMS · live" />
 
       <div className="panel">
         <PanelHero
@@ -90,7 +90,7 @@ export default async function TodayPage() {
         )}
 
         <div className="card-grid-2" style={{ marginTop: 22 }}>
-          <Card title="Arrivals" emphasis={`· ${arrivals.length} today`} sub="Cloudbeds · status not_checked_in / confirmed">
+          <Card title="Arrivals" emphasis={`· ${arrivals.length} today`} sub="PMS · status not_checked_in / confirmed">
             {arrivals.length === 0 ? (
               <div style={{ padding: 24, color: 'var(--ink-mute)', fontStyle: 'italic' }}>
                 No arrivals today.
@@ -207,7 +207,7 @@ export default async function TodayPage() {
               <p>Appointments · therapist load. Standalone scheduler not yet integrated.</p>
             </div>
           </Card>
-          <Card title="Activities Today" sub="Activity bookings live outside Cloudbeds" source="grey">
+          <Card title="Activities Today" sub="Activity bookings live outside PMS" source="grey">
             <div className="stub" style={{ padding: 32 }}>
               <h3>Coming soon</h3>
               <p>Bookings · suppliers. Phase 2 — when activity supplier feeds are in place.</p>

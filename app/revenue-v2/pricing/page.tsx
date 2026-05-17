@@ -12,7 +12,7 @@ export default function PricingPage() {
     <main className="page">
       <PageHeader
         title={d.header.title}
-        narrative={<span><em>Recommend-only.</em> No write to Cloudbeds. 5 recs queued — 2 flagged soft-floor for weekend hold.</span>}
+        narrative={<span><em>Recommend-only.</em> No write to PMS. 5 recs queued — 2 flagged soft-floor for weekend hold.</span>}
         meta={d.header.meta}
         actions={
           <>

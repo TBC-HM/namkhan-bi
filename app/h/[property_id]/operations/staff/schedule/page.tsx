@@ -1,30 +1,5 @@
-// app/h/[property_id]/operations/staff/schedule/page.tsx — property-scoped
-import ScheduleTabContent from '../../../../../operations/staff/_components/ScheduleTabContent';
-import { NAMKHAN_PROPERTY_ID, DONNA_PROPERTY_ID } from '@/lib/dept-cfg/by-property';
-
-export const revalidate = 60;
-export const dynamic = 'force-dynamic';
-
-const PROPERTY_LABELS: Record<number, string> = {
-  [NAMKHAN_PROPERTY_ID]: 'Namkhan',
-  [DONNA_PROPERTY_ID]:   'Donna Portals',
-};
-
-interface Props {
-  params: { property_id: string };
-  searchParams: Record<string, string | string[] | undefined>;
-}
-
-export default async function StaffScheduleScoped({ params, searchParams }: Props) {
-  const propertyId = Number(params.property_id);
-  if (!Number.isFinite(propertyId)) {
-    return <ScheduleTabContent propertyId={NAMKHAN_PROPERTY_ID} propertyLabel="Namkhan" searchParams={searchParams} />;
-  }
-  return (
-    <ScheduleTabContent
-      propertyId={propertyId}
-      propertyLabel={PROPERTY_LABELS[propertyId] ?? `Property ${propertyId}`}
-      searchParams={searchParams}
-    />
-  );
+// app/h/[property_id]/operations/staff/schedule/page.tsx — HR routes moved to /h/[property_id]/finance/hr/schedule
+import { redirect } from 'next/navigation';
+export default function StaffRedirect({ params }: { params: { property_id: string } }) {
+  redirect(`/h/${params.property_id}/finance/hr/schedule`);
 }

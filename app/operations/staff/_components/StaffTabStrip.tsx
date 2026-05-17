@@ -1,32 +1,44 @@
 // app/operations/staff/_components/StaffTabStrip.tsx
-// PBS 2026-05-13 — internal tab strip inside the Staff page.
-// Tabs: Register · Attendance · Schedule. Routes preserve propertyId.
+// PBS 2026-05-15 — HR tab strip. URL home is /finance/hr/*. Tabs:
+// Register · Lifecycle · Attendance · Schedule · Holidays · Recruitment · Data.
+// Lifecycle merges what used to be Onboarding + Offboarding into one parent
+// with 3 internal sub-tabs (onboarding / offboarding / warnings). Old /onboarding
+// and /offboarding URLs 307-redirect into ?view= on the Lifecycle page.
 
 'use client';
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-interface Tab { label: string; slug: '' | 'attendance' | 'schedule' | 'holidays' | 'data' | 'report'; }
+interface Tab {
+  label: string;
+  slug: '' | 'lifecycle' | 'attendance' | 'schedule' | 'holidays' | 'data' | 'recruitment';
+}
 const TABS: Tab[] = [
-  { label: 'Register',   slug: ''           },
-  { label: 'Attendance', slug: 'attendance' },
-  { label: 'Schedule',   slug: 'schedule'   },
-  { label: 'Holidays',   slug: 'holidays'   },
-  { label: 'Data',       slug: 'data'       },
-  { label: 'Report',     slug: 'report'     },
+  { label: 'Register',    slug: ''            },
+  { label: 'Lifecycle',   slug: 'lifecycle'   },
+  { label: 'Attendance',  slug: 'attendance'  },
+  { label: 'Schedule',    slug: 'schedule'    },
+  { label: 'Holidays',    slug: 'holidays'    },
+  { label: 'Recruitment', slug: 'recruitment' },
+  { label: 'Data',        slug: 'data'        },
 ];
 
 export default function StaffTabStrip({ propertyId }: { propertyId: number }) {
-  const pathname = usePathname() ?? '/operations/staff';
-  const base = propertyId === 260955 ? '/operations/staff' : `/h/${propertyId}/operations/staff`;
+  const pathname = usePathname() ?? '/finance/hr';
+  const base = propertyId === 260955 ? '/finance/hr' : `/h/${propertyId}/finance/hr`;
 
+  // Legacy /onboarding + /offboarding still light up Lifecycle until the
+  // redirects finish propagating from any cached link.
   const activeSlug: Tab['slug'] =
-    pathname.endsWith('/attendance') ? 'attendance' :
-    pathname.endsWith('/schedule')   ? 'schedule'   :
-    pathname.endsWith('/holidays')   ? 'holidays'   :
-    pathname.endsWith('/data')       ? 'data'       :
-    pathname.endsWith('/report')     ? 'report'     :
+    pathname.endsWith('/attendance')   ? 'attendance'   :
+    pathname.endsWith('/schedule')     ? 'schedule'     :
+    pathname.endsWith('/holidays')     ? 'holidays'     :
+    pathname.endsWith('/recruitment')  ? 'recruitment'  :
+    pathname.endsWith('/data')         ? 'data'         :
+    pathname.includes('/lifecycle')    ? 'lifecycle'    :
+    pathname.endsWith('/onboarding')   ? 'lifecycle'    :
+    pathname.endsWith('/offboarding')  ? 'lifecycle'    :
     '';
 
   return (

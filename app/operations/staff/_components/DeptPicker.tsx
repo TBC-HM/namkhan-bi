@@ -48,6 +48,7 @@ export default function DeptPicker({
         borderRadius: 4,
         cursor: 'pointer',
         minWidth: 180,
+        colorScheme: 'light',
       }}
     >
       <option value="all">All departments</option>

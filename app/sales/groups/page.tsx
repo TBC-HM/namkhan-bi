@@ -8,6 +8,7 @@ import KpiBox from '@/components/kpi/KpiBox';
 import ArtifactActions from '@/components/page/ArtifactActions';
 import GroupsTable, { type GroupRow as GroupRowT } from './_components/GroupsTable';
 import { SALES_SUBPAGES } from '../_subpages';
+import ParkedPageBanner from '../_components/ParkedPageBanner';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -64,6 +65,11 @@ export default async function GroupsPage() {
       title={<>Groups · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>{groups.length} blocks</em></>}
       subPages={SALES_SUBPAGES}
     >
+      <ParkedPageBanner
+        oldName="Groups"
+        goToHref="/sales/leads?deal_type=group"
+        goToLabel="Pipeline · Group filter"
+      />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
         <KpiBox value={groups.length} unit="count" label="Active blocks" tooltip={`${upcoming} upcoming`} />
         <KpiBox value={totalRn} unit="count" label="Total room nights" tooltip="Sum of block_size across active blocks." />

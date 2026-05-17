@@ -224,7 +224,7 @@ export default function FolioPopover(props: Props) {
                   borderRadius: 4,
                   textDecoration: 'none',
                 }}
-              >Open in Cloudbeds PMS ↗</a>
+              >Open in PMS ↗</a>
               {props.email
                 ? <a href={`mailto:${props.email}`} style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)', border: '1px solid var(--paper-deep)', padding: '3px 8px', borderRadius: 4, textDecoration: 'none' }}>Email</a>
                 : <span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', color: 'var(--ink-soft)', opacity: 0.6 }}>email not synced</span>}

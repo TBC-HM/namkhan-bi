@@ -31,29 +31,36 @@ export default function ModuleStateGate({
   const isPlanned = status === 'planned';
 
   return (
-    <div className="min-h-screen bg-[var(--bg,#F4EFE2)]">
+    <div className="min-h-screen">
       <div className="max-w-3xl mx-auto px-6 py-24">
-        <div className="rounded-lg border border-[var(--sand,#B8A878)]/40 bg-[var(--bg,#F4EFE2)] p-10 text-center">
-          <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium tracking-wider uppercase mb-6"
+        <div
+          className="rounded-lg p-10 text-center"
+          style={{ background: 'var(--card)', border: '1px solid var(--border)' }}
+        >
+          <div className="inline-flex items-center px-3 py-1 rounded-full font-medium tracking-wider uppercase mb-6"
                style={{
-                 background: isPlanned ? 'rgba(184, 84, 42, 0.08)' : 'rgba(184, 168, 120, 0.15)',
-                 color: isPlanned ? 'var(--terracotta, #B8542A)' : 'var(--sand, #B8A878)',
+                 fontSize: 'var(--t-xs)',
+                 background: isPlanned ? 'rgba(168, 133, 74, 0.15)' : 'var(--paper-deep)',
+                 color: isPlanned ? 'var(--brass)' : 'var(--ink-mute)',
                }}>
             {isPlanned ? 'Planned' : 'Not enabled'}
           </div>
 
-          <h1 className="text-3xl font-serif text-[var(--primary,#1F3A2E)] mb-3">
+          <h1 className="font-serif mb-3" style={{ fontSize: 'var(--t-3xl)', color: 'var(--ink)' }}>
             {meta.title}
           </h1>
-          <p className="text-base text-[var(--primary,#1F3A2E)]/70 mb-6">
+          <p className="mb-6" style={{ fontSize: 'var(--t-md)', color: 'var(--ink-soft)' }}>
             {meta.description}
           </p>
 
-          <div className="mt-8 pt-6 border-t border-[var(--sand,#B8A878)]/30 text-sm text-[var(--primary,#1F3A2E)]/60">
+          <div
+            className="mt-8 pt-6"
+            style={{ borderTop: '1px solid var(--border)', fontSize: 'var(--t-sm)', color: 'var(--ink-mute)' }}
+          >
             <p className="mb-1">
-              <span className="font-medium text-[var(--primary,#1F3A2E)]">For {propertyName}:</span> {meta.roadmap}
+              <span className="font-medium" style={{ color: 'var(--ink)' }}>For {propertyName}:</span> {meta.roadmap}
             </p>
-            <p className="text-xs text-[var(--primary,#1F3A2E)]/40 mt-2">
+            <p className="mt-2" style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-faint)' }}>
               Module: <code className="font-mono">{moduleCode}</code> · Status: <code className="font-mono">{status}</code>
             </p>
           </div>

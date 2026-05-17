@@ -67,7 +67,7 @@ export default async function PulseReport({ period }: Props) {
         padding: 24, color: '#7d7565', fontStyle: 'italic', textAlign: 'center',
         background: '#0f0d0a', border: '1px solid #1f1c15', borderRadius: 10,
       }}>
-        No pulse data for {period.label}. Cloudbeds returned no rows for this window.
+        No pulse data for {period.label}. PMS returned no rows for this window.
       </div>
     );
   }

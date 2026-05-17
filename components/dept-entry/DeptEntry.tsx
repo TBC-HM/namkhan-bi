@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { DeptCfg } from '@/lib/dept-cfg/types';
 import Page from '@/components/page/Page';
 import Panel from '@/components/page/Panel';
+import HoldingExtras from './HoldingExtras';
 
 /* ──────────────────────────────────────────────────────────────────────────
  * /revenue — entry page
@@ -668,7 +669,14 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
       const lines = attachments.map(a => `📎 ${a.name} (${(a.size / 1024).toFixed(0)} KB) — ${a.public_url ?? a.path}`);
       body = body ? `${body}\n\n${lines.join('\n')}` : lines.join('\n');
     }
+    // 2026-05-14 fix: pass the resolved persona explicitly so /cockpit/chat
+    // doesn't fall back to Felix for non-canonical dept surfaces (e.g.
+    // /holding/legal where cfg.slug='architect' but ownerRole='legal_specialist_donna').
     const params = new URLSearchParams({ q: body, dept: cfg.slug });
+    if (cfg.ownerRole) params.set('role', cfg.ownerRole);
+    if (cfg.hodName)   params.set('name', cfg.hodName);
+    if (cfg.hodEmoji)  params.set('emoji', cfg.hodEmoji);
+    if (cfg.pillTitle) params.set('label', cfg.pillTitle);
     if (activeProject) params.set('project', activeProject.slug);
     router.push(`/cockpit/chat?${params.toString()}`);
   }
@@ -691,6 +699,10 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
   }
   function askVectorAbout(label: string) {
     const params = new URLSearchParams({ q: label, dept: cfg.slug });
+    if (cfg.ownerRole) params.set('role', cfg.ownerRole);
+    if (cfg.hodName)   params.set('name', cfg.hodName);
+    if (cfg.hodEmoji)  params.set('emoji', cfg.hodEmoji);
+    if (cfg.pillTitle) params.set('label', cfg.pillTitle);
     if (activeProject) params.set('project', activeProject.slug);
     router.push(`/cockpit/chat?${params.toString()}`);
   }
@@ -851,6 +863,24 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
     const next: DocItem[] = [newDoc, ...docs];
     setDocs(next); saveLS(DOCS_KEY, next);
     setReportModal(false);
+
+    // PBS ask 24 (2026-05-13): also fire a cockpit ticket so the triage layer
+    // picks up the report request and routes it to the right HOD. The full
+    // Report-template render system is task #25 — here we only create the
+    // ticket. Fire-and-forget; the local doc card is the immediate UX.
+    void (async () => {
+      try {
+        const intentLine = `report_request · ${cfg.slug} · ${REPORT_LABEL[reportType]} · ${dimSummary}${sched}`;
+        await fetch('/api/cockpit/chat', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: intentLine,
+            current_page_url: typeof window !== 'undefined' ? window.location.href : undefined,
+          }),
+        });
+      } catch { /* silent — local card is the source of truth for now */ }
+    })();
   }
 
   // Pick from computer — direct upload via /api/cockpit/upload.
@@ -1085,7 +1115,7 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
   // The local topRightJSX is retained but unused; remove in a follow-up.
   void topRightJSX;
   return (
-    <Page subPages={DEPT_LINKS} kpiTiles={cfg.kpiTiles}>
+    <Page subPages={DEPT_LINKS} kpiTiles={cfg.kpiTiles} hideWeather={cfg.hideWeather}>
 
       {/* ── PROJECT BOX (PBS 2026-05-08) ───────────────────────────────────
        * Scopes chat + uploads to a project so the AI uses only global KB +
@@ -1441,8 +1471,42 @@ export default function DeptEntry({ cfg }: { cfg: DeptCfg }) {
               {c.label}
             </a>
           ))}
+          {/* PBS 2026-05-15: cfg-driven accent buttons (e.g. Finance · Messy data in orange) */}
+          {(cfg.extraChatButtons ?? []).map((b) => {
+            const accent = b.color || '#d68a3a';
+            return (
+              <a
+                key={b.href}
+                href={b.href}
+                style={{
+                  background:     accent,
+                  border:         `1px solid ${accent}`,
+                  borderRadius:   18,
+                  color:          '#0a0a0a',
+                  fontFamily:     "'JetBrains Mono', ui-monospace, monospace",
+                  fontSize:       10,
+                  letterSpacing:  '0.18em',
+                  textTransform:  'uppercase',
+                  fontWeight:     700,
+                  padding:        '6px 14px',
+                  textDecoration: 'none',
+                  whiteSpace:     'nowrap',
+                  transition:     'opacity 0.15s',
+                }}
+              >
+                {b.label}
+              </a>
+            );
+          })}
         </div>
       </div>
+
+      {/* ── cfg-driven holding extras (PBS 2026-05-14): when the cfg
+       *   carries customExtra='holding', inject the BC peach property-tile
+       *   grid + Cockpit CTA between the chat row and the containers row.
+       *   /holding is the only surface using this today.
+       * ───────────────────────────────────────────────────────────────── */}
+      {cfg.customExtra === 'holding' && <HoldingExtras />}
 
       {/* ── containers row (PBS 2026-05-08): "Needs your attention" split
        *   into Leakage + Opportunity. With Docs + Tasks that's 4 cards;
@@ -2561,46 +2625,50 @@ function KBPopover({
   footer?: string;
 }) {
   return (
+    // PBS 2026-05-14: switched from --surf-*/--text-* to legacy
+    // --paper-warm/--ink/--brass for theme-safe rendering on both Namkhan
+    // (dark :root defaults) and Donna (lightLegacyVars overrides).
     <div style={{
       position: 'absolute', top: 32, right: 0, zIndex: 60,
-      background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-3, #3a3327)', borderRadius: 10,
-      padding: 14, minWidth: 320, boxShadow: '0 12px 28px rgba(0,0,0,0.6)',
+      background: 'var(--paper-warm)', border: '1px solid var(--line)', borderRadius: 10,
+      padding: 14, minWidth: 320, boxShadow: '0 12px 28px rgba(0,0,0,0.25)',
+      color: 'var(--ink)',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
         <div style={{
           fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-          fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--accent, #a8854a)',
+          fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--brass)',
         }}>{eyebrow}</div>
         <button onClick={onClose} aria-label="Close" style={{
-          background: 'transparent', border: 'none', color: 'var(--text-dim, #7d7565)', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0,
+          background: 'transparent', border: 'none', color: 'var(--ink-mute)', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0,
         }}>×</button>
       </div>
       <div style={{
         fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic',
-        fontSize: 22, color: 'var(--text-2, #d8cca8)', marginBottom: 12,
+        fontSize: 22, color: 'var(--ink)', marginBottom: 12,
       }}>{title}</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
         {rows.map(r => (
           <div key={r.k} style={{
-            background: 'var(--surf-2, #15110b)', border: '1px solid var(--border-2, #2a261d)', borderRadius: 6, padding: '8px 10px',
+            background: 'var(--paper)', border: '1px solid var(--line-soft)', borderRadius: 6, padding: '8px 10px',
           }}>
             <div style={{
               fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-              fontSize: 9, letterSpacing: '0.18em', color: 'var(--text-dim, #7d7565)', textTransform: 'uppercase',
+              fontSize: 9, letterSpacing: '0.18em', color: 'var(--ink-mute)', textTransform: 'uppercase',
             }}>{r.k}</div>
             <div style={{
               fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic',
-              fontSize: 18, color: 'var(--text-2, #d8cca8)', marginTop: 2,
+              fontSize: 18, color: 'var(--ink)', marginTop: 2,
             }}>{r.v}</div>
-            <div style={{ fontSize: 10, color: 'var(--text-mute, #9b907a)', marginTop: 2 }}>{r.d}</div>
+            <div style={{ fontSize: 10, color: 'var(--ink-soft)', marginTop: 2 }}>{r.d}</div>
           </div>
         ))}
       </div>
       {footer && (
         <div style={{
-          marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--border-1, #1f1c15)',
+          marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--line-soft)',
           fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-          fontSize: 9, letterSpacing: '0.16em', color: 'var(--text-place, #5a5448)', textAlign: 'right',
+          fontSize: 9, letterSpacing: '0.16em', color: 'var(--ink-mute)', textAlign: 'right',
         }}>{footer}</div>
       )}
     </div>

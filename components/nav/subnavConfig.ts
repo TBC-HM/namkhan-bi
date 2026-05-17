@@ -119,7 +119,7 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/finance/pnl',              label: 'P&L' },
     { href: '/finance/ledger',           label: 'Ledger' },
     { href: '/finance/transactions',     label: 'Transactions' },
-    { href: '/finance/pos-transactions', label: 'POS · Cloudbeds' },
+    { href: '/finance/pos-transactions', label: 'POS · PMS' },
     { href: '/finance/poster',           label: 'POS · Poster',    isNew: true },
     { href: '/finance/mapping',          label: 'Account mapping' },
     { href: '/finance/supplier-mapping', label: 'Supplier mapping' },

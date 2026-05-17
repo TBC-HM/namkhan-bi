@@ -74,7 +74,7 @@ export default function SyncCloudbedsButton() {
         className="rounded-sm border border-emerald-900 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.10em] text-emerald-900 hover:bg-emerald-900 hover:text-white"
         style={{ marginRight: 8 }}
       >
-        ⇣ Sync from Cloudbeds
+        ⇣ Sync from PMS
       </button>
 
       {open && (
@@ -85,7 +85,7 @@ export default function SyncCloudbedsButton() {
           <div className="w-full max-w-2xl rounded-md bg-white p-6 text-sm text-stone-800 shadow-xl">
             <div className="mb-4 flex items-baseline justify-between">
               <h2 className="font-serif text-2xl text-stone-900">
-                Sync from <em className="italic">Cloudbeds POS</em>
+                Sync from <em className="italic">PMS POS</em>
               </h2>
               <button
                 type="button"
@@ -96,9 +96,9 @@ export default function SyncCloudbedsButton() {
             </div>
 
             <div className="mb-4 rounded-sm border border-stone-200 bg-stone-50 p-3 text-xs text-stone-600">
-              <div>Cloudbeds POS items live-sync to <code className="font-mono">public.items</code> via the existing <code className="font-mono">sync-cloudbeds</code> Edge Function. This sync mirrors selected categories into <code className="font-mono">inv.items</code> so they appear in the catalog.</div>
+              <div>PMS POS items live-sync to <code className="font-mono">public.items</code> via the existing <code className="font-mono">sync-cloudbeds</code> Edge Function. This sync mirrors selected categories into <code className="font-mono">inv.items</code> so they appear in the catalog.</div>
               <div className="mt-1">SKU pattern: <code className="font-mono">CB-{`{cloudbeds_item_id}`}</code>. Re-running this sync upserts; it never deletes.</div>
-              <div className="mt-1 text-stone-500">Note: Cloudbeds <code className="font-mono">unit_price</code> is the SALE price, used here as a stand-in for cost. Replace via CSV upload once you have real cost data.</div>
+              <div className="mt-1 text-stone-500">Note: PMS <code className="font-mono">unit_price</code> is the SALE price, used here as a stand-in for cost. Replace via CSV upload once you have real cost data.</div>
             </div>
 
             <div className="mb-3">

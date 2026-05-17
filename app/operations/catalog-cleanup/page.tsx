@@ -87,7 +87,7 @@ export default async function CatalogCleanupPage() {
     <>
       <SlimHero
         eyebrow="Operations · Catalog cleanup"
-        title="Cloudbeds"
+        title="PMS"
         emphasis="cleanup queue"
         sub={`${summary.total} dirty SKUs · last 180d · sorted by score, then revenue`}
       />
@@ -96,7 +96,7 @@ export default async function CatalogCleanupPage() {
       <KpiStrip
         items={[
           { label: 'Open · undecided', value: summary.open, kind: 'count', tone: summary.open > 0 ? 'warn' : 'pos', hint: `${summary.total} surfaced total` },
-          { label: 'Decided',         value: summary.decided, kind: 'count', tone: 'pos', hint: 'apply in Cloudbeds, then mark applied' },
+          { label: 'Decided',         value: summary.decided, kind: 'count', tone: 'pos', hint: 'apply in PMS, then mark applied' },
           { label: 'Departments hit', value: summary.byDept.length, kind: 'count', hint: 'click a card below' },
           { label: 'Total revenue', value: summary.byDept.reduce((s, d) => s + d.rev, 0), kind: 'money', hint: 'lifetime touched by dirty SKUs' },
         ] satisfies KpiStripItem[]}
@@ -187,10 +187,10 @@ export default async function CatalogCleanupPage() {
           marginBottom: 6,
         }}>How to clean</div>
         <strong>Re-flag USALI</strong>: edit <code style={{ fontFamily: 'var(--mono)' }}>usali_category_map</code> rules (DB) — add a row matching the description / item_category_name. <br />
-        <strong>Split SKU in Cloudbeds</strong>: in Cloudbeds → Manage → Items, the SKU with &gt;2.5× price spread is hiding two real items. Rename one, give it its own price. <br />
+        <strong>Split SKU in PMS</strong>: in PMS → Manage → Items, the SKU with &gt;2.5× price spread is hiding two real items. Rename one, give it its own price. <br />
         <strong>Add duration</strong>: rename spa SKUs to include &quot;(60 min)&quot; / &quot;(90 min)&quot;. <br />
         <strong>Set USD price</strong>: items with .55 / .82 / .09 cents are LAK-base; set them in USD with round prices. <br />
-        <strong>Set category</strong>: items with empty <code style={{ fontFamily: 'var(--mono)' }}>item_category_name</code> need a category in Cloudbeds.
+        <strong>Set category</strong>: items with empty <code style={{ fontFamily: 'var(--mono)' }}>item_category_name</code> need a category in PMS.
       </div>
     </>
   );

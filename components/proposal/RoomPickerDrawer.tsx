@@ -82,7 +82,7 @@ export default function RoomPickerDrawer({ open, onClose, fromDate, toDate, onPi
 
         {staleMin != null && staleMin > 60 && (
           <div className="proposal-drawer-warn">
-            <strong>Rates stale</strong> — last sync {staleMin} min ago. Refresh from Cloudbeds before sending.
+            <strong>Rates stale</strong> — last sync {staleMin} min ago. Refresh from PMS before sending.
           </div>
         )}
 
@@ -90,7 +90,7 @@ export default function RoomPickerDrawer({ open, onClose, fromDate, toDate, onPi
           {loading && <p style={{ color: 'var(--ink-mute)' }}>Loading availability…</p>}
           {!loading && rooms.length === 0 && (
             <div className="panel dashed" style={{ padding: 24, color: 'var(--ink-mute)' }}>
-              No rooms available for the full date range. Try different dates, or check Cloudbeds for stop-sell flags.
+              No rooms available for the full date range. Try different dates, or check PMS for stop-sell flags.
             </div>
           )}
           {!loading && rooms.length > 0 && (

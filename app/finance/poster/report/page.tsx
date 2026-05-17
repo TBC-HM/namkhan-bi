@@ -36,7 +36,7 @@ function buildFindings(f: PosterReportFindings): Finding[] {
     severity: 'high', area: 'Reconciliation', kind: 'unmatchable',
     finding: 'Charge-to-room receipts with un-resolvable client',
     count: f.unmatchable_clients_n, usd: f.unmatchable_clients_usd,
-    why: 'Manager typed staff names / generic placeholders / unrecognized labels in Poster\'s "client" field. Cannot tie back to a Cloudbeds reservation, so we don\'t know whose folio to check.',
+    why: 'Manager typed staff names / generic placeholders / unrecognized labels in Poster\'s "client" field. Cannot tie back to a PMS reservation, so we don\'t know whose folio to check.',
     action: 'Train F&B manager: pick the actual guest from Poster\'s customer list (Customers screen). Stop typing room-type names. Audit Poster customer list to ensure all in-house guests appear.',
     owner: 'F&B manager · today',
   });
@@ -68,23 +68,23 @@ function buildFindings(f: PosterReportFindings): Finding[] {
     severity: 'med', area: 'Reconciliation', kind: 'amount_mismatch',
     finding: 'Amount mismatch — client matched, total differs',
     count: f.amount_mismatch_n, usd: f.amount_mismatch_usd,
-    why: 'Reservation found, but Cloudbeds folio amount differs from Poster receipt by > 5%. Could be split bill, comped item, or amount typed wrong.',
-    action: 'Click each row in the receipts ledger filter "amount_mismatch", check the Cloudbeds folio against the Poster receipt. Tag legitimate splits, fix the rest.',
+    why: 'Reservation found, but PMS folio amount differs from Poster receipt by > 5%. Could be split bill, comped item, or amount typed wrong.',
+    action: 'Click each row in the receipts ledger filter "amount_mismatch", check the PMS folio against the Poster receipt. Tag legitimate splits, fix the rest.',
     owner: 'You · monthly close',
   });
   list.push({
     severity: 'med', area: 'Reconciliation', kind: 'no_cb_lines',
     finding: 'No CB folio line — reservation found, no F&B charge',
     count: f.no_cb_lines_n, usd: f.no_cb_lines_usd,
-    why: 'Poster says "charge to room", reservation exists, but no F&B charge ever made it onto the Cloudbeds folio. This is real revenue leakage.',
-    action: 'Manually post each receipt to the right folio in Cloudbeds. Going forward, audit "Charge to Room" receipts daily — the post-to-folio workflow is broken.',
+    why: 'Poster says "charge to room", reservation exists, but no F&B charge ever made it onto the PMS folio. This is real revenue leakage.',
+    action: 'Manually post each receipt to the right folio in PMS. Going forward, audit "Charge to Room" receipts daily — the post-to-folio workflow is broken.',
     owner: 'F&B manager · daily',
   });
   list.push({
     severity: 'low', area: 'Mapping',
-    finding: 'Poster nicknames not mapped to Cloudbeds room types',
+    finding: 'Poster nicknames not mapped to PMS room types',
     count: f.unaliased_distinct_clients, usd: null,
-    why: 'Manager invented nicknames like "Namkhan Tent", "River Side Villa", "Art Suite" that don\'t match any Cloudbeds room_type_name.',
+    why: 'Manager invented nicknames like "Namkhan Tent", "River Side Villa", "Art Suite" that don\'t match any PMS room_type_name.',
     action: `Edit pos.poster_room_type_alias and add a row for each unaliased nickname. ${f.alias_review_n} existing aliases are marked 'review' — verify those first.`,
     owner: 'You · 30 minutes',
   });
@@ -176,13 +176,13 @@ export default async function PosterReportPage() {
         ] satisfies KpiStripItem[]}
       />
 
-      {/* Top-down monthly recon: Poster Charge-to-Room out vs Cloudbeds F&B in */}
+      {/* Top-down monthly recon: Poster Charge-to-Room out vs PMS F&B in */}
       <section style={{ marginTop: 18 }}>
         <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 'var(--t-lg)', marginBottom: 6 }}>
-          Monthly <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>Poster ↔ Cloudbeds</em> recon
+          Monthly <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>Poster ↔ PMS</em> recon
         </h2>
         <p style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-soft)', margin: '0 0 12px' }}>
-          What Poster says it sent to room ({'$'}<em>posted</em>) vs what Cloudbeds actually has on guest folios as F&amp;B ({'$'}<em>booked</em>).
+          What Poster says it sent to room ({'$'}<em>posted</em>) vs what PMS actually has on guest folios as F&amp;B ({'$'}<em>booked</em>).
           The two should be near-identical. They&apos;re not.
         </p>
         <div style={{ overflowX: 'auto', border: '1px solid var(--paper-deep)', borderRadius: 8 }}>
@@ -255,9 +255,9 @@ export default async function PosterReportPage() {
           fontSize: 'var(--t-xs)', color: 'var(--ink)', lineHeight: 1.5,
         }}>
           <strong>Diagnosis:</strong> Poster&apos;s &quot;Charge to Room&quot; method went to <strong>$0</strong> in Nov 2025 and hasn&apos;t been used since.
-          Cloudbeds folios still receive F&amp;B charges (~$10k/month). That means either (a) the manager switched to a different posting workflow that bypasses Poster&apos;s &quot;Charge to Room&quot; flag,
-          (b) there&apos;s a parallel manual-posting path into Cloudbeds, or (c) Poster was reconfigured and old receipts are now being mis-tagged as &quot;Card&quot; or &quot;Without payment&quot;.
-          Pull the Cloudbeds folio audit log for one Apr 2026 day and trace where the F&amp;B lines came from. That&apos;s the unblocking step.
+          PMS folios still receive F&amp;B charges (~$10k/month). That means either (a) the manager switched to a different posting workflow that bypasses Poster&apos;s &quot;Charge to Room&quot; flag,
+          (b) there&apos;s a parallel manual-posting path into PMS, or (c) Poster was reconfigured and old receipts are now being mis-tagged as &quot;Card&quot; or &quot;Without payment&quot;.
+          Pull the PMS folio audit log for one Apr 2026 day and trace where the F&amp;B lines came from. That&apos;s the unblocking step.
         </div>
       </section>
 
@@ -465,10 +465,10 @@ export default async function PosterReportPage() {
           Process <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>fix</em>
         </h2>
         <p style={{ fontSize: 'var(--t-sm)', color: 'var(--ink)', lineHeight: 1.5 }}>
-          Every finding above is a symptom of the same root cause: <strong>Poster receipts are not properly tied to Cloudbeds reservations</strong>. Two SOP changes solve 80% of this:
+          Every finding above is a symptom of the same root cause: <strong>Poster receipts are not properly tied to PMS reservations</strong>. Two SOP changes solve 80% of this:
         </p>
         <ol style={{ fontSize: 'var(--t-sm)', color: 'var(--ink)', lineHeight: 1.6, paddingLeft: 22 }}>
-          <li><strong>At the table:</strong> waiter taps the customer field in Poster → picks the guest from the dropdown (which now lists tonight&apos;s in-house Cloudbeds guests). Never type the room type or &quot;Hotel Guest&quot;.</li>
+          <li><strong>At the table:</strong> waiter taps the customer field in Poster → picks the guest from the dropdown (which now lists tonight&apos;s in-house PMS guests). Never type the room type or &quot;Hotel Guest&quot;.</li>
           <li><strong>At end of shift:</strong> manager reviews open receipts — closes them or adds a delete reason. No receipt is allowed to stay Open past midnight.</li>
         </ol>
         <p style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-soft)', marginTop: 10 }}>

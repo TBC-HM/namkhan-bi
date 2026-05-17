@@ -135,7 +135,7 @@ export default function CatalogTableClient({ rows }: { rows: CatalogRow[] }) {
             No products yet.
           </div>
           <div style={{ marginTop: 6, fontSize: 'var(--t-sm)' }}>
-            Click <strong>+ Upload products</strong> to bulk-load from a Cloudbeds export CSV.
+            Click <strong>+ Upload products</strong> to bulk-load from a PMS export CSV.
           </div>
         </div>
       }

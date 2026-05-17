@@ -25,8 +25,16 @@
 import Link from 'next/link';
 import Page from '@/components/page/Page';
 import { MARKETING_SUBPAGES } from '../_subpages';
+import TabStrip, { INFO_TABS } from '@/app/finance/_components/TabStrip';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
+import IcpCockpit from './_components/IcpCockpit';
+
+type IcpView = 'roster' | 'analytics' | 'discovery' | 'create' | 'contacts';
+function parseIcpView(v: string | string[] | undefined): IcpView {
+  const s = typeof v === 'string' ? v : 'roster';
+  return (['roster', 'analytics', 'discovery', 'create', 'contacts'] as string[]).includes(s) ? (s as IcpView) : 'roster';
+}
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import { fmtMoney } from '@/lib/format';
 import {
@@ -207,13 +215,34 @@ export default async function AudiencesPage({ searchParams }: Props) {
 
   const dataMissing = totalProfiles === 0;
 
+  const icpView = parseIcpView(searchParams?.view);
+  // topCountries / topSources are tuples [name, count] from Map.entries()
+  const topCountry = topCountries[0]?.[0] ?? undefined;
+  const topSource  = topSources[0]?.[0]  ?? undefined;
+
   return (
     <Page
-      eyebrow="Marketing · Audiences"
-      title={<>Pick the <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>list</em> — then write the message.</>}
+      eyebrow="Marketing · Audiences · ICP cockpit"
+      title={<>ICP <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>cockpit</em></>}
       subPages={MARKETING_SUBPAGES}
     >
+      <TabStrip tabs={INFO_TABS} activeKey="audiences" />
 
+      {/* PBS 2026-05-16: ICP cockpit on top — Roster · Analytics · AI Discovery · Create. */}
+      <IcpCockpit
+        view={icpView}
+        liveCounts={{ totalProfiles, withCountry, withEmail, topCountry, topSource }}
+      />
+
+      {/* Below sections render only when view=contacts (the live guest data) */}
+      {icpView !== 'contacts' && (
+        <div style={{ marginTop: 18, padding: '10px 12px', fontSize: 'var(--t-xs)', color: 'var(--text-mute, #9b907a)', fontStyle: 'italic', borderTop: '1px solid var(--border-1, #1f1c15)' }}>
+          Live guest data ({totalProfiles.toLocaleString('en-US')} profiles · {withCountry} with country · {withEmail} email-addressable) drives the cockpit. Open <a href="?view=contacts" style={{ color: 'var(--brass)' }}>Guest contacts</a> to browse the source rows.
+        </div>
+      )}
+
+      {icpView === 'contacts' && (
+        <>
       <GuestStatusHeader
         top={
           <>
@@ -237,7 +266,7 @@ export default async function AudiencesPage({ searchParams }: Props) {
             </StatusCell>
             <StatusCell label="EMAIL ADDRESSABLE">
               <span style={metaSm}>{withEmail}</span>
-              {withEmail === 0 && <span style={metaDim}>· Cloudbeds anonymises emails — channel pending</span>}
+              {withEmail === 0 && <span style={metaDim}>· PMS anonymises emails — channel pending</span>}
             </StatusCell>
             <StatusCell label="SEGMENT">
               <span style={metaSm}>{selectedSegment.label}</span>
@@ -285,10 +314,10 @@ export default async function AudiencesPage({ searchParams }: Props) {
               fontSize: 'var(--t-sm)',
               color: 'var(--ink)',
             }}>
-              <strong>Heads-up.</strong> Cloudbeds returns <code>email = null</code> for every guest in the
+              <strong>Heads-up.</strong> PMS returns <code>email = null</code> for every guest in the
               materialized view — so 0 of 4,140 are reachable by email today. Behavioural segmentation
               still works (stays / recency / country / source); add an email channel by either (a)
-              wiring the Cloudbeds <em>full</em>-PII endpoint server-side or (b) ingesting from
+              wiring the PMS <em>full</em>-PII endpoint server-side or (b) ingesting from
               Mailchimp / Brevo. Until then, audiences ship as <em>lists for outbound</em>, not
               addressable cohorts.
             </div>
@@ -366,6 +395,8 @@ export default async function AudiencesPage({ searchParams }: Props) {
               </div>
             )}
           </div>
+        </>
+      )}
         </>
       )}
     </Page>

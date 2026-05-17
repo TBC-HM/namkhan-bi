@@ -216,7 +216,7 @@ export default function UploadProductsButton() {
                 {fileName ? fileName : 'drop a CSV here or click to pick'}
               </div>
               <div className="mt-2 text-xs text-stone-500">
-                One file at a time. Filters &quot;products we sell&quot; from the Cloudbeds Items export.
+                One file at a time. Filters &quot;products we sell&quot; from the PMS Items export.
               </div>
             </label>
 

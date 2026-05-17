@@ -13,6 +13,8 @@ import Page from '@/components/page/Page';
 import Panel from '@/components/page/Panel';
 import KpiBox from '@/components/kpi/KpiBox';
 import ArtifactActions from '@/components/page/ArtifactActions';
+import TabStrip, { MESSY_TABS } from '@/app/finance/_components/TabStrip';
+import { FINANCE_SUBPAGES } from '@/app/finance/_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { fmtMoney, fmtIsoDate, EMPTY } from '@/lib/format';
 import UnpaidBillsActions, {
@@ -51,10 +53,10 @@ const MANUAL_GAPS: ManualGap[] = [
   {
     area: 'cloudbeds',
     title: 'Guest emails / phones not synced',
-    why: 'public.reservations and guest.mv_guest_profile have NULL email/phone for most guests; Cloudbeds sync doesn\'t expose contact fields. Blocks /guest contactable + customer-profile drawer.',
+    why: 'public.reservations and guest.mv_guest_profile have NULL email/phone for most guests; PMS sync doesn\'t expose contact fields. Blocks /guest contactable + customer-profile drawer.',
     origin_link: { label: '/guest/directory', href: '/guest/directory' },
     severity: 'high',
-    fix_owner: 'Cloudbeds integration',
+    fix_owner: 'PMS integration',
   },
   {
     area: 'cloudbeds',
@@ -62,7 +64,7 @@ const MANUAL_GAPS: ManualGap[] = [
     why: 'guest.mv_guest_profile.city has 0 distinct values. Blocks city facet in /guest/directory.',
     origin_link: { label: '/guest/directory', href: '/guest/directory' },
     severity: 'medium',
-    fix_owner: 'Cloudbeds integration',
+    fix_owner: 'PMS integration',
   },
   {
     area: 'finance',
@@ -220,9 +222,11 @@ export default async function MessyDataPage() {
 
   return (
     <Page
-      eyebrow="Cross-cutting · Data quality"
+      eyebrow="Finance · Messy data"
       title={<>Messy <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>data</em></>}
+      subPages={FINANCE_SUBPAGES}
     >
+      <TabStrip tabs={MESSY_TABS} activeKey="overview" />
       <div style={{ marginBottom: 14, fontSize: 13, color: '#9b907a', maxWidth: 760 }}>
         One page for every known gap that visibly breaks a tile, table, or chart elsewhere in the
         dashboard. Each row links back to the page it originates from. Add formal entries to
@@ -234,7 +238,7 @@ export default async function MessyDataPage() {
         <KpiBox value={totalGaps} unit="count" label="Open gaps"      tooltip="dq_known_issues + curated manual list" />
         <KpiBox value={critical}  unit="count" label="Critical"       tooltip="severity = critical" />
         <KpiBox value={high}      unit="count" label="High"           tooltip="severity = high" />
-        <KpiBox value={Object.keys(byArea).length} unit="count" label="Areas affected" tooltip="Distinct affected areas across both lists (Cloudbeds, finance, marketing, ops, pricing)." />
+        <KpiBox value={Object.keys(byArea).length} unit="count" label="Areas affected" tooltip="Distinct affected areas across both lists (PMS, finance, marketing, ops, pricing)." />
         <KpiBox value={MANUAL_GAPS.length} unit="count" label="Manual gaps"     tooltip="Curated cross-page gaps known to Claude — see panel below for origin links." />
         <KpiBox value={dqIssues.length}    unit="count" label="dq_known_issues" tooltip="Open rows in public.dq_known_issues (status != fixed)." />
       </div>

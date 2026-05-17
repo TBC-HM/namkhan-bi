@@ -337,13 +337,15 @@ export async function getArrivalsDeparturesToday() {
  * itself is rebuilt (see sql/01_fix_mv_aged_ar.sql).
  */
 export async function getAgedAr() {
+  // 2026-05-15: switched from `mv_aged_ar` to `v_aged_ar_with_contact` so the
+  // table can hand email + phone to the guest drawer without a second roundtrip.
+  // The mat view is still upstream — the view just adds the contact join.
   const { data, error } = await supabase
-    .from('mv_aged_ar')
+    .from('v_aged_ar_with_contact')
     .select('*')
     .eq('property_id', PROPERTY_ID)
     .order('days_overdue', { ascending: false });
   if (error) throw error;
-  // Frontend safety net even before the SQL migration runs:
   return (data ?? []).filter((r: any) => Number(r.days_overdue) > 0);
 }
 

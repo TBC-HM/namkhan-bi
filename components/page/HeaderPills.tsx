@@ -21,11 +21,15 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import PropertySwitcher from '@/components/PropertySwitcher';
+// PBS 2026-05-14 — PropertySwitcher import removed; the global switcher lives
+// in the top-left BC brass mark (components/nav/NDropdown.tsx). The
+// session-scope filter + property catalogue also moved there.
 
 interface HeaderPillsProps {
   /** Optional per-dept KPI tiles shown when the user hovers the date pill. */
   kpiTiles?: Array<{ k: string; v: string; d: string }>;
+  /** PBS 2026-05-14: holding scope hides temp + AQI pills, keeps date + user. */
+  hideWeather?: boolean;
 }
 
 const USER_NAME = 'PBS';
@@ -176,9 +180,8 @@ interface AirSnapshot {
   humidity?: number | null;
 }
 
-export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
+export default function HeaderPills({ kpiTiles, hideWeather = false }: HeaderPillsProps) {
   const pathname = usePathname();
-  const inPropertyTree = pathname?.startsWith("/h/") ?? false;
   const [tempOpen, setTempOpen] = useState(false);
   const [airOpen,  setAirOpen]  = useState(false);
   const [dateHover, setDateHover] = useState(false);
@@ -190,6 +193,9 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
   // 2026-05-12: live weather + AQI fetched per active property
   const [weather, setWeather] = useState<WeatherSnapshot | null>(null);
   const [air, setAir] = useState<AirSnapshot | null>(null);
+
+  // 2026-05-14 — session scope kept for future per-tile filtering; the
+  // visible-properties list moved to NDropdown (top-left brass mark).
 
   // One close-timer per pill. mouseEnter on trigger OR popover cancels it.
   const tempTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -265,16 +271,12 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
 
   return (
     <>
-      {inPropertyTree && (
-        <PropertySwitcher
-          options={[
-            { property_id: 260955,  display_name: 'The Namkhan' },
-            { property_id: 1000001, display_name: 'Donna Portals' },
-          ]}
-        />
-      )}
+      {/* PBS 2026-05-14 — property switcher moved to the top-left BC brass mark.
+          The old inline PropertySwitcher chip was a duplicate of that menu and
+          has been removed; NDropdown is now the sole entry point. */}
       {/* TEMP — wrapper carries onMouseLeave so cursor stays inside it as
           it moves from pill to popover. (PBS 2026-05-09 hover-leave fix). */}
+      {!hideWeather && (
       <div
         style={S.pillWrap}
         onMouseEnter={() => {
@@ -309,8 +311,10 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
           </div>
         )}
       </div>
+      )}
 
       {/* AIR — same hover-wrap pattern. */}
+      {!hideWeather && (
       <div
         style={S.pillWrap}
         onMouseEnter={() => {
@@ -347,6 +351,7 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
           </div>
         )}
       </div>
+      )}
 
       {/* INBOX — control-center pill (PBS 2026-05-09 repair-list #6).
           Click → /inbox. Hover → popover with unread/unanswered/spam,
@@ -360,7 +365,7 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
         onMouseLeave={() => scheduleClose(inboxTimer, setInboxOpen)}
       >
         <a
-          href="/inbox"
+          href="/h/260955/inbox"
           title={`Inbox · ${inbox.unread} unread · ${inbox.unanswered} unanswered`}
           aria-label="Inbox"
           style={S.inboxChip}
@@ -439,24 +444,18 @@ export default function HeaderPills({ kpiTiles }: HeaderPillsProps) {
         </button>
         {userOpen && (
           <div style={S.userMenu}>
-            {/* PBS 2026-05-09 #21 → repair-list #6: inbox left this dropdown
-                — now lives as the control-center pill above (hover popover
-                with unread/unanswered/spam + top-sender drill-down). */}
-            <a href="/settings/property"        onClick={() => setUserOpen(false)} style={S.link}>Settings (Property)</a>
+            {/* PBS 2026-05-14: removed "Settings (Property)" + Cockpit links
+                from this dropdown. Property settings now live on the gear
+                icon at the right of the top dept menu (per-property). The
+                Cockpit lives under Felix on /holding. */}
             <a href="/cockpit/users"             onClick={() => setUserOpen(false)} style={S.link}>Account</a>
             <div style={S.menuDivider}>
-              {/* PBS 2026-05-09 #26: settings sub-pages live under cockpit now. */}
               <div style={S.menuSection}>Tools</div>
-              <a href="/cockpit"                   onClick={() => setUserOpen(false)} style={S.link}>IT cockpit</a>
-              <a href="/cockpit-v2"                onClick={() => setUserOpen(false)} style={S.link}>Cockpit v2 <span style={{ fontSize: 9, color: 'var(--accent, #a8854a)', marginLeft: 6, letterSpacing: '0.14em', textTransform: 'uppercase' }}>preview</span></a>
               <a href="/cockpit/tasks"             onClick={() => setUserOpen(false)} style={S.link}>Tasks</a>
               <a href="/front-office/arrivals"     onClick={() => setUserOpen(false)} style={S.link}>Front office</a>
               <a href="/settings/email-categories" onClick={() => setUserOpen(false)} style={S.link}>Email categories</a>
-              <a href="/settings/integrations"     onClick={() => setUserOpen(false)} style={S.link}>Integrations</a>
               <a href="/settings/users"            onClick={() => setUserOpen(false)} style={S.link}>Users &amp; roles</a>
-              <a href="/settings/dq"               onClick={() => setUserOpen(false)} style={S.link}>DQ engine</a>
               <a href="/messy-data"                onClick={() => setUserOpen(false)} style={S.link}>Messy data</a>
-              <a href="/settings/platform-map"     onClick={() => setUserOpen(false)} style={S.link}>Platform map</a>
             </div>
             <div style={S.langRow}>
               <button onClick={() => setLang('en')} title="English" style={langFlag(lang === 'en')}>🇬🇧</button>
@@ -566,7 +565,7 @@ function InboxPopover({ summary, onClose }: { summary: InboxSummary; onClose: ()
             <div style={S.popCellK}>{s.k}</div>
             <div style={{
               ...S.popCellV,
-              color: s.tone === 'bad'  ? '#e08484'
+              color: s.tone === 'bad'  ? 'var(--st-bad)'
                    : s.tone === 'warn' ? 'var(--brass-soft)'
                    : 'var(--text-1, #f0e5cb)',
             }}>{s.v}</div>
@@ -605,10 +604,11 @@ function InboxPopover({ summary, onClose }: { summary: InboxSummary; onClose: ()
         </div>
       )}
 
-      {/* Footer CTA */}
+      {/* Footer CTA — property-scoped (2026-05-14, Namkhan default until
+          session-derived property switching lands). */}
       <div style={S.inboxFooterRow}>
-        <a href="/inbox" style={S.inboxFooterLink}>Open inbox →</a>
-        <a href="/inbox?box=spam" style={S.inboxFooterMuted}>Spam ({summary.spam})</a>
+        <a href="/h/260955/inbox" style={S.inboxFooterLink}>Open inbox →</a>
+        <a href="/h/260955/inbox?box=spam" style={S.inboxFooterMuted}>Spam ({summary.spam})</a>
       </div>
     </div>
   );
@@ -752,19 +752,25 @@ const S: Record<string, React.CSSProperties> = {
     fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--text-place, #5a5448)',
   },
   langRow: { borderTop: '1px solid var(--border-2, #2a261d)', marginTop: 4, paddingTop: 6, display: 'flex', justifyContent: 'center', gap: 10 },
+  // PBS 2026-05-14: switched popover from modern --surf-*/--text-* tokens
+  // to legacy --paper-warm/--ink/--brass tokens. Reason: the modern tokens
+  // have dark hex fallbacks that bleed through if the SSR'd light overrides
+  // race the popover hover; the legacy tokens are always defined correctly
+  // on both Namkhan (:root dark defaults) and Donna (lightLegacyVars override).
   popover: {
-    background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-3, #3a3327)', borderRadius: 10,
-    padding: 14, minWidth: 320, boxShadow: '0 12px 28px rgba(0,0,0,0.6)',
+    background: 'var(--paper-warm)', border: '1px solid var(--line)', borderRadius: 10,
+    padding: 14, minWidth: 320, boxShadow: '0 12px 28px rgba(0,0,0,0.25)',
+    color: 'var(--ink)',
   },
   popHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 },
-  popEyebrow: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--accent, #a8854a)' },
-  popClose: { background: 'transparent', border: 'none', color: 'var(--text-dim, #7d7565)', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0 },
-  popTitle: { fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic', fontSize: 22, color: 'var(--text-1, #f0e5cb)', marginBottom: 12 },
+  popEyebrow: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 9, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--brass)' },
+  popClose: { background: 'transparent', border: 'none', color: 'var(--ink-mute)', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0 },
+  popTitle: { fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic', fontSize: 22, color: 'var(--ink)', marginBottom: 12 },
   popGrid: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 },
-  popCell: { background: 'var(--surf-2, #15110b)', border: '1px solid var(--border-2, #2a261d)', borderRadius: 6, padding: '8px 10px' },
-  popCellK: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 9, letterSpacing: '0.18em', color: 'var(--text-dim, #7d7565)', textTransform: 'uppercase' },
-  popCellV: { fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic', fontSize: 18, color: 'var(--text-1, #f0e5cb)', marginTop: 2 },
-  popCellD: { fontSize: 10, color: 'var(--text-mute, #9b907a)', marginTop: 2 },
+  popCell: { background: 'var(--paper)', border: '1px solid var(--line-soft)', borderRadius: 6, padding: '8px 10px' },
+  popCellK: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 9, letterSpacing: '0.18em', color: 'var(--ink-mute)', textTransform: 'uppercase' },
+  popCellV: { fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic', fontSize: 18, color: 'var(--ink)', marginTop: 2 },
+  popCellD: { fontSize: 10, color: 'var(--ink-soft)', marginTop: 2 },
   popFooter: {
     marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--border-1, #1f1c15)',
     fontFamily: "'JetBrains Mono', ui-monospace, monospace",

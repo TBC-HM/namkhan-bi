@@ -117,8 +117,7 @@ export async function getReviews(opts: {
 } = {}): Promise<Review[]> {
   const { limit = 50, source, status } = opts;
   let q = supabase
-    .schema('marketing')
-    .from('reviews')
+    .from('mkt_reviews')
     .select('id,source,reviewer_name,reviewer_country,rating_norm,rating_raw,rating_scale,title,body,language,reviewed_at,received_at,response_status,responded_at,is_verified')
     .order('received_at', { ascending: false })
     .limit(limit);
@@ -145,8 +144,7 @@ export async function getReviewStatsBySource(days = 90): Promise<Array<{
   since.setDate(since.getDate() - days);
 
   const { data, error } = await supabase
-    .schema('marketing')
-    .from('reviews')
+    .from('mkt_reviews')
     .select('source,rating_norm,response_status')
     .gte('received_at', since.toISOString());
 
@@ -188,8 +186,7 @@ export async function getReviewSummary(days = 30): Promise<{
   since.setDate(since.getDate() - days);
 
   const { data, error } = await supabase
-    .schema('marketing')
-    .from('reviews')
+    .from('mkt_reviews')
     .select('rating_norm,response_status')
     .gte('received_at', since.toISOString());
 
@@ -209,8 +206,7 @@ export async function getReviewSummary(days = 30): Promise<{
 
 export async function getSocialAccounts(): Promise<SocialAccount[]> {
   const { data, error } = await supabase
-    .schema('marketing')
-    .from('social_accounts')
+    .from('mkt_social_accounts')
     .select('*')
     .eq('active', true)
     .order('platform', { ascending: true });
@@ -225,8 +221,7 @@ export async function getSocialAccounts(): Promise<SocialAccount[]> {
 export async function getInfluencers(opts: { limit?: number } = {}): Promise<Influencer[]> {
   const { limit = 100 } = opts;
   const { data, error } = await supabase
-    .schema('marketing')
-    .from('influencers')
+    .from('mkt_influencers')
     .select('*')
     .order('stay_from', { ascending: false, nullsFirst: false })
     .limit(limit);
@@ -240,8 +235,7 @@ export async function getInfluencers(opts: { limit?: number } = {}): Promise<Inf
 
 export async function getMediaLinks(): Promise<MediaLink[]> {
   const { data, error } = await supabase
-    .schema('marketing')
-    .from('media_links')
+    .from('mkt_media_links')
     .select('id,category,label,url,description,added_at')
     .eq('active', true)
     .order('category', { ascending: true })
@@ -267,8 +261,7 @@ export async function getMediaReady(opts: {
 } = {}): Promise<MediaAssetReady[]> {
   const { limit = 200, tier, tag, excludeArchive = true } = opts;
   let q = supabase
-    .schema('marketing')
-    .from('v_media_ready')
+    .from('mkt_v_media_ready')
     .select('*')
     .order('captured_at', { ascending: false, nullsFirst: false })
     .limit(limit);
@@ -289,8 +282,7 @@ export async function getMediaReady(opts: {
  *  Powers the "Fresh & ready" widget on /marketing/library. */
 export async function getCuratorPicks(limit = 12): Promise<MediaAssetReady[]> {
   const { data, error } = await supabase
-    .schema('marketing')
-    .from('v_media_ready')
+    .from('mkt_v_media_ready')
     .select('*')
     .in('primary_tier', ['tier_ota_profile', 'tier_website_hero', 'tier_social_pool'])
     .order('qc_score', { ascending: false, nullsFirst: false })
@@ -336,8 +328,7 @@ export async function getRoomTypeBuckets(): Promise<RoomTypeBucket[]> {
   const buckets: RoomTypeBucket[] = [];
   for (const rt of ROOM_TYPE_SLUGS) {
     const { data, error } = await supabase
-      .schema('marketing')
-      .from('v_media_ready')
+      .from('mkt_v_media_ready')
       .select('*')
       .contains('tags', [rt.slug])
       .neq('primary_tier', 'tier_archive')
@@ -351,8 +342,7 @@ export async function getRoomTypeBuckets(): Promise<RoomTypeBucket[]> {
     }
     // Get total count separately (Supabase JS doesn't return count in select with limit easily)
     const { count: cnt } = await supabase
-      .schema('marketing')
-      .from('v_media_ready')
+      .from('mkt_v_media_ready')
       .select('*', { count: 'exact', head: true })
       .contains('tags', [rt.slug])
       .neq('primary_tier', 'tier_archive');
@@ -402,8 +392,7 @@ export async function getOtaPack(): Promise<OtaPackSlot[]> {
   const out: OtaPackSlot[] = [];
   for (const slot of OTA_PACK_SLOTS) {
     let q = supabase
-      .schema('marketing')
-      .from('v_media_ready')
+      .from('mkt_v_media_ready')
       .select('*', { count: 'exact' })
       .neq('primary_tier', 'tier_archive')
       .gte('qc_score', 70)
@@ -437,8 +426,7 @@ export async function getMediaTierCounts(): Promise<Array<{
   videos: number;
 }>> {
   const { data, error } = await supabase
-    .schema('marketing')
-    .from('v_media_by_tier')
+    .from('mkt_v_media_by_tier')
     .select('*');
   if (error) {
     console.error('getMediaTierCounts error', error);
@@ -535,8 +523,7 @@ export interface TaxonomyEntry {
 
 export async function getCampaigns(opts: { status?: CampaignStatus; limit?: number } = {}): Promise<CampaignCalendarRow[]> {
   let q = supabase
-    .schema('marketing')
-    .from('v_campaign_calendar')
+    .from('mkt_v_campaign_calendar')
     .select('*')
     .order('calendar_at', { ascending: false });
   if (opts.status) q = q.eq('status', opts.status);
@@ -551,8 +538,7 @@ export async function getCampaigns(opts: { status?: CampaignStatus; limit?: numb
 
 export async function getCampaign(campaignId: string): Promise<Campaign | null> {
   const { data, error } = await supabase
-    .schema('marketing')
-    .from('campaigns')
+    .from('mkt_campaigns')
     .select('*')
     .eq('campaign_id', campaignId)
     .maybeSingle();
@@ -565,8 +551,7 @@ export async function getCampaign(campaignId: string): Promise<Campaign | null> 
 
 export async function getCampaignAssets(campaignId: string): Promise<CampaignAssetRow[]> {
   const { data, error } = await supabase
-    .schema('marketing')
-    .from('campaign_assets')
+    .from('mkt_campaign_assets')
     .select('*')
     .eq('campaign_id', campaignId)
     .order('slot_order', { ascending: true });
@@ -579,8 +564,7 @@ export async function getCampaignAssets(campaignId: string): Promise<CampaignAss
 
 export async function getCampaignTemplates(): Promise<CampaignTemplate[]> {
   const { data, error } = await supabase
-    .schema('marketing')
-    .from('campaign_templates')
+    .from('mkt_campaign_templates')
     .select('*')
     .eq('is_active', true)
     .order('template_id', { ascending: true });
@@ -593,8 +577,7 @@ export async function getCampaignTemplates(): Promise<CampaignTemplate[]> {
 
 export async function getTaxonomy(): Promise<TaxonomyEntry[]> {
   const { data, error } = await supabase
-    .schema('marketing')
-    .from('media_taxonomy')
+    .from('mkt_media_taxonomy')
     .select('*')
     .order('category', { ascending: true })
     .order('label', { ascending: true });
@@ -607,8 +590,7 @@ export async function getTaxonomy(): Promise<TaxonomyEntry[]> {
 
 export async function getFreeKeywords(): Promise<Array<{ keyword: string; seen_count?: number; promoted_to_tag_id?: number | null }>> {
   const { data, error } = await supabase
-    .schema('marketing')
-    .from('media_keywords_free')
+    .from('mkt_media_keywords_free')
     .select('*')
     .order('seen_count', { ascending: false, nullsFirst: false })
     .limit(500);

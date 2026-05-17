@@ -245,7 +245,7 @@ export default async function HousekeepingPage() {
 
       {/* BLOCK 9: Guardrails banner */}
       <GuardrailsBanner>
-        <strong>No external write auto-fired.</strong> Cloudbeds room-status
+        <strong>No external write auto-fired.</strong> PMS room-status
         writes, vendor POs, and guest WhatsApp/SMS are <em>always</em> behind
         explicit human approval until validated against 90 days of decisions.
         Agents ship in approval-required mode by default — toggle in Settings ›

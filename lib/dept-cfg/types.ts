@@ -76,4 +76,15 @@ export interface DeptCfg {
   reportTypes?: ReportTypeDef[];      // empty = hide Build-a-report
   // Brand color for accent (currently unused; ready for when SVGs land).
   brandHex?: string;
+  // PBS 2026-05-14: chrome opt-outs for surfaces like /holding that
+  // don't want the temp/AQI pills cluttering the top-right.
+  hideWeather?: boolean;
+  // Slot id for cfg-driven custom blocks rendered by DeptEntry. Today the
+  // only value is 'holding' which injects the BC peach property-tile grid
+  // + Cockpit CTA between the chat row and the attention/docs/tasks row.
+  customExtra?: 'holding';
+  // PBS 2026-05-15: extra accent buttons rendered in the chip row directly
+  // under the HoD chat input. Currently used by Finance for the "Messy data"
+  // orange button after that item was pulled out of the submenu strip.
+  extraChatButtons?: { label: string; href: string; color?: string }[];
 }

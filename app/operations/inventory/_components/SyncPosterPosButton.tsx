@@ -70,7 +70,7 @@ export default function SyncPosterPosButton() {
             </div>
 
             <div className="mb-4 rounded-sm border border-stone-200 bg-stone-50 p-3 text-xs text-stone-600">
-              <div>Pulls every distinct product actually sold from <code className="font-mono">public.transactions</code> (the Poster POS feed flowing into Cloudbeds) into <code className="font-mono">inv.items</code>.</div>
+              <div>Pulls every distinct product actually sold from <code className="font-mono">public.transactions</code> (the Poster POS feed flowing into PMS) into <code className="font-mono">inv.items</code>.</div>
               <div className="mt-1">Excludes tax / fee / payment / room rate lines automatically. SKU pattern: <code className="font-mono">POS-&lt;hash&gt;</code>. Re-runnable; upserts.</div>
               <div className="mt-1 text-stone-500">Last cost defaults to average sale price across all historic transactions for that product.</div>
             </div>

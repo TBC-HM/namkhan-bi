@@ -65,7 +65,7 @@ export default async function PropertySettingsPage({
       eyebrow="Settings · Property"
       title={<>{data.identity?.trading_name ?? 'Property'} <em style={{ color: 'var(--brass)' }}>Settings</em></>}
     >
-      <div style={{ padding: '0 0 16px 0', fontSize: 12, color: 'var(--ink-soft)' }}>
+      <div style={{ padding: '0 0 16px 0', fontSize: 'var(--t-base)', color: 'var(--ink-soft)' }}>
         {data.identity?.legal_name}
         {data.identity?.star_rating && ` · ${'★'.repeat(data.identity.star_rating)}`}
         {data.location?.city && ` · ${data.location.city}, ${data.location.country}`}

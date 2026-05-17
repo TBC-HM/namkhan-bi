@@ -116,7 +116,7 @@ export default async function RevenueReport({ params, searchParams }: Props) {
       `}</style>
 
       <div className="report-meta" style={{ marginBottom: 14 }}>
-        Generated {stamp} · Source · Cloudbeds · QB · Property 260955
+        Generated {stamp} · Source · PMS · QB · Property 260955
       </div>
 
       <Brief

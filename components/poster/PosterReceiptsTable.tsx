@@ -100,10 +100,10 @@ export default function PosterReceiptsTable({ data, pageSize = 200 }: Props) {
   const reconBadge = (r: PosterReceipt): { label: string; color: string; title: string } => {
     if (r.payment_method !== 'Charge Room / to Folio') return { label: '·', color: 'var(--ink-soft)', title: 'Not a charge-to-room receipt' };
     const w = r.reconciled_with;
-    if (w === 'cloudbeds_match')   return { label: '✓',  color: 'var(--good, #2c7a4b)', title: `Exact match on Cloudbeds folio${r.cb_match_amount ? ` ($${r.cb_match_amount.toFixed(2)})` : ''}` };
+    if (w === 'cloudbeds_match')   return { label: '✓',  color: 'var(--good, #2c7a4b)', title: `Exact match on PMS folio${r.cb_match_amount ? ` ($${r.cb_match_amount.toFixed(2)})` : ''}` };
     if (w === 'amount_close')      return { label: '⚠',  color: 'var(--brass)',         title: `Amount close to CB folio (±5%) — delta $${r.cb_match_delta?.toFixed(2) ?? '?'}` };
     if (w === 'amount_mismatch')   return { label: '✗',  color: 'var(--bad, #b53a2a)',  title: `CB folio total ≠ Poster · delta $${r.cb_match_delta?.toFixed(2) ?? '?'}` };
-    if (w === 'no_cb_lines')       return { label: '✗',  color: 'var(--bad)',           title: 'Reservation found but no F&B charge on Cloudbeds folio' };
+    if (w === 'no_cb_lines')       return { label: '✗',  color: 'var(--bad)',           title: 'Reservation found but no F&B charge on PMS folio' };
     if (w === 'ambiguous_room')    return { label: '?',  color: 'var(--ink-soft)',      title: 'Multiple guests in same room type that day — needs manual match' };
     if (w === 'no_match')          return { label: '?',  color: 'var(--ink-soft)',      title: 'Could not resolve client → reservation (Poster name unrecognized)' };
     return { label: '·', color: 'var(--ink-soft)', title: 'Not yet reconciled' };

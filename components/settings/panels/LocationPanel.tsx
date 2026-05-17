@@ -26,7 +26,7 @@ export default function LocationPanel({ data }: { data: any }) {
         <Field label="Longitude" value={data.longitude} />
         <Field
           label="Google Maps"
-          value={data.google_maps_url ? <a href={data.google_maps_url} target="_blank" rel="noopener noreferrer" className="text-[var(--terracotta,#B8542A)] hover:underline">Open in Maps ↗</a> : null}
+          value={data.google_maps_url ? <a href={data.google_maps_url} target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: 'var(--brass)' }}>Open in Maps ↗</a> : null}
         />
         <Field label="Google Plus Code" value={data.google_plus_code} />
         <Field label="what3words" value={data.what3words} span={2} />

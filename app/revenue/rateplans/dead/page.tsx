@@ -175,7 +175,7 @@ export default async function DeadRatePlansPage() {
       <div style={{ marginTop: 14, fontSize: 11, color: '#7d7565' }}>
         Source: <code style={{ color: '#a8854a' }}>public.rate_plans</code> joined to{' '}
         <code style={{ color: '#a8854a' }}>public.reservations.rate_plan</code> over a 90-day window. To
-        deactivate a plan, use the Cloudbeds rate manager — this dashboard is read-only.
+        deactivate a plan, use the PMS rate manager — this dashboard is read-only.
       </div>
     </Page>
   );

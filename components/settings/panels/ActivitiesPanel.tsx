@@ -1,4 +1,5 @@
 // components/settings/panels/ActivitiesPanel.tsx
+// PBS 2026-05-13 rev3: brand-aware tokens. See _shared.tsx for rationale.
 import { PanelHeader, Chip, StatusBadge, EmptyState } from './_shared';
 
 export default function ActivitiesPanel({ data }: { data: any[] }) {
@@ -22,17 +23,29 @@ export default function ActivitiesPanel({ data }: { data: any[] }) {
       <div className="p-6 space-y-6">
         {Object.entries(byCategory).map(([cat, items]) => (
           <div key={cat}>
-            <h3 className="text-xs uppercase tracking-[0.15em] text-[var(--sand,#B8A878)] font-semibold mb-3">
-              {cat} <span className="text-[var(--primary,#1F3A2E)]/40 normal-case font-normal">({items.length})</span>
+            <h3
+              className="uppercase font-semibold mb-3"
+              style={{ fontSize: 'var(--t-xs)', letterSpacing: '0.15em', color: 'var(--brass)' }}
+            >
+              {cat} <span className="normal-case font-normal" style={{ color: 'var(--ink-mute)' }}>({items.length})</span>
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {items.map((a) => (
-                <div key={a.activity_id} className="bg-white rounded-lg border border-[var(--sand,#B8A878)]/20 p-4">
+                <div
+                  key={a.activity_id}
+                  className="rounded-lg p-4"
+                  style={{ background: 'var(--paper-deep)', border: '1px solid var(--border)' }}
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <h4 className="font-medium text-[var(--primary,#1F3A2E)]">{a.name}</h4>
+                      <h4 className="font-medium" style={{ color: 'var(--ink)' }}>{a.name}</h4>
                       {a.description && (
-                        <p className="text-sm text-[var(--primary,#1F3A2E)]/70 mt-1 leading-relaxed">{a.description}</p>
+                        <p
+                          className="mt-1 leading-relaxed"
+                          style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-soft)' }}
+                        >
+                          {a.description}
+                        </p>
                       )}
                       <div className="flex flex-wrap items-center gap-2 mt-2">
                         {a.duration_min && <Chip tone="muted">{a.duration_min} min</Chip>}

@@ -53,7 +53,7 @@ interface ChatShellProps {
   placeholder?: string;
   /** localStorage key prefix so each chat shell has its own thread state. */
   storageKey?: string;
-  /** Dept-entry storage prefix (rev / sal / fin / arch / it / …) — enables the "Create task" button to push into the right Tasks box. */
+  /** Deprecated 2026-05-14: "+ Create task" button removed. Prop kept for caller compatibility, no longer used. */
   taskStorageKeyPrefix?: string;
   /** Initial input prefilled into the composer (used when /cockpit/chat?q=… opens with a question). */
   initialInput?: string;
@@ -103,7 +103,7 @@ export default function ChatShell({
   mentionNickname,
   placeholder,
   storageKey,
-  taskStorageKeyPrefix,
+  // taskStorageKeyPrefix deprecated 2026-05-14 — "+ Create task" button removed.
   initialInput,
 }: ChatShellProps) {
   const STORE_KEY = storageKey ?? `chat_thread_start_${role}`;
@@ -119,7 +119,6 @@ export default function ChatShell({
   const [attachOpen,  setAttachOpen]  = useState(false);
   const [attaching,   setAttaching]   = useState(false);
   const [attachToast, setAttachToast] = useState<string | null>(null);
-  const [creatingTask, setCreatingTask] = useState(false);
   // PBS 2026-05-09: thread always starts fresh on mount. "Leave the page,
   // come back" should be empty. localStorage is no longer the source of
   // truth — it lived too long and made every return feel cluttered.
@@ -152,42 +151,6 @@ export default function ChatShell({
     }
     // Cap to last 20 turns to keep payload tight.
     return turns.slice(-20);
-  }
-
-  async function createTaskFromConversation() {
-    if (!taskStorageKeyPrefix) {
-      setAttachToast('No dept linked — can’t create task here');
-      setTimeout(() => setAttachToast(null), 2400);
-      return;
-    }
-    if (tickets.length === 0) return;
-    setCreatingTask(true);
-    try {
-      const turns = buildConversationHistory();
-      const lastUser = [...turns].reverse().find(t => t.role === 'user')?.content ?? '';
-      // Cheap heuristic: take the most recent user ask, trim, fall back to
-      // the assistant’s last reply if the user never asked anything concrete.
-      const seed = (lastUser || turns[turns.length - 1]?.content || '').trim();
-      const label = seed.replace(/^@\w+\s+/, '').slice(0, 140) || `Follow-up from chat with ${displayName}`;
-      const newTask = {
-        id: Math.random().toString(36).slice(2, 9),
-        label,
-        done: false,
-        created: new Date().toISOString(),
-      };
-      const TASKS_KEY = `nk.${taskStorageKeyPrefix}.entry.tasks.v2`;
-      let existing: unknown[] = [];
-      try {
-        const raw = localStorage.getItem(TASKS_KEY);
-        if (raw) existing = JSON.parse(raw);
-      } catch { /* ignore parse errors */ }
-      const next = Array.isArray(existing) ? [...existing, newTask] : [newTask];
-      localStorage.setItem(TASKS_KEY, JSON.stringify(next));
-      setAttachToast(`✓ Task added to ${dept ?? 'dept'} list`);
-      setTimeout(() => setAttachToast(null), 2400);
-    } finally {
-      setCreatingTask(false);
-    }
   }
 
   const load = async () => {
@@ -369,26 +332,7 @@ export default function ChatShell({
         </div>
         <div style={S.topbarRight}>
           <button onClick={startNewChat} style={{ ...S.topBtn, background: '#c79a6b', color: '#0a0a0b', border: 0, fontWeight: 600, cursor: 'pointer' }}>＋ New chat</button>
-          {/* Create task from conversation (PBS 2026-05-09): writes the most
-            * recent user ask into nk.<prefix>.entry.tasks.v2 so it shows up
-            * in the dept-entry "My tasks" box on next visit. */}
-          <button
-            onClick={createTaskFromConversation}
-            disabled={creatingTask || tickets.length === 0 || !taskStorageKeyPrefix}
-            title={
-              !taskStorageKeyPrefix ? 'No dept linked'
-              : tickets.length === 0 ? 'Send a message first'
-              : `Create a task in ${dept ?? 'this dept'} from this chat`
-            }
-            style={{
-              ...S.topBtn,
-              cursor: (creatingTask || tickets.length === 0 || !taskStorageKeyPrefix) ? 'not-allowed' : 'pointer',
-              background: 'transparent',
-              opacity: (tickets.length === 0 || !taskStorageKeyPrefix) ? 0.4 : 1,
-            }}
-          >
-            {creatingTask ? '…' : '＋ Create task'}
-          </button>
+          {/* "+ Create task" button removed 2026-05-14 (PBS request). */}
           {/* Add conversation to project (PBS 2026-05-08).
             * Uses projectList fetched on mount; tags the most-recent ticket
             * in this thread via /api/cockpit/projects/[slug]/attach-ticket. */}
@@ -432,11 +376,10 @@ export default function ChatShell({
               </div>
             )}
           </div>
-          {role === 'it_manager' ? (
+          {role === 'it_manager' && (
             // PBS 2026-05-09: from Captain Kit's chat, surface a prominent
-            // brass CTA to the IT Cockpit. Replaces the muted generic link
-            // for it_manager only — every other persona keeps the subtle
-            // "cockpit ↗" affordance.
+            // brass CTA to the IT Cockpit. The muted generic "cockpit ↗"
+            // link for other personas was removed 2026-05-14 (PBS request).
             <a
               href="/cockpit"
               style={{
@@ -447,8 +390,6 @@ export default function ChatShell({
                 fontWeight: 600,
               }}
             >↗ Open IT Cockpit</a>
-          ) : (
-            <a href="/cockpit" style={S.topBtn}>cockpit ↗</a>
           )}
         </div>
       </div>

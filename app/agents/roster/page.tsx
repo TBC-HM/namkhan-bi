@@ -104,7 +104,7 @@ export default function RosterPage() {
         <div className="agents-hero-eyebrow">Vertex AI · Anthropic · Custom</div>
         <div className="agents-hero-title">Operator Intelligence Crew</div>
         <div className="agents-hero-body">
-          Every agent reads from your live Cloudbeds + Supabase data.
+          Every agent reads from your live PMS + Supabase data.
           Fire manually for ad-hoc analysis, or let scheduled agents drop briefs in your inbox.
           Each agent is configurable — edit the prompt, swap models, change triggers.
         </div>

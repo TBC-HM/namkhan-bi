@@ -193,14 +193,20 @@ const REVENUE_CFG: DeptCfg = {
   chatPlaceholder: 'e.g. how are we pacing for next weekend?',
   storageKeyPrefix: 'rev',
   subPages: [
-    // PBS 2026-05-09 (repair-list 11): Agents only reachable via /cockpit.
+    // PBS 2026-05-15: HoD entry first — pressing it opens Vector's chat
+    // (the Revenue HoD landing page already renders the HoD chat shell).
+    { label: 'HoD',        href: '/revenue'           },
     { label: 'Pulse',      href: '/revenue/pulse'     },
     { label: 'Pace',       href: '/revenue/pace'      },
     { label: 'Channels',   href: '/revenue/channels'  },
     { label: 'Rate Plans', href: '/revenue/rateplans' },
-    { label: 'Pricing',    href: '/revenue/pricing'   },
+    // PBS 2026-05-15: Pricing renamed to Calendar; the page now hosts
+    // two tabs: Pricing (rate grid) + Density (country-holidays overlay).
+    { label: 'Calendar',   href: '/revenue/pricing'   },
     { label: 'Comp Set',   href: '/revenue/compset'   },
     { label: 'Parity',     href: '/revenue/parity'    },
+    // PBS 2026-05-16: Reports always sits flush-right (SubPagesStrip detects label).
+    { label: 'Reports',    href: '/h/260955/reports?dept=revenue' },
   ],
   quickChips: [
     { label: 'Pulse',    href: '/revenue/pulse'    },
@@ -263,15 +269,14 @@ const SALES_CFG: DeptCfg = {
   chatPlaceholder: 'e.g. which inquiries went silent past 48h?',
   storageKeyPrefix: 'sal',
   subPages: [
-    // PBS 2026-05-09: BTB is the unified MICE / DMC / Retreats / Groups
-    // command page. /sales/b2b stays for the deep DMC-contracts +
-    // LPA-reconciliation flow but is no longer in the dept menu.
-    { label: 'Inquiries', href: '/sales/inquiries' },
-    { label: 'Leads',     href: '/sales/leads'     },
-    { label: 'BTB',       href: '/sales/btb'       },
-    { label: 'Groups',    href: '/sales/groups'    },
-    { label: 'FIT',       href: '/sales/fit'       },
+    // PBS 2026-05-16: 4-page collapse — Pipeline absorbs Inquiries/Leads/BTB/Groups/FIT
+    // as filter chips. Accounts is the new mini-CRM. Old pages parked (still
+    // accessible at their URLs with a deprecation banner) until PBS confirms deletion.
+    { label: 'HoD',       href: '/sales'           },
+    { label: 'Pipeline',  href: '/sales/leads'     },
+    { label: 'Accounts',  href: '/sales/accounts'  },
     { label: 'Packages',  href: '/sales/packages'  },
+    { label: 'Reports',   href: '/h/260955/reports?dept=sales' },
   ],
   quickChips: [
     { label: 'Inquiries', href: '/sales/inquiries' },
@@ -328,18 +333,24 @@ const MARKETING_CFG: DeptCfg = {
     // PBS 2026-05-09 (repair-list 11): Agents only reachable via /cockpit.
     // PBS 2026-05-09 (new): Events schedule joins the strip — drives demand,
     // marketing brief, content + retreat planning.
-    { label: 'Snapshot',    href: '/marketing'             },
-    { label: 'Events',      href: '/marketing/events'      },
-    { label: 'Audiences',   href: '/marketing/audiences'   },
-    { label: 'Library',     href: '/marketing/library'     },
+    { label: 'HoD',         href: '/marketing'             },
+    // PBS 2026-05-16: Info hub consolidates Library + Events + Audiences +
+    // Taxonomy under a single submenu button (4-tab strip rendered on each
+    // page). First-tab destination = Library — matches Acc-hub pattern.
+    { label: 'Info',        href: '/marketing/library'     },
     { label: 'Campaigns',   href: '/marketing/campaigns'   },
     { label: 'Compiler',    href: '/marketing/compiler'    },
+    // PBS 2026-05-16: Social hub absorbs Influencers as a 2nd tab.
+    // First-tab destination = /marketing/social.
     { label: 'Social',      href: '/marketing/social'      },
-    { label: 'Influencers', href: '/marketing/influencers' },
-    { label: 'Taxonomy',    href: '/marketing/taxonomy'    },
+    // PBS 2026-05-16: Web hub consolidates 3 tabs — Web · Funnels · SEO.
+    // First-tab destination = /marketing/web. SEO moved here from top-level.
+    { label: 'Web',         href: '/marketing/web'         },
+    // PBS 2026-05-16: Reports always sits flush-right (SubPagesStrip detects label).
+    { label: 'Reports',     href: '/h/260955/reports?dept=marketing' },
   ],
   quickChips: [
-    { label: 'Snapshot',  href: '/marketing'             },
+    { label: 'HoD',       href: '/marketing'             },
     { label: 'Library',   href: '/marketing/library'     },
     { label: 'Campaigns', href: '/marketing/campaigns'   },
     { label: 'Social',    href: '/marketing/social'      },
@@ -390,20 +401,19 @@ const OPERATIONS_CFG: DeptCfg = {
   chatPlaceholder: 'e.g. is the spa fully booked this week?',
   storageKeyPrefix: 'ops',
   subPages: [
-    { label: 'Snapshot',         href: '/operations'                 },
-    { label: 'Staff',            href: '/operations/staff'           },
-    // PBS 2026-05-13: Attendance + Schedule moved INSIDE Staff as tabs.
+    // PBS 2026-05-15: Staff moved to Finance · HR (people-cost is a finance
+    // concern, not an operations one). Snapshot renamed HoD.
+    { label: 'HoD',              href: '/operations'                 },
     { label: 'F&B',              href: '/operations/restaurant'      },
     { label: 'Spa',              href: '/operations/spa'             },
     { label: 'Activities',       href: '/operations/activities'      },
-    { label: 'Events',           href: '/operations/events'          },
     { label: 'Inventory',        href: '/operations/inventory'       },
     { label: 'Suppliers',        href: '/operations/suppliers'       },
-    { label: 'Catalog cleanup',  href: '/operations/catalog-cleanup' },
+    // PBS 2026-05-16: Reports always sits flush-right (SubPagesStrip detects label).
+    { label: 'Reports',          href: '/h/260955/reports?dept=operations' },
   ],
   quickChips: [
-    { label: 'Snapshot',   href: '/operations'             },
-    { label: 'Staff',      href: '/operations/staff'       },
+    { label: 'HoD',        href: '/operations'             },
     { label: 'F&B',        href: '/operations/restaurant'  },
     { label: 'Spa',        href: '/operations/spa'         },
     { label: 'Activities', href: '/operations/activities'  },
@@ -433,7 +443,7 @@ const OPERATIONS_CFG: DeptCfg = {
     { matcher: 'spa',        href: '/operations/spa'             },
     { matcher: 'activit',    href: '/operations/activities'      },
     { matcher: 'inventory',  href: '/operations/inventory'       },
-    { matcher: 'catalog',    href: '/operations/catalog-cleanup' },
+    { matcher: 'catalog',    href: '/finance/messy-data'         },
   ],
   defaultDrilldown: '/operations',
   kpiTiles: [
@@ -463,6 +473,8 @@ const GUEST_CFG: DeptCfg = {
     { label: 'Loyalty',     href: '/guest/loyalty'     },
     { label: 'Messy data',  href: '/guest/messy-data'  },
     { label: 'Findings',    href: '/guest/findings'    },
+    // PBS 2026-05-16: Reports always sits flush-right (SubPagesStrip detects label).
+    { label: 'Reports',     href: '/h/260955/reports?dept=guest' },
   ],
   quickChips: [
     { label: 'Snapshot',   href: '/guest'            },
@@ -517,23 +529,43 @@ const FINANCE_CFG: DeptCfg = {
   chatPlaceholder: 'e.g. how is GOP tracking vs budget?',
   storageKeyPrefix: 'fin',
   subPages: [
-    { label: 'Snapshot',         href: '/finance'                  },
-    { label: 'P&L',              href: '/finance/pnl'              },
-    { label: 'Ledger',           href: '/finance/ledger'           },
-    { label: 'Transactions',     href: '/finance/transactions'     },
-    { label: 'POS · Cloudbeds',  href: '/finance/pos-transactions' },
-    { label: 'POS · Poster',     href: '/finance/poster'           },
-    { label: 'Account mapping',  href: '/finance/mapping'          },
-    { label: 'Supplier mapping', href: '/finance/supplier-mapping' },
-    { label: 'Budget',           href: '/finance/budget'           },
+    // PBS 2026-05-15: top line stripped to canonical hubs. Each hub now
+    // surfaces its sub-pages via the shared finance TabStrip.
+    //   Transactions hub  → Folio audit + POS
+    //   P&L hub           → P&L + Budget
+    //   Messy-data hub    → Overview + Account mapping + Supplier mapping
+    //   Banks             → CFO command centre for BCEL · BFL · JDB × USD/LAK
+    //   HR                → moved from Operations (PBS 2026-05-15 #2);
+    //                       the underlying page still lives at /operations/staff
+    //                       so all existing deep links keep working.
+    // PBS 2026-05-15: "Snapshot" renamed to "HoD" across Finance / Operations
+    //                 / Marketing menus so it reads as the HoD entry point.
+    { label: 'HoD',     href: '/finance'                                },
+    { label: 'P&L',     href: '/finance/pnl'                            },
+    { label: 'Ledger',  href: '/finance/ledger'                         },
+    // PBS 2026-05-15: Acc consolidates Transactions + Banks + POS under one
+    // top-line button. /finance/acc → 307 → /finance/transactions (the 3 are
+    // wired to share ACC_TABS so the user always sees the 3-tab strip).
+    { label: 'Acc',     href: '/finance/acc'                            },
+    { label: 'HR',      href: '/finance/hr'                             },
+    // PBS 2026-05-16: Legal = chief-legal-officer view (contracts, liabilities,
+    // calendar of dates + deadlines, licenses, lawyer-mail inbox, running cases).
+    { label: 'Legal',   href: '/finance/legal'                          },
+    // Messy data lifted out of submenu — now lives as the orange button
+    // under the HoD chat input (see extraChatButtons below).
+    { label: 'Reports', href: '/h/260955/reports?dept=finance'          },
   ],
   quickChips: [
-    { label: 'Snapshot',     href: '/finance'              },
-    { label: 'P&L',          href: '/finance/pnl'          },
-    { label: 'Ledger',       href: '/finance/ledger'       },
-    { label: 'Transactions', href: '/finance/transactions' },
-    { label: 'Budget',       href: '/finance/budget'       },
-    { label: 'Mapping',      href: '/finance/mapping'      },
+    { label: 'HoD',     href: '/finance'              },
+    { label: 'P&L',     href: '/finance/pnl'          },
+    { label: 'Ledger',  href: '/finance/ledger'       },
+    { label: 'Acc',     href: '/finance/acc'          },
+    { label: 'HR',      href: '/finance/hr'           },
+  ],
+  // PBS 2026-05-15: Messy data pulled out of submenu, surfaced as an
+  // orange accent button under the HoD chat input on /finance.
+  extraChatButtons: [
+    { label: 'Messy data', href: '/finance/messy-data', color: '#d68a3a' },
   ],
   defaultAttn: [
     { id: 'l1', label: 'AR > 60 days — $4.2k unpaid',          severity: 'high',   kind: 'leakage'     },
@@ -555,7 +587,7 @@ const FINANCE_CFG: DeptCfg = {
     { matcher: 'p&l',        href: '/finance/pnl'          },
     { matcher: 'ledger',     href: '/finance/ledger'       },
     { matcher: 'transaction', href: '/finance/transactions' },
-    { matcher: 'pos',        href: '/finance/pos-transactions' },
+    { matcher: 'pos',        href: '/finance/pos'              },
     { matcher: 'budget',     href: '/finance/budget'       },
     { matcher: 'supplier',   href: '/finance/supplier-mapping' },
     { matcher: 'mapping',    href: '/finance/mapping'      },
@@ -685,6 +717,155 @@ const ARCHITECT_CFG: DeptCfg = {
   ],
 };
 
+// ─── Holding (Beyond Circle) — Felix · cross-property command ────────────
+// Same DeptEntry boxes as every HoD / CEO page (My Attention · Reports ·
+// Tasks · Bugs · Messages). What makes /holding distinct:
+//   • customExtra='holding' injects the BC peach property-tile grid +
+//     Cockpit CTA between the chat row and the boxes.
+//   • hideWeather=true — temp/AQI pills are property-scoped, not holding.
+//   • subPages stays empty — the global TopDeptStrip is hidden on /holding
+//     (HIDE_PREFIXES) and the property tiles below the chat fill that role.
+const HOLDING_CFG: DeptCfg = {
+  slug: 'architect',
+  pillTitle: 'Beyond Circle',
+  hodName: 'Felix',
+  hodEmoji: '🌐',
+  ownerRole: 'lead',
+  hodTagline: 'Ask Felix anything — he routes cross-property and connects HoDs.',
+  chatPlaceholder: 'e.g. how are both properties trending this week?',
+  storageKeyPrefix: 'hold',
+  subPages: [],
+  quickChips: [],
+  defaultAttn: [
+    { id: 'h1', label: 'Donna DCO 1/2025 · settlement window open · ≈€25k/week bleed', severity: 'high',   kind: 'leakage'     },
+    { id: 'h2', label: 'Namkhan Mews tokens dead · backfill blocked on reissue',         severity: 'medium', kind: 'leakage'     },
+    { id: 'h3', label: 'Donna April payroll loaded · ready for finance review',          severity: 'low',    kind: 'opportunity' },
+    { id: 'h4', label: 'Sherlock Tier 1 dossiers due in 48h',                            severity: 'medium', kind: 'opportunity' },
+  ],
+  defaultDocs: [
+    { id: 'hd1', label: 'Cockpit (operations command)', href: '/cockpit-v2' },
+    { id: 'hd2', label: 'TBC public homepage',          href: '/tbc'         },
+    { id: 'hd3', label: 'Knowledge base',               href: '/knowledge'   },
+  ],
+  defaultTasks: [
+    { id: 'ht1', label: 'Confirm DCO 1/2025 casación state with Letrada Cañellas', done: false, created: TODAY, alert: true },
+    { id: 'ht2', label: 'Authorise Sherlock Tier 1 dossiers (5 priority targets)',  done: false, created: TODAY               },
+    { id: 'ht3', label: 'Review April Donna payroll vs March MoM',                  done: false, created: TODAY               },
+  ],
+  attentionRoutes: [
+    { matcher: 'donna',    href: '/h/1000001'              },
+    { matcher: 'namkhan',  href: '/h/260955'               },
+    { matcher: 'dco',      href: '/h/1000001/finance'      },
+    { matcher: 'sherlock', href: '/h/1000001/finance'      },
+    { matcher: 'payroll',  href: '/h/1000001/operations/staff' },
+    { matcher: 'mews',     href: '/h/260955'               },
+  ],
+  defaultDrilldown: '/cockpit-v2',
+  kpiTiles: [
+    { k: 'PROPERTIES', v: '2',     d: '1 live · 1 prospect'      },
+    { k: 'AGENTS',     v: '65',    d: 'active across holding'    },
+    { k: 'OPEN',       v: '3',     d: 'high-severity items'      },
+    { k: 'EXPOSURE',   v: '€440k', d: 'DCO tramitación accrued'  },
+  ],
+  hideWeather: true,
+  customExtra: 'holding',
+};
+
+// ─── Holding · Legal — Carla ─────────────────────────────────────────────
+// Holding-level legal scope. Carla (role=legal_specialist_donna) is the
+// holding generalist counsel — drafts memos, reviews contracts. She is
+// NOT a country-specialist; she escalates Spanish/Balearic labour-law
+// questions to Vera (legal_local_donna) in Donna · Finance.
+const HOLDING_LEGAL_CFG: DeptCfg = {
+  slug: 'architect',
+  pillTitle: 'Legal · Holding',
+  hodName: 'Carla',
+  hodEmoji: '⚖️',
+  ownerRole: 'legal_specialist_donna',
+  hodTagline: 'Holding legal generalist · The Beyond Circle. Contract review and 5th-Avenue-style memos. Escalates Spanish/Balearic labour-law questions to Vera (Donna · Finance).',
+  chatPlaceholder: 'e.g. summarize this contract for finance — focus on payments and renewals',
+  storageKeyPrefix: 'hold-legal',
+  subPages: [],
+  quickChips: [],
+  defaultAttn: [
+    { id: 'l1', label: 'DCO 1/2025 · 4 months elapsed · settle within 30d (€150-200k target)', severity: 'high',   kind: 'leakage'     },
+    { id: 'l2', label: 'D&O / RC patronal insurer notification — confirm filed',                severity: 'high',   kind: 'leakage'     },
+    { id: 'l3', label: 'Sherlock Tier 1 dossiers due in 48h',                                    severity: 'medium', kind: 'opportunity' },
+    { id: 'l4', label: 'Acción de regreso draft against Five Senses SLs — file in 14d',          severity: 'medium', kind: 'opportunity' },
+  ],
+  defaultDocs: [
+    { id: 'ld1', label: 'TOGA Assessment · DCO 1/2025',          href: '/h/1000001/finance' },
+    { id: 'ld2', label: 'SHERLOCK Brief · DCO 1/2025',           href: '/h/1000001/finance' },
+    { id: 'ld3', label: 'Sentencia TSJ IB 27/2026',              href: '/h/1000001/finance' },
+    { id: 'ld4', label: '47-worker register + tercero matrix',   href: '/h/1000001/finance' },
+  ],
+  defaultTasks: [
+    { id: 'lt1', label: 'Confirm casación procedural state with Letrada Cañellas', done: false, created: TODAY, alert: true },
+    { id: 'lt2', label: 'Authorise Sherlock Tier 1 (5 priority targets)',           done: false, created: TODAY               },
+    { id: 'lt3', label: 'Open settlement channel with UGT (floor 30%, target 35%)', done: false, created: TODAY               },
+  ],
+  attentionRoutes: [
+    { matcher: 'dco',         href: '/h/1000001/finance' },
+    { matcher: 'sherlock',    href: '/h/1000001/finance' },
+    { matcher: 'd&o',         href: '/h/1000001/finance' },
+    { matcher: 'regreso',     href: '/h/1000001/finance' },
+    { matcher: 'casación',    href: '/h/1000001/finance' },
+  ],
+  defaultDrilldown: '/h/1000001/finance',
+  kpiTiles: [
+    { k: 'OPEN CASES', v: '1',     d: 'DCO 1/2025 · solidaria' },
+    { k: 'EXPOSURE',   v: '€440k', d: 'tramitación accrued'    },
+    { k: 'BLEED',      v: '€25k/wk', d: 'until readmisión'      },
+    { k: 'TARGET',     v: '€150-200k', d: 'UGT settlement'      },
+  ],
+  hideWeather: true,
+};
+
+// ─── Holding · IT — Kit ──────────────────────────────────────────────────
+// Holding-level IT scope. Kit (role=it_manager) runs platform infra.
+const HOLDING_IT_CFG: DeptCfg = {
+  slug: 'architect',
+  pillTitle: 'IT · Holding',
+  hodName: 'Kit',
+  hodEmoji: '🛠',
+  ownerRole: 'it_manager',
+  hodTagline: 'Holding IT lead. Owns infrastructure, agent fleet, deploys, integrations.',
+  chatPlaceholder: 'e.g. why did the last deploy fail? what does the cron schedule look like?',
+  storageKeyPrefix: 'hold-it',
+  subPages: [],
+  quickChips: [],
+  defaultAttn: [
+    { id: 'i1', label: 'Mews tokens dead in prod AND demo — blocked on reissue', severity: 'high',   kind: 'leakage'     },
+    { id: 'i2', label: 'PDF page-splitting needed for SLH audit (>100 pages)',    severity: 'medium', kind: 'leakage'     },
+    { id: 'i3', label: 'Agent fleet healthy — push autonomous PRs',               severity: 'low',    kind: 'opportunity' },
+  ],
+  defaultDocs: [
+    { id: 'id1', label: 'Cockpit V2',                href: '/cockpit-v2'           },
+    { id: 'id2', label: 'Tasks board',               href: '/cockpit/tasks'        },
+    { id: 'id3', label: 'Knowledge base',            href: '/knowledge'            },
+    { id: 'id4', label: 'Claude operating manual',   href: '/cockpit-v2?tab=docs'  },
+  ],
+  defaultTasks: [
+    { id: 'it1', label: 'Wait on Mews token reissue (push side works)', done: false, created: TODAY },
+    { id: 'it2', label: 'Ship parse-pdf-doc page-splitting',            done: false, created: TODAY },
+    { id: 'it3', label: 'Review pending PRs',                            done: false, created: TODAY },
+  ],
+  attentionRoutes: [
+    { matcher: 'mews',   href: '/h/260955'      },
+    { matcher: 'deploy', href: '/cockpit-v2'    },
+    { matcher: 'agent',  href: '/cockpit-v2?tab=team' },
+    { matcher: 'pdf',    href: '/cockpit-v2?tab=docs' },
+  ],
+  defaultDrilldown: '/cockpit-v2',
+  kpiTiles: [
+    { k: 'TICKETS', v: '8',   d: 'open · 2 awaits-user'  },
+    { k: 'AGENTS',  v: '65',  d: 'active'                },
+    { k: 'DEPLOYS', v: '12',  d: 'today · 1 failed'      },
+    { k: 'SLA',     v: '94%', d: '< 5 min triage'        },
+  ],
+  hideWeather: true,
+};
+
 export const DEPT_CFG = {
   revenue:    REVENUE_CFG,
   sales:      SALES_CFG,
@@ -694,6 +875,9 @@ export const DEPT_CFG = {
   finance:    FINANCE_CFG,
   it:         IT_CFG,
   architect:  ARCHITECT_CFG,
+  holding:        HOLDING_CFG,
+  holding_legal:  HOLDING_LEGAL_CFG,
+  holding_it:     HOLDING_IT_CFG,
 } as const;
 
 export type { DeptCfg } from './types';

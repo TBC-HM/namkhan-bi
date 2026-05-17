@@ -18,6 +18,57 @@ import { OPERATIONS_SUBPAGES } from '../../_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import StaffTabStrip from './StaffTabStrip';
 import { holidaysForProperty, type Holiday, type HolidayScope } from './holidays-data';
+import {
+  SOURCE_META, buildDailyOverlap, densityColor,
+  sourcePaletteForProperty,
+  type SchoolSource,
+} from './school-holidays-data';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+
+interface DemandEvent {
+  event_id: string;
+  date_start: string;
+  date_end: string | null;
+  display_name: string;
+  demand_score_override: number | null;
+  is_confirmed: boolean | null;
+}
+
+async function getDemandEventsForYear(year: number): Promise<DemandEvent[]> {
+  const sb = getSupabaseAdmin();
+  const { data } = await sb
+    .schema('marketing')
+    .from('calendar_events')
+    .select('event_id,date_start,date_end,display_name,demand_score_override,is_confirmed')
+    .gte('date_start', `${year}-01-01`)
+    .lte('date_start', `${year}-12-31`)
+    .order('date_start', { ascending: true })
+    .limit(500);
+  return (data ?? []) as DemandEvent[];
+}
+
+function buildEventsByDate(events: DemandEvent[]): Map<string, DemandEvent[]> {
+  const out = new Map<string, DemandEvent[]>();
+  for (const e of events) {
+    const start = new Date(e.date_start + 'T00:00:00Z');
+    const end   = new Date((e.date_end ?? e.date_start) + 'T00:00:00Z');
+    for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+      const iso = d.toISOString().slice(0, 10);
+      const arr = out.get(iso) ?? [];
+      arr.push(e);
+      out.set(iso, arr);
+    }
+  }
+  return out;
+}
+
+function parseSchoolParam(p: string | string[] | undefined, palette: SchoolSource[]): Set<SchoolSource> | null {
+  if (!p || p === 'none') return null;
+  if (p === 'all') return new Set<SchoolSource>(palette);
+  const v = String(p).toLowerCase();
+  if ((palette as string[]).includes(v)) return new Set<SchoolSource>([v as SchoolSource]);
+  return null;
+}
 
 // =============================================================================
 
@@ -57,10 +108,15 @@ interface Props {
   propertyId: number;
   propertyLabel?: string;
   searchParams: Record<string, string | string[] | undefined>;
+  /** PBS 2026-05-15: when true, skip the outer <Page> + StaffTabStrip wrappers
+   *  so the caller can embed this body inside another page (e.g. Revenue
+   *  Calendar · Density tab). */
+  embedded?: boolean;
+  subPagesOverride?: { label: string; href: string }[];
 }
 
 export default async function HolidayScheduleTabContent({
-  propertyId, propertyLabel, searchParams,
+  propertyId, propertyLabel, searchParams, embedded = false, subPagesOverride,
 }: Props) {
   const { rows, countryName, regionName, flag } = holidaysForProperty(propertyId);
 
@@ -76,6 +132,29 @@ export default async function HolidayScheduleTabContent({
   const byDate = new Map<string, Holiday>();
   for (const h of yearRows) byDate.set(h.date, h);
 
+  // ── School-holiday overlay (PBS 2026-05-14, palette swap 2026-05-16) ───
+  // `?school=<src>|all|none` — palette is property-aware. Namkhan gets the
+  // Asian source markets (th, cn, jp, kr, vn, sg, au, int). Donna gets the
+  // EU markets (de, es, se, uk, us, int).
+  const palette = sourcePaletteForProperty(propertyId);
+  const requestedSchool = typeof searchParams?.school === 'string' ? searchParams.school : 'all';
+  const enabledSources = parseSchoolParam(requestedSchool, palette);
+  const overlap = enabledSources ? buildDailyOverlap(selectedYear, enabledSources) : new Map<string, Set<SchoolSource>>();
+
+  // ── Demand-events overlay (PBS 2026-05-16) ─────────────────────────────
+  // `?events=on` pulls marketing.calendar_events for the selected year and
+  // marks them on the calendar. Same source as /marketing/events.
+  const eventsOn = (typeof searchParams?.events === 'string' ? searchParams.events : '') === 'on';
+  const demandEvents = eventsOn ? await getDemandEventsForYear(selectedYear) : [];
+  const eventsByDate = buildEventsByDate(demandEvents);
+  // peak overlap day this year
+  let peakDay: { iso: string; count: number } | null = null;
+  for (const [iso, srcs] of overlap) {
+    if (!peakDay || srcs.size > peakDay.count) peakDay = { iso, count: srcs.size };
+  }
+  // days with at least one source enabled
+  const schoolBreakDayCount = overlap.size;
+
   // KPI counts
   const nNational = yearRows.filter((h) => h.scope === 'national').length;
   const nRegional = yearRows.filter((h) => h.scope === 'regional').length;
@@ -90,13 +169,24 @@ export default async function HolidayScheduleTabContent({
 
   const noData = yearRows.length === 0;
 
+  // PBS 2026-05-15: when embedded (e.g. Revenue Calendar · Density tab) the
+  // outer <Page> + StaffTabStrip are owned by the host page. Render a
+  // fragment so we don't nest layouts.
+  const Wrap = embedded
+    ? ({ children }: { children: React.ReactNode }) => <>{children}</>
+    : ({ children }: { children: React.ReactNode }) => (
+        <Page
+          eyebrow={eyebrow}
+          title={<>Public <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>holidays</em></>}
+          subPages={subPagesOverride ?? rewriteSubPagesForProperty(OPERATIONS_SUBPAGES, propertyId)}
+        >
+          <StaffTabStrip propertyId={propertyId} />
+          {children}
+        </Page>
+      );
+
   return (
-    <Page
-      eyebrow={eyebrow}
-      title={<>Public <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>holidays</em></>}
-      subPages={rewriteSubPagesForProperty(OPERATIONS_SUBPAGES, propertyId)}
-    >
-      <StaffTabStrip propertyId={propertyId} />
+    <Wrap>
 
       <KpiStrip items={[
         { label: 'Total', value: yearRows.length, kind: 'count', hint: `${selectedYear} festivos` },
@@ -110,10 +200,105 @@ export default async function HolidayScheduleTabContent({
         },
         { label: 'Country', value: `${flag || '·'} ${countryName || '—'}`, hint: regionName ?? '—' },
         { label: 'Verified', value: yearRows.filter((h) => h.verified).length, kind: 'count', tone: 'pos', hint: `of ${yearRows.length}` },
+        // PBS 2026-05-14 — school-break overlay metrics
+        {
+          label: 'School-break days',
+          value: schoolBreakDayCount,
+          kind: 'count',
+          tone: schoolBreakDayCount > 0 ? 'pos' : 'neutral',
+          hint: enabledSources && enabledSources.size === 1
+            ? `${SOURCE_META[[...enabledSources][0]].label} only`
+            : enabledSources ? `${enabledSources.size} sources overlaid` : 'overlay off',
+        },
+        {
+          label: 'Peak overlap',
+          value: peakDay
+            ? `${peakDay.count}× · ${new Date(peakDay.iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}`
+            : '—',
+          tone: peakDay && peakDay.count >= 3 ? 'warn' : 'neutral',
+          hint: peakDay ? 'simultaneously on break' : 'no overlap',
+        },
       ] satisfies KpiStripItem[]} />
 
+      {/* PBS 2026-05-14 — School-holidays overlay dropdown.
+          PBS 2026-05-16 — palette swap to Asia for Namkhan, plus Events toggle. */}
+      <section style={{ marginTop: 18, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{
+          fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
+          letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase',
+          color: 'var(--brass)',
+        }}>School holidays</span>
+        {([['all', '🌍 All (overlay)'] as [string, string]]
+          .concat(palette.map((s) => [s, `${SOURCE_META[s].flag} ${SOURCE_META[s].label}`] as [string, string]))
+          .concat([['none', '— off'] as [string, string]])
+        ).map(([k, label]) => {
+          const active = requestedSchool === k;
+          return (
+            <a key={k}
+              href={`?${new URLSearchParams({ y: String(selectedYear), school: k, ...(eventsOn ? { events: 'on' } : {}) }).toString()}`}
+              style={{
+                padding: '4px 10px',
+                fontFamily: 'var(--mono)', fontSize: 11,
+                letterSpacing: '0.10em',
+                color: active ? 'var(--ink)' : 'var(--ink-mute)',
+                background: active ? 'var(--paper-warm)' : 'transparent',
+                border: '1px solid var(--kpi-frame, rgba(168,133,74,0.45))',
+                borderRadius: 999, textDecoration: 'none',
+                fontWeight: active ? 600 : 400,
+              }}>{label}</a>
+          );
+        })}
+        {enabledSources && enabledSources.size > 1 && (
+          <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center', marginLeft: 8 }}>
+            {[1, 2, 3, 4].map((n) => (
+              <span key={n} style={{ display: 'inline-flex', gap: 4, alignItems: 'center', fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--ink-mute)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                <span style={{ width: 12, height: 12, borderRadius: 2, background: densityColor(n), border: '1px solid var(--line-soft)' }} />
+                {n === 4 ? '4+' : n}
+              </span>
+            ))}
+          </span>
+        )}
+      </section>
+
+      {/* PBS 2026-05-16 — Events overlay toggle. Pulls marketing.calendar_events
+          and marks each day with a small brass dot + tooltip. Same data source
+          as /marketing/events. */}
+      <section style={{ marginTop: 10, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{
+          fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
+          letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase',
+          color: 'var(--brass)',
+        }}>Events</span>
+        {([
+          ['on',  '✦ Show demand events'],
+          ['off', '— off'],
+        ] as Array<[string, string]>).map(([k, label]) => {
+          const active = (k === 'on' && eventsOn) || (k === 'off' && !eventsOn);
+          return (
+            <a key={k}
+              href={`?${new URLSearchParams({ y: String(selectedYear), school: String(requestedSchool), ...(k === 'on' ? { events: 'on' } : {}) }).toString()}`}
+              style={{
+                padding: '4px 10px',
+                fontFamily: 'var(--mono)', fontSize: 11,
+                letterSpacing: '0.10em',
+                color: active ? 'var(--ink)' : 'var(--ink-mute)',
+                background: active ? 'var(--paper-warm)' : 'transparent',
+                border: '1px solid var(--kpi-frame, rgba(168,133,74,0.45))',
+                borderRadius: 999, textDecoration: 'none',
+                fontWeight: active ? 600 : 400,
+              }}>{label}</a>
+          );
+        })}
+        {eventsOn && (
+          <span style={{
+            fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: 'var(--ls-extra)',
+            textTransform: 'uppercase', color: 'var(--ink-mute)',
+          }}>{demandEvents.length} event{demandEvents.length === 1 ? '' : 's'} · {selectedYear}</span>
+        )}
+      </section>
+
       {/* Year toggle */}
-      <section style={{ marginTop: 18, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+      <section style={{ marginTop: 14, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <span style={{
           fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
           letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase',
@@ -122,7 +307,7 @@ export default async function HolidayScheduleTabContent({
         {yearsAvailable.map((y) => (
           <a
             key={y}
-            href={`?y=${y}`}
+            href={`?${new URLSearchParams({ y: String(y), school: String(requestedSchool), ...(eventsOn ? { events: 'on' } : {}) }).toString()}`}
             style={{
               padding: '4px 12px',
               fontFamily: 'var(--mono)', fontSize: 11,
@@ -174,6 +359,8 @@ export default async function HolidayScheduleTabContent({
                   year={selectedYear}
                   monthIndex0={m}
                   byDate={byDate}
+                  overlap={overlap}
+                  eventsByDate={eventsByDate}
                 />
               ))}
             </div>
@@ -303,7 +490,7 @@ export default async function HolidayScheduleTabContent({
           </section>
         </>
       )}
-    </Page>
+    </Wrap>
   );
 }
 
@@ -312,8 +499,14 @@ export default async function HolidayScheduleTabContent({
 // =============================================================================
 
 function MonthCard({
-  year, monthIndex0, byDate,
-}: { year: number; monthIndex0: number; byDate: Map<string, Holiday> }) {
+  year, monthIndex0, byDate, overlap, eventsByDate,
+}: {
+  year: number;
+  monthIndex0: number;
+  byDate: Map<string, Holiday>;
+  overlap: Map<string, Set<SchoolSource>>;
+  eventsByDate: Map<string, DemandEvent[]>;
+}) {
   const days = daysInMonth(year, monthIndex0);
   const startDow = firstDowMon0(year, monthIndex0);
   const todayIso = new Date().toISOString().slice(0, 10);
@@ -376,23 +569,47 @@ function MonthCard({
           const isToday = c.iso === todayIso;
           const dow = new Date(c.iso! + 'T00:00:00Z').getUTCDay(); // 0 = Sun, 6 = Sat
           const isWeekend = dow === 0 || dow === 6;
+          const schoolSet = c.iso ? overlap.get(c.iso) : undefined;
+          const schoolCount = schoolSet?.size ?? 0;
+          const schoolBg = schoolCount > 0 ? densityColor(schoolCount) : 'transparent';
+          const dayEvents = c.iso ? eventsByDate.get(c.iso) ?? [] : [];
+          const hasEvent = dayEvents.length > 0;
+          const tipParts: string[] = [];
+          if (h) tipParts.push(`${h.name_en}${h.notes ? ' — ' + h.notes : ''}`);
+          if (schoolCount > 0 && schoolSet) {
+            tipParts.push(`School: ${[...schoolSet].map((s) => SOURCE_META[s].label).join(' · ')}`);
+          }
+          if (hasEvent) {
+            tipParts.push(`Events: ${dayEvents.map((e) => e.display_name).join(' · ')}`);
+          }
 
           return (
             <div key={i}
-              title={h ? `${h.name_en}${h.notes ? ' — ' + h.notes : ''}` : undefined}
+              title={tipParts.length ? tipParts.join('\n') : undefined}
               style={{
                 height: 22,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontFamily: 'var(--mono)', fontSize: 11,
                 color: h ? '#fff' : isWeekend ? 'var(--ink-mute)' : 'var(--ink)',
                 fontWeight: (h || isToday) ? 600 : 400,
-                background: h ? SCOPE_COLOR[h.scope] : 'transparent',
+                // Public-holiday fill wins; school-overlay tint underneath via background-image.
+                background: h
+                  ? SCOPE_COLOR[h.scope]
+                  : schoolBg,
                 border: isToday ? '1px solid var(--ink)' : h && !h.verified ? `1px dashed var(--brass)` : '1px solid transparent',
                 borderRadius: 3,
                 position: 'relative',
               }}
             >
               {c.day}
+              {hasEvent && (
+                <span aria-hidden style={{
+                  position: 'absolute', right: 2, top: 2,
+                  width: 5, height: 5, borderRadius: '50%',
+                  background: 'var(--brass, #a8854a)',
+                  boxShadow: '0 0 3px var(--brass, #a8854a)',
+                }} />
+              )}
             </div>
           );
         })}

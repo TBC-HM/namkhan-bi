@@ -73,7 +73,7 @@ export default async function SpaPage({ searchParams }: Props) {
 
       {/* Canonical: selectors UNDER KPI tiles. */}
       <div style={{ marginTop: 14 }}>
-        <FilterStrip showForward={false} showCompare={false} showSegment={false} liveSource="Cloudbeds · live" />
+        <FilterStrip showForward={false} showCompare={false} showSegment={false} liveSource="PMS · live" />
       </div>
 
       <h2 style={{ marginTop: 28, marginBottom: 6, fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>Monthly trend · revenue · costs · GOP %</h2>

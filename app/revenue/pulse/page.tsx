@@ -264,7 +264,7 @@ export default async function PulsePage({ searchParams }: Props) {
   const channelMixSvg = totalChRev > 0 && slices.length > 0 ? channelMix30dSvg(slices) : '';
 
   const charts = [
-    { title: 'Daily revenue', sub: `${period.label} · USD · Cloudbeds`, svg: dailyRevSvg },
+    { title: 'Daily revenue', sub: `${period.label} · USD · PMS`, svg: dailyRevSvg },
     { title: 'Channel mix', sub: 'last 30d · revenue share · Direct / OTA / Wholesale / Other', svg: channelMixSvg },
     { title: 'Occupancy by room type', sub: `${period.label} · v_room_type_pulse`, svg: occByRoomSvg(roomTypePulse) },
     { title: 'ADR × Occupancy', sub: 'bubble = revenue · per room type', svg: adrOccScatterSvg(roomTypePulse) },
@@ -294,7 +294,7 @@ export default async function PulsePage({ searchParams }: Props) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
         <KpiBox value={occ} unit="pct"  label="Occupancy"
           compare={cmpOcc != null ? { value: cmpOcc, unit: 'pp', period: cmpLabel } : undefined}
-          tooltip={`Rooms sold ÷ rooms available × 100. Window: ${period.label}. Source: kpi_daily (Cloudbeds).`} />
+          tooltip={`Rooms sold ÷ rooms available × 100. Window: ${period.label}. Source: kpi_daily (PMS).`} />
         <KpiBox value={adr} unit="usd"  label="ADR"
           compare={cmpAdr != null ? { value: cmpAdr, unit: 'usd', period: cmpLabel } : undefined}
           tooltip={`Average daily rate = rooms revenue ÷ rooms sold. Window: ${period.label}. Source: kpi_daily.`} />

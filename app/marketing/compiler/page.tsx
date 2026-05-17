@@ -9,6 +9,13 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import InlinePromptBar from './_components/InlinePromptBar';
 import CompilerActionRow from './_components/CompilerActionRow';
 import RecentRunsTable, { type RunRow } from './_components/RecentRunsTable';
+import CompilerCockpit from './_components/CompilerCockpit';
+
+type CompilerView = 'ongoing' | 'fixed' | 'lock';
+function parseCompilerView(v: string | string[] | undefined): CompilerView {
+  const s = typeof v === 'string' ? v : 'ongoing';
+  return (['ongoing', 'fixed', 'lock'] as string[]).includes(s) ? (s as CompilerView) : 'ongoing';
+}
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -37,13 +44,23 @@ async function loadAll() {
   };
 }
 
-export default async function CompilerHomePage() {
+interface Props { searchParams?: { view?: string; offer?: string } }
+
+export default async function CompilerHomePage({ searchParams }: Props) {
   let data: Awaited<ReturnType<typeof loadAll>> | null = null;
   let dbErr: string | null = null;
   try { data = await loadAll(); } catch (e: any) { dbErr = e?.message ?? String(e); }
 
+  const view = parseCompilerView(searchParams?.view);
+  const selectedOfferId = typeof searchParams?.offer === 'string' ? searchParams.offer : undefined;
+
   return (
     <Page eyebrow="Marketing · Compiler" title={<>Retreat <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>compiler</em></>} subPages={MARKETING_SUBPAGES}>
+
+      {/* PBS 2026-05-16: 2-tab cockpit on top — Ongoing Offers · Fixed Retreats. Lock & Distribute wizard via ?view=lock&offer=<id>. */}
+      <CompilerCockpit view={view} selectedOfferId={selectedOfferId} />
+
+      <div style={{ height: 18 }} />
 
       <InlinePromptBar presets={TEMPLATES} />
 

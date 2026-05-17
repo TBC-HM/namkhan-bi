@@ -10,8 +10,16 @@ import KpiBox from '@/components/kpi/KpiBox';
 import AssetGrid from '@/components/marketing/AssetGrid';
 import LibraryAiSearch from '@/components/marketing/LibraryAiSearch';
 import LibraryDropZone from '@/components/marketing/LibraryDropZone';
+import LibraryCockpit from './_components/LibraryCockpit';
 import { getMediaReady, getMediaTierCounts, getTaxonomy, getCuratorPicks, getRoomTypeBuckets, getOtaPack, TIER_LABEL } from '@/lib/marketing';
 import { MARKETING_SUBPAGES } from '../_subpages';
+import TabStrip, { INFO_TABS } from '@/app/finance/_components/TabStrip';
+
+type CockpitView = 'studio' | 'coverage' | 'briefs' | 'pipeline';
+function parseCockpitView(v: string | string[] | undefined): CockpitView {
+  const s = typeof v === 'string' ? v : 'studio';
+  return (['studio', 'coverage', 'briefs', 'pipeline'] as string[]).includes(s) ? (s as CockpitView) : 'studio';
+}
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -77,19 +85,26 @@ export default async function LibraryPage({ searchParams }: SP) {
       title={<>Media <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>library</em>.</>}
       subPages={MARKETING_SUBPAGES}
     >
-      {/* AI search bar — routes to /cockpit/chat?dept=marketing so Lumen handles
-          natural-language asset queries. */}
+      <TabStrip tabs={INFO_TABS} activeKey="library" />
+
+      {/* PBS 2026-05-16: AI Creation Cockpit on top — Studio · Coverage · Briefs · Pipeline.
+          DropZone now uses signed-URL flow (handles up to 500 MB / file). */}
+      <LibraryCockpit
+        view={parseCockpitView(searchParams?.view)}
+        liveCounts={{
+          totalReady,
+          ota: Number(otaCount),
+          hero: Number(heroCount),
+          social: Number(socialCount),
+          archive: archiveCount,
+        }}
+      />
+
+      <div style={{ height: 14 }} />
+
+      {/* AI search + Drop zone */}
       <LibraryAiSearch />
-
-      {/* Drop zone — drag/drop new media straight into /api/marketing/upload. */}
       <LibraryDropZone />
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
-        <KpiBox value={totalReady}   unit="count" label="Total ready"  tooltip="all tiers" />
-        <KpiBox value={Number(otaCount)}     unit="count" label="OTA profile"  tooltip="best of best" />
-        <KpiBox value={Number(heroCount)}    unit="count" label="Website hero" tooltip="thenamkhan.com" />
-        <KpiBox value={Number(socialCount)}  unit="count" label="Social pool"  tooltip="rotate weekly" />
-      </div>
 
       {/* Curator: Fresh & ready — top 12 by qc + brand-fit */}
       {curatorPicks.length > 0 && !tier && !tag && !q && (

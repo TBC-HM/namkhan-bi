@@ -13,28 +13,35 @@ import type { ReactNode } from 'react';
 
 type PaletteEntry = { hex: string; name: string; role: string; usage?: string };
 
-const NAMKHAN_DEFAULTS = {
-  primary: '#1F3A2E',
-  bg: '#F4EFE2',
-  surface: '#FFFFFF',
-  sand: '#B8A878',
-  terracotta: '#B8542A',
-  neutral: '#363C3D',
-  primaryFg: '#F4EFE2',
+// PBS 2026-05-13 rev3: removed cream NAMKHAN_DEFAULTS that were leaking
+// Donna-ish hexes (#F4EFE2, #1F3A2E, #B8A878) into Namkhan routes whenever
+// a brand_palette didn't define a `background`/`surface`/etc role. Now we
+// return undefined for any role the palette doesn't declare, and the
+// injector only emits the CSS var when we actually have a value. Namkhan's
+// dark canvas (defined in :root in styles/globals.css) therefore stays
+// intact on /h/260955/* routes.
+type PaletteTokens = {
+  primary?: string;
+  bg?: string;
+  surface?: string;
+  sand?: string;
+  terracotta?: string;
+  neutral?: string;
+  primaryFg?: string;
 };
 
-function roleToVar(palette: PaletteEntry[] | null | undefined) {
-  if (!palette || palette.length === 0) return NAMKHAN_DEFAULTS;
+function roleToVar(palette: PaletteEntry[] | null | undefined): PaletteTokens {
+  if (!palette || palette.length === 0) return {};
 
   const byRole = (role: string) => palette.find((p) => p.role === role)?.hex;
 
-  const primary = byRole('primary') ?? NAMKHAN_DEFAULTS.primary;
-  const bg = byRole('background') ?? NAMKHAN_DEFAULTS.bg;
-  const surface = byRole('surface') ?? byRole('neutral_light') ?? NAMKHAN_DEFAULTS.surface;
-  const sand = byRole('secondary') ?? byRole('neutral_light') ?? NAMKHAN_DEFAULTS.sand;
-  const terracotta = byRole('accent') ?? NAMKHAN_DEFAULTS.terracotta;
-  const neutral = byRole('neutral') ?? byRole('neutral_dark') ?? NAMKHAN_DEFAULTS.neutral;
-  const primaryFg = isLight(primary) ? '#1A1A1A' : '#F4EFE2';
+  const primary = byRole('primary');
+  const bg = byRole('background');
+  const surface = byRole('surface') ?? byRole('neutral_light');
+  const sand = byRole('secondary') ?? byRole('neutral_light');
+  const terracotta = byRole('accent');
+  const neutral = byRole('neutral') ?? byRole('neutral_dark');
+  const primaryFg = primary ? (isLight(primary) ? '#1A1A1A' : '#F4EFE2') : undefined;
 
   return { primary, bg, surface, sand, terracotta, neutral, primaryFg };
 }
@@ -74,7 +81,12 @@ function mixHex(c1: string, c2: string, ratio: number): string {
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
 }
 
-function lightTokens(t: ReturnType<typeof roleToVar>) {
+// Resolved-light type: ThemeInjector only calls lightTokens() once it has
+// verified every required role exists on the palette, so we can safely treat
+// fields as definite strings inside this function.
+type ResolvedLightTokens = Required<Pick<PaletteTokens, 'primary' | 'bg' | 'surface' | 'sand' | 'terracotta'>>;
+
+function lightTokens(t: ResolvedLightTokens) {
   // Surface ladder: page → card → card-inset → active
   const surf0 = t.bg;                          // page bg (sand)
   const surf1 = t.surface;                     // card/box bg (cream)
@@ -131,7 +143,10 @@ export default function ThemeInjector({
 
   // Properties whose palette declares a `background` role opt into the full
   // light theme. Properties without it (Namkhan today) keep dark fallbacks.
-  const hasLightPageBg = !!palette?.find((p) => p.role === 'background');
+  // PBS 2026-05-13 rev3: also require surface, sand-equivalent, primary, and
+  // accent so lightTokens() never derefs an undefined hex.
+  const hasLightPageBg =
+    !!t.bg && !!t.surface && !!t.sand && !!t.primary && !!t.terracotta;
 
   // PBS 2026-05-13 rev2: :root now defaults to Namkhan-dark. Donna's
   // ThemeInjector path explicitly restores the LIGHT legacy values so her
@@ -161,7 +176,7 @@ export default function ThemeInjector({
 
   let lightVars = '';
   if (hasLightPageBg) {
-    const L = lightTokens(t);
+    const L = lightTokens(t as ResolvedLightTokens);
     lightVars = `
       --page-bg: ${t.bg};
       --page-fg: ${t.primary};
@@ -214,19 +229,27 @@ export default function ThemeInjector({
     `;
   }
 
+  // Only emit a CSS var line when the role is actually defined on the
+  // palette. This prevents Donna-flavored defaults (cream/forest-green)
+  // from being painted over Namkhan's dark canvas.
+  const lines = [
+    t.primary   ? `--primary: ${t.primary};`         : '',
+    t.primaryFg ? `--primary-fg: ${t.primaryFg};`    : '',
+    t.bg        ? `--bg: ${t.bg};`                   : '',
+    t.surface   ? `--surface: ${t.surface};`         : '',
+    t.sand      ? `--sand: ${t.sand};`               : '',
+    t.terracotta? `--terracotta: ${t.terracotta};`   : '',
+    t.neutral   ? `--neutral: ${t.neutral};`         : '',
+  ].filter(Boolean).join('\n      ');
+
   const cssVars = `
     :root {
-      --primary: ${t.primary};
-      --primary-fg: ${t.primaryFg};
-      --bg: ${t.bg};
-      --surface: ${t.surface};
-      --sand: ${t.sand};
-      --terracotta: ${t.terracotta};
-      --neutral: ${t.neutral};
+      ${lines}
       ${lightLegacyVars}
       ${lightVars}
     }
-    body { background-color: var(--bg); }
+    ${hasLightPageBg ? 'body { background-color: var(--bg); color-scheme: light; }' : ''}
+    ${hasLightPageBg ? 'select, input, textarea, option { color-scheme: light; }' : ''}
   `;
 
   return (

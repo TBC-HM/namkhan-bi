@@ -17,6 +17,7 @@ import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 interface Props {
   propertyId: number;
   propertyLabel?: string;
+  subPagesOverride?: { label: string; href: string }[];
 }
 
 type Severity = 'high' | 'med' | 'low' | 'info';
@@ -37,7 +38,7 @@ function statusTone(s: Finding['status']): StatusTone {
   return s === 'resolved' ? 'active' : s === 'fix-in-progress' ? 'pending' : 'expired';
 }
 
-export default async function DataTabContent({ propertyId, propertyLabel }: Props) {
+export default async function DataTabContent({ propertyId, propertyLabel, subPagesOverride }: Props) {
   // ── Live queries (parallel) ──────────────────────────────────────────────
   const [
     activeRegisterRes,
@@ -332,7 +333,7 @@ export default async function DataTabContent({ propertyId, propertyLabel }: Prop
     <Page
       eyebrow={eyebrow}
       title={<>Data <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>quality</em></>}
-      subPages={rewriteSubPagesForProperty(OPERATIONS_SUBPAGES, propertyId)}
+      subPages={subPagesOverride ?? rewriteSubPagesForProperty(OPERATIONS_SUBPAGES, propertyId)}
     >
       <StaffTabStrip propertyId={propertyId} />
 

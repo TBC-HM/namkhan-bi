@@ -124,7 +124,7 @@ const PLACEHOLDER_OUTPUTS: Record<string, string[]> = {
     'Scan complete · 4,749 reservations · 76,001 transactions · 88,863 rate inventory rows\n\n',
     '| Severity | Issue | Count | Suggested Fix |\n',
     '|---|---|---|---|\n',
-    '| 🔴 High | Reservations with NULL guest_email | 4,749 | Investigate Cloudbeds API scope |\n',
+    '| 🔴 High | Reservations with NULL guest_email | 4,749 | Investigate PMS API scope |\n',
     '| 🟡 Med | Transactions without USALI category | 412 | Add to category map |\n',
     '| 🟡 Med | Reservations cancelled but with paid_amount > 0 | 8 | Verify refund status |\n',
     '| 🟢 Low | TENT_7_CLOSED retired flag still in active list | 1 | Cosmetic |\n\n',

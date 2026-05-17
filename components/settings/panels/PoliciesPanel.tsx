@@ -13,7 +13,7 @@ export default function PoliciesPanel({ data }: { data: any }) {
         <Field label="Check-out time" value={formatTime(data.check_out_time)} />
         <Field label="Recommended min nights" value={data.recommended_min_nights} />
         <Field label="Policy effective from" value={formatDate(data.effective_from)} />
-        <Field label="Source document" value={data.source_doc_url ? <a href={data.source_doc_url} target="_blank" rel="noopener noreferrer" className="text-[var(--terracotta,#B8542A)] hover:underline">View source ↗</a> : null} span={2} />
+        <Field label="Source document" value={data.source_doc_url ? <a href={data.source_doc_url} target="_blank" rel="noopener noreferrer" className="hover:underline" style={{ color: 'var(--brass)' }}>View source ↗</a> : null} span={2} />
       </Section>
 
       <Section title="Booking confirmation">

@@ -8,7 +8,7 @@
 
 import { supabase } from '@/lib/supabase';
 import { FX_LAK_PER_USD } from '@/lib/format';
-import { AnomalyCard } from './AnomalyCard';
+import { InsightCard } from './InsightCard';
 import { StaffShell } from './StaffShell';
 import { ArchivedStaffTable, type ArchivedRow } from './ArchivedStaffTable';
 import DeptBreakdown, { type DeptRow, type DeptEmployee } from './DeptBreakdown';
@@ -81,14 +81,6 @@ function fmtCcyShort(amount: number, ccy: string): string {
   return `${sign}${sym}${Math.round(abs).toLocaleString('en-US')}`;
 }
 
-const ISSUE_META: Record<string, { label: string; sub: string }> = {
-  missing_hire_date: { label: 'Missing hire date', sub: 'Contract import gap — separate handover.' },
-  missing_contract: { label: 'Missing contract PDF', sub: 'Upload signed contract to docs.hr_docs.' },
-  contract_expiring: { label: 'Contract expiring', sub: 'End date ≤ 60 days. Renew or release.' },
-  no_payslip_pdf_last_closed_month: { label: 'Payslip PDF missing', sub: 'Upload last closed-month payslip.' },
-  no_calculated_payroll_last_closed_month: { label: 'Payroll not run', sub: 'ops.payroll_monthly has no row for last month.' },
-};
-
 function buildMonthList(actualMonths: string[]): string[] {
   const out: string[] = [];
   const start = new Date(Date.UTC(2025, 0, 1));
@@ -112,9 +104,13 @@ interface Props {
   propertyId: number;
   propertyLabel?: string;
   searchParams: Record<string, string | string[] | undefined>;
+  /** PBS 2026-05-15: override the top-line sub-pages strip — used by the
+   *  Finance · HR route (/finance/hr) so the Finance sub-pages stay visible
+   *  while the body still renders the canonical staff content. */
+  subPagesOverride?: { label: string; href: string }[];
 }
 
-export default async function StaffPageContent({ propertyId, propertyLabel, searchParams }: Props) {
+export default async function StaffPageContent({ propertyId, propertyLabel, searchParams, subPagesOverride }: Props) {
   // Pull EVERY paid month for this property
   const { data: allMonthly } = await supabase
     .schema('ops')
@@ -170,7 +166,7 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
   }
   let trendPoints = [...byMonth.values()];
 
-  const [{ data: rows }, { data: anomalies }, archived] = await Promise.all([
+  const [{ data: rows }, { data: anomalies }, archived, { data: insightsJson }] = await Promise.all([
     supabase
       .schema('public')
       .from('v_staff_register_extended')
@@ -198,6 +194,7 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
         .order('end_date', { ascending: false });
       return (data as any[]) ?? [];
     })(),
+    supabase.schema('ops').rpc('fn_staff_insights', { p_property_id: propertyId }),
   ]);
 
   const safeRows: Row[] = (rows as unknown as Row[]) ?? [];
@@ -340,8 +337,17 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
     });
   }
 
-  const grouped: Record<string, Anomaly[]> = {};
-  for (const a of safeAnoms) (grouped[a.issue] ||= []).push(a);
+  // 2026-05-14 — 5-box insight payload from ops.fn_staff_insights().
+  // Replaces the prior 5 redundant "missing X" cards with 5 distinct dimensions:
+  // master-data completeness, contract pipeline, attendance, time-off, payroll readiness.
+  type InsightBox = {
+    title: string;
+    subtitle: string;
+    score_pct?: number | null;
+    stats: Array<{ label: string; value: string | number; accent?: 'ok' | 'amber' | 'red' | 'muted' }>;
+    people: Array<{ staff_id: string; full_name: string; dept_name: string; meta?: string | null }>;
+  };
+  const insightBoxes: InsightBox[] = (insightsJson as { boxes?: InsightBox[] } | null)?.boxes ?? [];
 
   const employeesByDept: Record<string, DeptEmployee[]> = {};
   for (const r of safeRows) {
@@ -365,6 +371,22 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
   const selHc = selPoint?.headcount ?? 0;
   const selCost = selPoint?.total_grand_usd ?? 0;
   const selCph = selHc > 0 ? selCost / selHc : 0;
+
+  // PBS 2026-05-14 — Company-cost KPI always shows the most recent 2 months
+  // (regardless of selectedMonth) + a MoM % delta. Replaces the prior
+  // "selected-month cost" KPI which was redundant with selCost on the trend
+  // chart's reference dot.
+  const sortedMonthIsos = [...byMonth.keys()].sort((a, b) => a.localeCompare(b));
+  const mCurrIso = sortedMonthIsos[sortedMonthIsos.length - 1] ?? null;
+  const mPrevIso = sortedMonthIsos[sortedMonthIsos.length - 2] ?? null;
+  const costCurrUsd = mCurrIso ? (byMonth.get(mCurrIso)?.total_grand_usd ?? 0) : 0;
+  const costPrevUsd = mPrevIso ? (byMonth.get(mPrevIso)?.total_grand_usd ?? 0) : 0;
+  const momPct = costPrevUsd > 0 ? ((costCurrUsd - costPrevUsd) / costPrevUsd) * 100 : null;
+  const shortMonth = (iso: string | null): string => {
+    if (!iso) return '—';
+    const [, m] = iso.split('-');
+    return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][Number(m) - 1] ?? iso;
+  };
 
   const totalActive = safeRows.length;
   // Currency-aware sum: each row converts via its own salary_currency.
@@ -423,7 +445,7 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
     <Page
       eyebrow={eyebrow}
       title={<>Staff <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>register</em></>}
-      subPages={rewriteSubPagesForProperty(OPERATIONS_SUBPAGES, propertyId)}
+      subPages={subPagesOverride ?? rewriteSubPagesForProperty(OPERATIONS_SUBPAGES, propertyId)}
       topRight={<UploadPayslipsButton />}
     >
       <StaffTabStrip propertyId={propertyId} />
@@ -437,9 +459,17 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
           { label: '12-month workforce', value: cnt12mo,    kind: 'count' as const, tone: 'pos' as const,     hint: 'year-round (≥11 mo · 2025)' },
           { label: '9-month / seasonal', value: cntSeasonal, kind: 'count' as const, tone: 'neutral' as const, hint: 'fijo discontinuo + seasonal' },
         ] : []),
-        // PBS 2026-05-13: KPI money in native currency (€ for Donna, $ for Namkhan).
-        // selCost / selCph stored as USD internally — convert back for display.
-        { label: 'Company cost', value: fmtCcyShort(usdToCcy(selCost, dominantCcy), dominantCcy), tone: 'neutral', hint: fmtPeriodLabel(selectedMonth) },
+        // PBS 2026-05-14: Company cost KPI shows the most recent 2 months
+        // (always, independent of selectedMonth) + MoM % delta.
+        // Tone: green if cost down, brass-warn if cost up, neutral otherwise.
+        {
+          label: `Company cost · ${shortMonth(mPrevIso)} / ${shortMonth(mCurrIso)}`,
+          value: mCurrIso
+            ? `${fmtCcyShort(usdToCcy(costPrevUsd, dominantCcy), dominantCcy)} → ${fmtCcyShort(usdToCcy(costCurrUsd, dominantCcy), dominantCcy)}`
+            : '—',
+          tone: momPct == null ? 'neutral' : (momPct > 0.5 ? 'warn' : momPct < -0.5 ? 'pos' : 'neutral'),
+          hint: momPct == null ? 'no prior month' : `${momPct >= 0 ? '+' : '−'}${Math.abs(momPct).toFixed(1)}% MoM`,
+        },
         { label: 'Cost / head', value: fmtCcyShort(usdToCcy(selCph, dominantCcy), dominantCcy), hint: `${dominantCcy} this month` },
         { label: 'Monthly base', value: fmtCcyShort(usdToCcy(totalMonthlyUSD, dominantCcy), dominantCcy), hint: `register sum · ${dominantCcy}` },
         { label: 'DQ flags', value: totalFlags, kind: 'count', tone: totalFlags > 0 ? 'warn' : 'pos', hint: 'anomalies' },
@@ -487,20 +517,21 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
             textTransform: 'uppercase',
             color: 'var(--brass)',
           }}>
-            Anomalies &amp; alerts
+            Workforce insights
           </h2>
-          <span style={{ fontFamily: 'var(--serif)', fontSize: 'var(--t-xl)', color: totalFlags > 0 ? 'var(--brass)' : 'var(--good, #2c7a4b)' }}>
-            {totalFlags} flag{totalFlags === 1 ? '' : 's'}
+          <span style={{ fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--ink-mute)' }}>
+            ops.fn_staff_insights
           </span>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
-          {Object.entries(ISSUE_META).map(([key, meta]) => (
-            <AnomalyCard
-              key={key}
-              title={meta.label}
-              subtitle={meta.sub}
-              count={grouped[key]?.length ?? 0}
-              people={grouped[key] ?? []}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
+          {insightBoxes.slice(0, 4).map((b, i) => (
+            <InsightCard
+              key={i}
+              title={b.title}
+              subtitle={b.subtitle}
+              stats={b.stats ?? []}
+              people={b.people ?? []}
+              scorePct={typeof b.score_pct === 'number' ? b.score_pct : null}
             />
           ))}
         </div>
@@ -554,7 +585,7 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
           textTransform: 'uppercase',
           color: 'var(--brass)',
         }}>
-          Staff register · {totalActive} active ▾ <span style={{ textTransform: 'none', letterSpacing: 'normal', color: 'var(--ink-mute)' }}>click row to drill down · ${Math.round(totalMonthlyUSD).toLocaleString()} monthly base (USD from {dominantCcy})</span>
+          Staff register · {totalActive} active ▾ <span style={{ textTransform: 'none', letterSpacing: 'normal', color: 'var(--ink-mute)' }}>click row to drill down · {fmtCcyShort(usdToCcy(totalMonthlyUSD, dominantCcy), dominantCcy)} monthly base</span>
         </summary>
         <div style={{ marginTop: 10 }}>
           <StaffShell rows={safeRows} />

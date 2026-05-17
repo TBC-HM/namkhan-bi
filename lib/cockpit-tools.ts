@@ -62,8 +62,32 @@ const supabase = createClient(
 );
 
 // Allowlist for query_supabase_view. Add views here as agents need them.
+// 2026-05-13 (#81): Refreshed to current canonical views. Removed:
+//   • v_overview_kpis (deprecated — superseded by mv_kpi_today + v_kpi_daily)
+//   • cockpit_knowledge_base (deprecated — superseded by cockpit.kn_agent_memory,
+//     accessed via the dedicated read_knowledge_base handler, not via this
+//     generic SQL reader)
+// Added canonical KPI + finance + payroll + channel-mix views per the spec.
 const ALLOWED_VIEWS = new Set([
-  "v_overview_kpis",
+  // ─── Canonical KPI surface (2026-05-13 refresh) ─────────────────────────
+  "mv_kpi_today",
+  "v_kpi_daily",
+  "v_revenue_usali",
+  "kpi.v_occupancy_base",
+  "kpi.v_capture_rate_daily",
+  "kpi.v_ancillary_daily",
+  "v_pickup_otb",
+  "v_channel_mix",
+  "v_adr_revpar",
+  "v_payroll_loader",
+  "v_otb_pace",
+  "v_channel_economics",
+  "v_finance_cash_forecast",
+  "v_finance_budget_vs_actual",
+  "v_payroll_dept_monthly",
+  "v_it_weekly_digest",
+  "v_donna_pay_summary",
+  // ─── Established cockpit operational views (still canonical) ───────────
   "v_compset_set_summary",
   "v_compset_property_summary",
   "v_dq_open",
@@ -79,16 +103,12 @@ const ALLOWED_VIEWS = new Set([
   // GAPs 3+4+5 of COWORK BRIEF 2026-05-07 — Kit cross-dept watch.
   "v_agent_health",
   "v_cross_dept_it_intake",
-  "v_it_weekly_digest",
   // GAP 13 (v2 brief) — Kit retro
   "v_kit_performance",
   // From v2 brief context — already created elsewhere, allowlist for explicit access
   "v_agent_capabilities",
   // PBS 2026-05-09: Felix + HoDs need to read the bug box, ticket queue,
-  // proposals, and project-related state directly. The dept Bugs box on
-  // every dept-entry page writes here; without read access, the personas
-  // can't answer "what's open in my bug box". Also expose tickets/proposals
-  // so personas can reason about WIP without going to the cockpit page.
+  // proposals, and project-related state directly.
   "cockpit_bugs",
   "cockpit_proposals",
   "cockpit_plans",
@@ -96,7 +116,6 @@ const ALLOWED_VIEWS = new Set([
   "cockpit_skill_calls",
   "cockpit_notifications",
   "cockpit_pbs_notifications",
-  "cockpit_knowledge_base",
   // PBS 2026-05-09: targeting frameworks landed today — let personas reference
   // ICP / firmographics / scoring weights when discussing leads + outreach.
   "frameworks",
@@ -124,7 +143,14 @@ async function query_supabase_view(args: {
     return { ok: false, error: `view '${view_name}' is not in the allowlist (${Array.from(ALLOWED_VIEWS).join(", ")})` };
   }
   const safeLimit = Math.min(Math.max(1, limit), 100);
-  let q = supabase.from(view_name).select("*").limit(safeLimit);
+  // 2026-05-13 (#81): support schema-qualified entries (e.g. "kpi.v_occupancy_base").
+  // supabase-js needs the schema set via .schema() then the bare relation name.
+  const dot = view_name.indexOf(".");
+  const schemaName = dot > 0 ? view_name.slice(0, dot) : null;
+  const relName = dot > 0 ? view_name.slice(dot + 1) : view_name;
+  let q = schemaName
+    ? supabase.schema(schemaName).from(relName).select("*").limit(safeLimit)
+    : supabase.from(relName).select("*").limit(safeLimit);
   if (filter_column && filter_value !== undefined) {
     q = q.eq(filter_column, filter_value);
   }
@@ -611,17 +637,60 @@ async function read_property_settings(args: { section?: string }): Promise<ToolR
 }
 
 async function read_knowledge_base(args: { topic?: string; scope?: string; limit?: number }): Promise<ToolResult> {
-  const { topic, scope = "global", limit = 20 } = args;
+  // 2026-05-13 (#81): re-pointed at cockpit.kn_agent_memory — the legacy
+  // public.cockpit_knowledge_base was replaced. Returns content + topics +
+  // importance so personas have enough signal to cite the right entry.
+  // The `scope` arg is preserved for backward-compat: when callers pass a
+  // value it falls through as a topic-array match (kn_agent_memory's `topics`
+  // text[] is the closest equivalent to the old `scope` column).
+  const { topic, scope, limit = 20 } = args;
   const safeLimit = Math.min(Math.max(1, limit), 50);
+
+  // Primary lookup: when a topic substring is supplied, prefer exact `topics`
+  // array match first (high precision), then fall back to content ILIKE.
+  if (topic && topic.trim()) {
+    const t = topic.trim();
+    const { data: byTopic, error: topicErr } = await supabase
+      .schema("cockpit")
+      .from("kn_agent_memory")
+      .select("id, memory_type, content, topics, importance, confidence, scope_tag, created_at, agent_handle")
+      .contains("topics", [t])
+      .eq("active", true)
+      .order("importance", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(safeLimit);
+    if (topicErr) return { ok: false, error: `kn_agent_memory: ${topicErr.message}` };
+    if ((byTopic ?? []).length > 0) {
+      return { ok: true, result: byTopic ?? [] };
+    }
+    // Fallback: substring on content.
+    const { data: byContent, error: contentErr } = await supabase
+      .schema("cockpit")
+      .from("kn_agent_memory")
+      .select("id, memory_type, content, topics, importance, confidence, scope_tag, created_at, agent_handle")
+      .ilike("content", `%${t}%`)
+      .eq("active", true)
+      .order("importance", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(safeLimit);
+    if (contentErr) return { ok: false, error: `kn_agent_memory: ${contentErr.message}` };
+    return { ok: true, result: byContent ?? [] };
+  }
+
+  // No topic provided → top-N by importance, optionally filtered by scope.
   let q = supabase
-    .from("cockpit_knowledge_base")
-    .select("topic, key_fact, scope, source, confidence, created_at")
+    .schema("cockpit")
+    .from("kn_agent_memory")
+    .select("id, memory_type, content, topics, importance, confidence, scope_tag, created_at, agent_handle")
     .eq("active", true)
+    .order("importance", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
     .limit(safeLimit);
-  if (scope && scope !== "all") q = q.eq("scope", scope);
-  if (topic) q = q.or(`topic.ilike.%${topic}%,key_fact.ilike.%${topic}%`);
+  if (scope && scope !== "all" && scope !== "global") {
+    q = q.eq("scope_tag", scope);
+  }
   const { data, error } = await q;
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: `kn_agent_memory: ${error.message}` };
   return { ok: true, result: data ?? [] };
 }
 
@@ -1368,7 +1437,191 @@ async function create_task(args: {
   return { ok: true, result: { ticket_id: data?.id, status: data?.status, created_at: data?.created_at, dept, title } };
 }
 
+// ─── Holding legal — XVII Convenio Hostelería Balears 2025-2028 ─────────
+// Minimal in-line catalogue of the most-cited topics for Carla + Vera.
+// Real source lives in the BOIB; this is the "what article should I cite"
+// helper. The BOIB scraper (Edge Function, follow-up) will populate
+// `legal.bulletin_log` for the live digest.
+interface ConvenioArticle { topic: string; article_ref: string; summary_md: string }
+const CONVENIO_BALEARS_2025_2028: ConvenioArticle[] = [
+  { topic: 'vacaciones',          article_ref: 'XVII Conv. Balears art. 31',     summary_md: '35 días naturales de vacaciones anuales retribuidas (mejora sobre los 30 ET art. 38). Distribución por acuerdo, mínimo 14 días naturales consecutivos.' },
+  { topic: 'antigüedad',           article_ref: 'XVII Conv. Balears art. 24',     summary_md: 'Pluses de antigüedad por trienios. Cuantía fijada en tablas (Anexo I). Se computa el tiempo en cualquier empresa del sector que aplique este Convenio.' },
+  { topic: 'fijo-discontinuo',     article_ref: 'XVII Conv. Balears art. 13 + ET art. 16', summary_md: 'Contrato de fijos-discontinuos para temporada hostelera. Orden de llamamiento por antigüedad. Comunicación escrita con 15 días de antelación al inicio de actividad. Incumplimiento del llamamiento = despido improcedente (SSTS 30-mar-2023, 28-feb-2024).' },
+  { topic: 'jornada',              article_ref: 'XVII Conv. Balears art. 20-22',  summary_md: 'Jornada anual fijada en 1.792 horas. Distribución irregular hasta el 10% por acuerdo. Descansos: 12h entre jornadas + 1,5 días semanales.' },
+  { topic: 'horas extraordinarias',article_ref: 'XVII Conv. Balears art. 23',     summary_md: 'Horas extras compensadas preferentemente en tiempo de descanso (1h extra = 1h15min de descanso). En metálico, recargo del 75% sobre la hora ordinaria.' },
+  { topic: 'nocturnidad',          article_ref: 'XVII Conv. Balears art. 25',     summary_md: 'Plus de nocturnidad para horas trabajadas entre 22:00 y 06:00. Cuantía en tablas (≈25% sobre hora ordinaria).' },
+  { topic: 'festivos',             article_ref: 'XVII Conv. Balears art. 26',     summary_md: 'Plus por trabajo en domingo y festivos (no incluido en jornada habitual). Compensación en descanso o en metálico.' },
+  { topic: 'categorias',           article_ref: 'XVII Conv. Balears Capítulo III + Anexo I', summary_md: 'Categorías profesionales y tablas salariales por niveles (jefe/a de cocina, camarero/a, recepcionista, gobernante/a, etc.). Revisión anual IPC + cláusula de garantía.' },
+  { topic: 'régimen disciplinario',article_ref: 'XVII Conv. Balears art. 50-54',  summary_md: 'Faltas leves (amonestación, suspensión 2 días), graves (suspensión 3-15 días), muy graves (suspensión 16-60 días o despido). Procedimiento contradictorio con audiencia previa.' },
+  { topic: 'comisión paritaria',   article_ref: 'XVII Conv. Balears art. 64',     summary_md: 'Comisión Paritaria de Interpretación + arbitraje. Cualquier discrepancia colectiva se somete primero a la Comisión antes de la vía judicial.' },
+  { topic: 'igualdad',             article_ref: 'XVII Conv. Balears art. 60-62 + LO 3/2007', summary_md: 'Plan de igualdad obligatorio (>50 trabajadoras/es). Registro retributivo. Protocolo de acoso sexual y por razón de sexo.' },
+  { topic: 'ETT',                  article_ref: 'XVII Conv. Balears art. 14',     summary_md: 'Trabajadores cedidos por ETT con igualdad de condiciones esenciales. Cómputo de antigüedad si pasan a plantilla directa.' },
+];
+function fuzzyTopicMatch(query: string, item: ConvenioArticle): number {
+  const q = query.toLowerCase();
+  if (item.topic.toLowerCase().includes(q)) return 100;
+  let score = 0;
+  for (const w of q.split(/\s+/)) {
+    if (!w) continue;
+    if (item.topic.toLowerCase().includes(w)) score += 30;
+    if (item.summary_md.toLowerCase().includes(w)) score += 10;
+    if (item.article_ref.toLowerCase().includes(w)) score += 50;
+  }
+  return score;
+}
+// ─── Google Sheet reader (public CSV-export) ────────────────────────────
+// Accepts any of these:
+//   https://docs.google.com/spreadsheets/d/<id>/edit#gid=<gid>
+//   https://docs.google.com/spreadsheets/d/<id>/export?format=csv&gid=<gid>
+//   plain <id>
+async function read_google_sheet(args: Record<string, unknown>): Promise<ToolResult> {
+  const raw = String(args.url ?? args.id ?? '').trim();
+  if (!raw) return { ok: false, error: 'url or id required' };
+  const max = Math.min(Number(args.max_rows ?? 500), 2000);
+
+  let sheetId = raw;
+  let gid: string | null = null;
+  const m = raw.match(/spreadsheets\/d\/([A-Za-z0-9_-]+)/);
+  if (m) sheetId = m[1];
+  const g = raw.match(/[?&#]gid=(\d+)/);
+  if (g) gid = g[1];
+
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv${gid ? `&gid=${gid}` : ''}`;
+  try {
+    const r = await fetch(url, { redirect: 'follow' });
+    if (!r.ok) return { ok: false, error: `sheet fetch ${r.status} — is it shared "anyone with the link can view"?` };
+    const text = await r.text();
+    const rows = parseCsv(text).slice(0, max);
+    const headers = rows.shift() ?? [];
+    return { ok: true, result: { sheetId, gid, rows: rows.length, headers, data: rows } };
+  } catch (e: unknown) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+function parseCsv(text: string): string[][] {
+  const out: string[][] = [];
+  let cur: string[] = [];
+  let buf = '';
+  let inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"' && text[i + 1] === '"') { buf += '"'; i++; }
+      else if (c === '"') inQ = false;
+      else buf += c;
+    } else {
+      if (c === '"') inQ = true;
+      else if (c === ',') { cur.push(buf); buf = ''; }
+      else if (c === '\n') { cur.push(buf); out.push(cur); cur = []; buf = ''; }
+      else if (c === '\r') { /* ignore */ }
+      else buf += c;
+    }
+  }
+  if (buf.length || cur.length) { cur.push(buf); out.push(cur); }
+  return out;
+}
+
+// ─── Table analytics — sum / avg / count / anomaly on tabular JSON ──────
+async function analyze_table(args: Record<string, unknown>): Promise<ToolResult> {
+  const data = Array.isArray(args.data) ? (args.data as unknown[]) : [];
+  const op = String(args.op ?? 'summary');
+  const field = args.field != null ? String(args.field) : null;
+  if (data.length === 0) return { ok: true, result: { rows: 0, note: 'empty data' } };
+
+  const rows = data as Array<Record<string, unknown>>;
+  const isObj = typeof rows[0] === 'object' && rows[0] !== null;
+  const cols = isObj ? Object.keys(rows[0] as Record<string, unknown>) : [];
+
+  if (op === 'summary') {
+    const summary: Record<string, { kind: string; n: number; min?: number; max?: number; mean?: number; uniq?: number }> = {};
+    for (const c of cols) {
+      const vals = rows.map((r) => r[c]);
+      const nums = vals.filter((v) => typeof v === 'number') as number[];
+      const strs = vals.filter((v) => typeof v === 'string') as string[];
+      if (nums.length > 0 && nums.length >= vals.length * 0.7) {
+        const min = Math.min(...nums), max = Math.max(...nums);
+        const mean = nums.reduce((a, b) => a + b, 0) / nums.length;
+        summary[c] = { kind: 'number', n: nums.length, min, max, mean: Math.round(mean * 100) / 100 };
+      } else {
+        summary[c] = { kind: 'text', n: strs.length, uniq: new Set(strs).size };
+      }
+    }
+    return { ok: true, result: { rows: rows.length, cols: cols.length, summary } };
+  }
+
+  if (!field) return { ok: false, error: 'field required for op ' + op };
+  const nums = rows
+    .map((r) => Number(r[field]))
+    .filter((n) => Number.isFinite(n));
+  if (op === 'sum')   return { ok: true, result: { field, op, n: nums.length, value: nums.reduce((a, b) => a + b, 0) } };
+  if (op === 'avg')   return { ok: true, result: { field, op, n: nums.length, value: nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : 0 } };
+  if (op === 'count') return { ok: true, result: { field, op, n: nums.length } };
+  if (op === 'min')   return { ok: true, result: { field, op, value: nums.length ? Math.min(...nums) : null } };
+  if (op === 'max')   return { ok: true, result: { field, op, value: nums.length ? Math.max(...nums) : null } };
+  if (op === 'anomaly') {
+    // Simple 2σ outlier detector.
+    if (nums.length < 4) return { ok: true, result: { field, op, n: nums.length, outliers: [] } };
+    const mean = nums.reduce((a, b) => a + b, 0) / nums.length;
+    const sd = Math.sqrt(nums.reduce((a, b) => a + (b - mean) ** 2, 0) / nums.length);
+    const outliers = rows
+      .map((r, i) => ({ i, value: Number(r[field]) }))
+      .filter((x) => Number.isFinite(x.value) && Math.abs(x.value - mean) > 2 * sd)
+      .slice(0, 20);
+    return { ok: true, result: { field, op, n: nums.length, mean, sd, outliers } };
+  }
+  return { ok: false, error: 'unknown op: ' + op };
+}
+
+// ─── Supabase Storage folder listing + read ─────────────────────────────
+async function list_storage_folder(args: Record<string, unknown>): Promise<ToolResult> {
+  const bucket = String(args.bucket ?? '').trim();
+  const path = String(args.path ?? '').trim();
+  if (!bucket) return { ok: false, error: 'bucket required' };
+  const { data, error } = await supabase.storage.from(bucket).list(path || undefined, { limit: 200, sortBy: { column: 'name', order: 'asc' } });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, result: { bucket, path, items: data } };
+}
+async function read_storage_file(args: Record<string, unknown>): Promise<ToolResult> {
+  const bucket = String(args.bucket ?? '').trim();
+  const path = String(args.path ?? '').trim();
+  if (!bucket || !path) return { ok: false, error: 'bucket + path required' };
+  const max = Math.min(Number(args.max_chars ?? 80000), 500000);
+  const { data, error } = await supabase.storage.from(bucket).download(path);
+  if (error || !data) return { ok: false, error: error?.message ?? 'no data' };
+  const buf = Buffer.from(await (data as Blob).arrayBuffer());
+  // Try as text first; binary files come back garbled but the caller can
+  // route via the existing OCR pipeline (parse-pdf-doc Edge Function).
+  const text = buf.toString('utf8').slice(0, max);
+  return { ok: true, result: { bucket, path, bytes: buf.length, text } };
+}
+
+async function cite_convenio_article(args: Record<string, unknown>): Promise<ToolResult> {
+  const topic = String(args.topic ?? '').trim();
+  if (!topic) return { ok: false, error: 'topic required' };
+  const ranked = CONVENIO_BALEARS_2025_2028
+    .map((a) => ({ a, score: fuzzyTopicMatch(topic, a) }))
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5)
+    .map(({ a }) => a);
+  if (ranked.length === 0) {
+    return {
+      ok: true,
+      result: {
+        topic, hits: 0,
+        note: 'No exact match in in-line catalogue. Consult BOIB · Conselleria d\'Empresa, Ocupació i Energia for the full XVII Convenio text, or call legal_bulletin_check for jurisprudence.',
+      },
+    };
+  }
+  return { ok: true, result: { topic, hits: ranked.length, articles: ranked } };
+}
+
 const HANDLERS: Record<string, (args: Record<string, unknown>) => Promise<ToolResult>> = {
+  cite_convenio_article,
+  read_google_sheet,
+  analyze_table,
+  list_storage_folder,
+  read_storage_file,
   list_team_members: (a) => list_team_members(a as Parameters<typeof list_team_members>[0]),
   create_task: (a) => create_task(a as Parameters<typeof create_task>[0]),
   check_founder_brief: (a) => check_founder_brief(a as Parameters<typeof check_founder_brief>[0]),
@@ -1745,7 +1998,7 @@ export const CHAT_MODE_TOOLS: AgentToolDef[] = [
   },
   {
     name: 'query_supabase_view',
-    description: 'Read live data from any allowlisted Supabase view/table. Use this PROACTIVELY whenever PBS asks about live state (bugs, tickets, KPIs, agents, KB, etc.) instead of saying you need to switch modes. Allowlist includes: cockpit_bugs, cockpit_tickets, cockpit_proposals, cockpit_audit_log, cockpit_knowledge_base, cockpit_incidents, cockpit_kpi_snapshots, v_overview_kpis, v_compset_set_summary, v_dq_open, v_pl_monthly_usali, v_tactical_alerts_top, v_unanswered_threads, v_agent_health, v_kit_performance, frameworks, framework_items, scoring_model, lead_scraping_fields, plus more.',
+    description: 'Read live data from any allowlisted Supabase view/table. Use this PROACTIVELY whenever PBS asks about live state (KPIs, tickets, bugs, KB, agents, etc.) instead of saying you need to switch modes. Allowlist (2026-05-13 refresh): mv_kpi_today, v_kpi_daily, v_revenue_usali, kpi.v_occupancy_base, kpi.v_capture_rate_daily, kpi.v_ancillary_daily, v_pickup_otb, v_channel_mix, v_adr_revpar, v_payroll_loader, v_otb_pace, v_channel_economics, v_finance_cash_forecast, v_finance_budget_vs_actual, v_payroll_dept_monthly, v_it_weekly_digest, v_donna_pay_summary, v_compset_set_summary, v_dq_open, v_pl_monthly_usali, v_tactical_alerts_top, v_unanswered_threads, v_agent_health, v_kit_performance, cockpit_bugs, cockpit_tickets, cockpit_proposals, cockpit_audit_log, cockpit_incidents, cockpit_kpi_snapshots, frameworks, framework_items, scoring_model, lead_scraping_fields. For curated knowledge base entries use the dedicated read_knowledge_base skill (cockpit.kn_agent_memory).',
     input_schema: {
       type: 'object',
       properties: {

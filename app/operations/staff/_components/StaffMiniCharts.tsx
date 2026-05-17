@@ -110,7 +110,7 @@ export default function StaffMiniCharts({
           <LineChart data={series} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
             <CartesianGrid stroke={C.grid} strokeDasharray="2 4" vertical={false} />
             <XAxis dataKey="m" tick={{ fill: C.axis, fontSize: 10 }} interval="preserveStartEnd" />
-            <YAxis tick={{ fill: C.axis, fontSize: 10 }} domain={['auto','auto']} />
+            <YAxis tick={{ fill: C.axis, fontSize: 10 }} domain={[0, 'auto']} allowDataOverflow={false} />
             <Tooltip contentStyle={tooltipStyle} itemStyle={itemStyle} labelStyle={labelStyle} cursor={{ stroke: C.brass, strokeWidth: 1 }} formatter={(v: any) => [`${v}`, 'Headcount']} />
             <Line type="monotone" dataKey="hc" stroke={C.moss} strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 4 }} />
             <ReferenceDot
@@ -127,7 +127,7 @@ export default function StaffMiniCharts({
           <LineChart data={series} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
             <CartesianGrid stroke={C.grid} strokeDasharray="2 4" vertical={false} />
             <XAxis dataKey="m" tick={{ fill: C.axis, fontSize: 10 }} interval="preserveStartEnd" />
-            <YAxis tick={{ fill: C.axis, fontSize: 10 }} tickFormatter={(v: number) => fmtCcyShort(v, nativeCurrency)} />
+            <YAxis tick={{ fill: C.axis, fontSize: 10 }} tickFormatter={(v: number) => fmtCcyShort(v, nativeCurrency)} domain={[0, 'auto']} allowDataOverflow={false} />
             <Tooltip contentStyle={tooltipStyle} itemStyle={itemStyle} labelStyle={labelStyle} cursor={{ stroke: C.brass, strokeWidth: 1 }} formatter={(v: any) => [fmtCcyShort(Number(v), nativeCurrency), 'Total cost']} />
             <Line type="monotone" dataKey="cost" stroke={C.brass} strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 4 }} />
             <ReferenceDot
@@ -144,7 +144,7 @@ export default function StaffMiniCharts({
           <LineChart data={series} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
             <CartesianGrid stroke={C.grid} strokeDasharray="2 4" vertical={false} />
             <XAxis dataKey="m" tick={{ fill: C.axis, fontSize: 10 }} interval="preserveStartEnd" />
-            <YAxis tick={{ fill: C.axis, fontSize: 10 }} tickFormatter={(v: number) => fmtCcyShort(v, nativeCurrency)} />
+            <YAxis tick={{ fill: C.axis, fontSize: 10 }} tickFormatter={(v: number) => fmtCcyShort(v, nativeCurrency)} domain={[0, 'auto']} allowDataOverflow={false} />
             <Tooltip contentStyle={tooltipStyle} itemStyle={itemStyle} labelStyle={labelStyle} cursor={{ stroke: C.brass, strokeWidth: 1 }} formatter={(v: any) => [fmtCcyShort(Number(v), nativeCurrency), 'Per head']} />
             <Line type="monotone" dataKey="cph" stroke={C.good} strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 4 }} />
             <ReferenceDot

@@ -1,4 +1,5 @@
 // components/settings/panels/FacilitiesPanel.tsx
+// PBS 2026-05-13 rev3: brand-aware tokens.
 import { PanelHeader, Chip, StatusBadge, EmptyState } from './_shared';
 
 export default function FacilitiesPanel({ data }: { data: any[] }) {
@@ -19,23 +20,40 @@ export default function FacilitiesPanel({ data }: { data: any[] }) {
       <div className="p-6 space-y-6">
         {Object.entries(byCategory).map(([cat, items]) => (
           <div key={cat}>
-            <h3 className="text-xs uppercase tracking-[0.15em] text-[var(--sand,#B8A878)] font-semibold mb-3">
-              {cat} <span className="text-[var(--primary,#1F3A2E)]/40 normal-case font-normal">({items.length})</span>
+            <h3
+              className="uppercase font-semibold mb-3"
+              style={{ fontSize: 'var(--t-xs)', letterSpacing: '0.15em', color: 'var(--brass)' }}
+            >
+              {cat} <span className="normal-case font-normal" style={{ color: 'var(--ink-mute)' }}>({items.length})</span>
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {items.map((f) => (
                 <div
                   key={f.facility_id}
-                  className="bg-white rounded-lg border border-[var(--sand,#B8A878)]/20 p-4 hover:border-[var(--sand,#B8A878)]/50 transition-colors"
+                  className="rounded-lg p-4 transition-colors"
+                  style={{ background: 'var(--paper-deep)', border: '1px solid var(--border)' }}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <h4 className="font-medium text-[var(--primary,#1F3A2E)]">{f.name}</h4>
+                      <h4 className="font-medium" style={{ color: 'var(--ink)' }}>{f.name}</h4>
                       {f.description && (
-                        <p className="text-sm text-[var(--primary,#1F3A2E)]/70 mt-1 leading-relaxed">{f.description}</p>
+                        <p
+                          className="mt-1 leading-relaxed"
+                          style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-soft)' }}
+                        >
+                          {f.description}
+                        </p>
                       )}
-                      {f.hours && <p className="text-xs text-[var(--sand,#B8A878)] mt-2">Hours: {f.hours}</p>}
-                      {f.notes && <p className="text-xs text-[var(--primary,#1F3A2E)]/50 mt-1 italic">{f.notes}</p>}
+                      {f.hours && (
+                        <p className="mt-2" style={{ fontSize: 'var(--t-xs)', color: 'var(--brass)' }}>
+                          Hours: {f.hours}
+                        </p>
+                      )}
+                      {f.notes && (
+                        <p className="mt-1 italic" style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>
+                          {f.notes}
+                        </p>
+                      )}
                     </div>
                     <div className="flex flex-col gap-1 items-end flex-shrink-0">
                       <StatusBadge active={f.is_active} />

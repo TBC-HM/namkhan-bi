@@ -10,6 +10,8 @@ import { NextResponse } from "next/server";
 import { unstable_noStore as noStore } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
 import { loadSkillsForRole, dispatchSkill, dispatchSkillGated, CHAT_MODE_TOOLS } from "@/lib/cockpit-tools";
+import { loadAgentSkills, toAnthropicTools, findSkill } from "@/lib/cockpit-skills/loader";
+import { executeSkill } from "@/lib/cockpit-skills/dispatcher";
 
 // ─── Unified-chat enrichment (KB #291) — added 2026-05-07 ──────────────────
 // Every chat request gets:
@@ -23,11 +25,18 @@ import { loadSkillsForRole, dispatchSkill, dispatchSkillGated, CHAT_MODE_TOOLS }
 const NICKNAME_TO_ROLE: Record<string, string> = {
   architect: "architect",
   kit: "it_manager", felix: "lead", olive: "ops_lead", sage: "backend",
-  pia: "frontend", bea: "designer", carla: "code_writer", sergei: "security",
+  pia: "frontend", bea: "designer", sergei: "security",
   quinn: "tester", scott: "documentarian", anders: "api_specialist",
   astra: "skill_creator", data: "researcher", sigma: "reviewer", quincy: "code_spec_writer",
   vector: "revenue_hod", mercer: "sales_hod", lumen: "marketing_hod",
   forge: "operations_hod", intel: "finance_hod",
+  // PBS-locked 2026-05-14: @carla = holding legal lead. The dev-team
+  // code_writer (display_name="Carla") loses the nickname here; address
+  // her directly as @code_writer when needed.
+  carla: "legal_specialist_donna",
+  toga: "legal_specialist_donna",   // legacy alias retained for back-compat
+  vera: "legal_local_donna",        // Donna · Finance · Spanish/Balearic labour-law specialist
+  sherlock: "forensic_detective",
 };
 
 function parseMention(text: string): string | null {
@@ -37,14 +46,16 @@ function parseMention(text: string): string | null {
   return NICKNAME_TO_ROLE[key] ?? null;
 }
 
+// 2026-05-13 (#81): swap stale v_overview_kpis → mv_kpi_today (canonical
+// snapshot). pace/channels split to their own canonical views.
 const ROUTE_TO_VIEW: Record<string, string> = {
-  "/revenue/pulse": "v_overview_kpis",
-  "/revenue/pace": "v_tactical_alerts_top",
-  "/revenue/channels": "v_overview_kpis",
+  "/revenue/pulse": "mv_kpi_today",
+  "/revenue/pace": "v_otb_pace",
+  "/revenue/channels": "v_channel_mix",
   "/revenue/parity": "v_tactical_alerts_top",
   "/revenue/agents": "cockpit_audit_log",
-  "/revenue-v2": "v_overview_kpis",
-  "/revenue-v2/pulse": "v_overview_kpis",
+  "/revenue-v2": "mv_kpi_today",
+  "/revenue-v2/pulse": "mv_kpi_today",
   "/revenue-v2/parity": "v_tactical_alerts_top",
   "/sales/inquiries": "v_unanswered_threads",
   "/cockpit": "cockpit_tickets",
@@ -236,6 +247,83 @@ async function loadPrompt(role: string): Promise<string> {
     .eq("active", true)
     .single();
   return data?.prompt ?? IT_MANAGER_FALLBACK_PROMPT;
+}
+
+// ─── Dynamic persona loader (2026-05-13, #82) ────────────────────────────
+// Replaces the hardcoded 8-entry personaMap with a live lookup against
+// cockpit.id_agents — all 65 agents are now addressable in chat-mode.
+// Cached per-request in chatPersonaCache so the same chat turn doesn't
+// re-query inside loops.
+export type ChatPersona = {
+  name: string;
+  voice: string;
+  hierarchy_level: number | null;
+  dept: string | null;
+  property_id: number | null;
+};
+
+const PERSONA_FALLBACK: ChatPersona = {
+  name: "namkhan-bi",
+  voice:
+    "You are a namkhan-bi platform agent. The role this user addressed was not found in cockpit.id_agents. Reply briefly: ask the user to clarify which agent (e.g. @felix, @vector, @intel) they want, or treat the message as a generic platform chat — direct, no fluff, 1-3 short sentences. No JSON, no plans.",
+  hierarchy_level: null,
+  dept: null,
+  property_id: null,
+};
+
+/**
+ * Look up a persona by role from cockpit.id_agents. Returns a chat-mode
+ * voice synthesised from display_name + tagline + dept. Falls back to a
+ * generic platform persona when no row matches (unknown role).
+ *
+ * Caller passes a `cache` map so multiple lookups within a single chat turn
+ * share the same DB round-trip per role.
+ */
+async function loadPersona(
+  role: string,
+  cache: Map<string, ChatPersona>,
+): Promise<ChatPersona> {
+  if (cache.has(role)) return cache.get(role)!;
+
+  const { data, error } = await supabase
+    .schema("cockpit")
+    .from("id_agents")
+    .select("role, display_name, tagline, avatar, color, hierarchy_level, dept, property_id, status")
+    .eq("role", role)
+    .eq("status", "active")
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) {
+    cache.set(role, PERSONA_FALLBACK);
+    return PERSONA_FALLBACK;
+  }
+
+  const displayName = (data.display_name as string | null) ?? role;
+  const tagline = (data.tagline as string | null) ?? "";
+  const dept = (data.dept as string | null) ?? null;
+  const hierarchy = (data.hierarchy_level as number | null) ?? null;
+  const propertyId = (data.property_id as number | null) ?? null;
+
+  // Synthesise a chat-mode system voice. Keeps the same shape as the old
+  // hardcoded map (1-3 sentence prose, no JSON, no plans) but lets the
+  // DB own the per-agent identity (name + tagline + dept).
+  const voice = [
+    `You are ${displayName}${tagline ? `, ${tagline}` : ""} at The Namkhan${dept ? ` (dept: ${dept})` : ""}.`,
+    "Conversational, direct, no fluff. Reply in 1-3 short sentences unless asked to elaborate.",
+    "You have skills available (see TOOL ACCESS below) — use them when PBS asks for live data instead of saying you can't.",
+    "No JSON. No \"recommended_agent\". No plans.",
+  ].join(" ");
+
+  const persona: ChatPersona = {
+    name: displayName,
+    voice,
+    hierarchy_level: hierarchy,
+    dept,
+    property_id: propertyId,
+  };
+  cache.set(role, persona);
+  return persona;
 }
 
 async function approveWorkTicket(): Promise<{ ticket: Record<string, unknown>; spec: string; issue: Record<string, unknown> } | null> {
@@ -807,17 +895,43 @@ export async function POST(req: Request) {
       const personaRole = mention
         ? (NICKNAME_TO_ROLE[mention] ?? mention)
         : "lead";
-      const personaMap: Record<string, { name: string; voice: string }> = {
-        lead:           { name: "Felix",       voice: "You are Felix, the cockpit lead at The Namkhan (luxury boutique hotel in Luang Prabang, Laos). Conversational, direct, warm. Reply in 1-3 short sentences unless asked to elaborate. NEVER say you will check logs, query Supabase, look up data, fetch a status, or run anything — you have NO tools in chat mode and CANNOT execute lookups. If the user asks for live data (sync status, counts, last-run times, KPIs), reply with EXACTLY: \"I can't query data from chat — phrase it as a task and I'll route it to the right agent. E.g. 'check the last Cloudbeds sync' will create a ticket.\" If the user just greeted you, greet them back and ask what they want to work on. No JSON. No \"recommended_agent\". No plans." },
-          architect:    { name: "Felix",       voice: "You are Felix, the architect/cockpit lead at The Namkhan. Conversational, direct, warm. Reply in 1-3 short sentences. NEVER say you will check logs, query Supabase, look up data, or run anything — you have NO tools in chat mode. If asked for live data, say: \"I can't query data from chat — phrase it as a task and I'll route it.\" No JSON, no plans." },
-          it_manager:   { name: "Captain Kit", voice: "You are Captain Kit, the IT manager at The Namkhan. Direct, technical, no fluff. Reply in 1-3 short sentences. You CANNOT query logs or run commands in chat mode — say so plainly if asked." },
-          revenue_hod:  { name: "Vector",      voice: "You are Vector, the Revenue HoD at The Namkhan. Numbers-first, dry, sharp. Reply in 1-3 short sentences. You CANNOT query the database in chat mode — if asked for numbers, say: \"Phrase it as a task and I'll pull the data.\"" },
-          sales_hod:    { name: "Mercer",      voice: "You are Mercer, the Sales HoD at The Namkhan. Warm but firm. Reply in 1-3 short sentences. You CANNOT query the database in chat mode — say so plainly if asked." },
-          marketing_hod:{ name: "Lumen",       voice: "You are Lumen, the Marketing HoD at The Namkhan. Brand-aware, casual luxury tone. Reply in 1-3 short sentences. You CANNOT query the database or external platforms in chat mode — say so plainly if asked." },
-          operations_hod:{name: "Forge",       voice: "You are Forge, the Operations HoD at The Namkhan. Practical, no-nonsense. Reply in 1-3 short sentences. You CANNOT query the database in chat mode — say so plainly if asked." },
-          finance_hod:  { name: "Intel",       voice: "You are Intel, the Finance HoD at The Namkhan. USALI-aware, blunt. Reply in 1-3 short sentences. You CANNOT query the database in chat mode — say so plainly if asked." },
-      };
-      const persona = personaMap[personaRole] ?? personaMap.lead;
+
+      // 2026-05-13 (#82): per-request persona cache + dynamic loader (replaces
+      // the hardcoded 8-entry personaMap). All 65 agents in cockpit.id_agents
+      // are now addressable; unknown roles fall back to the generic platform
+      // persona inside loadPersona().
+      const personaCache = new Map<string, ChatPersona>();
+      const persona = await loadPersona(personaRole, personaCache);
+
+      // 2026-05-14: bootstrap context. Every chat turn now starts with:
+      //   (1) a small "TBC bootstrap" header so any agent knows the holding
+      //       and properties even if their own prompt is thin,
+      //   (2) the FULL cockpit_agent_prompts row for the active role
+      //       (loadPrompt). This is the comprehensive operating prompt
+      //       (legal-team block, KB pointers, skills, escalation rules),
+      //       not just the synthesized voice from id_agents.tagline.
+      //   (3) the synthesized voice as a style fingerprint.
+      // Result: Felix and every HoD know about Carla/Vera/Sherlock, the two
+      // properties, the canonical roster, and the source-of-truth docs.
+      const fullRolePrompt = await loadPrompt(personaRole).catch(() => '');
+      const TBC_BOOTSTRAP = [
+        'PLATFORM CONTEXT — read this before answering.',
+        '',
+        'You are an AI agent inside **The Beyond Circle** (TBC) — a hospitality holding company that runs the namkhan-bi platform.',
+        'Two operating properties today:',
+        '  • The Namkhan (property_id 260955) — Luang Prabang, Laos · 24/30 rooms · SLH affiliate · CEO = Nova',
+        '  • Donna Hotel Portals (property_id 1000001) — Mallorca, Illes Balears, Spain · SLH affiliate · CEO = Orion',
+        'Holding leadership: Felix (lead, holding CEO + architect) · Captain Kit (it_manager) · Carla (legal_specialist_donna, holding legal) · Sherlock (forensic_detective).',
+        'Donna · Finance houses Vera (legal_local_donna) — the Spanish/Balearic labour-law specialist Carla escalates to.',
+        'Note: "Toga" is a legacy display name for Carla; "Counsel Iris" is obsolete. Map both to Carla.',
+        '',
+        'Source-of-truth documents live in Supabase `documentation.documents`:',
+        '  • doc_type=`claude_md` — operating manual (rules, output formats, standing rules)',
+        '  • doc_type=`architecture` — platform topology, agent roster, skill catalog',
+        'These docs are authoritative. If PBS asks something policy-shaped you do not know, the answer is in one of those rows — say so and offer to fetch.',
+        '',
+        '────────────────── BEGIN YOUR AGENT-SPECIFIC PROMPT ──────────────────',
+      ].join('\n');
 
       // Build messages array from prior history.
       const priorTurns = (conversation_history ?? []).slice(-12);
@@ -826,32 +940,209 @@ export async function POST(req: Request) {
         { role: "user" as const, content: message },
       ];
 
+      // 2026-05-13 — Bridge cap_skills handlers into the chat LLM tool_use
+      // lifecycle. Previously the chat-mode short-circuit fired Anthropic
+      // with no tools, so Felix/Intel/etc. could only emit prose even though
+      // each persona has 7-92 active skills granted in cockpit.cap_agent_skills.
+      // Now we load the role's roster, pass it as `tools`, and run an agentic
+      // loop. Each tool_use block is dispatched via executeSkill which logs to
+      // cockpit.cap_skill_calls + cockpit_audit_log.
+      const chatSkills = await loadAgentSkills(personaRole).catch((e) => {
+        console.error(`[chat] loadAgentSkills(${personaRole}) failed:`, e);
+        return [];
+      });
+      const chatTools = toAnthropicTools(chatSkills);
+      // Augment the persona prompt with a short note about tool availability —
+      // the legacy voice strings tell personas they have "no tools" which is
+      // no longer true. Append a positive instruction so the model uses them.
+      const toolNote = chatTools.length > 0
+        ? `\n\nTOOL ACCESS: You have ${chatTools.length} skills available. When PBS asks for live data (employees, KPIs, tickets, audit log, etc.) USE a tool instead of saying you can't. Tools available: ${chatTools.slice(0, 10).map((t) => t.name).join(', ')}${chatTools.length > 10 ? `, +${chatTools.length - 10} more` : ''}.`
+        : '';
+
+      // System prompt construction order (2026-05-14): TBC bootstrap →
+      // full role prompt from cockpit_agent_prompts → synthesized voice
+      // style fingerprint → tool note.
+      const personaVoice = [
+        TBC_BOOTSTRAP,
+        fullRolePrompt || '',
+        '─────────────────── END AGENT-SPECIFIC PROMPT ───────────────────',
+        '',
+        'STYLE FINGERPRINT:',
+        persona.voice,
+        toolNote,
+      ].filter(Boolean).join('\n');
+
       let replyText = `Hi — I'm here. What do you want to work on?`;
+      const skillCallLog: Array<{ skill: string; status: string; ms: number }> = [];
+
+      // ─── LLM cost ledger (2026-05-13, #84) ─────────────────────────────
+      // Anthropic Sonnet 4.5 pricing: $3 / 1M input · $15 / 1M output.
+      // Stored in milli-USD (×1000) to match cap_skill_calls.cost_usd_milli.
+      // Formula: round((in_tokens * 3 + out_tokens * 15) / 1000)
+      // We log per-Anthropic-call rows to cockpit_audit_log AND sum into
+      // a `llm_cost_usd_milli` field on the ticket notes so the running
+      // total is visible from cap_skill_calls + audit log together.
+      let llmTokensIn = 0;
+      let llmTokensOut = 0;
+      let llmCostMilli = 0;
+      let llmCallCount = 0;
+
       if (apiKey) {
-        try {
-          const r = await fetch("https://api.anthropic.com/v1/messages", {
-            method: "POST",
-            headers: {
-              "x-api-key": apiKey,
-              "anthropic-version": "2023-06-01",
-              "content-type": "application/json",
-            },
-            body: JSON.stringify({
+        type Msg = { role: 'user' | 'assistant'; content: unknown };
+        const loopMessages: Msg[] = messages.map((m) => ({ role: m.role, content: m.content })) as Msg[];
+
+        const MAX_ITERS = 4;
+        for (let iter = 0; iter < MAX_ITERS; iter++) {
+          try {
+            const body: Record<string, unknown> = {
               model: "claude-sonnet-4-5-20250929",
-              max_tokens: 600,
-              system: persona.voice,
-              messages,
-            }),
-          });
-          if (r.ok) {
+              max_tokens: 1500,
+              system: personaVoice,
+              messages: loopMessages,
+            };
+            if (chatTools.length > 0) body.tools = chatTools;
+
+            const callStartedAt = Date.now();
+            const r = await fetch("https://api.anthropic.com/v1/messages", {
+              method: "POST",
+              headers: {
+                "x-api-key": apiKey,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+              },
+              body: JSON.stringify(body),
+            });
+            if (!r.ok) {
+              const errText = await r.text();
+              console.error(`[chat] anthropic ${r.status}: ${errText.slice(0, 300)}`);
+              break;
+            }
             const j = await r.json();
-            const t = j?.content?.[0]?.text;
-            if (typeof t === "string" && t.trim().length > 0) {
+            const callDurationMs = Date.now() - callStartedAt;
+            const stopReason = j?.stop_reason as string | undefined;
+            const blocks = (j?.content ?? []) as Array<{ type: string; text?: string; id?: string; name?: string; input?: Record<string, unknown> }>;
+
+            // ─── Capture per-call token usage + roll into the ledger ─────
+            const callTokensIn = (j?.usage?.input_tokens as number | undefined) ?? 0;
+            const callTokensOut = (j?.usage?.output_tokens as number | undefined) ?? 0;
+            // Sonnet 4.5 pricing: $3/M in, $15/M out → milli-USD.
+            const callCostMilli = Math.round((callTokensIn * 3 + callTokensOut * 15) / 1000);
+            llmTokensIn += callTokensIn;
+            llmTokensOut += callTokensOut;
+            llmCostMilli += callCostMilli;
+            llmCallCount += 1;
+
+            // Per-Anthropic-call audit row so the cost is attributable.
+            // Fire-and-forget so the chat latency isn't hostage to the
+            // audit insert; errors are logged but don't break the reply.
+            void supabase.from("cockpit_audit_log").insert({
+              agent: personaRole,
+              action: "chat_llm_call",
+              target: `persona:${persona.name}`,
+              success: true,
+              duration_ms: callDurationMs,
+              cost_usd_milli: callCostMilli,
+              input_tokens: callTokensIn,
+              output_tokens: callTokensOut,
+              metadata: {
+                model: "claude-sonnet-4-5-20250929",
+                stop_reason: stopReason ?? null,
+                iter,
+                tools_offered: chatTools.length,
+                chat_mode: true,
+              },
+              reasoning: `Anthropic call #${iter + 1} for ${persona.name} (${personaRole}); ${callTokensIn}in/${callTokensOut}out tokens`,
+            }).then(({ error }) => {
+              if (error) console.warn('[chat] audit insert (llm) failed:', error.message);
+            });
+
+            const toolUses = blocks.filter((b) => b.type === 'tool_use');
+            if (toolUses.length > 0 && stopReason === 'tool_use') {
+              // Push the assistant's tool_use turn, then a user turn with tool_result blocks.
+              loopMessages.push({ role: 'assistant', content: blocks });
+              const results: Array<{ type: string; tool_use_id: string; content: string }> = [];
+              for (const tu of toolUses) {
+                const skill = findSkill(chatSkills, tu.name ?? '');
+                let resultPayload: unknown;
+                let status = 'failed';
+                let ms = 0;
+                if (!skill) {
+                  resultPayload = { error: `unknown skill: ${tu.name}` };
+                } else {
+                  const r2 = await executeSkill({
+                    role: personaRole,
+                    skill,
+                    input: tu.input ?? {},
+                    ticketId: null,
+                  });
+                  status = r2.status;
+                  ms = r2.duration_ms;
+                  resultPayload = r2.status === 'succeeded'
+                    ? r2.output
+                    : { error: r2.error };
+                }
+                skillCallLog.push({ skill: tu.name ?? 'unknown', status, ms });
+                results.push({
+                  type: 'tool_result',
+                  tool_use_id: tu.id ?? '',
+                  content: JSON.stringify(resultPayload).slice(0, 8000),
+                });
+              }
+              loopMessages.push({ role: 'user', content: results });
+              continue; // back into the loop for the model's next turn.
+            }
+
+            // Final answer reached (no more tool_use blocks).
+            const textBlock = blocks.find((b) => b.type === 'text');
+            const t = textBlock?.text;
+            if (typeof t === 'string' && t.trim().length > 0) {
               replyText = t.trim();
             }
+            break;
+          } catch (e) {
+            console.error('[chat] loop iter failed:', e);
+            break;
           }
-        } catch {
-          // fall through with default replyText
+        }
+
+        // ─── Forced-prose fallback (PBS 2026-05-15 — "sherlock does not
+        // talk back"). If the tool loop exited without an Anthropic
+        // text-block reply (e.g. Sherlock spent all MAX_ITERS calling
+        // skills that returned errors), do ONE final call with tools
+        // disabled so the model MUST produce prose.
+        if (replyText === `Hi — I'm here. What do you want to work on?` && apiKey) {
+          try {
+            const finalBody: Record<string, unknown> = {
+              model: "claude-sonnet-4-5-20250929",
+              max_tokens: 1500,
+              system: personaVoice + '\n\nFINAL TURN: tools have been disabled. Reply with prose only — answer the user directly using what you already know. Do not say you cannot help; give your best response.',
+              messages: loopMessages.length > 0 ? loopMessages : (messages as Msg[]),
+            };
+            const r = await fetch("https://api.anthropic.com/v1/messages", {
+              method: "POST",
+              headers: {
+                "x-api-key": apiKey,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+              },
+              body: JSON.stringify(finalBody),
+            });
+            if (r.ok) {
+              const j = await r.json();
+              const blocks = (j?.content ?? []) as Array<{ type: string; text?: string }>;
+              const textBlock = blocks.find((b) => b.type === 'text');
+              const t = textBlock?.text;
+              if (typeof t === 'string' && t.trim().length > 0) replyText = t.trim();
+              const fIn  = (j?.usage?.input_tokens  as number | undefined) ?? 0;
+              const fOut = (j?.usage?.output_tokens as number | undefined) ?? 0;
+              llmTokensIn  += fIn;
+              llmTokensOut += fOut;
+              llmCostMilli += Math.round((fIn * 3 + fOut * 15) / 1000);
+              llmCallCount += 1;
+            }
+          } catch (e) {
+            console.error('[chat] forced-prose fallback failed:', e);
+          }
         }
       }
 
@@ -873,11 +1164,42 @@ export async function POST(req: Request) {
             recommended_role: personaRole,
             recommended_agent: personaRole,
             persona: persona.name,
+            persona_source: persona === PERSONA_FALLBACK ? "fallback" : "id_agents",
+            persona_dept: persona.dept,
+            persona_hierarchy_level: persona.hierarchy_level,
+            skill_calls: skillCallLog,
+            skills_available: chatTools.length,
+            // 2026-05-13 (#84): LLM cost ledger for this chat turn.
+            llm_tokens_in: llmTokensIn,
+            llm_tokens_out: llmTokensOut,
+            llm_cost_usd_milli: llmCostMilli,
+            llm_call_count: llmCallCount,
           }),
           iterations: 0,
         })
         .select()
         .single();
+
+      // Roll-up audit row: total LLM cost for this chat turn, linked to the ticket.
+      if (chatTicket?.id && llmCallCount > 0) {
+        await supabase.from("cockpit_audit_log").insert({
+          ticket_id: chatTicket.id,
+          agent: personaRole,
+          action: "chat_turn_completed",
+          target: `ticket:${chatTicket.id}`,
+          success: true,
+          cost_usd_milli: llmCostMilli,
+          input_tokens: llmTokensIn,
+          output_tokens: llmTokensOut,
+          metadata: {
+            persona: persona.name,
+            llm_call_count: llmCallCount,
+            skill_calls: skillCallLog,
+            model: "claude-sonnet-4-5-20250929",
+          },
+          reasoning: `Chat turn for ${persona.name}: ${llmCallCount} LLM call(s), ${llmTokensIn}in/${llmTokensOut}out tokens, ${llmCostMilli} milli-USD`,
+        });
+      }
 
       return NextResponse.json({
         ticket: chatTicket,

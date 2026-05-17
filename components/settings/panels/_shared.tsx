@@ -1,12 +1,33 @@
 // components/settings/panels/_shared.tsx
+// PBS 2026-05-13 rev3: tenant-theme refactor. All hardcoded Donna-only
+// fallbacks (#1F3A2E green, #B8A878 sand, #B8542A terracotta) replaced
+// with brand-aware tokens that swap per tenant: --ink / --ink-mute /
+// --ink-soft / --brass / --paper-deep / --border / --card. These tokens
+// have Namkhan-dark defaults in styles/globals.css :root and are remapped
+// for Donna in ThemeInjector.lightLegacyVars.
 import { ReactNode } from 'react';
 
 export function PanelHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
   return (
-    <div className="px-6 py-5 border-b border-[var(--sand,#B8A878)]/20 flex items-start justify-between">
+    <div
+      className="px-6 py-5 flex items-start justify-between"
+      style={{ borderBottom: '1px solid var(--border)' }}
+    >
       <div>
-        <h2 className="text-xl font-serif text-[var(--primary,#1F3A2E)]">{title}</h2>
-        {subtitle && <p className="text-sm text-[var(--primary,#1F3A2E)]/60 mt-1">{subtitle}</p>}
+        <h2
+          className="font-serif"
+          style={{ fontSize: 'var(--t-xl)', color: 'var(--ink)' }}
+        >
+          {title}
+        </h2>
+        {subtitle && (
+          <p
+            className="mt-1"
+            style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-mute)' }}
+          >
+            {subtitle}
+          </p>
+        )}
       </div>
       {action}
     </div>
@@ -18,10 +39,19 @@ export function Field({ label, value, span = 1 }: { label: string; value: ReactN
   const spanCls = { 1: 'col-span-1', 2: 'col-span-2', 3: 'col-span-3' }[span];
   return (
     <div className={spanCls}>
-      <dt className="text-xs uppercase tracking-wider text-[var(--primary,#1F3A2E)]/50 font-medium mb-1.5">
+      <dt
+        className="uppercase tracking-wider font-medium mb-1.5"
+        style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}
+      >
         {label}
       </dt>
-      <dd className={`text-sm ${empty ? 'text-[var(--primary,#1F3A2E)]/30 italic' : 'text-[var(--primary,#1F3A2E)]'}`}>
+      <dd
+        style={{
+          fontSize: 'var(--t-sm)',
+          color: empty ? 'var(--ink-faint)' : 'var(--ink)',
+          fontStyle: empty ? 'italic' : 'normal',
+        }}
+      >
         {empty ? '—' : value}
       </dd>
     </div>
@@ -30,8 +60,14 @@ export function Field({ label, value, span = 1 }: { label: string; value: ReactN
 
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="px-6 py-5 border-b border-[var(--sand,#B8A878)]/10 last:border-b-0">
-      <h3 className="text-xs uppercase tracking-[0.15em] text-[var(--sand,#B8A878)] font-semibold mb-4">
+    <section
+      className="px-6 py-5 last:border-b-0"
+      style={{ borderBottom: '1px solid var(--border)' }}
+    >
+      <h3
+        className="uppercase font-semibold mb-4"
+        style={{ fontSize: 'var(--t-xs)', letterSpacing: '0.15em', color: 'var(--brass)' }}
+      >
         {title}
       </h3>
       <dl className="grid grid-cols-3 gap-x-6 gap-y-5">{children}</dl>
@@ -40,21 +76,32 @@ export function Section({ title, children }: { title: string; children: ReactNod
 }
 
 export function Chip({ children, tone = 'default' }: { children: ReactNode; tone?: 'default' | 'green' | 'warn' | 'muted' }) {
-  const tones = {
-    default: 'bg-[var(--primary,#1F3A2E)]/10 text-[var(--primary,#1F3A2E)]',
-    green: 'bg-emerald-100 text-emerald-800',
-    warn: 'bg-[var(--terracotta,#B8542A)]/15 text-[var(--terracotta,#B8542A)]',
-    muted: 'bg-stone-200 text-stone-700',
+  const styles: Record<string, React.CSSProperties> = {
+    default: { background: 'var(--paper-deep)', color: 'var(--ink-soft)' },
+    green:   { background: 'rgba(107, 147, 121, 0.15)', color: 'var(--st-good)' },
+    warn:    { background: 'rgba(212, 168, 102, 0.15)', color: 'var(--brass)' },
+    muted:   { background: 'var(--paper-deep)', color: 'var(--ink-mute)' },
   };
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${tones[tone]}`}>
+    <span
+      className="inline-flex items-center px-2 py-0.5 rounded font-medium"
+      style={{ fontSize: 'var(--t-xs)', ...styles[tone] }}
+    >
       {children}
     </span>
   );
 }
 
 export function ChipList({ items }: { items: string[] | null | undefined }) {
-  if (!items || items.length === 0) return <span className="text-[var(--primary,#1F3A2E)]/30 italic text-sm">—</span>;
+  if (!items || items.length === 0)
+    return (
+      <span
+        className="italic"
+        style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-faint)' }}
+      >
+        —
+      </span>
+    );
   return (
     <div className="flex flex-wrap gap-1.5">
       {items.map((item, i) => (
@@ -72,7 +119,7 @@ export function StatusBadge({ active }: { active: boolean | null | undefined }) 
 export function EmptyState({ message, action }: { message: string; action?: ReactNode }) {
   return (
     <div className="px-6 py-16 text-center">
-      <p className="text-[var(--primary,#1F3A2E)]/50">{message}</p>
+      <p style={{ color: 'var(--ink-mute)', fontSize: 'var(--t-sm)' }}>{message}</p>
       {action && <div className="mt-4">{action}</div>}
     </div>
   );

@@ -318,7 +318,7 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
             Cross-link to <Link href="/revenue/compset" style={{ color: 'var(--brass)' }}>Comp Set promo signals</Link>.
           </Empty>
           <Empty title="Cancellation reason mix">
-            Cloudbeds doesn&apos;t expose cancellation reason structured. Empty until {sourceName} channel manager exposes it.
+            PMS doesn&apos;t expose cancellation reason structured. Empty until {sourceName} channel manager exposes it.
           </Empty>
         </div>
       )}

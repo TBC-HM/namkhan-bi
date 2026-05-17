@@ -1,6 +1,11 @@
 // app/revenue/pricing/page.tsx
-// Revenue › Pricing — WIRED to public.rate_inventory + rate_plans + room_types.
+// Revenue › Calendar — WIRED to public.rate_inventory + rate_plans + room_types.
+// PBS 2026-05-15: renamed menu label Pricing → Calendar with two tabs:
+//   tab=pricing (default) — rate grid (existing content)
+//   tab=density           — country-holidays density heatmap (reused from
+//                          /operations/staff/holidays via embedded mode)
 
+import Link from 'next/link';
 import { resolvePeriod, type WindowKey } from '@/lib/period';
 import { getRoomTypes, getRatePlans, getRateInventory } from '@/lib/pricing';
 import { getPricingKpis } from '@/lib/pricingKpis';
@@ -10,11 +15,13 @@ import ArtifactActions from '@/components/page/ArtifactActions';
 import PeriodSelectorRow from '@/components/page/PeriodSelectorRow';
 import KpiBox from '@/components/kpi/KpiBox';
 import { REVENUE_SUBPAGES } from '../_subpages';
+import HolidayScheduleTabContent from '@/app/operations/staff/_components/HolidayScheduleTabContent';
+import { NAMKHAN_PROPERTY_ID } from '@/lib/dept-cfg/by-property';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
-interface SearchParams { win?: string; gran?: string; cmp?: string }
+interface SearchParams { win?: string; gran?: string; cmp?: string; tab?: string; y?: string; school?: string }
 
 const VALID_FWD: WindowKey[] = ['next7', 'next30', 'next90', 'next180', 'next365'];
 
@@ -49,6 +56,32 @@ function rateColor(rate: number, min: number, max: number): string {
 }
 
 export default async function PricingPage({ searchParams }: { searchParams: SearchParams }) {
+  const tab: 'pricing' | 'density' = searchParams.tab === 'density' ? 'density' : 'pricing';
+
+  // PBS 2026-05-15: Density tab embeds the holidays heatmap (country dropdown
+  // + school-break overlay) — same component used at /operations/staff/holidays.
+  if (tab === 'density') {
+    return (
+      <Page
+        eyebrow="Revenue · Calendar · Density"
+        title={<>Calendar · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>holiday density</em></>}
+        subPages={REVENUE_SUBPAGES}
+      >
+        <CalendarTabStrip active="density" />
+        <div style={{ padding: '8px 12px', fontSize: 'var(--t-sm)', color: 'var(--ink-soft)', marginBottom: 10 }}>
+          Country dropdown + multi-country overlay heatmap. Use to anticipate demand spikes
+          driven by source-market holidays before tuning BAR on the <Link href="/revenue/pricing" style={{ color: 'var(--brass)' }}>Pricing tab</Link>.
+        </div>
+        <HolidayScheduleTabContent
+          propertyId={NAMKHAN_PROPERTY_ID}
+          propertyLabel="Namkhan"
+          searchParams={searchParams as Record<string, string | string[] | undefined>}
+          embedded
+        />
+      </Page>
+    );
+  }
+
   const win = parseWin(searchParams.win);
   const gran = parseGran(searchParams.gran);
   const period = resolvePeriod({ win, cmp: searchParams.cmp });
@@ -160,10 +193,11 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
 
   return (
     <Page
-      eyebrow={`Revenue · Pricing · ${winLabels[win]}`}
-      title={<>Pricing · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>{winLabels[win]} · by {gran}</em></>}
+      eyebrow={`Revenue · Calendar · Pricing · ${winLabels[win]}`}
+      title={<>Calendar · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>{winLabels[win]} · by {gran}</em></>}
       subPages={REVENUE_SUBPAGES}
     >
+      <CalendarTabStrip active="pricing" />
       <style>{`
         .filter-btn:not(.fwd):not([href*="seg="]):not([href*="cmp="]):not([href*="cap="]) {
           opacity: 0.35; pointer-events: none;
@@ -505,5 +539,32 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
         {planAggs.length > 30 && <div style={{ padding: '8px 16px', fontSize: "var(--t-sm)", color: 'var(--ink-mute)' }}>+ {planAggs.length - 30} more</div>}
       </Panel>
     </Page>
+  );
+}
+
+// ─── Calendar tab strip · Pricing + Density ─────────────────────────────
+function CalendarTabStrip({ active }: { active: 'pricing' | 'density' }) {
+  return (
+    <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--paper-deep)', marginBottom: 12 }}>
+      <TabLink href="/revenue/pricing"             label="Pricing" active={active === 'pricing'} />
+      <TabLink href="/revenue/pricing?tab=density" label="Density" active={active === 'density'} />
+    </div>
+  );
+}
+
+function TabLink({ href, label, active }: { href: string; label: string; active: boolean }) {
+  return (
+    <Link href={href} style={{
+      padding: '10px 20px',
+      fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
+      letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase',
+      textDecoration: 'none',
+      fontWeight: active ? 700 : 500,
+      color: active ? 'var(--brass)' : 'var(--ink-soft)',
+      borderBottom: active ? '2px solid var(--brass)' : '2px solid transparent',
+      marginBottom: -1,
+    }}>
+      {label}
+    </Link>
   );
 }

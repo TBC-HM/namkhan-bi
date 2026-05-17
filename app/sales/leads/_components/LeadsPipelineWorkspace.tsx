@@ -41,6 +41,10 @@ export default function LeadsPipelineWorkspace({ leads, scrapingJobs }: Props) {
   const [uploadResult, setUploadResult] = useState<{ inserted: number; skipped_duplicates: number; valid: number; parsed: number; errors?: Array<{ row: number; reason: string }> } | null>(null);
   const [sortKey, setSortKey] = useState<'imported_at'|'priority'|'icp_score'|'company_name'>('imported_at');
   const [filterStatus, setFilterStatus] = useState<'all' | LeadStatus>('all');
+  // PBS 2026-05-17 — Sales restructure phase 2 — Pipeline filter chips.
+  // deal_type: btb · group · fit · null  · origin: inquiry · scrape · web · null
+  const [filterDealType, setFilterDealType] = useState<'all' | 'btb' | 'group' | 'fit' | 'none'>('all');
+  const [filterOrigin, setFilterOrigin] = useState<'all' | 'inquiry' | 'scrape' | 'web' | 'none'>('all');
   const [filterQuery, setFilterQuery] = useState('');
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -68,6 +72,16 @@ export default function LeadsPipelineWorkspace({ leads, scrapingJobs }: Props) {
     const q = filterQuery.trim().toLowerCase();
     let out = leads.slice();
     if (filterStatus !== 'all') out = out.filter(l => l.status === filterStatus);
+    if (filterDealType !== 'all') {
+      out = out.filter(l => filterDealType === 'none'
+        ? !l.deal_type
+        : l.deal_type === filterDealType);
+    }
+    if (filterOrigin !== 'all') {
+      out = out.filter(l => filterOrigin === 'none'
+        ? !l.origin
+        : l.origin === filterOrigin);
+    }
     if (q) {
       out = out.filter(l =>
         (l.company_name?.toLowerCase().includes(q)) ||
@@ -88,14 +102,40 @@ export default function LeadsPipelineWorkspace({ leads, scrapingJobs }: Props) {
       return new Date(b.imported_at).getTime() - new Date(a.imported_at).getTime();
     });
     return out;
-  }, [leads, filterStatus, filterQuery, sortKey]);
+  }, [leads, filterStatus, filterDealType, filterOrigin, filterQuery, sortKey]);
+
+  // Counts per deal_type / origin (live, recomputed on data change)
+  const dealTypeCounts = useMemo(() => {
+    const c = { btb: 0, group: 0, fit: 0, none: 0 };
+    for (const l of leads) {
+      if (l.deal_type === 'btb') c.btb++;
+      else if (l.deal_type === 'group') c.group++;
+      else if (l.deal_type === 'fit') c.fit++;
+      else c.none++;
+    }
+    return c;
+  }, [leads]);
+  const originCounts = useMemo(() => {
+    const c = { inquiry: 0, scrape: 0, web: 0, none: 0 };
+    for (const l of leads) {
+      if (l.origin === 'inquiry') c.inquiry++;
+      else if (l.origin === 'scrape') c.scrape++;
+      else if (l.origin === 'web') c.web++;
+      else c.none++;
+    }
+    return c;
+  }, [leads]);
 
   const pipelineByStatus = useMemo(() => {
-    const m: Record<LeadStatus, LeadRow[]> = {
+    // PBS 2026-05-16: tolerate the new 14-stage funnel enum (discovered, enriched,
+    // queued_to_send, etc.) — silently drop leads whose status isn't a legacy lane.
+    const m: Record<string, LeadRow[]> = {
       raw: [], qualified: [], contacted: [], pipeline: [], won: [], lost: [], dropped: [],
     };
-    for (const l of leads) m[l.status].push(l);
-    return m;
+    for (const l of leads) {
+      if (m[l.status]) m[l.status].push(l);
+    }
+    return m as Record<LeadStatus, LeadRow[]>;
   }, [leads]);
 
   // ── handlers ───────────────────────────────────────────────────────────
@@ -246,14 +286,45 @@ export default function LeadsPipelineWorkspace({ leads, scrapingJobs }: Props) {
       {/* 3. TWO-COLUMN BODY */}
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(340px, 5fr) minmax(420px, 7fr)', gap: 14 }}>
         {/* LEFT — leads queue */}
-        <Panel title={`Leads queue · ${filteredLeads.length} of ${leads.length}`} eyebrow="sales.leads">
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+        <Panel title={`Leads queue · ${filteredLeads.length} of ${leads.length}`} eyebrow="sales.leads · status · deal_type · origin">
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
             {(['all', ...ALL_STATUSES] as const).map(s => (
               <button key={s} type="button" onClick={() => setFilterStatus(s)}
                 style={s === filterStatus ? S.chipActive : S.chip}>
                 {s}
               </button>
             ))}
+          </div>
+          {/* Phase 2 chips — deal_type + origin */}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6, alignItems: 'center' }}>
+            <span style={S.chipGroupLabel}>Deal type:</span>
+            {(['all', 'btb', 'group', 'fit', 'none'] as const).map(s => {
+              const count = s === 'all'
+                ? leads.length
+                : (dealTypeCounts as Record<string, number>)[s] ?? 0;
+              return (
+                <button key={s} type="button" onClick={() => setFilterDealType(s)}
+                  style={s === filterDealType ? S.chipActive : S.chip}
+                  title={s === 'none' ? 'No deal_type set' : `Deal type = ${s}`}>
+                  {s === 'none' ? '— unset' : s} · {count}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8, alignItems: 'center' }}>
+            <span style={S.chipGroupLabel}>Origin:</span>
+            {(['all', 'inquiry', 'scrape', 'web', 'none'] as const).map(s => {
+              const count = s === 'all'
+                ? leads.length
+                : (originCounts as Record<string, number>)[s] ?? 0;
+              return (
+                <button key={s} type="button" onClick={() => setFilterOrigin(s)}
+                  style={s === filterOrigin ? S.chipActive : S.chip}
+                  title={s === 'none' ? 'No origin set' : `Origin = ${s}`}>
+                  {s === 'none' ? '— unset' : s} · {count}
+                </button>
+              );
+            })}
           </div>
           <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
             <input type="search" placeholder="Search company / city / email…"
@@ -479,6 +550,11 @@ const S: Record<string, React.CSSProperties> = {
     letterSpacing: 'var(--ls-loose)', textTransform: 'uppercase',
     background: 'var(--moss)', color: 'var(--paper-warm)', borderColor: 'var(--moss)',
     border: '1px solid var(--moss)', cursor: 'pointer', whiteSpace: 'nowrap',
+  },
+  chipGroupLabel: {
+    fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
+    letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase',
+    color: 'var(--ink-mute, #7d7565)', marginRight: 4,
   },
   input: {
     padding: '4px 10px', borderRadius: 5,

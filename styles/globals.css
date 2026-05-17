@@ -42,6 +42,11 @@
   --st-good:      #6b9379;
   --st-warn:      #a8854a;
   --st-bad:       #8e3a35;
+  /* PBS 2026-05-13 Ask#64: bare mid-tone info token (companion to good/warn/bad)
+   * so tenant-neutral status surfaces have a 4th semantic colour. Used by
+   * PlatformMapRenderer + Brief for info/next states. Mid-blue chosen to read
+   * on both Namkhan dark canvas and Donna cream paper. */
+  --st-info:      #5a83a8;
   --serif: 'Fraunces', Georgia, serif;
   --sans: 'Inter Tight', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, monospace;
@@ -151,6 +156,129 @@
   --ls-extra:  0.18em;  /* mono eyebrows / banners */
 }
 
+/* =====================================================================
+ * HOLDING — The Beyond Circle palette (PBS Apple note #31, 2026-05-13).
+ * Sourced from thebeyondcircle.com live site:
+ *   h1 #F7AC67 (peach/amber)  — accent
+ *   h2 #002428 (deep teal)    — primary / ink
+ *   link #001C22 (near-black) — ink-strong
+ *   teal #29818D              — secondary
+ *   bg #F0F8FF (alice-white)  — paper / background
+ * Holding-scope routes (/holding, /h/0/*) carry data-property="holding"
+ * on <html>; the ThemeInjector / layout sets that attribute, and these
+ * tokens override the dark Namkhan defaults. Token vocabulary mirrors
+ * the Donna light-theme overrides emitted by ThemeInjector so panels,
+ * tables, KPIs, brass accents all flip correctly.
+ *
+ * Multi-tenant boundary: holding scope NEVER blends Namkhan + Donna
+ * data into one view — only side-by-side tiles + property nav.
+ * ===================================================================== */
+:root[data-property='holding'] {
+  /* Legacy paper/ink ladder */
+  --paper:        #F0F8FF;
+  --paper-deep:   #E4EFF6;
+  --paper-warm:   #FFFFFF;
+  --ink:          #002428;
+  --ink-soft:     #133C42;
+  --ink-mute:     #4A6770;
+  --ink-faint:    #7E9BA2;
+  --line:         rgba(0, 36, 40, 0.22);
+  --line-soft:    rgba(0, 36, 40, 0.12);
+
+  /* Brand accents */
+  --brass:        #F7AC67;
+  --brass-soft:   #F9C18C;
+  --brass-pale:   #FBD8B5;
+  --moss:         #29818D;
+  --moss-deep:    #1A5C66;
+  --moss-mid:     #3E97A3;
+  --moss-glow:    #5DB4BF;
+  --sage:         #B6D6DA;
+
+  /* Mockup-vocab aliases */
+  --bg:           #F0F8FF;
+  --body:         var(--ink-soft);
+  --muted:        var(--ink-mute);
+  --border:       var(--line-soft);
+  --border-hard:  var(--line);
+  --card:         var(--paper-warm);
+  --bg-sub:       var(--paper-deep);
+  --tan:          var(--brass);
+  --tan-2:        var(--brass-soft);
+  --tan-deep:     #C2854D;
+  --gold:         var(--brass);
+  --green:        var(--moss);
+  --green-2:      var(--moss-mid);
+  --green-deep:   var(--moss-deep);
+
+  /* Top-bar + page surface */
+  --page-bg:      #F0F8FF;
+  --page-fg:      #002428;
+  --topbar-bg:    rgba(240, 248, 255, 0.92);
+  --topbar-border: rgba(0, 36, 40, 0.14);
+
+  /* Surface ladder */
+  --surf-0:       #F0F8FF;
+  --surf-1:       #FFFFFF;
+  --surf-1b:      #F7FBFE;
+  --surf-2:       #FAFCFE;
+  --surf-3:       #E4EFF6;
+
+  /* Borders */
+  --border-1:     rgba(0, 36, 40, 0.06);
+  --border-2:     rgba(0, 36, 40, 0.10);
+  --border-2b:    rgba(0, 36, 40, 0.14);
+  --border-3:     rgba(0, 36, 40, 0.18);
+  --border-4:     rgba(0, 36, 40, 0.26);
+
+  /* Text ladder */
+  --text-0:       #002428;
+  --text-1:       #001C22;
+  --text-2:       #002428;
+  --text-3:       #133C42;
+  --text-4:       #4A6770;
+  --text-mute:    rgba(0, 36, 40, 0.62);
+  --text-dim:     rgba(0, 36, 40, 0.45);
+  --text-place:   rgba(0, 36, 40, 0.32);
+  --text-soft:    rgba(0, 36, 40, 0.55);
+  --text-warm:    #C2854D;
+
+  /* Accents */
+  --accent:       #F7AC67;
+  --accent-2:     #E89954;
+  --accent-3:     #C2854D;
+  --accent-4:     #A06A3A;
+
+  /* Status surfaces */
+  --surf-warn:    #FEEFE0;
+  --surf-ok:      #E0F2EA;
+
+  /* Status mid-tone tokens (PBS 2026-05-13 Ask#64) — keep semantic but
+   * harmonised with the Beyond Circle teal/peach palette so PlatformMap +
+   * Brief surfaces don't bleed Namkhan moss/oxblood onto holding pages. */
+  --st-good:      #2E8A6F;
+  --st-warn:      #C2854D;
+  --st-bad:       #A13C2F;
+  --st-info:      #29818D;
+
+  /* Canonical table + panel tokens (light) */
+  --tbl-bg:           #FFFFFF;
+  --tbl-bg-elev:      #F7FBFE;
+  --tbl-fg:           #002428;
+  --tbl-fg-mute:      rgba(0, 36, 40, 0.62);
+  --tbl-fg-strong:    #001C22;
+  --tbl-border:       rgba(0, 36, 40, 0.10);
+  --tbl-border-strong: rgba(0, 36, 40, 0.18);
+  --tbl-row-hover:    rgba(0, 36, 40, 0.04);
+
+  /* KPI frame — peach on teal-white for the holding look */
+  --kpi-frame:        rgba(247, 172, 103, 0.45);
+  --kpi-frame-hover:  rgba(247, 172, 103, 0.80);
+}
+
+/* Holding pages get the cream-white canvas, not the global #0a0a0a body bg. */
+:root[data-property='holding'] body { background-color: var(--bg); color: var(--ink); }
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { scroll-behavior: smooth; }
 body {
@@ -207,8 +335,11 @@ button { font-family: inherit; }
 .main { display: flex; flex-direction: column; min-width: 0; }
 
 /* ===== BANNER ===== */
+/* PBS 2026-05-13: banner text was var(--paper-warm) (#15110c) on var(--moss)
+ * (#1a2e21) — dark-on-dark made the title + meta unreadable. Switch to --ink
+ * so eyebrow/title/meta all sit cleanly on the moss banner. */
 .banner {
-  background: var(--moss); color: var(--paper-warm);
+  background: var(--moss); color: var(--ink);
   padding: 20px 40px; border-bottom: 4px solid var(--brass);
 }
 .banner-row {
@@ -216,7 +347,7 @@ button { font-family: inherit; }
   flex-wrap: wrap; gap: 18px; max-width: 1600px; margin: 0 auto;
 }
 .banner-eyebrow {
-  font-family: var(--mono); font-size: 10px;
+  font-family: var(--mono); font-size: var(--t-xs);
   letter-spacing: 0.28em; text-transform: uppercase;
   color: var(--brass-soft); font-weight: 600;
 }
@@ -227,11 +358,50 @@ button { font-family: inherit; }
 }
 .banner-title em { color: var(--brass); font-style: italic; font-weight: 400; }
 .banner-meta {
-  font-family: var(--mono); font-size: 10px;
+  font-family: var(--mono); font-size: var(--t-xs);
   letter-spacing: 0.18em; text-transform: uppercase;
-  color: rgba(245, 233, 207, 0.7); font-weight: 500; text-align: right;
+  color: var(--ink-soft); font-weight: 500; text-align: right;
 }
-.banner-meta strong { color: var(--paper-warm); font-weight: 600; }
+.banner-meta strong { color: var(--ink); font-weight: 600; }
+
+/* ===== TOP MENU =====
+ * PBS 2026-05-13 (Apple note #18): TopNav lives inside <Banner> and shows
+ * on every Banner-shell page. Horizontal strip immediately below the
+ * brass-bottom border of .banner, with the brand sub-line (SubNav) sitting
+ * directly underneath. Brand tokens only — no hex outside :root.
+ */
+.top-menu {
+  background: var(--paper-deep);
+  border-bottom: 1px solid var(--line-soft);
+  display: flex; align-items: stretch; justify-content: space-between;
+  padding: 0 28px;
+  min-height: 48px;
+}
+.top-menu-items {
+  display: flex; align-items: stretch; flex-wrap: wrap; gap: 0;
+}
+.top-menu-link {
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 6px 18px;
+  text-decoration: none; color: var(--ink-soft);
+  border-bottom: 3px solid transparent;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.top-menu-link:hover { color: var(--ink); background: rgba(212, 168, 102, 0.06); }
+.top-menu-link.active { color: var(--brass); border-bottom-color: var(--brass); }
+.top-menu-title {
+  font-family: var(--serif); font-size: var(--t-md);
+  letter-spacing: -0.01em; line-height: 1.15;
+}
+.top-menu-sub {
+  font-family: var(--mono); font-size: var(--t-xs);
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--ink-faint); margin-top: 2px;
+}
+.top-menu-link.active .top-menu-sub { color: var(--brass-soft); }
+.top-menu-aside {
+  display: flex; align-items: center; padding-left: 12px;
+}
 
 /* ===== SUB-NAV ===== */
 .subnav {
@@ -1798,11 +1968,15 @@ td.num   { text-align: right; font-family: var(--mono); font-size: 11px; color: 
 .banner-right { display: flex; align-items: center; gap: 18px; }
 
 .user-menu { position: relative; display: inline-block; }
+/* PBS 2026-05-13: trigger pill text was var(--paper) (#1a160f) on the dark
+ * moss banner — dark-on-dark, effectively unreadable in screenshots.
+ * Switch trigger text + name + caret to --ink (cream) so the right-side
+ * menu reads cleanly on the moss banner. */
 .user-trigger {
   display: flex; align-items: center; gap: 10px;
   background: transparent; border: 1px solid transparent;
   padding: 6px 10px 6px 6px; cursor: pointer;
-  font-family: var(--mono); color: var(--paper);
+  font-family: var(--mono); font-size: var(--t-sm); color: var(--ink);
   transition: background 0.15s, border-color 0.15s;
 }
 .user-trigger:hover, .user-trigger.open {
@@ -1810,50 +1984,50 @@ td.num   { text-align: right; font-family: var(--mono); font-size: 11px; color: 
 }
 .user-avatar {
   width: 32px; height: 32px; border-radius: 50%;
-  background: var(--brass); color: var(--ink);
-  font-family: var(--serif); font-style: italic; font-weight: 500; font-size: 13px;
+  background: var(--brass); color: var(--paper);
+  font-family: var(--serif); font-style: italic; font-weight: 600; font-size: var(--t-md);
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
-.user-avatar.lg { width: 44px; height: 44px; font-size: 17px; }
-.user-meta-stack { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.1; }
+.user-avatar.lg { width: 44px; height: 44px; font-size: var(--t-xl); }
+.user-meta-stack { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.15; }
 .user-name {
-  font-family: var(--serif); font-style: italic; font-size: 14px; font-weight: 500; color: var(--paper);
+  font-family: var(--serif); font-style: italic; font-size: var(--t-lg); font-weight: 500; color: var(--ink);
 }
 .user-role {
-  font-family: var(--mono); font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase;
-  color: var(--brass); font-weight: 600; margin-top: 2px;
+  font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--brass-soft); font-weight: 600; margin-top: 2px;
 }
-.user-caret { font-size: 10px; color: var(--paper); opacity: 0.6; margin-left: 4px; }
+.user-caret { font-size: var(--t-xs); color: var(--ink-soft); opacity: 0.85; margin-left: 4px; }
 
 .user-dropdown {
   position: absolute; top: calc(100% + 8px); right: 0;
-  min-width: 280px; background: var(--paper); border: 1px solid var(--ink);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.16); z-index: 100;
+  min-width: 280px; background: var(--paper); border: 1px solid var(--line);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.45); z-index: 100;
 }
 .user-dropdown-head {
   display: flex; align-items: center; gap: 12px;
   padding: 16px; background: var(--paper-warm);
 }
-.user-dropdown-name { font-family: var(--serif); font-style: italic; font-size: 16px; font-weight: 500; color: var(--ink); }
-.user-dropdown-email { font-family: var(--mono); font-size: 10px; color: var(--ink-mute); margin-top: 2px; }
+.user-dropdown-name { font-family: var(--serif); font-style: italic; font-size: var(--t-xl); font-weight: 500; color: var(--ink); }
+.user-dropdown-email { font-family: var(--mono); font-size: var(--t-xs); color: var(--ink-soft); margin-top: 2px; }
 .user-dropdown-role {
-  display: inline-block; font-family: var(--mono); font-size: 9px; letter-spacing: 0.18em;
-  text-transform: uppercase; color: var(--brass); font-weight: 600; margin-top: 4px;
+  display: inline-block; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--brass-soft); font-weight: 600; margin-top: 4px;
 }
 .user-dropdown-divider { height: 1px; background: var(--line); }
 .user-dropdown-item {
   display: flex; align-items: center; gap: 12px; width: 100%;
   padding: 10px 16px; text-align: left; background: transparent; border: none;
-  cursor: pointer; font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em;
+  cursor: pointer; font-family: var(--mono); font-size: var(--t-sm); letter-spacing: 0.08em;
   color: var(--ink); text-decoration: none; transition: background 0.12s;
 }
 .user-dropdown-item:hover:not(.disabled) { background: var(--paper-warm); }
 .user-dropdown-item.disabled { color: var(--ink-mute); cursor: default; }
-.user-dropdown-item.logout { color: var(--oxblood); }
-.user-dropdown-item.logout:hover { background: rgba(107, 31, 31, 0.06); }
-.user-dropdown-icon { width: 18px; text-align: center; font-size: 12px; color: var(--ink-mute); }
+.user-dropdown-item.logout { color: var(--oxblood-soft); }
+.user-dropdown-item.logout:hover { background: rgba(184, 95, 78, 0.10); }
+.user-dropdown-icon { width: 18px; text-align: center; font-size: var(--t-base); color: var(--ink-soft); }
 .user-dropdown-coming {
-  margin-left: auto; font-size: 9px; font-style: italic; color: var(--ink-mute);
+  margin-left: auto; font-size: var(--t-xs); font-style: italic; color: var(--ink-mute);
   letter-spacing: 0; text-transform: none;
 }
 

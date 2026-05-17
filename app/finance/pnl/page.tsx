@@ -15,7 +15,7 @@ import {
   getLyLinesByPeriod, getForecastLinesByPeriod,
   getDriversByPeriod, getFreshnessSummary, getMaterialityThreshold,
   getDqSummary, getPayrollByPeriod, getDemandSummary,
-  getCashForecast13w, getLatestCommentary,
+  getLatestCommentary,
 } from '../_data';
 import { priorPeriod, type PeriodWindow } from '@/lib/supabase-gl';
 import Page from '@/components/page/Page';
@@ -23,11 +23,14 @@ import Panel from '@/components/page/Panel';
 import PeriodSelectorRow from '@/components/page/PeriodSelectorRow';
 import KpiBox from '@/components/kpi/KpiBox';
 import { FINANCE_SUBPAGES } from '../_subpages';
+import TabStrip, { PNL_TABS } from '../_components/TabStrip';
 import TwelveMonthPanel from './TwelveMonthPanel';
 import MonthDropdown from './MonthDropdown';
 import CompareDropdown, { type CompareMode } from './CompareDropdown';
-import CashForecastPanel from './CashForecastPanel';
+// PBS 2026-05-15: CashForecastPanel removed from P&L (treasury surface, not P&L).
+// Kept the module file in repo; no longer imported here.
 import CommentaryPanel from './CommentaryPanel';
+import { gopTrendSvg, deptProfitTrendSvg, costRatioTrendSvg, FIN_COLORS } from '@/lib/financeCharts';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -94,26 +97,37 @@ export default async function PnLPage({ searchParams }: Props) {
   // Pick the latest CLOSED period: explicitly exclude the calendar-current month
   // (it's always in progress and may have stray $13 of misposted revenue) — and
   // require at least $1,000 of income to count as a "real" closed month.
+  // PBS 2026-05-16: scan all years going back; default to 2025-12 when 2026 has
+  // no closed month with revenue (e.g. very early in the FY, stray-cents-only
+  // 2026 months). Was previously locked to 2026 — landed on stray months.
   const calCur = currentPeriod();
   const periodsWithRev = Array.from(new Set(
     plSections
       .filter(r => r.section === 'income' && Number(r.amount_usd) >= 1000 && r.period_yyyymm !== calCur)
       .map(r => r.period_yyyymm)
   )).sort().reverse();
-  const autoCur = periodsWithRev[0] || calCur;
+  // Prefer the latest 2026 closed month; if none, fall back to the latest 2025
+  // closed month (typically Dec 2025). Only fall through to calendar-current
+  // when neither year has signal.
+  const periods2026 = periodsWithRev.filter(p => p.startsWith('2026-'));
+  const periods2025 = periodsWithRev.filter(p => p.startsWith('2025-'));
+  const autoCur = periods2026[0] || periods2025[0] || periodsWithRev[0] || calCur;
 
-  // Manual override: ?month=YYYY-MM (FY2026 only). Falls back to auto-detect when invalid/missing.
+  // Manual override: ?month=YYYY-MM. Falls back to auto-detect when invalid/missing.
+  // PBS 2026-05-16: allow 2025 months too so the dropdown can roll back into
+  // the closed FY2025 view.
   const monthParam = (searchParams.month as string | undefined) || '';
-  const monthValid = /^2026-(0[1-9]|1[0-2])$/.test(monthParam);
+  const monthValid = /^20(25|26)-(0[1-9]|1[0-2])$/.test(monthParam);
   const cur = monthValid ? monthParam : autoCur;
   const prior = priorPeriod(cur);
 
-  // Dropdown options: Jan 2026 → latest closed month (auto). Always include
+  // Dropdown options: Jan 2025 → latest closed month (auto). Always include
   // through the auto-detected latest so the user can flip back to "current".
   const monthOptions = (() => {
     const months: string[] = [];
     const [endY, endM] = autoCur.split('-').map(Number);
-    for (let y = 2026, m = 1; (y < endY) || (y === endY && m <= endM); m += 1) {
+    // Start at 2025-01 so the closed prior year is selectable. PBS 2026-05-16.
+    for (let y = 2025, m = 1; (y < endY) || (y === endY && m <= endM); m += 1) {
       months.push(`${y}-${String(m).padStart(2, '0')}`);
       if (m === 12) { y += 1; m = 0; }
     }
@@ -175,13 +189,17 @@ export default async function PnLPage({ searchParams }: Props) {
   })();
   // 12-month panel needs all of FY2026 actuals + budgets
   const fy2026 = ['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06','2026-07','2026-08','2026-09','2026-10','2026-11','2026-12'];
-  const [lyTotalRev, lyByDept, lyByUsaliDept, deptByPeriods, budgetCur, twelveMonth, lyLines, forecastLines, drivers, freshness, materiality, dqSummary, payrollMonth, demandFy] = await Promise.all([
+  // PBS 2026-05-15: also fetch FY2025 for the "previous year" rollup panel
+  // rendered ABOVE the FY2026 panel.
+  const fy2025 = ['2025-01','2025-02','2025-03','2025-04','2025-05','2025-06','2025-07','2025-08','2025-09','2025-10','2025-11','2025-12'];
+  const [lyTotalRev, lyByDept, lyByUsaliDept, deptByPeriods, budgetCur, twelveMonth, twelveMonth2025, lyLines, forecastLines, drivers, freshness, materiality, dqSummary, payrollMonth, demandFy] = await Promise.all([
     getLyTotalRevenue(cur),
     getLyByDept(cur),
     getLyByUsaliDept(cur),
     getDeptByPeriods(heatmapPeriods),
     getBudgetByPeriod(cur),
     getScenarioStack(fy2026),
+    getScenarioStack(fy2025),
     getLyLinesByPeriod(cur),       // Actuals 2025 same-month, keyed `${subcat}||${dept}`
     getForecastLinesByPeriod(cur), // Conservative 2026 cur-month
     getDriversByPeriod(cur),       // plan.drivers — room_nights/occ%/ADR for cur period
@@ -192,13 +210,9 @@ export default async function PnLPage({ searchParams }: Props) {
     getDemandSummary(fy2026),      // revenue.demand_calendar for FY2026
   ]);
 
-  // Cash forecast (13-week) + latest LLM commentary draft for cur period
-  const [cashForecast, latestCommentary] = await Promise.all([
-    getCashForecast13w(),
-    getLatestCommentary(cur),
-  ]);
-  const cashStartParam = Number((searchParams.cash0 as string | undefined) ?? '0');
-  const cashStart = isFinite(cashStartParam) ? cashStartParam : 0;
+  // PBS 2026-05-15: 13-week cash forecast no longer rendered on P&L (treasury,
+  // not P&L). Only fetching latest commentary now.
+  const latestCommentary = await getLatestCommentary(cur);
 
   // Comparison mode (?compare=budget|forecast|ly) — controls which scenario
   // populates the "Budget"-coded columns in the main USALI grid + Δ math.
@@ -276,6 +290,10 @@ export default async function PnLPage({ searchParams }: Props) {
   const varianceBase: 'mom' | 'budget' | 'forecast' | 'ly' =
     (['mom','budget','forecast','ly'] as const).includes(varianceBaseParam as any)
       ? (varianceBaseParam as 'mom' | 'budget' | 'forecast' | 'ly') : 'mom';
+
+  // PBS 2026-05-15: trend chart filters — dept (graph 2) + ratio (graph 3)
+  const deptFilter  = ((searchParams.dept  as string | undefined) ?? 'all').toLowerCase();
+  const ratioFilter = ((searchParams.ratio as string | undefined) ?? 'all').toLowerCase();
 
   // Aggregate scenario_stack rows into dept-level departmental_profit for cur.
   const scenarioCur = (twelveMonth as any[]).filter(r => r.period_yyyymm === cur);
@@ -463,42 +481,28 @@ export default async function PnLPage({ searchParams }: Props) {
       title={<>Profit &amp; loss · where the <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>margin</em> lives.</>}
       subPages={FINANCE_SUBPAGES}
     >
+      <TabStrip tabs={PNL_TABS} activeKey="pnl" />
       {/* PBS 2026-05-13: pnl-page wrapper brings back the 196 globals.css
           rules scoped to .pnl-page (variance bars, USALI table tones,
           warn-banner, etc.) that were lost when the page was rewrapped
           in <Page>. Single-class fix, no JSX restructure. */}
       <div className="pnl-page">
-      {/* ─── 1. KPI TILES ─────────────────────────────────────────────── */}
+      {/* ─── 1. CFO KPI BAND ──────────────────────────────────────────
+          PBS 2026-05-15: trimmed to two CFO-grade rows.
+          ROW 1 — OUTCOMES: Revenue · GOP $ · GOP margin · EBITDA · vs LY
+          ROW 2 — DRIVERS:  Labour% · F&B labour% · Dist cost% · Occupancy · ADR
+          Dropped: Budget RN/Occ/ADR (lives in /finance/budget tab),
+                   Cash on hand (treasury, /finance/ledger),
+                   A&G $ (sub-line, drill in 12-mo rollup),
+                   USALI mapping gaps (/finance/messy-data),
+                   Staff on roll (/h/.../operations/staff). */}
 
-      {/* Drivers row — volume / mix / rate */}
-      {(budgetRoomNights != null || ytdRoomNights != null) && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-          <KpiBox value={budgetRoomNights} unit="count" dp={0} label={`Budget RN · ${monthLabel}`} tooltip="plan.drivers · scenario=Budget 2026 v1 · room_nights" />
-          <KpiBox value={ytdRoomNights} unit="count" dp={0} label="Actual YTD RN"
-            compare={(ytdRoomNights != null && budgetRoomNights != null && budgetRoomNights > 0)
-              ? { value: ((ytdRoomNights - budgetRoomNights) / budgetRoomNights) * 100, unit: 'pct', period: 'vs Bgt' }
-              : undefined}
-            tooltip="plan.drivers · scenario=Actuals 2026 YTD · room_nights" />
-          <KpiBox value={budgetOccPct} unit="pct" label="Budget occupancy" tooltip="plan.drivers · Budget 2026 v1 · occupancy_pct" />
-          <KpiBox value={ytdOccPct} unit="pct" label="Actual YTD occupancy"
-            compare={(ytdOccPct != null && budgetOccPct != null)
-              ? { value: ytdOccPct - budgetOccPct, unit: 'pp', period: 'vs Bgt' }
-              : undefined}
-            tooltip="plan.drivers · Actuals 2026 YTD · occupancy_pct" />
-          <KpiBox value={budgetAdr} unit="usd" dp={0} label="Budget ADR" tooltip="plan.drivers · Budget 2026 v1 · adr_usd" />
-          <KpiBox value={ytdAdr} unit="usd" dp={0} label="Actual YTD ADR"
-            compare={(ytdAdr != null && budgetAdr != null && budgetAdr > 0)
-              ? { value: ((ytdAdr - budgetAdr) / budgetAdr) * 100, unit: 'pct', period: 'vs Bgt' }
-              : undefined}
-            tooltip="plan.drivers · Actuals 2026 YTD · adr_usd" />
-        </div>
-      )}
-
-      <div style={{ height: 10 }} />
-
-      {/* Main KPI grid — P&L vitals */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-        <KpiBox value={totalRev} unit="usd" dp={0} label={`Total revenue · ${monthLabel}`}
+      {/* Row 1 — Outcomes */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12,
+        margin: '8px 0 6px',
+      }}>
+        <KpiBox value={totalRev} unit="usd" dp={0} label={`Revenue · ${monthLabel}`}
           compare={priorTotalRev > 0 ? { value: revVsPriorPct, unit: 'pct', period: 'vs prior mo' } : undefined}
           tooltip={`Sum of gl.pl_sections.amount_usd where section='income' for ${cur}.`} />
         <KpiBox value={gop} unit="usd" dp={0} label="GOP $"
@@ -515,9 +519,10 @@ export default async function PnLPage({ searchParams }: Props) {
           state={revVsLyPct == null ? 'data-needed' : 'live'}
           needs={revVsLyPct == null ? 'no LY row' : undefined}
           tooltip="Current month revenue vs same month last year. Source: gl.pnl_snapshot." />
-        <KpiBox value={null} unit="usd" label="Cash on hand"
-          state="data-needed" needs="bank feed not connected"
-          tooltip="Gap 4 — bank statement integration not yet wired." />
+      </div>
+
+      {/* Row 2 — Drivers */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
         <KpiBox value={labourPct} unit="pct" label="Labour cost %"
           state={labourPct == null ? 'data-needed' : 'live'}
           tooltip="Total payroll ÷ total revenue (closed-month scope). Target ≤ 35%." />
@@ -527,21 +532,39 @@ export default async function PnLPage({ searchParams }: Props) {
         <KpiBox value={channelsCommissionPct ?? (agg && agg.commission_pct != null ? Number(agg.commission_pct) : null)} unit="pct" label="Distribution cost %"
           state={(channelsCommissionPct == null && (!agg || agg.commission_pct == null)) ? 'data-needed' : 'live'}
           tooltip="OTA commissions (gl.account_id 624*) ÷ total revenue." />
-        <KpiBox value={agTotalWindow} unit="usd" dp={0} label="A&G $"
-          state={agTotalWindow === 0 ? 'data-needed' : 'live'}
-          tooltip="mv_usali_pl_monthly · A&G subcategory, closed-month scope." />
-        <KpiBox value={dqUnmapped} unit="count" label="USALI mapping gaps" tooltip="DQ-04-UNMAPPED open violations. Fix at /finance/mapping." />
-        {payrollMonth && (
-          <KpiBox value={Number(payrollMonth.staff_count)} unit="count" label="Staff on roll"
-            tooltip={`Payroll ${monthLabel}: $${(Number(payrollMonth.gross_payroll_usd) / 1000).toFixed(1)}k gross · ${payrollMonth.total_days_worked} days worked.`} />
-        )}
+        <KpiBox value={ytdOccPct} unit="pct" label="Occupancy · YTD"
+          compare={(ytdOccPct != null && budgetOccPct != null)
+            ? { value: ytdOccPct - budgetOccPct, unit: 'pp', period: 'vs Bgt' }
+            : undefined}
+          tooltip="plan.drivers · Actuals 2026 YTD · occupancy_pct" />
+        <KpiBox value={ytdAdr} unit="usd" dp={0} label="ADR · YTD"
+          compare={(ytdAdr != null && budgetAdr != null && budgetAdr > 0)
+            ? { value: ((ytdAdr - budgetAdr) / budgetAdr) * 100, unit: 'pct', period: 'vs Bgt' }
+            : undefined}
+          tooltip="plan.drivers · Actuals 2026 YTD · adr_usd" />
       </div>
 
-      {/* ─── 2. SELECTORS + DROPDOWNS ────────────────────────────────── */}
+      {/* ─── 2. SELECTORS + DROPDOWNS ─────────────────────────────────
+          PBS 2026-05-15: P&L periods are monthly, not daily. Today/7d/LW
+          make no sense here. Trimmed to CFO-grade windows + compare. */}
       <PeriodSelectorRow
         basePath="/finance/pnl"
         win={period.win}
         cmp={period.cmp}
+        timeOptions={[
+          { win: 'mtd',    label: 'MTD'         },
+          { win: '30d',    label: 'Last month'  },
+          { win: 'qtd',    label: 'QTD'         },
+          { win: 'ytd',    label: 'YTD'         },
+          { win: 'l12m',   label: 'Last 12m'    },
+          { win: 'fy',     label: 'Full year'   },
+        ]}
+        compareOptions={[
+          { cmp: 'none',     label: 'None'        },
+          { cmp: 'budget',   label: 'vs Budget'   },
+          { cmp: 'forecast', label: 'vs Forecast' },
+          { cmp: 'stly',     label: 'vs LY'       },
+        ]}
         preserve={{ seg: period.seg, month: cur, compare: compareMode, varBase: varianceBase }}
         rightSlot={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -596,38 +619,146 @@ export default async function PnLPage({ searchParams }: Props) {
 
       <div style={{ height: 14 }} />
 
-      <Panel title="13-week cash forecast" eyebrow="gl.v_cash_forecast_13w">
-        <div style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)', marginBottom: 8 }}>
-          OTB reservations + AR aging − fixed costs (payroll/utilities/A&G) − supplier estimate. Override starting cash via <code>?cash0=</code>.
-        </div>
-        <CashForecastPanel rows={cashForecast} startingCash={cashStart} />
-      </Panel>
+      {/* PBS 2026-05-15: 13-week cash forecast removed from P&L — it's a
+          treasury view, not a profit-and-loss view. Lives on /finance/ledger
+          (cash side) and a future /finance/cashflow tab. */}
 
-      <div style={{ height: 14 }} />
+      {/* PBS 2026-05-14: dense 7×12 heatmap replaced by 3 small side-by-side
+          trend panels (same pattern as /revenue/channels). SVG rendered via
+          dangerouslySetInnerHTML — content is server-built from typed inputs,
+          no user input, mirrors the /revenue/channels precedent.
+          12-month series: GOP · dept-profit mix · cost ratios. */}
+      {(() => {
+        const tPeriods = [...heatmapPeriods].reverse(); // oldest → newest
 
-      <Panel title="Margin leak heatmap" eyebrow={`$k dept profit · ${heatmapPeriodsRev[0]} → ${cur}`}>
-        <div className="heatmap">
-          {heatmapDepts.map(dept => (
-            <React.Fragment key={`row-${dept}`}>
-              <div className="hm-lbl">{dept}</div>
-              {heatmapPeriodsRev.map(p => {
-                const c = heatmapCell(dept, p);
-                const display = c.val == null ? '—' : `${c.val < 0 ? '-' : ''}${(Math.abs(c.val)/1000).toFixed(1)}`;
-                return (
-                  <div
-                    key={`${dept}-${p}`}
-                    className="hm"
-                    title={`${dept} · ${p} · ${dept === 'A&G' ? 'A&G overhead' : 'departmental_profit'}: ${c.val == null ? 'no data' : '$' + c.val.toLocaleString()}`}
-                    style={{ background: c.bg, color: c.color }}
-                  >
-                    {display}
-                  </div>
-                );
-              })}
-            </React.Fragment>
-          ))}
-        </div>
-      </Panel>
+        const gopPts = tPeriods.map(p => {
+          const h = houseByPeriod.get(p);
+          return { period: p, gop: h && h.gop != null ? Number(h.gop) : null };
+        });
+
+        function deptSeries(deptName: string) {
+          return tPeriods.map(p => {
+            const v = dpByKey.get(`${p}|${deptName}`);
+            return { period: p, value: v == null ? null : Number(v) };
+          });
+        }
+        const deptSeriesList = [
+          { name: 'Rooms',    color: FIN_COLORS.rooms, points: deptSeries('Rooms') },
+          { name: 'F&B',      color: FIN_COLORS.fb,    points: deptSeries('F&B') },
+          { name: 'OOD',      color: FIN_COLORS.ood,   points: deptSeries('Other Operated') },
+        ];
+
+        const revByPeriod = new Map<string, number>();
+        for (const r of plSections.filter(s => s.section === 'income')) {
+          revByPeriod.set(r.period_yyyymm, (revByPeriod.get(r.period_yyyymm) || 0) + Number(r.amount_usd || 0));
+        }
+        const payrollByPeriod = new Map<string, number>();
+        for (const r of payrollSubcat) {
+          payrollByPeriod.set(r.period_yyyymm, (payrollByPeriod.get(r.period_yyyymm) || 0) + Number(r.amount_usd || 0));
+        }
+        const agByPeriod = new Map<string, number>();
+        for (const r of agSubcat) {
+          agByPeriod.set(r.period_yyyymm, (agByPeriod.get(r.period_yyyymm) || 0) + Number(r.amount_usd || 0));
+        }
+        const fbRevByPeriod = new Map<string, number>();
+        const fbCogsByPeriod = new Map<string, number>();
+        for (const r of deptByPeriods.filter(d => d.dept === 'F&B')) {
+          fbRevByPeriod.set(r.period, Number(r.revenue || 0));
+        }
+        for (const r of fbDeptOnly) {
+          fbCogsByPeriod.set(r.period_yyyymm, Number(r.cost_of_sales || 0));
+        }
+        const labourPts = tPeriods.map(p => {
+          const rev = revByPeriod.get(p) || 0;
+          const pay = payrollByPeriod.get(p) || 0;
+          return { period: p, pct: rev > 0 ? (pay / rev) * 100 : null };
+        });
+        const fbCostPts = tPeriods.map(p => {
+          const fbR = fbRevByPeriod.get(p) || 0;
+          const fbC = fbCogsByPeriod.get(p) || 0;
+          return { period: p, pct: fbR > 0 ? (fbC / fbR) * 100 : null };
+        });
+        const agPts = tPeriods.map(p => {
+          const rev = revByPeriod.get(p) || 0;
+          const ag  = agByPeriod.get(p) || 0;
+          return { period: p, pct: rev > 0 ? (ag / rev) * 100 : null };
+        });
+        const ratioSeries = [
+          { name: 'Labour',   color: FIN_COLORS.labour, target: 35, points: labourPts },
+          { name: 'F&B cost', color: FIN_COLORS.fbCost, target: 32, points: fbCostPts },
+          { name: 'A&G',     color: FIN_COLORS.ag,     target: 12, points: agPts },
+        ];
+
+        // Apply dropdown filters (PBS 2026-05-15)
+        const filteredDeptSeries = deptFilter === 'all'
+          ? deptSeriesList
+          : deptSeriesList.filter((s) =>
+              (deptFilter === 'rooms' && s.name === 'Rooms') ||
+              (deptFilter === 'f&b'   && s.name === 'F&B')   ||
+              (deptFilter === 'ood'   && s.name === 'OOD'));
+        const filteredRatioSeries = ratioFilter === 'all'
+          ? ratioSeries
+          : ratioSeries.filter((s) =>
+              (ratioFilter === 'labour' && s.name === 'Labour')  ||
+              (ratioFilter === 'f&b'    && s.name === 'F&B cost') ||
+              (ratioFilter === 'a&g'    && s.name === 'A&G'));
+
+        // Helper for filter-pill URL building — preserves all other params
+        const baseQS = new URLSearchParams({
+          ...(period.win !== '30d' ? { win: period.win } : {}),
+          ...(period.cmp !== 'none' ? { cmp: period.cmp } : {}),
+          ...(monthValid ? { month: cur } : {}),
+          ...(compareMode !== 'budget' ? { compare: compareMode } : {}),
+          ...(varianceBase !== 'mom' ? { varBase: varianceBase } : {}),
+        });
+        const pillHref = (key: 'dept' | 'ratio', value: string): string => {
+          const q = new URLSearchParams(baseQS);
+          if (key === 'dept')  { value === 'all' ? q.delete('dept')  : q.set('dept',  value); if (ratioFilter !== 'all') q.set('ratio', ratioFilter); }
+          if (key === 'ratio') { value === 'all' ? q.delete('ratio') : q.set('ratio', value); if (deptFilter !== 'all')  q.set('dept', deptFilter); }
+          const s = q.toString();
+          return `/finance/pnl${s ? '?' + s : ''}`;
+        };
+
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+            <Panel title="GOP trend · 12mo" eyebrow={`${tPeriods[0]} → ${tPeriods[tPeriods.length - 1]} · hover for value`}>
+              <div dangerouslySetInnerHTML={{ __html: gopTrendSvg(gopPts) }} />
+            </Panel>
+            <Panel
+              title="Departmental profit · 12mo"
+              eyebrow={`Filter by dept · hover for value · ${filteredDeptSeries.length} of 3 visible`}
+            >
+              <FilterPills
+                options={[
+                  { key: 'all',   label: 'All'   },
+                  { key: 'rooms', label: 'Rooms' },
+                  { key: 'f&b',   label: 'F&B'   },
+                  { key: 'ood',   label: 'OOD'   },
+                ]}
+                activeKey={deptFilter}
+                hrefFor={(k) => pillHref('dept', k)}
+              />
+              <div dangerouslySetInnerHTML={{ __html: deptProfitTrendSvg(filteredDeptSeries) }} />
+            </Panel>
+            <Panel
+              title="Cost ratios · 12mo"
+              eyebrow={`% of revenue · target dashed · hover for value · ${filteredRatioSeries.length} of 3 visible`}
+            >
+              <FilterPills
+                options={[
+                  { key: 'all',    label: 'All'      },
+                  { key: 'labour', label: 'Labour'   },
+                  { key: 'f&b',    label: 'F&B cost' },
+                  { key: 'a&g',    label: 'A&G'      },
+                ]}
+                activeKey={ratioFilter}
+                hrefFor={(k) => pillHref('ratio', k)}
+              />
+              <div dangerouslySetInnerHTML={{ __html: costRatioTrendSvg(filteredRatioSeries) }} />
+            </Panel>
+          </div>
+        );
+      })()}
 
       <div style={{ height: 14 }} />
 
@@ -696,7 +827,15 @@ export default async function PnLPage({ searchParams }: Props) {
 
       <div style={{ height: 14 }} />
 
-      <Panel title="12-month rollup" eyebrow="actual · budget · forecast · ly">
+      {/* PBS 2026-05-15: prior-year rollup first, then current year — CFO
+          reads "where we came from" before "where we are". */}
+      <Panel title="12-month rollup · FY2025" eyebrow="actual · budget · ly (FY2024) · closed prior year">
+        <TwelveMonthPanel rows={twelveMonth2025} fy={fy2025} />
+      </Panel>
+
+      <div style={{ height: 14 }} />
+
+      <Panel title="12-month rollup · FY2026" eyebrow="actual · budget · forecast · ly">
         <TwelveMonthPanel rows={twelveMonth} fy={fy2026} demand={demandFy} />
       </Panel>
 
@@ -1051,7 +1190,7 @@ export default async function PnLPage({ searchParams }: Props) {
 
       {/* ─── Policy notices ─────────────────────────────────────────── */}
       <div className="warn-banner">
-        ⚠ <b>Cloudbeds write policy — pilot phase.</b>{' '}
+        ⚠ <b>PMS write policy — pilot phase.</b>{' '}
         Agent-proposed reclassifications, JE proposals, and RFQs always require explicit human approval.
         Variance Composer never auto-publishes commentary. Controller Agent never posts to GL. Procurement
         Agent has no PO authority. After validation against 90 days of decisions, only Tier-1 actions
@@ -1083,5 +1222,38 @@ export default async function PnLPage({ searchParams }: Props) {
       </div>
       </div>{/* /.pnl-page */}
     </Page>
+  );
+}
+
+// ─── FilterPills — server-rendered anchor pill row for chart filters ──
+// PBS 2026-05-15: used by graph 2 (dept) + graph 3 (cost ratio) on /finance/pnl
+function FilterPills({
+  options, activeKey, hrefFor,
+}: {
+  options: { key: string; label: string }[];
+  activeKey: string;
+  hrefFor: (key: string) => string;
+}) {
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '0 0 8px' }}>
+      {options.map((o) => {
+        const active = o.key === activeKey;
+        return (
+          <a
+            key={o.key}
+            href={hrefFor(o.key)}
+            style={{
+              padding: '3px 10px', borderRadius: 4,
+              border: '1px solid var(--paper-deep)',
+              background: active ? 'var(--brass)' : 'var(--paper-warm)',
+              color: active ? '#fff' : 'var(--ink-soft)',
+              fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
+              letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase',
+              fontWeight: 600, textDecoration: 'none',
+            }}
+          >{o.label}</a>
+        );
+      })}
+    </div>
   );
 }

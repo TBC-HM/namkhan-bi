@@ -151,10 +151,11 @@ interface Props {
   propertyId: number;
   propertyLabel?: string;
   searchParams: Record<string, string | string[] | undefined>;
+  subPagesOverride?: { label: string; href: string }[];
 }
 
 export default async function ScheduleTabContent({
-  propertyId, propertyLabel, searchParams,
+  propertyId, propertyLabel, searchParams, subPagesOverride,
 }: Props) {
   const tz = TZ_BY_PROPERTY[propertyId] ?? 'UTC';
 
@@ -167,8 +168,9 @@ export default async function ScheduleTabContent({
   const stripEnd   = shiftDate(selectedDay, +10);
   const in14d  = shiftDate(todayIso, 14);
   const back7d = shiftDate(todayIso, -7);
+  const back30d = shiftDate(todayIso, -30);
 
-  const [kpiRes, daysRes, dayShiftsRes, upcomingRes, punctualityRes] = await Promise.all([
+  const [kpiRes, daysRes, dayShiftsRes, upcomingRes, punctualityRes, accuracyRes] = await Promise.all([
     supabase.schema('ops').from('v_schedule_kpis')
       .select('*').eq('property_id', propertyId).maybeSingle(),
     supabase.schema('ops').from('v_schedule_daily_window')
@@ -189,6 +191,14 @@ export default async function ScheduleTabContent({
       .limit(300),
     supabase.schema('ops').from('v_staff_punctuality')
       .select('*').eq('property_id', propertyId),
+    // PBS 2026-05-14 — Planning-accuracy KPI: past 30 days of shifts that had
+    // a clock-in OR were no-shows. We compare hours_planned vs actual_hours.
+    supabase.schema('ops').from('v_shifts_with_actuals')
+      .select('hours_planned, actual_hours, actual_clock_in')
+      .eq('property_id', propertyId)
+      .gte('shift_date', back30d)
+      .lt('shift_date', todayIso)
+      .limit(5000),
   ]);
 
   const kpi       = (kpiRes.data as ScheduleKpiRow | null) ?? null;
@@ -200,6 +210,32 @@ export default async function ScheduleTabContent({
 
   const punctByStaff = new Map<string, PunctualityRow>();
   for (const p of punct) if (p.staff_id) punctByStaff.set(p.staff_id, p);
+
+  // ── Planning accuracy (PBS 2026-05-14) ─────────────────────────────────
+  // accuracy = 100 − |actual − planned| / planned × 100, capped at 0.
+  // No-show shifts contribute actual=0 → counts as full delta. Last 30d past.
+  type AccuracyRow = { hours_planned: number | null; actual_hours: number | null; actual_clock_in: string | null };
+  const accRows = (accuracyRes.data as AccuracyRow[] | null) ?? [];
+  let plannedH = 0;
+  let actualH = 0;
+  let noShows = 0;
+  let totalShifts = 0;
+  for (const r of accRows) {
+    const p = Number(r.hours_planned ?? 0);
+    const a = Number(r.actual_hours ?? 0);
+    if (p <= 0) continue;
+    plannedH += p;
+    actualH += a;
+    totalShifts += 1;
+    if (!r.actual_clock_in) noShows += 1;
+  }
+  const accuracyPct = plannedH > 0
+    ? Math.max(0, 100 - (Math.abs(actualH - plannedH) / plannedH) * 100)
+    : null;
+  const accuracyDirection = plannedH > 0
+    ? (actualH > plannedH ? 'over' : actualH < plannedH ? 'under' : 'on-target')
+    : 'no-data';
+  const noShowPct = totalShifts > 0 ? (noShows / totalShifts) * 100 : null;
 
   const eyebrow = propertyLabel
     ? `Operations · Staff · Schedule · ${propertyLabel}`
@@ -314,7 +350,7 @@ export default async function ScheduleTabContent({
     <Page
       eyebrow={eyebrow}
       title={<>Staff <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>schedule</em></>}
-      subPages={rewriteSubPagesForProperty(OPERATIONS_SUBPAGES, propertyId)}
+      subPages={subPagesOverride ?? rewriteSubPagesForProperty(OPERATIONS_SUBPAGES, propertyId)}
     >
       <StaffTabStrip propertyId={propertyId} />
 
@@ -324,6 +360,15 @@ export default async function ScheduleTabContent({
         { label: 'Staff on day',  value: allEmps.length,                  kind: 'count', hint: `${dayHours.toFixed(0)}h planned` },
         { label: 'Punctuality · day', value: dayAvgScore != null ? `${dayAvgScore}/100` : '—', tone: dayAvgScore != null && dayAvgScore >= 80 ? 'pos' : dayAvgScore != null && dayAvgScore < 50 ? 'warn' : 'neutral', hint: `${dayScored.length} matched` },
         { label: 'Punctuality · 90d', value: global90d != null ? `${global90d}/100` : '—', tone: global90d != null && global90d >= 80 ? 'pos' : global90d != null && global90d < 50 ? 'warn' : 'neutral', hint: 'avg · all staff' },
+        // PBS 2026-05-14 — Planning accuracy: how well planned hours matched actual over last 30 past days
+        {
+          label: 'Planning accuracy · 30d',
+          value: accuracyPct != null ? `${accuracyPct.toFixed(0)}%` : '—',
+          tone: accuracyPct == null ? 'neutral' : accuracyPct >= 90 ? 'pos' : accuracyPct >= 75 ? 'neutral' : 'warn',
+          hint: accuracyPct == null
+            ? 'no past shifts'
+            : `${Math.round(plannedH)}h plan → ${Math.round(actualH)}h actual · ${accuracyDirection}${noShowPct != null ? ` · ${noShowPct.toFixed(0)}% no-show` : ''}`,
+        },
         { label: 'Confirmed',     value: kpi?.confirmed_upcoming ?? 0,    kind: 'count', tone: 'pos', hint: 'forward · confirmed' },
         { label: 'Unconfirmed',   value: kpi?.scheduled_unconfirmed ?? 0, kind: 'count', tone: (kpi?.scheduled_unconfirmed ?? 0) > 0 ? 'warn' : 'pos', hint: 'needs signoff' },
       ] satisfies KpiStripItem[]} />

@@ -36,6 +36,8 @@ interface PageProps {
   kpiTiles?: Array<{ k: string; v: string; d: string }>;
   /** Hide the temp/air/date/user pills (e.g. on /sample candidates). Default true. */
   showHeaderPills?: boolean;
+  /** Hide only the temperature + air-quality pills (keep date + user). PBS 2026-05-14: used on /holding so Felix's surface stays clean. */
+  hideWeather?: boolean;
   /** Show standard footer (default true) */
   footer?: boolean;
   children: ReactNode;
@@ -43,7 +45,7 @@ interface PageProps {
 
 export default function Page({
   eyebrow, title, subPages, topRight, kpiTiles,
-  showHeaderPills = true, footer = true, children,
+  showHeaderPills = true, hideWeather = false, footer = true, children,
 }: PageProps) {
   return (
     <div style={S.page}>
@@ -61,7 +63,7 @@ export default function Page({
             when showHeaderPills=true; pages can opt-out (e.g. /sample). */}
         {showHeaderPills && (
           <div style={S.topRowPills}>
-            <HeaderPills kpiTiles={kpiTiles} />
+            <HeaderPills kpiTiles={kpiTiles} hideWeather={hideWeather} />
           </div>
         )}
 

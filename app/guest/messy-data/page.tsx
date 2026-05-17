@@ -151,7 +151,7 @@ export default async function MessyDataPage() {
             <span style={{ flex: 1 }} />
             <StatusCell label="SOURCE">
               <StatusPill tone="active">guest.mv_guest_profile</StatusPill>
-              <span style={metaDim}>· cleanup workflow: Cloudbeds → cron → mv refresh</span>
+              <span style={metaDim}>· cleanup workflow: PMS → cron → mv refresh</span>
             </StatusCell>
           </>
         }
@@ -227,7 +227,7 @@ export default async function MessyDataPage() {
         <SectionHead
           title="Top messy guests"
           emphasis={`${flaggedSorted.length}`}
-          sub={`Sorted by lifetime revenue · top 100 of ${flagged.length} flagged · fix in Cloudbeds`}
+          sub={`Sorted by lifetime revenue · top 100 of ${flagged.length} flagged · fix in PMS`}
           source="guest.mv_guest_profile"
         />
         {flaggedSorted.length === 0 ? (
@@ -298,7 +298,7 @@ export default async function MessyDataPage() {
         <div style={{ fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 'var(--ls-extra)', color: 'var(--brass)', fontWeight: 600, marginBottom: 6 }}>
           How to fix
         </div>
-        Open the guest in Cloudbeds (PMS) · merge duplicates via the guest profile screen · add missing email / phone / country.
+        Open the guest in PMS · merge duplicates via the guest profile screen · add missing email / phone / country.
         The materialised view <code style={{ fontFamily: 'var(--mono)' }}>guest.mv_guest_profile</code> refreshes via cron, so changes appear here on the next tick.
       </div>
     </Page>

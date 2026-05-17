@@ -48,6 +48,8 @@ export default async function PropertyLayout({
           logoUrl: brand?.logo_url ?? null,
         }}
       >
+        {/* 2026-05-14 — TopDeptStrip moved up to app/layout.tsx so it
+            survives legacy /<dept> redirects that escape this scope. */}
         {children}
       </PropertyProvider>
     </ThemeInjector>

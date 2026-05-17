@@ -774,6 +774,30 @@ in `cockpit_decisions` (planned ADR table).
 
 ---
 
+## 20.1. Canonical URL grammar (Tenant URL Rule · 2026-05-15)
+
+Every operational page lives at `/h/[property_id]/<dept>/<sub>`. One canonical URL shape per page; everything else is a 307 redirect.
+
+| Tier | URL shape | Example |
+|---|---|---|
+| Property page | `/h/[property_id]/<dept>/<sub>` | `/h/1000001/finance/hr/onboarding` |
+| Holding page | `/holding/<dept>` | `/holding/legal` |
+| Beyond Circle public | `/tbc` | — |
+
+**Property IDs (locked):** Namkhan = `260955`, Donna Portals = `1000001`, Beyond Circle holding = `/holding/*` (no property_id segment).
+
+**Department slugs (locked):** `sales`, `revenue`, `marketing`, `finance`, `operations`, `guests`. HR lives **inside** finance at `/finance/hr/*` (NOT at `/operations/staff/*` — that path 307-redirects).
+
+**Legacy Namkhan aliases.** Pre-2026-05 un-prefixed routes (`/finance/*`, `/sales/*`, ...) still render Namkhan content for backward compat, but every new link emitted by menus, agent replies or deep-link generators uses the canonical `/h/260955/...` shape.
+
+**Sub-page strip ownership.** Each dept owns a `_subpages.ts` (e.g. `app/finance/_subpages.ts`). Property-scoped renderers wrap it through `rewriteSubPagesForProperty(SUBPAGES, propertyId)`. TabContent components accept `subPagesOverride` so HR wrappers under `/h/[id]/finance/hr/*` pass the **finance** strip instead of the **operations** strip.
+
+**Catch-all fallback.** `app/h/[property_id]/[...rest]/page.tsx` renders a stub when a property doesn't yet have a concrete wrapper at that path — Donna deep-links never 404 mid-onboarding.
+
+**Why this lives in ARCHITECTURE.** URL grammar is the *first* multi-tenant guarantee a user experiences. Get it wrong and the property switcher, the ThemeInjector, and the tenant-scoped RLS context all desync. This is the public face of §6 and §7. Enforcement details: `CLAUDE.md` §2.1 + Supabase `cockpit_agent_memory` id=330 (importance=10).
+
+---
+
 ## 21. What does NOT belong here
 
 - Component-level UI rules → `DESIGN_NAMKHAN_BI.md`

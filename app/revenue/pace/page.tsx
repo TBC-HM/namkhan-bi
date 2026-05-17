@@ -206,7 +206,7 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
         <KpiBox value={totalRns} unit="count" label="OTB room nights"
           compare={cmpRns != null ? { value: cmpRns, unit: 'count', period: cmpLabel } : undefined}
-          tooltip="Sum of confirmed room-nights on the books for the forward window. Source: pace_otb (Cloudbeds)." />
+          tooltip="Sum of confirmed room-nights on the books for the forward window. Source: pace_otb (PMS)." />
         <KpiBox value={totalRev} unit="usd"   label="OTB revenue"
           compare={cmpRev != null ? { value: cmpRev, unit: 'usd', period: cmpLabel } : undefined}
           tooltip="Confirmed forward revenue (USD) for this window. Source: pace_otb." />

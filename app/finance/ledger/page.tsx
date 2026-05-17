@@ -1,171 +1,279 @@
-// app/finance/ledger/page.tsx — REDESIGN 2026-05-05 (recovery)
+// app/finance/ledger/page.tsx
+// PBS 2026-05-15: 3 tabs · Receivables + Deposits + House Accounts. Each tab
+// gets its own controller-relevant KPI band and drillable table(s).
+// Tab state lives in ?tab=receivables|deposits|house_accounts so links share.
+
+import Link from 'next/link';
 import Page from '@/components/page/Page';
-import PeriodSelectorRow from '@/components/page/PeriodSelectorRow';
+import Panel from '@/components/page/Panel';
 import { FINANCE_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
-import StatusPill from '@/components/ui/StatusPill';
 import { getAgedAr } from '@/lib/data';
-import { resolvePeriod } from '@/lib/period';
-import { supabase, PROPERTY_ID } from '@/lib/supabase';
+import { getDepositsPipeline, type DepositRow } from '@/lib/data-deposits';
+import { getHouseAccountsView } from '@/lib/data-house-accounts';
+import { PROPERTY_ID } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { fmtMoney } from '@/lib/format';
-import { SectionHead } from '../_components/FinanceShell';
 import AgedArChart from '../_components/AgedArChart';
-import AgedArTable, { type AgedRow } from './_components/AgedArTableClient';
+import {
+  AgedArSection,
+  type AgedRowWithContact,
+} from './_components/LedgerDrawerHost';
+import DepositsSection from './_components/DepositsSection';
+import HouseAccountsSection from './_components/HouseAccountsSection';
+// PBS 2026-05-15: Bank tab moved to /finance/banks (CFO page). Ledger keeps
+// guest-side ledgers only (receivables · deposits · house accounts).
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
 
+type Tab = 'receivables' | 'deposits' | 'house_accounts';
+
 interface Props { searchParams: Record<string, string | string[] | undefined>; }
 
 export default async function LedgerPage({ searchParams }: Props) {
-  const period = resolvePeriod(searchParams);
-  const aged = await getAgedAr().catch(() => []);
-  const totalAr = aged.reduce((s: number, r: any) => s + Number(r.open_balance || 0), 0);
-  const buckets = aged.reduce((b: any, r: any) => {
+  const tabParam = (searchParams.tab as string) ?? '';
+  const tab: Tab =
+    tabParam === 'deposits' ? 'deposits' :
+    tabParam === 'house_accounts' ? 'house_accounts' :
+    'receivables';
+
+  // Fetch all three feeds in parallel so the eyebrow + KPI math is consistent
+  // and tab switching doesn't flash empty.
+  const [aged, deposits, houseView] = await Promise.all([
+    getAgedAr().catch(() => []) as Promise<AgedRowWithContact[]>,
+    getDepositsPipeline().catch(() => []) as Promise<DepositRow[]>,
+    getHouseAccountsView(PROPERTY_ID).catch(() => ({
+      named: [], walkin: [],
+      stats: {
+        total_accounts: 0, active_named: 0, active_walkin: 0, walkin_30d: 0, walkin_ytd: 0,
+        named_total: 0, same_day_pct: 0, most_recent_open: null,
+        pos_walkins_matched: 0, pos_order_usd: 0, pos_cash_usd: 0, pos_card_usd: 0,
+        pos_bank_usd: 0, pos_house_acct_charge_usd: 0, pos_charge_room_usd: 0,
+      },
+      posByHa: {},
+    })),
+  ]);
+
+  // Receivables aggregates
+  const totalAr = aged.reduce((s, r) => s + Number(r.open_balance || 0), 0);
+  const bucketSums = aged.reduce((b, r) => {
     const k = r.bucket || 'unknown';
     b[k] = (b[k] || 0) + Number(r.open_balance || 0);
     return b;
   }, {} as Record<string, number>);
+  const bucketCounts = aged.reduce((b, r) => {
+    const k = r.bucket || 'unknown';
+    b[k] = (b[k] || 0) + 1;
+    return b;
+  }, {} as Record<string, number>);
+  const ar0_30  = Number(bucketSums['0_30']   || 0);
+  const ar31_60 = Number(bucketSums['31_60']  || 0);
+  const ar61_90 = Number(bucketSums['61_90']  || 0);
+  const ar90    = Number(bucketSums['90_plus'] || 0);
+  const n90     = Number(bucketCounts['90_plus'] || 0);
+  const largestUnpaid = aged.reduce((m, r) => Math.max(m, Number(r.open_balance || 0)), 0);
+  const avgDaysOverdue = aged.length > 0
+    ? Math.round(aged.reduce((s, r) => s + Number(r.days_overdue || 0), 0) / aged.length)
+    : 0;
 
-  const { data: inHouseRows } = await supabase
+  // Deposits aggregates
+  const depositsHeld   = deposits.reduce((s, r) => s + Number(r.paid_amount || 0), 0);
+  const depositsDue    = deposits.reduce((s, r) => s + Number(r.balance || 0), 0);
+  const overdue7d      = deposits.filter((r) => Number(r.balance) > 0 && (r.days_until_arrival ?? 999) <= 7).length;
+  const overdue7dUsd   = deposits.filter((r) => Number(r.balance) > 0 && (r.days_until_arrival ?? 999) <= 7)
+                                 .reduce((s, r) => s + Number(r.balance || 0), 0);
+  const arriving30d    = deposits.filter((r) => (r.days_until_arrival ?? 999) <= 30).length;
+  const noDeposit30d   = deposits.filter((r) => Number(r.paid_amount) === 0 && (r.days_until_arrival ?? 999) <= 30).length;
+  const largestPending = deposits.reduce((m, r) => Math.max(m, Number(r.balance || 0)), 0);
+  const avgDeposit     = deposits.filter((r) => Number(r.paid_amount) > 0).length > 0
+    ? Math.round(depositsHeld / deposits.filter((r) => Number(r.paid_amount) > 0).length)
+    : 0;
+
+  // In-house (still goes on Receivables tab)
+  const sb = getSupabaseAdmin();
+  const { data: inHouseRows } = await sb
     .from('reservations')
-    .select('reservation_id, balance, guest_email')
+    .select('reservation_id, balance')
     .eq('property_id', PROPERTY_ID)
     .eq('status', 'checked_in');
   const inHouseCount = (inHouseRows ?? []).length;
-  const inHouseBalance = (inHouseRows ?? []).reduce((s: number, r: any) => s + Number(r.balance || 0), 0);
-  const inHouseHighBal = (inHouseRows ?? []).filter((r: any) => Number(r.balance || 0) > 1000).length;
-  const checkedOutHighBal = aged.filter((r: any) => Number(r.open_balance || 0) > 1000).length;
-  const highBalFlags = inHouseHighBal + checkedOutHighBal;
-
-  const { count: missingEmailCount } = await supabase
-    .from('reservations')
-    .select('reservation_id', { count: 'exact', head: true })
-    .eq('property_id', PROPERTY_ID)
-    .is('guest_email', null)
-    .gte('check_in_date', period.from)
-    .lte('check_in_date', period.to);
-
-  const ar90 = Number(buckets['90_plus'] || 0);
-  const arHealth = ar90 > 0 ? 'expired' : (Number(buckets['61_90'] || 0) > 0 ? 'pending' : 'active');
-
-  // ---- Deposits — sourced from reservations.paid_amount + balance ----
-  const today = new Date().toISOString().slice(0, 10);
-  const in7  = new Date(Date.now() + 7  * 86400000).toISOString().slice(0, 10);
-  const in30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
-
-  const { data: futureConfirmed } = await supabase
-    .from('reservations')
-    .select('reservation_id, paid_amount, balance, check_in_date')
-    .eq('property_id', PROPERTY_ID)
-    .eq('status', 'confirmed')
-    .gte('check_in_date', today);
-
-  const depositsHeld = (futureConfirmed ?? []).reduce(
-    (s: number, r: any) => s + Number(r.paid_amount || 0), 0
+  const inHouseBalance = (inHouseRows ?? []).reduce(
+    (s: number, r: { balance: number | null }) => s + Number(r.balance || 0), 0,
   );
-  const depositsDue30 = (futureConfirmed ?? [])
-    .filter((r: any) => r.check_in_date && r.check_in_date <= in30 && Number(r.balance) > 0)
-    .reduce((s: number, r: any) => s + Number(r.balance || 0), 0);
-  const overdueDeposits = (futureConfirmed ?? [])
-    .filter((r: any) => r.check_in_date && r.check_in_date <= in7 && Number(r.balance) > 0)
-    .length;
 
-  // Future arrivals with NO deposit (collection risk)
-  const futureNoDeposit30d = (futureConfirmed ?? [])
-    .filter((r: any) => r.check_in_date && r.check_in_date <= in30 && Number(r.paid_amount || 0) === 0)
-    .length;
+  // Email coverage diagnostics (honest "why missing" for the inbox)
+  const arEmailMissing = aged.filter((r) => !r.guest_email).length;
+  const depEmailMissing = deposits.filter((r) => !r.guest_email).length;
 
-  // City ledger — house_accounts (companies, agencies)
-  const { data: houseAccounts } = await supabase
-    .from('house_accounts')
-    .select('account_id, account_name, account_type, balance, last_activity_date, status')
-    .eq('property_id', PROPERTY_ID)
-    .order('balance', { ascending: false })
-    .limit(20);
-  const cityLedgerActive = (houseAccounts ?? []).filter((r: any) => r.status === 'active').length;
-  const cityLedgerTotal = (houseAccounts ?? []).reduce((s: number, r: any) => s + Number(r.balance || 0), 0);
-
-  const { count: cancellations30d } = await supabase
-    .from('reservations')
-    .select('reservation_id', { count: 'exact', head: true })
-    .eq('property_id', PROPERTY_ID)
-    .eq('status', 'canceled')
-    .gte('cancellation_date', new Date(Date.now() - 30 * 86400000).toISOString());
-
-  const ledgerEyebrow = [
+  const tabLabel =
+    tab === 'deposits' ? 'Deposits' :
+    tab === 'house_accounts' ? 'House accounts' :
+    'Receivables';
+  const eyebrow = [
     'Finance · Ledger',
-    `${inHouseCount} in-house · ${fmtMoney(inHouseBalance, 'USD')}`,
-    `${aged.length} aged · ${fmtMoney(totalAr, 'USD')}`,
-    ar90 > 0 ? `${fmtMoney(ar90, 'USD')} 90+` : null,
-    `${fmtMoney(depositsHeld, 'USD')} deposits held`,
-    futureNoDeposit30d > 0 ? `${futureNoDeposit30d} no-deposit 30d` : null,
-  ].filter(Boolean).join(' · ');
+    `Tab: ${tabLabel}`,
+    tab === 'deposits'
+      ? `${deposits.length} future bookings · held ${fmtMoney(depositsHeld, 'USD')} · due ${fmtMoney(depositsDue, 'USD')}`
+      : tab === 'house_accounts'
+      ? `${houseView.stats.active_named} active named · ${houseView.stats.walkin_30d} walk-ins · 30d`
+      : `${aged.length} receivables · ${fmtMoney(totalAr, 'USD')} open · ${n90} in 90+`,
+  ].join(' · ');
 
   return (
     <Page
-      eyebrow={ledgerEyebrow}
+      eyebrow={eyebrow}
       title={<>Who <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>owes</em> you, and who's about to.</>}
       subPages={FINANCE_SUBPAGES}
     >
-      {/* ─── 1. KPI tiles ───────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-        <KpiBox value={inHouseCount} unit="count" label="In-house guests"      tooltip="Reservations currently checked-in (status='checked_in'). Source: public.reservations." />
-        <KpiBox value={inHouseBalance} unit="usd" label="In-house balance"      tooltip="Sum of open balance for currently in-house reservations." />
-        <KpiBox value={aged.length} unit="count" label="Checked-out unpaid"     tooltip="Reservations with checkout in the past + non-zero balance. Source: mv_aged_ar." />
-        <KpiBox value={totalAr} unit="usd" label="Checked-out unpaid $"         tooltip="Total open AR across all checked-out unpaid reservations." />
-        <KpiBox value={highBalFlags} unit="count" label="High-balance flags"    tooltip="Reservations with balance ≥ $1k — manual review recommended." />
-        <KpiBox value={missingEmailCount ?? 0} unit="count" label={`Missing email · ${period.label}`} tooltip="Reservations without a contact email — blocks invoicing and follow-up. Cloudbeds sync gap." />
-        <KpiBox value={depositsHeld} unit="usd" label="Deposits held" tooltip={`Σ paid_amount for ${(futureConfirmed ?? []).length} confirmed future-arrival reservations.`} />
-        <KpiBox value={depositsDue30} unit="usd" label="Deposits due (30d)" tooltip="Σ balance for confirmed reservations checking in within 30 days." />
-        <KpiBox value={overdueDeposits} unit="count" label="Overdue deposits" tooltip="Confirmed reservations arriving in ≤7 days with balance > 0." />
-        <KpiBox value={cancellations30d ?? 0} unit="count" label="Cancellations 30d" tooltip="Reservations canceled in the last 30 days." />
+      {/* ─── Tab strip ─────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--paper-deep)', marginBottom: 12 }}>
+        <TabLink href="/finance/ledger?tab=receivables" active={tab === 'receivables'}>
+          Receivables · {aged.length} resv
+        </TabLink>
+        <TabLink href="/finance/ledger?tab=deposits" active={tab === 'deposits'}>
+          Deposits · {deposits.length} bookings
+        </TabLink>
+        <TabLink href="/finance/ledger?tab=house_accounts" active={tab === 'house_accounts'}>
+          House accounts · {houseView.stats.active_named} active named
+        </TabLink>
       </div>
 
-      {/* ─── 2. Selector — drives missing-email window ──────────────── */}
-      <PeriodSelectorRow
-        basePath="/finance/ledger"
-        win={period.win}
-        cmp={period.cmp}
-        preserve={{ seg: period.seg }}
-      />
-
-      {/* ─── 3. Graphs ──────────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 12 }}>
-        <AgedArChart rows={aged as any} title="AR aging" sub="Open balance per bucket · mv_aged_ar" />
-      </div>
-
-      {/* ─── 4. Tables ──────────────────────────────────────────────── */}
-      <div style={{ marginTop: 18 }}>
-        <SectionHead title="Aged receivables" emphasis={`${aged.length} resv`} sub={`Total open: ${fmtMoney(totalAr, 'USD')} · sortable`} source="mv_aged_ar" />
-        <AgedArTable rows={aged as AgedRow[]} />
-      </div>
-
-      <div style={{ marginTop: 18 }}>
-        <SectionHead title="City ledger" emphasis={`${cityLedgerActive} active`} sub="House accounts · companies · agencies · house_accounts" source="house_accounts" />
-        {(houseAccounts ?? []).length === 0 ? (
-          <div className="panel dashed" style={{ padding: 20, color: 'var(--ink-mute)', fontStyle: 'italic', textAlign: 'center' }}>
-            No active house accounts.
+      {tab === 'receivables' && (
+        <>
+          {/* ── Receivables KPIs ─────────────────────────────────── */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
+            <KpiBox value={totalAr}        unit="usd"   label="Total open AR"          tooltip="Sum of open balances across all checked-out unpaid reservations." />
+            <KpiBox value={ar0_30}         unit="usd"   label="0–30 days"              tooltip="AR within the standard collection window." />
+            <KpiBox value={ar31_60}        unit="usd"   label="31–60 days"             tooltip="AR aging into amber — chase actively." />
+            <KpiBox value={ar61_90}        unit="usd"   label="61–90 days"             tooltip="AR aging into red — escalate." />
+            <KpiBox value={ar90}           unit="usd"   label={`90+ days · ${n90} resv`} tooltip="The collection priority." />
+            <KpiBox value={largestUnpaid}  unit="usd"   label="Largest single unpaid"  tooltip="Work this row first." />
+            <KpiBox value={avgDaysOverdue} unit="count" label="Avg days overdue"       tooltip="Average age of unpaid AR." />
+            <KpiBox value={inHouseCount}   unit="count" label="In-house guests"        tooltip="Reservations currently checked-in." />
+            <KpiBox value={inHouseBalance} unit="usd"   label="In-house balance"       tooltip="Sum of open balance for in-house guests." />
           </div>
-        ) : (
-          <table className="tbl" style={{ width: '100%', fontSize: 13 }}>
-            <thead>
-              <tr><th>Account</th><th>Type</th><th>Status</th><th className="num">Balance</th><th>Last activity</th></tr>
-            </thead>
-            <tbody>
-              {(houseAccounts ?? []).map((a: any) => (
-                <tr key={a.account_id}>
-                  <td className="lbl"><strong>{a.account_name || '—'}</strong></td>
-                  <td className="lbl text-mute">{a.account_type || '—'}</td>
-                  <td><StatusPill tone={a.status === 'active' ? 'active' : 'inactive'}>{a.status || '—'}</StatusPill></td>
-                  <td className="num" style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(Number(a.balance || 0), 'USD')}</td>
-                  <td className="lbl text-mute">{a.last_activity_date ? new Date(a.last_activity_date).toISOString().slice(0, 10) : '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+
+          {/* ── AR aging chart ──────────────────────────────────── */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 12, marginTop: 12 }}>
+            <AgedArChart rows={aged as never} title="AR aging" sub="Open balance per bucket · v_aged_ar_with_contact" />
+          </div>
+
+          {/* ── Email-coverage callout ──────────────────────────── */}
+          {arEmailMissing > 0 && (
+            <EmailCoverageBanner missing={arEmailMissing} total={aged.length} cohort="aged receivables" />
+          )}
+
+          {/* ── Tables ──────────────────────────────────────────── */}
+          <Panel
+            title={`Aged receivables · ${aged.length} resv · ${fmtMoney(totalAr, 'USD')}`}
+            eyebrow="Click any guest name to open the contact drawer · send reminder · verify via fc@thenamkhan.com"
+            expandable
+          >
+            <div style={{ padding: 12 }}>
+              <AgedArSection rows={aged} />
+            </div>
+          </Panel>
+        </>
+      )}
+
+      {tab === 'deposits' && (
+        <>
+          {/* ── Deposits KPIs ────────────────────────────────────── */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
+            <KpiBox value={depositsHeld}     unit="usd"   label="Deposits held"          tooltip="Σ paid_amount on confirmed future arrivals — pipeline cash already collected." />
+            <KpiBox value={depositsDue}      unit="usd"   label="Deposits due"           tooltip="Σ balance on confirmed future arrivals — what's still outstanding." />
+            <KpiBox value={overdue7dUsd}     unit="usd"   label={`Overdue · ≤7d · ${overdue7d}`} tooltip="Balance still due on bookings arriving within 7 days. Chase now." />
+            <KpiBox value={deposits.length}  unit="count" label="Future bookings"        tooltip="All future-confirmed reservations with paid_amount > 0 or balance > 0." />
+            <KpiBox value={arriving30d}      unit="count" label="Arriving ≤30d"          tooltip="Bookings arriving in the next 30 days." />
+            <KpiBox value={noDeposit30d}     unit="count" label="No deposit · ≤30d"      tooltip="Confirmed bookings arriving in 30 days with paid_amount = 0 — collection risk." />
+            <KpiBox value={largestPending}   unit="usd"   label="Largest pending"        tooltip="Biggest single outstanding deposit." />
+            <KpiBox value={avgDeposit}       unit="usd"   label="Avg deposit · per booking" tooltip="Average paid_amount across bookings that have deposit > 0." />
+          </div>
+
+          {/* ── Email-coverage callout ──────────────────────────── */}
+          {depEmailMissing > 0 && (
+            <EmailCoverageBanner missing={depEmailMissing} total={deposits.length} cohort="future bookings" />
+          )}
+
+          <Panel
+            title={`Deposit pipeline · ${deposits.length} future bookings`}
+            eyebrow="Click any guest name for the drawer · send reminder · verify via fc@thenamkhan.com"
+            expandable
+          >
+            <div style={{ padding: 12 }}>
+              <DepositsSection rows={deposits as DepositRow[]} />
+            </div>
+          </Panel>
+        </>
+      )}
+
+      {tab === 'house_accounts' && (
+        <HouseAccountsSection
+          named={houseView.named}
+          walkin={houseView.walkin}
+          stats={houseView.stats}
+          posByHa={houseView.posByHa}
+          propertyId={PROPERTY_ID}
+        />
+      )}
     </Page>
+  );
+}
+
+// ─── Email coverage banner ─────────────────────────────────────────────
+// Honest explanation of WHY we sometimes show no email + workaround.
+function EmailCoverageBanner({
+  missing, total, cohort,
+}: { missing: number; total: number; cohort: string }) {
+  const pct = total ? Math.round((missing / total) * 100) : 0;
+  return (
+    <div
+      style={{
+        margin: '12px 0',
+        padding: '10px 12px',
+        fontSize: 'var(--t-xs)',
+        color: 'var(--ink-soft)',
+        background: 'var(--paper-warm)',
+        border: '1px solid var(--paper-deep)',
+        borderLeft: '3px solid var(--st-warn, #C28F2C)',
+        borderRadius: 6,
+      }}
+    >
+      <strong style={{ color: 'var(--st-warn, #C28F2C)' }}>
+        Email missing on {missing} of {total} {cohort} ({pct}%)
+      </strong>
+      {' — '}
+      this is an <em>ETL lag</em>, not "no email in PMS". PMS&apos; reservation list
+      endpoint doesn&apos;t return email; the per-guest detail endpoint does, but our ETL runs that
+      with a ~90-day lag (recent {'<'} 90d: ~3% coverage; older {'>'} 90d: ~92%). OTA bookings
+      additionally use proxy addresses (<code>xxx@guest.booking.com</code>) that aren&apos;t fetched
+      pre-arrival. <strong>Workaround:</strong> click the reservation # to open PMS directly
+      and copy the address. <strong>Real fix:</strong> extend ETL to call
+      <code> getGuestList</code> on every confirmed/in-house reservation, not just stays older
+      than 90 days.
+    </div>
+  );
+}
+
+function TabLink({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      style={{
+        padding: '10px 20px',
+        fontFamily: 'var(--mono)',
+        fontSize: 'var(--t-xs)',
+        letterSpacing: 'var(--ls-extra)',
+        textTransform: 'uppercase',
+        textDecoration: 'none',
+        fontWeight: active ? 700 : 500,
+        color: active ? 'var(--brass)' : 'var(--ink-soft)',
+        borderBottom: active ? '2px solid var(--brass)' : '2px solid transparent',
+        marginBottom: -1,
+      }}
+    >
+      {children}
+    </Link>
   );
 }

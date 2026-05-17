@@ -1,6 +1,7 @@
 // app/finance/mapping/page.tsx — REDESIGN 2026-05-05 (recovery)
 import Page from '@/components/page/Page';
 import { FINANCE_SUBPAGES } from '../_subpages';
+import TabStrip, { MESSY_TABS } from '../_components/TabStrip';
 import KpiBox from '@/components/kpi/KpiBox';
 import { supabaseGl } from '@/lib/supabase-gl';
 import MappingTable, { type ClassOption, type MappingRow } from './MappingTable';
@@ -82,6 +83,7 @@ export default async function MappingPage() {
 
   return (
     <Page eyebrow={mappingEyebrow} title={<>Every account on a USALI <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>line</em> — or it's noise.</>} subPages={FINANCE_SUBPAGES}>
+      <TabStrip tabs={MESSY_TABS} activeKey="accounts" />
       {/* ─── 1. KPI tiles ───────────────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
         <KpiBox value={unclear.length} unit="count" label="Unclear accounts" tooltip="QB accounts with no USALI mapping yet — fall into 'Other / unmapped' on the P&L. Investigate weekly." />

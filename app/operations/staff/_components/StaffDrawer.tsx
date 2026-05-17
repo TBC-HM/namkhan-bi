@@ -137,7 +137,18 @@ export function StaffDrawer({ staffId, onClose }: Props) {
                 {detail.seniority_date && detail.seniority_date !== detail.hire_date && (
                   <Field label="Seniority date" value={detail.seniority_date} mono />
                 )}
-                <Field label="Tenure"          value={detail.tenure_years != null ? `${detail.tenure_years.toFixed(1)} yr` : '—'} />
+                {/* PBS 2026-05-15: Seniority shown as years + months + legal-context
+                    note. Spain accrues antigüedad; Laos has no statutory equivalent. */}
+                <Field
+                  label="Seniority"
+                  value={formatSeniority(detail.seniority_date ?? detail.hire_date)}
+                />
+                {detail.hire_date && (
+                  <Field
+                    label="Legal context"
+                    value={seniorityLegalContext(detail.hire_date, detail.nationality, detail.tenure_years ?? null)}
+                  />
+                )}
                 <Field label="Contract hours"  value={detail.contract_hours_pw != null ? `${detail.contract_hours_pw} h/wk` : '—'} />
                 {detail.date_of_birth && (
                   <Field label="Date of birth" value={detail.date_of_birth} mono />
@@ -901,3 +912,36 @@ const S: Record<string, React.CSSProperties> = {
     color: 'var(--ink)', letterSpacing: '0.12em', textTransform: 'uppercase',
   },
 };
+
+// ─── Seniority helpers · PBS 2026-05-15 ───────────────────────────────
+function formatSeniority(hireDateIso: string | null | undefined): string {
+  if (!hireDateIso) return '—';
+  const hire = new Date(hireDateIso);
+  if (Number.isNaN(hire.getTime())) return '—';
+  const ms = Date.now() - hire.getTime();
+  const days = Math.max(0, Math.floor(ms / 86_400_000));
+  const years = Math.floor(days / 365.25);
+  const remainingDays = days - Math.floor(years * 365.25);
+  const months = Math.floor(remainingDays / 30.4375);
+  if (years === 0 && months === 0) return `${days}d`;
+  return `${years}y ${months}m · ${days.toLocaleString()}d`;
+}
+
+function seniorityLegalContext(
+  hireDateIso: string | null | undefined,
+  nationality: string | null | undefined,
+  tenureYears: number | null,
+): string {
+  if (!hireDateIso) return '—';
+  // Spanish workers + Donna employees accrue antigüedad. Lao employees do
+  // not under Lao labour law (2014). We pick by nationality first; fall
+  // back to "Spanish context applies" if blank — gestoría payroll says so.
+  const isLao = (nationality ?? '').toUpperCase().startsWith('LAO');
+  if (isLao) return 'Lao law · no statutory seniority entitlement';
+  // Spanish context — show indemnización days at the standard rate
+  if (tenureYears == null) return 'ES antigüedad applies · 33d/yr unfair · 20d/yr objective';
+  const unfairDays = Math.min(Math.round(tenureYears * 33), 720); // capped 24 months ≈ 720d
+  const objectiveDays = Math.min(Math.round(tenureYears * 20), 360);
+  return `ES · unfair ~${unfairDays}d wage · objective ~${objectiveDays}d wage`;
+}
+

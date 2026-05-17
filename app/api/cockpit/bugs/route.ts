@@ -102,22 +102,40 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   noStore();
-  const body = (await req.json().catch(() => ({}))) as {
+  const raw = (await req.json().catch(() => ({}))) as {
+    // Legacy dept-entry shape:
     dept?: string;
     body?: string;
     created_by?: string;
+    // Global × widget shape (PBS 2026-05-13 ask 22):
+    message?: string;
+    page_url?: string;
+    viewport?: string;
+    user_agent?: string;
+    reporter_user_id?: string;
+    property_id?: string;
   };
-  const dept = (body.dept ?? "").trim();
-  const text = (body.body ?? "").trim();
-  if (!dept || !text) return NextResponse.json({ error: "dept and body required" }, { status: 400 });
+  // Accept either {dept, body} (dept-entry) or {message, page_url, ...} (global).
+  const dept = (raw.dept ?? "").trim() || "global";
+  const text = ((raw.body ?? raw.message) ?? "").trim();
+  if (!text) {
+    return NextResponse.json({ error: "body or message required" }, { status: 400 });
+  }
+  const insertRow: Record<string, unknown> = {
+    dept_slug: dept,
+    body: text,
+    created_by: raw.created_by ?? null,
+    status: "new",
+  };
+  if (raw.page_url) insertRow.page_url = raw.page_url;
+  if (raw.viewport) insertRow.viewport = raw.viewport;
+  if (raw.user_agent) insertRow.user_agent = raw.user_agent;
+  if (raw.reporter_user_id) insertRow.reporter_user_id = raw.reporter_user_id;
+  if (raw.property_id) insertRow.property_id = raw.property_id;
+
   const { data, error } = await supabase
     .from("cockpit_bugs")
-    .insert({
-      dept_slug: dept,
-      body: text,
-      created_by: body.created_by ?? null,
-      status: "new",
-    })
+    .insert(insertRow)
     .select("id")
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

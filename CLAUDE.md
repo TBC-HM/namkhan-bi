@@ -67,6 +67,43 @@ property must come from session context, not the source code.
 
 ---
 
+## 2.1. UNIVERSAL TENANT URL RULE (P1 — added 2026-05-15, importance 10)
+
+**Every dept/sub URL on this platform MUST be property-scoped under `/h/[property_id]/<dept>/<sub>`.** One canonical URL shape per page; legacy global aliases are 307 redirects only.
+
+**Property IDs (locked)**
+
+| Property | property_id | Canonical prefix |
+|---|---|---|
+| The Namkhan (Laos) | `260955` | `/h/260955/*` |
+| Donna Portals (Spain) | `1000001` | `/h/1000001/*` |
+| Beyond Circle holding | (synthetic) | `/holding/*` |
+
+**Department slugs (locked):** `sales`, `revenue`, `marketing`, `finance`, `operations`, `guests`.
+
+**HR routes — repaired 2026-05-15 (ticket #159):** HR lives at `/finance/hr/*` (NOT `/operations/staff/*` — old paths 307-redirect). Tabs: `register`, `onboarding`, `offboarding`, `attendance`, `schedule`, `holidays`, `recruitment`, `data`. Report tab removed.
+
+**Legacy Namkhan aliases.** Pre-2026-05 routes (`/finance/*`, `/sales/*`, `/operations/*`, `/revenue/*`, `/marketing/*`, `/guests/*`) continue to render Namkhan content for backward compat, but every menu strip + every agent link MUST emit `/h/260955/...`. Surviving un-prefixed links are technical debt, not the canon.
+
+**Implementation pins**
+
+- `rewriteSubPagesForProperty(SUBPAGES, propertyId)` in `lib/dept-cfg/rewrite-subpages.ts`
+- `scopeHrefs` / `PROPERTY_SCOPED_HREFS` in `lib/dept-cfg/by-property.ts`
+- Every TabContent component accepts `subPagesOverride?: { label: string; href: string }[]`
+- Catch-all `app/h/[property_id]/[...rest]/page.tsx` covers stubs
+
+**Enforcement**
+
+- An agent that emits a non-property-scoped link in a chat reply is in violation.
+- Felix MUST rewrite any user-pasted un-prefixed URL into canonical form before answering.
+- Coding agents proposing new routes MUST place them under `app/h/[property_id]/<path>` first; add a global alias only if a legacy redirect is needed.
+
+**Why importance 10:** any drift here splits the property switcher + ThemeInjector — Donna ends up in Namkhan's dark palette, agent links route to the wrong tenant, and the multi-tenant guarantee (§2) breaks at the URL layer before RLS even gets a chance to enforce it.
+
+Canonical sources: `claude_md` v2.29 §0.7, `architecture` v0.41 §17, `cockpit_agent_memory` id=330 (importance=10, handle=`all`).
+
+---
+
 ## 3. Database discipline (P1 — added 2026-05-11)
 
 The Supabase DB has 158+ tables across 19 schemas plus extensive

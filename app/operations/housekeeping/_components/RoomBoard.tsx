@@ -55,7 +55,7 @@ export default function RoomBoard({ rooms }: Props) {
         <DataNeededOverlay
           gap="Gap-H1"
           table="ops.room_status"
-          reason="Cloudbeds housekeeping.statuschanged + reservation.checkedout webhooks not yet wired. Polling fallback /housekeeping every 15 min available as backup."
+          reason="PMS housekeeping.statuschanged + reservation.checkedout webhooks not yet wired. Polling fallback /housekeeping every 15 min available as backup."
         />
       ) : (
         <>

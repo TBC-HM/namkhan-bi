@@ -11,6 +11,7 @@ import Panel from '@/components/page/Panel';
 import KpiBox from '@/components/kpi/KpiBox';
 import { getTaxonomy, getFreeKeywords } from '@/lib/marketing';
 import { MARKETING_SUBPAGES } from '../_subpages';
+import TabStrip, { INFO_TABS } from '@/app/finance/_components/TabStrip';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -42,6 +43,8 @@ export default async function TaxonomyPage() {
       }
       subPages={MARKETING_SUBPAGES}
     >
+      <TabStrip tabs={INFO_TABS} activeKey="taxonomy" />
+
       {/* KPI row */}
       <div
         style={{

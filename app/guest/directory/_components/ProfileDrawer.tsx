@@ -307,7 +307,7 @@ function ActionStrip({
       <button
         type="button"
         onClick={handleContact}
-        title={contact?.label ?? "No email / phone on file — Cloudbeds returns anonymised contact"}
+        title={contact?.label ?? "No email / phone on file — PMS returns anonymised contact"}
         className={`rounded-sm border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.16em] transition ${
           contactDisabled
             ? "border-stone-200 bg-stone-50 text-stone-400 hover:bg-stone-100"
@@ -442,7 +442,7 @@ function ContactBlock({
         <div className="mb-3 rounded-sm border border-amber-300 bg-amber-50/60 p-3 text-xs text-amber-900">
           <p className="font-medium">No contact details on file.</p>
           <p className="mt-0.5 text-amber-800">
-            Cloudbeds enriched-guest sync (<code>getGuest</code>) hasn&apos;t
+            PMS enriched-guest sync (<code>getGuest</code>) hasn&apos;t
             populated email / phone / city yet. Fields below show all the
             tracked attributes — em-dashes mark genuinely missing values.
           </p>

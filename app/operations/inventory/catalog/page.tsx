@@ -111,8 +111,8 @@ export default async function CatalogAdminPage() {
           color: 'var(--brass)',
           fontSize: 'var(--t-xs)',
           marginBottom: 6,
-        }}>Cloudbeds export → CSV</div>
-        In Cloudbeds: <strong>Manage</strong> → <strong>Items</strong> → filter to &quot;products we sell&quot; → export CSV.
+        }}>PMS export → CSV</div>
+        In PMS: <strong>Manage</strong> → <strong>Items</strong> → filter to &quot;products we sell&quot; → export CSV.
         Then map columns to: <code style={{ fontFamily: 'var(--mono)' }}>sku</code>,&nbsp;
         <code style={{ fontFamily: 'var(--mono)' }}>item_name</code>,&nbsp;
         <code style={{ fontFamily: 'var(--mono)' }}>category_code</code>&nbsp;(use codes shown in this table),&nbsp;

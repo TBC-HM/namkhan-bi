@@ -112,7 +112,7 @@ export default async function ArrivalsPage() {
       status: 'idle',
       description:
         'Generates targeted upsell offers (room-up / late checkout / welcome dinner / spa / activity / transfer / package). Margin-floor validated before approval.',
-      guardrails: ['approval-required', 'margin-floor enforced', 'no Cloudbeds folio post auto'],
+      guardrails: ['approval-required', 'margin-floor enforced', 'no PMS folio post auto'],
     },
     {
       name: 'VIP Curator',
@@ -128,7 +128,7 @@ export default async function ArrivalsPage() {
       status: 'paused',
       description:
         'Triangulates flight × driver × composer-reply ETA. Currently PAUSED until flight ingest provider (FlightAware / FlightRadar24 / manual) is decided.',
-      guardrails: ['no SMS auto-send', 'no Cloudbeds note auto-write'],
+      guardrails: ['no SMS auto-send', 'no PMS note auto-write'],
     },
     {
       name: 'Compliance Verifier',
@@ -144,7 +144,7 @@ export default async function ArrivalsPage() {
       status: 'idle',
       description:
         'For group arrivals: builds cohesion map, key handout sequence, bag delivery order, F&B slot, briefing room slot, language coverage check. Surfaces unresolved dependencies.',
-      guardrails: ['no Cloudbeds room-block edit auto'],
+      guardrails: ['no PMS room-block edit auto'],
     },
     {
       name: 'Margin-Leak Sentinel',
@@ -179,7 +179,7 @@ export default async function ArrivalsPage() {
           label="checked-in window"
           delta={arrivals72h.live ? 'live · cloudbeds.reservations' : 'data needed · cloudbeds offline'}
           deltaTone={arrivals72h.live ? 'flat' : 'flat'}
-          needs={arrivals72h.live ? undefined : 'Data needed · Cloudbeds API'}
+          needs={arrivals72h.live ? undefined : 'Data needed · PMS API'}
         />
         <OpsKpiTile
           scope="Pre-arrival · contact rate"
@@ -209,7 +209,7 @@ export default async function ArrivalsPage() {
           scope="Median check-in"
           value="—"
           label="seconds at desk"
-          needs="Data needed · no Cloudbeds API exposure today"
+          needs="Data needed · no PMS API exposure today"
         />
       </div>
 
@@ -401,8 +401,8 @@ export default async function ArrivalsPage() {
 
       {/* ── Block 9: Guardrails banner ─────────────────────────────────── */}
       <GuardrailsBanner>
-        <strong>Cloudbeds writes are gated.</strong> Until each agent's outputs are validated
-        against 90 days of human decisions, every Cloudbeds-write action (room reassignment,
+        <strong>PMS writes are gated.</strong> Until each agent's outputs are validated
+        against 90 days of human decisions, every PMS-write action (room reassignment,
         folio post, note write, group block edit) requires explicit human approval here.
         After validation, only Tier-1 actions (≥85% confidence, defined criteria) move to auto.
         ETA Watcher remains paused until a flight-ingest provider is selected.

@@ -122,6 +122,7 @@ const tableStyles: Record<string, React.CSSProperties> = {
     padding: '6px 10px',
     fontSize: 13,
     cursor: 'pointer',
+    colorScheme: 'light',
   },
   counter: {
     marginLeft: 'auto',

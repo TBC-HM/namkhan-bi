@@ -1,4 +1,5 @@
 // components/settings/panels/ContactsPanel.tsx
+// PBS 2026-05-13 rev3: brand-aware tokens.
 import { PanelHeader, Chip, StatusBadge, EmptyState } from './_shared';
 
 const purposeOrder = ['reservations', 'gm', 'owner', 'billing', 'emergency'];
@@ -33,14 +34,21 @@ export default function ContactsPanel({ data }: { data: any[] }) {
       <div className="p-6 space-y-6">
         {orderedKeys.map((purpose) => (
           <div key={purpose}>
-            <h3 className="text-xs uppercase tracking-[0.15em] text-[var(--sand,#B8A878)] font-semibold mb-3">
-              {purpose} <span className="text-[var(--primary,#1F3A2E)]/40 normal-case font-normal">({byPurpose[purpose].length})</span>
+            <h3
+              className="uppercase font-semibold mb-3"
+              style={{ fontSize: 'var(--t-xs)', letterSpacing: '0.15em', color: 'var(--brass)' }}
+            >
+              {purpose} <span className="normal-case font-normal" style={{ color: 'var(--ink-mute)' }}>({byPurpose[purpose].length})</span>
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {byPurpose[purpose].map((c) => {
                 const href = contactHref(c.kind, c.value);
                 return (
-                  <div key={c.contact_id} className="bg-white rounded-lg border border-[var(--sand,#B8A878)]/20 p-4">
+                  <div
+                    key={c.contact_id}
+                    className="rounded-lg p-4"
+                    style={{ background: 'var(--paper-deep)', border: '1px solid var(--border)' }}
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -49,15 +57,31 @@ export default function ContactsPanel({ data }: { data: any[] }) {
                           {!c.is_public && <Chip tone="warn">Internal</Chip>}
                         </div>
                         {href ? (
-                          <a href={href} className="text-sm text-[var(--terracotta,#B8542A)] hover:underline break-all">
+                          <a
+                            href={href}
+                            className="hover:underline break-all"
+                            style={{ fontSize: 'var(--t-sm)', color: 'var(--brass)' }}
+                          >
                             {c.value}
                           </a>
                         ) : (
-                          <p className="text-sm text-[var(--primary,#1F3A2E)] break-all">{c.value}</p>
+                          <p className="break-all" style={{ fontSize: 'var(--t-sm)', color: 'var(--ink)' }}>{c.value}</p>
                         )}
-                        {c.display_label && <p className="text-xs text-[var(--primary,#1F3A2E)]/60 mt-1">{c.display_label}</p>}
-                        {c.hours_local && <p className="text-xs text-[var(--sand,#B8A878)] mt-1">Hours: {c.hours_local}</p>}
-                        {c.notes && <p className="text-xs text-[var(--primary,#1F3A2E)]/50 mt-1 italic">{c.notes}</p>}
+                        {c.display_label && (
+                          <p className="mt-1" style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>
+                            {c.display_label}
+                          </p>
+                        )}
+                        {c.hours_local && (
+                          <p className="mt-1" style={{ fontSize: 'var(--t-xs)', color: 'var(--brass)' }}>
+                            Hours: {c.hours_local}
+                          </p>
+                        )}
+                        {c.notes && (
+                          <p className="mt-1 italic" style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>
+                            {c.notes}
+                          </p>
+                        )}
                       </div>
                       <div className="flex-shrink-0">
                         <StatusBadge active={c.is_active} />

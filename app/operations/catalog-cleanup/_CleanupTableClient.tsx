@@ -56,7 +56,7 @@ const FILTER_LABELS: Record<FilterKey, string> = {
 const ACTION_LABELS: Record<string, string> = {
   set_usali:       'Set USALI dept',
   set_category:    'Set category',
-  rename:          'Rename in Cloudbeds',
+  rename:          'Rename in PMS',
   split_variants:  'Split into N SKUs',
   merge_into:      'Merge into another SKU',
   set_price:       'Set USD price',
@@ -434,7 +434,7 @@ function DecisionForm({ row, onClose }: { row: DirtyRow; onClose: () => void }) 
       )}
 
       {showsCategory && (
-        <FormRow label="Cloudbeds category">
+        <FormRow label="PMS category">
           <input
             type="text"
             value={targetCategory}
@@ -461,7 +461,7 @@ function DecisionForm({ row, onClose }: { row: DirtyRow; onClose: () => void }) 
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={3}
-          placeholder="Context for the operator who applies this in Cloudbeds"
+          placeholder="Context for the operator who applies this in PMS"
           style={{ ...inputStyle, resize: 'vertical', minHeight: 60 }} />
       </FormRow>
 

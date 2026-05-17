@@ -50,15 +50,15 @@ interface Props {
   value: number | null | undefined;
   /** Currency of `value`. */
   currency: string;
-  /** Suppress the parenthetical USD conversion. */
-  hideUsd?: boolean;
+  /** Show the parenthetical USD conversion. Default OFF since 2026-05-14 — PBS rule "Donna staff area is EUR only, no USD anywhere". Opt-in only. */
+  showUsd?: boolean;
   /** Bold the primary number. */
   bold?: boolean;
   /** Color tone for the primary number. */
   tone?: 'default' | 'pos' | 'neg' | 'mute';
 }
 
-export default function NativeAmount({ value, currency, hideUsd = false, bold = false, tone = 'default' }: Props) {
+export default function NativeAmount({ value, currency, showUsd = false, bold = false, tone = 'default' }: Props) {
   const n = Number(value ?? 0);
   if (n === 0) {
     return <span style={{ color: 'var(--ink-faint)' }}>{EMPTY}</span>;
@@ -72,8 +72,9 @@ export default function NativeAmount({ value, currency, hideUsd = false, bold = 
   };
 
   const native = fmtNative(n, currency);
-  // For USD source: no parenthetical (would be redundant).
-  if (currency === 'USD' || hideUsd) {
+  // Default: native only. Opt-in `showUsd` for places that still want the
+  // parenthetical (e.g. Namkhan internal reports for accountants).
+  if (currency === 'USD' || !showUsd) {
     return (
       <span style={{ color: toneColor[tone], fontWeight: bold ? 600 : 500, fontVariantNumeric: 'tabular-nums' }}>
         {native}

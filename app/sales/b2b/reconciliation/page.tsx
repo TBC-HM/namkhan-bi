@@ -74,7 +74,7 @@ export default async function ReconciliationPage() {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: "var(--t-base)" }}>
           <thead>
             <tr style={{ background: 'var(--paper-warm)', textAlign: 'left', color: 'var(--ink-mute)', fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              <th style={{ padding: '10px 10px' }}>Cloudbeds ID</th>
+              <th style={{ padding: '10px 10px' }}>PMS ID</th>
               <th style={{ padding: '10px 10px' }}>Guest</th>
               <th style={{ padding: '10px 10px' }}>Source</th>
               <th style={{ padding: '10px 10px' }}>Check-in</th>
@@ -97,7 +97,7 @@ export default async function ReconciliationPage() {
                       target="_blank"
                       rel="noreferrer"
                       style={{ fontFamily: 'var(--mono)', color: 'var(--st-info-tx)', textDecoration: 'none', fontSize: "var(--t-sm)" }}
-                      title="Open in Cloudbeds"
+                      title="Open in PMS"
                     >
                       {r.reservation_id} ↗
                     </a>

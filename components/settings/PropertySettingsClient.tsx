@@ -48,6 +48,11 @@ const TABS: { key: Tab; label: string; subtitle: string; count: (d: any) => numb
 export default function PropertySettingsClient({ data, propertyId }: { data: any; propertyId: number }) {
   const [active, setActive] = useState<Tab>('identity');
 
+  // PBS 2026-05-13 rev3: replaced Donna-only Tailwind utilities + hardcoded
+  // hex fallbacks (#1F3A2E green, #F4EFE2 cream, #B8A878 sand) with brand-
+  // aware tokens. Namkhan picks up :root dark defaults, Donna picks up the
+  // lightLegacyVars override emitted by ThemeInjector — same component
+  // renders correctly in either tenant theme.
   return (
     <div className="grid grid-cols-12 gap-6">
       <aside className="col-span-3">
@@ -59,28 +64,36 @@ export default function PropertySettingsClient({ data, propertyId }: { data: any
               <button
                 key={tab.key}
                 onClick={() => setActive(tab.key)}
-                className={`w-full text-left px-4 py-3 rounded-lg transition-all border ${
-                  isActive
-                    ? 'bg-[var(--primary,#1F3A2E)] text-[var(--bg,#F4EFE2)] border-[var(--primary,#1F3A2E)] shadow-sm'
-                    : 'bg-white/40 text-[var(--primary,#1F3A2E)] border-transparent hover:bg-white/70 hover:border-[var(--sand,#B8A878)]/30'
-                }`}
+                className="w-full text-left px-4 py-3 rounded-lg transition-all"
+                style={{
+                  background: isActive ? 'var(--brass)' : 'var(--card)',
+                  color: isActive ? 'var(--paper-deep)' : 'var(--ink)',
+                  border: '1px solid',
+                  borderColor: isActive ? 'var(--brass)' : 'var(--border)',
+                }}
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-medium text-sm">{tab.label}</span>
+                  <span className="font-medium" style={{ fontSize: 'var(--t-md)' }}>{tab.label}</span>
                   {count !== null && (
                     <span
-                      className={`text-xs px-2 py-0.5 rounded-full ${
-                        isActive ? 'bg-white/20 text-white' : 'bg-[var(--primary,#1F3A2E)]/10 text-[var(--primary,#1F3A2E)]/70'
-                      }`}
+                      className="px-2 py-0.5 rounded-full"
+                      style={{
+                        fontSize: 'var(--t-xs)',
+                        background: isActive ? 'rgba(0,0,0,0.18)' : 'var(--paper-deep)',
+                        color: isActive ? 'var(--paper-deep)' : 'var(--ink-mute)',
+                      }}
                     >
                       {count}
                     </span>
                   )}
                 </div>
                 <p
-                  className={`text-xs mt-0.5 ${
-                    isActive ? 'text-white/70' : 'text-[var(--primary,#1F3A2E)]/50'
-                  }`}
+                  className="mt-0.5"
+                  style={{
+                    fontSize: 'var(--t-xs)',
+                    color: isActive ? 'var(--paper-deep)' : 'var(--ink-mute)',
+                    opacity: isActive ? 0.85 : 1,
+                  }}
                 >
                   {tab.subtitle}
                 </p>
@@ -91,7 +104,13 @@ export default function PropertySettingsClient({ data, propertyId }: { data: any
       </aside>
 
       <main className="col-span-9">
-        <div className="bg-white/60 backdrop-blur-sm rounded-xl border border-[var(--sand,#B8A878)]/20 shadow-sm">
+        <div
+          className="rounded-xl backdrop-blur-sm"
+          style={{
+            background: 'var(--card)',
+            border: '1px solid var(--border)',
+          }}
+        >
           {active === 'identity' && <IdentityPanel data={data.identity} propertyId={propertyId} />}
           {active === 'location' && <LocationPanel data={data.location} />}
           {active === 'brand' && <BrandPanel data={data.brand} />}

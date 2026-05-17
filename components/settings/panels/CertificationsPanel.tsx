@@ -1,4 +1,5 @@
 // components/settings/panels/CertificationsPanel.tsx
+// PBS 2026-05-13 rev3: brand-aware tokens. See _shared.tsx for rationale.
 import { PanelHeader, Chip, StatusBadge, EmptyState, formatDate } from './_shared';
 
 export default function CertificationsPanel({ data }: { data: any[] }) {
@@ -13,18 +14,22 @@ export default function CertificationsPanel({ data }: { data: any[] }) {
         {data.map((c) => (
           <div
             key={c.cert_id}
-            className="bg-white rounded-lg border border-[var(--sand,#B8A878)]/20 p-4"
+            className="rounded-lg p-4"
+            style={{ background: 'var(--paper-deep)', border: '1px solid var(--border)' }}
           >
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h4 className="font-medium text-[var(--primary,#1F3A2E)]">{c.certification_name}</h4>
+                  <h4 className="font-medium" style={{ color: 'var(--ink)' }}>{c.certification_name}</h4>
                   {c.level && <Chip tone="green">{c.level}</Chip>}
                 </div>
-                <p className="text-sm text-[var(--primary,#1F3A2E)]/70 mt-1">
+                <p className="mt-1" style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-soft)' }}>
                   Issued by {c.certifying_body}
                 </p>
-                <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-[var(--primary,#1F3A2E)]/60">
+                <div
+                  className="flex flex-wrap items-center gap-3 mt-2"
+                  style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}
+                >
                   {c.issued_date && <span>Issued {formatDate(c.issued_date)}</span>}
                   {c.expires_date && <span>· Expires {formatDate(c.expires_date)}</span>}
                   {c.certification_url && (
@@ -32,13 +37,21 @@ export default function CertificationsPanel({ data }: { data: any[] }) {
                       href={c.certification_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-[var(--terracotta,#B8542A)] hover:underline"
+                      className="hover:underline"
+                      style={{ color: 'var(--brass)' }}
                     >
                       Verify ↗
                     </a>
                   )}
                 </div>
-                {c.notes && <p className="text-xs text-[var(--primary,#1F3A2E)]/50 mt-2 italic">{c.notes}</p>}
+                {c.notes && (
+                  <p
+                    className="mt-2 italic"
+                    style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}
+                  >
+                    {c.notes}
+                  </p>
+                )}
               </div>
               <div className="flex-shrink-0">
                 <StatusBadge active={c.is_active} />

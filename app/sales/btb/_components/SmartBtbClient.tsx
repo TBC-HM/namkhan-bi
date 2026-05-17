@@ -389,7 +389,7 @@ function EmptyTab({ tab, hasAny }: { tab: 'all' | AccountType; hasAny: boolean }
       label: 'Set up first retreat',
     },
     Group: {
-      msg: 'No group blocks yet. Groups sync from Cloudbeds — add a block in Cloudbeds Connect, then refresh.',
+      msg: 'No group blocks yet. Groups sync from PMS — add a block in PMS Connect, then refresh.',
       href: '/sales/groups',
       label: 'Open Groups page',
     },

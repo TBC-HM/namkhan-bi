@@ -86,7 +86,7 @@ export default async function FnbPage({ searchParams }: Props) {
 
       {/* Canonical: selectors UNDER KPI tiles. */}
       <div style={{ marginTop: 14 }}>
-        <FilterStrip showForward={false} showCompare={false} showSegment={false} liveSource="Cloudbeds · live" />
+        <FilterStrip showForward={false} showCompare={false} showSegment={false} liveSource="PMS · live" />
       </div>
 
       {/* 3 explainer panels — wrapped in canonical <Panel> for dark canvas (PBS 2026-05-09) */}

@@ -222,7 +222,7 @@ export function DirectoryShell({
           value={headline.contactable.toLocaleString()}
           sub={
             headline.contactable === 0
-              ? "0 emails — Cloudbeds sync gap"
+              ? "0 emails — PMS sync gap"
               : `${pct(headline.contactable, headline.total)}% of base`
           }
           active={contactableOnly}
@@ -301,7 +301,7 @@ export function DirectoryShell({
                 visible. Re-enable as soon as enriched-guest sync populates. */}
             <select
               disabled
-              title="City filter — pending Cloudbeds enriched-guest sync (city has 0 distinct values today)"
+              title="City filter — pending PMS enriched-guest sync (city has 0 distinct values today)"
               className="cursor-not-allowed rounded-sm border border-stone-200 bg-stone-50 px-3 py-1.5 text-sm text-stone-400"
             >
               <option>City: pending sync</option>

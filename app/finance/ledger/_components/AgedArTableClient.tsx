@@ -3,6 +3,7 @@
 import DataTable from '@/components/ui/DataTable';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import { fmtMoney, fmtIsoDate, EMPTY } from '@/lib/format';
+import CloudbedsReservationLink from '@/components/cloudbeds/CloudbedsReservationLink';
 
 export interface AgedRow {
   reservation_id: string;
@@ -12,6 +13,8 @@ export interface AgedRow {
   open_balance: number;
   days_overdue: number | null;
   bucket: string;
+  guest_email?: string | null;
+  guest_phone?: string | null;
 }
 
 const BUCKET_LABEL: Record<string, string> = {
@@ -29,7 +32,13 @@ const BUCKET_TONE: Record<string, StatusTone> = {
   '90_plus': 'expired',
 };
 
-export default function AgedArTable({ rows }: { rows: AgedRow[] }) {
+export default function AgedArTable({
+  rows,
+  onRowClick,
+}: {
+  rows: AgedRow[];
+  onRowClick?: (r: AgedRow) => void;
+}) {
   return (
     <DataTable<AgedRow>
       rows={rows}
@@ -41,7 +50,28 @@ export default function AgedArTable({ rows }: { rows: AgedRow[] }) {
           key: 'guest',
           header: 'Guest',
           sortValue: (r) => r.guest_name ?? '',
-          render: (r) => <strong style={{ fontWeight: 600 }}>{r.guest_name || EMPTY}</strong>,
+          render: (r) =>
+            onRowClick ? (
+              <button
+                onClick={() => onRowClick(r)}
+                style={{
+                  background: 'none', border: 'none', padding: 0,
+                  cursor: 'pointer', textAlign: 'left',
+                  fontFamily: 'inherit', fontSize: 'inherit', fontWeight: 600,
+                  color: 'var(--brass)', textDecoration: 'underline',
+                }}
+              >
+                {r.guest_name || EMPTY}
+              </button>
+            ) : (
+              <strong style={{ fontWeight: 600 }}>{r.guest_name || EMPTY}</strong>
+            ),
+        },
+        {
+          key: 'reservation',
+          header: 'Reservation #',
+          sortValue: (r) => r.reservation_id,
+          render: (r) => <CloudbedsReservationLink reservationId={r.reservation_id} />,
         },
         {
           key: 'source',

@@ -225,7 +225,7 @@ function FragmentRow({
             const rate = TO_USD[nativeCurrency.toUpperCase()] ?? 1;
             const usd = Number(row.total_canonical_cost_usd ?? row.total_grand_usd ?? 0);
             const native = rate > 0 ? usd / rate : 0;
-            return <NativeAmount value={native} currency={nativeCurrency} hideUsd bold />;
+            return <NativeAmount value={native} currency={nativeCurrency} bold />;
           })()}
         </td>
       </tr>
@@ -284,7 +284,7 @@ function DeptEmployeeList({ employees, onSelect, nativeCurrency }: { employees: 
               <td style={{ padding: '6px 8px', color: 'var(--ink)' }}>{e.position_title ?? EMPTY}</td>
               <td style={{ padding: '6px 8px', fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: 'var(--ls-extra)' }}>{e.employment_type ?? EMPTY}</td>
               <td style={{ padding: '6px 8px', textAlign: 'right', color: 'var(--ink)' }}>
-                <NativeAmount value={e.monthly_salary} currency={nativeCurrency} hideUsd />
+                <NativeAmount value={e.monthly_salary} currency={nativeCurrency} />
               </td>
               <td style={{ padding: '6px 8px', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--ink-mute)' }}>{e.hire_date ?? EMPTY}</td>
             </tr>

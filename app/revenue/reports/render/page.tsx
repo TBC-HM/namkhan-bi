@@ -105,7 +105,7 @@ export default async function RevenueReportRender({ searchParams }: Props) {
       `}</style>
 
       <div className="report-meta">
-        Generated {stamp} · Source · Cloudbeds + QB · Property 260955
+        Generated {stamp} · Source · PMS + QB · Property 260955
       </div>
 
       {type === 'pulse'    && <PulseReport period={period} />}

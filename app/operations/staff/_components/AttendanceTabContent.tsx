@@ -49,9 +49,11 @@ interface UnmappedRow {
 export default async function AttendanceTabContent({
   propertyId,
   propertyLabel,
+  subPagesOverride,
 }: {
   propertyId: number;
   propertyLabel?: string;
+  subPagesOverride?: { label: string; href: string }[];
 }) {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   const [kpiRes, dailyRes, scoresRes, openRes, unmappedRes, recentRes, registerRes] = await Promise.all([
@@ -137,7 +139,7 @@ export default async function AttendanceTabContent({
     <Page
       eyebrow={eyebrow}
       title={<>Clock-in / <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>out</em></>}
-      subPages={rewriteSubPagesForProperty(OPERATIONS_SUBPAGES, propertyId)}
+      subPages={subPagesOverride ?? rewriteSubPagesForProperty(OPERATIONS_SUBPAGES, propertyId)}
     >
       <StaffTabStrip propertyId={propertyId} />
 

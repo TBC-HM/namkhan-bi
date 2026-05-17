@@ -71,7 +71,7 @@ export default function FilterStrip({
   showCompare = true,
   showSegment = true,
   showCapacity = false,
-  liveSource = 'Cloudbeds · live',
+  liveSource = 'PMS · live',
 }: Props) {
   const pathname = usePathname();
   const search = useSearchParams();

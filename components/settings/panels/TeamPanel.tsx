@@ -67,17 +67,28 @@ export default function TeamPanel({ data }: { data: PropertyUser[] }) {
 
       {gm && (
         <Section title="General Manager">
-          <div className="flex items-center gap-4 p-4 rounded-lg border border-[var(--primary,#1F3A2E)]/15 bg-[var(--primary,#1F3A2E)]/5">
-            <div className="w-12 h-12 rounded-full bg-[var(--primary,#1F3A2E)] text-[var(--bg,#F4EFE2)] flex items-center justify-center font-medium">
+          <div
+            className="flex items-center gap-4 p-4 rounded-lg"
+            style={{ border: '1px solid var(--border)', background: 'var(--paper-deep)' }}
+          >
+            <div
+              className="w-12 h-12 rounded-full flex items-center justify-center font-medium"
+              style={{ background: 'var(--brass)', color: 'var(--paper-deep)' }}
+            >
               {initials(gm.full_name, gm.email)}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-base font-medium text-[var(--primary,#1F3A2E)] truncate">
+              <p className="font-medium truncate" style={{ fontSize: 'var(--t-md)', color: 'var(--ink)' }}>
                 {gm.full_name ?? gm.email}
               </p>
-              <p className="text-sm text-[var(--primary,#1F3A2E)]/60 truncate">{gm.email}</p>
+              <p className="truncate" style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-mute)' }}>
+                {gm.email}
+              </p>
             </div>
-            <span className="text-xs px-2 py-1 rounded-full bg-[var(--primary,#1F3A2E)]/10 text-[var(--primary,#1F3A2E)] whitespace-nowrap">
+            <span
+              className="px-2 py-1 rounded-full whitespace-nowrap"
+              style={{ fontSize: 'var(--t-xs)', background: 'var(--card)', color: 'var(--ink-soft)' }}
+            >
               {ROLE_LABEL[gm.role] ?? gm.role}
             </span>
           </div>
@@ -92,16 +103,20 @@ export default function TeamPanel({ data }: { data: PropertyUser[] }) {
             {hods.map((u) => (
               <div
                 key={u.email}
-                className="flex items-center gap-3 p-3 rounded-lg border border-[var(--sand,#B8A878)]/30 bg-white/40"
+                className="flex items-center gap-3 p-3 rounded-lg"
+                style={{ border: '1px solid var(--border)', background: 'var(--paper-deep)' }}
               >
-                <div className="w-10 h-10 rounded-full bg-[var(--sand,#B8A878)]/30 text-[var(--primary,#1F3A2E)] flex items-center justify-center text-sm font-medium">
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center font-medium"
+                  style={{ fontSize: 'var(--t-sm)', background: 'var(--card)', color: 'var(--brass)' }}
+                >
                   {initials(u.full_name, u.email)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-[var(--primary,#1F3A2E)] truncate">
+                  <p className="font-medium truncate" style={{ fontSize: 'var(--t-sm)', color: 'var(--ink)' }}>
                     {u.full_name ?? u.email}
                   </p>
-                  <p className="text-xs text-[var(--primary,#1F3A2E)]/55 truncate">
+                  <p className="truncate" style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>
                     {u.department ? DEPT_LABEL[u.department] ?? u.department : 'HOD'} · {u.email}
                   </p>
                 </div>
@@ -115,10 +130,16 @@ export default function TeamPanel({ data }: { data: PropertyUser[] }) {
         <Section title={`Other team members · ${others.length}`}>
           <ul className="space-y-2">
             {others.map((u) => (
-              <li key={u.email} className="text-sm text-[var(--primary,#1F3A2E)]/80 flex items-center gap-3">
+              <li
+                key={u.email}
+                className="flex items-center gap-3"
+                style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-soft)' }}
+              >
                 <span>{u.full_name ?? u.email}</span>
-                <span className="text-[var(--primary,#1F3A2E)]/40">·</span>
-                <span className="text-xs text-[var(--primary,#1F3A2E)]/55">{ROLE_LABEL[u.role] ?? u.role}</span>
+                <span style={{ color: 'var(--ink-faint)' }}>·</span>
+                <span style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>
+                  {ROLE_LABEL[u.role] ?? u.role}
+                </span>
               </li>
             ))}
           </ul>

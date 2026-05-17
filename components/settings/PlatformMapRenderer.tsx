@@ -15,14 +15,18 @@ type Status =
   | 'OUT'
   | 'DONE';
 
+// PBS 2026-05-13 Ask#64: tenant-neutral status tokens. The previous palette
+// hard-coded Donna-flavoured terracotta/sand hexes that bled onto Namkhan dark
+// + Holding alice-white. Now mapped to canonical --st-* tokens that flip per
+// :root[data-property='...'] block in styles/globals.css.
 const STATUS_META: Record<Status, { label: string; bg: string; line: string; ink: string; dot: string }> = {
-  LIVE:    { label: 'Live',    bg: 'var(--st-good-bg)', line: '#2d6a4f', ink: '#1f3a2e', dot: '🟢' },
-  READY:   { label: 'Ready',   bg: 'var(--st-good-bg)', line: '#2d6a4f', ink: '#1f3a2e', dot: '🟢' },
-  DONE:    { label: 'Done',    bg: 'var(--st-good-bg)', line: '#2d6a4f', ink: '#1f3a2e', dot: '✅' },
-  PARTIAL: { label: 'Partial', bg: '#f4ead0', line: '#a87b3a', ink: '#6a4a16', dot: '🟡' },
-  NEXT:    { label: 'Next',    bg: '#f7ead4', line: '#c8893a', ink: '#a06020', dot: '🟠' },
-  GAP:     { label: 'Gap',     bg: '#f5e3df', line: '#a13c2f', ink: '#8a2c20', dot: '🔴' },
-  OUT:     { label: 'Out',     bg: '#ece7da', line: '#9a8e72', ink: '#4a443c', dot: '⚫' },
+  LIVE:    { label: 'Live',    bg: 'var(--st-good-bg)', line: 'var(--st-good)', ink: 'var(--st-good)', dot: '🟢' },
+  READY:   { label: 'Ready',   bg: 'var(--st-good-bg)', line: 'var(--st-good)', ink: 'var(--st-good)', dot: '🟢' },
+  DONE:    { label: 'Done',    bg: 'var(--st-good-bg)', line: 'var(--st-good)', ink: 'var(--st-good)', dot: '✅' },
+  PARTIAL: { label: 'Partial', bg: 'var(--st-warn-bg)', line: 'var(--st-warn)', ink: 'var(--st-warn)', dot: '🟡' },
+  NEXT:    { label: 'Next',    bg: 'var(--st-info-bg)', line: 'var(--st-info)', ink: 'var(--st-info-tx)', dot: '🟠' },
+  GAP:     { label: 'Gap',     bg: 'var(--st-bad-bg)',  line: 'var(--st-bad)',  ink: 'var(--st-bad)',  dot: '🔴' },
+  OUT:     { label: 'Out',     bg: 'var(--bg-sub)',     line: 'var(--ink-faint)', ink: 'var(--ink-mute)', dot: '⚫' },
 };
 
 // ---------- Inline formatting (bold + code + italic) ----------
@@ -383,13 +387,13 @@ const css = `
   border-radius: 2px;
 }
 .pm-row-text { flex: 1; min-width: 0; }
-.pm-row-GAP     { border-left: 3px solid #a13c2f; }
-.pm-row-NEXT    { border-left: 3px solid #c8893a; }
-.pm-row-PARTIAL { border-left: 3px solid #a87b3a; }
+.pm-row-GAP     { border-left: 3px solid var(--st-bad); }
+.pm-row-NEXT    { border-left: 3px solid var(--st-info); }
+.pm-row-PARTIAL { border-left: 3px solid var(--st-warn); }
 .pm-row-READY,
 .pm-row-LIVE,
-.pm-row-DONE    { border-left: 3px solid #2d6a4f; }
-.pm-row-OUT     { border-left: 3px solid #9a8e72; opacity: 0.7; }
+.pm-row-DONE    { border-left: 3px solid var(--st-good); }
+.pm-row-OUT     { border-left: 3px solid var(--ink-faint); opacity: 0.7; }
 .pm-row-none    { border-left: 3px solid var(--line); }
 .pm-pill {
   display: inline-flex; align-items: center; gap: 6px;

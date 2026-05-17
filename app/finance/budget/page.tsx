@@ -1,6 +1,7 @@
 // app/finance/budget/page.tsx — REDESIGN 2026-05-05 (recovery)
 import Page from '@/components/page/Page';
 import { FINANCE_SUBPAGES } from '../_subpages';
+import TabStrip, { PNL_TABS } from '../_components/TabStrip';
 import KpiBox from '@/components/kpi/KpiBox';
 import { supabaseGl } from '@/lib/supabase-gl';
 import BudgetUpload from './BudgetUpload';
@@ -71,6 +72,7 @@ export default async function BudgetPage() {
       title={<>The number you <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>committed to</em> — every USALI line, every month.</>}
       subPages={FINANCE_SUBPAGES}
     >
+      <TabStrip tabs={PNL_TABS} activeKey="budget" />
       {/* ─── 1. KPI tiles ───────────────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
         <KpiBox value={totalRows} unit="count" label="Budget rows"   tooltip="Distinct (subcategory × month) rows in plan.lines for the active budget year." />

@@ -23,6 +23,7 @@
 import Page from '@/components/page/Page';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { SALES_SUBPAGES } from '../_subpages';
+import ParkedPageBanner from '../_components/ParkedPageBanner';
 import SmartBtbClient, { type Account, type AccountType } from './_components/SmartBtbClient';
 
 export const dynamic = 'force-dynamic';
@@ -254,6 +255,11 @@ export default async function BtbPage() {
       title={<>Partners, <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>cohorts</em>, and groups in one place</>}
       subPages={SALES_SUBPAGES}
     >
+      <ParkedPageBanner
+        oldName="BTB"
+        goToHref="/sales/leads?deal_type=btb_dmc"
+        goToLabel="Pipeline · BTB filter"
+      />
       <SmartBtbClient rows={allRows} />
 
       <div style={{
@@ -265,7 +271,7 @@ export default async function BtbPage() {
         <strong>✓ Wired.</strong> {dmcRows.length} DMC · {retreatRows.length} retreats · {groupRows.filter(r => r.type === 'MICE').length} MICE · {groupRows.filter(r => r.type === 'Group').length} groups.
         Sources: <code>governance.dmc_contracts</code>, <code>marketing.retreat_programs</code>, <code>public.groups</code>.
         Type column derived: DMC from <code>partner_type</code>; MICE/Group split via name regex (offsite/leadership/incentive/conference/etc).
-        Skipped: {skipped.dmcWithoutCountry} DMC with no country; {skipped.groupsWithoutBlock} groups with no block_size (Cloudbeds sync gap).
+        Skipped: {skipped.dmcWithoutCountry} DMC with no country; {skipped.groupsWithoutBlock} groups with no block_size (PMS sync gap).
       </div>
     </Page>
   );

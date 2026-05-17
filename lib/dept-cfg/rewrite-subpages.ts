@@ -29,6 +29,7 @@ const PROPERTY_SCOPED_HREFS: ReadonlySet<string> = new Set([
   '/sales',
   '/marketing',
   '/it',
+  '/reports',                // agent-deliveries inbox · always property-scoped
 ]);
 
 export function rewriteSubPagesForProperty(
@@ -38,15 +39,44 @@ export function rewriteSubPagesForProperty(
   // Namkhan is the default — no rewrite needed.
   if (propertyId === NAMKHAN_PROPERTY_ID) return [...subPages];
 
+  // For the cross-property swap (e.g. Reports stored as /h/260955/reports
+  // points at Donna once the user is on Donna), rewrite /h/{namkhan}/ → /h/{donna}/
+  const namkhanPrefix = `/h/${NAMKHAN_PROPERTY_ID}`;
+
+  // Prefix-aware check — any sub-route of a dept root counts. So
+  // `/finance/ledger` is in scope because `/finance` is in the set.
+  const isPropertyScoped = (href: string): boolean => {
+    const path = stripQuery(href);
+    if (PROPERTY_SCOPED_HREFS.has(path)) return true;
+    for (const root of PROPERTY_SCOPED_HREFS) {
+      if (path === root) return true;
+      if (path.startsWith(root + '/')) return true;
+    }
+    return false;
+  };
+
   return subPages
     // Drop tabs that don't have a property-scoped equivalent
-    .filter((sp) => sp.href.startsWith('/h/') || PROPERTY_SCOPED_HREFS.has(sp.href))
+    .filter((sp) => sp.href.startsWith('/h/') || isPropertyScoped(sp.href))
     // Rewrite remaining hrefs to /h/[id]/...
     .map((sp) => {
+      // Swap Namkhan-anchored /h/260955/... URLs to the active property.
+      if (sp.href.startsWith(namkhanPrefix + '/') || sp.href === namkhanPrefix) {
+        return {
+          label: sp.label,
+          href: sp.href.replace(namkhanPrefix, `/h/${propertyId}`),
+        };
+      }
       if (sp.href.startsWith('/h/')) return sp;
       if (sp.href.startsWith('/')) {
         return { label: sp.label, href: `/h/${propertyId}${sp.href}` };
       }
       return sp;
     });
+}
+
+// Strip any ?query from an href before checking against PROPERTY_SCOPED_HREFS.
+function stripQuery(href: string): string {
+  const q = href.indexOf('?');
+  return q < 0 ? href : href.slice(0, q);
 }

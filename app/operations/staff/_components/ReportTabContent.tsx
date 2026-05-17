@@ -24,9 +24,32 @@ interface DailyTrend {
   hours: number;
 }
 
+// 2026-05-14: native-currency rendering on the report tab.
+// Donna (1000001) → EUR; Namkhan (260955) → LAK; fallback → USD.
+const NATIVE_CCY_BY_PROPERTY: Record<number, 'EUR' | 'LAK' | 'USD'> = {
+  1000001: 'EUR',
+  260955:  'LAK',
+};
+const USD_TO_NATIVE: Record<string, number> = { USD: 1, EUR: 1 / 1.08, LAK: 21800 };
+function fmtNative(usd: number, ccy: 'EUR' | 'LAK' | 'USD'): string {
+  const v = usd * (USD_TO_NATIVE[ccy] ?? 1);
+  const abs = Math.abs(v);
+  const sym = ccy === 'EUR' ? '€' : ccy === 'LAK' ? '₭' : '$';
+  if (ccy === 'LAK') {
+    if (abs >= 1_000_000_000) return `${sym}${(abs / 1_000_000_000).toFixed(1)}B`;
+    if (abs >= 1_000_000)     return `${sym}${(abs / 1_000_000).toFixed(1)}M`;
+    if (abs >= 1_000)         return `${sym}${Math.round(abs / 1_000)}k`;
+    return `${sym}${Math.round(abs)}`;
+  }
+  if (abs >= 1_000_000) return `${sym}${(abs / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000)     return `${sym}${(abs / 1_000).toFixed(1)}k`;
+  return `${sym}${Math.round(abs).toLocaleString('en-US')}`;
+}
+
 export default async function ReportTabContent({ propertyId, propertyLabel }: Props) {
   const year = new Date().getUTCFullYear();
   const ytdStart = `${year}-01-01`;
+  const nativeCcy = NATIVE_CCY_BY_PROPERTY[propertyId] ?? 'USD';
 
   const [
     registerActiveRes,
@@ -146,7 +169,7 @@ export default async function ReportTabContent({ propertyId, propertyLabel }: Pr
         { label: 'Archived',           value: archived,                                        kind: 'count', hint: 'departed' },
         { label: 'Departments',        value: deptCount,                                       kind: 'count' },
         { label: 'Hours · YTD',        value: `${Math.round(ytdHours).toLocaleString()}h`,    hint: `${ytdEvents.toLocaleString()} clock events` },
-        { label: 'Payroll cost · YTD', value: `$${Math.round(ytdPayrollUsd).toLocaleString()}`, hint: 'USD reporting basis' },
+        { label: `Payroll cost · YTD`, value: fmtNative(ytdPayrollUsd, nativeCcy), hint: `native ${nativeCcy}` },
         {
           label: 'Punctuality · 90d',
           value: globalAvgPunctuality != null ? `${globalAvgPunctuality}/100` : '—',
@@ -186,7 +209,7 @@ export default async function ReportTabContent({ propertyId, propertyLabel }: Pr
                 <Th right>Days w/ activity</Th>
                 <Th right>Clock events</Th>
                 <Th right>Hours worked</Th>
-                <Th right>Payroll cost · USD</Th>
+                <Th right>Payroll cost · {nativeCcy}</Th>
               </tr>
             </thead>
             <tbody>
@@ -199,7 +222,7 @@ export default async function ReportTabContent({ propertyId, propertyLabel }: Pr
                     <Td right mono>{b.days}</Td>
                     <Td right mono>{b.events.toLocaleString()}</Td>
                     <Td right mono strong>{Math.round(b.hours).toLocaleString()}h</Td>
-                    <Td right mono>{pr ? `$${Math.round(pr.usd).toLocaleString()}` : '—'}</Td>
+                    <Td right mono>{pr ? fmtNative(pr.usd, nativeCcy) : '—'}</Td>
                   </tr>
                 );
               })}

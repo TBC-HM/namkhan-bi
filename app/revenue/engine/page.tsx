@@ -32,7 +32,7 @@ export default function EngineRevenueEntryPage({ searchParams }: { searchParams:
         alignItems: "center",
         flexWrap: "wrap",
       }}>
-        <span>⚠ Engine Revenue · Phase 3 Stage 2 · MOCK DATA · Cloudbeds wiring deferred to Stage 3</span>
+        <span>⚠ Engine Revenue · Phase 3 Stage 2 · MOCK DATA · PMS wiring deferred to Stage 3</span>
         <span style={{ flex: 1 }} />
         {VIEWS.map((x) => (
           <a key={x.slug}

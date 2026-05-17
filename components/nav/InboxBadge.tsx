@@ -1,12 +1,16 @@
 // components/nav/InboxBadge.tsx
 // Mail icon link in the top banner. Renders unread count badge if > 0.
+//
+// 2026-05-14: inbox is now property-scoped at /h/[property_id]/inbox.
+// Until the active property comes from session context, this badge
+// hardcodes Namkhan (260955) — matches the existing cockpit context.
 
 import Link from 'next/link';
 
 export default function InboxBadge({ unread }: { unread: number }) {
   return (
     <Link
-      href="/inbox"
+      href="/h/260955/inbox"
       title={unread > 0 ? `Inbox · ${unread} unread` : 'Inbox'}
       style={{
         position: 'relative',
@@ -40,9 +44,9 @@ export default function InboxBadge({ unread }: { unread: number }) {
             height: 16,
             padding: '0 4px',
             borderRadius: 8,
-            background: 'var(--st-bad)',
-            color: 'var(--paper-warm)',
-            fontSize: 10,
+            background: 'var(--oxblood-soft)',
+            color: 'var(--ink)',
+            fontSize: 'var(--t-xs)',
             fontFamily: 'var(--mono)',
             fontWeight: 700,
             display: 'inline-flex',

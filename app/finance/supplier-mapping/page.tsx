@@ -10,6 +10,7 @@
 
 import Page from '@/components/page/Page';
 import { FINANCE_SUBPAGES } from '../_subpages';
+import TabStrip, { MESSY_TABS } from '../_components/TabStrip';
 import KpiBox from '@/components/kpi/KpiBox';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import VendorMappingTable, { type VendorRow } from './_VendorMappingTable';
@@ -91,6 +92,7 @@ export default async function SupplierMappingPage() {
       title={<>Vendor → <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>USALI dept</em> — fix the leaks.</>}
       subPages={FINANCE_SUBPAGES}
     >
+      <TabStrip tabs={MESSY_TABS} activeKey="suppliers" />
       {/* ─── 1. KPI tiles ───────────────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
         <KpiBox value={summary.vendors}              unit="count" label="Vendors (180d)" tooltip="Distinct vendor names with at least one bill / cheque / expense in the last 180d" />

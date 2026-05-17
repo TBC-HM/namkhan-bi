@@ -21,6 +21,7 @@ import GuardrailsBanner from '@/components/ops/GuardrailsBanner';
 import DataNeededOverlay from '@/components/ops/DataNeededOverlay';
 import Page from '@/components/page/Page';
 import { SALES_SUBPAGES } from '../_subpages';
+import ParkedPageBanner from '../_components/ParkedPageBanner';
 
 import InquiryFeed from './_components/InquiryFeed';
 import AutoDraftTray from './_components/AutoDraftTray';
@@ -201,9 +202,9 @@ export default async function InquiriesPage({
         { label: 'Send to: Group Quote Strategist' },
         { label: 'Send to: Sales Manager' },
         {
-          label: 'Cloudbeds room block',
+          label: 'PMS room block',
           writesExternal: true,
-          stampLabel: 'writes Cloudbeds · approval req',
+          stampLabel: 'writes PMS · approval req',
         },
       ],
     },
@@ -220,7 +221,7 @@ export default async function InquiriesPage({
         {
           label: 'Send to: DMC Specialist',
           writesExternal: true,
-          stampLabel: 'writes Cloudbeds · approval req',
+          stampLabel: 'writes PMS · approval req',
         },
       ],
     },
@@ -306,6 +307,11 @@ export default async function InquiriesPage({
       title={<>Every inquiry, an <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>answer</em> before lunch.</>}
       subPages={SALES_SUBPAGES}
     >
+      <ParkedPageBanner
+        oldName="Inquiries"
+        goToHref="/sales/leads?origin=inquiry"
+        goToLabel="Pipeline · Inquiry origin"
+      />
 
       {/* BLOCK 2: Mailbox routing pills — drive ?scope=<address>.
           5 canonical Namkhan inboxes pinned (book / reservations / plan / wm / xl).
@@ -499,7 +505,7 @@ export default async function InquiriesPage({
       <GuardrailsBanner>
         <strong>No external write auto-fired.</strong> Until the Sales agents are
         validated against 90 days of decisions, every agent-proposed change to
-        Cloudbeds (room block, rate code, package code, reservation hold) requires
+        PMS (room block, rate code, package code, reservation hold) requires
         explicit human approval. After validation, only Tier-1 actions (defined
         criteria, ≥85% confidence, within rate guardrails) move to auto. All
         Tier-2 actions and rate exceptions remain human-approval forever.

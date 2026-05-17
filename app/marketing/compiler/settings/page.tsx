@@ -45,10 +45,10 @@ export default async function CompilerSettingsPage() {
     { key: 'Active pricelist SKUs',        value: String(pricelistCount ?? 0),             source: 'pricing.pricelist',                 editable: 'live' },
     { key: 'Rate seasons',                 value: String(seasonsCount ?? 0),               source: 'pricing.seasons',                   editable: 'live' },
     { key: 'Parser model',                 value: 'regex (MVP)',                           source: 'lib/compiler/parse.ts',             editable: 'soon' },
-    { key: 'Variant builder',              value: 'real Cloudbeds NRF rate × selection',   source: 'lib/compiler/variants.ts',          editable: 'live' },
+    { key: 'Variant builder',              value: 'real PMS NRF rate × selection',   source: 'lib/compiler/variants.ts',          editable: 'live' },
     { key: 'PDF render',                   value: 'STUB · returns placeholder URL',        source: 'app/api/compiler/runs/[id]/render', editable: 'soon' },
     { key: 'Stripe checkout',              value: 'STUB · holds booking, no charge',       source: 'STRIPE_SECRET_KEY missing',         editable: 'env' },
-    { key: 'Cloudbeds reserve on payment', value: 'STUB · not auto-created',               source: 'CLOUDBEDS_REFRESH_TOKEN missing',   editable: 'env' },
+    { key: 'PMS reserve on payment', value: 'STUB · not auto-created',               source: 'CLOUDBEDS_REFRESH_TOKEN missing',   editable: 'env' },
     { key: 'Klaviyo lead flow',            value: 'STUB · capture writes to web.subscribers, no flow',  source: 'KLAVIYO_PRIVATE_KEY missing', editable: 'env' },
   ];
 

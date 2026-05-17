@@ -44,6 +44,7 @@ export default function MonthPicker({
         border: '1px solid var(--kpi-frame, rgba(168,133,74,0.45))',
         borderRadius: 4,
         cursor: 'pointer',
+        colorScheme: 'light',
       }}
     >
       {months.map((m) => (

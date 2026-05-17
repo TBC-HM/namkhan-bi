@@ -69,7 +69,7 @@ Return: { dimension, direction, impact_usd, confidence, evidence_refs[], recomme
     description: 'Detects tactical revenue opportunities and risks across the forward 90-day window.',
     cadenceType: 'cron',
     cadenceValue: '0 */2 * * *',
-    triggers: ['Cloudbeds reservation_change webhook', 'Cube refresh complete', 'Manual run'],
+    triggers: ['PMS reservation_change webhook', 'Cube refresh complete', 'Manual run'],
     knowledge: [
       { name: 'rate-strategy-2026.md',     size: '14 KB', updated: '12d ago' },
       { name: 'blackouts-LP.md',           size: '3 KB',  updated: '2d ago'  },
@@ -81,7 +81,7 @@ Return: { dimension, direction, impact_usd, confidence, evidence_refs[], recomme
     tools: [
       { key: 'cube.read',          label: 'Read demand cube',           allowed: true,  tier: 'read'     },
       { key: 'compset.read',       label: 'Read comp-set scrape',       allowed: true,  tier: 'read'     },
-      { key: 'cloudbeds.read',     label: 'Read Cloudbeds inventory',   allowed: true,  tier: 'read'     },
+      { key: 'cloudbeds.read',     label: 'Read PMS inventory',   allowed: true,  tier: 'read'     },
       { key: 'cloudbeds.rate',     label: 'Write rate change',          allowed: false, tier: 'write'    },
       { key: 'cloudbeds.restrict', label: 'Write restriction (CTA/CTD)',allowed: false, tier: 'write'    },
       { key: 'slack.post',         label: 'Post Slack alert',           allowed: true,  tier: 'external' },
@@ -105,14 +105,14 @@ Return: { dimension, direction, impact_usd, confidence, evidence_refs[], recomme
     label: 'Forecast Engine',
     pillar: 'revenue',
     status: 'paused',
-    reason: 'needs 90d clean Cloudbeds history · currently 42d',
+    reason: 'needs 90d clean PMS history · currently 42d',
     promptVersion: 'v0.9',
     promptTokens: 387,
     promptBody:
 `You are the Forecast Engine for The Namkhan.
 
 # Your role
-Produce daily revenue forecasts at +30, +60, +90 days with 80% confidence intervals. Wait for {{forecast.min_history_days}} days of clean Cloudbeds data before activating. Currently {{forecast.current_history_days}} / {{forecast.min_history_days}}.
+Produce daily revenue forecasts at +30, +60, +90 days with 80% confidence intervals. Wait for {{forecast.min_history_days}} days of clean PMS data before activating. Currently {{forecast.current_history_days}} / {{forecast.min_history_days}}.
 
 # Decision rules (when active)
 - Reject any forecast with confidence below 60 %.
@@ -133,7 +133,7 @@ Return: { date, scenario, occ_pct, adr_usd, revpar_usd, ci_low, ci_high, evidenc
     guardrailOverrides: {},
     tools: [
       { key: 'cube.read',         label: 'Read demand cube',            allowed: true,  tier: 'read' },
-      { key: 'cloudbeds.history', label: 'Read Cloudbeds history',      allowed: true,  tier: 'read' },
+      { key: 'cloudbeds.history', label: 'Read PMS history',      allowed: true,  tier: 'read' },
       { key: 'forecast.publish',  label: 'Publish forecast to dashboard',allowed: true, tier: 'write' },
     ],
     output: { channel: 'Revenue · Pace dashboard', format: 'forecast rows + CI bands', recipients: ['Federico', 'GM', 'Owner'] },
@@ -590,7 +590,7 @@ function Tools({ agent }: { agent: AgentDef }) {
     <div>
       <p style={{ fontSize: "var(--t-base)", color: 'var(--ink-soft)', lineHeight: 1.6, margin: '0 0 14px' }}>
         Capabilities this agent can invoke. <strong>Read</strong> = data access, <strong>Write</strong> = mutates internal state,
-        <strong> External</strong> = calls outside system (Cloudbeds, Slack, ad platforms). External writes always require approval.
+        <strong> External</strong> = calls outside system (PMS, Slack, ad platforms). External writes always require approval.
       </p>
       <table className="tbl">
         <thead><tr><th>Tool</th><th>Tier</th><th>Allowed</th><th>Approval</th></tr></thead>
