@@ -1,14 +1,9 @@
 // app/cockpit-v2/layout.tsx
-// Persistent shell for the cockpit-v2 tab segments. Renders Page header +
-// tab bar; each segment renders below as its own server component.
 //
-// Tab counts are computed once per request in this layout (server) so each
-// tab page is not forced to do the same head-counts.
-//
-// 2026-05-13 #58 — IT-team agent ported the TOP 7 V1 cockpit features:
-//   tasks, chat, notify, users, health, deploys, cost — appended after
-//   the existing 7 tabs (Team, Knowledge, Docs, Schemas, Activity,
-//   Platform-map, TBC).
+// PBS 2026-05-17: cockpit-v2 nav rebuilt — 14 flat tabs → 9 grouped tabs.
+// Click ➜ debug-drawer pattern adopted on /team. New routes /checks and
+// /freshness surfaced. Beyond Circle palette (peach + teal on navy) via
+// tokens.ts. This is the holding-level fleet-management surface.
 
 import { fetchAgents, fetchDocs, fetchMemories } from './_lib/data';
 import { fetchOpenTaskCount, fetchUnseenNotifyCount } from './_lib/data-port';
@@ -26,39 +21,39 @@ export default async function CockpitV2Layout({ children }: { children: React.Re
     fetchUnseenNotifyCount(),
   ]);
 
+  // PBS 2026-05-17 9-tab structure. Each tab = one operational concern.
+  // Routes that already exist (chat, notify, users, tasks, platform-map)
+  // are reachable via direct URLs and the /home More menu.
   const tabs = [
-    { href: '/cockpit-v2/team', label: 'Team', n: agents.length },
-    { href: '/cockpit-v2/knowledge', label: 'Knowledge', n: memories.length },
-    { href: '/cockpit-v2/docs', label: 'Docs', n: docs.length },
-    { href: '/cockpit-v2/schemas', label: 'Schemas', n: null },
-    { href: '/cockpit-v2/activity', label: 'Activity', n: null },
-    { href: '/cockpit-v2/platform-map', label: 'Platform map', n: null },
-    { href: '/tbc', label: 'Beyond Circle ↗', n: null },
-    // Ported V1 cockpit features (#58)
-    { href: '/cockpit-v2/tasks', label: 'Tasks', n: openTasks },
-    { href: '/cockpit-v2/chat', label: 'Chat', n: null },
-    { href: '/cockpit-v2/notify', label: 'Notify', n: unseenNotify },
-    { href: '/cockpit-v2/users', label: 'Users', n: null },
-    { href: '/cockpit-v2/health', label: 'Health', n: null },
-    { href: '/cockpit-v2/deploys', label: 'Deploys', n: null },
-    { href: '/cockpit-v2/cost', label: 'Cost', n: null },
+    { href: '/cockpit-v2',           label: 'Home',         n: null },
+    { href: '/cockpit-v2/team',      label: 'Team',         n: agents.length },
+    { href: '/cockpit-v2/docs',      label: 'Docs',         n: docs.length },
+    { href: '/cockpit-v2/knowledge', label: 'Memory',       n: memories.length },
+    { href: '/cockpit-v2/schemas',   label: 'Schemas',      n: null },
+    { href: '/cockpit-v2/freshness', label: 'Freshness',    n: null },
+    { href: '/cockpit-v2/checks',    label: 'Checks',       n: null },
+    { href: '/cockpit-v2/activity',  label: 'Activity',     n: null },
+    { href: '/cockpit-v2/deploys',   label: 'Deploys',      n: null },
+    { href: '/cockpit-v2/cost',      label: 'Cost',         n: null },
+    // utility (kept reachable, but slimmed):
+    { href: '/cockpit-v2/tasks',     label: 'Tasks',        n: openTasks },
+    { href: '/cockpit-v2/chat',      label: 'Chat',         n: null },
+    { href: '/cockpit-v2/health',    label: 'Health',       n: unseenNotify > 0 ? unseenNotify : null },
+    { href: '/tbc',                  label: 'BC ↗',         n: null },
   ];
 
   return (
     <Page
       eyebrow="cockpit · v2"
-      title={<em>What&apos;s in the system right now?</em>}
+      title={<em>Multi-tenant fleet control</em>}
       kpiTiles={[
         { k: 'AGENTS', v: String(agents.length), d: 'identities' },
-        { k: 'DOCS', v: String(docs.length), d: 'live published' },
+        { k: 'DOCS',   v: String(docs.length),   d: 'live published' },
         { k: 'MEMORY', v: String(memories.length), d: 'active rows' },
       ]}
     >
       <style>{`
-        @keyframes cockpitv2blink {
-          0%, 100% { opacity: 1; }
-          50%      { opacity: 0.35; }
-        }
+        @keyframes cockpitv2blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
       `}</style>
       <div style={{ fontFamily: 'var(--sans)', color: 'var(--ink)' }}>
         <TabBar tabs={tabs} />
