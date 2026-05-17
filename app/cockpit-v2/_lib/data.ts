@@ -1,6 +1,24 @@
 // app/cockpit-v2/_lib/data.ts
-// Server-side data fetchers for the cockpit-v2 tabs. Every read is server-only
-// (no anon key needed). property_id filtering is the caller's responsibility.
+//
+// Server-side data fetchers for the cockpit-v2 tabs. Every read uses the
+// service-role client against PUBLIC views of cockpit.* tables.
+//
+// IMPORTANT (2026-05-17, claude_md §0.5):
+//   PostgREST only exposes the `public` schema. `sbCockpit` with
+//   db:{schema:'cockpit'} silently returns []. Every fetcher therefore
+//   uses getSupabaseAdmin() against the corresponding public view:
+//
+//     cockpit.id_agents          -> public.cockpit_agent_identity
+//     cockpit.cap_skills         -> public.cockpit_skills_catalog
+//     cockpit.cap_agent_skills   -> public.cockpit_agent_role_skills
+//     cockpit.cap_skill_calls    -> public.cockpit_skill_calls
+//     cockpit.kn_agent_memory    -> public.cockpit_agent_memory
+//     cockpit.cap_prompts        -> public.cockpit_agent_prompts
+//     cockpit.aud_change_log     -> public.cockpit_change_log
+//     cockpit.intake_items       -> public.cockpit_intake_items
+//
+// fetchSchemaInventory still uses sbCockpit.rpc (different fix — separate scope).
+// fetchDocs still uses sbDocs (documentation schema — separate scope).
 
 import { sbCockpit, sbDocs } from './supabase-cockpit';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -20,8 +38,9 @@ import type {
 // --- agents -----------------------------------------------------------------
 
 export async function fetchAgents(): Promise<Agent[]> {
-  const { data, error } = await sbCockpit
-    .from('id_agents')
+  const admin = getSupabaseAdmin();
+  const { data, error } = await admin
+    .from('cockpit_agent_identity')
     .select('role, display_name, avatar, tagline, color, property_id, hierarchy_level, reports_to, dept, status, scope, updated_at')
     .neq('status', 'disabled')
     .order('property_id', { ascending: true, nullsFirst: true })
@@ -38,8 +57,9 @@ export async function fetchAgents(): Promise<Agent[]> {
 // --- skills + per-agent skill map ------------------------------------------
 
 export async function fetchSkills(): Promise<Skill[]> {
-  const { data, error } = await sbCockpit
-    .from('cap_skills')
+  const admin = getSupabaseAdmin();
+  const { data, error } = await admin
+    .from('cockpit_skills_catalog')
     .select('id, name, description, category, cost_class, authority_level, active')
     .order('category', { ascending: true })
     .order('name', { ascending: true });
@@ -51,8 +71,9 @@ export async function fetchSkills(): Promise<Skill[]> {
 }
 
 export async function fetchAgentSkills(): Promise<AgentSkill[]> {
-  const { data, error } = await sbCockpit
-    .from('cap_agent_skills')
+  const admin = getSupabaseAdmin();
+  const { data, error } = await admin
+    .from('cockpit_agent_role_skills')
     .select('role, skill_id, enabled');
   if (error) {
     console.error('[cockpit-v2] fetchAgentSkills error', error);
@@ -64,19 +85,16 @@ export async function fetchAgentSkills(): Promise<AgentSkill[]> {
 // --- run statistics ---------------------------------------------------------
 
 export async function fetchRoleRunStats(): Promise<Record<string, RoleRunStats>> {
-  // Pull last 30 days of calls; aggregate in JS to keep the SQL simple
-  // and avoid a custom RPC. Volume is small (~hundreds today).
-  const { data, error } = await sbCockpit
-    .from('cap_skill_calls')
+  const admin = getSupabaseAdmin();
+  const { data, error } = await admin
+    .from('cockpit_skill_calls')
     .select('role, created_at')
     .gte('created_at', new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString())
     .order('created_at', { ascending: false })
     .limit(5000);
 
-  // Also pull lifetime count via a wider window — we keep lifetime cheap by
-  // counting on a second query that returns only ids.
-  const { data: lifetimeRows, error: lifetimeErr } = await sbCockpit
-    .from('cap_skill_calls')
+  const { data: lifetimeRows, error: lifetimeErr } = await admin
+    .from('cockpit_skill_calls')
     .select('role')
     .limit(50000);
 
@@ -104,8 +122,9 @@ export async function fetchRoleRunStats(): Promise<Record<string, RoleRunStats>>
 }
 
 export async function fetchAgentArchive(role: string, limit = 50): Promise<SkillCall[]> {
-  const { data, error } = await sbCockpit
-    .from('cap_skill_calls')
+  const admin = getSupabaseAdmin();
+  const { data, error } = await admin
+    .from('cockpit_skill_calls')
     .select('id, ticket_id, role, skill_id, skill_name, input, output, error, duration_ms, cost_usd_milli, was_dry_run, status, created_at, completed_at')
     .eq('role', role)
     .order('created_at', { ascending: false })
@@ -123,8 +142,9 @@ export async function fetchMemories(opts?: {
   propertyId?: number | null;
   agentHandle?: string;
 }): Promise<AgentMemory[]> {
-  let q = sbCockpit
-    .from('kn_agent_memory')
+  const admin = getSupabaseAdmin();
+  let q = admin
+    .from('cockpit_agent_memory')
     .select('id, agent_handle, memory_type, content, topics, confidence, importance, active, updated_at, property_id')
     .eq('active', true)
     .order('importance', { ascending: false, nullsFirst: false })
@@ -144,8 +164,9 @@ export async function fetchMemories(opts?: {
 }
 
 export async function fetchPrompts(opts?: { role?: string }): Promise<Prompt[]> {
-  let q = sbCockpit
-    .from('cap_prompts')
+  const admin = getSupabaseAdmin();
+  let q = admin
+    .from('cockpit_agent_prompts')
     .select('id, role, prompt, version, active, notes, source, department, status, updated_at')
     .eq('active', true)
     .order('updated_at', { ascending: false })
@@ -160,8 +181,9 @@ export async function fetchPrompts(opts?: { role?: string }): Promise<Prompt[]> 
 }
 
 export async function fetchPromptForRole(role: string): Promise<Prompt | null> {
-  const { data, error } = await sbCockpit
-    .from('cap_prompts')
+  const admin = getSupabaseAdmin();
+  const { data, error } = await admin
+    .from('cockpit_agent_prompts')
     .select('id, role, prompt, version, active, notes, source, department, status, updated_at')
     .eq('role', role)
     .eq('active', true)
@@ -177,8 +199,8 @@ export async function fetchPromptForRole(role: string): Promise<Prompt | null> {
 // --- documents --------------------------------------------------------------
 
 // PBS 2026-05-17: surface ALL 11 published doc_types in documentation.documents
-// (was hardcoded to 3). The /cockpit-v2/docs page is the single navigable
-// surface for every doc an agent might reference. Categories grouped client-side.
+// (was hardcoded to 3). Still uses sbDocs because that's the documentation
+// schema -- separate fix scope.
 export async function fetchDocs(): Promise<Document[]> {
   const { data, error } = await sbDocs
     .from('documents')
@@ -190,7 +212,6 @@ export async function fetchDocs(): Promise<Document[]> {
     console.error('[cockpit-v2] fetchDocs error', error);
     return [];
   }
-  // Keep only newest version per doc_type
   const seen = new Set<string>();
   return ((data as Document[]) ?? []).filter((d) => {
     if (seen.has(d.doc_type)) return false;
@@ -200,9 +221,9 @@ export async function fetchDocs(): Promise<Document[]> {
 }
 
 // --- schemas tab (#77) -----------------------------------------------------
-// Reads cockpit.fn_schema_inventory() (SECURITY DEFINER RPC). Returns every
-// Postgres relation across user schemas with cheap row-count estimate and
-// last DDL timestamp from cockpit.aud_change_log if present.
+// Still uses sbCockpit.rpc for now -- separate fix scope. fn_schema_inventory
+// will need either a public.fn_schema_inventory wrapper or the cockpit
+// schema exposed for PostgREST.
 
 export async function fetchSchemaInventory(): Promise<SchemaObject[]> {
   const { data, error } = await sbCockpit.rpc('fn_schema_inventory');
@@ -214,23 +235,21 @@ export async function fetchSchemaInventory(): Promise<SchemaObject[]> {
 }
 
 // --- activity tab (#77 cont.) ----------------------------------------------
-// Unified timeline pulled from four sources, sorted DESC by `at`, capped at
-// `limit`. Each source query pulls roughly limit*1.2 rows so the merged
-// timeline can still surface `limit` events even if one source is sparse.
 
 export async function fetchActivityEvents(limit = 200): Promise<ActivityEvent[]> {
+  const admin = getSupabaseAdmin();
   const perSource = Math.max(50, Math.ceil((limit * 12) / 10));
   const events: ActivityEvent[] = [];
 
-  // 1. cockpit.aud_change_log — DDL/schema changes
+  // 1. public.cockpit_change_log  (cockpit.aud_change_log) — DDL/schema changes
   try {
-    const { data, error } = await sbCockpit
-      .from('aud_change_log')
+    const { data, error } = await admin
+      .from('cockpit_change_log')
       .select('id, changed_at, command_tag, object_type, schema_name, object_identity, current_user_name, application_name')
       .order('changed_at', { ascending: false })
       .limit(perSource);
     if (error) {
-      console.error('[cockpit-v2] activity: aud_change_log error', error);
+      console.error('[cockpit-v2] activity: cockpit_change_log error', error);
     } else {
       for (const r of (data as Array<{
         id: number;
@@ -258,18 +277,18 @@ export async function fetchActivityEvents(limit = 200): Promise<ActivityEvent[]>
       }
     }
   } catch (e) {
-    console.error('[cockpit-v2] activity: aud_change_log threw', e);
+    console.error('[cockpit-v2] activity: cockpit_change_log threw', e);
   }
 
-  // 2. cockpit.intake_items — incoming intake / triage
+  // 2. public.cockpit_intake_items  (cockpit.intake_items) — incoming intake / triage
   try {
-    const { data, error } = await sbCockpit
-      .from('intake_items')
+    const { data, error } = await admin
+      .from('cockpit_intake_items')
       .select('id, created_at, updated_at, kind, title, status, priority, current_stage, routed_to, assignee_role, dept_slug, property_id')
       .order('updated_at', { ascending: false })
       .limit(perSource);
     if (error) {
-      console.error('[cockpit-v2] activity: intake_items error', error);
+      console.error('[cockpit-v2] activity: cockpit_intake_items error', error);
     } else {
       for (const r of (data as Array<{
         id: number;
@@ -301,18 +320,18 @@ export async function fetchActivityEvents(limit = 200): Promise<ActivityEvent[]>
       }
     }
   } catch (e) {
-    console.error('[cockpit-v2] activity: intake_items threw', e);
+    console.error('[cockpit-v2] activity: cockpit_intake_items threw', e);
   }
 
-  // 3. cockpit.cap_skill_calls — every agent skill invocation
+  // 3. public.cockpit_skill_calls  (cockpit.cap_skill_calls) — every agent skill invocation
   try {
-    const { data, error } = await sbCockpit
-      .from('cap_skill_calls')
+    const { data, error } = await admin
+      .from('cockpit_skill_calls')
       .select('id, role, skill_name, status, duration_ms, was_dry_run, created_at')
       .order('created_at', { ascending: false })
       .limit(perSource);
     if (error) {
-      console.error('[cockpit-v2] activity: cap_skill_calls error', error);
+      console.error('[cockpit-v2] activity: cockpit_skill_calls error', error);
     } else {
       for (const r of (data as Array<{
         id: number;
@@ -332,18 +351,17 @@ export async function fetchActivityEvents(limit = 200): Promise<ActivityEvent[]>
           target: r.was_dry_run ? 'dry-run' : 'live',
           status: r.status ?? null,
           detail: typeof r.duration_ms === 'number' ? `${r.duration_ms}ms` : null,
-          // Link to the agent's archive drawer (Team tab opens by role)
-          link: `/cockpit-v2/team?archive=${encodeURIComponent(r.role)}`,
+          // Link to /agent/[role] (debug surface replaces old archive drawer)
+          link: `/cockpit-v2/agent/${encodeURIComponent(r.role)}`,
         });
       }
     }
   } catch (e) {
-    console.error('[cockpit-v2] activity: cap_skill_calls threw', e);
+    console.error('[cockpit-v2] activity: cockpit_skill_calls threw', e);
   }
 
-  // 4. public.cockpit_audit_log — governance writes (separate client; public schema)
+  // 4. public.cockpit_audit_log — governance writes
   try {
-    const admin = getSupabaseAdmin();
     const { data, error } = await admin
       .from('cockpit_audit_log')
       .select('id, created_at, agent, action, target, success, reasoning')
