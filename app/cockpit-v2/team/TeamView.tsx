@@ -1,18 +1,26 @@
 'use client';
 
 // app/cockpit-v2/team/TeamView.tsx
-// Client interactivity for the Team tab: property-scope filter pills,
-// "show dormant" toggle, agent click → archive drawer (cap_skill_calls
-// for that role, fetched via /api/cockpit-v2/archive).
+//
+// Human org chart — 3 bands (Holding / Namkhan / Donna).
+// CEO on top, HODs in a row, workers in a grid under each HOD.
+// Per-agent skill chips, blinking dot on activity in last 60s,
+// run counter (lifetime + 7d).
+//
+// Click any agent card -> /cockpit-v2/agent/[role] debug surface:
+//   Prompt (editable) · Skills · Memory · Audit · Deliveries  + "View runs" feedback loop.
+//
+// PBS 2026-05-17: previous archive drawer was duplicative — the /agent/[role]
+// Audit tab does the same thing better, plus prompt-edit + feedback loop.
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { TOKENS, SERIF, MONO } from '../_components/tokens';
 import { Pill, StatusDot } from '../_components/Pill';
 import type {
   Agent,
   Skill,
   AgentSkill,
-  SkillCall,
   RoleRunStats,
 } from '../_lib/types';
 import { PROPERTY_NAMKHAN, PROPERTY_DONNA } from '../_lib/types';
@@ -29,7 +37,6 @@ type ScopeKey = 'all' | 'holding' | typeof PROPERTY_NAMKHAN | typeof PROPERTY_DO
 export function TeamView({ agents, skills, agentSkills, runStats }: Props) {
   const [scope, setScope] = useState<ScopeKey>('all');
   const [showDormant, setShowDormant] = useState(false);
-  const [openArchiveRole, setOpenArchiveRole] = useState<string | null>(null);
 
   // role -> Skill[]
   const skillsByRole = useMemo(() => {
@@ -51,7 +58,6 @@ export function TeamView({ agents, skills, agentSkills, runStats }: Props) {
     return agents.filter((a) => a.property_id === scope);
   }, [agents, scope]);
 
-  // Counts for filter pills
   const counts = useMemo(() => {
     return {
       all: agents.length,
@@ -91,8 +97,8 @@ export function TeamView({ agents, skills, agentSkills, runStats }: Props) {
               onClick={() => setScope(t.v)}
               style={{
                 padding: '8px 14px',
-                border: `1px solid ${active ? TOKENS.ink : TOKENS.border}`,
-                background: active ? TOKENS.ink : 'transparent',
+                border: `1px solid ${active ? TOKENS.brass : TOKENS.border}`,
+                background: active ? TOKENS.brass : 'transparent',
                 color: active ? TOKENS.bg : TOKENS.text,
                 fontSize: 13,
                 fontWeight: 500,
@@ -178,7 +184,15 @@ export function TeamView({ agents, skills, agentSkills, runStats }: Props) {
         ))}
       </div>
 
-      {/* Org groups */}
+      {/* Click hint */}
+      <div style={{
+        fontFamily: MONO, fontSize: 10, color: TOKENS.text3,
+        marginBottom: 10, letterSpacing: '0.06em',
+      }}>
+        click any agent → prompt · skills · memory · audit · deliveries (full debug surface)
+      </div>
+
+      {/* Org bands */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         {groups.map((g) => (
           <OrgGroup
@@ -186,7 +200,6 @@ export function TeamView({ agents, skills, agentSkills, runStats }: Props) {
             group={g}
             skillsByRole={skillsByRole}
             runStats={runStats}
-            onOpenArchive={(role) => setOpenArchiveRole(role)}
           />
         ))}
         {groups.length === 0 && (
@@ -195,14 +208,6 @@ export function TeamView({ agents, skills, agentSkills, runStats }: Props) {
           </div>
         )}
       </div>
-
-      {openArchiveRole && (
-        <ArchiveDrawer
-          role={openArchiveRole}
-          agent={agents.find((a) => a.role === openArchiveRole) || null}
-          onClose={() => setOpenArchiveRole(null)}
-        />
-      )}
     </div>
   );
 }
@@ -215,6 +220,7 @@ type Group = {
   key: string;
   title: string;
   subtitle: string;
+  accent: string;
   ceo: Agent | null;
   hods: Agent[];
   workersByHod: Record<string, Agent[]>;
@@ -223,16 +229,21 @@ type Group = {
 };
 
 function buildGroups(agents: Agent[], showDormant: boolean): Group[] {
-  // Holding always anchored on Felix (role=lead)
   const holdingAgents = agents.filter((a) => a.property_id === null);
   const namkhanAgents = agents.filter((a) => a.property_id === PROPERTY_NAMKHAN);
   const donnaAgents = agents.filter((a) => a.property_id === PROPERTY_DONNA);
 
   const out: Group[] = [];
-  const groupBuilders: Array<{ key: string; title: string; subtitle: string; pool: Agent[]; ceoRole: string }> = [
-    { key: 'holding', title: 'HOLDING', subtitle: 'property_id = NULL · platform-wide', pool: holdingAgents, ceoRole: 'lead' },
-    { key: 'namkhan', title: 'NAMKHAN', subtitle: 'property_id = 260955 · Luang Prabang · PMS · LAK', pool: namkhanAgents, ceoRole: 'hotel_ceo_namkhan' },
-    { key: 'donna', title: 'DONNA PORTALS', subtitle: 'property_id = 1000001 · Mallorca · Mews · EUR · onboards ~2w', pool: donnaAgents, ceoRole: 'hotel_ceo_donna' },
+  const groupBuilders: Array<{
+    key: string; title: string; subtitle: string; accent: string;
+    pool: Agent[]; ceoRole: string;
+  }> = [
+    { key: 'holding', title: 'HOLDING',        subtitle: 'property_id = NULL · platform-wide · Felix · Carla · Vera · Kit',
+      accent: TOKENS.brass, pool: holdingAgents, ceoRole: 'lead' },
+    { key: 'namkhan', title: 'NAMKHAN',        subtitle: 'property_id = 260955 · Luang Prabang · PMS · LAK',
+      accent: TOKENS.brass, pool: namkhanAgents, ceoRole: 'hotel_ceo_namkhan' },
+    { key: 'donna',   title: 'DONNA PORTALS',  subtitle: 'property_id = 1000001 · Mallorca · Mews · EUR · onboards ~2w',
+      accent: TOKENS.forest, pool: donnaAgents, ceoRole: 'hotel_ceo_donna' },
   ];
 
   for (const gb of groupBuilders) {
@@ -252,27 +263,25 @@ function buildGroups(agents: Agent[], showDormant: boolean): Group[] {
     let ceoDirect = gb.pool.filter((a) => a.hierarchy_level === 'worker' && a.reports_to === (ceo?.role ?? ''));
     if (!showDormant) ceoDirect = ceoDirect.filter((w) => w.status === 'active');
 
-    out.push({ key: gb.key, title: gb.title, subtitle: gb.subtitle, ceo, hods, workersByHod, ceoDirectWorkers: ceoDirect });
+    out.push({ key: gb.key, title: gb.title, subtitle: gb.subtitle, accent: gb.accent, ceo, hods, workersByHod, ceoDirectWorkers: ceoDirect });
   }
   return out;
 }
 
-const DEPT_ORDER = ['finance', 'revenue', 'operations', 'marketing', 'sales', 'it', 'general', 'executive'];
+const DEPT_ORDER = ['finance', 'revenue', 'operations', 'marketing', 'sales', 'it', 'legal', 'general', 'executive', 'system'];
 
 function OrgGroup({
   group,
   skillsByRole,
   runStats,
-  onOpenArchive,
 }: {
   group: Group;
   skillsByRole: Record<string, Skill[]>;
   runStats: Record<string, RoleRunStats>;
-  onOpenArchive: (role: string) => void;
 }) {
-  const { title, subtitle, ceo, hods, workersByHod, ceoDirectWorkers } = group;
+  const { title, subtitle, accent, ceo, hods, workersByHod, ceoDirectWorkers } = group;
   return (
-    <section style={{ border: `1px solid ${TOKENS.border}`, background: TOKENS.bgRaised }}>
+    <section style={{ border: `1px solid ${TOKENS.border}`, borderLeft: `3px solid ${accent}`, background: TOKENS.bgRaised }}>
       <header
         style={{
           padding: '14px 20px',
@@ -299,15 +308,14 @@ function OrgGroup({
               <AgentCard
                 agent={ceo}
                 size="ceo"
+                accent={accent}
                 skills={skillsByRole[ceo.role] || []}
                 runs={runStats[ceo.role] || null}
-                onClick={() => onOpenArchive(ceo.role)}
               />
             </div>
           </div>
         )}
 
-        {/* CEO direct workers (e.g. general / generalist) — rendered as a thin row */}
         {ceoDirectWorkers.length > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, marginBottom: 20 }}>
             {ceoDirectWorkers.map((w) => (
@@ -315,15 +323,14 @@ function OrgGroup({
                 key={w.role}
                 agent={w}
                 size="worker"
+                accent={accent}
                 skills={skillsByRole[w.role] || []}
                 runs={runStats[w.role] || null}
-                onClick={() => onOpenArchive(w.role)}
               />
             ))}
           </div>
         )}
 
-        {/* HOD row + workers underneath each */}
         {hods.length > 0 && (
           <div
             style={{
@@ -337,9 +344,9 @@ function OrgGroup({
                 <AgentCard
                   agent={h}
                   size="hod"
+                  accent={accent}
                   skills={skillsByRole[h.role] || []}
                   runs={runStats[h.role] || null}
-                  onClick={() => onOpenArchive(h.role)}
                 />
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderLeft: `1px dashed ${TOKENS.borderSoft}`, paddingLeft: 10, marginLeft: 6 }}>
                   {(workersByHod[h.role] || []).map((w) => (
@@ -347,9 +354,9 @@ function OrgGroup({
                       key={w.role}
                       agent={w}
                       size="worker"
+                      accent={accent}
                       skills={skillsByRole[w.role] || []}
                       runs={runStats[w.role] || null}
-                      onClick={() => onOpenArchive(w.role)}
                     />
                   ))}
                   {(workersByHod[h.role] || []).length === 0 && (
@@ -366,43 +373,41 @@ function OrgGroup({
 }
 
 // ---------------------------------------------------------------------------
-// Agent card
+// Agent card  —  clickable Link to /cockpit-v2/agent/[role]
 // ---------------------------------------------------------------------------
 
 function AgentCard({
   agent,
   size,
+  accent,
   skills,
   runs,
-  onClick,
 }: {
   agent: Agent;
   size: 'ceo' | 'hod' | 'worker';
+  accent: string;
   skills: Skill[];
   runs: RoleRunStats | null;
-  onClick: () => void;
 }) {
   const isCeo = size === 'ceo';
   const isHod = size === 'hod';
   const dormant = agent.status === 'dormant';
 
-  // Blink when last activity was within 60s
   const liveNow = !!runs?.latest && Date.now() - new Date(runs.latest).getTime() < 60_000;
 
   const avatarSize = isCeo ? 56 : isHod ? 44 : 36;
   const titleSize = isCeo ? 18 : isHod ? 15 : 14;
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <Link
+      href={`/cockpit-v2/agent/${encodeURIComponent(agent.role)}`}
       style={{
-        textAlign: 'left',
+        textDecoration: 'none',
         display: 'flex',
         gap: 12,
         padding: isCeo ? '16px 18px' : '10px 12px',
         background: TOKENS.bg,
-        border: `1px solid ${isCeo ? TOKENS.brass : TOKENS.borderSoft}`,
+        border: `1px solid ${isCeo ? accent : TOKENS.borderSoft}`,
         borderRadius: 2,
         opacity: dormant ? 0.55 : 1,
         width: '100%',
@@ -440,7 +445,6 @@ function AgentCard({
           <div style={{ fontSize: 12, color: TOKENS.text2, lineHeight: 1.45, marginBottom: 6 }}>{agent.tagline}</div>
         )}
 
-        {/* Skill list */}
         {skills.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
             {skills.slice(0, isCeo ? 12 : 8).map((s) => (
@@ -468,7 +472,6 @@ function AgentCard({
           </div>
         )}
 
-        {/* Footer: role + runs */}
         <div
           style={{
             fontSize: 10,
@@ -488,136 +491,15 @@ function AgentCard({
           </span>
         </div>
       </div>
-    </button>
-  );
-}
 
-// ---------------------------------------------------------------------------
-// Archive drawer
-// ---------------------------------------------------------------------------
-
-function ArchiveDrawer({ role, agent, onClose }: { role: string; agent: Agent | null; onClose: () => void }) {
-  const [rows, setRows] = useState<SkillCall[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  // Lazy load on open
-  useMemo(() => {
-    fetch(`/api/cockpit-v2/skill-calls?role=${encodeURIComponent(role)}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`${r.status}`))))
-      .then((j) => setRows(j.rows || []))
-      .catch((e) => setError(String(e)));
-  }, [role]);
-
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.6)',
-        zIndex: 1000,
-        display: 'flex',
-        justifyContent: 'flex-end',
-      }}
-      onClick={onClose}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: 'min(640px, 96vw)',
-          height: '100%',
-          background: TOKENS.bgRaised,
-          borderLeft: `1px solid ${TOKENS.border}`,
-          overflowY: 'auto',
-          padding: 24,
-          color: TOKENS.text,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <div>
-            <div style={{ fontFamily: SERIF, fontSize: 22, color: TOKENS.ink }}>
-              {agent?.display_name || role} <span style={{ fontFamily: MONO, fontSize: 12, color: TOKENS.text3 }}>· archive</span>
-            </div>
-            <div style={{ fontFamily: MONO, fontSize: 11, color: TOKENS.text3, marginTop: 2 }}>
-              cockpit.cap_skill_calls · last 50 rows
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'transparent',
-              color: TOKENS.text2,
-              border: `1px solid ${TOKENS.border}`,
-              padding: '4px 10px',
-              cursor: 'pointer',
-              borderRadius: 2,
-              fontFamily: MONO,
-              fontSize: 12,
-            }}
-          >
-            close
-          </button>
-        </div>
-
-        {error && (
-          <div style={{ color: TOKENS.terracotta, fontSize: 12, marginBottom: 12 }}>archive fetch failed: {error}</div>
-        )}
-        {!rows && !error && <div style={{ color: TOKENS.text3, fontSize: 12 }}>loading —</div>}
-        {rows && rows.length === 0 && (
-          <div style={{ color: TOKENS.text3, fontSize: 12, fontStyle: 'italic' }}>no recorded calls for this agent</div>
-        )}
-
-        {rows && rows.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {rows.map((r) => (
-              <div
-                key={r.id}
-                style={{
-                  border: `1px solid ${TOKENS.borderSoft}`,
-                  background: TOKENS.bg,
-                  padding: 10,
-                  borderRadius: 2,
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <StatusDot status={r.status || 'normal'} />
-                    <span style={{ fontFamily: MONO, fontSize: 12, color: TOKENS.text }}>{r.skill_name || `skill_id=${r.skill_id ?? '?'}`}</span>
-                    {r.was_dry_run && <Pill color={TOKENS.ochre}>dry run</Pill>}
-                  </div>
-                  <span style={{ fontFamily: MONO, fontSize: 10, color: TOKENS.text3 }}>{new Date(r.created_at).toLocaleString()}</span>
-                </div>
-                <div style={{ display: 'flex', gap: 14, fontSize: 10, color: TOKENS.text3, fontFamily: MONO, marginTop: 4 }}>
-                  <span>duration {r.duration_ms ?? '—'}ms</span>
-                  <span>
-                    cost ${r.cost_usd_milli != null ? (r.cost_usd_milli / 1000).toFixed(3) : '—'}
-                  </span>
-                  {r.ticket_id != null && <span>ticket #{r.ticket_id}</span>}
-                </div>
-                {(r.input || r.output || r.error) && (
-                  <details style={{ marginTop: 6 }}>
-                    <summary style={{ cursor: 'pointer', fontSize: 10, color: TOKENS.text3, fontFamily: MONO }}>payload</summary>
-                    <pre
-                      style={{
-                        background: TOKENS.bgDeep,
-                        border: `1px solid ${TOKENS.borderSoft}`,
-                        padding: 8,
-                        borderRadius: 2,
-                        fontSize: 11,
-                        overflowX: 'auto',
-                        marginTop: 6,
-                        color: TOKENS.text,
-                        fontFamily: MONO,
-                      }}
-                    >
-{JSON.stringify({ input: r.input, output: r.output, error: r.error }, null, 2)}
-                    </pre>
-                  </details>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+      {/* deep-link affordance */}
+      <span style={{
+        position: 'absolute', top: 6, right: 10,
+        fontFamily: MONO, fontSize: 10, color: TOKENS.text3,
+        letterSpacing: '0.08em',
+      }}>
+        debug →
+      </span>
+    </Link>
   );
 }
