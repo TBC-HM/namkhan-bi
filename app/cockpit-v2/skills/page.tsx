@@ -1,12 +1,15 @@
 // app/cockpit-v2/skills/page.tsx
 //
-// Skills cockpit — uses the cockpit-scoped supabase client (sbCockpit)
-// which has `db: { schema: 'cockpit' }` set, so PostgREST resolves the
-// cockpit schema correctly. Earlier version used getSupabaseAdmin()
-// .schema('cockpit') which silently returns [] (claude_md §0.5).
+// Skills cockpit — reads via getSupabaseAdmin() against PUBLIC views, since
+// PostgREST only exposes the public schema (claude_md §0.5). Previous
+// sbCockpit approach silently returned [] because cockpit schema is not
+// in the exposed schemas list. Views used:
+//   public.cockpit_skills_catalog     — cockpit.cap_skills (all cols incl. category)
+//   public.cockpit_agent_role_skills  — cockpit.cap_agent_skills (role,skill_id,enabled)
+//   public.cockpit_skill_calls        — cockpit.cap_skill_calls
 
 import Link from 'next/link';
-import { sbCockpit } from '../_lib/supabase-cockpit';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { TOKENS, SERIF, MONO } from '../_components/tokens';
 import { SkillsTable } from './SkillsTable';
 
@@ -14,12 +17,13 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 async function fetchSkillsData() {
+  const admin = getSupabaseAdmin();
   const [{ data: skills }, { data: agentSkills }, { data: calls7d }] = await Promise.all([
-    sbCockpit.from('cap_skills')
+    admin.from('cockpit_skills_catalog')
       .select('id, name, description, category, authority_level, requires_pbs_approval, estimated_cost_usd_milli, cost_class, active, implementation_type, archived_at, handler, error_codes')
       .order('name'),
-    sbCockpit.from('cap_agent_skills').select('role, skill_id, enabled'),
-    sbCockpit.from('cap_skill_calls')
+    admin.from('cockpit_agent_role_skills').select('role, skill_id, enabled'),
+    admin.from('cockpit_skill_calls')
       .select('skill_id, status, duration_ms, cost_usd_milli')
       .gt('created_at', new Date(Date.now() - 7 * 86_400_000).toISOString()),
   ]);

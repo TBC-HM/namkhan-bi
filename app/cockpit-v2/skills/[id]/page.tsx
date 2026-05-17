@@ -1,10 +1,13 @@
 // app/cockpit-v2/skills/[id]/page.tsx
 //
-// Skill detail · what it does, who has it, who used it, errors.
+// Skill detail · uses getSupabaseAdmin() against PUBLIC views (claude_md §0.5).
+// public.cockpit_skills_catalog    — cockpit.cap_skills
+// public.cockpit_agent_role_skills — cockpit.cap_agent_skills
+// public.cockpit_skill_calls       — cockpit.cap_skill_calls
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { sbCockpit } from '../../_lib/supabase-cockpit';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { TOKENS, SERIF, MONO } from '../../_components/tokens';
 
 export const dynamic = 'force-dynamic';
@@ -16,15 +19,16 @@ export default async function SkillDetailPage({ params }: PageProps) {
   const skillId = Number(params.id);
   if (!skillId) notFound();
 
+  const admin = getSupabaseAdmin();
   const [{ data: skill }, { data: grants }, { data: calls }] = await Promise.all([
-    sbCockpit.from('cap_skills')
+    admin.from('cockpit_skills_catalog')
       .select('*')
       .eq('id', skillId)
       .maybeSingle(),
-    sbCockpit.from('cap_agent_skills')
+    admin.from('cockpit_agent_role_skills')
       .select('role, enabled, created_at')
       .eq('skill_id', skillId),
-    sbCockpit.from('cap_skill_calls')
+    admin.from('cockpit_skill_calls')
       .select('id, role, status, duration_ms, cost_usd_milli, created_at, error, input, output')
       .eq('skill_id', skillId)
       .order('created_at', { ascending: false })
