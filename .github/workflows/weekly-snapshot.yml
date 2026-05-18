@@ -28,6 +28,7 @@ jobs:
       SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
       SUPABASE_DB_HOST: ${{ secrets.SUPABASE_DB_HOST }}   # optional; falls back to ref
+      SUPABASE_DB_USER: ${{ secrets.SUPABASE_DB_USER }}   # optional; bypasses postgres.${REF} concat
 
     steps:
       - name: Guard — required secrets
@@ -82,12 +83,19 @@ jobs:
 
           echo "Dumping to $OUTFILE from $HOST..."
 
+          # Resolve DB user: explicit SUPABASE_DB_USER wins, fallback to postgres.${REF}
+          if [ -n "${SUPABASE_DB_USER:-}" ]; then
+            DB_USER="$SUPABASE_DB_USER"
+          else
+            DB_USER="postgres.${SUPABASE_PROJECT_REF}"
+          fi
+
           # DEBUG: verify env var expansion (no secrets leaked)
-          USER_TO_SEND="postgres.${SUPABASE_PROJECT_REF}"
-          echo "DEBUG username length: ${#USER_TO_SEND}"
-          echo "DEBUG username masked: ${USER_TO_SEND:0:9}***${USER_TO_SEND: -4}"
+          echo "DEBUG username length: ${#DB_USER}"
+          echo "DEBUG username masked: ${DB_USER:0:9}***${DB_USER: -4}"
           echo "DEBUG host: $HOST"
           echo "DEBUG password length: ${#PGPASSWORD}"
+          echo "DEBUG db_user source: ${SUPABASE_DB_USER:+EXPLICIT}${SUPABASE_DB_USER:-CONCAT}"
 
           # Platform tables we cannot re-sync from upstream:
           #   - documentation.* (architecture docs, ADRs, handoffs)
@@ -109,7 +117,7 @@ jobs:
           pg_dump \
             --host="$HOST" \
             --port=5432 \
-            --username="postgres.${SUPABASE_PROJECT_REF}" \
+            --username="$DB_USER" \
             --dbname=postgres \
             --no-owner \
             --no-privileges \
@@ -136,7 +144,7 @@ jobs:
           echo "" >> "$OUTFILE"
           echo "-- cockpit_audit_log (last 30 days, slim slice)" >> "$OUTFILE"
           psql \
-            "host=$HOST port=5432 user=postgres.${SUPABASE_PROJECT_REF} dbname=postgres sslmode=require" \
+            "host=$HOST port=5432 user=$DB_USER dbname=postgres sslmode=require" \
             --no-psqlrc --no-align --tuples-only --quiet \
             -c "COPY (SELECT * FROM public.cockpit_audit_log WHERE created_at > now() - interval '30 days') TO STDOUT WITH (FORMAT csv, HEADER true)" \
             > "${OUTFILE%.sql}_audit_log_30d.csv" 2>>dump_err.log || true
