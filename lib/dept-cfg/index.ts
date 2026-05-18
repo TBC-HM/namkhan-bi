@@ -197,6 +197,7 @@ const REVENUE_CFG: DeptCfg = {
     // (the Revenue HoD landing page already renders the HoD chat shell).
     { label: 'HoD',        href: '/revenue'           },
     { label: 'Pulse',      href: '/revenue/pulse'     },
+    { label: 'Demand',     href: '/revenue/demand'    },
     { label: 'Pace',       href: '/revenue/pace'      },
     { label: 'Channels',   href: '/revenue/channels'  },
     { label: 'Rate Plans', href: '/revenue/rateplans' },
@@ -210,6 +211,7 @@ const REVENUE_CFG: DeptCfg = {
   ],
   quickChips: [
     { label: 'Pulse',    href: '/revenue/pulse'    },
+    { label: 'Demand',   href: '/revenue/demand'   },
     { label: 'Pace',     href: '/revenue/pace'     },
     { label: 'Channels', href: '/revenue/channels' },
     { label: 'Comp Set', href: '/revenue/compset'  },
