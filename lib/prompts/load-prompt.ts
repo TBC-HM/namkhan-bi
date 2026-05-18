@@ -9,7 +9,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 // supabase-js generated types only know `public`. We need to query `cockpit`
 // and `governance` schemas, so widen the client type to allow any schema arg.
-type LooseClient = SupabaseClient<any, any, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+type LooseClient = SupabaseClient<any, any, any>;
 
 export interface AgentPrompt {
   agent_id: string;
