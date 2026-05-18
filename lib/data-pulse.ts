@@ -143,14 +143,14 @@ export async function getPulsePerformanceSummary(
   return { yesterday: y, mtd: m, ytd: yr };
 }
 
-// ─── KPI strip — same window as yesterday for the 4 hero KPIs ──────────
+// ─── KPI strip — TODAY snapshot (PBS lock 2026-05-18) ──────────
+// Original Cloudbeds Pulse showed yesterday; PBS prefers live today.
 
 export async function getPulseHeadlineKpis(
   propertyId: number,
   asOf: string,
 ): Promise<PulseKpiSnapshot> {
-  // Match Cloudbeds: KPI strip = yesterday snapshot.
-  return aggregate(propertyId, shiftDate(asOf, -1), shiftDate(asOf, -1));
+  return aggregate(propertyId, asOf, asOf);
 }
 
 // ─── Top sources (last 30 days, by accommodations booked) ───────────────
