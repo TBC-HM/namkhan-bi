@@ -82,6 +82,13 @@ jobs:
 
           echo "Dumping to $OUTFILE from $HOST..."
 
+          # DEBUG: verify env var expansion (no secrets leaked)
+          USER_TO_SEND="postgres.${SUPABASE_PROJECT_REF}"
+          echo "DEBUG username length: ${#USER_TO_SEND}"
+          echo "DEBUG username masked: ${USER_TO_SEND:0:9}***${USER_TO_SEND: -4}"
+          echo "DEBUG host: $HOST"
+          echo "DEBUG password length: ${#PGPASSWORD}"
+
           # Platform tables we cannot re-sync from upstream:
           #   - documentation.* (architecture docs, ADRs, handoffs)
           #   - cockpit_agent_memory (learned rules, importance≥8)
