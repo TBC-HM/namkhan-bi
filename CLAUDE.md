@@ -51,12 +51,20 @@ Project: `namkhan-pms`, id `kpenyneooigsyuuomgct`.
 
 ## Working in this repo
 
+### Package manager
+
+This repo uses **npm** with `package-lock.json`. Not pnpm, not yarn.
+If `npm ci` fails with "lockfile not in sync", run `npm install` to
+regenerate the lockfile, then commit both `package.json` and
+`package-lock.json` together. CI gates on `npm ci`, so drift between
+the two files breaks every workflow.
+
 ### Editing surfaces, in preference order
 
 | Surface | Use for |
 |---|---|
-| **GitHub Codespace** | Anything serious. Multi-file edits, refactors, debugging. Browser VS Code with Claude Code pre-installed (see `.devcontainer/devcontainer.json`). |
-| **claude.ai chat + Supabase bridge** | Small edits, single-file fixes, docs, config files. Bridge function: `public.fn_gh_push_file(owner, repo, branch, path, content, message)`. |
+| **GitHub Codespace** | Anything serious. Multi-file edits, refactors, debugging, dependency changes (forces npm install + lockfile commit). Browser VS Code with Claude Code pre-installed (see `.devcontainer/devcontainer.json`). |
+| **claude.ai chat + Supabase bridge** | Small edits, single-file fixes, docs, config files. Bridge function: `public.fn_gh_push_file(owner, repo, branch, path, content, message)`. ⚠ Cannot regenerate lockfiles — use Codespace for that. |
 | **Local IDE** | Optional. Same rules apply. Treated as a workstation, not a source of truth. |
 
 ### Onboarding a new contributor (10-min path)
@@ -64,7 +72,7 @@ Project: `namkhan-pms`, id `kpenyneooigsyuuomgct`.
 1. PBS adds them to `TBC-HM` GitHub org.
 2. PBS invites them to the claude.ai team plan.
 3. They open `github.com/TBC-HM/namkhan-bi` → Code → Codespaces → Create on `main`.
-4. Codespace boots (~2 min), `pnpm install` finishes, Claude Code is preinstalled.
+4. Codespace boots (~2 min), `npm install` finishes, Claude Code is preinstalled.
 5. They open this CLAUDE.md, then read the canonical manual via Supabase MCP.
 6. They edit, commit, push, Vercel auto-deploys.
 
@@ -77,16 +85,16 @@ Project: `namkhan-pms`, id `kpenyneooigsyuuomgct`.
 | Data | Supabase (Postgres 17, `kpenyneooigsyuuomgct`) |
 | Auth | Supabase Auth |
 | Hosting | Vercel (auto-deploy from `main`) |
-| Package manager | pnpm 9 |
+| Package manager | **npm** (package-lock.json) |
 
 ### Commands
 
 ```bash
-pnpm install
-pnpm dev          # http://localhost:3000
-pnpm build
-pnpm lint
-pnpm typecheck
+npm install       # installs + reconciles lockfile
+npm ci            # clean install (CI uses this — fails on lockfile drift)
+npm run dev       # http://localhost:3000
+npm run build
+npm run lint
 ```
 
 ### Server-side data access
@@ -108,12 +116,14 @@ cream palette. See claude_md §2.6.
 
 ## Shipping a code change — happy path
 
-1. Open Codespace on `main` (or use the claude.ai bridge).
+1. Open Codespace on `main` (or use the claude.ai bridge for single-file edits).
 2. Read canonical claude_md + architecture from Supabase MCP.
-3. Edit. Run `pnpm typecheck && pnpm build` locally first (Codespace counts).
-4. Commit + push to `main` (PR if collaborative).
-5. Verify with `SELECT * FROM public.v_current_prod;` after Vercel finishes.
-6. If the change crosses any §0 rule, write a new `cockpit_decisions` ADR.
+3. Edit. Run `npm run build` in the Codespace before pushing.
+4. If you added/removed/upgraded any dependency, commit `package-lock.json`
+   in the same commit as `package.json`. CI will fail otherwise.
+5. Commit + push to `main` (PR if collaborative).
+6. Verify with `SELECT * FROM public.v_current_prod;` after Vercel finishes.
+7. If the change crosses any §0 rule, write a new `cockpit_decisions` ADR.
 
 **Never** `vercel deploy` or `vercel --prod`. The `deploy.deployments`
 audit trail is broken by CLI deploys.
