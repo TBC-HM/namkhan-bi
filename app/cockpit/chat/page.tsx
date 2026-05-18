@@ -184,7 +184,6 @@ export default async function CockpitChatPage({ searchParams }: Props) {
     );
   }
   if (themeScope === 'donna') {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return <ThemeInjector palette={donnaPalette as any}>{chatBody}</ThemeInjector>;
   }
   return chatBody;
