@@ -1,9 +1,19 @@
 // lib/data-donna-mews.ts
 //
 // PBS 2026-05-16: Property-aware fetchers for Donna (property_id=1000001)
-// that read from the Mews-imported tables (pms.reservations_mews +
-// pms.reservation_rooms_mews) and shape the result like the Cloudbeds-side
-// canonical fetchers so the same shells can render either property.
+// that read from the Mews-imported tables and shape the result like the
+// Cloudbeds-side canonical fetchers so the same shells can render either
+// property.
+//
+// 2026-05-18 (claude_md v3.1 §0.5 fix): PostgREST only exposes `public` —
+// the original `.from('reservations_mews')` calls silently returned [] because
+// the base tables live in `pms`. Now reads via public bridge views:
+//   public.pms_reservations_mews        -> pms.reservations_mews
+//   public.pms_reservation_rooms_mews   -> pms.reservation_rooms_mews
+//   public.pms_rate_plans_mews          -> pms.rate_plans_mews
+// The Pulse function's FK embed (`reservations_mews!inner(is_cancelled)`) is
+// refactored into a separate cancelled-id fetch + JS filter so it stops
+// depending on PostgREST view-FK detection.
 //
 // Capacity is derived: 66 distinct room_ids observed in reservation_rooms_mews
 // for 2025+. When core.properties grows a room_count column, swap this const.
@@ -42,20 +52,29 @@ export async function getDonnaPulseKpis(
   fromDate: string,
   toDate: string,
 ): Promise<DonnaPulseKpis> {
-  // 1) Per-night rate rows for the window (non-cancelled)
-  const { data: nightRows, error: nightsErr } = await supabase
-    .from('reservation_rooms_mews')
-    .select('night_date, rate, reservation_id, reservations_mews!inner(reservation_id, is_cancelled)', { count: 'exact' })
-    .eq('property_id', DONNA_PROPERTY_ID)
-    .gte('night_date', fromDate)
-    .lte('night_date', toDate)
-    .eq('reservations_mews.is_cancelled', false);
+  // 1) Per-night rate rows for the window. PostgREST view-FK detection is
+  // unreliable, so we fetch night rows and cancelled IDs separately and
+  // filter in JS (claude_md v3.1 §0.5).
+  const [{ data: nightRows, error: nightsErr }, { data: cancelledRows }] = await Promise.all([
+    supabase
+      .from('pms_reservation_rooms_mews')
+      .select('night_date, rate, reservation_id')
+      .eq('property_id', DONNA_PROPERTY_ID)
+      .gte('night_date', fromDate)
+      .lte('night_date', toDate),
+    supabase
+      .from('pms_reservations_mews')
+      .select('reservation_id')
+      .eq('property_id', DONNA_PROPERTY_ID)
+      .eq('is_cancelled', true),
+  ]);
 
   if (nightsErr) {
     // soft-fail: return zeros so the page still renders
     return zeroResult(fromDate, toDate);
   }
-  const rows = (nightRows ?? []) as any[];
+  const cancelledIds = new Set<string>((cancelledRows ?? []).map((r: any) => String(r.reservation_id)));
+  const rows = ((nightRows ?? []) as any[]).filter((r) => !cancelledIds.has(String(r.reservation_id)));
   const rnSold = rows.length;
   const roomsRevenue = rows.reduce((s, r) => s + Number(r.rate || 0), 0);
   const numDays = daysBetween(fromDate, toDate);
@@ -76,7 +95,7 @@ export async function getDonnaPulseKpis(
 
   // 2) Reservation-level rollup for cancel% + ALOS + lead time
   const { data: resvRows } = await supabase
-    .from('reservations_mews')
+    .from('pms_reservations_mews')
     .select('reservation_id, nights, check_in_date, booking_date, is_cancelled')
     .eq('property_id', DONNA_PROPERTY_ID)
     .gte('check_in_date', fromDate)
@@ -139,7 +158,7 @@ export interface DonnaPaceKpis {
 export async function getDonnaPaceKpis(fromDate: string, toDate: string): Promise<DonnaPaceKpis> {
   const numDays = daysBetween(fromDate, toDate);
   const { data: resvAll } = await supabase
-    .from('reservations_mews')
+    .from('pms_reservations_mews')
     .select('reservation_id, nights, total_amount, check_in_date, is_cancelled')
     .eq('property_id', DONNA_PROPERTY_ID)
     .gte('check_in_date', fromDate)
@@ -220,7 +239,7 @@ export interface DonnaChannelsKpis {
 
 export async function getDonnaChannelsKpis(fromDate: string, toDate: string): Promise<DonnaChannelsKpis> {
   const { data: resvRows } = await supabase
-    .from('reservations_mews')
+    .from('pms_reservations_mews')
     .select('source_name, nights, total_amount, check_in_date, booking_date, is_cancelled')
     .eq('property_id', DONNA_PROPERTY_ID)
     .gte('check_in_date', fromDate)
@@ -298,7 +317,7 @@ export interface DonnaRateplansKpis {
 
 export async function getDonnaRateplansKpis(fromDate: string, toDate: string): Promise<DonnaRateplansKpis> {
   const { data: resvRows } = await supabase
-    .from('reservations_mews')
+    .from('pms_reservations_mews')
     .select('rate_plan, nights, total_amount, is_cancelled')
     .eq('property_id', DONNA_PROPERTY_ID)
     .gte('check_in_date', fromDate)
@@ -330,7 +349,7 @@ export async function getDonnaRateplansKpis(fromDate: string, toDate: string): P
 
   // "Sleeping" = pre-seeded in rate_plans_mews but no reservations in window
   const { count: seededCount } = await supabase
-    .from('rate_plans_mews')
+    .from('pms_rate_plans_mews')
     .select('rate_id', { count: 'exact', head: true })
     .eq('property_id', DONNA_PROPERTY_ID);
   const sleepingPlans = Math.max(0, (seededCount ?? 0) - rows.length);
