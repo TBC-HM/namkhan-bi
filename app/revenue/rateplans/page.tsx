@@ -25,22 +25,26 @@ import {
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
 
-interface Props { searchParams: Record<string, string | string[] | undefined>; }
+interface Props { searchParams: Record<string, string | string[] | undefined>; propertyId?: number; }
 
-export default async function RatePlansPage({ searchParams }: Props) {
+export default async function RatePlansPage({ searchParams, propertyId }: Props) {
+  // PBS 2026-05-18: property-aware. Defaults to PROPERTY_ID (Namkhan) so
+  // /revenue/rateplans is byte-identical. Donna /h/1000001/revenue/rateplans
+  // gets the SAME layout via this same page code with propertyId=1000001.
+  const pid = propertyId ?? PROPERTY_ID;
   const period = resolvePeriod(searchParams);
 
   const { data: configuredPlans } = await supabase
     .from('rate_plans')
     .select('rate_id, rate_name, rate_type, is_active')
-    .eq('property_id', PROPERTY_ID)
+    .eq('property_id', pid)
     .eq('is_active', true);
   const masterNames = new Set((configuredPlans ?? []).map((p: any) => p.rate_name));
 
   const { data: recent90 } = await supabase
     .from('reservations')
     .select('rate_plan, status, booking_date')
-    .eq('property_id', PROPERTY_ID)
+    .eq('property_id', pid)
     .gte('booking_date', new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10))
     .neq('status', 'canceled');
   const activeMasterNames = new Set(
@@ -50,11 +54,19 @@ export default async function RatePlansPage({ searchParams }: Props) {
   );
   const activeMasterCount = activeMasterNames.size;
 
-  const { data: windowRows } = await supabase
-    .from('v_rate_plan_perf')
-    .select('rate_plan, status, total_amount, nights, lead_days, plan_type, is_configured, booking_date, check_in_date')
-    .gte('check_in_date', period.from)
-    .lte('check_in_date', period.to);
+  // v_rate_plan_perf / _sleeping / _orphans are Namkhan-only views today
+  // (no property_id column). Short-circuit for non-Namkhan so Donna's
+  // page renders the same shape with empty plan rows until the views are
+  // extended with a Mews UNION branch (Phase E follow-up).
+  const isNamkhan = pid === PROPERTY_ID;
+
+  const { data: windowRows } = isNamkhan
+    ? await supabase
+        .from('v_rate_plan_perf')
+        .select('rate_plan, status, total_amount, nights, lead_days, plan_type, is_configured, booking_date, check_in_date')
+        .gte('check_in_date', period.from)
+        .lte('check_in_date', period.to)
+    : { data: [] as any[] };
 
   type PlanAgg = {
     name: string; type: string; isConfigured: boolean;
@@ -132,18 +144,22 @@ export default async function RatePlansPage({ searchParams }: Props) {
     bookings: p.bookings, cancellations: p.cancellations,
   }));
 
-  const { data: sleepingPlans } = await supabase
-    .from('v_rate_plan_sleeping')
-    .select('rate_name, rate_type, last_booked, days_since')
-    .order('days_since', { ascending: false })
-    .limit(30);
+  const { data: sleepingPlans } = isNamkhan
+    ? await supabase
+        .from('v_rate_plan_sleeping')
+        .select('rate_name, rate_type, last_booked, days_since')
+        .order('days_since', { ascending: false })
+        .limit(30)
+    : { data: [] as any[] };
   const sleepingRows: SleepingRow[] = (sleepingPlans ?? []) as SleepingRow[];
 
-  const { data: orphans } = await supabase
-    .from('v_rate_plan_orphans')
-    .select('rate_plan, bookings_lifetime, revenue_lifetime, last_booked')
-    .order('revenue_lifetime', { ascending: false })
-    .limit(20);
+  const { data: orphans } = isNamkhan
+    ? await supabase
+        .from('v_rate_plan_orphans')
+        .select('rate_plan, bookings_lifetime, revenue_lifetime, last_booked')
+        .order('revenue_lifetime', { ascending: false })
+        .limit(20)
+    : { data: [] as any[] };
   const orphanRows: OrphanRow[] = (orphans ?? []) as OrphanRow[];
 
   return (

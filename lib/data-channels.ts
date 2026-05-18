@@ -100,12 +100,15 @@ export interface ChannelXRoomRow {
  * Channel economics for the requested period window.
  * Falls back gracefully if matview not yet refreshed (returns []).
  */
-export async function getChannelEconomics(period?: ResolvedPeriod): Promise<ChannelEconRow[]> {
+export async function getChannelEconomics(
+  period?: ResolvedPeriod,
+  propertyId: number = PROPERTY_ID,
+): Promise<ChannelEconRow[]> {
   const window_days = matchWindow(period);
   const { data, error } = await supabase
     .from('mv_channel_economics')
     .select('*')
-    .eq('property_id', PROPERTY_ID)
+    .eq('property_id', propertyId)
     .eq('window_days', window_days)
     .gt('bookings', 0)
     .order('gross_revenue', { ascending: false, nullsFirst: false });
@@ -121,12 +124,15 @@ export async function getChannelEconomics(period?: ResolvedPeriod): Promise<Chan
  * OTA × Room-type matrix. Now accepts ALL the same window keys as
  * getChannelEconomics (1, 7, 30, 60, 90, 180, 365, 9999, -7, -30, -90).
  */
-export async function getChannelXRoomtype(period?: ResolvedPeriod): Promise<ChannelXRoomRow[]> {
+export async function getChannelXRoomtype(
+  period?: ResolvedPeriod,
+  propertyId: number = PROPERTY_ID,
+): Promise<ChannelXRoomRow[]> {
   const window_days = matchWindowMatrix(period);
   const { data, error } = await supabase
     .from('mv_channel_x_roomtype')
     .select('*')
-    .eq('property_id', PROPERTY_ID)
+    .eq('property_id', propertyId)
     .eq('window_days', window_days)
     .gt('bookings', 0);
 
@@ -163,11 +169,18 @@ export interface ChannelDailyRow { day: string; bookings: number; room_nights: n
 export interface ChannelRoomMixRow { room_type_name: string; bookings: number; room_nights: number; gross_revenue: number; share_pct: number; }
 
 /** Per-source channel economics for an arbitrary date range. Backed by `f_channel_econ_for_range`. */
-export async function getChannelEconomicsForRange(fromDate: string, toDate: string): Promise<ChannelEconRow[]> {
+export async function getChannelEconomicsForRange(
+  fromDate: string,
+  toDate: string,
+  propertyId: number = PROPERTY_ID,
+): Promise<ChannelEconRow[]> {
+  // RPC is Cloudbeds-scoped today (reads pms.reservations_cb).
+  // For non-Namkhan properties: short-circuit to [] until the RPC is extended.
+  if (propertyId !== PROPERTY_ID) return [];
   const { data, error } = await supabase.rpc('f_channel_econ_for_range', { p_from: fromDate, p_to: toDate });
   if (error) { console.error('getChannelEconomicsForRange error', error); return []; }
   return ((data ?? []) as any[]).map((r) => ({
-    property_id: Number(r.property_id ?? PROPERTY_ID),
+    property_id: Number(r.property_id ?? propertyId),
     source_name: String(r.source_name),
     window_days: Number(r.window_days ?? 0),
     bookings: Number(r.bookings ?? 0),
@@ -184,7 +197,12 @@ export async function getChannelEconomicsForRange(fromDate: string, toDate: stri
   }));
 }
 
-export async function getChannelMixWeeklyTrend(fromDate: string, toDate: string): Promise<ChannelMixWeeklyRow[]> {
+export async function getChannelMixWeeklyTrend(
+  fromDate: string,
+  toDate: string,
+  propertyId: number = PROPERTY_ID,
+): Promise<ChannelMixWeeklyRow[]> {
+  if (propertyId !== PROPERTY_ID) return [];
   const { data, error } = await supabase.rpc('f_channel_mix_weekly_trend', { p_from: fromDate, p_to: toDate });
   if (error) return [];
   return ((data ?? []) as any[]).map((r) => ({
@@ -195,7 +213,12 @@ export async function getChannelMixWeeklyTrend(fromDate: string, toDate: string)
   }));
 }
 
-export async function getChannelNetValueForRange(fromDate: string, toDate: string): Promise<ChannelNetValueRow[]> {
+export async function getChannelNetValueForRange(
+  fromDate: string,
+  toDate: string,
+  propertyId: number = PROPERTY_ID,
+): Promise<ChannelNetValueRow[]> {
+  if (propertyId !== PROPERTY_ID) return [];
   const { data, error } = await supabase.rpc('f_channel_net_value_for_range', { p_from: fromDate, p_to: toDate });
   if (error) return [];
   return ((data ?? []) as any[]).map((r) => ({
@@ -208,7 +231,10 @@ export async function getChannelNetValueForRange(fromDate: string, toDate: strin
   }));
 }
 
-export async function getChannelVelocity28dByCat(): Promise<ChannelVelocityRow[]> {
+export async function getChannelVelocity28dByCat(
+  propertyId: number = PROPERTY_ID,
+): Promise<ChannelVelocityRow[]> {
+  if (propertyId !== PROPERTY_ID) return [];
   const { data, error } = await supabase.rpc('f_channel_velocity_28d_by_cat');
   if (error) return [];
   return ((data ?? []) as any[]).map((r) => ({

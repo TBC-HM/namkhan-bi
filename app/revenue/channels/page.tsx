@@ -51,9 +51,16 @@ function healthPill(c: any): { label: string; tone: 'good' | 'warn' | 'bad' | 'n
   return { label: 'MONITOR', tone: 'neutral' };
 }
 
-interface Props { searchParams: Record<string, string | string[] | undefined>; }
+interface Props { searchParams: Record<string, string | string[] | undefined>; propertyId?: number; }
 
-export default async function ChannelsPage({ searchParams }: Props) {
+const PROPERTY_ID_NAMKHAN = 260955;
+
+export default async function ChannelsPage({ searchParams, propertyId }: Props) {
+  // PBS 2026-05-18: property-aware. Defaults to Namkhan so /revenue/channels
+  // is byte-identical for legacy callers. Donna canonical /h/1000001/revenue/channels
+  // passes propertyId=1000001 from the shell.
+  const pid = propertyId ?? PROPERTY_ID_NAMKHAN;
+
   const period = resolvePeriod(searchParams);
 
   // Compare period synth (when cmp != none) — fetch same window shape but in the past.
@@ -66,14 +73,14 @@ export default async function ChannelsPage({ searchParams }: Props) {
   // 30-day numbers — not the year-ago range. Switched to the range-based
   // RPC so SDLY/STLY/etc. actually compare against the right window.
   const [channelsRaw, matrixRaw, channelsCmp, mixWeekly, netValue, velocity] = await Promise.all([
-    getChannelEconomics(period).catch(() => [] as Awaited<ReturnType<typeof getChannelEconomics>>),
-    getChannelXRoomtype(period).catch(() => [] as Awaited<ReturnType<typeof getChannelXRoomtype>>),
+    getChannelEconomics(period, pid).catch(() => [] as Awaited<ReturnType<typeof getChannelEconomics>>),
+    getChannelXRoomtype(period, pid).catch(() => [] as Awaited<ReturnType<typeof getChannelXRoomtype>>),
     cmpPeriod
-      ? getChannelEconomicsForRange(cmpPeriod.from, cmpPeriod.to).catch(() => [])
+      ? getChannelEconomicsForRange(cmpPeriod.from, cmpPeriod.to, pid).catch(() => [])
       : Promise.resolve([] as any[]),
-    getChannelMixWeeklyTrend(period.from, period.to).catch(() => []),
-    getChannelNetValueForRange(period.from, period.to).catch(() => []),
-    getChannelVelocity28dByCat().catch(() => []),
+    getChannelMixWeeklyTrend(period.from, period.to, pid).catch(() => []),
+    getChannelNetValueForRange(period.from, period.to, pid).catch(() => []),
+    getChannelVelocity28dByCat(pid).catch(() => []),
   ]);
   const channels = channelsRaw;
   const matrix = matrixRaw;
