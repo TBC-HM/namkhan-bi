@@ -9,7 +9,7 @@
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-type LooseClient = SupabaseClient<any, any, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+type LooseClient = SupabaseClient<any, any, any>;
 
 export const MAX_HOPS = 3;
 
