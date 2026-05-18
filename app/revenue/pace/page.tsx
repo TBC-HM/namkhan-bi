@@ -40,11 +40,11 @@ function parseGran(raw: string | undefined): 'day' | 'week' | 'month' {
   return 'month';
 }
 
-async function getPace(fromDate: string, toDate: string): Promise<PaceRow[]> {
+async function getPace(fromDate: string, toDate: string, pid: number): Promise<PaceRow[]> {
   const { data, error } = await supabase
     .from('v_otb_pace')
     .select('night_date, confirmed_rooms, confirmed_revenue, cancelled_rooms')
-    .eq('property_id', PROPERTY_ID)
+    .eq('property_id', pid)
     .gte('night_date', fromDate)
     .lte('night_date', toDate)
     .order('night_date');
@@ -56,7 +56,7 @@ async function getPace(fromDate: string, toDate: string): Promise<PaceRow[]> {
 }
 
 // STLY actuals proxy: same calendar dates -1 year from mv_kpi_daily.
-async function getStlyActuals(fromDate: string, toDate: string): Promise<Map<string, { rns: number; rev: number }>> {
+async function getStlyActuals(fromDate: string, toDate: string, pid: number): Promise<Map<string, { rns: number; rev: number }>> {
   const shift = (iso: string) => {
     const d = new Date(iso + 'T00:00:00Z');
     d.setUTCFullYear(d.getUTCFullYear() - 1);
@@ -65,7 +65,7 @@ async function getStlyActuals(fromDate: string, toDate: string): Promise<Map<str
   const { data } = await supabase
     .from('mv_kpi_daily')
     .select('night_date, rooms_sold, rooms_revenue')
-    .eq('property_id', PROPERTY_ID)
+    .eq('property_id', pid)
     .gte('night_date', shift(fromDate))
     .lte('night_date', shift(toDate));
   const out = new Map<string, { rns: number; rev: number }>();
@@ -84,6 +84,7 @@ function bucketRows(
   stlyByDate: Map<string, { rns: number; rev: number }>,
   fromIso: string,
   toIso: string,
+  pid: number,
 ): BucketRow[] {
   const buckets = new Map<string, { rns: number; rev: number; cxl: number; days: number; stlyRn: number; stlyRev: number }>();
   for (const r of rows) {
@@ -123,15 +124,15 @@ function bucketRows(
       const monthEnd = new Date(next.getTime() - 86400000).toISOString().slice(0, 10);
       const winFrom = monthStart < fromIso ? fromIso : monthStart;
       const winTo = monthEnd > toIso ? toIso : monthEnd;
-      cap = capacityRnRange(winFrom, winTo);
+      cap = capacityRnRange(winFrom, winTo, pid);
     } else if (gran === 'week') {
       const winFrom = key < fromIso ? fromIso : key;
       const weekEnd = new Date(key + 'T00:00:00Z');
       weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
       const weTo = weekEnd.toISOString().slice(0, 10) > toIso ? toIso : weekEnd.toISOString().slice(0, 10);
-      cap = capacityRnRange(winFrom, weTo);
+      cap = capacityRnRange(winFrom, weTo, pid);
     } else {
-      cap = capacityFor(key);
+      cap = capacityFor(key, pid);
     }
     return { key, ...v, capacity: cap };
   }).sort((a, b) => a.key.localeCompare(b.key));
@@ -143,7 +144,18 @@ function fmtMonth(yyyymm: string) {
   return d.toLocaleString('en-US', { month: 'short', year: '2-digit' });
 }
 
-export default async function PacePage({ searchParams }: { searchParams: SearchParams }) {
+export default async function PacePage({
+  searchParams,
+  propertyId,
+}: {
+  searchParams: SearchParams;
+  propertyId?: number;
+}) {
+  // PBS 2026-05-18: property-aware. Defaults to PROPERTY_ID (Namkhan) so the
+  // legacy `/revenue/pace` route is byte-identical. Donna's canonical
+  // /h/1000001/revenue/pace passes propertyId=1000001 from the shell.
+  const pid = propertyId ?? PROPERTY_ID;
+
   const win = parseWin(searchParams.win);
   const gran = parseGran(searchParams.gran);
   // PBS 2026-05-09: forward `cmp` so the universal CompareSelector reflects
@@ -154,20 +166,20 @@ export default async function PacePage({ searchParams }: { searchParams: SearchP
   const toIso = period.to;
 
   const [rows, stlyMap, paceCurve] = await Promise.all([
-    getPace(fromIso, toIso),
-    getStlyActuals(fromIso, toIso),
-    getPaceCurve(30, 30).catch(() => []),
+    getPace(fromIso, toIso, pid),
+    getStlyActuals(fromIso, toIso, pid),
+    getPaceCurve(30, 30, pid).catch(() => []),
   ]);
 
   const totalRns = rows.reduce((s, r) => s + (Number(r.confirmed_rooms) || 0), 0);
   const totalRev = rows.reduce((s, r) => s + (Number(r.confirmed_revenue) || 0), 0);
   const totalCxl = rows.reduce((s, r) => s + (Number(r.cancelled_rooms) || 0), 0);
   const adr = totalRns > 0 ? totalRev / totalRns : 0;
-  const capacityRn = capacityRnRange(fromIso, toIso);
+  const capacityRn = capacityRnRange(fromIso, toIso, pid);
   const occ = capacityRn > 0 ? (totalRns / capacityRn) * 100 : 0;
   const cxlRate = totalRns + totalCxl > 0 ? (totalCxl / (totalRns + totalCxl)) * 100 : 0;
 
-  const buckets = bucketRows(rows, gran, stlyMap, fromIso, toIso);
+  const buckets = bucketRows(rows, gran, stlyMap, fromIso, toIso, pid);
   const stlyRnTotal = buckets.reduce((s, b) => s + b.stlyRn, 0);
   const stlyRevTotal = buckets.reduce((s, b) => s + b.stlyRev, 0);
   const stlyPctOverall = stlyRnTotal > 0 ? (totalRns / stlyRnTotal) * 100 : 0;

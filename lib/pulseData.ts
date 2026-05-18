@@ -120,8 +120,20 @@ export async function getRoomTypePulse(
 /**
  * Pace curve, scoped to a window centered around today.
  * Default: -30d..+30d (matches the "Booking pace curve · May 2026" mockup feel).
+ *
+ * PBS 2026-05-18: now property-aware. v_pace_curve is Namkhan-only today
+ * (no property_id column), so non-Namkhan property IDs short-circuit to []
+ * — Pace page renders the bucket panel only for Donna until v_pace_curve
+ * gets a Mews UNION branch.
  */
-export async function getPaceCurve(daysBack = 30, daysForward = 30): Promise<PaceCurveRow[]> {
+const NAMKHAN_PROPERTY_ID_PC = 260955;
+
+export async function getPaceCurve(
+  daysBack = 30,
+  daysForward = 30,
+  propertyId: number = NAMKHAN_PROPERTY_ID_PC,
+): Promise<PaceCurveRow[]> {
+  if (propertyId !== NAMKHAN_PROPERTY_ID_PC) return [];
   const today = new Date();
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
   const from = new Date(today); from.setDate(from.getDate() - daysBack);
