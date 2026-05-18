@@ -75,6 +75,12 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
   const offset = Math.max(-365, Math.min(365, parseInt(offsetParam, 10) || 0));
   const winDays = winParam === '7d' ? 7 : winParam === '14d' ? 14 : winParam === '60d' ? 60 : 30;
 
+  // PBS 2026-05-18: Today's Pickup is navigable — `?pickupOffset=N`, clamped
+  // to [-8, 0]. 0 = today, -1 = yesterday, … -8 = 8 days back. No forward
+  // navigation past today (you can't pick up bookings made in the future).
+  const pickupOffsetParam = typeof searchParams.pickupOffset === 'string' ? searchParams.pickupOffset : '0';
+  const pickupOffset = Math.max(-8, Math.min(0, parseInt(pickupOffsetParam, 10) || 0));
+
   const anchor = todayIso();
   const heroFrom = shiftDate(anchor, offset);
   const heroTo = shiftDate(anchor, offset + winDays - 1);
@@ -92,7 +98,7 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
       getPulseDaily(pid, stlyFrom, stlyTo),
       getPulseTopSources(pid, 30, 5),
       getPulseHighOcc(pid, anchor, shiftDate(anchor, 60), 80),
-      getPulseTodayPickup(pid, anchor),
+      getPulseTodayPickup(pid, shiftDate(anchor, pickupOffset)),
       getPulseUpcomingEvents(pid, anchor, shiftDate(anchor, 30), 10),
     ]);
 
@@ -131,8 +137,22 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
     const p = new URLSearchParams();
     if (offset !== 0) p.set('offset', String(offset));
     if (newWin !== '30d') p.set('win', newWin);
+    if (pickupOffset !== 0) p.set('pickupOffset', String(pickupOffset));
     return `/revenue/pulse${p.toString() ? '?' + p.toString() : ''}`;
   };
+
+  // Today's Pickup ← / → href builder
+  const pickupHref = (newPickupOffset: number) => {
+    const clamped = Math.max(-8, Math.min(0, newPickupOffset));
+    const p = new URLSearchParams();
+    if (offset !== 0) p.set('offset', String(offset));
+    if (winParam !== '30d') p.set('win', winParam);
+    if (clamped !== 0) p.set('pickupOffset', String(clamped));
+    return `/revenue/pulse${p.toString() ? '?' + p.toString() : ''}`;
+  };
+  const pickupDate = shiftDate(anchor, pickupOffset);
+  const pickupLabel =
+    pickupOffset === 0 ? 'Today' : pickupOffset === -1 ? 'Yesterday' : `${Math.abs(pickupOffset)} days ago`;
 
   return (
     <Page
@@ -280,7 +300,31 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
 
       {/* ── Row 4: Today's pickup + Upcoming events ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 14 }}>
-        <Panel title="Today's pickup" eyebrow={`booked on ${fmtLongDate(anchor)}`}>
+        <Panel
+          title={`${pickupLabel}'s pickup`}
+          eyebrow={`booked on ${fmtLongDate(pickupDate)}`}
+          actions={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <a
+                href={pickupHref(pickupOffset - 1)}
+                style={{ ...navBtn(), opacity: pickupOffset <= -8 ? 0.35 : 1, pointerEvents: pickupOffset <= -8 ? 'none' : 'auto' }}
+                title="Back 1 day"
+              >
+                ←
+              </a>
+              {pickupOffset !== 0 && (
+                <a href={pickupHref(0)} style={navBtn()} title="Back to today">today</a>
+              )}
+              <a
+                href={pickupHref(pickupOffset + 1)}
+                style={{ ...navBtn(), opacity: pickupOffset >= 0 ? 0.35 : 1, pointerEvents: pickupOffset >= 0 ? 'none' : 'auto' }}
+                title="Forward 1 day"
+              >
+                →
+              </a>
+            </div>
+          }
+        >
           <div style={{ padding: 14, overflowX: 'auto' }}>
             {pickup.length === 0 ? (
               <Empty>None available.</Empty>
