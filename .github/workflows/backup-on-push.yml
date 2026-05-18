@@ -1,0 +1,76 @@
+# .github/workflows/backup-on-push.yml
+#
+# PRE-DEPLOY BACKUP — triggers a Supabase snapshot on every push to main,
+# before Vercel's git-integration deploy lands.
+#
+# Why this exists:
+#   Vercel's git integration deploys every push to main automatically.
+#   If that deploy ships a regression, we want a fresh DB snapshot from
+#   seconds before it went live, not from last night.
+#
+# What it replaces:
+#   The old deploy-prod.yml had three jobs:
+#     1. pre-deploy-checks (this, kept)
+#     2. deploy            (CLI 'vercel deploy --prod' — REMOVED, racing
+#                          with the git-integration deploy, §0.8 violation)
+#     3. rollback-on-fail  (REMOVED, depended on job 2)
+#
+# Trigger: push to main. Skips on doc-only changes.
+# Author: TBC bridge · 2026-05-18
+
+name: Backup on push
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "cockpit/decisions/**"
+      - "docs/**"
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Why a manual backup (1-line)"
+        required: false
+        default: "manual"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup-on-push
+  cancel-in-progress: false  # never cancel an in-flight backup
+
+jobs:
+  pre-deploy-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Trigger Supabase pre-deploy backup
+        id: backup
+        run: |
+          set -e
+          echo "Triggering pre-deploy backup..."
+          RESP=$(curl -s -X POST "https://namkhan-bi.vercel.app/api/cockpit/docs/backup" \
+            -H "Authorization: Bearer ${{ secrets.COCKPIT_AGENT_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"backup_type\":\"pre_push_to_main\",\"deployment_id\":\"${{ github.run_id }}\"}")
+          echo "Backup response: $RESP"
+          OK=$(echo "$RESP" | jq -r '.ok // false')
+          if [ "$OK" != "true" ]; then
+            echo "FAIL: backup did not succeed"
+            exit 1
+          fi
+          echo "Backup succeeded."
