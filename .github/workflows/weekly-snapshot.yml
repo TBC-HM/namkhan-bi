@@ -111,7 +111,11 @@ jobs:
           # We dump the cockpit schema (real tables) + documentation schema.
           # We exclude cockpit.exec_secrets (sensitive) and cockpit.aud_audit_log
           # (large, grabbed separately as a 30-day slim slice below).
-          pg_dump \
+          # Force pg_dump 17 — the apt install adds it but PATH may pick up the 16 binary
+          PGDUMP=/usr/lib/postgresql/17/bin/pg_dump
+          if [ ! -x "$PGDUMP" ]; then PGDUMP=$(command -v pg_dump); fi
+          echo "Using: $PGDUMP ($($PGDUMP --version))"
+          "$PGDUMP" \
             --host="$HOST" \
             --port=5432 \
             --username="$DB_USER" \
@@ -140,8 +144,8 @@ jobs:
             > "${OUTFILE%.sql}_audit_log_30d.csv" 2>>dump_err.log || true
 
           # Compress
-          gzip -9 "$OUTFILE"
-          gzip -9 "${OUTFILE%.sql}_audit_log_30d.csv" || true
+          gzip -9f "$OUTFILE"
+          gzip -9f "${OUTFILE%.sql}_audit_log_30d.csv" || true
 
           # Stats
           SIZE=$(du -h "${OUTFILE}.gz" | cut -f1)
