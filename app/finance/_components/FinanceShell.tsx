@@ -131,3 +131,78 @@ export default function FinanceShell({ children }: { children: React.ReactNode }
     </div>
   )
 }
+
+/* ---------------------------------------------------------------------------
+ * SectionHead — finance-page section header (title · emphasis · sub · source)
+ *
+ * Restored 2026-05-18 via Supabase→GitHub bridge. Three pages
+ * (budget, mapping, supplier-mapping) import { SectionHead } from this
+ * module but the symbol was never exported, breaking `tsc --noEmit` on
+ * main. Re-added here as the smallest-diff fix.
+ *
+ * Props match existing callsites verbatim:
+ *   title    — required, primary heading text
+ *   emphasis — optional, accented secondary (e.g. count, status)
+ *   sub      — optional, muted helper line
+ *   source   — optional, monospace source pill (DB view / RPC name)
+ * --------------------------------------------------------------------------- */
+export function SectionHead({
+  title,
+  emphasis,
+  sub,
+  source,
+}: {
+  title: string;
+  emphasis?: string;
+  sub?: string;
+  source?: string;
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'baseline',
+        justifyContent: 'space-between',
+        gap: 12,
+        marginBottom: 10,
+        flexWrap: 'wrap',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+        <h3
+          style={{
+            margin: 0,
+            fontSize: 14,
+            fontWeight: 600,
+            letterSpacing: '0.01em',
+            color: 'var(--ink, #1a1a1a)',
+          }}
+        >
+          {title}
+        </h3>
+        {emphasis ? (
+          <span style={{ fontSize: 12, color: 'var(--brass, #b8a878)', fontWeight: 500 }}>
+            {emphasis}
+          </span>
+        ) : null}
+        {sub ? (
+          <span style={{ fontSize: 12, color: 'var(--ink-mute, #6b7280)' }}>{sub}</span>
+        ) : null}
+      </div>
+      {source ? (
+        <code
+          style={{
+            fontSize: 11,
+            color: 'var(--ink-mute, #6b7280)',
+            background: 'var(--paper-deep, #efe9d8)',
+            padding: '2px 6px',
+            borderRadius: 4,
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+          }}
+        >
+          {source}
+        </code>
+      ) : null}
+    </div>
+  );
+}
