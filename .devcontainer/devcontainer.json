@@ -8,7 +8,7 @@
     "ghcr.io/devcontainers/features/node:1": { "version": "20" }
   },
 
-  "postCreateCommand": "corepack enable && corepack prepare pnpm@9 --activate && pnpm install --frozen-lockfile=false",
+  "postCreateCommand": "npm install --no-audit --no-fund",
 
   "customizations": {
     "vscode": {
