@@ -90,13 +90,6 @@ jobs:
             DB_USER="postgres.${SUPABASE_PROJECT_REF}"
           fi
 
-          # DEBUG: verify env var expansion (no secrets leaked)
-          echo "DEBUG username length: ${#DB_USER}"
-          echo "DEBUG username masked: ${DB_USER:0:9}***${DB_USER: -4}"
-          echo "DEBUG host: $HOST"
-          echo "DEBUG password length: ${#PGPASSWORD}"
-          echo "DEBUG db_user source: ${SUPABASE_DB_USER:+EXPLICIT}${SUPABASE_DB_USER:-CONCAT}"
-
           # Platform tables we cannot re-sync from upstream:
           #   - documentation.* (architecture docs, ADRs, handoffs)
           #   - cockpit_agent_memory (learned rules, importance≥8)
@@ -114,6 +107,10 @@ jobs:
           # We DO NOT dump: reservations, transactions, guests, payroll, etc.
           # Those rebuild from Cloudbeds + QuickBooks + Factorial syncs.
 
+          # NOTE: public.cockpit_* are PostgREST bridge views; real data lives in cockpit.*
+          # We dump the cockpit schema (real tables) + documentation schema.
+          # We exclude cockpit.exec_secrets (sensitive) and cockpit.aud_audit_log
+          # (large, grabbed separately as a 30-day slim slice below).
           pg_dump \
             --host="$HOST" \
             --port=5432 \
@@ -123,17 +120,10 @@ jobs:
             --no-privileges \
             --no-comments \
             --schema=documentation \
-            --table=public.cockpit_agent_memory \
-            --table=public.cockpit_decisions \
-            --table=public.cockpit_change_log \
-            --table=public.cockpit_tickets \
-            --table=public.cockpit_proposals \
-            --table=public.cockpit_projects \
-            --table=public.cockpit_agent_prompts \
-            --table=public.cockpit_agent_skills \
-            --table=public.cockpit_agent_identity \
-            --table=public.cockpit_knowledge_base \
-            --table=public.cockpit_standing_tasks \
+            --schema=cockpit \
+            --exclude-table=cockpit.exec_secrets \
+            --exclude-table=cockpit._b64_stage \
+            --exclude-table=cockpit.aud_audit_log \
             > "$OUTFILE" 2>dump_err.log || {
               echo "::error::pg_dump failed. stderr:"
               cat dump_err.log
@@ -146,7 +136,7 @@ jobs:
           psql \
             "host=$HOST port=5432 user=$DB_USER dbname=postgres sslmode=require" \
             --no-psqlrc --no-align --tuples-only --quiet \
-            -c "COPY (SELECT * FROM public.cockpit_audit_log WHERE created_at > now() - interval '30 days') TO STDOUT WITH (FORMAT csv, HEADER true)" \
+            -c "COPY (SELECT * FROM cockpit.aud_audit_log WHERE created_at > now() - interval '30 days') TO STDOUT WITH (FORMAT csv, HEADER true)" \
             > "${OUTFILE%.sql}_audit_log_30d.csv" 2>>dump_err.log || true
 
           # Compress
