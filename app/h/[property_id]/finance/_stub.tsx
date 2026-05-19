@@ -1,66 +1,47 @@
 // app/h/[property_id]/finance/_stub.tsx
-//
-// Shared stub renderer for Donna finance sub-pages that exist in the Namkhan
-// nav strip but haven't been per-property-wired yet. Renders a clear
-// "under construction" body with the right Donna nav so PBS doesn't see
-// Namkhan content bleeding through.
-//
-// For Namkhan, the per-property routes redirect to the global /finance/*
-// surface (which is the canonical Namkhan implementation today).
-//
-// PBS 2026-05-15. Replace these stubs with actual Donna-wired pages once
-// per-property data flows are in (P&L is the only one done so far — see
-// /h/[property_id]/finance/pnl).
+// 2026-05-19 refactor onto @/app/(cockpit)/_design primitives.
+// Shared stub for Donna finance sub-pages awaiting per-property wiring.
 
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
-import Page from '@/components/page/Page';
-import Panel from '@/components/page/Panel';
-import { financeSubPagesForProperty } from '@/app/finance/_subpages';
+import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import { NAMKHAN_PROPERTY_ID } from '@/lib/dept-cfg/by-property';
 
 interface Props {
   propertyId: number;
-  routeLabel: string;          // 'Ledger'  · 'Transactions' · ...
-  namkhanPath: string;         // '/finance/ledger'
-  hint?: string;               // optional one-liner about what this page will hold
+  routeLabel: string;
+  namkhanPath: string;
+  hint?: string;
 }
 
 export default function FinanceStub({ propertyId, routeLabel, namkhanPath, hint }: Props) {
   if (propertyId === NAMKHAN_PROPERTY_ID) redirect(namkhanPath);
 
   return (
-    <Page
-      eyebrow={`Finance · ${routeLabel} · Donna`}
-      title={
-        <>
-          {routeLabel} ·{' '}
-          <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>Donna</em>
-        </>
-      }
-      subPages={financeSubPagesForProperty(propertyId)}
+    <DashboardPage
+      title={`Finance · ${routeLabel}`}
+      subtitle={`Donna · property_id=${propertyId} · per-Donna wiring pending`}
     >
-      <Panel
-        title={`${routeLabel} · per-Donna wiring pending`}
-        eyebrow={`Namkhan source: ${namkhanPath}`}
+      <Container
+        title={`${routeLabel} · awaiting Donna feed`}
+        subtitle={`Namkhan source: ${namkhanPath}`}
       >
-        <div style={{ padding: 18, fontSize: 'var(--t-sm)', color: 'var(--ink-soft)', maxWidth: 720 }}>
-          <p style={{ marginTop: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 720 }}>
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--ink, #1B1B1B)' }}>
             This page is part of the Donna finance navigation but isn&apos;t wired to
             Donna&apos;s data yet. The canonical implementation lives at{' '}
-            <a href={namkhanPath} style={{ color: 'var(--brass)' }}>{namkhanPath}</a>{' '}
-            (Namkhan-scoped). Rather than show Namkhan numbers under a Donna URL, we
-            stop here.
+            <a href={namkhanPath} style={{ color: 'var(--primary, #1F3A2E)', fontWeight: 600 }}>{namkhanPath}</a>
+            {' '}(Namkhan-scoped). Rather than show Namkhan numbers under a Donna URL,
+            we stop here.
           </p>
           {hint && (
-            <p style={{ color: 'var(--ink-mute)', fontStyle: 'italic' }}>{hint}</p>
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>{hint}</p>
           )}
-          <p style={{ color: 'var(--ink-mute)', fontSize: 'var(--t-xs)' }}>
-            See <Link href={`/h/${propertyId}/finance/pnl`} style={{ color: 'var(--brass)' }}>Donna P&amp;L</Link>
+          <p style={{ margin: 0, fontSize: 11, color: 'var(--ink-soft, #5A5A5A)' }}>
+            See <a href={`/h/${propertyId}/finance/pnl`} style={{ color: 'var(--primary, #1F3A2E)' }}>Donna P&amp;L</a>
             {' '}for the reference per-property implementation pattern.
           </p>
         </div>
-      </Panel>
-    </Page>
+      </Container>
+    </DashboardPage>
   );
 }
