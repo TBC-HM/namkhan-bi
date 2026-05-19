@@ -1,45 +1,53 @@
-// app/revenue/rateplans/page.tsx — REDESIGN 2026-05-05 (recovery rewrite)
-// compset-style: PageHeader + status header + 3 graphs + KpiBox + DataTable.
+// app/revenue/rateplans/page.tsx
+// 2026-05-19 refactor onto @/app/(cockpit)/_design primitives.
+// Single tree, both properties. Donna shows 0s for views that filter
+// property_id; the Namkhan-only views fall back to empty arrays on non-pid.
 
-import Page from '@/components/page/Page';
-import PeriodSelectorRow from '@/components/page/PeriodSelectorRow';
-import { REVENUE_SUBPAGES } from '../_subpages';
-import KpiBox from '@/components/kpi/KpiBox';
-import { supabase, PROPERTY_ID } from '@/lib/supabase';
-import { resolvePeriod } from '@/lib/period';
-
-import RatePlansGraphs, {
-  type DailyTrendRow,
-  type TypeMixRow,
-  type CancelRow,
-} from './_components/RatePlansGraphs';
 import {
-  PlansTable,
-  SleepingTable,
-  OrphansTable,
-  type PlanRow,
-  type SleepingRow,
-  type OrphanRow,
-} from './_components/PlansTablesClient';
+  DashboardPage, Container, KpiTile, Chart,
+  type ChartSeries, type DashboardTab, type KpiTileProps,
+} from '@/app/(cockpit)/_design';
+import { REVENUE_SUBPAGES } from '../_subpages';
+import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
+import { supabase, PROPERTY_ID } from '@/lib/supabase';
+import { resolvePeriod, type WindowKey } from '@/lib/period';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
 
-interface Props { searchParams: Record<string, string | string[] | undefined>; propertyId?: number; }
+interface Props { searchParams: Record<string, string | string[] | undefined>; propertyId?: number }
+
+interface PlanAgg {
+  name: string; type: string; isConfigured: boolean;
+  bookings: number; cancellations: number; nights: number; revenue: number;
+  leadDaysSum: number; leadDaysN: number; lastBooked: string | null;
+}
+
+function fmtUSD(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(Number(n))) return '—';
+  return '$' + Math.round(Number(n)).toLocaleString('en-US');
+}
+function fmtInt(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(Number(n))) return '—';
+  return Math.round(Number(n)).toLocaleString('en-US');
+}
+function fmtPct(n: number | null | undefined, decimals = 1): string {
+  if (n == null || !Number.isFinite(Number(n))) return '—';
+  return `${Number(n).toFixed(decimals)}%`;
+}
 
 export default async function RatePlansPage({ searchParams, propertyId }: Props) {
-  // PBS 2026-05-18: property-aware. Defaults to PROPERTY_ID (Namkhan) so
-  // /revenue/rateplans is byte-identical. Donna /h/1000001/revenue/rateplans
-  // gets the SAME layout via this same page code with propertyId=1000001.
   const pid = propertyId ?? PROPERTY_ID;
   const period = resolvePeriod(searchParams);
+  const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
+  const basePath = pid !== PROPERTY_ID ? `/h/${pid}/revenue/rateplans` : '/revenue/rateplans';
 
   const { data: configuredPlans } = await supabase
     .from('rate_plans')
     .select('rate_id, rate_name, rate_type, is_active')
     .eq('property_id', pid)
     .eq('is_active', true);
-  const masterNames = new Set((configuredPlans ?? []).map((p: any) => p.rate_name));
+  const masterNames = new Set((configuredPlans ?? []).map((p: { rate_name: string }) => p.rate_name));
 
   const { data: recent90 } = await supabase
     .from('reservations')
@@ -49,15 +57,10 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     .neq('status', 'canceled');
   const activeMasterNames = new Set(
     (recent90 ?? [])
-      .map((r: any) => r.rate_plan)
-      .filter((n: string) => n && masterNames.has(n)),
+      .map((r: { rate_plan: string | null }) => r.rate_plan)
+      .filter((n): n is string => !!n && masterNames.has(n)),
   );
   const activeMasterCount = activeMasterNames.size;
-
-  // v_rate_plan_perf / _sleeping / _orphans are Namkhan-only views today
-  // (no property_id column). Short-circuit for non-Namkhan so Donna's
-  // page renders the same shape with empty plan rows until the views are
-  // extended with a Mews UNION branch (Phase E follow-up).
   const isNamkhan = pid === PROPERTY_ID;
 
   const { data: windowRows } = isNamkhan
@@ -66,92 +69,94 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
         .select('rate_plan, status, total_amount, nights, lead_days, plan_type, is_configured, booking_date, check_in_date')
         .gte('check_in_date', period.from)
         .lte('check_in_date', period.to)
-    : { data: [] as any[] };
+    : { data: [] as Array<Record<string, unknown>> };
 
-  type PlanAgg = {
-    name: string; type: string; isConfigured: boolean;
-    bookings: number; cancellations: number; nights: number; revenue: number;
-    leadDaysSum: number; leadDaysN: number; lastBooked: string | null;
-  };
   const planMap: Record<string, PlanAgg> = {};
-  (windowRows ?? []).forEach((r: any) => {
-    const key = r.rate_plan;
+  (windowRows ?? []).forEach((r: Record<string, unknown>) => {
+    const key = String(r.rate_plan ?? '');
     if (!planMap[key]) {
-      planMap[key] = { name: key, type: r.plan_type, isConfigured: r.is_configured, bookings: 0, cancellations: 0, nights: 0, revenue: 0, leadDaysSum: 0, leadDaysN: 0, lastBooked: null };
+      planMap[key] = { name: key, type: String(r.plan_type ?? ''), isConfigured: Boolean(r.is_configured), bookings: 0, cancellations: 0, nights: 0, revenue: 0, leadDaysSum: 0, leadDaysN: 0, lastBooked: null };
     }
     const p = planMap[key];
     if (r.status === 'canceled') p.cancellations += 1;
     else {
       p.bookings += 1;
-      p.nights += Number(r.nights || 0);
-      p.revenue += Number(r.total_amount || 0);
+      p.nights += Number(r.nights ?? 0);
+      p.revenue += Number(r.total_amount ?? 0);
       if (r.lead_days != null) { p.leadDaysSum += Number(r.lead_days); p.leadDaysN += 1; }
     }
-    const bookDate = (r.booking_date as string)?.slice(0, 10);
+    const bookDate = String(r.booking_date ?? '').slice(0, 10);
     if (bookDate && (!p.lastBooked || bookDate > p.lastBooked)) p.lastBooked = bookDate;
   });
 
-  const rankedAll = Object.values(planMap)
-    .filter((p) => p.bookings > 0 || p.cancellations > 0)
-    .sort((a, b) => b.revenue - a.revenue);
+  const rankedAll = Object.values(planMap).filter((p) => p.bookings > 0 || p.cancellations > 0).sort((a, b) => b.revenue - a.revenue);
   const ranked = rankedAll.filter((p) => activeMasterNames.has(p.name));
   const totalRev = ranked.reduce((s, r) => s + r.revenue, 0);
   const plansBookingInWindow = ranked.filter((r) => r.bookings > 0).length;
   const top3Pct = totalRev > 0 ? (100 * ranked.slice(0, 3).reduce((s, r) => s + r.revenue, 0)) / totalRev : 0;
   const hiddenOrphanInWindow = rankedAll.length - ranked.length;
 
-  const planRows: PlanRow[] = ranked.map((p) => ({
-    name: p.name, type: p.type, isConfigured: p.isConfigured,
-    bookings: p.bookings, cancellations: p.cancellations, nights: p.nights, revenue: p.revenue,
-    adr: p.nights ? p.revenue / p.nights : 0,
-    cancelPct: (p.bookings + p.cancellations) > 0 ? (100 * p.cancellations) / (p.bookings + p.cancellations) : 0,
-    avgLead: p.leadDaysN ? p.leadDaysSum / p.leadDaysN : 0,
-    lastBooked: p.lastBooked,
-    mixPct: totalRev ? (100 * p.revenue) / totalRev : 0,
+  // Plans table rows (pre-formatted strings — no functions cross primitives)
+  const planRows = ranked.map((p) => ({
+    name:        p.name,
+    type:        p.type,
+    bookings:    fmtInt(p.bookings),
+    cancellations: fmtInt(p.cancellations),
+    cancel_pct:  fmtPct((p.bookings + p.cancellations) > 0 ? (100 * p.cancellations) / (p.bookings + p.cancellations) : 0),
+    revenue:     fmtUSD(p.revenue),
+    adr:         fmtUSD(p.nights ? p.revenue / p.nights : 0),
+    mix:         fmtPct(totalRev ? (100 * p.revenue) / totalRev : 0),
+    last_booked: p.lastBooked ?? '—',
   }));
 
+  // Type rollup → donut data (revenue by plan type)
   const typeMap: Record<string, { bookings: number; revenue: number; nights: number }> = {};
   ranked.forEach((p) => {
     if (!typeMap[p.type]) typeMap[p.type] = { bookings: 0, revenue: 0, nights: 0 };
     typeMap[p.type].bookings += p.bookings;
-    typeMap[p.type].revenue += p.revenue;
-    typeMap[p.type].nights += p.nights;
+    typeMap[p.type].revenue  += p.revenue;
+    typeMap[p.type].nights   += p.nights;
   });
-  const typeRollup: TypeMixRow[] = Object.entries(typeMap).map(([type, v]) => ({
-    type, ...v,
-    adr: v.nights ? v.revenue / v.nights : 0,
-    mix: totalRev ? (100 * v.revenue) / totalRev : 0,
-  })).sort((a, b) => b.revenue - a.revenue);
+  const typeDonut = Object.entries(typeMap).map(([type, v]) => ({
+    name:    type,
+    value:   Math.round(v.revenue),
+  })).sort((a, b) => b.value - a.value);
 
+  // Daily trend → line chart
   const trendMap: Record<string, { bookings: number; revenue: number; nights: number }> = {};
-  (windowRows ?? []).forEach((r: any) => {
+  (windowRows ?? []).forEach((r: Record<string, unknown>) => {
     if (r.status === 'canceled') return;
-    const day = (r.booking_date as string)?.slice(0, 10);
+    const day = String(r.booking_date ?? '').slice(0, 10);
     if (!day) return;
     if (!trendMap[day]) trendMap[day] = { bookings: 0, revenue: 0, nights: 0 };
     trendMap[day].bookings += 1;
-    trendMap[day].revenue += Number(r.total_amount || 0);
-    trendMap[day].nights += Number(r.nights || 0);
+    trendMap[day].revenue  += Number(r.total_amount ?? 0);
+    trendMap[day].nights   += Number(r.nights ?? 0);
   });
-  const trend: DailyTrendRow[] = Object.entries(trendMap).map(([day, v]) => ({
-    day, bookings: v.bookings, revenue: v.revenue,
-    adr: v.nights ? v.revenue / v.nights : 0,
+  const trendData = Object.entries(trendMap).map(([day, v]) => ({
+    day, bookings: v.bookings, revenue: Math.round(v.revenue),
   })).sort((a, b) => a.day.localeCompare(b.day));
 
-  const cancelData: CancelRow[] = ranked.map((p) => ({
-    name: p.name,
-    cancelPct: (p.bookings + p.cancellations) > 0 ? (100 * p.cancellations) / (p.bookings + p.cancellations) : 0,
-    bookings: p.bookings, cancellations: p.cancellations,
+  // Top 10 plans by revenue → bar chart
+  const planBar = ranked.slice(0, 10).map((p) => ({
+    name: p.name.length > 24 ? p.name.slice(0, 24) + '…' : p.name,
+    revenue: Math.round(p.revenue),
   }));
 
+  // Sleeping + orphans (Namkhan-only views)
   const { data: sleepingPlans } = isNamkhan
     ? await supabase
         .from('v_rate_plan_sleeping')
         .select('rate_name, rate_type, last_booked, days_since')
         .order('days_since', { ascending: false })
         .limit(30)
-    : { data: [] as any[] };
-  const sleepingRows: SleepingRow[] = (sleepingPlans ?? []) as SleepingRow[];
+    : { data: [] as Array<{ rate_name: string; rate_type: string; last_booked: string | null; days_since: number }> };
+  const sleepingRows = (sleepingPlans ?? []).map((r) => ({
+    name:        r.rate_name,
+    type:        r.rate_type,
+    last_booked: r.last_booked ?? '—',
+    days_idle:   fmtInt(r.days_since),
+  }));
 
   const { data: orphans } = isNamkhan
     ? await supabase
@@ -159,70 +164,143 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
         .select('rate_plan, bookings_lifetime, revenue_lifetime, last_booked')
         .order('revenue_lifetime', { ascending: false })
         .limit(20)
-    : { data: [] as any[] };
-  const orphanRows: OrphanRow[] = (orphans ?? []) as OrphanRow[];
+    : { data: [] as Array<{ rate_plan: string; bookings_lifetime: number; revenue_lifetime: number; last_booked: string | null }> };
+  const orphanRows = (orphans ?? []).map((r) => ({
+    plan:        r.rate_plan,
+    bookings:    fmtInt(r.bookings_lifetime),
+    revenue:     fmtUSD(r.revenue_lifetime),
+    last_booked: r.last_booked ?? '—',
+  }));
+
+  // Headline tiles
+  const tiles: KpiTileProps[] = [
+    { label: `Plans booking · ${period.label}`, value: `${plansBookingInWindow}/${activeMasterCount}`, size: 'sm',
+      footnote: 'plans w/ ≥1 reservation ÷ active master', status: plansBookingInWindow > 0 ? 'green' : 'grey' },
+    { label: 'Sleeping plans 90d', value: sleepingRows.length, size: 'sm',
+      footnote: 'idle ≥ 90d', status: sleepingRows.length > 0 ? 'amber' : 'grey' },
+    { label: 'Top 3 concentration', value: `${top3Pct.toFixed(1)}%`, size: 'sm',
+      footnote: '>60% healthy · <40% scattered', status: top3Pct >= 60 ? 'green' : top3Pct >= 40 ? 'amber' : 'red' },
+    { label: `Revenue · ${period.label}`, value: Math.round(totalRev), currency: 'USD', size: 'sm',
+      footnote: 'attributed to a rate plan', status: totalRev > 0 ? 'green' : 'grey' },
+  ];
+
+  const tabs: DashboardTab[] = subPages.map((s) => ({ key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/rateplans') }));
+
+  // Period pill URL helper
+  const hrefFor = (newWin: WindowKey) => {
+    const p = new URLSearchParams();
+    if (newWin !== '30d') p.set('win', newWin);
+    if (period.cmp && period.cmp !== 'none') p.set('cmp', period.cmp);
+    const qs = p.toString();
+    return `${basePath}${qs ? '?' + qs : ''}`;
+  };
+  const winOptions: Array<{ k: WindowKey; label: string }> = [
+    { k: '7d', label: '7d' }, { k: '30d', label: '30d' }, { k: '90d', label: '90d' }, { k: '180d', label: '180d' },
+  ];
+
+  const planCols: ChartSeries[] = [
+    { key: 'type',          label: 'Type' },
+    { key: 'bookings',      label: 'Bookings' },
+    { key: 'cancellations', label: 'Cxl' },
+    { key: 'cancel_pct',    label: 'Cancel %' },
+    { key: 'revenue',       label: 'Revenue' },
+    { key: 'adr',           label: 'ADR' },
+    { key: 'mix',           label: 'Mix %' },
+    { key: 'last_booked',   label: 'Last booked' },
+  ];
 
   return (
-    <Page
-      eyebrow="Revenue · Rate plans"
-      title={<>Sell the right <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>plan</em>, retire the dead ones.</>}
-      subPages={REVENUE_SUBPAGES}
-      topRight={
-        <a href="/revenue/rateplans/dead" style={{
-          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-          fontSize: 11, letterSpacing: '0.10em', textTransform: 'uppercase', fontWeight: 700,
-          color: '#0a0a0a', background: '#a8854a',
-          border: '1px solid #2a2520', padding: '6px 12px',
-          borderRadius: 4, textDecoration: 'none',
+    <DashboardPage
+      title="Revenue · Rate plans"
+      subtitle={`Sell the right plan, retire the dead ones. ${period.label}.`}
+      tabs={tabs}
+      action={
+        <a href={`${basePath.replace('/rateplans','')}/rateplans/dead`} style={{
+          fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600,
+          padding: '6px 14px', borderRadius: 4,
+          background: 'var(--terracotta, #B8542A)', color: '#FFF',
+          border: 'none', textDecoration: 'none',
         }}>↗ Dead plans (90d)</a>
       }
     >
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginTop: 14 }}>
-        <KpiBox value={null} unit="text" valueText={`${plansBookingInWindow}/${activeMasterCount}`} label={`Plans booking ${period.label}`} tooltip={`Plans with at least one reservation in ${period.label} ÷ active master plans.`} />
-        <KpiBox value={sleepingRows.length} unit="count" label="Sleeping plans 90d" tooltip="Active plans with 0 bookings in the last 90 days. Click 'Dead plans' top-right for the cleanup list." />
-        <KpiBox value={top3Pct} unit="pct" label="Top 3 concentration" tooltip="Share of revenue captured by the top 3 plans. > 60% = healthy clarity, < 40% = scattered." />
-        <KpiBox value={totalRev} unit="usd" label={`Revenue ${period.label}`} tooltip="Sum of reservation total_amount attributed to a rate plan in this window." />
-      </div>
-
-      {/* Canonical period chooser — under the KPI tile row. */}
-      <PeriodSelectorRow
-        basePath="/revenue/rateplans"
-        win={period.win}
-        cmp={period.cmp}
-        preserve={{ seg: period.seg }}
-      />
-
-      <RatePlansGraphs trend={trend} typeMix={typeRollup} cancel={cancelData} />
-
-      <div style={{ marginTop: 18 }}>
-        <SectionHead title="Plans" emphasis="ranked by revenue" sub={`${period.label} · active master plans only${hiddenOrphanInWindow > 0 ? ` · ${hiddenOrphanInWindow} orphan/retired hidden — see below` : ''}`} source="v_rate_plan_perf" />
-        <PlansTable rows={planRows} />
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 12, marginTop: 18 }}>
-        <div>
-          <SectionHead title="Sleeping plans" emphasis="≥90d idle" sub={`${sleepingRows.length} configured · candidates to retire`} source="v_rate_plan_sleeping" />
-          <SleepingTable rows={sleepingRows} />
+      <Container title="Headline" subtitle={period.label} density="compact">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+          {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
         </div>
-        <div>
-          <SectionHead title="Orphan plans" emphasis="not in master" sub="Booked but not configured · GDS-injected" source="v_rate_plan_orphans" />
-          <OrphansTable rows={orphanRows} />
-        </div>
-      </div>
-    </Page>
-  );
-}
+      </Container>
 
-function SectionHead({ title, emphasis, sub, source }: { title: string; emphasis?: string; sub?: string; source?: string }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12, marginBottom: 6, flexWrap: 'wrap' }}>
-      <div>
-        <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-xl)', fontWeight: 500, color: 'var(--ink)', lineHeight: 1.1 }}>
-          {title}
-          {emphasis && <span style={{ marginLeft: 8, fontFamily: 'var(--mono)', fontStyle: 'normal', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>{emphasis}</span>}
+      <Container title="Window" subtitle="period selector" density="compact">
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+          {winOptions.map((o) => {
+            const active = o.k === period.win;
+            return (
+              <a key={o.k} href={hrefFor(o.k)} style={{
+                fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase',
+                padding: '4px 10px', borderRadius: 99,
+                border: `1px solid ${active ? 'var(--primary, #1F3A2E)' : 'var(--hairline, #E6DFCC)'}`,
+                background: active ? 'var(--primary, #1F3A2E)' : 'var(--paper, #FFFFFF)',
+                color: active ? '#FFFFFF' : 'var(--ink-soft, #5A5A5A)',
+                fontWeight: active ? 600 : 500, textDecoration: 'none',
+              }}>{o.label}</a>
+            );
+          })}
         </div>
-        {sub && <div style={{ marginTop: 2, fontSize: 'var(--t-sm)', color: 'var(--ink-mute)' }}>{sub}</div>}
-      </div>
-      {source && <span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-loose)', textTransform: 'uppercase', color: 'var(--ink-faint)' }}>{source}</span>}
-    </div>
+      </Container>
+
+      <Container title="Daily booking trend" subtitle={`bookings + revenue · ${period.label}`}>
+        <Chart variant="line" data={trendData} xKey="day"
+          series={[
+            { key: 'bookings', label: 'Bookings', color: '#1F3A2E' },
+            { key: 'revenue',  label: 'Revenue',  color: '#B8542A' },
+          ]}
+          height={220}
+          empty={{ title: 'No booking activity in window' }}
+        />
+      </Container>
+
+      <Container title="Mix by plan type" subtitle={`revenue share · ${period.label}`}>
+        <Chart variant="donut" data={typeDonut} xKey="name"
+          series={[{ key: 'value', label: 'Revenue' }]}
+          height={220}
+          empty={{ title: 'No plan-type mix' }}
+        />
+      </Container>
+
+      <Container title="Top 10 plans · revenue" subtitle={`${period.label}`}>
+        <Chart variant="bar" data={planBar} xKey="name"
+          series={[{ key: 'revenue', label: 'Revenue', color: '#1F3A2E' }]}
+          height={240}
+          empty={{ title: 'No plans booking in window' }}
+        />
+      </Container>
+
+      <Container title={`Plans · ${ranked.length} active`} subtitle={`${period.label}${hiddenOrphanInWindow > 0 ? ` · ${hiddenOrphanInWindow} orphan/retired hidden` : ''} · v_rate_plan_perf`}>
+        <Chart variant="table" data={planRows} xKey="name" series={planCols}
+          empty={{ title: 'No plans in window' }}
+        />
+      </Container>
+
+      <Container title="Sleeping plans · ≥ 90d idle" subtitle="candidates to retire · v_rate_plan_sleeping">
+        <Chart variant="table" data={sleepingRows} xKey="name"
+          series={[
+            { key: 'type',        label: 'Type' },
+            { key: 'last_booked', label: 'Last booked' },
+            { key: 'days_idle',   label: 'Days idle' },
+          ]}
+          empty={{ title: 'No sleeping plans' }}
+        />
+      </Container>
+
+      <Container title="Orphan plans · not in master" subtitle="booked but not configured · GDS-injected · v_rate_plan_orphans">
+        <Chart variant="table" data={orphanRows} xKey="plan"
+          series={[
+            { key: 'bookings',    label: 'Bookings · lifetime' },
+            { key: 'revenue',     label: 'Revenue · lifetime' },
+            { key: 'last_booked', label: 'Last booked' },
+          ]}
+          empty={{ title: 'No orphan plans' }}
+        />
+      </Container>
+    </DashboardPage>
   );
 }
