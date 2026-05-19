@@ -1,10 +1,9 @@
 // app/cockpit-v2/layout.tsx
 //
-// PBS 2026-05-17 v2: 14 flat tabs → 5 grouped top tabs + per-group sub-strip.
-// Mirrors the finance "Acc" submenu pattern. Routes outside the chosen group
-// fall back to Home. Every existing URL still works.
-// 2026-05-19: added "Inventory" submenu under Knowledge → /cockpit/supabase
-// (legacy redirect resolves to /h/260955/cockpit/supabase via middleware).
+// 5+1 grouped top tabs. 2026-05-19: Inventory promoted to a top-level group
+// (was buried as a Knowledge subitem — invisible until Knowledge clicked).
+// Inventory has no subs — clicking it goes straight to /cockpit/supabase
+// (middleware redirects to /h/260955/cockpit/supabase).
 
 import { fetchAgents, fetchDocs, fetchMemories } from './_lib/data';
 import { fetchOpenTaskCount, fetchUnseenNotifyCount } from './_lib/data-port';
@@ -23,10 +22,7 @@ export default async function CockpitV2Layout({ children }: { children: React.Re
   ]);
 
   const groups: Group[] = [
-    {
-      key: 'home', label: 'Home', href: '/cockpit-v2',
-      subs: [],
-    },
+    { key: 'home', label: 'Home', href: '/cockpit-v2', subs: [] },
     {
       key: 'fleet', label: 'Fleet', href: '/cockpit-v2/team',
       subs: [
@@ -41,8 +37,11 @@ export default async function CockpitV2Layout({ children }: { children: React.Re
         { href: '/cockpit-v2/docs',      label: 'Docs',      n: docs.length },
         { href: '/cockpit-v2/schemas',   label: 'Schemas',   n: null },
         { href: '/cockpit-v2/freshness', label: 'Freshness', n: null },
-        { href: '/cockpit/supabase',     label: 'Inventory', n: null },
       ],
+    },
+    {
+      key: 'inventory', label: 'Inventory', href: '/cockpit/supabase',
+      subs: [],
     },
     {
       key: 'ops', label: 'Ops', href: '/cockpit-v2/tasks',
