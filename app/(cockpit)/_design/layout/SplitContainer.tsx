@@ -1,5 +1,9 @@
 // SplitContainer — two-column layout: typically KpiTile(s) left, Chart right.
 // Wraps a Container so Chart's dimension dropdown can portal into the header.
+//
+// 2026-05-19: outer wrapper spans the full row of DashboardPage's grid body
+// (`gridColumn: '1 / -1'`) — a 2-col split inside a single grid cell would be
+// too cramped.
 
 'use client';
 
@@ -24,16 +28,16 @@ export default function SplitContainer(props: SplitContainerProps) {
       <div style={S.cell}>{right}</div>
     </div>
   );
-  if (!title) {
-    return body;
-  }
   return (
-    <Container title={title} subtitle={subtitle} action={action}>
-      {body}
-    </Container>
+    <div style={S.spanFullRow}>
+      {title
+        ? <Container title={title} subtitle={subtitle} action={action}>{body}</Container>
+        : body}
+    </div>
   );
 }
 
 const S: Record<string, CSSProperties> = {
   cell: { minWidth: 0, display: 'flex', flexDirection: 'column' },
+  spanFullRow: { gridColumn: '1 / -1' },
 };
