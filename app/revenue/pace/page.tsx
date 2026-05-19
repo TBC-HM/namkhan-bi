@@ -4,11 +4,15 @@
 // Data fetchers + period/granularity logic are UNCHANGED — same v_otb_pace,
 // v_pace_curve, mv_kpi_daily reads; same resolvePeriod / capacityRnRange.
 //
-// Note on the period/granularity strip: it is a URL-driven CONTROL, not a
-// "visual block" (the brief's §1 carveout). Until the design system grows
-// a PeriodSelector primitive, kept inline-styled using design tokens.
-// Bespoke <PaceGraphs> and <PaceBucketsTable> are now stubs — every chart /
-// table here is the design-system <Chart> primitive.
+// PRIMITIVE GAP noted for pair-Claude:
+//   <Chart formatY={(v) => ...}> is a function prop. Because Chart is a
+//   'use client' primitive and this page is a server component, passing a
+//   function across the boundary throws "Functions cannot be passed to
+//   Client Components from Server Components" at runtime. Worked around
+//   below by pre-formatting numeric data into string columns and dropping
+//   formatY. Recommend Chart accept a string enum (e.g. valueAxisFormat:
+//   'integer' | 'percent' | 'currency') alongside formatY so server pages
+//   can opt into common formats without crossing the boundary.
 
 import {
   DashboardPage,
@@ -181,13 +185,13 @@ export default async function PacePage({
 
   const buckets = bucketRows(rows, gran, stlyMap, fromIso, toIso, pid);
   const stlyRnTotal = buckets.reduce((s, b) => s + b.stlyRn, 0);
+  const stlyRevTotal = buckets.reduce((s, b) => s + b.stlyRev, 0);
   const stlyPctOverall = stlyRnTotal > 0 ? (totalRns / stlyRnTotal) * 100 : 0;
   const cmpActive = period.cmp !== 'none' && stlyRnTotal > 0;
   const cmpLabel = period.cmpLabel ? period.cmpLabel.replace(/^vs\s+/i, '') : 'STLY';
 
-  // ─── tiles ──────────────────────────────────────────────────────────────
   const pctChange = (cur: number, base: number) => (base > 0 ? ((cur - base) / base) * 100 : 0);
-  const stlyAdr = stlyRnTotal > 0 ? buckets.reduce((s, b) => s + b.stlyRev, 0) / stlyRnTotal : 0;
+  const stlyAdr = stlyRnTotal > 0 ? stlyRevTotal / stlyRnTotal : 0;
   const stlyOcc = capacityRn > 0 ? (stlyRnTotal / capacityRn) * 100 : 0;
 
   const tiles: KpiTileProps[] = [
@@ -199,8 +203,8 @@ export default async function PacePage({
     },
     {
       label: 'OTB Revenue', value: totalRev, currency: 'USD', size: 'sm',
-      delta: cmpActive ? { value: pctChange(totalRev, buckets.reduce((s, b) => s + b.stlyRev, 0)), period: cmpLabel,
-        direction: totalRev >= buckets.reduce((s, b) => s + b.stlyRev, 0) ? 'up' : 'down' } : undefined,
+      delta: cmpActive ? { value: pctChange(totalRev, stlyRevTotal), period: cmpLabel,
+        direction: totalRev >= stlyRevTotal ? 'up' : 'down' } : undefined,
     },
     {
       label: 'OTB ADR', value: Math.round(adr), currency: 'USD', size: 'sm',
@@ -216,7 +220,7 @@ export default async function PacePage({
     { label: 'vs STLY', value: `${stlyPctOverall.toFixed(0)}%`, size: 'sm', status: stlyPctOverall >= 100 ? 'green' : stlyPctOverall >= 80 ? 'amber' : 'red' },
   ];
 
-  // ─── pace-curve data → primitive Chart ──────────────────────────────────
+  // ─── data prep (no functions cross server→client boundary) ─────────────
   const paceCurveData = (paceCurveRaw as PaceCurvePoint[]).map((r) => ({
     day:    r.day ?? r.stay_date ?? '',
     actual: r.rooms_actual ?? null,
@@ -225,37 +229,36 @@ export default async function PacePage({
     budget: r.rooms_budget_daily_avg ?? null,
   }));
   const paceSeries: ChartSeries[] = [
-    { key: 'actual', label: 'Actual', color: 'var(--primary, #1F3A2E)' },
-    { key: 'otb',    label: 'OTB',    color: 'var(--sand, #B8A878)' },
-    { key: 'stly',   label: 'STLY',   color: 'var(--ink-soft, #5A5A5A)' },
-    { key: 'budget', label: 'Budget', color: 'var(--terracotta, #B8542A)' },
+    { key: 'actual', label: 'Actual', color: '#1F3A2E' },
+    { key: 'otb',    label: 'OTB',    color: '#B8A878' },
+    { key: 'stly',   label: 'STLY',   color: '#5A5A5A' },
+    { key: 'budget', label: 'Budget', color: '#B8542A' },
   ];
 
-  // ─── bucket data → primitive Charts ─────────────────────────────────────
   const formatLabel = (key: string) => (gran === 'month' ? fmtMonth(key) : key.slice(5));
   const bucketBar = buckets.map((b) => ({ bucket: formatLabel(b.key), rns: b.rns }));
   const stlyBar = buckets
     .filter((b) => b.stlyRn > 0)
     .map((b) => ({ bucket: formatLabel(b.key), stly_pct: Math.round((b.rns / b.stlyRn) * 100) }));
+  // Pre-format numeric table cells (Chart variant='table' is in a client comp
+  // — formatY can't cross the boundary, so we format here).
   const bucketTable = buckets.map((b) => ({
     bucket:   formatLabel(b.key),
-    rns:      b.rns,
-    rev:      Math.round(b.rev),
-    occ:      b.capacity > 0 ? Math.round((b.rns / b.capacity) * 1000) / 10 : 0,
+    rns:      b.rns.toLocaleString('en-US'),
+    rev:      `$${Math.round(b.rev).toLocaleString('en-US')}`,
+    occ:      b.capacity > 0 ? `${((b.rns / b.capacity) * 100).toFixed(1)}%` : '—',
     cxl:      b.cxl,
-    stly_pct: b.stlyRn > 0 ? Math.round((b.rns / b.stlyRn) * 100) : null,
+    stly_pct: b.stlyRn > 0 ? `${Math.round((b.rns / b.stlyRn) * 100)}%` : '—',
   }));
 
-  // ─── tabs (subpage strip via DashboardPage.tabs) ────────────────────────
   const basePath = propertyId ? `/h/${propertyId}/revenue` : '/revenue';
   const tabs: DashboardTab[] = REVENUE_SUBPAGES.map((s) => {
-    const href = s.href.startsWith('/h/') || s.href === '/revenue' || s.href.startsWith('/revenue/')
-      ? (propertyId ? s.href.replace(/^\/revenue/, basePath) : s.href)
+    const href = propertyId && (s.href.startsWith('/revenue/') || s.href === '/revenue')
+      ? s.href.replace(/^\/revenue/, basePath)
       : s.href;
     return { key: s.href, label: s.label, href, active: s.href.endsWith('/pace') };
   });
 
-  // ─── period + granularity control strip (URL-driven, not a card) ────────
   const granOptions: Array<{ k: 'day' | 'week' | 'month'; label: string }> = [
     { k: 'day', label: 'Day' }, { k: 'week', label: 'Week' }, { k: 'month', label: 'Month' },
   ];
@@ -280,14 +283,12 @@ export default async function PacePage({
       subtitle={`What's on the books ahead. ${period.label}.`}
       tabs={tabs}
     >
-      {/* KPIs */}
       <Container title="On-the-books snapshot" subtitle={period.label} density="compact">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
           {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
         </div>
       </Container>
 
-      {/* Period + granularity strip */}
       <Container title="Window & granularity" subtitle="URL-driven controls" density="compact">
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
           <ControlGroup label="Forward window">
@@ -319,7 +320,7 @@ export default async function PacePage({
           variant="bar"
           data={bucketBar}
           xKey="bucket"
-          series={[{ key: 'rns', label: 'Rooms', color: 'var(--primary, #1F3A2E)' }]}
+          series={[{ key: 'rns', label: 'Rooms', color: '#1F3A2E' }]}
           height={240}
           empty={{ title: 'No on-the-books in this window' }}
         />
@@ -330,9 +331,8 @@ export default async function PacePage({
           variant="bar"
           data={stlyBar}
           xKey="bucket"
-          series={[{ key: 'stly_pct', label: 'STLY %', color: 'var(--sand, #B8A878)' }]}
+          series={[{ key: 'stly_pct', label: 'STLY %', color: '#B8A878' }]}
           height={220}
-          formatY={(v) => `${v}%`}
           empty={{ title: 'No STLY actuals' }}
         />
       </Container>
@@ -354,8 +354,6 @@ export default async function PacePage({
     </DashboardPage>
   );
 }
-
-// ─── inline URL-control helpers (not visual blocks) ──────────────────────
 
 function ControlGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
