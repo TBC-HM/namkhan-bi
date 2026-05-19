@@ -21,6 +21,16 @@ function renderValue(value: KpiTileProps['value'], currency?: KpiTileProps['curr
   return formatNumber(value, { decimals: 0 });
 }
 
+// When value is a long string (e.g. a kpi.v_… view name) we shrink the
+// display so it fits a sm tile without horizontal overflow.
+function valueFontSizeFor(value: KpiTileProps['value'], base: number): number {
+  if (typeof value !== 'string') return base;
+  if (value.length <= 8) return base;
+  if (value.length <= 14) return Math.max(13, base - 4);
+  if (value.length <= 24) return Math.max(12, base - 7);
+  return Math.max(11, base - 9);
+}
+
 export default function KpiTile(props: KpiTileProps) {
   const {
     label, value, unit, currency, delta, compare, status, footnote,
@@ -28,7 +38,8 @@ export default function KpiTile(props: KpiTileProps) {
   } = props;
   const [tipOpen, setTipOpen] = useState(false);
   const height = SIZE_HEIGHT[size];
-  const valueSize = SIZE_VALUE[size];
+  const valueBase = SIZE_VALUE[size];
+  const valueSize = valueFontSizeFor(value, valueBase);
   const pad = SIZE_PAD[size];
 
   const compareItems: KpiComparison[] = compare ?? [];
@@ -55,6 +66,7 @@ export default function KpiTile(props: KpiTileProps) {
     fontFamily: 'var(--sans, "Inter Tight", system-ui, sans-serif)',
     position: 'relative',
     fontVariantNumeric: 'tabular-nums',
+    overflow: 'hidden',
   };
 
   function handleKey(e: React.KeyboardEvent<HTMLDivElement>) {
@@ -69,7 +81,7 @@ export default function KpiTile(props: KpiTileProps) {
     return (
       <div style={tileStyle} aria-busy>
         <Skeleton width="60%" height={10} />
-        <div style={{ marginTop: 6 }}><Skeleton width="40%" height={valueSize - 6} /></div>
+        <div style={{ marginTop: 6 }}><Skeleton width="40%" height={valueBase - 6} /></div>
         <div style={{ marginTop: 6 }}><Skeleton width="50%" height={10} /></div>
       </div>
     );
@@ -107,8 +119,8 @@ export default function KpiTile(props: KpiTileProps) {
       </div>
 
       <div style={{ ...S.valueRow, fontSize: valueSize }}>
-        <span>{renderValue(value, currency)}</span>
-        {unit && <span style={{ ...S.unit, fontSize: Math.max(11, valueSize - 14) }}>{unit}</span>}
+        <span style={S.valueText}>{renderValue(value, currency)}</span>
+        {unit && <span style={{ ...S.unit, fontSize: Math.max(10, valueSize - 8) }}>{unit}</span>}
       </div>
 
       {delta && (
@@ -173,8 +185,9 @@ function CompareLine({
 
 const S: Record<string, CSSProperties> = {
   headRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  label: { color: 'var(--ink-soft, #5A5A5A)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 500 },
-  valueRow: { display: 'flex', alignItems: 'baseline', gap: 6, fontWeight: 600, color: 'var(--ink, #1B1B1B)', fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 },
+  label: { color: 'var(--ink-soft, #5A5A5A)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 },
+  valueRow: { display: 'flex', alignItems: 'baseline', gap: 6, fontWeight: 600, color: 'var(--ink, #1B1B1B)', fontVariantNumeric: 'tabular-nums', lineHeight: 1.15, minWidth: 0 },
+  valueText: { wordBreak: 'break-word', minWidth: 0 },
   unit: { color: 'var(--ink-soft, #5A5A5A)', fontWeight: 500 },
   deltaLine: { display: 'flex', alignItems: 'baseline', gap: 4, fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums' },
   arrow: { fontSize: 14 },
@@ -210,5 +223,5 @@ const S: Record<string, CSSProperties> = {
     flexDirection: 'column',
     gap: 2,
   },
-  footnote: { fontSize: 10, color: 'var(--ink-soft, #5A5A5A)', marginTop: 'auto' },
+  footnote: { fontSize: 10, color: 'var(--ink-soft, #5A5A5A)', marginTop: 'auto', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' },
 };
