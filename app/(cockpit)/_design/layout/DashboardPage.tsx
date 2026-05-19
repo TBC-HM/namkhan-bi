@@ -1,6 +1,11 @@
 // DashboardPage — every cockpit page sits inside this template.
 // Owns the `.cockpit-design` scoped-token wrapper that activates v5 tokens
 // for everything nested below.
+//
+// 2026-05-19: body switched from flex-column to grid (auto-fit, minmax 360).
+// Containers are *containers* — they pack side-by-side when there's room.
+// A child that needs to span the row should set
+// `style={{ gridColumn: '1 / -1' }}` on its outer wrap (SplitContainer does this).
 
 'use client';
 
@@ -28,9 +33,7 @@ export default function DashboardPage(props: DashboardPageProps) {
 function TabStrip({ tabs }: { tabs: DashboardTab[] }) {
   return (
     <nav style={S.tabStrip} role="tablist" aria-label="Page sections">
-      {tabs.map((t) => (
-        <TabButton key={t.key} tab={t} />
-      ))}
+      {tabs.map((t) => <TabButton key={t.key} tab={t} />)}
     </nav>
   );
 }
@@ -44,15 +47,8 @@ function TabButton({ tab }: { tab: DashboardTab }) {
     </span>
   );
   const baseStyle: CSSProperties = { ...S.tab, ...(active ? S.tabActive : null) };
-
-  if (tab.href) {
-    return (
-      <a href={tab.href} role="tab" aria-selected={active} style={baseStyle}>{content}</a>
-    );
-  }
-  return (
-    <button type="button" role="tab" aria-selected={active} onClick={tab.onSelect} style={baseStyle}>{content}</button>
-  );
+  if (tab.href) return <a href={tab.href} role="tab" aria-selected={active} style={baseStyle}>{content}</a>;
+  return <button type="button" role="tab" aria-selected={active} onClick={tab.onSelect} style={baseStyle}>{content}</button>;
 }
 
 const S: Record<string, CSSProperties> = {
@@ -87,5 +83,10 @@ const S: Record<string, CSSProperties> = {
   tabActive: { color: 'var(--ink, #1B1B1B)', borderBottomColor: 'var(--primary, #1F3A2E)', fontWeight: 600 },
   tabInner: { display: 'inline-flex', alignItems: 'center', gap: 6 },
   tabCount: { fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', background: 'var(--bg, #F4EFE2)', borderRadius: 99, padding: '0 6px', fontWeight: 500 },
-  body: { display: 'flex', flexDirection: 'column', gap: 24 },
+  body: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+    gap: 16,
+    alignItems: 'start',
+  },
 };
