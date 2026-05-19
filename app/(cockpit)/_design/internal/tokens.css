@@ -1,0 +1,37 @@
+/* Cockpit design system v5 — scoped tokens.
+ * Applied via <div className="cockpit-design"> wrapper in DashboardPage.
+ * Legacy /h/[id] pages (Namkhan-dark theme) are untouched outside this scope.
+ */
+
+.cockpit-design {
+  --bg:           #F4EFE2;
+  --primary:      #1F3A2E;
+  --primary-fg:   #FFFFFF;
+  --sand:         #B8A878;
+  --terracotta:   #B8542A;
+  --ink:          #1B1B1B;
+  --ink-soft:     #5A5A5A;
+  --hairline:     #E6DFCC;
+  --paper:        #FFFFFF;
+
+  --status-green: #2E7D32;
+  --status-amber: #B8A878;
+  --status-red:   #B8542A;
+  --status-grey:  #8A8A8A;
+
+  background: var(--bg);
+  color: var(--ink);
+  font-feature-settings: 'tnum' 1;
+}
+
+/* Tabular numerals everywhere inside the cockpit design subtree. */
+.cockpit-design .tnum,
+.cockpit-design [data-tnum] {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Skeleton shimmer keyframes (used by Skeleton.tsx). */
+@keyframes tbc-skeleton {
+  0%   { background-position: 0% 0%; }
+  100% { background-position: -200% 0%; }
+}
