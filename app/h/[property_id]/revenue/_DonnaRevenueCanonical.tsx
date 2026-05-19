@@ -1,13 +1,14 @@
 // app/h/[property_id]/revenue/_DonnaRevenueCanonical.tsx
-// Canonical Donna revenue surface — refactored 2026-05-19 onto _design primitives.
-// One file flips all 7 Donna revenue sub-routes (channels, compset, forecast,
-// parity, pricing, pulse, rateplans) to the new visual system at once.
-// state='data-needed' tiles → KpiTile{value:0, status:'grey', footnote:'…'}.
-// Empty panels → Container + Chart variant='line' with empty prop.
+// Canonical Donna revenue surface — refactored onto _design primitives.
+// Renders identical scaffold for all 7 Donna revenue sub-routes.
+//
+// 2026-05-19 fix: dropped ListContainer (its rowKey/renderRow are functions
+// that can't cross server→client boundary). Detail table now uses
+// Chart variant='table' with an empty-state placeholder.
 
 import {
-  DashboardPage, Container, KpiTile, Chart, ListContainer,
-  type DashboardTab, type KpiTileProps, type ListContainerColumn,
+  DashboardPage, Container, KpiTile, Chart,
+  type DashboardTab, type KpiTileProps, type ChartSeries,
 } from '@/app/(cockpit)/_design';
 import { REVENUE_SUBPAGES } from '@/app/revenue/_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
@@ -46,14 +47,14 @@ export default function DonnaRevenueCanonical({ propertyId, cfg }: Props) {
     footnote: NEEDS_NOTE,
   }));
 
-  // Mock-typed empty rows so ListContainer is happy + columns wire later.
-  type EmptyRow = Record<string, string | number>;
-  const tableCols: ListContainerColumn<EmptyRow>[] = (cfg.tableColumns ?? []).map((label) => ({
-    key: label.toLowerCase().replace(/[^a-z0-9]+/g, '_') as keyof EmptyRow & string,
+  // Detail table: render as Chart variant='table' with explicit empty data.
+  // ListContainer is intentionally NOT used here — its rowKey/renderRow are
+  // functions and can't cross server→client.
+  const tableSeries: ChartSeries[] = (cfg.tableColumns ?? []).slice(1).map((label) => ({
+    key: label.toLowerCase().replace(/[^a-z0-9]+/g, '_'),
     label,
-    align: 'left',
-    sortable: true,
   }));
+  const tableXKey = (cfg.tableColumns ?? [])[0] ?? '';
 
   return (
     <DashboardPage
@@ -80,17 +81,16 @@ export default function DonnaRevenueCanonical({ propertyId, cfg }: Props) {
         </Container>
       ))}
 
-      {tableCols.length > 0 && (
-        <ListContainer<EmptyRow>
-          title={`${cfg.title} · detail`}
-          subtitle={NEEDS_NOTE}
-          data={[]}
-          preview={5}
-          rowKey={() => '_'}
-          renderRow={() => <span>—</span>}
-          drawerColumns={tableCols}
-          empty={{ title: 'data needed', hint: NEEDS_NOTE }}
-        />
+      {tableXKey && tableSeries.length > 0 && (
+        <Container title={`${cfg.title} · detail`} subtitle={NEEDS_NOTE}>
+          <Chart
+            variant="table"
+            data={[]}
+            xKey={tableXKey.toLowerCase().replace(/[^a-z0-9]+/g, '_')}
+            series={tableSeries}
+            empty={{ title: 'data needed', hint: NEEDS_NOTE }}
+          />
+        </Container>
       )}
     </DashboardPage>
   );
