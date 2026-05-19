@@ -1,6 +1,10 @@
 // Merged F&B Outlets — full-parity scaffold for legacy /operations/restaurant.
 // Single tree, both properties; live tiles render real data, "wire later"
 // tiles render 0 + grey status + footnote pointing at the missing bridge.
+//
+// 2026-05-19: tile labels switched from "MTD …" to "… · 30d" since the
+// aggregator now anchors on the latest-available revenue_date (data lake
+// lag means MTD-of-current-month is often empty even when 30d is rich).
 
 'use client';
 
@@ -35,9 +39,6 @@ function formatPct(n: number, decimals = 1): string {
   return `${n.toFixed(decimals)}%`;
 }
 
-// Helper: tile that ALWAYS shows '0' + grey + 'wire later'. Used for every
-// metric whose source view isn't bridged yet. Wiring later = replace this
-// call with a normal KpiTile.
 function pending(label: string, footnoteExtra?: string): KpiTileProps {
   return {
     label,
@@ -52,21 +53,23 @@ export default function OutletsView({ snapshot, propertyName }: Props) {
   const {
     mtdRevenue, mtdCovers, mtdAvgCheck, topOutlet,
     byOutlet, dailyByOutlet, outletKeys, topProducts, productCount,
-    daysCovered, monthLabel,
+    daysCovered, monthLabel, rangeFromIso, rangeToIso,
     foodRevMtd, bevRevMtd, minibarRevMtd,
     monthlyTrend, pnlMonthlyRollup, topSellerTrend, glDetail, posTransactions,
   } = snapshot;
 
   const [drillProduct, setDrillProduct] = useState<OutletMixRow | null>(null);
+  const windowLabel = `${rangeFromIso} → ${rangeToIso}`;
+  const winFootnote = `30d · ${rangeToIso}`;
 
   // ─── ROW 1 · OPERATING SNAPSHOT (legacy parity) ──────────────────────────
   const operatingTiles: KpiTileProps[] = [
     pending('F&B / Occ Rn',           'needs mv_kpi_daily + outlet rev'),
     pending('Capture %',              'needs v_fnb_capture_daily'),
     { label: 'Food Rev',     value: Math.round(foodRevMtd),    currency: 'USD', size: 'sm',
-      footnote: 'MTD · subdept=Food',  status: foodRevMtd > 0 ? 'green' : 'grey' },
+      footnote: winFootnote,           status: foodRevMtd > 0 ? 'green' : 'grey' },
     { label: 'Beverage Rev', value: Math.round(bevRevMtd),     currency: 'USD', size: 'sm',
-      footnote: 'MTD · subdept=Beverage', status: bevRevMtd > 0 ? 'green' : 'grey' },
+      footnote: winFootnote,           status: bevRevMtd > 0 ? 'green' : 'grey' },
     pending('Staff Canteen $',        'needs v_staff_canteen_monthly'),
     pending('Canteen / Occ',          'derived from canteen view'),
   ];
@@ -81,22 +84,21 @@ export default function OutletsView({ snapshot, propertyName }: Props) {
     pending('Eff Food %',       'target ≤ 30%'),
   ];
 
-  // ─── ROW 3 · OUTLET HEADLINE (already wired) ─────────────────────────────
+  // ─── ROW 3 · OUTLET HEADLINE (already wired, 30d window) ─────────────────
   const outletHeadline: KpiTileProps[] = [
-    { label: 'MTD F&B Revenue', value: Math.round(mtdRevenue), currency: 'USD', size: 'sm',
-      footnote: monthLabel,   status: mtdRevenue > 0 ? 'green' : 'grey' },
-    { label: 'MTD Covers',      value: mtdCovers, size: 'sm',
+    { label: 'F&B Revenue · 30d', value: Math.round(mtdRevenue), currency: 'USD', size: 'sm',
+      footnote: winFootnote, status: mtdRevenue > 0 ? 'green' : 'grey' },
+    { label: 'Covers · 30d',      value: mtdCovers, size: 'sm',
       footnote: 'reservation-distinct', status: mtdCovers > 0 ? 'green' : 'grey' },
-    { label: 'Avg Check',       value: Math.round(mtdAvgCheck), currency: 'USD', size: 'sm',
-      footnote: 'MTD revenue ÷ covers', status: mtdAvgCheck > 0 ? 'green' : 'grey' },
+    { label: 'Avg Check',         value: Math.round(mtdAvgCheck), currency: 'USD', size: 'sm',
+      footnote: 'revenue ÷ covers · 30d', status: mtdAvgCheck > 0 ? 'green' : 'grey' },
     { label: 'Top Outlet',
       value: topOutlet ? topOutlet.name : '—',
       size: 'sm',
-      footnote: topOutlet ? `${formatUSD(topOutlet.revenue)} · last 30d` : 'no outlet revenue yet',
+      footnote: topOutlet ? `${formatUSD(topOutlet.revenue)} · 30d` : 'no outlet revenue yet',
       status: topOutlet ? 'green' : 'grey' },
   ];
 
-  // ─── outlet series + donut data (wired) ─────────────────────────────────
   const outletSeries: ChartSeries[] = outletKeys.length > 0
     ? outletKeys.map((k, i) => ({ key: k, label: k, color: FALLBACK_OUTLET_COLORS[i % FALLBACK_OUTLET_COLORS.length] }))
     : [{ key: 'total', label: 'No outlets', color: '#8A8A8A' }];
@@ -113,9 +115,8 @@ export default function OutletsView({ snapshot, propertyName }: Props) {
         footnote: `${formatInt(o.covers)} covers · ${formatUSD(o.avg_check)} avg check`,
         status: 'green' as const,
       }))
-    : [pending('No outlet data', 'last 30 days')];
+    : [pending('No outlet data', '30d window')];
 
-  // ─── product list columns ───────────────────────────────────────────────
   const productColumns: ListContainerColumn<OutletMixRow>[] = [
     { key: 'item',           label: 'Item',     sortable: true,  align: 'left' },
     { key: 'outlet',         label: 'Outlet',   sortable: true,  align: 'left' },
@@ -127,7 +128,6 @@ export default function OutletsView({ snapshot, propertyName }: Props) {
       render: (p) => formatUSD(p.avg_unit_price) },
   ];
 
-  // ─── pending list columns (typed empty arrays so wiring is trivial) ─────
   const pnlColumns: ListContainerColumn<PnlMonthlyRow>[] = [
     { key: 'month',         label: 'Month',  align: 'left'  },
     { key: 'revenue',       label: 'Rev',    align: 'right', render: (r) => formatUSD(r.revenue) },
@@ -152,9 +152,9 @@ export default function OutletsView({ snapshot, propertyName }: Props) {
   return (
     <DashboardPage
       title="F&B Outlets"
-      subtitle={`${propertyName} · last 30 days · MTD ${monthLabel}${daysCovered === 0 ? ' · no rows yet' : ''}`}
+      subtitle={`${propertyName} · ${windowLabel}${daysCovered === 0 ? ' · no rows in window' : ` · ${daysCovered} days with data`}`}
     >
-      <Container title="Operating snapshot" subtitle={monthLabel} density="compact">
+      <Container title="Operating snapshot" subtitle={`Window · ${winFootnote}`} density="compact">
         <TileGrid tiles={operatingTiles} />
       </Container>
 
@@ -162,7 +162,7 @@ export default function OutletsView({ snapshot, propertyName }: Props) {
         <TileGrid tiles={usaliTiles} />
       </Container>
 
-      <Container title="Outlet headline · MTD" subtitle="from v_outlet_revenue_daily" density="compact">
+      <Container title="Outlet headline · 30 days" subtitle="from v_outlet_revenue_daily" density="compact">
         <TileGrid tiles={outletHeadline} />
       </Container>
 
@@ -186,18 +186,18 @@ export default function OutletsView({ snapshot, propertyName }: Props) {
         </ExplainerBody>
       </Container>
 
-      <Container title="Daily revenue by outlet" subtitle="Last 30 days · stacked">
+      <Container title="Daily revenue by outlet" subtitle={`Last 30 days · ${winFootnote}`}>
         <Chart
           variant="stacked_bar"
           data={dailyByOutlet}
           xKey="revenue_date"
           series={outletSeries}
           height={260}
-          empty={{ title: 'No outlet revenue rows', hint: 'v_outlet_revenue_daily returned 0 rows' }}
+          empty={{ title: 'No outlet revenue rows', hint: 'v_outlet_revenue_daily returned 0 rows in window' }}
         />
       </Container>
 
-      <Container title="Outlet contribution" subtitle="Share of revenue · last 30 days">
+      <Container title="Outlet contribution" subtitle={`Share of revenue · ${winFootnote}`}>
         <Chart
           variant="donut"
           data={donutData}
@@ -223,7 +223,7 @@ export default function OutletsView({ snapshot, propertyName }: Props) {
         />
       </Container>
 
-      <Container title="Outlet tiles · top 5" subtitle="last 30 days">
+      <Container title="Outlet tiles · top 5" subtitle={`${winFootnote}`}>
         <TileGrid tiles={outletTiles} minTile={200} />
       </Container>
 
@@ -250,7 +250,7 @@ export default function OutletsView({ snapshot, propertyName }: Props) {
 
       <ListContainer<OutletMixRow>
         title={`Top products · ${monthLabel}`}
-        subtitle={productCount > 0 ? `${productCount} products this month — top 5 preview` : 'no products this month'}
+        subtitle={productCount > 0 ? `${productCount} products this period — top 5 preview` : 'no products in latest month'}
         data={topProducts}
         preview={5}
         rowKey={(p) => `${p.outlet}:${p.item}`}
@@ -374,5 +374,5 @@ function Dd({ children }: { children: ReactNode }) {
   return <dd style={{ margin: 0, fontSize: 13, color: 'var(--ink, #1B1B1B)', fontVariantNumeric: 'tabular-nums' }}>{children}</dd>;
 }
 
-// Lint: imported types intentionally referenced via Generic<T> on ListContainer.
+// Lint: explicit references for the unused typed imports so wiring is trivial.
 type _Unused = MonthlyTrendRow;
