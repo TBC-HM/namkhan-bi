@@ -1,6 +1,9 @@
 // Server data fetcher + aggregator for the F&B Outlets page.
-// Same shape returned for every property. Donna's views currently return
-// 0 rows — the snapshot just contains 0s; the page renders identically.
+// Real values: outlet revenue / product mix / food-bev-minibar split.
+// Placeholder zeros: every metric whose source view isn't bridged into
+// public yet (USALI, canteen, breakfast, capture, monthly P&L, top-seller
+// trend, GL detail, raw POS). Each gets a typed field on OutletsSnapshot
+// so wiring later is a 5-line aggregator change, no UI churn.
 
 import { supabase } from '@/lib/supabase';
 import type {
@@ -50,14 +53,26 @@ async function fetchMix(propertyId: number, monthIso: string): Promise<OutletMix
   return (data ?? []) as OutletMixRow[];
 }
 
-function aggregate(daily: OutletDailyRow[], mix: OutletMixRow[], monthIsoFirst: string, fromIso: string, toIso: string): OutletsSnapshot {
-  // MTD totals from daily rows whose revenue_date is in the current month.
+function aggregate(
+  daily: OutletDailyRow[],
+  mix: OutletMixRow[],
+  monthIsoFirst: string,
+  fromIso: string,
+  toIso: string,
+): OutletsSnapshot {
   const monthDaily = daily.filter((r) => r.revenue_date >= monthIsoFirst);
   const mtdRevenue = monthDaily.reduce((s, r) => s + Number(r.revenue || 0), 0);
   const mtdCovers  = monthDaily.reduce((s, r) => s + Number(r.covers_reservation_distinct || 0), 0);
   const mtdAvgCheck = mtdCovers > 0 ? mtdRevenue / mtdCovers : 0;
 
-  // By-outlet totals over the full daily window (last 30d).
+  const sumBySubdept = (label: string): number =>
+    monthDaily
+      .filter((r) => (r.subdept ?? '').toLowerCase() === label.toLowerCase())
+      .reduce((s, r) => s + Number(r.revenue || 0), 0);
+  const foodRevMtd    = sumBySubdept('Food');
+  const bevRevMtd     = sumBySubdept('Beverage');
+  const minibarRevMtd = sumBySubdept('Minibar');
+
   const byOutletMap = new Map<string, ByOutletAgg>();
   for (const r of daily) {
     const cur = byOutletMap.get(r.outlet) ?? { outlet: r.outlet, revenue: 0, covers: 0, avg_check: 0 };
@@ -72,7 +87,6 @@ function aggregate(daily: OutletDailyRow[], mix: OutletMixRow[], monthIsoFirst: 
 
   const topOutlet = byOutlet.length > 0 ? { name: byOutlet[0].outlet, revenue: byOutlet[0].revenue } : null;
 
-  // Pivot daily by outlet — one row per date, one column per outlet, plus total.
   const outletKeys = byOutlet.map((o) => o.outlet);
   const pivotMap = new Map<string, DailyByOutletPivot>();
   for (const r of daily) {
@@ -87,7 +101,6 @@ function aggregate(daily: OutletDailyRow[], mix: OutletMixRow[], monthIsoFirst: 
   }
   const dailyByOutlet = Array.from(pivotMap.values()).sort((a, b) => a.revenue_date.localeCompare(b.revenue_date));
 
-  // Top products this month (pre-sorted from query).
   const topProducts = mix.slice(0, 50);
 
   return {
@@ -103,6 +116,23 @@ function aggregate(daily: OutletDailyRow[], mix: OutletMixRow[], monthIsoFirst: 
     rangeFromIso: fromIso,
     rangeToIso: toIso,
     monthLabel: monthLabel(monthIsoFirst),
+    foodRevMtd, bevRevMtd, minibarRevMtd,
+    // ─── placeholders (0 until pair-Claude ships the bridge views) ────────
+    fnbPerOccRn: 0,
+    capturePct: 0,
+    staffCanteenUsd: 0,
+    canteenPerOccRn: 0,
+    breakfastAllocUsd: 0,
+    effectiveFnbRev: 0,
+    effectiveGopUsd: 0,
+    effectiveGopPct: 0,
+    effLaborPct: 0,
+    effFoodPct: 0,
+    monthlyTrend: [],
+    pnlMonthlyRollup: [],
+    topSellerTrend: [],
+    glDetail: [],
+    posTransactions: [],
   };
 }
 
