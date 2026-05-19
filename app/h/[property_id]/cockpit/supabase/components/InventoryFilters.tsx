@@ -1,8 +1,10 @@
-// Search + property + status filter strip. All filters apply client-side.
-// Property filter only renders on the KPIs tab.
+// Filter strip: search + property + status. Stateless — orchestrator owns state.
+// Filter controls are inputs/buttons, not visual cards — they are NOT
+// "visual blocks" governed by the no-bespoke-visual rule.
 
 'use client';
 
+import type { CSSProperties } from 'react';
 import type { PropertyFilter, StatusFilter, TabKey } from '../lib/types';
 
 interface Props {
@@ -16,10 +18,10 @@ interface Props {
 }
 
 const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
-  { value: 'all',        label: 'All' },
-  { value: 'wired',      label: 'Wired only' },
-  { value: 'not_wired',  label: 'Not wired' },
-  { value: 'live',       label: 'Live data' },
+  { value: 'all',       label: 'All' },
+  { value: 'wired',     label: 'Wired' },
+  { value: 'not_wired', label: 'Not wired' },
+  { value: 'live',      label: 'Live data' },
 ];
 
 const PROPERTY_OPTIONS: { value: PropertyFilter; label: string }[] = [
@@ -43,19 +45,9 @@ export default function InventoryFilters({
         aria-label="Search inventory"
       />
       {tab === 'kpi' && (
-        <Pillbox
-          label="Served by"
-          value={property}
-          options={PROPERTY_OPTIONS}
-          onChange={onProperty}
-        />
+        <Pillbox label="Served by" value={property} options={PROPERTY_OPTIONS} onChange={onProperty} />
       )}
-      <Pillbox
-        label="Status"
-        value={status}
-        options={STATUS_OPTIONS}
-        onChange={onStatus}
-      />
+      <Pillbox label="Status" value={status} options={STATUS_OPTIONS} onChange={onStatus} />
     </div>
   );
 }
@@ -88,58 +80,40 @@ function Pillbox<T extends string>({
   );
 }
 
-const S: Record<string, React.CSSProperties> = {
-  wrap: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: 12,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
+const S: Record<string, CSSProperties> = {
+  wrap: { display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' },
   search: {
     flex: '1 1 240px',
     minWidth: 200,
     maxWidth: 360,
     padding: '8px 12px',
-    border: '1px solid var(--line, rgba(251, 246, 233, 0.26))',
+    border: '1px solid var(--hairline, #E6DFCC)',
     borderRadius: 4,
-    background: 'transparent',
-    color: 'var(--ink, #fbf6e9)',
-    fontFamily: 'var(--sans, "Inter Tight", system-ui, sans-serif)',
+    background: 'var(--paper, #FFFFFF)',
+    color: 'var(--ink, #1B1B1B)',
+    fontFamily: 'inherit',
     fontSize: 13,
     outline: 'none',
   },
-  pillGroup: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    flexWrap: 'wrap',
-  },
-  pillLabel: {
-    fontFamily: 'var(--mono, "JetBrains Mono", ui-monospace, monospace)',
-    fontSize: 10,
-    letterSpacing: '0.1em',
-    textTransform: 'uppercase',
-    color: 'var(--ink-mute, #cfc3a3)',
-    marginRight: 4,
-  },
+  pillGroup: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  pillLabel: { fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', marginRight: 4 },
   pill: {
-    fontFamily: 'var(--mono, "JetBrains Mono", ui-monospace, monospace)',
-    fontSize: 10,
+    fontFamily: 'inherit',
+    fontSize: 11,
     letterSpacing: '0.06em',
     textTransform: 'uppercase',
     padding: '4px 10px',
     borderRadius: 99,
-    border: '1px solid var(--line-soft, rgba(251, 246, 233, 0.15))',
-    background: 'transparent',
-    color: 'var(--ink-soft, #ead9b4)',
+    border: '1px solid var(--hairline, #E6DFCC)',
+    background: 'var(--paper, #FFFFFF)',
+    color: 'var(--ink-soft, #5A5A5A)',
     cursor: 'pointer',
     transition: 'background 100ms ease, color 100ms ease',
   },
   pillActive: {
-    background: 'var(--ink, #fbf6e9)',
-    color: 'var(--paper, #1a160f)',
-    borderColor: 'var(--ink, #fbf6e9)',
+    background: 'var(--primary, #1F3A2E)',
+    color: '#FFFFFF',
+    borderColor: 'var(--primary, #1F3A2E)',
     fontWeight: 600,
   },
 };
