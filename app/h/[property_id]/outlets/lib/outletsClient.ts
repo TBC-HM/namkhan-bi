@@ -1,9 +1,9 @@
 // Server data fetcher + aggregator for the F&B Outlets page.
-// Real values: outlet revenue / product mix / food-bev-minibar split.
-// Placeholder zeros: every metric whose source view isn't bridged into
-// public yet (USALI, canteen, breakfast, capture, monthly P&L, top-seller
-// trend, GL detail, raw POS). Each gets a typed field on OutletsSnapshot
-// so wiring later is a 5-line aggregator change, no UI churn.
+//
+// 2026-05-19 — headline tiles now use the rolling 30-day window, not MTD.
+// Reason: data lake currently ends ~3 weeks behind today, so MTD-of-the-
+// current-month returns 0 rows even when last-30d is rich. Legacy page used
+// the 30d aggregate for the same reason. Window: max(revenue_date) - 29d.
 
 import { supabase } from '@/lib/supabase';
 import type {
@@ -41,12 +41,35 @@ async function fetchDaily(propertyId: number, fromIso: string, toIso: string): P
   return (data ?? []) as OutletDailyRow[];
 }
 
+async function fetchMaxRevenueDate(propertyId: number): Promise<string | null> {
+  const { data } = await supabase
+    .from('v_outlet_revenue_daily')
+    .select('revenue_date')
+    .eq('property_id', propertyId)
+    .order('revenue_date', { ascending: false })
+    .limit(1);
+  if (!data || data.length === 0) return null;
+  return (data[0] as { revenue_date: string }).revenue_date;
+}
+
 async function fetchMix(propertyId: number, monthIso: string): Promise<OutletMixRow[]> {
+  // Prefer the latest month available so the "Top products" list isn't empty
+  // when the data lake lags. Falls back to monthIso if the latest-month
+  // lookup finds nothing.
+  const { data: latest } = await supabase
+    .from('v_outlet_product_mix_monthly')
+    .select('month')
+    .eq('property_id', propertyId)
+    .order('month', { ascending: false })
+    .limit(1);
+  const targetMonth = (latest && latest.length > 0)
+    ? (latest[0] as { month: string }).month
+    : monthIso;
   const { data, error } = await supabase
     .from('v_outlet_product_mix_monthly')
     .select('property_id, month, outlet, item, units_sold, revenue, avg_unit_price, check_count, avg_check')
     .eq('property_id', propertyId)
-    .eq('month', monthIso)
+    .eq('month', targetMonth)
     .order('revenue', { ascending: false })
     .limit(500);
   if (error) { console.error('[outlets] mix error', error); return []; }
@@ -56,22 +79,22 @@ async function fetchMix(propertyId: number, monthIso: string): Promise<OutletMix
 function aggregate(
   daily: OutletDailyRow[],
   mix: OutletMixRow[],
-  monthIsoFirst: string,
   fromIso: string,
   toIso: string,
+  monthLabelStr: string,
 ): OutletsSnapshot {
-  const monthDaily = daily.filter((r) => r.revenue_date >= monthIsoFirst);
-  const mtdRevenue = monthDaily.reduce((s, r) => s + Number(r.revenue || 0), 0);
-  const mtdCovers  = monthDaily.reduce((s, r) => s + Number(r.covers_reservation_distinct || 0), 0);
-  const mtdAvgCheck = mtdCovers > 0 ? mtdRevenue / mtdCovers : 0;
+  // 30-day window totals (not MTD — see file header).
+  const winRevenue = daily.reduce((s, r) => s + Number(r.revenue || 0), 0);
+  const winCovers  = daily.reduce((s, r) => s + Number(r.covers_reservation_distinct || 0), 0);
+  const winAvgCheck = winCovers > 0 ? winRevenue / winCovers : 0;
 
   const sumBySubdept = (label: string): number =>
-    monthDaily
+    daily
       .filter((r) => (r.subdept ?? '').toLowerCase() === label.toLowerCase())
       .reduce((s, r) => s + Number(r.revenue || 0), 0);
-  const foodRevMtd    = sumBySubdept('Food');
-  const bevRevMtd     = sumBySubdept('Beverage');
-  const minibarRevMtd = sumBySubdept('Minibar');
+  const foodRev    = sumBySubdept('Food');
+  const bevRev     = sumBySubdept('Beverage');
+  const minibarRev = sumBySubdept('Minibar');
 
   const byOutletMap = new Map<string, ByOutletAgg>();
   for (const r of daily) {
@@ -104,7 +127,9 @@ function aggregate(
   const topProducts = mix.slice(0, 50);
 
   return {
-    mtdRevenue, mtdCovers, mtdAvgCheck,
+    mtdRevenue: winRevenue,           // field name preserved; semantics = 30d window
+    mtdCovers: winCovers,
+    mtdAvgCheck: winAvgCheck,
     topOutlet,
     byOutlet,
     dailyByOutlet,
@@ -115,9 +140,10 @@ function aggregate(
     daysCovered: new Set(daily.map((r) => r.revenue_date)).size,
     rangeFromIso: fromIso,
     rangeToIso: toIso,
-    monthLabel: monthLabel(monthIsoFirst),
-    foodRevMtd, bevRevMtd, minibarRevMtd,
-    // ─── placeholders (0 until pair-Claude ships the bridge views) ────────
+    monthLabel: monthLabelStr,
+    foodRevMtd: foodRev,
+    bevRevMtd: bevRev,
+    minibarRevMtd: minibarRev,
     fnbPerOccRn: 0,
     capturePct: 0,
     staffCanteenUsd: 0,
@@ -137,12 +163,17 @@ function aggregate(
 }
 
 export async function fetchOutletsSnapshot(propertyId: number): Promise<OutletsSnapshot> {
-  const to = todayIso();
+  // Anchor the 30-day window on the LATEST revenue_date we have for this
+  // property, not on "today". The data lake lags ~3 weeks behind real time
+  // for outlet revenue today.
+  const today = todayIso();
+  const maxDate = (await fetchMaxRevenueDate(propertyId)) ?? today;
+  const to = maxDate;
   const from = shiftDaysIso(to, -29);
   const monthFirst = monthStartIso(to);
   const [daily, mix] = await Promise.all([
     fetchDaily(propertyId, from, to),
     fetchMix(propertyId, monthFirst),
   ]);
-  return aggregate(daily, mix, monthFirst, from, to);
+  return aggregate(daily, mix, from, to, monthLabel(monthFirst));
 }
