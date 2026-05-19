@@ -3,6 +3,8 @@
 // PBS 2026-05-17 v2: 14 flat tabs → 5 grouped top tabs + per-group sub-strip.
 // Mirrors the finance "Acc" submenu pattern. Routes outside the chosen group
 // fall back to Home. Every existing URL still works.
+// 2026-05-19: added "Inventory" submenu under Knowledge → /cockpit/supabase
+// (legacy redirect resolves to /h/260955/cockpit/supabase via middleware).
 
 import { fetchAgents, fetchDocs, fetchMemories } from './_lib/data';
 import { fetchOpenTaskCount, fetchUnseenNotifyCount } from './_lib/data-port';
@@ -39,6 +41,7 @@ export default async function CockpitV2Layout({ children }: { children: React.Re
         { href: '/cockpit-v2/docs',      label: 'Docs',      n: docs.length },
         { href: '/cockpit-v2/schemas',   label: 'Schemas',   n: null },
         { href: '/cockpit-v2/freshness', label: 'Freshness', n: null },
+        { href: '/cockpit/supabase',     label: 'Inventory', n: null },
       ],
     },
     {
