@@ -1,21 +1,28 @@
-// app/revenue/pace/page.tsx — wired to <Page> shell (PBS manifesto 2026-05-09).
-// First real sub-page using Page + Panel + Brief + ArtifactActions.
-// Data fetching unchanged; chrome moved onto canonical primitives.
+// app/revenue/pace/page.tsx
+// TRIAL refactor (brief: refactor-revenue-pace-to-primitives).
+// Visual blocks now composed exclusively from @/app/(cockpit)/_design.
+// Data fetchers + period/granularity logic are UNCHANGED — same v_otb_pace,
+// v_pace_curve, mv_kpi_daily reads; same resolvePeriod / capacityRnRange.
 //
-// SR-RM rule: backward windows make NO sense on Pace. CSS greys backward chips.
+// Note on the period/granularity strip: it is a URL-driven CONTROL, not a
+// "visual block" (the brief's §1 carveout). Until the design system grows
+// a PeriodSelector primitive, kept inline-styled using design tokens.
+// Bespoke <PaceGraphs> and <PaceBucketsTable> are now stubs — every chart /
+// table here is the design-system <Chart> primitive.
 
-import KpiBox from '@/components/kpi/KpiBox';
-import Page from '@/components/page/Page';
-import Panel from '@/components/page/Panel';
-import ArtifactActions from '@/components/page/ArtifactActions';
-import PeriodSelectorRow from '@/components/page/PeriodSelectorRow';
+import {
+  DashboardPage,
+  Container,
+  KpiTile,
+  Chart,
+  type ChartSeries,
+  type DashboardTab,
+  type KpiTileProps,
+} from '@/app/(cockpit)/_design';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import { resolvePeriod, type WindowKey } from '@/lib/period';
 import { capacityFor, capacityRnRange } from '@/lib/capacity';
 import { getPaceCurve } from '@/lib/pulseData';
-
-import PaceGraphs, { type BucketRow } from './_components/PaceGraphs';
-import PaceBucketsTable from './_components/PaceTableClient';
 import { REVENUE_SUBPAGES } from '../_subpages';
 
 export const dynamic = 'force-dynamic';
@@ -48,14 +55,10 @@ async function getPace(fromDate: string, toDate: string, pid: number): Promise<P
     .gte('night_date', fromDate)
     .lte('night_date', toDate)
     .order('night_date');
-  if (error) {
-    console.error('[pace] error', error);
-    return [];
-  }
+  if (error) { console.error('[pace] error', error); return []; }
   return (data ?? []) as PaceRow[];
 }
 
-// STLY actuals proxy: same calendar dates -1 year from mv_kpi_daily.
 async function getStlyActuals(fromDate: string, toDate: string, pid: number): Promise<Map<string, { rns: number; rev: number }>> {
   const shift = (iso: string) => {
     const d = new Date(iso + 'T00:00:00Z');
@@ -69,13 +72,14 @@ async function getStlyActuals(fromDate: string, toDate: string, pid: number): Pr
     .gte('night_date', shift(fromDate))
     .lte('night_date', shift(toDate));
   const out = new Map<string, { rns: number; rev: number }>();
-  for (const r of ((data ?? []) as any[])) {
-    out.set(String(r.night_date), {
-      rns: Number(r.rooms_sold ?? 0),
-      rev: Number(r.rooms_revenue ?? 0),
-    });
+  for (const r of ((data ?? []) as Array<{ night_date: string; rooms_sold: number | null; rooms_revenue: number | null }>)) {
+    out.set(String(r.night_date), { rns: Number(r.rooms_sold ?? 0), rev: Number(r.rooms_revenue ?? 0) });
   }
   return out;
+}
+
+interface BucketRow {
+  key: string; rns: number; rev: number; cxl: number; days: number; capacity: number; stlyRn: number; stlyRev: number;
 }
 
 function bucketRows(
@@ -102,33 +106,27 @@ function bucketRows(
     cur.rev += Number(r.confirmed_revenue) || 0;
     cur.cxl += Number(r.cancelled_rooms) || 0;
     cur.days += 1;
-    // shift this night to STLY
     const shifted = (() => {
       const t = new Date(r.night_date + 'T00:00:00Z');
       t.setUTCFullYear(t.getUTCFullYear() - 1);
       return t.toISOString().slice(0, 10);
     })();
     const stly = stlyByDate.get(shifted);
-    if (stly) {
-      cur.stlyRn += stly.rns;
-      cur.stlyRev += stly.rev;
-    }
+    if (stly) { cur.stlyRn += stly.rns; cur.stlyRev += stly.rev; }
     buckets.set(key, cur);
   }
   return Array.from(buckets.entries()).map(([key, v]) => {
     let cap = 0;
     if (gran === 'month') {
       const monthStart = key + '-01';
-      const next = new Date(key + '-01T00:00:00Z');
-      next.setUTCMonth(next.getUTCMonth() + 1);
+      const next = new Date(key + '-01T00:00:00Z'); next.setUTCMonth(next.getUTCMonth() + 1);
       const monthEnd = new Date(next.getTime() - 86400000).toISOString().slice(0, 10);
       const winFrom = monthStart < fromIso ? fromIso : monthStart;
       const winTo = monthEnd > toIso ? toIso : monthEnd;
       cap = capacityRnRange(winFrom, winTo, pid);
     } else if (gran === 'week') {
       const winFrom = key < fromIso ? fromIso : key;
-      const weekEnd = new Date(key + 'T00:00:00Z');
-      weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
+      const weekEnd = new Date(key + 'T00:00:00Z'); weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
       const weTo = weekEnd.toISOString().slice(0, 10) > toIso ? toIso : weekEnd.toISOString().slice(0, 10);
       cap = capacityRnRange(winFrom, weTo, pid);
     } else {
@@ -144,6 +142,15 @@ function fmtMonth(yyyymm: string) {
   return d.toLocaleString('en-US', { month: 'short', year: '2-digit' });
 }
 
+interface PaceCurvePoint {
+  day?: string;
+  stay_date?: string;
+  rooms_actual?: number | null;
+  rooms_otb?: number | null;
+  rooms_stly_daily_avg?: number | null;
+  rooms_budget_daily_avg?: number | null;
+}
+
 export default async function PacePage({
   searchParams,
   propertyId,
@@ -151,21 +158,14 @@ export default async function PacePage({
   searchParams: SearchParams;
   propertyId?: number;
 }) {
-  // PBS 2026-05-18: property-aware. Defaults to PROPERTY_ID (Namkhan) so the
-  // legacy `/revenue/pace` route is byte-identical. Donna's canonical
-  // /h/1000001/revenue/pace passes propertyId=1000001 from the shell.
   const pid = propertyId ?? PROPERTY_ID;
-
   const win = parseWin(searchParams.win);
   const gran = parseGran(searchParams.gran);
-  // PBS 2026-05-09: forward `cmp` so the universal CompareSelector reflects
-  // the active state. Pace's own STLY proxy still drives compare numbers.
   const period = resolvePeriod({ win, cmp: searchParams.cmp });
-
   const fromIso = period.from;
   const toIso = period.to;
 
-  const [rows, stlyMap, paceCurve] = await Promise.all([
+  const [rows, stlyMap, paceCurveRaw] = await Promise.all([
     getPace(fromIso, toIso, pid),
     getStlyActuals(fromIso, toIso, pid),
     getPaceCurve(30, 30, pid).catch(() => []),
@@ -181,112 +181,210 @@ export default async function PacePage({
 
   const buckets = bucketRows(rows, gran, stlyMap, fromIso, toIso, pid);
   const stlyRnTotal = buckets.reduce((s, b) => s + b.stlyRn, 0);
-  const stlyRevTotal = buckets.reduce((s, b) => s + b.stlyRev, 0);
   const stlyPctOverall = stlyRnTotal > 0 ? (totalRns / stlyRnTotal) * 100 : 0;
-
-  // PBS 2026-05-09: compare numbers for KpiBox `compare` prop. Pace doesn't
-  // use f_overview_kpis, so we derive deltas from the STLY proxy (mv_kpi_daily
-  // shifted -1y). Only meaningful when cmp != none and STLY had coverage.
   const cmpActive = period.cmp !== 'none' && stlyRnTotal > 0;
-  const cmpLabel = period.cmpLabel ? period.cmpLabel.replace(/^vs\s+/i, '') : '';
-  const stlyAdr = stlyRnTotal > 0 ? stlyRevTotal / stlyRnTotal : 0;
+  const cmpLabel = period.cmpLabel ? period.cmpLabel.replace(/^vs\s+/i, '') : 'STLY';
+
+  // ─── tiles ──────────────────────────────────────────────────────────────
+  const pctChange = (cur: number, base: number) => (base > 0 ? ((cur - base) / base) * 100 : 0);
+  const stlyAdr = stlyRnTotal > 0 ? buckets.reduce((s, b) => s + b.stlyRev, 0) / stlyRnTotal : 0;
   const stlyOcc = capacityRn > 0 ? (stlyRnTotal / capacityRn) * 100 : 0;
-  const cmpRns = cmpActive ? totalRns - stlyRnTotal : null;
-  const cmpRev = cmpActive ? totalRev - stlyRevTotal : null;
-  const cmpAdrDelta = cmpActive ? adr - stlyAdr : null;
-  const cmpOccDelta = cmpActive ? occ - stlyOcc : null;
 
-  const granLabels: Record<string, string> = { day: 'Day', week: 'Week', month: 'Month' };
+  const tiles: KpiTileProps[] = [
+    {
+      label: 'OTB Room Nights', value: totalRns, size: 'sm',
+      delta: cmpActive ? { value: pctChange(totalRns, stlyRnTotal), period: cmpLabel,
+        direction: totalRns >= stlyRnTotal ? 'up' : 'down' } : undefined,
+      footnote: 'v_otb_pace',
+    },
+    {
+      label: 'OTB Revenue', value: totalRev, currency: 'USD', size: 'sm',
+      delta: cmpActive ? { value: pctChange(totalRev, buckets.reduce((s, b) => s + b.stlyRev, 0)), period: cmpLabel,
+        direction: totalRev >= buckets.reduce((s, b) => s + b.stlyRev, 0) ? 'up' : 'down' } : undefined,
+    },
+    {
+      label: 'OTB ADR', value: Math.round(adr), currency: 'USD', size: 'sm',
+      delta: cmpActive && stlyAdr > 0 ? { value: pctChange(adr, stlyAdr), period: cmpLabel,
+        direction: adr >= stlyAdr ? 'up' : 'down' } : undefined,
+    },
+    {
+      label: 'OTB Occupancy', value: `${occ.toFixed(1)}%`, size: 'sm',
+      delta: cmpActive ? { value: occ - stlyOcc, period: cmpLabel,
+        direction: occ >= stlyOcc ? 'up' : 'down' } : undefined,
+    },
+    { label: 'Cancel Rate', value: `${cxlRate.toFixed(1)}%`, size: 'sm', footnote: 'cancelled / total reservations' },
+    { label: 'vs STLY', value: `${stlyPctOverall.toFixed(0)}%`, size: 'sm', status: stlyPctOverall >= 100 ? 'green' : stlyPctOverall >= 80 ? 'amber' : 'red' },
+  ];
 
+  // ─── pace-curve data → primitive Chart ──────────────────────────────────
+  const paceCurveData = (paceCurveRaw as PaceCurvePoint[]).map((r) => ({
+    day:    r.day ?? r.stay_date ?? '',
+    actual: r.rooms_actual ?? null,
+    otb:    r.rooms_otb ?? null,
+    stly:   r.rooms_stly_daily_avg ?? null,
+    budget: r.rooms_budget_daily_avg ?? null,
+  }));
+  const paceSeries: ChartSeries[] = [
+    { key: 'actual', label: 'Actual', color: 'var(--primary, #1F3A2E)' },
+    { key: 'otb',    label: 'OTB',    color: 'var(--sand, #B8A878)' },
+    { key: 'stly',   label: 'STLY',   color: 'var(--ink-soft, #5A5A5A)' },
+    { key: 'budget', label: 'Budget', color: 'var(--terracotta, #B8542A)' },
+  ];
+
+  // ─── bucket data → primitive Charts ─────────────────────────────────────
   const formatLabel = (key: string) => (gran === 'month' ? fmtMonth(key) : key.slice(5));
+  const bucketBar = buckets.map((b) => ({ bucket: formatLabel(b.key), rns: b.rns }));
+  const stlyBar = buckets
+    .filter((b) => b.stlyRn > 0)
+    .map((b) => ({ bucket: formatLabel(b.key), stly_pct: Math.round((b.rns / b.stlyRn) * 100) }));
+  const bucketTable = buckets.map((b) => ({
+    bucket:   formatLabel(b.key),
+    rns:      b.rns,
+    rev:      Math.round(b.rev),
+    occ:      b.capacity > 0 ? Math.round((b.rns / b.capacity) * 1000) / 10 : 0,
+    cxl:      b.cxl,
+    stly_pct: b.stlyRn > 0 ? Math.round((b.rns / b.stlyRn) * 100) : null,
+  }));
 
-  const ctx = (kind: 'panel' | 'kpi' | 'brief' | 'table', title: string, signal?: string) => ({ kind, title, signal, dept: 'revenue' as const });
+  // ─── tabs (subpage strip via DashboardPage.tabs) ────────────────────────
+  const basePath = propertyId ? `/h/${propertyId}/revenue` : '/revenue';
+  const tabs: DashboardTab[] = REVENUE_SUBPAGES.map((s) => {
+    const href = s.href.startsWith('/h/') || s.href === '/revenue' || s.href.startsWith('/revenue/')
+      ? (propertyId ? s.href.replace(/^\/revenue/, basePath) : s.href)
+      : s.href;
+    return { key: s.href, label: s.label, href, active: s.href.endsWith('/pace') };
+  });
+
+  // ─── period + granularity control strip (URL-driven, not a card) ────────
+  const granOptions: Array<{ k: 'day' | 'week' | 'month'; label: string }> = [
+    { k: 'day', label: 'Day' }, { k: 'week', label: 'Week' }, { k: 'month', label: 'Month' },
+  ];
+  const winOptions: Array<{ k: WindowKey; label: string }> = [
+    { k: 'next7', label: '7d' }, { k: 'next30', label: '30d' }, { k: 'next90', label: '90d' },
+    { k: 'next180', label: '180d' }, { k: 'next365', label: '365d' },
+  ];
+  const hrefFor = (overrides: { win?: WindowKey; gran?: 'day' | 'week' | 'month' }) => {
+    const params = new URLSearchParams();
+    const nextWin = overrides.win ?? win;
+    const nextGran = overrides.gran ?? gran;
+    if (nextWin !== 'next90') params.set('win', nextWin);
+    if (nextGran !== 'month') params.set('gran', nextGran);
+    if (period.cmp && period.cmp !== 'none') params.set('cmp', period.cmp);
+    const qs = params.toString();
+    return `${basePath}/pace${qs ? '?' + qs : ''}`;
+  };
 
   return (
-    <Page
-      eyebrow="Revenue · Pace"
-      title={<>What&apos;s <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>on the books</em> ahead.</>}
-      subPages={REVENUE_SUBPAGES}
+    <DashboardPage
+      title="Revenue · Pace"
+      subtitle={`What's on the books ahead. ${period.label}.`}
+      tabs={tabs}
     >
-      <style>{`
-        .filter-btn:not(.fwd):not([href*="seg="]):not([href*="cmp="]):not([href*="cap="]) {
-          opacity: 0.35;
-          pointer-events: none;
-        }
-      `}</style>
+      {/* KPIs */}
+      <Container title="On-the-books snapshot" subtitle={period.label} density="compact">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
+          {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
+        </div>
+      </Container>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
-        <KpiBox value={totalRns} unit="count" label="OTB room nights"
-          compare={cmpRns != null ? { value: cmpRns, unit: 'count', period: cmpLabel } : undefined}
-          tooltip="Sum of confirmed room-nights on the books for the forward window. Source: pace_otb (PMS)." />
-        <KpiBox value={totalRev} unit="usd"   label="OTB revenue"
-          compare={cmpRev != null ? { value: cmpRev, unit: 'usd', period: cmpLabel } : undefined}
-          tooltip="Confirmed forward revenue (USD) for this window. Source: pace_otb." />
-        <KpiBox value={adr} unit="usd"        label="OTB ADR"
-          compare={cmpAdrDelta != null ? { value: cmpAdrDelta, unit: 'usd', period: cmpLabel } : undefined}
-          tooltip="OTB revenue ÷ OTB room-nights. Reflects price already locked in." />
-        <KpiBox value={occ} unit="pct"        label="OTB occupancy"
-          compare={cmpOccDelta != null ? { value: cmpOccDelta, unit: 'pp', period: cmpLabel } : undefined}
-          tooltip="OTB room-nights ÷ capacity room-nights × 100." />
-        <KpiBox value={cxlRate} unit="pct"    label="Cancel rate"     tooltip="Cancelled reservations ÷ total reservations × 100, for this forward window." />
-        <KpiBox value={stlyPctOverall} unit="pct" label="vs STLY"     tooltip="OTB this window vs same time last year (% change)." />
-      </div>
+      {/* Period + granularity strip */}
+      <Container title="Window & granularity" subtitle="URL-driven controls" density="compact">
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
+          <ControlGroup label="Forward window">
+            {winOptions.map((o) => (
+              <PillLink key={o.k} active={o.k === win} href={hrefFor({ win: o.k })}>{o.label}</PillLink>
+            ))}
+          </ControlGroup>
+          <ControlGroup label="Granularity">
+            {granOptions.map((o) => (
+              <PillLink key={o.k} active={o.k === gran} href={hrefFor({ gran: o.k })}>{o.label}</PillLink>
+            ))}
+          </ControlGroup>
+        </div>
+      </Container>
 
-      {/* Canonical period chooser + granularity dropdown — under the KPI tile row. */}
-      <PeriodSelectorRow
-        basePath="/revenue/pace"
-        win={period.win}
-        cmp={period.cmp}
-        includeForward
-        preserve={{ gran }}
-        rightSlot={
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <span className="t-eyebrow">GRANULARITY</span>
-            {(['day', 'week', 'month'] as const).map((g) => {
-              const active = g === gran;
-              const params = new URLSearchParams();
-              if (win !== 'next90') params.set('win', win);
-              if (g !== 'month') params.set('gran', g);
-              const href = `/revenue/pace${params.toString() ? '?' + params.toString() : ''}`;
-              return (
-                <a
-                  key={g}
-                  href={href}
-                  style={{
-                    padding: '4px 12px',
-                    borderRadius: 4,
-                    border: '1px solid var(--paper-deep)',
-                    background: active ? 'var(--moss)' : 'var(--paper-warm)',
-                    color: active ? 'var(--paper-warm)' : 'var(--ink-soft)',
-                    fontFamily: 'var(--mono)',
-                    fontSize: 'var(--t-xs)',
-                    letterSpacing: 'var(--ls-extra)',
-                    textTransform: 'uppercase',
-                    fontWeight: 600,
-                    textDecoration: 'none',
-                  }}
-                >
-                  {granLabels[g]}
-                </a>
-              );
-            })}
-          </div>
-        }
-      />
+      <Container title="Booking pace curve" subtitle="Actual · OTB · STLY · Budget — rooms occupied, −30d → +30d">
+        <Chart
+          variant="line"
+          data={paceCurveData}
+          xKey="day"
+          series={paceSeries}
+          height={240}
+          empty={{ title: 'No pace-curve data', hint: 'v_pace_curve returned 0 rows for this property' }}
+        />
+      </Container>
 
-      <Panel title="Pace curves & buckets" eyebrow="hero" actions={<ArtifactActions context={ctx('panel', 'Pace curves & buckets')} />}>
-        <PaceGraphs paceCurve={paceCurve} buckets={buckets} formatLabel={formatLabel} />
-      </Panel>
+      <Container title="OTB by stay-bucket" subtitle={`Confirmed room nights · ${gran}`}>
+        <Chart
+          variant="bar"
+          data={bucketBar}
+          xKey="bucket"
+          series={[{ key: 'rns', label: 'Rooms', color: 'var(--primary, #1F3A2E)' }]}
+          height={240}
+          empty={{ title: 'No on-the-books in this window' }}
+        />
+      </Container>
 
-      <div style={{ height: 14 }} />
+      <Container title="STLY pace per bucket" subtitle="OTB ÷ STLY actuals · % at same lead time">
+        <Chart
+          variant="bar"
+          data={stlyBar}
+          xKey="bucket"
+          series={[{ key: 'stly_pct', label: 'STLY %', color: 'var(--sand, #B8A878)' }]}
+          height={220}
+          formatY={(v) => `${v}%`}
+          empty={{ title: 'No STLY actuals' }}
+        />
+      </Container>
 
-      <Panel
-        title={`Pace by stay-bucket · ${buckets.length} ${gran}s`}
-        eyebrow="v_otb_pace · mv_kpi_daily"
-        actions={<ArtifactActions context={ctx('table', `Pace by stay-bucket · ${gran}`)} />}
-      >
-        <PaceBucketsTable rows={buckets} gran={gran} />
-      </Panel>
-    </Page>
+      <Container title={`Pace by stay-bucket · ${buckets.length} ${gran}${buckets.length === 1 ? '' : 's'}`} subtitle="v_otb_pace · mv_kpi_daily">
+        <Chart
+          variant="table"
+          data={bucketTable}
+          xKey="bucket"
+          series={[
+            { key: 'rns',      label: 'RNs' },
+            { key: 'rev',      label: 'Rev (USD)' },
+            { key: 'occ',      label: 'Occ %' },
+            { key: 'cxl',      label: 'Cxl' },
+            { key: 'stly_pct', label: 'STLY %' },
+          ]}
+        />
+      </Container>
+    </DashboardPage>
+  );
+}
+
+// ─── inline URL-control helpers (not visual blocks) ──────────────────────
+
+function ControlGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', marginRight: 4 }}>{label}:</span>
+      {children}
+    </div>
+  );
+}
+
+function PillLink({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
+  return (
+    <a
+      href={href}
+      style={{
+        fontFamily: 'inherit',
+        fontSize: 11,
+        letterSpacing: '0.06em',
+        textTransform: 'uppercase',
+        padding: '4px 10px',
+        borderRadius: 99,
+        border: `1px solid ${active ? 'var(--primary, #1F3A2E)' : 'var(--hairline, #E6DFCC)'}`,
+        background: active ? 'var(--primary, #1F3A2E)' : 'var(--paper, #FFFFFF)',
+        color: active ? '#FFFFFF' : 'var(--ink-soft, #5A5A5A)',
+        fontWeight: active ? 600 : 500,
+        textDecoration: 'none',
+      }}
+    >
+      {children}
+    </a>
   );
 }
