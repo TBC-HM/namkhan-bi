@@ -4,7 +4,7 @@
 
 'use client';
 
-import { type CSSProperties, type ReactNode } from 'react';
+import { Fragment, type CSSProperties, type ReactNode } from 'react';
 import {
   ResponsiveContainer,
   LineChart, Line,
@@ -67,7 +67,7 @@ export default function Chart(props: ChartProps) {
     ? <DimensionSelector dimensions={dimensions!} activeKey={activeDimensionKey} onChange={onDimensionChange} />
     : null;
 
-  const tip = (variant: string, showStackTotal = false) => (
+  const tip = (variantName: string, showStackTotal = false) => (
     <Tooltip
       cursor={{ stroke: 'var(--hairline, #E6DFCC)', strokeWidth: 1 }}
       content={(p) => (
@@ -76,7 +76,7 @@ export default function Chart(props: ChartProps) {
           formatY={formatY}
           formatX={formatX}
           tooltipFormatter={tooltipFormatter}
-          variant={variant}
+          variant={variantName}
           showStackTotal={showStackTotal}
         />
       )}
@@ -201,31 +201,35 @@ export default function Chart(props: ChartProps) {
 function HeatmapView({ data, xKey, yKey, valueKey, height, formatY }: { data: Record<string, unknown>[]; xKey: string; yKey: string; valueKey: string; height: number; formatY?: (v: number) => string }) {
   const xs = Array.from(new Set(data.map((d) => String(d[xKey]))));
   const ys = Array.from(new Set(data.map((d) => String(d[yKey]))));
-  const values = data.map((d) => Number(d[valueKey]) || 0);
-  const max = values.length ? Math.max(...values) : 1;
   const lookup = new Map<string, number>();
-  data.forEach((d) => lookup.set(`${d[xKey]}|${d[yKey]}`, Number(d[valueKey]) || 0));
+  let max = 0;
+  data.forEach((d) => {
+    const v = Number(d[valueKey]) || 0;
+    if (v > max) max = v;
+    lookup.set(`${d[xKey]}|${d[yKey]}`, v);
+  });
+  if (max === 0) max = 1;
 
   return (
     <div style={{ overflowX: 'auto', minHeight: height }}>
       <div style={{ display: 'grid', gridTemplateColumns: `auto repeat(${xs.length}, 1fr)`, gap: 2, fontSize: 11 }}>
         <div />
-        {xs.map((x) => <div key={x} style={{ padding: '4px 8px', color: 'var(--ink-soft, #5A5A5A)', textAlign: 'center', fontWeight: 500 }}>{x}</div>)}
+        {xs.map((x) => <div key={`xhead-${x}`} style={{ padding: '4px 8px', color: 'var(--ink-soft, #5A5A5A)', textAlign: 'center', fontWeight: 500 }}>{x}</div>)}
         {ys.map((y) => (
-          <>
-            <div key={`label-${y}`} style={{ padding: '6px 8px', color: 'var(--ink-soft, #5A5A5A)', fontWeight: 500 }}>{y}</div>
+          <Fragment key={`row-${y}`}>
+            <div style={{ padding: '6px 8px', color: 'var(--ink-soft, #5A5A5A)', fontWeight: 500 }}>{y}</div>
             {xs.map((x) => {
               const v = lookup.get(`${x}|${y}`) ?? 0;
-              const intensity = max > 0 ? v / max : 0;
+              const intensity = v / max;
               const bg = `rgba(31, 58, 46, ${Math.max(0.05, intensity)})`;
               const fg = intensity > 0.55 ? '#FFF' : 'var(--ink, #1B1B1B)';
               return (
-                <div key={`${x}-${y}`} title={`${y} · ${x} · ${v}`} style={{ background: bg, color: fg, padding: '8px 4px', textAlign: 'center', borderRadius: 2, fontVariantNumeric: 'tabular-nums' }}>
+                <div key={`cell-${x}-${y}`} title={`${y} · ${x} · ${v}`} style={{ background: bg, color: fg, padding: '8px 4px', textAlign: 'center', borderRadius: 2, fontVariantNumeric: 'tabular-nums' }}>
                   {formatY ? formatY(v) : v.toLocaleString('en-US')}
                 </div>
               );
             })}
-          </>
+          </Fragment>
         ))}
       </div>
     </div>
