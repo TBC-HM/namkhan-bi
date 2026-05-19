@@ -1,7 +1,7 @@
 // app/h/[property_id]/cockpit/supabase/lib/types.ts
 // Row shape mirrors public.v_cockpit_inventory.
 
-export type InventoryKind = 'kpi' | 'container' | 'graph';
+export type InventoryKind = 'kpi' | 'container' | 'graph' | 'component';
 export type DataStatus = 'live' | 'partial' | 'blocked';
 export type StatusColor = 'red' | 'green' | 'amber';
 
@@ -22,6 +22,6 @@ export interface InventoryRow {
   status_color: StatusColor;
 }
 
-export type TabKey = 'kpi' | 'container' | 'graph';
+export type TabKey = 'kpi' | 'container' | 'graph' | 'component';
 export type PropertyFilter = 'all' | 'namkhan' | 'donna' | 'both';
 export type StatusFilter = 'all' | 'wired' | 'not_wired' | 'live';
