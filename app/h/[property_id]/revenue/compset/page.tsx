@@ -1,31 +1,16 @@
 // app/h/[property_id]/revenue/compset/page.tsx
-// Donna canonical Revenue · Comp-set — full canonical layout, empty-state data
-// until Donna PMS/booking feed is wired. Namkhan redirects to legacy.
+// 2026-05-20: property-aware compset. Single source of truth at
+// /app/revenue/compset/page.tsx — same JSX renders for both Namkhan + Donna.
+// Donna's compset views return 0 rows; the page falls through to empty states.
 
-import { redirect } from 'next/navigation';
-import { NAMKHAN_PROPERTY_ID } from '@/lib/dept-cfg/by-property';
-import DonnaRevenueCanonical from '../_DonnaRevenueCanonical';
-import { REVENUE_SURFACES } from '../_surfaces';
+import { notFound } from 'next/navigation';
+import CompsetBody from '@/app/revenue/compset/page';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export default function DonnaRevenueCompsetPage({
-  params,
-  searchParams,
-}: {
-  params: { property_id: string };
-  searchParams?: { win?: string; cmp?: string };
-}) {
+export default function PropertyCompsetPage({ params }: { params: { property_id: string } }) {
   const propertyId = Number(params.property_id);
-  if (propertyId === NAMKHAN_PROPERTY_ID) redirect('/revenue/compset');
-
-  return (
-    <DonnaRevenueCanonical
-      propertyId={propertyId}
-      win={searchParams?.win}
-      cmp={searchParams?.cmp}
-      cfg={REVENUE_SURFACES.compset}
-    />
-  );
+  if (!Number.isFinite(propertyId)) notFound();
+  return <CompsetBody propertyId={propertyId} />;
 }
