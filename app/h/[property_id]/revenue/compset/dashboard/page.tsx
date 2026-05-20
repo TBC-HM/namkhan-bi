@@ -1,17 +1,13 @@
 // app/h/[property_id]/revenue/compset/dashboard/page.tsx
-// NEW Compset dashboard composed from _design primitives.
-// Additive — leaves the legacy /revenue/compset page untouched.
-//
-// Reads from public.v_compset_* views (Namkhan-scoped — compset is the
-// hotel's competitive landscape, not per-property). Donna falls back to
-// empty states cleanly.
+// 2026-05-20: added "Performance context" + "Compset signals" containers
+// per PBS — cross-domain KPIs that read alongside the compset numbers.
 
 import { notFound } from 'next/navigation';
 import {
   DashboardPage, Container, KpiTile, Chart,
   type ChartSeries, type DashboardTab, type KpiTileProps,
 } from '@/app/(cockpit)/_design';
-import { supabase } from '@/lib/supabase';
+import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import { REVENUE_SUBPAGES } from '@/app/revenue/_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 
@@ -19,60 +15,25 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
 interface PropertySummaryRow {
-  comp_id: string;
-  set_name: string | null;
-  property_name: string;
-  is_self: boolean | null;
-  star_rating: number | null;
-  rooms: number | null;
-  latest_usd: number | null;
-  latest_channel: string | null;
-  last_shop_date: string | null;
-  last_shop_human: string | null;
-  avg_30d_usd: number | null;
-  obs_count_30d: number | null;
-  min_30d_usd: number | null;
-  max_30d_usd: number | null;
-  pct_vs_median: number | null;
-  review_score: number | null;
-  review_count: number | null;
-  channels_with_reviews: number | null;
-  has_bdc: boolean | null;
-  has_agoda: boolean | null;
-  has_expedia: boolean | null;
-  has_trip: boolean | null;
-  has_direct: boolean | null;
+  comp_id: string; set_name: string | null; property_name: string; is_self: boolean | null;
+  star_rating: number | null; rooms: number | null; latest_usd: number | null; latest_channel: string | null;
+  last_shop_date: string | null; last_shop_human: string | null; avg_30d_usd: number | null;
+  obs_count_30d: number | null; min_30d_usd: number | null; max_30d_usd: number | null;
+  pct_vs_median: number | null; review_score: number | null; review_count: number | null;
+  channels_with_reviews: number | null; has_bdc: boolean | null; has_agoda: boolean | null;
+  has_expedia: boolean | null; has_trip: boolean | null; has_direct: boolean | null;
 }
-
-interface RateMatrixRow {
-  comp_id: string;
-  stay_date: string;
-  rate_usd: number | null;
-  channel: string | null;
-}
-
+interface RateMatrixRow { comp_id: string; stay_date: string; rate_usd: number | null; channel: string | null }
 interface PromoTileRow {
-  comp_id: string;
-  property_name: string;
-  is_self: boolean | null;
-  latest_rate_usd: number | null;
-  promo_frequency_pct: number | null;
-  avg_discount_pct: number | null;
-  max_discount_seen: number | null;
-  pattern_label: string | null;
-  days_with_promo: number | null;
-  days_with_data: number | null;
+  comp_id: string; property_name: string; is_self: boolean | null;
+  latest_rate_usd: number | null; promo_frequency_pct: number | null; avg_discount_pct: number | null;
+  max_discount_seen: number | null; pattern_label: string | null;
+  days_with_promo: number | null; days_with_data: number | null;
 }
-
 interface RatePlanRow {
-  category: string | null;
-  plan_name: string;
-  competitors_offering: number | null;
-  comps_offering_excl_self: number | null;
-  channels_seen: number | null;
-  avg_rate_usd: number | null;
-  avg_discount_when_promoted: number | null;
-  namkhan_offers: boolean | null;
+  category: string | null; plan_name: string;
+  competitors_offering: number | null; comps_offering_excl_self: number | null; channels_seen: number | null;
+  avg_rate_usd: number | null; avg_discount_when_promoted: number | null; namkhan_offers: boolean | null;
 }
 
 function fmtUSD(n: number | null | undefined): string {
@@ -89,17 +50,28 @@ function fmtSignedPct(n: number | null | undefined): string {
   const sign = v > 0 ? '+' : v < 0 ? '−' : '';
   return `${sign}${Math.abs(v).toFixed(1)}%`;
 }
+function todayIso(): string { return new Date().toISOString().slice(0, 10); }
+function shiftDate(iso: string, days: number): string {
+  const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+function daysBetweenToday(iso: string | null): number | null {
+  if (!iso) return null;
+  const t = new Date(iso + 'T00:00:00Z').getTime();
+  const today = new Date(todayIso() + 'T00:00:00Z').getTime();
+  return Math.floor((today - t) / 86_400_000);
+}
 
 export default async function CompsetDashboardPage({ params }: { params: { property_id: string } }) {
   const propertyId = Number(params.property_id);
   if (!Number.isFinite(propertyId)) notFound();
-
-  const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, propertyId);
+  const pid = propertyId;
+  const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
   const tabs: DashboardTab[] = subPages.map((s) => ({
     key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/compset'),
   }));
 
-  // ─── parallel load ────────────────────────────────────────────────────
+  // ─── compset views ────────────────────────────────────────────────────
   const [{ data: properties }, { data: matrix }, { data: promoTiles }, { data: ratePlans }] = await Promise.all([
     supabase.from('v_compset_property_summary')
       .select('comp_id, set_name, property_name, is_self, star_rating, rooms, latest_usd, latest_channel, last_shop_date, last_shop_human, avg_30d_usd, obs_count_30d, min_30d_usd, max_30d_usd, pct_vs_median, review_score, review_count, channels_with_reviews, has_bdc, has_agoda, has_expedia, has_trip, has_direct')
@@ -124,39 +96,60 @@ export default async function CompsetDashboardPage({ params }: { params: { prope
   const promos = (promoTiles ?? []) as PromoTileRow[];
   const plans = (ratePlans ?? []) as RatePlanRow[];
 
-  // ─── headline metrics ────────────────────────────────────────────────
+  // ─── Performance context — pull from public.v_kpi_daily + v_otb_pace ──
+  // Most recent yesterday-anchored snapshot for the property.
+  const anchor = todayIso();
+  const yest = shiftDate(anchor, -1);
+  const stly = shiftDate(yest, -365);
+
+  const { data: kpiRows } = await supabase
+    .from('v_kpi_daily')
+    .select('night_date, adr, revpar, trevpar')
+    .eq('property_id', pid)
+    .in('night_date', [yest, stly])
+    .order('night_date', { ascending: false });
+  const yestRow = (kpiRows ?? []).find((r) => r.night_date === yest) ?? null;
+  const stlyRow = (kpiRows ?? []).find((r) => r.night_date === stly) ?? null;
+
+  const adrYest    = Number(yestRow?.adr ?? 0);
+  const revparYest = Number(yestRow?.revpar ?? 0);
+  const trevparYest = Number(yestRow?.trevpar ?? 0);
+  const adrStly    = Number(stlyRow?.adr ?? 0);
+  const revparStly = Number(stlyRow?.revpar ?? 0);
+  const adrDelta    = adrStly > 0 ? ((adrYest - adrStly) / adrStly) * 100 : null;
+  const revparDelta = revparStly > 0 ? ((revparYest - revparStly) / revparStly) * 100 : null;
+
+  // 24h pickup — confirmed_rooms today vs yesterday from v_otb_pace
+  const recentTo   = anchor;
+  const recentFrom = shiftDate(anchor, -2);
+  const { data: paceRows } = await supabase
+    .from('v_otb_pace')
+    .select('night_date, confirmed_rooms')
+    .eq('property_id', pid)
+    .gte('night_date', recentFrom)
+    .lte('night_date', recentTo);
+  const pickupToday  = (paceRows ?? []).filter((r) => r.night_date === anchor)
+    .reduce((s, r) => s + Number(r.confirmed_rooms || 0), 0);
+  const pickupYest   = (paceRows ?? []).filter((r) => r.night_date === yest)
+    .reduce((s, r) => s + Number(r.confirmed_rooms || 0), 0);
+
+  // ─── headline metrics (existing) ──────────────────────────────────────
   const self = props.find((p) => p.is_self === true) ?? null;
   const others = props.filter((p) => !p.is_self);
   const compSetSize = others.length;
-  const avgCompRate = others.length > 0
-    ? others.filter((p) => p.latest_usd != null).reduce((s, p) => s + Number(p.latest_usd || 0), 0)
-      / Math.max(1, others.filter((p) => p.latest_usd != null).length)
+  const compsWithRate = others.filter((p) => p.latest_usd != null);
+  const avgCompRate = compsWithRate.length > 0
+    ? compsWithRate.reduce((s, p) => s + Number(p.latest_usd || 0), 0) / compsWithRate.length
     : 0;
   const ourRate = Number(self?.latest_usd ?? 0);
   const ourGap = ourRate > 0 && avgCompRate > 0 ? ((ourRate - avgCompRate) / avgCompRate) * 100 : 0;
-  const lastShop = props
-    .map((p) => p.last_shop_date)
-    .filter((d): d is string => !!d)
-    .sort()
-    .pop() ?? null;
-  const channelCount = (() => {
-    if (!self) return 0;
-    let n = 0;
-    if (self.has_bdc) n++;
-    if (self.has_agoda) n++;
-    if (self.has_expedia) n++;
-    if (self.has_trip) n++;
-    if (self.has_direct) n++;
-    return n;
-  })();
-  // Our rank — sort by latest_usd descending; find our row's position
-  const rankedAll = [...props]
-    .filter((p) => p.latest_usd != null)
+  const lastShop = props.map((p) => p.last_shop_date).filter((d): d is string => !!d).sort().pop() ?? null;
+  const rankedAll = [...props].filter((p) => p.latest_usd != null)
     .sort((a, b) => Number(b.latest_usd) - Number(a.latest_usd));
   const ourRank = self ? rankedAll.findIndex((p) => p.comp_id === self.comp_id) + 1 : 0;
   const totalRanked = rankedAll.length;
 
-  const tiles: KpiTileProps[] = [
+  const headlineTiles: KpiTileProps[] = [
     { label: 'Comp set size', value: compSetSize, size: 'sm',
       footnote: 'competitors tracked', status: compSetSize > 0 ? 'green' : 'grey' },
     { label: 'Our rate', value: Math.round(ourRate), currency: 'USD', size: 'sm',
@@ -165,22 +158,59 @@ export default async function CompsetDashboardPage({ params }: { params: { prope
       footnote: 'mean of competitors', status: avgCompRate > 0 ? 'green' : 'grey' },
     { label: 'vs Compset median', value: fmtSignedPct(ourGap), size: 'sm',
       footnote: ourGap >= 0 ? 'priced above' : 'priced below',
-      status: ourRate === 0 || avgCompRate === 0 ? 'grey' : ourGap > 15 ? 'amber' : ourGap < -15 ? 'amber' : 'green' },
+      status: ourRate === 0 || avgCompRate === 0 ? 'grey' : Math.abs(ourGap) > 15 ? 'amber' : 'green' },
     { label: 'Our rank', value: ourRank > 0 ? `${ourRank} / ${totalRanked}` : '—', size: 'sm',
-      footnote: 'by latest rate (high → low)',
-      status: ourRank > 0 ? 'green' : 'grey' },
+      footnote: 'by latest rate (high → low)', status: ourRank > 0 ? 'green' : 'grey' },
     { label: 'Last shop', value: lastShop ?? '—', size: 'sm',
-      footnote: self?.last_shop_human ?? 'no observations',
-      status: lastShop ? 'green' : 'grey' },
+      footnote: self?.last_shop_human ?? 'no observations', status: lastShop ? 'green' : 'grey' },
   ];
 
-  // ─── rate trend chart — pivot stay_date × property ───────────────────
-  // Take top 5 competitors + self, plot avg rate per day.
-  const topCompIds = new Set(
-    [...rankedAll.slice(0, 6).map((p) => p.comp_id)],
-  );
-  const compNameById = new Map(props.map((p) => [p.comp_id, p.property_name]));
+  // ─── Performance context (NEW) ────────────────────────────────────────
+  const contextTiles: KpiTileProps[] = [
+    { label: 'RevPAR · yesterday', value: Math.round(revparYest), currency: 'USD', size: 'sm',
+      delta: revparDelta != null ? { value: revparDelta, period: 'STLY',
+        direction: revparDelta >= 0 ? 'up' : 'down' } : undefined,
+      footnote: 'v_kpi_daily', status: revparYest > 0 ? 'green' : 'grey' },
+    { label: 'ADR · yesterday', value: Math.round(adrYest), currency: 'USD', size: 'sm',
+      delta: adrDelta != null ? { value: adrDelta, period: 'STLY',
+        direction: adrDelta >= 0 ? 'up' : 'down' } : undefined,
+      footnote: 'v_kpi_daily', status: adrYest > 0 ? 'green' : 'grey' },
+    { label: 'TRevPAR · yesterday', value: Math.round(trevparYest), currency: 'USD', size: 'sm',
+      footnote: 'rooms + F&B + ancillary', status: trevparYest > 0 ? 'green' : 'grey' },
+    { label: 'Pickup · 24h', value: pickupToday, size: 'sm',
+      footnote: `vs ${pickupYest} yesterday · v_otb_pace`,
+      status: pickupToday > 0 ? 'green' : 'grey' },
+  ];
 
+  // ─── Compset signals (NEW) ────────────────────────────────────────────
+  const competitorRatesNum = compsWithRate.map((p) => Number(p.latest_usd));
+  const maxComp = competitorRatesNum.length ? Math.max(...competitorRatesNum) : 0;
+  const minComp = competitorRatesNum.length ? Math.min(...competitorRatesNum) : 0;
+  const spread = maxComp - minComp;
+
+  const selfPromo = promos.find((p) => p.is_self === true);
+  const daysFresh = daysBetweenToday(lastShop);
+
+  const signalTiles: KpiTileProps[] = [
+    { label: 'Compset spread', value: Math.round(spread), currency: 'USD', size: 'sm',
+      footnote: `${fmtUSD(minComp)} → ${fmtUSD(maxComp)}`,
+      status: spread > 0 ? 'green' : 'grey' },
+    { label: 'Our promo frequency', value: fmtPct(selfPromo?.promo_frequency_pct, 0), size: 'sm',
+      footnote: selfPromo
+        ? `${selfPromo.days_with_promo ?? 0} / ${selfPromo.days_with_data ?? 0} days promoted`
+        : 'not in promo data',
+      status: selfPromo ? (Number(selfPromo.promo_frequency_pct ?? 0) > 0 ? 'amber' : 'green') : 'grey' },
+    { label: 'Our pattern', value: selfPromo?.pattern_label ?? '—', size: 'sm',
+      footnote: 'price-move cadence',
+      status: selfPromo?.pattern_label ? 'green' : 'grey' },
+    { label: 'Data freshness', value: daysFresh != null ? `${daysFresh}d` : '—', size: 'sm',
+      footnote: lastShop ? `last shop ${lastShop}` : 'never shopped',
+      status: daysFresh == null ? 'grey' : daysFresh <= 2 ? 'green' : daysFresh <= 7 ? 'amber' : 'red' },
+  ];
+
+  // ─── rate trend ───────────────────────────────────────────────────────
+  const topCompIds = new Set([...rankedAll.slice(0, 6).map((p) => p.comp_id)]);
+  const compNameById = new Map(props.map((p) => [p.comp_id, p.property_name]));
   const pivot: Map<string, Record<string, number | string>> = new Map();
   for (const r of mat) {
     if (!topCompIds.has(r.comp_id)) continue;
@@ -193,16 +223,14 @@ export default async function CompsetDashboardPage({ params }: { params: { prope
     row[`${name}__n`] = count + 1;
     pivot.set(r.stay_date, row);
   }
-  const trendData = Array.from(pivot.values())
-    .map((r) => {
-      const clean: Record<string, number | string> = { stay_date: String(r.stay_date) };
-      for (const k of Object.keys(r)) {
-        if (k.endsWith('__n') || k === 'stay_date') continue;
-        clean[k] = Math.round(Number(r[k]));
-      }
-      return clean;
-    })
-    .sort((a, b) => String(a.stay_date).localeCompare(String(b.stay_date)));
+  const trendData = Array.from(pivot.values()).map((r) => {
+    const clean: Record<string, number | string> = { stay_date: String(r.stay_date) };
+    for (const k of Object.keys(r)) {
+      if (k.endsWith('__n') || k === 'stay_date') continue;
+      clean[k] = Math.round(Number(r[k]));
+    }
+    return clean;
+  }).sort((a, b) => String(a.stay_date).localeCompare(String(b.stay_date)));
 
   const palette = ['#1F3A2E', '#B8542A', '#B8A878', '#2E7D32', '#6E8B65', '#C8843E', '#5A5A5A', '#8FA585'];
   const trendSeries: ChartSeries[] = Array.from(topCompIds).map((id, i) => {
@@ -211,7 +239,7 @@ export default async function CompsetDashboardPage({ params }: { params: { prope
     return { key: name, label: prop?.is_self ? `★ ${name}` : name, color: palette[i % palette.length] };
   });
 
-  // ─── property table rows ─────────────────────────────────────────────
+  // ─── property + promo + rate-plan tables ─────────────────────────────
   const propertyRows = props.map((p) => ({
     property: p.is_self ? `★ ${p.property_name}` : p.property_name,
     stars:    p.star_rating != null ? `${p.star_rating}★` : '—',
@@ -224,8 +252,6 @@ export default async function CompsetDashboardPage({ params }: { params: { prope
     channels:  [p.has_bdc && 'BDC', p.has_agoda && 'AGO', p.has_expedia && 'EXP', p.has_trip && 'TRP', p.has_direct && 'DIR'].filter(Boolean).join(' · ') || '—',
     last_shop: p.last_shop_human ?? '—',
   }));
-
-  // ─── promo behaviour rows ────────────────────────────────────────────
   const promoRows = promos.map((p) => ({
     property:  p.is_self ? `★ ${p.property_name}` : p.property_name,
     latest:    fmtUSD(p.latest_rate_usd),
@@ -236,8 +262,6 @@ export default async function CompsetDashboardPage({ params }: { params: { prope
     days_promoted: p.days_with_data && p.days_with_data > 0
       ? `${p.days_with_promo ?? 0} / ${p.days_with_data}` : '—',
   }));
-
-  // ─── rate-plan landscape ─────────────────────────────────────────────
   const planRows = plans.map((p) => ({
     plan:         p.plan_name,
     category:     p.category ?? '—',
@@ -249,31 +273,21 @@ export default async function CompsetDashboardPage({ params }: { params: { prope
   }));
 
   const propertyCols: ChartSeries[] = [
-    { key: 'stars',     label: 'Stars' },
-    { key: 'rooms',     label: 'Rooms' },
-    { key: 'latest',    label: 'Latest' },
-    { key: 'avg_30d',   label: 'Avg 30d' },
-    { key: 'range',     label: 'Range 30d' },
-    { key: 'vs_median', label: 'vs Med' },
-    { key: 'review',    label: 'Review' },
-    { key: 'channels',  label: 'Channels' },
+    { key: 'stars', label: 'Stars' }, { key: 'rooms', label: 'Rooms' },
+    { key: 'latest', label: 'Latest' }, { key: 'avg_30d', label: 'Avg 30d' },
+    { key: 'range', label: 'Range 30d' }, { key: 'vs_median', label: 'vs Med' },
+    { key: 'review', label: 'Review' }, { key: 'channels', label: 'Channels' },
     { key: 'last_shop', label: 'Last shop' },
   ];
   const promoCols: ChartSeries[] = [
-    { key: 'latest',        label: 'Latest' },
-    { key: 'pattern',       label: 'Pattern' },
-    { key: 'promo_freq',    label: 'Promo freq' },
-    { key: 'avg_disc',      label: 'Avg disc' },
-    { key: 'max_disc',      label: 'Max disc' },
-    { key: 'days_promoted', label: 'Promoted / observed' },
+    { key: 'latest', label: 'Latest' }, { key: 'pattern', label: 'Pattern' },
+    { key: 'promo_freq', label: 'Promo freq' }, { key: 'avg_disc', label: 'Avg disc' },
+    { key: 'max_disc', label: 'Max disc' }, { key: 'days_promoted', label: 'Promoted / observed' },
   ];
   const planCols: ChartSeries[] = [
-    { key: 'category',     label: 'Category' },
-    { key: 'competitors',  label: 'Competitors' },
-    { key: 'excl_self',    label: 'Excl self' },
-    { key: 'avg_rate',     label: 'Avg rate' },
-    { key: 'avg_discount', label: 'Avg disc' },
-    { key: 'we_offer',     label: 'We offer' },
+    { key: 'category', label: 'Category' }, { key: 'competitors', label: 'Competitors' },
+    { key: 'excl_self', label: 'Excl self' }, { key: 'avg_rate', label: 'Avg rate' },
+    { key: 'avg_discount', label: 'Avg disc' }, { key: 'we_offer', label: 'We offer' },
   ];
 
   return (
@@ -292,49 +306,40 @@ export default async function CompsetDashboardPage({ params }: { params: { prope
     >
       <Container title="Compset headline" subtitle="latest observed rates · last 30 days" density="compact">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-          {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
+          {headlineTiles.map((t, i) => <KpiTile key={i} {...t} />)}
+        </div>
+      </Container>
+
+      <Container title="Performance context" subtitle="yesterday's realized numbers · context for compset positioning" density="compact">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+          {contextTiles.map((t, i) => <KpiTile key={i} {...t} />)}
+        </div>
+      </Container>
+
+      <Container title="Compset signals" subtitle="derived from compset data · spread · cadence · freshness" density="compact">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+          {signalTiles.map((t, i) => <KpiTile key={i} {...t} />)}
         </div>
       </Container>
 
       <Container title="Daily rate trend · top 6" subtitle="self + 5 nearest competitors · v_compset_competitor_rate_matrix">
-        <Chart
-          variant="line"
-          data={trendData}
-          xKey="stay_date"
-          series={trendSeries}
-          height={260}
-          empty={{ title: 'No rate observations', hint: 'compset has not been shopped yet' }}
-        />
+        <Chart variant="line" data={trendData} xKey="stay_date" series={trendSeries} height={260}
+          empty={{ title: 'No rate observations', hint: 'compset has not been shopped yet' }} />
       </Container>
 
       <Container title={`Properties · ${props.length}`} subtitle="ranked by latest rate · v_compset_property_summary">
-        <Chart
-          variant="table"
-          data={propertyRows}
-          xKey="property"
-          series={propertyCols}
-          empty={{ title: 'No competitors registered' }}
-        />
+        <Chart variant="table" data={propertyRows} xKey="property" series={propertyCols}
+          empty={{ title: 'No competitors registered' }} />
       </Container>
 
       <Container title="Promo behaviour" subtitle="discount cadence · v_compset_promo_tiles">
-        <Chart
-          variant="table"
-          data={promoRows}
-          xKey="property"
-          series={promoCols}
-          empty={{ title: 'No promo data' }}
-        />
+        <Chart variant="table" data={promoRows} xKey="property" series={promoCols}
+          empty={{ title: 'No promo data' }} />
       </Container>
 
       <Container title="Rate-plan landscape" subtitle="who offers what · v_compset_rate_plan_landscape">
-        <Chart
-          variant="table"
-          data={planRows}
-          xKey="plan"
-          series={planCols}
-          empty={{ title: 'No rate-plan landscape data' }}
-        />
+        <Chart variant="table" data={planRows} xKey="plan" series={planCols}
+          empty={{ title: 'No rate-plan landscape data' }} />
       </Container>
     </DashboardPage>
   );
