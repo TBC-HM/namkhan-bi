@@ -23,9 +23,9 @@ interface PlanAgg {
   leadDaysSum: number; leadDaysN: number; lastBooked: string | null;
 }
 
-function fmtUSD(n: number | null | undefined): string {
+function fmtMoney(n: number | null | undefined, sym: string = '$'): string {
   if (n == null || !Number.isFinite(Number(n))) return '—';
-  return '$' + Math.round(Number(n)).toLocaleString('en-US');
+  return sym + Math.round(Number(n)).toLocaleString('en-US');
 }
 function fmtInt(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(Number(n))) return '—';
@@ -38,6 +38,8 @@ function fmtPct(n: number | null | undefined, decimals = 1): string {
 
 export default async function RatePlansPage({ searchParams, propertyId }: Props) {
   const pid = propertyId ?? PROPERTY_ID;
+  const moneyCurrency: 'USD' | 'EUR' = pid === 1000001 ? 'EUR' : 'USD';
+  const sym: string = pid === 1000001 ? '€' : '$';
   const period = resolvePeriod(searchParams);
   const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
   const basePath = pid !== PROPERTY_ID ? `/h/${pid}/revenue/rateplans` : '/revenue/rateplans';
@@ -103,8 +105,8 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     bookings:    fmtInt(p.bookings),
     cancellations: fmtInt(p.cancellations),
     cancel_pct:  fmtPct((p.bookings + p.cancellations) > 0 ? (100 * p.cancellations) / (p.bookings + p.cancellations) : 0),
-    revenue:     fmtUSD(p.revenue),
-    adr:         fmtUSD(p.nights ? p.revenue / p.nights : 0),
+    revenue:     fmtMoney(p.revenue, sym),
+    adr:         fmtMoney(p.nights ? p.revenue / p.nights : 0, sym),
     mix:         fmtPct(totalRev ? (100 * p.revenue) / totalRev : 0),
     last_booked: p.lastBooked ?? '—',
   }));
@@ -168,7 +170,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
   const orphanRows = (orphans ?? []).map((r) => ({
     plan:        r.rate_plan,
     bookings:    fmtInt(r.bookings_lifetime),
-    revenue:     fmtUSD(r.revenue_lifetime),
+    revenue:     fmtMoney(r.revenue_lifetime, sym),
     last_booked: r.last_booked ?? '—',
   }));
 
@@ -180,7 +182,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
       footnote: 'idle ≥ 90d', status: sleepingRows.length > 0 ? 'amber' : 'grey' },
     { label: 'Top 3 concentration', value: `${top3Pct.toFixed(1)}%`, size: 'sm',
       footnote: '>60% healthy · <40% scattered', status: top3Pct >= 60 ? 'green' : top3Pct >= 40 ? 'amber' : 'red' },
-    { label: `Revenue · ${period.label}`, value: Math.round(totalRev), currency: 'USD', size: 'sm',
+    { label: `Revenue · ${period.label}`, value: Math.round(totalRev), currency: moneyCurrency, size: 'sm',
       footnote: 'attributed to a rate plan', status: totalRev > 0 ? 'green' : 'grey' },
   ];
 
