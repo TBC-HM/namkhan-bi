@@ -308,7 +308,53 @@ export async function getPaceOtb(period?: ResolvedPeriod, propertyId?: number) {
 
   const { data, error } = await query;
   if (error) throw error;
-  return data ?? [];
+  if (data && data.length > 0) return data;
+
+  // Fallback: mv_pace_otb has no rows for this property (currently Donna).
+  // Synthesize the same shape from public.fn_pickup_otb_at, using today as
+  // OTB snapshot and (today − 1 year) as STLY. Keeps Demand page wired even
+  // before mv_pace_otb is rebuilt to include the property.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const sdlyDate = new Date(); sdlyDate.setFullYear(sdlyDate.getFullYear() - 1);
+  const sdlyIso = sdlyDate.toISOString().slice(0, 10);
+  const [{ data: otb }, { data: stly }] = await Promise.all([
+    supabase.rpc('fn_pickup_otb_at', { p_property_id: pid, p_asof: todayIso }),
+    supabase.rpc('fn_pickup_otb_at', { p_property_id: pid, p_asof: sdlyIso  }),
+  ]);
+  type Snap = { stay_year: number; stay_month: number; rn: number; rev: number };
+  const otbArr  = (otb  ?? []) as Snap[];
+  const stlyArr = (stly ?? []) as Snap[];
+  // Filter both to the current year and (current year − 1) respectively
+  // to mirror Pace OTB semantics (forward 12mo of current year vs same months LY).
+  const thisYear = new Date().getFullYear();
+  const byMo = new Map<number, { otb: Snap | null; stly: Snap | null }>();
+  for (const r of otbArr) {
+    if (r.stay_year !== thisYear) continue;
+    const slot = byMo.get(r.stay_month) ?? { otb: null, stly: null };
+    slot.otb = r; byMo.set(r.stay_month, slot);
+  }
+  for (const r of stlyArr) {
+    if (r.stay_year !== thisYear - 1) continue;
+    const slot = byMo.get(r.stay_month) ?? { otb: null, stly: null };
+    slot.stly = r; byMo.set(r.stay_month, slot);
+  }
+  const months = [...byMo.entries()].sort((a, b) => a[0] - b[0]);
+  return months.map(([month, slot]) => {
+    const otbRn  = Number(slot.otb?.rn  ?? 0);
+    const stlyRn = Number(slot.stly?.rn ?? 0);
+    const otbRev = Number(slot.otb?.rev  ?? 0);
+    const stlyRev= Number(slot.stly?.rev ?? 0);
+    return {
+      property_id: pid,
+      ci_month: `${thisYear}-${String(month).padStart(2, '0')}-01`,
+      otb_roomnights: otbRn,
+      stly_roomnights: stlyRn,
+      roomnights_delta: otbRn - stlyRn,
+      otb_revenue: otbRev,
+      stly_revenue: stlyRev,
+      revenue_delta: otbRev - stlyRev,
+    };
+  });
 }
 
 // ============================================================================
