@@ -1,22 +1,15 @@
 // app/revenue/reports/render/_renderers/PlMonthReport.tsx
-// USALI P&L for the picked month — pulls v_usali_house_summary +
-// v_usali_dept_summary from the gl schema. Server component.
-//
-// URL contract:
-//   /revenue/reports/render?type=pl-month&month=2026-04
-// If `month` is missing or invalid we fall back to the latest closed month
-// in the gl data; if that also fails we render an empty-state.
+// USALI P&L month report — ported to primitives.
 
-import Panel from '@/components/page/Panel';
-import KpiBox from '@/components/kpi/KpiBox';
-import Brief from '@/components/page/Brief';
+import { Container, KpiTile, Chart, type ChartSeries } from '@/app/(cockpit)/_design';
+import ReportBrief from './_shared/ReportBrief';
 import { getUsaliHouse, getUsaliDept } from '@/app/finance/_data';
 import type { ResolvedPeriod } from '@/lib/period';
 import { fmtTableUsd } from '@/lib/format';
 
 interface Props {
   period: ResolvedPeriod;
-  month?: string; // 2026-04
+  month?: string;
 }
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -30,14 +23,11 @@ function priorMonth(yyyymm: string): string {
 }
 
 export default async function PlMonthReport({ period, month }: Props) {
-  // Resolve target month: explicit param wins; else last full calendar month
-  // before period.to (so default 30d windows still produce a useful month).
   let target: string;
   if (month && MONTH_RE.test(month)) {
     target = month;
   } else {
     const d = new Date(period.to + 'T00:00:00Z');
-    // Use the period.to month (it's the most relevant for "this month's P&L").
     target = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
   }
   const prior = priorMonth(target);
@@ -48,23 +38,21 @@ export default async function PlMonthReport({ period, month }: Props) {
 
   const periods = [target, prior, ly];
   const [house, dept] = await Promise.all([
-    getUsaliHouse(periods).catch(() => []),
-    getUsaliDept(periods).catch(() => []),
+    getUsaliHouse(periods).catch(() => [] as Array<Record<string, unknown>>),
+    getUsaliDept(periods).catch(() => [] as Array<Record<string, unknown>>),
   ]);
 
-  const hCur   = house.find(r => r.period_yyyymm === target) ?? null;
-  const hPrior = house.find(r => r.period_yyyymm === prior)  ?? null;
-  const hLy    = house.find(r => r.period_yyyymm === ly)     ?? null;
+  const hCur   = house.find((r) => r.period_yyyymm === target) ?? null;
+  const hPrior = house.find((r) => r.period_yyyymm === prior)  ?? null;
+  const hLy    = house.find((r) => r.period_yyyymm === ly)     ?? null;
 
-  // No data → empty state
-  if (!hCur && dept.filter(d => d.period_yyyymm === target).length === 0) {
+  if (!hCur && dept.filter((d) => d.period_yyyymm === target).length === 0) {
     return (
-      <div data-panel style={{
-        padding: 24, color: '#7d7565', fontStyle: 'italic', textAlign: 'center',
-        background: '#0f0d0a', border: '1px solid #1f1c15', borderRadius: 10,
-      }}>
-        No P&L data for {target}. gl.v_usali_house_summary returned no rows for this month.
-      </div>
+      <Container title="No data" subtitle={`gl.v_usali_house_summary returned no rows for ${target}`} density="compact">
+        <div style={{ padding: 20, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>
+          Try a different month or check the upstream GL feed.
+        </div>
+      </Container>
     );
   }
 
@@ -84,129 +72,91 @@ export default async function PlMonthReport({ period, month }: Props) {
   const revYoyPct = lyRev    > 0 ? ((totalRev - lyRev   ) / lyRev   ) * 100 : 0;
   const gopPct = totalRev > 0 ? (gop / totalRev) * 100 : 0;
 
-  const briefSignal =
-    `${target} · Total revenue $${totalRev.toLocaleString(undefined, { maximumFractionDigits: 0 })} · ` +
-    `GOP $${gop.toLocaleString(undefined, { maximumFractionDigits: 0 })} (${gopPct.toFixed(0)}%)`;
-  const briefBody =
-    `MoM ${revMomPct >= 0 ? '+' : ''}${revMomPct.toFixed(1)}% · ` +
-    `YoY ${revYoyPct >= 0 ? '+' : ''}${revYoyPct.toFixed(1)}%.`;
+  const briefSignal = `${target} · Total revenue $${totalRev.toLocaleString(undefined, { maximumFractionDigits: 0 })} · GOP $${gop.toLocaleString(undefined, { maximumFractionDigits: 0 })} (${gopPct.toFixed(0)}%)`;
+  const briefBody = `MoM ${revMomPct >= 0 ? '+' : ''}${revMomPct.toFixed(1)}% · YoY ${revYoyPct >= 0 ? '+' : ''}${revYoyPct.toFixed(1)}%.`;
   const good: string[] = [];
   const bad:  string[] = [];
-  if (gopPct >= 30)   good.push(`GOP margin ${gopPct.toFixed(0)}% — healthy.`);
-  if (gopPct <  20)   bad.push (`GOP margin ${gopPct.toFixed(0)}% — thin; review costs.`);
-  if (revMomPct >= 5) good.push(`Revenue +${revMomPct.toFixed(0)}% MoM.`);
+  if (gopPct >= 30)    good.push(`GOP margin ${gopPct.toFixed(0)}% — healthy.`);
+  if (gopPct <  20)    bad.push (`GOP margin ${gopPct.toFixed(0)}% — thin; review costs.`);
+  if (revMomPct >= 5)  good.push(`Revenue +${revMomPct.toFixed(0)}% MoM.`);
   if (revMomPct <= -5) bad.push (`Revenue ${revMomPct.toFixed(0)}% MoM — investigate softness.`);
-  if (revYoyPct >= 5) good.push(`Revenue +${revYoyPct.toFixed(0)}% YoY.`);
+  if (revYoyPct >= 5)  good.push(`Revenue +${revYoyPct.toFixed(0)}% YoY.`);
   if (revYoyPct <= -5) bad.push (`Revenue ${revYoyPct.toFixed(0)}% YoY — vs same month last year.`);
   if (good.length === 0) good.push('No standout strengths flagged this month.');
   if (bad.length === 0)  bad.push ('No structural risks flagged this month.');
 
-  // Department detail rows (current month only)
-  const deptCur = dept.filter(d => d.period_yyyymm === target);
+  const deptCur = dept.filter((d) => d.period_yyyymm === target);
+
+  const revRows = [
+    { metric: 'Total revenue',
+      target: fmtTableUsd(totalRev), prior: fmtTableUsd(priorRev),
+      dmom: fmtTableUsd(dRevMom),
+      ly: fmtTableUsd(lyRev), dyoy: fmtTableUsd(dRevYoy) },
+    { metric: 'GOP',
+      target: fmtTableUsd(gop), prior: fmtTableUsd(Number(hPrior?.gop ?? 0)),
+      dmom: fmtTableUsd(gop - Number(hPrior?.gop ?? 0)),
+      ly: fmtTableUsd(Number(hLy?.gop ?? 0)),
+      dyoy: fmtTableUsd(gop - Number(hLy?.gop ?? 0)) },
+    { metric: 'Net income',
+      target: fmtTableUsd(net), prior: fmtTableUsd(Number(hPrior?.net_income ?? 0)),
+      dmom: fmtTableUsd(net - Number(hPrior?.net_income ?? 0)),
+      ly: fmtTableUsd(Number(hLy?.net_income ?? 0)),
+      dyoy: fmtTableUsd(net - Number(hLy?.net_income ?? 0)) },
+  ];
+  const revCols: ChartSeries[] = [
+    { key: 'target', label: target },
+    { key: 'prior',  label: prior },
+    { key: 'dmom',   label: 'Δ MoM' },
+    { key: 'ly',     label: ly },
+    { key: 'dyoy',   label: 'Δ YoY' },
+  ];
+
+  const deptRows = deptCur.map((d, i) => ({
+    department: String(d.usali_department ?? `Row ${i + 1}`),
+    revenue: fmtTableUsd(Number(d.revenue ?? 0)),
+    cogs: fmtTableUsd(Number(d.cost_of_sales ?? 0)),
+    payroll: fmtTableUsd(Number(d.payroll ?? 0)),
+    other: fmtTableUsd(Number(d.other_op_exp ?? 0)),
+    profit: fmtTableUsd(Number(d.departmental_profit ?? 0)),
+    margin: d.dept_profit_margin != null ? `${Number(d.dept_profit_margin).toFixed(1)}%` : '—',
+  }));
+  const deptCols: ChartSeries[] = [
+    { key: 'revenue', label: 'Revenue' },
+    { key: 'cogs',    label: 'COGS' },
+    { key: 'payroll', label: 'Payroll' },
+    { key: 'other',   label: 'Other OE' },
+    { key: 'profit',  label: 'Dept profit' },
+    { key: 'margin',  label: 'Margin %' },
+  ];
 
   return (
     <>
-      <Brief brief={{ signal: briefSignal, body: briefBody, good, bad }} actions={null} />
+      <ReportBrief signal={briefSignal} body={briefBody} good={good} bad={bad} />
 
-      <div style={{ height: 14 }} />
-
-      <Panel title={`USALI P&L · ${target}`} eyebrow="house summary" hideExpander>
+      <Container title={`USALI P&L · ${target}`} subtitle="house summary" density="compact">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-          <KpiBox value={totalRev} unit="usd" label="Total revenue"
-            compare={{ value: dRevMom, unit: 'usd', period: 'MoM' }} />
-          <KpiBox value={cogs}     unit="usd" label="Cost of sales" />
-          <KpiBox value={payroll}  unit="usd" label="Payroll" />
-          <KpiBox value={ag}       unit="usd" label="A&G" />
-          <KpiBox value={utilities} unit="usd" label="Utilities" />
-          <KpiBox value={gop}      unit="usd" label="GOP"
-            compare={{ value: gopPct, unit: 'pct', period: 'margin' }} />
-          <KpiBox value={net}      unit="usd" label="Net income" />
+          <KpiTile label="Total revenue" value={Math.round(totalRev)} currency="USD" size="sm"
+            delta={priorRev > 0 ? { value: revMomPct, period: 'MoM', direction: dRevMom >= 0 ? 'up' : 'down' } : undefined} />
+          <KpiTile label="Cost of sales" value={Math.round(cogs)} currency="USD" size="sm" />
+          <KpiTile label="Payroll" value={Math.round(payroll)} currency="USD" size="sm" />
+          <KpiTile label="A&G" value={Math.round(ag)} currency="USD" size="sm" />
+          <KpiTile label="Utilities" value={Math.round(utilities)} currency="USD" size="sm" />
+          <KpiTile label="GOP" value={Math.round(gop)} currency="USD" size="sm"
+            footnote={`margin ${gopPct.toFixed(1)}%`}
+            status={gopPct >= 30 ? 'green' : gopPct < 20 ? 'red' : 'amber'} />
+          <KpiTile label="Net income" value={Math.round(net)} currency="USD" size="sm" />
         </div>
-      </Panel>
+      </Container>
 
-      <div style={{ height: 14 }} />
+      <Container title="Revenue MoM / YoY" subtitle={`${target} vs ${prior} · vs ${ly}`}>
+        <Chart variant="table" data={revRows} xKey="metric" series={revCols}
+          empty={{ title: 'No comparison data' }} />
+      </Container>
 
-      <Panel title="Revenue MoM / YoY" eyebrow={`${target} vs ${prior} · vs ${ly}`} hideExpander>
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th>Metric</th>
-              <th className="num">{target}</th>
-              <th className="num">{prior}</th>
-              <th className="num">Δ MoM</th>
-              <th className="num">{ly}</th>
-              <th className="num">Δ YoY</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td className="lbl">Total revenue</td>
-              <td className="num">{fmtTableUsd(totalRev)}</td>
-              <td className="num">{fmtTableUsd(priorRev)}</td>
-              <td className="num">{fmtTableUsd(dRevMom)}</td>
-              <td className="num">{fmtTableUsd(lyRev)}</td>
-              <td className="num">{fmtTableUsd(dRevYoy)}</td>
-            </tr>
-            <tr>
-              <td className="lbl">GOP</td>
-              <td className="num">{fmtTableUsd(gop)}</td>
-              <td className="num">{fmtTableUsd(Number(hPrior?.gop ?? 0))}</td>
-              <td className="num">{fmtTableUsd(gop - Number(hPrior?.gop ?? 0))}</td>
-              <td className="num">{fmtTableUsd(Number(hLy?.gop ?? 0))}</td>
-              <td className="num">{fmtTableUsd(gop - Number(hLy?.gop ?? 0))}</td>
-            </tr>
-            <tr>
-              <td className="lbl">Net income</td>
-              <td className="num">{fmtTableUsd(net)}</td>
-              <td className="num">{fmtTableUsd(Number(hPrior?.net_income ?? 0))}</td>
-              <td className="num">{fmtTableUsd(net - Number(hPrior?.net_income ?? 0))}</td>
-              <td className="num">{fmtTableUsd(Number(hLy?.net_income ?? 0))}</td>
-              <td className="num">{fmtTableUsd(net - Number(hLy?.net_income ?? 0))}</td>
-            </tr>
-          </tbody>
-        </table>
-      </Panel>
-
-      <div style={{ height: 14 }} />
-
-      <Panel title="Departmental detail" eyebrow={`${deptCur.length} departments`} hideExpander>
-        {deptCur.length === 0 ? (
-          <div style={{ padding: 20, color: '#7d7565', fontStyle: 'italic' }}>
-            No departmental rows for {target}.
-          </div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th>Department</th>
-                  <th className="num">Revenue</th>
-                  <th className="num">COGS</th>
-                  <th className="num">Payroll</th>
-                  <th className="num">Other OE</th>
-                  <th className="num">Dept profit</th>
-                  <th className="num">Margin %</th>
-                </tr>
-              </thead>
-              <tbody>
-                {deptCur.map((d, i) => (
-                  <tr key={`${d.usali_department}-${i}`}>
-                    <td className="lbl">{d.usali_department}</td>
-                    <td className="num">{fmtTableUsd(Number(d.revenue ?? 0))}</td>
-                    <td className="num">{fmtTableUsd(Number(d.cost_of_sales ?? 0))}</td>
-                    <td className="num">{fmtTableUsd(Number(d.payroll ?? 0))}</td>
-                    <td className="num">{fmtTableUsd(Number(d.other_op_exp ?? 0))}</td>
-                    <td className="num">{fmtTableUsd(Number(d.departmental_profit ?? 0))}</td>
-                    <td className="num">
-                      {d.dept_profit_margin != null ? `${Number(d.dept_profit_margin).toFixed(1)}%` : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
+      <Container title="Departmental detail" subtitle={`${deptCur.length} department${deptCur.length === 1 ? '' : 's'}`}>
+        <Chart variant="table" data={deptRows} xKey="department" series={deptCols}
+          empty={{ title: 'No departmental rows', hint: `for ${target}` }} />
+      </Container>
     </>
   );
 }
