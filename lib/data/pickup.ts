@@ -1,17 +1,30 @@
 // lib/data/pickup.ts
 // Server-side helper: builds the PickupMatrixData shape for a given property.
-// Phase 1 wires what's computable from existing data — 2025 actuals (LY/SDLY),
-// 2026 Today OTB (from v_otb_pace) — and returns nulls for the snapshot,
-// 2023/2024 baseline, and budget columns so the matrix renders gracefully
-// before pms.otb_snapshots / finance.gl_budgets room rows land.
+// Phase 1 (2026-05-21): all reads now go through the public bridge view
+// public.v_pickup_monthly so we stay inside PostgREST's allowed scope
+// (claud_md v3.1 §0.5 — no direct pms.* reads). The view unifies both
+// reservation tables (cb + mews) and aggregates by (property × year × month).
+//
+// Columns this currently lights up:
+//   · 2023 / 2024 / 2025 RO  (from historical reservations)
+//   · OTB ALL 2026           (from current reservations, status != cancelled)
+//   · Today                  (same as OTB ALL — no separate snapshot yet)
+//   · SDLY value + Δ vs SDLY (LY 2025 row vs 2026 OTB)
+//   · OTB vs LY              (delta + pct)
+// Columns still null until pms.otb_snapshots ships:
+//   · Monthly · Monday · Yesterday snapshot
+//   · Pickup deltas (monthly / weekly / yesterday)
+// Columns still null until finance.gl_budgets gets room rows for 2026:
+//   · Budget 2026 · OTB vs Budget
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import type { PickupMatrixData, PickupMatrixRow, PickupMetric, PickupMatrixMonth, PickupDelta } from '@/app/(cockpit)/_design/PickupMatrix';
+import type {
+  PickupMatrixData, PickupMatrixRow, PickupMetric, PickupMatrixMonth, PickupDelta,
+} from '@/app/(cockpit)/_design/PickupMatrix';
 
 const NAMKHAN_ID = 260955;
-const DONNA_ID = 1000001;
+const DONNA_ID   = 1000001;
 
-// Sellable capacity per property. PDF header shows Donna=64; Namkhan memory says 24/30.
 const CAPACITY: Record<number, number> = {
   [NAMKHAN_ID]: 24,
   [DONNA_ID]:   64,
@@ -22,7 +35,6 @@ function daysInMonth(year: number, month: number): number {
 }
 
 interface MonthAgg { rn: number; rev: number }
-const EMPTY: MonthAgg = { rn: 0, rev: 0 };
 
 function delta(a: number | null, b: number | null): PickupDelta {
   if (a == null || b == null) return { abs: null, pct: null };
@@ -34,7 +46,7 @@ function delta(a: number | null, b: number | null): PickupDelta {
 function computeRow(
   metric: PickupMetric,
   cur: MonthAgg | null,
-  ly:  MonthAgg | null,
+  baselines: { y2023: MonthAgg | null; y2024: MonthAgg | null; y2025: MonthAgg | null },
   capacity: number,
   daysInMo: number,
 ): PickupMatrixRow {
@@ -49,13 +61,19 @@ function computeRow(
     return null;
   };
   const otbToday = valueOf(cur);
-  const sdly = valueOf(ly);
+  const baseline2023 = valueOf(baselines.y2023);
+  const baseline2024 = valueOf(baselines.y2024);
+  const baseline2025 = valueOf(baselines.y2025);
+
+  const vsLyPair = (otbToday != null && baseline2025 != null)
+    ? delta(otbToday, baseline2025)
+    : { abs: null, pct: null };
 
   return {
     metric,
-    baseline2023: null,
-    baseline2024: null,
-    baseline2025: sdly,
+    baseline2023,
+    baseline2024,
+    baseline2025,
     budget2026:   null,
     otbAll:       otbToday,
     otbMonthly:   null,
@@ -66,16 +84,18 @@ function computeRow(
     pickupWeekly:    { abs: null, pct: null },
     pickupYesterday: { abs: null, pct: null },
     vsBudget: { abs: null, pct: null },
-    vsLy: (otbToday != null && sdly != null)
-      ? delta(otbToday, sdly)
-      : { abs: null, pct: null },
-    sdly,
-    sdlyDiff: (otbToday != null && sdly != null) ? otbToday - sdly : null,
+    vsLy:     vsLyPair,
+    sdly:     baseline2025,
+    sdlyDiff: (otbToday != null && baseline2025 != null) ? otbToday - baseline2025 : null,
   };
 }
 
-function aggregateRows(rows: MonthAgg[]): MonthAgg {
-  return rows.reduce((acc, r) => ({ rn: acc.rn + r.rn, rev: acc.rev + r.rev }), { rn: 0, rev: 0 });
+function sumMonths(buckets: Array<Record<number, MonthAgg>>): MonthAgg {
+  const total: MonthAgg = { rn: 0, rev: 0 };
+  for (const b of buckets) {
+    for (const m of Object.values(b)) { total.rn += m.rn; total.rev += m.rev; }
+  }
+  return total;
 }
 
 export async function getPickupMatrix(propertyId: number): Promise<PickupMatrixData> {
@@ -92,44 +112,23 @@ export async function getPickupMatrix(propertyId: number): Promise<PickupMatrixD
   const lastMonday = new Date(now);
   const dow = lastMonday.getDay() || 7;
   lastMonday.setDate(lastMonday.getDate() - (dow - 1) - 7);
-
   const sdly = new Date(now); sdly.setFullYear(sdly.getFullYear() - 1);
 
-  // 2026 OTB from v_otb_pace, monthly aggregated (Today snapshot only — older
-  // snapshots will come from pms.otb_snapshots once that table exists).
-  const { data: otbRaw } = await supabase
-    .from('v_otb_pace')
-    .select('night_date,confirmed_rooms,confirmed_revenue')
+  // Single query — public bridge view, all 4 years, both reservation sources.
+  const { data: rows, error } = await supabase
+    .from('v_pickup_monthly')
+    .select('year,month,rn,rev')
     .eq('property_id', propertyId)
-    .gte('night_date', '2026-01-01')
-    .lt('night_date', '2027-01-01');
+    .gte('year', 2023)
+    .lte('year', 2026);
 
-  const cur: Record<number, MonthAgg> = {};
-  for (const r of (otbRaw ?? [])) {
-    const m = Number(String((r as { night_date: string }).night_date).slice(5, 7));
-    if (!cur[m]) cur[m] = { rn: 0, rev: 0 };
-    cur[m].rn  += Number((r as { confirmed_rooms?: number }).confirmed_rooms ?? 0);
-    cur[m].rev += Number((r as { confirmed_revenue?: number }).confirmed_revenue ?? 0);
-  }
+  if (error) console.error('[pickup] v_pickup_monthly query failed', error);
 
-  // 2025 actuals — from the right reservation table per property.
-  const ly: Record<number, MonthAgg> = {};
-  const resTable = propertyId === NAMKHAN_ID ? 'reservations_cb' : 'reservations_mews';
-  const { data: lyRaw } = await supabase
-    .schema('pms')
-    // @ts-expect-error - resTable is one of two valid generated names
-    .from(resTable)
-    .select('check_in_date,nights,total_amount,is_cancelled')
-    .eq('property_id', propertyId)
-    .gte('check_in_date', '2025-01-01')
-    .lt('check_in_date', '2026-01-01')
-    .eq('is_cancelled', false);
-
-  for (const r of (lyRaw ?? []) as Array<{ check_in_date: string; nights: number; total_amount: number }>) {
-    const m = Number(String(r.check_in_date).slice(5, 7));
-    if (!ly[m]) ly[m] = { rn: 0, rev: 0 };
-    ly[m].rn  += Number(r.nights ?? 0);
-    ly[m].rev += Number(r.total_amount ?? 0);
+  // Bucketize per year
+  const buckets: Record<number, Record<number, MonthAgg>> = { 2023: {}, 2024: {}, 2025: {}, 2026: {} };
+  for (const r of (rows ?? []) as Array<{ year: number; month: number; rn: number; rev: number }>) {
+    if (!buckets[r.year]) continue;
+    buckets[r.year][r.month] = { rn: Number(r.rn ?? 0), rev: Number(r.rev ?? 0) };
   }
 
   const METRICS: PickupMetric[] = ['RN', 'OCC', 'REV', 'ADR', 'RevPAR'];
@@ -139,30 +138,48 @@ export async function getPickupMatrix(propertyId: number): Promise<PickupMatrixD
     months.push({
       monthKey:   `2026-${String(mo).padStart(2, '0')}`,
       monthLabel: `01/${String(mo).padStart(2, '0')}/2026`,
-      rows: METRICS.map((m) => computeRow(m, cur[mo] ?? null, ly[mo] ?? null, capacity, dim)),
+      rows: METRICS.map((m) => computeRow(
+        m,
+        buckets[2026][mo] ?? null,
+        {
+          y2023: buckets[2023][mo] ?? null,
+          y2024: buckets[2024][mo] ?? null,
+          y2025: buckets[2025][mo] ?? null,
+        },
+        capacity, dim,
+      )),
     });
   }
 
-  // Totals — sum RN and REV across months; recompute derived metrics.
-  const totalCur = aggregateRows(Object.values(cur));
-  const totalLy  = aggregateRows(Object.values(ly));
-  const totalDays = 365; // 2026 is not a leap year
-  const totalRows = METRICS.map((m) => computeRow(m, totalCur, totalLy, capacity, totalDays));
+  // Yearly totals
+  const total2023 = sumMonths([buckets[2023]]);
+  const total2024 = sumMonths([buckets[2024]]);
+  const total2025 = sumMonths([buckets[2025]]);
+  const total2026 = sumMonths([buckets[2026]]);
+  const totalRows = METRICS.map((m) => computeRow(
+    m,
+    Object.keys(buckets[2026]).length ? total2026 : null,
+    {
+      y2023: Object.keys(buckets[2023]).length ? total2023 : null,
+      y2024: Object.keys(buckets[2024]).length ? total2024 : null,
+      y2025: Object.keys(buckets[2025]).length ? total2025 : null,
+    },
+    capacity, 365,
+  ));
 
-  // Staleness note for Donna — last sync was ~6 days behind per PBS.
   const stalenessNote = propertyId === DONNA_ID
-    ? 'Donna · feed last synced 6 days ago; pickup columns are static until live ingest resumes.'
+    ? 'Donna · last 5–6 days of bookings missing; pickup deltas blank until live ingest resumes.'
     : undefined;
 
   return {
     property,
     capacity,
     asOfDate: today,
-    monthlySnapshotLabel: fmtDmy(monthStart),
-    mondaySnapshotLabel:  fmtDmy(lastMonday),
+    monthlySnapshotLabel:   fmtDmy(monthStart),
+    mondaySnapshotLabel:    fmtDmy(lastMonday),
     yesterdaySnapshotLabel: fmtDmy(yesterday),
-    todaySnapshotLabel: fmtDmy(now),
-    sdlyDate: fmtDmy(sdly),
+    todaySnapshotLabel:     fmtDmy(now),
+    sdlyDate:               fmtDmy(sdly),
     months,
     total: totalRows,
     stalenessNote,
