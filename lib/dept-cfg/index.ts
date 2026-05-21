@@ -200,6 +200,7 @@ const REVENUE_CFG: DeptCfg = {
     { label: 'Demand',     href: '/revenue/demand'    },
     { label: 'Pace',       href: '/revenue/pace'      },
     { label: 'Pickup',     href: '/revenue/pickup'    },
+    { label: 'Rooms',      href: '/revenue/rooms'     },
     { label: 'Channels',   href: '/revenue/channels'  },
     { label: 'Rate Plans', href: '/revenue/rateplans' },
     // PBS 2026-05-15: Pricing renamed to Calendar; the page now hosts
