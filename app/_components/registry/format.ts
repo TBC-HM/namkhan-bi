@@ -61,6 +61,10 @@ export function formatValue(value: unknown, token: FormatToken, currencySymbol: 
     case 'usd': {
       const n = toNumber(value); return n == null ? '—' : fmtMoney(n, SYMBOL.usd);
     }
+    case 'money': {
+      // Currency-neutral: caller must pass the property's display_symbol.
+      const n = toNumber(value); return n == null ? '—' : fmtMoney(n, currencySymbol);
+    }
     case 'pct': {
       const n = toNumber(value); return n == null ? '—' : fmtPct(n);
     }
