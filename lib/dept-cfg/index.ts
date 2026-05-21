@@ -208,7 +208,6 @@ const REVENUE_CFG: DeptCfg = {
     { label: 'Comp Set',   href: '/revenue/compset'   },
     // PBS 2026-05-19: registry-driven drill pages (leakage + channel mix).
     { label: 'Leakage',    href: '/revenue/leakage'   },
-    { label: 'Channel',    href: '/revenue/channel'   },
     { label: 'Parity',     href: '/revenue/parity'    },
     // PBS 2026-05-16: Reports always sits flush-right (SubPagesStrip detects label).
     { label: 'Reports',    href: '/h/260955/reports?dept=revenue' },
