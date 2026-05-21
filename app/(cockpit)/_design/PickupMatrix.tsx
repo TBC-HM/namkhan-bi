@@ -104,7 +104,7 @@ export default function PickupMatrix({ data }: Props) {
             <th style={{ ...S.groupTh, ...S.frozen, ...S.frozenHead, textAlign: 'left' }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: INK }}>As of {data.asOfDate}</div>
               {data.stalenessNote && (
-                <div style={{ fontSize: 10, color: INK_SOFT, marginTop: 2, fontStyle: 'italic' }}>{data.stalenessNote}</div>
+                <div style={{ fontSize: 9, color: INK_SOFT, marginTop: 2, fontStyle: 'italic', maxWidth: 90, whiteSpace: 'normal', lineHeight: 1.2 }}>{data.stalenessNote}</div>
               )}
             </th>
             <th style={S.groupTh} colSpan={4}>Baselines</th>
