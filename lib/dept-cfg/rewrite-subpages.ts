@@ -26,6 +26,7 @@ const PROPERTY_SCOPED_HREFS: ReadonlySet<string> = new Set([
   '/guest',                  // shim exists
   '/revenue',                // (snapshot, no detail pages yet)
   '/revenue/pickup',         // pickup matrix · property-aware
+  '/revenue/rooms',          // rooms intelligence · registry-driven
   '/finance',
   '/sales',
   '/marketing',
