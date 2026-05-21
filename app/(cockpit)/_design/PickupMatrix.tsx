@@ -1,8 +1,8 @@
 // app/(cockpit)/_design/PickupMatrix.tsx
-// Monthly pickup matrix primitive — fully on the paper palette now (no dark
-// header bands, no hard black frame). Row labels are dark on paper; group
-// header is cream-on-ink so it reads at a glance. Null cells render "—" so
-// the table is meaningful before snapshot / budget / 2023-24 sources land.
+// Pickup matrix primitive — pure paper-white surface, no coloured bands.
+// All text is ink (#1B1B1B) so dates and labels read clearly. Visual
+// structure comes from hairlines, not from background fills. Sticky left
+// column, sticky thead, opaque white so nothing bleeds through on scroll.
 
 import type { CSSProperties } from 'react';
 
@@ -53,9 +53,15 @@ export interface PickupMatrixData {
   stalenessNote?: string;
 }
 
-interface Props {
-  data: PickupMatrixData;
-}
+interface Props { data: PickupMatrixData }
+
+const PAPER       = '#FFFFFF';
+const ALT_PAPER   = '#FAFAF7';
+const INK         = '#1B1B1B';
+const INK_SOFT    = '#5A5A5A';
+const HAIRLINE    = '#E0DAC4';
+const HAIRLINE_SOFT = '#EDE8D6';
+const GROUP_RULE  = '#1B1B1B';
 
 const fmtInt   = (n: number) => Math.round(n).toLocaleString('en-US');
 const fmtUsd   = (n: number) => '€' + Math.round(n).toLocaleString('en-US');
@@ -87,30 +93,30 @@ export default function PickupMatrix({ data }: Props) {
     <div style={S.scroll}>
       <table style={S.table}>
         <thead>
-          <tr style={S.groupRow}>
-            <th style={{ ...S.groupTh, ...S.frozen, ...S.frozenHead, background: '#EFE9D6', color: 'var(--ink, #1B1B1B)', textAlign: 'left' }}>
-              {data.asOfDate}
+          <tr>
+            <th style={{ ...S.groupTh, ...S.frozen, ...S.frozenHead, textAlign: 'left', borderBottom: `2px solid ${GROUP_RULE}` }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: INK }}>As of {data.asOfDate}</div>
               {data.stalenessNote && (
-                <div style={{ fontSize: 9, fontWeight: 400, color: 'var(--ink-soft, #5A5A5A)', marginTop: 2, fontStyle: 'italic' }}>{data.stalenessNote}</div>
+                <div style={{ fontSize: 10, color: INK_SOFT, marginTop: 2, fontStyle: 'italic' }}>{data.stalenessNote}</div>
               )}
             </th>
             <th style={S.groupTh} colSpan={4}>Baselines</th>
             <th style={S.groupTh} colSpan={5}>OTB snapshots</th>
             <th style={S.groupTh} colSpan={3}>Pickup</th>
             <th style={S.groupTh} colSpan={4}>Comparison</th>
-            <th style={S.groupTh} colSpan={2}>SDLY {data.sdlyDate}</th>
+            <th style={S.groupTh} colSpan={2}>SDLY · {data.sdlyDate}</th>
           </tr>
-          <tr style={S.headerRow}>
-            <th style={{ ...S.headerTh, ...S.frozen, ...S.frozenHead, background: '#F7F1DF', textAlign: 'left' }}>Month · Metric</th>
+          <tr>
+            <th style={{ ...S.headerTh, ...S.frozen, ...S.frozenHead, textAlign: 'left' }}>Month · Metric</th>
             <th style={S.headerTh}>2023 RO</th>
             <th style={S.headerTh}>2024 RO</th>
             <th style={S.headerTh}>2025 RO</th>
             <th style={S.headerTh}>Budget 2026</th>
             <th style={S.headerTh}>OTB ALL 2026</th>
-            <th style={S.headerTh}>Monthly<br/><span style={S.headerSub}>{data.monthlySnapshotLabel}</span></th>
-            <th style={S.headerTh}>Monday<br/><span style={S.headerSub}>{data.mondaySnapshotLabel}</span></th>
-            <th style={S.headerTh}>Yesterday<br/><span style={S.headerSub}>{data.yesterdaySnapshotLabel}</span></th>
-            <th style={S.headerTh}>Today<br/><span style={S.headerSub}>{data.todaySnapshotLabel}</span></th>
+            <th style={S.headerTh}>Monthly<div style={S.headerSub}>{data.monthlySnapshotLabel}</div></th>
+            <th style={S.headerTh}>Monday<div style={S.headerSub}>{data.mondaySnapshotLabel}</div></th>
+            <th style={S.headerTh}>Yesterday<div style={S.headerSub}>{data.yesterdaySnapshotLabel}</div></th>
+            <th style={S.headerTh}>Today<div style={S.headerSub}>{data.todaySnapshotLabel}</div></th>
             <th style={S.headerTh}>Monthly</th>
             <th style={S.headerTh}>Weekly</th>
             <th style={S.headerTh}>Yesterday</th>
@@ -132,39 +138,50 @@ export default function PickupMatrix({ data }: Props) {
 }
 
 function MonthBlock({ month, isAlt, isTotal }: { month: PickupMatrixMonth; isAlt: boolean; isTotal?: boolean }) {
-  const bg = isTotal ? '#F7F1DF' : isAlt ? '#FAF8F1' : '#FFFFFF';
+  const bg = isTotal ? PAPER : isAlt ? ALT_PAPER : PAPER;
   return (
     <>
       {month.rows.map((r, i) => {
         const showMonth = i === 0;
+        const borderTop = isTotal && showMonth
+          ? `2px solid ${GROUP_RULE}`
+          : showMonth
+            ? `1px solid ${HAIRLINE}`
+            : `1px solid ${HAIRLINE_SOFT}`;
         return (
-          <tr key={`${month.monthKey}-${r.metric}`} style={{ background: bg, borderTop: showMonth ? '1px solid #D8CFB7' : '1px solid #F2EBD8' }}>
-            <th style={{ ...S.rowHead, ...S.frozen, background: bg, fontWeight: isTotal ? 700 : 500 }}>
+          <tr key={`${month.monthKey}-${r.metric}`} style={{ background: bg }}>
+            <th style={{
+              ...S.rowHead,
+              ...S.frozen,
+              background: bg,
+              borderTop,
+              fontWeight: isTotal ? 700 : 500,
+            }}>
               {showMonth && (
-                <div style={{ fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', letterSpacing: '0.04em', marginBottom: 1 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: INK, letterSpacing: '0.04em', marginBottom: 2 }}>
                   {month.monthLabel}
                 </div>
               )}
-              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink, #1B1B1B)' }}>{r.metric}</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: INK_SOFT, letterSpacing: '0.04em' }}>{r.metric}</div>
             </th>
-            <Cell val={r.baseline2023} metric={r.metric} />
-            <Cell val={r.baseline2024} metric={r.metric} />
-            <Cell val={r.baseline2025} metric={r.metric} />
-            <Cell val={r.budget2026}   metric={r.metric} />
-            <Cell val={r.otbAll}       metric={r.metric} emphasis />
-            <Cell val={r.otbMonthly}   metric={r.metric} />
-            <Cell val={r.otbMonday}    metric={r.metric} />
-            <Cell val={r.otbYesterday} metric={r.metric} />
-            <Cell val={r.otbToday}     metric={r.metric} emphasis />
-            <DeltaCell d={r.pickupMonthly}   metric={r.metric} kind="abs" />
-            <DeltaCell d={r.pickupWeekly}    metric={r.metric} kind="abs" />
-            <DeltaCell d={r.pickupYesterday} metric={r.metric} kind="abs" />
-            <DeltaCell d={r.vsBudget} metric={r.metric} kind="abs" />
-            <DeltaCell d={r.vsBudget} metric={r.metric} kind="pct" />
-            <DeltaCell d={r.vsLy}     metric={r.metric} kind="abs" />
-            <DeltaCell d={r.vsLy}     metric={r.metric} kind="pct" />
-            <Cell val={r.sdly}     metric={r.metric} />
-            <DeltaCell d={{ abs: r.sdlyDiff, pct: null }} metric={r.metric} kind="abs" />
+            <Cell val={r.baseline2023} metric={r.metric} borderTop={borderTop} />
+            <Cell val={r.baseline2024} metric={r.metric} borderTop={borderTop} />
+            <Cell val={r.baseline2025} metric={r.metric} borderTop={borderTop} />
+            <Cell val={r.budget2026}   metric={r.metric} borderTop={borderTop} />
+            <Cell val={r.otbAll}       metric={r.metric} emphasis borderTop={borderTop} />
+            <Cell val={r.otbMonthly}   metric={r.metric} borderTop={borderTop} />
+            <Cell val={r.otbMonday}    metric={r.metric} borderTop={borderTop} />
+            <Cell val={r.otbYesterday} metric={r.metric} borderTop={borderTop} />
+            <Cell val={r.otbToday}     metric={r.metric} emphasis borderTop={borderTop} />
+            <DeltaCell d={r.pickupMonthly}   metric={r.metric} kind="abs" borderTop={borderTop} />
+            <DeltaCell d={r.pickupWeekly}    metric={r.metric} kind="abs" borderTop={borderTop} />
+            <DeltaCell d={r.pickupYesterday} metric={r.metric} kind="abs" borderTop={borderTop} />
+            <DeltaCell d={r.vsBudget} metric={r.metric} kind="abs" borderTop={borderTop} />
+            <DeltaCell d={r.vsBudget} metric={r.metric} kind="pct" borderTop={borderTop} />
+            <DeltaCell d={r.vsLy}     metric={r.metric} kind="abs" borderTop={borderTop} />
+            <DeltaCell d={r.vsLy}     metric={r.metric} kind="pct" borderTop={borderTop} />
+            <Cell val={r.sdly}     metric={r.metric} borderTop={borderTop} />
+            <DeltaCell d={{ abs: r.sdlyDiff, pct: null }} metric={r.metric} kind="abs" borderTop={borderTop} />
           </tr>
         );
       })}
@@ -172,12 +189,13 @@ function MonthBlock({ month, isAlt, isTotal }: { month: PickupMatrixMonth; isAlt
   );
 }
 
-function Cell({ val, metric, emphasis }: { val: number | null; metric: PickupMetric; emphasis?: boolean }) {
+function Cell({ val, metric, emphasis, borderTop }: { val: number | null; metric: PickupMetric; emphasis?: boolean; borderTop: string }) {
   const c = cell(val, metric);
   return (
     <td style={{
       ...S.td,
-      color: c.muted ? 'var(--ink-soft, #8A8276)' : 'var(--ink, #1B1B1B)',
+      borderTop,
+      color: c.muted ? INK_SOFT : INK,
       fontStyle: c.muted ? 'italic' : 'normal',
       fontWeight: emphasis ? 600 : 400,
     }}>
@@ -186,12 +204,12 @@ function Cell({ val, metric, emphasis }: { val: number | null; metric: PickupMet
   );
 }
 
-function DeltaCell({ d, metric, kind }: { d: PickupDelta | undefined; metric: PickupMetric; kind: 'abs' | 'pct' }) {
+function DeltaCell({ d, metric, kind, borderTop }: { d: PickupDelta | undefined; metric: PickupMetric; kind: 'abs' | 'pct'; borderTop: string }) {
   const c = deltaCell(d, metric, kind);
   const bg = c.tone === 'good' ? '#E8F2E4' : c.tone === 'bad' ? '#F7E2DC' : 'transparent';
-  const fg = c.tone === 'good' ? '#1F3A2E' : c.tone === 'bad' ? '#8A2A1D' : 'var(--ink-soft, #8A8276)';
+  const fg = c.tone === 'good' ? '#1F3A2E' : c.tone === 'bad' ? '#8A2A1D' : INK_SOFT;
   return (
-    <td style={{ ...S.td, background: bg, color: fg, fontStyle: c.tone === 'mute' ? 'italic' : 'normal' }}>
+    <td style={{ ...S.td, borderTop, background: bg, color: fg, fontStyle: c.tone === 'mute' ? 'italic' : 'normal' }}>
       {c.text}
     </td>
   );
@@ -200,9 +218,9 @@ function DeltaCell({ d, metric, kind }: { d: PickupDelta | undefined; metric: Pi
 const S: Record<string, CSSProperties> = {
   scroll: {
     overflowX: 'auto',
-    border: '1px solid var(--hairline, #E6DFCC)',
-    borderRadius: 6,
-    background: 'var(--paper, #FFFFFF)',
+    border: `1px solid ${HAIRLINE}`,
+    borderRadius: 4,
+    background: PAPER,
   },
   table: {
     borderCollapse: 'separate',
@@ -210,49 +228,54 @@ const S: Record<string, CSSProperties> = {
     width: '100%',
     minWidth: 1600,
     fontFamily: 'inherit',
-    fontSize: 11,
+    fontSize: 12,
+    background: PAPER,
   },
-  groupRow: { background: '#EFE9D6' },
   groupTh: {
-    padding: '8px 10px',
+    padding: '10px 12px',
     textAlign: 'center',
-    color: 'var(--ink, #1B1B1B)',
+    color: INK,
     fontWeight: 700,
-    fontSize: 10,
-    letterSpacing: '0.08em',
+    fontSize: 11,
+    letterSpacing: '0.1em',
     textTransform: 'uppercase',
-    borderRight: '1px solid #E6DFCC',
-    borderBottom: '1px solid #D8CFB7',
-    background: '#EFE9D6',
+    background: PAPER,
+    borderBottom: `2px solid ${GROUP_RULE}`,
+    borderRight: `1px solid ${HAIRLINE}`,
   },
-  headerRow: { background: '#F7F1DF' },
   headerTh: {
-    padding: '6px 8px',
+    padding: '8px 10px',
     textAlign: 'right',
-    color: 'var(--ink-soft, #5A5A5A)',
+    color: INK,
     fontWeight: 600,
-    fontSize: 10,
-    letterSpacing: '0.04em',
-    background: '#F7F1DF',
-    borderBottom: '1px solid #D8CFB7',
-    borderRight: '1px solid #E6DFCC',
+    fontSize: 11,
+    letterSpacing: '0.02em',
+    background: PAPER,
+    borderBottom: `1px solid ${HAIRLINE}`,
+    borderRight: `1px solid ${HAIRLINE_SOFT}`,
     whiteSpace: 'nowrap',
   },
-  headerSub: { fontSize: 9, fontWeight: 400, color: 'var(--ink-soft, #5A5A5A)' },
+  headerSub: {
+    fontSize: 11,
+    fontWeight: 500,
+    color: INK,
+    marginTop: 2,
+    fontFeatureSettings: '"tnum"',
+  },
   rowHead: {
-    padding: '6px 10px',
+    padding: '8px 12px',
     textAlign: 'left',
-    minWidth: 140,
-    borderRight: '1px solid #E6DFCC',
-    color: 'var(--ink, #1B1B1B)',
+    minWidth: 150,
+    borderRight: `1px solid ${HAIRLINE}`,
+    color: INK,
   },
   td: {
-    padding: '5px 8px',
+    padding: '6px 10px',
     textAlign: 'right',
-    borderRight: '1px solid #F2EBD8',
+    borderRight: `1px solid ${HAIRLINE_SOFT}`,
     whiteSpace: 'nowrap',
     fontVariantNumeric: 'tabular-nums',
   },
   frozen: { position: 'sticky', left: 0, zIndex: 1 },
-  frozenHead: { zIndex: 2 },
+  frozenHead: { zIndex: 3, top: 0 },
 };
