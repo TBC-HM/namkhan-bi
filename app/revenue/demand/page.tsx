@@ -52,7 +52,7 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
   }));
 
   const period = resolvePeriod(searchParams ?? {});
-  const pace = await getPaceOtb(period).catch(() => [] as Record<string, unknown>[]);
+  const pace = await getPaceOtb(period, pid).catch(() => [] as Record<string, unknown>[]);
   const rows: DemandRow[] = (pace as Array<Record<string, unknown>>).map((r) => ({
     ci_month:         String(r.ci_month),
     otb_roomnights:   Number(r.otb_roomnights || 0),
