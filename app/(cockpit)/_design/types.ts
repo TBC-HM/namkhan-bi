@@ -99,6 +99,8 @@ export interface ContainerProps {
   loading?: boolean;
   status?: StatusTone;
   className?: string;
+  /** Show the top-right expand-to-fullscreen toggle. Default true. Set false on tiny tiles where it'd add visual noise. */
+  expandable?: boolean;
 }
 
 // ─── Drawer ───────────────────────────────────────────────────────────────
