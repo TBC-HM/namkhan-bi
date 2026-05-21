@@ -1,165 +1,61 @@
-// middleware.ts
-// Two layered concerns:
-//   1. Auth gate (existing) — verifies workspace_session for /cockpit/*, /revenue/*, etc.
-//      Currently in OPEN MODE per PBS 2026-05-07; enable via COCKPIT_AUTH_GATE=on.
-//   2. Multi-tenant URL routing (new, ADR-024):
-//      /h/[property_id]/...  -> resolves active property, sets cookie
-//      /settings/*, /        -> redirects to /h/[cookie-or-default]/...
-//
-// Note: /p/[token]/ is RESERVED for public proposal sharing — multi-tenant
-// routes live under /h/[property_id]/ to avoid collision.
+// middleware.ts  —  repo root (TBC-HM/namkhan-bi)
+// ADR-112. Gates the whole app: no session -> /login; session lacking
+// the requested property_id in JWT claims -> 403. Holding roles bypass.
+import { createServerClient } from '@supabase/ssr'
+import { NextResponse, type NextRequest } from 'next/server'
 
-import { NextResponse, type NextRequest } from "next/server";
-import { verifyWorkspaceCookie } from "@/lib/workspace-cookie";
-
-const PROPERTY_COOKIE = "tbc.active_property";
-const DEFAULT_PROPERTY = 260955; // Namkhan
-
-const STATIC_PATHS = ["/_next", "/api", "/favicon", "/static", "/images", "/fonts"];
-
-// Routes gated by the auth-gate layer (only enforced when COCKPIT_AUTH_GATE=on)
-const AUTH_GATED_PREFIXES = ["/cockpit", "/revenue", "/sales", "/marketing", "/operations", "/finance", "/overview"];
-
-const DEPT_PREFIXES: Array<{ prefix: string; flag: string }> = [
-  { prefix: "/revenue",    flag: "access_revenue" },
-  { prefix: "/sales",      flag: "access_sales" },
-  { prefix: "/marketing",  flag: "access_marketing" },
-  { prefix: "/operations", flag: "access_operations" },
-  { prefix: "/finance",    flag: "access_finance" },
-];
-
-function isStatic(p: string) {
-  return STATIC_PATHS.some((s) => p.startsWith(s));
-}
-
-function notFound() {
-  return new NextResponse("Not Found", { status: 404 });
-}
+const PUBLIC_PATHS = ['/login', '/auth/callback', '/p/'] // signed public links stay open
 
 export async function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl;
+  const { pathname } = req.nextUrl
 
-  if (isStatic(pathname)) return NextResponse.next();
+  if (
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/api/cron') ||
+    pathname.startsWith('/api/cockpit/webhooks') ||
+    PUBLIC_PATHS.some(p => pathname.startsWith(p))
+  ) return NextResponse.next()
 
-  // ===== LAYER 1: AUTH GATE (only when COCKPIT_AUTH_GATE=on) =====
-  const gateOn = process.env.COCKPIT_AUTH_GATE === "on";
-  const isAuthGated = AUTH_GATED_PREFIXES.some((p) => pathname.startsWith(p));
-
-  if (gateOn && isAuthGated) {
-    if (pathname.startsWith("/api/cockpit/webhooks/") ||
-        pathname.startsWith("/api/cockpit/agent/run") ||
-        pathname.startsWith("/api/cockpit/auth/redeem") ||
-        pathname.startsWith("/api/cockpit/audit-log") ||
-        pathname.startsWith("/api/cockpit/backup/status") ||
-        pathname.startsWith("/api/cockpit/deploy/rollback") ||
-        pathname.startsWith("/api/cockpit/webhooks/post-deploy") ||
-        pathname.startsWith("/api/cockpit/chat")) {
-      // continue to layer 2
-    } else {
-      const cookie = req.cookies.get("workspace_session")?.value;
-      let user: Awaited<ReturnType<typeof verifyWorkspaceCookie>> | null = null;
-      try { user = await verifyWorkspaceCookie(cookie); } catch { user = null; }
-
-      if (!user) {
-        if (pathname.startsWith("/api/")) return notFound();
-        const url = req.nextUrl.clone();
-        url.pathname = "/login";
-        url.searchParams.set("from", pathname);
-        return NextResponse.redirect(url);
-      }
-
-      if (pathname.startsWith("/cockpit/users") && !(user as { is_owner?: boolean }).is_owner) {
-        return notFound();
-      }
-
-      for (const { prefix, flag } of DEPT_PREFIXES) {
-        if (pathname.startsWith(prefix)) {
-          const u = user as Record<string, unknown>;
-          const allowed = (u.is_owner === true) || (u[flag] === true);
-          if (!allowed) return notFound();
-        }
-      }
+  let res = NextResponse.next({ request: { headers: req.headers } })
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => req.cookies.getAll(),
+        setAll: (c) => { c.forEach(({ name, value, options }) =>
+          res.cookies.set(name, value, options)) },
+      },
     }
+  )
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    const url = req.nextUrl.clone()
+    url.pathname = '/login'
+    url.searchParams.set('next', pathname)
+    return NextResponse.redirect(url)
   }
 
-  // ===== LAYER 2: MULTI-TENANT ROUTING =====
+  const { data: { session } } = await supabase.auth.getSession()
+  const claims = session?.access_token
+    ? JSON.parse(Buffer.from(session.access_token.split('.')[1], 'base64').toString())
+    : {}
+  const holdingRole: string = claims.holding_role || ''
+  const propertyIds: number[] = claims.property_ids || []
 
-  // Case A: URL already has /h/[id]/... — set cookie, continue.
-  // PBS Apple note #31 (2026-05-13): /h/0/... is the holding sentinel
-  // — rewrite to /holding so visitors that deep-link to /h/0/* still
-  // land on Felix's surface rather than 404 on a non-existent property.
-  const propertyMatch = pathname.match(/^\/h\/(\d+)(\/.*)?$/);
-  if (propertyMatch) {
-    const propertyId = propertyMatch[1];
-    if (propertyId === "0") {
-      const url = req.nextUrl.clone();
-      url.pathname = "/holding";
-      const res = NextResponse.redirect(url);
-      res.cookies.set(PROPERTY_COOKIE, "0", {
-        path: "/",
-        sameSite: "lax",
-        maxAge: 60 * 60 * 24 * 90,
-      });
-      return res;
-    }
-    const res = NextResponse.next();
-    res.cookies.set(PROPERTY_COOKIE, propertyId, {
-      path: "/",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 90,
-    });
-    return res;
+  const m = pathname.match(/^\/h\/(\d+)(\/|$)/)
+  if (m) {
+    const pid = Number(m[1])
+    const allowed = holdingRole !== '' || propertyIds.includes(pid)
+    if (!allowed) return new NextResponse('Forbidden — no access to this property', { status: 403 })
   }
 
-  // PBS Apple note #31: visiting /holding refreshes the cookie so the
-  // operator's last-active scope persists across refreshes.
-  if (pathname === "/holding" || pathname.startsWith("/holding/")) {
-    const res = NextResponse.next();
-    res.cookies.set(PROPERTY_COOKIE, "0", {
-      path: "/",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 90,
-    });
-    return res;
+  if (pathname.startsWith('/holding') && holdingRole === '') {
+    return new NextResponse('Forbidden — holding access only', { status: 403 })
   }
 
-  // Case B: / or /settings/property* — redirect to /h/[active]/...
-  // Other /settings/X routes (cockpit, agents, budget, dq, etc.) are NOT yet
-  // migrated to /h/ — pass through to the legacy app/settings/X/page.tsx.
-  const isPropertyOrRoot = pathname === "/" || pathname === "/settings/property" || pathname.startsWith("/settings/property/");
-  if (isPropertyOrRoot) {
-    const cookieValue = req.cookies.get(PROPERTY_COOKIE)?.value;
-    const activeProperty = cookieValue ?? String(DEFAULT_PROPERTY);
-    // PBS Apple note #31: holding cookie short-circuits the redirect
-    // directly to /holding (avoids /h/0 → /holding double-hop).
-    if (activeProperty === "0" && pathname === "/") {
-      const url = req.nextUrl.clone();
-      url.pathname = "/holding";
-      return NextResponse.redirect(url);
-    }
-    const url = req.nextUrl.clone();
-    url.pathname = pathname === "/" ? `/h/${activeProperty}` : `/h/${activeProperty}${pathname}`;
-    return NextResponse.redirect(url);
-  }
-
-  // Case B2: /TBC (uppercase legacy) → /tbc (lowercase canonical).
-  // 2026-05-14: PBS hit /tbc and got 404 because the original Agent O shipped
-  // the folder as app/TBC. Renamed to app/tbc; redirect old links here.
-  if (pathname === "/TBC" || pathname.startsWith("/TBC/")) {
-    const url = req.nextUrl.clone();
-    url.pathname = pathname.replace(/^\/TBC/, "/tbc");
-    return NextResponse.redirect(url, 308);
-  }
-
-  // Case C: /cockpit-v2 stays at /cockpit-v2 — Ask 1/2/3 (2026-05-13) rewires
-  // /cockpit-v2 to live segment routing (team/knowledge/docs/schemas/activity).
-  // The old redirect to /h/[active]/it/cockpit was from the prior Prompt 6 plan
-  // and is now removed. /h/[property_id]/it/cockpit still exists as an
-  // alternate property-scoped view and is NOT touched.
-
-  return NextResponse.next();
+  return res
 }
 
-export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
-};
+export const config = { matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'] }
