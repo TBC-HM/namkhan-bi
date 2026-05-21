@@ -53,12 +53,14 @@ function num(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-/** Sum canonical_capacity_nights deduped on period (capacity repeats per granular row in the same period). */
+/** Per-room capacity (prefer room_capacity_nights when present, else canonical fallback).
+ *  Capacity repeats per row within a period — dedupe by period before summing. */
 function totalCapacity(rows: DataRow[]): number {
   const byPeriod = new Map<string, number>();
   for (const r of rows) {
     const p = String(r.period_yyyymm ?? '');
-    const cap = num(r.canonical_capacity_nights);
+    const perRoom = num(r.room_capacity_nights);
+    const cap = perRoom > 0 ? perRoom : num(r.canonical_capacity_nights);
     if (!byPeriod.has(p)) byPeriod.set(p, cap);
   }
   let total = 0;
@@ -113,7 +115,23 @@ export default async function ContainerRoomIntel({ container, propertyId, search
       </Container>
     );
   }
-  const rows = allRows as DataRow[];
+  // Per-room unit counts → enables per-room occ/revpar (canonical fallback when missing).
+  const { data: unitsRows } = await supabase
+    .from('v_room_type_units').select('room_type_name, units').eq('property_id', propertyId);
+  const unitsByName = new Map<string, number>(
+    ((unitsRows ?? []) as Array<{ room_type_name: string; units: number }>).map((r) => [String(r.room_type_name), Number(r.units ?? 0)])
+  );
+  const daysInPeriod = (yyyymm: string): number => {
+    if (!yyyymm || yyyymm.length < 7) return 30;
+    const y = Number(yyyymm.slice(0, 4)); const m = Number(yyyymm.slice(5, 7));
+    if (!Number.isFinite(y) || !Number.isFinite(m)) return 30;
+    return new Date(y, m, 0).getDate();
+  };
+  const rows = (allRows as DataRow[]).map((r) => {
+    const u = unitsByName.get(String(r.room_type_name ?? '')) ?? 0;
+    const d = daysInPeriod(String(r.period_yyyymm ?? ''));
+    return { ...r, room_sellable_units: u, room_capacity_nights: u * d } as DataRow;
+  });
 
   // 2. Currency
   const { data: propRow } = await supabase
