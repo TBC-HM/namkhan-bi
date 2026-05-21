@@ -159,7 +159,7 @@ export default async function ParityPage({ propertyId }: Props) {
         </div>
       </Container>
 
-      <Container title="Date × OTA · gap heatmap" subtitle="positive % = we're priced ABOVE channel · v_parity_grid">
+      <Container title="Date × OTA · gap heatmap" subtitle="positive % = we're priced ABOVE channel">
         <Chart variant="heatmap" data={heatmapData} xKey="channel" yKey="stay_date"
           series={[{ key: 'gap', label: 'Gap %' }]}
           height={Math.max(220, Math.min(560, new Set(grid.map((r) => r.stay_date)).size * 22))}
@@ -167,7 +167,7 @@ export default async function ParityPage({ propertyId }: Props) {
         />
       </Container>
 
-      <Container title={`Open breaches · ${data.breaches.length}`} subtitle="actionable list · v_parity_open_breaches">
+      <Container title={`Open breaches · ${data.breaches.length}`} subtitle="actionable list">
         <Chart variant="table" data={breachRows} xKey="severity"
           series={breachCols}
           empty={{ title: 'No open breaches', hint: 'parity holds across all checks' }}
