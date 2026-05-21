@@ -1,10 +1,8 @@
 // app/revenue/page.tsx
-// 2026-05-21: Revenue HoD entry page rebuilt on the canonical primitives so
-// it matches the other revenue subpages (pulse/demand/pace/channels/etc).
-// Legacy DeptEntry surface (chat + reports + project context + bug tracker)
-// preserved at /revenue/legacy; this page surfaces the static cfg defaults
-// (attention items / docs / tasks / KPI tiles) in the new design and points
-// users to the legacy surface for the chat-heavy workflow.
+// 2026-05-21: Revenue HoD entry page on primitives — DashboardPage shell,
+// KPI strip, Attention/Docs/Tasks containers, and the ReportBuilder ported
+// from the legacy modal so the report flow stays available in the new design.
+// Legacy DeptEntry chat surface preserved at /revenue/legacy.
 
 import Link from 'next/link';
 import {
@@ -17,15 +15,10 @@ import { REVENUE_SUBPAGES } from './_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { getDeptCfg } from '@/lib/dept-cfg/by-property';
 import { PROPERTY_ID } from '@/lib/supabase';
+import ReportBuilder from './_components/ReportBuilder';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
-
-const SEV_STATUS: Record<string, KpiTileProps['status']> = {
-  high: 'red',
-  medium: 'amber',
-  low: 'grey',
-};
 
 interface Props {
   propertyId?: number;
@@ -37,25 +30,17 @@ export default function RevenueHoDPage({ propertyId }: Props = {}) {
 
   const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
   const tabs: DashboardTab[] = subPages.map((s) => ({
-    key: s.href,
-    label: s.label,
-    href: s.href,
-    active: s.label === 'HoD',
+    key: s.href, label: s.label, href: s.href, active: s.label === 'HoD',
   }));
 
-  // KPI strip — sourced from cfg.kpiTiles (date-hover popover values).
-  // Stays static for now; live values will land once a per-property KPI
-  // helper exists alongside getPaceOtb.
   const tiles: KpiTileProps[] = (cfg.kpiTiles ?? []).map((k) => ({
-    label: k.k,
-    value: k.v,
-    size: 'sm',
-    footnote: k.d,
+    label: k.k, value: k.v, size: 'sm', footnote: k.d,
   }));
 
   const attn = cfg.defaultAttn ?? [];
   const docs = cfg.defaultDocs ?? [];
   const tasks = cfg.defaultTasks ?? [];
+  const reportTypes = cfg.reportTypes ?? [];
 
   const chatHref = pid === PROPERTY_ID ? '/revenue/legacy' : `/h/${pid}/revenue/legacy`;
 
@@ -65,22 +50,7 @@ export default function RevenueHoDPage({ propertyId }: Props = {}) {
       subtitle={cfg.hodTagline}
       tabs={tabs}
       action={
-        <Link
-          href={chatHref}
-          style={{
-            fontSize: 11,
-            letterSpacing: '0.08em',
-            textTransform: 'uppercase',
-            fontWeight: 600,
-            padding: '6px 14px',
-            borderRadius: 4,
-            background: 'var(--primary, #1F3A2E)',
-            color: '#FFFFFF',
-            textDecoration: 'none',
-          }}
-        >
-          {`Ask ${cfg.hodName} →`}
-        </Link>
+        <Link href={chatHref} style={primaryBtnStyle}>{`Ask ${cfg.hodName} →`}</Link>
       }
     >
       {tiles.length > 0 && (
@@ -93,9 +63,7 @@ export default function RevenueHoDPage({ propertyId }: Props = {}) {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
         <Container title="Attention" subtitle={`${attn.length} item${attn.length === 1 ? '' : 's'}`} density="compact">
-          {attn.length === 0 ? (
-            <div style={emptyStyle}>nothing flagged</div>
-          ) : (
+          {attn.length === 0 ? <div style={emptyStyle}>nothing flagged</div> : (
             <div style={listStyle}>
               {attn.map((a) => (
                 <div key={a.id} style={rowStyle}>
@@ -109,12 +77,10 @@ export default function RevenueHoDPage({ propertyId }: Props = {}) {
         </Container>
 
         <Container title="My Docs" subtitle={`${docs.length} item${docs.length === 1 ? '' : 's'}`} density="compact">
-          {docs.length === 0 ? (
-            <div style={emptyStyle}>no docs yet</div>
-          ) : (
+          {docs.length === 0 ? <div style={emptyStyle}>no docs yet</div> : (
             <div style={listStyle}>
               {docs.map((d) => (
-                <a key={d.id} href={d.href} style={{ ...rowStyle, textDecoration: 'none', color: 'inherit' }}>
+                <a key={d.id} href={d.href} target="_blank" rel="noopener noreferrer" style={{ ...rowStyle, textDecoration: 'none', color: 'inherit' }}>
                   <span style={{ ...dotStyle, background: 'var(--brass, #B8542A)' }} aria-hidden />
                   <span style={labelStyle}>{d.label}</span>
                   {d.report_type && <span style={tagStyle}>{d.report_type}</span>}
@@ -125,21 +91,12 @@ export default function RevenueHoDPage({ propertyId }: Props = {}) {
         </Container>
 
         <Container title="My Tasks" subtitle={`${tasks.filter((t) => !t.done).length} open`} density="compact">
-          {tasks.length === 0 ? (
-            <div style={emptyStyle}>no tasks yet</div>
-          ) : (
+          {tasks.length === 0 ? <div style={emptyStyle}>no tasks yet</div> : (
             <div style={listStyle}>
               {tasks.map((t) => (
                 <div key={t.id} style={rowStyle}>
-                  <span style={{
-                    ...dotStyle,
-                    background: t.done ? 'var(--ink-soft, #5A5A5A)' : 'var(--primary, #1F3A2E)',
-                  }} aria-hidden />
-                  <span style={{
-                    ...labelStyle,
-                    textDecoration: t.done ? 'line-through' : 'none',
-                    color: t.done ? 'var(--ink-soft, #5A5A5A)' : 'inherit',
-                  }}>{t.label}</span>
+                  <span style={{ ...dotStyle, background: t.done ? 'var(--ink-soft, #5A5A5A)' : 'var(--primary, #1F3A2E)' }} aria-hidden />
+                  <span style={{ ...labelStyle, textDecoration: t.done ? 'line-through' : 'none', color: t.done ? 'var(--ink-soft, #5A5A5A)' : 'inherit' }}>{t.label}</span>
                 </div>
               ))}
             </div>
@@ -147,60 +104,42 @@ export default function RevenueHoDPage({ propertyId }: Props = {}) {
         </Container>
       </div>
 
-      <Container title="Chat" subtitle={`open the full ${cfg.hodName} surface (project context · reports · bug tracker · uploads)`} density="compact">
-        <Link
-          href={chatHref}
-          style={{
-            display: 'inline-block',
-            padding: '10px 18px',
-            background: 'var(--paper, #FFFFFF)',
-            border: '1px solid var(--hairline, #E6DFCC)',
-            borderRadius: 4,
-            color: 'var(--ink, #1B1B1B)',
-            textDecoration: 'none',
-            fontSize: 13,
-            fontWeight: 500,
-          }}
+      {reportTypes.length > 0 && (
+        <Container
+          title="Build a report"
+          subtitle="pick a type · narrow with chips · open the print-ready render in a new tab"
+          density="compact"
         >
-          {`Open ${cfg.hodName} chat →`}
-        </Link>
+          <ReportBuilder reportTypes={reportTypes} />
+        </Container>
+      )}
+
+      <Container title="Chat" subtitle={`open the full ${cfg.hodName} surface (project context · reports · bug tracker · uploads)`} density="compact">
+        <Link href={chatHref} style={secondaryBtnStyle}>{`Open ${cfg.hodName} chat →`}</Link>
       </Container>
     </DashboardPage>
   );
 }
 
-const SEV_DOT: Record<string, string> = {
-  high: '#C0584C',
-  medium: '#C4A06B',
-  low: '#9B907A',
-};
-
+const SEV_DOT: Record<string, string> = { high: '#C0584C', medium: '#C4A06B', low: '#9B907A' };
 const listStyle: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 6 };
 const rowStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-  padding: '6px 8px',
-  borderRadius: 4,
-  background: 'var(--paper, #FFFFFF)',
-  border: '1px solid var(--hairline, #E6DFCC)',
-  fontSize: 12,
+  display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 4,
+  background: 'var(--paper, #FFFFFF)', border: '1px solid var(--hairline, #E6DFCC)', fontSize: 12,
 };
 const dotStyle: React.CSSProperties = { width: 8, height: 8, borderRadius: '50%', flexShrink: 0 };
 const labelStyle: React.CSSProperties = { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
 const tagStyle: React.CSSProperties = {
-  fontSize: 10,
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase',
-  color: 'var(--ink-soft, #5A5A5A)',
-  padding: '2px 6px',
-  borderRadius: 99,
-  background: 'var(--hairline, #E6DFCC)',
-  flexShrink: 0,
+  fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)',
+  padding: '2px 6px', borderRadius: 99, background: 'var(--hairline, #E6DFCC)', flexShrink: 0,
 };
-const emptyStyle: React.CSSProperties = {
-  fontSize: 12,
-  color: 'var(--ink-soft, #5A5A5A)',
-  fontStyle: 'italic',
-  padding: '8px 4px',
+const emptyStyle: React.CSSProperties = { fontSize: 12, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic', padding: '8px 4px' };
+const primaryBtnStyle: React.CSSProperties = {
+  fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600,
+  padding: '6px 14px', borderRadius: 4, background: 'var(--primary, #1F3A2E)', color: '#FFFFFF', textDecoration: 'none',
+};
+const secondaryBtnStyle: React.CSSProperties = {
+  display: 'inline-block', padding: '10px 18px',
+  background: 'var(--paper, #FFFFFF)', border: '1px solid var(--hairline, #E6DFCC)', borderRadius: 4,
+  color: 'var(--ink, #1B1B1B)', textDecoration: 'none', fontSize: 13, fontWeight: 500,
 };
