@@ -25,6 +25,7 @@ const PROPERTY_SCOPED_HREFS: ReadonlySet<string> = new Set([
   // /operations/catalog-cleanup once those pages are property-scoped.
   '/guest',                  // shim exists
   '/revenue',                // (snapshot, no detail pages yet)
+  '/revenue/pickup',         // pickup matrix · property-aware
   '/finance',
   '/sales',
   '/marketing',
