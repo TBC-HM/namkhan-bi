@@ -118,9 +118,16 @@ export default async function ContainerRoomIntel({ container, propertyId, search
   const currencySymbol = String((propRow as { display_symbol?: string } | null)?.display_symbol ?? '$');
 
   // 3. Distinct periods (descending) — default to latest
-  const periods = Array.from(new Set(rows.map((r) => String(r[periodField] ?? '')).filter(Boolean))).sort().reverse();
+  const allPeriods = Array.from(new Set(rows.map((r) => String(r[periodField] ?? '')).filter(Boolean))).sort().reverse();
+  // Default: most-recent REALISED period (≤ current YYYY-MM) so the page
+  // lands on a month with broad coverage, not a sparse forward month with
+  // a single advance booking.
+  const currentYm = new Date().toISOString().slice(0, 7);
+  const realised = allPeriods.filter((p) => p <= currentYm);
+  const periods = allPeriods;
   const requested = String(searchParams?.period ?? '');
-  const activePeriod = periods.includes(requested) ? requested : periods[0];
+  const fallback = realised[0] ?? allPeriods[0];
+  const activePeriod = periods.includes(requested) ? requested : fallback;
   if (!activePeriod) {
     return (
       <Container title={container.container_name} subtitle="No months on file for this property">
