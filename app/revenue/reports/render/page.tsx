@@ -75,7 +75,7 @@ export default async function RevenueReportRender({ searchParams }: Props) {
       {type === 'pulse'    && <PulseReport period={period} />}
       {type === 'pace'     && <PaceReport period={period} />}
       {type === 'channels' && <ChannelsReport period={period} />}
-      {type === 'pl-month' && <PlMonthReport month={month} />}
+      {type === 'pl-month' && <PlMonthReport period={period} month={month} />}
 
       {!['pulse','pace','channels','pl-month'].includes(type) && (
         <div data-panel style={{
