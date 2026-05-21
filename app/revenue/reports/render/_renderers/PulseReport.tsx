@@ -1,10 +1,9 @@
 // app/revenue/reports/render/_renderers/PulseReport.tsx
-// Pulse report — today's snapshot: occ / ADR / RevPAR / TRevPAR + channel
-// mix top 5 + top-3 tactical alerts. Server component.
+// Pulse report — ported to primitives. Container · KpiTile · Chart(table)
+// + shared ReportBrief. Data fetching unchanged.
 
-import Panel from '@/components/page/Panel';
-import KpiBox from '@/components/kpi/KpiBox';
-import Brief from '@/components/page/Brief';
+import { Container, KpiTile, Chart, type ChartSeries } from '@/app/(cockpit)/_design';
+import ReportBrief from './_shared/ReportBrief';
 import { getOverviewKpis, getChannelPerf } from '@/lib/data';
 import { getTacticalAlertsTop } from '@/lib/pulseData';
 import type { ResolvedPeriod } from '@/lib/period';
@@ -14,40 +13,35 @@ interface Props { period: ResolvedPeriod }
 
 export default async function PulseReport({ period }: Props) {
   const [kpis, channels, alerts] = await Promise.all([
-    getOverviewKpis(period).catch(() => ({ current: null, compare: null } as any)),
-    getChannelPerf(period).catch(() => [] as any[]),
-    getTacticalAlertsTop().catch(() => [] as any[]),
+    getOverviewKpis(period).catch(() => ({ current: null, compare: null } as Record<string, unknown>)),
+    getChannelPerf(period).catch(() => [] as Record<string, unknown>[]),
+    getTacticalAlertsTop().catch(() => [] as Record<string, unknown>[]),
   ]);
 
-  const cur = kpis.current;
-  const cmp = kpis.compare;
-  const occ = Number(cur?.occupancy_pct ?? 0);
-  const adr = Number(cur?.adr_usd ?? 0);
-  const revpar = Number(cur?.revpar_usd ?? 0);
+  const cur = (kpis as { current?: Record<string, unknown> }).current;
+  const cmp = (kpis as { compare?: Record<string, unknown> }).compare;
+  const occ     = Number(cur?.occupancy_pct ?? 0);
+  const adr     = Number(cur?.adr_usd ?? 0);
+  const revpar  = Number(cur?.revpar_usd ?? 0);
   const trevpar = Number(cur?.trevpar_usd ?? 0);
 
   const cmpLabel = period.cmpLabel ? period.cmpLabel.replace(/^vs\s+/i, '') : '';
-  const dOcc     = cmp ? occ     - Number(cmp?.occupancy_pct ?? 0) : null;
-  const dAdr     = cmp ? adr     - Number(cmp?.adr_usd        ?? 0) : null;
-  const dRevpar  = cmp ? revpar  - Number(cmp?.revpar_usd     ?? 0) : null;
-  const dTrevpar = cmp ? trevpar - Number(cmp?.trevpar_usd    ?? 0) : null;
+  const dOcc     = cmp ? occ     - Number(cmp.occupancy_pct ?? 0) : null;
+  const dAdr     = cmp ? adr     - Number(cmp.adr_usd        ?? 0) : null;
+  const dRevpar  = cmp ? revpar  - Number(cmp.revpar_usd     ?? 0) : null;
+  const dTrevpar = cmp ? trevpar - Number(cmp.trevpar_usd    ?? 0) : null;
 
-  // Channel mix totals
-  const channelTotal = channels.reduce(
-    (s, c: any) => s + Number(c.revenue_30d || c.revenue_90d || 0), 0,
+  const channelTotal = (channels as Array<Record<string, unknown>>).reduce(
+    (s, c) => s + Number(c.revenue_30d || c.revenue_90d || 0), 0,
   );
-  const directRev = channels
-    .filter((c: any) => /direct|website|booking engine|email|walk[- ]?in/i.test(String(c.source_name || '')))
-    .reduce((s: number, c: any) => s + Number(c.revenue_30d || c.revenue_90d || 0), 0);
+  const directRev = (channels as Array<Record<string, unknown>>)
+    .filter((c) => /direct|website|booking engine|email|walk[- ]?in/i.test(String(c.source_name || '')))
+    .reduce((s, c) => s + Number(c.revenue_30d || c.revenue_90d || 0), 0);
   const directShare = channelTotal > 0 ? (directRev / channelTotal) * 100 : 0;
-  const top5 = channels.slice(0, 5);
+  const top5 = (channels as Array<Record<string, unknown>>).slice(0, 5);
 
-  const briefSignal =
-    `${period.label} · OCC ${occ.toFixed(0)}% · ADR $${adr.toFixed(0)} · ` +
-    `RevPAR $${revpar.toFixed(0)} · TRevPAR $${trevpar.toFixed(0)}`;
-  const briefBody =
-    `${alerts.length} tactical alert${alerts.length === 1 ? '' : 's'} live · ` +
-    `Direct share ${directShare.toFixed(0)}% across the channel set.`;
+  const briefSignal = `${period.label} · OCC ${occ.toFixed(0)}% · ADR $${adr.toFixed(0)} · RevPAR $${revpar.toFixed(0)} · TRevPAR $${trevpar.toFixed(0)}`;
+  const briefBody = `${alerts.length} tactical alert${alerts.length === 1 ? '' : 's'} live · Direct share ${directShare.toFixed(0)}% across the channel set.`;
   const good: string[] = [];
   const bad:  string[] = [];
   if (occ >= 70)         good.push(`Occupancy ${occ.toFixed(0)}% — strong base.`);
@@ -60,94 +54,71 @@ export default async function PulseReport({ period }: Props) {
   if (bad.length === 0)  bad.push ('No leakage signals flagged for this period.');
 
   const hasAnyData = occ > 0 || adr > 0 || revpar > 0 || channels.length > 0;
-
   if (!hasAnyData) {
     return (
-      <div data-panel style={{
-        padding: 24, color: '#7d7565', fontStyle: 'italic', textAlign: 'center',
-        background: '#0f0d0a', border: '1px solid #1f1c15', borderRadius: 10,
-      }}>
-        No pulse data for {period.label}. PMS returned no rows for this window.
-      </div>
+      <Container title="No data" subtitle={`PMS returned no rows for ${period.label}`} density="compact">
+        <div style={{ padding: 20, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>
+          Try a different window or check the upstream feed.
+        </div>
+      </Container>
     );
   }
 
+  const channelRows = top5.map((c, i) => {
+    const rev = Number(c.revenue_30d || c.revenue_90d || 0);
+    const bookings = Number(c.bookings_30d || c.bookings_90d || 0);
+    const share = channelTotal > 0 ? (rev / channelTotal) * 100 : 0;
+    return {
+      channel: String(c.source_name ?? `Row ${i + 1}`),
+      revenue: fmtTableUsd(rev),
+      bookings: bookings.toLocaleString(),
+      share: `${share.toFixed(1)}%`,
+    };
+  });
+  const channelCols: ChartSeries[] = [
+    { key: 'revenue',  label: 'Revenue' },
+    { key: 'bookings', label: 'Bookings' },
+    { key: 'share',    label: 'Share %' },
+  ];
+
   return (
     <>
-      <Brief brief={{ signal: briefSignal, body: briefBody, good, bad }} actions={null} />
+      <ReportBrief signal={briefSignal} body={briefBody} good={good} bad={bad} />
 
-      <div style={{ height: 14 }} />
-
-      <Panel title="Headline KPIs" eyebrow="this period" hideExpander>
+      <Container title="Headline KPIs" subtitle="this period" density="compact">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-          <KpiBox value={occ} unit="pct" label="Occupancy"
-            compare={dOcc != null ? { value: dOcc, unit: 'pp', period: cmpLabel } : undefined}
-            tooltip="Occupancy % across the period." />
-          <KpiBox value={adr} unit="usd" label="ADR"
-            compare={dAdr != null ? { value: dAdr, unit: 'usd', period: cmpLabel } : undefined}
-            tooltip="Average daily rate in USD." />
-          <KpiBox value={revpar} unit="usd" label="RevPAR"
-            compare={dRevpar != null ? { value: dRevpar, unit: 'usd', period: cmpLabel } : undefined}
-            tooltip="Revenue per available room." />
-          <KpiBox value={trevpar} unit="usd" label="TRevPAR"
-            compare={dTrevpar != null ? { value: dTrevpar, unit: 'usd', period: cmpLabel } : undefined}
-            tooltip="Total revenue per available room." />
-          <KpiBox value={directShare} unit="pct" label="Direct share"
-            tooltip="Direct revenue ÷ total channel revenue × 100." />
+          <KpiTile label="Occupancy" value={`${occ.toFixed(1)}%`} size="sm"
+            delta={dOcc != null ? { value: dOcc, period: cmpLabel, direction: dOcc >= 0 ? 'up' : 'down' } : undefined}
+            footnote="period average" />
+          <KpiTile label="ADR" value={Math.round(adr)} currency="USD" size="sm"
+            delta={dAdr != null ? { value: dAdr, period: cmpLabel, direction: dAdr >= 0 ? 'up' : 'down' } : undefined} />
+          <KpiTile label="RevPAR" value={Math.round(revpar)} currency="USD" size="sm"
+            delta={dRevpar != null ? { value: dRevpar, period: cmpLabel, direction: dRevpar >= 0 ? 'up' : 'down' } : undefined} />
+          <KpiTile label="TRevPAR" value={Math.round(trevpar)} currency="USD" size="sm"
+            delta={dTrevpar != null ? { value: dTrevpar, period: cmpLabel, direction: dTrevpar >= 0 ? 'up' : 'down' } : undefined} />
+          <KpiTile label="Direct share" value={`${directShare.toFixed(1)}%`} size="sm"
+            footnote="direct ÷ total channel revenue" />
         </div>
-      </Panel>
+      </Container>
 
-      <div style={{ height: 14 }} />
+      <Container title="Top channels" subtitle={`${top5.length} of ${channels.length}`} density="compact">
+        <Chart variant="table" data={channelRows} xKey="channel" series={channelCols}
+          empty={{ title: 'No channel revenue', hint: 'mv_channel_perf returned no rows' }} />
+      </Container>
 
-      <Panel title="Top channels" eyebrow={`${top5.length} of ${channels.length}`} hideExpander>
-        {top5.length === 0 ? (
-          <div style={{ padding: 20, color: '#7d7565', fontStyle: 'italic' }}>
-            No channel revenue captured for this window.
-          </div>
-        ) : (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Channel</th>
-                <th className="num">Revenue</th>
-                <th className="num">Bookings</th>
-                <th className="num">Share %</th>
-              </tr>
-            </thead>
-            <tbody>
-              {top5.map((c: any, i: number) => {
-                const rev = Number(c.revenue_30d || c.revenue_90d || 0);
-                const bookings = Number(c.bookings_30d || c.bookings_90d || 0);
-                const share = channelTotal > 0 ? (rev / channelTotal) * 100 : 0;
-                return (
-                  <tr key={c.source_name ?? i}>
-                    <td className="lbl">{c.source_name ?? '—'}</td>
-                    <td className="num">{fmtTableUsd(rev)}</td>
-                    <td className="num">{bookings.toLocaleString()}</td>
-                    <td className="num">{share.toFixed(1)}%</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </Panel>
-
-      <div style={{ height: 14 }} />
-
-      <Panel title="Live tactical alerts" eyebrow={`${alerts.length} open`} hideExpander>
+      <Container title="Live tactical alerts" subtitle={`${alerts.length} open`} density="compact">
         {alerts.length === 0 ? (
-          <div style={{ padding: 20, color: '#7d7565', fontStyle: 'italic' }}>
+          <div style={{ padding: 8, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic', fontSize: 12 }}>
             No tactical alerts at this moment.
           </div>
         ) : (
-          <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--line-soft)', fontSize: 13, lineHeight: 1.7 }}>
-            {alerts.slice(0, 3).map((a: any, i: number) => (
-              <li key={i}>{a.title ?? a.label ?? JSON.stringify(a).slice(0, 200)}</li>
+          <ul style={{ margin: 0, paddingLeft: 18, color: 'var(--ink, #1B1B1B)', fontSize: 13, lineHeight: 1.7 }}>
+            {(alerts as Array<Record<string, unknown>>).slice(0, 3).map((a, i) => (
+              <li key={i}>{String(a.title ?? a.label ?? JSON.stringify(a).slice(0, 200))}</li>
             ))}
           </ul>
         )}
-      </Panel>
+      </Container>
     </>
   );
 }
