@@ -78,7 +78,7 @@ export default function NDropdown() {
   }
 
   return (
-    <div ref={ref} style={{ position: 'fixed', top: 14, left: 14, zIndex: 1000 }}>
+    <div ref={ref} style={{ position: 'fixed', top: 12, left: 12, zIndex: 1000 }}>
       <button
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="listbox"
@@ -86,9 +86,9 @@ export default function NDropdown() {
         aria-label="Beyond Circle — switch property"
         title="Switch property"
         style={{
-          width: 44,
-          height: 36,
-          borderRadius: 8,
+          width: 32,
+          height: 28,
+          borderRadius: 6,
           background: 'linear-gradient(135deg, #c79a6b, #b88556)',
           color: '#1a1a1a',
           fontWeight: 700,
@@ -98,11 +98,11 @@ export default function NDropdown() {
           alignItems: 'center',
           justifyContent: 'center',
           textDecoration: 'none',
-          boxShadow: '0 3px 10px rgba(0,0,0,0.4)',
+          boxShadow: '0 2px 5px rgba(0,0,0,0.25)',
           border: 'none',
           cursor: 'pointer',
-          fontSize: 15,
-          letterSpacing: '0.02em',
+          fontSize: 11,
+          letterSpacing: '0.04em',
           lineHeight: 1,
           padding: 0,
         }}
