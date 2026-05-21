@@ -51,9 +51,9 @@ function pctChange(now: number, prior: number | null): number | null {
   if (prior == null || prior === 0) return null;
   return ((now - prior) / prior) * 100;
 }
-function fmtUSD(n: number | null | undefined): string {
+function fmtMoney(n: number | null | undefined, sym: string = '$'): string {
   if (n == null || !Number.isFinite(Number(n))) return '—';
-  return '$' + Math.round(Number(n)).toLocaleString('en-US');
+  return sym + Math.round(Number(n)).toLocaleString('en-US');
 }
 function fmtPct(n: number | null | undefined, decimals = 1): string {
   if (n == null || !Number.isFinite(Number(n))) return '—';
@@ -72,6 +72,9 @@ function fmtSignedPct(n: number | null | undefined): string {
 
 export default async function PulsePage({ searchParams, propertyId }: Props) {
   const pid = propertyId ?? PROPERTY_ID;
+  // Per-property money formatting — Donna prints €, Namkhan $.
+  const sym: string = pid === 1000001 ? '€' : '$';
+  const moneyCurrency: 'USD' | 'EUR' = pid === 1000001 ? 'EUR' : 'USD';
   const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
   const basePath = pid !== PROPERTY_ID ? `/h/${pid}/revenue/pulse` : '/revenue/pulse';
 
@@ -111,13 +114,13 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
     { label: 'Occupancy',        value: `${(headline.occupancyPct ?? 0).toFixed(1)}%`, size: 'sm',
       delta: occΔ != null ? { value: occΔ, period: 'STLY', direction: occΔ >= 0 ? 'up' : 'down' } : undefined,
       footnote: 'yesterday', status: occΔ != null && occΔ >= 0 ? 'green' : occΔ != null ? 'red' : 'grey' },
-    { label: 'RevPAR',           value: Math.round(headline.revpar ?? 0), currency: 'USD', size: 'sm',
+    { label: 'RevPAR',           value: Math.round(headline.revpar ?? 0), currency: moneyCurrency, size: 'sm',
       delta: revparΔ != null ? { value: revparΔ, period: 'STLY', direction: revparΔ >= 0 ? 'up' : 'down' } : undefined,
       footnote: 'yesterday', status: revparΔ != null && revparΔ >= 0 ? 'green' : revparΔ != null ? 'red' : 'grey' },
     { label: 'Room Nights Sold', value: fmtInt(headline.roomsSold), size: 'sm',
       delta: rnsΔ != null ? { value: rnsΔ, period: 'STLY', direction: rnsΔ >= 0 ? 'up' : 'down' } : undefined,
       footnote: 'yesterday', status: rnsΔ != null && rnsΔ >= 0 ? 'green' : rnsΔ != null ? 'red' : 'grey' },
-    { label: 'ADR',              value: Math.round(headline.adr ?? 0), currency: 'USD', size: 'sm',
+    { label: 'ADR',              value: Math.round(headline.adr ?? 0), currency: moneyCurrency, size: 'sm',
       delta: adrΔ != null ? { value: adrΔ, period: 'STLY', direction: adrΔ >= 0 ? 'up' : 'down' } : undefined,
       footnote: 'yesterday', status: adrΔ != null && adrΔ >= 0 ? 'green' : adrΔ != null ? 'red' : 'grey' },
   ];
@@ -127,7 +130,7 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
     const label = field === 'occupancyPct' ? 'Occupancy' : field === 'revpar' ? 'RevPAR' : 'ADR';
     const unit  = field === 'occupancyPct' ? 'pct' : 'usd';
     const fmt   = (v: number | null | undefined) =>
-      v == null ? '—' : unit === 'pct' ? fmtPct(v, 2) : fmtUSD(v);
+      v == null ? '—' : unit === 'pct' ? fmtPct(v, 2) : fmtMoney(v, sym);
     const stlyField = field === 'occupancyPct' ? 'stlyOccupancyPct' : field === 'revpar' ? 'stlyRevpar' : 'stlyAdr';
     const cell = (snap: PulseKpiSnapshot) => {
       const now = Number(snap[field] ?? 0);
