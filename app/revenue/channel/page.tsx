@@ -1,21 +1,10 @@
 // app/revenue/channel/page.tsx
-// Canonical channel page (Namkhan default property).
-// Same routing rationale as /revenue/leakage: middleware strips
-// /h/260955/* -> /* so /revenue/channel is the Namkhan render path.
-// /h/1000001/revenue/channel handles Donna.
+// Singular slug retired on 2026-05-21 — merged into the plural /revenue/channels
+// surface. This file stays as a 308 redirect so any saved bookmarks /
+// scheduled-report URLs keep working.
 
-import PageRenderer from '@/app/_components/registry/PageRenderer';
+import { redirect } from 'next/navigation';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-
-export default function ChannelPage() {
-  return (
-    <PageRenderer
-      pageSlug="channel"
-      propertyId={260955}
-      title="Revenue · Channel"
-      subtitle="channel economics · source mix · driven by registry"
-    />
-  );
+export default function ChannelRedirect() {
+  redirect('/revenue/channels');
 }
