@@ -45,14 +45,14 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
   const basePath = pid !== PROPERTY_ID ? `/h/${pid}/revenue/rateplans` : '/revenue/rateplans';
 
   const { data: configuredPlans } = await supabase
-    .from('rate_plans')
+    .from('v_rate_plans_all')
     .select('rate_id, rate_name, rate_type, is_active')
     .eq('property_id', pid)
     .eq('is_active', true);
   const masterNames = new Set((configuredPlans ?? []).map((p: { rate_name: string }) => p.rate_name));
 
   const { data: recent90 } = await supabase
-    .from('reservations')
+    .from('v_reservations_unified')
     .select('rate_plan, status, booking_date')
     .eq('property_id', pid)
     .gte('booking_date', new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10))
@@ -63,12 +63,13 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
       .filter((n): n is string => !!n && masterNames.has(n)),
   );
   const activeMasterCount = activeMasterNames.size;
-  const isNamkhan = pid === PROPERTY_ID;
+  const isNamkhan = true; // cross-property since views now expose property_id and we filter explicitly
 
   const { data: windowRows } = isNamkhan
     ? await supabase
         .from('v_rate_plan_perf')
         .select('rate_plan, status, total_amount, nights, lead_days, plan_type, is_configured, booking_date, check_in_date')
+        .eq('property_id', pid)
         .gte('check_in_date', period.from)
         .lte('check_in_date', period.to)
     : { data: [] as Array<Record<string, unknown>> };
@@ -150,6 +151,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     ? await supabase
         .from('v_rate_plan_sleeping')
         .select('rate_name, rate_type, last_booked, days_since')
+        .eq('property_id', pid)
         .order('days_since', { ascending: false })
         .limit(30)
     : { data: [] as Array<{ rate_name: string; rate_type: string; last_booked: string | null; days_since: number }> };
@@ -164,6 +166,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     ? await supabase
         .from('v_rate_plan_orphans')
         .select('rate_plan, bookings_lifetime, revenue_lifetime, last_booked')
+        .eq('property_id', pid)
         .order('revenue_lifetime', { ascending: false })
         .limit(20)
     : { data: [] as Array<{ rate_plan: string; bookings_lifetime: number; revenue_lifetime: number; last_booked: string | null }> };
