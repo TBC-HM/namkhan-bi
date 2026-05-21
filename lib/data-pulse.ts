@@ -153,6 +153,10 @@ export async function getPulseHeadlineKpis(
   return aggregate(propertyId, asOf, asOf);
 }
 
+// Property id constants — also used downstream by getPulseTodayPickup / getPulseUpcomingEvents.
+const NAMKHAN_PROPERTY_ID = 260955;
+const DONNA_PROPERTY_ID = 1000001;
+
 // ─── Top sources — bound to public.v_source_top10 (cross-property bridge).
 // PBS cockpit #197 (SEQ 5/6): one anon-readable view replaces the cb/mews
 // branch that hit pms_reservations_mews directly and produced "permission
