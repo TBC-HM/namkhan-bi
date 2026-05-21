@@ -66,6 +66,7 @@ interface Props { searchParams: Record<string, string | string[] | undefined>; p
 
 export default async function ChannelsPage({ searchParams, propertyId }: Props) {
   const pid = propertyId ?? PROPERTY_ID_NAMKHAN;
+  const moneyCurrency: 'USD' | 'EUR' = pid === 1000001 ? 'EUR' : 'USD';
   const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
   const basePath = pid !== PROPERTY_ID_NAMKHAN ? `/h/${pid}/revenue/channels` : '/revenue/channels';
   const period = resolvePeriod(searchParams);
