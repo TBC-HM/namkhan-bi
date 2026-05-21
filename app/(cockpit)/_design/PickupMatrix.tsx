@@ -1,8 +1,15 @@
 // app/(cockpit)/_design/PickupMatrix.tsx
-// Pickup matrix primitive — pure paper-white surface, no coloured bands.
-// All text is ink (#1B1B1B) so dates and labels read clearly. Visual
-// structure comes from hairlines, not from background fills. Sticky left
-// column, sticky thead, opaque white so nothing bleeds through on scroll.
+// Monthly pickup matrix primitive — pure paper-white surface.
+//
+// 2026-05-21 v3 fixes:
+// - block-style month separation: a single thick rule above each month's
+//   RN row, NO horizontal rules between RN/OCC/REV/ADR/RevPAR inside the
+//   block. Matches the PDF "block per month" feel.
+// - tighter row height (cells were 8/10px padding → 3/8px)
+// - delta cells coloured green/red so the polarity reads at a glance —
+//   not just for explicit delta columns, but also for the SDLY Δ.
+// - subtle alternating month tint so consecutive blocks distinguish without
+//   adding more rules.
 
 import type { CSSProperties } from 'react';
 
@@ -56,12 +63,11 @@ export interface PickupMatrixData {
 interface Props { data: PickupMatrixData }
 
 const PAPER       = '#FFFFFF';
-const ALT_PAPER   = '#FAFAF7';
+const BLOCK_TINT  = '#FAFAF7';   // subtle alt-block tint
 const INK         = '#1B1B1B';
 const INK_SOFT    = '#5A5A5A';
 const HAIRLINE    = '#E0DAC4';
-const HAIRLINE_SOFT = '#EDE8D6';
-const GROUP_RULE  = '#1B1B1B';
+const BLOCK_RULE  = '#1B1B1B';   // thick ink rule between month blocks
 
 const fmtInt   = (n: number) => Math.round(n).toLocaleString('en-US');
 const fmtUsd   = (n: number) => '€' + Math.round(n).toLocaleString('en-US');
@@ -74,17 +80,18 @@ function fmtMetric(metric: PickupMetric, val: number): string {
   return fmtUsd(val);
 }
 
-function cell(val: number | null, metric: PickupMetric): { text: string; muted: boolean } {
-  if (val == null || !Number.isFinite(val)) return { text: '—', muted: true };
-  return { text: fmtMetric(metric, val), muted: false };
+function cell(val: number | null, metric: PickupMetric): { text: string; muted: boolean; negative: boolean } {
+  if (val == null || !Number.isFinite(val)) return { text: '—', muted: true, negative: false };
+  return { text: fmtMetric(metric, val), muted: false, negative: val < 0 };
 }
 
 function deltaCell(d: PickupDelta | undefined, metric: PickupMetric, kind: 'abs' | 'pct') {
   const raw = kind === 'abs' ? d?.abs : d?.pct;
   if (raw == null || !Number.isFinite(raw)) return { text: '—', tone: 'mute' as const };
-  const positive = raw >= 0;
+  const positive = raw > 0;
+  const negative = raw < 0;
   const text = kind === 'abs' ? fmtDelta(raw, false) + (metric === 'OCC' ? 'pp' : '') : fmtDelta(raw, true);
-  const tone = raw === 0 ? 'mute' : positive ? 'good' : 'bad';
+  const tone = positive ? 'good' : negative ? 'bad' : 'mute';
   return { text, tone };
 }
 
@@ -94,7 +101,7 @@ export default function PickupMatrix({ data }: Props) {
       <table style={S.table}>
         <thead>
           <tr>
-            <th style={{ ...S.groupTh, ...S.frozen, ...S.frozenHead, textAlign: 'left', borderBottom: `2px solid ${GROUP_RULE}` }}>
+            <th style={{ ...S.groupTh, ...S.frozen, ...S.frozenHead, textAlign: 'left' }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: INK }}>As of {data.asOfDate}</div>
               {data.stalenessNote && (
                 <div style={{ fontSize: 10, color: INK_SOFT, marginTop: 2, fontStyle: 'italic' }}>{data.stalenessNote}</div>
@@ -138,16 +145,15 @@ export default function PickupMatrix({ data }: Props) {
 }
 
 function MonthBlock({ month, isAlt, isTotal }: { month: PickupMatrixMonth; isAlt: boolean; isTotal?: boolean }) {
-  const bg = isTotal ? PAPER : isAlt ? ALT_PAPER : PAPER;
+  const bg = isTotal ? PAPER : isAlt ? BLOCK_TINT : PAPER;
   return (
     <>
       {month.rows.map((r, i) => {
-        const showMonth = i === 0;
-        const borderTop = isTotal && showMonth
-          ? `2px solid ${GROUP_RULE}`
-          : showMonth
-            ? `1px solid ${HAIRLINE}`
-            : `1px solid ${HAIRLINE_SOFT}`;
+        const isFirstInBlock = i === 0;
+        // Block separator on the FIRST row of every month; nothing between metrics.
+        const borderTop = isFirstInBlock
+          ? (isTotal ? `2px solid ${BLOCK_RULE}` : `1.5px solid ${BLOCK_RULE}`)
+          : 'none';
         return (
           <tr key={`${month.monthKey}-${r.metric}`} style={{ background: bg }}>
             <th style={{
@@ -156,13 +162,12 @@ function MonthBlock({ month, isAlt, isTotal }: { month: PickupMatrixMonth; isAlt
               background: bg,
               borderTop,
               fontWeight: isTotal ? 700 : 500,
+              borderBottom: 'none',
             }}>
-              {showMonth && (
-                <div style={{ fontSize: 12, fontWeight: 700, color: INK, letterSpacing: '0.04em', marginBottom: 2 }}>
-                  {month.monthLabel}
-                </div>
+              {isFirstInBlock && (
+                <div style={S.monthLabel}>{month.monthLabel}</div>
               )}
-              <div style={{ fontSize: 11, fontWeight: 600, color: INK_SOFT, letterSpacing: '0.04em' }}>{r.metric}</div>
+              <div style={S.metricLabel}>{r.metric}</div>
             </th>
             <Cell val={r.baseline2023} metric={r.metric} borderTop={borderTop} />
             <Cell val={r.baseline2024} metric={r.metric} borderTop={borderTop} />
@@ -191,11 +196,13 @@ function MonthBlock({ month, isAlt, isTotal }: { month: PickupMatrixMonth; isAlt
 
 function Cell({ val, metric, emphasis, borderTop }: { val: number | null; metric: PickupMetric; emphasis?: boolean; borderTop: string }) {
   const c = cell(val, metric);
+  // Negative absolute values get red, positive emphasis cells stay ink.
+  const color = c.muted ? INK_SOFT : c.negative ? '#8A2A1D' : INK;
   return (
     <td style={{
       ...S.td,
       borderTop,
-      color: c.muted ? INK_SOFT : INK,
+      color,
       fontStyle: c.muted ? 'italic' : 'normal',
       fontWeight: emphasis ? 600 : 400,
     }}>
@@ -206,6 +213,7 @@ function Cell({ val, metric, emphasis, borderTop }: { val: number | null; metric
 
 function DeltaCell({ d, metric, kind, borderTop }: { d: PickupDelta | undefined; metric: PickupMetric; kind: 'abs' | 'pct'; borderTop: string }) {
   const c = deltaCell(d, metric, kind);
+  // Tinted background only — no chip border, no fill change on tone='mute'.
   const bg = c.tone === 'good' ? '#E8F2E4' : c.tone === 'bad' ? '#F7E2DC' : 'transparent';
   const fg = c.tone === 'good' ? '#1F3A2E' : c.tone === 'bad' ? '#8A2A1D' : INK_SOFT;
   return (
@@ -228,53 +236,69 @@ const S: Record<string, CSSProperties> = {
     width: '100%',
     minWidth: 1600,
     fontFamily: 'inherit',
-    fontSize: 12,
+    fontSize: 11,
     background: PAPER,
+    lineHeight: 1.25,
   },
   groupTh: {
-    padding: '10px 12px',
+    padding: '6px 10px',
     textAlign: 'center',
     color: INK,
     fontWeight: 700,
-    fontSize: 11,
+    fontSize: 10,
     letterSpacing: '0.1em',
     textTransform: 'uppercase',
     background: PAPER,
-    borderBottom: `2px solid ${GROUP_RULE}`,
+    borderBottom: `2px solid ${BLOCK_RULE}`,
     borderRight: `1px solid ${HAIRLINE}`,
   },
   headerTh: {
-    padding: '8px 10px',
+    padding: '5px 8px',
     textAlign: 'right',
     color: INK,
     fontWeight: 600,
-    fontSize: 11,
+    fontSize: 10,
     letterSpacing: '0.02em',
     background: PAPER,
     borderBottom: `1px solid ${HAIRLINE}`,
-    borderRight: `1px solid ${HAIRLINE_SOFT}`,
+    borderRight: `1px solid ${HAIRLINE}`,
     whiteSpace: 'nowrap',
   },
   headerSub: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 500,
     color: INK,
-    marginTop: 2,
-    fontFeatureSettings: '"tnum"',
+    marginTop: 1,
   },
   rowHead: {
-    padding: '8px 12px',
+    padding: '3px 10px',
     textAlign: 'left',
-    minWidth: 150,
+    minWidth: 130,
+    width: 130,
     borderRight: `1px solid ${HAIRLINE}`,
     color: INK,
+    verticalAlign: 'middle',
   },
   td: {
-    padding: '6px 10px',
+    padding: '3px 8px',
     textAlign: 'right',
-    borderRight: `1px solid ${HAIRLINE_SOFT}`,
+    borderRight: `1px solid ${HAIRLINE}`,
     whiteSpace: 'nowrap',
     fontVariantNumeric: 'tabular-nums',
+    height: 22,
+  },
+  monthLabel: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: INK,
+    letterSpacing: '0.04em',
+    marginBottom: 2,
+  },
+  metricLabel: {
+    fontSize: 10,
+    fontWeight: 500,
+    color: INK_SOFT,
+    letterSpacing: '0.04em',
   },
   frozen: { position: 'sticky', left: 0, zIndex: 1 },
   frozenHead: { zIndex: 3, top: 0 },
