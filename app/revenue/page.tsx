@@ -1,8 +1,8 @@
 // app/revenue/page.tsx
-// Revenue HoD landing — full-width, headline tiles + Attention + tasks +
-// Sections navigator (the secondary sub-nav UNDER HoD). NOT one of 12 equal
-// tabs — HoD is the parent; everything else lives below it.
-// cockpit ticket #198 (SEQ 6/6) · 2026-05-21.
+// Revenue HoD landing — TIGHT, full-width, above-the-fold first read.
+// Order: Headline tiles → Attention/Docs/Tasks → Sections navigator → Report builder → Chat.
+// Every block spans gridColumn 1/-1 so nothing sits in a 360px column with blank right.
+// cockpit ticket #198 (SEQ 6/6) · 2026-05-21 (tightened after PBS feedback re scroll+blank space).
 
 import Link from 'next/link';
 import {
@@ -25,20 +25,19 @@ interface Props {
 }
 
 // Short hint per section — shown in the Sections navigator card.
-// Kept inline here so the HoD landing reads as PBS's mental map, not a generic dump.
 const SECTION_HINT: Record<string, string> = {
-  Pulse:        '30-day rolling KPIs · pickup · ADR · OCC',
-  Demand:       'Forward demand · OTB pace · 12 months ahead',
-  Pace:         'Booking pace vs SDLY + pickup detail',
-  Pickup:       'Monthly pickup matrix (PDF-style grid)',
-  Rooms:        'Per-room-type tiles · ADR · OCC · RevPAR · 12mo ADR drill',
-  Channels:     'Direct · OTAs · DMC — economics + commission',
-  'Rate Plans': 'Plan health · cancellations · sleeping/orphan',
-  Calendar:     'Pricing calendar + density (country holidays overlay)',
-  'Comp Set':   'Competitor rates · price ladders · ad-hoc',
-  Leakage:      'OTA rate leakage · bedbank parity drift',
-  Parity:       'Direct-vs-OTA rate parity violations',
-  Reports:      'Build a printable report · pulse · pace · channels · P&L',
+  Pulse:        '30-day rolling KPIs',
+  Demand:       'Forward OTB pace · 12 months',
+  Pace:         'Pace vs SDLY + pickup detail',
+  Pickup:       'Monthly pickup matrix',
+  Rooms:        'Per-room tiles · ADR · OCC · RevPAR',
+  Channels:     'Direct · OTAs · DMC economics',
+  'Rate Plans': 'Plan health · cancellations',
+  Calendar:     'Pricing calendar + density',
+  'Comp Set':   'Competitor rates',
+  Leakage:      'OTA leakage + bedbank drift',
+  Parity:       'Rate parity violations',
+  Reports:      'Print-ready reports',
 };
 
 export default function RevenueHoDPage({ propertyId }: Props = {}) {
@@ -46,8 +45,6 @@ export default function RevenueHoDPage({ propertyId }: Props = {}) {
   const cfg: DeptCfg = pid === PROPERTY_ID ? DEPT_CFG.revenue : getDeptCfg('revenue', pid);
 
   const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
-  // HoD page intentionally renders WITHOUT a tab strip — the Sections grid
-  // below is the secondary sub-nav. The tab strip lives on the subpages.
   const sections = subPages.filter((s) => s.label !== 'HoD');
 
   const tiles: KpiTileProps[] = (cfg.kpiTiles ?? []).map((k) => ({
@@ -69,27 +66,19 @@ export default function RevenueHoDPage({ propertyId }: Props = {}) {
         <Link href={chatHref} style={primaryBtnStyle}>{`Ask ${cfg.hodName} →`}</Link>
       }
     >
+      {/* 1. Headline tiles — full-width row, dense */}
       {tiles.length > 0 && (
-        <Container title="Headline" subtitle="snapshot · last refresh" density="compact">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-            {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
-          </div>
-        </Container>
+        <div style={fullRow}>
+          <Container title="Headline" subtitle="snapshot · last refresh" density="compact">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
+              {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
+            </div>
+          </Container>
+        </div>
       )}
 
-      {/* Sections navigator — the secondary sub-nav. PBS #198 SEQ 6/6 */}
-      <Container title="Sections" subtitle="drill into a sub-area" density="compact">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
-          {sections.map((s) => (
-            <Link key={s.href} href={s.href} style={sectionCardStyle}>
-              <div style={sectionLabelStyle}>{s.label}</div>
-              <div style={sectionHintStyle}>{SECTION_HINT[s.label] ?? ''}</div>
-            </Link>
-          ))}
-        </div>
-      </Container>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+      {/* 2. Attention / Docs / Tasks — three-up full-width row */}
+      <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
         <Container title="Attention" subtitle={`${attn.length} item${attn.length === 1 ? '' : 's'}`} density="compact">
           {attn.length === 0 ? <div style={emptyStyle}>nothing flagged</div> : (
             <div style={listStyle}>
@@ -132,55 +121,79 @@ export default function RevenueHoDPage({ propertyId }: Props = {}) {
         </Container>
       </div>
 
-      {reportTypes.length > 0 && (
-        <Container
-          title="Build a report"
-          subtitle="pick a type · narrow with chips · open the print-ready render in a new tab"
-          density="compact"
-        >
-          <ReportBuilder reportTypes={reportTypes} />
+      {/* 3. Sections navigator — full-width 4-up dense grid (the secondary sub-nav) */}
+      <div style={fullRow}>
+        <Container title="Sections" subtitle="drill into a sub-area" density="compact">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 6 }}>
+            {sections.map((s) => (
+              <Link key={s.href} href={s.href} style={sectionCardStyle}>
+                <div style={sectionLabelStyle}>{s.label}</div>
+                <div style={sectionHintStyle}>{SECTION_HINT[s.label] ?? ''}</div>
+              </Link>
+            ))}
+          </div>
         </Container>
+      </div>
+
+      {/* 4. Build a report — full-width */}
+      {reportTypes.length > 0 && (
+        <div style={fullRow}>
+          <Container
+            title="Build a report"
+            subtitle="pick a type · narrow with chips · open print-ready render"
+            density="compact"
+          >
+            <ReportBuilder reportTypes={reportTypes} />
+          </Container>
+        </div>
       )}
 
-      <Container title="Chat" subtitle={`open the full ${cfg.hodName} surface (project context · reports · bug tracker · uploads)`} density="compact">
-        <Link href={chatHref} style={secondaryBtnStyle}>{`Open ${cfg.hodName} chat →`}</Link>
-      </Container>
+      {/* 5. Chat — full-width, single CTA */}
+      <div style={fullRow}>
+        <Container title="Chat" subtitle={`open the full ${cfg.hodName} surface`} density="compact">
+          <Link href={chatHref} style={secondaryBtnStyle}>{`Open ${cfg.hodName} chat →`}</Link>
+        </Container>
+      </div>
     </DashboardPage>
   );
 }
 
+// Each immediate child of DashboardPage body sits in a 360px auto-fit grid cell.
+// Spanning gridColumn 1/-1 makes the block use the full row instead of leaving
+// blank space to the right.
+const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
+
 const SEV_DOT: Record<string, string> = { high: '#C0584C', medium: '#C4A06B', low: '#9B907A' };
-const listStyle: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 6 };
+const listStyle: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 4 };
 const rowStyle: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 4,
+  display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 4,
   background: 'var(--paper, #FFFFFF)', border: '1px solid var(--hairline, #E6DFCC)', fontSize: 12,
 };
-const dotStyle: React.CSSProperties = { width: 8, height: 8, borderRadius: '50%', flexShrink: 0 };
+const dotStyle: React.CSSProperties = { width: 7, height: 7, borderRadius: '50%', flexShrink: 0 };
 const labelStyle: React.CSSProperties = { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
 const tagStyle: React.CSSProperties = {
   fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)',
   padding: '2px 6px', borderRadius: 99, background: 'var(--hairline, #E6DFCC)', flexShrink: 0,
 };
-const emptyStyle: React.CSSProperties = { fontSize: 12, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic', padding: '8px 4px' };
+const emptyStyle: React.CSSProperties = { fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic', padding: '6px 4px' };
 const primaryBtnStyle: React.CSSProperties = {
   fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600,
   padding: '6px 14px', borderRadius: 4, background: 'var(--primary, #1F3A2E)', color: '#FFFFFF', textDecoration: 'none',
 };
 const secondaryBtnStyle: React.CSSProperties = {
-  display: 'inline-block', padding: '10px 18px',
+  display: 'inline-block', padding: '8px 14px',
   background: 'var(--paper, #FFFFFF)', border: '1px solid var(--hairline, #E6DFCC)', borderRadius: 4,
-  color: 'var(--ink, #1B1B1B)', textDecoration: 'none', fontSize: 13, fontWeight: 500,
+  color: 'var(--ink, #1B1B1B)', textDecoration: 'none', fontSize: 12, fontWeight: 500,
 };
-// Sections navigator card — clean paper, hairline border, ink label + soft hint.
 const sectionCardStyle: React.CSSProperties = {
-  display: 'flex', flexDirection: 'column', gap: 4,
-  padding: '12px 14px', borderRadius: 6,
+  display: 'flex', flexDirection: 'column', gap: 2,
+  padding: '8px 10px', borderRadius: 4,
   background: 'var(--paper, #FFFFFF)', border: '1px solid var(--hairline, #E6DFCC)',
   color: 'inherit', textDecoration: 'none',
 };
 const sectionLabelStyle: React.CSSProperties = {
-  fontSize: 14, fontWeight: 600, color: 'var(--ink, #1B1B1B)',
+  fontSize: 13, fontWeight: 600, color: 'var(--ink, #1B1B1B)',
 };
 const sectionHintStyle: React.CSSProperties = {
-  fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', lineHeight: 1.4,
+  fontSize: 10, color: 'var(--ink-soft, #5A5A5A)', lineHeight: 1.3,
 };
