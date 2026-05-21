@@ -1,13 +1,13 @@
 // app/revenue/page.tsx
-// 2026-05-21: Revenue HoD entry page on primitives — DashboardPage shell,
-// KPI strip, Attention/Docs/Tasks containers, and the ReportBuilder ported
-// from the legacy modal so the report flow stays available in the new design.
-// Legacy DeptEntry chat surface preserved at /revenue/legacy.
+// Revenue HoD landing — full-width, headline tiles + Attention + tasks +
+// Sections navigator (the secondary sub-nav UNDER HoD). NOT one of 12 equal
+// tabs — HoD is the parent; everything else lives below it.
+// cockpit ticket #198 (SEQ 6/6) · 2026-05-21.
 
 import Link from 'next/link';
 import {
   DashboardPage, Container, KpiTile,
-  type DashboardTab, type KpiTileProps,
+  type KpiTileProps,
 } from '@/app/(cockpit)/_design';
 import { DEPT_CFG } from '@/lib/dept-cfg';
 import type { DeptCfg } from '@/lib/dept-cfg/types';
@@ -24,14 +24,31 @@ interface Props {
   propertyId?: number;
 }
 
+// Short hint per section — shown in the Sections navigator card.
+// Kept inline here so the HoD landing reads as PBS's mental map, not a generic dump.
+const SECTION_HINT: Record<string, string> = {
+  Pulse:        '30-day rolling KPIs · pickup · ADR · OCC',
+  Demand:       'Forward demand · OTB pace · 12 months ahead',
+  Pace:         'Booking pace vs SDLY + pickup detail',
+  Pickup:       'Monthly pickup matrix (PDF-style grid)',
+  Rooms:        'Per-room-type tiles · ADR · OCC · RevPAR · 12mo ADR drill',
+  Channels:     'Direct · OTAs · DMC — economics + commission',
+  'Rate Plans': 'Plan health · cancellations · sleeping/orphan',
+  Calendar:     'Pricing calendar + density (country holidays overlay)',
+  'Comp Set':   'Competitor rates · price ladders · ad-hoc',
+  Leakage:      'OTA rate leakage · bedbank parity drift',
+  Parity:       'Direct-vs-OTA rate parity violations',
+  Reports:      'Build a printable report · pulse · pace · channels · P&L',
+};
+
 export default function RevenueHoDPage({ propertyId }: Props = {}) {
   const pid = propertyId ?? PROPERTY_ID;
   const cfg: DeptCfg = pid === PROPERTY_ID ? DEPT_CFG.revenue : getDeptCfg('revenue', pid);
 
   const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
-  const tabs: DashboardTab[] = subPages.map((s) => ({
-    key: s.href, label: s.label, href: s.href, active: s.label === 'HoD',
-  }));
+  // HoD page intentionally renders WITHOUT a tab strip — the Sections grid
+  // below is the secondary sub-nav. The tab strip lives on the subpages.
+  const sections = subPages.filter((s) => s.label !== 'HoD');
 
   const tiles: KpiTileProps[] = (cfg.kpiTiles ?? []).map((k) => ({
     label: k.k, value: k.v, size: 'sm', footnote: k.d,
@@ -48,7 +65,6 @@ export default function RevenueHoDPage({ propertyId }: Props = {}) {
     <DashboardPage
       title={`Revenue · ${cfg.hodName}`}
       subtitle={cfg.hodTagline}
-      tabs={tabs}
       action={
         <Link href={chatHref} style={primaryBtnStyle}>{`Ask ${cfg.hodName} →`}</Link>
       }
@@ -60,6 +76,18 @@ export default function RevenueHoDPage({ propertyId }: Props = {}) {
           </div>
         </Container>
       )}
+
+      {/* Sections navigator — the secondary sub-nav. PBS #198 SEQ 6/6 */}
+      <Container title="Sections" subtitle="drill into a sub-area" density="compact">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+          {sections.map((s) => (
+            <Link key={s.href} href={s.href} style={sectionCardStyle}>
+              <div style={sectionLabelStyle}>{s.label}</div>
+              <div style={sectionHintStyle}>{SECTION_HINT[s.label] ?? ''}</div>
+            </Link>
+          ))}
+        </div>
+      </Container>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
         <Container title="Attention" subtitle={`${attn.length} item${attn.length === 1 ? '' : 's'}`} density="compact">
@@ -142,4 +170,17 @@ const secondaryBtnStyle: React.CSSProperties = {
   display: 'inline-block', padding: '10px 18px',
   background: 'var(--paper, #FFFFFF)', border: '1px solid var(--hairline, #E6DFCC)', borderRadius: 4,
   color: 'var(--ink, #1B1B1B)', textDecoration: 'none', fontSize: 13, fontWeight: 500,
+};
+// Sections navigator card — clean paper, hairline border, ink label + soft hint.
+const sectionCardStyle: React.CSSProperties = {
+  display: 'flex', flexDirection: 'column', gap: 4,
+  padding: '12px 14px', borderRadius: 6,
+  background: 'var(--paper, #FFFFFF)', border: '1px solid var(--hairline, #E6DFCC)',
+  color: 'inherit', textDecoration: 'none',
+};
+const sectionLabelStyle: React.CSSProperties = {
+  fontSize: 14, fontWeight: 600, color: 'var(--ink, #1B1B1B)',
+};
+const sectionHintStyle: React.CSSProperties = {
+  fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', lineHeight: 1.4,
 };
