@@ -1,8 +1,8 @@
 // app/_components/registry/types.ts
 // Shape of public.v_container_registry + v_graph_registry rows.
 
-export type RenderType = 'kpi_strip' | 'table' | 'top_n_drill' | 'month_table' | 'chart';
-export type FormatToken = 'text' | 'int' | 'eur' | 'lak' | 'usd' | 'pct' | 'date' | 'month';
+export type RenderType = 'kpi_strip' | 'table' | 'top_n_drill' | 'month_table' | 'chart' | 'room_intel';
+export type FormatToken = 'text' | 'int' | 'eur' | 'lak' | 'usd' | 'pct' | 'date' | 'month' | 'money';
 export type PropertyScope = 'both' | 'donna' | 'namkhan';
 export type ChartType = 'bar' | 'line' | 'pie';
 
