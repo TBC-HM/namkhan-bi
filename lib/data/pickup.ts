@@ -5,7 +5,7 @@
 // 2023/2024 baseline, and budget columns so the matrix renders gracefully
 // before pms.otb_snapshots / finance.gl_budgets room rows land.
 
-import { getSupabaseAdmin } from '@/lib/supabase-admin';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import type { PickupMatrixData, PickupMatrixRow, PickupMetric, PickupMatrixMonth, PickupDelta } from '@/app/(cockpit)/_design/PickupMatrix';
 
 const NAMKHAN_ID = 260955;
