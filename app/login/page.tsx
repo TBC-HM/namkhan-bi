@@ -1,8 +1,13 @@
 // app/login/page.tsx
 // ADR-112. Google SSO (primary) + email/password (fallback).
 // On success, redirect to ?next or the user's first property.
+//
+// TS-shape: useSearchParams returns ReadonlyURLSearchParams | null and must
+// be read inside a Suspense boundary (Next.js 14 requirement). The outer
+// LoginPage owns the Suspense; LoginForm is the inner component that calls
+// the hooks. Auth flow is unchanged from the staged spec.
 'use client'
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useRouter, useSearchParams } from 'next/navigation'
 
@@ -12,9 +17,17 @@ const supabase = createBrowserClient(
 )
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  )
+}
+
+function LoginForm() {
   const router = useRouter()
   const params = useSearchParams()
-  const next = params.get('next') || '/'
+  const next = params?.get('next') ?? '/'
   const [email, setEmail] = useState('')
   const [pw, setPw] = useState('')
   const [err, setErr] = useState('')
