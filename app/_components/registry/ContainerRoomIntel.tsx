@@ -149,10 +149,13 @@ export default async function ContainerRoomIntel({ container, propertyId, search
   // 5. Build category index — every REAL canonical code the property has had.
   //    Junk buckets like 'OTHER' (1-row uncategorised fallback) are excluded so
   //    the tile grid only shows actual room categories.
+  // Tile categories: when grouping by canonical, keep only real codes (strip OTHER junk).
+  // When grouping granular (room_type_name), keep every non-empty distinct value.
   const REAL_CATEGORIES = new Set(['DBL','JR_SUITE','SUITE','PENTHOUSE','VILLA','GLAMPING']);
+  const isCanonicalGrouping = groupBy === 'canonical_room_type_code';
   const allCategories = Array.from(new Set(
     rows.map((r) => String(r[groupBy] ?? '')).filter(Boolean)
-  )).filter((c) => REAL_CATEGORIES.has(c)).sort();
+  )).filter((c) => isCanonicalGrouping ? REAL_CATEGORIES.has(c) : true).sort();
 
   const rowsByCatActive = new Map<string, DataRow[]>();
   for (const r of periodRows) {
@@ -219,9 +222,11 @@ export default async function ContainerRoomIntel({ container, propertyId, search
                 opacity: hasData ? 1 : 0.7,
               }}>
                 <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>{code}</div>
+                  {isCanonicalGrouping && (
+                    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>{code}</div>
+                  )}
                   <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--ink, #1B1B1B)' }}>
-                    {friendly}{tagline && tagline !== friendly ? ` · ${tagline}` : ''}
+                    {isCanonicalGrouping ? `${friendly}${tagline && tagline !== friendly ? ` · ${tagline}` : ''}` : code}
                   </div>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
@@ -249,7 +254,7 @@ export default async function ContainerRoomIntel({ container, propertyId, search
       {activeExpand && (
         <DrillPanel
           code={activeExpand}
-          friendly={FRIENDLY[activeExpand] ?? activeExpand}
+          friendly={isCanonicalGrouping ? (FRIENDLY[activeExpand] ?? activeExpand) : activeExpand}
           activePeriod={activePeriod}
           propertyId={propertyId}
           categoryRowsAllTime={rows.filter((r) => r[groupBy] === activeExpand)}
