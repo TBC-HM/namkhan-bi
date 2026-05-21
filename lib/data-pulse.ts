@@ -153,59 +153,30 @@ export async function getPulseHeadlineKpis(
   return aggregate(propertyId, asOf, asOf);
 }
 
-// ─── Top sources (last 30 days, by accommodations booked) ───────────────
-
-const NAMKHAN_PROPERTY_ID = 260955;
-const DONNA_PROPERTY_ID = 1000001;
+// ─── Top sources — bound to public.v_source_top10 (cross-property bridge).
+// PBS cockpit #197 (SEQ 5/6): one anon-readable view replaces the cb/mews
+// branch that hit pms_reservations_mews directly and produced "permission
+// denied for table sources_mews" runtime errors.
 
 export async function getPulseTopSources(
   propertyId: number,
-  daysBack = 30,
+  _daysBack = 30,
   limit = 5,
 ): Promise<PulseSourceRow[]> {
-  if (propertyId === NAMKHAN_PROPERTY_ID) {
-    // Cloudbeds: read mv_channel_economics latest 30d window
-    const { data, error } = await supabase
-      .from('mv_channel_economics')
-      .select('source_name, bookings')
-      .eq('property_id', propertyId)
-      .eq('window_days', daysBack <= 7 ? 7 : daysBack <= 30 ? 30 : 90)
-      .order('bookings', { ascending: false })
-      .limit(limit);
-    if (error) {
-      console.error('[pulse/getPulseTopSources] cb error', error);
-      return [];
-    }
-    return ((data ?? []) as any[]).map((r) => ({
-      source_name: String(r.source_name ?? '—'),
-      bookings: Number(r.bookings ?? 0),
-    }));
+  const { data, error } = await supabase
+    .from('v_source_top10')
+    .select('source, reservations')
+    .eq('property_id', propertyId)
+    .order('reservations', { ascending: false })
+    .limit(limit);
+  if (error) {
+    console.error('[pulse/getPulseTopSources] v_source_top10 error', error);
+    return [];
   }
-
-  if (propertyId === DONNA_PROPERTY_ID) {
-    // Mews: derive from pms_reservations_mews booked in last 30d
-    const fromIso = shiftDate(new Date().toISOString().slice(0, 10), -daysBack);
-    const { data, error } = await supabase
-      .from('pms_reservations_mews')
-      .select('source_name')
-      .eq('property_id', propertyId)
-      .gte('booking_date', fromIso)
-      .eq('is_cancelled', false);
-    if (error) {
-      console.error('[pulse/getPulseTopSources] mews error', error);
-      return [];
-    }
-    const counts = new Map<string, number>();
-    for (const r of (data ?? []) as any[]) {
-      const k = String(r.source_name ?? '— unknown —');
-      counts.set(k, (counts.get(k) ?? 0) + 1);
-    }
-    return Array.from(counts.entries())
-      .map(([source_name, bookings]) => ({ source_name, bookings }))
-      .sort((a, b) => b.bookings - a.bookings)
-      .slice(0, limit);
-  }
-  return [];
+  return ((data ?? []) as Array<{ source: string | null; reservations: number | null }>).map((r) => ({
+    source_name: String(r.source ?? '—'),
+    bookings:    Number(r.reservations ?? 0),
+  }));
 }
 
 // ─── Upcoming high occupancy (>= threshold, forward N days) ─────────────
@@ -325,4 +296,40 @@ export async function getPulseUpcomingEvents(
     name: String(r.event_name ?? '—'),
     date: String(r.event_date),
   }));
+}
+
+// ─── Scoped occupancy (cockpit #197) ─────────────────────────────────────
+// Single-row-per-property snapshot of occupancy across 5 windows:
+// yesterday · MTD · YTD · next 30d OTB · next 90d OTB.
+// Source: public.v_occupancy_scoped (anon-readable bridge).
+
+export interface OccScoped {
+  occ_yesterday: number;
+  occ_mtd: number;
+  occ_ytd: number;
+  occ_otb_next30: number;
+  occ_otb_next90: number;
+  sellable_capacity: number;
+}
+
+export async function getOccScoped(propertyId: number): Promise<OccScoped | null> {
+  const { data, error } = await supabase
+    .from('v_occupancy_scoped')
+    .select('occ_yesterday, occ_mtd, occ_ytd, occ_otb_next30, occ_otb_next90, sellable_capacity')
+    .eq('property_id', propertyId)
+    .maybeSingle();
+  if (error) {
+    console.error('[pulse/getOccScoped] error', error);
+    return null;
+  }
+  if (!data) return null;
+  const d = data as Record<string, unknown>;
+  return {
+    occ_yesterday:     Number(d.occ_yesterday ?? 0),
+    occ_mtd:           Number(d.occ_mtd ?? 0),
+    occ_ytd:           Number(d.occ_ytd ?? 0),
+    occ_otb_next30:    Number(d.occ_otb_next30 ?? 0),
+    occ_otb_next90:    Number(d.occ_otb_next90 ?? 0),
+    sellable_capacity: Number(d.sellable_capacity ?? 0),
+  };
 }
