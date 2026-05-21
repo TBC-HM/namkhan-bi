@@ -6,6 +6,11 @@
 // Containers are *containers* — they pack side-by-side when there's room.
 // A child that needs to span the row should set
 // `style={{ gridColumn: '1 / -1' }}` on its outer wrap (SplitContainer does this).
+//
+// 2026-05-21 (rev-consolidation SEQ 6/6 · cockpit ticket #198): HoD-as-parent.
+// A tab whose label is "HoD" is rendered as a left-aligned "← HoD" breadcrumb,
+// not as one of the equal sibling tabs. This enforces the hierarchy: HoD is the
+// landing page; everything else is a sub-section under it.
 
 'use client';
 
@@ -31,11 +36,31 @@ export default function DashboardPage(props: DashboardPageProps) {
 }
 
 function TabStrip({ tabs }: { tabs: DashboardTab[] }) {
+  // Split "HoD" entries off the regular tab list — they render as a
+  // left-aligned breadcrumb so the rest of the strip becomes a secondary
+  // sub-nav under the HoD landing.
+  const parents = tabs.filter((t) => t.label === 'HoD');
+  const others  = tabs.filter((t) => t.label !== 'HoD');
   return (
     <nav style={S.tabStrip} role="tablist" aria-label="Page sections">
-      {tabs.map((t) => <TabButton key={t.key} tab={t} />)}
+      {parents.length > 0 && (
+        <div style={S.parentGroup}>
+          {parents.map((t) => <ParentLink key={t.key} tab={t} />)}
+        </div>
+      )}
+      {others.length > 0 && (
+        <div style={S.tabGroup}>
+          {others.map((t) => <TabButton key={t.key} tab={t} />)}
+        </div>
+      )}
     </nav>
   );
+}
+
+function ParentLink({ tab }: { tab: DashboardTab }) {
+  const label = `← ${tab.label}`;
+  if (tab.href) return <a href={tab.href} style={S.parentLink}>{label}</a>;
+  return <button type="button" onClick={tab.onSelect} style={S.parentLink}>{label}</button>;
 }
 
 function TabButton({ tab }: { tab: DashboardTab }) {
@@ -67,7 +92,21 @@ const S: Record<string, CSSProperties> = {
   title: { margin: 0, fontSize: 28, fontWeight: 700, color: 'var(--ink, #1B1B1B)' },
   subtitle: { margin: 0, fontSize: 13, color: 'var(--ink-soft, #5A5A5A)' },
   action: { display: 'flex', alignItems: 'center', gap: 8 },
-  tabStrip: { display: 'flex', gap: 4, borderBottom: '1px solid var(--hairline, #E6DFCC)', flexWrap: 'wrap' },
+  tabStrip: { display: 'flex', alignItems: 'center', gap: 12, borderBottom: '1px solid var(--hairline, #E6DFCC)', flexWrap: 'wrap' },
+  parentGroup: { display: 'flex', gap: 4, paddingRight: 12, borderRight: '1px solid var(--hairline, #E6DFCC)' },
+  tabGroup: { display: 'flex', gap: 4, flexWrap: 'wrap', flex: 1 },
+  parentLink: {
+    background: 'transparent',
+    border: 'none',
+    padding: '8px 0',
+    fontSize: 12,
+    fontWeight: 500,
+    color: 'var(--ink-soft, #5A5A5A)',
+    cursor: 'pointer',
+    textDecoration: 'none',
+    fontFamily: 'inherit',
+    letterSpacing: '0.04em',
+  },
   tab: {
     background: 'transparent',
     border: 'none',
