@@ -146,11 +146,13 @@ export default async function ContainerRoomIntel({ container, propertyId, search
     ? rows.filter((r) => String(r.period_yyyymm ?? '').startsWith(`${activePeriod.slice(4)}-`))
     : rows.filter((r) => String(r.period_yyyymm) === activePeriod);
 
-  // 5. Build category index — every canonical code the property has EVER had,
-  //    so all categories surface even if the active period has zero rows for them.
+  // 5. Build category index — every REAL canonical code the property has had.
+  //    Junk buckets like 'OTHER' (1-row uncategorised fallback) are excluded so
+  //    the tile grid only shows actual room categories.
+  const REAL_CATEGORIES = new Set(['DBL','JR_SUITE','SUITE','PENTHOUSE','VILLA','GLAMPING']);
   const allCategories = Array.from(new Set(
     rows.map((r) => String(r[groupBy] ?? '')).filter(Boolean)
-  )).sort();
+  )).filter((c) => REAL_CATEGORIES.has(c)).sort();
 
   const rowsByCatActive = new Map<string, DataRow[]>();
   for (const r of periodRows) {
