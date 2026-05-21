@@ -21,6 +21,8 @@ import {
   getPulseHighOcc,
   getPulseTodayPickup,
   getPulseUpcomingEvents,
+  getOccScoped,
+  type OccScoped,
   type PulseDailyRow,
   type PulseKpiSnapshot,
   type PulseSourceRow,
@@ -92,7 +94,7 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
   const stlyFrom = shiftDate(heroFrom, -365);
   const stlyTo = shiftDate(heroTo, -365);
 
-  const [headline, summary, dailyRows, stlyDailyRows, topSources, highOcc, pickup, events] =
+  const [headline, summary, dailyRows, stlyDailyRows, topSources, highOcc, pickup, events, occScoped] =
     await Promise.all([
       getPulseHeadlineKpis(pid, anchor),
       getPulsePerformanceSummary(pid, anchor),
@@ -102,7 +104,8 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
       getPulseHighOcc(pid, anchor, shiftDate(anchor, 60), 80),
       getPulseTodayPickup(pid, shiftDate(anchor, pickupOffset)),
       getPulseUpcomingEvents(pid, anchor, shiftDate(anchor, 30), 10),
-    ]);
+      getOccScoped(pid),
+    ]) as [PulseKpiSnapshot, Awaited<ReturnType<typeof getPulsePerformanceSummary>>, PulseDailyRow[], PulseDailyRow[], PulseSourceRow[], PulseHighOccDay[], PulsePickupRow[], PulseEventRow[], OccScoped | null];
 
   // ─── headline tiles ──────────────────────────────────────────────────
   const occΔ    = pctChange(headline.occupancyPct, headline.stlyOccupancyPct);
@@ -111,9 +114,10 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
   const adrΔ    = pctChange(headline.adr,          headline.stlyAdr);
 
   const headlineTiles: KpiTileProps[] = [
-    { label: 'Occupancy',        value: `${(headline.occupancyPct ?? 0).toFixed(1)}%`, size: 'sm',
+    // PBS cockpit #197 SEQ 5/6: bind to v_occupancy_scoped.occ_yesterday — explicit scope in label.
+    { label: 'Occ · yesterday', value: occScoped ? `${occScoped.occ_yesterday.toFixed(1)}%` : '—', size: 'sm',
       delta: occΔ != null ? { value: occΔ, period: 'STLY', direction: occΔ >= 0 ? 'up' : 'down' } : undefined,
-      footnote: 'yesterday', status: occΔ != null && occΔ >= 0 ? 'green' : occΔ != null ? 'red' : 'grey' },
+      status: occΔ != null && occΔ >= 0 ? 'green' : occΔ != null ? 'red' : 'grey' },
     { label: 'RevPAR',           value: Math.round(headline.revpar ?? 0), currency: moneyCurrency, size: 'sm',
       delta: revparΔ != null ? { value: revparΔ, period: 'STLY', direction: revparΔ >= 0 ? 'up' : 'down' } : undefined,
       footnote: 'yesterday', status: revparΔ != null && revparΔ >= 0 ? 'green' : revparΔ != null ? 'red' : 'grey' },
