@@ -66,8 +66,6 @@ interface Props { searchParams: Record<string, string | string[] | undefined>; p
 
 export default async function ChannelsPage({ searchParams, propertyId }: Props) {
   const pid = propertyId ?? PROPERTY_ID_NAMKHAN;
-  // Per-property currency — Donna prints €, Namkhan $.
-  const moneyCurrency: 'USD' | 'EUR' = pid === 1000001 ? 'EUR' : 'USD';
   const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
   const basePath = pid !== PROPERTY_ID_NAMKHAN ? `/h/${pid}/revenue/channels` : '/revenue/channels';
   const period = resolvePeriod(searchParams);
@@ -103,7 +101,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
     { label: 'Direct mix',         value: `${mixPct(byCat.direct).toFixed(1)}%`, size: 'sm', footnote: `${byCat.direct.length} sources · target ≥ 30%`, status: mixPct(byCat.direct) >= 30 ? 'green' : 'amber' },
     { label: 'OTA mix',            value: `${mixPct(byCat.ota).toFixed(1)}%`,    size: 'sm', footnote: `${byCat.ota.length} sources · lower = less commission drag`, status: 'amber' },
     { label: 'DMC & Bedbanks mix', value: `${mixPct(byCat.dmc).toFixed(1)}%`,    size: 'sm', footnote: `${byCat.dmc.length} sources · net-rate exposure`, status: 'amber' },
-    { label: `Revenue · ${period.label}`, value: Math.round(totalRev), currency: moneyCurrency, size: 'sm', footnote: `${channels.length} active sources` },
+    { label: `Revenue · ${period.label}`, value: Math.round(totalRev), currency: 'USD', size: 'sm', footnote: `${channels.length} active sources` },
   ];
 
   // Page-level watch chips (cross-cutting)
@@ -116,7 +114,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
   });
   const chips: string[] = [];
   if (worstCancel.name && worstCancel.pct > 25) chips.push(`⚠ Cancel watch · ${worstCancel.name} ${worstCancel.pct.toFixed(1)}%`);
-  if (commissionPctOfRev > 12) chips.push(`⚠ Commission load · ${commissionPctOfRev.toFixed(1)}% of rev (${fmtMoney(totalCommission, moneyCurrency)})`);
+  if (commissionPctOfRev > 12) chips.push(`⚠ Commission load · ${commissionPctOfRev.toFixed(1)}% of rev (${fmtMoney(totalCommission, 'USD')})`);
 
   const tabs: DashboardTab[] = subPages.map((s) => ({ key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/channels') }));
   const hrefFor = (newWin: WindowKey) => {
@@ -182,9 +180,9 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
         })}
       </div>
 
-      {activeTab === 'direct' && <CategoryBlock category="direct" rows={byCat.direct} cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'direct')} mixWeekly={mixWeekly} velocity={velocity} period={period} totalRev={totalRev} netValue={netValue.filter((r) => classify(String(r.source_name || r.channel || '')) === 'direct')} />}
-      {activeTab === 'ota'    && <CategoryBlock category="ota"    rows={byCat.ota}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'ota')}    mixWeekly={mixWeekly} velocity={velocity} period={period} totalRev={totalRev} netValue={netValue.filter((r) => classify(String(r.source_name || r.channel || '')) === 'ota')} />}
-      {activeTab === 'dmc'    && <CategoryBlock category="dmc"    rows={byCat.dmc}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'dmc')}    mixWeekly={mixWeekly} velocity={velocity} period={period} totalRev={totalRev} netValue={netValue.filter((r) => classify(String(r.source_name || r.channel || '')) === 'dmc')} />}
+      {activeTab === 'direct' && <CategoryBlock category="direct" rows={byCat.direct} cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'direct')} mixWeekly={mixWeekly} velocity={velocity} period={period} totalRev={totalRev} netValue={netValue.filter((r) => classify(String(r.source_name || r.channel || '')) === 'direct')} moneyCurrency={moneyCurrency} />}
+      {activeTab === 'ota'    && <CategoryBlock category="ota"    rows={byCat.ota}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'ota')}    mixWeekly={mixWeekly} velocity={velocity} period={period} totalRev={totalRev} netValue={netValue.filter((r) => classify(String(r.source_name || r.channel || '')) === 'ota')} moneyCurrency={moneyCurrency} />}
+      {activeTab === 'dmc'    && <CategoryBlock category="dmc"    rows={byCat.dmc}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'dmc')}    mixWeekly={mixWeekly} velocity={velocity} period={period} totalRev={totalRev} netValue={netValue.filter((r) => classify(String(r.source_name || r.channel || '')) === 'dmc')} moneyCurrency={moneyCurrency} />}
 
       <Container title="12-month structural view" subtitle="tier rollup · top sources · monthly trend · groups · DMC contracts (Namkhan only)" density="compact">
         <PageRenderer pageSlug="channel" propertyId={pid} title="" subtitle="" />
@@ -195,7 +193,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
 
 // ─── per-category block ──────────────────────────────────────────────────────
 function CategoryBlock({
-  category, rows, cmpRows, mixWeekly, velocity, period, totalRev, netValue,
+  category, rows, cmpRows, mixWeekly, velocity, period, totalRev, netValue, moneyCurrency,
 }: {
   category: Category;
   rows: Array<Record<string, unknown>>;
@@ -205,6 +203,7 @@ function CategoryBlock({
   period: { label: string; from: string; to: string };
   totalRev: number;
   netValue: Array<Record<string, unknown>>;
+  moneyCurrency: 'USD' | 'EUR';
 }) {
   const bookings = rows.reduce((s, c) => s + Number(c.bookings || 0), 0);
   const revenue  = rows.reduce((s, c) => s + Number(c.gross_revenue || 0), 0);
@@ -248,8 +247,8 @@ function CategoryBlock({
     if (category === 'direct') {
       return [
         { label: 'Bookings', value: bookings, size: 'sm', delta: hasCmp ? { value: dPct(bookings, cmpBookings), period: 'cmp', direction: bookings >= cmpBookings ? 'up' : 'down' } : undefined },
-        { label: 'Revenue', value: Math.round(revenue), currency: moneyCurrency, size: 'sm', delta: hasCmp ? { value: dPct(revenue, cmpRevenue), period: 'cmp', direction: revenue >= cmpRevenue ? 'up' : 'down' } : undefined },
-        { label: 'ADR', value: Math.round(adr), currency: moneyCurrency, size: 'sm', delta: hasCmp ? { value: dPct(adr, cmpAdr), period: 'cmp', direction: adr >= cmpAdr ? 'up' : 'down' } : undefined },
+        { label: 'Revenue', value: Math.round(revenue), currency: 'USD', size: 'sm', delta: hasCmp ? { value: dPct(revenue, cmpRevenue), period: 'cmp', direction: revenue >= cmpRevenue ? 'up' : 'down' } : undefined },
+        { label: 'ADR', value: Math.round(adr), currency: 'USD', size: 'sm', delta: hasCmp ? { value: dPct(adr, cmpAdr), period: 'cmp', direction: adr >= cmpAdr ? 'up' : 'down' } : undefined },
         { label: 'Share of revenue', value: `${shareOfRev.toFixed(1)}%`, size: 'sm', footnote: 'target ≥ 30%', status: shareOfRev >= 30 ? 'green' : 'amber' },
         { label: 'Avg lead time', value: `${avgLead.toFixed(0)}d`, size: 'sm', footnote: 'booking-weighted' },
       ];
@@ -257,18 +256,18 @@ function CategoryBlock({
     if (category === 'ota') {
       return [
         { label: 'Bookings', value: bookings, size: 'sm', delta: hasCmp ? { value: dPct(bookings, cmpBookings), period: 'cmp', direction: bookings >= cmpBookings ? 'up' : 'down' } : undefined },
-        { label: 'Revenue', value: Math.round(revenue), currency: moneyCurrency, size: 'sm' },
-        { label: 'ADR (gross)', value: Math.round(adr), currency: moneyCurrency, size: 'sm' },
+        { label: 'Revenue', value: Math.round(revenue), currency: 'USD', size: 'sm' },
+        { label: 'ADR (gross)', value: Math.round(adr), currency: 'USD', size: 'sm' },
         { label: 'Commission %', value: `${commPct.toFixed(1)}%`, size: 'sm', footnote: hasCmp ? `cmp ${cmpCommPct.toFixed(1)}%` : 'lower is better', status: commPct > 18 ? 'red' : commPct > 12 ? 'amber' : 'green' },
-        { label: 'Net ADR', value: Math.round(netAdr), currency: moneyCurrency, size: 'sm', footnote: 'gross × (1 − comm%)' },
+        { label: 'Net ADR', value: Math.round(netAdr), currency: 'USD', size: 'sm', footnote: 'gross × (1 − comm%)' },
         { label: 'Cancel rate', value: `${cancelPctTotal.toFixed(1)}%`, size: 'sm', status: cancelPctTotal > 25 ? 'red' : 'amber' },
       ];
     }
     // dmc
     return [
       { label: 'Bookings', value: bookings, size: 'sm' },
-      { label: 'Revenue', value: Math.round(revenue), currency: moneyCurrency, size: 'sm' },
-      { label: 'ADR', value: Math.round(adr), currency: moneyCurrency, size: 'sm', footnote: 'pre-commission net rate' },
+      { label: 'Revenue', value: Math.round(revenue), currency: 'USD', size: 'sm' },
+      { label: 'ADR', value: Math.round(adr), currency: 'USD', size: 'sm', footnote: 'pre-commission net rate' },
       { label: 'Avg lead time', value: `${avgLead.toFixed(0)}d`, size: 'sm', footnote: 'usually longer for B2B' },
       { label: 'Active contracts', value: rows.length, size: 'sm', footnote: 'distinct sources w/ bookings' },
     ];
@@ -304,7 +303,7 @@ function CategoryBlock({
         revenue:   fmtMoney(Number(c.gross_revenue ?? 0), moneyCurrency),
         adr:       fmtMoney(Number(c.adr ?? 0), moneyCurrency),
         comm_pct:  `${Number(c.commission_pct ?? 0).toFixed(0)}%`,
-        net_adr:   fmtMoney(netAdrR, moneyCurrency),
+        net_adr:   fmtMoney(netAdrR, 'USD'),
         cancel:    `${Number(c.cancel_pct ?? 0).toFixed(1)}%`,
         lead:      `${Number(c.avg_lead_days ?? 0).toFixed(0)}d`,
         los:       Number(c.avg_los ?? 0).toFixed(1),
