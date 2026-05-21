@@ -1,10 +1,8 @@
 // app/(cockpit)/_design/PickupMatrix.tsx
-// Monthly pickup matrix primitive — renders the PDF-style grid:
-//   row groups: 12 months × {RN, OCC, REV, ADR, RevPAR}
-//   col groups: baselines · OTB snapshots · pickup deltas · comparison · SDLY
-// Cells with null values render as "—" (greyed) so the table is meaningful
-// before snapshot / budget / 2023-24 sources land. Delta cells are coloured
-// green / red. Server component — no state.
+// Monthly pickup matrix primitive — fully on the paper palette now (no dark
+// header bands, no hard black frame). Row labels are dark on paper; group
+// header is cream-on-ink so it reads at a glance. Null cells render "—" so
+// the table is meaningful before snapshot / budget / 2023-24 sources land.
 
 import type { CSSProperties } from 'react';
 
@@ -36,8 +34,8 @@ export interface PickupMatrixRow {
 }
 
 export interface PickupMatrixMonth {
-  monthKey: string;   // "2026-01"
-  monthLabel: string; // "01/01/2026"
+  monthKey: string;
+  monthLabel: string;
   rows: PickupMatrixRow[];
 }
 
@@ -45,14 +43,13 @@ export interface PickupMatrixData {
   property: string;
   capacity: number;
   asOfDate: string;
-  monthlySnapshotLabel: string;   // "04/05/2026" — first day of current month
-  mondaySnapshotLabel: string;    // "14/05/2026"
-  yesterdaySnapshotLabel: string; // "20/05/2026"
-  todaySnapshotLabel: string;     // "21/05/2026"
-  sdlyDate: string;               // "21/05/2025"
+  monthlySnapshotLabel: string;
+  mondaySnapshotLabel: string;
+  yesterdaySnapshotLabel: string;
+  todaySnapshotLabel: string;
+  sdlyDate: string;
   months: PickupMatrixMonth[];
   total: PickupMatrixRow[];
-  /** Optional note shown under the title — e.g. "Donna data stale: 6 days behind" */
   stalenessNote?: string;
 }
 
@@ -91,20 +88,20 @@ export default function PickupMatrix({ data }: Props) {
       <table style={S.table}>
         <thead>
           <tr style={S.groupRow}>
-            <th style={{ ...S.groupTh, ...S.frozen, ...S.frozenHead, background: '#1F3A2E', color: '#FFFFFF', borderRight: '2px solid #E6DFCC' }}>
+            <th style={{ ...S.groupTh, ...S.frozen, ...S.frozenHead, background: '#EFE9D6', color: 'var(--ink, #1B1B1B)', textAlign: 'left' }}>
               {data.asOfDate}
               {data.stalenessNote && (
-                <div style={{ fontSize: 9, fontWeight: 400, opacity: 0.75, marginTop: 2 }}>{data.stalenessNote}</div>
+                <div style={{ fontSize: 9, fontWeight: 400, color: 'var(--ink-soft, #5A5A5A)', marginTop: 2, fontStyle: 'italic' }}>{data.stalenessNote}</div>
               )}
             </th>
             <th style={S.groupTh} colSpan={4}>Baselines</th>
             <th style={S.groupTh} colSpan={5}>OTB snapshots</th>
-            <th style={S.groupTh} colSpan={6}>Pickup</th>
+            <th style={S.groupTh} colSpan={3}>Pickup</th>
             <th style={S.groupTh} colSpan={4}>Comparison</th>
             <th style={S.groupTh} colSpan={2}>SDLY {data.sdlyDate}</th>
           </tr>
           <tr style={S.headerRow}>
-            <th style={{ ...S.headerTh, ...S.frozen, ...S.frozenHead, borderRight: '2px solid #E6DFCC' }}>Month · Metric</th>
+            <th style={{ ...S.headerTh, ...S.frozen, ...S.frozenHead, background: '#F7F1DF', textAlign: 'left' }}>Month · Metric</th>
             <th style={S.headerTh}>2023 RO</th>
             <th style={S.headerTh}>2024 RO</th>
             <th style={S.headerTh}>2025 RO</th>
@@ -135,7 +132,7 @@ export default function PickupMatrix({ data }: Props) {
 }
 
 function MonthBlock({ month, isAlt, isTotal }: { month: PickupMatrixMonth; isAlt: boolean; isTotal?: boolean }) {
-  const bg = isTotal ? '#FBF7EA' : isAlt ? '#FAF8F1' : '#FFFFFF';
+  const bg = isTotal ? '#F7F1DF' : isAlt ? '#FAF8F1' : '#FFFFFF';
   return (
     <>
       {month.rows.map((r, i) => {
@@ -144,7 +141,7 @@ function MonthBlock({ month, isAlt, isTotal }: { month: PickupMatrixMonth; isAlt
           <tr key={`${month.monthKey}-${r.metric}`} style={{ background: bg, borderTop: showMonth ? '1px solid #D8CFB7' : '1px solid #F2EBD8' }}>
             <th style={{ ...S.rowHead, ...S.frozen, background: bg, fontWeight: isTotal ? 700 : 500 }}>
               {showMonth && (
-                <div style={{ fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', letterSpacing: '0.04em' }}>
+                <div style={{ fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', letterSpacing: '0.04em', marginBottom: 1 }}>
                   {month.monthLabel}
                 </div>
               )}
@@ -180,7 +177,7 @@ function Cell({ val, metric, emphasis }: { val: number | null; metric: PickupMet
   return (
     <td style={{
       ...S.td,
-      color: c.muted ? 'var(--ink-soft, #5A5A5A)' : 'var(--ink, #1B1B1B)',
+      color: c.muted ? 'var(--ink-soft, #8A8276)' : 'var(--ink, #1B1B1B)',
       fontStyle: c.muted ? 'italic' : 'normal',
       fontWeight: emphasis ? 600 : 400,
     }}>
@@ -192,7 +189,7 @@ function Cell({ val, metric, emphasis }: { val: number | null; metric: PickupMet
 function DeltaCell({ d, metric, kind }: { d: PickupDelta | undefined; metric: PickupMetric; kind: 'abs' | 'pct' }) {
   const c = deltaCell(d, metric, kind);
   const bg = c.tone === 'good' ? '#E8F2E4' : c.tone === 'bad' ? '#F7E2DC' : 'transparent';
-  const fg = c.tone === 'good' ? '#1F3A2E' : c.tone === 'bad' ? '#8A2A1D' : 'var(--ink-soft, #5A5A5A)';
+  const fg = c.tone === 'good' ? '#1F3A2E' : c.tone === 'bad' ? '#8A2A1D' : 'var(--ink-soft, #8A8276)';
   return (
     <td style={{ ...S.td, background: bg, color: fg, fontStyle: c.tone === 'mute' ? 'italic' : 'normal' }}>
       {c.text}
@@ -215,38 +212,42 @@ const S: Record<string, CSSProperties> = {
     fontFamily: 'inherit',
     fontSize: 11,
   },
-  groupRow: { background: '#1F3A2E' },
+  groupRow: { background: '#EFE9D6' },
   groupTh: {
-    padding: '6px 8px',
+    padding: '8px 10px',
     textAlign: 'center',
-    color: '#FFFFFF',
-    fontWeight: 600,
+    color: 'var(--ink, #1B1B1B)',
+    fontWeight: 700,
     fontSize: 10,
-    letterSpacing: '0.06em',
+    letterSpacing: '0.08em',
     textTransform: 'uppercase',
-    borderRight: '1px solid #2A4E3F',
+    borderRight: '1px solid #E6DFCC',
+    borderBottom: '1px solid #D8CFB7',
+    background: '#EFE9D6',
   },
-  headerRow: { background: '#F2EBD8' },
+  headerRow: { background: '#F7F1DF' },
   headerTh: {
     padding: '6px 8px',
     textAlign: 'right',
-    color: 'var(--ink, #1B1B1B)',
+    color: 'var(--ink-soft, #5A5A5A)',
     fontWeight: 600,
     fontSize: 10,
     letterSpacing: '0.04em',
+    background: '#F7F1DF',
     borderBottom: '1px solid #D8CFB7',
     borderRight: '1px solid #E6DFCC',
     whiteSpace: 'nowrap',
   },
   headerSub: { fontSize: 9, fontWeight: 400, color: 'var(--ink-soft, #5A5A5A)' },
   rowHead: {
-    padding: '4px 8px',
+    padding: '6px 10px',
     textAlign: 'left',
-    minWidth: 130,
-    borderRight: '2px solid #E6DFCC',
+    minWidth: 140,
+    borderRight: '1px solid #E6DFCC',
+    color: 'var(--ink, #1B1B1B)',
   },
   td: {
-    padding: '4px 8px',
+    padding: '5px 8px',
     textAlign: 'right',
     borderRight: '1px solid #F2EBD8',
     whiteSpace: 'nowrap',
