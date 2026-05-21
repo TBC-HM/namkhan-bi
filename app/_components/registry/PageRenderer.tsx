@@ -15,6 +15,7 @@ import ContainerTable from './ContainerTable';
 import ContainerChart from './ContainerChart';
 import ContainerMonthTable from './ContainerMonthTable';
 import ContainerTopNDrill from './ContainerTopNDrill';
+import ContainerRoomIntel from './ContainerRoomIntel';
 
 interface Props {
   pageSlug: string;
@@ -23,9 +24,11 @@ interface Props {
   subtitle?: string;
   /** Optional kpi-strip slot rendered ABOVE the containers (kpi_strip render_type). */
   kpiStrip?: React.ReactNode;
+  /** Forwarded URL search params for handlers that read ?period=, ?expand=, etc. */
+  searchParams?: Record<string, string | string[] | undefined>;
 }
 
-export default async function PageRenderer({ pageSlug, propertyId, title, subtitle, kpiStrip }: Props) {
+export default async function PageRenderer({ pageSlug, propertyId, title, subtitle, kpiStrip, searchParams }: Props) {
   // Tabs use revenue subpages strip for now (only consumer so far is revenue)
   const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, propertyId);
   const tabs: DashboardTab[] = subPages.map((s) => ({
@@ -79,6 +82,8 @@ export default async function PageRenderer({ pageSlug, propertyId, title, subtit
             return <ContainerMonthTable key={`c-${c.container_code}`} container={c} propertyId={propertyId} />;
           case 'top_n_drill':
             return <ContainerTopNDrill key={`c-${c.container_code}`} container={c} propertyId={propertyId} />;
+          case 'room_intel':
+            return <ContainerRoomIntel key={`c-${c.container_code}`} container={c} propertyId={propertyId} searchParams={searchParams} />;
           case 'chart': {
             // Allow container-row chart definitions to also flow through ContainerChart by
             // synthesising a minimal GraphRegistryRow from columns_spec.
