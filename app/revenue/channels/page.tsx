@@ -15,6 +15,7 @@ import {
 } from '@/lib/data-channels';
 import { fmtMoney } from '@/lib/format';
 import { REVENUE_SUBPAGES } from '../_subpages';
+import PageRenderer from '@/app/_components/registry/PageRenderer';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 
 export const revalidate = 60;
@@ -298,6 +299,12 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
           ]}
           empty={{ title: 'No channel data in selected window' }}
         />
+      </Container>
+
+      {/* 12-month structural channel view — tier rollup, top 10 with drill, monthly perf, group, DMC.
+          Merged in 2026-05-21 from the legacy /revenue/channel registry page. */}
+      <Container title="12-month structural view" subtitle="tier rollup · top sources · monthly trend · groups · DMC (Namkhan only)" density="compact">
+        <PageRenderer pageSlug="channel" propertyId={pid} title="" subtitle="" />
       </Container>
 
       {matRooms.length > 0 && matSources.length > 0 && (
