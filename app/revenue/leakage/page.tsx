@@ -15,7 +15,7 @@ export default function LeakagePage() {
       pageSlug="leakage"
       propertyId={260955}
       title="Revenue · Leakage"
-      subtitle="rate leakage · source transparency · driven by v_container_registry + v_graph_registry"
+      subtitle="rate leakage · source transparency"
     />
   );
 }
