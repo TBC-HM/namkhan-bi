@@ -291,11 +291,12 @@ export async function getChannelPerf(period?: ResolvedPeriod): Promise<any[]> {
 // PACE
 // ============================================================================
 
-export async function getPaceOtb(period?: ResolvedPeriod) {
+export async function getPaceOtb(period?: ResolvedPeriod, propertyId?: number) {
+  const pid = propertyId ?? PROPERTY_ID;
   let query = supabase
     .from('mv_pace_otb')
     .select('*')
-    .eq('property_id', PROPERTY_ID)
+    .eq('property_id', pid)
     .order('ci_month', { ascending: true });
 
   // If period is forward-looking, scope the pace months to its window
