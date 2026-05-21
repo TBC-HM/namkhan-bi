@@ -45,14 +45,14 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
   const basePath = pid !== PROPERTY_ID ? `/h/${pid}/revenue/rateplans` : '/revenue/rateplans';
 
   const { data: configuredPlans } = await supabase
-    .from('v_rate_plans_all')
+    .from('rate_plans')
     .select('rate_id, rate_name, rate_type, is_active')
     .eq('property_id', pid)
     .eq('is_active', true);
   const masterNames = new Set((configuredPlans ?? []).map((p: { rate_name: string }) => p.rate_name));
 
   const { data: recent90 } = await supabase
-    .from('v_reservations_unified')
+    .from('reservations')
     .select('rate_plan, status, booking_date')
     .eq('property_id', pid)
     .gte('booking_date', new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10))
@@ -68,7 +68,6 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
   const { data: windowRows } = isNamkhan
     ? await supabase
         .from('v_rate_plan_perf')
-        .eq('property_id', pid)
         .select('rate_plan, status, total_amount, nights, lead_days, plan_type, is_configured, booking_date, check_in_date')
         .gte('check_in_date', period.from)
         .lte('check_in_date', period.to)
@@ -150,7 +149,6 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
   const { data: sleepingPlans } = isNamkhan
     ? await supabase
         .from('v_rate_plan_sleeping')
-        .eq('property_id', pid)
         .select('rate_name, rate_type, last_booked, days_since')
         .order('days_since', { ascending: false })
         .limit(30)
@@ -165,7 +163,6 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
   const { data: orphans } = isNamkhan
     ? await supabase
         .from('v_rate_plan_orphans')
-        .eq('property_id', pid)
         .select('rate_plan, bookings_lifetime, revenue_lifetime, last_booked')
         .order('revenue_lifetime', { ascending: false })
         .limit(20)
