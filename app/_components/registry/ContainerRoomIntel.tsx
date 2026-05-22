@@ -139,16 +139,24 @@ export default async function ContainerRoomIntel({ container, propertyId, search
     .select('display_symbol, display_currency').eq('property_id', propertyId).maybeSingle();
   const currencySymbol = String((propRow as { display_symbol?: string } | null)?.display_symbol ?? '$');
 
-  // 3. Periods — discrete months + a YTD pill for current year
+  // 3. Periods — discrete months + a YTD pill for current year.
+  // PBS 2026-05-22: future months (OTB) must be visible. Window = past 12
+  // months + current + every future month the view has data for.
   const allPeriods = Array.from(new Set(rows.map((r) => String(r.period_yyyymm ?? '')).filter(Boolean))).sort().reverse();
   const currentYm = new Date().toISOString().slice(0, 7);
   const currentYear = currentYm.slice(0, 4);
-  const realisedMonths = allPeriods.filter((p) => p <= currentYm);
+  const past12Floor = (() => {
+    const d = new Date(currentYm + '-01T00:00:00Z');
+    d.setUTCMonth(d.getUTCMonth() - 11);
+    return d.toISOString().slice(0, 7);
+  })();
+  const windowMonths = allPeriods.filter((p) => p >= past12Floor);
+  const realisedMonths = windowMonths.filter((p) => p <= currentYm);
   const ytdKey = `YTD-${currentYear}`;
   const requested = String(searchParams?.period ?? '');
   const isYtd = requested === ytdKey;
   const validPeriods = new Set([ytdKey, ...allPeriods]);
-  const activePeriod = validPeriods.has(requested) ? requested : (realisedMonths[0] ?? allPeriods[0]);
+  const activePeriod = validPeriods.has(requested) ? requested : (realisedMonths[0] ?? windowMonths[0] ?? allPeriods[0]);
   if (!activePeriod) {
     return (
       <Container title={container.container_name} subtitle="No data on file">
@@ -163,6 +171,24 @@ export default async function ContainerRoomIntel({ container, propertyId, search
   const periodRows = isYtd || activePeriod.startsWith('YTD-')
     ? rows.filter((r) => String(r.period_yyyymm ?? '').startsWith(`${activePeriod.slice(4)}-`))
     : rows.filter((r) => String(r.period_yyyymm) === activePeriod);
+
+  // 4b. PBS 2026-05-22: same-time-last-year rows for LY comparison per tile.
+  function lyOf(p: string): string {
+    if (p.startsWith('YTD-')) {
+      const y = Number(p.slice(4));
+      return Number.isFinite(y) ? `YTD-${y - 1}` : p;
+    }
+    if (p.length >= 7) {
+      const y = Number(p.slice(0, 4));
+      const mm = p.slice(5, 7);
+      return Number.isFinite(y) ? `${y - 1}-${mm}` : p;
+    }
+    return p;
+  }
+  const lyPeriod = lyOf(activePeriod);
+  const lyRows = lyPeriod.startsWith('YTD-')
+    ? rows.filter((r) => String(r.period_yyyymm ?? '').startsWith(`${lyPeriod.slice(4)}-`))
+    : rows.filter((r) => String(r.period_yyyymm) === lyPeriod);
 
   // 5. Build category index — every REAL canonical code the property has had.
   //    Junk buckets like 'OTHER' (1-row uncategorised fallback) are excluded so
@@ -180,6 +206,12 @@ export default async function ContainerRoomIntel({ container, propertyId, search
     const k = String(r[groupBy] ?? 'UNKNOWN');
     if (!rowsByCatActive.has(k)) rowsByCatActive.set(k, []);
     rowsByCatActive.get(k)!.push(r);
+  }
+  const rowsByCatLy = new Map<string, DataRow[]>();
+  for (const r of lyRows) {
+    const k = String(r[groupBy] ?? 'UNKNOWN');
+    if (!rowsByCatLy.has(k)) rowsByCatLy.set(k, []);
+    rowsByCatLy.get(k)!.push(r);
   }
   // Build label tagline from any row in this category (top revenue subtype)
   const taglineByCat = new Map<string, string>();
@@ -210,9 +242,11 @@ export default async function ContainerRoomIntel({ container, propertyId, search
 
   const periodPicker = (
     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-      <Link href={hrefPeriod(ytdKey)} style={pillStyle(activePeriod === ytdKey, true)}>YTD {currentYear}</Link>
-      {realisedMonths.slice(0, 12).map((p) => (
-        <Link key={p} href={hrefPeriod(p)} style={pillStyle(activePeriod === p, false)}>{p}</Link>
+      <Link href={hrefPeriod(ytdKey)} style={pillStyle(activePeriod === ytdKey, true, false)}>YTD {currentYear}</Link>
+      {windowMonths.slice(0, 24).map((p) => (
+        <Link key={p} href={hrefPeriod(p)} style={pillStyle(activePeriod === p, false, p > currentYm)}>
+          {p}{p > currentYm ? ' · OTB' : ''}
+        </Link>
       ))}
     </div>
   );
@@ -249,12 +283,23 @@ export default async function ContainerRoomIntel({ container, propertyId, search
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
                   {spec.tile_metrics.map((m) => {
-                    const v = computeMetric(m, catRows);
+                    const v   = computeMetric(m, catRows);
+                    const lyV = computeMetric(m, rowsByCatLy.get(code) ?? []);
+                    const lyHasData = lyV != null && lyV !== 0;
+                    let deltaPct: number | null = null;
+                    if (v != null && lyHasData && Math.abs(lyV) > 0.01) {
+                      deltaPct = ((v - lyV) / Math.abs(lyV)) * 100;
+                    }
                     return (
                       <div key={m.key} style={{ display: 'flex', flexDirection: 'column' }}>
                         <span style={{ fontSize: 10, color: 'var(--ink-soft, #5A5A5A)', letterSpacing: '0.04em' }}>{m.label}</span>
                         <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink, #1B1B1B)', fontVariantNumeric: 'tabular-nums' }}>
                           {v == null ? '—' : formatValue(v, m.format as never, currencySymbol)}
+                        </span>
+                        <span style={{ fontSize: 9.5, color: 'var(--ink-soft, #5A5A5A)', fontVariantNumeric: 'tabular-nums', marginTop: 1 }}>
+                          {lyHasData
+                            ? `LY ${formatValue(lyV!, m.format as never, currencySymbol)}${deltaPct != null ? `  ${deltaPct >= 0 ? '+' : ''}${deltaPct.toFixed(0)}%` : ''}`
+                            : 'LY —'}
                         </span>
                       </div>
                     );
@@ -435,14 +480,22 @@ async function DrillPanel({
 }
 
 // ─── styles ─────────────────────────────────────────────────────────────────
-function pillStyle(active: boolean, ytd: boolean): React.CSSProperties {
+function pillStyle(active: boolean, ytd: boolean, future: boolean = false): React.CSSProperties {
+  const borderColor = active ? 'var(--primary, #1F3A2E)'
+    : ytd ? 'var(--terracotta, #B8542A)'
+    : future ? 'var(--brass, #B8A878)'
+    : 'var(--hairline, #E6DFCC)';
+  const fg = active ? '#FFFFFF'
+    : ytd ? 'var(--terracotta, #B8542A)'
+    : future ? 'var(--brass, #B8A878)'
+    : 'var(--ink, #1B1B1B)';
   return {
     fontSize: 11, letterSpacing: '0.04em',
     padding: '4px 10px', borderRadius: 99,
-    border: `1px solid ${active ? 'var(--primary, #1F3A2E)' : ytd ? 'var(--terracotta, #B8542A)' : 'var(--hairline, #E6DFCC)'}`,
+    border: `1px solid ${borderColor}`,
     background:  active ? 'var(--primary, #1F3A2E)' : 'var(--paper, #FFFFFF)',
-    color:       active ? '#FFFFFF' : ytd ? 'var(--terracotta, #B8542A)' : 'var(--ink, #1B1B1B)',
-    fontWeight: active || ytd ? 600 : 500, textDecoration: 'none',
+    color:       fg,
+    fontWeight: active || ytd || future ? 600 : 500, textDecoration: 'none',
     fontVariantNumeric: 'tabular-nums',
   };
 }
