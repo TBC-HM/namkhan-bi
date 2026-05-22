@@ -67,7 +67,6 @@ interface Props { searchParams: Record<string, string | string[] | undefined>; p
 export default async function ChannelsPage({ searchParams, propertyId }: Props) {
   const pid = propertyId ?? PROPERTY_ID_NAMKHAN;
   const moneyCurrency: 'USD' | 'EUR' = pid === 1000001 ? 'EUR' : 'USD';
-  const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
   const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
   const basePath = pid !== PROPERTY_ID_NAMKHAN ? `/h/${pid}/revenue/channels` : '/revenue/channels';
   const period = resolvePeriod(searchParams);
@@ -142,66 +141,53 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
       subtitle={`Channel performance · ${period.label} · ${channels.length} active sources across ${[byCat.direct, byCat.ota, byCat.dmc].filter((g) => g.length > 0).length} categories`}
       tabs={tabs}
     >
-      {/* 1. Sub-tabs FIRST — tabs on top per PBS 2026-05-22 */}
-      <div style={{ ...fullRow }}>
-        <div style={subTabRow}>
-          {TAB_DEFS.map((t) => {
-            const active = t.key === activeTab;
+      <Container title="Headline · channel mix" subtitle={period.label} density="compact">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+          {pageMixTiles.map((t, i) => <KpiTile key={i} {...t} />)}
+        </div>
+      </Container>
+
+      {chips.length > 0 && (
+        <Container title="Watch list" subtitle="auto-detected insights · cross-category" density="compact" status="amber">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {chips.map((c, i) => (
+              <span key={i} style={chipStyle}>{c}</span>
+            ))}
+          </div>
+        </Container>
+      )}
+
+      <Container title="Window" subtitle="period selector" density="compact">
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+          {(['7d', '30d', '90d'] as WindowKey[]).map((k) => {
+            const active = k === period.win;
             return (
-              <Link key={t.key} href={tabHrefFor(t.key)} style={subTabStyle(active)}>
-                <span style={{ fontSize: 13, fontWeight: 600 }}>{t.label}</span>
-                <span style={{ fontSize: 10, color: active ? 'rgba(255,255,255,0.85)' : 'var(--ink-soft, #5A5A5A)', marginTop: 1 }}>{t.tagline}</span>
-              </Link>
+              <a key={k} href={hrefFor(k)} style={pillStyle(active)}>{k}</a>
             );
           })}
         </div>
-      </div>
+      </Container>
 
-      {/* 2. Headline tiles */}
-      <div style={fullRow}>
-        <Container title="Headline · channel mix" subtitle={period.label} density="compact">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-            {pageMixTiles.map((t, i) => <KpiTile key={i} {...t} />)}
-          </div>
-        </Container>
-      </div>
-
-      {/* 3. Watch list (conditional) */}
-      {chips.length > 0 && (
-        <div style={fullRow}>
-          <Container title="Watch list" subtitle="auto-detected insights · cross-category" density="compact" status="amber">
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {chips.map((c, i) => (
-                <span key={i} style={chipStyle}>{c}</span>
-              ))}
-            </div>
-          </Container>
-        </div>
-      )}
-
-      {/* 4. Window selector */}
-      <div style={fullRow}>
-        <Container title="Window" subtitle="period selector" density="compact">
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-            {(['7d', '30d', '90d'] as WindowKey[]).map((k) => {
-              const active = k === period.win;
-              return (
-                <a key={k} href={hrefFor(k)} style={pillStyle(active)}>{k}</a>
-              );
-            })}
-          </div>
-        </Container>
+      {/* Sub-tabs: Direct · OTAs · DMC/Bedbanks */}
+      <div style={subTabRow}>
+        {TAB_DEFS.map((t) => {
+          const active = t.key === activeTab;
+          return (
+            <Link key={t.key} href={tabHrefFor(t.key)} style={subTabStyle(active)}>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>{t.label}</span>
+              <span style={{ fontSize: 10, color: active ? 'rgba(255,255,255,0.85)' : 'var(--ink-soft, #5A5A5A)', marginTop: 1 }}>{t.tagline}</span>
+            </Link>
+          );
+        })}
       </div>
 
       {activeTab === 'direct' && <CategoryBlock category="direct" rows={byCat.direct} cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'direct')} mixWeekly={mixWeekly} velocity={velocity} period={period} totalRev={totalRev} netValue={netValue.filter((r) => classify(String(r.source_name || r.channel || '')) === 'direct')} moneyCurrency={moneyCurrency} />}
       {activeTab === 'ota'    && <CategoryBlock category="ota"    rows={byCat.ota}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'ota')}    mixWeekly={mixWeekly} velocity={velocity} period={period} totalRev={totalRev} netValue={netValue.filter((r) => classify(String(r.source_name || r.channel || '')) === 'ota')} moneyCurrency={moneyCurrency} />}
       {activeTab === 'dmc'    && <CategoryBlock category="dmc"    rows={byCat.dmc}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'dmc')}    mixWeekly={mixWeekly} velocity={velocity} period={period} totalRev={totalRev} netValue={netValue.filter((r) => classify(String(r.source_name || r.channel || '')) === 'dmc')} moneyCurrency={moneyCurrency} />}
 
-      <div style={fullRow}>
-        <Container title="12-month structural view" subtitle="tier rollup · top sources · monthly trend · groups · DMC contracts (Namkhan only)" density="compact">
-          <PageRenderer pageSlug="channel" propertyId={pid} title="" subtitle="" />
-        </Container>
-      </div>
+      <Container title="12-month structural view" subtitle="tier rollup · top sources · monthly trend · groups · DMC contracts (Namkhan only)" density="compact">
+        <PageRenderer pageSlug="channel" propertyId={pid} title="" subtitle="" />
+      </Container>
     </DashboardPage>
   );
 }
@@ -339,48 +325,58 @@ function CategoryBlock({
     { key: 'los',      label: 'LOS' },
   ];
 
+  const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
   return (
     <>
       {/* KPI tiles */}
-      <Container title={`${titleOf[category]} · headline`} subtitle={`${period.label} · ${rows.length} active sources`} density="compact">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
-          {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
-        </div>
-      </Container>
+      <div style={fullRow}>
+        <Container title={`${titleOf[category]} · headline`} subtitle={`${period.label} · ${rows.length} active sources`} density="compact">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
+            {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
+          </div>
+        </Container>
+      </div>
 
-      {/* Graphs */}
-      <Container title={`${titleOf[category]} share · weekly trend`} subtitle={period.label}>
-        <Chart variant="line" data={trendData} xKey="week"
-          series={[{ key: 'share', label: `${titleOf[category]} % of revenue`, color: '#1F3A2E' }]}
-          height={220} empty={{ title: 'No mix data in window' }} />
-      </Container>
-
-      <Container title={`${titleOf[category]} velocity · 28d`} subtitle="bookings made per day">
-        <Chart variant="line" data={velocityData} xKey="day"
-          series={[{ key: 'n', label: 'Bookings/day', color: '#B8542A' }]}
-          height={200} empty={{ title: 'No velocity in last 28 days' }} />
-      </Container>
+      {/* Two trend charts paired in a 2-up row */}
+      <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
+        <Container title={`${titleOf[category]} share · weekly trend`} subtitle={period.label}>
+          <Chart variant="line" data={trendData} xKey="week"
+            series={[{ key: 'share', label: `${titleOf[category]} % of revenue`, color: '#1F3A2E' }]}
+            height={220} empty={{ title: 'No mix data in window' }} />
+        </Container>
+        <Container title={`${titleOf[category]} velocity · 28d`} subtitle="bookings made per day">
+          <Chart variant="line" data={velocityData} xKey="day"
+            series={[{ key: 'n', label: 'Bookings/day', color: '#B8542A' }]}
+            height={220} empty={{ title: 'No velocity in last 28 days' }} />
+        </Container>
+      </div>
 
       {netData.length > 0 && (
-        <Container title={`${titleOf[category]} · net $/booking`} subtitle="cancel-adjusted">
-          <Chart variant="bar" data={netData} xKey="source"
-            series={[{ key: 'net_pb', label: 'Net $/booking', color: '#1F3A2E' }]}
-            height={200} empty={{ title: 'No net value data' }} />
-        </Container>
+        <div style={fullRow}>
+          <Container title={`${titleOf[category]} · net $/booking`} subtitle="cancel-adjusted">
+            <Chart variant="bar" data={netData} xKey="source"
+              series={[{ key: 'net_pb', label: 'Net $/booking', color: '#1F3A2E' }]}
+              height={200} empty={{ title: 'No net value data' }} />
+          </Container>
+        </div>
       )}
 
       {/* Table */}
-      <Container title={`${titleOf[category]} · all sources`} subtitle={`${rows.length} sources · sorted by bookings`}>
-        <Chart variant="table" data={tableRows} xKey="source" series={tableCols}
-          empty={{ title: 'No sources in this category for the window' }} />
-      </Container>
+      <div style={fullRow}>
+        <Container title={`${titleOf[category]} · all sources`} subtitle={`${rows.length} sources · sorted by bookings`}>
+          <Chart variant="table" data={tableRows} xKey="source" series={tableCols}
+            empty={{ title: 'No sources in this category for the window' }} />
+        </Container>
+      </div>
 
       {/* Owed / missing data note */}
-      <Container title="Still owed" subtitle="data not yet wired for this category" density="compact" status="grey">
-        <div style={{ fontSize: 12, color: 'var(--ink-soft, #5A5A5A)', lineHeight: 1.5 }}>
-          {missingNote[category]}
-        </div>
-      </Container>
+      <div style={fullRow}>
+        <Container title="Still owed" subtitle="data not yet wired for this category" density="compact" status="grey">
+          <div style={{ fontSize: 12, color: 'var(--ink-soft, #5A5A5A)', lineHeight: 1.5 }}>
+            {missingNote[category]}
+          </div>
+        </Container>
+      </div>
     </>
   );
 }
