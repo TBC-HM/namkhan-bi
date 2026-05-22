@@ -154,8 +154,8 @@ export default async function PricingPage({ searchParams, propertyId }: { search
   if (tab === 'rate') {
     const period = resolvePeriod({ win });
     const [roomTypes, inventory] = await Promise.all([
-      getRoomTypes(),
-      getRateInventory(period.from, period.to),
+      getRoomTypes(pid),
+      getRateInventory(period.from, period.to, { propertyId: pid }),
     ]);
     const cellMap = new Map<string, number>();
     for (const r of inventory) {
@@ -201,8 +201,8 @@ export default async function PricingPage({ searchParams, propertyId }: { search
     const fromIso = today.toISOString().slice(0,10);
     const toIso = horizon.toISOString().slice(0,10);
     const [roomTypes, inventory] = await Promise.all([
-      getRoomTypes(),
-      getRateInventory(fromIso, toIso),
+      getRoomTypes(pid),
+      getRateInventory(fromIso, toIso, { propertyId: pid }),
     ]);
     const cellMap = new Map<string, number>();
     for (const r of inventory) {
@@ -251,7 +251,7 @@ export default async function PricingPage({ searchParams, propertyId }: { search
         .select('stay_date, channel, rate_usd, is_available')
         .gte('stay_date', fromIso)
         .lte('stay_date', toIso),
-      getRateInventory(fromIso, toIso),
+      getRateInventory(fromIso, toIso, { propertyId: pid }),
     ]);
     const comp = (compResp.data ?? []) as Array<{ stay_date: string; channel: string; rate_usd: number | null; is_available: boolean | null }>;
     const bar = new Map<string, number>();
@@ -302,10 +302,10 @@ export default async function PricingPage({ searchParams, propertyId }: { search
   // ─── Default: Pricing tab (the original, kept intact) ────────────────
   const period = resolvePeriod({ win });
   const [roomTypes, ratePlans, inventory, todayKpis] = await Promise.all([
-    getRoomTypes(),
-    getRatePlans(),
-    getRateInventory(period.from, period.to),
-    getPricingKpis(),
+    getRoomTypes(pid),
+    getRatePlans(pid),
+    getRateInventory(period.from, period.to, { propertyId: pid }),
+    getPricingKpis(pid),
   ]);
   void ratePlans;
 
