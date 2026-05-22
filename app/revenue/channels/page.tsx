@@ -67,6 +67,7 @@ interface Props { searchParams: Record<string, string | string[] | undefined>; p
 export default async function ChannelsPage({ searchParams, propertyId }: Props) {
   const pid = propertyId ?? PROPERTY_ID_NAMKHAN;
   const moneyCurrency: 'USD' | 'EUR' = pid === 1000001 ? 'EUR' : 'USD';
+  const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
   const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
   const basePath = pid !== PROPERTY_ID_NAMKHAN ? `/h/${pid}/revenue/channels` : '/revenue/channels';
   const period = resolvePeriod(searchParams);
@@ -141,53 +142,66 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
       subtitle={`Channel performance · ${period.label} · ${channels.length} active sources across ${[byCat.direct, byCat.ota, byCat.dmc].filter((g) => g.length > 0).length} categories`}
       tabs={tabs}
     >
-      <Container title="Headline · channel mix" subtitle={period.label} density="compact">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-          {pageMixTiles.map((t, i) => <KpiTile key={i} {...t} />)}
-        </div>
-      </Container>
-
-      {chips.length > 0 && (
-        <Container title="Watch list" subtitle="auto-detected insights · cross-category" density="compact" status="amber">
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {chips.map((c, i) => (
-              <span key={i} style={chipStyle}>{c}</span>
-            ))}
-          </div>
-        </Container>
-      )}
-
-      <Container title="Window" subtitle="period selector" density="compact">
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-          {(['7d', '30d', '90d'] as WindowKey[]).map((k) => {
-            const active = k === period.win;
+      {/* 1. Sub-tabs FIRST — tabs on top per PBS 2026-05-22 */}
+      <div style={{ ...fullRow }}>
+        <div style={subTabRow}>
+          {TAB_DEFS.map((t) => {
+            const active = t.key === activeTab;
             return (
-              <a key={k} href={hrefFor(k)} style={pillStyle(active)}>{k}</a>
+              <Link key={t.key} href={tabHrefFor(t.key)} style={subTabStyle(active)}>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>{t.label}</span>
+                <span style={{ fontSize: 10, color: active ? 'rgba(255,255,255,0.85)' : 'var(--ink-soft, #5A5A5A)', marginTop: 1 }}>{t.tagline}</span>
+              </Link>
             );
           })}
         </div>
-      </Container>
+      </div>
 
-      {/* Sub-tabs: Direct · OTAs · DMC/Bedbanks */}
-      <div style={subTabRow}>
-        {TAB_DEFS.map((t) => {
-          const active = t.key === activeTab;
-          return (
-            <Link key={t.key} href={tabHrefFor(t.key)} style={subTabStyle(active)}>
-              <span style={{ fontSize: 13, fontWeight: 600 }}>{t.label}</span>
-              <span style={{ fontSize: 10, color: active ? 'rgba(255,255,255,0.85)' : 'var(--ink-soft, #5A5A5A)', marginTop: 1 }}>{t.tagline}</span>
-            </Link>
-          );
-        })}
+      {/* 2. Headline tiles */}
+      <div style={fullRow}>
+        <Container title="Headline · channel mix" subtitle={period.label} density="compact">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+            {pageMixTiles.map((t, i) => <KpiTile key={i} {...t} />)}
+          </div>
+        </Container>
+      </div>
+
+      {/* 3. Watch list (conditional) */}
+      {chips.length > 0 && (
+        <div style={fullRow}>
+          <Container title="Watch list" subtitle="auto-detected insights · cross-category" density="compact" status="amber">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {chips.map((c, i) => (
+                <span key={i} style={chipStyle}>{c}</span>
+              ))}
+            </div>
+          </Container>
+        </div>
+      )}
+
+      {/* 4. Window selector */}
+      <div style={fullRow}>
+        <Container title="Window" subtitle="period selector" density="compact">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {(['7d', '30d', '90d'] as WindowKey[]).map((k) => {
+              const active = k === period.win;
+              return (
+                <a key={k} href={hrefFor(k)} style={pillStyle(active)}>{k}</a>
+              );
+            })}
+          </div>
+        </Container>
       </div>
 
       {activeTab === 'direct' && <CategoryBlock category="direct" rows={byCat.direct} cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'direct')} mixWeekly={mixWeekly} velocity={velocity} period={period} totalRev={totalRev} netValue={netValue.filter((r) => classify(String(r.source_name || r.channel || '')) === 'direct')} moneyCurrency={moneyCurrency} />}
       {activeTab === 'ota'    && <CategoryBlock category="ota"    rows={byCat.ota}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'ota')}    mixWeekly={mixWeekly} velocity={velocity} period={period} totalRev={totalRev} netValue={netValue.filter((r) => classify(String(r.source_name || r.channel || '')) === 'ota')} moneyCurrency={moneyCurrency} />}
       {activeTab === 'dmc'    && <CategoryBlock category="dmc"    rows={byCat.dmc}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'dmc')}    mixWeekly={mixWeekly} velocity={velocity} period={period} totalRev={totalRev} netValue={netValue.filter((r) => classify(String(r.source_name || r.channel || '')) === 'dmc')} moneyCurrency={moneyCurrency} />}
 
-      <Container title="12-month structural view" subtitle="tier rollup · top sources · monthly trend · groups · DMC contracts (Namkhan only)" density="compact">
-        <PageRenderer pageSlug="channel" propertyId={pid} title="" subtitle="" />
-      </Container>
+      <div style={fullRow}>
+        <Container title="12-month structural view" subtitle="tier rollup · top sources · monthly trend · groups · DMC contracts (Namkhan only)" density="compact">
+          <PageRenderer pageSlug="channel" propertyId={pid} title="" subtitle="" />
+        </Container>
+      </div>
     </DashboardPage>
   );
 }
