@@ -286,10 +286,20 @@ export default async function ContainerRoomIntel({ container, propertyId, search
                     const v   = computeMetric(m, catRows);
                     const lyV = computeMetric(m, rowsByCatLy.get(code) ?? []);
                     const lyHasData = lyV != null && lyV !== 0;
-                    let deltaPct: number | null = null;
-                    if (v != null && lyHasData && Math.abs(lyV) > 0.01) {
-                      deltaPct = ((v - lyV) / Math.abs(lyV)) * 100;
+                    const diff = v != null && lyV != null ? v - lyV : null;
+                    const isPctMetric = m.format === 'pct';
+                    let deltaTxt: string | null = null;
+                    if (diff != null && lyHasData) {
+                      if (isPctMetric) {
+                        deltaTxt = `${diff.toFixed(1)}pp`;
+                      } else if (Math.abs(lyV!) > 0.01) {
+                        deltaTxt = `${((diff / Math.abs(lyV!)) * 100).toFixed(0)}%`;
+                      }
                     }
+                    const deltaColor = diff == null ? 'var(--ink-soft, #5A5A5A)'
+                      : diff > 0.01 ? '#1F7A5B'
+                      : diff < -0.01 ? '#C0584C'
+                      : 'var(--ink-soft, #5A5A5A)';
                     return (
                       <div key={m.key} style={{ display: 'flex', flexDirection: 'column' }}>
                         <span style={{ fontSize: 10, color: 'var(--ink-soft, #5A5A5A)', letterSpacing: '0.04em' }}>{m.label}</span>
@@ -297,9 +307,14 @@ export default async function ContainerRoomIntel({ container, propertyId, search
                           {v == null ? '—' : formatValue(v, m.format as never, currencySymbol)}
                         </span>
                         <span style={{ fontSize: 9.5, color: 'var(--ink-soft, #5A5A5A)', fontVariantNumeric: 'tabular-nums', marginTop: 1 }}>
-                          {lyHasData
-                            ? `LY ${formatValue(lyV!, m.format as never, currencySymbol)}${deltaPct != null ? `  ${deltaPct >= 0 ? '+' : ''}${deltaPct.toFixed(0)}%` : ''}`
-                            : 'LY —'}
+                          {lyHasData ? (
+                            <>
+                              LY {formatValue(lyV!, m.format as never, currencySymbol)}
+                              {deltaTxt && (
+                                <span style={{ marginLeft: 6, color: deltaColor, fontWeight: 600 }}>{deltaTxt}</span>
+                              )}
+                            </>
+                          ) : 'LY —'}
                         </span>
                       </div>
                     );
@@ -402,23 +417,60 @@ async function DrillPanel({
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr style={{ background: '#FAFAF7' }}>
-                <th style={th}>{spec.drill.row_field === 'room_type_name' ? 'Room type' : spec.drill.row_field}</th>
-                {spec.drill.columns.map((c) => (
-                  <th key={c.key} style={{ ...th, textAlign: 'right' }}>{c.label}</th>
-                ))}
+                <th style={th}>Room type</th>
+                <th style={th}>Month</th>
+                <th style={{ ...th, textAlign: 'right' }}>RN</th>
+                <th style={{ ...th, textAlign: 'right' }}>REV</th>
+                <th style={{ ...th, textAlign: 'right' }}>OCC</th>
               </tr>
             </thead>
             <tbody>
-              {sorted.map((r, i) => (
-                <tr key={String(r[spec.drill.row_field as keyof DataRow] ?? i)} style={{ borderTop: '1px solid var(--hairline, #E6DFCC)' }}>
-                  <td style={tdLeft}>{String(r[spec.drill.row_field as keyof DataRow] ?? '—')}</td>
-                  {spec.drill.columns.map((c) => (
-                    <td key={c.key} style={tdRight}>
-                      {formatValue(r[c.key as keyof DataRow], c.format as never, currencySymbol)}
+              {sorted.map((r, i) => {
+                const period = String(r.period_yyyymm ?? '');
+                const lyP = period.length >= 7 ? `${Number(period.slice(0, 4)) - 1}-${period.slice(5, 7)}` : '';
+                const ly = lyP
+                  ? categoryRowsAllTime.find((x) =>
+                      x.room_type_name === r.room_type_name &&
+                      String(x.period_yyyymm ?? '') === lyP)
+                  : null;
+                const rn  = num(r.room_nights);
+                const rev = num(r.room_revenue);
+                const occ = num(r.occ_pct_of_canonical);
+                const rnLy  = ly ? num(ly.room_nights) : null;
+                const revLy = ly ? num(ly.room_revenue) : null;
+                const occLy = ly ? num(ly.occ_pct_of_canonical) : null;
+                const rowKey = `${String(r[spec.drill.row_field as keyof DataRow] ?? i)}|${period}`;
+                return (
+                  <tr key={rowKey} style={{ borderTop: '1px solid var(--hairline, #E6DFCC)' }}>
+                    <td style={tdLeft}>{String(r[spec.drill.row_field as keyof DataRow] ?? '—')}</td>
+                    <td style={tdLeft}>{period || '—'}</td>
+                    <td style={tdRight}>
+                      <div>{rn.toLocaleString()}</div>
+                      {rnLy != null && rnLy > 0 && (
+                        <div style={lyCellStyle(rn - rnLy)}>
+                          LY {rnLy.toLocaleString()}  {formatVarPct(rn, rnLy)}
+                        </div>
+                      )}
                     </td>
-                  ))}
-                </tr>
-              ))}
+                    <td style={tdRight}>
+                      <div>{formatValue(rev, 'money', currencySymbol)}</div>
+                      {revLy != null && revLy > 0 && (
+                        <div style={lyCellStyle(rev - revLy)}>
+                          LY {formatValue(revLy, 'money', currencySymbol)}  {formatVarPct(rev, revLy)}
+                        </div>
+                      )}
+                    </td>
+                    <td style={tdRight}>
+                      <div>{occ.toFixed(1)}%</div>
+                      {occLy != null && occLy > 0 && (
+                        <div style={lyCellStyle(occ - occLy)}>
+                          LY {occLy.toFixed(1)}%  {(occ - occLy).toFixed(1)}pp
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -480,6 +532,20 @@ async function DrillPanel({
 }
 
 // ─── styles ─────────────────────────────────────────────────────────────────
+function lyCellStyle(diff: number): React.CSSProperties {
+  return {
+    fontSize: 10,
+    color: diff > 0.01 ? '#1F7A5B' : diff < -0.01 ? '#C0584C' : 'var(--ink-soft, #5A5A5A)',
+    fontVariantNumeric: 'tabular-nums',
+    marginTop: 2,
+    fontWeight: 500,
+  };
+}
+function formatVarPct(curr: number, ly: number): string {
+  if (Math.abs(ly) < 0.01) return '';
+  const pct = ((curr - ly) / Math.abs(ly)) * 100;
+  return `${pct.toFixed(0)}%`;
+}
 function pillStyle(active: boolean, ytd: boolean, future: boolean = false): React.CSSProperties {
   const borderColor = active ? 'var(--primary, #1F3A2E)'
     : ytd ? 'var(--terracotta, #B8542A)'
