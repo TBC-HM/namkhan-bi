@@ -54,6 +54,14 @@ export default async function RevenueReportRender({ searchParams }: Props) {
   const rawPid = Number(searchParams.property_id);
   const propertyId = Number.isFinite(rawPid) ? rawPid : NAMKHAN_PROPERTY_ID;
   const isNamkhan = propertyId === NAMKHAN_PROPERTY_ID;
+  // Types that depend on Namkhan-only views (mv_channel_perf, mv_kpi_daily,
+  // v_pace_curve, v_tactical_alerts_top, gl.v_usali_*). These get gated until
+  // task #74 rebuilds the source views as cross-property. The other renderers
+  // (pricing/forecast/compset) read from already-cross-property bridges
+  // (v_rate_plans_all, v_otb_pace, v_rate_plan_*) so they render Donna data
+  // correctly today.
+  const NAMKHAN_ONLY_TYPES = new Set(['pulse', 'pace', 'channels', 'pl-month']);
+  const needsNamkhanData = !isNamkhan && NAMKHAN_ONLY_TYPES.has(type);
   const propertyLabel = propertyId === 1000001 ? 'Donna' : isNamkhan ? 'Namkhan' : `Property ${propertyId}`;
   const backHref = isNamkhan ? '/revenue' : `/h/${propertyId}/revenue`;
 
@@ -90,7 +98,7 @@ export default async function RevenueReportRender({ searchParams }: Props) {
         }
       `}</style>
 
-      {!isNamkhan ? (
+      {needsNamkhanData ? (
         <div data-panel style={{
           padding: 24,
           border: '1px solid var(--hairline, #E6DFCC)',
