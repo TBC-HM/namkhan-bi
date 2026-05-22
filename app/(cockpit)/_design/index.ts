@@ -10,6 +10,7 @@ export { default as Drawer } from './overlay/Drawer';
 export { default as DashboardPage } from './layout/DashboardPage';
 export { default as MetricRow } from './layout/MetricRow';
 export { default as SplitContainer } from './layout/SplitContainer';
+export { default as BookingActivity } from './BookingActivity';
 
 export type {
   StatusTone,
