@@ -136,14 +136,16 @@ export async function getOverviewDqSummary() {
  * mv_kpi_daily and auth_ext. Search_path is locked to `public, pg_temp` to
  * prevent path-injection. EXECUTE granted to anon/authenticated/service_role.
  */
-export async function getOverviewKpis(period: ResolvedPeriod) {
+export async function getOverviewKpis(period: ResolvedPeriod, propertyId?: number) {
   const win = WIN_MAP[period.win] ?? '30D';
   const cmp = CMP_MAP[period.cmp] ?? 'NONE';
   const seg = SEG_MAP[period.seg] ?? null;
+  const pid = propertyId ?? PROPERTY_ID;
   const { data, error } = await supabase.rpc('f_overview_kpis', {
     p_window:  win,
     p_compare: cmp,
     p_segment: seg,
+    p_property_id: pid,
   });
   if (error) throw error;
   const rows = (data ?? []) as any[];
