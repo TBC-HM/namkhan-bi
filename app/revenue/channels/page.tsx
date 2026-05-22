@@ -326,6 +326,7 @@ function CategoryBlock({
   ];
 
   const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
+  const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
   return (
     <>
       {/* KPI tiles */}
