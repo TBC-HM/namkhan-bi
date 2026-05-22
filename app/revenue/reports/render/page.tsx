@@ -76,10 +76,12 @@ export default async function RevenueReportRender({ searchParams }: Props) {
   // Reports landing (/h/<pid>/reports) can list and re-open them. Skipped
   // when the integrity gate fires — gated views aren't real reports.
   if (!needsNamkhanData) {
-    void supabase.from('report_runs').insert({
-      template_code: type,
-      property_id: propertyId,
-      params: {
+    // Anon role has SELECT only on public.report_runs — write goes through
+    // the SECURITY DEFINER fn_log_report_run RPC (claude_md §0.5 pattern).
+    void supabase.rpc('fn_log_report_run', {
+      p_template_code: type,
+      p_property_id: propertyId,
+      p_params: {
         type,
         dept: 'revenue',
         period_label: period.label,
@@ -88,8 +90,8 @@ export default async function RevenueReportRender({ searchParams }: Props) {
         month: month || null,
         raw: searchParams,
       },
-      output_summary: `${titleWord} · ${period.label}${month ? ` · ${month}` : ''} · ${propertyLabel}`,
-      status: 'viewed',
+      p_output_summary: `${titleWord} · ${period.label}${month ? ` · ${month}` : ''} · ${propertyLabel}`,
+      p_status: 'ok',
     }).then(({ error }) => {
       if (error) console.error('[reports/render] persist failed:', error.message);
     });
