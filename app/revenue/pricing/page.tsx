@@ -83,6 +83,7 @@ export default async function PricingPage({ searchParams, propertyId }: { search
               propertyId={pid}
               propertyLabel={propertyLabel}
               searchParams={searchParams as Record<string, string | string[] | undefined>}
+              basePath={`${basePath}?tab=holidays`}
               embedded
             />
           </Container>
