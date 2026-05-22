@@ -113,11 +113,20 @@ interface Props {
    *  Calendar · Density tab). */
   embedded?: boolean;
   subPagesOverride?: { label: string; href: string }[];
+  /** When this component is embedded inside another route (e.g. /revenue/pricing?tab=holidays),
+   *  the parent passes its base href so country/year/events buttons stay on the parent tab
+   *  instead of stripping the parent's query string. PBS 2026-05-22. */
+  basePath?: string;
 }
 
 export default async function HolidayScheduleTabContent({
-  propertyId, propertyLabel, searchParams, embedded = false, subPagesOverride,
+  propertyId, propertyLabel, searchParams, embedded = false, subPagesOverride, basePath,
 }: Props) {
+  const buildHref = (params: Record<string, string>): string => {
+    const qs = new URLSearchParams(params).toString();
+    if (!basePath) return `?${qs}`;
+    return `${basePath}${basePath.includes('?') ? '&' : '?'}${qs}`;
+  };
   const { rows, countryName, regionName, flag } = holidaysForProperty(propertyId);
 
   // Year toggle — default to current calendar year, fall back to first available
@@ -235,7 +244,7 @@ export default async function HolidayScheduleTabContent({
           const active = requestedSchool === k;
           return (
             <a key={k}
-              href={`?${new URLSearchParams({ y: String(selectedYear), school: k, ...(eventsOn ? { events: 'on' } : {}) }).toString()}`}
+              href={buildHref({ y: String(selectedYear), school: k, ...(eventsOn ? { events: 'on' } : {}) })}
               style={{
                 padding: '4px 10px',
                 fontFamily: 'var(--mono)', fontSize: 11,
@@ -276,7 +285,7 @@ export default async function HolidayScheduleTabContent({
           const active = (k === 'on' && eventsOn) || (k === 'off' && !eventsOn);
           return (
             <a key={k}
-              href={`?${new URLSearchParams({ y: String(selectedYear), school: String(requestedSchool), ...(k === 'on' ? { events: 'on' } : {}) }).toString()}`}
+              href={buildHref({ y: String(selectedYear), school: String(requestedSchool), ...(k === 'on' ? { events: 'on' } : {}) })}
               style={{
                 padding: '4px 10px',
                 fontFamily: 'var(--mono)', fontSize: 11,
@@ -307,7 +316,7 @@ export default async function HolidayScheduleTabContent({
         {yearsAvailable.map((y) => (
           <a
             key={y}
-            href={`?${new URLSearchParams({ y: String(y), school: String(requestedSchool), ...(eventsOn ? { events: 'on' } : {}) }).toString()}`}
+            href={buildHref({ y: String(y), school: String(requestedSchool), ...(eventsOn ? { events: 'on' } : {}) })}
             style={{
               padding: '4px 12px',
               fontFamily: 'var(--mono)', fontSize: 11,
