@@ -28,7 +28,7 @@ const NICKNAME_TO_ROLE: Record<string, string> = {
   pia: "frontend", bea: "designer", sergei: "security",
   quinn: "tester", scott: "documentarian", anders: "api_specialist",
   astra: "skill_creator", data: "researcher", sigma: "reviewer", quincy: "code_spec_writer",
-  vector: "revenue_hod", mercer: "sales_hod", lumen: "marketing_hod",
+  vector: "revenue_hod", mira: "revenue_hod_donna", mercer: "sales_hod", lumen: "marketing_hod",
   forge: "operations_hod", intel: "finance_hod",
   // PBS-locked 2026-05-14: @carla = holding legal lead. The dev-team
   // code_writer (display_name="Carla") loses the nickname here; address
