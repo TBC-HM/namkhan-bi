@@ -53,16 +53,21 @@ interface SearchParams { win?: string; gran?: string; cmp?: string; tab?: string
 
 const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
 
-export default async function PricingPage({ searchParams }: { searchParams: SearchParams }) {
+export default async function PricingPage({ searchParams, propertyId }: { searchParams: SearchParams; propertyId?: number }) {
   const tab = parseTab(searchParams.tab);
-  const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, NAMKHAN_PROPERTY_ID);
+  const pid = propertyId ?? NAMKHAN_PROPERTY_ID;
+  const isNamkhan = pid === NAMKHAN_PROPERTY_ID;
+  const capacity = isNamkhan ? 30 : 64;
+  const propertyLabel = isNamkhan ? 'Namkhan' : pid === 1000001 ? 'Donna' : `Property ${pid}`;
+  const basePath = isNamkhan ? '/revenue/pricing' : `/h/${pid}/revenue/pricing`;
+  const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
   const tabs: DashboardTab[] = subPages.map((s) => ({ key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/pricing') }));
   const win = parseWin(searchParams.win);
 
   const stripBlock = (
     <div style={fullRow}>
       <Container title="Calendar" subtitle="pricing · holidays · OTB density · pickup · rate · restrictions · parity" density="compact">
-        <CalendarTabStrip active={tab} />
+        <CalendarTabStrip active={tab} basePath={basePath} />
       </Container>
     </div>
   );
@@ -75,8 +80,8 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
         <div style={fullRow}>
           <Container title="Holidays" subtitle="anticipate demand spikes from source-market and Lao calendars">
             <HolidayScheduleTabContent
-              propertyId={NAMKHAN_PROPERTY_ID}
-              propertyLabel="Namkhan"
+              propertyId={pid}
+              propertyLabel={propertyLabel}
               searchParams={searchParams as Record<string, string | string[] | undefined>}
               embedded
             />
@@ -88,7 +93,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
 
   // ─── Tab: Pickup (reuses PickupMatrix primitive) ──────────────────────
   if (tab === 'pickup') {
-    const pickupData = await getPickupMatrix(NAMKHAN_PROPERTY_ID).catch(() => null);
+    const pickupData = await getPickupMatrix(pid).catch(() => null);
     return (
       <DashboardPage title="Revenue · Calendar" subtitle="pickup matrix · OTB vs SDLY" tabs={tabs}>
         {stripBlock}
@@ -112,11 +117,11 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
     const { data: pace } = await supabase
       .from('v_otb_pace')
       .select('night_date, confirmed_rooms')
-      .eq('property_id', NAMKHAN_PROPERTY_ID)
+      .eq('property_id', pid)
       .gte('night_date', fromIso)
       .lte('night_date', toIso)
       .order('night_date');
-    const cap = CAPACITY_FIXED_LABEL;
+    const cap = capacity;
     const heat = ((pace ?? []) as Array<{ night_date: string; confirmed_rooms: number }>).map((r) => {
       const d = new Date(r.night_date + 'T00:00:00Z');
       return {
@@ -171,7 +176,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
     return (
       <DashboardPage title="Revenue · Calendar" subtitle={`rate calendar · ${period.label}`} tabs={tabs}>
         {stripBlock}
-        <WindowPills win={win} basePath="/revenue/pricing?tab=rate" />
+        <WindowPills win={win} basePath={`${basePath}?tab=rate`} />
         <div style={fullRow}>
           <Container title="Rate calendar · date × room type" subtitle={`cheapest sellable rate · USD · ${period.label}`}>
             <Chart
@@ -345,7 +350,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
       footnote: `BAR − median comp · ${k.compRows ?? 0} comps`,
       status: compGap == null ? 'grey' : compGap >= 0 ? 'green' : 'amber' },
     { label: 'Occupancy fence', value: k.occPctToday != null ? `${k.occPctToday.toFixed(0)}%` : '—', size: 'sm',
-      footnote: `${k.roomsSold ?? 0} / ${CAPACITY_FIXED_LABEL} sold`,
+      footnote: `${k.roomsSold ?? 0} / ${capacity} sold`,
       status: k.occPctToday != null ? 'green' : 'grey' },
     { label: 'Sellable · 14d', value: k.sellable14d ?? 0, size: 'sm',
       footnote: 'next 14d · stop_sell=false',
@@ -378,7 +383,7 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
           </div>
         </Container>
       </div>
-      <WindowPills win={win} basePath="/revenue/pricing" />
+      <WindowPills win={win} basePath={basePath} />
       <div style={fullRow}>
         <Container title="Two-week glance · cheapest sellable rate" subtitle="date × room type · USD per night · next 14d">
           <Chart variant="heatmap" data={heatmapData} xKey="date" yKey="room"
@@ -399,12 +404,12 @@ export default async function PricingPage({ searchParams }: { searchParams: Sear
   );
 }
 
-function CalendarTabStrip({ active }: { active: CalendarTab }) {
+function CalendarTabStrip({ active, basePath = '/revenue/pricing' }: { active: CalendarTab; basePath?: string }) {
   return (
     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
       {VALID_TABS.map((key) => {
         const isActive = key === active;
-        const href = key === 'pricing' ? '/revenue/pricing' : `/revenue/pricing?tab=${key}`;
+        const href = key === 'pricing' ? basePath : `${basePath}?tab=${key}`;
         return (
           <a key={key} href={href} style={{
             fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600,
