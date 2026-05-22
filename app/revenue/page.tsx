@@ -41,7 +41,7 @@ const SECTION_HINT: Record<string, string> = {
   Reports:      'Print-ready reports',
 };
 
-export default function RevenueHoDPage({ propertyId, searchParams }: Props = {}) {
+export default async function RevenueHoDPage({ propertyId, searchParams }: Props = {}) {
   const pid = propertyId ?? PROPERTY_ID;
   const cfg: DeptCfg = pid === PROPERTY_ID ? DEPT_CFG.revenue : getDeptCfg('revenue', pid);
 
