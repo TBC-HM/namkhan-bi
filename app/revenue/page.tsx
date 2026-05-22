@@ -150,7 +150,7 @@ export default function RevenueHoDPage({ propertyId }: Props = {}) {
             subtitle="pick a type · narrow with chips · open print-ready render"
             density="compact"
           >
-            <ReportBuilder reportTypes={reportTypes} />
+            <ReportBuilder reportTypes={reportTypes} hrefPrefix={pid === PROPERTY_ID ? '' : `/h/${pid}`} />
           </Container>
         </div>
       )}
