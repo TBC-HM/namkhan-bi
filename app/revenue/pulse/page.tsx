@@ -181,7 +181,9 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
 
   // ─── today's pickup ───────────────────────────────────────────────────
   const pickupRows = pickup.map((p: PulsePickupRow) => ({
+    source:        p.source,
     accommodation: p.accommodation,
+    count:         p.count,
     window:        p.window,
     avg_los:       p.avg_los.toFixed(1),
   }));
@@ -310,12 +312,14 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
         <Chart
           variant="table"
           data={pickupRows}
-          xKey="accommodation"
+          xKey="source"
           series={[
-            { key: 'window',  label: 'Window' },
-            { key: 'avg_los', label: 'Avg LOS' },
+            { key: 'count',         label: 'Bookings' },
+            { key: 'accommodation', label: 'Room type' },
+            { key: 'window',        label: 'Window' },
+            { key: 'avg_los',       label: 'Avg LOS' },
           ]}
-          empty={{ title: 'None available' }}
+          empty={{ title: 'No bookings on this day' }}
         />
       </Container>
 
