@@ -12,6 +12,7 @@ import { Container, Chart, type ChartSeries } from '@/app/(cockpit)/_design';
 import { supabase } from '@/lib/supabase';
 import { stripPublicPrefix, type ContainerRegistryRow } from './types';
 import { formatValue } from './format';
+import PeriodDropdown from './PeriodDropdown';
 
 interface TileMetric {
   key: string;
@@ -55,20 +56,24 @@ function num(v: unknown): number {
 
 /** Per-room capacity (prefer room_capacity_nights when present, else canonical fallback).
  *  Capacity repeats per row within a period — dedupe by period before summing. */
-function totalCapacity(rows: DataRow[]): number {
+function totalCapacity(rows: DataRow[], useCanonical: boolean = false): number {
   const byPeriod = new Map<string, number>();
   for (const r of rows) {
     const p = String(r.period_yyyymm ?? '');
-    const perRoom = num(r.room_capacity_nights);
-    const cap = perRoom > 0 ? perRoom : num(r.canonical_capacity_nights);
-    if (!byPeriod.has(p)) byPeriod.set(p, cap);
+    if (byPeriod.has(p)) continue;
+    if (useCanonical) {
+      byPeriod.set(p, num(r.canonical_capacity_nights));
+    } else {
+      const perRoom = num(r.room_capacity_nights);
+      byPeriod.set(p, perRoom > 0 ? perRoom : num(r.canonical_capacity_nights));
+    }
   }
   let total = 0;
   for (const c of byPeriod.values()) total += c;
   return total;
 }
 
-function computeMetric(metric: TileMetric, rows: DataRow[]): number | null {
+function computeMetric(metric: TileMetric, rows: DataRow[], useCanonical: boolean = false): number | null {
   if (rows.length === 0) return null;
   switch (metric.agg) {
     case 'sum':
@@ -82,12 +87,12 @@ function computeMetric(metric: TileMetric, rows: DataRow[]): number | null {
     }
     case 'rev_over_capacity': {
       const rev = rows.reduce((s, r) => s + num(r.room_revenue), 0);
-      const cap = totalCapacity(rows);
+      const cap = totalCapacity(rows, useCanonical);
       return cap > 0 ? rev / cap : 0;
     }
     case 'nights_over_capacity': {
       const nights = rows.reduce((s, r) => s + num(r.room_nights), 0);
-      const cap = totalCapacity(rows);
+      const cap = totalCapacity(rows, useCanonical);
       return cap > 0 ? (nights / cap) * 100 : 0;
     }
     default:
@@ -127,11 +132,13 @@ export default async function ContainerRoomIntel({ container, propertyId, search
     if (!Number.isFinite(y) || !Number.isFinite(m)) return 30;
     return new Date(y, m, 0).getDate();
   };
-  const rows = (allRows as DataRow[]).map((r) => {
-    const u = unitsByName.get(String(r.room_type_name ?? '')) ?? 0;
-    const d = daysInPeriod(String(r.period_yyyymm ?? ''));
-    return { ...r, room_sellable_units: u, room_capacity_nights: u * d } as DataRow;
-  });
+  const rows = (allRows as DataRow[])
+    .filter((r) => !String(r.room_type_name ?? '').startsWith('[retired]'))
+    .map((r) => {
+      const u = unitsByName.get(String(r.room_type_name ?? '')) ?? 0;
+      const d = daysInPeriod(String(r.period_yyyymm ?? ''));
+      return { ...r, room_sellable_units: u, room_capacity_nights: u * d } as DataRow;
+    });
 
   // 2. Currency
   const { data: propRow } = await supabase
@@ -169,7 +176,10 @@ export default async function ContainerRoomIntel({ container, propertyId, search
 
   // 4. Filter rows to the active period (single month or YTD)
   const periodRows = isYtd || activePeriod.startsWith('YTD-')
-    ? rows.filter((r) => String(r.period_yyyymm ?? '').startsWith(`${activePeriod.slice(4)}-`))
+    ? rows.filter((r) => {
+        const p = String(r.period_yyyymm ?? '');
+        return p.startsWith(`${activePeriod.slice(4)}-`) && p <= currentYm;
+      })
     : rows.filter((r) => String(r.period_yyyymm) === activePeriod);
 
   // 4b. PBS 2026-05-22: same-time-last-year rows for LY comparison per tile.
@@ -186,8 +196,12 @@ export default async function ContainerRoomIntel({ container, propertyId, search
     return p;
   }
   const lyPeriod = lyOf(activePeriod);
+  const elapsedMm = currentYm.slice(5, 7);
   const lyRows = lyPeriod.startsWith('YTD-')
-    ? rows.filter((r) => String(r.period_yyyymm ?? '').startsWith(`${lyPeriod.slice(4)}-`))
+    ? rows.filter((r) => {
+        const p = String(r.period_yyyymm ?? '');
+        return p.startsWith(`${lyPeriod.slice(4)}-`) && p.slice(5, 7) <= elapsedMm;
+      })
     : rows.filter((r) => String(r.period_yyyymm) === lyPeriod);
 
   // 5. Build category index — every REAL canonical code the property has had.
@@ -240,15 +254,20 @@ export default async function ContainerRoomIntel({ container, propertyId, search
     return qs ? `?${qs}` : '';
   }
 
+  // PBS 2026-05-22: switched 24-pill bar → compact <select> dropdown.
+  // PeriodDropdown is a client component that pushes period into URL while
+  // preserving ?expand=. Default = realisedMonths[0] (latest realised month).
+  const futureMonths = windowMonths.filter((p) => p > currentYm);
   const periodPicker = (
-    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-      <Link href={hrefPeriod(ytdKey)} style={pillStyle(activePeriod === ytdKey, true, false)}>YTD {currentYear}</Link>
-      {windowMonths.slice(0, 24).map((p) => (
-        <Link key={p} href={hrefPeriod(p)} style={pillStyle(activePeriod === p, false, p > currentYm)}>
-          {p}{p > currentYm ? ' · OTB' : ''}
-        </Link>
-      ))}
-    </div>
+    <PeriodDropdown
+      activePeriod={activePeriod}
+      ytdKey={ytdKey}
+      ytdLabel={`YTD ${currentYear}`}
+      realisedMonths={realisedMonths}
+      futureMonths={futureMonths}
+      defaultPeriod={realisedMonths[0]}
+      preserveParams={{ expand: activeExpand }}
+    />
   );
 
   return (
@@ -258,6 +277,46 @@ export default async function ContainerRoomIntel({ container, propertyId, search
       density="compact"
       action={periodPicker}
     >
+      {/* PBS 2026-05-22: 4 headline KPIs aggregated across all categories. */}
+      {(() => {
+        const totalNights = periodRows.reduce((s, r) => s + num(r.room_nights), 0);
+        const totalRev = periodRows.reduce((s, r) => s + num(r.room_revenue), 0);
+        const avgAdr = totalNights > 0 ? totalRev / totalNights : 0;
+        const seenCanonical = new Set<string>();
+        let totalCap = 0;
+        for (const r of periodRows) {
+          const p = String(r.period_yyyymm ?? '');
+          const code = String(r.canonical_room_type_code ?? '');
+          const key = `${p}|${code}`;
+          if (seenCanonical.has(key)) continue;
+          seenCanonical.add(key);
+          totalCap += num(r.canonical_capacity_nights);
+        }
+        const occ = totalCap > 0 ? (totalNights / totalCap) * 100 : 0;
+        const tile = (label: string, value: string) => (
+          <div key={label} style={{
+            border: '1px solid var(--hairline, #E6DFCC)', borderRadius: 4,
+            padding: '8px 12px', background: 'var(--paper, #FFFFFF)',
+            display: 'flex', flexDirection: 'column', gap: 2,
+          }}>
+            <span style={{ fontSize: 10, color: 'var(--ink-soft, #5A5A5A)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{label}</span>
+            <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--ink, #1B1B1B)', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+          </div>
+        );
+        return (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+            gap: 8, marginBottom: 12,
+          }}>
+            {tile('Occupancy', `${occ.toFixed(1)}%`)}
+            {tile('ADR', `${currencySymbol}${Math.round(avgAdr).toLocaleString()}`)}
+            {tile('Room nights', totalNights.toLocaleString())}
+            {tile('Room revenue', `${currencySymbol}${Math.round(totalRev).toLocaleString()}`)}
+          </div>
+        );
+      })()}
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
         {allCategories.map((code) => {
           const catRows = rowsByCatActive.get(code) ?? [];
@@ -283,8 +342,8 @@ export default async function ContainerRoomIntel({ container, propertyId, search
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
                   {spec.tile_metrics.map((m) => {
-                    const v   = computeMetric(m, catRows);
-                    const lyV = computeMetric(m, rowsByCatLy.get(code) ?? []);
+                    const v   = computeMetric(m, catRows, isCanonicalGrouping);
+                    const lyV = computeMetric(m, rowsByCatLy.get(code) ?? [], isCanonicalGrouping);
                     const lyHasData = lyV != null && lyV !== 0;
                     const diff = v != null && lyV != null ? v - lyV : null;
                     const isPctMetric = m.format === 'pct';
