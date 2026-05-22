@@ -56,7 +56,14 @@ export default function RevenueHoDPage({ propertyId }: Props = {}) {
   const tasks = cfg.defaultTasks ?? [];
   const reportTypes = cfg.reportTypes ?? [];
 
-  const chatHref = pid === PROPERTY_ID ? '/revenue/legacy' : `/h/${pid}/revenue/legacy`;
+  // task #68 · route the "Ask <HoD>" CTA to the canonical persona-aware
+  // chat surface. Donna HoD is Mira (role revenue_hod_donna) so we pass
+  // the explicit role/name/emoji/label overrides that /cockpit/chat consumes.
+  const DONNA_PROPERTY_ID = 1000001;
+  const chatHref =
+    pid === DONNA_PROPERTY_ID
+      ? `/cockpit/chat?dept=revenue&role=revenue_hod_donna&name=Mira&emoji=${encodeURIComponent('📈')}&label=Revenue`
+      : `/cockpit/chat?dept=revenue`;
 
   return (
     <DashboardPage
