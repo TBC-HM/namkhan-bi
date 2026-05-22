@@ -6,7 +6,7 @@
 
 import Link from 'next/link';
 import {
-  DashboardPage, Container, KpiTile,
+  DashboardPage, Container, KpiTile, BookingActivity,
   type KpiTileProps,
 } from '@/app/(cockpit)/_design';
 import { DEPT_CFG } from '@/lib/dept-cfg';
@@ -22,6 +22,7 @@ export const revalidate = 60;
 
 interface Props {
   propertyId?: number;
+  searchParams?: Record<string, string | string[] | undefined>;
 }
 
 // Short hint per section — shown in the Sections navigator card.
@@ -40,7 +41,7 @@ const SECTION_HINT: Record<string, string> = {
   Reports:      'Print-ready reports',
 };
 
-export default function RevenueHoDPage({ propertyId }: Props = {}) {
+export default function RevenueHoDPage({ propertyId, searchParams }: Props = {}) {
   const pid = propertyId ?? PROPERTY_ID;
   const cfg: DeptCfg = pid === PROPERTY_ID ? DEPT_CFG.revenue : getDeptCfg('revenue', pid);
 
@@ -128,7 +129,13 @@ export default function RevenueHoDPage({ propertyId }: Props = {}) {
         </Container>
       </div>
 
-      {/* 3. Sections navigator — full-width 4-up dense grid (the secondary sub-nav) */}
+      {/* 3a. Booking activity — last 1-7 days · server-fetched · property-aware */}
+      <div style={fullRow}>
+        {/* @ts-expect-error Server Component */}
+        <BookingActivity propertyId={pid} searchParams={searchParams} />
+      </div>
+
+      {/* 3b. Sections navigator — full-width 4-up dense grid (the secondary sub-nav) */}
       <div style={fullRow}>
         <Container title="Sections" subtitle="drill into a sub-area" density="compact">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 6 }}>
