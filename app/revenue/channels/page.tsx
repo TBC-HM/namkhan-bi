@@ -102,7 +102,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
     { label: 'Direct mix',         value: `${mixPct(byCat.direct).toFixed(1)}%`, size: 'sm', footnote: `${byCat.direct.length} sources · target ≥ 30%`, status: mixPct(byCat.direct) >= 30 ? 'green' : 'amber' },
     { label: 'OTA mix',            value: `${mixPct(byCat.ota).toFixed(1)}%`,    size: 'sm', footnote: `${byCat.ota.length} sources · lower = less commission drag`, status: 'amber' },
     { label: 'DMC & Bedbanks mix', value: `${mixPct(byCat.dmc).toFixed(1)}%`,    size: 'sm', footnote: `${byCat.dmc.length} sources · net-rate exposure`, status: 'amber' },
-    { label: `Revenue · ${period.label}`, value: Math.round(totalRev), currency: 'USD', size: 'sm', footnote: `${channels.length} active sources` },
+    { label: `Revenue · ${period.label}`, value: Math.round(totalRev), currency: moneyCurrency, size: 'sm', footnote: `${channels.length} active sources` },
   ];
 
   // Page-level watch chips (cross-cutting)
@@ -248,8 +248,8 @@ function CategoryBlock({
     if (category === 'direct') {
       return [
         { label: 'Bookings', value: bookings, size: 'sm', delta: hasCmp ? { value: dPct(bookings, cmpBookings), period: 'cmp', direction: bookings >= cmpBookings ? 'up' : 'down' } : undefined },
-        { label: 'Revenue', value: Math.round(revenue), currency: 'USD', size: 'sm', delta: hasCmp ? { value: dPct(revenue, cmpRevenue), period: 'cmp', direction: revenue >= cmpRevenue ? 'up' : 'down' } : undefined },
-        { label: 'ADR', value: Math.round(adr), currency: 'USD', size: 'sm', delta: hasCmp ? { value: dPct(adr, cmpAdr), period: 'cmp', direction: adr >= cmpAdr ? 'up' : 'down' } : undefined },
+        { label: 'Revenue', value: Math.round(revenue), currency: moneyCurrency, size: 'sm', delta: hasCmp ? { value: dPct(revenue, cmpRevenue), period: 'cmp', direction: revenue >= cmpRevenue ? 'up' : 'down' } : undefined },
+        { label: 'ADR', value: Math.round(adr), currency: moneyCurrency, size: 'sm', delta: hasCmp ? { value: dPct(adr, cmpAdr), period: 'cmp', direction: adr >= cmpAdr ? 'up' : 'down' } : undefined },
         { label: 'Share of revenue', value: `${shareOfRev.toFixed(1)}%`, size: 'sm', footnote: 'target ≥ 30%', status: shareOfRev >= 30 ? 'green' : 'amber' },
         { label: 'Avg lead time', value: `${avgLead.toFixed(0)}d`, size: 'sm', footnote: 'booking-weighted' },
       ];
@@ -257,18 +257,18 @@ function CategoryBlock({
     if (category === 'ota') {
       return [
         { label: 'Bookings', value: bookings, size: 'sm', delta: hasCmp ? { value: dPct(bookings, cmpBookings), period: 'cmp', direction: bookings >= cmpBookings ? 'up' : 'down' } : undefined },
-        { label: 'Revenue', value: Math.round(revenue), currency: 'USD', size: 'sm' },
-        { label: 'ADR (gross)', value: Math.round(adr), currency: 'USD', size: 'sm' },
+        { label: 'Revenue', value: Math.round(revenue), currency: moneyCurrency, size: 'sm' },
+        { label: 'ADR (gross)', value: Math.round(adr), currency: moneyCurrency, size: 'sm' },
         { label: 'Commission %', value: `${commPct.toFixed(1)}%`, size: 'sm', footnote: hasCmp ? `cmp ${cmpCommPct.toFixed(1)}%` : 'lower is better', status: commPct > 18 ? 'red' : commPct > 12 ? 'amber' : 'green' },
-        { label: 'Net ADR', value: Math.round(netAdr), currency: 'USD', size: 'sm', footnote: 'gross × (1 − comm%)' },
+        { label: 'Net ADR', value: Math.round(netAdr), currency: moneyCurrency, size: 'sm', footnote: 'gross × (1 − comm%)' },
         { label: 'Cancel rate', value: `${cancelPctTotal.toFixed(1)}%`, size: 'sm', status: cancelPctTotal > 25 ? 'red' : 'amber' },
       ];
     }
     // dmc
     return [
       { label: 'Bookings', value: bookings, size: 'sm' },
-      { label: 'Revenue', value: Math.round(revenue), currency: 'USD', size: 'sm' },
-      { label: 'ADR', value: Math.round(adr), currency: 'USD', size: 'sm', footnote: 'pre-commission net rate' },
+      { label: 'Revenue', value: Math.round(revenue), currency: moneyCurrency, size: 'sm' },
+      { label: 'ADR', value: Math.round(adr), currency: moneyCurrency, size: 'sm', footnote: 'pre-commission net rate' },
       { label: 'Avg lead time', value: `${avgLead.toFixed(0)}d`, size: 'sm', footnote: 'usually longer for B2B' },
       { label: 'Active contracts', value: rows.length, size: 'sm', footnote: 'distinct sources w/ bookings' },
     ];
@@ -304,7 +304,7 @@ function CategoryBlock({
         revenue:   fmtMoney(Number(c.gross_revenue ?? 0), moneyCurrency),
         adr:       fmtMoney(Number(c.adr ?? 0), moneyCurrency),
         comm_pct:  `${Number(c.commission_pct ?? 0).toFixed(0)}%`,
-        net_adr:   fmtMoney(netAdrR, 'USD'),
+        net_adr:   fmtMoney(netAdrR, moneyCurrency),
         cancel:    `${Number(c.cancel_pct ?? 0).toFixed(1)}%`,
         lead:      `${Number(c.avg_lead_days ?? 0).toFixed(0)}d`,
         los:       Number(c.avg_los ?? 0).toFixed(1),
