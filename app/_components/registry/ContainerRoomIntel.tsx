@@ -317,6 +317,59 @@ export default async function ContainerRoomIntel({ container, propertyId, search
         );
       })()}
 
+      {/* PBS 2026-05-22 task #84: 3 graphs (ADR bar + REV bar + OCC donut) */}
+      {(() => {
+        const catChart = allCategories.map((code) => {
+          const r = rowsByCatActive.get(code) ?? [];
+          const friendly = FRIENDLY[code] ?? code;
+          const rev = r.reduce((s, x) => s + num(x.room_revenue), 0);
+          const nights = r.reduce((s, x) => s + num(x.room_nights), 0);
+          const adr = nights > 0 ? rev / nights : 0;
+          // canonical capacity = first row per period (canonical_capacity_nights is identical across granular rows in the same category/month)
+          const seenP = new Set<string>();
+          let cap = 0;
+          for (const row of r) {
+            const p = String(row.period_yyyymm ?? '');
+            if (seenP.has(p)) continue;
+            seenP.add(p);
+            cap += num(row.canonical_capacity_nights);
+          }
+          const occ = cap > 0 ? (nights / cap) * 100 : 0;
+          return { category: friendly, adr, revenue: rev, occ };
+        }).filter((d) => d.adr > 0 || d.revenue > 0);
+
+        if (catChart.length === 0) return null;
+        return (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            gap: 12, marginBottom: 12,
+          }}>
+            <div style={chartFrameStyle}>
+              <div style={chartTitleStyle}>ADR by category</div>
+              <Chart variant="bar" data={catChart} xKey="category"
+                series={[{ key: 'adr', label: 'ADR', color: 'var(--brass, #B8A878)' }]}
+                height={180}
+                empty={{ title: 'No ADR data' }} />
+            </div>
+            <div style={chartFrameStyle}>
+              <div style={chartTitleStyle}>Revenue by category</div>
+              <Chart variant="bar" data={catChart} xKey="category"
+                series={[{ key: 'revenue', label: 'Revenue', color: 'var(--primary, #1F3A2E)' }]}
+                height={180}
+                empty={{ title: 'No revenue data' }} />
+            </div>
+            <div style={chartFrameStyle}>
+              <div style={chartTitleStyle}>Occupancy mix</div>
+              <Chart variant="donut" data={catChart} xKey="category"
+                series={[{ key: 'occ', label: 'Occ %' }]}
+                height={180}
+                empty={{ title: 'No occupancy data' }} />
+            </div>
+          </div>
+        );
+      })()}
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
         {allCategories.map((code) => {
           const catRows = rowsByCatActive.get(code) ?? [];
@@ -591,6 +644,15 @@ async function DrillPanel({
 }
 
 // ─── styles ─────────────────────────────────────────────────────────────────
+const chartFrameStyle: React.CSSProperties = {
+  border: '1px solid var(--hairline, #E6DFCC)', borderRadius: 6,
+  background: 'var(--paper, #FFFFFF)', padding: 12,
+  display: 'flex', flexDirection: 'column', gap: 6,
+};
+const chartTitleStyle: React.CSSProperties = {
+  fontSize: 11, fontWeight: 600, letterSpacing: '0.06em',
+  textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)',
+};
 function lyCellStyle(diff: number): React.CSSProperties {
   return {
     fontSize: 10,
