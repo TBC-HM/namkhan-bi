@@ -7,6 +7,7 @@
 
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { resolvePeriod } from '@/lib/period';
+import { supabase } from '@/lib/supabase';
 import PrintControls from './PrintControls';
 import PulseReport from './_renderers/PulseReport';
 import PaceReport from './_renderers/PaceReport';
@@ -70,6 +71,29 @@ export default async function RevenueReportRender({ searchParams }: Props) {
   const tabs: DashboardTab[] = [
     { key: 'back', label: '← Revenue', href: backHref },
   ];
+
+  // task #79 · log every viewed report into public.report_runs so the
+  // Reports landing (/h/<pid>/reports) can list and re-open them. Skipped
+  // when the integrity gate fires — gated views aren't real reports.
+  if (!needsNamkhanData) {
+    void supabase.from('report_runs').insert({
+      template_code: type,
+      property_id: propertyId,
+      params: {
+        type,
+        dept: 'revenue',
+        period_label: period.label,
+        win: searchParams.win ?? null,
+        cmp: searchParams.cmp ?? null,
+        month: month || null,
+        raw: searchParams,
+      },
+      output_summary: `${titleWord} · ${period.label}${month ? ` · ${month}` : ''} · ${propertyLabel}`,
+      status: 'viewed',
+    }).then(({ error }) => {
+      if (error) console.error('[reports/render] persist failed:', error.message);
+    });
+  }
 
   return (
     <DashboardPage
