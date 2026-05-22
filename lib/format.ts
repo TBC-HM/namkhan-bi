@@ -4,7 +4,7 @@
 
 export const FX_LAK_PER_USD = Number(process.env.NEXT_PUBLIC_FX_LAK_USD || 21800);
 
-export type Currency = 'USD' | 'LAK';
+export type Currency = 'USD' | 'EUR' | 'LAK';
 
 export function fmtMoney(n: number | null | undefined, ccy: Currency = 'USD'): string {
   if (n == null || isNaN(n as number)) return '—';
@@ -13,6 +13,15 @@ export function fmtMoney(n: number | null | undefined, ccy: Currency = 'USD'): s
     if (abs >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
     if (abs >= 10_000) return `$${(n / 1000).toFixed(1)}k`;
     return `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+  }
+  if (ccy === 'EUR') {
+    // Donna operating currency. PBS 2026-05-22: ensure fmtMoney supports EUR
+    // — without this branch the function fell through to the LAK display and
+    // printed ₭ on Donna pages that called fmtMoney(n, 'EUR').
+    const abs = Math.abs(n);
+    if (abs >= 1_000_000) return `€${(n / 1_000_000).toFixed(2)}M`;
+    if (abs >= 10_000) return `€${(n / 1000).toFixed(1)}k`;
+    return `€${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
   }
   // LAK display
   const lak = n * FX_LAK_PER_USD;
