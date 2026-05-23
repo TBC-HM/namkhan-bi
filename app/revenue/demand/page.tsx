@@ -281,7 +281,7 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
 
       {/* Row 5 · LOS + Booking window distributions (2-up) */}
       <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, alignItems: 'stretch' }}>
-        <Container title="LOS bucket distribution" subtitle="reservations by length-of-stay bucket">
+        <Container title="LOS bucket distribution" subtitle="all-time (lifetime aggregate) · reservations by length-of-stay bucket · 25/26 side-by-side comparison is a deeper view rewrite (deferred)">
           <Chart variant="bar" data={(losDist.data ?? []).map((r) => ({
             bucket: String((r as Record<string, unknown>).los_bucket ?? ''),
             reservations: Number((r as Record<string, unknown>).total_reservations ?? 0),
@@ -290,7 +290,7 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
             series={[{ key: 'reservations', label: 'Reservations', color: '#1F3A2E' }]}
             height={220} empty={{ title: 'No LOS distribution data' }} />
         </Container>
-        <Container title="Booking window distribution" subtitle="reservations by lead-time bucket">
+        <Container title="Booking window distribution" subtitle="all-time (lifetime aggregate) · reservations by lead-time bucket · 25/26 side-by-side comparison is a deeper view rewrite (deferred)">
           <Chart variant="bar" data={(bwDist.data ?? []).map((r) => ({
             bucket: String((r as Record<string, unknown>).booking_window_bucket ?? ''),
             reservations: Number((r as Record<string, unknown>).total_reservations ?? 0),
