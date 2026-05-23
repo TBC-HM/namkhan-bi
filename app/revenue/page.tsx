@@ -88,10 +88,15 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
       ? `/cockpit/chat?dept=revenue&role=revenue_hod_donna&name=Mira&emoji=${encodeURIComponent('📈')}&label=Revenue`
       : `/cockpit/chat?dept=revenue`;
 
+  // PBS note#1: surface sections as the TOP tab strip on the HoD landing.
+  const hodTabs = sections.map((s) => ({
+    key: s.href, label: s.label, href: s.href, active: false,
+  }));
   return (
     <DashboardPage
       title={`Revenue · ${cfg.hodName}`}
       subtitle={cfg.hodTagline}
+      tabs={hodTabs}
       action={
         <Link href={chatHref} style={primaryBtnStyle}>{`Ask ${cfg.hodName} →`}</Link>
       }
