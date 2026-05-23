@@ -349,7 +349,7 @@ export default async function PricingPage({ searchParams, propertyId }: { search
   ];
 
   // ── #138: 30-day calendar with arrow nav (URL ?off=0/30/60/90) ──────────
-  const offRaw = Number(searchParams.off ?? 0);
+  const offRaw = Number((searchParams as Record<string, string | string[] | undefined>).off ?? 0);
   const calOff = Number.isFinite(offRaw) ? Math.max(0, Math.min(90, Math.trunc(offRaw))) : 0;
   const calFrom = new Date(); calFrom.setUTCHours(0, 0, 0, 0); calFrom.setUTCDate(calFrom.getUTCDate() + calOff);
   const calTo = new Date(calFrom); calTo.setUTCDate(calFrom.getUTCDate() + 29);
