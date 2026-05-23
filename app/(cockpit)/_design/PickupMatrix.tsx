@@ -67,7 +67,7 @@ const BLOCK_TINT  = '#FAFAF7';   // subtle alt-block tint
 const INK         = '#1B1B1B';
 const INK_SOFT    = '#5A5A5A';
 const HAIRLINE    = '#E0DAC4';
-const BLOCK_RULE  = '#1B1B1B';   // thick ink rule between month blocks
+const BLOCK_RULE  = '#E6DFCC';   // hairline rule between month blocks (was ink-black — too heavy)
 
 const fmtInt   = (n: number) => Math.round(n).toLocaleString('en-US');
 const fmtUsd   = (n: number) => '€' + Math.round(n).toLocaleString('en-US');
@@ -123,7 +123,7 @@ export default function PickupMatrix({ data }: Props) {
             <th style={S.headerTh}>Monthly<div style={S.headerSub}>{data.monthlySnapshotLabel}</div></th>
             <th style={S.headerTh}>Monday<div style={S.headerSub}>{data.mondaySnapshotLabel}</div></th>
             <th style={S.headerTh}>Yesterday<div style={S.headerSub}>{data.yesterdaySnapshotLabel}</div></th>
-            <th style={S.headerTh}>Today<div style={S.headerSub}>{data.todaySnapshotLabel}</div></th>
+            <th style={S.headerTh}>Today<div style={{ ...S.headerSub, fontWeight: 700, color: 'var(--ink, #1B1B1B)' }}>{data.todaySnapshotLabel}</div></th>
             <th style={S.headerTh}>Monthly</th>
             <th style={S.headerTh}>Weekly</th>
             <th style={S.headerTh}>Yesterday</th>
