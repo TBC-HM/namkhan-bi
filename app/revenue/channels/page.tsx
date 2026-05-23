@@ -34,6 +34,7 @@ import {
   getChannelMixWeeklyTrend, getChannelNetValueForRange, getChannelVelocity28dByCat,
 } from '@/lib/data-channels';
 import { fmtMoney } from '@/lib/format';
+import { supabase } from '@/lib/supabase';
 import { REVENUE_SUBPAGES } from '../_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 
