@@ -301,45 +301,6 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
         </Container>
       </div>
 
-      {/* Row 6 · LOS × Booking-window correlation — note#153 heatmap variant */}
-      <div style={fullRow}>
-        <Container title="LOS × Booking-window correlation" subtitle="x = LOS bucket · y = booking-window bucket · cell intensity = reservation count">
-          <Chart variant="heatmap" data={((losWindow.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
-            los:    String(r.los_bucket ?? ''),
-            window: String(r.window_bucket ?? ''),
-            count:  Number(r.reservations ?? 0),
-          }))}
-            xKey="los"
-            yKey="window"
-            series={[{ key: 'count', label: 'Reservations' }]}
-            height={300}
-            empty={{ title: 'No reservations in window' }} />
-        </Container>
-      </div>
-
-      {/* Row 7 · Country × LOS × Booking-window — surgical tactical table */}
-      <div style={fullRow}>
-        <Container title="Country × LOS × Booking-window" subtitle="who books late vs who plans · short-window % flags reactive bookers · top 20 by volume">
-          <Chart variant="table" data={((countryLW.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
-            country:           String(r.guest_country ?? 'Unknown'),
-            reservations:      Number(r.reservations ?? 0),
-            avg_los:           Number(r.avg_los ?? 0).toFixed(1) + ' n',
-            avg_window:        Number(r.avg_window_days ?? 0).toFixed(0) + ' d',
-            short_window_pct:  Number(r.short_window_pct ?? 0).toFixed(1) + '%',
-            share_pct:         Number(r.share_pct ?? 0).toFixed(1) + '%',
-          }))}
-            xKey="country"
-            series={[
-              { key: 'reservations',     label: 'Bookings' },
-              { key: 'avg_los',          label: 'Avg LOS' },
-              { key: 'avg_window',       label: 'Avg window' },
-              { key: 'short_window_pct', label: '≤7d %' },
-              { key: 'share_pct',        label: 'Share' },
-            ]}
-            empty={{ title: 'No country reservations data' }} />
-        </Container>
-      </div>
-
       {/* Row 8 · SDLY trends (3-up): ADR · LOS · RevPAR */}
       <div style={threeUp}>
         <Container title="ADR · TY vs LY" subtitle="monthly · by check-in month">
@@ -395,6 +356,44 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
               { key: 'rest',   label: 'Rest',   color: '#B8A878' },
             ]}
             height={240} empty={{ title: 'No channel mix data' }} />
+        </Container>
+      </div>
+
+      {/* Bottom: behaviour heatmaps (PBS #153 + #154 — moved to end of page) */}
+      <div style={fullRow}>
+        <Container title="LOS × Booking-window correlation" subtitle="x = LOS bucket · y = booking-window bucket · cell intensity = reservation count">
+          <Chart variant="heatmap" data={((losWindow.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+            los:    String(r.los_bucket ?? ''),
+            window: String(r.window_bucket ?? ''),
+            count:  Number(r.reservations ?? 0),
+          }))}
+            xKey="los"
+            yKey="window"
+            series={[{ key: 'count', label: 'Reservations' }]}
+            height={300}
+            empty={{ title: 'No reservations in window' }} />
+        </Container>
+      </div>
+
+      <div style={fullRow}>
+        <Container title="Country × LOS × Booking-window" subtitle="who books late vs who plans · short-window % flags reactive bookers · top 20 by volume · 90/180/365-day trailing dropdown owed">
+          <Chart variant="table" data={((countryLW.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+            country:           String(r.guest_country ?? 'Unknown'),
+            reservations:      Number(r.reservations ?? 0),
+            avg_los:           Number(r.avg_los ?? 0).toFixed(1) + ' n',
+            avg_window:        Number(r.avg_window_days ?? 0).toFixed(0) + ' d',
+            short_window_pct:  Number(r.short_window_pct ?? 0).toFixed(1) + '%',
+            share_pct:         Number(r.share_pct ?? 0).toFixed(1) + '%',
+          }))}
+            xKey="country"
+            series={[
+              { key: 'reservations',     label: 'Bookings' },
+              { key: 'avg_los',          label: 'Avg LOS' },
+              { key: 'avg_window',       label: 'Avg window' },
+              { key: 'short_window_pct', label: '≤7d %' },
+              { key: 'share_pct',        label: 'Share' },
+            ]}
+            empty={{ title: 'No country reservations data' }} />
         </Container>
       </div>
 
