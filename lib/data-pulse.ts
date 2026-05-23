@@ -55,6 +55,11 @@ export interface PulsePickupRow {
   window: string;
   avg_los: number;
   count: number;
+  guest: string;
+  reservation_id: string;
+  adr: number;
+  value: number;
+  nights: number;
 }
 
 export interface PulseEventRow {
