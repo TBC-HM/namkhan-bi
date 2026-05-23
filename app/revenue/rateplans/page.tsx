@@ -88,6 +88,14 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
         .lte('check_in_date', period.to)
     : { data: [] as Array<Record<string, unknown>> };
 
+  const { data: planMasterRows } = await supabase.from('v_rate_plans_all')
+    .select('rate_plan, created_at')
+    .eq('property_id', pid);
+  const createdAtByPlan = new Map<string, string>();
+  for (const m of (planMasterRows ?? []) as Array<{ rate_plan: string | null; created_at: string | null }>) {
+    if (m.rate_plan && m.created_at) createdAtByPlan.set(m.rate_plan, m.created_at);
+  }
+
   const planMap: Record<string, PlanAgg> = {};
   (windowRows ?? []).forEach((r: Record<string, unknown>) => {
     const key = String(r.rate_plan ?? '');
@@ -124,6 +132,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     adr:         fmtMoney(p.nights ? p.revenue / p.nights : 0, sym),
     mix:         fmtPct(totalRev ? (100 * p.revenue) / totalRev : 0),
     last_booked: p.lastBooked ?? '—',
+    created:     (createdAtByPlan.get(p.name) ?? '').slice(0, 10) || '—',
   }));
 
   // Type rollup → donut data (revenue by plan type)
@@ -222,6 +231,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
 
   const planCols: ChartSeries[] = [
     { key: 'type',          label: 'Type' },
+    { key: 'created',       label: 'Created' },
     { key: 'bookings',      label: 'Bookings' },
     { key: 'cancellations', label: 'Cxl' },
     { key: 'cancel_pct',    label: 'Cancel %' },
