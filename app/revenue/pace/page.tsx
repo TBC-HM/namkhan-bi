@@ -236,7 +236,13 @@ export default async function PacePage({
   ];
 
   const formatLabel = (key: string) => (gran === 'month' ? fmtMonth(key) : key.slice(5));
-  const bucketBar = buckets.map((b) => ({ bucket: formatLabel(b.key), rns: b.rns }));
+  // note#12: combined OTB + STLY overlay — one bar per bucket with both rns + stly_pct
+  const bucketBar = buckets.map((b) => ({
+    bucket: formatLabel(b.key),
+    rns: b.rns,
+    stly_pct: b.stlyRn > 0 ? Math.round((b.rns / b.stlyRn) * 100) : null,
+  }));
+  // kept for backwards-compat / table only — not used in JSX anymore
   const stlyBar = buckets
     .filter((b) => b.stlyRn > 0)
     .map((b) => ({ bucket: formatLabel(b.key), stly_pct: Math.round((b.rns / b.stlyRn) * 100) }));
@@ -316,25 +322,17 @@ export default async function PacePage({
         />
       </Container>
 
-      <Container title="OTB by stay-bucket" subtitle={`Confirmed room nights · ${gran}`}>
+      <Container title="OTB by stay-bucket · with STLY % overlay" subtitle={`Confirmed room nights + OTB ÷ STLY at same lead time · ${gran}`}>
         <Chart
           variant="bar"
           data={bucketBar}
           xKey="bucket"
-          series={[{ key: 'rns', label: 'Rooms', color: '#1F3A2E' }]}
-          height={240}
+          series={[
+            { key: 'rns',      label: 'Rooms',  color: '#1F3A2E' },
+            { key: 'stly_pct', label: 'STLY %', color: '#B8A878' },
+          ]}
+          height={260}
           empty={{ title: 'No on-the-books in this window' }}
-        />
-      </Container>
-
-      <Container title="STLY pace per bucket" subtitle="OTB ÷ STLY actuals · % at same lead time">
-        <Chart
-          variant="bar"
-          data={stlyBar}
-          xKey="bucket"
-          series={[{ key: 'stly_pct', label: 'STLY %', color: '#B8A878' }]}
-          height={220}
-          empty={{ title: 'No STLY actuals' }}
         />
       </Container>
 
