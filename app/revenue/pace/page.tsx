@@ -296,24 +296,24 @@ export default async function PacePage({
       subtitle={`What's on the books ahead. ${period.label}.`}
       tabs={tabs}
     >
-      {/* note#174: KPI stripe on top with Window & granularity embedded inside (saves vertical space) */}
-      <Container title="On-the-books snapshot" subtitle={period.label} density="compact">
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', marginBottom: 12 }}>
-          <ControlGroup label="Forward window">
-            {winOptions.map((o) => (
-              <PillLink key={o.k} active={o.k === win} href={hrefFor({ win: o.k })}>{o.label}</PillLink>
-            ))}
-          </ControlGroup>
-          <ControlGroup label="Granularity">
-            {granOptions.map((o) => (
-              <PillLink key={o.k} active={o.k === gran} href={hrefFor({ gran: o.k })}>{o.label}</PillLink>
-            ))}
-          </ControlGroup>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
-          {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
-        </div>
-      </Container>
+      {/* PBS #188 (2026-05-24): KPI stripe at the top is a raw row — NOT a Container box.
+          Controls (Forward window · Granularity) sit on row 1, KPI tiles on row 2. */}
+      <div style={{ gridColumn: '1 / -1', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', marginBottom: 8 }}>
+        <ControlGroup label="Forward window">
+          {winOptions.map((o) => (
+            <PillLink key={o.k} active={o.k === win} href={hrefFor({ win: o.k })}>{o.label}</PillLink>
+          ))}
+        </ControlGroup>
+        <ControlGroup label="Granularity">
+          {granOptions.map((o) => (
+            <PillLink key={o.k} active={o.k === gran} href={hrefFor({ gran: o.k })}>{o.label}</PillLink>
+          ))}
+        </ControlGroup>
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--ink-soft, #5A5A5A)' }}>{period.label}</span>
+      </div>
+      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12, marginBottom: 4 }}>
+        {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
+      </div>
 
       <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, alignItems: 'stretch' }}>
       <Container title="Booking pace curve" subtitle="rooms occupied per day · Actual (green) · OTB (brass) · STLY (grey) · Budget (orange) — window −30d → +30d, ticks below as MM-DD">
