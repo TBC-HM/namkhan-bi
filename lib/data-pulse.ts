@@ -51,6 +51,11 @@ export interface PulseHighOccDay {
 export interface PulsePickupRow {
   source: string;
   accommodation: string;
+  guest: string;
+  reservation_id: string;
+  adr: number;
+  value: number;
+  nights: number;
   window: string;
   avg_los: number;
   count: number;
@@ -228,39 +233,40 @@ export async function getPulseTodayPickup(
 
   const { data, error } = await supabase
     .from('v_reservations_unified')
-    .select('source_name, room_type_name, check_in_date, booking_date, nights')
+    .select('reservation_id, source_name, room_type_name, guest_name, check_in_date, booking_date, nights, total_amount')
     .eq('property_id', propertyId)
     .eq('is_cancelled', false)
     .gte('booking_date', startIso)
-    .lte('booking_date', endIso);
+    .lte('booking_date', endIso)
+    .order('booking_date', { ascending: false })
+    .limit(50);
 
   if (error || !data) return [];
 
-  const agg = new Map<string, { source: string; acc: string; count: number; nightsSum: number; windowDaysSum: number; windowDaysN: number }>();
-  for (const r of data as Array<Record<string, unknown>>) {
-    const source = String(r.source_name ?? 'Direct');
-    const acc = String(r.room_type_name ?? '—');
-    const key = `${source}||${acc}`;
-    const cur = agg.get(key) ?? { source, acc, count: 0, nightsSum: 0, windowDaysSum: 0, windowDaysN: 0 };
-    cur.count += 1;
-    cur.nightsSum += Number(r.nights ?? 0);
+  return (data as Array<Record<string, unknown>>).map((r) => {
+    const nights = Number(r.nights ?? 0);
+    const value = Number(r.total_amount ?? 0);
+    const adr = nights > 0 ? value / nights : 0;
+    let windowLabel = '—';
     if (r.booking_date && r.check_in_date) {
       const bd = new Date(String(r.booking_date)).getTime();
       const ci = new Date(String(r.check_in_date) + 'T00:00:00Z').getTime();
-      cur.windowDaysSum += Math.max(0, Math.round((ci - bd) / 86_400_000));
-      cur.windowDaysN += 1;
+      const w = Math.max(0, Math.round((ci - bd) / 86_400_000));
+      windowLabel = `${w}d`;
     }
-    agg.set(key, cur);
-  }
-  return Array.from(agg.values())
-    .map((v) => ({
-      source: v.source,
-      accommodation: v.acc,
-      window: v.windowDaysN > 0 ? `${Math.round(v.windowDaysSum / v.windowDaysN)}d` : '—',
-      avg_los: v.count > 0 ? v.nightsSum / v.count : 0,
-      count: v.count,
-    }))
-    .sort((a, b) => b.count - a.count);
+    return {
+      source: String(r.source_name ?? 'Direct'),
+      accommodation: String(r.room_type_name ?? '—'),
+      guest: String(r.guest_name ?? '—'),
+      reservation_id: String(r.reservation_id ?? ''),
+      adr,
+      value,
+      nights,
+      window: windowLabel,
+      avg_los: nights,
+      count: 1,
+    };
+  });
 }
 
 // ─── Upcoming events (next 30 days from marketing.calendar_events) ──────
