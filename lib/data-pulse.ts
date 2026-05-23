@@ -229,50 +229,47 @@ export async function getPulseTodayPickup(
   propertyId: number,
   asOf: string,
 ): Promise<PulsePickupRow[]> {
-  // PBS 2026-05-22 (task #86): query v_reservations_unified for BOTH
-  // properties + surface source_name. Previously the helper queried
-  // pms_reservations_mews / reservations (which don't always populate
-  // room_type_name on the umbrella row), aggregated by room_type only,
-  // and showed a single "— unspecified —" bucket with no useful info.
-  // Now we read the cross-property bridge and group by source × room_type.
+  // PBS 2026-05-23 (#104 FULL fix): return per-reservation rows so the page
+  // can show Name · Reservation ID · ADR · Value per row + Total footer
+  // (task #101). Previous aggregator pivoted by source × room_type which
+  // dropped guest/reservation_id/adr/value at the granularity needed.
   const startIso = asOf + 'T00:00:00';
   const endIso = asOf + 'T23:59:59';
 
   const { data, error } = await supabase
     .from('v_reservations_unified')
-    .select('source_name, room_type_name, check_in_date, booking_date, nights')
+    .select('reservation_id, source_name, room_type_name, guest_name, check_in_date, booking_date, nights, total_amount')
     .eq('property_id', propertyId)
     .eq('is_cancelled', false)
     .gte('booking_date', startIso)
-    .lte('booking_date', endIso);
+    .lte('booking_date', endIso)
+    .order('booking_date', { ascending: false })
+    .limit(100);
 
   if (error || !data) return [];
 
-  const agg = new Map<string, { source: string; acc: string; count: number; nightsSum: number; windowDaysSum: number; windowDaysN: number }>();
-  for (const r of data as Array<Record<string, unknown>>) {
-    const source = String(r.source_name ?? 'Direct');
-    const acc = String(r.room_type_name ?? '—');
-    const key = `${source}||${acc}`;
-    const cur = agg.get(key) ?? { source, acc, count: 0, nightsSum: 0, windowDaysSum: 0, windowDaysN: 0 };
-    cur.count += 1;
-    cur.nightsSum += Number(r.nights ?? 0);
+  return (data as Array<Record<string, unknown>>).map((r) => {
+    const nights = Number(r.nights ?? 0);
+    const value = Number(r.total_amount ?? 0);
+    const adr = nights > 0 ? value / nights : 0;
+    let windowLabel = '—';
     if (r.booking_date && r.check_in_date) {
       const bd = new Date(String(r.booking_date)).getTime();
       const ci = new Date(String(r.check_in_date) + 'T00:00:00Z').getTime();
-      cur.windowDaysSum += Math.max(0, Math.round((ci - bd) / 86_400_000));
-      cur.windowDaysN += 1;
+      const windowDays = Math.max(0, Math.round((ci - bd) / 86_400_000));
+      windowLabel = `${windowDays}d`;
     }
-    agg.set(key, cur);
-  }
-  return Array.from(agg.values())
-    .map((v) => ({
-      source: v.source,
-      accommodation: v.acc,
-      window: v.windowDaysN > 0 ? `${Math.round(v.windowDaysSum / v.windowDaysN)}d` : '—',
-      avg_los: v.count > 0 ? v.nightsSum / v.count : 0,
-      count: v.count,
-    }))
-    .sort((a, b) => b.count - a.count);
+    return {
+      source: String(r.source_name ?? 'Direct'),
+      accommodation: String(r.room_type_name ?? '—'),
+      guest: String(r.guest_name ?? '—'),
+      reservation_id: String(r.reservation_id ?? ''),
+      adr, value, nights,
+      window: windowLabel,
+      avg_los: nights,
+      count: 1,
+    };
+  });
 }
 
 // ─── Upcoming events (next 30 days from marketing.calendar_events) ──────
