@@ -175,12 +175,6 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
         </div>
       )}
 
-      {/* 5. Chat — full-width, single CTA */}
-      <div style={fullRow}>
-        <Container title="Chat" subtitle={`open the full ${cfg.hodName} surface`} density="compact">
-          <Link href={chatHref} style={secondaryBtnStyle}>{`Open ${cfg.hodName} chat →`}</Link>
-        </Container>
-      </div>
     </DashboardPage>
   );
 }
