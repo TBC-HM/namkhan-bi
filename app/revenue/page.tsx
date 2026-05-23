@@ -162,20 +162,6 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
         </Container>
       </div>
 
-      {/* 3. Sections navigator — full-width 4-up dense grid (the secondary sub-nav) */}
-      <div style={fullRow}>
-        <Container title="Sections" subtitle="drill into a sub-area" density="compact">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 6 }}>
-            {sections.map((s) => (
-              <Link key={s.href} href={s.href} style={sectionCardStyle}>
-                <div style={sectionLabelStyle}>{s.label}</div>
-                <div style={sectionHintStyle}>{SECTION_HINT[s.label] ?? ''}</div>
-              </Link>
-            ))}
-          </div>
-        </Container>
-      </div>
-
       {/* 4. Build a report — full-width */}
       {reportTypes.length > 0 && (
         <div style={fullRow}>
