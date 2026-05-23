@@ -525,9 +525,10 @@ async function DrillPanel({
     last12Months.forEach((m, mIdx) => {
       const row = categoryRowsAllTime.find((r) => r.room_type_name === rt && r.period_yyyymm === m);
       adrData[mIdx][`t${idx}`] = row ? num(row.adr) : 0;
-      // PBS 2026-05-22 task #88: surface RN in tooltip too. LOS (avg length
-      // of stay per booking) needs reservation-level data — tracked as #96.
       adrData[mIdx][`t${idx}_rn`] = row ? num(row.room_nights) : 0;
+      // task #96: LOS now sourced from view's avg_los column (nights / bookings)
+      adrData[mIdx][`t${idx}_los`] = row ? num(row.avg_los) : 0;
+      adrData[mIdx][`t${idx}_bk`] = row ? num(row.bookings) : 0;
     });
   });
   // labels for tooltip lookup
@@ -637,6 +638,8 @@ async function DrillPanel({
                 const label = seriesLabelByKey[key] ?? key;
                 const adr = Number(point[key] ?? 0);
                 const rn = Number(point[`${key}_rn`] ?? 0);
+                const los = Number(point[`${key}_los`] ?? 0);
+                const bk = Number(point[`${key}_bk`] ?? 0);
                 const month = String(point.month ?? '');
                 return (
                   <div style={{ fontSize: 11, lineHeight: 1.5 }}>
@@ -644,6 +647,8 @@ async function DrillPanel({
                     <div style={{ color: 'var(--ink-soft, #5A5A5A)' }}>{month}</div>
                     <div>ADR <strong>{currencySymbol}{Math.round(adr).toLocaleString()}</strong></div>
                     <div>Room nights <strong>{rn.toLocaleString()}</strong></div>
+                    <div>Bookings <strong>{bk.toLocaleString()}</strong></div>
+                    <div>Avg LOS <strong>{los > 0 ? los.toFixed(1) + 'n' : '—'}</strong></div>
                   </div>
                 );
               }} />
