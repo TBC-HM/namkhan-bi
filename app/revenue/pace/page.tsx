@@ -341,7 +341,7 @@ export default async function PacePage({
         />
       </Container>
 
-      <Container title={`Pace by stay-bucket · ${buckets.length} ${gran}${buckets.length === 1 ? '' : 's'}`} subtitle="v_otb_pace · mv_kpi_daily" 
+      <Container title={`Pace by stay-bucket · ${buckets.length} ${gran}${buckets.length === 1 ? '' : 's'}`} subtitle="v_otb_pace · mv_kpi_daily">
         <Chart
           variant="table"
           data={bucketTable}
@@ -355,6 +355,7 @@ export default async function PacePage({
           ]}
         />
       </Container>
+      </div>
     </DashboardPage>
   );
 }
