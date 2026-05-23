@@ -78,11 +78,14 @@ export async function getPickupMatrix(propertyId: number): Promise<PickupMatrixD
   lastMonday.setDate(lastMonday.getDate() - (dow - 1) - 7);
   const sdly = new Date(now); sdly.setFullYear(sdly.getFullYear() - 1);
 
-  // 5 point-in-time snapshots via the public SQL function
-  const callSnapshot = (asof: Date) =>
-    supabase
-      .rpc('fn_pickup_otb_at', { p_property_id: propertyId, p_asof: fmtIso(asof) })
-      .then((r) => (r.data ?? []) as Array<{ stay_year: number; stay_month: number; rn: number; rev: number }>);
+  // 5 point-in-time snapshots via the public SQL function.
+  // Wrap in Promise.resolve so .catch() works — Supabase .rpc().then() returns PromiseLike, not Promise.
+  const callSnapshot = (asof: Date): Promise<Array<{ stay_year: number; stay_month: number; rn: number; rev: number }>> =>
+    Promise.resolve(
+      supabase
+        .rpc('fn_pickup_otb_at', { p_property_id: propertyId, p_asof: fmtIso(asof) })
+        .then((r) => (r.data ?? []) as Array<{ stay_year: number; stay_month: number; rn: number; rev: number }>)
+    );
 
   const [snapToday, snapYesterday, snapMonday, snapMonthStart, snapSdly] = await Promise.all([
     callSnapshot(today).catch((e) => { console.error('[pickup] snap today', e); return null; }),
