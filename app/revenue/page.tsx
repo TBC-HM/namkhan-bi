@@ -17,6 +17,7 @@ import { getDeptCfg } from '@/lib/dept-cfg/by-property';
 import { PROPERTY_ID, supabase } from '@/lib/supabase';
 import ReportBuilder from './_components/ReportBuilder';
 import ReportsList from './_components/ReportsList';
+import BugsList from './_components/BugsList';
 import HodTasksList from './_components/HodTasksList';
 import AttentionList from './_components/AttentionList';
 import { getPulseTodayPickup, getPulseTodayCancellations } from '@/lib/data-pulse';
@@ -129,18 +130,8 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
           <HodTasksList deptSlug="revenue" propertyId={pid} />
         </Container>
 
-        <Container title="Bugs" subtitle={`${bugs.length} open`} density="compact">
-          {bugs.length === 0 ? <div style={emptyStyle}>no open bugs</div> : (
-            <div style={listStyle}>
-              {bugs.map((b) => (
-                <div key={b.id} style={rowStyle}>
-                  <span style={{ ...dotStyle, background: 'var(--brass, #B8542A)' }} aria-hidden />
-                  <span style={labelStyle}>{String(b.body ?? '').slice(0, 80)}</span>
-                  {b.page_url && <span style={tagStyle}>{String(b.page_url).replace(/^https?:\/\/[^/]+/, '')}</span>}
-                </div>
-              ))}
-            </div>
-          )}
+        <Container title="Bugs" subtitle={`${bugs.length} open · + to add · /cockpit/bugs for full inbox`} density="compact">
+          <BugsList deptSlug="revenue" propertyId={pid} initial={bugs as unknown as { id: number; body: string | null; status: string | null; created_at: string | null; page_url: string | null }[]} />
         </Container>
       </div>
 
