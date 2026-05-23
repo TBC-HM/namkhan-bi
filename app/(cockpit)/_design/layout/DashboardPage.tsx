@@ -22,14 +22,16 @@ export default function DashboardPage(props: DashboardPageProps) {
   const { title, subtitle, tabs, action, children } = props;
   return (
     <div className="cockpit-design" style={S.shell}>
-      <header style={S.topBar}>
-        <div style={S.titleStack}>
-          <h1 style={S.title}>{title}</h1>
-          {subtitle && <p style={S.subtitle}>{subtitle}</p>}
-        </div>
-        {action && <div style={S.action}>{action}</div>}
-      </header>
-      {tabs && tabs.length > 0 && <TabStrip tabs={tabs} />}
+      <div style={S.stickyTop}>
+        <header style={S.topBar}>
+          <div style={S.titleStack}>
+            <h1 style={S.title}>{title}</h1>
+            {subtitle && <p style={S.subtitle}>{subtitle}</p>}
+          </div>
+          {action && <div style={S.action}>{action}</div>}
+        </header>
+        {tabs && tabs.length > 0 && <TabStrip tabs={tabs} />}
+      </div>
       <main style={S.body}>{children}</main>
     </div>
   );
@@ -86,6 +88,18 @@ const S: Record<string, CSSProperties> = {
     flexDirection: 'column',
     gap: 24,
     fontFamily: 'var(--sans, "Inter Tight", system-ui, sans-serif)',
+  },
+  stickyTop: {
+    position: 'sticky',
+    top: 0,
+    zIndex: 20,
+    background: 'var(--paper, #FFFFFF)',
+    paddingTop: 12,
+    paddingBottom: 8,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 12,
+    borderBottom: '1px solid var(--hairline, #E6DFCC)',
   },
   topBar: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' },
   titleStack: { display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 },
