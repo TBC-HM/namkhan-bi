@@ -122,7 +122,32 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
   const hiddenOrphanInWindow = rankedAll.length - ranked.length;
 
   // Plans table rows (pre-formatted strings — no functions cross primitives)
-  // note#20: group plans visually by plan_type (sort by type, revenue order preserved within group via stable JS sort)
+  // note#23: per-plan trend — last-7d vs prior-7d booking ratio within the rateplans window
+  const trendByPlan: Record<string, { recent: number; prior: number }> = {};
+  const cutToday = new Date(); cutToday.setUTCHours(0, 0, 0, 0);
+  const cut7  = new Date(cutToday); cut7.setUTCDate(cutToday.getUTCDate() - 7);
+  const cut14 = new Date(cutToday); cut14.setUTCDate(cutToday.getUTCDate() - 14);
+  const cut7Iso  = cut7.toISOString().slice(0, 10);
+  const cut14Iso = cut14.toISOString().slice(0, 10);
+  for (const wr of (windowRows ?? []) as Array<Record<string, unknown>>) {
+    if (wr.status === 'canceled') continue;
+    const plan = String(wr.rate_plan ?? '');
+    if (!plan) continue;
+    const bd = String(wr.booking_date ?? '').slice(0, 10);
+    if (!bd) continue;
+    if (!trendByPlan[plan]) trendByPlan[plan] = { recent: 0, prior: 0 };
+    if (bd >= cut7Iso) trendByPlan[plan].recent += 1;
+    else if (bd >= cut14Iso) trendByPlan[plan].prior += 1;
+  }
+  const trendGlyph = (name: string): string => {
+    const t = trendByPlan[name];
+    if (!t || (t.recent === 0 && t.prior === 0)) return '—';
+    if (t.prior === 0) return t.recent > 0 ? `↑ new` : '—';
+    const delta = ((t.recent - t.prior) / t.prior) * 100;
+    if (Math.abs(delta) < 10) return `→ ${Math.round(delta)}%`;
+    return (delta > 0 ? '↑ ' : '↓ ') + `${Math.round(delta)}%`;
+  };
+
   const planRows = [...ranked].sort((a, b) => formatPlanType(a.type).localeCompare(formatPlanType(b.type))).map((p) => ({
     name:        formatPlanName(p.name),
     type:        formatPlanType(p.type),
@@ -134,6 +159,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     mix:         fmtPct(totalRev ? (100 * p.revenue) / totalRev : 0),
     last_booked: p.lastBooked ?? '—',
     created:     (createdAtByPlan.get(p.name) ?? '').slice(0, 10) || '—',
+    trend:       trendGlyph(p.name),
   }));
 
   // Type rollup → donut data (revenue by plan type)
@@ -233,6 +259,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
   const planCols: ChartSeries[] = [
     { key: 'type',          label: 'Type' },
     { key: 'created',       label: 'Created' },
+    { key: 'trend',         label: 'Trend 7d/7d' },
     { key: 'bookings',      label: 'Bookings' },
     { key: 'cancellations', label: 'Cxl' },
     { key: 'cancel_pct',    label: 'Cancel %' },
