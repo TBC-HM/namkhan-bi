@@ -17,21 +17,18 @@ import {
   DashboardPage, Container, KpiTile, Chart,
   type DashboardTab, type KpiTileProps,
 } from '@/app/(cockpit)/_design';
-import PickupMatrix from '@/app/(cockpit)/_design/PickupMatrix';
-import { getPickupMatrix } from '@/lib/data/pickup';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
-type CalendarTab = 'pricing' | 'holidays' | 'otb_density' | 'pickup' | 'rate' | 'restrictions' | 'parity';
-const VALID_TABS: CalendarTab[] = ['pricing','holidays','otb_density','pickup','rate','restrictions','parity'];
+type CalendarTab = 'pricing' | 'holidays' | 'otb_density' | 'rate' | 'restrictions' | 'parity';
+const VALID_TABS: CalendarTab[] = ['pricing','holidays','otb_density','rate','restrictions','parity'];
 const TAB_LABELS: Record<CalendarTab, string> = {
   pricing:      'Pricing',
   holidays:     'Holidays',
   otb_density:  'OTB Density',
-  pickup:       'Pickup',
   rate:         'Rate',
   restrictions: 'Restrictions',
   parity:       'Parity',
@@ -66,7 +63,7 @@ export default async function PricingPage({ searchParams, propertyId }: { search
 
   const stripBlock = (
     <div style={fullRow}>
-      <Container title="Calendar" subtitle="pricing · holidays · OTB density · pickup · rate · restrictions · parity" density="compact">
+      <Container title="Calendar" subtitle="pricing · holidays · OTB density · rate · restrictions · parity" density="compact">
         <CalendarTabStrip active={tab} basePath={basePath} />
       </Container>
     </div>
@@ -92,22 +89,6 @@ export default async function PricingPage({ searchParams, propertyId }: { search
     );
   }
 
-  // ─── Tab: Pickup (reuses PickupMatrix primitive) ──────────────────────
-  if (tab === 'pickup') {
-    const pickupData = await getPickupMatrix(pid).catch(() => null);
-    return (
-      <DashboardPage title="Revenue · Calendar" subtitle="pickup matrix · OTB vs SDLY" tabs={tabs}>
-        {stripBlock}
-        <div style={fullRow}>
-          <Container title="Pickup matrix" subtitle="month × metric · OTB snapshots · same surface as /revenue/pickup">
-            {pickupData ? <PickupMatrix data={pickupData} /> : (
-              <div style={emptyStyle}>Pickup data unavailable. See <Link href="/revenue/pickup" style={linkStyle}>/revenue/pickup</Link> for the full surface.</div>
-            )}
-          </Container>
-        </div>
-      </DashboardPage>
-    );
-  }
 
   // ─── Tab: OTB Density ─────────────────────────────────────────────────
   if (tab === 'otb_density') {
