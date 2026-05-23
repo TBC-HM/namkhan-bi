@@ -180,13 +180,39 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
   }));
 
   // ─── today's pickup ───────────────────────────────────────────────────
-  const pickupRows = pickup.map((p: PulsePickupRow) => ({
-    source:        p.source,
-    accommodation: p.accommodation,
-    count:         p.count,
-    window:        p.window,
-    avg_los:       p.avg_los.toFixed(1),
+  // PBS 2026-05-23 (#101): per-reservation rows with guest, reservation_id,
+  // ADR, value; Total footer row when >1 booking.
+  const sym = pid === 1000001 ? '€' : '$';
+  const fmtMoney = (n: number) => `${sym}${Math.round(n).toLocaleString('en-US')}`;
+  const pickupBase = pickup.map((p: PulsePickupRow) => ({
+    source:         p.source,
+    guest:          p.guest,
+    reservation_id: p.reservation_id,
+    accommodation:  p.accommodation,
+    nights:         p.nights,
+    adr:            p.adr > 0 ? fmtMoney(p.adr) : '—',
+    value:          p.value > 0 ? fmtMoney(p.value) : '—',
+    window:         p.window,
   }));
+  const pickupRows = pickupBase.length > 1
+    ? [
+        ...pickupBase,
+        (() => {
+          const totalNights = pickup.reduce((s, r) => s + Number(r.nights ?? 0), 0);
+          const totalValue = pickup.reduce((s, r) => s + Number(r.value ?? 0), 0);
+          return {
+            source: `Total · ${pickup.length} bookings`,
+            guest: '',
+            reservation_id: '',
+            accommodation: '',
+            nights: totalNights,
+            adr: '',
+            value: totalValue > 0 ? fmtMoney(totalValue) : '—',
+            window: '',
+          };
+        })(),
+      ]
+    : pickupBase;
   const pickupDate = shiftDate(anchor, pickupOffset);
   const pickupLabel = pickupOffset === 0 ? 'Today' : pickupOffset === -1 ? 'Yesterday' : `${Math.abs(pickupOffset)} days ago`;
 
