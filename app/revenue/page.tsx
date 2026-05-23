@@ -16,6 +16,7 @@ import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { getDeptCfg } from '@/lib/dept-cfg/by-property';
 import { PROPERTY_ID } from '@/lib/supabase';
 import ReportBuilder from './_components/ReportBuilder';
+import { getPulseTodayPickup, getPulseTodayCancellations } from '@/lib/data-pulse';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -41,16 +42,34 @@ const SECTION_HINT: Record<string, string> = {
   Reports:      'Print-ready reports',
 };
 
-export default function RevenueHoDPage({ propertyId, searchParams }: Props = {}) {
+export default async function RevenueHoDPage({ propertyId, searchParams }: Props = {}) {
   const pid = propertyId ?? PROPERTY_ID;
   const cfg: DeptCfg = pid === PROPERTY_ID ? DEPT_CFG.revenue : getDeptCfg('revenue', pid);
 
   const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
   const sections = subPages.filter((s) => s.label !== 'HoD');
 
-  const tiles: KpiTileProps[] = (cfg.kpiTiles ?? []).map((k) => ({
+  // PBS note#2: append today's Pickup + Cancellations as 5th + 6th KPI tiles.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const [pickupToday, cancellationsToday] = await Promise.all([
+    getPulseTodayPickup(pid, todayIso).catch(() => [] as Array<unknown>),
+    getPulseTodayCancellations(pid, todayIso).catch(() => [] as Array<unknown>),
+  ]);
+  const pickupCount = pickupToday.length;
+  const cancelCount = cancellationsToday.length;
+
+  const baseTiles: KpiTileProps[] = (cfg.kpiTiles ?? []).map((k) => ({
     label: k.k, value: k.v, size: 'sm', footnote: k.d,
   }));
+  const tiles: KpiTileProps[] = [
+    ...baseTiles,
+    { label: 'Pickup today', value: pickupCount, size: 'sm',
+      footnote: pickupCount === 1 ? 'new booking' : 'new bookings',
+      status: pickupCount > 0 ? 'green' : 'grey' },
+    { label: 'Cancellations today', value: cancelCount, size: 'sm',
+      footnote: cancelCount === 1 ? 'booking lost' : 'bookings lost',
+      status: cancelCount === 0 ? 'green' : 'amber' },
+  ];
 
   const attn = cfg.defaultAttn ?? [];
   const docs = cfg.defaultDocs ?? [];
