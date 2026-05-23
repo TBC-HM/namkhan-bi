@@ -155,6 +155,10 @@ const REVENUE_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
       { value: 'ly',     label: 'LY'     },
     ]},
   ]},
+  { value: 'variance', label: 'Variance', hrefBase: '/revenue/reports/render?type=variance', dimGroups: [
+    { key: 'win',     label: 'Window',  options: [{ value: 'mtd', label: 'MTD' }, { value: 'ytd', label: 'YTD' }, { value: 'last_month', label: 'Last month' }] },
+    { key: 'cmp',     label: 'Compare', options: [{ value: 'budget', label: 'vs budget' }, { value: 'sdly',  label: 'vs same-day-last-year' }, { value: 'both',   label: 'both' }] },
+  ]},
   { value: 'pl-month', label: 'P&L · month', hrefBase: '/revenue/reports/render?type=pl-month', dimGroups: [
     { key: 'window', label: 'Month', options: [
       { value: 'this',  label: 'This month'   },
