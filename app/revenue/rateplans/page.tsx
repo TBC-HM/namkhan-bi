@@ -253,17 +253,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
         </div>
       </Container></div>
 
-      <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}><Container title="Daily booking trend" subtitle={`bookings + revenue · ${period.label}`}>
-        <Chart variant="line" data={trendData} xKey="day"
-          series={[
-            { key: 'bookings', label: 'Bookings', color: '#1F3A2E' },
-            { key: 'revenue',  label: 'Revenue',  color: '#B8542A' },
-          ]}
-          height={220}
-          empty={{ title: 'No booking activity in window' }}
-        />
-      </Container>
-        <Container title="Mix by plan type" subtitle={`revenue share · ${period.label}`}>
+      <div style={fullRow}><Container title="Mix by plan type" subtitle={`revenue share · ${period.label}`}>
         <Chart variant="donut" data={typeDonut} xKey="name"
           series={[{ key: 'value', label: 'Revenue' }]}
           height={220}
