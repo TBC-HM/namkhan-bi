@@ -1,10 +1,22 @@
 // middleware.ts  —  repo root (TBC-HM/namkhan-bi)
 // ADR-112. Gates the whole app: no session -> /login; session lacking
 // the requested property_id in JWT claims -> 403. Holding roles bypass.
+//
+// Edge-runtime note: Buffer is a Node global, not available here.
+// We decode the JWT payload with atob() after normalising base64url.
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 const PUBLIC_PATHS = ['/login', '/auth/callback', '/p/'] // signed public links stay open
+
+function decodeJwtPayload(token: string): Record<string, unknown> {
+  try {
+    const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    return JSON.parse(atob(b64))
+  } catch {
+    return {}
+  }
+}
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
@@ -38,11 +50,9 @@ export async function middleware(req: NextRequest) {
   }
 
   const { data: { session } } = await supabase.auth.getSession()
-  const claims = session?.access_token
-    ? JSON.parse(Buffer.from(session.access_token.split('.')[1], 'base64').toString())
-    : {}
-  const holdingRole: string = claims.holding_role || ''
-  const propertyIds: number[] = claims.property_ids || []
+  const claims = session?.access_token ? decodeJwtPayload(session.access_token) : {}
+  const holdingRole: string = (claims.holding_role as string) || ''
+  const propertyIds: number[] = (claims.property_ids as number[]) || []
 
   const m = pathname.match(/^\/h\/(\d+)(\/|$)/)
   if (m) {
