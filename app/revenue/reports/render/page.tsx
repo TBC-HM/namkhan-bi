@@ -31,8 +31,6 @@ const TITLE_BY_TYPE: Record<string, string> = {
   forecast:  'Forecast',
   'pl-month':'P&L · month',
   pl_month:  'P&L · month',
-  pricing:   'Pricing',
-  forecast:  'Forecast',
   compset:   'Comp Set',
   variance:  'Variance',
 };
@@ -128,7 +126,6 @@ export default async function RevenueReportRender({ searchParams }: Props) {
       `}</style>
 
       {/* PBS 2026-05-22: letterhead — property name left, address right, generated stamp */}
-      {/* @ts-expect-error Server Component */}
       <LetterheadHeader propertyId={propertyId} reportLabel={`${titleWord} report`} periodLabel={`${period.label}${month ? ` · ${month}` : ''}`} />
 
       {needsNamkhanData ? (
