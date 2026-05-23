@@ -141,6 +141,33 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
       subtitle={`Channel performance · ${period.label} · ${channels.length} active sources across ${[byCat.direct, byCat.ota, byCat.dmc].filter((g) => g.length > 0).length} categories`}
       tabs={tabs}
     >
+      {/* note#14: Window + Category selectors stay together at the top — no more jumping */}
+      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 10, alignItems: 'stretch' }}>
+        <Container title="Window" subtitle="period selector" density="compact">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {(['7d', '30d', '90d'] as WindowKey[]).map((k) => {
+              const active = k === period.win;
+              return (
+                <a key={k} href={hrefFor(k)} style={pillStyle(active)}>{k}</a>
+              );
+            })}
+          </div>
+        </Container>
+        <Container title="Category" subtitle="Direct · OTAs · DMC/Bedbanks" density="compact">
+          <div style={subTabRow}>
+            {TAB_DEFS.map((t) => {
+              const active = t.key === activeTab;
+              return (
+                <Link key={t.key} href={tabHrefFor(t.key)} style={subTabStyle(active)}>
+                  <span style={{ fontSize: 13, fontWeight: 600 }}>{t.label}</span>
+                  <span style={{ fontSize: 10, color: active ? 'rgba(255,255,255,0.85)' : 'var(--ink-soft, #5A5A5A)', marginTop: 1 }}>{t.tagline}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </Container>
+      </div>
+
       <Container title="Headline · channel mix" subtitle={period.label} density="compact">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
           {pageMixTiles.map((t, i) => <KpiTile key={i} {...t} />)}
@@ -156,30 +183,6 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
           </div>
         </Container>
       )}
-
-      <Container title="Window" subtitle="period selector" density="compact">
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-          {(['7d', '30d', '90d'] as WindowKey[]).map((k) => {
-            const active = k === period.win;
-            return (
-              <a key={k} href={hrefFor(k)} style={pillStyle(active)}>{k}</a>
-            );
-          })}
-        </div>
-      </Container>
-
-      {/* Sub-tabs: Direct · OTAs · DMC/Bedbanks */}
-      <div style={subTabRow}>
-        {TAB_DEFS.map((t) => {
-          const active = t.key === activeTab;
-          return (
-            <Link key={t.key} href={tabHrefFor(t.key)} style={subTabStyle(active)}>
-              <span style={{ fontSize: 13, fontWeight: 600 }}>{t.label}</span>
-              <span style={{ fontSize: 10, color: active ? 'rgba(255,255,255,0.85)' : 'var(--ink-soft, #5A5A5A)', marginTop: 1 }}>{t.tagline}</span>
-            </Link>
-          );
-        })}
-      </div>
 
       {activeTab === 'direct' && <CategoryBlock category="direct" rows={byCat.direct as unknown as Array<Record<string, unknown>>} cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'direct')} mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'direct')} moneyCurrency={moneyCurrency} />}
       {activeTab === 'ota'    && <CategoryBlock category="ota"    rows={byCat.ota as unknown as Array<Record<string, unknown>>}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'ota')}    mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'ota')} moneyCurrency={moneyCurrency} />}
