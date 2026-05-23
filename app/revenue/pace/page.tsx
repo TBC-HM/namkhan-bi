@@ -221,13 +221,20 @@ export default async function PacePage({
   ];
 
   // ─── data prep (no functions cross server→client boundary) ─────────────
-  const paceCurveData = (paceCurveRaw as PaceCurvePoint[]).map((r) => ({
-    day:    r.day ?? r.stay_date ?? '',
-    actual: r.rooms_actual ?? null,
-    otb:    r.rooms_otb ?? null,
-    stly:   r.rooms_stly_daily_avg ?? null,
-    budget: r.rooms_budget_daily_avg ?? null,
-  }));
+  // note#11: shorten x-axis labels (MM-DD on daily, "MMM yy" on monthly) to stop date overlap
+  const paceCurveData = (paceCurveRaw as PaceCurvePoint[]).map((r) => {
+    const raw = (r.day ?? r.stay_date ?? '').slice(0, 10);
+    const short = raw.length >= 10
+      ? (gran === 'month' ? raw.slice(0, 7) : raw.slice(5))
+      : raw;
+    return {
+      day:    short,
+      actual: r.rooms_actual ?? null,
+      otb:    r.rooms_otb ?? null,
+      stly:   r.rooms_stly_daily_avg ?? null,
+      budget: r.rooms_budget_daily_avg ?? null,
+    };
+  });
   const paceSeries: ChartSeries[] = [
     { key: 'actual', label: 'Actual', color: '#1F3A2E' },
     { key: 'otb',    label: 'OTB',    color: '#B8A878' },
@@ -311,7 +318,7 @@ export default async function PacePage({
         </div>
       </Container>
 
-      <Container title="Booking pace curve" subtitle="Actual · OTB · STLY · Budget — rooms occupied, −30d → +30d">
+      <Container title="Booking pace curve" subtitle="rooms occupied per day · Actual (green) · OTB (brass) · STLY (grey) · Budget (orange) — window −30d → +30d, ticks below as MM-DD">
         <Chart
           variant="line"
           data={paceCurveData}
