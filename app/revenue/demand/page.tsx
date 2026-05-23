@@ -301,31 +301,18 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
         </Container>
       </div>
 
-      {/* Row 6 · LOS × Booking-window correlation (lastminute bookers' stay length) */}
+      {/* Row 6 · LOS × Booking-window correlation — note#153 heatmap variant */}
       <div style={fullRow}>
-        <Container title="LOS × Booking-window correlation" subtitle="rows = booking-window bucket · columns = LOS bucket · cell = reservation count">
-          <Chart variant="table" data={(() => {
-            const lw = (losWindow.data ?? []) as Array<Record<string, unknown>>;
-            const losBuckets = ['1 night','2 nights','3-4 nights','5-7 nights','8-14 nights','15+ nights'];
-            const winBuckets = ['0-3 Days','4-7 Days','8-14 Days','15-30 Days','31-90 Days','90+ Days'];
-            return winBuckets.map((w) => {
-              const row: Record<string, string | number> = { window: w };
-              for (const l of losBuckets) {
-                const cell = lw.find((r) => String(r.window_bucket) === w && String(r.los_bucket) === l);
-                row[l] = cell ? Number(cell.reservations) : 0;
-              }
-              return row;
-            });
-          })()}
-            xKey="window"
-            series={[
-              { key: '1 night',     label: '1n' },
-              { key: '2 nights',    label: '2n' },
-              { key: '3-4 nights',  label: '3-4n' },
-              { key: '5-7 nights',  label: '5-7n' },
-              { key: '8-14 nights', label: '8-14n' },
-              { key: '15+ nights',  label: '15+n' },
-            ]}
+        <Container title="LOS × Booking-window correlation" subtitle="x = LOS bucket · y = booking-window bucket · cell intensity = reservation count">
+          <Chart variant="heatmap" data={((losWindow.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+            los:    String(r.los_bucket ?? ''),
+            window: String(r.window_bucket ?? ''),
+            count:  Number(r.reservations ?? 0),
+          }))}
+            xKey="los"
+            yKey="window"
+            series={[{ key: 'count', label: 'Reservations' }]}
+            height={300}
             empty={{ title: 'No reservations in window' }} />
         </Container>
       </div>
