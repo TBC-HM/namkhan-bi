@@ -227,7 +227,44 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
         </Container>
       </div>
 
-      {/* Row 4 · Window selector (forward horizon) */}
+      {/* Row 4 · Pace by check-in month — moved under KPIs (#107); positive variance green, negative red (#106) */}
+      <div style={fullRow}>
+        <Container title={`Pace by check-in month · from Jan 2025 · ${paceTableRows.length} month${paceTableRows.length === 1 ? '' : 's'}`} subtitle="past = actual OTB · future = pace · green = ahead STLY · red = behind">
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left',  padding: '6px 8px', borderBottom: '1px solid var(--hairline, #E6DFCC)', fontWeight: 600 }}>Check-in month</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #E6DFCC)', fontWeight: 600 }}>OTB RN</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #E6DFCC)', fontWeight: 600 }}>STLY RN</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #E6DFCC)', fontWeight: 600 }}>Δ RN</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #E6DFCC)', fontWeight: 600 }}>OTB Rev</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #E6DFCC)', fontWeight: 600 }}>STLY Rev</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #E6DFCC)', fontWeight: 600 }}>Δ Rev</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paceTableRows.map((r) => (
+                  <tr key={r.ci_month}>
+                    <td style={{ padding: '6px 8px', borderBottom: '1px solid var(--hairline, #F0EBD8)' }}>{r.ci_month}</td>
+                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #F0EBD8)', fontVariantNumeric: 'tabular-nums' }}>{fmtInt(r.otb_roomnights)}</td>
+                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #F0EBD8)', fontVariantNumeric: 'tabular-nums' }}>{fmtInt(r.stly_roomnights)}</td>
+                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #F0EBD8)', fontVariantNumeric: 'tabular-nums', color: r.roomnights_delta > 0 ? '#1F7A4B' : r.roomnights_delta < 0 ? '#B22222' : 'var(--ink-soft, #5A5A5A)', fontWeight: 600 }}>{fmtSigned(r.roomnights_delta)}</td>
+                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #F0EBD8)', fontVariantNumeric: 'tabular-nums' }}>{fmtUSD(r.otb_revenue)}</td>
+                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #F0EBD8)', fontVariantNumeric: 'tabular-nums' }}>{fmtUSD(r.stly_revenue)}</td>
+                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #F0EBD8)', fontVariantNumeric: 'tabular-nums', color: r.revenue_delta > 0 ? '#1F7A4B' : r.revenue_delta < 0 ? '#B22222' : 'var(--ink-soft, #5A5A5A)', fontWeight: 600 }}>{fmtSigned(r.revenue_delta) + ' $'}</td>
+                  </tr>
+                ))}
+                {paceTableRows.length === 0 && (
+                  <tr><td colSpan={7} style={{ padding: 16, textAlign: 'center', color: 'var(--ink-soft, #5A5A5A)' }}>No pace rows from 2025-01 onwards</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Container>
+      </div>
+
+      {/* Row 5 · Window selector (forward horizon) */}
       <div style={fullRow}>
         <Container title="Window" subtitle="forward demand horizon" density="compact">
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
@@ -380,13 +417,6 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
         </Container>
       </div>
 
-      {/* Row 10 · Pace by check-in month (anchored here under filters, starts Jan-2025) */}
-      <div style={fullRow}>
-        <Container title={`Pace by check-in month · from Jan 2025 · ${paceTableRows.length} month${paceTableRows.length === 1 ? '' : 's'}`} subtitle="past = actual OTB · future = pace · mv_pace_otb">
-          <Chart variant="table" data={tableRows} xKey="ci_month" series={tableCols}
-            empty={{ title: 'No pace rows from 2025-01 onwards' }} />
-        </Container>
-      </div>
     </DashboardPage>
   );
 }
