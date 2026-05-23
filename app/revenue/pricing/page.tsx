@@ -116,7 +116,7 @@ export default async function PricingPage({ searchParams, propertyId }: { search
       <DashboardPage title="Revenue · Calendar" subtitle="forward OTB occupancy · next 90 days" tabs={tabs}>
         {stripBlock}
         <div style={fullRow}>
-          <Container title="OTB occupancy · forward 90d" subtitle="confirmed rooms ÷ sellable · per night · colour by % occ">
+          <Container title="OTB occupancy · forward 90d" subtitle="occupancy % per night (NOT rate — see Rate tab for price heatmap). Confirmed rooms ÷ sellable. Colour intensity = % occ.">
             <Chart
               variant="heatmap"
               data={heat}
@@ -206,7 +206,7 @@ export default async function PricingPage({ searchParams, propertyId }: { search
       <DashboardPage title="Revenue · Calendar" subtitle="restrictions · MinLOS + stop-sell · next 60d" tabs={tabs}>
         {stripBlock}
         <div style={fullRow}>
-          <Container title="Restrictions calendar" subtitle="cell = nights MinLOS · 99 (red) = stop-sell · next 60d">
+          <Container title="Restrictions calendar" subtitle="WIRED — reads rate_inventory.minimum_stay + stop_sell from Cloudbeds. Each cell shows minimum-nights-required for that room×date; 99 (red) = stop-sell. Next 60 days.">
             <Chart
               variant="heatmap"
               data={data}
