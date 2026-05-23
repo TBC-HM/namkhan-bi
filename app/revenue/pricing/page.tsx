@@ -415,6 +415,16 @@ export default async function PricingPage({ searchParams, propertyId }: { search
   return (
     <DashboardPage title="Revenue · Calendar" subtitle={`pricing · ${period.label}`} tabs={tabs}>
       {stripBlock}
+
+      {/* note#178: KPI stripe at the top */}
+      <div style={fullRow}>
+        <Container title="Pricing snapshot" subtitle="actionable now" density="compact">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+            {actionableTiles.map((t, i) => <KpiTile key={i} {...t} />)}
+          </div>
+        </Container>
+      </div>
+
       <div style={fullRow}>
         <Container title={`30-day pricing calendar · ${calRangeLabel}`} subtitle="hover any day for base rate · rooms available · OCC · category. arrow to slide next month (max +90d)">
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 10 }}>
@@ -426,13 +436,6 @@ export default async function PricingPage({ searchParams, propertyId }: { search
         </Container>
       </div>
 
-      <div style={fullRow}>
-        <Container title="Pricing snapshot" subtitle="actionable now" density="compact">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-            {actionableTiles.map((t, i) => <KpiTile key={i} {...t} />)}
-          </div>
-        </Container>
-      </div>
       <div style={fullRow}>
         <Container title="Window aggregates" subtitle={period.label} density="compact">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
