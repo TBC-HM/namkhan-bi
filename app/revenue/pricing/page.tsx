@@ -14,8 +14,8 @@ import { REVENUE_SUBPAGES } from '../_subpages';
 import HolidayScheduleTabContent from '@/app/operations/staff/_components/HolidayScheduleTabContent';
 import { NAMKHAN_PROPERTY_ID } from '@/lib/dept-cfg/by-property';
 import {
-  DashboardPage, Container, KpiTile, Chart,
-  type DashboardTab, type KpiTileProps,
+  DashboardPage, Container, KpiTile, Chart, MonthCalendar,
+  type DashboardTab, type KpiTileProps, type CalendarDay,
 } from '@/app/(cockpit)/_design';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { supabase } from '@/lib/supabase';
@@ -348,9 +348,84 @@ export default async function PricingPage({ searchParams, propertyId }: { search
     { label: 'Min-stay', value: minStayRows, size: 'sm', footnote: 'minimum_stay > 1', status: minStayRows > 0 ? 'amber' : 'green' },
   ];
 
+  // ── #138: 30-day calendar with arrow nav (URL ?off=0/30/60/90) ──────────
+  const offRaw = Number(searchParams.off ?? 0);
+  const calOff = Number.isFinite(offRaw) ? Math.max(0, Math.min(90, Math.trunc(offRaw))) : 0;
+  const calFrom = new Date(); calFrom.setUTCHours(0, 0, 0, 0); calFrom.setUTCDate(calFrom.getUTCDate() + calOff);
+  const calTo = new Date(calFrom); calTo.setUTCDate(calFrom.getUTCDate() + 29);
+  const calFromIso = calFrom.toISOString().slice(0, 10);
+  const calToIso = calTo.toISOString().slice(0, 10);
+  const { data: pricingCal } = await supabase
+    .from('v_chart_pricing_calendar_30d')
+    .select('day, base_rate, rooms_available, occ_pct, occ_category, all_stop_sell, stop_sell_cells, rooms_sold, total_rooms')
+    .eq('property_id', pid)
+    .gte('day', calFromIso)
+    .lte('day', calToIso)
+    .order('day');
+  const calByDay = new Map<string, Record<string, unknown>>();
+  for (const r of (pricingCal ?? []) as Array<Record<string, unknown>>) calByDay.set(String(r.day).slice(0, 10), r);
+  const sym = pid === 1000001 ? '€' : '$';
+  const pricingCalendarDays: CalendarDay[] = (() => {
+    const out: CalendarDay[] = [];
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(calFrom); d.setUTCDate(calFrom.getUTCDate() + i);
+      const iso = d.toISOString().slice(0, 10);
+      const row = calByDay.get(iso);
+      const rate = row && row.base_rate != null ? Math.round(Number(row.base_rate)) : null;
+      const avail = row && row.rooms_available != null ? Number(row.rooms_available) : null;
+      const occ = row && row.occ_pct != null ? Number(row.occ_pct) : null;
+      const cat = row ? String(row.occ_category ?? 'unknown') : 'unknown';
+      const tone: CalendarDay['tone'] =
+        row && row.all_stop_sell === true ? 'red' :
+        cat === 'high' ? 'green' :
+        cat === 'mid'  ? 'amber' :
+        cat === 'low'  ? 'red'   :
+        undefined;
+      out.push({
+        date: iso,
+        label: rate != null ? `${sym}${rate}` : '—',
+        tone,
+        tooltip: [
+          iso,
+          rate != null ? `Base rate: ${sym}${rate}` : 'Base rate: —',
+          avail != null ? `Rooms available: ${avail}` : 'Rooms available: —',
+          occ != null  ? `Occ: ${occ.toFixed(1)}%` : 'Occ: —',
+          `OCC category: ${cat}`,
+        ].join('\n'),
+      });
+    }
+    return out;
+  })();
+  const calHref = (newOff: number) => {
+    const p = new URLSearchParams();
+    if (newOff !== 0) p.set('off', String(newOff));
+    const qs = p.toString();
+    return `${basePath}${qs ? '?' + qs : ''}`;
+  };
+  const calRangeLabel = `${calFromIso} → ${calToIso}`;
+  const calPillStyle = (active: boolean): React.CSSProperties => ({
+    fontSize: 11, padding: '4px 10px', borderRadius: 99,
+    border: `1px solid ${active ? 'var(--primary, #1F3A2E)' : 'var(--hairline, #E6DFCC)'}`,
+    background: active ? 'var(--primary, #1F3A2E)' : 'var(--paper, #FFFFFF)',
+    color: active ? '#FFFFFF' : 'var(--ink-soft, #5A5A5A)',
+    textDecoration: 'none', fontWeight: active ? 600 : 500,
+    letterSpacing: '0.06em', textTransform: 'uppercase',
+  });
+
   return (
     <DashboardPage title="Revenue · Calendar" subtitle={`pricing · ${period.label}`} tabs={tabs}>
       {stripBlock}
+      <div style={fullRow}>
+        <Container title={`30-day pricing calendar · ${calRangeLabel}`} subtitle="hover any day for base rate · rooms available · OCC · category. arrow to slide next month (max +90d)">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 10 }}>
+            <a href={calHref(Math.max(0, calOff - 30))} style={{ ...calPillStyle(false), opacity: calOff === 0 ? 0.4 : 1 }}>← prev 30d</a>
+            {calOff !== 0 && <a href={calHref(0)} style={calPillStyle(false)}>today</a>}
+            <a href={calHref(Math.min(90, calOff + 30))} style={{ ...calPillStyle(false), opacity: calOff >= 90 ? 0.4 : 1 }}>next 30d →</a>
+          </div>
+          <MonthCalendar days={pricingCalendarDays} variant="occ" />
+        </Container>
+      </div>
+
       <div style={fullRow}>
         <Container title="Pricing snapshot" subtitle="actionable now" density="compact">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
