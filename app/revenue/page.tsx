@@ -14,7 +14,7 @@ import type { DeptCfg } from '@/lib/dept-cfg/types';
 import { REVENUE_SUBPAGES } from './_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { getDeptCfg } from '@/lib/dept-cfg/by-property';
-import { PROPERTY_ID } from '@/lib/supabase';
+import { PROPERTY_ID, supabase } from '@/lib/supabase';
 import ReportBuilder from './_components/ReportBuilder';
 import { getPulseTodayPickup, getPulseTodayCancellations } from '@/lib/data-pulse';
 
@@ -50,11 +50,14 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   const sections = subPages.filter((s) => s.label !== 'HoD');
 
   // PBS note#2: append today's Pickup + Cancellations as 5th + 6th KPI tiles.
+  // PBS note#6: bring back Bug box — read cockpit_bugs (open only).
   const todayIso = new Date().toISOString().slice(0, 10);
-  const [pickupToday, cancellationsToday] = await Promise.all([
+  const [pickupToday, cancellationsToday, bugsRes] = await Promise.all([
     getPulseTodayPickup(pid, todayIso).catch(() => [] as Array<unknown>),
     getPulseTodayCancellations(pid, todayIso).catch(() => [] as Array<unknown>),
+    supabase.from('cockpit_bugs').select('id, body, status, created_at, page_url').not('status','in','(closed,resolved,wontfix,done)').order('created_at', { ascending: false }).limit(5),
   ]);
+  const bugs = (bugsRes.data ?? []) as Array<{ id: number; body: string | null; status: string | null; created_at: string | null; page_url: string | null }>;
   const pickupCount = pickupToday.length;
   const cancelCount = cancellationsToday.length;
 
@@ -104,8 +107,8 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
         </div>
       )}
 
-      {/* 2. Attention / Docs / Tasks — three-up full-width row */}
-      <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
+      {/* 2. Attention / Reports / Tasks / Bugs — four-up full-width row (Bug box restored per #6) */}
+      <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
         <Container title="Attention" subtitle={`${attn.length} item${attn.length === 1 ? '' : 's'}`} density="compact">
           {attn.length === 0 ? <div style={emptyStyle}>nothing flagged</div> : (
             <div style={listStyle}>
@@ -141,6 +144,20 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
                 <div key={t.id} style={rowStyle}>
                   <span style={{ ...dotStyle, background: t.done ? 'var(--ink-soft, #5A5A5A)' : 'var(--primary, #1F3A2E)' }} aria-hidden />
                   <span style={{ ...labelStyle, textDecoration: t.done ? 'line-through' : 'none', color: t.done ? 'var(--ink-soft, #5A5A5A)' : 'inherit' }}>{t.label}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Container>
+
+        <Container title="Bugs" subtitle={`${bugs.length} open`} density="compact">
+          {bugs.length === 0 ? <div style={emptyStyle}>no open bugs</div> : (
+            <div style={listStyle}>
+              {bugs.map((b) => (
+                <div key={b.id} style={rowStyle}>
+                  <span style={{ ...dotStyle, background: 'var(--brass, #B8542A)' }} aria-hidden />
+                  <span style={labelStyle}>{String(b.body ?? '').slice(0, 80)}</span>
+                  {b.page_url && <span style={tagStyle}>{String(b.page_url).replace(/^https?:\/\/[^/]+/, '')}</span>}
                 </div>
               ))}
             </div>
