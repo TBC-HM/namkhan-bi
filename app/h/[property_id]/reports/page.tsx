@@ -10,6 +10,7 @@
 // ?dept= param picks the right subPages strip so the entry tab stays lit.
 
 import Link from 'next/link';
+import ReportActions from './_components/ReportActions';
 import { notFound } from 'next/navigation';
 import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
 import AgentDeliveriesPanel from '@/components/inbox/AgentDeliveriesPanel';
@@ -115,6 +116,7 @@ export default async function ReportsPage({ params, searchParams }: Props) {
     supabase
       .from('report_runs')
       .select('id, template_code, property_id, params, output_summary, status, created_at')
+      .neq('status', 'deleted')
       .eq('property_id', propertyId)
       .order('created_at', { ascending: false })
       .limit(100),
@@ -176,9 +178,12 @@ export default async function ReportsPage({ params, searchParams }: Props) {
                           <span title={run.created_at}>{relTime(run.created_at)}</span>
                         </td>
                         <td style={tdRight}>
-                          <Link href={buildReopenHref(propertyId, run)} target="_blank" rel="noopener noreferrer" style={reopenLink}>
-                            Reopen ↗
-                          </Link>
+                          <ReportActions
+                            runId={run.id}
+                            reopenHref={buildReopenHref(propertyId, run)}
+                            reportType={String((run.params ?? {}).type ?? run.template_code ?? '')}
+                            reportUrl={buildReopenHref(propertyId, run)}
+                          />
                         </td>
                       </tr>
                     );
