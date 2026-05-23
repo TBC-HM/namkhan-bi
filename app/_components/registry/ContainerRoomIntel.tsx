@@ -525,8 +525,14 @@ async function DrillPanel({
     last12Months.forEach((m, mIdx) => {
       const row = categoryRowsAllTime.find((r) => r.room_type_name === rt && r.period_yyyymm === m);
       adrData[mIdx][`t${idx}`] = row ? num(row.adr) : 0;
+      // PBS 2026-05-22 task #88: surface RN in tooltip too. LOS (avg length
+      // of stay per booking) needs reservation-level data — tracked as #96.
+      adrData[mIdx][`t${idx}_rn`] = row ? num(row.room_nights) : 0;
     });
   });
+  // labels for tooltip lookup
+  const seriesLabelByKey: Record<string, string> = {};
+  granularTypes.forEach((rt, idx) => { seriesLabelByKey[`t${idx}`] = rt; });
 
   // Source mix per granular room_type (RPC call)
   const { data: sourceMixRows } = await supabase.rpc('fn_room_source_mix', {
@@ -625,7 +631,22 @@ async function DrillPanel({
           </div>
           <div style={{ padding: 12 }}>
             <Chart variant="line" data={adrData} xKey="month" series={adrSeries} height={220}
-              empty={{ title: 'No ADR history for this category' }} />
+              empty={{ title: 'No ADR history for this category' }}
+              tooltipFormatter={(point, seriesKey) => {
+                const key = String(seriesKey ?? '');
+                const label = seriesLabelByKey[key] ?? key;
+                const adr = Number(point[key] ?? 0);
+                const rn = Number(point[`${key}_rn`] ?? 0);
+                const month = String(point.month ?? '');
+                return (
+                  <div style={{ fontSize: 11, lineHeight: 1.5 }}>
+                    <div style={{ fontWeight: 600, marginBottom: 4 }}>{label}</div>
+                    <div style={{ color: 'var(--ink-soft, #5A5A5A)' }}>{month}</div>
+                    <div>ADR <strong>{currencySymbol}{Math.round(adr).toLocaleString()}</strong></div>
+                    <div>Room nights <strong>{rn.toLocaleString()}</strong></div>
+                  </div>
+                );
+              }} />
           </div>
         </div>
       )}
