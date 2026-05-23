@@ -16,7 +16,7 @@ import { getPaceOtb } from '@/lib/data';
 import { resolvePeriod, type WindowKey } from '@/lib/period';
 import { REVENUE_SUBPAGES } from '../_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
-import { PROPERTY_ID } from '@/lib/supabase';
+import { PROPERTY_ID, supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -66,7 +66,11 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
   }));
 
   const period = resolvePeriod(searchParams ?? {});
-  const pace = await getPaceOtb(period, pid).catch(() => [] as Record<string, unknown>[]);
+  const [pace, losDist, bwDist] = await Promise.all([
+    getPaceOtb(period, pid).catch(() => [] as Record<string, unknown>[]),
+    supabase.from('v_chart_los_distribution').select('los_bucket, bucket_order, total_reservations, total_revenue, adr, share_pct').eq('property_id', pid).order('bucket_order'),
+    supabase.from('v_chart_booking_window_distribution').select('booking_window_bucket, bucket_order, total_reservations, total_revenue, adr, share_pct').eq('property_id', pid).order('bucket_order'),
+  ]);
   const allRows: DemandRow[] = (pace as Array<Record<string, unknown>>).map((r) => ({
     ci_month:         String(r.ci_month),
     otb_roomnights:   Number(r.otb_roomnights || 0),
@@ -239,7 +243,29 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
         </Container>
       </div>
 
-      {/* Row 5 · Pace by check-in month (anchored here under filters, starts Jan-2025) */}
+      {/* Row 5 · LOS + Booking window distributions (2-up) */}
+      <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, alignItems: 'stretch' }}>
+        <Container title="LOS bucket distribution" subtitle="reservations by length-of-stay bucket">
+          <Chart variant="bar" data={(losDist.data ?? []).map((r) => ({
+            bucket: String((r as Record<string, unknown>).los_bucket ?? ''),
+            reservations: Number((r as Record<string, unknown>).total_reservations ?? 0),
+            share_pct: Number((r as Record<string, unknown>).share_pct ?? 0),
+          }))} xKey="bucket"
+            series={[{ key: 'reservations', label: 'Reservations', color: '#1F3A2E' }]}
+            height={220} empty={{ title: 'No LOS distribution data' }} />
+        </Container>
+        <Container title="Booking window distribution" subtitle="reservations by lead-time bucket">
+          <Chart variant="bar" data={(bwDist.data ?? []).map((r) => ({
+            bucket: String((r as Record<string, unknown>).booking_window_bucket ?? ''),
+            reservations: Number((r as Record<string, unknown>).total_reservations ?? 0),
+            share_pct: Number((r as Record<string, unknown>).share_pct ?? 0),
+          }))} xKey="bucket"
+            series={[{ key: 'reservations', label: 'Reservations', color: '#B8542A' }]}
+            height={220} empty={{ title: 'No booking window data' }} />
+        </Container>
+      </div>
+
+      {/* Row 6 · Pace by check-in month (anchored here under filters, starts Jan-2025) */}
       <div style={fullRow}>
         <Container title={`Pace by check-in month · from Jan 2025 · ${paceTableRows.length} month${paceTableRows.length === 1 ? '' : 's'}`} subtitle="past = actual OTB · future = pace · mv_pace_otb">
           <Chart variant="table" data={tableRows} xKey="ci_month" series={tableCols}
