@@ -122,7 +122,8 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
   const hiddenOrphanInWindow = rankedAll.length - ranked.length;
 
   // Plans table rows (pre-formatted strings — no functions cross primitives)
-  const planRows = ranked.map((p) => ({
+  // note#20: group plans visually by plan_type (sort by type, revenue order preserved within group via stable JS sort)
+  const planRows = [...ranked].sort((a, b) => formatPlanType(a.type).localeCompare(formatPlanType(b.type))).map((p) => ({
     name:        formatPlanName(p.name),
     type:        formatPlanType(p.type),
     bookings:    fmtInt(p.bookings),
