@@ -8,6 +8,7 @@
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { resolvePeriod } from '@/lib/period';
 import { supabase } from '@/lib/supabase';
+import LetterheadHeader from './LetterheadHeader';
 import PrintControls from './PrintControls';
 import PulseReport from './_renderers/PulseReport';
 import PaceReport from './_renderers/PaceReport';
@@ -123,6 +124,10 @@ export default async function RevenueReportRender({ searchParams }: Props) {
           a { color: inherit !important; text-decoration: none !important; }
         }
       `}</style>
+
+      {/* PBS 2026-05-22: letterhead — property name left, address right, generated stamp */}
+      {/* @ts-expect-error Server Component */}
+      <LetterheadHeader propertyId={propertyId} reportLabel={`${titleWord} report`} periodLabel={`${period.label}${month ? ` · ${month}` : ''}`} />
 
       {needsNamkhanData ? (
         <div data-panel style={{
