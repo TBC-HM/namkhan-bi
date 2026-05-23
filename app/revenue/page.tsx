@@ -16,6 +16,7 @@ import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { getDeptCfg } from '@/lib/dept-cfg/by-property';
 import { PROPERTY_ID, supabase } from '@/lib/supabase';
 import ReportBuilder from './_components/ReportBuilder';
+import ReportsList from './_components/ReportsList';
 import HodTasksList from './_components/HodTasksList';
 import AttentionList from './_components/AttentionList';
 import { getPulseTodayPickup, getPulseTodayCancellations } from '@/lib/data-pulse';
@@ -120,18 +121,8 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
           <AttentionList items={attn} storageKey={`attn:revenue:${pid}`} />
         </Container>
 
-        <Container title="My Reports" subtitle={`${docs.length} item${docs.length === 1 ? '' : 's'}`} density="compact">
-          {docs.length === 0 ? <div style={emptyStyle}>no docs yet</div> : (
-            <div style={listStyle}>
-              {docs.map((d) => (
-                <a key={d.id} href={d.href} target="_blank" rel="noopener noreferrer" style={{ ...rowStyle, textDecoration: 'none', color: 'inherit' }}>
-                  <span style={{ ...dotStyle, background: 'var(--brass, #B8542A)' }} aria-hidden />
-                  <span style={labelStyle}>{d.label}</span>
-                  {d.report_type && <span style={tagStyle}>{d.report_type}</span>}
-                </a>
-              ))}
-            </div>
-          )}
+        <Container title="My Reports" subtitle={`${docs.length} item${docs.length === 1 ? '' : 's'} · red = unseen · dismiss with ×`} density="compact">
+          <ReportsList items={docs} storageKey={`reports:revenue:${pid}`} />
         </Container>
 
         <Container title="My Tasks" subtitle="add / check off / delete · per property" density="compact">
