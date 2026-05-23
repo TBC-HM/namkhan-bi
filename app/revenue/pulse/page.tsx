@@ -11,6 +11,8 @@ import {
   type ChartSeries, type DashboardTab, type KpiTileProps,
 } from '@/app/(cockpit)/_design';
 import { REVENUE_SUBPAGES } from '../_subpages';
+import MonthCalendar, { type CalendarDay } from './_components/MonthCalendar';
+import PickupTabs from './_components/PickupTabs';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { PROPERTY_ID } from '@/lib/supabase';
 import {
@@ -20,6 +22,7 @@ import {
   getPulseTopSources,
   getPulseHighOcc,
   getPulseTodayPickup,
+  getPulseTodayCancellations,
   getPulseUpcomingEvents,
   getOccScoped,
   type OccScoped,
@@ -94,18 +97,19 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
   const stlyFrom = shiftDate(heroFrom, -365);
   const stlyTo = shiftDate(heroTo, -365);
 
-  const [headline, summary, dailyRows, stlyDailyRows, topSources, highOcc, pickup, events, occScoped] =
+  const [headline, summary, dailyRows, stlyDailyRows, topSources, highOcc, pickup, cancellations, events, occScoped] =
     await Promise.all([
       getPulseHeadlineKpis(pid, anchor),
       getPulsePerformanceSummary(pid, anchor),
       getPulseDaily(pid, heroFrom, heroTo),
       getPulseDaily(pid, stlyFrom, stlyTo),
-      getPulseTopSources(pid, 30, 5),
-      getPulseHighOcc(pid, anchor, shiftDate(anchor, 60), 80),
+      getPulseTopSources(pid, 30, 10),
+      getPulseHighOcc(pid, anchor, shiftDate(anchor, 30), 0),
       getPulseTodayPickup(pid, shiftDate(anchor, pickupOffset)),
-      getPulseUpcomingEvents(pid, anchor, shiftDate(anchor, 30), 10),
+      getPulseTodayCancellations(pid, shiftDate(anchor, pickupOffset)),
+      getPulseUpcomingEvents(pid, anchor, shiftDate(anchor, 30), 30),
       getOccScoped(pid),
-    ]) as [PulseKpiSnapshot, Awaited<ReturnType<typeof getPulsePerformanceSummary>>, PulseDailyRow[], PulseDailyRow[], PulseSourceRow[], PulseHighOccDay[], PulsePickupRow[], PulseEventRow[], OccScoped | null];
+    ]) as [PulseKpiSnapshot, Awaited<ReturnType<typeof getPulsePerformanceSummary>>, PulseDailyRow[], PulseDailyRow[], PulseSourceRow[], PulseHighOccDay[], PulsePickupRow[], PulsePickupRow[], PulseEventRow[], OccScoped | null];
 
   // ─── headline tiles ──────────────────────────────────────────────────
   const occΔ    = pctChange(headline.occupancyPct, headline.stlyOccupancyPct);
@@ -255,6 +259,64 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
     return `${basePath}${qs ? '?' + qs : ''}`;
   };
 
+  // PBS 2026-05-23 (#103): build 30-day calendar days for events + occ.
+  const calendarDays: { date: string; idx: number }[] = (() => {
+    const out: { date: string; idx: number }[] = [];
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(anchor + 'T00:00:00Z');
+      d.setUTCDate(d.getUTCDate() + i);
+      out.push({ date: d.toISOString().slice(0, 10), idx: i });
+    }
+    return out;
+  })();
+  const eventsByDay = new Map<string, string[]>();
+  for (const e of events) {
+    const k = String(e.date).slice(0, 10);
+    const arr = eventsByDay.get(k) ?? [];
+    arr.push(e.name);
+    eventsByDay.set(k, arr);
+  }
+  const eventCalendar: CalendarDay[] = calendarDays.map((d) => {
+    const evs = eventsByDay.get(d.date) ?? [];
+    return {
+      date: d.date,
+      label: evs.length > 0 ? `${evs.length}` : undefined,
+      tone: evs.length > 0 ? 'brass' : undefined,
+      tooltip: evs.length > 0 ? `${d.date}\n${evs.join('\n')}` : undefined,
+    };
+  });
+  const occByDay = new Map<string, number>();
+  for (const r of highOcc) {
+    occByDay.set(String(r.date).slice(0, 10), Number(r.occupancy_pct ?? 0));
+  }
+  const occCalendar: CalendarDay[] = calendarDays.map((d) => {
+    const pct = occByDay.get(d.date);
+    if (pct == null) return { date: d.date };
+    const tone: CalendarDay['tone'] = pct >= 80 ? 'green' : pct >= 50 ? 'amber' : 'red';
+    return {
+      date: d.date,
+      label: `${Math.round(pct)}%`,
+      tone,
+      tooltip: `${d.date}\nOccupancy: ${pct.toFixed(1)}%`,
+    };
+  });
+
+  // Map pickup + cancellations to PickupTabs row shape
+  const pickupTabRows = pickup.map((p) => ({
+    source: p.source, guest: p.guest, reservation_id: p.reservation_id,
+    accommodation: p.accommodation, nights: p.nights,
+    adr: p.adr > 0 ? `${sym}${Math.round(p.adr).toLocaleString('en-US')}` : '—',
+    value: p.value > 0 ? `${sym}${Math.round(p.value).toLocaleString('en-US')}` : '—',
+    window: p.window,
+  }));
+  const cancelTabRows = cancellations.map((p) => ({
+    source: p.source, guest: p.guest, reservation_id: p.reservation_id,
+    accommodation: p.accommodation, nights: p.nights,
+    adr: p.adr > 0 ? `${sym}${Math.round(p.adr).toLocaleString('en-US')}` : '—',
+    value: p.value > 0 ? `${sym}${Math.round(p.value).toLocaleString('en-US')}` : '—',
+    window: p.window,
+  }));
+
   return (
     <DashboardPage
       title="Revenue · Pulse"
@@ -306,57 +368,38 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
         />
       </Container>
 
-      <Container title="Top 5 sources" subtitle="last 30 days · accommodations booked">
+      <Container title="Top 10 sources" subtitle="last 30 days · bookings + revenue">
         <Chart
           variant="table"
-          data={topSourceRows}
+          data={topSources.map((s) => ({
+            channel: s.source_name,
+            bookings: s.bookings,
+            revenue: s.revenue != null && s.revenue > 0 ? `${sym}${Math.round(s.revenue).toLocaleString('en-US')}` : '—',
+          }))}
           xKey="channel"
-          series={[{ key: 'bookings', label: 'Booked' }]}
+          series={[
+            { key: 'bookings', label: 'Bookings' },
+            { key: 'revenue',  label: 'Revenue' },
+          ]}
           empty={{ title: 'No source data in window' }}
         />
       </Container>
 
-      <Container title="Upcoming high occupancy" subtitle="next 60 days · ≥ 80%">
-        <Chart
-          variant="table"
-          data={highOccRows}
-          xKey="date"
-          series={[
-            { key: 'occupancy', label: 'Occ %' },
-            { key: 'rooms',     label: 'Rooms sold' },
-          ]}
-          empty={{ title: 'No high-occupancy days in next 60d' }}
-        />
+      <Container title="Occupancy · next 30 days" subtitle="hover any day for the OCC %">
+        <MonthCalendar days={occCalendar} variant="occ" />
       </Container>
 
-      <Container title={`${pickupLabel}'s pickup`} subtitle={`booked on ${fmtLongDate(pickupDate)}`}>
+      <Container title={`${pickupLabel} · pickup + cancellations`} subtitle={`activity on ${fmtLongDate(pickupDate)}`}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 12 }}>
           <PillLink href={pickupHref(pickupOffset - 1)} active={false} disabled={pickupOffset <= -8}>←</PillLink>
           {pickupOffset !== 0 && <PillLink href={pickupHref(0)} active={false}>today</PillLink>}
           <PillLink href={pickupHref(pickupOffset + 1)} active={false} disabled={pickupOffset >= 0}>→</PillLink>
         </div>
-        <Chart
-          variant="table"
-          data={pickupRows}
-          xKey="source"
-          series={[
-            { key: 'count',         label: 'Bookings' },
-            { key: 'accommodation', label: 'Room type' },
-            { key: 'window',        label: 'Window' },
-            { key: 'avg_los',       label: 'Avg LOS' },
-          ]}
-          empty={{ title: 'No bookings on this day' }}
-        />
+        <PickupTabs pickup={pickupTabRows} cancellations={cancelTabRows} />
       </Container>
 
-      <Container title="Upcoming events" subtitle="next 30 days">
-        <Chart
-          variant="table"
-          data={eventRows}
-          xKey="event"
-          series={[{ key: 'date', label: 'Date' }]}
-          empty={{ title: 'None available' }}
-        />
+      <Container title="Upcoming events · next 30 days" subtitle="hover any day to see events">
+        <MonthCalendar days={eventCalendar} variant="events" />
       </Container>
     </DashboardPage>
   );
