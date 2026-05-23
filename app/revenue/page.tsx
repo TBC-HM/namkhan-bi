@@ -51,7 +51,8 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   const cfg: DeptCfg = pid === PROPERTY_ID ? DEPT_CFG.revenue : getDeptCfg('revenue', pid);
 
   const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
-  const sections = subPages.filter((s) => s.label !== 'HoD');
+  // PBS #181: keep HoD in the tab strip so user can click back to landing.
+  const sections = subPages;
 
   // PBS note#2: append today's Pickup + Cancellations as 5th + 6th KPI tiles.
   // PBS note#6: bring back Bug box — read cockpit_bugs (open only).
@@ -96,8 +97,11 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
       : `/cockpit/chat?dept=revenue`;
 
   // PBS note#1: surface sections as the TOP tab strip on the HoD landing.
+  // PBS #181: when on bare /revenue the active tab is HoD (the landing); on /h/[pid]/revenue same.
+  const hodHrefs = ['/revenue', `/h/${pid}/revenue`];
   const hodTabs = sections.map((s) => ({
-    key: s.href, label: s.label, href: s.href, active: false,
+    key: s.href, label: s.label, href: s.href,
+    active: s.label === 'HoD' && hodHrefs.includes('/revenue'),
   }));
   return (
     <DashboardPage
