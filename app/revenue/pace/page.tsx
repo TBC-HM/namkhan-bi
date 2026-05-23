@@ -283,13 +283,8 @@ export default async function PacePage({
       subtitle={`What's on the books ahead. ${period.label}.`}
       tabs={tabs}
     >
-      <Container title="On-the-books snapshot" subtitle={period.label} density="compact">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
-          {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
-        </div>
-      </Container>
-
-      <Container title="Window & granularity" subtitle="URL-driven controls" density="compact">
+      {/* note#10: Window & granularity promoted to top of content (just under sticky page header) */}
+      <Container title="Window & granularity" subtitle="URL-driven controls · stay on top of every scroll" density="compact">
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
           <ControlGroup label="Forward window">
             {winOptions.map((o) => (
@@ -301,6 +296,12 @@ export default async function PacePage({
               <PillLink key={o.k} active={o.k === gran} href={hrefFor({ gran: o.k })}>{o.label}</PillLink>
             ))}
           </ControlGroup>
+        </div>
+      </Container>
+
+      <Container title="On-the-books snapshot" subtitle={period.label} density="compact">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
+          {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
         </div>
       </Container>
 
