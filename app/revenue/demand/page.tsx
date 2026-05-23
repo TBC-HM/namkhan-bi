@@ -1,6 +1,11 @@
 // app/revenue/demand/page.tsx
-// 2026-05-20: primitives-based demand. Shared body for /revenue/demand
-// (Namkhan default) and /h/[id]/revenue/demand (delegates with propertyId).
+// 2026-05-23 (#105/#106/#107) — restructured per PBS:
+//   Row 1 (3-up):  Room-nights · Revenue · Delta heat  (3 graphs on top)
+//   Row 2 (full):  OTB headline KPI strip (4 tiles)
+//   Row 3 (full):  Pace signals KPI strip (4 tiles)
+//   Row 4 (full):  Window selector (forward horizon pills)
+//   Row 5 (full):  Pace by check-in month — anchored here, starts Jan-2025
+// Shared body for /revenue/demand (Namkhan) and /h/[id]/revenue/demand.
 // Legacy preserved at /revenue/demand/legacy.
 
 import {
@@ -15,6 +20,15 @@ import { PROPERTY_ID } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
+
+const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
+const threeUp: React.CSSProperties = {
+  gridColumn: '1 / -1',
+  display: 'grid',
+  gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+  gap: 10,
+  alignItems: 'stretch',
+};
 
 interface DemandRow {
   ci_month: string;
@@ -53,7 +67,7 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
 
   const period = resolvePeriod(searchParams ?? {});
   const pace = await getPaceOtb(period, pid).catch(() => [] as Record<string, unknown>[]);
-  const rows: DemandRow[] = (pace as Array<Record<string, unknown>>).map((r) => ({
+  const allRows: DemandRow[] = (pace as Array<Record<string, unknown>>).map((r) => ({
     ci_month:         String(r.ci_month),
     otb_roomnights:   Number(r.otb_roomnights || 0),
     stly_roomnights:  Number(r.stly_roomnights || 0),
@@ -62,6 +76,10 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
     stly_revenue:     Number(r.stly_revenue || 0),
     revenue_delta:    Number(r.revenue_delta || 0),
   }));
+
+  // #106: Pace table starts at Jan 2025. KPIs/headline use all rows in window.
+  const rows = allRows;
+  const paceTableRows = allRows.filter((r) => r.ci_month >= '2025-01');
 
   const total = rows.reduce(
     (a, r) => ({
@@ -120,7 +138,7 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
     { key: 'stly_rev', label: 'STLY revenue', color: '#B8542A' },
   ];
 
-  const tableRows = rows.map((r) => ({
+  const tableRows = paceTableRows.map((r) => ({
     ci_month:  r.ci_month,
     otb_rn:    fmtInt(r.otb_roomnights),
     stly_rn:   fmtInt(r.stly_roomnights),
@@ -165,56 +183,69 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
         }}>↗ Legacy archive</a>
       }
     >
-      <Container title="OTB headline" subtitle={`forward window · ${period.label}`} density="compact">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-          {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
-        </div>
-      </Container>
+      {/* Row 1 · 3 graphs on top (3-up, equal size) */}
+      <div style={threeUp}>
+        <Container title="Room-nights · OTB vs STLY" subtitle="by check-in month">
+          <Chart variant="line" data={trendData} xKey="ci_month" series={trendSeries} height={220}
+            empty={{ title: 'No demand rows', hint: 'mv_pace_otb returned 0 rows' }} />
+        </Container>
+        <Container title="Revenue · OTB vs STLY" subtitle="by check-in month · USD">
+          <Chart variant="line" data={revData} xKey="ci_month" series={revSeries} height={220}
+            empty={{ title: 'No revenue rows' }} />
+        </Container>
+        <Container title="Delta heat · room-nights" subtitle="positive = ahead of STLY">
+          <Chart variant="bar" data={deltaData} xKey="ci_month"
+            series={[{ key: 'rn_delta', label: 'Δ RN vs STLY', color: '#1F3A2E' }]}
+            height={220} empty={{ title: 'No delta rows' }} />
+        </Container>
+      </div>
 
-      <Container title="Pace signals" subtitle="month-level distribution" density="compact">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-          {signals.map((t, i) => <KpiTile key={i} {...t} />)}
-        </div>
-      </Container>
+      {/* Row 2 · OTB headline KPI strip */}
+      <div style={fullRow}>
+        <Container title="OTB headline" subtitle={`forward window · ${period.label}`} density="compact">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+            {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
+          </div>
+        </Container>
+      </div>
 
-      <Container title="Window" subtitle="forward demand horizon" density="compact">
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-          {winOptions.map((o) => {
-            const active = o.k === period.win;
-            return (
-              <a key={o.k} href={hrefFor(o.k)} style={{
-                fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase',
-                padding: '4px 10px', borderRadius: 99,
-                border: `1px solid ${active ? 'var(--primary, #1F3A2E)' : 'var(--hairline, #E6DFCC)'}`,
-                background: active ? 'var(--primary, #1F3A2E)' : 'var(--paper, #FFFFFF)',
-                color: active ? '#FFFFFF' : 'var(--ink-soft, #5A5A5A)',
-                fontWeight: active ? 600 : 500, textDecoration: 'none',
-              }}>{o.label}</a>
-            );
-          })}
-        </div>
-      </Container>
+      {/* Row 3 · Pace signals KPI strip */}
+      <div style={fullRow}>
+        <Container title="Pace signals" subtitle="month-level distribution" density="compact">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+            {signals.map((t, i) => <KpiTile key={i} {...t} />)}
+          </div>
+        </Container>
+      </div>
 
-      <Container title="Room-nights · OTB vs STLY" subtitle="by check-in month">
-        <Chart variant="line" data={trendData} xKey="ci_month" series={trendSeries} height={240}
-          empty={{ title: 'No demand rows', hint: 'mv_pace_otb returned 0 rows' }} />
-      </Container>
+      {/* Row 4 · Window selector (forward horizon) */}
+      <div style={fullRow}>
+        <Container title="Window" subtitle="forward demand horizon" density="compact">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {winOptions.map((o) => {
+              const active = o.k === period.win;
+              return (
+                <a key={o.k} href={hrefFor(o.k)} style={{
+                  fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase',
+                  padding: '4px 10px', borderRadius: 99,
+                  border: `1px solid ${active ? 'var(--primary, #1F3A2E)' : 'var(--hairline, #E6DFCC)'}`,
+                  background: active ? 'var(--primary, #1F3A2E)' : 'var(--paper, #FFFFFF)',
+                  color: active ? '#FFFFFF' : 'var(--ink-soft, #5A5A5A)',
+                  fontWeight: active ? 600 : 500, textDecoration: 'none',
+                }}>{o.label}</a>
+              );
+            })}
+          </div>
+        </Container>
+      </div>
 
-      <Container title="Revenue · OTB vs STLY" subtitle="by check-in month · USD">
-        <Chart variant="line" data={revData} xKey="ci_month" series={revSeries} height={240}
-          empty={{ title: 'No revenue rows' }} />
-      </Container>
-
-      <Container title="Delta heat · room-nights" subtitle="positive = ahead of STLY">
-        <Chart variant="bar" data={deltaData} xKey="ci_month"
-          series={[{ key: 'rn_delta', label: 'Δ RN vs STLY', color: '#1F3A2E' }]}
-          height={220} empty={{ title: 'No delta rows' }} />
-      </Container>
-
-      <Container title={`Pace by check-in month · ${rows.length} month${rows.length === 1 ? '' : 's'}`} subtitle="OTB vs STLY · mv_pace_otb">
-        <Chart variant="table" data={tableRows} xKey="ci_month" series={tableCols}
-          empty={{ title: 'No pace rows' }} />
-      </Container>
+      {/* Row 5 · Pace by check-in month (anchored here under filters, starts Jan-2025) */}
+      <div style={fullRow}>
+        <Container title={`Pace by check-in month · from Jan 2025 · ${paceTableRows.length} month${paceTableRows.length === 1 ? '' : 's'}`} subtitle="past = actual OTB · future = pace · mv_pace_otb">
+          <Chart variant="table" data={tableRows} xKey="ci_month" series={tableCols}
+            empty={{ title: 'No pace rows from 2025-01 onwards' }} />
+        </Container>
+      </div>
     </DashboardPage>
   );
 }
