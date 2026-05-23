@@ -41,6 +41,7 @@ export interface PulsePerformanceSummary {
 export interface PulseSourceRow {
   source_name: string;
   bookings: number;
+  revenue?: number;
 }
 
 export interface PulseHighOccDay {
@@ -51,11 +52,6 @@ export interface PulseHighOccDay {
 export interface PulsePickupRow {
   source: string;
   accommodation: string;
-  guest: string;
-  reservation_id: string;
-  adr: number;
-  value: number;
-  nights: number;
   window: string;
   avg_los: number;
   count: number;
@@ -174,19 +170,25 @@ export async function getPulseTopSources(
   _daysBack = 30,
   limit = 5,
 ): Promise<PulseSourceRow[]> {
+  // PBS 2026-05-23 (#102): the previous impl read v_source_top10 (all-time
+  // reservation count) — container says "last 30 days" so numbers looked
+  // wrong. Switched to public.mv_channel_perf which has bookings_30d +
+  // revenue_30d per (property, source) — rebuilt cross-property in #97.
   const { data, error } = await supabase
-    .from('v_source_top10')
-    .select('source, reservations')
+    .from('mv_channel_perf')
+    .select('source_name, bookings_30d, revenue_30d')
     .eq('property_id', propertyId)
-    .order('reservations', { ascending: false })
+    .gt('bookings_30d', 0)
+    .order('bookings_30d', { ascending: false })
     .limit(limit);
   if (error) {
-    console.error('[pulse/getPulseTopSources] v_source_top10 error', error);
+    console.error('[pulse/getPulseTopSources] mv_channel_perf error', error);
     return [];
   }
-  return ((data ?? []) as Array<{ source: string | null; reservations: number | null }>).map((r) => ({
-    source_name: String(r.source ?? '—'),
-    bookings:    Number(r.reservations ?? 0),
+  return ((data ?? []) as Array<{ source_name: string | null; bookings_30d: number | null; revenue_30d: number | null }>).map((r) => ({
+    source_name: String(r.source_name ?? '—'),
+    bookings:    Number(r.bookings_30d ?? 0),
+    revenue:     Number(r.revenue_30d ?? 0),
   }));
 }
 
@@ -233,40 +235,39 @@ export async function getPulseTodayPickup(
 
   const { data, error } = await supabase
     .from('v_reservations_unified')
-    .select('reservation_id, source_name, room_type_name, guest_name, check_in_date, booking_date, nights, total_amount')
+    .select('source_name, room_type_name, check_in_date, booking_date, nights')
     .eq('property_id', propertyId)
     .eq('is_cancelled', false)
     .gte('booking_date', startIso)
-    .lte('booking_date', endIso)
-    .order('booking_date', { ascending: false })
-    .limit(50);
+    .lte('booking_date', endIso);
 
   if (error || !data) return [];
 
-  return (data as Array<Record<string, unknown>>).map((r) => {
-    const nights = Number(r.nights ?? 0);
-    const value = Number(r.total_amount ?? 0);
-    const adr = nights > 0 ? value / nights : 0;
-    let windowLabel = '—';
+  const agg = new Map<string, { source: string; acc: string; count: number; nightsSum: number; windowDaysSum: number; windowDaysN: number }>();
+  for (const r of data as Array<Record<string, unknown>>) {
+    const source = String(r.source_name ?? 'Direct');
+    const acc = String(r.room_type_name ?? '—');
+    const key = `${source}||${acc}`;
+    const cur = agg.get(key) ?? { source, acc, count: 0, nightsSum: 0, windowDaysSum: 0, windowDaysN: 0 };
+    cur.count += 1;
+    cur.nightsSum += Number(r.nights ?? 0);
     if (r.booking_date && r.check_in_date) {
       const bd = new Date(String(r.booking_date)).getTime();
       const ci = new Date(String(r.check_in_date) + 'T00:00:00Z').getTime();
-      const w = Math.max(0, Math.round((ci - bd) / 86_400_000));
-      windowLabel = `${w}d`;
+      cur.windowDaysSum += Math.max(0, Math.round((ci - bd) / 86_400_000));
+      cur.windowDaysN += 1;
     }
-    return {
-      source: String(r.source_name ?? 'Direct'),
-      accommodation: String(r.room_type_name ?? '—'),
-      guest: String(r.guest_name ?? '—'),
-      reservation_id: String(r.reservation_id ?? ''),
-      adr,
-      value,
-      nights,
-      window: windowLabel,
-      avg_los: nights,
-      count: 1,
-    };
-  });
+    agg.set(key, cur);
+  }
+  return Array.from(agg.values())
+    .map((v) => ({
+      source: v.source,
+      accommodation: v.acc,
+      window: v.windowDaysN > 0 ? `${Math.round(v.windowDaysSum / v.windowDaysN)}d` : '—',
+      avg_los: v.count > 0 ? v.nightsSum / v.count : 0,
+      count: v.count,
+    }))
+    .sort((a, b) => b.count - a.count);
 }
 
 // ─── Upcoming events (next 30 days from marketing.calendar_events) ──────
