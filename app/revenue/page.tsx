@@ -17,6 +17,7 @@ import { getDeptCfg } from '@/lib/dept-cfg/by-property';
 import { PROPERTY_ID, supabase } from '@/lib/supabase';
 import ReportBuilder from './_components/ReportBuilder';
 import HodTasksList from './_components/HodTasksList';
+import AttentionList from './_components/AttentionList';
 import { getPulseTodayPickup, getPulseTodayCancellations } from '@/lib/data-pulse';
 
 export const dynamic = 'force-dynamic';
@@ -115,18 +116,8 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
 
       {/* 2. Attention / Reports / Tasks / Bugs — four-up full-width row (Bug box restored per #6) */}
       <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
-        <Container title="Attention" subtitle={`${attn.length} item${attn.length === 1 ? '' : 's'}`} density="compact">
-          {attn.length === 0 ? <div style={emptyStyle}>nothing flagged</div> : (
-            <div style={listStyle}>
-              {attn.map((a) => (
-                <div key={a.id} style={rowStyle}>
-                  <span style={{ ...dotStyle, background: SEV_DOT[a.severity] }} aria-hidden />
-                  <span style={labelStyle}>{a.label}</span>
-                  <span style={tagStyle}>{a.kind}</span>
-                </div>
-              ))}
-            </div>
-          )}
+        <Container title="Attention" subtitle={`${attn.length} item${attn.length === 1 ? '' : 's'} · dismiss with ×`} density="compact">
+          <AttentionList items={attn} storageKey={`attn:revenue:${pid}`} />
         </Container>
 
         <Container title="My Reports" subtitle={`${docs.length} item${docs.length === 1 ? '' : 's'}`} density="compact">
