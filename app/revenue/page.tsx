@@ -102,7 +102,7 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   return (
     <DashboardPage
       title={`Revenue · ${cfg.hodName}`}
-      subtitle={`${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} · ${cfg.hodTagline}`}
+      subtitle={new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
       tabs={hodTabs}
       action={
         <Link href={chatHref} style={primaryBtnStyle}>{`Ask ${cfg.hodName} →`}</Link>
