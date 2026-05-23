@@ -66,10 +66,12 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
   }));
 
   const period = resolvePeriod(searchParams ?? {});
-  const [pace, losDist, bwDist] = await Promise.all([
+  const [pace, losDist, bwDist, losWindow, countryLW] = await Promise.all([
     getPaceOtb(period, pid).catch(() => [] as Record<string, unknown>[]),
     supabase.from('v_chart_los_distribution').select('los_bucket, bucket_order, total_reservations, total_revenue, adr, share_pct').eq('property_id', pid).order('bucket_order'),
     supabase.from('v_chart_booking_window_distribution').select('booking_window_bucket, bucket_order, total_reservations, total_revenue, adr, share_pct').eq('property_id', pid).order('bucket_order'),
+    supabase.from('v_chart_los_window_correlation').select('los_bucket, los_order, window_bucket, window_order, reservations, avg_los, total_revenue').eq('property_id', pid).order('window_order').order('los_order'),
+    supabase.from('v_chart_country_los_window').select('guest_country, reservations, avg_los, avg_window_days, short_window_pct, share_pct, total_revenue').eq('property_id', pid).order('reservations', { ascending: false }).limit(20),
   ]);
   const allRows: DemandRow[] = (pace as Array<Record<string, unknown>>).map((r) => ({
     ci_month:         String(r.ci_month),
@@ -265,7 +267,59 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
         </Container>
       </div>
 
-      {/* Row 6 · Pace by check-in month (anchored here under filters, starts Jan-2025) */}
+      {/* Row 6 · LOS × Booking-window correlation (lastminute bookers' stay length) */}
+      <div style={fullRow}>
+        <Container title="LOS × Booking-window correlation" subtitle="rows = booking-window bucket · columns = LOS bucket · cell = reservation count">
+          <Chart variant="table" data={(() => {
+            const lw = (losWindow.data ?? []) as Array<Record<string, unknown>>;
+            const losBuckets = ['1 night','2 nights','3-4 nights','5-7 nights','8-14 nights','15+ nights'];
+            const winBuckets = ['0-3 Days','4-7 Days','8-14 Days','15-30 Days','31-90 Days','90+ Days'];
+            return winBuckets.map((w) => {
+              const row: Record<string, string | number> = { window: w };
+              for (const l of losBuckets) {
+                const cell = lw.find((r) => String(r.window_bucket) === w && String(r.los_bucket) === l);
+                row[l] = cell ? Number(cell.reservations) : 0;
+              }
+              return row;
+            });
+          })()}
+            xKey="window"
+            series={[
+              { key: '1 night',     label: '1n' },
+              { key: '2 nights',    label: '2n' },
+              { key: '3-4 nights',  label: '3-4n' },
+              { key: '5-7 nights',  label: '5-7n' },
+              { key: '8-14 nights', label: '8-14n' },
+              { key: '15+ nights',  label: '15+n' },
+            ]}
+            empty={{ title: 'No reservations in window' }} />
+        </Container>
+      </div>
+
+      {/* Row 7 · Country × LOS × Booking-window — surgical tactical table */}
+      <div style={fullRow}>
+        <Container title="Country × LOS × Booking-window" subtitle="who books late vs who plans · short-window % flags reactive bookers · top 20 by volume">
+          <Chart variant="table" data={((countryLW.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+            country:           String(r.guest_country ?? 'Unknown'),
+            reservations:      Number(r.reservations ?? 0),
+            avg_los:           Number(r.avg_los ?? 0).toFixed(1) + ' n',
+            avg_window:        Number(r.avg_window_days ?? 0).toFixed(0) + ' d',
+            short_window_pct:  Number(r.short_window_pct ?? 0).toFixed(1) + '%',
+            share_pct:         Number(r.share_pct ?? 0).toFixed(1) + '%',
+          }))}
+            xKey="country"
+            series={[
+              { key: 'reservations',     label: 'Bookings' },
+              { key: 'avg_los',          label: 'Avg LOS' },
+              { key: 'avg_window',       label: 'Avg window' },
+              { key: 'short_window_pct', label: '≤7d %' },
+              { key: 'share_pct',        label: 'Share' },
+            ]}
+            empty={{ title: 'No country reservations data' }} />
+        </Container>
+      </div>
+
+      {/* Row 8 · Pace by check-in month (anchored here under filters, starts Jan-2025) */}
       <div style={fullRow}>
         <Container title={`Pace by check-in month · from Jan 2025 · ${paceTableRows.length} month${paceTableRows.length === 1 ? '' : 's'}`} subtitle="past = actual OTB · future = pace · mv_pace_otb">
           <Chart variant="table" data={tableRows} xKey="ci_month" series={tableCols}
