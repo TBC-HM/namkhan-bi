@@ -184,7 +184,28 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
       subtitle={`Find the gap before the calendar gets soft · ${period.label} · ${rows.length} month${rows.length === 1 ? '' : 's'} on the books`}
       tabs={tabs}
     >
-      {/* Row 1 · 3 graphs on top (3-up, equal size) */}
+      {/* note#155: Window selector promoted to row 1 (just under sticky header) — changes the whole page, must stay near top */}
+      <div style={fullRow}>
+        <Container title="Window" subtitle="forward demand horizon · stays on top of every scroll" density="compact">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {winOptions.map((o) => {
+              const active = o.k === period.win;
+              return (
+                <a key={o.k} href={hrefFor(o.k)} style={{
+                  fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase',
+                  padding: '4px 10px', borderRadius: 99,
+                  border: `1px solid ${active ? 'var(--primary, #1F3A2E)' : 'var(--hairline, #E6DFCC)'}`,
+                  background: active ? 'var(--primary, #1F3A2E)' : 'var(--paper, #FFFFFF)',
+                  color: active ? '#FFFFFF' : 'var(--ink-soft, #5A5A5A)',
+                  fontWeight: active ? 600 : 500, textDecoration: 'none',
+                }}>{o.label}</a>
+              );
+            })}
+          </div>
+        </Container>
+      </div>
+
+      {/* Row 2 · 3 graphs on top (3-up, equal size) */}
       <div style={threeUp}>
         <Container title="Room-nights · OTB vs STLY" subtitle="by check-in month">
           <Chart variant="line" data={trendData} xKey="ci_month" series={trendSeries} height={220}
@@ -256,26 +277,7 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
         </Container>
       </div>
 
-      {/* Row 5 · Window selector (forward horizon) */}
-      <div style={fullRow}>
-        <Container title="Window" subtitle="forward demand horizon" density="compact">
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-            {winOptions.map((o) => {
-              const active = o.k === period.win;
-              return (
-                <a key={o.k} href={hrefFor(o.k)} style={{
-                  fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase',
-                  padding: '4px 10px', borderRadius: 99,
-                  border: `1px solid ${active ? 'var(--primary, #1F3A2E)' : 'var(--hairline, #E6DFCC)'}`,
-                  background: active ? 'var(--primary, #1F3A2E)' : 'var(--paper, #FFFFFF)',
-                  color: active ? '#FFFFFF' : 'var(--ink-soft, #5A5A5A)',
-                  fontWeight: active ? 600 : 500, textDecoration: 'none',
-                }}>{o.label}</a>
-              );
-            })}
-          </div>
-        </Container>
-      </div>
+
 
       {/* Row 5 · LOS + Booking window distributions (2-up) */}
       <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, alignItems: 'stretch' }}>
