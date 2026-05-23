@@ -31,6 +31,19 @@ function fmtInt(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(Number(n))) return '—';
   return Math.round(Number(n)).toLocaleString('en-US');
 }
+// note#22: clarify "Restricted" — these are non-refundable / advance-purchase plans (stay/cancel restrictions)
+const PLAN_TYPE_LABEL: Record<string, string> = {
+  Restricted: 'Restricted · non-refundable / advance purchase',
+};
+function formatPlanType(t: string): string {
+  return PLAN_TYPE_LABEL[t] ?? t;
+}
+// note#21: flag UWC Thailand as one-time group booking
+const ONE_TIME_GROUPS = new Set(['UWC Thailand']);
+function formatPlanName(n: string): string {
+  return ONE_TIME_GROUPS.has(n) ? `${n} · one-time group` : n;
+}
+
 function fmtPct(n: number | null | undefined, decimals = 1): string {
   if (n == null || !Number.isFinite(Number(n))) return '—';
   return `${Number(n).toFixed(decimals)}%`;
@@ -102,8 +115,8 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
 
   // Plans table rows (pre-formatted strings — no functions cross primitives)
   const planRows = ranked.map((p) => ({
-    name:        p.name,
-    type:        p.type,
+    name:        formatPlanName(p.name),
+    type:        formatPlanType(p.type),
     bookings:    fmtInt(p.bookings),
     cancellations: fmtInt(p.cancellations),
     cancel_pct:  fmtPct((p.bookings + p.cancellations) > 0 ? (100 * p.cancellations) / (p.bookings + p.cancellations) : 0),
@@ -122,7 +135,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     typeMap[p.type].nights   += p.nights;
   });
   const typeDonut = Object.entries(typeMap).map(([type, v]) => ({
-    name:    type,
+    name:    formatPlanType(type),
     value:   Math.round(v.revenue),
   })).sort((a, b) => b.value - a.value);
 
@@ -157,8 +170,8 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
         .limit(30)
     : { data: [] as Array<{ rate_name: string; rate_type: string; last_booked: string | null; days_since: number }> };
   const sleepingRows = (sleepingPlans ?? []).map((r) => ({
-    name:        r.rate_name,
-    type:        r.rate_type,
+    name:        formatPlanName(r.rate_name),
+    type:        formatPlanType(r.rate_type),
     last_booked: r.last_booked ?? '—',
     days_idle:   fmtInt(r.days_since),
   }));
