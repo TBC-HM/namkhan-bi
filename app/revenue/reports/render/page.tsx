@@ -17,6 +17,7 @@ import PlMonthReport from './_renderers/PlMonthReport';
 import PricingReport from './_renderers/PricingReport';
 import ForecastReport from './_renderers/ForecastReport';
 import CompSetReport from './_renderers/CompSetReport';
+import VarianceReport from './_renderers/VarianceReport';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -33,6 +34,7 @@ const TITLE_BY_TYPE: Record<string, string> = {
   pricing:   'Pricing',
   forecast:  'Forecast',
   compset:   'Comp Set',
+  variance:  'Variance',
 };
 
 interface Props {
@@ -160,10 +162,11 @@ export default async function RevenueReportRender({ searchParams }: Props) {
           {type === 'pricing'  && <PricingReport period={period} propertyId={propertyId} />}
           {type === 'forecast' && <ForecastReport period={period} propertyId={propertyId} />}
           {(type === 'compset' || type === 'comp_set') && <CompSetReport period={period} propertyId={propertyId} />}
+          {type === 'variance' && <VarianceReport period={period} propertyId={propertyId} />}
         </>
       )}
 
-      {!['pulse','pace','channels','pl-month','pricing','forecast','compset','comp_set'].includes(type) && (
+      {!['pulse','pace','channels','pl-month','pricing','forecast','compset','comp_set','variance'].includes(type) && (
         <div data-panel style={{
           padding: 24,
           border: '1px solid var(--hairline, #E6DFCC)',
