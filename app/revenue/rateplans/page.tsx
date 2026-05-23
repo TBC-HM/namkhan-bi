@@ -253,7 +253,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     return `${basePath}${qs ? '?' + qs : ''}`;
   };
   const winOptions: Array<{ k: WindowKey; label: string }> = [
-    { k: '7d', label: '7d' }, { k: '30d', label: '30d' }, { k: '90d', label: '90d' }, { k: '180d', label: '180d' },
+    { k: '7d', label: '7d' }, { k: '30d', label: '30d' }, { k: '90d', label: '90d' }, { k: 'next180' as WindowKey, label: '180d' },
   ];
 
   const planCols: ChartSeries[] = [
