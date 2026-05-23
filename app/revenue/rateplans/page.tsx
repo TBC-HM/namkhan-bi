@@ -283,14 +283,10 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
         }}>↗ Dead plans (90d)</a>
       }
     >
+      {/* note#176: Window pills embedded INSIDE the Headline KPI stripe — saves vertical space */}
       <div style={fullRow}><Container title="Headline" subtitle={period.label} density="compact">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-          {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
-        </div>
-      </Container></div>
-
-      <div style={fullRow}><Container title="Window" subtitle="period selector" density="compact">
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 12, alignItems: 'center' }}>
+          <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', marginRight: 6 }}>Window:</span>
           {winOptions.map((o) => {
             const active = o.k === period.win;
             return (
@@ -304,6 +300,9 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
               }}>{o.label}</a>
             );
           })}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+          {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
         </div>
       </Container></div>
 
