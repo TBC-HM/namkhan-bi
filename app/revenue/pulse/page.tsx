@@ -1,8 +1,8 @@
 // app/revenue/pulse/page.tsx
-// 2026-05-19 refactor onto @/app/(cockpit)/_design primitives.
-// Single tree, both properties via PulseShell. Data fetches UNCHANGED.
-// Bespoke <PerformanceHero> / <HighOccCalendar> retired (stubs).
-//
+// 2026-05-23 (#103) — layout redesign per PBS spec:
+//   Row 1 (full):  Headline · yesterday  (4 KPI tiles)
+//   Row 2 (3-up):  Pickup + Cancellations  |  Performance vs STLY  |  Performance graph
+//   Row 3 (3-up):  Top 10 sources  |  Upcoming events calendar  |  Occupancy calendar
 // Server→client function-prop trap: no functions pass through primitives —
 // every table cell is pre-formatted as a string in the data array.
 
@@ -11,6 +11,8 @@ import {
   type ChartSeries, type DashboardTab, type KpiTileProps,
 } from '@/app/(cockpit)/_design';
 import { REVENUE_SUBPAGES } from '../_subpages';
+import MonthCalendar, { type CalendarDay } from './_components/MonthCalendar';
+import PickupTabs from './_components/PickupTabs';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { PROPERTY_ID } from '@/lib/supabase';
 import {
@@ -20,6 +22,7 @@ import {
   getPulseTopSources,
   getPulseHighOcc,
   getPulseTodayPickup,
+  getPulseTodayCancellations,
   getPulseUpcomingEvents,
   getOccScoped,
   type OccScoped,
@@ -38,6 +41,15 @@ interface Props {
   searchParams: Record<string, string | string[] | undefined>;
   propertyId?: number;
 }
+
+const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
+const threeUp: React.CSSProperties = {
+  gridColumn: '1 / -1',
+  display: 'grid',
+  gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+  gap: 10,
+  alignItems: 'stretch',
+};
 
 function todayIso(): string { return new Date().toISOString().slice(0, 10); }
 function shiftDate(iso: string, days: number): string {
@@ -74,7 +86,6 @@ function fmtSignedPct(n: number | null | undefined): string {
 
 export default async function PulsePage({ searchParams, propertyId }: Props) {
   const pid = propertyId ?? PROPERTY_ID;
-  // Per-property money formatting — Donna prints €, Namkhan $.
   const sym: string = pid === 1000001 ? '€' : '$';
   const moneyCurrency: 'USD' | 'EUR' = pid === 1000001 ? 'EUR' : 'USD';
   const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
@@ -94,18 +105,19 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
   const stlyFrom = shiftDate(heroFrom, -365);
   const stlyTo = shiftDate(heroTo, -365);
 
-  const [headline, summary, dailyRows, stlyDailyRows, topSources, highOcc, pickup, events, occScoped] =
+  const [headline, summary, dailyRows, stlyDailyRows, topSources, highOcc, pickup, cancellations, events, occScoped] =
     await Promise.all([
       getPulseHeadlineKpis(pid, anchor),
       getPulsePerformanceSummary(pid, anchor),
       getPulseDaily(pid, heroFrom, heroTo),
       getPulseDaily(pid, stlyFrom, stlyTo),
-      getPulseTopSources(pid, 30, 5),
-      getPulseHighOcc(pid, anchor, shiftDate(anchor, 60), 80),
+      getPulseTopSources(pid, 30, 10),
+      getPulseHighOcc(pid, anchor, shiftDate(anchor, 30), 0),
       getPulseTodayPickup(pid, shiftDate(anchor, pickupOffset)),
-      getPulseUpcomingEvents(pid, anchor, shiftDate(anchor, 30), 10),
+      getPulseTodayCancellations(pid, shiftDate(anchor, pickupOffset)),
+      getPulseUpcomingEvents(pid, anchor, shiftDate(anchor, 30), 30),
       getOccScoped(pid),
-    ]) as [PulseKpiSnapshot, Awaited<ReturnType<typeof getPulsePerformanceSummary>>, PulseDailyRow[], PulseDailyRow[], PulseSourceRow[], PulseHighOccDay[], PulsePickupRow[], PulseEventRow[], OccScoped | null];
+    ]) as [PulseKpiSnapshot, Awaited<ReturnType<typeof getPulsePerformanceSummary>>, PulseDailyRow[], PulseDailyRow[], PulseSourceRow[], PulseHighOccDay[], PulsePickupRow[], PulsePickupRow[], PulseEventRow[], OccScoped | null];
 
   // ─── headline tiles ──────────────────────────────────────────────────
   const occΔ    = pctChange(headline.occupancyPct, headline.stlyOccupancyPct);
@@ -114,17 +126,16 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
   const adrΔ    = pctChange(headline.adr,          headline.stlyAdr);
 
   const headlineTiles: KpiTileProps[] = [
-    // PBS cockpit #197 SEQ 5/6: bind to v_occupancy_scoped.occ_yesterday — explicit scope in label.
     { label: 'Occ · yesterday', value: occScoped ? `${occScoped.occ_yesterday.toFixed(1)}%` : '—', size: 'sm',
       delta: occΔ != null ? { value: occΔ, period: 'STLY', direction: occΔ >= 0 ? 'up' : 'down' } : undefined,
       status: occΔ != null && occΔ >= 0 ? 'green' : occΔ != null ? 'red' : 'grey' },
-    { label: 'RevPAR',           value: Math.round(headline.revpar ?? 0), currency: moneyCurrency, size: 'sm',
+    { label: 'RevPAR', value: Math.round(headline.revpar ?? 0), currency: moneyCurrency, size: 'sm',
       delta: revparΔ != null ? { value: revparΔ, period: 'STLY', direction: revparΔ >= 0 ? 'up' : 'down' } : undefined,
       footnote: 'yesterday', status: revparΔ != null && revparΔ >= 0 ? 'green' : revparΔ != null ? 'red' : 'grey' },
     { label: 'Room Nights Sold', value: fmtInt(headline.roomsSold), size: 'sm',
       delta: rnsΔ != null ? { value: rnsΔ, period: 'STLY', direction: rnsΔ >= 0 ? 'up' : 'down' } : undefined,
       footnote: 'yesterday', status: rnsΔ != null && rnsΔ >= 0 ? 'green' : rnsΔ != null ? 'red' : 'grey' },
-    { label: 'ADR',              value: Math.round(headline.adr ?? 0), currency: moneyCurrency, size: 'sm',
+    { label: 'ADR', value: Math.round(headline.adr ?? 0), currency: moneyCurrency, size: 'sm',
       delta: adrΔ != null ? { value: adrΔ, period: 'STLY', direction: adrΔ >= 0 ? 'up' : 'down' } : undefined,
       footnote: 'yesterday', status: adrΔ != null && adrΔ >= 0 ? 'green' : adrΔ != null ? 'red' : 'grey' },
   ];
@@ -166,34 +177,6 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
     { key: 'stly_revpar', label: 'STLY RevPAR', color: '#5A5A5A' },
   ];
 
-  // ─── top 5 sources table data ─────────────────────────────────────────
-  const topSourceRows = topSources.map((s: PulseSourceRow) => ({
-    channel:  s.source_name,
-    bookings: fmtInt(s.bookings),
-  }));
-
-  // ─── upcoming high occupancy → list of dates with occ % ───────────────
-  const highOccRows = (highOcc as PulseHighOccDay[]).map((d) => ({
-    date:      d.night_date,
-    occupancy: fmtPct(d.occupancy_pct, 1),
-    rooms:     fmtInt(d.rooms_sold ?? null),
-  }));
-
-  // ─── today's pickup ───────────────────────────────────────────────────
-  const pickupRows = pickup.map((p: PulsePickupRow) => ({
-    accommodation: p.accommodation,
-    window:        p.window,
-    avg_los:       p.avg_los.toFixed(1),
-  }));
-  const pickupDate = shiftDate(anchor, pickupOffset);
-  const pickupLabel = pickupOffset === 0 ? 'Today' : pickupOffset === -1 ? 'Yesterday' : `${Math.abs(pickupOffset)} days ago`;
-
-  // ─── upcoming events ──────────────────────────────────────────────────
-  const eventRows = events.map((e: PulseEventRow) => ({
-    event: e.name,
-    date:  e.date,
-  }));
-
   // ─── tabs + URL builders ──────────────────────────────────────────────
   const tabs: DashboardTab[] = subPages.map((s) => ({
     key:    s.href,
@@ -227,107 +210,159 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
     return `${basePath}${qs ? '?' + qs : ''}`;
   };
 
+  // ─── pickup + cancellation rows for tabs ──────────────────────────────
+  const moneyStr = (n: number) => n > 0 ? `${sym}${Math.round(n).toLocaleString('en-US')}` : '—';
+  const pickupTabRows = pickup.map((p: PulsePickupRow) => ({
+    source: p.source, guest: p.guest, reservation_id: p.reservation_id,
+    accommodation: p.accommodation, nights: p.nights,
+    adr: moneyStr(p.adr), value: moneyStr(p.value), window: p.window,
+  }));
+  const cancelTabRows = cancellations.map((p: PulsePickupRow) => ({
+    source: p.source, guest: p.guest, reservation_id: p.reservation_id,
+    accommodation: p.accommodation, nights: p.nights,
+    adr: moneyStr(p.adr), value: moneyStr(p.value), window: p.window,
+  }));
+  const pickupDate = shiftDate(anchor, pickupOffset);
+  const pickupLabel = pickupOffset === 0 ? 'Today' : pickupOffset === -1 ? 'Yesterday' : `${Math.abs(pickupOffset)} days ago`;
+
+  // ─── 30-day calendars (events + occupancy) ────────────────────────────
+  const calendarDays: { date: string }[] = (() => {
+    const out: { date: string }[] = [];
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(anchor + 'T00:00:00Z');
+      d.setUTCDate(d.getUTCDate() + i);
+      out.push({ date: d.toISOString().slice(0, 10) });
+    }
+    return out;
+  })();
+  const eventsByDay = new Map<string, string[]>();
+  for (const e of events) {
+    const k = String(e.date).slice(0, 10);
+    const arr = eventsByDay.get(k) ?? [];
+    arr.push(e.name);
+    eventsByDay.set(k, arr);
+  }
+  const eventCalendar: CalendarDay[] = calendarDays.map((d) => {
+    const evs = eventsByDay.get(d.date) ?? [];
+    return {
+      date: d.date,
+      label: evs.length > 0 ? `${evs.length}` : undefined,
+      tone: evs.length > 0 ? 'brass' : undefined,
+      tooltip: evs.length > 0 ? `${d.date}\n${evs.join('\n')}` : undefined,
+    };
+  });
+  const occByDay = new Map<string, number>();
+  for (const r of highOcc as PulseHighOccDay[]) {
+    occByDay.set(String((r as any).night_date ?? (r as any).date).slice(0, 10), Number(r.occupancy_pct ?? 0));
+  }
+  const occCalendar: CalendarDay[] = calendarDays.map((d) => {
+    const pct = occByDay.get(d.date);
+    if (pct == null) return { date: d.date };
+    const tone: CalendarDay['tone'] = pct >= 80 ? 'green' : pct >= 50 ? 'amber' : 'red';
+    return {
+      date: d.date,
+      label: `${Math.round(pct)}%`,
+      tone,
+      tooltip: `${d.date}\nOccupancy: ${pct.toFixed(1)}%`,
+    };
+  });
+
+  // ─── top 10 sources rows ──────────────────────────────────────────────
+  const topSourceRows = topSources.map((s: PulseSourceRow) => ({
+    channel:  s.source_name,
+    bookings: s.bookings,
+    revenue:  s.revenue != null && s.revenue > 0 ? `${sym}${Math.round(s.revenue).toLocaleString('en-US')}` : '—',
+  }));
+
   return (
     <DashboardPage
       title="Revenue · Pulse"
       subtitle={`${fmtLongDate(anchor)} · what's open, right now`}
       tabs={tabs}
     >
-      <Container title="Headline · yesterday" subtitle="vs same time last year" density="compact">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-          {headlineTiles.map((t, i) => <KpiTile key={i} {...t} />)}
-        </div>
-      </Container>
+      {/* Row 1 · Headline KPI strip */}
+      <div style={fullRow}>
+        <Container title="Headline · yesterday" subtitle="vs same time last year" density="compact">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+            {headlineTiles.map((t, i) => <KpiTile key={i} {...t} />)}
+          </div>
+        </Container>
+      </div>
 
-      <Container title="Performance · vs STLY" subtitle="Yesterday · MTD · YTD">
-        <Chart
-          variant="table"
-          data={perfTable}
-          xKey="metric"
-          series={[
-            { key: 'yesterday', label: 'Yesterday' },
-            { key: 'mtd',       label: 'MTD' },
-            { key: 'ytd',       label: 'YTD' },
-          ]}
-        />
-      </Container>
+      {/* Row 2 · Pickup + Cancellations | Performance vs STLY | Performance graph */}
+      <div style={threeUp}>
+        <Container title={`${pickupLabel} · pickup + cancellations`} subtitle={`activity on ${fmtLongDate(pickupDate)}`}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 12 }}>
+            <PillLink href={pickupHref(pickupOffset - 1)} active={false} disabled={pickupOffset <= -8}>←</PillLink>
+            {pickupOffset !== 0 && <PillLink href={pickupHref(0)} active={false}>today</PillLink>}
+            <PillLink href={pickupHref(pickupOffset + 1)} active={false} disabled={pickupOffset >= 0}>→</PillLink>
+          </div>
+          <PickupTabs pickup={pickupTabRows} cancellations={cancelTabRows} />
+        </Container>
 
-      <Container
-        title={`Performance · ${winDays}d`}
-        subtitle={`${fmtLongDate(heroFrom)} → ${fmtLongDate(heroTo)}${offset !== 0 ? ` · ${offset > 0 ? '+' : ''}${offset}d` : ''}`}
-      >
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center', marginBottom: 12 }}>
-          <PillRow>
-            <PillLink href={scrubHref(offset - 7)} active={false}>← 7d</PillLink>
-            {offset !== 0 && <PillLink href={scrubHref(0)} active={false}>today</PillLink>}
-            <PillLink href={scrubHref(offset + 7)} active={false}>7d →</PillLink>
-          </PillRow>
-          <PillRow>
-            {(['7d','14d','30d','60d'] as const).map((w) => (
-              <PillLink key={w} href={winHref(w)} active={w === winParam}>{w}</PillLink>
-            ))}
-          </PillRow>
-        </div>
-        <Chart
-          variant="line"
-          data={heroData}
-          xKey="night_date"
-          series={heroSeries}
-          height={260}
-          empty={{ title: 'No data in window' }}
-        />
-      </Container>
+        <Container title="Performance · vs STLY" subtitle="Yesterday · MTD · YTD">
+          <Chart
+            variant="table"
+            data={perfTable}
+            xKey="metric"
+            series={[
+              { key: 'yesterday', label: 'Yesterday' },
+              { key: 'mtd',       label: 'MTD' },
+              { key: 'ytd',       label: 'YTD' },
+            ]}
+          />
+        </Container>
 
-      <Container title="Top 5 sources" subtitle="last 30 days · accommodations booked">
-        <Chart
-          variant="table"
-          data={topSourceRows}
-          xKey="channel"
-          series={[{ key: 'bookings', label: 'Booked' }]}
-          empty={{ title: 'No source data in window' }}
-        />
-      </Container>
+        <Container
+          title={`Performance · ${winDays}d`}
+          subtitle={`${fmtLongDate(heroFrom)} → ${fmtLongDate(heroTo)}${offset !== 0 ? ` · ${offset > 0 ? '+' : ''}${offset}d` : ''}`}
+        >
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 12 }}>
+            <PillRow>
+              <PillLink href={scrubHref(offset - 7)} active={false}>← 7d</PillLink>
+              {offset !== 0 && <PillLink href={scrubHref(0)} active={false}>today</PillLink>}
+              <PillLink href={scrubHref(offset + 7)} active={false}>7d →</PillLink>
+            </PillRow>
+            <PillRow>
+              {(['7d','14d','30d','60d'] as const).map((w) => (
+                <PillLink key={w} href={winHref(w)} active={w === winParam}>{w}</PillLink>
+              ))}
+            </PillRow>
+          </div>
+          <Chart
+            variant="line"
+            data={heroData}
+            xKey="night_date"
+            series={heroSeries}
+            height={220}
+            empty={{ title: 'No data in window' }}
+          />
+        </Container>
+      </div>
 
-      <Container title="Upcoming high occupancy" subtitle="next 60 days · ≥ 80%">
-        <Chart
-          variant="table"
-          data={highOccRows}
-          xKey="date"
-          series={[
-            { key: 'occupancy', label: 'Occ %' },
-            { key: 'rooms',     label: 'Rooms sold' },
-          ]}
-          empty={{ title: 'No high-occupancy days in next 60d' }}
-        />
-      </Container>
+      {/* Row 3 · Top 10 sources | Events calendar | Occupancy calendar */}
+      <div style={threeUp}>
+        <Container title="Top 10 sources" subtitle="last 30 days · bookings + revenue">
+          <Chart
+            variant="table"
+            data={topSourceRows}
+            xKey="channel"
+            series={[
+              { key: 'bookings', label: 'Bookings' },
+              { key: 'revenue',  label: 'Revenue' },
+            ]}
+            empty={{ title: 'No source data in window' }}
+          />
+        </Container>
 
-      <Container title={`${pickupLabel}'s pickup`} subtitle={`booked on ${fmtLongDate(pickupDate)}`}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 12 }}>
-          <PillLink href={pickupHref(pickupOffset - 1)} active={false} disabled={pickupOffset <= -8}>←</PillLink>
-          {pickupOffset !== 0 && <PillLink href={pickupHref(0)} active={false}>today</PillLink>}
-          <PillLink href={pickupHref(pickupOffset + 1)} active={false} disabled={pickupOffset >= 0}>→</PillLink>
-        </div>
-        <Chart
-          variant="table"
-          data={pickupRows}
-          xKey="accommodation"
-          series={[
-            { key: 'window',  label: 'Window' },
-            { key: 'avg_los', label: 'Avg LOS' },
-          ]}
-          empty={{ title: 'None available' }}
-        />
-      </Container>
+        <Container title="Upcoming events · next 30 days" subtitle="hover any day to see events">
+          <MonthCalendar days={eventCalendar} variant="events" />
+        </Container>
 
-      <Container title="Upcoming events" subtitle="next 30 days">
-        <Chart
-          variant="table"
-          data={eventRows}
-          xKey="event"
-          series={[{ key: 'date', label: 'Date' }]}
-          empty={{ title: 'None available' }}
-        />
-      </Container>
+        <Container title="Occupancy · next 30 days" subtitle="hover any day for the OCC %">
+          <MonthCalendar days={occCalendar} variant="occ" />
+        </Container>
+      </div>
     </DashboardPage>
   );
 }

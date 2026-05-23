@@ -12,6 +12,7 @@ import { Container, Chart, type ChartSeries } from '@/app/(cockpit)/_design';
 import { supabase } from '@/lib/supabase';
 import { stripPublicPrefix, type ContainerRegistryRow } from './types';
 import { formatValue } from './format';
+import PeriodDropdown from './PeriodDropdown';
 
 interface TileMetric {
   key: string;
@@ -55,20 +56,24 @@ function num(v: unknown): number {
 
 /** Per-room capacity (prefer room_capacity_nights when present, else canonical fallback).
  *  Capacity repeats per row within a period — dedupe by period before summing. */
-function totalCapacity(rows: DataRow[]): number {
+function totalCapacity(rows: DataRow[], useCanonical: boolean = false): number {
   const byPeriod = new Map<string, number>();
   for (const r of rows) {
     const p = String(r.period_yyyymm ?? '');
-    const perRoom = num(r.room_capacity_nights);
-    const cap = perRoom > 0 ? perRoom : num(r.canonical_capacity_nights);
-    if (!byPeriod.has(p)) byPeriod.set(p, cap);
+    if (byPeriod.has(p)) continue;
+    if (useCanonical) {
+      byPeriod.set(p, num(r.canonical_capacity_nights));
+    } else {
+      const perRoom = num(r.room_capacity_nights);
+      byPeriod.set(p, perRoom > 0 ? perRoom : num(r.canonical_capacity_nights));
+    }
   }
   let total = 0;
   for (const c of byPeriod.values()) total += c;
   return total;
 }
 
-function computeMetric(metric: TileMetric, rows: DataRow[]): number | null {
+function computeMetric(metric: TileMetric, rows: DataRow[], useCanonical: boolean = false): number | null {
   if (rows.length === 0) return null;
   switch (metric.agg) {
     case 'sum':
@@ -82,12 +87,12 @@ function computeMetric(metric: TileMetric, rows: DataRow[]): number | null {
     }
     case 'rev_over_capacity': {
       const rev = rows.reduce((s, r) => s + num(r.room_revenue), 0);
-      const cap = totalCapacity(rows);
+      const cap = totalCapacity(rows, useCanonical);
       return cap > 0 ? rev / cap : 0;
     }
     case 'nights_over_capacity': {
       const nights = rows.reduce((s, r) => s + num(r.room_nights), 0);
-      const cap = totalCapacity(rows);
+      const cap = totalCapacity(rows, useCanonical);
       return cap > 0 ? (nights / cap) * 100 : 0;
     }
     default:
@@ -127,11 +132,13 @@ export default async function ContainerRoomIntel({ container, propertyId, search
     if (!Number.isFinite(y) || !Number.isFinite(m)) return 30;
     return new Date(y, m, 0).getDate();
   };
-  const rows = (allRows as DataRow[]).map((r) => {
-    const u = unitsByName.get(String(r.room_type_name ?? '')) ?? 0;
-    const d = daysInPeriod(String(r.period_yyyymm ?? ''));
-    return { ...r, room_sellable_units: u, room_capacity_nights: u * d } as DataRow;
-  });
+  const rows = (allRows as DataRow[])
+    .filter((r) => !String(r.room_type_name ?? '').startsWith('[retired]'))
+    .map((r) => {
+      const u = unitsByName.get(String(r.room_type_name ?? '')) ?? 0;
+      const d = daysInPeriod(String(r.period_yyyymm ?? ''));
+      return { ...r, room_sellable_units: u, room_capacity_nights: u * d } as DataRow;
+    });
 
   // 2. Currency
   const { data: propRow } = await supabase
@@ -139,16 +146,34 @@ export default async function ContainerRoomIntel({ container, propertyId, search
     .select('display_symbol, display_currency').eq('property_id', propertyId).maybeSingle();
   const currencySymbol = String((propRow as { display_symbol?: string } | null)?.display_symbol ?? '$');
 
-  // 3. Periods — discrete months + a YTD pill for current year
+  // 2b. Direct-sales share per canonical category (PBS 2026-05-22 task #87)
+  // Always YTD scope for stability; could be parameterized to active period later.
+  const currentYearStr = new Date().toISOString().slice(0, 4);
+  const { data: directRows } = await supabase
+    .rpc('fn_room_direct_share', { p_property_id: propertyId, p_period_yyyymm: null, p_year: currentYearStr });
+  const directByCanon = new Map<string, number>();
+  for (const r of ((directRows ?? []) as Array<{ canonical_room_type_code: string; direct_share_pct: number }>)) {
+    directByCanon.set(String(r.canonical_room_type_code), Number(r.direct_share_pct ?? 0));
+  }
+
+  // 3. Periods — discrete months + a YTD pill for current year.
+  // PBS 2026-05-22: future months (OTB) must be visible. Window = past 12
+  // months + current + every future month the view has data for.
   const allPeriods = Array.from(new Set(rows.map((r) => String(r.period_yyyymm ?? '')).filter(Boolean))).sort().reverse();
   const currentYm = new Date().toISOString().slice(0, 7);
   const currentYear = currentYm.slice(0, 4);
-  const realisedMonths = allPeriods.filter((p) => p <= currentYm);
+  const past12Floor = (() => {
+    const d = new Date(currentYm + '-01T00:00:00Z');
+    d.setUTCMonth(d.getUTCMonth() - 11);
+    return d.toISOString().slice(0, 7);
+  })();
+  const windowMonths = allPeriods.filter((p) => p >= past12Floor);
+  const realisedMonths = windowMonths.filter((p) => p <= currentYm);
   const ytdKey = `YTD-${currentYear}`;
   const requested = String(searchParams?.period ?? '');
   const isYtd = requested === ytdKey;
   const validPeriods = new Set([ytdKey, ...allPeriods]);
-  const activePeriod = validPeriods.has(requested) ? requested : (realisedMonths[0] ?? allPeriods[0]);
+  const activePeriod = validPeriods.has(requested) ? requested : (realisedMonths[0] ?? windowMonths[0] ?? allPeriods[0]);
   if (!activePeriod) {
     return (
       <Container title={container.container_name} subtitle="No data on file">
@@ -161,8 +186,33 @@ export default async function ContainerRoomIntel({ container, propertyId, search
 
   // 4. Filter rows to the active period (single month or YTD)
   const periodRows = isYtd || activePeriod.startsWith('YTD-')
-    ? rows.filter((r) => String(r.period_yyyymm ?? '').startsWith(`${activePeriod.slice(4)}-`))
+    ? rows.filter((r) => {
+        const p = String(r.period_yyyymm ?? '');
+        return p.startsWith(`${activePeriod.slice(4)}-`) && p <= currentYm;
+      })
     : rows.filter((r) => String(r.period_yyyymm) === activePeriod);
+
+  // 4b. PBS 2026-05-22: same-time-last-year rows for LY comparison per tile.
+  function lyOf(p: string): string {
+    if (p.startsWith('YTD-')) {
+      const y = Number(p.slice(4));
+      return Number.isFinite(y) ? `YTD-${y - 1}` : p;
+    }
+    if (p.length >= 7) {
+      const y = Number(p.slice(0, 4));
+      const mm = p.slice(5, 7);
+      return Number.isFinite(y) ? `${y - 1}-${mm}` : p;
+    }
+    return p;
+  }
+  const lyPeriod = lyOf(activePeriod);
+  const elapsedMm = currentYm.slice(5, 7);
+  const lyRows = lyPeriod.startsWith('YTD-')
+    ? rows.filter((r) => {
+        const p = String(r.period_yyyymm ?? '');
+        return p.startsWith(`${lyPeriod.slice(4)}-`) && p.slice(5, 7) <= elapsedMm;
+      })
+    : rows.filter((r) => String(r.period_yyyymm) === lyPeriod);
 
   // 5. Build category index — every REAL canonical code the property has had.
   //    Junk buckets like 'OTHER' (1-row uncategorised fallback) are excluded so
@@ -180,6 +230,12 @@ export default async function ContainerRoomIntel({ container, propertyId, search
     const k = String(r[groupBy] ?? 'UNKNOWN');
     if (!rowsByCatActive.has(k)) rowsByCatActive.set(k, []);
     rowsByCatActive.get(k)!.push(r);
+  }
+  const rowsByCatLy = new Map<string, DataRow[]>();
+  for (const r of lyRows) {
+    const k = String(r[groupBy] ?? 'UNKNOWN');
+    if (!rowsByCatLy.has(k)) rowsByCatLy.set(k, []);
+    rowsByCatLy.get(k)!.push(r);
   }
   // Build label tagline from any row in this category (top revenue subtype)
   const taglineByCat = new Map<string, string>();
@@ -208,13 +264,20 @@ export default async function ContainerRoomIntel({ container, propertyId, search
     return qs ? `?${qs}` : '';
   }
 
+  // PBS 2026-05-22: switched 24-pill bar → compact <select> dropdown.
+  // PeriodDropdown is a client component that pushes period into URL while
+  // preserving ?expand=. Default = realisedMonths[0] (latest realised month).
+  const futureMonths = windowMonths.filter((p) => p > currentYm);
   const periodPicker = (
-    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-      <Link href={hrefPeriod(ytdKey)} style={pillStyle(activePeriod === ytdKey, true)}>YTD {currentYear}</Link>
-      {realisedMonths.slice(0, 12).map((p) => (
-        <Link key={p} href={hrefPeriod(p)} style={pillStyle(activePeriod === p, false)}>{p}</Link>
-      ))}
-    </div>
+    <PeriodDropdown
+      activePeriod={activePeriod}
+      ytdKey={ytdKey}
+      ytdLabel={`YTD ${currentYear}`}
+      realisedMonths={realisedMonths}
+      futureMonths={futureMonths}
+      defaultPeriod={realisedMonths[0]}
+      preserveParams={{ expand: activeExpand }}
+    />
   );
 
   return (
@@ -224,6 +287,99 @@ export default async function ContainerRoomIntel({ container, propertyId, search
       density="compact"
       action={periodPicker}
     >
+      {/* PBS 2026-05-22: 4 headline KPIs aggregated across all categories. */}
+      {(() => {
+        const totalNights = periodRows.reduce((s, r) => s + num(r.room_nights), 0);
+        const totalRev = periodRows.reduce((s, r) => s + num(r.room_revenue), 0);
+        const avgAdr = totalNights > 0 ? totalRev / totalNights : 0;
+        const seenCanonical = new Set<string>();
+        let totalCap = 0;
+        for (const r of periodRows) {
+          const p = String(r.period_yyyymm ?? '');
+          const code = String(r.canonical_room_type_code ?? '');
+          const key = `${p}|${code}`;
+          if (seenCanonical.has(key)) continue;
+          seenCanonical.add(key);
+          totalCap += num(r.canonical_capacity_nights);
+        }
+        const occ = totalCap > 0 ? (totalNights / totalCap) * 100 : 0;
+        const tile = (label: string, value: string) => (
+          <div key={label} style={{
+            border: '1px solid var(--hairline, #E6DFCC)', borderRadius: 4,
+            padding: '8px 12px', background: 'var(--paper, #FFFFFF)',
+            display: 'flex', flexDirection: 'column', gap: 2,
+          }}>
+            <span style={{ fontSize: 10, color: 'var(--ink-soft, #5A5A5A)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{label}</span>
+            <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--ink, #1B1B1B)', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+          </div>
+        );
+        return (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+            gap: 8, marginBottom: 12,
+          }}>
+            {tile('Occupancy', `${occ.toFixed(1)}%`)}
+            {tile('ADR', `${currencySymbol}${Math.round(avgAdr).toLocaleString()}`)}
+            {tile('Room nights', totalNights.toLocaleString())}
+            {tile('Room revenue', `${currencySymbol}${Math.round(totalRev).toLocaleString()}`)}
+          </div>
+        );
+      })()}
+
+      {/* PBS 2026-05-22 task #84: 3 graphs (ADR bar + REV bar + OCC donut) */}
+      {(() => {
+        const catChart = allCategories.map((code) => {
+          const r = rowsByCatActive.get(code) ?? [];
+          const friendly = FRIENDLY[code] ?? code;
+          const rev = r.reduce((s, x) => s + num(x.room_revenue), 0);
+          const nights = r.reduce((s, x) => s + num(x.room_nights), 0);
+          const adr = nights > 0 ? rev / nights : 0;
+          // canonical capacity = first row per period (canonical_capacity_nights is identical across granular rows in the same category/month)
+          const seenP = new Set<string>();
+          let cap = 0;
+          for (const row of r) {
+            const p = String(row.period_yyyymm ?? '');
+            if (seenP.has(p)) continue;
+            seenP.add(p);
+            cap += num(row.canonical_capacity_nights);
+          }
+          const occ = cap > 0 ? (nights / cap) * 100 : 0;
+          return { category: friendly, adr, revenue: rev, occ };
+        }).filter((d) => d.adr > 0 || d.revenue > 0);
+
+        if (catChart.length === 0) return null;
+        return (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            gap: 12, marginBottom: 12,
+          }}>
+            <div style={chartFrameStyle}>
+              <div style={chartTitleStyle}>ADR by category</div>
+              <Chart variant="bar" data={catChart} xKey="category"
+                series={[{ key: 'adr', label: 'ADR', color: 'var(--brass, #B8A878)' }]}
+                height={180}
+                empty={{ title: 'No ADR data' }} />
+            </div>
+            <div style={chartFrameStyle}>
+              <div style={chartTitleStyle}>Revenue by category</div>
+              <Chart variant="bar" data={catChart} xKey="category"
+                series={[{ key: 'revenue', label: 'Revenue', color: 'var(--primary, #1F3A2E)' }]}
+                height={180}
+                empty={{ title: 'No revenue data' }} />
+            </div>
+            <div style={chartFrameStyle}>
+              <div style={chartTitleStyle}>Occupancy mix</div>
+              <Chart variant="donut" data={catChart} xKey="category"
+                series={[{ key: 'occ', label: 'Occ %' }]}
+                height={180}
+                empty={{ title: 'No occupancy data' }} />
+            </div>
+          </div>
+        );
+      })()}
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
         {allCategories.map((code) => {
           const catRows = rowsByCatActive.get(code) ?? [];
@@ -249,17 +405,62 @@ export default async function ContainerRoomIntel({ container, propertyId, search
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
                   {spec.tile_metrics.map((m) => {
-                    const v = computeMetric(m, catRows);
+                    const v   = computeMetric(m, catRows, isCanonicalGrouping);
+                    const lyV = computeMetric(m, rowsByCatLy.get(code) ?? [], isCanonicalGrouping);
+                    const lyHasData = lyV != null && lyV !== 0;
+                    const diff = v != null && lyV != null ? v - lyV : null;
+                    const isPctMetric = m.format === 'pct';
+                    let deltaTxt: string | null = null;
+                    if (diff != null && lyHasData) {
+                      if (isPctMetric) {
+                        deltaTxt = `${diff.toFixed(1)}pp`;
+                      } else if (Math.abs(lyV!) > 0.01) {
+                        deltaTxt = `${((diff / Math.abs(lyV!)) * 100).toFixed(0)}%`;
+                      }
+                    }
+                    const deltaColor = diff == null ? 'var(--ink-soft, #5A5A5A)'
+                      : diff > 0.01 ? '#1F7A5B'
+                      : diff < -0.01 ? '#C0584C'
+                      : 'var(--ink-soft, #5A5A5A)';
                     return (
                       <div key={m.key} style={{ display: 'flex', flexDirection: 'column' }}>
                         <span style={{ fontSize: 10, color: 'var(--ink-soft, #5A5A5A)', letterSpacing: '0.04em' }}>{m.label}</span>
                         <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink, #1B1B1B)', fontVariantNumeric: 'tabular-nums' }}>
                           {v == null ? '—' : formatValue(v, m.format as never, currencySymbol)}
                         </span>
+                        <span style={{ fontSize: 9.5, color: 'var(--ink-soft, #5A5A5A)', fontVariantNumeric: 'tabular-nums', marginTop: 1 }}>
+                          {lyHasData ? (
+                            <>
+                              LY {formatValue(lyV!, m.format as never, currencySymbol)}
+                              {deltaTxt && (
+                                <span style={{ marginLeft: 6, color: deltaColor, fontWeight: 600 }}>{deltaTxt}</span>
+                              )}
+                            </>
+                          ) : 'LY —'}
+                        </span>
                       </div>
                     );
                   })}
                 </div>
+                {isCanonicalGrouping && (() => {
+                  const directPct = directByCanon.get(code);
+                  if (directPct == null) return null;
+                  return (
+                    <div style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      fontSize: 10, color: 'var(--ink-soft, #5A5A5A)',
+                      borderTop: '1px solid var(--hairline, #E6DFCC)',
+                      paddingTop: 4, marginTop: 4, letterSpacing: '0.04em',
+                    }}>
+                      <span>Direct sales (YTD)</span>
+                      <span style={{
+                        fontWeight: 600,
+                        color: directPct >= 30 ? '#1F7A5B' : directPct < 20 ? '#C0584C' : 'var(--ink, #1B1B1B)',
+                        fontVariantNumeric: 'tabular-nums',
+                      }}>{directPct.toFixed(1)}%</span>
+                    </div>
+                  );
+                })()}
                 <div style={{ fontSize: 10, color: 'var(--ink-soft, #5A5A5A)', textAlign: 'right' }}>
                   {!hasData ? 'no data this period · click for history' : isExpanded ? '↑ collapse' : 'expand ↓'}
                 </div>
@@ -324,8 +525,15 @@ async function DrillPanel({
     last12Months.forEach((m, mIdx) => {
       const row = categoryRowsAllTime.find((r) => r.room_type_name === rt && r.period_yyyymm === m);
       adrData[mIdx][`t${idx}`] = row ? num(row.adr) : 0;
+      adrData[mIdx][`t${idx}_rn`] = row ? num(row.room_nights) : 0;
+      // task #96: LOS now sourced from view's avg_los column (nights / bookings)
+      adrData[mIdx][`t${idx}_los`] = row ? num(row.avg_los) : 0;
+      adrData[mIdx][`t${idx}_bk`] = row ? num(row.bookings) : 0;
     });
   });
+  // labels for tooltip lookup
+  const seriesLabelByKey: Record<string, string> = {};
+  granularTypes.forEach((rt, idx) => { seriesLabelByKey[`t${idx}`] = rt; });
 
   // Source mix per granular room_type (RPC call)
   const { data: sourceMixRows } = await supabase.rpc('fn_room_source_mix', {
@@ -357,23 +565,60 @@ async function DrillPanel({
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr style={{ background: '#FAFAF7' }}>
-                <th style={th}>{spec.drill.row_field === 'room_type_name' ? 'Room type' : spec.drill.row_field}</th>
-                {spec.drill.columns.map((c) => (
-                  <th key={c.key} style={{ ...th, textAlign: 'right' }}>{c.label}</th>
-                ))}
+                <th style={th}>Room type</th>
+                <th style={th}>Month</th>
+                <th style={{ ...th, textAlign: 'right' }}>RN</th>
+                <th style={{ ...th, textAlign: 'right' }}>REV</th>
+                <th style={{ ...th, textAlign: 'right' }}>OCC</th>
               </tr>
             </thead>
             <tbody>
-              {sorted.map((r, i) => (
-                <tr key={String(r[spec.drill.row_field as keyof DataRow] ?? i)} style={{ borderTop: '1px solid var(--hairline, #E6DFCC)' }}>
-                  <td style={tdLeft}>{String(r[spec.drill.row_field as keyof DataRow] ?? '—')}</td>
-                  {spec.drill.columns.map((c) => (
-                    <td key={c.key} style={tdRight}>
-                      {formatValue(r[c.key as keyof DataRow], c.format as never, currencySymbol)}
+              {sorted.map((r, i) => {
+                const period = String(r.period_yyyymm ?? '');
+                const lyP = period.length >= 7 ? `${Number(period.slice(0, 4)) - 1}-${period.slice(5, 7)}` : '';
+                const ly = lyP
+                  ? categoryRowsAllTime.find((x) =>
+                      x.room_type_name === r.room_type_name &&
+                      String(x.period_yyyymm ?? '') === lyP)
+                  : null;
+                const rn  = num(r.room_nights);
+                const rev = num(r.room_revenue);
+                const occ = num(r.occ_pct_of_canonical);
+                const rnLy  = ly ? num(ly.room_nights) : null;
+                const revLy = ly ? num(ly.room_revenue) : null;
+                const occLy = ly ? num(ly.occ_pct_of_canonical) : null;
+                const rowKey = `${String(r[spec.drill.row_field as keyof DataRow] ?? i)}|${period}`;
+                return (
+                  <tr key={rowKey} style={{ borderTop: '1px solid var(--hairline, #E6DFCC)' }}>
+                    <td style={tdLeft}>{String(r[spec.drill.row_field as keyof DataRow] ?? '—')}</td>
+                    <td style={tdLeft}>{period || '—'}</td>
+                    <td style={tdRight}>
+                      <div>{rn.toLocaleString()}</div>
+                      {rnLy != null && rnLy > 0 && (
+                        <div style={lyCellStyle(rn - rnLy)}>
+                          LY {rnLy.toLocaleString()}  {formatVarPct(rn, rnLy)}
+                        </div>
+                      )}
                     </td>
-                  ))}
-                </tr>
-              ))}
+                    <td style={tdRight}>
+                      <div>{formatValue(rev, 'money', currencySymbol)}</div>
+                      {revLy != null && revLy > 0 && (
+                        <div style={lyCellStyle(rev - revLy)}>
+                          LY {formatValue(revLy, 'money', currencySymbol)}  {formatVarPct(rev, revLy)}
+                        </div>
+                      )}
+                    </td>
+                    <td style={tdRight}>
+                      <div>{occ.toFixed(1)}%</div>
+                      {occLy != null && occLy > 0 && (
+                        <div style={lyCellStyle(occ - occLy)}>
+                          LY {occLy.toFixed(1)}%  {(occ - occLy).toFixed(1)}pp
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -387,7 +632,26 @@ async function DrillPanel({
           </div>
           <div style={{ padding: 12 }}>
             <Chart variant="line" data={adrData} xKey="month" series={adrSeries} height={220}
-              empty={{ title: 'No ADR history for this category' }} />
+              empty={{ title: 'No ADR history for this category' }}
+              tooltipFormatter={(point, seriesKey) => {
+                const key = String(seriesKey ?? '');
+                const label = seriesLabelByKey[key] ?? key;
+                const adr = Number(point[key] ?? 0);
+                const rn = Number(point[`${key}_rn`] ?? 0);
+                const los = Number(point[`${key}_los`] ?? 0);
+                const bk = Number(point[`${key}_bk`] ?? 0);
+                const month = String(point.month ?? '');
+                return (
+                  <div style={{ fontSize: 11, lineHeight: 1.5 }}>
+                    <div style={{ fontWeight: 600, marginBottom: 4 }}>{label}</div>
+                    <div style={{ color: 'var(--ink-soft, #5A5A5A)' }}>{month}</div>
+                    <div>ADR <strong>{currencySymbol}{Math.round(adr).toLocaleString()}</strong></div>
+                    <div>Room nights <strong>{rn.toLocaleString()}</strong></div>
+                    <div>Bookings <strong>{bk.toLocaleString()}</strong></div>
+                    <div>Avg LOS <strong>{los > 0 ? los.toFixed(1) + 'n' : '—'}</strong></div>
+                  </div>
+                );
+              }} />
           </div>
         </div>
       )}
@@ -435,14 +699,45 @@ async function DrillPanel({
 }
 
 // ─── styles ─────────────────────────────────────────────────────────────────
-function pillStyle(active: boolean, ytd: boolean): React.CSSProperties {
+const chartFrameStyle: React.CSSProperties = {
+  border: '1px solid var(--hairline, #E6DFCC)', borderRadius: 6,
+  background: 'var(--paper, #FFFFFF)', padding: 12,
+  display: 'flex', flexDirection: 'column', gap: 6,
+};
+const chartTitleStyle: React.CSSProperties = {
+  fontSize: 11, fontWeight: 600, letterSpacing: '0.06em',
+  textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)',
+};
+function lyCellStyle(diff: number): React.CSSProperties {
+  return {
+    fontSize: 10,
+    color: diff > 0.01 ? '#1F7A5B' : diff < -0.01 ? '#C0584C' : 'var(--ink-soft, #5A5A5A)',
+    fontVariantNumeric: 'tabular-nums',
+    marginTop: 2,
+    fontWeight: 500,
+  };
+}
+function formatVarPct(curr: number, ly: number): string {
+  if (Math.abs(ly) < 0.01) return '';
+  const pct = ((curr - ly) / Math.abs(ly)) * 100;
+  return `${pct.toFixed(0)}%`;
+}
+function pillStyle(active: boolean, ytd: boolean, future: boolean = false): React.CSSProperties {
+  const borderColor = active ? 'var(--primary, #1F3A2E)'
+    : ytd ? 'var(--terracotta, #B8542A)'
+    : future ? 'var(--brass, #B8A878)'
+    : 'var(--hairline, #E6DFCC)';
+  const fg = active ? '#FFFFFF'
+    : ytd ? 'var(--terracotta, #B8542A)'
+    : future ? 'var(--brass, #B8A878)'
+    : 'var(--ink, #1B1B1B)';
   return {
     fontSize: 11, letterSpacing: '0.04em',
     padding: '4px 10px', borderRadius: 99,
-    border: `1px solid ${active ? 'var(--primary, #1F3A2E)' : ytd ? 'var(--terracotta, #B8542A)' : 'var(--hairline, #E6DFCC)'}`,
+    border: `1px solid ${borderColor}`,
     background:  active ? 'var(--primary, #1F3A2E)' : 'var(--paper, #FFFFFF)',
-    color:       active ? '#FFFFFF' : ytd ? 'var(--terracotta, #B8542A)' : 'var(--ink, #1B1B1B)',
-    fontWeight: active || ytd ? 600 : 500, textDecoration: 'none',
+    color:       fg,
+    fontWeight: active || ytd || future ? 600 : 500, textDecoration: 'none',
     fontVariantNumeric: 'tabular-nums',
   };
 }

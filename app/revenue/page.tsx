@@ -22,6 +22,7 @@ export const revalidate = 60;
 
 interface Props {
   propertyId?: number;
+  searchParams?: Record<string, string | string[] | undefined>;
 }
 
 // Short hint per section — shown in the Sections navigator card.
@@ -40,7 +41,7 @@ const SECTION_HINT: Record<string, string> = {
   Reports:      'Print-ready reports',
 };
 
-export default function RevenueHoDPage({ propertyId }: Props = {}) {
+export default function RevenueHoDPage({ propertyId, searchParams }: Props = {}) {
   const pid = propertyId ?? PROPERTY_ID;
   const cfg: DeptCfg = pid === PROPERTY_ID ? DEPT_CFG.revenue : getDeptCfg('revenue', pid);
 
@@ -56,7 +57,14 @@ export default function RevenueHoDPage({ propertyId }: Props = {}) {
   const tasks = cfg.defaultTasks ?? [];
   const reportTypes = cfg.reportTypes ?? [];
 
-  const chatHref = pid === PROPERTY_ID ? '/revenue/legacy' : `/h/${pid}/revenue/legacy`;
+  // task #68 · route the "Ask <HoD>" CTA to the canonical persona-aware
+  // chat surface. Donna HoD is Mira (role revenue_hod_donna) so we pass
+  // the explicit role/name/emoji/label overrides that /cockpit/chat consumes.
+  const DONNA_PROPERTY_ID = 1000001;
+  const chatHref =
+    pid === DONNA_PROPERTY_ID
+      ? `/cockpit/chat?dept=revenue&role=revenue_hod_donna&name=Mira&emoji=${encodeURIComponent('📈')}&label=Revenue`
+      : `/cockpit/chat?dept=revenue`;
 
   return (
     <DashboardPage
@@ -143,7 +151,7 @@ export default function RevenueHoDPage({ propertyId }: Props = {}) {
             subtitle="pick a type · narrow with chips · open print-ready render"
             density="compact"
           >
-            <ReportBuilder reportTypes={reportTypes} />
+            <ReportBuilder reportTypes={reportTypes} hrefPrefix={pid === PROPERTY_ID ? '' : `/h/${pid}`} />
           </Container>
         </div>
       )}

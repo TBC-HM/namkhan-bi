@@ -2900,3 +2900,93 @@ PBS: "IN THE LEADS AREA DESIGN THE WHOLE CONCEPT IN BACKEND AND FRONTEND THAT WE
 - **Constraints honoured.** No hardcoded `fontSize:` JSX literals. No new dependencies. No DB / RLS / view changes. No public-view `security_invoker` exposure (per the locked 2026-05-11 security baseline in CLAUDE.md v2.8). `/cockpit/**`, `/finance/**`, `/sales/**`, `app/api/**`, `components/**`, `lib/**` — untouched.
 - **Out of scope (deliberately deferred to PBS decision).** Live data fetches, auth gate, write-back to Supabase, replacement of `/cockpit`. Once PBS reviews the Vercel preview, decision options: keep `/cockpit-v2` as parallel preview indefinitely · promote design language into `/cockpit` via proper intake · discard.
 - **Refs.** cockpit intake #3 / #4 / #5 (referenced in commit body, not closing). PR https://github.com/TBC-HM/namkhan-bi/pull/297. Source handover at `~/Documents/Claude/Projects/cloudbeds Vercel portal/cockpit-v2-deploy/HANDOVER.md`.
+
+
+### 2026-05-22 — Revenue area: HoD landing + per-room tiles + Donna cross-property wiring + ADR-112 auth staged
+
+Long session — coordinated rev-consolidation work across the cockpit, plus the password-protection front door staged on a branch.
+
+#### A · Cockpit ticket #198 (SEQ 6/6) — HoD landing + tab hierarchy
+
+- **Why.** PBS: "HoD is the full-width landing for `/h/[property_id]/revenue`. NOT one of 12 equal tabs." Goal — read the business in ~10s on HoD, then drill into a sub-tab.
+- **What.**
+  - `app/(cockpit)/_design/layout/DashboardPage.tsx` — `TabStrip` split: a tab with `label === 'HoD'` renders as a left-aligned `← HoD` breadcrumb separated from the rest of the strip. Subpages keep their tabs; HoD itself drops the strip.
+  - `app/revenue/page.tsx` — full rewrite. Order: Headline tiles → Attention/Docs/Tasks (3-up row) → Sections navigator (12 cards for the 12 subpages) → Report builder → Chat. Each block uses `gridColumn: 1 / -1` so it spans the full row instead of sitting in a 360px auto-fit column with blank right.
+  - `app/revenue/legacy2/page.tsx` + `app/h/[property_id]/revenue/legacy2/page.tsx` — **frozen safety snapshot** of the post-#198 HoD landing per PBS "for safty keep what we have as legacy 2 or so". Standalone route, won't drift if later iterations of `/revenue` break.
+- **Verified.** Both `/h/260955/revenue` and `/h/1000001/revenue` render the Sections navigator; subpages (Pulse, Rateplans, Rooms) render the `← HoD` breadcrumb.
+
+#### B · Rooms tile granularity (PBS "all categories all the info")
+
+- **Why.** Donna SUITE canonical lumped 6 room types into one tile showing 7 units; PBS: "naughtz is 2 unites not 7 the others are other theme suites i need them all separated".
+- **DB.**
+  - `public.v_room_type_units` — new bridge view. Per-room-type unit count derived from `COUNT(DISTINCT room_id)` over the last 365 days across `pms.reservation_rooms_cb` + `pms.reservation_rooms_mews`. Naughty Suite = 2 ✅ matches PBS's ground truth. Falls back through `mapping.room_type_xref.display_name` for naming consistency with the perf view.
+  - `kpi.container_registry` — `rooms_intel` row updated. `columns_spec.group_by`: `canonical_room_type_code` → `room_type_name`. `tile_metrics` reverted to include Occ % / RevPAR / Units alongside ADR / Nights / Revenue after the per-room capacity fix.
+- **Code.**
+  - `app/_components/registry/ContainerRoomIntel.tsx` —
+    1. `REAL_CATEGORIES` allowlist is now conditional on `groupBy === 'canonical_room_type_code'`. Room-type-name grouping shows every non-empty distinct value (no OTHER junk lumping).
+    2. Tile header strips the canonical-code line when grouping by room name; the room name itself is the prominent label.
+    3. `DrillPanel.friendly` uses the room name verbatim when granular.
+    4. NEW — fetches `v_room_type_units`, builds `unitsByName` map, decorates every row with `room_sellable_units` + `room_capacity_nights = units × days_in_period`.
+    5. `totalCapacity()` now prefers `room_capacity_nights` (per-room) over `canonical_capacity_nights` (canonical) when available. So `nights_over_capacity` and `rev_over_capacity` aggs auto-compute correct per-room Occ % and RevPAR.
+- **Verified.** Donna shows Naughty Suite, Marcel Wanders, Spa Suite, Stargazer, etc. as separate tiles. Namkhan shows Art Deluxe Room, Riverview Suite, Sunset Namkhan River Villa, Explorer Glamping, etc. Occ % rendering on both.
+
+#### C · Donna cross-property data wiring (rateplans + channels)
+
+Pattern established this session — every legacy `mv_*` / `v_*` view that hardcoded `property_id = 260955` (Namkhan-only) gets rebuilt against a unified bridge.
+
+- **`public.v_reservations_unified`** — already existed as the canonical bridge UNION-ing `pms.reservations_cb` (Namkhan) + `pms.reservations_mews` (Donna). 10,960 rows total.
+- **`public.mv_channel_economics`** — rebuilt earlier in the session against `v_reservations_unified`. Donna: 18 sources / €561k in 30d (was 0 before).
+- **NEW today**:
+  - `public.v_rate_plans_all` — UNION of `pms.rate_plans_cb` + `pms.rate_plans_mews`. Namkhan 104 active, Donna 30 active.
+  - `public.v_rate_plan_perf` — rebuilt against `v_reservations_unified` with explicit `property_id` exposed. Namkhan 4,776 rows, Donna 6,158 rows.
+  - `public.v_rate_plan_sleeping` — rebuilt: 90-day idle plans cross-property. Namkhan 76, Donna 9.
+  - `public.v_rate_plan_orphans` — rebuilt: bookings under retired plan names. Namkhan 243, Donna 1.
+- **`app/revenue/rateplans/page.tsx`** — three rounds:
+  1. Currency-neutral (€ Donna / $ Namkhan) via `sym` + `moneyCurrency` + parameterised `fmtMoney`.
+  2. First Donna-wiring attempt regressed Namkhan to 500 — reverted via re-push of the currency-only state.
+  3. Redo using channels-proven pattern: `.eq('property_id', pid)` AFTER `.select()`. Opened the `isNamkhan` gate so Donna runs the data fetches too. Live verified: Namkhan 200, Donna 200 with €67 glyphs (was €0 before).
+
+#### D · Cockpit ticket #197 (SEQ 5/6) — Trust + bug repoints (partial)
+
+- **Pulse Occupancy tile** rebound to `public.v_occupancy_scoped.occ_yesterday`. Label changed from bare `Occupancy` to `Occ · yesterday` with explicit scope. Fixes the longstanding bug where the tile labeled "yesterday" was actually showing `aggregate(asOf, asOf)` (today, not yesterday). The Performance summary table continues to expose Yesterday/MTD/YTD for all three metrics.
+- **Top Sources** rebound to `public.v_source_top10` (anon-readable, cross-property). Kills the `permission denied for table sources_mews` error. The Namkhan-vs-Donna branching in `lib/data-pulse.ts::getPulseTopSources` collapsed to a single supabase query against `v_source_top10`.
+- **Technical strings scrubbed** from subtitles on `app/revenue/leakage/page.tsx` and `app/revenue/parity/page.tsx` — "driven by v_container_registry + v_graph_registry", "v_parity_grid", "v_parity_open_breaches" all gone from user-facing chrome.
+- **Bedbank `est_leakage_eur`** — already configured in `kpi.container_registry` for `leakage_bedbank_detail` + `leakage_bedbank_summary`. No code change needed — the view rename is honoured.
+- **Deferred to next session** (PBS sign-off needed before touching middleware):
+  - `/revenue/* → /h/[pid]/revenue/*` 307 redirect — current middleware does the OPPOSITE direction (strips `/h/260955/*` → `/*` for Namkhan default). Reversing requires careful coordination since the redirect changes every request's URL shape.
+  - Full sweep of technical strings across all subpages (only leakage + parity addressed today).
+  - Additional Occ scopes (`Occ · MTD / YTD / 30d OTB / 90d OTB`) — currently only `Occ · yesterday` headline tile is bound; the full 5-scope strip is staged for follow-up.
+
+#### E · Channels page · `ReferenceError: moneyCurrency` 500 fix
+
+Mid-session bug: my earlier currency-neutralisation patch on `app/revenue/channels/page.tsx` referenced `moneyCurrency` 10× but never declared it. Vercel runtime threw `ReferenceError` on every `/h/1000001/revenue/channels` hit. Fixed by inserting `const moneyCurrency: 'USD' | 'EUR' = pid === 1000001 ? 'EUR' : 'USD';` right after `const pid = propertyId ?? PROPERTY_ID_NAMKHAN;`. Live verified.
+
+#### F · ADR-112 auth front door — staged on branch, NOT merged
+
+- **What.** Login + middleware + OAuth callback for the whole cockpit. Pulled canonical files from `dms.documents` (source = `claude_20260521_auth`, three titles). Branch: `auth/adr-112-frontdoor`. PR #312 OPEN.
+- **Files on the branch.**
+  - `middleware.ts` — gates every request. No session → `/login?next=`. Session without the requested `property_id` in JWT claims → 403. Holding roles bypass. Signed `/p/<token>` links stay public.
+  - `app/login/page.tsx` — Google SSO (primary) + email/password (fallback). Fixed in a follow-up commit to wrap `useSearchParams()` in a Suspense boundary (Next.js 14 requirement) and optional-chain the search-params read.
+  - `app/auth/callback/route.ts` — exchanges OAuth code for session, redirects to `?next`.
+- **CI state at end of session.** Vercel preview READY ✅. GitHub Actions `tsc --noEmit` + `lint · typecheck · build` failed on the first push (npm-ci mismatch from a transient `@playwright/test` dep I'd added then reverted; e2e harness files removed to clear the typecheck). After the login Suspense fix push, CI re-run pending. `design-doc-check` is `continue-on-error: true` (this entry handles that warning).
+- **What PBS must do tomorrow** (out of my scope per the brief — Supabase dashboard GUI, no API):
+  1. Authentication → Hooks → enable the `custom_access_token_hook`.
+  2. Authentication → Providers → enable Google (needs Client ID + Secret from Google Cloud Console).
+  3. Authentication → URL Configuration → Site URL = `https://namkhan-bi.vercel.app` + Redirect URLs include `/auth/callback`.
+  4. Once green CI on PR #312 + the three dashboard steps are done → click Merge. Site goes login-only within ~90s.
+
+#### G · Files changed (today, all surfaces)
+
+- DB views — `v_room_type_units` (new), `v_rate_plans_all` (new), `v_rate_plan_perf` / `v_rate_plan_sleeping` / `v_rate_plan_orphans` (rebuilt against unified bridge).
+- DB registry — `kpi.container_registry::rooms_intel.columns_spec` (group_by + tile_metrics).
+- Code (main branch) — `app/(cockpit)/_design/layout/DashboardPage.tsx`, `app/revenue/page.tsx`, `app/revenue/legacy2/page.tsx` (new), `app/h/[property_id]/revenue/legacy2/page.tsx` (new), `app/_components/registry/ContainerRoomIntel.tsx`, `app/revenue/rateplans/page.tsx`, `app/revenue/channels/page.tsx`, `app/revenue/pulse/page.tsx`, `lib/data-pulse.ts`, `app/revenue/leakage/page.tsx`, `app/revenue/parity/page.tsx`, `DESIGN_NAMKHAN_BI.md` (this entry).
+- Code (branch `auth/adr-112-frontdoor`) — `middleware.ts`, `app/login/page.tsx`, `app/auth/callback/route.ts`.
+
+#### H · Constraints honoured
+
+- All edits via SQL `fn_gh_push_file` (no Mac disk staging, no Vercel CLI).
+- No service-role key in any client file. Auth uses ANON only.
+- No `localStorage`/`sessionStorage` anywhere in the auth surface.
+- DB RLS / SQL / `custom_access_token_hook` UNTOUCHED on the auth branch — ADR-112 DB side stays locked.
+- Auth code merged to a BRANCH, not main. Site is still open until PBS explicitly merges PR #312.
+- Frozen `legacy2` snapshot preserves the working HoD if the next iteration breaks anything.

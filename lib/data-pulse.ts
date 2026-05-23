@@ -41,6 +41,7 @@ export interface PulsePerformanceSummary {
 export interface PulseSourceRow {
   source_name: string;
   bookings: number;
+  revenue?: number;
 }
 
 export interface PulseHighOccDay {
@@ -49,9 +50,11 @@ export interface PulseHighOccDay {
 }
 
 export interface PulsePickupRow {
+  source: string;
   accommodation: string;
   window: string;
   avg_los: number;
+  count: number;
 }
 
 export interface PulseEventRow {
@@ -167,19 +170,25 @@ export async function getPulseTopSources(
   _daysBack = 30,
   limit = 5,
 ): Promise<PulseSourceRow[]> {
+  // PBS 2026-05-23 (#102): the previous impl read v_source_top10 (all-time
+  // reservation count) — container says "last 30 days" so numbers looked
+  // wrong. Switched to public.mv_channel_perf which has bookings_30d +
+  // revenue_30d per (property, source) — rebuilt cross-property in #97.
   const { data, error } = await supabase
-    .from('v_source_top10')
-    .select('source, reservations')
+    .from('mv_channel_perf')
+    .select('source_name, bookings_30d, revenue_30d')
     .eq('property_id', propertyId)
-    .order('reservations', { ascending: false })
+    .gt('bookings_30d', 0)
+    .order('bookings_30d', { ascending: false })
     .limit(limit);
   if (error) {
-    console.error('[pulse/getPulseTopSources] v_source_top10 error', error);
+    console.error('[pulse/getPulseTopSources] mv_channel_perf error', error);
     return [];
   }
-  return ((data ?? []) as Array<{ source: string | null; reservations: number | null }>).map((r) => ({
-    source_name: String(r.source ?? '—'),
-    bookings:    Number(r.reservations ?? 0),
+  return ((data ?? []) as Array<{ source_name: string | null; bookings_30d: number | null; revenue_30d: number | null }>).map((r) => ({
+    source_name: String(r.source_name ?? '—'),
+    bookings:    Number(r.bookings_30d ?? 0),
+    revenue:     Number(r.revenue_30d ?? 0),
   }));
 }
 
@@ -215,64 +224,50 @@ export async function getPulseTodayPickup(
   propertyId: number,
   asOf: string,
 ): Promise<PulsePickupRow[]> {
-  if (propertyId === DONNA_PROPERTY_ID) {
-    const { data, error } = await supabase
-      .from('pms_reservations_mews')
-      .select('check_in_date, booking_date, nights, room_type_name')
-      .eq('property_id', propertyId)
-      .eq('booking_date', asOf)
-      .eq('is_cancelled', false);
-    if (error) return [];
-    const agg = new Map<string, { count: number; nightsSum: number; windowDaysSum: number }>();
-    for (const r of (data ?? []) as any[]) {
-      const acc = String(r.room_type_name ?? '— unspecified —');
-      const cur = agg.get(acc) ?? { count: 0, nightsSum: 0, windowDaysSum: 0 };
-      cur.count += 1;
-      cur.nightsSum += Number(r.nights ?? 0);
-      // Window = days from booking to check-in
-      if (r.booking_date && r.check_in_date) {
-        const bd = new Date(String(r.booking_date)).getTime();
-        const ci = new Date(String(r.check_in_date) + 'T00:00:00Z').getTime();
-        cur.windowDaysSum += Math.max(0, Math.round((ci - bd) / 86_400_000));
-      }
-      agg.set(acc, cur);
-    }
-    return Array.from(agg.entries()).map(([acc, v]) => ({
-      accommodation: acc,
-      window: v.count > 0 ? `${Math.round(v.windowDaysSum / v.count)}d` : '—',
-      avg_los: v.count > 0 ? v.nightsSum / v.count : 0,
-    }));
-  }
+  // PBS 2026-05-22 (task #86): query v_reservations_unified for BOTH
+  // properties + surface source_name. Previously the helper queried
+  // pms_reservations_mews / reservations (which don't always populate
+  // room_type_name on the umbrella row), aggregated by room_type only,
+  // and showed a single "— unspecified —" bucket with no useful info.
+  // Now we read the cross-property bridge and group by source × room_type.
+  const startIso = asOf + 'T00:00:00';
+  const endIso = asOf + 'T23:59:59';
 
-  if (propertyId === NAMKHAN_PROPERTY_ID) {
-    const { data, error } = await supabase
-      .from('reservations')
-      .select('check_in_date, booking_date, nights, room_type_name')
-      .eq('property_id', propertyId)
-      .gte('booking_date', asOf + 'T00:00:00')
-      .lt('booking_date', asOf + 'T23:59:59')
-      .neq('status', 'canceled');
-    if (error) return [];
-    const agg = new Map<string, { count: number; nightsSum: number; windowDaysSum: number }>();
-    for (const r of (data ?? []) as any[]) {
-      const acc = String(r.room_type_name ?? '— unspecified —');
-      const cur = agg.get(acc) ?? { count: 0, nightsSum: 0, windowDaysSum: 0 };
-      cur.count += 1;
-      cur.nightsSum += Number(r.nights ?? 0);
-      if (r.booking_date && r.check_in_date) {
-        const bd = new Date(String(r.booking_date)).getTime();
-        const ci = new Date(String(r.check_in_date) + 'T00:00:00Z').getTime();
-        cur.windowDaysSum += Math.max(0, Math.round((ci - bd) / 86_400_000));
-      }
-      agg.set(acc, cur);
+  const { data, error } = await supabase
+    .from('v_reservations_unified')
+    .select('source_name, room_type_name, check_in_date, booking_date, nights')
+    .eq('property_id', propertyId)
+    .eq('is_cancelled', false)
+    .gte('booking_date', startIso)
+    .lte('booking_date', endIso);
+
+  if (error || !data) return [];
+
+  const agg = new Map<string, { source: string; acc: string; count: number; nightsSum: number; windowDaysSum: number; windowDaysN: number }>();
+  for (const r of data as Array<Record<string, unknown>>) {
+    const source = String(r.source_name ?? 'Direct');
+    const acc = String(r.room_type_name ?? '—');
+    const key = `${source}||${acc}`;
+    const cur = agg.get(key) ?? { source, acc, count: 0, nightsSum: 0, windowDaysSum: 0, windowDaysN: 0 };
+    cur.count += 1;
+    cur.nightsSum += Number(r.nights ?? 0);
+    if (r.booking_date && r.check_in_date) {
+      const bd = new Date(String(r.booking_date)).getTime();
+      const ci = new Date(String(r.check_in_date) + 'T00:00:00Z').getTime();
+      cur.windowDaysSum += Math.max(0, Math.round((ci - bd) / 86_400_000));
+      cur.windowDaysN += 1;
     }
-    return Array.from(agg.entries()).map(([acc, v]) => ({
-      accommodation: acc,
-      window: v.count > 0 ? `${Math.round(v.windowDaysSum / v.count)}d` : '—',
-      avg_los: v.count > 0 ? v.nightsSum / v.count : 0,
-    }));
+    agg.set(key, cur);
   }
-  return [];
+  return Array.from(agg.values())
+    .map((v) => ({
+      source: v.source,
+      accommodation: v.acc,
+      window: v.windowDaysN > 0 ? `${Math.round(v.windowDaysSum / v.windowDaysN)}d` : '—',
+      avg_los: v.count > 0 ? v.nightsSum / v.count : 0,
+      count: v.count,
+    }))
+    .sort((a, b) => b.count - a.count);
 }
 
 // ─── Upcoming events (next 30 days from marketing.calendar_events) ──────
@@ -281,25 +276,59 @@ export async function getPulseUpcomingEvents(
   propertyId: number,
   fromIso: string,
   toIso: string,
-  limit = 10,
+  limit = 30,
 ): Promise<PulseEventRow[]> {
-  // public.calendar_events bridge view (if absent the from() returns []).
+  // PBS 2026-05-23 (#103): public.calendar_events view doesn't exist;
+  // public.v_cal_events (day_date, label, layer_key) is the real source.
   const { data, error } = await supabase
-    .from('calendar_events')
-    .select('event_name, event_date, property_id')
-    .or(`property_id.eq.${propertyId},property_id.is.null`)
-    .gte('event_date', fromIso)
-    .lte('event_date', toIso)
-    .order('event_date')
+    .from('v_cal_events')
+    .select('day_date, label, tooltip_json')
+    .eq('property_id', propertyId)
+    .eq('layer_key', 'event')
+    .gte('day_date', fromIso)
+    .lte('day_date', toIso)
+    .order('day_date')
     .limit(limit);
   if (error) {
-    // Soft-fail — table/view may not be exposed yet
+    console.error('[pulse/getPulseUpcomingEvents] v_cal_events error', error.message);
     return [];
   }
-  return ((data ?? []) as any[]).map((r) => ({
-    name: String(r.event_name ?? '—'),
-    date: String(r.event_date),
+  return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+    name: String(r.label ?? '—'),
+    date: String(r.day_date),
   }));
+}
+
+// PBS 2026-05-23 (#103): cancellations counterpart for Today's pickup tab
+export async function getPulseTodayCancellations(
+  propertyId: number,
+  asOf: string,
+): Promise<PulsePickupRow[]> {
+  const { data, error } = await supabase
+    .from('v_reservations_unified')
+    .select('reservation_id, source_name, room_type_name, guest_name, check_in_date, booking_date, cancellation_date, nights, total_amount')
+    .eq('property_id', propertyId)
+    .eq('is_cancelled', true)
+    .gte('cancellation_date', asOf)
+    .lte('cancellation_date', asOf + 'T23:59:59')
+    .order('cancellation_date', { ascending: false })
+    .limit(50);
+  if (error || !data) return [];
+  return (data as Array<Record<string, unknown>>).map((r) => {
+    const nights = Number(r.nights ?? 0);
+    const value = Number(r.total_amount ?? 0);
+    const adr = nights > 0 ? value / nights : 0;
+    return {
+      source: String(r.source_name ?? 'Direct'),
+      accommodation: String(r.room_type_name ?? '—'),
+      guest: String(r.guest_name ?? '—'),
+      reservation_id: String(r.reservation_id ?? ''),
+      adr, value, nights,
+      window: '—',
+      avg_los: nights,
+      count: 1,
+    };
+  });
 }
 
 // ─── Scoped occupancy (cockpit #197) ─────────────────────────────────────

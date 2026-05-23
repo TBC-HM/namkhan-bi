@@ -102,7 +102,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
     { label: 'Direct mix',         value: `${mixPct(byCat.direct).toFixed(1)}%`, size: 'sm', footnote: `${byCat.direct.length} sources · target ≥ 30%`, status: mixPct(byCat.direct) >= 30 ? 'green' : 'amber' },
     { label: 'OTA mix',            value: `${mixPct(byCat.ota).toFixed(1)}%`,    size: 'sm', footnote: `${byCat.ota.length} sources · lower = less commission drag`, status: 'amber' },
     { label: 'DMC & Bedbanks mix', value: `${mixPct(byCat.dmc).toFixed(1)}%`,    size: 'sm', footnote: `${byCat.dmc.length} sources · net-rate exposure`, status: 'amber' },
-    { label: `Revenue · ${period.label}`, value: Math.round(totalRev), currency: 'USD', size: 'sm', footnote: `${channels.length} active sources` },
+    { label: `Revenue · ${period.label}`, value: Math.round(totalRev), currency: moneyCurrency, size: 'sm', footnote: `${channels.length} active sources` },
   ];
 
   // Page-level watch chips (cross-cutting)
@@ -248,8 +248,8 @@ function CategoryBlock({
     if (category === 'direct') {
       return [
         { label: 'Bookings', value: bookings, size: 'sm', delta: hasCmp ? { value: dPct(bookings, cmpBookings), period: 'cmp', direction: bookings >= cmpBookings ? 'up' : 'down' } : undefined },
-        { label: 'Revenue', value: Math.round(revenue), currency: 'USD', size: 'sm', delta: hasCmp ? { value: dPct(revenue, cmpRevenue), period: 'cmp', direction: revenue >= cmpRevenue ? 'up' : 'down' } : undefined },
-        { label: 'ADR', value: Math.round(adr), currency: 'USD', size: 'sm', delta: hasCmp ? { value: dPct(adr, cmpAdr), period: 'cmp', direction: adr >= cmpAdr ? 'up' : 'down' } : undefined },
+        { label: 'Revenue', value: Math.round(revenue), currency: moneyCurrency, size: 'sm', delta: hasCmp ? { value: dPct(revenue, cmpRevenue), period: 'cmp', direction: revenue >= cmpRevenue ? 'up' : 'down' } : undefined },
+        { label: 'ADR', value: Math.round(adr), currency: moneyCurrency, size: 'sm', delta: hasCmp ? { value: dPct(adr, cmpAdr), period: 'cmp', direction: adr >= cmpAdr ? 'up' : 'down' } : undefined },
         { label: 'Share of revenue', value: `${shareOfRev.toFixed(1)}%`, size: 'sm', footnote: 'target ≥ 30%', status: shareOfRev >= 30 ? 'green' : 'amber' },
         { label: 'Avg lead time', value: `${avgLead.toFixed(0)}d`, size: 'sm', footnote: 'booking-weighted' },
       ];
@@ -257,18 +257,18 @@ function CategoryBlock({
     if (category === 'ota') {
       return [
         { label: 'Bookings', value: bookings, size: 'sm', delta: hasCmp ? { value: dPct(bookings, cmpBookings), period: 'cmp', direction: bookings >= cmpBookings ? 'up' : 'down' } : undefined },
-        { label: 'Revenue', value: Math.round(revenue), currency: 'USD', size: 'sm' },
-        { label: 'ADR (gross)', value: Math.round(adr), currency: 'USD', size: 'sm' },
+        { label: 'Revenue', value: Math.round(revenue), currency: moneyCurrency, size: 'sm' },
+        { label: 'ADR (gross)', value: Math.round(adr), currency: moneyCurrency, size: 'sm' },
         { label: 'Commission %', value: `${commPct.toFixed(1)}%`, size: 'sm', footnote: hasCmp ? `cmp ${cmpCommPct.toFixed(1)}%` : 'lower is better', status: commPct > 18 ? 'red' : commPct > 12 ? 'amber' : 'green' },
-        { label: 'Net ADR', value: Math.round(netAdr), currency: 'USD', size: 'sm', footnote: 'gross × (1 − comm%)' },
+        { label: 'Net ADR', value: Math.round(netAdr), currency: moneyCurrency, size: 'sm', footnote: 'gross × (1 − comm%)' },
         { label: 'Cancel rate', value: `${cancelPctTotal.toFixed(1)}%`, size: 'sm', status: cancelPctTotal > 25 ? 'red' : 'amber' },
       ];
     }
     // dmc
     return [
       { label: 'Bookings', value: bookings, size: 'sm' },
-      { label: 'Revenue', value: Math.round(revenue), currency: 'USD', size: 'sm' },
-      { label: 'ADR', value: Math.round(adr), currency: 'USD', size: 'sm', footnote: 'pre-commission net rate' },
+      { label: 'Revenue', value: Math.round(revenue), currency: moneyCurrency, size: 'sm' },
+      { label: 'ADR', value: Math.round(adr), currency: moneyCurrency, size: 'sm', footnote: 'pre-commission net rate' },
       { label: 'Avg lead time', value: `${avgLead.toFixed(0)}d`, size: 'sm', footnote: 'usually longer for B2B' },
       { label: 'Active contracts', value: rows.length, size: 'sm', footnote: 'distinct sources w/ bookings' },
     ];
@@ -304,7 +304,7 @@ function CategoryBlock({
         revenue:   fmtMoney(Number(c.gross_revenue ?? 0), moneyCurrency),
         adr:       fmtMoney(Number(c.adr ?? 0), moneyCurrency),
         comm_pct:  `${Number(c.commission_pct ?? 0).toFixed(0)}%`,
-        net_adr:   fmtMoney(netAdrR, 'USD'),
+        net_adr:   fmtMoney(netAdrR, moneyCurrency),
         cancel:    `${Number(c.cancel_pct ?? 0).toFixed(1)}%`,
         lead:      `${Number(c.avg_lead_days ?? 0).toFixed(0)}d`,
         los:       Number(c.avg_los ?? 0).toFixed(1),
@@ -325,48 +325,58 @@ function CategoryBlock({
     { key: 'los',      label: 'LOS' },
   ];
 
+  const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
   return (
     <>
       {/* KPI tiles */}
-      <Container title={`${titleOf[category]} · headline`} subtitle={`${period.label} · ${rows.length} active sources`} density="compact">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
-          {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
-        </div>
-      </Container>
+      <div style={fullRow}>
+        <Container title={`${titleOf[category]} · headline`} subtitle={`${period.label} · ${rows.length} active sources`} density="compact">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
+            {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
+          </div>
+        </Container>
+      </div>
 
-      {/* Graphs */}
-      <Container title={`${titleOf[category]} share · weekly trend`} subtitle={period.label}>
-        <Chart variant="line" data={trendData} xKey="week"
-          series={[{ key: 'share', label: `${titleOf[category]} % of revenue`, color: '#1F3A2E' }]}
-          height={220} empty={{ title: 'No mix data in window' }} />
-      </Container>
-
-      <Container title={`${titleOf[category]} velocity · 28d`} subtitle="bookings made per day">
-        <Chart variant="line" data={velocityData} xKey="day"
-          series={[{ key: 'n', label: 'Bookings/day', color: '#B8542A' }]}
-          height={200} empty={{ title: 'No velocity in last 28 days' }} />
-      </Container>
+      {/* Two trend charts paired in a 2-up row */}
+      <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
+        <Container title={`${titleOf[category]} share · weekly trend`} subtitle={period.label}>
+          <Chart variant="line" data={trendData} xKey="week"
+            series={[{ key: 'share', label: `${titleOf[category]} % of revenue`, color: '#1F3A2E' }]}
+            height={220} empty={{ title: 'No mix data in window' }} />
+        </Container>
+        <Container title={`${titleOf[category]} velocity · 28d`} subtitle="bookings made per day">
+          <Chart variant="line" data={velocityData} xKey="day"
+            series={[{ key: 'n', label: 'Bookings/day', color: '#B8542A' }]}
+            height={220} empty={{ title: 'No velocity in last 28 days' }} />
+        </Container>
+      </div>
 
       {netData.length > 0 && (
-        <Container title={`${titleOf[category]} · net $/booking`} subtitle="cancel-adjusted">
-          <Chart variant="bar" data={netData} xKey="source"
-            series={[{ key: 'net_pb', label: 'Net $/booking', color: '#1F3A2E' }]}
-            height={200} empty={{ title: 'No net value data' }} />
-        </Container>
+        <div style={fullRow}>
+          <Container title={`${titleOf[category]} · net $/booking`} subtitle="cancel-adjusted">
+            <Chart variant="bar" data={netData} xKey="source"
+              series={[{ key: 'net_pb', label: 'Net $/booking', color: '#1F3A2E' }]}
+              height={200} empty={{ title: 'No net value data' }} />
+          </Container>
+        </div>
       )}
 
       {/* Table */}
-      <Container title={`${titleOf[category]} · all sources`} subtitle={`${rows.length} sources · sorted by bookings`}>
-        <Chart variant="table" data={tableRows} xKey="source" series={tableCols}
-          empty={{ title: 'No sources in this category for the window' }} />
-      </Container>
+      <div style={fullRow}>
+        <Container title={`${titleOf[category]} · all sources`} subtitle={`${rows.length} sources · sorted by bookings`}>
+          <Chart variant="table" data={tableRows} xKey="source" series={tableCols}
+            empty={{ title: 'No sources in this category for the window' }} />
+        </Container>
+      </div>
 
       {/* Owed / missing data note */}
-      <Container title="Still owed" subtitle="data not yet wired for this category" density="compact" status="grey">
-        <div style={{ fontSize: 12, color: 'var(--ink-soft, #5A5A5A)', lineHeight: 1.5 }}>
-          {missingNote[category]}
-        </div>
-      </Container>
+      <div style={fullRow}>
+        <Container title="Still owed" subtitle="data not yet wired for this category" density="compact" status="grey">
+          <div style={{ fontSize: 12, color: 'var(--ink-soft, #5A5A5A)', lineHeight: 1.5 }}>
+            {missingNote[category]}
+          </div>
+        </Container>
+      </div>
     </>
   );
 }

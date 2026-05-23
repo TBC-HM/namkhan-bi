@@ -26,9 +26,15 @@ interface Props {
   kpiStrip?: React.ReactNode;
   /** Forwarded URL search params for handlers that read ?period=, ?expand=, etc. */
   searchParams?: Record<string, string | string[] | undefined>;
+  /** Layout mode for items.
+   *  'flat' (default) — each item in its own 360px auto-fit cell.
+   *  'graphs-first' — all graphs packed into a top row (auto-fit, min 280px),
+   *  containers below in a 2-up grid. Kills white space for pages with many
+   *  short graphs + a few long tables (e.g. leakage). */
+  layout?: 'flat' | 'graphs-first';
 }
 
-export default async function PageRenderer({ pageSlug, propertyId, title, subtitle, kpiStrip, searchParams }: Props) {
+export default async function PageRenderer({ pageSlug, propertyId, title, subtitle, kpiStrip, searchParams, layout = 'flat' }: Props) {
   // Tabs use revenue subpages strip for now (only consumer so far is revenue)
   const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, propertyId);
   const tabs: DashboardTab[] = subPages.map((s) => ({
@@ -70,53 +76,71 @@ export default async function PageRenderer({ pageSlug, propertyId, title, subtit
         </Container>
       )}
 
-      {items.map((it, idx) => {
-        if (it.kind === 'graph' && it.graph) {
-          return <ContainerChart key={`g-${it.graph.graph_code}-${idx}`} graph={it.graph} propertyId={propertyId} />;
-        }
-        const c = it.container!;
-        switch (c.render_type) {
-          case 'table':
-            return <ContainerTable key={`c-${c.container_code}`} container={c} propertyId={propertyId} />;
-          case 'month_table':
-            return <ContainerMonthTable key={`c-${c.container_code}`} container={c} propertyId={propertyId} />;
-          case 'top_n_drill':
-            return <ContainerTopNDrill key={`c-${c.container_code}`} container={c} propertyId={propertyId} />;
-          case 'room_intel':
-            return <ContainerRoomIntel key={`c-${c.container_code}`} container={c} propertyId={propertyId} searchParams={searchParams} />;
-          case 'chart': {
-            // Allow container-row chart definitions to also flow through ContainerChart by
-            // synthesising a minimal GraphRegistryRow from columns_spec.
-            const firstNumeric = (c.columns_spec ?? []).find((col) => col.format !== 'text' && col.format !== 'date' && col.format !== 'month');
-            const labelCol = (c.columns_spec ?? [])[0]?.key ?? 'label';
-            const valueCol = firstNumeric?.key ?? 'value';
-            const synthGraph: GraphRegistryRow = {
-              graph_code: c.container_code,
-              graph_name: c.container_name,
-              chart_type: 'bar',
-              view_name: c.bound_views[0] ?? '',
-              section: c.page_slug,
-              label_col: labelCol,
-              value_col: valueCol,
-              series_col: null,
-              primary_filter: c.primary_filter,
-              property_scope: c.property_scope,
-              display_order: c.display_order,
-              description: c.subtitle,
-              active: c.active,
-            };
-            return <ContainerChart key={`c-${c.container_code}`} graph={synthGraph} propertyId={propertyId} />;
+      {(() => {
+        const renderItem = (it: RenderableItem, idx: number): React.ReactNode => {
+          if (it.kind === 'graph' && it.graph) {
+            return <ContainerChart key={`g-${it.graph.graph_code}-${idx}`} graph={it.graph} propertyId={propertyId} />;
           }
-          default:
-            return (
-              <Container key={`c-${c.container_code}`} title={c.container_name} subtitle={`unknown render_type: ${c.render_type}`}>
-                <div style={{ padding: 18, fontSize: 12, color: 'var(--ink-soft, #5A5A5A)' }}>
-                  This render_type is not supported yet by the renderer.
+          const c = it.container!;
+          switch (c.render_type) {
+            case 'table':
+              return <ContainerTable key={`c-${c.container_code}`} container={c} propertyId={propertyId} />;
+            case 'month_table':
+              return <ContainerMonthTable key={`c-${c.container_code}`} container={c} propertyId={propertyId} />;
+            case 'top_n_drill':
+              return <ContainerTopNDrill key={`c-${c.container_code}`} container={c} propertyId={propertyId} />;
+            case 'room_intel':
+              return <ContainerRoomIntel key={`c-${c.container_code}`} container={c} propertyId={propertyId} searchParams={searchParams} />;
+            case 'chart': {
+              const firstNumeric = (c.columns_spec ?? []).find((col) => col.format !== 'text' && col.format !== 'date' && col.format !== 'month');
+              const labelCol = (c.columns_spec ?? [])[0]?.key ?? 'label';
+              const valueCol = firstNumeric?.key ?? 'value';
+              const synthGraph: GraphRegistryRow = {
+                graph_code: c.container_code, graph_name: c.container_name, chart_type: 'bar',
+                view_name: c.bound_views[0] ?? '', section: c.page_slug,
+                label_col: labelCol, value_col: valueCol, series_col: null,
+                primary_filter: c.primary_filter, property_scope: c.property_scope,
+                display_order: c.display_order, description: c.subtitle, active: c.active,
+              };
+              return <ContainerChart key={`c-${c.container_code}`} graph={synthGraph} propertyId={propertyId} />;
+            }
+            default:
+              return (
+                <Container key={`c-${c.container_code}`} title={c.container_name} subtitle={`unknown render_type: ${c.render_type}`}>
+                  <div style={{ padding: 18, fontSize: 12, color: 'var(--ink-soft, #5A5A5A)' }}>
+                    This render_type is not supported yet by the renderer.
+                  </div>
+                </Container>
+              );
+          }
+        };
+
+        if (layout === 'graphs-first') {
+          // PBS 2026-05-22: leakage was chaos with each item in a 360px cell.
+          // Pack all graphs into a single auto-fit row at the top, then all
+          // containers (long tables) below in a 2-up grid. fullRow lets each
+          // group span the DashboardPage body width.
+          const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
+          const graphItems     = items.filter((it) => it.kind === 'graph');
+          const containerItems = items.filter((it) => it.kind === 'container');
+          return (
+            <>
+              {graphItems.length > 0 && (
+                <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
+                  {graphItems.map((it, idx) => renderItem(it, idx))}
                 </div>
-              </Container>
-            );
+              )}
+              {containerItems.length > 0 && (
+                <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+                  {containerItems.map((it, idx) => renderItem(it, idx))}
+                </div>
+              )}
+            </>
+          );
         }
-      })}
+
+        return items.map((it, idx) => renderItem(it, idx));
+      })()}
     </DashboardPage>
   );
 }

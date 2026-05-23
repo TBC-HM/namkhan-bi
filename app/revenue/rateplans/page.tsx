@@ -38,6 +38,7 @@ function fmtPct(n: number | null | undefined, decimals = 1): string {
 
 export default async function RatePlansPage({ searchParams, propertyId }: Props) {
   const pid = propertyId ?? PROPERTY_ID;
+  const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
   const moneyCurrency: 'USD' | 'EUR' = pid === 1000001 ? 'EUR' : 'USD';
   const sym: string = pid === 1000001 ? '€' : '$';
   const period = resolvePeriod(searchParams);
@@ -228,13 +229,13 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
         }}>↗ Dead plans (90d)</a>
       }
     >
-      <Container title="Headline" subtitle={period.label} density="compact">
+      <div style={fullRow}><Container title="Headline" subtitle={period.label} density="compact">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
           {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
         </div>
-      </Container>
+      </Container></div>
 
-      <Container title="Window" subtitle="period selector" density="compact">
+      <div style={fullRow}><Container title="Window" subtitle="period selector" density="compact">
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
           {winOptions.map((o) => {
             const active = o.k === period.win;
@@ -250,9 +251,9 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
             );
           })}
         </div>
-      </Container>
+      </Container></div>
 
-      <Container title="Daily booking trend" subtitle={`bookings + revenue · ${period.label}`}>
+      <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}><Container title="Daily booking trend" subtitle={`bookings + revenue · ${period.label}`}>
         <Chart variant="line" data={trendData} xKey="day"
           series={[
             { key: 'bookings', label: 'Bookings', color: '#1F3A2E' },
@@ -262,30 +263,29 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
           empty={{ title: 'No booking activity in window' }}
         />
       </Container>
-
-      <Container title="Mix by plan type" subtitle={`revenue share · ${period.label}`}>
+        <Container title="Mix by plan type" subtitle={`revenue share · ${period.label}`}>
         <Chart variant="donut" data={typeDonut} xKey="name"
           series={[{ key: 'value', label: 'Revenue' }]}
           height={220}
           empty={{ title: 'No plan-type mix' }}
         />
-      </Container>
+      </Container></div>
 
-      <Container title="Top 10 plans · revenue" subtitle={`${period.label}`}>
+      <div style={fullRow}><Container title="Top 10 plans · revenue" subtitle={`${period.label}`}>
         <Chart variant="bar" data={planBar} xKey="name"
           series={[{ key: 'revenue', label: 'Revenue', color: '#1F3A2E' }]}
           height={240}
           empty={{ title: 'No plans booking in window' }}
         />
-      </Container>
+      </Container></div>
 
-      <Container title={`Plans · ${ranked.length} active`} subtitle={`${period.label}${hiddenOrphanInWindow > 0 ? ` · ${hiddenOrphanInWindow} orphan/retired hidden` : ''} · v_rate_plan_perf`}>
+      <div style={fullRow}><Container title={`Plans · ${ranked.length} active`} subtitle={`${period.label}${hiddenOrphanInWindow > 0 ? ` · ${hiddenOrphanInWindow} orphan/retired hidden` : ''} · v_rate_plan_perf`}>
         <Chart variant="table" data={planRows} xKey="name" series={planCols}
           empty={{ title: 'No plans in window' }}
         />
-      </Container>
+      </Container></div>
 
-      <Container title="Sleeping plans · ≥ 90d idle" subtitle="candidates to retire · v_rate_plan_sleeping">
+      <div style={fullRow}><Container title="Sleeping plans · ≥ 90d idle" subtitle="candidates to retire · v_rate_plan_sleeping">
         <Chart variant="table" data={sleepingRows} xKey="name"
           series={[
             { key: 'type',        label: 'Type' },
@@ -294,9 +294,9 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
           ]}
           empty={{ title: 'No sleeping plans' }}
         />
-      </Container>
+      </Container></div>
 
-      <Container title="Orphan plans · not in master" subtitle="booked but not configured · GDS-injected · v_rate_plan_orphans">
+      <div style={fullRow}><Container title="Orphan plans · not in master" subtitle="booked but not configured · GDS-injected · v_rate_plan_orphans">
         <Chart variant="table" data={orphanRows} xKey="plan"
           series={[
             { key: 'bookings',    label: 'Bookings · lifetime' },
@@ -305,7 +305,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
           ]}
           empty={{ title: 'No orphan plans' }}
         />
-      </Container>
+      </Container></div>
     </DashboardPage>
   );
 }

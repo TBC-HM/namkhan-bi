@@ -16,6 +16,7 @@ export default function LeakagePage() {
       propertyId={260955}
       title="Revenue · Leakage"
       subtitle="rate leakage · source transparency"
+      layout="graphs-first"
     />
   );
 }

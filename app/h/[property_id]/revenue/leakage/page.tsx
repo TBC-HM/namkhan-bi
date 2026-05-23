@@ -16,6 +16,7 @@ export default function LeakagePage({ params }: { params: { property_id: string 
       propertyId={propertyId}
       title="Revenue · Leakage"
       subtitle="rate leakage · source transparency · driven by v_container_registry + v_graph_registry"
+      layout="graphs-first"
     />
   );
 }

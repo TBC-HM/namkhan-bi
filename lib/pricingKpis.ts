@@ -1,24 +1,24 @@
 // lib/pricingKpis.ts
 // PBS 2026-05-09: KPI-strip data for /revenue/pricing.
-//   1. Current BAR — today's lowest sellable rate from rate_inventory (rate >= RATE_MIN, stop_sell=false)
-//   2. Comp gap — today's BAR minus median compset rate from v_compset_competitor_rate_matrix
-//   3. Occupancy fence — today's rooms_sold / 30 (PBS-locked capacity)
-//   4. Sellable count — count of room-night cells with rate >= RATE_MIN over next 14 days
+//   1. Current BAR — today's lowest sellable rate from rate_inventory
+//   2. Comp gap — today's BAR minus median compset rate
+//   3. Occupancy fence — today's rooms_sold / capacity (per-property)
+//   4. Sellable count — cells with rate >= RATE_MIN over next 14 days
 //
-// Each metric also returns yesterday's value so KpiBox can render a delta.
+// 2026-05-22: every helper accepts an optional propertyId. CAPACITY +
+// occupancy source switch per property (Namkhan=30 via v_kpi_daily,
+// Donna=64 via v_otb_pace — v_kpi_daily has no property column).
+// rate_inventory stays Namkhan-only at the schema level — returns null/0
+// for Donna, which the KPI tiles render as "—" (empty-state).
 //
 // IMPORTANT: the shared `lib/supabase` client uses service_role, but
-// service_role currently LACKS SELECT on the underlying revenue.* tables that
-// the v_compset_* views reflect (only anon + authenticated do). PostgREST
-// therefore returns [] silently for service-role on every v_compset_* view.
-// /revenue/compset works around this by spinning up a local anon client; we
-// mirror that for the comp-gap query only. All other queries use service_role.
+// service_role currently LACKS SELECT on the revenue.* tables that the
+// v_compset_* views reflect (only anon + authenticated do). The compset
+// query mirrors /revenue/compset's local-anon-client workaround.
 
 import { createClient } from '@supabase/supabase-js';
 import { supabase, PROPERTY_ID } from './supabase';
 
-// Local anon client for v_compset_* views (revenue.* schema is service-role
-// blind — see lib comment + app/revenue/compset/page.tsx lines 97-112).
 const compsetAnon = createClient(
   (process.env.NEXT_PUBLIC_SUPABASE_URL || "https://build-placeholder.supabase.co"),
   (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "build-placeholder-anon"),
@@ -26,60 +26,51 @@ const compsetAnon = createClient(
 );
 
 export const RATE_MIN = 10;
-export const CAPACITY_FIXED = 30;
+const CAPACITY_BY_PROPERTY: Record<number, number> = { 260955: 30, 1000001: 64 };
+export const CAPACITY_FIXED = 30; // legacy export — Namkhan default
+function capacityFor(propertyId: number): number {
+  return CAPACITY_BY_PROPERTY[propertyId] ?? 30;
+}
 
 export interface PricingKpis {
-  // Current BAR
   barToday: number | null;
   barYest: number | null;
-
-  // Comp gap (BAR - median compset)
   compMedian: number | null;
   compMedianYest: number | null;
   compRows: number;
-
-  // Occupancy fence
   roomsSold: number | null;
-  roomsAvailable: number;        // capped at CAPACITY_FIXED
+  roomsAvailable: number;
   occPctToday: number | null;
   occPctYest: number | null;
-
-  // Sellable count next 14d
   sellable14d: number | null;
-  sellable14dPrev: number | null; // 14d ending today (rolling-back baseline)
+  sellable14dPrev: number | null;
 }
 
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+function todayIso(): string { return new Date().toISOString().slice(0, 10); }
 function isoOffset(days: number): string {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
 
-async function bar(date: string): Promise<number | null> {
+async function bar(date: string, propertyId: number): Promise<number | null> {
   const { data, error } = await supabase
     .from('rate_inventory')
     .select('rate')
-    .eq('property_id', PROPERTY_ID)
+    .eq('property_id', propertyId)
     .eq('inventory_date', date)
     .gte('rate', RATE_MIN)
     .or('stop_sell.is.null,stop_sell.eq.false');
-  if (error || !data) return null;
-  if (data.length === 0) return null;
+  if (error || !data || data.length === 0) return null;
   let min = Number.POSITIVE_INFINITY;
   for (const r of data) {
-    const v = Number((r as any).rate) || 0;
+    const v = Number((r as Record<string, unknown>).rate) || 0;
     if (v >= RATE_MIN && v < min) min = v;
   }
   return min === Number.POSITIVE_INFINITY ? null : min;
 }
 
 async function compMedian(date: string): Promise<{ median: number | null; rows: number }> {
-  // MUST use anon client (service_role can't read revenue.* underneath the
-  // v_compset_* views — see file header). Mirror the proven /revenue/compset
-  // pattern: select * with high limit, filter client-side.
   const { data, error } = await compsetAnon
     .from('v_compset_competitor_rate_matrix')
     .select('*')
@@ -88,38 +79,50 @@ async function compMedian(date: string): Promise<{ median: number | null; rows: 
     if (error) console.error('[pricingKpis] compMedian', error);
     return { median: null, rows: 0 };
   }
-  const rates = data
-    .filter((r: any) => String(r.stay_date) === date)
-    .filter((r: any) => r.is_available !== false)
-    .map((r: any) => Number(r.rate_usd))
-    .filter((n: number) => Number.isFinite(n) && n > 0)
+  const rates = (data as Array<Record<string, unknown>>)
+    .filter((r) => String(r.stay_date) === date)
+    .filter((r) => r.is_available !== false)
+    .map((r) => Number(r.rate_usd))
+    .filter((n) => Number.isFinite(n) && n > 0)
     .sort((a, b) => a - b);
   if (rates.length === 0) return { median: null, rows: 0 };
   const mid = Math.floor(rates.length / 2);
-  const median = rates.length % 2 === 0
-    ? (rates[mid - 1] + rates[mid]) / 2
-    : rates[mid];
+  const median = rates.length % 2 === 0 ? (rates[mid - 1] + rates[mid]) / 2 : rates[mid];
   return { median, rows: rates.length };
 }
 
-async function occToday(date: string): Promise<{ roomsSold: number | null; occPct: number | null }> {
+// occToday: Namkhan reads v_kpi_daily (the legacy property-less view);
+// Donna falls back to v_otb_pace which IS property-aware. Both produce
+// rooms_sold + occ % against the property's capacity.
+async function occToday(date: string, propertyId: number): Promise<{ roomsSold: number | null; occPct: number | null }> {
+  const cap = capacityFor(propertyId);
+  if (propertyId === 260955) {
+    const { data, error } = await supabase
+      .from('v_kpi_daily')
+      .select('rooms_sold, rooms_available, occupancy_pct')
+      .eq('metric_date', date)
+      .maybeSingle();
+    if (error || !data) return { roomsSold: null, occPct: null };
+    const sold = Number((data as Record<string, unknown>).rooms_sold ?? 0);
+    return { roomsSold: sold, occPct: cap > 0 ? (sold / cap) * 100 : 0 };
+  }
+  // Donna (and any other property): derive from v_otb_pace
   const { data, error } = await supabase
-    .from('v_kpi_daily')
-    .select('rooms_sold, rooms_available, occupancy_pct')
-    .eq('metric_date', date)
+    .from('v_otb_pace')
+    .select('confirmed_rooms')
+    .eq('property_id', propertyId)
+    .eq('night_date', date)
     .maybeSingle();
   if (error || !data) return { roomsSold: null, occPct: null };
-  const sold = Number((data as any).rooms_sold ?? 0);
-  // Always render against fixed capacity 30 per PBS lock
-  const pct = CAPACITY_FIXED > 0 ? (sold / CAPACITY_FIXED) * 100 : 0;
-  return { roomsSold: sold, occPct: pct };
+  const sold = Number((data as Record<string, unknown>).confirmed_rooms ?? 0);
+  return { roomsSold: sold, occPct: cap > 0 ? (sold / cap) * 100 : 0 };
 }
 
-async function sellableCount(fromIso: string, toIso: string): Promise<number | null> {
+async function sellableCount(fromIso: string, toIso: string, propertyId: number): Promise<number | null> {
   const { count, error } = await supabase
     .from('rate_inventory')
     .select('*', { count: 'exact', head: true })
-    .eq('property_id', PROPERTY_ID)
+    .eq('property_id', propertyId)
     .gte('inventory_date', fromIso)
     .lt('inventory_date', toIso)
     .gte('rate', RATE_MIN)
@@ -128,7 +131,7 @@ async function sellableCount(fromIso: string, toIso: string): Promise<number | n
   return count ?? 0;
 }
 
-export async function getPricingKpis(): Promise<PricingKpis> {
+export async function getPricingKpis(propertyId: number = PROPERTY_ID): Promise<PricingKpis> {
   const today = todayIso();
   const yest = isoOffset(-1);
   const plus14 = isoOffset(14);
@@ -140,14 +143,14 @@ export async function getPricingKpis(): Promise<PricingKpis> {
     occT, occY,
     sell14, sell14prev,
   ] = await Promise.all([
-    bar(today),
-    bar(yest),
+    bar(today, propertyId),
+    bar(yest, propertyId),
     compMedian(today),
     compMedian(yest),
-    occToday(today),
-    occToday(yest),
-    sellableCount(today, plus14),
-    sellableCount(minus14, today),
+    occToday(today, propertyId),
+    occToday(yest, propertyId),
+    sellableCount(today, plus14, propertyId),
+    sellableCount(minus14, today, propertyId),
   ]);
 
   return {
@@ -157,7 +160,7 @@ export async function getPricingKpis(): Promise<PricingKpis> {
     compMedianYest: compY.median,
     compRows: compT.rows,
     roomsSold: occT.roomsSold,
-    roomsAvailable: CAPACITY_FIXED,
+    roomsAvailable: capacityFor(propertyId),
     occPctToday: occT.occPct,
     occPctYest: occY.occPct,
     sellable14d: sell14,
