@@ -66,12 +66,15 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
   }));
 
   const period = resolvePeriod(searchParams ?? {});
-  const [pace, losDist, bwDist, losWindow, countryLW] = await Promise.all([
+  const [pace, losDist, bwDist, losWindow, countryLW, sdly, chanMix] = await Promise.all([
+    // ↓ existing 5 (kept verbatim — only line replaced is the await header above)
     getPaceOtb(period, pid).catch(() => [] as Record<string, unknown>[]),
     supabase.from('v_chart_los_distribution').select('los_bucket, bucket_order, total_reservations, total_revenue, adr, share_pct').eq('property_id', pid).order('bucket_order'),
     supabase.from('v_chart_booking_window_distribution').select('booking_window_bucket, bucket_order, total_reservations, total_revenue, adr, share_pct').eq('property_id', pid).order('bucket_order'),
     supabase.from('v_chart_los_window_correlation').select('los_bucket, los_order, window_bucket, window_order, reservations, avg_los, total_revenue').eq('property_id', pid).order('window_order').order('los_order'),
     supabase.from('v_chart_country_los_window').select('guest_country, reservations, avg_los, avg_window_days, short_window_pct, share_pct, total_revenue').eq('property_id', pid).order('reservations', { ascending: false }).limit(20),
+    supabase.from('v_chart_demand_monthly_sdly').select('ci_month, ty_adr, ly_adr, ty_avg_los, ly_avg_los, ty_revpar, ly_revpar, ty_bookings, ly_bookings').eq('property_id', pid).gte('ci_month', '2024-01').order('ci_month'),
+    supabase.from('v_chart_channel_mix_monthly').select('ci_month, ota_bookings, direct_bookings, rest_bookings').eq('property_id', pid).gte('ci_month', '2024-01').order('ci_month'),
   ]);
   const allRows: DemandRow[] = (pace as Array<Record<string, unknown>>).map((r) => ({
     ci_month:         String(r.ci_month),
@@ -319,7 +322,65 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
         </Container>
       </div>
 
-      {/* Row 8 · Pace by check-in month (anchored here under filters, starts Jan-2025) */}
+      {/* Row 8 · SDLY trends (3-up): ADR · LOS · RevPAR */}
+      <div style={threeUp}>
+        <Container title="ADR · TY vs LY" subtitle="monthly · by check-in month">
+          <Chart variant="line" data={((sdly.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+            ci_month: String(r.ci_month),
+            ty_adr:   Number(r.ty_adr ?? 0),
+            ly_adr:   Number(r.ly_adr ?? 0),
+          }))} xKey="ci_month"
+            series={[
+              { key: 'ty_adr', label: 'TY ADR', color: '#1F3A2E' },
+              { key: 'ly_adr', label: 'LY ADR', color: '#5A5A5A' },
+            ]}
+            height={200} empty={{ title: 'No ADR data' }} />
+        </Container>
+        <Container title="LOS · TY vs LY" subtitle="avg length-of-stay by month">
+          <Chart variant="line" data={((sdly.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+            ci_month: String(r.ci_month),
+            ty_los:   Number(r.ty_avg_los ?? 0),
+            ly_los:   Number(r.ly_avg_los ?? 0),
+          }))} xKey="ci_month"
+            series={[
+              { key: 'ty_los', label: 'TY LOS', color: '#1F3A2E' },
+              { key: 'ly_los', label: 'LY LOS', color: '#5A5A5A' },
+            ]}
+            height={200} empty={{ title: 'No LOS data' }} />
+        </Container>
+        <Container title="RevPAR · TY vs LY" subtitle="monthly · rooms-revenue / room-capacity">
+          <Chart variant="line" data={((sdly.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+            ci_month: String(r.ci_month),
+            ty_revpar: Number(r.ty_revpar ?? 0),
+            ly_revpar: Number(r.ly_revpar ?? 0),
+          }))} xKey="ci_month"
+            series={[
+              { key: 'ty_revpar', label: 'TY RevPAR', color: '#1F3A2E' },
+              { key: 'ly_revpar', label: 'LY RevPAR', color: '#B8542A' },
+            ]}
+            height={200} empty={{ title: 'No RevPAR data' }} />
+        </Container>
+      </div>
+
+      {/* Row 9 · Channel mix monthly trend (full row) */}
+      <div style={fullRow}>
+        <Container title="Channel mix · monthly trend" subtitle="OTAs · Direct · Rest (rest = wholesale/group/other)">
+          <Chart variant="line" data={((chanMix.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+            ci_month: String(r.ci_month),
+            ota:      Number(r.ota_bookings ?? 0),
+            direct:   Number(r.direct_bookings ?? 0),
+            rest:     Number(r.rest_bookings ?? 0),
+          }))} xKey="ci_month"
+            series={[
+              { key: 'ota',    label: 'OTAs',   color: '#1F3A2E' },
+              { key: 'direct', label: 'Direct', color: '#B8542A' },
+              { key: 'rest',   label: 'Rest',   color: '#B8A878' },
+            ]}
+            height={240} empty={{ title: 'No channel mix data' }} />
+        </Container>
+      </div>
+
+      {/* Row 10 · Pace by check-in month (anchored here under filters, starts Jan-2025) */}
       <div style={fullRow}>
         <Container title={`Pace by check-in month · from Jan 2025 · ${paceTableRows.length} month${paceTableRows.length === 1 ? '' : 's'}`} subtitle="past = actual OTB · future = pace · mv_pace_otb">
           <Chart variant="table" data={tableRows} xKey="ci_month" series={tableCols}
