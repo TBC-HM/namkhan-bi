@@ -146,6 +146,16 @@ export default async function ContainerRoomIntel({ container, propertyId, search
     .select('display_symbol, display_currency').eq('property_id', propertyId).maybeSingle();
   const currencySymbol = String((propRow as { display_symbol?: string } | null)?.display_symbol ?? '$');
 
+  // 2b. Direct-sales share per canonical category (PBS 2026-05-22 task #87)
+  // Always YTD scope for stability; could be parameterized to active period later.
+  const currentYearStr = new Date().toISOString().slice(0, 4);
+  const { data: directRows } = await supabase
+    .rpc('fn_room_direct_share', { p_property_id: propertyId, p_period_yyyymm: null, p_year: currentYearStr });
+  const directByCanon = new Map<string, number>();
+  for (const r of ((directRows ?? []) as Array<{ canonical_room_type_code: string; direct_share_pct: number }>)) {
+    directByCanon.set(String(r.canonical_room_type_code), Number(r.direct_share_pct ?? 0));
+  }
+
   // 3. Periods — discrete months + a YTD pill for current year.
   // PBS 2026-05-22: future months (OTB) must be visible. Window = past 12
   // months + current + every future month the view has data for.
@@ -432,6 +442,25 @@ export default async function ContainerRoomIntel({ container, propertyId, search
                     );
                   })}
                 </div>
+                {isCanonicalGrouping && (() => {
+                  const directPct = directByCanon.get(code);
+                  if (directPct == null) return null;
+                  return (
+                    <div style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      fontSize: 10, color: 'var(--ink-soft, #5A5A5A)',
+                      borderTop: '1px solid var(--hairline, #E6DFCC)',
+                      paddingTop: 4, marginTop: 4, letterSpacing: '0.04em',
+                    }}>
+                      <span>Direct sales (YTD)</span>
+                      <span style={{
+                        fontWeight: 600,
+                        color: directPct >= 30 ? '#1F7A5B' : directPct < 20 ? '#C0584C' : 'var(--ink, #1B1B1B)',
+                        fontVariantNumeric: 'tabular-nums',
+                      }}>{directPct.toFixed(1)}%</span>
+                    </div>
+                  );
+                })()}
                 <div style={{ fontSize: 10, color: 'var(--ink-soft, #5A5A5A)', textAlign: 'right' }}>
                   {!hasData ? 'no data this period · click for history' : isExpanded ? '↑ collapse' : 'expand ↓'}
                 </div>
