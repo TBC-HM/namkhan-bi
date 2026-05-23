@@ -5,15 +5,10 @@
 // cockpit ticket #198 (SEQ 6/6) · 2026-05-21 (tightened after PBS feedback re scroll+blank space).
 
 import Link from 'next/link';
-import { Suspense } from 'react';
 import {
   DashboardPage, Container, KpiTile,
   type KpiTileProps,
 } from '@/app/(cockpit)/_design';
-// Direct import (NOT via barrel) — the barrel re-export of async server
-// components triggers "Unsupported Server Component" in Next.js 14 RSC.
-// task #89 retry of #82 wiring.
-import BookingActivity from '@/app/(cockpit)/_design/BookingActivity';
 import { DEPT_CFG } from '@/lib/dept-cfg';
 import type { DeptCfg } from '@/lib/dept-cfg/types';
 import { REVENUE_SUBPAGES } from './_subpages';
@@ -46,7 +41,7 @@ const SECTION_HINT: Record<string, string> = {
   Reports:      'Print-ready reports',
 };
 
-export default async function RevenueHoDPage({ propertyId, searchParams }: Props = {}) {
+export default function RevenueHoDPage({ propertyId, searchParams }: Props = {}) {
   const pid = propertyId ?? PROPERTY_ID;
   const cfg: DeptCfg = pid === PROPERTY_ID ? DEPT_CFG.revenue : getDeptCfg('revenue', pid);
 
@@ -134,14 +129,7 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
         </Container>
       </div>
 
-      {/* 3a. Booking activity — last 1-7 days · server-fetched · property-aware */}
-      <div style={fullRow}>
-        <Suspense fallback={<Container title="Bookings & cancellations" subtitle="loading…" density="compact"><div style={{ padding: 12, fontSize: 12, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>Loading recent activity…</div></Container>}>
-          <BookingActivity propertyId={pid} searchParams={searchParams} />
-        </Suspense>
-      </div>
-
-      {/* 3b. Sections navigator — full-width 4-up dense grid (the secondary sub-nav) */}
+      {/* 3. Sections navigator — full-width 4-up dense grid (the secondary sub-nav) */}
       <div style={fullRow}>
         <Container title="Sections" subtitle="drill into a sub-area" density="compact">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 6 }}>
