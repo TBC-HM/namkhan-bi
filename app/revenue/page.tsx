@@ -16,6 +16,7 @@ import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { getDeptCfg } from '@/lib/dept-cfg/by-property';
 import { PROPERTY_ID, supabase } from '@/lib/supabase';
 import ReportBuilder from './_components/ReportBuilder';
+import HodTasksList from './_components/HodTasksList';
 import { getPulseTodayPickup, getPulseTodayCancellations } from '@/lib/data-pulse';
 
 export const dynamic = 'force-dynamic';
@@ -142,17 +143,8 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
           )}
         </Container>
 
-        <Container title="My Tasks" subtitle={`${tasks.filter((t) => !t.done).length} open`} density="compact">
-          {tasks.length === 0 ? <div style={emptyStyle}>no tasks yet</div> : (
-            <div style={listStyle}>
-              {tasks.map((t) => (
-                <div key={t.id} style={rowStyle}>
-                  <span style={{ ...dotStyle, background: t.done ? 'var(--ink-soft, #5A5A5A)' : 'var(--primary, #1F3A2E)' }} aria-hidden />
-                  <span style={{ ...labelStyle, textDecoration: t.done ? 'line-through' : 'none', color: t.done ? 'var(--ink-soft, #5A5A5A)' : 'inherit' }}>{t.label}</span>
-                </div>
-              ))}
-            </div>
-          )}
+        <Container title="My Tasks" subtitle="add / check off / delete · per property" density="compact">
+          <HodTasksList deptSlug="revenue" propertyId={pid} />
         </Container>
 
         <Container title="Bugs" subtitle={`${bugs.length} open`} density="compact">
