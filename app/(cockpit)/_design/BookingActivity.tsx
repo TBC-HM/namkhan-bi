@@ -6,7 +6,7 @@
 // plan · LOS · ADR · Revenue. Cancellations rendered in a second sub-table
 // below the bookings. Task #82 · 2026-05-22.
 
-import { Container } from './layout/Container';
+import Container from './layout/Container';
 import BookingActivityDays from './BookingActivityDays';
 import { supabase } from '@/lib/supabase';
 
