@@ -159,16 +159,21 @@ const REVENUE_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
     { key: 'win',     label: 'Window',  options: [{ value: 'mtd', label: 'MTD' }, { value: 'ytd', label: 'YTD' }, { value: 'last_month', label: 'Last month' }] },
     { key: 'cmp',     label: 'Compare', options: [{ value: 'budget', label: 'vs budget' }, { value: 'sdly',  label: 'vs same-day-last-year' }, { value: 'both',   label: 'both' }] },
   ]},
-  { value: 'pl-month', label: 'P&L · month', hrefBase: '/revenue/reports/render?type=pl-month', dimGroups: [
-    { key: 'window', label: 'Month', options: [
-      { value: 'this',  label: 'This month'   },
-      { value: 'prior', label: 'Last month'   },
-      { value: 'ytd',   label: 'YTD summary'  },
+  { value: 'pickup', label: 'Pickup', hrefBase: '/revenue/reports/render?type=pickup', dimGroups: [
+    { key: 'window', label: 'Window', options: [
+      { value: 'today',    label: 'Today'     },
+      { value: 'last_1d',  label: 'Last 1d'   },
+      { value: 'last_7d',  label: 'Last 7d'   },
+      { value: 'last_28d', label: 'Last 28d'  },
     ]},
-    { key: 'compare', label: 'Compare', options: [
-      { value: 'mom', label: 'vs prior month' },
-      { value: 'yoy', label: 'vs same month LY' },
-      { value: 'budget', label: 'vs Budget' },
+    { key: 'frequency', label: 'Send frequency', options: [
+      { value: 'once',  label: 'Once now'  },
+      { value: 'daily', label: 'Daily 08:00' },
+    ]},
+    { key: 'email', label: 'Email to', options: [
+      { value: 'me',       label: 'Just me'       },
+      { value: 'rev_team', label: 'Revenue team'  },
+      { value: 'gm',       label: 'GM + revenue'  },
     ]},
   ]},
   { value: 'all', label: 'All revenue', hrefBase: '/revenue/reports/render?type=pulse', dimGroups: [
