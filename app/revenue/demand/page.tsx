@@ -183,14 +183,6 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
       title="Revenue · Demand"
       subtitle={`Find the gap before the calendar gets soft · ${period.label} · ${rows.length} month${rows.length === 1 ? '' : 's'} on the books`}
       tabs={tabs}
-      action={
-        <a href="/revenue/demand/legacy" style={{
-          fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600,
-          padding: '6px 14px', borderRadius: 4,
-          background: 'var(--paper, #FFFFFF)', color: 'var(--ink, #1B1B1B)',
-          border: '1px solid var(--hairline, #E6DFCC)', textDecoration: 'none',
-        }}>↗ Legacy archive</a>
-      }
     >
       {/* Row 1 · 3 graphs on top (3-up, equal size) */}
       <div style={threeUp}>
