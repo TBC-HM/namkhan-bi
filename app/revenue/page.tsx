@@ -101,7 +101,7 @@ export default function RevenueHoDPage({ propertyId, searchParams }: Props = {})
           )}
         </Container>
 
-        <Container title="My Docs" subtitle={`${docs.length} item${docs.length === 1 ? '' : 's'}`} density="compact">
+        <Container title="My Reports" subtitle={`${docs.length} item${docs.length === 1 ? '' : 's'}`} density="compact">
           {docs.length === 0 ? <div style={emptyStyle}>no docs yet</div> : (
             <div style={listStyle}>
               {docs.map((d) => (
