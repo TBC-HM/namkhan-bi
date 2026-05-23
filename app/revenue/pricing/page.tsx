@@ -161,9 +161,9 @@ export default async function PricingPage({ searchParams, propertyId }: { search
     const cellMap = new Map<string, number>();
     for (const r of inventory) {
       const rate = Number(r.rate);
-      const stop = Boolean((r as Record<string, unknown>).stop_sell);
+      const stop = Boolean((r as unknown as Record<string, unknown>).stop_sell);
       if (stop || rate < RATE_MIN) continue;
-      const date = String((r as Record<string, unknown>).inventory_date ?? '').slice(0, 10);
+      const date = String((r as unknown as Record<string, unknown>).inventory_date ?? '').slice(0, 10);
       const rt = roomTypes.find((x) => x.room_type_id === r.room_type_id);
       const rtName = rt?.room_type_name ?? `room_${r.room_type_id}`;
       const key = `${date}|${rtName}`;
@@ -207,10 +207,10 @@ export default async function PricingPage({ searchParams, propertyId }: { search
     ]);
     const cellMap = new Map<string, number>();
     for (const r of inventory) {
-      const stop = Boolean((r as Record<string, unknown>).stop_sell);
+      const stop = Boolean((r as unknown as Record<string, unknown>).stop_sell);
       const mls  = Number(r.minimum_stay ?? 1);
       const value = stop ? 99 : mls;
-      const date = String((r as Record<string, unknown>).inventory_date ?? '').slice(0, 10);
+      const date = String((r as unknown as Record<string, unknown>).inventory_date ?? '').slice(0, 10);
       const rt = roomTypes.find((x) => x.room_type_id === r.room_type_id);
       const rtName = rt?.room_type_name ?? `room_${r.room_type_id}`;
       const key = `${date}|${rtName}`;
@@ -258,9 +258,9 @@ export default async function PricingPage({ searchParams, propertyId }: { search
     const bar = new Map<string, number>();
     for (const r of inventory) {
       const rate = Number(r.rate);
-      const stop = Boolean((r as Record<string, unknown>).stop_sell);
+      const stop = Boolean((r as unknown as Record<string, unknown>).stop_sell);
       if (stop || rate < RATE_MIN) continue;
-      const date = String((r as Record<string, unknown>).inventory_date ?? '').slice(0, 10);
+      const date = String((r as unknown as Record<string, unknown>).inventory_date ?? '').slice(0, 10);
       const cur = bar.get(date);
       if (cur == null || rate < cur) bar.set(date, rate);
     }
@@ -328,9 +328,9 @@ export default async function PricingPage({ searchParams, propertyId }: { search
   const cellMap = new Map<string, number>();
   for (const r of inventory) {
     const rate = Number(r.rate);
-    const stop = Boolean((r as Record<string, unknown>).stop_sell);
+    const stop = Boolean((r as unknown as Record<string, unknown>).stop_sell);
     if (stop || rate < RATE_MIN) continue;
-    const date = String((r as Record<string, unknown>).inventory_date ?? '').slice(0, 10);
+    const date = String((r as unknown as Record<string, unknown>).inventory_date ?? '').slice(0, 10);
     if (date < todayIso || date > horizonIso) continue;
     const rt = roomTypes.find((x) => x.room_type_id === r.room_type_id);
     const rtName = rt?.room_type_name ?? `room_${r.room_type_id}`;
