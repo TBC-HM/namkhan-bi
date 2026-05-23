@@ -235,8 +235,10 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
         </Container>
       </div>
 
-      {/* note#15: PageRenderer now renders each of its 9 registry containers as a sibling (was wrapped in one outer "12-month structural view" Container — PBS asked for 9 separate pieces) */}
-      <PageRenderer pageSlug="channel" propertyId={pid} title="" subtitle="" />
+      {/* note#15 HOTFIX: PageRenderer wraps its own DashboardPage internally — keep the outer Container wrapper to avoid nested-page crash. True 9-piece split needs PageRenderer "embedded" mode (deferred to follow-up). */}
+      <Container title="12-month structural view" subtitle="tier rollup · top sources · monthly trend · groups · DMC contracts (Namkhan only)" density="compact">
+        <PageRenderer pageSlug="channel" propertyId={pid} title="" subtitle="" />
+      </Container>
     </DashboardPage>
   );
 }
