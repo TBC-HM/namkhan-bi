@@ -154,10 +154,13 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     day, bookings: v.bookings, revenue: Math.round(v.revenue),
   })).sort((a, b) => a.day.localeCompare(b.day));
 
-  // Top 10 plans by revenue → bar chart
+  // note#17: enrich planBar so hover tooltip shows bookings + ADR + room-nights alongside revenue
   const planBar = ranked.slice(0, 10).map((p) => ({
     name: p.name.length > 24 ? p.name.slice(0, 24) + '…' : p.name,
     revenue: Math.round(p.revenue),
+    bookings: p.bookings,
+    adr: Math.round(p.nights ? p.revenue / p.nights : 0),
+    rn: p.nights,
   }));
 
   // Sleeping + orphans (Namkhan-only views)
@@ -274,9 +277,14 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
         />
       </Container></div>
 
-      <div style={fullRow}><Container title="Top 10 plans · revenue" subtitle={`${period.label}`}>
+      <div style={fullRow}><Container title="Top 10 plans · revenue" subtitle={`${period.label} · hover for bookings · ADR · RN`}>
         <Chart variant="bar" data={planBar} xKey="name"
-          series={[{ key: 'revenue', label: 'Revenue', color: '#1F3A2E' }]}
+          series={[
+            { key: 'revenue',  label: 'Revenue',  color: '#1F3A2E' },
+            { key: 'bookings', label: 'Bookings' },
+            { key: 'adr',      label: 'ADR' },
+            { key: 'rn',       label: 'RN' },
+          ]}
           height={240}
           empty={{ title: 'No plans booking in window' }}
         />
