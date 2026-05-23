@@ -296,9 +296,9 @@ export default async function PacePage({
       subtitle={`What's on the books ahead. ${period.label}.`}
       tabs={tabs}
     >
-      {/* note#10: Window & granularity promoted to top of content (just under sticky page header) */}
-      <Container title="Window & granularity" subtitle="URL-driven controls · stay on top of every scroll" density="compact">
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
+      {/* note#174: KPI stripe on top with Window & granularity embedded inside (saves vertical space) */}
+      <Container title="On-the-books snapshot" subtitle={period.label} density="compact">
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', marginBottom: 12 }}>
           <ControlGroup label="Forward window">
             {winOptions.map((o) => (
               <PillLink key={o.k} active={o.k === win} href={hrefFor({ win: o.k })}>{o.label}</PillLink>
@@ -310,14 +310,12 @@ export default async function PacePage({
             ))}
           </ControlGroup>
         </div>
-      </Container>
-
-      <Container title="On-the-books snapshot" subtitle={period.label} density="compact">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
           {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
         </div>
       </Container>
 
+      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, alignItems: 'stretch' }}>
       <Container title="Booking pace curve" subtitle="rooms occupied per day · Actual (green) · OTB (brass) · STLY (grey) · Budget (orange) — window −30d → +30d, ticks below as MM-DD">
         <Chart
           variant="line"
@@ -343,7 +341,7 @@ export default async function PacePage({
         />
       </Container>
 
-      <Container title={`Pace by stay-bucket · ${buckets.length} ${gran}${buckets.length === 1 ? '' : 's'}`} subtitle="v_otb_pace · mv_kpi_daily">
+      <Container title={`Pace by stay-bucket · ${buckets.length} ${gran}${buckets.length === 1 ? '' : 's'}`} subtitle="v_otb_pace · mv_kpi_daily" 
         <Chart
           variant="table"
           data={bucketTable}
