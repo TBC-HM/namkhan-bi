@@ -234,9 +234,8 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
         </Container>
       </div>
 
-      <Container title="12-month structural view" subtitle="tier rollup · top sources · monthly trend · groups · DMC contracts (Namkhan only)" density="compact">
-        <PageRenderer pageSlug="channel" propertyId={pid} title="" subtitle="" />
-      </Container>
+      {/* note#15: PageRenderer now renders each of its 9 registry containers as a sibling (was wrapped in one outer "12-month structural view" Container — PBS asked for 9 separate pieces) */}
+      <PageRenderer pageSlug="channel" propertyId={pid} title="" subtitle="" />
     </DashboardPage>
   );
 }
