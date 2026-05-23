@@ -67,6 +67,7 @@ interface Props { searchParams: Record<string, string | string[] | undefined>; p
 export default async function ChannelsPage({ searchParams, propertyId }: Props) {
   const pid = propertyId ?? PROPERTY_ID_NAMKHAN;
   const moneyCurrency: 'USD' | 'EUR' = pid === 1000001 ? 'EUR' : 'USD';
+  const sym = moneyCurrency === 'EUR' ? '€' : '$';
 
   // note#13: per-source 24/25/26 aggregate for the full-screen-expandable table
   const { data: sourcesAllYears } = await supabase
