@@ -184,10 +184,12 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
       subtitle={`Find the gap before the calendar gets soft · ${period.label} · ${rows.length} month${rows.length === 1 ? '' : 's'} on the books`}
       tabs={tabs}
     >
-      {/* note#155: Window selector promoted to row 1 (just under sticky header) — changes the whole page, must stay near top */}
+      {/* PBS #189 (2026-05-24): Window selector merged INTO the OTB headline container —
+          one container, two stacked rows. Saves vertical space + keeps the horizon control
+          immediately above the tiles it filters. */}
       <div style={fullRow}>
-        <Container title="Window" subtitle="forward demand horizon · stays on top of every scroll" density="compact">
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+        <Container title="OTB headline" subtitle={`forward window · ${period.label}`} density="compact">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}>
             {winOptions.map((o) => {
               const active = o.k === period.win;
               return (
@@ -202,12 +204,6 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
               );
             })}
           </div>
-        </Container>
-      </div>
-
-      {/* Row 2 · OTB headline KPI strip (note#169: KPIs ABOVE graphs) */}
-      <div style={fullRow}>
-        <Container title="OTB headline" subtitle={`forward window · ${period.label}`} density="compact">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
             {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
           </div>
