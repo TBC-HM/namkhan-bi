@@ -56,12 +56,15 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   // PBS note#2: append today's Pickup + Cancellations as 5th + 6th KPI tiles.
   // PBS note#6: bring back Bug box — read cockpit_bugs (open only).
   const todayIso = new Date().toISOString().slice(0, 10);
-  const [pickupToday, cancellationsToday, bugsRes] = await Promise.all([
+  const [pickupToday, cancellationsToday, bugsRes, dueTasksRes] = await Promise.all([
     getPulseTodayPickup(pid, todayIso).catch(() => [] as Array<unknown>),
     getPulseTodayCancellations(pid, todayIso).catch(() => [] as Array<unknown>),
     supabase.from('cockpit_bugs').select('id, body, status, created_at, page_url').not('status','in','(closed,resolved,wontfix,done)').order('created_at', { ascending: false }).limit(5),
+    // PBS #164: badge count of tasks whose remind-or-due date has arrived (from v_hod_tasks_due)
+    supabase.from('v_hod_tasks_due').select('id', { count: 'exact', head: true }).eq('dept_slug', 'revenue').eq('property_id', pid).eq('is_due', true),
   ]);
   const bugs = (bugsRes.data ?? []) as Array<{ id: number; body: string | null; status: string | null; created_at: string | null; page_url: string | null }>;
+  const dueTasksCount = dueTasksRes.count ?? 0;
   const pickupCount = pickupToday.length;
   const cancelCount = cancellationsToday.length;
 
@@ -126,7 +129,7 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
           <ReportsList items={docs} storageKey={`reports:revenue:${pid}`} />
         </Container>
 
-        <Container title="My Tasks" subtitle="add / check off / delete · per property" density="compact">
+        <Container title="My Tasks" subtitle={dueTasksCount > 0 ? `🔴 ${dueTasksCount} due · add / due-date / repeat / delete` : 'add / due-date / repeat / delete · per property'} density="compact">
           <HodTasksList deptSlug="revenue" propertyId={pid} />
         </Container>
 
