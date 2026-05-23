@@ -276,25 +276,59 @@ export async function getPulseUpcomingEvents(
   propertyId: number,
   fromIso: string,
   toIso: string,
-  limit = 10,
+  limit = 30,
 ): Promise<PulseEventRow[]> {
-  // public.calendar_events bridge view (if absent the from() returns []).
+  // PBS 2026-05-23 (#103): public.calendar_events view doesn't exist;
+  // public.v_cal_events (day_date, label, layer_key) is the real source.
   const { data, error } = await supabase
-    .from('calendar_events')
-    .select('event_name, event_date, property_id')
-    .or(`property_id.eq.${propertyId},property_id.is.null`)
-    .gte('event_date', fromIso)
-    .lte('event_date', toIso)
-    .order('event_date')
+    .from('v_cal_events')
+    .select('day_date, label, tooltip_json')
+    .eq('property_id', propertyId)
+    .eq('layer_key', 'event')
+    .gte('day_date', fromIso)
+    .lte('day_date', toIso)
+    .order('day_date')
     .limit(limit);
   if (error) {
-    // Soft-fail — table/view may not be exposed yet
+    console.error('[pulse/getPulseUpcomingEvents] v_cal_events error', error.message);
     return [];
   }
-  return ((data ?? []) as any[]).map((r) => ({
-    name: String(r.event_name ?? '—'),
-    date: String(r.event_date),
+  return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+    name: String(r.label ?? '—'),
+    date: String(r.day_date),
   }));
+}
+
+// PBS 2026-05-23 (#103): cancellations counterpart for Today's pickup tab
+export async function getPulseTodayCancellations(
+  propertyId: number,
+  asOf: string,
+): Promise<PulsePickupRow[]> {
+  const { data, error } = await supabase
+    .from('v_reservations_unified')
+    .select('reservation_id, source_name, room_type_name, guest_name, check_in_date, booking_date, cancellation_date, nights, total_amount')
+    .eq('property_id', propertyId)
+    .eq('is_cancelled', true)
+    .gte('cancellation_date', asOf)
+    .lte('cancellation_date', asOf + 'T23:59:59')
+    .order('cancellation_date', { ascending: false })
+    .limit(50);
+  if (error || !data) return [];
+  return (data as Array<Record<string, unknown>>).map((r) => {
+    const nights = Number(r.nights ?? 0);
+    const value = Number(r.total_amount ?? 0);
+    const adr = nights > 0 ? value / nights : 0;
+    return {
+      source: String(r.source_name ?? 'Direct'),
+      accommodation: String(r.room_type_name ?? '—'),
+      guest: String(r.guest_name ?? '—'),
+      reservation_id: String(r.reservation_id ?? ''),
+      adr, value, nights,
+      window: '—',
+      avg_los: nights,
+      count: 1,
+    };
+  });
 }
 
 // ─── Scoped occupancy (cockpit #197) ─────────────────────────────────────
