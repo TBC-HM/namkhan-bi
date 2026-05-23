@@ -59,7 +59,7 @@ export default function ContainerMonthTable({ container, propertyId }: Props) {
       if (cancelled) return;
       if (error) { setError(error.message); setLoading(false); return; }
       const set = new Set<string>();
-      for (const r of (data ?? []) as DataRow[]) {
+      for (const r of (data ?? []) as unknown as DataRow[]) {
         const v = r[monthField];
         if (typeof v === 'string' && v.length >= 7) set.add(firstOfMonth(v));
       }
