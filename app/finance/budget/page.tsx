@@ -1,15 +1,12 @@
-// app/finance/budget/page.tsx — PBS #205 (2026-05-25)
-// Adapted to DashboardPage primitive. Body remains flex-column inside a
-// single full-row grid cell so the legacy KPI strip + budget grid + upload
-// button render exactly as before, just with the canonical chrome.
+// app/finance/budget/page.tsx — PBS #205 v2 (2026-05-25)
+// Full primitive adoption: DashboardPage chrome + Container sections +
+// KpiTile headline + grid table preserved. Replaces the chrome-swap-only
+// pass with the canonical Revenue-style surface.
 
-import { DashboardPage } from '@/app/(cockpit)/_design';
+import { DashboardPage, Container, KpiTile, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { FINANCE_SUBPAGES } from '../_subpages';
-import TabStrip, { PNL_TABS } from '../_components/TabStrip';
-import KpiBox from '@/components/kpi/KpiBox';
 import { supabaseGl } from '@/lib/supabase-gl';
 import BudgetUpload from './BudgetUpload';
-import { SectionHead } from '../_components/FinanceShell';
 
 export const revalidate = 0;
 export const dynamic = 'force-dynamic';
@@ -27,6 +24,8 @@ function fmtK(n: number | null | undefined): string {
   if (n == null || !isFinite(n) || n === 0) return '—';
   return `$${(n / 1000).toFixed(1)}k`;
 }
+
+const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
 
 export default async function BudgetPage() {
   const { data: rows } = await supabaseGl
@@ -53,35 +52,38 @@ export default async function BudgetPage() {
   }
   const monthsCovered = MONTHS_2026.filter((m) => (colSum.get(m) ?? 0) > 0).length;
   const subcatsCovered = SUBCAT_ORDER.filter((s) => (rowSum.get(s) ?? 0) > 0).length;
-  const lastUpload: string | null = null;
+  const coveragePct = SUBCAT_ORDER.length > 0 ? (subcatsCovered / SUBCAT_ORDER.length) * 100 : 0;
 
-  const budgetEyebrow = [
-    'plan.lines · Budget 2026 v1',
-    `${monthsCovered}/12 months`,
-    `${subcatsCovered}/${SUBCAT_ORDER.length} subcats`,
-    lastUpload ? `uploaded ${String(lastUpload).slice(0, 10)}` : null,
-  ].filter(Boolean).join(' · ');
+  const subtitle = `plan.lines · Budget 2026 v1 · ${monthsCovered}/12 months · ${subcatsCovered}/${SUBCAT_ORDER.length} subcats`;
 
   const tabs = FINANCE_SUBPAGES.map((s) => ({
     key: s.href, label: s.label, href: s.href,
     active: s.href === '/finance/pnl',
   }));
 
+  const tiles: KpiTileProps[] = [
+    { label: 'Budget rows', value: totalRows, size: 'sm', footnote: 'gl.v_budget_lines' },
+    { label: 'Annual total', value: Math.round(grand), currency: 'USD', size: 'sm', footnote: 'sum across all subcats × months', status: grand > 0 ? 'green' : 'amber' },
+    { label: 'Months covered', value: `${monthsCovered}/12`, size: 'sm', footnote: 'months with ≥1 budget row' },
+    { label: 'Subcats covered', value: `${subcatsCovered}/${SUBCAT_ORDER.length}`, size: 'sm', footnote: 'USALI subcategories with rows' },
+    { label: 'Coverage %', value: `${coveragePct.toFixed(0)}%`, size: 'sm', status: coveragePct >= 80 ? 'green' : coveragePct >= 50 ? 'amber' : 'red' },
+  ];
+
   return (
-    <DashboardPage title="Budget · FY2026" subtitle={budgetEyebrow} tabs={tabs}>
-      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 18 }}>
-        <TabStrip tabs={PNL_TABS} activeKey="budget" />
+    <DashboardPage title="Budget · FY2026" subtitle={subtitle} tabs={tabs}>
+      {/* 1 · Headline KPI strip */}
+      <div style={fullRow}>
+        <Container title="Headline" subtitle="annual · USALI · monthly" density="compact">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
+            {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
+          </div>
+        </Container>
+      </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-          <KpiBox value={totalRows} unit="count" label="Budget rows"   tooltip="Distinct (subcategory × month) rows in plan.lines for the active budget year." />
-          <KpiBox value={grand} unit="usd" label="Annual total"        state={grand > 0 ? 'live' : 'data-needed'} needs={grand === 0 ? 'awaiting upload' : undefined} tooltip="Sum of budget across every subcategory + month in the active year." />
-          <KpiBox value={null} unit="text" valueText={`${monthsCovered}/12`} label="Months covered" tooltip="Distinct months that have at least one budget row populated for the active year." />
-          <KpiBox value={null} unit="text" valueText={`${subcatsCovered}/${SUBCAT_ORDER.length}`} label="Subcats covered" tooltip="Distinct USALI subcategories with at least one budget row this year." />
-        </div>
-
-        <div>
-          <SectionHead title="Budget grid" emphasis="2026 · monthly" sub="Subcategory rows × month columns" source="plan.lines" />
-          <div style={{ overflowX: 'auto', border: '1px solid var(--paper-deep)', borderRadius: 8, background: 'var(--paper-warm)' }}>
+      {/* 2 · Budget grid */}
+      <div style={fullRow}>
+        <Container title="Budget grid" subtitle="USALI subcategory rows × month columns" density="compact">
+          <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr>
@@ -96,12 +98,12 @@ export default async function BudgetPage() {
                     <td style={td}><strong>{s}</strong></td>
                     {MONTHS_2026.map((m) => {
                       const v = cell.get(`${m}|${s}`) ?? 0;
-                      return <td key={m} style={{ ...td, textAlign: 'right', color: v === 0 ? 'var(--ink-mute)' : undefined }}>{fmtK(v)}</td>;
+                      return <td key={m} style={{ ...td, textAlign: 'right', color: v === 0 ? 'var(--ink-mute, #6b7280)' : undefined }}>{fmtK(v)}</td>;
                     })}
                     <td style={{ ...td, textAlign: 'right' }}><strong>{fmtK(rowSum.get(s) ?? 0)}</strong></td>
                   </tr>
                 ))}
-                <tr style={{ borderTop: '2px solid var(--paper-deep)' }}>
+                <tr style={{ borderTop: '2px solid var(--ink-soft, #5a5a5a)' }}>
                   <td style={td}><strong>Monthly total</strong></td>
                   {MONTHS_2026.map((m) => <td key={m} style={{ ...td, textAlign: 'right' }}><strong>{fmtK(colSum.get(m) ?? 0)}</strong></td>)}
                   <td style={{ ...td, textAlign: 'right' }}><strong>{fmtK(grand)}</strong></td>
@@ -109,15 +111,18 @@ export default async function BudgetPage() {
               </tbody>
             </table>
           </div>
-        </div>
+        </Container>
+      </div>
 
-        <div>
-          <BudgetUpload lastUploadAt={lastUpload} />
-        </div>
+      {/* 3 · Upload */}
+      <div style={fullRow}>
+        <Container title="Upload" subtitle="drop a new budget CSV" density="compact">
+          <BudgetUpload lastUploadAt={null} />
+        </Container>
       </div>
     </DashboardPage>
   );
 }
 
-const th: React.CSSProperties = { textAlign: 'left', padding: '8px 10px', background: 'var(--paper-deep)', borderBottom: '1px solid var(--paper-deep)', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)', fontWeight: 600 };
-const td: React.CSSProperties = { padding: '6px 10px', borderBottom: '1px solid var(--paper-deep)', fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--ink)', fontVariantNumeric: 'tabular-nums' };
+const th: React.CSSProperties = { textAlign: 'left', padding: '8px 10px', borderBottom: '1px solid var(--ink-soft, #d4d4d8)', fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5a5a5a)', fontWeight: 600 };
+const td: React.CSSProperties = { padding: '6px 10px', borderBottom: '1px solid var(--ink-soft, #ececec)', fontSize: 12, color: 'var(--ink, #1b1b1b)', fontVariantNumeric: 'tabular-nums' };
