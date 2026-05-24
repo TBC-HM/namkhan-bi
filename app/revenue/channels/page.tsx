@@ -483,6 +483,15 @@ function CategoryBlock({
         </div>
       )}
 
+      {/* PBS #199 v4: small "Still owed" note moved UP from the bottom — sits between graphs and the all-sources table. */}
+      <div style={fullRow}>
+        <Container title="Still owed" subtitle="data not yet wired for this category" density="compact" status="grey">
+          <div style={{ fontSize: 12, color: 'var(--ink-soft, #5A5A5A)', lineHeight: 1.5 }}>
+            {missingNote[category]}
+          </div>
+        </Container>
+      </div>
+
       {/* Table — PBS #199: source-name cell is a Link → ?drill=<source> opens ChannelDrillDrawer (mounted at page bottom) */}
       <div style={fullRow}>
         <Container title={`${titleOf[category]} · all sources`} subtitle={`${rows.length} sources · sorted by bookings · click a source to open the drawer`}>
@@ -515,14 +524,7 @@ function CategoryBlock({
         </Container>
       </div>
 
-      {/* Owed / missing data note */}
-      <div style={fullRow}>
-        <Container title="Still owed" subtitle="data not yet wired for this category" density="compact" status="grey">
-          <div style={{ fontSize: 12, color: 'var(--ink-soft, #5A5A5A)', lineHeight: 1.5 }}>
-            {missingNote[category]}
-          </div>
-        </Container>
-      </div>
+
     </>
   );
 }
