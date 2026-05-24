@@ -226,24 +226,49 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
       {activeTab === 'ota'    && <CategoryBlock category="ota"    rows={byCat.ota as unknown as Array<Record<string, unknown>>}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'ota')}    mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'ota')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} />}
       {activeTab === 'dmc'    && <CategoryBlock category="dmc"    rows={byCat.dmc as unknown as Array<Record<string, unknown>>}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'dmc')}    mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'dmc')} drillHrefFor={drillHrefFor} moneyCurrency="USD" />}
 
-      {/* note#13: full-screen-expandable sources table (data fetched at top via sourcesAllYears) */}
+      {/* PBS #199 fix-2: top-level Sources · 2024/2025/2026 table is ALSO clickable. Click any source to open the drawer. */}
       <div style={{ gridColumn: '1 / -1' }}>
-        <Container title={`Sources · 2024 / 2025 / 2026 · ${sourcesAllYearsRows.length} active sources`} subtitle="every active source since 2024, grouped Direct / OTA / DMC. Click container header to expand to full screen. SDLY column compares 2026 vs 2025 reservations.">
-          <Chart variant="table" data={sourcesAllYearsRows as unknown as Array<Record<string, unknown>>} xKey="source"
-            series={[
-              { key: 'category', label: 'Group' },
-              { key: 'res_24',   label: 'Res 24' },
-              { key: 'res_25',   label: 'Res 25' },
-              { key: 'res_26',   label: 'Res 26' },
-              { key: 'sdly',     label: 'SDLY 26 vs 25' },
-              { key: 'rev_26',   label: 'Rev 26' },
-              { key: 'adr_26',   label: 'ADR 26' },
-              { key: 'rn_26',    label: 'RN 26' },
-              { key: 'window_d', label: 'Avg window' },
-              { key: 'los_d',    label: 'Avg LOS' },
-            ]}
-            empty={{ title: 'No sources data' }}
-          />
+        <Container title={`Sources · 2024 / 2025 / 2026 · ${sourcesAllYearsRows.length} active sources`} subtitle="every active source since 2024, grouped Direct / OTA / DMC. Click any source name to open the drawer.">
+          {sourcesAllYearsRows.length === 0 ? (
+            <div style={{ padding: 16, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>No sources data</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: 'var(--bg, #F4EFE2)', textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: 10, color: 'var(--ink-soft, #5A5A5A)' }}>
+                    <th style={thStyle}>Source</th>
+                    <th style={thStyle}>Group</th>
+                    <th style={{ ...thStyle, textAlign: 'right' }}>Res 24</th>
+                    <th style={{ ...thStyle, textAlign: 'right' }}>Res 25</th>
+                    <th style={{ ...thStyle, textAlign: 'right' }}>Res 26</th>
+                    <th style={{ ...thStyle, textAlign: 'right' }}>SDLY 26 vs 25</th>
+                    <th style={{ ...thStyle, textAlign: 'right' }}>Rev 26</th>
+                    <th style={{ ...thStyle, textAlign: 'right' }}>ADR 26</th>
+                    <th style={{ ...thStyle, textAlign: 'right' }}>RN 26</th>
+                    <th style={{ ...thStyle, textAlign: 'right' }}>Avg window</th>
+                    <th style={{ ...thStyle, textAlign: 'right' }}>Avg LOS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sourcesAllYearsRows.map((r, i) => (
+                    <tr key={i} style={{ borderTop: '1px solid var(--hairline, #E6DFCC)' }}>
+                      <td style={tdLabelStyle}><Link href={drillHrefFor(r.source)} style={sourceLinkStyle}>{r.source}</Link></td>
+                      <td style={tdLabelStyle}>{r.category}</td>
+                      <td style={tdNumStyle}>{r.res_24}</td>
+                      <td style={tdNumStyle}>{r.res_25}</td>
+                      <td style={tdNumStyle}>{r.res_26}</td>
+                      <td style={tdNumStyle}>{r.sdly}</td>
+                      <td style={tdNumStyle}>{r.rev_26}</td>
+                      <td style={tdNumStyle}>{r.adr_26}</td>
+                      <td style={tdNumStyle}>{r.rn_26}</td>
+                      <td style={tdNumStyle}>{r.window_d}</td>
+                      <td style={tdNumStyle}>{r.los_d}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Container>
       </div>
 
