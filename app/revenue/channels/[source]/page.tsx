@@ -8,6 +8,7 @@
 
 import Link from 'next/link';
 import Page from '@/components/page/Page';
+import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
 import { REVENUE_SUBPAGES } from '../../_subpages';
 import { resolvePeriod } from '@/lib/period';
 import {
@@ -78,36 +79,39 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
   const cmpMeta = allCmpRows.find((r) => r.source_name === sourceName);
   const cat = categorize(sourceName);
 
-  // Booking.com — clean page: header + tabs + new layout. Skip standard 30-day panels.
+  // Booking.com — primitives shell (PBS #201). 4 tabs collapsed to 3: Now / Profile / History.
+  // History merges Trends + Signals (both time-axis agent views).
   if (isBookingCom) {
-    const bdcTab = String(searchParams.bdc_tab ?? 'now').toLowerCase();
+    const bdcTab = (() => {
+      const raw = String(searchParams.bdc_tab ?? 'now').toLowerCase();
+      // Backwards-compat: old "trend" + "signals" URLs both land on "history".
+      if (raw === 'trend' || raw === 'signals') return 'history';
+      if (raw === 'now' || raw === 'profile' || raw === 'history') return raw;
+      return 'now';
+    })();
     const tabBaseHref = `/revenue/channels/${encodeURIComponent(sourceName)}`;
+    const revenueTabs: DashboardTab[] = REVENUE_SUBPAGES.map((s) => ({
+      key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/channels'),
+    }));
     return (
-      <Page
-        eyebrow={`Revenue · Channels · ${sourceName}`}
-        title={<MaybeOtaBadge name={sourceName} />}
-        subPages={REVENUE_SUBPAGES}
-        topRight={<Link href="/settings/channel-contacts" style={{
-          padding: '8px 14px',
-          fontFamily: 'var(--mono)',
-          fontSize: 'var(--t-xs)',
-          textTransform: 'uppercase',
-          letterSpacing: 'var(--ls-extra)',
-          color: 'var(--paper-warm)',
-          background: 'var(--moss)',
-          border: 'none',
-          borderRadius: 4,
-          textDecoration: 'none',
-          display: 'inline-block',
+      <DashboardPage
+        title={sourceName}
+        subtitle={`Revenue · Channels · ${sourceName} — Booking.com hardwired data`}
+        tabs={revenueTabs}
+        action={<Link href="/settings/channel-contacts" style={{
+          padding: '6px 14px', fontSize: 11, letterSpacing: '0.08em',
+          textTransform: 'uppercase', fontWeight: 600,
+          background: 'var(--primary, #1F3A2E)', color: '#FFFFFF',
+          borderRadius: 4, textDecoration: 'none',
         }}>⚙ Channel settings</Link>}
       >
 
-        <div style={{ display: 'flex', gap: 0, marginTop: 12, marginBottom: 14, borderBottom: '1px solid var(--paper-deep)' }}>
+        {/* Sub-tab strip — 3 tabs now */}
+        <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 0, borderBottom: '1px solid var(--hairline, #E6DFCC)', marginBottom: 8 }}>
           {[
-            { key: 'now',     label: 'Now',     sub: 'Latest snapshot + actions' },
+            { key: 'now',     label: 'Now',     sub: 'Live snapshot · actions · signals' },
             { key: 'profile', label: 'Profile', sub: 'Crawler · recs · outcomes' },
-            { key: 'trend',   label: 'Trends',  sub: 'History over time' },
-            { key: 'signals', label: 'Signals', sub: 'Agent decisions queued' },
+            { key: 'history', label: 'History', sub: 'Trends + agent decision queue' },
           ].map((t) => {
             const active = bdcTab === t.key;
             return (
@@ -116,25 +120,26 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
                 href={`${tabBaseHref}?bdc_tab=${t.key}`}
                 style={{
                   padding: '10px 18px',
-                  fontFamily: 'var(--mono)',
-                  fontSize: 'var(--t-xs)',
+                  fontFamily: 'inherit',
+                  fontSize: 11,
                   textTransform: 'uppercase',
-                  letterSpacing: 'var(--ls-extra)',
-                  color: active ? 'var(--ink)' : 'var(--ink-mute)',
-                  borderBottom: active ? '2px solid var(--brass)' : '2px solid transparent',
+                  letterSpacing: '0.08em',
+                  color: active ? 'var(--ink, #1B1B1B)' : 'var(--ink-soft, #5A5A5A)',
+                  borderBottom: active ? '2px solid var(--primary, #1F3A2E)' : '2px solid transparent',
                   textDecoration: 'none',
+                  fontWeight: active ? 600 : 500,
                   marginBottom: -1,
                 }}
               >
                 <div>{t.label}</div>
-                <div style={{ fontSize: '10px', textTransform: 'none', letterSpacing: 'normal', color: 'var(--ink-mute)', marginTop: 2 }}>{t.sub}</div>
+                <div style={{ fontSize: 10, textTransform: 'none', letterSpacing: 'normal', color: 'var(--ink-soft, #5A5A5A)', marginTop: 2, fontWeight: 400 }}>{t.sub}</div>
               </Link>
             );
           })}
         </div>
 
         {bdcTab === 'now' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 14, alignItems: 'flex-start' }}>
+          <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '300px 1fr', gap: 14, alignItems: 'flex-start' }}>
             <ChannelContactCard sourceName={sourceName} />
             <div>
               <BdcKpiStrip />
@@ -145,10 +150,22 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
             </div>
           </div>
         )}
-        {bdcTab === 'profile' && <BdcProfileTab otaSource="Booking.com" />}
-        {bdcTab === 'trend' && <BdcTrends />}
-        {bdcTab === 'signals' && <BdcSignals />}
-      </Page>
+        {bdcTab === 'profile' && (
+          <div style={{ gridColumn: '1 / -1' }}>
+            <BdcProfileTab otaSource="Booking.com" />
+          </div>
+        )}
+        {bdcTab === 'history' && (
+          <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <Container title="Trends" subtitle="ranking · book-window · country deltas — needs 3+ snapshots to fill">
+              <BdcTrends />
+            </Container>
+            <Container title="Signals" subtitle="agent decisions queued — governance.decision_queue">
+              <BdcSignals />
+            </Container>
+          </div>
+        )}
+      </DashboardPage>
     );
   }
 
