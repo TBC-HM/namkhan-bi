@@ -168,34 +168,35 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
       subtitle={`Channel performance · ${period.label} · ${channels.length} active sources across ${[byCat.direct, byCat.ota, byCat.dmc].filter((g) => g.length > 0).length} categories`}
       tabs={tabs}
     >
-      {/* note#14: Window + Category selectors stay together at the top — no more jumping */}
-      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 10, alignItems: 'stretch' }}>
-        <Container title="Window" subtitle="period selector" density="compact">
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-            {(['7d', '30d', '90d'] as WindowKey[]).map((k) => {
-              const active = k === period.win;
-              return (
-                <a key={k} href={hrefFor(k)} style={pillStyle(active)}>{k}</a>
-              );
-            })}
-          </div>
-        </Container>
-        <Container title="Category" subtitle="Direct · OTAs · DMC/Bedbanks" density="compact">
-          <div style={subTabRow}>
-            {TAB_DEFS.map((t) => {
-              const active = t.key === activeTab;
-              return (
-                <Link key={t.key} href={tabHrefFor(t.key)} style={subTabStyle(active)}>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>{t.label}</span>
-                  <span style={{ fontSize: 10, color: active ? 'rgba(255,255,255,0.85)' : 'var(--ink-soft, #5A5A5A)', marginTop: 1 }}>{t.tagline}</span>
-                </Link>
-              );
-            })}
-          </div>
-        </Container>
-      </div>
-
+      {/* PBS #187 (2026-05-24): Window + Category controls collapsed INTO the Headline
+          channel-mix container — one container, three stacked rows (Window · Category · KPI tiles). */}
       <Container title="Headline · channel mix" subtitle={period.label} density="compact">
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'center', marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>Window</span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {(['7d', '30d', '90d'] as WindowKey[]).map((k) => {
+                const active = k === period.win;
+                return (
+                  <a key={k} href={hrefFor(k)} style={pillStyle(active)}>{k}</a>
+                );
+              })}
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>Category</span>
+            <div style={subTabRow}>
+              {TAB_DEFS.map((t) => {
+                const active = t.key === activeTab;
+                return (
+                  <Link key={t.key} href={tabHrefFor(t.key)} style={subTabStyle(active)}>
+                    <span style={{ fontSize: 12, fontWeight: 600 }}>{t.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
           {pageMixTiles.map((t, i) => <KpiTile key={i} {...t} />)}
         </div>
