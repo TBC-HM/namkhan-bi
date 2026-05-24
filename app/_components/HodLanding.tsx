@@ -9,7 +9,8 @@ import {
   DashboardPage, Container, KpiTile,
   type KpiTileProps,
 } from '@/app/(cockpit)/_design';
-import { DEPT_CFG, type DeptSlug } from '@/lib/dept-cfg';
+import { DEPT_CFG } from '@/lib/dept-cfg';
+type DeptSlug = 'finance' | 'sales' | 'marketing' | 'operations' | 'revenue' | 'guest' | 'it' | 'legal';
 import { getDeptCfg } from '@/lib/dept-cfg/by-property';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { PROPERTY_ID, supabase } from '@/lib/supabase';
