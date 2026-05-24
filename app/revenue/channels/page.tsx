@@ -50,7 +50,7 @@ const BEDBANK_RX = /hotelbeds|webbeds|sunhotels|bonotel|miki|destimo|sidetours|w
 const DMC_RX = /khiri|trails of|tui|jet2|tour operator|gta|tourico|wholesale|reseller|dmc/i;
 const DIRECT_RX = /direct|website|booking engine|^email|walk[- ]?in|witbooking|whatsapp|mews operations|in person|telephone/i;
 
-type Category = 'direct' | 'ota' | 'dmc' | 'bedbank';
+type Category = 'direct' | 'ota' | 'dmc' | 'bedbank' | 'group';
 
 // PBS #199 v5: DMC is now the CATCH-ALL bucket — anything not Direct/OTA/Bedbank lands in DMC
 // (B2B tour operators, agents, comp invitations, walk-on partners — historically dumped in "other"
@@ -71,6 +71,7 @@ function visibleTabs(pid: number): Array<{ key: Category; label: string; tagline
     { key: 'dmc',     label: 'DMC',      tagline: 'Tour ops · agents · everything else B2B' },
   ];
   if (pid === 1000001) base.push({ key: 'bedbank', label: 'Bedbanks', tagline: 'Hotelbeds · WebBeds · Sunhotels · …' });
+  base.push({ key: 'group', label: 'Groups', tagline: '4+ rooms · retreats · MICE · weddings' });
   return base;
 }
 const TAB_DEFS: Array<{ key: Category; label: string; tagline: string }> = [
@@ -122,7 +123,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
     ? { ...period, from: period.compareFrom, to: period.compareTo, cmp: 'none' as const }
     : null;
 
-  const [channelsRaw, channelsCmp, mixWeekly, netValue, velocity] = await Promise.all([
+  const [channelsRaw, channelsCmp, mixWeekly, netValue, velocity, groupRows] = await Promise.all([
     getChannelEconomics(period, pid).catch(() => [] as Awaited<ReturnType<typeof getChannelEconomics>>),
     cmpPeriod
       ? getChannelEconomicsForRange(cmpPeriod.from, cmpPeriod.to, pid).catch(() => [] as Array<Record<string, unknown>>)
@@ -130,11 +131,12 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
     getChannelMixWeeklyTrend(period.from, period.to, pid).catch(() => [] as Array<Record<string, unknown>>),
     getChannelNetValueForRange(period.from, period.to, pid).catch(() => [] as Array<Record<string, unknown>>),
     getChannelVelocity28dByCat(pid).catch(() => [] as Array<Record<string, unknown>>),
+    supabase.from('v_group_bookings_12mo').select('channel_group, source, reservations, room_nights, gross_revenue, group_adr, est_commission, net_revenue').eq('property_id', pid).order('gross_revenue', { ascending: false }).then((r) => r.data ?? [] as Array<Record<string, unknown>>),
   ]);
   const channels = channelsRaw;
 
   // Group all channels by category
-  const byCat: Record<Category | 'other', typeof channels> = { direct: [], ota: [], dmc: [], bedbank: [], other: [] };
+  const byCat: Record<Category | 'other', typeof channels> = { direct: [], ota: [], dmc: [], bedbank: [], group: [], other: [] };
   for (const c of channels) byCat[classify(String(c.source_name || ''))].push(c);
 
   // Page-level mix tiles (across all categories)
@@ -233,6 +235,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
       {activeTab === 'ota'    && <CategoryBlock category="ota"    rows={byCat.ota as unknown as Array<Record<string, unknown>>}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'ota')}    mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'ota')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} />}
       {activeTab === 'dmc'    && <CategoryBlock category="dmc"    rows={byCat.dmc as unknown as Array<Record<string, unknown>>}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'dmc')}    mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'dmc')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} />}
       {activeTab === 'bedbank' && pid === 1000001 && <CategoryBlock category="bedbank" rows={byCat.bedbank as unknown as Array<Record<string, unknown>>} cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'bedbank')} mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'bedbank')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} />}
+      {activeTab === 'group' && <GroupsBlock rows={(groupRows as unknown as Array<Record<string, unknown>>)} moneyCurrency={moneyCurrency} drillHrefFor={drillHrefFor} />}
 
       {/* PBS #199 fix-2: top-level Sources · 2024/2025/2026 table is ALSO clickable. Click any source to open the drawer. */}
       <div style={{ gridColumn: '1 / -1' }}>
@@ -519,6 +522,71 @@ function CategoryBlock({
       </div>
 
 
+    </>
+  );
+}
+
+// PBS #199 v6: Groups tab — 4+ rooms / retreats / MICE / weddings. Reads public.v_group_bookings_12mo.
+function GroupsBlock({ rows, moneyCurrency, drillHrefFor }: {
+  rows: Array<Record<string, unknown>>;
+  moneyCurrency: 'USD' | 'EUR';
+  drillHrefFor: (source: string) => string;
+}) {
+  const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
+  const sym = moneyCurrency === 'EUR' ? '€' : '$';
+  const totalRn  = rows.reduce((s, r) => s + Number(r.room_nights ?? 0), 0);
+  const totalRev = rows.reduce((s, r) => s + Number(r.gross_revenue ?? 0), 0);
+  const totalRes = rows.reduce((s, r) => s + Number(r.reservations ?? 0), 0);
+  const groupAdr = totalRn > 0 ? totalRev / totalRn : 0;
+  return (
+    <>
+      <div style={{ ...fullRow, display: 'flex', flexDirection: 'column', gap: 6, padding: '2px 0 10px', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>
+        <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>
+          Groups · last 12 months · {rows.length} active group sources
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
+          <KpiTile label="Reservations" value={totalRes} size="sm" footnote="group bookings" />
+          <KpiTile label="Room nights"  value={totalRn} size="sm" footnote="cumulative across all groups" />
+          <KpiTile label="Revenue"      value={Math.round(totalRev)} currency={moneyCurrency} size="sm" />
+          <KpiTile label="Group ADR"    value={Math.round(groupAdr)} currency={moneyCurrency} size="sm" footnote="rev ÷ RNs" />
+        </div>
+      </div>
+      <div style={fullRow}>
+        <Container title="Groups · all sources" subtitle={`${rows.length} sources · click row → drawer · v_group_bookings_12mo`}>
+          {rows.length === 0 ? (
+            <div style={{ padding: 16, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>No group bookings in the last 12 months.</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: 'var(--bg, #F4EFE2)', textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: 10, color: 'var(--ink-soft, #5A5A5A)' }}>
+                    <th style={thStyle}>Source</th>
+                    <th style={thStyle}>Channel</th>
+                    <th style={{ ...thStyle, textAlign: 'right' }}>Res</th>
+                    <th style={{ ...thStyle, textAlign: 'right' }}>RNs</th>
+                    <th style={{ ...thStyle, textAlign: 'right' }}>Revenue</th>
+                    <th style={{ ...thStyle, textAlign: 'right' }}>Group ADR</th>
+                    <th style={{ ...thStyle, textAlign: 'right' }}>Net rev</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r, i) => (
+                    <tr key={i} style={{ borderTop: '1px solid var(--hairline, #E6DFCC)' }}>
+                      <td style={tdLabelStyle}><Link href={drillHrefFor(String(r.source ?? ''))} style={sourceLinkStyle}>{String(r.source ?? '—')}</Link></td>
+                      <td style={tdLabelStyle}>{String(r.channel_group ?? '—')}</td>
+                      <td style={tdNumStyle}>{Number(r.reservations ?? 0)}</td>
+                      <td style={tdNumStyle}>{Number(r.room_nights ?? 0)}</td>
+                      <td style={tdNumStyle}>{sym}{Math.round(Number(r.gross_revenue ?? 0)).toLocaleString('en-US')}</td>
+                      <td style={tdNumStyle}>{sym}{Math.round(Number(r.group_adr ?? 0)).toLocaleString('en-US')}</td>
+                      <td style={tdNumStyle}>{sym}{Math.round(Number(r.net_revenue ?? 0)).toLocaleString('en-US')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Container>
+      </div>
     </>
   );
 }
