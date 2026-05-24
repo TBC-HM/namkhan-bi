@@ -1,7 +1,7 @@
 // app/marketing/page.tsx
-import DeptEntry from '@/components/dept-entry/DeptEntry';
-import { DEPT_CFG } from '@/lib/dept-cfg';
-
+// PBS #204 — Marketing HoD landing on shared primitive.
+import HodLanding from '@/app/_components/HodLanding';
+export const dynamic = 'force-dynamic';
 export default function MarketingPage() {
-  return <DeptEntry cfg={DEPT_CFG.marketing} />;
+  return <HodLanding slug="marketing" />;
 }
