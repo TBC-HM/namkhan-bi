@@ -26,11 +26,9 @@ export default function Drawer(props: DrawerProps) {
       }
     };
     document.addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    // PBS #199 v7: keep underlying page scrollable so it stays visibly "the page" — drawer is a side panel, not a full-screen takeover.
     return () => {
       document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prev;
       lastFocusedRef.current?.focus?.();
     };
   }, [open, onClose]);
@@ -72,7 +70,8 @@ const S: Record<string, CSSProperties> = {
     display: 'flex', justifyContent: 'flex-end',
     fontFamily: 'var(--sans, "Inter Tight", system-ui, sans-serif)',
   },
-  scrim: { position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)' },
+  // PBS #199 v7: drawer scrim lightened (40% black → 12% black) so the underlying page remains clearly visible while drawer is open.
+  scrim: { position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.12)' },
   panel: {
     position: 'relative', height: '100vh',
     background: 'var(--paper, #FFFFFF)',
