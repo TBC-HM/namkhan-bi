@@ -13,6 +13,8 @@ import { supabase } from '@/lib/supabase';
 import { stripPublicPrefix, type ContainerRegistryRow } from './types';
 import { formatValue } from './format';
 import PeriodDropdown from './PeriodDropdown';
+import DrillDrawer from './DrillDrawer';
+import IcpSection from './IcpSection';
 
 interface TileMetric {
   key: string;
@@ -471,16 +473,22 @@ export default async function ContainerRoomIntel({ container, propertyId, search
       </div>
 
       {activeExpand && (
-        <DrillPanel
-          code={activeExpand}
-          friendly={isCanonicalGrouping ? (FRIENDLY[activeExpand] ?? activeExpand) : activeExpand}
-          activePeriod={activePeriod}
-          propertyId={propertyId}
-          categoryRowsAllTime={rows.filter((r) => r[groupBy] === activeExpand)}
-          categoryRowsActive={rowsByCatActive.get(activeExpand) ?? []}
-          spec={spec}
-          currencySymbol={currencySymbol}
-        />
+        <DrillDrawer
+          title={`Drill · ${isCanonicalGrouping ? (FRIENDLY[activeExpand] ?? activeExpand) : activeExpand}`}
+          subtitle={`${activePeriod} · click outside or × to close`}
+        >
+          <DrillPanel
+            code={activeExpand}
+            friendly={isCanonicalGrouping ? (FRIENDLY[activeExpand] ?? activeExpand) : activeExpand}
+            activePeriod={activePeriod}
+            propertyId={propertyId}
+            categoryRowsAllTime={rows.filter((r) => r[groupBy] === activeExpand)}
+            categoryRowsActive={rowsByCatActive.get(activeExpand) ?? []}
+            spec={spec}
+            currencySymbol={currencySymbol}
+          />
+          <IcpSection category={activeExpand} />
+        </DrillDrawer>
       )}
     </Container>
   );
