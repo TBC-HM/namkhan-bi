@@ -634,27 +634,9 @@ async function DrillPanel({
             ADR · last 12 months <span style={panelHeaderSub}>· per granular room type</span>
           </div>
           <div style={{ padding: 12 }}>
+            {/* PBS #145 hotfix-2: tooltipFormatter (a function) crashes server→client into the DashboardPage ('use client') boundary. Drop the custom formatter — default tooltip shows key/value pairs. Custom hover detail returns once Chart accepts a string enum for format. */}
             <Chart variant="line" data={adrData} xKey="month" series={adrSeries} height={220}
-              empty={{ title: 'No ADR history for this category' }}
-              tooltipFormatter={(point, seriesKey) => {
-                const key = String(seriesKey ?? '');
-                const label = seriesLabelByKey[key] ?? key;
-                const adr = Number(point[key] ?? 0);
-                const rn = Number(point[`${key}_rn`] ?? 0);
-                const los = Number(point[`${key}_los`] ?? 0);
-                const bk = Number(point[`${key}_bk`] ?? 0);
-                const month = String(point.month ?? '');
-                return (
-                  <div style={{ fontSize: 11, lineHeight: 1.5 }}>
-                    <div style={{ fontWeight: 600, marginBottom: 4 }}>{label}</div>
-                    <div style={{ color: 'var(--ink-soft, #5A5A5A)' }}>{month}</div>
-                    <div>ADR <strong>{currencySymbol}{Math.round(adr).toLocaleString()}</strong></div>
-                    <div>Room nights <strong>{rn.toLocaleString()}</strong></div>
-                    <div>Bookings <strong>{bk.toLocaleString()}</strong></div>
-                    <div>Avg LOS <strong>{los > 0 ? los.toFixed(1) + 'n' : '—'}</strong></div>
-                  </div>
-                );
-              }} />
+              empty={{ title: 'No ADR history for this category' }} />
           </div>
         </div>
       )}
