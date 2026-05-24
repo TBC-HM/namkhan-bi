@@ -18,8 +18,8 @@ import {
   getLatestCommentary,
 } from '../_data';
 import { priorPeriod, type PeriodWindow } from '@/lib/supabase-gl';
-import Page from '@/components/page/Page';
-import Panel from '@/components/page/Panel';
+import { DashboardPage, Container } from '@/app/(cockpit)/_design';
+
 import PeriodSelectorRow from '@/components/page/PeriodSelectorRow';
 import KpiBox from '@/components/kpi/KpiBox';
 import { FINANCE_SUBPAGES } from '../_subpages';
@@ -476,11 +476,12 @@ export default async function PnLPage({ searchParams }: Props) {
   void fbOverPct; void priorLabel; void latestMonth; // computed but currently unused after refactor
 
   return (
-    <Page
-      eyebrow={pnlEyebrow}
-      title={<>Profit &amp; loss · where the <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>margin</em> lives.</>}
-      subPages={FINANCE_SUBPAGES}
+    <DashboardPage
+      title="Profit & Loss"
+      subtitle={pnlEyebrow}
+      tabs={FINANCE_SUBPAGES.map(s => ({ key: s.href, label: s.label, href: s.href, active: s.href === '/finance/pnl' }))}
     >
+      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 18 }}>
       <TabStrip tabs={PNL_TABS} activeKey="pnl" />
       {/* PBS 2026-05-13: pnl-page wrapper brings back the 196 globals.css
           rules scoped to .pnl-page (variance bars, USALI table tones,
@@ -576,7 +577,7 @@ export default async function PnLPage({ searchParams }: Props) {
 
       {/* ─── 3. GRAPHS ──────────────────────────────────────────────── */}
 
-      <Panel title={`Top variances · ${VAR_LABEL[varianceBase]}`} eyebrow="v_usali_dept_summary">
+      <Container title={`Top variances · ${VAR_LABEL[varianceBase]}`} eyebrow="v_usali_dept_summary">
         <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
           {(['mom', 'budget', 'forecast', 'ly'] as const).map((b) => {
             const active = varianceBase === b;
@@ -615,7 +616,7 @@ export default async function PnLPage({ searchParams }: Props) {
             );
           })}
         </div>
-      </Panel>
+      </Container>
 
       <div style={{ height: 14 }} />
 
@@ -721,12 +722,12 @@ export default async function PnLPage({ searchParams }: Props) {
 
         return (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
-            <Panel title="GOP trend · 12mo" eyebrow={`${tPeriods[0]} → ${tPeriods[tPeriods.length - 1]} · hover for value`}>
+            <Container title="GOP trend · 12mo" eyebrow={`${tPeriods[0]} → ${tPeriods[tPeriods.length - 1]} · hover for value`}>
               <div dangerouslySetInnerHTML={{ __html: gopTrendSvg(gopPts) }} />
-            </Panel>
-            <Panel
+            </Container>
+            <Container
               title="Departmental profit · 12mo"
-              eyebrow={`Filter by dept · hover for value · ${filteredDeptSeries.length} of 3 visible`}
+              subtitle={`Filter by dept · hover for value · ${filteredDeptSeries.length} of 3 visible`}
             >
               <FilterPills
                 options={[
@@ -739,10 +740,10 @@ export default async function PnLPage({ searchParams }: Props) {
                 hrefFor={(k) => pillHref('dept', k)}
               />
               <div dangerouslySetInnerHTML={{ __html: deptProfitTrendSvg(filteredDeptSeries) }} />
-            </Panel>
-            <Panel
+            </Container>
+            <Container
               title="Cost ratios · 12mo"
-              eyebrow={`% of revenue · target dashed · hover for value · ${filteredRatioSeries.length} of 3 visible`}
+              subtitle={`% of revenue · target dashed · hover for value · ${filteredRatioSeries.length} of 3 visible`}
             >
               <FilterPills
                 options={[
@@ -755,14 +756,14 @@ export default async function PnLPage({ searchParams }: Props) {
                 hrefFor={(k) => pillHref('ratio', k)}
               />
               <div dangerouslySetInnerHTML={{ __html: costRatioTrendSvg(filteredRatioSeries) }} />
-            </Panel>
+            </Container>
           </div>
         );
       })()}
 
       <div style={{ height: 14 }} />
 
-      <Panel title={`Variance commentary · ${cur}`} eyebrow={latestCommentary ? 'LLM draft' : 'auto-draft'}>
+      <Container title={`Variance commentary · ${cur}`} eyebrow={latestCommentary ? 'LLM draft' : 'auto-draft'}>
         <CommentaryPanel
           period={cur}
           draftBody={latestCommentary?.body ?? null}
@@ -823,29 +824,29 @@ export default async function PnLPage({ searchParams }: Props) {
             </>
           }
         />
-      </Panel>
+      </Container>
 
       <div style={{ height: 14 }} />
 
       {/* PBS 2026-05-15: prior-year rollup first, then current year — CFO
           reads "where we came from" before "where we are". */}
-      <Panel title="12-month rollup · FY2025" eyebrow="actual · budget · ly (FY2024) · closed prior year">
+      <Container title="12-month rollup · FY2025" eyebrow="actual · budget · ly (FY2024) · closed prior year">
         <TwelveMonthPanel rows={twelveMonth2025} fy={fy2025} />
-      </Panel>
+      </Container>
 
       <div style={{ height: 14 }} />
 
-      <Panel title="12-month rollup · FY2026" eyebrow="actual · budget · forecast · ly">
+      <Container title="12-month rollup · FY2026" eyebrow="actual · budget · forecast · ly">
         <TwelveMonthPanel rows={twelveMonth} fy={fy2026} demand={demandFy} />
-      </Panel>
+      </Container>
 
       {/* ─── 4. TABLES ──────────────────────────────────────────────── */}
 
       <div style={{ height: 14 }} />
 
-      <Panel
+      <Container
         title={`USALI department schedule · ${monthLabel} (MTD) · vs ${compareLabel}`}
-        eyebrow={compareSource}
+        subtitle={compareSource}
       >
           <div className="meta">
             Materiality: 5% AND $1,000. Coloring — green ≤5% · amber 5–10% · red &gt;10% AND &gt;$1k.
@@ -1118,13 +1119,13 @@ export default async function PnLPage({ searchParams }: Props) {
               })()}
             </tbody>
           </table>
-      </Panel>
+      </Container>
 
       <div style={{ height: 14 }} />
 
-      <Panel
+      <Container
         title="Decisions queued for you"
-        eyebrow={`${decisions.length} pending · governance.decision_queue`}
+        subtitle={`${decisions.length} pending · governance.decision_queue`}
       >
         {decisions.length === 0 ? (
           <div style={{ padding: 16, textAlign: 'center', color: 'var(--ink-mute)', fontStyle: 'italic' }}>
@@ -1154,13 +1155,13 @@ export default async function PnLPage({ searchParams }: Props) {
             })}
           </div>
         )}
-      </Panel>
+      </Container>
 
       <div style={{ height: 14 }} />
 
-      <Panel
+      <Container
         title="Tactical alerts"
-        eyebrow={`v_usali_dept_summary · period=${cur} · ${alerts.length === 0 ? 'all clean' : `${alerts.length} breach${alerts.length > 1 ? 'es' : ''}`}`}
+        subtitle={`v_usali_dept_summary · period=${cur} · ${alerts.length === 0 ? 'all clean' : `${alerts.length} breach${alerts.length > 1 ? 'es' : ''}`}`}
       >
         <div style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)', marginBottom: 10 }}>
           Thresholds: F&amp;B cost &gt; 32% · Labour &gt; 35% · A&amp;G or Utilities MoM &gt; ±{(matPct * 3).toFixed(0)}% (3× materiality).
@@ -1184,7 +1185,7 @@ export default async function PnLPage({ searchParams }: Props) {
             ))}
           </div>
         )}
-      </Panel>
+      </Container>
 
       <div style={{ height: 18 }} />
 
@@ -1221,7 +1222,8 @@ export default async function PnLPage({ searchParams }: Props) {
         </div>
       </div>
       </div>{/* /.pnl-page */}
-    </Page>
+      </div>
+    </DashboardPage>
   );
 }
 
