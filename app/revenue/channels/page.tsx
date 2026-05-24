@@ -356,12 +356,14 @@ function CategoryBlock({
     ota:     'OTAs',
     dmc:     'DMC',
     bedbank: 'Bedbanks',
+    group:   'Groups',
   };
   const missingNote: Record<Category, string> = {
     direct:  '↪ Conversion rate (visits → bookings) and returning-guest direct % — owed by Plausible / GA integration + cross-join to pms.guests_mews.',
     ota:     '↪ Search visibility · content score · Genius status — owed by BDC admin scrape (component scaffold at /channels/[source]).',
     dmc:     '↪ Contract status · net-rate vs published rack · production-vs-target — owed by cockpit.dmc_contracts table.',
     bedbank: '↪ Net-rate vs rack contract terms · allotment uplift · stop-sell breach — owed by cockpit.bedbank_contracts table.',
+    group:   '↪ Group bookings (weddings · MICE · retreats) — sourced from v_group_bookings_12mo, cross-channel, owned by Sales.',
   };
 
   // KPI tiles per category
