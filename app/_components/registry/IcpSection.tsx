@@ -8,7 +8,7 @@
 // and filter here. For now, all active ICPs are surfaced — operator picks
 // the matching ones manually.
 
-import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 
 interface IcpRow {
@@ -26,7 +26,6 @@ interface Props {
 }
 
 export default async function IcpSection({ category: _category }: Props) {
-  const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from('v_icp_segments_active')
     .select('id, key, name, description, daily_quota, criteria')
