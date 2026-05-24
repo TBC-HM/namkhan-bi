@@ -237,10 +237,9 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
         </Container>
       </div>
 
-      {/* note#15 HOTFIX: PageRenderer wraps its own DashboardPage internally — keep the outer Container wrapper to avoid nested-page crash. True 9-piece split needs PageRenderer "embedded" mode (deferred to follow-up). */}
-      <Container title="12-month structural view" subtitle="tier rollup · top sources · monthly trend · groups · DMC contracts (Namkhan only)" density="compact">
-        <PageRenderer pageSlug="channel" propertyId={pid} title="" subtitle="" />
-      </Container>
+      {/* PBS #126 (2026-05-24): 9-piece split. PageRenderer in embedded mode renders the 9 registry
+          children as direct siblings of the host DashboardPage — no nested DashboardPage, no outer wrap. */}
+      <PageRenderer pageSlug="channel" propertyId={pid} title="" subtitle="" embedded />
     </DashboardPage>
   );
 }
