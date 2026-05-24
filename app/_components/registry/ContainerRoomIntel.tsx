@@ -13,7 +13,6 @@ import { supabase } from '@/lib/supabase';
 import { stripPublicPrefix, type ContainerRegistryRow } from './types';
 import { formatValue } from './format';
 import PeriodDropdown from './PeriodDropdown';
-import DrillDrawer from './DrillDrawer';
 import IcpSection from './IcpSection';
 
 interface TileMetric {
@@ -472,24 +471,20 @@ export default async function ContainerRoomIntel({ container, propertyId, search
         })}
       </div>
 
+      {/* PBS #145 hotfix: DrillPanel's internal Chart uses tooltipFormatter (a function), which can't be serialised across server→client when wrapped inside the client DrillDrawer. Reverting to inline render. IcpSection renders as a sibling below. */}
       {activeExpand && (
-        <DrillDrawer
-          title={`Drill · ${isCanonicalGrouping ? (FRIENDLY[activeExpand] ?? activeExpand) : activeExpand}`}
-          subtitle={`${activePeriod} · click outside or × to close`}
-        >
-          <DrillPanel
-            code={activeExpand}
-            friendly={isCanonicalGrouping ? (FRIENDLY[activeExpand] ?? activeExpand) : activeExpand}
-            activePeriod={activePeriod}
-            propertyId={propertyId}
-            categoryRowsAllTime={rows.filter((r) => r[groupBy] === activeExpand)}
-            categoryRowsActive={rowsByCatActive.get(activeExpand) ?? []}
-            spec={spec}
-            currencySymbol={currencySymbol}
-          />
-          <IcpSection category={activeExpand} />
-        </DrillDrawer>
+        <DrillPanel
+          code={activeExpand}
+          friendly={isCanonicalGrouping ? (FRIENDLY[activeExpand] ?? activeExpand) : activeExpand}
+          activePeriod={activePeriod}
+          propertyId={propertyId}
+          categoryRowsAllTime={rows.filter((r) => r[groupBy] === activeExpand)}
+          categoryRowsActive={rowsByCatActive.get(activeExpand) ?? []}
+          spec={spec}
+          currencySymbol={currencySymbol}
+        />
       )}
+      {activeExpand && <IcpSection category={activeExpand} />}
     </Container>
   );
 }
