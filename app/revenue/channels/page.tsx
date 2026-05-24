@@ -28,6 +28,7 @@ import {
   type ChartSeries, type DashboardTab, type KpiTileProps,
 } from '@/app/(cockpit)/_design';
 import PageRenderer from '@/app/_components/registry/PageRenderer';
+import ChannelDrillDrawer from '@/app/_components/registry/ChannelDrillDrawer';
 import { resolvePeriod, type WindowKey } from '@/lib/period';
 import {
   getChannelEconomics, getChannelEconomicsForRange,
@@ -240,6 +241,23 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
       {/* PBS #126 (2026-05-24): 9-piece split. PageRenderer in embedded mode renders the 9 registry
           children as direct siblings of the host DashboardPage — no nested DashboardPage, no outer wrap. */}
       <PageRenderer pageSlug="channel" propertyId={pid} title="" subtitle="" embedded />
+
+      {/* PBS #199 — click a row in any sources table to open this drawer; CTA → full per-channel page (Booking.com hardwired Bdc* panels render there). */}
+      <ChannelDrillDrawer
+        rows={[...byCat.direct, ...byCat.ota, ...byCat.dmc, ...byCat.other].map((c) => ({
+          source_name:   String(c.source_name || ''),
+          bookings:      Number(c.bookings || 0),
+          gross_revenue: Number(c.gross_revenue || 0),
+          adr:           Number(c.adr || 0),
+          commission_pct: Number(c.commission_pct || 0),
+          cancel_pct:    Number(c.cancel_pct || 0),
+          avg_lead_days: Number(c.avg_lead_days || 0),
+          avg_los:       Number(c.avg_los || 0),
+          roomnights:    Number(c.roomnights || 0),
+        }))}
+        currencyCode={moneyCurrency}
+        basePath={basePath}
+      />
     </DashboardPage>
   );
 }
