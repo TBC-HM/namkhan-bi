@@ -32,9 +32,13 @@ interface Props {
    *  containers below in a 2-up grid. Kills white space for pages with many
    *  short graphs + a few long tables (e.g. leakage). */
   layout?: 'flat' | 'graphs-first';
+  /** When true, skip the DashboardPage + tabs wrap and return only the items as a fragment.
+   *  Lets a host page (e.g. /revenue/channels) embed the registry output inline without
+   *  nesting DashboardPage shells. PBS #126 (2026-05-24). */
+  embedded?: boolean;
 }
 
-export default async function PageRenderer({ pageSlug, propertyId, title, subtitle, kpiStrip, searchParams, layout = 'flat' }: Props) {
+export default async function PageRenderer({ pageSlug, propertyId, title, subtitle, kpiStrip, searchParams, layout = 'flat', embedded = false }: Props) {
   // Tabs use revenue subpages strip for now (only consumer so far is revenue)
   const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, propertyId);
   const tabs: DashboardTab[] = subPages.map((s) => ({
@@ -62,8 +66,8 @@ export default async function PageRenderer({ pageSlug, propertyId, title, subtit
   const finalTitle = title ?? `Revenue · ${pageSlug.charAt(0).toUpperCase()}${pageSlug.slice(1)}`;
   const finalSubtitle = subtitle ?? `registry-driven · ${containers.length} container${containers.length === 1 ? '' : 's'} · ${graphs.length} graph${graphs.length === 1 ? '' : 's'}`;
 
-  return (
-    <DashboardPage title={finalTitle} subtitle={finalSubtitle} tabs={tabs}>
+  const body = (
+    <>
       {kpiStrip}
 
       {items.length === 0 && (
@@ -141,6 +145,13 @@ export default async function PageRenderer({ pageSlug, propertyId, title, subtit
 
         return items.map((it, idx) => renderItem(it, idx));
       })()}
+    </>
+  );
+
+  if (embedded) return body;
+  return (
+    <DashboardPage title={finalTitle} subtitle={finalSubtitle} tabs={tabs}>
+      {body}
     </DashboardPage>
   );
 }
