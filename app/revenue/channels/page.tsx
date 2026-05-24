@@ -52,13 +52,15 @@ const DIRECT_RX = /direct|website|booking engine|^email|walk[- ]?in|witbooking|w
 
 type Category = 'direct' | 'ota' | 'dmc' | 'bedbank';
 
+// PBS #199 v5: DMC is now the CATCH-ALL bucket — anything not Direct/OTA/Bedbank lands in DMC
+// (B2B tour operators, agents, comp invitations, walk-on partners — historically dumped in "other"
+// and made invisible to all tabs). "other" still exists in the type for safety but classify never returns it.
 function classify(source: string): Category | 'other' {
   const s = (source || '').toLowerCase();
   if (DIRECT_RX.test(s))   return 'direct';
   if (OTA_RX.test(s))      return 'ota';
   if (BEDBANK_RX.test(s))  return 'bedbank';
-  if (DMC_RX.test(s))      return 'dmc';
-  return 'other';
+  return 'dmc'; // catch-all
 }
 
 // PBS #199: Namkhan does not have Bedbank business. Bedbank tab only on Donna (pid=1000001).
@@ -66,7 +68,7 @@ function visibleTabs(pid: number): Array<{ key: Category; label: string; tagline
   const base: Array<{ key: Category; label: string; tagline: string }> = [
     { key: 'direct',  label: 'Direct',   tagline: 'in-house channels — best margin' },
     { key: 'ota',     label: 'OTAs',     tagline: 'Booking.com · Expedia · Agoda · …' },
-    { key: 'dmc',     label: 'DMC',      tagline: 'Khiri · Trails · tour operators' },
+    { key: 'dmc',     label: 'DMC',      tagline: 'Tour ops · agents · everything else B2B' },
   ];
   if (pid === 1000001) base.push({ key: 'bedbank', label: 'Bedbanks', tagline: 'Hotelbeds · WebBeds · Sunhotels · …' });
   return base;
@@ -74,7 +76,7 @@ function visibleTabs(pid: number): Array<{ key: Category; label: string; tagline
 const TAB_DEFS: Array<{ key: Category; label: string; tagline: string }> = [
   { key: 'direct',  label: 'Direct',   tagline: 'in-house channels — best margin' },
   { key: 'ota',     label: 'OTAs',     tagline: 'Booking.com · Expedia · Agoda · …' },
-  { key: 'dmc',     label: 'DMC',      tagline: 'Khiri · Trails · tour operators' },
+  { key: 'dmc',     label: 'DMC',      tagline: 'Tour ops · agents · everything else B2B' },
   { key: 'bedbank', label: 'Bedbanks', tagline: 'Hotelbeds · WebBeds · Sunhotels · …' },
 ];
 
@@ -225,15 +227,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
         </div>
       </div>
 
-      {chips.length > 0 && (
-        <Container title="Watch list" subtitle="auto-detected insights · cross-category" density="compact" status="amber">
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {chips.map((c, i) => (
-              <span key={i} style={chipStyle}>{c}</span>
-            ))}
-          </div>
-        </Container>
-      )}
+
 
       {activeTab === 'direct' && <CategoryBlock category="direct" rows={byCat.direct as unknown as Array<Record<string, unknown>>} cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'direct')} mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'direct')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} />}
       {activeTab === 'ota'    && <CategoryBlock category="ota"    rows={byCat.ota as unknown as Array<Record<string, unknown>>}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'ota')}    mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'ota')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} />}
