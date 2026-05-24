@@ -271,23 +271,27 @@ export default async function CompsetPage({ propertyId }: Props = {}) {
         }}>↗ Legacy archive</a>
       }
     >
-      <Container title="Compset headline" subtitle="latest observed rates · last 30 days" density="compact">
+      {/* PBS #193: KPI groupings as flat strips (no Container chrome), matching the channels v3 pattern. */}
+      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 6, padding: '2px 0 10px', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>
+        <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>Compset headline · latest observed rates · last 30 days</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
           {headlineTiles.map((t, i) => <KpiTile key={i} {...t} />)}
         </div>
-      </Container>
+      </div>
 
-      <Container title="Performance context" subtitle="yesterday's realized · context for positioning" density="compact">
+      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 6, padding: '2px 0 10px', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>
+        <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>Performance context · yesterday's realized</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
           {contextTiles.map((t, i) => <KpiTile key={i} {...t} />)}
         </div>
-      </Container>
+      </div>
 
-      <Container title="Compset signals" subtitle="spread · cadence · freshness" density="compact">
+      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 6, padding: '2px 0 10px', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>
+        <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>Compset signals · spread · cadence · freshness</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
           {signalTiles.map((t, i) => <KpiTile key={i} {...t} />)}
         </div>
-      </Container>
+      </div>
 
       <Container title="Daily rate trend · top 6" subtitle="self + 5 nearest competitors · v_compset_competitor_rate_matrix">
         <Chart variant="line" data={trendData} xKey="stay_date" series={trendSeries} height={260}
