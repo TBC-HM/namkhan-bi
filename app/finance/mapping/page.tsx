@@ -1,15 +1,10 @@
-// app/finance/mapping/page.tsx — PBS #205 (2026-05-25)
-// Adapted to DashboardPage primitive. Body kept flex-column inside a single
-// full-row grid cell so the MESSY_TABS strip + KPI tiles + unclear/overridden/
-// standard sections render exactly as before.
+// app/finance/mapping/page.tsx — PBS #205 v2 (2026-05-25)
+// Full primitive adoption: DashboardPage + Container per section + KpiTile.
 
-import { DashboardPage } from '@/app/(cockpit)/_design';
+import { DashboardPage, Container, KpiTile, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { FINANCE_SUBPAGES } from '../_subpages';
-import TabStrip, { MESSY_TABS } from '../_components/TabStrip';
-import KpiBox from '@/components/kpi/KpiBox';
 import { supabaseGl } from '@/lib/supabase-gl';
 import MappingTable, { type ClassOption, type MappingRow } from './MappingTable';
-import { SectionHead } from '../_components/FinanceShell';
 
 export const revalidate = 0;
 export const dynamic = 'force-dynamic';
@@ -30,6 +25,8 @@ function fmtUsd(n: number | null | undefined): string {
   if (abs >= 1000) return `${sign}$${(abs / 1000).toFixed(1)}k`;
   return `${sign}$${Math.round(abs)}`;
 }
+
+const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
 
 export default async function MappingPage() {
   const [{ data: rowsR }, { data: classesR }] = await Promise.all([
@@ -71,56 +68,73 @@ export default async function MappingPage() {
   const overridden = rows.filter(r => !r.is_unclear && r.override_class_id).sort((a, b) => (b.override_updated_at || '').localeCompare(a.override_updated_at || ''));
   const standard = rows.filter(r => !r.is_unclear && !r.override_class_id);
   const unclearTotal = unclear.reduce((s, r) => s + Math.abs(r.usd_total), 0);
-  const overriddenTotal = overridden.reduce((s, r) => s + Math.abs(r.usd_total), 0);
-  const standardTotal = standard.reduce((s, r) => s + Math.abs(r.usd_total), 0);
-  const grand = unclearTotal + overriddenTotal + standardTotal;
   const total = rows.length;
   const coveragePct = total > 0 ? ((total - unclear.length) / total) * 100 : 0;
 
-  const mappingEyebrow = [
-    'gl.v_account_class_status',
-    `${total} accounts`,
-    `${unclear.length} unclear (${fmtUsd(unclearTotal)})`,
-    `${coveragePct.toFixed(0)}% coverage`,
-  ].filter(Boolean).join(' · ');
+  const subtitle = `gl.v_account_class_status · ${total} accounts · ${unclear.length} unclear (${fmtUsd(unclearTotal)}) · ${coveragePct.toFixed(0)}% coverage`;
 
   const tabs = FINANCE_SUBPAGES.map((s) => ({ key: s.href, label: s.label, href: s.href }));
 
+  const tiles: KpiTileProps[] = [
+    { label: 'Unclear', value: unclear.length, size: 'sm', footnote: 'no USALI mapping', status: unclear.length > 0 ? 'amber' : 'green' },
+    { label: 'Overridden', value: overridden.length, size: 'sm', footnote: 'manual overrides' },
+    { label: 'Standard', value: standard.length, size: 'sm', footnote: 'rule-mapped' },
+    { label: 'Total', value: total, size: 'sm' },
+    { label: 'Coverage %', value: `${coveragePct.toFixed(0)}%`, size: 'sm', status: coveragePct >= 90 ? 'green' : coveragePct >= 70 ? 'amber' : 'red' },
+    { label: 'Unclear $', value: Math.round(unclearTotal), currency: 'USD', size: 'sm', footnote: 'Σ|usd_total| on unclear', status: unclearTotal > 0 ? 'amber' : 'green' },
+  ];
+
   return (
-    <DashboardPage title="Account mapping" subtitle={mappingEyebrow} tabs={tabs}>
-      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 18 }}>
-        <TabStrip tabs={MESSY_TABS} activeKey="accounts" />
+    <DashboardPage title="Account mapping" subtitle={subtitle} tabs={tabs}>
+      {/* 1 · Headline */}
+      <div style={fullRow}>
+        <Container title="Headline" subtitle="USALI coverage · classification status" density="compact">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
+            {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
+          </div>
+        </Container>
+      </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-          <KpiBox value={unclear.length} unit="count" label="Unclear accounts" tooltip="QB accounts with no USALI mapping yet — fall into 'Other / unmapped' on the P&L. Investigate weekly." />
-          <KpiBox value={overridden.length} unit="count" label="Overridden"      tooltip="Accounts with a manual USALI override (preserved across re-syncs)." />
-          <KpiBox value={standard.length} unit="count" label="Standard"          tooltip="Accounts mapped via the standard rule set in gl.account_mapping_rules." />
-          <KpiBox value={total} unit="count" label="Total accounts"              tooltip="All QB accounts active in the chart of accounts." />
-          <KpiBox value={coveragePct} unit="pct" label="USALI coverage"          tooltip="(total − unclear) ÷ total × 100." />
-          <KpiBox value={unclearTotal} unit="usd" label="Unclear $ exposure"     tooltip="Σ |usd_total| across unclear accounts — money landing on 'Other / unmapped' until classified." />
-        </div>
-
-        {unclear.length > 0 && (
-          <div>
-            <SectionHead title="Needs your attention" emphasis={`${unclear.length} accounts`} sub="Pick a class · Save updates every gl_entry · refreshes mv_usali_pl_monthly" source="gl.v_account_class_status" />
+      {/* 2 · Unclear (action required) */}
+      {unclear.length > 0 && (
+        <div style={fullRow}>
+          <Container
+            title="Needs your attention"
+            subtitle={`${unclear.length} accounts · pick a class · save updates every gl_entry → refreshes mv_usali_pl_monthly`}
+            density="compact"
+          >
             <MappingTable rows={unclear} classes={classes} mode="unclear" />
-          </div>
-        )}
-        {overridden.length > 0 && (
-          <div>
-            <SectionHead title="Already overridden" emphasis={`${overridden.length}`} sub="Editable" source="gl.account_class_override" />
+          </Container>
+        </div>
+      )}
+
+      {/* 3 · Overridden */}
+      {overridden.length > 0 && (
+        <div style={fullRow}>
+          <Container
+            title="Already overridden"
+            subtitle={`${overridden.length} accounts · editable · gl.account_class_override`}
+            density="compact"
+          >
             <MappingTable rows={overridden} classes={classes} mode="overridden" />
-          </div>
-        )}
-        <div>
-          <SectionHead title="Standard mappings" emphasis={`${standard.length}`} sub="QB-classified · expand to view" />
-          <details style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '10px 14px' }}>
-            <summary style={{ cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--ink-soft)', fontWeight: 600 }}>
+          </Container>
+        </div>
+      )}
+
+      {/* 4 · Standard */}
+      <div style={fullRow}>
+        <Container
+          title="Standard mappings"
+          subtitle={`${standard.length} accounts · QB-classified · expand to view`}
+          density="compact"
+        >
+          <details style={{ background: 'transparent' }}>
+            <summary style={{ cursor: 'pointer', fontSize: 12, color: 'var(--ink-soft, #5a5a5a)', fontWeight: 600, padding: '4px 0' }}>
               Show {standard.length} accounts
             </summary>
             <div style={{ marginTop: 10 }}><MappingTable rows={standard} classes={classes} mode="standard" /></div>
           </details>
-        </div>
+        </Container>
       </div>
     </DashboardPage>
   );
