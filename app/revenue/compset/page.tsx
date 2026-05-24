@@ -3,10 +3,12 @@
 // (Namkhan default) and /h/[id]/revenue/compset (delegates with propertyId).
 // Legacy preserved at /revenue/compset/legacy.
 
+import Link from 'next/link';
 import {
   DashboardPage, Container, KpiTile, Chart,
   type ChartSeries, type DashboardTab, type KpiTileProps,
 } from '@/app/(cockpit)/_design';
+import CompsetPropertyDrawer from '@/app/_components/registry/CompsetPropertyDrawer';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import { REVENUE_SUBPAGES } from '../_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
@@ -298,9 +300,43 @@ export default async function CompsetPage({ propertyId }: Props = {}) {
           empty={{ title: 'No rate observations', hint: 'compset has not been shopped yet' }} />
       </Container>
 
-      <Container title={`Properties · ${props.length}`} subtitle="ranked by latest rate · v_compset_property_summary">
-        <Chart variant="table" data={propertyRows} xKey="property" series={propertyCols}
-          empty={{ title: 'No competitors registered' }} />
+      <Container title={`Properties · ${props.length}`} subtitle="ranked by latest rate · click a property to open the drawer">
+        {props.length === 0 ? (
+          <div style={{ padding: 16, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>No competitors registered</div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ background: 'var(--bg, #F4EFE2)', textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: 10, color: 'var(--ink-soft, #5A5A5A)' }}>
+                  <th style={cthStyle}>Property</th>
+                  <th style={cthStyle}>★</th>
+                  <th style={{ ...cthStyle, textAlign: 'right' }}>Latest $</th>
+                  <th style={{ ...cthStyle, textAlign: 'right' }}>Avg 30d $</th>
+                  <th style={{ ...cthStyle, textAlign: 'right' }}>vs median</th>
+                  <th style={{ ...cthStyle, textAlign: 'right' }}>Rooms</th>
+                  <th style={cthStyle}>Last shop</th>
+                </tr>
+              </thead>
+              <tbody>
+                {props.map((p) => (
+                  <tr key={p.comp_id} style={{ borderTop: '1px solid var(--hairline, #E6DFCC)' }}>
+                    <td style={ctdLabelStyle}>
+                      <Link href={`?comp=${encodeURIComponent(p.comp_id)}`} style={cSourceLinkStyle}>
+                        {p.property_name}{p.is_self ? ' ⭐' : ''}
+                      </Link>
+                    </td>
+                    <td style={ctdLabelStyle}>{p.star_rating ? '★'.repeat(p.star_rating) : '—'}</td>
+                    <td style={ctdNumStyle}>{p.latest_usd != null ? fmtUSD(p.latest_usd) : '—'}</td>
+                    <td style={ctdNumStyle}>{p.avg_30d_usd != null ? fmtUSD(p.avg_30d_usd) : '—'}</td>
+                    <td style={ctdNumStyle}>{fmtSignedPct(p.pct_vs_median)}</td>
+                    <td style={ctdNumStyle}>{p.rooms ?? '—'}</td>
+                    <td style={ctdLabelStyle}>{p.last_shop_human ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Container>
 
       <Container title="Promo behaviour" subtitle="discount cadence · v_compset_promo_tiles">
@@ -312,6 +348,13 @@ export default async function CompsetPage({ propertyId }: Props = {}) {
         <Chart variant="table" data={planRows} xKey="plan" series={planCols}
           empty={{ title: 'No rate-plan landscape data' }} />
       </Container>
+      {/* PBS #193: drawer mount — opens on ?comp=<comp_id> */}
+      <CompsetPropertyDrawer rows={props as unknown as Array<Record<string, unknown>> as unknown as never} />
     </DashboardPage>
   );
 }
+
+const cthStyle: React.CSSProperties = { textAlign: 'left', padding: '8px 10px', fontWeight: 600 };
+const ctdLabelStyle: React.CSSProperties = { padding: '8px 10px', color: 'var(--ink, #1B1B1B)' };
+const ctdNumStyle: React.CSSProperties = { padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--mono, "JetBrains Mono", ui-monospace, monospace)', color: 'var(--ink, #1B1B1B)' };
+const cSourceLinkStyle: React.CSSProperties = { color: 'var(--primary, #1F3A2E)', textDecoration: 'none', fontWeight: 600, cursor: 'pointer' };
