@@ -29,6 +29,7 @@ import {
 } from '@/app/(cockpit)/_design';
 import PageRenderer from '@/app/_components/registry/PageRenderer';
 import ChannelDrillDrawer from '@/app/_components/registry/ChannelDrillDrawer';
+import SourceCompareChart from '@/app/_components/registry/SourceCompareChart';
 import { resolvePeriod, type WindowKey } from '@/lib/period';
 import {
   getChannelEconomics, getChannelEconomicsForRange,
@@ -123,7 +124,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
     ? { ...period, from: period.compareFrom, to: period.compareTo, cmp: 'none' as const }
     : null;
 
-  const [channelsRaw, channelsCmp, mixWeekly, netValue, velocity, groupRows] = await Promise.all([
+  const [channelsRaw, channelsCmp, mixWeekly, netValue, velocity, groupRows, monthlySrc] = await Promise.all([
     getChannelEconomics(period, pid).catch(() => [] as Awaited<ReturnType<typeof getChannelEconomics>>),
     cmpPeriod
       ? getChannelEconomicsForRange(cmpPeriod.from, cmpPeriod.to, pid).catch(() => [] as Array<Record<string, unknown>>)
@@ -132,6 +133,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
     getChannelNetValueForRange(period.from, period.to, pid).catch(() => [] as Array<Record<string, unknown>>),
     getChannelVelocity28dByCat(pid).catch(() => [] as Array<Record<string, unknown>>),
     supabase.from('v_group_bookings_12mo').select('channel_group, source, reservations, room_nights, gross_revenue, group_adr, est_commission, net_revenue').eq('property_id', pid).order('gross_revenue', { ascending: false }).then((r) => r.data ?? [] as Array<Record<string, unknown>>),
+    supabase.from('v_channel_performance_monthly').select('source_name, month, rooms_revenue, reservations').eq('property_id', pid).gte('month', '2025-01-01').lte('month', '2026-12-31').then((r) => r.data ?? [] as Array<Record<string, unknown>>),
   ]);
   const channels = channelsRaw;
 
@@ -231,10 +233,10 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
 
 
 
-      {activeTab === 'direct' && <CategoryBlock category="direct" rows={byCat.direct as unknown as Array<Record<string, unknown>>} cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'direct')} mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'direct')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} />}
-      {activeTab === 'ota'    && <CategoryBlock category="ota"    rows={byCat.ota as unknown as Array<Record<string, unknown>>}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'ota')}    mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'ota')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} />}
-      {activeTab === 'dmc'    && <CategoryBlock category="dmc"    rows={byCat.dmc as unknown as Array<Record<string, unknown>>}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'dmc')}    mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'dmc')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} />}
-      {activeTab === 'bedbank' && pid === 1000001 && <CategoryBlock category="bedbank" rows={byCat.bedbank as unknown as Array<Record<string, unknown>>} cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'bedbank')} mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'bedbank')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} />}
+      {activeTab === 'direct' && <CategoryBlock category="direct" rows={byCat.direct as unknown as Array<Record<string, unknown>>} cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'direct')} mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'direct')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} monthlySrc={monthlySrc as unknown as Array<Record<string, unknown>>} />}
+      {activeTab === 'ota'    && <CategoryBlock category="ota"    rows={byCat.ota as unknown as Array<Record<string, unknown>>}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'ota')}    mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'ota')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} monthlySrc={monthlySrc as unknown as Array<Record<string, unknown>>} />}
+      {activeTab === 'dmc'    && <CategoryBlock category="dmc"    rows={byCat.dmc as unknown as Array<Record<string, unknown>>}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'dmc')}    mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'dmc')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} monthlySrc={monthlySrc as unknown as Array<Record<string, unknown>>} />}
+      {activeTab === 'bedbank' && pid === 1000001 && <CategoryBlock category="bedbank" rows={byCat.bedbank as unknown as Array<Record<string, unknown>>} cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'bedbank')} mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'bedbank')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} monthlySrc={monthlySrc as unknown as Array<Record<string, unknown>>} />}
       {activeTab === 'group' && <GroupsBlock rows={(groupRows as unknown as Array<Record<string, unknown>>)} moneyCurrency={moneyCurrency} drillHrefFor={drillHrefFor} />}
 
       {/* PBS #199 fix-2: top-level Sources · 2024/2025/2026 table is ALSO clickable. Click any source to open the drawer. */}
@@ -309,7 +311,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
 
 // ─── per-category block ──────────────────────────────────────────────────────
 function CategoryBlock({
-  category, rows, cmpRows, mixWeekly, velocity, period, totalRev, netValue, moneyCurrency, drillHrefFor,
+  category, rows, cmpRows, mixWeekly, velocity, period, totalRev, netValue, moneyCurrency, drillHrefFor, monthlySrc,
 }: {
   category: Category;
   rows: Array<Record<string, unknown>>;
@@ -321,6 +323,7 @@ function CategoryBlock({
   netValue: Array<Record<string, unknown>>;
   moneyCurrency: 'USD' | 'EUR';
   drillHrefFor: (source: string) => string;
+  monthlySrc: Array<Record<string, unknown>>;
 }) {
   const bookings = rows.reduce((s, c) => s + Number(c.bookings || 0), 0);
   const revenue  = rows.reduce((s, c) => s + Number(c.gross_revenue || 0), 0);
@@ -480,6 +483,16 @@ function CategoryBlock({
         </div>
       )}
 
+      {/* PBS #199 v8: per-category 2025 vs 2026 source comparison */}
+      <div style={fullRow}>
+        <SourceCompareChart
+          category={category}
+          sources={rows.map((r) => String(r.source_name ?? '')).filter(Boolean)}
+          rows={(monthlySrc as Array<{ source_name: string; month: string; rooms_revenue: number; reservations: number }>).filter((m) => rows.some((r) => r.source_name === m.source_name))}
+          moneyCurrency={moneyCurrency}
+        />
+      </div>
+
       {/* PBS #199 v4: small "Still owed" note moved UP from the bottom — sits between graphs and the all-sources table. */}
       <div style={fullRow}>
         <Container title="Still owed" subtitle="data not yet wired for this category" density="compact" status="grey">
@@ -531,6 +544,7 @@ function GroupsBlock({ rows, moneyCurrency, drillHrefFor }: {
   rows: Array<Record<string, unknown>>;
   moneyCurrency: 'USD' | 'EUR';
   drillHrefFor: (source: string) => string;
+  monthlySrc: Array<Record<string, unknown>>;
 }) {
   const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
   const sym = moneyCurrency === 'EUR' ? '€' : '$';
