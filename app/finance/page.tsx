@@ -1,7 +1,7 @@
 // app/finance/page.tsx
-import DeptEntry from '@/components/dept-entry/DeptEntry';
-import { DEPT_CFG } from '@/lib/dept-cfg';
-
+// PBS #204 — Finance HoD landing on shared primitive (matches /revenue).
+import HodLanding from '@/app/_components/HodLanding';
+export const dynamic = 'force-dynamic';
 export default function FinancePage() {
-  return <DeptEntry cfg={DEPT_CFG.finance} />;
+  return <HodLanding slug="finance" />;
 }
