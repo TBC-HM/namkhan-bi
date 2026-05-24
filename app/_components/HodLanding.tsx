@@ -10,7 +10,7 @@ import {
   type KpiTileProps,
 } from '@/app/(cockpit)/_design';
 import { DEPT_CFG } from '@/lib/dept-cfg';
-import type { DeptSlug } from '@/lib/dept-cfg/types';
+type DeptSlug = 'finance' | 'sales' | 'marketing' | 'operations' | 'revenue' | 'guest' | 'it' | 'legal';
 import { getDeptCfg } from '@/lib/dept-cfg/by-property';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { PROPERTY_ID, supabase } from '@/lib/supabase';
@@ -70,7 +70,7 @@ export default async function HodLanding({ slug, propertyId }: Props) {
 
   return (
     <DashboardPage
-      title={`${cfg.title ?? slug} · ${cfg.hodName}`}
+      title={`${cfg.pillTitle ?? slug} · ${cfg.hodName}`}
       subtitle={new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
       tabs={hodTabs}
       action={<Link href={chatHref} style={primaryBtnStyle}>{`Ask ${cfg.hodName} →`}</Link>}
