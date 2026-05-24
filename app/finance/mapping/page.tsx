@@ -1,5 +1,9 @@
-// app/finance/mapping/page.tsx — REDESIGN 2026-05-05 (recovery)
-import Page from '@/components/page/Page';
+// app/finance/mapping/page.tsx — PBS #205 (2026-05-25)
+// Adapted to DashboardPage primitive. Body kept flex-column inside a single
+// full-row grid cell so the MESSY_TABS strip + KPI tiles + unclear/overridden/
+// standard sections render exactly as before.
+
+import { DashboardPage } from '@/app/(cockpit)/_design';
 import { FINANCE_SUBPAGES } from '../_subpages';
 import TabStrip, { MESSY_TABS } from '../_components/TabStrip';
 import KpiBox from '@/components/kpi/KpiBox';
@@ -74,48 +78,50 @@ export default async function MappingPage() {
   const coveragePct = total > 0 ? ((total - unclear.length) / total) * 100 : 0;
 
   const mappingEyebrow = [
-    'Finance · Mapping',
     'gl.v_account_class_status',
     `${total} accounts`,
     `${unclear.length} unclear (${fmtUsd(unclearTotal)})`,
     `${coveragePct.toFixed(0)}% coverage`,
   ].filter(Boolean).join(' · ');
 
-  return (
-    <Page eyebrow={mappingEyebrow} title={<>Every account on a USALI <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>line</em> — or it's noise.</>} subPages={FINANCE_SUBPAGES}>
-      <TabStrip tabs={MESSY_TABS} activeKey="accounts" />
-      {/* ─── 1. KPI tiles ───────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-        <KpiBox value={unclear.length} unit="count" label="Unclear accounts" tooltip="QB accounts with no USALI mapping yet — fall into 'Other / unmapped' on the P&L. Investigate weekly." />
-        <KpiBox value={overridden.length} unit="count" label="Overridden"      tooltip="Accounts with a manual USALI override (preserved across re-syncs)." />
-        <KpiBox value={standard.length} unit="count" label="Standard"          tooltip="Accounts mapped via the standard rule set in gl.account_mapping_rules." />
-        <KpiBox value={total} unit="count" label="Total accounts"              tooltip="All QB accounts active in the chart of accounts." />
-        <KpiBox value={coveragePct} unit="pct" label="USALI coverage"          tooltip="(total − unclear) ÷ total × 100." />
-        <KpiBox value={unclearTotal} unit="usd" label="Unclear $ exposure"     tooltip="Σ |usd_total| across unclear accounts — money landing on 'Other / unmapped' until classified." />
-      </div>
+  const tabs = FINANCE_SUBPAGES.map((s) => ({ key: s.href, label: s.label, href: s.href }));
 
-      {/* No period selector — page works on full QB chart-of-accounts snapshot. */}
-      {unclear.length > 0 && (
-        <div style={{ marginTop: 18 }}>
-          <SectionHead title="Needs your attention" emphasis={`${unclear.length} accounts`} sub="Pick a class · Save updates every gl_entry · refreshes mv_usali_pl_monthly" source="gl.v_account_class_status" />
-          <MappingTable rows={unclear} classes={classes} mode="unclear" />
+  return (
+    <DashboardPage title="Account mapping" subtitle={mappingEyebrow} tabs={tabs}>
+      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <TabStrip tabs={MESSY_TABS} activeKey="accounts" />
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+          <KpiBox value={unclear.length} unit="count" label="Unclear accounts" tooltip="QB accounts with no USALI mapping yet — fall into 'Other / unmapped' on the P&L. Investigate weekly." />
+          <KpiBox value={overridden.length} unit="count" label="Overridden"      tooltip="Accounts with a manual USALI override (preserved across re-syncs)." />
+          <KpiBox value={standard.length} unit="count" label="Standard"          tooltip="Accounts mapped via the standard rule set in gl.account_mapping_rules." />
+          <KpiBox value={total} unit="count" label="Total accounts"              tooltip="All QB accounts active in the chart of accounts." />
+          <KpiBox value={coveragePct} unit="pct" label="USALI coverage"          tooltip="(total − unclear) ÷ total × 100." />
+          <KpiBox value={unclearTotal} unit="usd" label="Unclear $ exposure"     tooltip="Σ |usd_total| across unclear accounts — money landing on 'Other / unmapped' until classified." />
         </div>
-      )}
-      {overridden.length > 0 && (
-        <div style={{ marginTop: 18 }}>
-          <SectionHead title="Already overridden" emphasis={`${overridden.length}`} sub="Editable" source="gl.account_class_override" />
-          <MappingTable rows={overridden} classes={classes} mode="overridden" />
+
+        {unclear.length > 0 && (
+          <div>
+            <SectionHead title="Needs your attention" emphasis={`${unclear.length} accounts`} sub="Pick a class · Save updates every gl_entry · refreshes mv_usali_pl_monthly" source="gl.v_account_class_status" />
+            <MappingTable rows={unclear} classes={classes} mode="unclear" />
+          </div>
+        )}
+        {overridden.length > 0 && (
+          <div>
+            <SectionHead title="Already overridden" emphasis={`${overridden.length}`} sub="Editable" source="gl.account_class_override" />
+            <MappingTable rows={overridden} classes={classes} mode="overridden" />
+          </div>
+        )}
+        <div>
+          <SectionHead title="Standard mappings" emphasis={`${standard.length}`} sub="QB-classified · expand to view" />
+          <details style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '10px 14px' }}>
+            <summary style={{ cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--ink-soft)', fontWeight: 600 }}>
+              Show {standard.length} accounts
+            </summary>
+            <div style={{ marginTop: 10 }}><MappingTable rows={standard} classes={classes} mode="standard" /></div>
+          </details>
         </div>
-      )}
-      <div style={{ marginTop: 18 }}>
-        <SectionHead title="Standard mappings" emphasis={`${standard.length}`} sub="QB-classified · expand to view" />
-        <details style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '10px 14px' }}>
-          <summary style={{ cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--ink-soft)', fontWeight: 600 }}>
-            Show {standard.length} accounts
-          </summary>
-          <div style={{ marginTop: 10 }}><MappingTable rows={standard} classes={classes} mode="standard" /></div>
-        </details>
       </div>
-    </Page>
+    </DashboardPage>
   );
 }
