@@ -164,6 +164,10 @@ export interface DashboardPageProps {
   tabs?: DashboardTab[];
   action?: ReactNode;
   children: ReactNode;
+  /** PBS #157 — extra context for the HeaderPills date-hover popover. */
+  kpiTiles?: Array<{ k: string; v: string; d: string }>;
+  /** PBS #157 — hide the temp + AQ pills (holding scope). Default false. */
+  hideWeather?: boolean;
 }
 
 export interface MetricRowProps {
