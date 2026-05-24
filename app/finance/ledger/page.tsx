@@ -1,13 +1,13 @@
-// app/finance/ledger/page.tsx
-// PBS 2026-05-15: 3 tabs · Receivables + Deposits + House Accounts. Each tab
-// gets its own controller-relevant KPI band and drillable table(s).
-// Tab state lives in ?tab=receivables|deposits|house_accounts so links share.
+// app/finance/ledger/page.tsx — PBS #205 v2 (2026-05-25)
+// Full primitive adoption: DashboardPage + Container per section + KpiTile.
+// 3 tabs (Receivables · Deposits · House accounts) preserved via ?tab=.
+// Old <Page>/<Panel>/<KpiBox> chrome dropped.
 
 import Link from 'next/link';
-import Page from '@/components/page/Page';
-import Panel from '@/components/page/Panel';
+import {
+  DashboardPage, Container, KpiTile, type KpiTileProps,
+} from '@/app/(cockpit)/_design';
 import { FINANCE_SUBPAGES } from '../_subpages';
-import KpiBox from '@/components/kpi/KpiBox';
 import { getAgedAr } from '@/lib/data';
 import { getDepositsPipeline, type DepositRow } from '@/lib/data-deposits';
 import { getHouseAccountsView } from '@/lib/data-house-accounts';
@@ -21,8 +21,6 @@ import {
 } from './_components/LedgerDrawerHost';
 import DepositsSection from './_components/DepositsSection';
 import HouseAccountsSection from './_components/HouseAccountsSection';
-// PBS 2026-05-15: Bank tab moved to /finance/banks (CFO page). Ledger keeps
-// guest-side ledgers only (receivables · deposits · house accounts).
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -31,6 +29,8 @@ type Tab = 'receivables' | 'deposits' | 'house_accounts';
 
 interface Props { searchParams: Record<string, string | string[] | undefined>; }
 
+const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
+
 export default async function LedgerPage({ searchParams }: Props) {
   const tabParam = (searchParams.tab as string) ?? '';
   const tab: Tab =
@@ -38,8 +38,6 @@ export default async function LedgerPage({ searchParams }: Props) {
     tabParam === 'house_accounts' ? 'house_accounts' :
     'receivables';
 
-  // Fetch all three feeds in parallel so the eyebrow + KPI math is consistent
-  // and tab switching doesn't flash empty.
   const [aged, deposits, houseView] = await Promise.all([
     getAgedAr().catch(() => []) as Promise<AgedRowWithContact[]>,
     getDepositsPipeline().catch(() => []) as Promise<DepositRow[]>,
@@ -90,7 +88,7 @@ export default async function LedgerPage({ searchParams }: Props) {
     ? Math.round(depositsHeld / deposits.filter((r) => Number(r.paid_amount) > 0).length)
     : 0;
 
-  // In-house (still goes on Receivables tab)
+  // In-house
   const sb = getSupabaseAdmin();
   const { data: inHouseRows } = await sb
     .from('reservations')
@@ -102,7 +100,6 @@ export default async function LedgerPage({ searchParams }: Props) {
     (s: number, r: { balance: number | null }) => s + Number(r.balance || 0), 0,
   );
 
-  // Email coverage diagnostics (honest "why missing" for the inbox)
   const arEmailMissing = aged.filter((r) => !r.guest_email).length;
   const depEmailMissing = deposits.filter((r) => !r.guest_email).length;
 
@@ -110,169 +107,173 @@ export default async function LedgerPage({ searchParams }: Props) {
     tab === 'deposits' ? 'Deposits' :
     tab === 'house_accounts' ? 'House accounts' :
     'Receivables';
-  const eyebrow = [
-    'Finance · Ledger',
-    `Tab: ${tabLabel}`,
+
+  const subtitle =
     tab === 'deposits'
       ? `${deposits.length} future bookings · held ${fmtMoney(depositsHeld, 'USD')} · due ${fmtMoney(depositsDue, 'USD')}`
       : tab === 'house_accounts'
       ? `${houseView.stats.active_named} active named · ${houseView.stats.walkin_30d} walk-ins · 30d`
-      : `${aged.length} receivables · ${fmtMoney(totalAr, 'USD')} open · ${n90} in 90+`,
-  ].join(' · ');
+      : `${aged.length} receivables · ${fmtMoney(totalAr, 'USD')} open · ${n90} in 90+`;
+
+  const tabs = FINANCE_SUBPAGES.map((s) => ({
+    key: s.href, label: s.label, href: s.href,
+    active: s.href === '/finance/ledger',
+  }));
+
+  const recvTiles: KpiTileProps[] = [
+    { label: 'Total open AR', value: Math.round(totalAr), currency: 'USD', size: 'sm', status: totalAr > 0 ? 'amber' : 'green' },
+    { label: '0–30d', value: Math.round(ar0_30), currency: 'USD', size: 'sm' },
+    { label: '31–60d', value: Math.round(ar31_60), currency: 'USD', size: 'sm', status: ar31_60 > 0 ? 'amber' : 'green' },
+    { label: '61–90d', value: Math.round(ar61_90), currency: 'USD', size: 'sm', status: ar61_90 > 0 ? 'amber' : 'green' },
+    { label: `90+ · ${n90} resv`, value: Math.round(ar90), currency: 'USD', size: 'sm', status: ar90 > 0 ? 'red' : 'green' },
+    { label: 'Largest unpaid', value: Math.round(largestUnpaid), currency: 'USD', size: 'sm' },
+    { label: 'Avg days overdue', value: avgDaysOverdue, size: 'sm' },
+    { label: 'In-house guests', value: inHouseCount, size: 'sm' },
+    { label: 'In-house balance', value: Math.round(inHouseBalance), currency: 'USD', size: 'sm' },
+  ];
+  const depTiles: KpiTileProps[] = [
+    { label: 'Held', value: Math.round(depositsHeld), currency: 'USD', size: 'sm', status: 'green' },
+    { label: 'Due', value: Math.round(depositsDue), currency: 'USD', size: 'sm', status: depositsDue > 0 ? 'amber' : 'green' },
+    { label: `Overdue ≤7d · ${overdue7d}`, value: Math.round(overdue7dUsd), currency: 'USD', size: 'sm', status: overdue7dUsd > 0 ? 'red' : 'green' },
+    { label: 'Future bookings', value: deposits.length, size: 'sm' },
+    { label: 'Arriving ≤30d', value: arriving30d, size: 'sm' },
+    { label: 'No deposit ≤30d', value: noDeposit30d, size: 'sm', status: noDeposit30d > 0 ? 'amber' : 'green' },
+    { label: 'Largest pending', value: Math.round(largestPending), currency: 'USD', size: 'sm' },
+    { label: 'Avg deposit', value: avgDeposit, currency: 'USD', size: 'sm' },
+  ];
 
   return (
-    <Page
-      eyebrow={eyebrow}
-      title={<>Who <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>owes</em> you, and who's about to.</>}
-      subPages={FINANCE_SUBPAGES}
-    >
-      {/* ─── Tab strip ─────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--paper-deep)', marginBottom: 12 }}>
-        <TabLink href="/finance/ledger?tab=receivables" active={tab === 'receivables'}>
-          Receivables · {aged.length} resv
-        </TabLink>
-        <TabLink href="/finance/ledger?tab=deposits" active={tab === 'deposits'}>
-          Deposits · {deposits.length} bookings
-        </TabLink>
-        <TabLink href="/finance/ledger?tab=house_accounts" active={tab === 'house_accounts'}>
-          House accounts · {houseView.stats.active_named} active named
-        </TabLink>
+    <DashboardPage title="Ledger" subtitle={subtitle} tabs={tabs}>
+      {/* Sub-tab strip — kept as a slim inline strip inside the page body */}
+      <div style={fullRow}>
+        <div style={{ display: 'flex', gap: 6, borderBottom: '1px solid var(--ink-soft, #d4d4d8)' }}>
+          <TabLink href="/finance/ledger?tab=receivables" active={tab === 'receivables'}>
+            Receivables · {aged.length}
+          </TabLink>
+          <TabLink href="/finance/ledger?tab=deposits" active={tab === 'deposits'}>
+            Deposits · {deposits.length}
+          </TabLink>
+          <TabLink href="/finance/ledger?tab=house_accounts" active={tab === 'house_accounts'}>
+            House accounts · {houseView.stats.active_named}
+          </TabLink>
+        </div>
       </div>
 
       {tab === 'receivables' && (
         <>
-          {/* ── Receivables KPIs ─────────────────────────────────── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
-            <KpiBox value={totalAr}        unit="usd"   label="Total open AR"          tooltip="Sum of open balances across all checked-out unpaid reservations." />
-            <KpiBox value={ar0_30}         unit="usd"   label="0–30 days"              tooltip="AR within the standard collection window." />
-            <KpiBox value={ar31_60}        unit="usd"   label="31–60 days"             tooltip="AR aging into amber — chase actively." />
-            <KpiBox value={ar61_90}        unit="usd"   label="61–90 days"             tooltip="AR aging into red — escalate." />
-            <KpiBox value={ar90}           unit="usd"   label={`90+ days · ${n90} resv`} tooltip="The collection priority." />
-            <KpiBox value={largestUnpaid}  unit="usd"   label="Largest single unpaid"  tooltip="Work this row first." />
-            <KpiBox value={avgDaysOverdue} unit="count" label="Avg days overdue"       tooltip="Average age of unpaid AR." />
-            <KpiBox value={inHouseCount}   unit="count" label="In-house guests"        tooltip="Reservations currently checked-in." />
-            <KpiBox value={inHouseBalance} unit="usd"   label="In-house balance"       tooltip="Sum of open balance for in-house guests." />
+          <div style={fullRow}>
+            <Container title="Receivables · headline" subtitle="aged buckets · in-house balance" density="compact">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
+                {recvTiles.map((t, i) => <KpiTile key={i} {...t} />)}
+              </div>
+            </Container>
           </div>
 
-          {/* ── AR aging chart ──────────────────────────────────── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 12, marginTop: 12 }}>
-            <AgedArChart rows={aged as never} title="AR aging" sub="Open balance per bucket · v_aged_ar_with_contact" />
+          <div style={fullRow}>
+            <Container title="AR aging" subtitle="open balance per bucket · v_aged_ar_with_contact" density="compact">
+              <AgedArChart rows={aged as never} title="" sub="" />
+            </Container>
           </div>
 
-          {/* ── Email-coverage callout ──────────────────────────── */}
           {arEmailMissing > 0 && (
-            <EmailCoverageBanner missing={arEmailMissing} total={aged.length} cohort="aged receivables" />
+            <div style={fullRow}>
+              <EmailCoverageBanner missing={arEmailMissing} total={aged.length} cohort="aged receivables" />
+            </div>
           )}
 
-          {/* ── Tables ──────────────────────────────────────────── */}
-          <Panel
-            title={`Aged receivables · ${aged.length} resv · ${fmtMoney(totalAr, 'USD')}`}
-            eyebrow="Click any guest name to open the contact drawer · send reminder · verify via fc@thenamkhan.com"
-            expandable
-          >
-            <div style={{ padding: 12 }}>
+          <div style={fullRow}>
+            <Container
+              title={`Aged receivables · ${aged.length} resv · ${fmtMoney(totalAr, 'USD')}`}
+              subtitle="click a guest name to open the contact drawer · send reminder · verify via fc@thenamkhan.com"
+              density="compact"
+            >
               <AgedArSection rows={aged} />
-            </div>
-          </Panel>
+            </Container>
+          </div>
         </>
       )}
 
       {tab === 'deposits' && (
         <>
-          {/* ── Deposits KPIs ────────────────────────────────────── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
-            <KpiBox value={depositsHeld}     unit="usd"   label="Deposits held"          tooltip="Σ paid_amount on confirmed future arrivals — pipeline cash already collected." />
-            <KpiBox value={depositsDue}      unit="usd"   label="Deposits due"           tooltip="Σ balance on confirmed future arrivals — what's still outstanding." />
-            <KpiBox value={overdue7dUsd}     unit="usd"   label={`Overdue · ≤7d · ${overdue7d}`} tooltip="Balance still due on bookings arriving within 7 days. Chase now." />
-            <KpiBox value={deposits.length}  unit="count" label="Future bookings"        tooltip="All future-confirmed reservations with paid_amount > 0 or balance > 0." />
-            <KpiBox value={arriving30d}      unit="count" label="Arriving ≤30d"          tooltip="Bookings arriving in the next 30 days." />
-            <KpiBox value={noDeposit30d}     unit="count" label="No deposit · ≤30d"      tooltip="Confirmed bookings arriving in 30 days with paid_amount = 0 — collection risk." />
-            <KpiBox value={largestPending}   unit="usd"   label="Largest pending"        tooltip="Biggest single outstanding deposit." />
-            <KpiBox value={avgDeposit}       unit="usd"   label="Avg deposit · per booking" tooltip="Average paid_amount across bookings that have deposit > 0." />
+          <div style={fullRow}>
+            <Container title="Deposits · headline" subtitle="pipeline cash · arrivals window" density="compact">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
+                {depTiles.map((t, i) => <KpiTile key={i} {...t} />)}
+              </div>
+            </Container>
           </div>
 
-          {/* ── Email-coverage callout ──────────────────────────── */}
           {depEmailMissing > 0 && (
-            <EmailCoverageBanner missing={depEmailMissing} total={deposits.length} cohort="future bookings" />
+            <div style={fullRow}>
+              <EmailCoverageBanner missing={depEmailMissing} total={deposits.length} cohort="future bookings" />
+            </div>
           )}
 
-          <Panel
-            title={`Deposit pipeline · ${deposits.length} future bookings`}
-            eyebrow="Click any guest name for the drawer · send reminder · verify via fc@thenamkhan.com"
-            expandable
-          >
-            <div style={{ padding: 12 }}>
+          <div style={fullRow}>
+            <Container
+              title={`Deposit pipeline · ${deposits.length} future bookings`}
+              subtitle="click a guest name for the drawer · send reminder · verify via fc@thenamkhan.com"
+              density="compact"
+            >
               <DepositsSection rows={deposits as DepositRow[]} />
-            </div>
-          </Panel>
+            </Container>
+          </div>
         </>
       )}
 
       {tab === 'house_accounts' && (
-        <HouseAccountsSection
-          named={houseView.named}
-          walkin={houseView.walkin}
-          stats={houseView.stats}
-          posByHa={houseView.posByHa}
-          propertyId={PROPERTY_ID}
-        />
+        <div style={fullRow}>
+          <HouseAccountsSection
+            named={houseView.named}
+            walkin={houseView.walkin}
+            stats={houseView.stats}
+            posByHa={houseView.posByHa}
+            propertyId={PROPERTY_ID}
+          />
+        </div>
       )}
-    </Page>
+    </DashboardPage>
   );
 }
 
-// ─── Email coverage banner ─────────────────────────────────────────────
-// Honest explanation of WHY we sometimes show no email + workaround.
-function EmailCoverageBanner({
-  missing, total, cohort,
-}: { missing: number; total: number; cohort: string }) {
+function EmailCoverageBanner({ missing, total, cohort }: { missing: number; total: number; cohort: string }) {
   const pct = total ? Math.round((missing / total) * 100) : 0;
   return (
-    <div
-      style={{
-        margin: '12px 0',
-        padding: '10px 12px',
-        fontSize: 'var(--t-xs)',
-        color: 'var(--ink-soft)',
-        background: 'var(--paper-warm)',
-        border: '1px solid var(--paper-deep)',
-        borderLeft: '3px solid var(--st-warn, #C28F2C)',
-        borderRadius: 6,
-      }}
-    >
-      <strong style={{ color: 'var(--st-warn, #C28F2C)' }}>
+    <div style={{
+      padding: '10px 12px',
+      fontSize: 12,
+      color: 'var(--ink-soft, #5a5a5a)',
+      background: 'rgba(194,143,44,0.06)',
+      border: '1px solid rgba(194,143,44,0.25)',
+      borderLeft: '3px solid #C28F2C',
+      borderRadius: 6,
+      lineHeight: 1.5,
+    }}>
+      <strong style={{ color: '#C28F2C' }}>
         Email missing on {missing} of {total} {cohort} ({pct}%)
-      </strong>
-      {' — '}
-      this is an <em>ETL lag</em>, not "no email in PMS". PMS&apos; reservation list
-      endpoint doesn&apos;t return email; the per-guest detail endpoint does, but our ETL runs that
-      with a ~90-day lag (recent {'<'} 90d: ~3% coverage; older {'>'} 90d: ~92%). OTA bookings
-      additionally use proxy addresses (<code>xxx@guest.booking.com</code>) that aren&apos;t fetched
-      pre-arrival. <strong>Workaround:</strong> click the reservation # to open PMS directly
-      and copy the address. <strong>Real fix:</strong> extend ETL to call
-      <code> getGuestList</code> on every confirmed/in-house reservation, not just stays older
-      than 90 days.
+      </strong>{' — '}
+      ETL lag, not "no email in PMS". The reservation list endpoint doesn't return email; the per-guest detail
+      endpoint does but runs with a ~90-day lag (recent &lt;90d ≈ 3% coverage; older &gt;90d ≈ 92%). OTA bookings
+      use proxy addresses (<code>xxx@guest.booking.com</code>). <strong>Workaround:</strong> click the reservation #
+      to open PMS and copy. <strong>Real fix:</strong> extend ETL to call <code>getGuestList</code> on every
+      confirmed/in-house reservation.
     </div>
   );
 }
 
 function TabLink({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
   return (
-    <Link
-      href={href}
-      style={{
-        padding: '10px 20px',
-        fontFamily: 'var(--mono)',
-        fontSize: 'var(--t-xs)',
-        letterSpacing: 'var(--ls-extra)',
-        textTransform: 'uppercase',
-        textDecoration: 'none',
-        fontWeight: active ? 700 : 500,
-        color: active ? 'var(--brass)' : 'var(--ink-soft)',
-        borderBottom: active ? '2px solid var(--brass)' : '2px solid transparent',
-        marginBottom: -1,
-      }}
-    >
+    <Link href={href} style={{
+      padding: '10px 16px',
+      fontSize: 11,
+      letterSpacing: '0.06em',
+      textTransform: 'uppercase',
+      textDecoration: 'none',
+      fontWeight: active ? 700 : 500,
+      color: active ? 'var(--ink, #1b1b1b)' : 'var(--ink-soft, #5a5a5a)',
+      borderBottom: active ? '2px solid var(--ink, #1b1b1b)' : '2px solid transparent',
+      marginBottom: -1,
+    }}>
       {children}
     </Link>
   );
