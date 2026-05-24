@@ -577,7 +577,7 @@ export default async function PnLPage({ searchParams }: Props) {
 
       {/* ─── 3. GRAPHS ──────────────────────────────────────────────── */}
 
-      <Container title={`Top variances · ${VAR_LABEL[varianceBase]}`} eyebrow="v_usali_dept_summary">
+      <Container title={`Top variances · ${VAR_LABEL[varianceBase]}`} subtitle="v_usali_dept_summary">
         <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
           {(['mom', 'budget', 'forecast', 'ly'] as const).map((b) => {
             const active = varianceBase === b;
@@ -722,7 +722,7 @@ export default async function PnLPage({ searchParams }: Props) {
 
         return (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
-            <Container title="GOP trend · 12mo" eyebrow={`${tPeriods[0]} → ${tPeriods[tPeriods.length - 1]} · hover for value`}>
+            <Container title="GOP trend · 12mo" subtitle={`${tPeriods[0]} → ${tPeriods[tPeriods.length - 1]} · hover for value`}>
               <div dangerouslySetInnerHTML={{ __html: gopTrendSvg(gopPts) }} />
             </Container>
             <Container
@@ -763,7 +763,7 @@ export default async function PnLPage({ searchParams }: Props) {
 
       <div style={{ height: 14 }} />
 
-      <Container title={`Variance commentary · ${cur}`} eyebrow={latestCommentary ? 'LLM draft' : 'auto-draft'}>
+      <Container title={`Variance commentary · ${cur}`} subtitle={latestCommentary ? 'LLM draft' : 'auto-draft'}>
         <CommentaryPanel
           period={cur}
           draftBody={latestCommentary?.body ?? null}
@@ -830,13 +830,13 @@ export default async function PnLPage({ searchParams }: Props) {
 
       {/* PBS 2026-05-15: prior-year rollup first, then current year — CFO
           reads "where we came from" before "where we are". */}
-      <Container title="12-month rollup · FY2025" eyebrow="actual · budget · ly (FY2024) · closed prior year">
+      <Container title="12-month rollup · FY2025" subtitle="actual · budget · ly (FY2024) · closed prior year">
         <TwelveMonthPanel rows={twelveMonth2025} fy={fy2025} />
       </Container>
 
       <div style={{ height: 14 }} />
 
-      <Container title="12-month rollup · FY2026" eyebrow="actual · budget · forecast · ly">
+      <Container title="12-month rollup · FY2026" subtitle="actual · budget · forecast · ly">
         <TwelveMonthPanel rows={twelveMonth} fy={fy2026} demand={demandFy} />
       </Container>
 
