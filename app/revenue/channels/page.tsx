@@ -154,6 +154,15 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
     const qs = p.toString();
     return `${basePath}${qs ? '?' + qs : ''}`;
   };
+  const drillHrefFor = (source: string) => {
+    const p = new URLSearchParams();
+    if (period.win !== '30d') p.set('win', period.win);
+    if (period.cmp && period.cmp !== 'none') p.set('cmp', period.cmp);
+    if (activeTab !== 'direct') p.set('tab', activeTab);
+    p.set('drill', source);
+    return `${basePath}?${p.toString()}`;
+  };
+
   const tabHrefFor = (newTab: Category) => {
     const p = new URLSearchParams();
     if (period.win !== '30d') p.set('win', period.win);
@@ -213,9 +222,9 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
         </Container>
       )}
 
-      {activeTab === 'direct' && <CategoryBlock category="direct" rows={byCat.direct as unknown as Array<Record<string, unknown>>} cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'direct')} mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'direct')} moneyCurrency={moneyCurrency} />}
-      {activeTab === 'ota'    && <CategoryBlock category="ota"    rows={byCat.ota as unknown as Array<Record<string, unknown>>}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'ota')}    mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'ota')} moneyCurrency={moneyCurrency} />}
-      {activeTab === 'dmc'    && <CategoryBlock category="dmc"    rows={byCat.dmc as unknown as Array<Record<string, unknown>>}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'dmc')}    mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'dmc')} moneyCurrency="USD" />}
+      {activeTab === 'direct' && <CategoryBlock category="direct" rows={byCat.direct as unknown as Array<Record<string, unknown>>} cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'direct')} mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'direct')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} />}
+      {activeTab === 'ota'    && <CategoryBlock category="ota"    rows={byCat.ota as unknown as Array<Record<string, unknown>>}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'ota')}    mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'ota')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} />}
+      {activeTab === 'dmc'    && <CategoryBlock category="dmc"    rows={byCat.dmc as unknown as Array<Record<string, unknown>>}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'dmc')}    mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'dmc')} drillHrefFor={drillHrefFor} moneyCurrency="USD" />}
 
       {/* note#13: full-screen-expandable sources table (data fetched at top via sourcesAllYears) */}
       <div style={{ gridColumn: '1 / -1' }}>
@@ -264,7 +273,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
 
 // ─── per-category block ──────────────────────────────────────────────────────
 function CategoryBlock({
-  category, rows, cmpRows, mixWeekly, velocity, period, totalRev, netValue, moneyCurrency,
+  category, rows, cmpRows, mixWeekly, velocity, period, totalRev, netValue, moneyCurrency, drillHrefFor,
 }: {
   category: Category;
   rows: Array<Record<string, unknown>>;
@@ -275,6 +284,7 @@ function CategoryBlock({
   totalRev: number;
   netValue: Array<Record<string, unknown>>;
   moneyCurrency: 'USD' | 'EUR';
+  drillHrefFor: (source: string) => string;
 }) {
   const bookings = rows.reduce((s, c) => s + Number(c.bookings || 0), 0);
   const revenue  = rows.reduce((s, c) => s + Number(c.gross_revenue || 0), 0);
@@ -431,11 +441,35 @@ function CategoryBlock({
         </div>
       )}
 
-      {/* Table */}
+      {/* Table — PBS #199: source-name cell is a Link → ?drill=<source> opens ChannelDrillDrawer (mounted at page bottom) */}
       <div style={fullRow}>
-        <Container title={`${titleOf[category]} · all sources`} subtitle={`${rows.length} sources · sorted by bookings`}>
-          <Chart variant="table" data={tableRows} xKey="source" series={tableCols}
-            empty={{ title: 'No sources in this category for the window' }} />
+        <Container title={`${titleOf[category]} · all sources`} subtitle={`${rows.length} sources · sorted by bookings · click a source to open the drawer`}>
+          {tableRows.length === 0 ? (
+            <div style={{ padding: 16, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>No sources in this category for the window</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: 'var(--bg, #F4EFE2)', textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: 10, color: 'var(--ink-soft, #5A5A5A)' }}>
+                    <th style={thStyle}>Source</th>
+                    {tableCols.map((c) => <th key={c.key} style={{ ...thStyle, textAlign: 'right' }}>{c.label}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {tableRows.map((r, i) => (
+                    <tr key={i} style={{ borderTop: '1px solid var(--hairline, #E6DFCC)' }}>
+                      <td style={tdLabelStyle}>
+                        <Link href={drillHrefFor(r.source)} style={sourceLinkStyle}>{r.source}</Link>
+                      </td>
+                      {tableCols.map((c) => (
+                        <td key={c.key} style={tdNumStyle}>{String((r as Record<string, unknown>)[c.key] ?? '—')}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Container>
       </div>
 
@@ -474,6 +508,11 @@ const pillStyle = (active: boolean): React.CSSProperties => ({
   color: active ? '#FFFFFF' : 'var(--ink-soft, #5A5A5A)',
   fontWeight: active ? 600 : 500, textDecoration: 'none',
 });
+const thStyle: React.CSSProperties = { textAlign: 'left', padding: '8px 10px', fontWeight: 600 };
+const tdLabelStyle: React.CSSProperties = { padding: '8px 10px', color: 'var(--ink, #1B1B1B)', fontWeight: 500 };
+const tdNumStyle: React.CSSProperties = { padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--mono, "JetBrains Mono", ui-monospace, monospace)', color: 'var(--ink, #1B1B1B)' };
+const sourceLinkStyle: React.CSSProperties = { color: 'var(--primary, #1F3A2E)', textDecoration: 'none', fontWeight: 600, cursor: 'pointer' };
+
 const chipStyle: React.CSSProperties = {
   fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase',
   padding: '4px 10px', borderRadius: 4,
