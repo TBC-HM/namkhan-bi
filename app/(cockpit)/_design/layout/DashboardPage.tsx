@@ -11,18 +11,30 @@
 // A tab whose label is "HoD" is rendered as a left-aligned "← HoD" breadcrumb,
 // not as one of the equal sibling tabs. This enforces the hierarchy: HoD is the
 // landing page; everything else is a sub-section under it.
+//
+// 2026-05-24 (PBS #157): HeaderPills (temp · AQ · date · user) restored on the
+// new shell. The legacy <Page> shell auto-renders HeaderPills, so marketing /
+// operations / sales had the strip. The new <DashboardPage> shell never did,
+// so the Revenue area lost the strip when it migrated to primitives. We now
+// render HeaderPills inside the stickyTop block, one row above the page title,
+// matching "one line below the main menu" placement.
 
 'use client';
 
 import type { CSSProperties, ReactNode } from 'react';
 import type { DashboardPageProps, DashboardTab } from '../types';
+import HeaderPills from '@/components/page/HeaderPills';
 import '../internal/tokens.css';
 
 export default function DashboardPage(props: DashboardPageProps) {
-  const { title, subtitle, tabs, action, children } = props;
+  const { title, subtitle, tabs, action, children, kpiTiles, hideWeather } = props;
   return (
     <div className="cockpit-design" style={S.shell}>
       <div style={S.stickyTop}>
+        {/* PBS #157 — temp / AQ / date / user line, just below TopDeptStrip. */}
+        <div style={S.pillsRow}>
+          <HeaderPills kpiTiles={kpiTiles} hideWeather={hideWeather} />
+        </div>
         <header style={S.topBar}>
           <div style={S.titleStack}>
             <h1 style={S.title}>{title}</h1>
@@ -100,6 +112,13 @@ const S: Record<string, CSSProperties> = {
     flexDirection: 'column',
     gap: 12,
     borderBottom: '1px solid var(--hairline, #E6DFCC)',
+  },
+  pillsRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+    minHeight: 28,
   },
   topBar: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' },
   titleStack: { display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 },
