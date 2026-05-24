@@ -1,7 +1,7 @@
 // app/operations/page.tsx
-import DeptEntry from '@/components/dept-entry/DeptEntry';
-import { DEPT_CFG } from '@/lib/dept-cfg';
-
+// PBS #204 — Operations HoD landing on shared primitive.
+import HodLanding from '@/app/_components/HodLanding';
+export const dynamic = 'force-dynamic';
 export default function OperationsPage() {
-  return <DeptEntry cfg={DEPT_CFG.operations} />;
+  return <HodLanding slug="operations" />;
 }
