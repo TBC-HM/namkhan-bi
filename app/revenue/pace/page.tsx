@@ -23,10 +23,12 @@ import {
   type DashboardTab,
   type KpiTileProps,
 } from '@/app/(cockpit)/_design';
+import Link from 'next/link';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import { resolvePeriod, type WindowKey } from '@/lib/period';
 import { capacityFor, capacityRnRange } from '@/lib/capacity';
 import { getPaceCurve } from '@/lib/pulseData';
+import { getPaceOtb } from '@/lib/data';
 import { REVENUE_SUBPAGES } from '../_subpages';
 
 export const dynamic = 'force-dynamic';
@@ -169,11 +171,18 @@ export default async function PacePage({
   const fromIso = period.from;
   const toIso = period.to;
 
-  const [rows, stlyMap, paceCurveRaw] = await Promise.all([
+  // PBS #200: pull totals from the same source /demand uses (mv_pace_otb via getPaceOtb) so the KPI tile MATCHES /demand's "OTB Revenue".
+  const [rows, stlyMap, paceCurveRaw, demandRows] = await Promise.all([
     getPace(fromIso, toIso, pid),
     getStlyActuals(fromIso, toIso, pid),
     getPaceCurve(30, 30, pid).catch(() => []),
+    getPaceOtb(period, pid).catch(() => [] as Array<Record<string, unknown>>),
   ]);
+  // Aggregate /demand-equivalent totals (ci_month grain)
+  const demandTotal = (demandRows as Array<{ otb_roomnights: number; otb_revenue: number; stly_roomnights: number; stly_revenue: number }>).reduce(
+    (s, r) => ({ otb: s.otb + Number(r.otb_roomnights || 0), rev: s.rev + Number(r.otb_revenue || 0), stly: s.stly + Number(r.stly_roomnights || 0), stlyRev: s.stlyRev + Number(r.stly_revenue || 0) }),
+    { otb: 0, rev: 0, stly: 0, stlyRev: 0 },
+  );
 
   const totalRns = rows.reduce((s, r) => s + (Number(r.confirmed_rooms) || 0), 0);
   const totalRev = rows.reduce((s, r) => s + (Number(r.confirmed_revenue) || 0), 0);
@@ -194,30 +203,41 @@ export default async function PacePage({
   const stlyAdr = stlyRnTotal > 0 ? stlyRevTotal / stlyRnTotal : 0;
   const stlyOcc = capacityRn > 0 ? (stlyRnTotal / capacityRn) * 100 : 0;
 
+  // PBS #200: KPI tiles use the SAME totals as /demand (mv_pace_otb via getPaceOtb) — same OTB Revenue number across the two pages.
+  const tileRns  = demandTotal.otb;
+  const tileRev  = demandTotal.rev;
+  const tileStly = demandTotal.stly;
+  const tileStlyRev = demandTotal.stlyRev;
+  const tileAdr  = tileRns > 0 ? tileRev / tileRns : 0;
+  const tileStlyAdr = tileStly > 0 ? tileStlyRev / tileStly : 0;
+  const tileOcc  = capacityRn > 0 ? (tileRns / capacityRn) * 100 : 0;
+  const tileStlyOcc = capacityRn > 0 ? (tileStly / capacityRn) * 100 : 0;
+  const tileStlyPct = tileStly > 0 ? (tileRns / tileStly) * 100 : 0;
   const tiles: KpiTileProps[] = [
     {
-      label: 'OTB Room Nights', value: totalRns, size: 'sm',
-      delta: cmpActive ? { value: pctChange(totalRns, stlyRnTotal), period: cmpLabel,
-        direction: totalRns >= stlyRnTotal ? 'up' : 'down' } : undefined,
-      footnote: 'v_otb_pace',
+      label: 'OTB Room Nights', value: tileRns, size: 'sm',
+      delta: cmpActive && tileStly > 0 ? { value: pctChange(tileRns, tileStly), period: cmpLabel,
+        direction: tileRns >= tileStly ? 'up' : 'down' } : undefined,
+      footnote: 'mv_pace_otb · matches /demand',
     },
     {
-      label: 'OTB Revenue', value: totalRev, currency: 'USD', size: 'sm',
-      delta: cmpActive ? { value: pctChange(totalRev, stlyRevTotal), period: cmpLabel,
-        direction: totalRev >= stlyRevTotal ? 'up' : 'down' } : undefined,
+      label: 'OTB Revenue', value: tileRev, currency: 'USD', size: 'sm',
+      delta: cmpActive && tileStlyRev > 0 ? { value: pctChange(tileRev, tileStlyRev), period: cmpLabel,
+        direction: tileRev >= tileStlyRev ? 'up' : 'down' } : undefined,
+      footnote: 'matches /demand',
     },
     {
-      label: 'OTB ADR', value: Math.round(adr), currency: 'USD', size: 'sm',
-      delta: cmpActive && stlyAdr > 0 ? { value: pctChange(adr, stlyAdr), period: cmpLabel,
-        direction: adr >= stlyAdr ? 'up' : 'down' } : undefined,
+      label: 'OTB ADR', value: Math.round(tileAdr), currency: 'USD', size: 'sm',
+      delta: cmpActive && tileStlyAdr > 0 ? { value: pctChange(tileAdr, tileStlyAdr), period: cmpLabel,
+        direction: tileAdr >= tileStlyAdr ? 'up' : 'down' } : undefined,
     },
     {
-      label: 'OTB Occupancy', value: `${occ.toFixed(1)}%`, size: 'sm',
-      delta: cmpActive ? { value: occ - stlyOcc, period: cmpLabel,
-        direction: occ >= stlyOcc ? 'up' : 'down' } : undefined,
+      label: 'OTB Occupancy', value: `${tileOcc.toFixed(1)}%`, size: 'sm',
+      delta: cmpActive && tileStly > 0 ? { value: tileOcc - tileStlyOcc, period: cmpLabel,
+        direction: tileOcc >= tileStlyOcc ? 'up' : 'down' } : undefined,
     },
-    { label: 'Cancel Rate', value: `${cxlRate.toFixed(1)}%`, size: 'sm', footnote: 'cancelled / total reservations' },
-    { label: 'vs STLY', value: `${stlyPctOverall.toFixed(0)}%`, size: 'sm', status: stlyPctOverall >= 100 ? 'green' : stlyPctOverall >= 80 ? 'amber' : 'red' },
+    { label: 'Cancel Rate', value: `${cxlRate.toFixed(1)}%`, size: 'sm', footnote: 'cancelled / total reservations · v_otb_pace' },
+    { label: 'vs STLY', value: `${tileStlyPct.toFixed(0)}%`, size: 'sm', status: tileStlyPct >= 100 ? 'green' : tileStlyPct >= 80 ? 'amber' : 'red' },
   ];
 
   // ─── data prep (no functions cross server→client boundary) ─────────────
@@ -371,7 +391,7 @@ function ControlGroup({ label, children }: { label: string; children: React.Reac
 
 function PillLink({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
   return (
-    <a
+    <Link
       href={href}
       style={{
         fontFamily: 'inherit',
@@ -388,6 +408,6 @@ function PillLink({ href, active, children }: { href: string; active: boolean; c
       }}
     >
       {children}
-    </a>
+    </Link>
   );
 }
