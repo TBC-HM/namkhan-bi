@@ -22,7 +22,8 @@ const CANONICAL_DEPTS: DeptLink[] = [
   { label: 'Operations', slug: 'operations' },
   { label: 'Finance',    slug: 'finance'    },
   { label: 'Guest',      slug: 'guest'      },
-  { label: 'IT',         slug: 'it'         },
+  // PBS #158/#159 (2026-05-24): IT removed from property menu — only in holding strip.
+  // Per-property settings now reached via the gear button below (in IT's former slot).
 ];
 
 const SLUG_SET = new Set(CANONICAL_DEPTS.map((d) => d.slug));
@@ -189,18 +190,19 @@ export default function TopDeptStrip() {
           </a>
         );
       })}
-      {/* PBS 2026-05-14: per-property settings gear, anchored right. */}
+      {/* PBS #158/#159 (2026-05-24): property settings gear sits where IT used to be —
+          larger, brass on hover, lit with the same brass when on /settings/property. */}
       <a
         href={`${base}/settings/property`}
         title="Property settings"
         aria-label="Property settings"
+        aria-current={activeSlug === 'settings' ? 'page' : undefined}
         style={{
-          marginLeft: 'auto',
-          color: 'var(--ink-mute, var(--text-1, #f0e5cb))',
+          color: activeSlug === 'settings' ? 'var(--brass)' : 'var(--ink-mute, var(--text-1, #f0e5cb))',
           textDecoration: 'none',
-          fontSize: 14,
+          fontSize: 22,
           lineHeight: 1,
-          padding: '6px 4px',
+          padding: '2px 6px',
           flexShrink: 0,
           transition: 'color 100ms ease',
         }}

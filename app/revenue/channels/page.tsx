@@ -34,6 +34,7 @@ import {
   getChannelMixWeeklyTrend, getChannelNetValueForRange, getChannelVelocity28dByCat,
 } from '@/lib/data-channels';
 import { fmtMoney } from '@/lib/format';
+import { supabase } from '@/lib/supabase';
 import { REVENUE_SUBPAGES } from '../_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 
@@ -67,6 +68,32 @@ interface Props { searchParams: Record<string, string | string[] | undefined>; p
 export default async function ChannelsPage({ searchParams, propertyId }: Props) {
   const pid = propertyId ?? PROPERTY_ID_NAMKHAN;
   const moneyCurrency: 'USD' | 'EUR' = pid === 1000001 ? 'EUR' : 'USD';
+  const sym = moneyCurrency === 'EUR' ? '€' : '$';
+
+  // note#13: per-source 24/25/26 aggregate for the full-screen-expandable table
+  const { data: sourcesAllYears } = await supabase
+    .from('v_chart_channels_sources_24_25_26')
+    .select('category, source_name, res_24, res_25, res_26, res_total, rev_24, rev_25, rev_26, rev_total, rn_26, adr_26, avg_window_days, avg_los, sdly_dev_pct')
+    .eq('property_id', pid)
+    .order('category')
+    .order('res_total', { ascending: false });
+  const sourcesAllYearsRows = ((sourcesAllYears ?? []) as Array<Record<string, unknown>>).map((r) => {
+    const dev = r.sdly_dev_pct == null ? null : Number(r.sdly_dev_pct);
+    const devStr = dev == null ? '—' : (dev > 0 ? '↑ ' : dev < 0 ? '↓ ' : '→ ') + `${Math.round(dev)}%`;
+    return {
+      category: String(r.category ?? 'Other'),
+      source:   String(r.source_name ?? 'Unknown'),
+      res_24:   Number(r.res_24 ?? 0),
+      res_25:   Number(r.res_25 ?? 0),
+      res_26:   Number(r.res_26 ?? 0),
+      rev_26:   r.rev_26 != null ? `${sym}${Math.round(Number(r.rev_26)).toLocaleString('en-US')}` : '—',
+      adr_26:   r.adr_26 != null ? `${sym}${Math.round(Number(r.adr_26)).toLocaleString('en-US')}` : '—',
+      rn_26:    r.rn_26 != null ? Number(r.rn_26) : 0,
+      window_d: r.avg_window_days != null ? `${Math.round(Number(r.avg_window_days))}d` : '—',
+      los_d:    r.avg_los != null ? `${Number(r.avg_los).toFixed(1)}n` : '—',
+      sdly:     devStr,
+    };
+  });
   const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
   const basePath = pid !== PROPERTY_ID_NAMKHAN ? `/h/${pid}/revenue/channels` : '/revenue/channels';
   const period = resolvePeriod(searchParams);
@@ -141,7 +168,35 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
       subtitle={`Channel performance · ${period.label} · ${channels.length} active sources across ${[byCat.direct, byCat.ota, byCat.dmc].filter((g) => g.length > 0).length} categories`}
       tabs={tabs}
     >
+      {/* PBS #187 (2026-05-24): Window + Category controls collapsed INTO the Headline
+          channel-mix container — one container, three stacked rows (Window · Category · KPI tiles). */}
       <Container title="Headline · channel mix" subtitle={period.label} density="compact">
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'center', marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>Window</span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {(['7d', '30d', '90d'] as WindowKey[]).map((k) => {
+                const active = k === period.win;
+                return (
+                  <a key={k} href={hrefFor(k)} style={pillStyle(active)}>{k}</a>
+                );
+              })}
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>Category</span>
+            <div style={subTabRow}>
+              {TAB_DEFS.map((t) => {
+                const active = t.key === activeTab;
+                return (
+                  <Link key={t.key} href={tabHrefFor(t.key)} style={subTabStyle(active)}>
+                    <span style={{ fontSize: 12, fontWeight: 600 }}>{t.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
           {pageMixTiles.map((t, i) => <KpiTile key={i} {...t} />)}
         </div>
@@ -157,37 +212,34 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
         </Container>
       )}
 
-      <Container title="Window" subtitle="period selector" density="compact">
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-          {(['7d', '30d', '90d'] as WindowKey[]).map((k) => {
-            const active = k === period.win;
-            return (
-              <a key={k} href={hrefFor(k)} style={pillStyle(active)}>{k}</a>
-            );
-          })}
-        </div>
-      </Container>
-
-      {/* Sub-tabs: Direct · OTAs · DMC/Bedbanks */}
-      <div style={subTabRow}>
-        {TAB_DEFS.map((t) => {
-          const active = t.key === activeTab;
-          return (
-            <Link key={t.key} href={tabHrefFor(t.key)} style={subTabStyle(active)}>
-              <span style={{ fontSize: 13, fontWeight: 600 }}>{t.label}</span>
-              <span style={{ fontSize: 10, color: active ? 'rgba(255,255,255,0.85)' : 'var(--ink-soft, #5A5A5A)', marginTop: 1 }}>{t.tagline}</span>
-            </Link>
-          );
-        })}
-      </div>
-
       {activeTab === 'direct' && <CategoryBlock category="direct" rows={byCat.direct as unknown as Array<Record<string, unknown>>} cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'direct')} mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'direct')} moneyCurrency={moneyCurrency} />}
       {activeTab === 'ota'    && <CategoryBlock category="ota"    rows={byCat.ota as unknown as Array<Record<string, unknown>>}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'ota')}    mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'ota')} moneyCurrency={moneyCurrency} />}
-      {activeTab === 'dmc'    && <CategoryBlock category="dmc"    rows={byCat.dmc as unknown as Array<Record<string, unknown>>}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'dmc')}    mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'dmc')} moneyCurrency={moneyCurrency} />}
+      {activeTab === 'dmc'    && <CategoryBlock category="dmc"    rows={byCat.dmc as unknown as Array<Record<string, unknown>>}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'dmc')}    mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'dmc')} moneyCurrency="USD" />}
 
-      <Container title="12-month structural view" subtitle="tier rollup · top sources · monthly trend · groups · DMC contracts (Namkhan only)" density="compact">
-        <PageRenderer pageSlug="channel" propertyId={pid} title="" subtitle="" />
-      </Container>
+      {/* note#13: full-screen-expandable sources table (data fetched at top via sourcesAllYears) */}
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Container title={`Sources · 2024 / 2025 / 2026 · ${sourcesAllYearsRows.length} active sources`} subtitle="every active source since 2024, grouped Direct / OTA / DMC. Click container header to expand to full screen. SDLY column compares 2026 vs 2025 reservations.">
+          <Chart variant="table" data={sourcesAllYearsRows as unknown as Array<Record<string, unknown>>} xKey="source"
+            series={[
+              { key: 'category', label: 'Group' },
+              { key: 'res_24',   label: 'Res 24' },
+              { key: 'res_25',   label: 'Res 25' },
+              { key: 'res_26',   label: 'Res 26' },
+              { key: 'sdly',     label: 'SDLY 26 vs 25' },
+              { key: 'rev_26',   label: 'Rev 26' },
+              { key: 'adr_26',   label: 'ADR 26' },
+              { key: 'rn_26',    label: 'RN 26' },
+              { key: 'window_d', label: 'Avg window' },
+              { key: 'los_d',    label: 'Avg LOS' },
+            ]}
+            empty={{ title: 'No sources data' }}
+          />
+        </Container>
+      </div>
+
+      {/* PBS #126 (2026-05-24): 9-piece split. PageRenderer in embedded mode renders the 9 registry
+          children as direct siblings of the host DashboardPage — no nested DashboardPage, no outer wrap. */}
+      <PageRenderer pageSlug="channel" propertyId={pid} title="" subtitle="" embedded />
     </DashboardPage>
   );
 }

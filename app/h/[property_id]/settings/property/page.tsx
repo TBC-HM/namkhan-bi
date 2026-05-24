@@ -1,17 +1,16 @@
 // app/h/[property_id]/settings/property/page.tsx
-// v2: Adds team data fetch from tenancy.property_users for the Team tab.
-// Uses <Page> shell so HeaderPills + PropertySwitcher render.
+// PBS #160 (2026-05-24): paper-white DashboardPage chrome to match the rest
+// of the cockpit. Tab content still rendered by PropertySettingsClient.
 
 import { createClient } from '@/lib/supabase/server';
 import PropertySettingsClient from '@/components/settings/PropertySettingsClient';
-import Page from '@/components/page/Page';
+import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 async function getPropertyData(propertyId: number) {
   const supabase = createClient();
-
   const [
     identity, location, brand, policies,
     rooms, facilities, activities, seasons, certifications, contacts, social,
@@ -60,18 +59,25 @@ export default async function PropertySettingsPage({
   const propertyId = Number(params.property_id);
   const data = await getPropertyData(propertyId);
 
+  const subtitleParts = [
+    data.identity?.legal_name,
+    data.identity?.star_rating ? '★'.repeat(data.identity.star_rating) : null,
+    data.location?.city && data.location?.country ? `${data.location.city}, ${data.location.country}` : null,
+    `Property ID ${propertyId}`,
+  ].filter(Boolean).join(' · ');
+
+  const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
+
   return (
-    <Page
-      eyebrow="Settings · Property"
-      title={<>{data.identity?.trading_name ?? 'Property'} <em style={{ color: 'var(--brass)' }}>Settings</em></>}
+    <DashboardPage
+      title={`Settings · ${data.identity?.trading_name ?? 'Property'}`}
+      subtitle={subtitleParts}
     >
-      <div style={{ padding: '0 0 16px 0', fontSize: 'var(--t-base)', color: 'var(--ink-soft)' }}>
-        {data.identity?.legal_name}
-        {data.identity?.star_rating && ` · ${'★'.repeat(data.identity.star_rating)}`}
-        {data.location?.city && ` · ${data.location.city}, ${data.location.country}`}
-        {` · Property ID: ${propertyId}`}
+      <div style={fullRow}>
+        <Container title="Property" subtitle="identity · brand · rooms · facilities · activities · seasons · team">
+          <PropertySettingsClient data={data} propertyId={propertyId} />
+        </Container>
       </div>
-      <PropertySettingsClient data={data} propertyId={propertyId} />
-    </Page>
+    </DashboardPage>
   );
 }

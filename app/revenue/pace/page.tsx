@@ -221,13 +221,20 @@ export default async function PacePage({
   ];
 
   // ─── data prep (no functions cross server→client boundary) ─────────────
-  const paceCurveData = (paceCurveRaw as PaceCurvePoint[]).map((r) => ({
-    day:    r.day ?? r.stay_date ?? '',
-    actual: r.rooms_actual ?? null,
-    otb:    r.rooms_otb ?? null,
-    stly:   r.rooms_stly_daily_avg ?? null,
-    budget: r.rooms_budget_daily_avg ?? null,
-  }));
+  // note#11: shorten x-axis labels (MM-DD on daily, "MMM yy" on monthly) to stop date overlap
+  const paceCurveData = (paceCurveRaw as PaceCurvePoint[]).map((r) => {
+    const raw = (r.day ?? r.stay_date ?? '').slice(0, 10);
+    const short = raw.length >= 10
+      ? (gran === 'month' ? raw.slice(0, 7) : raw.slice(5))
+      : raw;
+    return {
+      day:    short,
+      actual: r.rooms_actual ?? null,
+      otb:    r.rooms_otb ?? null,
+      stly:   r.rooms_stly_daily_avg ?? null,
+      budget: r.rooms_budget_daily_avg ?? null,
+    };
+  });
   const paceSeries: ChartSeries[] = [
     { key: 'actual', label: 'Actual', color: '#1F3A2E' },
     { key: 'otb',    label: 'OTB',    color: '#B8A878' },
@@ -236,7 +243,13 @@ export default async function PacePage({
   ];
 
   const formatLabel = (key: string) => (gran === 'month' ? fmtMonth(key) : key.slice(5));
-  const bucketBar = buckets.map((b) => ({ bucket: formatLabel(b.key), rns: b.rns }));
+  // note#12: combined OTB + STLY overlay — one bar per bucket with both rns + stly_pct
+  const bucketBar = buckets.map((b) => ({
+    bucket: formatLabel(b.key),
+    rns: b.rns,
+    stly_pct: b.stlyRn > 0 ? Math.round((b.rns / b.stlyRn) * 100) : null,
+  }));
+  // kept for backwards-compat / table only — not used in JSX anymore
   const stlyBar = buckets
     .filter((b) => b.stlyRn > 0)
     .map((b) => ({ bucket: formatLabel(b.key), stly_pct: Math.round((b.rns / b.stlyRn) * 100) }));
@@ -283,28 +296,27 @@ export default async function PacePage({
       subtitle={`What's on the books ahead. ${period.label}.`}
       tabs={tabs}
     >
-      <Container title="On-the-books snapshot" subtitle={period.label} density="compact">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
-          {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
-        </div>
-      </Container>
+      {/* PBS #188 (2026-05-24): KPI stripe at the top is a raw row — NOT a Container box.
+          Controls (Forward window · Granularity) sit on row 1, KPI tiles on row 2. */}
+      <div style={{ gridColumn: '1 / -1', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', marginBottom: 8 }}>
+        <ControlGroup label="Forward window">
+          {winOptions.map((o) => (
+            <PillLink key={o.k} active={o.k === win} href={hrefFor({ win: o.k })}>{o.label}</PillLink>
+          ))}
+        </ControlGroup>
+        <ControlGroup label="Granularity">
+          {granOptions.map((o) => (
+            <PillLink key={o.k} active={o.k === gran} href={hrefFor({ gran: o.k })}>{o.label}</PillLink>
+          ))}
+        </ControlGroup>
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--ink-soft, #5A5A5A)' }}>{period.label}</span>
+      </div>
+      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12, marginBottom: 4 }}>
+        {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
+      </div>
 
-      <Container title="Window & granularity" subtitle="URL-driven controls" density="compact">
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
-          <ControlGroup label="Forward window">
-            {winOptions.map((o) => (
-              <PillLink key={o.k} active={o.k === win} href={hrefFor({ win: o.k })}>{o.label}</PillLink>
-            ))}
-          </ControlGroup>
-          <ControlGroup label="Granularity">
-            {granOptions.map((o) => (
-              <PillLink key={o.k} active={o.k === gran} href={hrefFor({ gran: o.k })}>{o.label}</PillLink>
-            ))}
-          </ControlGroup>
-        </div>
-      </Container>
-
-      <Container title="Booking pace curve" subtitle="Actual · OTB · STLY · Budget — rooms occupied, −30d → +30d">
+      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, alignItems: 'stretch' }}>
+      <Container title="Booking pace curve" subtitle="rooms occupied per day · Actual (green) · OTB (brass) · STLY (grey) · Budget (orange) — window −30d → +30d, ticks below as MM-DD">
         <Chart
           variant="line"
           data={paceCurveData}
@@ -315,25 +327,17 @@ export default async function PacePage({
         />
       </Container>
 
-      <Container title="OTB by stay-bucket" subtitle={`Confirmed room nights · ${gran}`}>
+      <Container title="OTB by stay-bucket · with STLY % overlay" subtitle={`Confirmed room nights + OTB ÷ STLY at same lead time · ${gran}`}>
         <Chart
           variant="bar"
           data={bucketBar}
           xKey="bucket"
-          series={[{ key: 'rns', label: 'Rooms', color: '#1F3A2E' }]}
-          height={240}
+          series={[
+            { key: 'rns',      label: 'Rooms',  color: '#1F3A2E' },
+            { key: 'stly_pct', label: 'STLY %', color: '#B8A878' },
+          ]}
+          height={260}
           empty={{ title: 'No on-the-books in this window' }}
-        />
-      </Container>
-
-      <Container title="STLY pace per bucket" subtitle="OTB ÷ STLY actuals · % at same lead time">
-        <Chart
-          variant="bar"
-          data={stlyBar}
-          xKey="bucket"
-          series={[{ key: 'stly_pct', label: 'STLY %', color: '#B8A878' }]}
-          height={220}
-          empty={{ title: 'No STLY actuals' }}
         />
       </Container>
 
@@ -351,6 +355,7 @@ export default async function PacePage({
           ]}
         />
       </Container>
+      </div>
     </DashboardPage>
   );
 }

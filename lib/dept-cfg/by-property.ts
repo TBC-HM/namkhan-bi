@@ -45,10 +45,13 @@ function withDonnaHod(base: DeptCfg, hod: { name: string; emoji?: string; role: 
     ownerRole: hod.role,
     hodTagline: `Ask ${hod.name} anything about ${base.pillTitle.toLowerCase()}.`,
     chatPlaceholder: `e.g. a ${base.pillTitle.toLowerCase()} question for ${hod.name}…`,
+    // PBS note#173: keep base.kpiTiles so Donna HoD has the same KPI strip
+    // structure as Namkhan (was [] which made Donna boxes visibly smaller).
+    // hod_tasks is per-property so My Tasks is property-scoped anyway.
     defaultAttn: [],
     defaultDocs: [],
     defaultTasks: [],
-    kpiTiles: [],
+    kpiTiles: base.kpiTiles ?? [],
   };
 }
 

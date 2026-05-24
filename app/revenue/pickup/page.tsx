@@ -50,7 +50,7 @@ export default async function PickupPage({ propertyId }: Props = {}) {
 
       <Container
         title="OTB · Pickup · Comparison · SDLY"
-        subtitle={data ? `as of ${data.asOfDate} · Today snapshot wired · older snapshots will light up once pms.otb_snapshots ships` : 'data fetch failed'}
+        subtitle={data ? `as of ${data.asOfDate}` : 'data fetch failed'}
         density="compact"
       >
         {data ? (

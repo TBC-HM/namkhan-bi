@@ -67,7 +67,7 @@ const BLOCK_TINT  = '#FAFAF7';   // subtle alt-block tint
 const INK         = '#1B1B1B';
 const INK_SOFT    = '#5A5A5A';
 const HAIRLINE    = '#E0DAC4';
-const BLOCK_RULE  = '#1B1B1B';   // thick ink rule between month blocks
+const BLOCK_RULE  = '#E6DFCC';   // hairline rule between month blocks (was ink-black — too heavy)
 
 const fmtInt   = (n: number) => Math.round(n).toLocaleString('en-US');
 const fmtUsd   = (n: number) => '€' + Math.round(n).toLocaleString('en-US');
@@ -123,7 +123,7 @@ export default function PickupMatrix({ data }: Props) {
             <th style={S.headerTh}>Monthly<div style={S.headerSub}>{data.monthlySnapshotLabel}</div></th>
             <th style={S.headerTh}>Monday<div style={S.headerSub}>{data.mondaySnapshotLabel}</div></th>
             <th style={S.headerTh}>Yesterday<div style={S.headerSub}>{data.yesterdaySnapshotLabel}</div></th>
-            <th style={S.headerTh}>Today<div style={S.headerSub}>{data.todaySnapshotLabel}</div></th>
+            <th style={S.headerTh}>Today<div style={{ ...S.headerSub, fontWeight: 700, color: 'var(--ink, #1B1B1B)' }}>{data.todaySnapshotLabel}</div></th>
             <th style={S.headerTh}>Monthly</th>
             <th style={S.headerTh}>Weekly</th>
             <th style={S.headerTh}>Yesterday</th>
@@ -236,9 +236,9 @@ const S: Record<string, CSSProperties> = {
     width: '100%',
     minWidth: 1600,
     fontFamily: 'inherit',
-    fontSize: 11,
+    fontSize: 10,
     background: PAPER,
-    lineHeight: 1.25,
+    lineHeight: 1.2,
   },
   groupTh: {
     padding: '6px 10px',
@@ -271,22 +271,26 @@ const S: Record<string, CSSProperties> = {
     marginTop: 1,
   },
   rowHead: {
-    padding: '3px 10px',
+    padding: '2px 8px',
     textAlign: 'left',
-    minWidth: 96,
-    width: 96,
-    maxWidth: 96,
+    minWidth: 88,
+    width: 88,
+    maxWidth: 88,
     borderRight: `1px solid ${HAIRLINE}`,
     color: INK,
     verticalAlign: 'middle',
   },
   td: {
-    padding: '3px 8px',
+    padding: '2px 6px',
     textAlign: 'right',
     borderRight: `1px solid ${HAIRLINE}`,
     whiteSpace: 'nowrap',
     fontVariantNumeric: 'tabular-nums',
-    height: 22,
+    height: 18,
+    maxWidth: 64,
+    minWidth: 56,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
   },
   monthLabel: {
     fontSize: 11,

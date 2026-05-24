@@ -11,6 +11,9 @@ export { default as DashboardPage } from './layout/DashboardPage';
 export { default as MetricRow } from './layout/MetricRow';
 export { default as SplitContainer } from './layout/SplitContainer';
 export { default as BookingActivity } from './BookingActivity';
+export { default as MonthCalendar, type CalendarDay } from './calendar/MonthCalendar';
+export { default as PickupTabs } from './PickupTabs';
+export { default as FloatingMira } from './FloatingMira';
 
 export type {
   StatusTone,

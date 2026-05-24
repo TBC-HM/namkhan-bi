@@ -31,6 +31,19 @@ function fmtInt(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(Number(n))) return '—';
   return Math.round(Number(n)).toLocaleString('en-US');
 }
+// note#22: clarify "Restricted" — these are non-refundable / advance-purchase plans (stay/cancel restrictions)
+const PLAN_TYPE_LABEL: Record<string, string> = {
+  Restricted: 'Restricted · non-refundable / advance purchase',
+};
+function formatPlanType(t: string): string {
+  return PLAN_TYPE_LABEL[t] ?? t;
+}
+// note#21: flag UWC Thailand as one-time group booking
+const ONE_TIME_GROUPS = new Set(['UWC Thailand']);
+function formatPlanName(n: string): string {
+  return ONE_TIME_GROUPS.has(n) ? `${n} · one-time group` : n;
+}
+
 function fmtPct(n: number | null | undefined, decimals = 1): string {
   if (n == null || !Number.isFinite(Number(n))) return '—';
   return `${Number(n).toFixed(decimals)}%`;
@@ -75,6 +88,14 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
         .lte('check_in_date', period.to)
     : { data: [] as Array<Record<string, unknown>> };
 
+  const { data: planMasterRows } = await supabase.from('v_rate_plans_all')
+    .select('rate_plan, created_at')
+    .eq('property_id', pid);
+  const createdAtByPlan = new Map<string, string>();
+  for (const m of (planMasterRows ?? []) as Array<{ rate_plan: string | null; created_at: string | null }>) {
+    if (m.rate_plan && m.created_at) createdAtByPlan.set(m.rate_plan, m.created_at);
+  }
+
   const planMap: Record<string, PlanAgg> = {};
   (windowRows ?? []).forEach((r: Record<string, unknown>) => {
     const key = String(r.rate_plan ?? '');
@@ -101,9 +122,35 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
   const hiddenOrphanInWindow = rankedAll.length - ranked.length;
 
   // Plans table rows (pre-formatted strings — no functions cross primitives)
-  const planRows = ranked.map((p) => ({
-    name:        p.name,
-    type:        p.type,
+  // note#23: per-plan trend — last-7d vs prior-7d booking ratio within the rateplans window
+  const trendByPlan: Record<string, { recent: number; prior: number }> = {};
+  const cutToday = new Date(); cutToday.setUTCHours(0, 0, 0, 0);
+  const cut7  = new Date(cutToday); cut7.setUTCDate(cutToday.getUTCDate() - 7);
+  const cut14 = new Date(cutToday); cut14.setUTCDate(cutToday.getUTCDate() - 14);
+  const cut7Iso  = cut7.toISOString().slice(0, 10);
+  const cut14Iso = cut14.toISOString().slice(0, 10);
+  for (const wr of (windowRows ?? []) as Array<Record<string, unknown>>) {
+    if (wr.status === 'canceled') continue;
+    const plan = String(wr.rate_plan ?? '');
+    if (!plan) continue;
+    const bd = String(wr.booking_date ?? '').slice(0, 10);
+    if (!bd) continue;
+    if (!trendByPlan[plan]) trendByPlan[plan] = { recent: 0, prior: 0 };
+    if (bd >= cut7Iso) trendByPlan[plan].recent += 1;
+    else if (bd >= cut14Iso) trendByPlan[plan].prior += 1;
+  }
+  const trendGlyph = (name: string): string => {
+    const t = trendByPlan[name];
+    if (!t || (t.recent === 0 && t.prior === 0)) return '—';
+    if (t.prior === 0) return t.recent > 0 ? `↑ new` : '—';
+    const delta = ((t.recent - t.prior) / t.prior) * 100;
+    if (Math.abs(delta) < 10) return `→ ${Math.round(delta)}%`;
+    return (delta > 0 ? '↑ ' : '↓ ') + `${Math.round(delta)}%`;
+  };
+
+  const planRows = [...ranked].sort((a, b) => formatPlanType(a.type).localeCompare(formatPlanType(b.type))).map((p) => ({
+    name:        formatPlanName(p.name),
+    type:        formatPlanType(p.type),
     bookings:    fmtInt(p.bookings),
     cancellations: fmtInt(p.cancellations),
     cancel_pct:  fmtPct((p.bookings + p.cancellations) > 0 ? (100 * p.cancellations) / (p.bookings + p.cancellations) : 0),
@@ -111,6 +158,8 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     adr:         fmtMoney(p.nights ? p.revenue / p.nights : 0, sym),
     mix:         fmtPct(totalRev ? (100 * p.revenue) / totalRev : 0),
     last_booked: p.lastBooked ?? '—',
+    created:     (createdAtByPlan.get(p.name) ?? '').slice(0, 10) || '—',
+    trend:       trendGlyph(p.name),
   }));
 
   // Type rollup → donut data (revenue by plan type)
@@ -122,7 +171,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     typeMap[p.type].nights   += p.nights;
   });
   const typeDonut = Object.entries(typeMap).map(([type, v]) => ({
-    name:    type,
+    name:    formatPlanType(type),
     value:   Math.round(v.revenue),
   })).sort((a, b) => b.value - a.value);
 
@@ -141,10 +190,13 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     day, bookings: v.bookings, revenue: Math.round(v.revenue),
   })).sort((a, b) => a.day.localeCompare(b.day));
 
-  // Top 10 plans by revenue → bar chart
+  // note#17: enrich planBar so hover tooltip shows bookings + ADR + room-nights alongside revenue
   const planBar = ranked.slice(0, 10).map((p) => ({
     name: p.name.length > 24 ? p.name.slice(0, 24) + '…' : p.name,
     revenue: Math.round(p.revenue),
+    bookings: p.bookings,
+    adr: Math.round(p.nights ? p.revenue / p.nights : 0),
+    rn: p.nights,
   }));
 
   // Sleeping + orphans (Namkhan-only views)
@@ -157,8 +209,8 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
         .limit(30)
     : { data: [] as Array<{ rate_name: string; rate_type: string; last_booked: string | null; days_since: number }> };
   const sleepingRows = (sleepingPlans ?? []).map((r) => ({
-    name:        r.rate_name,
-    type:        r.rate_type,
+    name:        formatPlanName(r.rate_name),
+    type:        formatPlanType(r.rate_type),
     last_booked: r.last_booked ?? '—',
     days_idle:   fmtInt(r.days_since),
   }));
@@ -201,11 +253,13 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     return `${basePath}${qs ? '?' + qs : ''}`;
   };
   const winOptions: Array<{ k: WindowKey; label: string }> = [
-    { k: '7d', label: '7d' }, { k: '30d', label: '30d' }, { k: '90d', label: '90d' }, { k: '180d', label: '180d' },
+    { k: '7d', label: '7d' }, { k: '30d', label: '30d' }, { k: '90d', label: '90d' }, { k: 'next180' as WindowKey, label: '180d' },
   ];
 
   const planCols: ChartSeries[] = [
     { key: 'type',          label: 'Type' },
+    { key: 'created',       label: 'Created' },
+    { key: 'trend',         label: 'Trend 7d/7d' },
     { key: 'bookings',      label: 'Bookings' },
     { key: 'cancellations', label: 'Cxl' },
     { key: 'cancel_pct',    label: 'Cancel %' },
@@ -229,14 +283,10 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
         }}>↗ Dead plans (90d)</a>
       }
     >
+      {/* note#176: Window pills embedded INSIDE the Headline KPI stripe — saves vertical space */}
       <div style={fullRow}><Container title="Headline" subtitle={period.label} density="compact">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-          {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
-        </div>
-      </Container></div>
-
-      <div style={fullRow}><Container title="Window" subtitle="period selector" density="compact">
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 12, alignItems: 'center' }}>
+          <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', marginRight: 6 }}>Window:</span>
           {winOptions.map((o) => {
             const active = o.k === period.win;
             return (
@@ -251,19 +301,12 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
             );
           })}
         </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+          {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
+        </div>
       </Container></div>
 
-      <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}><Container title="Daily booking trend" subtitle={`bookings + revenue · ${period.label}`}>
-        <Chart variant="line" data={trendData} xKey="day"
-          series={[
-            { key: 'bookings', label: 'Bookings', color: '#1F3A2E' },
-            { key: 'revenue',  label: 'Revenue',  color: '#B8542A' },
-          ]}
-          height={220}
-          empty={{ title: 'No booking activity in window' }}
-        />
-      </Container>
-        <Container title="Mix by plan type" subtitle={`revenue share · ${period.label}`}>
+      <div style={fullRow}><Container title="Mix by plan type" subtitle={`revenue share · ${period.label}`}>
         <Chart variant="donut" data={typeDonut} xKey="name"
           series={[{ key: 'value', label: 'Revenue' }]}
           height={220}
@@ -271,9 +314,14 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
         />
       </Container></div>
 
-      <div style={fullRow}><Container title="Top 10 plans · revenue" subtitle={`${period.label}`}>
+      <div style={fullRow}><Container title="Top 10 plans · revenue" subtitle={`${period.label} · hover for bookings · ADR · RN`}>
         <Chart variant="bar" data={planBar} xKey="name"
-          series={[{ key: 'revenue', label: 'Revenue', color: '#1F3A2E' }]}
+          series={[
+            { key: 'revenue',  label: 'Revenue',  color: '#1F3A2E' },
+            { key: 'bookings', label: 'Bookings' },
+            { key: 'adr',      label: 'ADR' },
+            { key: 'rn',       label: 'RN' },
+          ]}
           height={240}
           empty={{ title: 'No plans booking in window' }}
         />

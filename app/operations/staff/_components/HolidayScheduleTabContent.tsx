@@ -182,7 +182,20 @@ export default async function HolidayScheduleTabContent({
   // outer <Page> + StaffTabStrip are owned by the host page. Render a
   // fragment so we don't nest layouts.
   const Wrap = embedded
-    ? ({ children }: { children: React.ReactNode }) => <>{children}</>
+    ? ({ children }: { children: React.ReactNode }) => (
+        // PBS 2026-05-23 #144: re-scope the dark cream/brass tokens to paper-white
+        // when this component is embedded inside the new design pricing page.
+        <div style={{
+          ['--brass' as any]: '#7A5C2E',
+          ['--ink' as any]: '#1B1B1B',
+          ['--ink-mute' as any]: '#5A5A5A',
+          ['--ink-faint' as any]: '#9A9A9A',
+          ['--paper-warm' as any]: '#FAFAF7',
+          ['--line-soft' as any]: '#E0DAC4',
+          ['--mono' as any]: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+          color: '#1B1B1B',
+        }}>{children}</div>
+      )
     : ({ children }: { children: React.ReactNode }) => (
         <Page
           eyebrow={eyebrow}

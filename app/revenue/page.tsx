@@ -14,8 +14,13 @@ import type { DeptCfg } from '@/lib/dept-cfg/types';
 import { REVENUE_SUBPAGES } from './_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { getDeptCfg } from '@/lib/dept-cfg/by-property';
-import { PROPERTY_ID } from '@/lib/supabase';
+import { PROPERTY_ID, supabase } from '@/lib/supabase';
 import ReportBuilder from './_components/ReportBuilder';
+import ReportsList from './_components/ReportsList';
+import BugsList from './_components/BugsList';
+import HodTasksList from './_components/HodTasksList';
+import AttentionList from './_components/AttentionList';
+import { getPulseTodayPickup, getPulseTodayCancellations } from '@/lib/data-pulse';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -41,16 +46,41 @@ const SECTION_HINT: Record<string, string> = {
   Reports:      'Print-ready reports',
 };
 
-export default function RevenueHoDPage({ propertyId, searchParams }: Props = {}) {
+export default async function RevenueHoDPage({ propertyId, searchParams }: Props = {}) {
   const pid = propertyId ?? PROPERTY_ID;
   const cfg: DeptCfg = pid === PROPERTY_ID ? DEPT_CFG.revenue : getDeptCfg('revenue', pid);
 
   const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
-  const sections = subPages.filter((s) => s.label !== 'HoD');
+  // PBS #181: keep HoD in the tab strip so user can click back to landing.
+  const sections = subPages;
 
-  const tiles: KpiTileProps[] = (cfg.kpiTiles ?? []).map((k) => ({
+  // PBS note#2: append today's Pickup + Cancellations as 5th + 6th KPI tiles.
+  // PBS note#6: bring back Bug box — read cockpit_bugs (open only).
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const [pickupToday, cancellationsToday, bugsRes, dueTasksRes] = await Promise.all([
+    getPulseTodayPickup(pid, todayIso).catch(() => [] as Array<unknown>),
+    getPulseTodayCancellations(pid, todayIso).catch(() => [] as Array<unknown>),
+    supabase.from('cockpit_bugs').select('id, body, status, created_at, page_url').not('status','in','(closed,resolved,wontfix,done)').order('created_at', { ascending: false }).limit(5),
+    // PBS #164: badge count of tasks whose remind-or-due date has arrived (from v_hod_tasks_due)
+    supabase.from('v_hod_tasks_due').select('id', { count: 'exact', head: true }).eq('dept_slug', 'revenue').eq('property_id', pid).eq('is_due', true),
+  ]);
+  const bugs = (bugsRes.data ?? []) as Array<{ id: number; body: string | null; status: string | null; created_at: string | null; page_url: string | null }>;
+  const dueTasksCount = dueTasksRes.count ?? 0;
+  const pickupCount = pickupToday.length;
+  const cancelCount = cancellationsToday.length;
+
+  const baseTiles: KpiTileProps[] = (cfg.kpiTiles ?? []).map((k) => ({
     label: k.k, value: k.v, size: 'sm', footnote: k.d,
   }));
+  const tiles: KpiTileProps[] = [
+    ...baseTiles,
+    { label: 'Pickup today', value: pickupCount, size: 'sm',
+      footnote: pickupCount === 1 ? 'new booking' : 'new bookings',
+      status: pickupCount > 0 ? 'green' : 'grey' },
+    { label: 'Cancellations today', value: cancelCount, size: 'sm',
+      footnote: cancelCount === 1 ? 'booking lost' : 'bookings lost',
+      status: cancelCount === 0 ? 'green' : 'amber' },
+  ];
 
   const attn = cfg.defaultAttn ?? [];
   const docs = cfg.defaultDocs ?? [];
@@ -66,10 +96,18 @@ export default function RevenueHoDPage({ propertyId, searchParams }: Props = {})
       ? `/cockpit/chat?dept=revenue&role=revenue_hod_donna&name=Mira&emoji=${encodeURIComponent('📈')}&label=Revenue`
       : `/cockpit/chat?dept=revenue`;
 
+  // PBS note#1: surface sections as the TOP tab strip on the HoD landing.
+  // PBS #181: when on bare /revenue the active tab is HoD (the landing); on /h/[pid]/revenue same.
+  const hodHrefs = ['/revenue', `/h/${pid}/revenue`];
+  const hodTabs = sections.map((s) => ({
+    key: s.href, label: s.label, href: s.href,
+    active: s.label === 'HoD' && hodHrefs.includes('/revenue'),
+  }));
   return (
     <DashboardPage
       title={`Revenue · ${cfg.hodName}`}
-      subtitle={cfg.hodTagline}
+      subtitle={new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+      tabs={hodTabs}
       action={
         <Link href={chatHref} style={primaryBtnStyle}>{`Ask ${cfg.hodName} →`}</Link>
       }
@@ -85,61 +123,22 @@ export default function RevenueHoDPage({ propertyId, searchParams }: Props = {})
         </div>
       )}
 
-      {/* 2. Attention / Docs / Tasks — three-up full-width row */}
-      <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
-        <Container title="Attention" subtitle={`${attn.length} item${attn.length === 1 ? '' : 's'}`} density="compact">
-          {attn.length === 0 ? <div style={emptyStyle}>nothing flagged</div> : (
-            <div style={listStyle}>
-              {attn.map((a) => (
-                <div key={a.id} style={rowStyle}>
-                  <span style={{ ...dotStyle, background: SEV_DOT[a.severity] }} aria-hidden />
-                  <span style={labelStyle}>{a.label}</span>
-                  <span style={tagStyle}>{a.kind}</span>
-                </div>
-              ))}
-            </div>
-          )}
+      {/* 2. Attention / Reports / Tasks / Bugs — four-up full-width row (Bug box restored per #6) */}
+      <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
+        <Container title="Attention" subtitle={`${attn.length} item${attn.length === 1 ? '' : 's'} · dismiss with ×`} density="compact">
+          <AttentionList items={attn} storageKey={`attn:revenue:${pid}`} />
         </Container>
 
-        <Container title="My Docs" subtitle={`${docs.length} item${docs.length === 1 ? '' : 's'}`} density="compact">
-          {docs.length === 0 ? <div style={emptyStyle}>no docs yet</div> : (
-            <div style={listStyle}>
-              {docs.map((d) => (
-                <a key={d.id} href={d.href} target="_blank" rel="noopener noreferrer" style={{ ...rowStyle, textDecoration: 'none', color: 'inherit' }}>
-                  <span style={{ ...dotStyle, background: 'var(--brass, #B8542A)' }} aria-hidden />
-                  <span style={labelStyle}>{d.label}</span>
-                  {d.report_type && <span style={tagStyle}>{d.report_type}</span>}
-                </a>
-              ))}
-            </div>
-          )}
+        <Container title="My Reports" subtitle={`${docs.length} item${docs.length === 1 ? '' : 's'} · red = unseen · dismiss with ×`} density="compact">
+          <ReportsList items={docs} storageKey={`reports:revenue:${pid}`} />
         </Container>
 
-        <Container title="My Tasks" subtitle={`${tasks.filter((t) => !t.done).length} open`} density="compact">
-          {tasks.length === 0 ? <div style={emptyStyle}>no tasks yet</div> : (
-            <div style={listStyle}>
-              {tasks.map((t) => (
-                <div key={t.id} style={rowStyle}>
-                  <span style={{ ...dotStyle, background: t.done ? 'var(--ink-soft, #5A5A5A)' : 'var(--primary, #1F3A2E)' }} aria-hidden />
-                  <span style={{ ...labelStyle, textDecoration: t.done ? 'line-through' : 'none', color: t.done ? 'var(--ink-soft, #5A5A5A)' : 'inherit' }}>{t.label}</span>
-                </div>
-              ))}
-            </div>
-          )}
+        <Container title="My Tasks" subtitle={dueTasksCount > 0 ? `🔴 ${dueTasksCount} due · add / due-date / repeat / delete` : 'add / due-date / repeat / delete · per property'} density="compact">
+          <HodTasksList deptSlug="revenue" propertyId={pid} />
         </Container>
-      </div>
 
-      {/* 3. Sections navigator — full-width 4-up dense grid (the secondary sub-nav) */}
-      <div style={fullRow}>
-        <Container title="Sections" subtitle="drill into a sub-area" density="compact">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 6 }}>
-            {sections.map((s) => (
-              <Link key={s.href} href={s.href} style={sectionCardStyle}>
-                <div style={sectionLabelStyle}>{s.label}</div>
-                <div style={sectionHintStyle}>{SECTION_HINT[s.label] ?? ''}</div>
-              </Link>
-            ))}
-          </div>
+        <Container title="Bugs" subtitle={`${bugs.length} open · + to add · /cockpit/bugs for full inbox`} density="compact">
+          <BugsList deptSlug="revenue" propertyId={pid} initial={bugs as unknown as { id: number; body: string | null; status: string | null; created_at: string | null; page_url: string | null }[]} />
         </Container>
       </div>
 
@@ -156,12 +155,6 @@ export default function RevenueHoDPage({ propertyId, searchParams }: Props = {})
         </div>
       )}
 
-      {/* 5. Chat — full-width, single CTA */}
-      <div style={fullRow}>
-        <Container title="Chat" subtitle={`open the full ${cfg.hodName} surface`} density="compact">
-          <Link href={chatHref} style={secondaryBtnStyle}>{`Open ${cfg.hodName} chat →`}</Link>
-        </Container>
-      </div>
     </DashboardPage>
   );
 }

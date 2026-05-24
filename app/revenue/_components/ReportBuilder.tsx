@@ -72,9 +72,9 @@ export default function ReportBuilder({ reportTypes, hrefPrefix = '' }: Props) {
     : '';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {/* Report type chooser */}
-      <div>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, minmax(0, 1fr))', gap: 12, alignItems: 'start' }}>
+      {/* Report type chooser — full row */}
+      <div style={{ gridColumn: '1 / -1' }}>
         <div style={labelStyle}>Report type</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 6 }}>
           {stdTypes.map((rt) => (
@@ -101,7 +101,8 @@ export default function ReportBuilder({ reportTypes, hrefPrefix = '' }: Props) {
 
       {def && (
         <>
-          <div style={{ borderTop: '1px solid var(--hairline, #E6DFCC)', paddingTop: 10 }}>
+          {/* Dimensions — left 7 cols on wide, full on narrow */}
+          <div style={{ gridColumn: 'span 12', borderTop: '1px solid var(--hairline, #E6DFCC)', paddingTop: 10 }}>
             <div style={hintStyle}>
               Narrow down — these are the dimensions <strong>{def.label}</strong> accepts.
               Click a chip to set, click again to clear (defaults apply).
@@ -123,8 +124,8 @@ export default function ReportBuilder({ reportTypes, hrefPrefix = '' }: Props) {
             ))}
           </div>
 
-          {/* Schedule */}
-          <div style={{ borderTop: '1px solid var(--hairline, #E6DFCC)', paddingTop: 10 }}>
+          {/* Schedule — 6 cols on wide, full on narrow */}
+          <div style={{ gridColumn: 'span 6', borderTop: '1px solid var(--hairline, #E6DFCC)', paddingTop: 10 }}>
             <div style={labelStyle}>Schedule</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {SCHEDULES.map((s) => (
@@ -143,8 +144,8 @@ export default function ReportBuilder({ reportTypes, hrefPrefix = '' }: Props) {
             )}
           </div>
 
-          {/* Email recipients */}
-          <div style={{ borderTop: '1px solid var(--hairline, #E6DFCC)', paddingTop: 10 }}>
+          {/* Email recipients — 6 cols on wide, full on narrow */}
+          <div style={{ gridColumn: 'span 6', borderTop: '1px solid var(--hairline, #E6DFCC)', paddingTop: 10 }}>
             <div style={labelStyle}>Email delivery <span style={{ fontWeight: 400, color: 'var(--ink-soft, #5A5A5A)' }}>(optional)</span></div>
             {emails.length > 0 && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
@@ -182,8 +183,8 @@ export default function ReportBuilder({ reportTypes, hrefPrefix = '' }: Props) {
             </div>
           </div>
 
-          {/* Open button */}
-          <div style={{ borderTop: '1px solid var(--hairline, #E6DFCC)', paddingTop: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          {/* Open button — full row */}
+          <div style={{ gridColumn: '1 / -1', borderTop: '1px solid var(--hairline, #E6DFCC)', paddingTop: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             {href ? (
               <a href={href} target="_blank" rel="noopener noreferrer" style={openBtnStyle}>
                 Open report →

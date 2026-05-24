@@ -8,11 +8,10 @@
 
 import {
   DashboardPage, Container, KpiTile, Chart,
-  type ChartSeries, type DashboardTab, type KpiTileProps,
+  MonthCalendar, PickupTabs,
+  type ChartSeries, type DashboardTab, type KpiTileProps, type CalendarDay,
 } from '@/app/(cockpit)/_design';
 import { REVENUE_SUBPAGES } from '../_subpages';
-import MonthCalendar, { type CalendarDay } from './_components/MonthCalendar';
-import PickupTabs from './_components/PickupTabs';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { PROPERTY_ID } from '@/lib/supabase';
 import {

@@ -14,24 +14,21 @@ import { REVENUE_SUBPAGES } from '../_subpages';
 import HolidayScheduleTabContent from '@/app/operations/staff/_components/HolidayScheduleTabContent';
 import { NAMKHAN_PROPERTY_ID } from '@/lib/dept-cfg/by-property';
 import {
-  DashboardPage, Container, KpiTile, Chart,
-  type DashboardTab, type KpiTileProps,
+  DashboardPage, Container, KpiTile, Chart, MonthCalendar,
+  type DashboardTab, type KpiTileProps, type CalendarDay,
 } from '@/app/(cockpit)/_design';
-import PickupMatrix from '@/app/(cockpit)/_design/PickupMatrix';
-import { getPickupMatrix } from '@/lib/data/pickup';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
-type CalendarTab = 'pricing' | 'holidays' | 'otb_density' | 'pickup' | 'rate' | 'restrictions' | 'parity';
-const VALID_TABS: CalendarTab[] = ['pricing','holidays','otb_density','pickup','rate','restrictions','parity'];
+type CalendarTab = 'pricing' | 'holidays' | 'otb_density' | 'rate' | 'restrictions' | 'parity';
+const VALID_TABS: CalendarTab[] = ['pricing','holidays','otb_density','rate','restrictions','parity'];
 const TAB_LABELS: Record<CalendarTab, string> = {
   pricing:      'Pricing',
   holidays:     'Holidays',
   otb_density:  'OTB Density',
-  pickup:       'Pickup',
   rate:         'Rate',
   restrictions: 'Restrictions',
   parity:       'Parity',
@@ -66,7 +63,7 @@ export default async function PricingPage({ searchParams, propertyId }: { search
 
   const stripBlock = (
     <div style={fullRow}>
-      <Container title="Calendar" subtitle="pricing · holidays · OTB density · pickup · rate · restrictions · parity" density="compact">
+      <Container title="Calendar" subtitle="pricing · holidays · OTB density · rate · restrictions · parity" density="compact">
         <CalendarTabStrip active={tab} basePath={basePath} />
       </Container>
     </div>
@@ -92,22 +89,6 @@ export default async function PricingPage({ searchParams, propertyId }: { search
     );
   }
 
-  // ─── Tab: Pickup (reuses PickupMatrix primitive) ──────────────────────
-  if (tab === 'pickup') {
-    const pickupData = await getPickupMatrix(pid).catch(() => null);
-    return (
-      <DashboardPage title="Revenue · Calendar" subtitle="pickup matrix · OTB vs SDLY" tabs={tabs}>
-        {stripBlock}
-        <div style={fullRow}>
-          <Container title="Pickup matrix" subtitle="month × metric · OTB snapshots · same surface as /revenue/pickup">
-            {pickupData ? <PickupMatrix data={pickupData} /> : (
-              <div style={emptyStyle}>Pickup data unavailable. See <Link href="/revenue/pickup" style={linkStyle}>/revenue/pickup</Link> for the full surface.</div>
-            )}
-          </Container>
-        </div>
-      </DashboardPage>
-    );
-  }
 
   // ─── Tab: OTB Density ─────────────────────────────────────────────────
   if (tab === 'otb_density') {
@@ -135,7 +116,7 @@ export default async function PricingPage({ searchParams, propertyId }: { search
       <DashboardPage title="Revenue · Calendar" subtitle="forward OTB occupancy · next 90 days" tabs={tabs}>
         {stripBlock}
         <div style={fullRow}>
-          <Container title="OTB occupancy · forward 90d" subtitle="confirmed rooms ÷ sellable · per night · colour by % occ">
+          <Container title="OTB occupancy · forward 90d" subtitle="occupancy % per night (NOT rate — see Rate tab for price heatmap). Confirmed rooms ÷ sellable. Colour intensity = % occ.">
             <Chart
               variant="heatmap"
               data={heat}
@@ -225,7 +206,7 @@ export default async function PricingPage({ searchParams, propertyId }: { search
       <DashboardPage title="Revenue · Calendar" subtitle="restrictions · MinLOS + stop-sell · next 60d" tabs={tabs}>
         {stripBlock}
         <div style={fullRow}>
-          <Container title="Restrictions calendar" subtitle="cell = nights MinLOS · 99 (red) = stop-sell · next 60d">
+          <Container title="Restrictions calendar" subtitle="WIRED — reads rate_inventory.minimum_stay + stop_sell from Cloudbeds. Each cell shows minimum-nights-required for that room×date; 99 (red) = stop-sell. Next 60 days.">
             <Chart
               variant="heatmap"
               data={data}
@@ -367,9 +348,75 @@ export default async function PricingPage({ searchParams, propertyId }: { search
     { label: 'Min-stay', value: minStayRows, size: 'sm', footnote: 'minimum_stay > 1', status: minStayRows > 0 ? 'amber' : 'green' },
   ];
 
+  // ── #138: 30-day calendar with arrow nav (URL ?off=0/30/60/90) ──────────
+  const offRaw = Number((searchParams as Record<string, string | string[] | undefined>).off ?? 0);
+  const calOff = Number.isFinite(offRaw) ? Math.max(0, Math.min(90, Math.trunc(offRaw))) : 0;
+  const calFrom = new Date(); calFrom.setUTCHours(0, 0, 0, 0); calFrom.setUTCDate(calFrom.getUTCDate() + calOff);
+  const calTo = new Date(calFrom); calTo.setUTCDate(calFrom.getUTCDate() + 29);
+  const calFromIso = calFrom.toISOString().slice(0, 10);
+  const calToIso = calTo.toISOString().slice(0, 10);
+  const { data: pricingCal } = await supabase
+    .from('v_chart_pricing_calendar_30d')
+    .select('day, base_rate, rooms_available, occ_pct, occ_category, all_stop_sell, stop_sell_cells, rooms_sold, total_rooms')
+    .eq('property_id', pid)
+    .gte('day', calFromIso)
+    .lte('day', calToIso)
+    .order('day');
+  const calByDay = new Map<string, Record<string, unknown>>();
+  for (const r of (pricingCal ?? []) as Array<Record<string, unknown>>) calByDay.set(String(r.day).slice(0, 10), r);
+  const sym = pid === 1000001 ? '€' : '$';
+  const pricingCalendarDays: CalendarDay[] = (() => {
+    const out: CalendarDay[] = [];
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(calFrom); d.setUTCDate(calFrom.getUTCDate() + i);
+      const iso = d.toISOString().slice(0, 10);
+      const row = calByDay.get(iso);
+      const rate = row && row.base_rate != null ? Math.round(Number(row.base_rate)) : null;
+      const avail = row && row.rooms_available != null ? Number(row.rooms_available) : null;
+      const occ = row && row.occ_pct != null ? Number(row.occ_pct) : null;
+      const cat = row ? String(row.occ_category ?? 'unknown') : 'unknown';
+      const tone: CalendarDay['tone'] =
+        row && row.all_stop_sell === true ? 'red' :
+        cat === 'high' ? 'green' :
+        cat === 'mid'  ? 'amber' :
+        cat === 'low'  ? 'red'   :
+        undefined;
+      out.push({
+        date: iso,
+        label: rate != null ? `${sym}${rate}` : '—',
+        tone,
+        tooltip: [
+          iso,
+          rate != null ? `Base rate: ${sym}${rate}` : 'Base rate: —',
+          avail != null ? `Rooms available: ${avail}` : 'Rooms available: —',
+          occ != null  ? `Occ: ${occ.toFixed(1)}%` : 'Occ: —',
+          `OCC category: ${cat}`,
+        ].join('\n'),
+      });
+    }
+    return out;
+  })();
+  const calHref = (newOff: number) => {
+    const p = new URLSearchParams();
+    if (newOff !== 0) p.set('off', String(newOff));
+    const qs = p.toString();
+    return `${basePath}${qs ? '?' + qs : ''}`;
+  };
+  const calRangeLabel = `${calFromIso} → ${calToIso}`;
+  const calPillStyle = (active: boolean): React.CSSProperties => ({
+    fontSize: 11, padding: '4px 10px', borderRadius: 99,
+    border: `1px solid ${active ? 'var(--primary, #1F3A2E)' : 'var(--hairline, #E6DFCC)'}`,
+    background: active ? 'var(--primary, #1F3A2E)' : 'var(--paper, #FFFFFF)',
+    color: active ? '#FFFFFF' : 'var(--ink-soft, #5A5A5A)',
+    textDecoration: 'none', fontWeight: active ? 600 : 500,
+    letterSpacing: '0.06em', textTransform: 'uppercase',
+  });
+
   return (
     <DashboardPage title="Revenue · Calendar" subtitle={`pricing · ${period.label}`} tabs={tabs}>
       {stripBlock}
+
+      {/* note#178: KPI stripe at the top */}
       <div style={fullRow}>
         <Container title="Pricing snapshot" subtitle="actionable now" density="compact">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
@@ -377,6 +424,18 @@ export default async function PricingPage({ searchParams, propertyId }: { search
           </div>
         </Container>
       </div>
+
+      <div style={fullRow}>
+        <Container title={`30-day pricing calendar · ${calRangeLabel}`} subtitle="hover any day for base rate · rooms available · OCC · category. arrow to slide next month (max +90d)">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 10 }}>
+            <a href={calHref(Math.max(0, calOff - 30))} style={{ ...calPillStyle(false), opacity: calOff === 0 ? 0.4 : 1 }}>← prev 30d</a>
+            {calOff !== 0 && <a href={calHref(0)} style={calPillStyle(false)}>today</a>}
+            <a href={calHref(Math.min(90, calOff + 30))} style={{ ...calPillStyle(false), opacity: calOff >= 90 ? 0.4 : 1 }}>next 30d →</a>
+          </div>
+          <MonthCalendar days={pricingCalendarDays} variant="occ" />
+        </Container>
+      </div>
+
       <div style={fullRow}>
         <Container title="Window aggregates" subtitle={period.label} density="compact">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
