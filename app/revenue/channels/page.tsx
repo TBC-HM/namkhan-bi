@@ -45,23 +45,37 @@ export const dynamic = 'force-dynamic';
 const PROPERTY_ID_NAMKHAN = 260955;
 
 const OTA_RX = /booking\.com|expedia|agoda|airbnb|ctrip|trip\.com|hotels\.com|traveloka|a-expedia|a-hotels|bdc-|exp-/i;
-const DMC_RX = /hotelbeds|webbeds|sunhotels|gta|tourico|bonotel|miki|reseller|khiri|trails of|wholesale|destimo|sidetours|tui|jet2|wtb-|sun-|ago-|wbs-/i;
+// PBS #199: split Bedbanks (rate wholesalers) from DMCs (B2B tour operators)
+const BEDBANK_RX = /hotelbeds|webbeds|sunhotels|bonotel|miki|destimo|sidetours|wbs-|wtb-|sun-|ago-/i;
+const DMC_RX = /khiri|trails of|tui|jet2|tour operator|gta|tourico|wholesale|reseller|dmc/i;
 const DIRECT_RX = /direct|website|booking engine|^email|walk[- ]?in|witbooking|whatsapp|mews operations|in person|telephone/i;
 
-type Category = 'direct' | 'ota' | 'dmc';
+type Category = 'direct' | 'ota' | 'dmc' | 'bedbank';
 
 function classify(source: string): Category | 'other' {
   const s = (source || '').toLowerCase();
-  if (DIRECT_RX.test(s)) return 'direct';
-  if (OTA_RX.test(s))    return 'ota';
-  if (DMC_RX.test(s))    return 'dmc';
+  if (DIRECT_RX.test(s))   return 'direct';
+  if (OTA_RX.test(s))      return 'ota';
+  if (BEDBANK_RX.test(s))  return 'bedbank';
+  if (DMC_RX.test(s))      return 'dmc';
   return 'other';
 }
 
+// PBS #199: Namkhan does not have Bedbank business. Bedbank tab only on Donna (pid=1000001).
+function visibleTabs(pid: number): Array<{ key: Category; label: string; tagline: string }> {
+  const base: Array<{ key: Category; label: string; tagline: string }> = [
+    { key: 'direct',  label: 'Direct',   tagline: 'in-house channels — best margin' },
+    { key: 'ota',     label: 'OTAs',     tagline: 'Booking.com · Expedia · Agoda · …' },
+    { key: 'dmc',     label: 'DMC',      tagline: 'Khiri · Trails · tour operators' },
+  ];
+  if (pid === 1000001) base.push({ key: 'bedbank', label: 'Bedbanks', tagline: 'Hotelbeds · WebBeds · Sunhotels · …' });
+  return base;
+}
 const TAB_DEFS: Array<{ key: Category; label: string; tagline: string }> = [
-  { key: 'direct', label: 'Direct',        tagline: 'in-house channels — best margin' },
-  { key: 'ota',    label: 'OTAs',          tagline: 'Booking.com · Expedia · Agoda · …' },
-  { key: 'dmc',    label: 'DMC · Bedbanks', tagline: 'Hotelbeds · WebBeds · Khiri · …' },
+  { key: 'direct',  label: 'Direct',   tagline: 'in-house channels — best margin' },
+  { key: 'ota',     label: 'OTAs',     tagline: 'Booking.com · Expedia · Agoda · …' },
+  { key: 'dmc',     label: 'DMC',      tagline: 'Khiri · Trails · tour operators' },
+  { key: 'bedbank', label: 'Bedbanks', tagline: 'Hotelbeds · WebBeds · Sunhotels · …' },
 ];
 
 interface Props { searchParams: Record<string, string | string[] | undefined>; propertyId?: number }
@@ -118,7 +132,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
   const channels = channelsRaw;
 
   // Group all channels by category
-  const byCat: Record<Category | 'other', typeof channels> = { direct: [], ota: [], dmc: [], other: [] };
+  const byCat: Record<Category | 'other', typeof channels> = { direct: [], ota: [], dmc: [], bedbank: [], other: [] };
   for (const c of channels) byCat[classify(String(c.source_name || ''))].push(c);
 
   // Page-level mix tiles (across all categories)
@@ -178,9 +192,8 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
       subtitle={`Channel performance · ${period.label} · ${channels.length} active sources across ${[byCat.direct, byCat.ota, byCat.dmc].filter((g) => g.length > 0).length} categories`}
       tabs={tabs}
     >
-      {/* PBS #187 (2026-05-24): Window + Category controls collapsed INTO the Headline
-          channel-mix container — one container, three stacked rows (Window · Category · KPI tiles). */}
-      <Container title="Headline · channel mix" subtitle={period.label} density="compact">
+      {/* PBS #199 strip-1 (2026-05-25): Headline channel-mix is now a flat strip (no Container chrome). Selectors on row 1, KPI tiles on row 2. */}
+      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 10, padding: '4px 0 10px', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'center', marginBottom: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>Window</span>
@@ -196,7 +209,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
             <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>Category</span>
             <div style={subTabRow}>
-              {TAB_DEFS.map((t) => {
+              {visibleTabs(pid).map((t) => {
                 const active = t.key === activeTab;
                 return (
                   <Link key={t.key} href={tabHrefFor(t.key)} style={subTabStyle(active)}>
@@ -210,7 +223,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
           {pageMixTiles.map((t, i) => <KpiTile key={i} {...t} />)}
         </div>
-      </Container>
+      </div>
 
       {chips.length > 0 && (
         <Container title="Watch list" subtitle="auto-detected insights · cross-category" density="compact" status="amber">
@@ -224,7 +237,8 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
 
       {activeTab === 'direct' && <CategoryBlock category="direct" rows={byCat.direct as unknown as Array<Record<string, unknown>>} cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'direct')} mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'direct')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} />}
       {activeTab === 'ota'    && <CategoryBlock category="ota"    rows={byCat.ota as unknown as Array<Record<string, unknown>>}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'ota')}    mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'ota')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} />}
-      {activeTab === 'dmc'    && <CategoryBlock category="dmc"    rows={byCat.dmc as unknown as Array<Record<string, unknown>>}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'dmc')}    mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'dmc')} drillHrefFor={drillHrefFor} moneyCurrency="USD" />}
+      {activeTab === 'dmc'    && <CategoryBlock category="dmc"    rows={byCat.dmc as unknown as Array<Record<string, unknown>>}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'dmc')}    mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'dmc')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} />}
+      {activeTab === 'bedbank' && pid === 1000001 && <CategoryBlock category="bedbank" rows={byCat.bedbank as unknown as Array<Record<string, unknown>>} cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'bedbank')} mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'bedbank')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} />}
 
       {/* PBS #199 fix-2: top-level Sources · 2024/2025/2026 table is ALSO clickable. Click any source to open the drawer. */}
       <div style={{ gridColumn: '1 / -1' }}>
@@ -338,14 +352,16 @@ function CategoryBlock({
   const dPct = (a: number, b: number) => b > 0 ? ((a - b) / b) * 100 : 0;
 
   const titleOf: Record<Category, string> = {
-    direct: 'Direct',
-    ota:    'OTAs',
-    dmc:    'DMC · Bedbanks',
+    direct:  'Direct',
+    ota:     'OTAs',
+    dmc:     'DMC',
+    bedbank: 'Bedbanks',
   };
   const missingNote: Record<Category, string> = {
-    direct: '↪ Conversion rate (visits → bookings) and returning-guest direct % — owed by Plausible / GA integration + cross-join to pms.guests_mews.',
-    ota:    '↪ Search visibility · content score · Genius status — owed by BDC admin scrape (component scaffold at /channels/[source]).',
-    dmc:    '↪ Contract status · net-rate vs published rack · production-vs-target — owed by cockpit.dmc_contracts table.',
+    direct:  '↪ Conversion rate (visits → bookings) and returning-guest direct % — owed by Plausible / GA integration + cross-join to pms.guests_mews.',
+    ota:     '↪ Search visibility · content score · Genius status — owed by BDC admin scrape (component scaffold at /channels/[source]).',
+    dmc:     '↪ Contract status · net-rate vs published rack · production-vs-target — owed by cockpit.dmc_contracts table.',
+    bedbank: '↪ Net-rate vs rack contract terms · allotment uplift · stop-sell breach — owed by cockpit.bedbank_contracts table.',
   };
 
   // KPI tiles per category
@@ -369,17 +385,17 @@ function CategoryBlock({
         { label: 'Cancel rate', value: `${cancelPctTotal.toFixed(1)}%`, size: 'sm', status: cancelPctTotal > 25 ? 'red' : 'amber' },
       ];
     }
-    // dmc
+    // dmc / bedbank (same shape — both are B2B intermediaries)
     return [
       { label: 'Bookings', value: bookings, size: 'sm' },
       { label: 'Revenue', value: Math.round(revenue), currency: moneyCurrency, size: 'sm' },
-      { label: 'ADR', value: Math.round(adr), currency: moneyCurrency, size: 'sm', footnote: 'pre-commission net rate' },
-      { label: 'Avg lead time', value: `${avgLead.toFixed(0)}d`, size: 'sm', footnote: 'usually longer for B2B' },
+      { label: 'ADR', value: Math.round(adr), currency: moneyCurrency, size: 'sm', footnote: category === 'bedbank' ? 'net rate (no commission)' : 'pre-commission net rate' },
+      { label: 'Avg lead time', value: `${avgLead.toFixed(0)}d`, size: 'sm', footnote: category === 'bedbank' ? 'B2B allotments' : 'usually longer for B2B' },
       { label: 'Active contracts', value: rows.length, size: 'sm', footnote: 'distinct sources w/ bookings' },
     ];
   })();
 
-  // Trend chart — pluck the right column from mixWeekly
+  // Trend chart — pluck the right column from mixWeekly (dmc + bedbank both fall into "wholesale" bucket in mixWeekly)
   const trendKey: 'direct' | 'ota' | 'wholesale' = category === 'direct' ? 'direct' : category === 'ota' ? 'ota' : 'wholesale';
   const trendData = (mixWeekly as Array<Record<string, unknown>>).map((r) => ({
     week:  String(r.week_start ?? r.week ?? ''),
@@ -433,13 +449,14 @@ function CategoryBlock({
   const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
   return (
     <>
-      {/* KPI tiles */}
-      <div style={fullRow}>
-        <Container title={`${titleOf[category]} · headline`} subtitle={`${period.label} · ${rows.length} active sources`} density="compact">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
-            {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
-          </div>
-        </Container>
+      {/* PBS #199 strip-2 (2026-05-25): per-category headline is now a flat strip (no Container chrome). */}
+      <div style={{ ...fullRow, display: 'flex', flexDirection: 'column', gap: 6, padding: '2px 0 10px', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>
+        <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>
+          {titleOf[category]} · {period.label} · {rows.length} active sources
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
+          {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
+        </div>
       </div>
 
       {/* Two trend charts paired in a 2-up row */}
