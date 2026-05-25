@@ -19,8 +19,8 @@
 // only what it renders; no client-side aggregation of receipt lines.
 
 import Link from 'next/link';
-import Page from '@/components/page/Page';
-import Panel from '@/components/page/Panel';
+import { DashboardPage, Container } from '@/app/(cockpit)/_design';
+
 import KpiBox from '@/components/kpi/KpiBox';
 import FilterStrip from '@/components/nav/FilterStrip';
 import PosterReceiptsTable from '@/components/poster/PosterReceiptsTable';
@@ -103,15 +103,12 @@ export default async function PosControllerPage({ searchParams }: Props) {
   ].filter(Boolean).join(' · ');
 
   return (
-    <Page
-      eyebrow={eyebrow}
-      title={
-        <>
-          POS · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>reconcile</em> · Poster ↔ PMS
-        </>
-      }
-      subPages={FINANCE_SUBPAGES}
+    <DashboardPage
+      title="POS · reconcile · Poster ↔ PMS"
+      subtitle={eyebrow}
+      tabs={FINANCE_SUBPAGES.map(s => ({ key: s.href, label: s.label, href: s.href, active: s.href === '/finance/acc' }))}
     >
+      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 18 }}>
       <TabStrip tabs={ACC_TABS} activeKey="pos" />
       {/* ─── 1. Controller KPIs (lead with the reconciliation health) ─ */}
       <div
@@ -163,9 +160,9 @@ export default async function PosControllerPage({ searchParams }: Props) {
       <FilterStrip />
 
       {/* ─── 2. Charge-Room reconciliation: three buckets ──────────── */}
-      <Panel
+      <Container
         title="Charge-to-room reconciliation"
-        eyebrow={`Poster room postings vs PMS folio · last sync ${recon.reconciled_at?.slice(0, 16).replace('T', ' ') ?? '(never)'}`}
+        subtitle={`Poster room postings vs PMS folio · last sync ${recon.reconciled_at?.slice(0, 16).replace('T', ' ') ?? '(never)'}`}
         expandable={false}
       >
         <div
@@ -198,23 +195,23 @@ export default async function PosControllerPage({ searchParams }: Props) {
             note={`${recon.no_match_n} no client match · ${recon.no_cb_lines_n} no PMS line on that date.`}
           />
         </div>
-      </Panel>
+      </Container>
 
       {/* Unmatched detail table — month dropdown + name search + bucket toggle */}
       {unmatched.length > 0 && (
-        <Panel
+        <Container
           title={`Charge-to-room receipts that need investigation · ${unmatched.length} surfaced`}
-          eyebrow="filter by month or search by client / waiter / receipt # · delta column explains the gap"
+          subtitle="filter by month or search by client / waiter / receipt # · delta column explains the gap"
           expandable
         >
           <UnmatchedReceiptsTable rows={unmatched} />
-        </Panel>
+        </Container>
       )}
 
       {/* ─── 3. Tickets on top (paid in restaurant) ─────────────────── */}
-      <Panel
+      <Container
         title="Tickets on top · paid in the restaurant"
-        eyebrow="Receipts that did NOT post to a guest room — invitations · walk-ins · staff · deposits"
+        subtitle="Receipts that did NOT post to a guest room — invitations · walk-ins · staff · deposits"
         expandable={false}
       >
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, padding: 12 }}>
@@ -225,36 +222,36 @@ export default async function PosControllerPage({ searchParams }: Props) {
             <MethodTile key={b.label} label={prettifyMethod(b.label)} n={b.n} usd={b.usd} tone="warn" />
           ))}
         </div>
-      </Panel>
+      </Container>
 
       {/* ─── 4. House-account ──────────────────────────────────────── */}
-      <Panel
+      <Container
         title={`House-account transactions · ${house.closed_n} receipt${house.closed_n === 1 ? '' : 's'} · ${fmtMoney(house.order_usd, 'USD')}`}
-        eyebrow="payment_method='House Acccount Charge' — non-guest folio (vendor / management / barter)"
+        subtitle="payment_method='House Acccount Charge' — non-guest folio (vendor / management / barter)"
         expandable
       >
         <HouseAccountTable rows={raw.filter((r) => r.payment_method === 'House Acccount Charge')} />
-      </Panel>
+      </Container>
 
       {/* ─── 5. Monthly Poster vs Cloudbeds delta ──────────────────── */}
       {vsCb.length > 0 && (
-        <Panel
+        <Container
           title="Poster room postings vs PMS F&B · monthly"
-          eyebrow="If the line drifts apart, Poster posted to room and PMS did NOT receive it — controller alert"
+          subtitle="If the line drifts apart, Poster posted to room and PMS did NOT receive it — controller alert"
           expandable
         >
           <VsCloudbedsChart rows={vsCb.slice(-12)} />
-        </Panel>
+        </Container>
       )}
 
       {/* ─── 6. Raw Poster receipts (drill-down) ───────────────────── */}
-      <Panel
+      <Container
         title={`All receipts in period · ${raw.length}`}
-        eyebrow="raw drill — search by client, table, waiter, amount"
+        subtitle="raw drill — search by client, table, waiter, amount"
         expandable
       >
         <PosterReceiptsTable data={raw} />
-      </Panel>
+      </Container>
 
       <div style={{ marginTop: 16, fontSize: 'var(--t-xs)', color: 'var(--ink-mute)', textAlign: 'right' }}>
         Legacy tabs deprecated:{' '}
@@ -263,7 +260,8 @@ export default async function PosControllerPage({ searchParams }: Props) {
         <Link href="/finance/pos?win=last30d" style={{ color: 'var(--brass)' }}>POS · Poster</Link>{' '}
         merged into this page (PBS 2026-05-15).
       </div>
-    </Page>
+      </div>
+    </DashboardPage>
   );
 }
 
