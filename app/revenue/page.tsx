@@ -21,6 +21,8 @@ import BugsList from './_components/BugsList';
 import HodTasksList from './_components/HodTasksList';
 import AttentionList from './_components/AttentionList';
 import { getPulseTodayPickup, getPulseTodayCancellations } from '@/lib/data-pulse';
+// Task #89: re-wire BookingActivity primitive into the Revenue HoD landing
+import BookingActivity from '@/app/(cockpit)/_design/BookingActivity';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -154,6 +156,11 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
           </Container>
         </div>
       )}
+
+      {/* Task #89: BookingActivity — today's bookings + cancellations + day-window selector */}
+      <div style={fullRow}>
+        <BookingActivity propertyId={pid} searchParams={searchParams} />
+      </div>
 
     </DashboardPage>
   );
