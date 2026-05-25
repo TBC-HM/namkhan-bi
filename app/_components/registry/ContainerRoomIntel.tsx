@@ -521,6 +521,8 @@ async function DrillPanel({
   })();
   const adrSeries: ChartSeries[] = [];
   const adrData: Array<Record<string, string | number>> = last12Months.map((m) => ({ month: m }));
+  // USALI task #5: parallel OCC dataset (same series keys/colors as ADR, so legends line up)
+  const occData: Array<Record<string, string | number>> = last12Months.map((m) => ({ month: m }));
   const granularTypes = Array.from(new Set(categoryRowsAllTime.map((r) => String(r.room_type_name ?? '')))).sort();
   const PALETTE = ['#1F3A2E', '#B8542A', '#B8A878', '#5B7A5A', '#8A2A1D', '#3A7CA5'];
   granularTypes.forEach((rt, idx) => {
@@ -532,6 +534,7 @@ async function DrillPanel({
       // task #96: LOS now sourced from view's avg_los column (nights / bookings)
       adrData[mIdx][`t${idx}_los`] = row ? num(row.avg_los) : 0;
       adrData[mIdx][`t${idx}_bk`] = row ? num(row.bookings) : 0;
+      occData[mIdx][`t${idx}`] = row ? num(row.occ_pct_of_canonical) : 0;
     });
   });
   // labels for tooltip lookup
@@ -637,6 +640,19 @@ async function DrillPanel({
             {/* PBS #145 hotfix-2: tooltipFormatter (a function) crashes server→client into the DashboardPage ('use client') boundary. Drop the custom formatter — default tooltip shows key/value pairs. Custom hover detail returns once Chart accepts a string enum for format. */}
             <Chart variant="line" data={adrData} xKey="month" series={adrSeries} height={220}
               empty={{ title: 'No ADR history for this category' }} />
+          </div>
+        </div>
+      )}
+
+      {/* USALI task #5 — OCC line chart per granular room type (mirror of ADR) */}
+      {last12Months.length > 0 && (
+        <div style={panelStyle}>
+          <div style={panelHeader}>
+            OCC · last 12 months <span style={panelHeaderSub}>· per granular room type · % of canonical capacity</span>
+          </div>
+          <div style={{ padding: 12 }}>
+            <Chart variant="line" data={occData} xKey="month" series={adrSeries} height={220}
+              empty={{ title: 'No OCC history for this category' }} />
           </div>
         </div>
       )}
