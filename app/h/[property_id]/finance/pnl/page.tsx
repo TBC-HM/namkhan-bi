@@ -586,7 +586,7 @@ export default async function PropertyPnLPage({ params, searchParams }: Props) {
           <Container
             title={`Monthly overview · ${fmtMonthLong(selectedMonth)}`}
             subtitle={`finance.gl_pl_monthly · property_id=${propertyId}`}
-            actions={
+            action={
               <MonthDropdown
                 current={selectedMonth}
                 options={monthOptions}
@@ -610,7 +610,7 @@ export default async function PropertyPnLPage({ params, searchParams }: Props) {
           <Container
             title={`12-month rollup · FY${year}`}
             subtitle={`actual · ${currency} · ${rows.length} rows`}
-            actions={
+            action={
               <span style={{ fontSize: 'var(--t-xs)', color: 'var(--tbl-fg-mute, rgba(26, 26, 26, 0.6))' }}>
                 FY {year} · {fmtCurrency(annualHotelRev, currency)} rev · {fmtCurrency(annualNet, currency)} net
                 {annualHotelRev !== 0 && annualGop !== 0 ? ` · GOP ${fmtPct((annualGop / annualHotelRev) * 100, 1)}` : ''}
