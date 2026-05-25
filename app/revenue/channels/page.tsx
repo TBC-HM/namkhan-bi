@@ -482,16 +482,6 @@ function CategoryBlock({
         </Container>
       </div>
 
-      {netData.length > 0 && (
-        <div style={fullRow}>
-          <Container title={`${titleOf[category]} · net $/booking`} subtitle="cancel-adjusted">
-            <Chart variant="bar" data={netData} xKey="source"
-              series={[{ key: 'net_pb', label: 'Net $/booking', color: '#1F3A2E' }]}
-              height={200} empty={{ title: 'No net value data' }} />
-          </Container>
-        </div>
-      )}
-
       {/* PBS #199 v4: small "Still owed" note moved UP from the bottom — sits between graphs and the all-sources table. */}
       <div style={fullRow}>
         <Container title="Still owed" subtitle="data not yet wired for this category" density="compact" status="grey">
