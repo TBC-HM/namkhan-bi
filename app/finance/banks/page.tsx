@@ -13,8 +13,8 @@
 // PBS 2026-05-15.
 
 import Link from 'next/link';
-import Page from '@/components/page/Page';
-import Panel from '@/components/page/Panel';
+import { DashboardPage, Container } from '@/app/(cockpit)/_design';
+
 import { FINANCE_SUBPAGES } from '../_subpages';
 import TabStrip, { ACC_TABS } from '../_components/TabStrip';
 import CoverageMatrixExpandable from './_components/CoverageMatrixExpandable';
@@ -66,11 +66,12 @@ export default async function BanksPage({ searchParams }: Props) {
   ].join(' · ');
 
   return (
-    <Page
-      eyebrow={eyebrow}
-      title={<>Every dollar and every kip — <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>where it sits</em>, where it moved, what's missing.</>}
-      subPages={FINANCE_SUBPAGES}
+    <DashboardPage
+      title="Banks · cash command"
+      subtitle={eyebrow}
+      tabs={FINANCE_SUBPAGES.map(s => ({ key: s.href, label: s.label, href: s.href, active: s.href === '/finance/acc' }))}
     >
+      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 18 }}>
       {/* ─── Acc hub strip (Transactions · Banks · POS) ────────────── */}
       <TabStrip tabs={ACC_TABS} activeKey="banks" />
 
@@ -101,7 +102,8 @@ export default async function BanksPage({ searchParams }: Props) {
       {tab === 'reconcile' && (
         <ReconcileTab health={recHealth} candidates={recCandidates} />
       )}
-    </Page>
+      </div>
+    </DashboardPage>
   );
 }
 
@@ -154,24 +156,24 @@ function OverviewTab({
 
       {/* 2 · Graphs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 12 }}>
-        <Panel title="Balance trajectory · USD-eq" eyebrow="cumulative net cash">
+        <Container title="Balance trajectory · USD-eq" subtitle="cumulative net cash">
           <BalanceTrajectoryChart months={months} flow={v.monthlyFlow} totalCash={v.totalCashUsd} />
-        </Panel>
-        <Panel title="Monthly flow · in vs out" eyebrow="2025-01 onwards · hover for value">
+        </Container>
+        <Container title="Monthly flow · in vs out" subtitle="2025-01 onwards · hover for value">
           <MonthlyFlowChart months={months} flow={v.monthlyFlow} />
-        </Panel>
-        <Panel title="Top counterparties · USD" eyebrow="ranked by inflow · top 10">
+        </Container>
+        <Container title="Top counterparties · USD" subtitle="ranked by inflow · top 10">
           <TopCounterpartiesChart rows={v.topCounterparties} />
-        </Panel>
+        </Container>
       </div>
 
       <div style={{ height: 14 }} />
 
       {/* 3 · Data coverage matrix · compact · with FC CTA */}
-      <Panel
+      <Container
         title="Data coverage · 2025-01 → today"
-        eyebrow={`${coverageStats.cells_missing} of ${coverageStats.cells_total} account-months missing · click ✉ to request from FC`}
-        actions={<MasterRequestCTA
+        subtitle={`${coverageStats.cells_missing} of ${coverageStats.cells_total} account-months missing · click ✉ to request from FC`}
+        action={<MasterRequestCTA
           accountOrder={accountOrder}
           accountMeta={accountMeta}
           missingByAccount={(() => {
@@ -192,14 +194,14 @@ function OverviewTab({
             return m;
           })()}
         />
-      </Panel>
+      </Container>
 
       <div style={{ height: 14 }} />
 
       {/* 4 · Lookup container */}
-      <Panel
+      <Container
         title="Look up · descriptor search"
-        eyebrow="free-text · period · type · type 'booking' to match Booking.com etc."
+        subtitle="free-text · period · type · type 'booking' to match Booking.com etc."
       >
         <form method="get" style={{
           display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end',
@@ -248,27 +250,27 @@ function OverviewTab({
             </Link>
           )}
         </form>
-      </Panel>
+      </Container>
 
       <div style={{ height: 14 }} />
 
       {/* 5 · Tables — lookup results + account balances */}
-      <Panel
+      <Container
         title={`Lookup results · ${lookup.length}${lookup.length === 200 ? ' (capped)' : ''}`}
-        eyebrow={[
+        subtitle={[
           q && `“${q}”`,
           period !== 'all' && period,
           type !== 'all' && (type === 'in' ? 'inflow only' : 'outflow only'),
         ].filter(Boolean).join(' · ') || 'all rows · 200 most recent'}
       >
         <LookupTable rows={lookup} />
-      </Panel>
+      </Container>
 
       <div style={{ height: 14 }} />
 
-      <Panel title="Account balances · USD-equivalent" eyebrow="opening + Σ txns">
+      <Container title="Account balances · USD-equivalent" subtitle="opening + Σ txns">
         <AccountBalanceTable rows={v.balances} />
-      </Panel>
+      </Container>
     </>
   );
 }
@@ -297,31 +299,31 @@ function AnalyticsTab({ v }: { v: Awaited<ReturnType<typeof getBanksCfoView>> })
 
       {/* 2 · Graphs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 12 }}>
-        <Panel title="Inflow Pareto · top 15" eyebrow="ranked by inflow USD">
+        <Container title="Inflow Pareto · top 15" subtitle="ranked by inflow USD">
           <CounterpartyPareto rows={inflows} kind="in" />
-        </Panel>
-        <Panel title="Outflow Pareto · top 15" eyebrow="ranked by outflow USD · highest spend on top">
+        </Container>
+        <Container title="Outflow Pareto · top 15" subtitle="ranked by outflow USD · highest spend on top">
           <CounterpartyPareto rows={outflows} kind="out" />
-        </Panel>
-        <Panel title="Category split · USD" eyebrow="net flow per descriptor category">
+        </Container>
+        <Container title="Category split · USD" subtitle="net flow per descriptor category">
           <CategoryBars rows={categoryRollup.byCategory} />
-        </Panel>
+        </Container>
       </div>
 
       <div style={{ height: 14 }} />
 
       {/* 3 · Tables */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <Panel title="Top inflow counterparties" eyebrow="who pays us">
+        <Container title="Top inflow counterparties" subtitle="who pays us">
           <SmallTable cols={['Counterparty', 'Category', 'Txns', 'Inflow $']} rows={inflows.map((r) => [
             r.counterparty, r.category, r.txn_count, fmtMoney(r.inflow_usd, 'USD'),
           ])} />
-        </Panel>
-        <Panel title="Top outflow counterparties" eyebrow="who we pay">
+        </Container>
+        <Container title="Top outflow counterparties" subtitle="who we pay">
           <SmallTable cols={['Counterparty', 'Category', 'Txns', 'Outflow $']} rows={outflows.map((r) => [
             r.counterparty, r.category, r.txn_count, fmtMoney(r.outflow_usd, 'USD'),
           ])} />
-        </Panel>
+        </Container>
       </div>
 
       {!hasData && (
@@ -394,7 +396,7 @@ function ReconcileTab({ health, candidates }: { health: ReconcileHealth; candida
       <div style={{ height: 14 }} />
 
       {/* 2 · Strategy / explainer */}
-      <Panel title="How the matcher works" eyebrow="v_bank_cloudbeds_reconcile_candidates · ±3 days · ±$1 USD · method affinity">
+      <Container title="How the matcher works" subtitle="v_bank_cloudbeds_reconcile_candidates · ±3 days · ±$1 USD · method affinity">
         <div style={{ padding: 14, fontSize: 'var(--t-sm)', color: 'var(--ink-soft)' }}>
           <ol style={{ margin: 0, paddingLeft: 20 }}>
             <li><strong>Date window:</strong> bank_date within ±3 days of PMS pay_date (covers settlement lag).</li>
@@ -404,22 +406,22 @@ function ReconcileTab({ health, candidates }: { health: ReconcileHealth; candida
             <li><strong>Manual override:</strong> set <code>bank.transactions.reconciled = true</code> and <code>reconciled_with = cb_txn_id</code>.</li>
           </ol>
         </div>
-      </Panel>
+      </Container>
 
       <div style={{ height: 14 }} />
 
       {/* 3 · Candidate match tables */}
-      <Panel title={`High-confidence matches · ${high.length}`} eyebrow="score ≥ 80 · safe to confirm">
+      <Container title={`High-confidence matches · ${high.length}`} subtitle="score ≥ 80 · safe to confirm">
         <ReconcileTable rows={high} />
-      </Panel>
+      </Container>
       <div style={{ height: 14 }} />
-      <Panel title={`Medium-confidence matches · ${med.length}`} eyebrow="score 50-79 · review manually">
+      <Container title={`Medium-confidence matches · ${med.length}`} subtitle="score 50-79 · review manually">
         <ReconcileTable rows={med} />
-      </Panel>
+      </Container>
       <div style={{ height: 14 }} />
-      <Panel title={`Low-confidence matches · ${low.length}`} eyebrow="score < 50 · likely false positive">
+      <Container title={`Low-confidence matches · ${low.length}`} subtitle="score < 50 · likely false positive">
         <ReconcileTable rows={low} />
-      </Panel>
+      </Container>
 
       {health.bank_credit_n === 0 && (
         <>
