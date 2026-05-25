@@ -12,7 +12,7 @@
 
 import { supabase } from '@/lib/supabase';
 import KpiStrip, { type KpiStripItem } from '@/components/kpi/KpiStrip';
-import Page from '@/components/page/Page';
+import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import { OPERATIONS_SUBPAGES } from '../../_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import StaffTabStrip from './StaffTabStrip';
@@ -347,11 +347,12 @@ export default async function ScheduleTabContent({
     : null;
 
   return (
-    <Page
-      eyebrow={eyebrow}
-      title={<>Staff <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>schedule</em></>}
-      subPages={subPagesOverride ?? rewriteSubPagesForProperty(OPERATIONS_SUBPAGES, propertyId)}
+    <DashboardPage
+      title="Staff schedule"
+      subtitle={eyebrow}
+      tabs={(subPagesOverride ?? rewriteSubPagesForProperty(OPERATIONS_SUBPAGES, propertyId)).map(s => ({ key: s.href, label: s.label, href: s.href, active: s.label === 'HR' || s.href.endsWith('/finance/hr') || s.href.endsWith('/operations/staff') }))}
     >
+      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 18 }}>
       <StaffTabStrip propertyId={propertyId} />
 
       <KpiStrip items={[
@@ -637,7 +638,8 @@ export default async function ScheduleTabContent({
           </section>
         </>
       )}
-    </Page>
+      </div>
+    </DashboardPage>
   );
 }
 
