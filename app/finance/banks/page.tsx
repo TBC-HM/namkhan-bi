@@ -134,23 +134,21 @@ function OverviewTab({
 
   return (
     <>
-      {/* 1 · KPI band — Position */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
-        <Kpi value={fmtMoney(v.totalCashUsd, 'USD')} label="Total cash · USD-eq" hint="Σ opening + Σ txns, LAK FX'd to USD at 21,800" tone="brass" />
-        <Kpi value={fmtMoney(v.usdCashUsd, 'USD')}   label="USD accounts" />
-        <Kpi value={fmtMoney(v.lakCashUsd, 'USD')}   label="LAK accounts · USD-eq" />
-        <Kpi value={`${v.fxExposurePct}%`}           label="FX exposure (LAK %)" warn={v.fxExposurePct > 30} />
-        <Kpi value={`${coverageStats.coverage_pct}%`} label="Data coverage" warn={coverageStats.coverage_pct < 80} />
-      </div>
-      <div style={{ height: 10 }} />
-      {/* KPI band — Flow */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
-        <Kpi value={fmtMoney(v.ytdInflowUsd, 'USD')}             label="Inflow · YTD" tone="brass" />
-        <Kpi value={fmtMoney(Math.abs(v.ytdOutflowUsd), 'USD')}  label="Outflow · YTD" tone="brass" />
-        <Kpi value={fmtMoney(v.ytdNetUsd, 'USD')}                label="Net cash · YTD" />
-        <Kpi value={`${v.ytdReconciledPct}%`}                    label="Reconciled · %" warn />
-        <Kpi value={`${coverageStats.accounts_empty}/${v.balances.length}`} label="Accounts empty" warn={coverageStats.accounts_empty > 0} />
-      </div>
+      {/* 1 · Headline — cash position + YTD flow, all 10 tiles in one strip */}
+      <Container title="Headline · cash position + YTD flow" subtitle="position (top) + flow (bottom) · USD-equivalent" density="compact">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+          <Kpi value={fmtMoney(v.totalCashUsd, 'USD')} label="Total cash · USD-eq" hint="Σ opening + Σ txns, LAK FX'd to USD at 21,800" tone="brass" />
+          <Kpi value={fmtMoney(v.usdCashUsd, 'USD')}   label="USD accounts" />
+          <Kpi value={fmtMoney(v.lakCashUsd, 'USD')}   label="LAK accounts · USD-eq" />
+          <Kpi value={`${v.fxExposurePct}%`}           label="FX exposure (LAK %)" warn={v.fxExposurePct > 30} />
+          <Kpi value={`${coverageStats.coverage_pct}%`} label="Data coverage" warn={coverageStats.coverage_pct < 80} />
+          <Kpi value={fmtMoney(v.ytdInflowUsd, 'USD')}             label="Inflow · YTD" tone="brass" />
+          <Kpi value={fmtMoney(Math.abs(v.ytdOutflowUsd), 'USD')}  label="Outflow · YTD" tone="brass" />
+          <Kpi value={fmtMoney(v.ytdNetUsd, 'USD')}                label="Net cash · YTD" />
+          <Kpi value={`${v.ytdReconciledPct}%`}                    label="Reconciled · %" warn />
+          <Kpi value={`${coverageStats.accounts_empty}/${v.balances.length}`} label="Accounts empty" warn={coverageStats.accounts_empty > 0} />
+        </div>
+      </Container>
 
       <div style={{ height: 14 }} />
 
