@@ -665,7 +665,7 @@ const S: Record<string, React.CSSProperties> = {
     // PBS 2026-05-09 #33: brighter temp/air pills.
     display: 'flex', alignItems: 'center', gap: 6,
     background: 'transparent', border: '1px solid var(--border-3, #3a3327)',
-    borderRadius: 999, padding: '4px 10px', cursor: 'pointer', color: 'var(--text-1, #f0e5cb)',
+    borderRadius: 999, padding: '4px 10px', cursor: 'pointer', color: 'var(--ink, #1B1B1B)',
   },
   chipText: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 11, fontWeight: 600 },
   // popoverHost is a transparent positioner that shares the close-delay
@@ -688,7 +688,7 @@ const S: Record<string, React.CSSProperties> = {
   dateText: {
     fontFamily: "'JetBrains Mono', ui-monospace, monospace",
     fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase',
-    color: 'var(--text-1, #f0e5cb)', fontWeight: 600, cursor: 'help',
+    color: 'var(--ink, #1B1B1B)', fontWeight: 600, cursor: 'help',
   },
   dateGrid: {
     position: 'absolute', top: '100%', right: 0, zIndex: 60,
@@ -724,7 +724,7 @@ const S: Record<string, React.CSSProperties> = {
   userBtn: {
     // PBS 2026-05-09 #33: brighter user-name pill.
     background: 'transparent', border: '1px solid var(--border-3, #3a3327)', borderRadius: 6,
-    color: 'var(--text-warm, #d9bf8e)', padding: '5px 12px', cursor: 'pointer',
+    color: 'var(--ink, #1B1B1B)', padding: '5px 12px', cursor: 'pointer',
     fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 10,
     letterSpacing: '0.16em', textTransform: 'uppercase', fontWeight: 700,
     display: 'flex', alignItems: 'center', gap: 6,
@@ -781,7 +781,7 @@ const S: Record<string, React.CSSProperties> = {
   inboxChip: {
     display: 'flex', alignItems: 'center', gap: 6,
     background: 'transparent', border: '1px solid var(--border-3, #3a3327)',
-    borderRadius: 999, padding: '4px 10px', cursor: 'pointer', color: 'var(--text-1, #f0e5cb)',
+    borderRadius: 999, padding: '4px 10px', cursor: 'pointer', color: 'var(--ink, #1B1B1B)',
     textDecoration: 'none', position: 'relative',
   },
   inboxBubble: {
