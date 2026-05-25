@@ -19,7 +19,7 @@ import { fmtPeriodLabel } from './period-utils';
 import StaffTabStrip from './StaffTabStrip';
 import UploadPayslipsButton from './UploadPayslipsButton';
 import KpiStrip, { type KpiStripItem } from '@/components/kpi/KpiStrip';
-import Page from '@/components/page/Page';
+import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import { OPERATIONS_SUBPAGES } from '../../_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 
@@ -442,12 +442,13 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
   const noData = totalActive === 0 && archived.length === 0 && deptRows.length === 0;
 
   return (
-    <Page
-      eyebrow={eyebrow}
-      title={<>Staff <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>register</em></>}
-      subPages={subPagesOverride ?? rewriteSubPagesForProperty(OPERATIONS_SUBPAGES, propertyId)}
-      topRight={<UploadPayslipsButton />}
+    <DashboardPage
+      title={`Staff register · ${propertyLabel ?? 'Property'}`}
+      subtitle={eyebrow}
+      tabs={(subPagesOverride ?? rewriteSubPagesForProperty(OPERATIONS_SUBPAGES, propertyId)).map(s => ({ key: s.href, label: s.label, href: s.href, active: s.label === 'HR' || s.href.endsWith('/finance/hr') || s.href.endsWith('/operations/staff') }))}
+      action={<UploadPayslipsButton />}
     >
+      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 18 }}>
       <StaffTabStrip propertyId={propertyId} />
       <KpiStrip items={[
         { label: 'Active', value: totalActive, kind: 'count', hint: 'on register' },
@@ -608,6 +609,7 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
           <ArchivedStaffTable rows={archived} />
         </div>
       </details>
-    </Page>
+      </div>
+    </DashboardPage>
   );
 }
