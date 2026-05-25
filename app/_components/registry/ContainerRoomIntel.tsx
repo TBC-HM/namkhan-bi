@@ -174,8 +174,11 @@ export default async function ContainerRoomIntel({ container, propertyId, search
   const ytdKey = `YTD-${currentYear}`;
   const requested = String(searchParams?.period ?? '');
   const isYtd = requested === ytdKey;
-  // USALI task #8: aggregate periods (FY + Q1-4) derived from every year in data
-  const AGGREGATE_YEARS = Array.from(new Set(allPeriods.map((p) => p.slice(0, 4)))).filter(Boolean).sort();
+  // USALI task #8 (pruned 2026-05-26): aggregate periods restricted to 2025 onwards
+  // (PBS feedback: full 2019-2026 list was cluttering the dropdown).
+  const AGGREGATE_YEARS = Array.from(new Set(allPeriods.map((p) => p.slice(0, 4))))
+    .filter((y) => Boolean(y) && Number(y) >= 2025)
+    .sort();
   const aggregatePeriods: string[] = [];
   for (const y of AGGREGATE_YEARS) {
     aggregatePeriods.push(`FY-${y}`, `Q1-${y}`, `Q2-${y}`, `Q3-${y}`, `Q4-${y}`);
