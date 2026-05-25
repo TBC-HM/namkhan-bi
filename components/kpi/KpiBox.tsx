@@ -1,29 +1,12 @@
-// components/kpi/KpiBox.tsx
-//
-// THE canonical KPI box for every pillar. Locked spec per user 2026-05-03 +
-// docs/11_BRAND_AND_UI_STANDARDS.md.
-//
-// Layout (top-to-bottom inside one box):
-//   ┌────────────────────────────────┐
-//   │ ▲ +5.2pp STLY  ▼ −3.1pp Bgt   │  delta(s)            — top
-//   │                                │
-//   │ 28.3%                          │  primary value       — center
-//   │ OCCUPANCY                      │  label (caps mono)   — under value
-//   │                                │
-//   │  [needs pill bottom-right]     │  data-needed badge
-//   └────────────────────────────────┘
-//
-// Typography hierarchy (one rule, no exceptions):
-//   - Primary value: italic Fraunces serif (--t-2xl)
-//   - Label: mono uppercase letterspaced (--t-xs)
-//   - Delta: sans small muted (--t-xs)
-//   - Needs: italic small muted (--t-xs)
-//
-// Unit formatting: handled by lib/format.fmtKpi. Pass raw numbers + unit
-// prop, never pre-format. Pre-formatted values bypass the locked rules.
+// components/kpi/KpiBox.tsx — PBS #205 (2026-05-25)
+// Legacy KPI box ADAPTED to delegate to the canonical KpiTile primitive.
+// Every existing KpiBox callsite (50+ on /finance/pnl alone) automatically
+// renders with the new design without touching any call site. Locked spec
+// preserved for tooltip/needs/state behavior — mapped onto KpiTile props.
 
 import { ReactNode } from 'react';
-import { fmtKpi, fmtDelta, type KpiUnit } from '@/lib/format';
+import { fmtKpi, type KpiUnit } from '@/lib/format';
+import { KpiTile, type KpiTileProps } from '@/app/(cockpit)/_design';
 
 export interface KpiDelta {
   /** Raw numeric delta (e.g. +5.2 for +5.2pp). Sign matters. */
@@ -35,93 +18,69 @@ export interface KpiDelta {
 }
 
 export interface KpiBoxProps {
-  /** Primary numeric value. Pass null/undefined to render "—". */
   value: number | null | undefined;
-  /** Unit determines formatting. Use 'text' for arbitrary strings. */
   unit: KpiUnit;
-  /** KPI label — automatically uppercased + mono-spaced. */
   label: string;
-  /** Up to 2 deltas rendered side-by-side at the top. */
   delta?: KpiDelta;
   compare?: KpiDelta;
-  /**
-   * State of the tile.
-   *   live          — normal value
-   *   data-needed   — greyed value + amber "DATA NEEDED" pill
-   *   pending       — italic muted "lorem"
-   */
   state?: 'live' | 'data-needed' | 'pending';
-  /** Explainer shown below value when state === 'data-needed'. */
   needs?: string;
-  /**
-   * Optional pre-formatted value override. Use ONLY when the value cannot
-   * be expressed by a unit (e.g. "18 / 4" composite, "n/a", "—").
-   * Prefer numeric `value` + `unit` for everything else so all KPIs share
-   * one formatting rule set.
-   */
   valueText?: ReactNode;
-  /** Decimal places for the primary value (default: 1 for pct/nights, 0 else). */
   dp?: number;
-  /** Hover tooltip — surface definition · period · source · calculation. */
   tooltip?: string;
 }
 
-export default function KpiBox({
-  value,
-  unit,
-  label,
-  delta,
-  compare,
-  state = 'live',
-  needs,
-  valueText,
-  dp,
-  tooltip,
-}: KpiBoxProps) {
-  const dataNeeded = state === 'data-needed';
-  const pending = state === 'pending';
+export default function KpiBox(props: KpiBoxProps) {
+  const { value, unit, label, delta, compare, state = 'live', needs, valueText, dp, tooltip } = props;
 
-  const display: ReactNode =
-    valueText ??
-    (pending ? 'lorem' : dataNeeded ? '—' : fmtKpi(value, unit, dp));
+  // Value formatting:
+  //   - valueText overrides (string passed through; JSX falls back to fmtKpi)
+  //   - state='pending' → 'lorem'
+  //   - state='data-needed' → '—'
+  //   - else fmtKpi(value, unit, dp)
+  const display: string =
+    typeof valueText === 'string' || typeof valueText === 'number'
+      ? String(valueText)
+      : state === 'pending'
+      ? 'lorem'
+      : state === 'data-needed'
+      ? '—'
+      : fmtKpi(value, unit, dp);
 
-  const valueClass =
-    `kpi-tile-value${pending || dataNeeded ? ' lorem' : ''}`;
+  // State → status mapping
+  const status: KpiTileProps['status'] =
+    state === 'data-needed' ? 'amber' :
+    state === 'pending' ? 'grey' :
+    undefined;
 
-  const tip =
-    tooltip ??
-    [label, delta && fmtDelta(delta.value, delta.unit, delta.period).text]
-      .filter(Boolean)
-      .join(' · ');
+  // Footnote — needs takes priority over tooltip (data-needed is the louder
+  // signal). Truncate tooltip to ~120 chars to keep tiles tight.
+  const tooltipShort = tooltip && tooltip.length > 120 ? tooltip.slice(0, 117) + '…' : tooltip;
+  const footnote = needs ? `Needs: ${needs}` : tooltipShort;
+
+  // Delta mapping — KpiTile expects { value, period, direction }.
+  const kpiTileDelta: KpiTileProps['delta'] =
+    delta && delta.value != null && Number.isFinite(Number(delta.value))
+      ? {
+          value: Number(delta.value),
+          period: delta.period ?? '',
+          direction: Number(delta.value) >= 0 ? 'up' : 'down',
+        }
+      : undefined;
+
+  // Note: `compare` (second delta) is dropped — KpiTile supports a single
+  // delta. Pages relying on dual-delta should switch to a custom Container
+  // layout. Audit before removing the prop.
+  void compare;
 
   return (
-    <div className="kpi-box" data-tooltip={tip || undefined} data-state={state}>
-      {/* Delta row — top */}
-      {(delta || compare) && (
-        <div className="kpi-box-deltas">
-          {delta && <KpiDeltaPill {...delta} />}
-          {compare && <KpiDeltaPill {...compare} />}
-        </div>
-      )}
-
-      {/* Primary value */}
-      <div className={valueClass}>{display}</div>
-
-      {/* Label */}
-      <div className="kpi-tile-scope">{label}</div>
-
-      {/* Data-needed badge / explainer — bottom-right */}
-      {dataNeeded && (
-        <>
-          {needs && <div className="kpi-box-needs">Needs: {needs}</div>}
-          <span className="kpi-box-pill">DATA NEEDED</span>
-        </>
-      )}
-    </div>
+    <KpiTile
+      label={label}
+      value={display}
+      size="sm"
+      status={status}
+      footnote={footnote}
+      delta={kpiTileDelta}
+    />
   );
-}
-
-function KpiDeltaPill({ value, unit, period }: KpiDelta) {
-  const { text, tone } = fmtDelta(value, unit, period);
-  return <span className={`kpi-box-delta ${tone}`}>{text}</span>;
 }
