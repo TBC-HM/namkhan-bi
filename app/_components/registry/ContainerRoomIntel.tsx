@@ -254,6 +254,13 @@ export default async function ContainerRoomIntel({ container, propertyId, search
     const params = new URLSearchParams();
     if (p !== realisedMonths[0]) params.set('period', p);
     if (activeExpand) params.set('expand', activeExpand);
+    // USALI task #6: preserve drill filters across period changes
+    const qParam = String(searchParams?.q ?? '');
+    const rtParam = String(searchParams?.rt ?? '');
+    const yrParam = String(searchParams?.yr ?? '');
+    if (qParam) params.set('q', qParam);
+    if (rtParam) params.set('rt', rtParam);
+    if (yrParam) params.set('yr', yrParam);
     const qs = params.toString();
     return qs ? `?${qs}` : '';
   }
@@ -474,6 +481,9 @@ export default async function ContainerRoomIntel({ container, propertyId, search
       {/* PBS #145 hotfix: DrillPanel's internal Chart uses tooltipFormatter (a function), which can't be serialised across server→client when wrapped inside the client DrillDrawer. Reverting to inline render. IcpSection renders as a sibling below. */}
       {activeExpand && (
         <DrillPanel
+          q={String(searchParams?.q ?? '')}
+          rtList={String(searchParams?.rt ?? '').split(',').filter(Boolean)}
+          yrFilter={String(searchParams?.yr ?? '')}
           code={activeExpand}
           friendly={isCanonicalGrouping ? (FRIENDLY[activeExpand] ?? activeExpand) : activeExpand}
           activePeriod={activePeriod}
@@ -499,31 +509,63 @@ interface DrillProps {
   categoryRowsActive: DataRow[];
   spec: RoomIntelSpec;
   currencySymbol: string;
+  // USALI task #6: drill filters (server-side, URL-driven)
+  q: string;
+  rtList: string[];
+  yrFilter: string;
 }
 
 async function DrillPanel({
   code, friendly, activePeriod, propertyId,
   categoryRowsAllTime, categoryRowsActive, spec, currencySymbol,
+  q, rtList, yrFilter,
 }: DrillProps) {
   const sortSpec = (spec.drill.default_sort ?? '').split(/\s+/);
   const sortCol = sortSpec[0] || 'room_revenue';
   const sortDesc = (sortSpec[1] ?? 'desc').toLowerCase() === 'desc';
-  const sorted = [...categoryRowsActive].sort((a, b) => {
+  // USALI task #6: apply search/chip filter to the drill table rows too
+  const sorted = [...categoryRowsActive]
+    .filter((r) => granularTypes.includes(String(r.room_type_name ?? '')))
+    .sort((a, b) => {
     const av = num(a[sortCol]); const bv = num(b[sortCol]);
     return sortDesc ? bv - av : av - bv;
   });
 
   // 12-month ADR series per granular room_type_name from the all-time rows
-  const last12Months: string[] = (() => {
+  const last12MonthsAll: string[] = (() => {
     const months = Array.from(new Set(categoryRowsAllTime.map((r) => String(r.period_yyyymm ?? ''))))
       .filter(Boolean).sort();
     return months.slice(-12);
   })();
+  // USALI task #6: shrink to chosen year when yrFilter is set
+  const last12Months: string[] = yrFilter
+    ? last12MonthsAll.filter((m) => m.startsWith(yrFilter))
+    : last12MonthsAll;
   const adrSeries: ChartSeries[] = [];
   const adrData: Array<Record<string, string | number>> = last12Months.map((m) => ({ month: m }));
   // USALI task #5: parallel OCC dataset (same series keys/colors as ADR, so legends line up)
   const occData: Array<Record<string, string | number>> = last12Months.map((m) => ({ month: m }));
-  const granularTypes = Array.from(new Set(categoryRowsAllTime.map((r) => String(r.room_type_name ?? '')))).sort();
+  const granularTypesAll = Array.from(new Set(categoryRowsAllTime.map((r) => String(r.room_type_name ?? '')))).sort();
+  // USALI task #6: search + chip filter (case-insensitive substring + multi-select chips)
+  const qLower = q.trim().toLowerCase();
+  const granularTypes = granularTypesAll.filter((rt) =>
+    (!qLower || rt.toLowerCase().includes(qLower)) &&
+    (rtList.length === 0 || rtList.includes(rt))
+  );
+  // USALI task #6: href helper for filter chips — preserves expand + period, toggles q / rt / yr
+  function hrefDrillToggle(overrides: { q?: string | null; rt?: string | null; yr?: string | null }): string {
+    const params = new URLSearchParams();
+    if (code) params.set('expand', code);
+    if (activePeriod) params.set('period', activePeriod);
+    const nextQ = 'q' in overrides ? overrides.q : q;
+    const nextRt = 'rt' in overrides ? overrides.rt : (rtList.length > 0 ? rtList.join(',') : null);
+    const nextYr = 'yr' in overrides ? overrides.yr : yrFilter;
+    if (nextQ) params.set('q', String(nextQ));
+    if (nextRt) params.set('rt', String(nextRt));
+    if (nextYr) params.set('yr', String(nextYr));
+    const qs = params.toString();
+    return qs ? `?${qs}` : '';
+  }
   const PALETTE = ['#1F3A2E', '#B8542A', '#B8A878', '#5B7A5A', '#8A2A1D', '#3A7CA5'];
   granularTypes.forEach((rt, idx) => {
     adrSeries.push({ key: `t${idx}`, label: rt, color: PALETTE[idx % PALETTE.length] });
@@ -558,6 +600,61 @@ async function DrillPanel({
 
   return (
     <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* USALI task #6 — drill filter toolbar (year toggle · search · multi-select chips) */}
+      <div style={panelStyle}>
+        <div style={{ padding: '10px 14px', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>Year</div>
+          {[{ k: '', label: 'All' }, { k: '2025', label: '2025' }, { k: '2026', label: '2026' }, { k: '2027', label: '2027' }].map((y) => {
+            const isActive = (y.k === '' && !yrFilter) || (y.k !== '' && yrFilter === y.k);
+            return (
+              <Link key={y.k || 'all'} href={hrefDrillToggle({ yr: y.k || null })} style={{
+                fontSize: 12, padding: '4px 10px', borderRadius: 4,
+                border: `1px solid ${isActive ? 'var(--primary, #1F3A2E)' : 'var(--hairline, #E6DFCC)'}`,
+                background: isActive ? 'var(--primary, #1F3A2E)' : 'var(--paper, #FFFFFF)',
+                color: isActive ? 'var(--paper, #FFFFFF)' : 'var(--ink, #1B1B1B)',
+                textDecoration: 'none', fontWeight: isActive ? 600 : 400,
+              }}>{y.label}</Link>
+            );
+          })}
+          <form method="get" style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
+            {code && <input type="hidden" name="expand" value={code} />}
+            {activePeriod && <input type="hidden" name="period" value={activePeriod} />}
+            {yrFilter && <input type="hidden" name="yr" value={yrFilter} />}
+            {rtList.length > 0 && <input type="hidden" name="rt" value={rtList.join(',')} />}
+            <label style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>Search</label>
+            <input type="text" name="q" defaultValue={q} placeholder="room type..." style={{
+              fontSize: 12, padding: '4px 8px',
+              border: '1px solid var(--hairline, #E6DFCC)', borderRadius: 4,
+              background: 'var(--paper, #FFFFFF)', color: 'var(--ink, #1B1B1B)', minWidth: 140,
+            }} />
+            {q && (
+              <Link href={hrefDrillToggle({ q: null })} style={{ fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', textDecoration: 'underline' }}>clear</Link>
+            )}
+          </form>
+        </div>
+        {granularTypesAll.length > 0 && (
+          <div style={{ padding: '0 14px 12px', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', alignSelf: 'center', marginRight: 4 }}>Rooms</div>
+            {granularTypesAll.map((rt) => {
+              const isSelected = rtList.includes(rt);
+              const nextList = isSelected ? rtList.filter((x) => x !== rt) : [...rtList, rt];
+              return (
+                <Link key={rt} href={hrefDrillToggle({ rt: nextList.length === 0 ? null : nextList.join(',') })} style={{
+                  fontSize: 12, padding: '3px 8px', borderRadius: 4,
+                  border: `1px solid ${isSelected ? 'var(--primary, #1F3A2E)' : 'var(--hairline, #E6DFCC)'}`,
+                  background: isSelected ? 'var(--primary, #1F3A2E)' : 'var(--paper, #FFFFFF)',
+                  color: isSelected ? 'var(--paper, #FFFFFF)' : 'var(--ink, #1B1B1B)',
+                  textDecoration: 'none', fontWeight: isSelected ? 600 : 400,
+                }}>{rt}</Link>
+              );
+            })}
+            {rtList.length > 0 && (
+              <Link href={hrefDrillToggle({ rt: null })} style={{ fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', textDecoration: 'underline', alignSelf: 'center', marginLeft: 6 }}>clear</Link>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Granular table */}
       <div style={panelStyle}>
         <div style={panelHeader}>
