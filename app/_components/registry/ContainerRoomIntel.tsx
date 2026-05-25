@@ -173,7 +173,13 @@ export default async function ContainerRoomIntel({ container, propertyId, search
   const ytdKey = `YTD-${currentYear}`;
   const requested = String(searchParams?.period ?? '');
   const isYtd = requested === ytdKey;
-  const validPeriods = new Set([ytdKey, ...allPeriods]);
+  // USALI task #8: aggregate periods (FY + Q1-4) for every year in data
+  const AGGREGATE_YEARS = Array.from(new Set(allPeriods.map((p) => p.slice(0, 4)))).filter(Boolean).sort();
+  const aggregatePeriods: string[] = [];
+  for (const y of AGGREGATE_YEARS) {
+    aggregatePeriods.push(`FY-${y}`, `Q1-${y}`, `Q2-${y}`, `Q3-${y}`, `Q4-${y}`);
+  }
+  const validPeriods = new Set([ytdKey, ...allPeriods, ...aggregatePeriods]);
   const activePeriod = validPeriods.has(requested) ? requested : (realisedMonths[0] ?? windowMonths[0] ?? allPeriods[0]);
   if (!activePeriod) {
     return (
@@ -185,12 +191,25 @@ export default async function ContainerRoomIntel({ container, propertyId, search
     );
   }
 
-  // 4. Filter rows to the active period (single month or YTD)
+  // 4. Filter rows to the active period (single month / YTD / FY / Q1-4)
+  // USALI task #8: quarter helper — 'Q1-2025' → ['2025-01','2025-02','2025-03']
+  function quarterMonths(qCode: string): string[] {
+    const q = Number(qCode.charAt(1));
+    const y = qCode.slice(3);
+    const startMonth = (q - 1) * 3 + 1;
+    return [0, 1, 2].map((i) => `${y}-${String(startMonth + i).padStart(2, '0')}`);
+  }
+  const isFY = activePeriod.startsWith('FY-');
+  const isQ  = /^Q[1-4]-\d{4}$/.test(activePeriod);
   const periodRows = isYtd || activePeriod.startsWith('YTD-')
     ? rows.filter((r) => {
         const p = String(r.period_yyyymm ?? '');
         return p.startsWith(`${activePeriod.slice(4)}-`) && p <= currentYm;
       })
+    : isFY
+    ? rows.filter((r) => String(r.period_yyyymm ?? '').startsWith(`${activePeriod.slice(3)}-`))
+    : isQ
+    ? (() => { const qm = new Set(quarterMonths(activePeriod)); return rows.filter((r) => qm.has(String(r.period_yyyymm ?? ''))); })()
     : rows.filter((r) => String(r.period_yyyymm) === activePeriod);
 
   // 4b. PBS 2026-05-22: same-time-last-year rows for LY comparison per tile.
@@ -198,6 +217,15 @@ export default async function ContainerRoomIntel({ container, propertyId, search
     if (p.startsWith('YTD-')) {
       const y = Number(p.slice(4));
       return Number.isFinite(y) ? `YTD-${y - 1}` : p;
+    }
+    // USALI task #8: FY + Q LY shifts
+    if (p.startsWith('FY-')) {
+      const y = Number(p.slice(3));
+      return Number.isFinite(y) ? `FY-${y - 1}` : p;
+    }
+    if (/^Q[1-4]-\d{4}$/.test(p)) {
+      const y = Number(p.slice(3));
+      return Number.isFinite(y) ? `${p.slice(0, 3)}${y - 1}` : p;
     }
     if (p.length >= 7) {
       const y = Number(p.slice(0, 4));
@@ -213,6 +241,10 @@ export default async function ContainerRoomIntel({ container, propertyId, search
         const p = String(r.period_yyyymm ?? '');
         return p.startsWith(`${lyPeriod.slice(4)}-`) && p.slice(5, 7) <= elapsedMm;
       })
+    : lyPeriod.startsWith('FY-')
+    ? rows.filter((r) => String(r.period_yyyymm ?? '').startsWith(`${lyPeriod.slice(3)}-`))
+    : /^Q[1-4]-\d{4}$/.test(lyPeriod)
+    ? (() => { const qm = new Set(quarterMonths(lyPeriod)); return rows.filter((r) => qm.has(String(r.period_yyyymm ?? ''))); })()
     : rows.filter((r) => String(r.period_yyyymm) === lyPeriod);
 
   // 5. Build category index — every REAL canonical code the property has had.
@@ -283,6 +315,7 @@ export default async function ContainerRoomIntel({ container, propertyId, search
       ytdLabel={`YTD ${currentYear}`}
       realisedMonths={realisedMonths}
       futureMonths={futureMonths}
+      aggregatePeriods={aggregatePeriods}
       defaultPeriod={realisedMonths[0]}
       preserveParams={{ expand: activeExpand }}
     />
