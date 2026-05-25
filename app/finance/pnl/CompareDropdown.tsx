@@ -41,7 +41,7 @@ export default function CompareDropdown({ value }: Props) {
         fontSize: 'var(--t-xs)',
         letterSpacing: 'var(--ls-extra)',
         textTransform: 'uppercase',
-        color: 'var(--brass)',
+        color: 'var(--ink-soft, #5A5A5A)',
       }}
     >
       Compare vs
@@ -53,9 +53,9 @@ export default function CompareDropdown({ value }: Props) {
           fontSize: 'var(--t-sm)',
           letterSpacing: 0,
           textTransform: 'none',
-          color: 'var(--ink)',
-          background: 'var(--surf-2, #f5f1e7)',
-          border: '1px solid var(--rule, #d6cfb8)',
+          color: 'var(--ink, #1B1B1B)',
+          background: 'var(--paper, #FFFFFF)',
+          border: '1px solid var(--hairline, #E6DFCC)',
           borderRadius: 4,
           padding: '4px 8px',
           cursor: 'pointer',
