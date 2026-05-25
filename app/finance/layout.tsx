@@ -4,9 +4,14 @@
 // touching 30+ component files. Scope: every descendant of /finance/* gets
 // these overrides; outside /finance the legacy dark tokens remain intact.
 
-export default function FinanceLayout({ children }: { children: React.ReactNode }) {
+// USALI task #16: mount FxRateHub at the top of every Finance page
+import FxRateHub from '@/app/_components/finance/FxRateHub';
+
+export default async function FinanceLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="finance-paperwhite-scope">
+      {/* @ts-expect-error Async Server Component in JSX */}
+      <FxRateHub />
       <style>{`
         .finance-paperwhite-scope {
           /* Dark surface tokens → paper-white equivalents */
