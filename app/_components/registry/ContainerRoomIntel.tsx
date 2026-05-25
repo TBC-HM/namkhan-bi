@@ -371,9 +371,10 @@ export default async function ContainerRoomIntel({ container, propertyId, search
                 empty={{ title: 'No revenue data' }} />
             </div>
             <div style={chartFrameStyle}>
-              <div style={chartTitleStyle}>Occupancy mix</div>
-              <Chart variant="donut" data={catChart} xKey="category"
-                series={[{ key: 'occ', label: 'Occ %' }]}
+              <div style={chartTitleStyle}>Occupancy by category</div>
+              {/* USALI task #7: donut → bar (axis read beats sector arcs for cross-category compare) */}
+              <Chart variant="bar" data={catChart} xKey="category"
+                series={[{ key: 'occ', label: 'Occ %', color: 'var(--terracotta, #B8542A)' }]}
                 height={180}
                 empty={{ title: 'No occupancy data' }} />
             </div>
