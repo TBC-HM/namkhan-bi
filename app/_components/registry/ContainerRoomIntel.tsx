@@ -474,6 +474,9 @@ export default async function ContainerRoomIntel({ container, propertyId, search
       {/* PBS #145 hotfix: DrillPanel's internal Chart uses tooltipFormatter (a function), which can't be serialised across server→client when wrapped inside the client DrillDrawer. Reverting to inline render. IcpSection renders as a sibling below. */}
       {activeExpand && (
         <DrillPanel
+          q={String(searchParams?.q ?? '')}
+          rtList={String(searchParams?.rt ?? '').split(',').filter(Boolean)}
+          yrFilter={String(searchParams?.yr ?? '')}
           code={activeExpand}
           friendly={isCanonicalGrouping ? (FRIENDLY[activeExpand] ?? activeExpand) : activeExpand}
           activePeriod={activePeriod}
@@ -499,11 +502,16 @@ interface DrillProps {
   categoryRowsActive: DataRow[];
   spec: RoomIntelSpec;
   currencySymbol: string;
+  // USALI task #6: drill filters (server-side, URL-driven)
+  q: string;
+  rtList: string[];
+  yrFilter: string;
 }
 
 async function DrillPanel({
   code, friendly, activePeriod, propertyId,
   categoryRowsAllTime, categoryRowsActive, spec, currencySymbol,
+  q, rtList, yrFilter,
 }: DrillProps) {
   const sortSpec = (spec.drill.default_sort ?? '').split(/\s+/);
   const sortCol = sortSpec[0] || 'room_revenue';
@@ -538,6 +546,32 @@ async function DrillPanel({
   const seriesLabelByKey: Record<string, string> = {};
   granularTypes.forEach((rt, idx) => { seriesLabelByKey[`t${idx}`] = rt; });
 
+  // USALI task #6 — derived filter state (search · multi-select · year)
+  const qLower = q.trim().toLowerCase();
+  const granularTypesFiltered = granularTypes.filter((rt) =>
+    (!qLower || rt.toLowerCase().includes(qLower)) &&
+    (rtList.length === 0 || rtList.includes(rt))
+  );
+  const last12MonthsFiltered = yrFilter
+    ? last12Months.filter((m) => m.startsWith(yrFilter))
+    : last12Months;
+  const adrDataFiltered = last12MonthsFiltered.map((m) => adrData.find((d) => d.month === m) ?? { month: m });
+  const adrSeriesFiltered = adrSeries.filter((s) => granularTypesFiltered.some((rt) => seriesLabelByKey[String(s.key)] === rt));
+  const sortedFiltered = sorted.filter((r) => granularTypesFiltered.includes(String(r.room_type_name ?? '')));
+  function hrefDrillToggle(overrides: { q?: string | null; rt?: string | null; yr?: string | null }): string {
+    const params = new URLSearchParams();
+    if (code) params.set('expand', code);
+    if (activePeriod) params.set('period', activePeriod);
+    const nextQ  = 'q'  in overrides ? overrides.q  : q;
+    const nextRt = 'rt' in overrides ? overrides.rt : (rtList.length > 0 ? rtList.join(',') : null);
+    const nextYr = 'yr' in overrides ? overrides.yr : yrFilter;
+    if (nextQ)  params.set('q',  String(nextQ));
+    if (nextRt) params.set('rt', String(nextRt));
+    if (nextYr) params.set('yr', String(nextYr));
+    const qs = params.toString();
+    return qs ? `?${qs}` : '';
+  }
+
   // Source mix per granular room_type (RPC call)
   const { data: sourceMixRows } = await supabase.rpc('fn_room_source_mix', {
     p_property_id: propertyId,
@@ -556,11 +590,66 @@ async function DrillPanel({
   return (
     <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 12 }}>
       {/* Granular table */}
+      {/* USALI task #6 — drill filter toolbar (year · search · multi-select chips) */}
+      <div style={panelStyle}>
+        <div style={{ padding: '10px 14px', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>Year</div>
+          {[{ k: '', label: 'All' }, { k: '2025', label: '2025' }, { k: '2026', label: '2026' }, { k: '2027', label: '2027' }].map((y) => {
+            const isActive = (y.k === '' && !yrFilter) || (y.k !== '' && yrFilter === y.k);
+            return (
+              <Link key={y.k || 'all'} href={hrefDrillToggle({ yr: y.k || null })} style={{
+                fontSize: 12, padding: '4px 10px', borderRadius: 4,
+                border: `1px solid ${isActive ? 'var(--primary, #1F3A2E)' : 'var(--hairline, #E6DFCC)'}`,
+                background: isActive ? 'var(--primary, #1F3A2E)' : 'var(--paper, #FFFFFF)',
+                color: isActive ? 'var(--paper, #FFFFFF)' : 'var(--ink, #1B1B1B)',
+                textDecoration: 'none', fontWeight: isActive ? 600 : 400,
+              }}>{y.label}</Link>
+            );
+          })}
+          <form method="get" style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
+            {code && <input type="hidden" name="expand" value={code} />}
+            {activePeriod && <input type="hidden" name="period" value={activePeriod} />}
+            {yrFilter && <input type="hidden" name="yr" value={yrFilter} />}
+            {rtList.length > 0 && <input type="hidden" name="rt" value={rtList.join(',')} />}
+            <label style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>Search</label>
+            <input type="text" name="q" defaultValue={q} placeholder="room type..." style={{
+              fontSize: 12, padding: '4px 8px',
+              border: '1px solid var(--hairline, #E6DFCC)', borderRadius: 4,
+              background: 'var(--paper, #FFFFFF)', color: 'var(--ink, #1B1B1B)', minWidth: 140,
+            }} />
+            {q && (
+              <Link href={hrefDrillToggle({ q: null })} style={{ fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', textDecoration: 'underline' }}>clear</Link>
+            )}
+          </form>
+        </div>
+        {granularTypes.length > 0 && (
+          <div style={{ padding: '0 14px 12px', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', alignSelf: 'center', marginRight: 4 }}>Rooms</div>
+            {granularTypes.map((rt) => {
+              const isSelected = rtList.includes(rt);
+              const nextList = isSelected ? rtList.filter((x) => x !== rt) : [...rtList, rt];
+              return (
+                <Link key={rt} href={hrefDrillToggle({ rt: nextList.length === 0 ? null : nextList.join(',') })} style={{
+                  fontSize: 12, padding: '3px 8px', borderRadius: 4,
+                  border: `1px solid ${isSelected ? 'var(--primary, #1F3A2E)' : 'var(--hairline, #E6DFCC)'}`,
+                  background: isSelected ? 'var(--primary, #1F3A2E)' : 'var(--paper, #FFFFFF)',
+                  color: isSelected ? 'var(--paper, #FFFFFF)' : 'var(--ink, #1B1B1B)',
+                  textDecoration: 'none', fontWeight: isSelected ? 600 : 400,
+                }}>{rt}</Link>
+              );
+            })}
+            {rtList.length > 0 && (
+              <Link href={hrefDrillToggle({ rt: null })} style={{ fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', textDecoration: 'underline', alignSelf: 'center', marginLeft: 6 }}>clear</Link>
+            )}
+          </div>
+        )}
+      </div>
+
       <div style={panelStyle}>
         <div style={panelHeader}>
           Drill · {friendly} <span style={panelHeaderSub}>· {sorted.length} granular room type{sorted.length === 1 ? '' : 's'} · {activePeriod}</span>
         </div>
-        {sorted.length === 0 ? (
+        {sortedFiltered.length === 0 ? (
           <div style={{ padding: 14, fontSize: 12, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>
             No granular rows for this category in {activePeriod}.
           </div>
@@ -576,7 +665,7 @@ async function DrillPanel({
               </tr>
             </thead>
             <tbody>
-              {sorted.map((r, i) => {
+              {sortedFiltered.map((r, i) => {
                 const period = String(r.period_yyyymm ?? '');
                 const lyP = period.length >= 7 ? `${Number(period.slice(0, 4)) - 1}-${period.slice(5, 7)}` : '';
                 const ly = lyP
@@ -628,21 +717,21 @@ async function DrillPanel({
       </div>
 
       {/* 12-month ADR rollup */}
-      {last12Months.length > 0 && (
+      {last12MonthsFiltered.length > 0 && (
         <div style={panelStyle}>
           <div style={panelHeader}>
             ADR · last 12 months <span style={panelHeaderSub}>· per granular room type</span>
           </div>
           <div style={{ padding: 12 }}>
             {/* PBS #145 hotfix-2: tooltipFormatter (a function) crashes server→client into the DashboardPage ('use client') boundary. Drop the custom formatter — default tooltip shows key/value pairs. Custom hover detail returns once Chart accepts a string enum for format. */}
-            <Chart variant="line" data={adrData} xKey="month" series={adrSeries} height={220}
+            <Chart variant="line" data={adrDataFiltered} xKey="month" series={adrSeriesFiltered} height={220}
               empty={{ title: 'No ADR history for this category' }} />
           </div>
         </div>
       )}
 
       {/* USALI task #5 — OCC line chart per granular room type (sibling of ADR rollup, no shared state) */}
-      {last12Months.length > 0 && (
+      {last12MonthsFiltered.length > 0 && (
         <div style={panelStyle}>
           <div style={panelHeader}>
             OCC · last 12 months <span style={panelHeaderSub}>· per granular room type · % of canonical capacity</span>
@@ -650,16 +739,17 @@ async function DrillPanel({
           <div style={{ padding: 12 }}>
             <Chart
               variant="line"
-              data={last12Months.map((m) => {
+              data={last12MonthsFiltered.map((m) => {
                 const row: Record<string, string | number> = { month: m };
-                granularTypes.forEach((rt, idx) => {
+                granularTypesFiltered.forEach((rt) => {
+                  const idx = granularTypes.indexOf(rt);
                   const r = categoryRowsAllTime.find((x) => x.room_type_name === rt && x.period_yyyymm === m);
                   row[`t${idx}`] = r ? num(r.occ_pct_of_canonical) : 0;
                 });
                 return row;
               })}
               xKey="month"
-              series={adrSeries}
+              series={adrSeriesFiltered}
               height={220}
               empty={{ title: 'No OCC history for this category' }}
             />
