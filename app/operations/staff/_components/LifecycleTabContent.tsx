@@ -5,8 +5,8 @@
 // "Total Seniority Due" tile → ?drilldown=seniority expands a panel below
 // the band with the per-employee indemnización breakdown.
 
-import Page from '@/components/page/Page';
-import Panel from '@/components/page/Panel';
+import { DashboardPage, Container } from '@/app/(cockpit)/_design';
+
 import Link from 'next/link';
 import StaffTabStrip from './StaffTabStrip';
 import OnboardingTabContent from './OnboardingTabContent';
@@ -39,11 +39,12 @@ export default async function LifecycleTabContent({ propertyId, propertyLabel, s
   const eyebrow = propertyLabel ? `HR · Lifecycle · ${propertyLabel}` : 'HR · Lifecycle';
 
   return (
-    <Page
-      eyebrow={eyebrow}
-      title={<>Lifecycle · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>{propertyLabel ?? ''}</em></>}
-      subPages={subPagesOverride}
+    <DashboardPage
+      title={`Lifecycle · ${propertyLabel ?? 'Property'}`}
+      subtitle={eyebrow}
+      tabs={(subPagesOverride ?? []).map(s => ({ key: s.href, label: s.label, href: s.href, active: s.label === 'HR' || s.href.endsWith('/finance/hr') || s.href.endsWith('/operations/staff') }))}
     >
+      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 18 }}>
       <StaffTabStrip propertyId={propertyId} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, margin: '14px 0 8px' }}>
@@ -72,25 +73,25 @@ export default async function LifecycleTabContent({ propertyId, propertyLabel, s
       }}>
         <ChartPanel
           title="Seniority distribution"
-          eyebrow={`Active staff binned by tenure · ${bundle.totals.active} total`}
+          subtitle={`Active staff binned by tenure · ${bundle.totals.active} total`}
           svgMarkup={seniorityHistogramSvg(bundle.buckets)}
         />
         <ChartPanel
           title="Avg aging by department"
-          eyebrow={`Top 8 by avg years · ${bundle.byDepartment.length} depts active`}
+          subtitle={`Top 8 by avg years · ${bundle.byDepartment.length} depts active`}
           svgMarkup={deptAvgSeniorityBarSvg(bundle.byDepartment)}
         />
         <ChartPanel
           title={isDonna ? 'Indemnización exposure by dept' : 'Headcount by department'}
-          eyebrow={isDonna ? '33d/yr cap-24mo · top 8 by exposure' : 'Top 8 by headcount · Lao law n/a for exposure'}
+          subtitle={isDonna ? '33d/yr cap-24mo · top 8 by exposure' : 'Top 8 by headcount · Lao law n/a for exposure'}
           svgMarkup={deptExposureOrHeadcountBarSvg(bundle.byDepartment, isDonna)}
         />
       </div>
 
       {drilldown && (
-        <Panel
+        <Container
           title="Per-employee seniority breakdown"
-          eyebrow={`${bundle.rows.length} active · sorted by seniority desc`}
+          subtitle={`${bundle.rows.length} active · sorted by seniority desc`}
         >
           <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 14px 0' }}>
             <Link href={`${base}?view=${view}`} style={{
@@ -101,7 +102,7 @@ export default async function LifecycleTabContent({ propertyId, propertyLabel, s
             }}>Close ✕</Link>
           </div>
           <SeniorityDrilldownTable rows={bundle.rows} isDonna={isDonna} />
-        </Panel>
+        </Container>
       )}
 
       <nav style={{
@@ -140,7 +141,8 @@ export default async function LifecycleTabContent({ propertyId, propertyLabel, s
           <WarningsTab propertyId={propertyId} bundle={bundle} />
         )}
       </div>
-    </Page>
+      </div>
+    </DashboardPage>
   );
 }
 
