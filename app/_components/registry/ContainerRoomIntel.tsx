@@ -641,6 +641,32 @@ async function DrillPanel({
         </div>
       )}
 
+      {/* USALI task #5 — OCC line chart per granular room type (sibling of ADR rollup, no shared state) */}
+      {last12Months.length > 0 && (
+        <div style={panelStyle}>
+          <div style={panelHeader}>
+            OCC · last 12 months <span style={panelHeaderSub}>· per granular room type · % of canonical capacity</span>
+          </div>
+          <div style={{ padding: 12 }}>
+            <Chart
+              variant="line"
+              data={last12Months.map((m) => {
+                const row: Record<string, string | number> = { month: m };
+                granularTypes.forEach((rt, idx) => {
+                  const r = categoryRowsAllTime.find((x) => x.room_type_name === rt && x.period_yyyymm === m);
+                  row[`t${idx}`] = r ? num(r.occ_pct_of_canonical) : 0;
+                });
+                return row;
+              })}
+              xKey="month"
+              series={adrSeries}
+              height={220}
+              empty={{ title: 'No OCC history for this category' }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Source mix per granular room type */}
       {sourceMix.length > 0 && (
         <div style={panelStyle}>
