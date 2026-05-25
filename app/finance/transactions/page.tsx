@@ -1,7 +1,7 @@
 // app/finance/transactions/page.tsx
 // Finance · Transactions — full Cloudbeds + POS transactions with KPI grouping + search.
 
-import Page from '@/components/page/Page';
+import { DashboardPage } from '@/app/(cockpit)/_design';
 import { FINANCE_SUBPAGES } from '../_subpages';
 import TabStrip, { ACC_TABS } from '../_components/TabStrip';
 import KpiBox from '@/components/kpi/KpiBox';
@@ -152,15 +152,12 @@ export default async function TransactionsPage({ searchParams }: Props) {
   ].filter(Boolean).join(' · ');
 
   return (
-    <Page
-      eyebrow={txnEyebrow}
-      title={
-        <>
-          Folio <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>audit</em> · PMS ledger
-        </>
-      }
-      subPages={FINANCE_SUBPAGES}
+    <DashboardPage
+      title="Transactions · folio audit"
+      subtitle={txnEyebrow}
+      tabs={FINANCE_SUBPAGES.map(s => ({ key: s.href, label: s.label, href: s.href, active: s.href === '/finance/acc' }))}
     >
+      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 18 }}>
       <TabStrip tabs={ACC_TABS} activeKey="transactions" />
       <div style={{
         margin: '8px 0 4px', padding: '8px 12px',
@@ -316,7 +313,8 @@ export default async function TransactionsPage({ searchParams }: Props) {
           </div>
         )}
       </div>
-    </Page>
+      </div>
+    </DashboardPage>
   );
 }
 
