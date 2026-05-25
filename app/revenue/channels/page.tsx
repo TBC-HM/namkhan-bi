@@ -117,6 +117,13 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
   const period = resolvePeriod(searchParams);
 
   const rawTab = String(searchParams.tab ?? 'direct').toLowerCase();
+  // USALI task #12 — channel-group filter for Sources · 2024/25/26 table
+  const chFilter = String(searchParams.ch ?? 'all').toLowerCase();
+  const filteredSources = chFilter === 'all'
+    ? sourcesAllYearsRows
+    : chFilter === 'rest'
+    ? sourcesAllYearsRows.filter((r) => !['direct','ota','dmc'].includes(String(r.category).toLowerCase()))
+    : sourcesAllYearsRows.filter((r) => String(r.category).toLowerCase() === chFilter);
   const activeTab: Category = (TAB_DEFS.find((t) => t.key === rawTab)?.key) ?? 'direct';
 
   const cmpPeriod = period.cmp !== 'none' && period.compareFrom && period.compareTo
@@ -286,8 +293,31 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
 
       {/* PBS #199 fix-2: top-level Sources · 2024/2025/2026 table is ALSO clickable. Click any source to open the drawer. */}
       <div style={{ gridColumn: '1 / -1' }}>
-        <Container title={`Sources · 2024 / 2025 / 2026 · ${sourcesAllYearsRows.length} active sources`} subtitle="every active source since 2024, grouped Direct / OTA / DMC. Click any source name to open the drawer.">
-          {sourcesAllYearsRows.length === 0 ? (
+        {/* USALI task #12 — channel-group filter chips (ADD-only sibling, sits ABOVE the Container) */}
+        <div style={{ padding: '8px 14px', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>Filter</div>
+          {[{ k: 'all', label: 'All' }, { k: 'direct', label: 'Direct' }, { k: 'ota', label: 'OTA' }, { k: 'dmc', label: 'DMC' }, { k: 'rest', label: 'Rest' }].map((c) => {
+            const isActive = c.k === chFilter || (c.k === 'all' && chFilter === 'all');
+            const params = new URLSearchParams();
+            for (const [k, v] of Object.entries(searchParams as Record<string, string | string[] | undefined>)) {
+              if (k === 'ch') continue;
+              if (typeof v === 'string' && v) params.set(k, v);
+            }
+            if (c.k !== 'all') params.set('ch', c.k);
+            const qs = params.toString();
+            return (
+              <Link key={c.k} href={qs ? `?${qs}` : '?'} style={{
+                fontSize: 12, padding: '3px 10px', borderRadius: 4,
+                border: `1px solid ${isActive ? 'var(--primary, #1F3A2E)' : 'var(--hairline, #E6DFCC)'}`,
+                background: isActive ? 'var(--primary, #1F3A2E)' : 'var(--paper, #FFFFFF)',
+                color: isActive ? 'var(--paper, #FFFFFF)' : 'var(--ink, #1B1B1B)',
+                textDecoration: 'none', fontWeight: isActive ? 600 : 400,
+              }}>{c.label}</Link>
+            );
+          })}
+        </div>
+        <Container title={`Sources · 2024 / 2025 / 2026 · ${filteredSources.length} of ${sourcesAllYearsRows.length} sources`} subtitle="every active source since 2024, grouped Direct / OTA / DMC. Click any source name to open the drawer.">
+          {filteredSources.length === 0 ? (
             <div style={{ padding: 16, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>No sources data</div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
@@ -308,7 +338,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
                   </tr>
                 </thead>
                 <tbody>
-                  {sourcesAllYearsRows.map((r, i) => (
+                  {filteredSources.map((r, i) => (
                     <tr key={i} style={{ borderTop: '1px solid var(--hairline, #E6DFCC)' }}>
                       <td style={tdLabelStyle}><Link href={drillHrefFor(r.source)} style={sourceLinkStyle}>{r.source}</Link></td>
                       <td style={tdLabelStyle}>{r.category}</td>
