@@ -1,6 +1,11 @@
 'use client';
 
 // components/page/HeaderPills.tsx
+// USALI task #16 (2026-05-26): FxRatePills inserted as a sibling pill set
+// (leftmost in the strip), reading public.v_fx_rates_latest with the anon
+// client. No layout/scope wrapping — pure sibling fragment.
+//
+// Original header below:
 // Shared header pills rendered top-right on every <Page>: temperature,
 // air/AQI, today's date, user dropdown. Lifted out of DeptEntry so the
 // header is consistent across dept-entry pages AND every sub-page (PBS
@@ -20,6 +25,7 @@
 //       carries a bridging paddingBottom so there is no dead-zone gap.
 
 import { useEffect, useRef, useState } from 'react';
+import FxRatePills from './FxRatePills';
 import { usePathname } from 'next/navigation';
 // PBS 2026-05-14 — PropertySwitcher import removed; the global switcher lives
 // in the top-left BC brass mark (components/nav/NDropdown.tsx). The
@@ -274,6 +280,9 @@ export default function HeaderPills({ kpiTiles, hideWeather = false }: HeaderPil
       {/* PBS 2026-05-14 — property switcher moved to the top-left BC brass mark.
           The old inline PropertySwitcher chip was a duplicate of that menu and
           has been removed; NDropdown is now the sole entry point. */}
+      {/* USALI task #16 — FX rate pills (leftmost, sibling of temp/air/date/user) */}
+      <FxRatePills />
+
       {/* TEMP — wrapper carries onMouseLeave so cursor stays inside it as
           it moves from pill to popover. (PBS 2026-05-09 hover-leave fix). */}
       {!hideWeather && (
