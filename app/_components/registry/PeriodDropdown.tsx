@@ -16,13 +16,15 @@ interface Props {
   ytdLabel: string;
   realisedMonths: string[];   // descending order, current month first
   futureMonths: string[];    // descending order, latest OTB first
+  // USALI task #8: aggregate periods (FY-YYYY + Q1-4-YYYY)
+  aggregatePeriods?: string[];
   preserveParams?: Record<string, string | undefined>;
   defaultPeriod?: string;     // when value matches default, drop period from URL
 }
 
 export default function PeriodDropdown({
   activePeriod, ytdKey, ytdLabel, realisedMonths, futureMonths,
-  preserveParams = {}, defaultPeriod,
+  aggregatePeriods = [], preserveParams = {}, defaultPeriod,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -71,6 +73,18 @@ export default function PeriodDropdown({
           {futureMonths.map((p) => (
             <option key={p} value={p}>{p} · OTB</option>
           ))}
+        </optgroup>
+      )}
+      {aggregatePeriods.length > 0 && (
+        <optgroup label="Aggregates">
+          {aggregatePeriods.map((p) => {
+            const label = p.startsWith('FY-')
+              ? `FY ${p.slice(3)}`
+              : /^Q[1-4]-\d{4}$/.test(p)
+              ? `${p.slice(0, 2)} ${p.slice(3)}`
+              : p;
+            return (<option key={p} value={p}>{label}</option>);
+          })}
         </optgroup>
       )}
     </select>
