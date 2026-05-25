@@ -290,6 +290,15 @@ export default async function ContainerRoomIntel({ container, propertyId, search
     const params = new URLSearchParams();
     if (p !== realisedMonths[0]) params.set('period', p);
     if (activeExpand) params.set('expand', activeExpand);
+    // Preserve drill filters across period changes
+    const qParam  = String(searchParams?.q  ?? '');
+    const rtParam = String(searchParams?.rt ?? '');
+    const yrParam = String(searchParams?.yr ?? '');
+    const cmpParam = String(searchParams?.cmp ?? '');
+    if (qParam)  params.set('q',  qParam);
+    if (rtParam) params.set('rt', rtParam);
+    if (yrParam) params.set('yr', yrParam);
+    if (cmpParam && cmpParam !== 'sdly') params.set('cmp', cmpParam);
     const qs = params.toString();
     return qs ? `?${qs}` : '';
   }
@@ -297,6 +306,9 @@ export default async function ContainerRoomIntel({ container, propertyId, search
     const params = new URLSearchParams();
     if (activePeriod !== realisedMonths[0]) params.set('period', activePeriod);
     if (cat !== activeExpand) params.set('expand', cat);
+    // Preserve cmp across category changes (q/rt/yr are drill-scoped, reset on new category)
+    const cmpParam = String(searchParams?.cmp ?? '');
+    if (cmpParam && cmpParam !== 'sdly') params.set('cmp', cmpParam);
     const qs = params.toString();
     return qs ? `?${qs}` : '';
   }
