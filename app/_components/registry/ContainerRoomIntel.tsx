@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase';
 import { stripPublicPrefix, type ContainerRegistryRow } from './types';
 import { formatValue } from './format';
 import PeriodDropdown from './PeriodDropdown';
+import CompareDropdown from './CompareDropdown';
 import IcpSection from './IcpSection';
 
 interface TileMetric {
@@ -236,7 +237,9 @@ export default async function ContainerRoomIntel({ container, propertyId, search
   }
   const lyPeriod = lyOf(activePeriod);
   const elapsedMm = currentYm.slice(5, 7);
-  const lyRows = lyPeriod.startsWith('YTD-')
+  // USALI task #9: cmpMode toggles SDLY vs BUDGET; BUDGET short-circuits LY rows until per-cat budget view ships
+  const cmpMode = String(searchParams?.cmp ?? 'sdly');
+  const lyRows: DataRow[] = cmpMode === 'budget' ? [] : lyPeriod.startsWith('YTD-')
     ? rows.filter((r) => {
         const p = String(r.period_yyyymm ?? '');
         return p.startsWith(`${lyPeriod.slice(4)}-`) && p.slice(5, 7) <= elapsedMm;
@@ -308,17 +311,25 @@ export default async function ContainerRoomIntel({ container, propertyId, search
   // PeriodDropdown is a client component that pushes period into URL while
   // preserving ?expand=. Default = realisedMonths[0] (latest realised month).
   const futureMonths = windowMonths.filter((p) => p > currentYm);
+  // USALI task #9: action slot now wraps both PeriodDropdown + CompareDropdown
+  const activeCmp = cmpMode;
   const periodPicker = (
-    <PeriodDropdown
-      activePeriod={activePeriod}
-      ytdKey={ytdKey}
-      ytdLabel={`YTD ${currentYear}`}
-      realisedMonths={realisedMonths}
-      futureMonths={futureMonths}
-      aggregatePeriods={aggregatePeriods}
-      defaultPeriod={realisedMonths[0]}
-      preserveParams={{ expand: activeExpand }}
-    />
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+      <PeriodDropdown
+        activePeriod={activePeriod}
+        ytdKey={ytdKey}
+        ytdLabel={`YTD ${currentYear}`}
+        realisedMonths={realisedMonths}
+        futureMonths={futureMonths}
+        aggregatePeriods={aggregatePeriods}
+        defaultPeriod={realisedMonths[0]}
+        preserveParams={{ expand: activeExpand, cmp: activeCmp === 'sdly' ? undefined : activeCmp }}
+      />
+      <CompareDropdown
+        activeCmp={activeCmp}
+        preserveParams={{ expand: activeExpand, period: activePeriod === realisedMonths[0] ? undefined : activePeriod }}
+      />
+    </div>
   );
 
   return (
