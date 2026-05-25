@@ -182,7 +182,7 @@ function KpiTile({
   return href ? <Link href={href} style={{ textDecoration: 'none', color: 'inherit' }}>{inner}</Link> : inner;
 }
 
-function ChartPanel({ title, eyebrow, svgMarkup }: { title: string; eyebrow: string; svgMarkup: string }) {
+function ChartPanel({ title, subtitle, svgMarkup }: { title: string; subtitle: string; svgMarkup: string }) {
   const dataUrl = svgMarkup
     ? `data:image/svg+xml;utf8,${encodeURIComponent(svgMarkup)}`
     : '';
@@ -198,7 +198,7 @@ function ChartPanel({ title, eyebrow, svgMarkup }: { title: string; eyebrow: str
         fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
         letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase',
         color: 'var(--ink-mute)',
-      }}>{eyebrow}</div>
+      }}>{subtitle}</div>
       <div style={{
         marginTop: 2, fontSize: 'var(--t-sm)', fontWeight: 600,
         color: 'var(--ink)',
