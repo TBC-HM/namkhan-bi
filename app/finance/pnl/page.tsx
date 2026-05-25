@@ -17,7 +17,7 @@ import {
   getDqSummary, getPayrollByPeriod, getDemandSummary,
   getLatestCommentary,
 } from '../_data';
-import { priorPeriod, type PeriodWindow } from '@/lib/supabase-gl';
+import { priorPeriod, supabaseGl, type PeriodWindow } from '@/lib/supabase-gl';
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 
 import PeriodSelectorRow from '@/components/page/PeriodSelectorRow';
@@ -841,8 +841,63 @@ export default async function PnLPage({ searchParams }: Props) {
       </Container>
 
       {/* ─── 4. TABLES ──────────────────────────────────────────────── */}
+      {/* Account-drill: contributing accounts per USALI department for `cur` */}
+      {await (async () => null)()}
 
       <div style={{ height: 14 }} />
+
+      {/* ── Per-dept account drill (PBS USALI #2) ── */}
+      {await (async () => {
+        const { data: glRows } = await supabaseGl
+          .from('v_gl_entries_enriched')
+          .select('account_id,account_name,usali_department,amount_usd')
+          .eq('period_yyyymm', cur)
+          .eq('is_pl', true);
+        const byDept = new Map<string, Array<{ id: string; name: string; amt: number }>>();
+        for (const r of (glRows ?? [])) {
+          const d = (r as any).usali_department || 'Unmapped';
+          const id = (r as any).account_id || '—';
+          const nm = (r as any).account_name || id;
+          const amt = Number((r as any).amount_usd || 0);
+          if (!byDept.has(d)) byDept.set(d, []);
+          const arr = byDept.get(d)!;
+          const ex = arr.find(x => x.id === id);
+          if (ex) ex.amt += amt; else arr.push({ id, name: nm, amt });
+        }
+        for (const arr of byDept.values()) arr.sort((a, b) => Math.abs(b.amt) - Math.abs(a.amt));
+        const depts = Array.from(byDept.keys()).sort();
+        if (depts.length === 0) return null;
+        return (
+          <Container title="Accounts behind the lines" subtitle={`gl entries for ${cur} · click a department to expand`} density="compact">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {depts.map(d => {
+                const rows = byDept.get(d)!;
+                const total = rows.reduce((s, r) => s + r.amt, 0);
+                return (
+                  <details key={d} style={{ border: '1px solid var(--hairline, #E6DFCC)', borderRadius: 6, background: 'var(--paper, #fff)' }}>
+                    <summary style={{ cursor: 'pointer', padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, fontWeight: 600 }}>
+                      <span>{d} <span style={{ color: 'var(--ink-soft, #5A5A5A)', fontWeight: 400 }}>· {rows.length} acct{rows.length === 1 ? '' : 's'}</span></span>
+                      <span style={{ fontVariantNumeric: 'tabular-nums', color: total >= 0 ? 'var(--ink, #1B1B1B)' : '#B8542A' }}>{total < 0 ? '-' : ''}${Math.abs(total).toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+                    </summary>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                      <thead><tr style={{ background: 'var(--paper-warm, #FAFAF7)' }}><th style={{ textAlign: 'left', padding: '4px 12px', color: 'var(--ink-soft, #5A5A5A)', fontWeight: 600 }}>Account ID</th><th style={{ textAlign: 'left', padding: '4px 12px', color: 'var(--ink-soft, #5A5A5A)', fontWeight: 600 }}>Name</th><th style={{ textAlign: 'right', padding: '4px 12px', color: 'var(--ink-soft, #5A5A5A)', fontWeight: 600 }}>Amount (USD)</th></tr></thead>
+                      <tbody>
+                        {rows.map(r => (
+                          <tr key={r.id} style={{ borderTop: '1px solid var(--hairline, #E6DFCC)' }}>
+                            <td style={{ padding: '4px 12px', fontFamily: 'ui-monospace, monospace', color: 'var(--ink-soft, #5A5A5A)' }}>{r.id}</td>
+                            <td style={{ padding: '4px 12px' }}>{r.name}</td>
+                            <td style={{ padding: '4px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: r.amt >= 0 ? 'var(--ink, #1B1B1B)' : '#B8542A' }}>{r.amt < 0 ? '-' : ''}${Math.abs(r.amt).toLocaleString('en-US', { maximumFractionDigits: 0 })}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </details>
+                );
+              })}
+            </div>
+          </Container>
+        );
+      })()}
 
       <Container
         title={`USALI department schedule · ${monthLabel} (MTD) · vs ${compareLabel}`}
