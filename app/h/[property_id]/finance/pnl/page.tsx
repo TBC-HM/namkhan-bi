@@ -21,8 +21,8 @@
 // per-property ThemeInjector so colours follow the brand palette.
 
 import { redirect } from 'next/navigation';
-import Page from '@/components/page/Page';
-import Panel from '@/components/page/Panel';
+import { DashboardPage, Container } from '@/app/(cockpit)/_design';
+
 import KpiBox from '@/components/kpi/KpiBox';
 import { financeSubPagesForProperty } from '@/app/finance/_subpages';
 import {
@@ -268,12 +268,13 @@ export default async function PropertyPnLPage({ params, searchParams }: Props) {
   ].join(' · ');
 
   return (
-    <Page
-      eyebrow={eyebrow}
-      title={<>Profit &amp; loss · USALI · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>{year}</em></>}
-      subPages={financeSubPagesForProperty(propertyId)}
-      topRight={<YearDropdown current={year} years={SUPPORTED_YEARS} yearsWithData={yearsWithData} />}
+    <DashboardPage
+      title={`Profit & Loss · ${year}`}
+      subtitle={eyebrow}
+      tabs={financeSubPagesForProperty(propertyId).map(s => ({ key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/finance/pnl') }))}
+      action={<YearDropdown current={year} years={SUPPORTED_YEARS} yearsWithData={yearsWithData} />}
     >
+      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 18 }}>
       {/* ─── 1. CFO KPI BAND ──────────────────────────────────────────
           Mirrors Namkhan /finance/pnl: row 1 outcomes, row 2 drivers. */}
       {/* Row 1 — Outcomes */}
@@ -393,7 +394,7 @@ export default async function PropertyPnLPage({ params, searchParams }: Props) {
           Inline-styled (not .pnl-page class) so the bars/labels stay
           theme-safe on both light (Donna) and dark (Namkhan) palettes. */}
       {!noData && (
-        <Panel title={`Top variances · ${priorMonth} → ${selectedMonth}`} eyebrow="dept profit MoM · finance.gl_pl_monthly">
+        <Container title={`Top variances · ${priorMonth} → ${selectedMonth}`} subtitle="dept profit MoM · finance.gl_pl_monthly">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '6px 4px' }}>
             {variances.map((v) => {
               const pct = (Math.abs(v.delta) / maxAbsVar) * 100;
@@ -428,7 +429,7 @@ export default async function PropertyPnLPage({ params, searchParams }: Props) {
               );
             })}
           </div>
-        </Panel>
+        </Container>
       )}
 
       <div style={{ height: 12 }} />
@@ -489,22 +490,22 @@ export default async function PropertyPnLPage({ params, searchParams }: Props) {
 
         return (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12, marginBottom: 16 }}>
-            <Panel title={`GOP trend · ${year}`} eyebrow="Gross Operating Profit / month">
+            <Container title={`GOP trend · ${year}`} subtitle="Gross Operating Profit / month">
               <div dangerouslySetInnerHTML={{ __html: gopTrendSvg(gopPts) }} />
-            </Panel>
-            <Panel title={`Departmental profit · ${year}`} eyebrow="Rooms · F&B · OOD">
+            </Container>
+            <Container title={`Departmental profit · ${year}`} subtitle="Rooms · F&B · OOD">
               <div dangerouslySetInnerHTML={{ __html: deptProfitTrendSvg(deptSeriesList) }} />
-            </Panel>
-            <Panel title={`Cost ratios · ${year}`} eyebrow="% of Hotel Revenue · target dashed">
+            </Container>
+            <Container title={`Cost ratios · ${year}`} subtitle="% of Hotel Revenue · target dashed">
               <div dangerouslySetInnerHTML={{ __html: costRatioTrendSvg(ratioSeries) }} />
-            </Panel>
+            </Container>
           </div>
         );
       })()}
 
       {/* ─── 5. VARIANCE COMMENTARY (template w/ live numbers) ─────── */}
       {!noData && (
-        <Panel title={`Variance commentary · ${selectedMonth}`} eyebrow="auto-draft · template from finance.gl_pl_monthly">
+        <Container title={`Variance commentary · ${selectedMonth}`} subtitle="auto-draft · template from finance.gl_pl_monthly">
           <div style={{
             fontSize: 'var(--t-sm)', lineHeight: 1.6,
             color: 'var(--ink, var(--tbl-fg, #1A1A1A))',
@@ -564,27 +565,27 @@ export default async function PropertyPnLPage({ params, searchParams }: Props) {
               </>
             )}
           </div>
-        </Panel>
+        </Container>
       )}
 
       <div style={{ height: 12 }} />
 
       {/* ── Empty-state for the chosen year ─────────────────────────── */}
       {noData && (
-        <Panel title={`No data for ${year}`} eyebrow="empty" expandable={false}>
+        <Container title={`No data for ${year}`} subtitle="empty" expandable={false}>
           <div style={{ padding: 16, color: 'var(--tbl-fg-mute, rgba(26, 26, 26, 0.6))', fontSize: 'var(--t-sm)' }}>
             No rows in <code>finance.gl_pl_monthly</code> for property <code>{propertyId}</code> in {year}.
             Pick a different year from the Year dropdown above.
           </div>
-        </Panel>
+        </Container>
       )}
 
       {!noData && (
         <>
           {/* ── Monthly overview ───────────────────────────────────── */}
-          <Panel
+          <Container
             title={`Monthly overview · ${fmtMonthLong(selectedMonth)}`}
-            eyebrow={`finance.gl_pl_monthly · property_id=${propertyId}`}
+            subtitle={`finance.gl_pl_monthly · property_id=${propertyId}`}
             actions={
               <MonthDropdown
                 current={selectedMonth}
@@ -601,14 +602,14 @@ export default async function PropertyPnLPage({ params, searchParams }: Props) {
               hotelRev={hotelRev}
               currency={currency}
             />
-          </Panel>
+          </Container>
 
           <div style={{ height: 12 }} />
 
           {/* ── Annual view (12-month) ─────────────────────────────── */}
-          <Panel
+          <Container
             title={`12-month rollup · FY${year}`}
-            eyebrow={`actual · ${currency} · ${rows.length} rows`}
+            subtitle={`actual · ${currency} · ${rows.length} rows`}
             actions={
               <span style={{ fontSize: 'var(--t-xs)', color: 'var(--tbl-fg-mute, rgba(26, 26, 26, 0.6))' }}>
                 FY {year} · {fmtCurrency(annualHotelRev, currency)} rev · {fmtCurrency(annualNet, currency)} net
@@ -617,10 +618,11 @@ export default async function PropertyPnLPage({ params, searchParams }: Props) {
             }
           >
             <AnnualTable rows={rows} year={year} currency={currency} />
-          </Panel>
+          </Container>
         </>
       )}
-    </Page>
+      </div>
+    </DashboardPage>
   );
 }
 
