@@ -847,6 +847,10 @@ export default async function PnLPage({ searchParams }: Props) {
       <Container
         title={`USALI department schedule · ${monthLabel} (MTD) · vs ${compareLabel}`}
         subtitle={compareSource}
+        action={<div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <CompareDropdown value={compareMode} />
+          <MonthDropdown value={cur} options={monthOptions} />
+        </div>}
       >
           <div className="meta">
             Materiality: 5% AND $1,000. Coloring — green ≤5% · amber 5–10% · red &gt;10% AND &gt;$1k.
