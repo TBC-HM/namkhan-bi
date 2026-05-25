@@ -4,14 +4,13 @@
 // touching 30+ component files. Scope: every descendant of /finance/* gets
 // these overrides; outside /finance the legacy dark tokens remain intact.
 
-// USALI task #16: mount FxRateHub at the top of every Finance page
-import FxRateHub from '@/app/_components/finance/FxRateHub';
+// USALI task #16 (relocated 2026-05-26): FxRateHub moved to the global header
+// strip — was previously mounted here as a top-of-finance band but PBS reports
+// that pushed the finance sub-menu down. FX pills now live next to temp/air/user.
 
-export default async function FinanceLayout({ children }: { children: React.ReactNode }) {
+export default function FinanceLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="finance-paperwhite-scope">
-      {/* @ts-expect-error Async Server Component in JSX */}
-      <FxRateHub />
       <style>{`
         .finance-paperwhite-scope {
           /* Dark surface tokens → paper-white equivalents */
