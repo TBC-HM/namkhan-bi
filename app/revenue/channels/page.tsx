@@ -130,7 +130,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
     ? { ...period, from: period.compareFrom, to: period.compareTo, cmp: 'none' as const }
     : null;
 
-  const [channelsRaw, channelsCmp, mixWeekly, netValue, velocity, groupRows] = await Promise.all([
+  const [channelsRaw, channelsCmp, mixWeekly, netValue, velocity, groupRows, allTimeTrend] = await Promise.all([
     getChannelEconomics(period, pid).catch(() => [] as Awaited<ReturnType<typeof getChannelEconomics>>),
     cmpPeriod
       ? getChannelEconomicsForRange(cmpPeriod.from, cmpPeriod.to, pid).catch(() => [] as Array<Record<string, unknown>>)
@@ -139,8 +139,18 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
     getChannelNetValueForRange(period.from, period.to, pid).catch(() => [] as Array<Record<string, unknown>>),
     getChannelVelocity28dByCat(pid).catch(() => [] as Array<Record<string, unknown>>),
     supabase.from('v_group_bookings_12mo').select('channel_group, source, reservations, room_nights, gross_revenue, group_adr, est_commission, net_revenue').eq('property_id', pid).order('gross_revenue', { ascending: false }).then((r) => r.data ?? [] as Array<Record<string, unknown>>),
+    // USALI tasks #14+15: all-time monthly trend (since data start) — Revenue + ADR + bookings + RN
+    supabase.from('v_channels_all_time_trend').select('period_yyyymm, bookings, room_nights, total_revenue, adr').eq('property_id', pid).order('period_yyyymm', { ascending: true }).then((r) => (r.data ?? []) as Array<Record<string, unknown>>),
   ]);
   const channels = channelsRaw;
+  // USALI tasks #14+15: chart-ready transform for the all-time trend
+  const trendRows = (allTimeTrend as Array<Record<string, unknown>>).map((r) => ({
+    month: String(r.period_yyyymm ?? ''),
+    revenue: Number(r.total_revenue ?? 0),
+    adr: Number(r.adr ?? 0),
+    bookings: Number(r.bookings ?? 0),
+    room_nights: Number(r.room_nights ?? 0),
+  }));
 
   // Group all channels by category
   const byCat: Record<Category | 'other', typeof channels> = { direct: [], ota: [], dmc: [], bedbank: [], group: [], other: [] };
@@ -206,6 +216,37 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
       subtitle={`Channel performance · ${period.label} · ${channels.length} active sources across ${[byCat.direct, byCat.ota, byCat.dmc].filter((g) => g.length > 0).length} categories`}
       tabs={tabs}
     >
+      {/* USALI tasks #14+15 — slim all-time trend (Revenue + ADR since data start) + snapshot scaffold footer */}
+      <div style={{ gridColumn: '1 / -1', marginBottom: 8 }}>
+        <Container title={`All-time channels trend · ${trendRows.length} months on record`} subtitle="Revenue + ADR per month since the earliest reservation · scaffold ready for snapshot SDLY overlay">
+          {trendRows.length === 0 ? (
+            <div style={{ padding: 14, fontSize: 12, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>
+              No data on file for property {pid}.
+            </div>
+          ) : (
+            <div style={{ padding: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', marginBottom: 4 }}>Revenue · {sym} per month</div>
+                <Chart variant="line" data={trendRows} xKey="month"
+                  series={[{ key: 'revenue', label: `Revenue (${sym})`, color: 'var(--primary, #1F3A2E)' }]}
+                  height={140}
+                  empty={{ title: 'No revenue data' }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', marginBottom: 4 }}>ADR · {sym} per month</div>
+                <Chart variant="line" data={trendRows} xKey="month"
+                  series={[{ key: 'adr', label: `ADR (${sym})`, color: 'var(--terracotta, #B8542A)' }]}
+                  height={140}
+                  empty={{ title: 'No ADR data' }} />
+              </div>
+            </div>
+          )}
+          <div style={{ padding: '4px 14px 12px', fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>
+            Snapshot scaffold: per-day OTB snapshots from <code>pms.otb_snapshots</code> are not yet ingested. Once shipped, a snapshot SDLY overlay will appear alongside the live line.
+          </div>
+        </Container>
+      </div>
+
       {/* PBS #199 strip-1 (2026-05-25): Headline channel-mix is now a flat strip (no Container chrome). Selectors on row 1, KPI tiles on row 2. */}
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 10, padding: '4px 0 10px', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'center', marginBottom: 12 }}>
