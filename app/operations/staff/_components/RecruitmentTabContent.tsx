@@ -2,7 +2,7 @@
 // per-property config, then hands off to the client wizard.
 
 import { supabase } from '@/lib/supabase';
-import Page from '@/components/page/Page';
+import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import StaffTabStrip from './StaffTabStrip';
 import RecruitmentWizard from './RecruitmentWizard';
 import { OPERATIONS_SUBPAGES } from '../../_subpages';
@@ -74,11 +74,12 @@ export default async function RecruitmentTabContent({ propertyId, propertyLabel,
     : 'Operations · Staff · Recruitment';
 
   return (
-    <Page
-      eyebrow={eyebrow}
-      title={<>Recruitment <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>wizard</em></>}
-      subPages={subPagesOverride ?? rewriteSubPagesForProperty(OPERATIONS_SUBPAGES, propertyId)}
+    <DashboardPage
+      title="Recruitment · wizard"
+      subtitle={eyebrow}
+      tabs={(subPagesOverride ?? rewriteSubPagesForProperty(OPERATIONS_SUBPAGES, propertyId)).map(s => ({ key: s.href, label: s.label, href: s.href, active: s.label === 'HR' || s.href.endsWith('/finance/hr') || s.href.endsWith('/operations/staff') }))}
     >
+      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 18 }}>
       <StaffTabStrip propertyId={propertyId} />
       <RecruitmentWizard
         propertyId={propertyId}
@@ -88,6 +89,7 @@ export default async function RecruitmentTabContent({ propertyId, propertyLabel,
         languages={cfg.languages}
         channels={cfg.channels}
       />
-    </Page>
+      </div>
+    </DashboardPage>
   );
 }
