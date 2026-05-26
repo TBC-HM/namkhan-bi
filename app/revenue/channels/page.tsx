@@ -507,13 +507,18 @@ function CategoryBlock({
 
   // Velocity 28d — RPC returns one row per (category, day). Filter by category.
   // PBS #199 v9: same Direct/OTA/Wholesale/Other category mapping.
-  const velocityData = (velocity as Array<Record<string, unknown>>)
-    .filter((r) => String(r.category ?? '') === trendCatKey)
-    .map((r) => ({
-      day: String(r.day ?? ''),
-      n:   Number(r.bookings ?? 0),
-    }))
-    .sort((a, b) => a.day.localeCompare(b.day));
+  // PBS 2026-05-26: 25 vs 26 overlay. Pivot by day_offset 0..27 so prior-year and current-year align on the same x position.
+  const velMap = new Map<number, { day: string; n_25: number; n_26: number }>();
+  for (const r of velocity as Array<Record<string, unknown>>) {
+    if (String(r.category ?? '') !== trendCatKey) continue;
+    const off = Number(r.day_offset ?? 0);
+    const y = Number(r.year ?? 0);
+    const slot = velMap.get(off) ?? { day: 'D' + String(off + 1).padStart(2, '0'), n_25: 0, n_26: 0 };
+    if (y === 2025) slot.n_25 = Number(r.bookings ?? 0);
+    else if (y === 2026) slot.n_26 = Number(r.bookings ?? 0);
+    velMap.set(off, slot);
+  }
+  const velocityData = Array.from(velMap.entries()).sort((a, b) => a[0] - b[0]).map(([, v]) => v);
 
   // Net $/booking bar — RPC column is net_value_per_booking (PBS #199 v9 fix)
   const netData = (netValue as Array<Record<string, unknown>>).map((r) => ({
@@ -574,7 +579,7 @@ function CategoryBlock({
         </Container>
         <Container title={`${titleOf[category]} velocity · 28d`} subtitle="bookings made per day">
           <Chart variant="line" data={velocityData} xKey="day"
-            series={[{ key: 'n', label: 'Bookings/day', color: '#B8542A' }]}
+            series={[{ key: 'n_25', label: '2025 bkgs', color: '#9C9C9C' }, { key: 'n_26', label: '2026 bkgs', color: '#B8542A' }]}
             height={220} empty={{ title: 'No velocity in last 28 days' }} />
         </Container>
       </div>
