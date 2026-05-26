@@ -66,7 +66,7 @@ jobs:
           RESP=$(curl -s -X POST "https://namkhan-bi.vercel.app/api/cockpit/docs/backup" \
             -H "Authorization: Bearer ${{ secrets.COCKPIT_AGENT_TOKEN }}" \
             -H "Content-Type: application/json" \
-            -d "{\"backup_type\":\"pre_push_to_main\",\"deployment_id\":\"${{ github.run_id }}\"}")
+            -d "{\"backup_type\":\"deployment_triggered\",\"deployment_id\":\"${{ github.run_id }}\"}")
           echo "Backup response: $RESP"
           OK=$(echo "$RESP" | jq -r '.ok // false')
           if [ "$OK" != "true" ]; then
