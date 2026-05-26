@@ -1,25 +1,34 @@
 // app/revenue/leakage/page.tsx
 // Canonical leakage page (Namkhan default property).
-// The middleware strips /h/260955/* -> /* for Namkhan, so this is the
-// route that actually renders for Namkhan. /h/1000001/* (Donna) keeps
-// its prefix and is served by app/h/[property_id]/revenue/leakage/page.tsx.
-// PBS 2026-05-26 (#248): BedbankKpiStrip mounted via kpiStrip slot (empty for Namkhan).
+// PBS 2026-05-26 (#248 + #252): BedbankKpiStrip + LeakageAdrMatrix mounted via kpiStrip slot.
 
 import PageRenderer from '@/app/_components/registry/PageRenderer';
 import BedbankKpiStrip from '@/app/_components/registry/BedbankKpiStrip';
+import LeakageAdrMatrix from '@/app/_components/registry/LeakageAdrMatrix';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export default function LeakagePage() {
+interface Props {
+  searchParams?: Record<string, string | string[] | undefined>;
+}
+
+export default function LeakagePage({ searchParams }: Props) {
+  const propertyId = 260955;
   return (
     <PageRenderer
       pageSlug="leakage"
-      propertyId={260955}
+      propertyId={propertyId}
+      searchParams={searchParams}
       title="Revenue · Leakage"
       subtitle="rate leakage · source transparency"
       layout="graphs-first"
-      kpiStrip={<BedbankKpiStrip propertyId={260955} />}
+      kpiStrip={
+        <>
+          <BedbankKpiStrip propertyId={propertyId} />
+          <LeakageAdrMatrix propertyId={propertyId} searchParams={searchParams} />
+        </>
+      }
     />
   );
 }
