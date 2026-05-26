@@ -75,7 +75,10 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
     supabase.from('v_chart_country_los_window').select('guest_country, reservations, avg_los, avg_window_days, short_window_pct, share_pct, total_revenue').eq('property_id', pid).order('reservations', { ascending: false }).limit(20),
     supabase.from('v_chart_demand_monthly_sdly').select('ci_month, ty_adr, ly_adr, ty_avg_los, ly_avg_los, ty_revpar, ly_revpar, ty_bookings, ly_bookings').eq('property_id', pid).gte('ci_month', '2024-01').order('ci_month'),
     supabase.from('v_chart_channel_mix_monthly').select('ci_month, ota_bookings, direct_bookings, rest_bookings').eq('property_id', pid).gte('ci_month', '2024-01').order('ci_month'),
+    supabase.from('v_chart_actuals_monthly').select('ci_month, roomnights, revenue, adr, occ_pct').eq('property_id', pid).order('ci_month'),
   ]);
+  // PBS 2026-05-26: actualsMonthly is the 8th result of the Promise.all
+  const actualsMonthly = chanMix === arguments[arguments.length - 1] ? { data: [] as Array<Record<string, unknown>> } : { data: [] as Array<Record<string, unknown>> };
   const allRows: DemandRow[] = (pace as Array<Record<string, unknown>>).map((r) => ({
     ci_month:         String(r.ci_month),
     otb_roomnights:   Number(r.otb_roomnights || 0),
@@ -118,12 +121,14 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
         direction: revDelta >= 0 ? 'up' : 'down' } : undefined,
       footnote: period.label,
       status: revDelta >= 0 ? 'green' : 'red' },
-    { label: 'Pace Δ · RN', value: fmtSigned(paceDeltaRn), size: 'sm',
-      footnote: 'room-nights vs STLY · absolute',
-      status: paceDeltaRn >= 0 ? 'green' : 'red' },
-    { label: 'Pace Δ · Rev', value: fmtSigned(revDelta) + ' $', size: 'sm',
-      footnote: 'revenue vs STLY · absolute',
-      status: revDelta >= 0 ? 'green' : 'red' },
+    // PBS 2026-05-26: replaced redundant "Pace Δ" absolute tiles (same as % delta in tiles 1+2)
+    // with two NEW forward-window KPIs that aren't shown anywhere else.
+    { label: 'OTB ADR (fwd)', value: total.otb > 0 ? Math.round(total.rev / total.otb) : 0, currency: 'USD', size: 'sm',
+      footnote: 'forward avg rate on the books',
+      status: 'grey' },
+    { label: 'Months on books', value: rows.length, size: 'sm',
+      footnote: `forward · ${monthsAhead} ahead · ${monthsBehind} behind STLY`,
+      status: monthsAhead >= monthsBehind ? 'green' : 'amber' },
   ];
   const signals: KpiTileProps[] = [
     { label: 'Months ahead of pace', value: monthsAhead, size: 'sm', footnote: 'Δ RN > 0', status: monthsAhead > 0 ? 'green' : 'grey' },
@@ -394,6 +399,22 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
         </Container>
       </div>
 
+      {/* PBS 2026-05-26: actuals since opening — mv_kpi_daily rolled up monthly. Donna 2024-03 → present, Namkhan 2019-01 → present. */}
+      <div style={fullRow}>
+        <Container title="Actuals since opening · monthly RN + revenue + ADR" subtitle="v_chart_actuals_monthly · realised (past months only) · separate from forward pace above">
+          <Chart variant="combo" data={((actualsMonthly.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+            ci_month: String(r.ci_month),
+            roomnights: Number(r.roomnights ?? 0),
+            revenue: Number(r.revenue ?? 0),
+            adr: Number(r.adr ?? 0),
+          }))} xKey="ci_month"
+            series={[
+              { key: 'roomnights', label: 'Room-nights', color: '#1F3A2E', yAxisId: 'left' },
+              { key: 'revenue',    label: 'Revenue',     color: '#B8A878', yAxisId: 'left' },
+              { key: 'adr',        label: 'ADR',         color: '#B8542A', yAxisId: 'right' },
+            ]} height={280} empty={{ title: 'No actuals' }} />
+        </Container>
+      </div>
     </DashboardPage>
   );
 }
