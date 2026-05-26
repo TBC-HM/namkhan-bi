@@ -9,6 +9,7 @@
 
 import Link from 'next/link';
 import { Container, Chart, type ChartSeries } from '@/app/(cockpit)/_design';
+import SideDrawer from '@/app/(cockpit)/_design/overlay/SideDrawer';
 import { supabase } from '@/lib/supabase';
 import { stripPublicPrefix, type ContainerRegistryRow } from './types';
 import { formatValue } from './format';
@@ -425,8 +426,7 @@ export default async function ContainerRoomIntel({ container, propertyId, search
         );
       })()}
 
-      <div style={{ display: 'grid', gridTemplateColumns: activeExpand ? '1fr minmax(360px, 480px)' : '1fr', gap: 16, alignItems: 'start' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
         {allCategories.map((code) => {
           const catRows = rowsByCatActive.get(code) ?? [];
           const friendly = FRIENDLY[code] ?? code;
@@ -516,12 +516,14 @@ export default async function ContainerRoomIntel({ container, propertyId, search
         })}
       </div>
 
-      {/* PBS #145: drawer-from-right via aside in col 2 of outer 2-col grid. Sticky right-dock. Server-rendered to preserve tooltipFormatter contract from prior attempt. */}
+      {/* PBS #145: drawer slides OVER the page (true overlay) — see _design/overlay/SideDrawer. Server-rendered children preserve tooltipFormatter contract from Chart in DrillPanel. */}
+      <SideDrawer
+        open={!!activeExpand}
+        closeHref={activeExpand ? hrefExpand(activeExpand) : ''}
+        title={activeExpand ? `Room: ${isCanonicalGrouping ? (FRIENDLY[activeExpand] ?? activeExpand) : activeExpand}` : null}
+      >
         {activeExpand && (
-          <aside style={{ position: 'sticky', top: 80, alignSelf: 'start', display: 'flex', flexDirection: 'column', gap: 12, paddingLeft: 12, borderLeft: '1px solid var(--hairline, #E6DFCC)', maxHeight: 'calc(100vh - 100px)', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <Link href={hrefExpand(activeExpand)} style={{ fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', textDecoration: 'none', padding: '2px 8px', borderRadius: 4, border: '1px solid var(--hairline, #E6DFCC)' }}>✕ close</Link>
-            </div>
+          <>
             <DrillPanel
               q={String(searchParams?.q ?? '')}
               rtList={String(searchParams?.rt ?? '').split(',').filter(Boolean)}
@@ -536,9 +538,9 @@ export default async function ContainerRoomIntel({ container, propertyId, search
               currencySymbol={currencySymbol}
             />
             <IcpSection category={activeExpand} />
-          </aside>
+          </>
         )}
-      </div>
+      </SideDrawer>
     </Container>
   );
 }
