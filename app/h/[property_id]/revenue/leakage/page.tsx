@@ -1,11 +1,12 @@
 // app/h/[property_id]/revenue/leakage/page.tsx
 // Registry-driven leakage page. Adding/removing containers = DB-only.
-// PBS 2026-05-26 (#248 + #252): BedbankKpiStrip + LeakageAdrMatrix mounted via kpiStrip slot.
+// PBS 2026-05-26 (#248 + #252 + #253): BedbankKpiStrip + RateDisciplineTrio + LeakageAdrMatrix via kpiStrip slot.
 
 import { notFound } from 'next/navigation';
 import PageRenderer from '@/app/_components/registry/PageRenderer';
 import BedbankKpiStrip from '@/app/_components/registry/BedbankKpiStrip';
 import LeakageAdrMatrix from '@/app/_components/registry/LeakageAdrMatrix';
+import RateDisciplineTrio from '@/app/_components/registry/RateDisciplineTrio';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -29,6 +30,7 @@ export default function LeakagePage({ params, searchParams }: Props) {
       kpiStrip={
         <>
           <BedbankKpiStrip propertyId={propertyId} />
+          <RateDisciplineTrio propertyId={propertyId} searchParams={searchParams} />
           <LeakageAdrMatrix propertyId={propertyId} searchParams={searchParams} />
         </>
       }
