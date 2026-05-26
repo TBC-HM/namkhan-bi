@@ -66,14 +66,26 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     // PBS #164: badge count of tasks whose remind-or-due date has arrived (from v_hod_tasks_due)
     supabase.from('v_hod_tasks_due').select('id', { count: 'exact', head: true }).eq('dept_slug', 'revenue').eq('property_id', pid).eq('is_due', true),
   ]);
+
+  // #228: today's real OCC / ADR / RevPAR via SECURITY DEFINER RPC (replaces hardcoded DEPT_CFG.kpiTiles 78%/$182/$142 placeholders)
+  const todayKpiRes = await supabase.rpc('fn_revenue_hod_today_kpi', { p_property_id: pid });
+  const todayKpi = ((todayKpiRes.data ?? [])[0] ?? null) as { rn_tonight: number; capacity: number; occ_pct: number; adr_today: number; revpar_today: number } | null;
+  const moneyCurrencyToday = pid === 1000001 ? 'EUR' : 'USD';
+  const symToday = moneyCurrencyToday === 'EUR' ? '€' : '$';
   const bugs = (bugsRes.data ?? []) as Array<{ id: number; body: string | null; status: string | null; created_at: string | null; page_url: string | null }>;
   const dueTasksCount = dueTasksRes.count ?? 0;
   const pickupCount = pickupToday.length;
   const cancelCount = cancellationsToday.length;
 
-  const baseTiles: KpiTileProps[] = (cfg.kpiTiles ?? []).map((k) => ({
-    label: k.k, value: k.v, size: 'sm', footnote: k.d,
-  }));
+  const baseTiles: KpiTileProps[] = (cfg.kpiTiles ?? []).map((k) => {
+    // #228: override placeholders for the revenue HoD with today's live OCC/ADR/RevPAR
+    if (todayKpi) {
+      if (k.k === 'OCC')    return { label: 'OCC',    value: `${todayKpi.occ_pct ?? 0}%`,           size: 'sm', footnote: `${todayKpi.rn_tonight ?? 0} of ${todayKpi.capacity ?? 0} rooms tonight` } as KpiTileProps;
+      if (k.k === 'ADR')    return { label: 'ADR',    value: `${symToday}${Math.round(Number(todayKpi.adr_today ?? 0)).toLocaleString('en-US')}`,    size: 'sm', footnote: 'today, in-house only' } as KpiTileProps;
+      if (k.k === 'RevPAR') return { label: 'RevPAR', value: `${symToday}${Math.round(Number(todayKpi.revpar_today ?? 0)).toLocaleString('en-US')}`, size: 'sm', footnote: 'today, vs capacity' } as KpiTileProps;
+    }
+    return { label: k.k, value: k.v, size: 'sm', footnote: k.d } as KpiTileProps;
+  });
   const tiles: KpiTileProps[] = [
     ...baseTiles,
     { label: 'Pickup today', value: pickupCount, size: 'sm',
