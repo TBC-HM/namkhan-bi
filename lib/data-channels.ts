@@ -238,17 +238,19 @@ export async function getChannelNetValueForRange(
   }));
 }
 
+// PBS 2026-05-26: cross-property + 25 vs 26 overlay. RPC now takes p_property_id and returns (day, day_offset, year, category, bookings).
 export async function getChannelVelocity28dByCat(
   propertyId: number = PROPERTY_ID,
 ): Promise<ChannelVelocityRow[]> {
-  if (propertyId !== PROPERTY_ID) return [];
-  const { data, error } = await supabase.rpc('f_channel_velocity_28d_by_cat');
+  const { data, error } = await supabase.rpc('f_channel_velocity_28d_by_cat', { p_property_id: propertyId });
   if (error) return [];
   return ((data ?? []) as any[]).map((r) => ({
     day: String(r.day),
     category: String(r.category),
     bookings: Number(r.bookings ?? 0),
-  }));
+    day_offset: Number(r.day_offset ?? 0),
+    year: Number(r.year ?? 0),
+  } as ChannelVelocityRow & { day_offset: number; year: number }));
 }
 
 export async function getChannelDailyForRange(sourceName: string, fromDate: string, toDate: string): Promise<ChannelDailyRow[]> {
