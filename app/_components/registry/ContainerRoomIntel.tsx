@@ -165,19 +165,18 @@ export default async function ContainerRoomIntel({ container, propertyId, search
   const allPeriods = Array.from(new Set(rows.map((r) => String(r.period_yyyymm ?? '')).filter(Boolean))).sort().reverse();
   const currentYm = new Date().toISOString().slice(0, 7);
   const currentYear = currentYm.slice(0, 4);
-  const past12Floor = (() => {
-    const d = new Date(currentYm + '-01T00:00:00Z');
-    d.setUTCMonth(d.getUTCMonth() - 11);
-    return d.toISOString().slice(0, 7);
-  })();
-  const windowMonths = allPeriods.filter((p) => p >= past12Floor);
+  // PBS 2026-05-26: dropdowns must start from earliest data (Donna opened 2024-03).
+  // Use Donna's opening as the historical floor; data filter still ensures we only
+  // surface months that actually have rows.
+  const HISTORICAL_FLOOR = '2024-03';
+  const windowMonths = allPeriods.filter((p) => p >= HISTORICAL_FLOOR);
   const realisedMonths = windowMonths.filter((p) => p <= currentYm);
   const ytdKey = `YTD-${currentYear}`;
   const requested = String(searchParams?.period ?? '');
   const isYtd = requested === ytdKey;
-  // USALI #8 — aggregate periods (FY + Q1-4) for years 2025+ only
+  // PBS 2026-05-26: include 2024 aggregates (Donna opened 2024-03).
   const AGGREGATE_YEARS = Array.from(new Set(allPeriods.map((p) => p.slice(0, 4))))
-    .filter((y) => Boolean(y) && Number(y) >= 2025)
+    .filter((y) => Boolean(y) && Number(y) >= 2024)
     .sort();
   const aggregatePeriods: string[] = [];
   for (const y of AGGREGATE_YEARS) {
