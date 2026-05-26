@@ -66,7 +66,7 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
   }));
 
   const period = resolvePeriod(searchParams ?? {});
-  const [pace, losDist, bwDist, losWindow, countryLW, sdly, chanMix] = await Promise.all([
+  const [pace, losDist, bwDist, losWindow, countryLW, sdly, chanMix, actualsMonthly] = await Promise.all([
     // ↓ existing 5 (kept verbatim — only line replaced is the await header above)
     getPaceOtb(period, pid).catch(() => [] as Record<string, unknown>[]),
     supabase.from('v_chart_los_distribution').select('los_bucket, bucket_order, total_reservations, total_revenue, adr, share_pct').eq('property_id', pid).order('bucket_order'),
@@ -77,8 +77,7 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
     supabase.from('v_chart_channel_mix_monthly').select('ci_month, ota_bookings, direct_bookings, rest_bookings').eq('property_id', pid).gte('ci_month', '2024-01').order('ci_month'),
     supabase.from('v_chart_actuals_monthly').select('ci_month, roomnights, revenue, adr, occ_pct').eq('property_id', pid).order('ci_month'),
   ]);
-  // PBS 2026-05-26: actualsMonthly is the 8th result of the Promise.all
-  const actualsMonthly = chanMix === arguments[arguments.length - 1] ? { data: [] as Array<Record<string, unknown>> } : { data: [] as Array<Record<string, unknown>> };
+  // PBS 2026-05-26: actualsMonthly destructured above as 8th Promise.all result.
   const allRows: DemandRow[] = (pace as Array<Record<string, unknown>>).map((r) => ({
     ci_month:         String(r.ci_month),
     otb_roomnights:   Number(r.otb_roomnights || 0),
