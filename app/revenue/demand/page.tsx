@@ -72,7 +72,7 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
     supabase.from('v_chart_los_distribution').select('los_bucket, bucket_order, total_reservations, total_revenue, adr, share_pct').eq('property_id', pid).order('bucket_order'),
     supabase.from('v_chart_booking_window_distribution').select('booking_window_bucket, bucket_order, total_reservations, total_revenue, adr, share_pct').eq('property_id', pid).order('bucket_order'),
     supabase.from('v_chart_los_window_correlation').select('los_bucket, los_order, window_bucket, window_order, reservations, avg_los, total_revenue').eq('property_id', pid).order('window_order').order('los_order'),
-    supabase.rpc('fn_chart_country_los_window', { p_property_id: pid, p_year: String(searchParams?.yr ?? '') || null }).then((res) => ({ data: (res.data ?? []).slice(0, 20),
+    supabase.rpc('fn_chart_country_los_window', { p_property_id: pid, p_year: String(searchParams?.yr ?? '') || null }).then((res) => ({ data: (res.data ?? []).slice(0, 20) })),
     supabase.from('v_chart_demand_monthly_sdly').select('ci_month, ty_adr, ly_adr, ty_avg_los, ly_avg_los, ty_revpar, ly_revpar, ty_bookings, ly_bookings').eq('property_id', pid).gte('ci_month', '2024-01').order('ci_month'),
     supabase.from('v_chart_channel_mix_monthly').select('ci_month, ota_bookings, direct_bookings, rest_bookings').eq('property_id', pid).gte('ci_month', '2024-01').order('ci_month'),
     supabase.from('v_chart_actuals_monthly').select('ci_month, roomnights, revenue, adr, occ_pct').eq('property_id', pid).order('ci_month'),
