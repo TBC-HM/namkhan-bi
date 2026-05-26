@@ -293,7 +293,9 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
         <Container title={`${pickupLabel} · pickup + cancellations`} subtitle={`activity on ${fmtLongDate(pickupDate)}`}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 12 }}>
             <PillLink href={pickupHref(pickupOffset - 1)} active={false} disabled={pickupOffset <= -8}>←</PillLink>
-            {pickupOffset !== 0 && <PillLink href={pickupHref(0)} active={false}>today</PillLink>}
+            {/* #230: label shows the date being viewed (active highlight). The "↺ today" shortcut only appears when you are not on today. */}
+            <PillLink href={pickupHref(pickupOffset)} active={true}>{pickupLabel}</PillLink>
+            {pickupOffset !== 0 && <PillLink href={pickupHref(0)} active={false}>↺ today</PillLink>}
             <PillLink href={pickupHref(pickupOffset + 1)} active={false} disabled={pickupOffset >= 0}>→</PillLink>
           </div>
           <PickupTabs pickup={pickupTabRows} cancellations={cancelTabRows} />
