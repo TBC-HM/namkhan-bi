@@ -17,8 +17,13 @@ export default async function ContainerChart({ graph, propertyId }: Props) {
     .from(view)
     .select('*')
     .eq(filterCol, propertyId)
-    .order(graph.value_col, { ascending: false, nullsFirst: false })
-    .limit(12);
+    // PBS 2026-05-26: chronological sort for date/month label columns (time-series charts).
+    // Non-date columns keep value-DESC top-12 semantic (revenue ranking, etc).
+    .order(
+      /^(.*_)?(month|date|day|month_label|night_date|ci_month)$/i.test(graph.label_col) ? graph.label_col : graph.value_col,
+      { ascending: /^(.*_)?(month|date|day|month_label|night_date|ci_month)$/i.test(graph.label_col), nullsFirst: false }
+    )
+    .limit(24);
 
   const rows = (data ?? []) as DataRow[];
   if (error || rows.length === 0) {
