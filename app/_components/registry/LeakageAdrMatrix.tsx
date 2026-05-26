@@ -32,6 +32,7 @@ interface MatrixRow {
 interface DrillRow {
   guest_name: string;
   source_name: string;
+  rate_plan: string;
   nights: number;
   adr: number;
   total_amount: number;
@@ -85,7 +86,7 @@ export default async function LeakageAdrMatrix({ propertyId, searchParams }: Pro
     drillBucket = b;
     const { data: drillData } = await supabase
       .from('v_adr_bucket_drill')
-      .select('guest_name, source_name, nights, adr, total_amount, booking_window_days')
+      .select('guest_name, source_name, rate_plan, nights, adr, total_amount, booking_window_days')
       .eq('property_id', propertyId)
       .eq('month_label', selectedMonth)
       .eq('room_category', drillRoom)
@@ -183,6 +184,7 @@ export default async function LeakageAdrMatrix({ propertyId, searchParams }: Pro
                   <tr style={{ borderBottom: '2px solid var(--hairline, #E6DFCC)' }}>
                     <th style={{ textAlign: 'left', padding: '8px 10px', fontWeight: 600 }}>Guest</th>
                     <th style={{ textAlign: 'left', padding: '8px 10px', fontWeight: 600 }}>Source</th>
+                    <th style={{ textAlign: 'left', padding: '8px 10px', fontWeight: 600 }}>Rate plan</th>
                     <th style={{ textAlign: 'right', padding: '8px 10px', fontWeight: 600 }}>Nights</th>
                     <th style={{ textAlign: 'right', padding: '8px 10px', fontWeight: 600 }}>ADR</th>
                     <th style={{ textAlign: 'right', padding: '8px 10px', fontWeight: 600 }}>Total</th>
@@ -194,6 +196,7 @@ export default async function LeakageAdrMatrix({ propertyId, searchParams }: Pro
                     <tr key={i} style={{ borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>
                       <td style={{ padding: '8px 10px' }}>{r.guest_name}</td>
                       <td style={{ padding: '8px 10px' }}>{r.source_name}</td>
+                      <td style={{ padding: '8px 10px' }}>{r.rate_plan}</td>
                       <td style={{ padding: '8px 10px', textAlign: 'right' }}>{r.nights}</td>
                       <td style={{ padding: '8px 10px', textAlign: 'right' }}>{ccy}{Number(r.adr).toLocaleString()}</td>
                       <td style={{ padding: '8px 10px', textAlign: 'right' }}>{ccy}{Number(r.total_amount).toLocaleString()}</td>
