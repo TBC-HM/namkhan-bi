@@ -63,6 +63,13 @@ export default function ContainerMonthTable({ container, propertyId }: Props) {
         const v = r[monthField];
         if (typeof v === 'string' && v.length >= 7) set.add(firstOfMonth(v));
       }
+      // PBS 2026-05-26: include current + next 18 calendar months so future-dated
+      // reservations are pickable even when the underlying view is past-only.
+      const today = new Date();
+      for (let i = 0; i <= 18; i++) {
+        const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + i, 1));
+        set.add(d.toISOString().slice(0, 10));
+      }
       const list = Array.from(set).sort().reverse();
       setMonths(list);
       setSelectedMonth(list[0] ?? null);
