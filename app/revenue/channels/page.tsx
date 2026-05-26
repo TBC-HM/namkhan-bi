@@ -568,10 +568,7 @@ function CategoryBlock({
         </Container>
       </div>
 
-      {/* PBS 2026-05-26: "Still owed" container removed (task #235). */}
-      <div style={fullRow}>
-        <!-- "Still owed" container deleted -->
-      </div>
+      {/* "Still owed" container removed 2026-05-26 (task #235) */}
     </>
   );
 }
