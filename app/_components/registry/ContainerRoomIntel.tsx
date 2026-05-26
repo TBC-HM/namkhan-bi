@@ -425,17 +425,37 @@ export default async function ContainerRoomIntel({ container, propertyId, search
         );
       })()}
 
+      {/* PBS 2026-05-26: compute average for the first tile metric across categories with data; used to colour tile frames (green over avg, orange under, red deep-under). */}
+      {(() => null)()}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+        {(() => null)() /* avg computed inline per tile */}
         {allCategories.map((code) => {
           const catRows = rowsByCatActive.get(code) ?? [];
           const friendly = FRIENDLY[code] ?? code;
           const tagline = taglineByCat.get(code) ?? '';
           const isExpanded = code === activeExpand;
           const hasData = catRows.length > 0;
+          // PBS 2026-05-26: tile-vs-average colour-coded frame.
+          const primaryMetric = spec.tile_metrics[0];
+          const ownVal = primaryMetric ? computeMetric(primaryMetric, catRows, isCanonicalGrouping) : null;
+          const peerVals = primaryMetric
+            ? allCategories
+                .map((c) => computeMetric(primaryMetric, rowsByCatActive.get(c) ?? [], isCanonicalGrouping))
+                .filter((v): v is number => v != null && v > 0)
+            : [];
+          const avgVal = peerVals.length > 0 ? peerVals.reduce((a, b) => a + b, 0) / peerVals.length : null;
+          const ratio = (ownVal != null && avgVal != null && avgVal > 0) ? ownVal / avgVal : null;
+          let frameColor = 'var(--hairline, #E6DFCC)';
+          if (isExpanded) frameColor = 'var(--primary, #1F3A2E)';
+          else if (ratio != null) {
+            if (ratio > 1.05) frameColor = '#1F7A5B';        // green: above avg
+            else if (ratio < 0.85) frameColor = '#C0584C';   // red: deep under
+            else if (ratio < 0.95) frameColor = '#B8542A';   // orange: under
+          }
           return (
             <Link key={code} href={hrefExpand(code)} style={{ textDecoration: 'none', color: 'inherit' }}>
               <div style={{
-                border: `1px solid ${isExpanded ? 'var(--primary, #1F3A2E)' : 'var(--hairline, #E6DFCC)'}`,
+                border: `2px solid ${frameColor}`,
                 borderRadius: 6, padding: 14, background: 'var(--paper, #FFFFFF)',
                 display: 'flex', flexDirection: 'column', gap: 8,
                 opacity: hasData ? 1 : 0.7,
