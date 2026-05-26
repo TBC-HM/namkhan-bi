@@ -139,7 +139,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
     cmpPeriod
       ? getChannelEconomicsForRange(cmpPeriod.from, cmpPeriod.to, pid).catch(() => [] as Array<Record<string, unknown>>)
       : Promise.resolve([] as Array<Record<string, unknown>>),
-    getChannelMixWeeklyTrend(period.from, period.to, pid).catch(() => [] as Array<Record<string, unknown>>),
+    getChannelMixWeeklyTrend('2025-01-01', new Date().toISOString().slice(0,10), pid).catch(() => [] as Array<Record<string, unknown>>),
     getChannelNetValueForRange(period.from, period.to, pid).catch(() => [] as Array<Record<string, unknown>>),
     getChannelVelocity28dByCat(pid).catch(() => [] as Array<Record<string, unknown>>),
     supabase.from('v_group_bookings_12mo').select('channel_group, source, reservations, room_nights, gross_revenue, group_adr, est_commission, net_revenue').eq('property_id', pid).order('gross_revenue', { ascending: false }).then((r) => r.data ?? [] as Array<Record<string, unknown>>),
@@ -491,13 +491,19 @@ function CategoryBlock({
   // Trend chart — RPC returns one row per (category, week_start) with category in ['Direct','OTA','Wholesale','Other'].
   // PBS #199 v9: filter by the matching category and aggregate.
   const trendCatKey = category === 'direct' ? 'Direct' : category === 'ota' ? 'OTA' : category === 'group' ? 'Other' : 'Wholesale';
-  const trendData = (mixWeekly as Array<Record<string, unknown>>)
-    .filter((r) => String(r.category ?? '') === trendCatKey)
-    .map((r) => ({
-      week:  String(r.week_start ?? ''),
-      share: Number(r.share_pct ?? 0),
-    }))
-    .sort((a, b) => a.week.localeCompare(b.week));
+  // PBS 2026-05-26: 25 vs 26 overlay. Pivot weekly trend rows into per-year series keyed by ISO week 1-53.
+  const trendMap = new Map<number, { week: string; share_25: number; share_26: number }>();
+  for (const r of mixWeekly as Array<Record<string, unknown>>) {
+    if (String(r.category ?? '') !== trendCatKey) continue;
+    const w = Number(r.week_of_year ?? 0);
+    const y = Number(r.year ?? 0);
+    if (!w) continue;
+    const slot = trendMap.get(w) ?? { week: 'W' + String(w).padStart(2, '0'), share_25: 0, share_26: 0 };
+    if (y === 2025) slot.share_25 = Number(r.share_pct ?? 0);
+    else if (y === 2026) slot.share_26 = Number(r.share_pct ?? 0);
+    trendMap.set(w, slot);
+  }
+  const trendData = Array.from(trendMap.entries()).sort((a, b) => a[0] - b[0]).map(([, v]) => v);
 
   // Velocity 28d — RPC returns one row per (category, day). Filter by category.
   // PBS #199 v9: same Direct/OTA/Wholesale/Other category mapping.
@@ -563,7 +569,7 @@ function CategoryBlock({
       <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
         <Container title={`${titleOf[category]} share · weekly trend`} subtitle={period.label}>
           <Chart variant="line" data={trendData} xKey="week"
-            series={[{ key: 'share', label: `${titleOf[category]} % of revenue`, color: '#1F3A2E' }]}
+            series={[{ key: 'share_25', label: '2025 %', color: '#9C9C9C' }, { key: 'share_26', label: '2026 %', color: '#1F3A2E' }]}
             height={220} empty={{ title: 'No mix data in window' }} />
         </Container>
         <Container title={`${titleOf[category]} velocity · 28d`} subtitle="bookings made per day">
