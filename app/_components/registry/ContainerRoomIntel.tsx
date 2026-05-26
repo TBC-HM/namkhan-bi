@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase';
 import { stripPublicPrefix, type ContainerRegistryRow } from './types';
 import { formatValue } from './format';
 import PeriodDropdown from './PeriodDropdown';
+import CompareDropdown from './CompareDropdown';
 import IcpSection from './IcpSection';
 
 interface TileMetric {
@@ -173,7 +174,15 @@ export default async function ContainerRoomIntel({ container, propertyId, search
   const ytdKey = `YTD-${currentYear}`;
   const requested = String(searchParams?.period ?? '');
   const isYtd = requested === ytdKey;
-  const validPeriods = new Set([ytdKey, ...allPeriods]);
+  // USALI #8 — aggregate periods (FY + Q1-4) for years 2025+ only
+  const AGGREGATE_YEARS = Array.from(new Set(allPeriods.map((p) => p.slice(0, 4))))
+    .filter((y) => Boolean(y) && Number(y) >= 2025)
+    .sort();
+  const aggregatePeriods: string[] = [];
+  for (const y of AGGREGATE_YEARS) {
+    aggregatePeriods.push(`FY-${y}`, `Q1-${y}`, `Q2-${y}`, `Q3-${y}`, `Q4-${y}`);
+  }
+  const validPeriods = new Set([ytdKey, ...allPeriods, ...aggregatePeriods]);
   const activePeriod = validPeriods.has(requested) ? requested : (realisedMonths[0] ?? windowMonths[0] ?? allPeriods[0]);
   if (!activePeriod) {
     return (
@@ -185,8 +194,20 @@ export default async function ContainerRoomIntel({ container, propertyId, search
     );
   }
 
-  // 4. Filter rows to the active period (single month or YTD)
-  const periodRows = isYtd || activePeriod.startsWith('YTD-')
+  // 4. Filter rows to the active period (single month / YTD / FY / Q1-4)
+  function quarterMonths(qCode: string): string[] {
+    const q = Number(qCode.charAt(1));
+    const y = qCode.slice(3);
+    const startMonth = (q - 1) * 3 + 1;
+    return [0, 1, 2].map((i) => `${y}-${String(startMonth + i).padStart(2, '0')}`);
+  }
+  const isFY = activePeriod.startsWith('FY-');
+  const isQ  = /^Q[1-4]-\d{4}$/.test(activePeriod);
+  const periodRows = isFY
+    ? rows.filter((r) => String(r.period_yyyymm ?? '').startsWith(`${activePeriod.slice(3)}-`))
+    : isQ
+    ? (() => { const qm = new Set(quarterMonths(activePeriod)); return rows.filter((r) => qm.has(String(r.period_yyyymm ?? ''))); })()
+    : isYtd || activePeriod.startsWith('YTD-')
     ? rows.filter((r) => {
         const p = String(r.period_yyyymm ?? '');
         return p.startsWith(`${activePeriod.slice(4)}-`) && p <= currentYm;
@@ -199,6 +220,14 @@ export default async function ContainerRoomIntel({ container, propertyId, search
       const y = Number(p.slice(4));
       return Number.isFinite(y) ? `YTD-${y - 1}` : p;
     }
+    if (p.startsWith('FY-')) {
+      const y = Number(p.slice(3));
+      return Number.isFinite(y) ? `FY-${y - 1}` : p;
+    }
+    if (/^Q[1-4]-\d{4}$/.test(p)) {
+      const y = Number(p.slice(3));
+      return Number.isFinite(y) ? `${p.slice(0, 3)}${y - 1}` : p;
+    }
     if (p.length >= 7) {
       const y = Number(p.slice(0, 4));
       const mm = p.slice(5, 7);
@@ -208,7 +237,14 @@ export default async function ContainerRoomIntel({ container, propertyId, search
   }
   const lyPeriod = lyOf(activePeriod);
   const elapsedMm = currentYm.slice(5, 7);
-  const lyRows = lyPeriod.startsWith('YTD-')
+  // USALI #9 — comparison source (sdly default · budget clears LY rows)
+  const cmpMode = String(searchParams?.cmp ?? 'sdly');
+  const lyRows: DataRow[] = cmpMode === 'budget' ? [] :
+    lyPeriod.startsWith('FY-')
+      ? rows.filter((r) => String(r.period_yyyymm ?? '').startsWith(`${lyPeriod.slice(3)}-`))
+    : /^Q[1-4]-\d{4}$/.test(lyPeriod)
+      ? (() => { const qm = new Set(quarterMonths(lyPeriod)); return rows.filter((r) => qm.has(String(r.period_yyyymm ?? ''))); })()
+    : lyPeriod.startsWith('YTD-')
     ? rows.filter((r) => {
         const p = String(r.period_yyyymm ?? '');
         return p.startsWith(`${lyPeriod.slice(4)}-`) && p.slice(5, 7) <= elapsedMm;
@@ -270,15 +306,22 @@ export default async function ContainerRoomIntel({ container, propertyId, search
   // preserving ?expand=. Default = realisedMonths[0] (latest realised month).
   const futureMonths = windowMonths.filter((p) => p > currentYm);
   const periodPicker = (
-    <PeriodDropdown
-      activePeriod={activePeriod}
-      ytdKey={ytdKey}
-      ytdLabel={`YTD ${currentYear}`}
-      realisedMonths={realisedMonths}
-      futureMonths={futureMonths}
-      defaultPeriod={realisedMonths[0]}
-      preserveParams={{ expand: activeExpand }}
-    />
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+      <PeriodDropdown
+        activePeriod={activePeriod}
+        ytdKey={ytdKey}
+        ytdLabel={`YTD ${currentYear}`}
+        realisedMonths={realisedMonths}
+        futureMonths={futureMonths}
+        aggregatePeriods={aggregatePeriods}
+        defaultPeriod={realisedMonths[0]}
+        preserveParams={{ expand: activeExpand, cmp: cmpMode === 'sdly' ? undefined : cmpMode }}
+      />
+      <CompareDropdown
+        activeCmp={cmpMode}
+        preserveParams={{ expand: activeExpand, period: activePeriod === realisedMonths[0] ? undefined : activePeriod }}
+      />
+    </div>
   );
 
   return (
@@ -371,9 +414,10 @@ export default async function ContainerRoomIntel({ container, propertyId, search
                 empty={{ title: 'No revenue data' }} />
             </div>
             <div style={chartFrameStyle}>
-              <div style={chartTitleStyle}>Occupancy mix</div>
-              <Chart variant="donut" data={catChart} xKey="category"
-                series={[{ key: 'occ', label: 'Occ %' }]}
+              <div style={chartTitleStyle}>Occupancy by category</div>
+              {/* USALI #7: donut → bar (axis comparison beats sector arcs) */}
+              <Chart variant="bar" data={catChart} xKey="category"
+                series={[{ key: 'occ', label: 'Occ %', color: 'var(--terracotta, #B8542A)' }]}
                 height={180}
                 empty={{ title: 'No occupancy data' }} />
             </div>
@@ -474,6 +518,9 @@ export default async function ContainerRoomIntel({ container, propertyId, search
       {/* PBS #145 hotfix: DrillPanel's internal Chart uses tooltipFormatter (a function), which can't be serialised across server→client when wrapped inside the client DrillDrawer. Reverting to inline render. IcpSection renders as a sibling below. */}
       {activeExpand && (
         <DrillPanel
+          q={String(searchParams?.q ?? '')}
+          rtList={String(searchParams?.rt ?? '').split(',').filter(Boolean)}
+          yrFilter={String(searchParams?.yr ?? '')}
           code={activeExpand}
           friendly={isCanonicalGrouping ? (FRIENDLY[activeExpand] ?? activeExpand) : activeExpand}
           activePeriod={activePeriod}
@@ -499,11 +546,16 @@ interface DrillProps {
   categoryRowsActive: DataRow[];
   spec: RoomIntelSpec;
   currencySymbol: string;
+  // USALI #6 — drill filters (URL-driven server-side)
+  q: string;
+  rtList: string[];
+  yrFilter: string;
 }
 
 async function DrillPanel({
   code, friendly, activePeriod, propertyId,
   categoryRowsAllTime, categoryRowsActive, spec, currencySymbol,
+  q, rtList, yrFilter,
 }: DrillProps) {
   const sortSpec = (spec.drill.default_sort ?? '').split(/\s+/);
   const sortCol = sortSpec[0] || 'room_revenue';
@@ -538,6 +590,32 @@ async function DrillPanel({
   const seriesLabelByKey: Record<string, string> = {};
   granularTypes.forEach((rt, idx) => { seriesLabelByKey[`t${idx}`] = rt; });
 
+  // USALI #6 — derived filter state (search + chips + year)
+  const qLower = q.trim().toLowerCase();
+  const granularTypesFiltered = granularTypes.filter((rt) =>
+    (!qLower || rt.toLowerCase().includes(qLower)) &&
+    (rtList.length === 0 || rtList.includes(rt))
+  );
+  const last12MonthsFiltered = yrFilter
+    ? last12Months.filter((m) => m.startsWith(yrFilter))
+    : last12Months;
+  const adrDataFiltered = last12MonthsFiltered.map((m) => adrData.find((d) => d.month === m) ?? { month: m });
+  const adrSeriesFiltered = adrSeries.filter((s) => granularTypesFiltered.some((rt) => seriesLabelByKey[String(s.key)] === rt));
+  const sortedFiltered = sorted.filter((r) => granularTypesFiltered.includes(String(r.room_type_name ?? '')));
+  function hrefDrillToggle(overrides: { q?: string | null; rt?: string | null; yr?: string | null }): string {
+    const params = new URLSearchParams();
+    if (code) params.set('expand', code);
+    if (activePeriod) params.set('period', activePeriod);
+    const nextQ  = 'q'  in overrides ? overrides.q  : q;
+    const nextRt = 'rt' in overrides ? overrides.rt : (rtList.length > 0 ? rtList.join(',') : null);
+    const nextYr = 'yr' in overrides ? overrides.yr : yrFilter;
+    if (nextQ)  params.set('q',  String(nextQ));
+    if (nextRt) params.set('rt', String(nextRt));
+    if (nextYr) params.set('yr', String(nextYr));
+    const qs = params.toString();
+    return qs ? `?${qs}` : '';
+  }
+
   // Source mix per granular room_type (RPC call)
   const { data: sourceMixRows } = await supabase.rpc('fn_room_source_mix', {
     p_property_id: propertyId,
@@ -556,11 +634,66 @@ async function DrillPanel({
   return (
     <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 12 }}>
       {/* Granular table */}
+      {/* USALI #6 — drill filter toolbar (year · search · multi-select chips) */}
+      <div style={panelStyle}>
+        <div style={{ padding: '10px 14px', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>Year</div>
+          {[{ k: '', label: 'All' }, { k: '2025', label: '2025' }, { k: '2026', label: '2026' }, { k: '2027', label: '2027' }].map((y) => {
+            const isActive = (y.k === '' && !yrFilter) || (y.k !== '' && yrFilter === y.k);
+            return (
+              <Link key={y.k || 'all'} href={hrefDrillToggle({ yr: y.k || null })} style={{
+                fontSize: 12, padding: '4px 10px', borderRadius: 4,
+                border: `1px solid ${isActive ? 'var(--primary, #1F3A2E)' : 'var(--hairline, #E6DFCC)'}`,
+                background: isActive ? 'var(--primary, #1F3A2E)' : 'var(--paper, #FFFFFF)',
+                color: isActive ? 'var(--paper, #FFFFFF)' : 'var(--ink, #1B1B1B)',
+                textDecoration: 'none', fontWeight: isActive ? 600 : 400,
+              }}>{y.label}</Link>
+            );
+          })}
+          <form method="get" style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
+            {code && <input type="hidden" name="expand" value={code} />}
+            {activePeriod && <input type="hidden" name="period" value={activePeriod} />}
+            {yrFilter && <input type="hidden" name="yr" value={yrFilter} />}
+            {rtList.length > 0 && <input type="hidden" name="rt" value={rtList.join(',')} />}
+            <label style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>Search</label>
+            <input type="text" name="q" defaultValue={q} placeholder="room type..." style={{
+              fontSize: 12, padding: '4px 8px',
+              border: '1px solid var(--hairline, #E6DFCC)', borderRadius: 4,
+              background: 'var(--paper, #FFFFFF)', color: 'var(--ink, #1B1B1B)', minWidth: 140,
+            }} />
+            {q && (
+              <Link href={hrefDrillToggle({ q: null })} style={{ fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', textDecoration: 'underline' }}>clear</Link>
+            )}
+          </form>
+        </div>
+        {granularTypes.length > 0 && (
+          <div style={{ padding: '0 14px 12px', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', alignSelf: 'center', marginRight: 4 }}>Rooms</div>
+            {granularTypes.map((rt) => {
+              const isSelected = rtList.includes(rt);
+              const nextList = isSelected ? rtList.filter((x) => x !== rt) : [...rtList, rt];
+              return (
+                <Link key={rt} href={hrefDrillToggle({ rt: nextList.length === 0 ? null : nextList.join(',') })} style={{
+                  fontSize: 12, padding: '3px 8px', borderRadius: 4,
+                  border: `1px solid ${isSelected ? 'var(--primary, #1F3A2E)' : 'var(--hairline, #E6DFCC)'}`,
+                  background: isSelected ? 'var(--primary, #1F3A2E)' : 'var(--paper, #FFFFFF)',
+                  color: isSelected ? 'var(--paper, #FFFFFF)' : 'var(--ink, #1B1B1B)',
+                  textDecoration: 'none', fontWeight: isSelected ? 600 : 400,
+                }}>{rt}</Link>
+              );
+            })}
+            {rtList.length > 0 && (
+              <Link href={hrefDrillToggle({ rt: null })} style={{ fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', textDecoration: 'underline', alignSelf: 'center', marginLeft: 6 }}>clear</Link>
+            )}
+          </div>
+        )}
+      </div>
+
       <div style={panelStyle}>
         <div style={panelHeader}>
           Drill · {friendly} <span style={panelHeaderSub}>· {sorted.length} granular room type{sorted.length === 1 ? '' : 's'} · {activePeriod}</span>
         </div>
-        {sorted.length === 0 ? (
+        {sortedFiltered.length === 0 ? (
           <div style={{ padding: 14, fontSize: 12, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>
             No granular rows for this category in {activePeriod}.
           </div>
@@ -576,7 +709,7 @@ async function DrillPanel({
               </tr>
             </thead>
             <tbody>
-              {sorted.map((r, i) => {
+              {sortedFiltered.map((r, i) => {
                 const period = String(r.period_yyyymm ?? '');
                 const lyP = period.length >= 7 ? `${Number(period.slice(0, 4)) - 1}-${period.slice(5, 7)}` : '';
                 const ly = lyP
@@ -628,15 +761,42 @@ async function DrillPanel({
       </div>
 
       {/* 12-month ADR rollup */}
-      {last12Months.length > 0 && (
+      {last12MonthsFiltered.length > 0 && (
         <div style={panelStyle}>
           <div style={panelHeader}>
             ADR · last 12 months <span style={panelHeaderSub}>· per granular room type</span>
           </div>
           <div style={{ padding: 12 }}>
             {/* PBS #145 hotfix-2: tooltipFormatter (a function) crashes server→client into the DashboardPage ('use client') boundary. Drop the custom formatter — default tooltip shows key/value pairs. Custom hover detail returns once Chart accepts a string enum for format. */}
-            <Chart variant="line" data={adrData} xKey="month" series={adrSeries} height={220}
+            <Chart variant="line" data={adrDataFiltered} xKey="month" series={adrSeriesFiltered} height={220}
               empty={{ title: 'No ADR history for this category' }} />
+          </div>
+        </div>
+      )}
+
+      {/* USALI #5 — OCC line chart (sibling of ADR rollup, uses filtered series + months) */}
+      {last12MonthsFiltered.length > 0 && (
+        <div style={panelStyle}>
+          <div style={panelHeader}>
+            OCC · last 12 months <span style={panelHeaderSub}>· per granular room type · % of canonical capacity</span>
+          </div>
+          <div style={{ padding: 12 }}>
+            <Chart
+              variant="line"
+              data={last12MonthsFiltered.map((m) => {
+                const row: Record<string, string | number> = { month: m };
+                granularTypesFiltered.forEach((rt) => {
+                  const idx = granularTypes.indexOf(rt);
+                  const r = categoryRowsAllTime.find((x) => x.room_type_name === rt && x.period_yyyymm === m);
+                  row[`t${idx}`] = r ? num(r.occ_pct_of_canonical) : 0;
+                });
+                return row;
+              })}
+              xKey="month"
+              series={adrSeriesFiltered}
+              height={220}
+              empty={{ title: 'No OCC history for this category' }}
+            />
           </div>
         </div>
       )}
