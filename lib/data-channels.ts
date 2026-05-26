@@ -197,20 +197,27 @@ export async function getChannelEconomicsForRange(
   }));
 }
 
+// PBS 2026-05-26: cross-property + 25 vs 26 comparison. Drop Namkhan short-circuit.
+// RPC now returns (week_of_year, year, category, gross_revenue, share_pct).
 export async function getChannelMixWeeklyTrend(
   fromDate: string,
   toDate: string,
   propertyId: number = PROPERTY_ID,
 ): Promise<ChannelMixWeeklyRow[]> {
-  if (propertyId !== PROPERTY_ID) return [];
-  const { data, error } = await supabase.rpc('f_channel_mix_weekly_trend', { p_from: fromDate, p_to: toDate });
+  const { data, error } = await supabase.rpc('f_channel_mix_weekly_trend', {
+    p_property_id: propertyId,
+    p_from: fromDate || null,
+    p_to: toDate || null,
+  });
   if (error) return [];
   return ((data ?? []) as any[]).map((r) => ({
-    week_start: String(r.week_start),
+    week_start: `W${String(r.week_of_year).padStart(2,'0')}-${r.year}`,
     category: String(r.category),
     gross_revenue: Number(r.gross_revenue ?? 0),
     share_pct: Number(r.share_pct ?? 0),
-  }));
+    week_of_year: Number(r.week_of_year ?? 0),
+    year: Number(r.year ?? 0),
+  } as ChannelMixWeeklyRow & { week_of_year: number; year: number }));
 }
 
 export async function getChannelNetValueForRange(
