@@ -88,7 +88,7 @@ export default async function PageRenderer({ pageSlug, propertyId, title, subtit
           const c = it.container!;
           switch (c.render_type) {
             case 'table':
-              return <ContainerTable key={`c-${c.container_code}`} container={c} propertyId={propertyId} />;
+              return <ContainerTable key={`c-${c.container_code}`} container={c} propertyId={propertyId} searchParams={searchParams} />;
             case 'month_table':
               return <ContainerMonthTable key={`c-${c.container_code}`} container={c} propertyId={propertyId} />;
             case 'top_n_drill':
