@@ -306,15 +306,13 @@ export async function getPulseTodayCancellations(
   propertyId: number,
   asOf: string,
 ): Promise<PulsePickupRow[]> {
+  // #229 (2026-05-26): switched to public.fn_pulse_day_cancellations RPC which uses
+  // COALESCE(cancellation_date::date, booking_date::date) — 145 of 1014 Namkhan cancelled
+  // rows have NULL cancellation_date (CB sync gap), so the old direct-table filter
+  // never matched them. RPC widens the net to include cancellations whose cancel
+  // timestamp wasn't synced from Cloudbeds.
   const { data, error } = await supabase
-    .from('v_reservations_unified')
-    .select('reservation_id, source_name, room_type_name, guest_name, check_in_date, booking_date, cancellation_date, nights, total_amount')
-    .eq('property_id', propertyId)
-    .eq('is_cancelled', true)
-    .gte('cancellation_date', asOf)
-    .lte('cancellation_date', asOf + 'T23:59:59')
-    .order('cancellation_date', { ascending: false })
-    .limit(50);
+    .rpc('fn_pulse_day_cancellations', { p_property_id: propertyId, p_as_of: asOf });
   if (error || !data) return [];
   return (data as Array<Record<string, unknown>>).map((r) => {
     const nights = Number(r.nights ?? 0);
