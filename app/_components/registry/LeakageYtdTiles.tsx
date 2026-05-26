@@ -1,5 +1,6 @@
 // app/_components/registry/LeakageYtdTiles.tsx
-// PBS 2026-05-27 (#255): 4 KPI tiles at top of /leakage showing YTD loss per channel.
+// PBS 2026-05-27 (#255 + #256): 4 YTD loss tiles on top of /leakage,
+// reading per-(room × month) breach detection from v_rate_discipline_metrics.
 
 import { KpiTile } from '@/app/(cockpit)/_design';
 import { supabase } from '@/lib/supabase';
@@ -9,15 +10,19 @@ interface Props { propertyId: number }
 interface Row {
   property_id: number;
   yr: number;
-  ota_parity_loss_ytd: number;
-  website_discipline_loss_ytd: number;
-  email_leak_ytd: number;
-  phone_leak_ytd: number;
+  ota_parity_loss_eur: number;
+  ota_parity_breach_rn: number;
+  website_self_loss_eur: number;
+  website_self_breach_rn: number;
+  email_loss_eur: number;
+  email_breach_rn: number;
+  phone_loss_eur: number;
+  phone_breach_rn: number;
 }
 
 export default async function LeakageYtdTiles({ propertyId }: Props) {
   const { data } = await supabase
-    .from('v_ytd_channel_leak')
+    .from('v_rate_discipline_metrics')
     .select('*')
     .eq('property_id', propertyId)
     .maybeSingle();
@@ -27,43 +32,27 @@ export default async function LeakageYtdTiles({ propertyId }: Props) {
 
   const ccy: 'USD' | 'EUR' = propertyId === 1000001 ? 'EUR' : 'USD';
 
+  const mk = (label: string, loss: number, rn: number, hint: string) => ({
+    label,
+    value: Math.round(Number(loss ?? 0)),
+    currency: ccy,
+    footnote: `YTD · ${Math.round(Number(rn ?? 0)).toLocaleString()} room-nights · ${hint}`,
+    status: (Number(loss) > 50000 ? 'red' : Number(loss) > 10000 ? 'amber' : 'green') as 'red' | 'amber' | 'green',
+  });
+
   const tiles = [
-    {
-      label: 'OTA Parity Loss',
-      value: Math.round(Number(r.ota_parity_loss_ytd ?? 0)),
-      currency: ccy,
-      footnote: 'YTD · OTAs selling below Website',
-      status: Number(r.ota_parity_loss_ytd) > 50000 ? 'red' as const : Number(r.ota_parity_loss_ytd) > 10000 ? 'amber' as const : 'green' as const,
-    },
-    {
-      label: 'Website Discipline',
-      value: Math.round(Number(r.website_discipline_loss_ytd ?? 0)),
-      currency: ccy,
-      footnote: 'YTD · self-undercut vs OTA',
-      status: Number(r.website_discipline_loss_ytd) > 25000 ? 'red' as const : Number(r.website_discipline_loss_ytd) > 5000 ? 'amber' as const : 'green' as const,
-    },
-    {
-      label: 'Email Leak',
-      value: Math.round(Number(r.email_leak_ytd ?? 0)),
-      currency: ccy,
-      footnote: 'YTD · Email ADR below Website',
-      status: Number(r.email_leak_ytd) > 50000 ? 'red' as const : Number(r.email_leak_ytd) > 10000 ? 'amber' as const : 'green' as const,
-    },
-    {
-      label: 'Phone Leak',
-      value: Math.round(Number(r.phone_leak_ytd ?? 0)),
-      currency: ccy,
-      footnote: 'YTD · Phone ADR below Website',
-      status: Number(r.phone_leak_ytd) > 50000 ? 'red' as const : Number(r.phone_leak_ytd) > 10000 ? 'amber' as const : 'green' as const,
-    },
+    mk('OTA Parity Loss', r.ota_parity_loss_eur, r.ota_parity_breach_rn, 'OTAs sold below Website rate'),
+    mk('Website Discipline', r.website_self_loss_eur, r.website_self_breach_rn, 'Website undercut OTA rate'),
+    mk('Email Leak', r.email_loss_eur, r.email_breach_rn, 'Email ADR below Website'),
+    mk('Phone Leak', r.phone_loss_eur, r.phone_breach_rn, 'Phone ADR below Website'),
   ];
 
   return (
     <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 6, padding: '2px 0 10px', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>
       <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>
-        Channel Leak · YTD {r.yr} · estimated revenue lost vs Website baseline
+        Channel Leak · YTD {r.yr} · revenue lost vs Website baseline (per room category × month)
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
         {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
       </div>
     </div>
