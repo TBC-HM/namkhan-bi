@@ -91,7 +91,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
   // note#13: per-source 24/25/26 aggregate for the full-screen-expandable table
   const { data: sourcesAllYears } = await supabase
     .from('v_chart_channels_sources_24_25_26')
-    .select('category, source_name, res_24, res_25, res_26, res_total, rev_24, rev_25, rev_26, rev_total, rn_26, adr_26, avg_window_days, avg_los, sdly_dev_pct')
+    .select('category, source_name, res_24, res_25, res_26, res_total, rev_24, rev_25, rev_26, rev_total, rn_24, rn_25, rn_26, adr_24, adr_25, adr_26, avg_window_days, avg_los, sdly_dev_pct')
     .eq('property_id', pid)
     .order('category')
     .order('res_total', { ascending: false });
@@ -104,7 +104,11 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
       res_24:   Number(r.res_24 ?? 0),
       res_25:   Number(r.res_25 ?? 0),
       res_26:   Number(r.res_26 ?? 0),
+      rev_24:   r.rev_24 != null ? `${sym}${Math.round(Number(r.rev_24)).toLocaleString('en-US')}` : '—',
+      rev_25:   r.rev_25 != null ? `${sym}${Math.round(Number(r.rev_25)).toLocaleString('en-US')}` : '—',
       rev_26:   r.rev_26 != null ? `${sym}${Math.round(Number(r.rev_26)).toLocaleString('en-US')}` : '—',
+      adr_24:   r.adr_24 != null ? `${sym}${Math.round(Number(r.adr_24)).toLocaleString('en-US')}` : '—',
+      adr_25:   r.adr_25 != null ? `${sym}${Math.round(Number(r.adr_25)).toLocaleString('en-US')}` : '—',
       adr_26:   r.adr_26 != null ? `${sym}${Math.round(Number(r.adr_26)).toLocaleString('en-US')}` : '—',
       rn_26:    r.rn_26 != null ? Number(r.rn_26) : 0,
       window_d: r.avg_window_days != null ? `${Math.round(Number(r.avg_window_days))}d` : '—',
