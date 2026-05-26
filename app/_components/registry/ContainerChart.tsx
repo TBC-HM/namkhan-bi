@@ -23,7 +23,7 @@ export default async function ContainerChart({ graph, propertyId }: Props) {
       /^(.*_)?(month|date|day|month_label|night_date|ci_month)$/i.test(graph.label_col) ? graph.label_col : graph.value_col,
       { ascending: /^(.*_)?(month|date|day|month_label|night_date|ci_month)$/i.test(graph.label_col), nullsFirst: false }
     )
-    .limit(24);
+    .limit(120);
 
   const rows = (data ?? []) as DataRow[];
   if (error || rows.length === 0) {
@@ -43,17 +43,29 @@ export default async function ContainerChart({ graph, propertyId }: Props) {
     graph.chart_type === 'pie'  ? 'donut' :
     'bar';
 
+  // PBS 2026-05-26: include all extra numeric columns so tooltip surfaces them (sold_nights etc).
+  const extraNumericCols = Object.keys(rows[0] ?? {}).filter((k) =>
+    k !== graph.label_col && k !== filterCol && k !== 'property_id' && typeof rows[0]?.[k] === 'number'
+  );
   const chartData = rows.map((r) => {
     const lbl = String(r[graph.label_col] ?? '—');
-    const val = Number(r[graph.value_col] ?? 0);
-    return { [graph.label_col]: lbl, [graph.value_col]: Math.round(val) } as Record<string, string | number>;
+    const out: Record<string, string | number> = { [graph.label_col]: lbl };
+    for (const k of extraNumericCols) {
+      const n = Number(r[k] ?? 0);
+      out[k] = Number.isFinite(n) ? Math.round(n) : 0;
+    }
+    // ensure primary value_col is present even if not numeric in source
+    if (!(graph.value_col in out)) out[graph.value_col] = Math.round(Number(r[graph.value_col] ?? 0));
+    return out;
   });
 
-  const series: ChartSeries[] = [{
-    key: graph.value_col,
-    label: graph.value_col,
-    color: CHART_PALETTE[0],
-  }];
+  // Primary series first (the synthesized value_col); secondaries auto-add from extras.
+  const orderedSeriesKeys = [graph.value_col, ...extraNumericCols.filter((k) => k !== graph.value_col)];
+  const series: ChartSeries[] = orderedSeriesKeys.map((k, i) => ({
+    key: k,
+    label: k,
+    color: CHART_PALETTE[i % CHART_PALETTE.length],
+  }));
 
   return (
     <Container title={graph.graph_name} subtitle={graph.description ?? view}>
@@ -62,7 +74,7 @@ export default async function ContainerChart({ graph, propertyId }: Props) {
         data={chartData}
         xKey={graph.label_col}
         series={series}
-        height={260}
+        height={320}
         empty={{ title: 'No data for this property' }}
       />
     </Container>
