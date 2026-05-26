@@ -231,13 +231,13 @@ export default async function PacePage({
       label: 'OTB Room Nights', value: tileRns, size: 'sm',
       delta: cmpActive && tileStly > 0 ? { value: pctChange(tileRns, tileStly), period: cmpLabel,
         direction: tileRns >= tileStly ? 'up' : 'down' } : undefined,
-      footnote: 'mv_pace_otb · matches /demand',
+      footnote: period.label,
     },
     {
       label: 'OTB Revenue', value: tileRev, currency: 'USD', size: 'sm',
       delta: cmpActive && tileStlyRev > 0 ? { value: pctChange(tileRev, tileStlyRev), period: cmpLabel,
         direction: tileRev >= tileStlyRev ? 'up' : 'down' } : undefined,
-      footnote: 'matches /demand',
+      footnote: period.label,
     },
     {
       label: 'OTB ADR', value: Math.round(tileAdr), currency: 'USD', size: 'sm',
@@ -249,7 +249,7 @@ export default async function PacePage({
       delta: cmpActive && tileStly > 0 ? { value: tileOcc - tileStlyOcc, period: cmpLabel,
         direction: tileOcc >= tileStlyOcc ? 'up' : 'down' } : undefined,
     },
-    { label: 'Cancel Rate', value: `${cxlRate.toFixed(1)}%`, size: 'sm', footnote: 'cancelled / total reservations · v_otb_pace' },
+    { label: 'Cancel Rate', value: `${cxlRate.toFixed(1)}%`, size: 'sm', footnote: 'cancelled / total reservations' },
     { label: 'vs STLY', value: `${tileStlyPct.toFixed(0)}%`, size: 'sm', status: tileStlyPct >= 100 ? 'green' : tileStlyPct >= 80 ? 'amber' : 'red' },
   ];
 
