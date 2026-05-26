@@ -474,10 +474,15 @@ function CategoryBlock({
       ];
     }
     // dmc / bedbank (same shape — both are B2B intermediaries)
+    // PBS 2026-05-26 #233: add STLY/cmp delta to match Direct/OTA tile branch
     return [
-      { label: 'Bookings', value: bookings, size: 'sm' },
-      { label: 'Revenue', value: Math.round(revenue), currency: moneyCurrency, size: 'sm' },
-      { label: 'ADR', value: Math.round(adr), currency: moneyCurrency, size: 'sm', footnote: category === 'bedbank' ? 'net rate (no commission)' : 'pre-commission net rate' },
+      { label: 'Bookings', value: bookings, size: 'sm',
+        delta: hasCmp ? { value: dPct(bookings, cmpBookings), period: 'cmp', direction: bookings >= cmpBookings ? 'up' : 'down' } : undefined },
+      { label: 'Revenue', value: Math.round(revenue), currency: moneyCurrency, size: 'sm',
+        delta: hasCmp ? { value: dPct(revenue, cmpRevenue), period: 'cmp', direction: revenue >= cmpRevenue ? 'up' : 'down' } : undefined },
+      { label: 'ADR', value: Math.round(adr), currency: moneyCurrency, size: 'sm',
+        delta: hasCmp ? { value: dPct(adr, cmpAdr), period: 'cmp', direction: adr >= cmpAdr ? 'up' : 'down' } : undefined,
+        footnote: category === 'bedbank' ? 'net rate (no commission)' : 'pre-commission net rate' },
       { label: 'Avg lead time', value: `${avgLead.toFixed(0)}d`, size: 'sm', footnote: category === 'bedbank' ? 'B2B allotments' : 'usually longer for B2B' },
       { label: 'Active contracts', value: rows.length, size: 'sm', footnote: 'distinct sources w/ bookings' },
     ];
