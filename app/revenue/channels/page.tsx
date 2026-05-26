@@ -334,7 +334,11 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
                     <th style={{ ...thStyle, textAlign: 'right' }}>Res 25</th>
                     <th style={{ ...thStyle, textAlign: 'right' }}>Res 26</th>
                     <th style={{ ...thStyle, textAlign: 'right' }}>SDLY 26 vs 25</th>
+                    <th style={{ ...thStyle, textAlign: 'right' }}>Rev 24</th>
+                    <th style={{ ...thStyle, textAlign: 'right' }}>Rev 25</th>
                     <th style={{ ...thStyle, textAlign: 'right' }}>Rev 26</th>
+                    <th style={{ ...thStyle, textAlign: 'right' }}>ADR 24</th>
+                    <th style={{ ...thStyle, textAlign: 'right' }}>ADR 25</th>
                     <th style={{ ...thStyle, textAlign: 'right' }}>ADR 26</th>
                     <th style={{ ...thStyle, textAlign: 'right' }}>RN 26</th>
                     <th style={{ ...thStyle, textAlign: 'right' }}>Avg window</th>
@@ -350,7 +354,11 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
                       <td style={tdNumStyle}>{r.res_25}</td>
                       <td style={tdNumStyle}>{r.res_26}</td>
                       <td style={tdNumStyle}>{r.sdly}</td>
+                      <td style={tdNumStyle}>{r.rev_24}</td>
+                      <td style={tdNumStyle}>{r.rev_25}</td>
                       <td style={tdNumStyle}>{r.rev_26}</td>
+                      <td style={tdNumStyle}>{r.adr_24}</td>
+                      <td style={tdNumStyle}>{r.adr_25}</td>
                       <td style={tdNumStyle}>{r.adr_26}</td>
                       <td style={tdNumStyle}>{r.rn_26}</td>
                       <td style={tdNumStyle}>{r.window_d}</td>
