@@ -377,6 +377,18 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
       </div>
 
       <div style={fullRow}>
+        {/* PBS 2026-05-26: year filter strip for Country × LOS × Window table — RPC honours p_year. */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center', fontSize: 11 }}>
+          <span style={{ color: 'var(--ink-soft, #5A5A5A)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Year:</span>
+          {(['all', '2024', '2025', '2026'] as const).map((y) => {
+            const cur = String(searchParams?.yr ?? '');
+            const isActive = (y === 'all' && !cur) || cur === y;
+            const href = y === 'all' ? '?' : '?yr=' + y;
+            return (
+              <a key={y} href={href} style={{ padding: '2px 10px', borderRadius: 999, border: '1px solid var(--hairline, #E6DFCC)', textDecoration: 'none', color: isActive ? 'var(--paper, #FFFFFF)' : 'var(--ink, #1B1B1B)', background: isActive ? 'var(--primary, #1F3A2E)' : 'transparent', fontWeight: isActive ? 600 : 400 }}>{y === 'all' ? 'All' : y}</a>
+            );
+          })}
+        </div>
         <Container title="Country × LOS × Booking-window" subtitle="who books late vs who plans · short-window % flags reactive bookers · top 20 by volume · 90/180/365-day trailing dropdown owed">
           <Chart variant="table" data={((countryLW.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
             country:           String(r.guest_country ?? 'Unknown'),
