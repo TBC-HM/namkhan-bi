@@ -1,9 +1,7 @@
 // app/_components/registry/RateDisciplineTrio.tsx
-// PBS 2026-05-26 (#253): three side-by-side rate-discipline boxes on /leakage.
-// Box 1 — OTA parity: OTA vs Website (positive = Website premium, healthy).
-// Box 2 — Website cheaper than OTA: same pair, framed as self-undercut risk.
-// Box 3 — Direct channels (Website / Email / Phone): cross-channel ADR consistency.
-// Year pill strip 24/25/26 shared across all 3 (?rd_yr=2026).
+// PBS 2026-05-27 (#253 + #255 + #256): 4 rate-discipline boxes on /leakage,
+// driven by per-(room_category × month) breach detection in v_rate_discipline_metrics.
+// Each box surfaces: Discipline %, breach pairs, breach RN, YTD € damage.
 
 import { Container } from '@/app/(cockpit)/_design';
 import { supabase } from '@/lib/supabase';
@@ -13,29 +11,29 @@ interface Props {
   searchParams?: Record<string, string | string[] | undefined>;
 }
 
-interface ChannelRow {
+interface Row {
   property_id: number;
-  month_label: string;
   yr: number;
-  ota_adr: number | null;
-  website_adr: number | null;
-  email_adr: number | null;
-  phone_adr: number | null;
-  walkin_adr: number | null;
-  bedbank_adr: number | null;
-}
-
-function avg(nums: Array<number | null | undefined>): number {
-  const arr = nums.filter((n): n is number => n != null && Number.isFinite(n) && n > 0);
-  if (arr.length === 0) return 0;
-  return arr.reduce((a, b) => a + b, 0) / arr.length;
-}
-
-function stdev(nums: number[]): number {
-  if (nums.length < 2) return 0;
-  const m = nums.reduce((a, b) => a + b, 0) / nums.length;
-  const v = nums.reduce((s, x) => s + (x - m) ** 2, 0) / (nums.length - 1);
-  return Math.sqrt(v);
+  ota_parity_pairs: number;
+  ota_parity_breach_pairs: number;
+  ota_parity_breach_rn: number;
+  ota_parity_loss_eur: number;
+  website_self_pairs: number;
+  website_self_breach_pairs: number;
+  website_self_breach_rn: number;
+  website_self_loss_eur: number;
+  email_pairs: number;
+  email_breach_pairs: number;
+  email_breach_rn: number;
+  email_loss_eur: number;
+  phone_pairs: number;
+  phone_breach_pairs: number;
+  phone_breach_rn: number;
+  phone_loss_eur: number;
+  direct_pairs: number;
+  direct_breach_pairs: number;
+  direct_breach_rn: number;
+  direct_loss_eur: number;
 }
 
 export default async function RateDisciplineTrio({ propertyId, searchParams }: Props) {
@@ -44,46 +42,12 @@ export default async function RateDisciplineTrio({ propertyId, searchParams }: P
   const rdYr = /^20\d{2}$/.test(rdYrRaw) ? Number(rdYrRaw) : new Date().getFullYear();
 
   const { data } = await supabase
-    .from('v_monthly_adr_by_channel')
+    .from('v_rate_discipline_metrics')
     .select('*')
     .eq('property_id', propertyId)
-    .eq('yr', rdYr)
-    .order('month_label', { ascending: true });
+    .maybeSingle();
 
-  const rows = (data ?? []) as ChannelRow[];
-
-  // Box 1 — OTA parity (compare OTA vs Website)
-  const otaMeanA = avg(rows.map((r) => r.ota_adr));
-  const websiteMean = avg(rows.map((r) => r.website_adr));
-  const box1Diff = websiteMean > 0 ? ((otaMeanA - websiteMean) / websiteMean) * 100 : 0;
-  // Discipline: positive = OTA priced AT/ABOVE website (good parity).
-  // Negative = OTA undercutting our website (breach).
-  const box1Discipline = -box1Diff; // invert so positive=good (no breach)
-
-  // Box 2 — Website cheaper than OTA (same pair, frame as direct self-undercut)
-  const otaMeanB = otaMeanA;
-  const websiteMeanB = websiteMean;
-  // Discipline: positive when Website >= OTA (no self-undercut). Negative when Website < OTA.
-  const box2Diff = otaMeanB > 0 ? ((websiteMeanB - otaMeanB) / otaMeanB) * 100 : 0;
-  const box2Discipline = box2Diff;
-
-  // Box 4 — Website vs Phone — pre-compute means used by box 4
-  const phoneMean = avg(rows.map((r) => r.phone_adr));
-  const box4Diff = phoneMean > 0 ? ((websiteMean - phoneMean) / phoneMean) * 100 : 0;
-  const box4Discipline = box4Diff; // positive = Website premium over Phone
-
-  // Box 3 — Direct channels consistency (Website / Email / Phone)
-  const directMonthly = rows
-    .map((r) => [r.website_adr, r.email_adr, r.phone_adr]
-      .filter((x): x is number => x != null && x > 0))
-    .filter((arr) => arr.length >= 2);
-  const cvs = directMonthly.map((arr) => {
-    const m = arr.reduce((a, b) => a + b, 0) / arr.length;
-    return m > 0 ? (stdev(arr) / m) * 100 : 0;
-  });
-  const avgCv = cvs.length ? cvs.reduce((a, b) => a + b, 0) / cvs.length : 0;
-  // Discipline: positive when channels are tight (low CV). 50 = perfectly aligned, 0 = 50% spread, negative when spread > 50%.
-  const box3Discipline = 50 - avgCv;
+  const r = (data ?? null) as Row | null;
 
   const yearPills = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -110,66 +74,74 @@ export default async function RateDisciplineTrio({ propertyId, searchParams }: P
   );
 
   const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
+
+  if (!r) {
+    return (
+      <div style={{ ...fullRow }}>
+        <Container title="Rate Discipline" subtitle={`${rdYr} · no comparable data`}>
+          <div style={{ padding: 18, fontSize: 12, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>
+            No reservation data for {rdYr}.
+          </div>
+        </Container>
+      </div>
+    );
+  }
+
+  // Discipline % = 100 - breach_pct (signed: positive means good)
+  // PBS: positive = disciplined, negative = leak
+  const disciplineFromBreach = (breachPairs: number, totalPairs: number) => {
+    if (totalPairs === 0) return 0;
+    return Math.round(100 - (breachPairs / totalPairs) * 100);
+  };
+
   return (
     <div style={{ ...fullRow, display: 'flex', flexDirection: 'column', gap: 8 }} id="rate-discipline">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' }}>
         <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>
-          Rate Discipline · {rdYr} · year-over-year channel ADR comparison
+          Rate Discipline · YTD {rdYr} · per (room category × month) comparison
         </div>
         {yearPills}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
         <DisciplineBox
-          title="OTA parity breaches"
-          subtitle={`${rdYr} · OTA vs Website`}
-          channelA="OTA"
-          channelB="Website"
-          adrA={Math.round(otaMeanA)}
-          adrB={Math.round(websiteMean)}
-          discipline={box1Discipline}
-          diffPct={box1Diff}
+          title="OTA Parity Breaches"
+          subtitle="OTAs sold below Website rate (parity breach by OTA)"
+          discipline={disciplineFromBreach(r.ota_parity_breach_pairs, r.ota_parity_pairs)}
+          breachPairs={r.ota_parity_breach_pairs}
+          totalPairs={r.ota_parity_pairs}
+          breachRn={r.ota_parity_breach_rn}
+          lossEur={r.ota_parity_loss_eur}
           ccy={ccy}
-          rowCount={rows.filter((r) => (r.ota_adr ?? 0) > 0 && (r.website_adr ?? 0) > 0).length}
-          interpretation={box1Discipline >= 0 ? 'No breach · OTAs not undercutting' : 'BREACH · OTAs selling cheaper than Website'}
         />
         <DisciplineBox
-          title="Website cheaper than OTA"
-          subtitle={`${rdYr} · self-undercut watch`}
-          channelA="Website"
-          channelB="OTA"
-          adrA={Math.round(websiteMean)}
-          adrB={Math.round(otaMeanA)}
-          discipline={box2Discipline}
-          diffPct={box2Diff}
+          title="Website Cheaper Than OTA"
+          subtitle="we undercut our own OTA listings (self-cannibalize)"
+          discipline={disciplineFromBreach(r.website_self_breach_pairs, r.website_self_pairs)}
+          breachPairs={r.website_self_breach_pairs}
+          totalPairs={r.website_self_pairs}
+          breachRn={r.website_self_breach_rn}
+          lossEur={r.website_self_loss_eur}
           ccy={ccy}
-          rowCount={rows.filter((r) => (r.ota_adr ?? 0) > 0 && (r.website_adr ?? 0) > 0).length}
-          interpretation={box2Discipline >= 0 ? 'Website premium intact' : 'SELF-UNDERCUT · Website lower than OTA average'}
         />
         <DisciplineBox
-          title="Direct channels spread"
-          subtitle={`${rdYr} · Website / Email / Phone`}
-          channelA="Direct mix"
-          channelB="ideal=tight"
-          adrA={Math.round(websiteMean)}
-          adrB={Math.round(avg(rows.map((r) => r.email_adr).concat(rows.map((r) => r.phone_adr))))}
-          discipline={box3Discipline}
-          diffPct={avgCv}
+          title="Email Leak"
+          subtitle="Email ADR below Website (direct channel inconsistency)"
+          discipline={disciplineFromBreach(r.email_breach_pairs, r.email_pairs)}
+          breachPairs={r.email_breach_pairs}
+          totalPairs={r.email_pairs}
+          breachRn={r.email_breach_rn}
+          lossEur={r.email_loss_eur}
           ccy={ccy}
-          rowCount={directMonthly.length}
-          interpretation={box3Discipline >= 25 ? 'Tight · channels aligned' : box3Discipline >= 0 ? 'Moderate spread' : 'WIDE spread · inconsistent direct pricing'}
         />
         <DisciplineBox
-          title="Website vs Phone"
-          subtitle={`${rdYr} · phone-channel discipline`}
-          channelA="Website"
-          channelB="Phone"
-          adrA={Math.round(websiteMean)}
-          adrB={Math.round(phoneMean)}
-          discipline={box4Discipline}
-          diffPct={box4Diff}
+          title="Phone Leak"
+          subtitle="Phone ADR below Website (direct channel inconsistency)"
+          discipline={disciplineFromBreach(r.phone_breach_pairs, r.phone_pairs)}
+          breachPairs={r.phone_breach_pairs}
+          totalPairs={r.phone_pairs}
+          breachRn={r.phone_breach_rn}
+          lossEur={r.phone_loss_eur}
           ccy={ccy}
-          rowCount={rows.filter((r) => (r.phone_adr ?? 0) > 0 && (r.website_adr ?? 0) > 0).length}
-          interpretation={box4Discipline >= 0 ? 'Website premium intact' : 'PHONE LEAK · Phone selling below Website'}
         />
       </div>
     </div>
@@ -179,47 +151,45 @@ export default async function RateDisciplineTrio({ propertyId, searchParams }: P
 interface BoxProps {
   title: string;
   subtitle: string;
-  channelA: string;
-  channelB: string;
-  adrA: number;
-  adrB: number;
   discipline: number;
-  diffPct: number;
+  breachPairs: number;
+  totalPairs: number;
+  breachRn: number;
+  lossEur: number;
   ccy: '$' | '€';
-  rowCount: number;
-  interpretation: string;
 }
 
-function DisciplineBox({ title, subtitle, channelA, channelB, adrA, adrB, discipline, diffPct, ccy, rowCount, interpretation }: BoxProps) {
-  const sign = discipline >= 0 ? '+' : '';
-  const color = discipline >= 0 ? 'var(--ok, #2E7D32)' : 'var(--alert, #B83A3A)';
+function DisciplineBox({ title, subtitle, discipline, breachPairs, totalPairs, breachRn, lossEur, ccy }: BoxProps) {
+  const sign = discipline >= 50 ? '+' : '';
+  const color = discipline >= 80 ? 'var(--ok, #2E7D32)' : discipline >= 50 ? 'var(--brass-soft, #B8A878)' : 'var(--alert, #B83A3A)';
+  const breachPct = totalPairs > 0 ? Math.round((breachPairs / totalPairs) * 100) : 0;
   return (
     <Container title={title} subtitle={subtitle}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '8px 4px' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}>
-          <span style={{ fontSize: 26, fontWeight: 700, color, fontFamily: 'JetBrains Mono, ui-monospace, monospace' }}>
-            {sign}{discipline.toFixed(1)}
+          <span style={{ fontSize: 28, fontWeight: 700, color, fontFamily: 'JetBrains Mono, ui-monospace, monospace' }}>
+            {sign}{discipline}
           </span>
           <span style={{ fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            Rate Discipline
+            Rate Discipline (0-100)
           </span>
         </div>
-        <div style={{ display: 'flex', gap: 16, fontSize: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, fontSize: 12 }}>
           <div>
-            <div style={{ fontSize: 10, color: 'var(--ink-soft, #5A5A5A)', textTransform: 'uppercase' }}>{channelA}</div>
-            <div style={{ fontWeight: 600 }}>{ccy}{adrA.toLocaleString()}</div>
+            <div style={{ fontSize: 10, color: 'var(--ink-soft, #5A5A5A)', textTransform: 'uppercase' }}>Breaches</div>
+            <div style={{ fontWeight: 600 }}>{breachPairs} / {totalPairs}</div>
+            <div style={{ fontSize: 10, color: 'var(--ink-soft, #5A5A5A)' }}>{breachPct}% of room×month pairs</div>
           </div>
           <div>
-            <div style={{ fontSize: 10, color: 'var(--ink-soft, #5A5A5A)', textTransform: 'uppercase' }}>{channelB}</div>
-            <div style={{ fontWeight: 600 }}>{ccy}{adrB.toLocaleString()}</div>
+            <div style={{ fontSize: 10, color: 'var(--ink-soft, #5A5A5A)', textTransform: 'uppercase' }}>Breach RN</div>
+            <div style={{ fontWeight: 600 }}>{Number(breachRn ?? 0).toLocaleString()}</div>
+            <div style={{ fontSize: 10, color: 'var(--ink-soft, #5A5A5A)' }}>room-nights sold cheap</div>
           </div>
           <div>
-            <div style={{ fontSize: 10, color: 'var(--ink-soft, #5A5A5A)', textTransform: 'uppercase' }}>% diff</div>
-            <div style={{ fontWeight: 600, color }}>{sign}{diffPct.toFixed(1)}%</div>
+            <div style={{ fontSize: 10, color: 'var(--ink-soft, #5A5A5A)', textTransform: 'uppercase' }}>YTD damage</div>
+            <div style={{ fontWeight: 700, color }}>{ccy}{Number(lossEur ?? 0).toLocaleString()}</div>
+            <div style={{ fontSize: 10, color: 'var(--ink-soft, #5A5A5A)' }}>vs baseline</div>
           </div>
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic', borderTop: '1px solid var(--hairline, #E6DFCC)', paddingTop: 6 }}>
-          {interpretation} · {rowCount} month{rowCount === 1 ? '' : 's'} of data
         </div>
       </div>
     </Container>
