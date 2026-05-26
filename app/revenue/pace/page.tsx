@@ -178,6 +178,19 @@ export default async function PacePage({
     getPaceCurve(30, 30, pid).catch(() => []),
     getPaceOtb(period, pid).catch(() => [] as Array<Record<string, unknown>>),
   ]);
+
+  // #106: pace by check-in month — separate fetch from public.v_pace_by_ci_month (Jan-2025 onwards, with LY pair)
+  const paceCiMonthRes = await supabase
+    .from('v_pace_by_ci_month')
+    .select('ci_month, ci_month_start, ci_year, ci_mm, room_nights, revenue, adr, ly_room_nights, ly_revenue, ly_adr, rn_var_pct, rev_var_pct')
+    .eq('property_id', pid)
+    .order('ci_month', { ascending: true });
+  const paceCiMonthRows = ((paceCiMonthRes.data ?? []) as Array<{
+    ci_month: string; ci_month_start: string; ci_year: number; ci_mm: number;
+    room_nights: number; revenue: number; adr: number;
+    ly_room_nights: number | null; ly_revenue: number | null; ly_adr: number | null;
+    rn_var_pct: number | null; rev_var_pct: number | null;
+  }>);
   // Aggregate /demand-equivalent totals (ci_month grain)
   const demandTotal = (demandRows as Array<{ otb_roomnights: number; otb_revenue: number; stly_roomnights: number; stly_revenue: number }>).reduce(
     (s, r) => ({ otb: s.otb + Number(r.otb_roomnights || 0), rev: s.rev + Number(r.otb_revenue || 0), stly: s.stly + Number(r.stly_roomnights || 0), stlyRev: s.stlyRev + Number(r.stly_revenue || 0) }),
@@ -376,6 +389,66 @@ export default async function PacePage({
         />
       </Container>
       </div>
+      {/* #106 — Pace by check-in month (Jan-2025 → forward); RN bar + LY overlay + variance table */}
+      <div style={{ gridColumn: '1 / -1', marginTop: 8 }}>
+        <Container title="Pace by check-in month" subtitle="Room-nights on the books per check-in month · Jan-2025 onwards · variance vs LY">
+          {paceCiMonthRows.length === 0 ? (
+            <div style={{ padding: 14, fontSize: 12, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>
+              No data on file for property {pid}.
+            </div>
+          ) : (
+            <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <Chart variant="bar" data={paceCiMonthRows.map((r) => ({
+                month: r.ci_month,
+                rn:    Number(r.room_nights ?? 0),
+                ly_rn: Number(r.ly_room_nights ?? 0),
+              }))} xKey="month"
+                series={[
+                  { key: 'rn',    label: 'Room Nights',    color: 'var(--primary, #1F3A2E)' },
+                  { key: 'ly_rn', label: 'LY Room Nights', color: 'var(--hairline, #C8C0A6)' },
+                ]}
+                height={220}
+                empty={{ title: 'No pace data' }} />
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: '#FAFAF7' }}>
+                      <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>Month</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>RN</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>LY RN</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>RN var %</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>Revenue</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>LY Revenue</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>Rev var %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paceCiMonthRows.map((r) => {
+                      const rnVar = r.rn_var_pct == null ? null : Number(r.rn_var_pct);
+                      const revVar = r.rev_var_pct == null ? null : Number(r.rev_var_pct);
+                      const rnColor = rnVar == null ? 'var(--ink-soft, #5A5A5A)' : rnVar > 0 ? 'var(--status-green, #2E7D32)' : rnVar < 0 ? 'var(--terracotta, #B8542A)' : 'var(--ink-soft, #5A5A5A)';
+                      const revColor = revVar == null ? 'var(--ink-soft, #5A5A5A)' : revVar > 0 ? 'var(--status-green, #2E7D32)' : revVar < 0 ? 'var(--terracotta, #B8542A)' : 'var(--ink-soft, #5A5A5A)';
+                      const tdN: React.CSSProperties = { padding: '4px 10px', fontSize: 11, color: 'var(--ink, #1B1B1B)', textAlign: 'right', fontVariantNumeric: 'tabular-nums', borderTop: '1px solid var(--hairline, #E6DFCC)' };
+                      return (
+                        <tr key={r.ci_month}>
+                          <td style={{ padding: '4px 10px', fontSize: 11, color: 'var(--ink, #1B1B1B)', borderTop: '1px solid var(--hairline, #E6DFCC)' }}>{r.ci_month}</td>
+                          <td style={tdN}>{Number(r.room_nights ?? 0).toLocaleString('en-US')}</td>
+                          <td style={tdN}>{r.ly_room_nights == null ? '—' : Number(r.ly_room_nights).toLocaleString('en-US')}</td>
+                          <td style={{ ...tdN, color: rnColor, fontWeight: 600 }}>{rnVar == null ? '—' : `${rnVar > 0 ? '+' : ''}${rnVar.toFixed(1)}%`}</td>
+                          <td style={tdN}>${Math.round(Number(r.revenue ?? 0)).toLocaleString('en-US')}</td>
+                          <td style={tdN}>{r.ly_revenue == null ? '—' : `$${Math.round(Number(r.ly_revenue)).toLocaleString('en-US')}`}</td>
+                          <td style={{ ...tdN, color: revColor, fontWeight: 600 }}>{revVar == null ? '—' : `${revVar > 0 ? '+' : ''}${revVar.toFixed(1)}%`}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </Container>
+      </div>
+
     </DashboardPage>
   );
 }
