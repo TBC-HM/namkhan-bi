@@ -86,9 +86,10 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
     revenue_delta:    Number(r.revenue_delta || 0),
   }));
 
-  // #106: Pace table starts at Jan 2025. KPIs/headline use all rows in window.
+  // PBS 2026-05-26: pace table = all forward months from mv_pace_otb (CURRENT month → ~12 months forward).
+  // mv_pace_otb is forward-only by design — there's no historical pace bucket here.
   const rows = allRows;
-  const paceTableRows = allRows.filter((r) => r.ci_month >= '2025-01');
+  const paceTableRows = allRows;
 
   const total = rows.reduce(
     (a, r) => ({
@@ -238,7 +239,7 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
 
       {/* Row 4 · Pace by check-in month — moved under KPIs (#107); positive variance green, negative red (#106) */}
       <div style={fullRow}>
-        <Container title={`Pace by check-in month · from Jan 2025 · ${paceTableRows.length} month${paceTableRows.length === 1 ? '' : 's'}`} subtitle="past = actual OTB · future = pace · green = ahead STLY · red = behind">
+        <Container title={`Pace by check-in month · ${paceTableRows.length} forward month${paceTableRows.length === 1 ? '' : 's'}`} subtitle="forward OTB pace vs STLY (same-time-last-year) · green = ahead · red = behind">
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
@@ -265,7 +266,7 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
                   </tr>
                 ))}
                 {paceTableRows.length === 0 && (
-                  <tr><td colSpan={7} style={{ padding: 16, textAlign: 'center', color: 'var(--ink-soft, #5A5A5A)' }}>No pace rows from 2025-01 onwards</td></tr>
+                  <tr><td colSpan={7} style={{ padding: 16, textAlign: 'center', color: 'var(--ink-soft, #5A5A5A)' }}>No forward pace rows for this property</td></tr>
                 )}
               </tbody>
             </table>
