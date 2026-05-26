@@ -67,6 +67,11 @@ export default async function RateDisciplineTrio({ propertyId, searchParams }: P
   const box2Diff = otaMeanB > 0 ? ((websiteMeanB - otaMeanB) / otaMeanB) * 100 : 0;
   const box2Discipline = box2Diff;
 
+  // Box 4 — Website vs Phone — pre-compute means used by box 4
+  const phoneMean = avg(rows.map((r) => r.phone_adr));
+  const box4Diff = phoneMean > 0 ? ((websiteMean - phoneMean) / phoneMean) * 100 : 0;
+  const box4Discipline = box4Diff; // positive = Website premium over Phone
+
   // Box 3 — Direct channels consistency (Website / Email / Phone)
   const directMonthly = rows
     .map((r) => [r.website_adr, r.email_adr, r.phone_adr]
@@ -152,6 +157,19 @@ export default async function RateDisciplineTrio({ propertyId, searchParams }: P
           ccy={ccy}
           rowCount={directMonthly.length}
           interpretation={box3Discipline >= 25 ? 'Tight · channels aligned' : box3Discipline >= 0 ? 'Moderate spread' : 'WIDE spread · inconsistent direct pricing'}
+        />
+        <DisciplineBox
+          title="Website vs Phone"
+          subtitle={`${rdYr} · phone-channel discipline`}
+          channelA="Website"
+          channelB="Phone"
+          adrA={Math.round(websiteMean)}
+          adrB={Math.round(phoneMean)}
+          discipline={box4Discipline}
+          diffPct={box4Diff}
+          ccy={ccy}
+          rowCount={rows.filter((r) => (r.phone_adr ?? 0) > 0 && (r.website_adr ?? 0) > 0).length}
+          interpretation={box4Discipline >= 0 ? 'Website premium intact' : 'PHONE LEAK · Phone selling below Website'}
         />
       </div>
     </div>
