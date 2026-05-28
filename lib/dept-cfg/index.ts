@@ -879,6 +879,64 @@ const HOLDING_IT_CFG: DeptCfg = {
   hideWeather: true,
 };
 
+
+// ─── Holding · Strategy — Fox ────────────────────────────────────────────
+// Group strategy & structure advisor. Reports to Felix. Holding scope.
+const HOLDING_STRATEGY_CFG: DeptCfg = {
+  slug: 'architect',
+  pillTitle: 'Strategy · Holding',
+  hodName: 'Fox',
+  hodEmoji: '🦊',
+  ownerRole: 'group_strategy_advisor',
+  hodTagline: 'Holding strategy & structure advisor. Group restructuring, cash-flow design, OpCo budgeting, management/lease/intercompany contract review.',
+  chatPlaceholder: 'e.g. design an opco/propco split for Donna; review this management contract.',
+  storageKeyPrefix: 'hold-strategy',
+  subPages: [],
+  quickChips: [],
+  defaultAttn: [],
+  defaultDocs: [
+    { id: 'sd1', label: 'Cockpit (operations command)', href: '/cockpit-v2' },
+    { id: 'sd2', label: 'Knowledge base',               href: '/knowledge'   },
+  ],
+  defaultTasks: [],
+  attentionRoutes: [],
+  defaultDrilldown: '/cockpit-v2',
+  kpiTiles: [
+    { k: 'PROJECTS', v: '—', d: 'group restructuring · ongoing' },
+    { k: 'REVIEWS',  v: '—', d: 'contracts in queue'             },
+  ],
+  hideWeather: true,
+};
+
+// ─── Holding · Legal (Lao) — John ────────────────────────────────────────
+// Lao legal & institutional-intelligence counsel · Namkhan + Luang Prabang.
+// Holding scope, reports to Felix. Peer to Carla (Spain/Balearic).
+const HOLDING_JOHN_CFG: DeptCfg = {
+  slug: 'architect',
+  pillTitle: 'Legal · Lao',
+  hodName: 'John',
+  hodEmoji: '⚖️',
+  ownerRole: 'legal_specialist',
+  hodTagline: 'Lao legal & institutional-intelligence counsel · Namkhan + Luang Prabang. Corporate / property / court structure, chain-of-command and power-mapping, Lao/English doc reading.',
+  chatPlaceholder: 'e.g. who actually owns this Lao SOE? draft a 5th-Avenue memo on this Namkhan contract.',
+  storageKeyPrefix: 'hold-legal-lao',
+  subPages: [],
+  quickChips: [],
+  defaultAttn: [],
+  defaultDocs: [
+    { id: 'jd1', label: 'Cockpit (operations command)', href: '/cockpit-v2' },
+    { id: 'jd2', label: 'Knowledge base',               href: '/knowledge'   },
+  ],
+  defaultTasks: [],
+  attentionRoutes: [],
+  defaultDrilldown: '/cockpit-v2',
+  kpiTiles: [
+    { k: 'JURISDICTION', v: 'LAO', d: 'Namkhan + Luang Prabang' },
+    { k: 'OPEN MATTERS', v: '—',   d: 'contracts in review'      },
+  ],
+  hideWeather: true,
+};
+
 export const DEPT_CFG = {
   revenue:    REVENUE_CFG,
   sales:      SALES_CFG,
@@ -888,9 +946,11 @@ export const DEPT_CFG = {
   finance:    FINANCE_CFG,
   it:         IT_CFG,
   architect:  ARCHITECT_CFG,
-  holding:        HOLDING_CFG,
-  holding_legal:  HOLDING_LEGAL_CFG,
-  holding_it:     HOLDING_IT_CFG,
+  holding:           HOLDING_CFG,
+  holding_legal:     HOLDING_LEGAL_CFG,
+  holding_it:        HOLDING_IT_CFG,
+  holding_strategy:  HOLDING_STRATEGY_CFG,
+  holding_john:      HOLDING_JOHN_CFG,
 } as const;
 
 export type { DeptCfg } from './types';
