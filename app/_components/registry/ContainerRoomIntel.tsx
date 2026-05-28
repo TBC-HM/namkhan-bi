@@ -411,7 +411,8 @@ export default async function ContainerRoomIntel({ container, propertyId, search
       })()}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
-        {allCategories.map((code) => {
+        {/* PBS 2026-05-28: hide tiles with no data in the active period — only render categories that actually booked. */}
+        {allCategories.filter((code) => (rowsByCatActive.get(code)?.length ?? 0) > 0).map((code) => {
           const catRows = rowsByCatActive.get(code) ?? [];
           const friendly = FRIENDLY[code] ?? code;
           const tagline = taglineByCat.get(code) ?? '';
