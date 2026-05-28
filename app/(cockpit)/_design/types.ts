@@ -55,6 +55,8 @@ export interface ChartSeries {
   label: string;
   color?: string;
   type?: 'bar' | 'line';
+  /** Recharts dual-axis support (left/right Y axis). Used by demand page. */
+  yAxisId?: string;
 }
 
 export interface ChartDimension {
