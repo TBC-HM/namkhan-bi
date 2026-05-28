@@ -1,8 +1,12 @@
 // app/_components/registry/LeakageAdrMatrix.tsx
-// PBS 2026-05-28: renamed "ADR Analytics" → "Price Spread". All canonical
-// room categories now render (even when 0 RN in the selected month — shown
-// as em-dashes). Month picker is a dropdown in the Container action slot.
-// OTHER category excluded from the display.
+// PBS 2026-05-28: Price Spread matrix — granular room display_name rows.
+//   • View v_adr_bucket_matrix rebuilt to group by display_name (via xref)
+//     and filter voided + orphan + OTHER night-rows.
+//   • Rows sorted: canonical group (DBL → JR_SUITE → SUITE → PENTHOUSE →
+//     VILLA → GLAMPING) then alphabetical within group.
+//   • Every room ever booked at this property appears, even if 0 nights in
+//     the active month (em-dash cells).
+//   • Month picker is a dropdown in the Container action slot.
 //
 // URL state: ?adr_month=YYYY-MM &adr_drill=ROOM:BUCKET
 
@@ -19,6 +23,7 @@ interface MatrixRow {
   property_id: number;
   month_label: string;
   room_category: string;
+  canonical_code: string;
   rn_lt_200: number;
   rn_lt_300: number;
   rn_lt_400: number;
@@ -55,12 +60,7 @@ const BUCKETS: Array<{ key: keyof MatrixRow; col: string; label: string }> = [
   { key: 'rn_gte_2000', col: 'gte_2000', label: '>= 2000' },
 ];
 
-const CATEGORY_ORDER = ['DBL', 'JR_SUITE', 'SUITE', 'PENTHOUSE', 'VILLA', 'GLAMPING'];
-
-const FRIENDLY_CAT: Record<string, string> = {
-  DBL: 'Double', JR_SUITE: 'Junior Suite', SUITE: 'Suite',
-  PENTHOUSE: 'Penthouse', VILLA: 'Villa', GLAMPING: 'Glamping',
-};
+const CANONICAL_ORDER = ['DBL', 'JR_SUITE', 'SUITE', 'PENTHOUSE', 'VILLA', 'GLAMPING'];
 
 export default async function LeakageAdrMatrix({ propertyId, searchParams }: Props) {
   const ccy: '$' | '€' = propertyId === 1000001 ? '€' : '$';
@@ -68,26 +68,22 @@ export default async function LeakageAdrMatrix({ propertyId, searchParams }: Pro
   const selectedMonth = String(searchParams?.adr_month ?? todayMonth);
   const drill = String(searchParams?.adr_drill ?? '');
 
-  // 1. Matrix rows for the selected month
   const { data: matrixData } = await supabase
     .from('v_adr_bucket_matrix')
     .select('*')
     .eq('property_id', propertyId)
-    .eq('month_label', selectedMonth)
-    .order('rn_total', { ascending: false });
+    .eq('month_label', selectedMonth);
 
-  // 2. All distinct months for this property — drives the dropdown
   const { data: monthsData } = await supabase
     .from('v_adr_bucket_matrix')
     .select('month_label')
     .eq('property_id', propertyId)
     .order('month_label', { ascending: false });
 
-  // 3. All distinct categories EVER seen for this property (so empty months
-  //    still render a row per category with em-dashes — PBS 2026-05-28).
+  // All distinct rooms (with their canonical) for this property → drives row set
   const { data: catData } = await supabase
     .from('v_adr_bucket_matrix')
-    .select('room_category')
+    .select('room_category, canonical_code')
     .eq('property_id', propertyId);
 
   const months = Array.from(new Set((monthsData ?? []).map((r) => r.month_label as string)));
@@ -95,19 +91,21 @@ export default async function LeakageAdrMatrix({ propertyId, searchParams }: Pro
   const rowByCategory = new Map<string, MatrixRow>();
   for (const r of rows) rowByCategory.set(r.room_category, r);
 
-  // Build the canonical category list — exclude OTHER (data-quality noise),
-  // sort by canonical order, then alpha for any unknowns.
-  const seenCats = Array.from(new Set(((catData ?? []) as Array<{ room_category: string }>).map((r) => r.room_category)))
-    .filter((c) => c && c !== 'OTHER');
-  const allCategories = seenCats.sort((a, b) => {
-    const ia = CATEGORY_ORDER.indexOf(a); const ib = CATEGORY_ORDER.indexOf(b);
-    if (ia === -1 && ib === -1) return a.localeCompare(b);
-    if (ia === -1) return 1;
-    if (ib === -1) return -1;
-    return ia - ib;
+  // Build the (display_name, canonical_code) inventory for this property.
+  const canonByName = new Map<string, string>();
+  for (const r of ((catData ?? []) as Array<{ room_category: string; canonical_code: string }>)) {
+    if (r.room_category) canonByName.set(r.room_category, r.canonical_code ?? '');
+  }
+
+  const allCategories = Array.from(canonByName.keys()).sort((a, b) => {
+    const ca = canonByName.get(a) ?? ''; const cb = canonByName.get(b) ?? '';
+    const ia = CANONICAL_ORDER.indexOf(ca); const ib = CANONICAL_ORDER.indexOf(cb);
+    const sa = ia === -1 ? CANONICAL_ORDER.length : ia;
+    const sb = ib === -1 ? CANONICAL_ORDER.length : ib;
+    if (sa !== sb) return sa - sb;
+    return a.localeCompare(b);
   });
 
-  // 4. Drill if requested
   let drillRows: DrillRow[] = [];
   let drillRoom = '';
   let drillBucket = '';
@@ -143,6 +141,10 @@ export default async function LeakageAdrMatrix({ propertyId, searchParams }: Pro
     />
   );
 
+  // For visual grouping: track the canonical we're rendering so we can show a
+  // subtle group header before the first room of each canonical bucket.
+  let lastCanon = '';
+
   return (
     <div style={{ ...fullRow, display: 'flex', flexDirection: 'column', gap: 8 }} id="adr-matrix">
       <Container
@@ -154,7 +156,7 @@ export default async function LeakageAdrMatrix({ propertyId, searchParams }: Pro
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr style={{ borderBottom: '2px solid var(--hairline, #E6DFCC)' }}>
-                <th style={{ textAlign: 'left', padding: '8px 10px', fontWeight: 600 }}>Room category</th>
+                <th style={{ textAlign: 'left', padding: '8px 10px', fontWeight: 600 }}>Room</th>
                 {BUCKETS.map((b) => (
                   <th key={b.key} style={{ textAlign: 'right', padding: '8px 10px', fontWeight: 600, color: 'var(--ink-soft, #5A5A5A)' }}>
                     {ccy}{b.label}
@@ -167,37 +169,44 @@ export default async function LeakageAdrMatrix({ propertyId, searchParams }: Pro
               {allCategories.map((cat) => {
                 const r = rowByCategory.get(cat);
                 const hasData = !!r;
+                const canon = canonByName.get(cat) ?? '';
+                const isNewGroup = canon !== lastCanon;
+                lastCanon = canon;
                 return (
-                  <tr key={cat} style={{ borderBottom: '1px solid var(--hairline, #E6DFCC)', opacity: hasData ? 1 : 0.55 }}>
-                    <td style={{ padding: '8px 10px', fontWeight: 600 }}>
-                      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--ink-soft, #5A5A5A)' }}>{cat}</span>
-                      {FRIENDLY_CAT[cat] && (
-                        <span style={{ marginLeft: 6, fontWeight: 500, color: 'var(--ink, #1B1B1B)' }}>· {FRIENDLY_CAT[cat]}</span>
-                      )}
-                    </td>
-                    {BUCKETS.map((b) => {
-                      if (!hasData) {
-                        return <td key={b.key} style={{ padding: '8px 10px', textAlign: 'right', color: 'var(--ink-faint, #B5B5B5)' }}>—</td>;
-                      }
-                      const val = Number(r![b.key] ?? 0);
-                      if (val === 0) {
-                        return <td key={b.key} style={{ padding: '8px 10px', textAlign: 'right', color: 'var(--ink-faint, #B5B5B5)' }}>—</td>;
-                      }
-                      const drillKey = `${cat}:${b.col}`;
-                      const isActive = drill === drillKey;
-                      return (
-                        <td key={b.key} style={{ padding: '8px 10px', textAlign: 'right', background: isActive ? 'var(--primary, #1F3A2E)' : 'transparent' }}>
-                          <a href={linkBase(selectedMonth, drillKey)} style={{
-                            color: isActive ? 'var(--paper, #FFFFFF)' : 'var(--accent, #B8542A)',
-                            textDecoration: 'underline', fontWeight: 600,
-                          }}>{val}</a>
+                  <>
+                    {isNewGroup && canon && (
+                      <tr key={`group-${canon}`} style={{ background: '#FAFAF7' }}>
+                        <td colSpan={BUCKETS.length + 2} style={{ padding: '6px 10px', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>
+                          {canon}
                         </td>
-                      );
-                    })}
-                    <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, background: 'var(--surface-alt, #F4EFE0)' }}>
-                      {hasData ? r!.rn_total : <span style={{ color: 'var(--ink-faint, #B5B5B5)' }}>—</span>}
-                    </td>
-                  </tr>
+                      </tr>
+                    )}
+                    <tr key={cat} style={{ borderBottom: '1px solid var(--hairline, #E6DFCC)', opacity: hasData ? 1 : 0.55 }}>
+                      <td style={{ padding: '8px 10px 8px 22px', fontWeight: 500 }}>{cat}</td>
+                      {BUCKETS.map((b) => {
+                        if (!hasData) {
+                          return <td key={b.key} style={{ padding: '8px 10px', textAlign: 'right', color: 'var(--ink-faint, #B5B5B5)' }}>—</td>;
+                        }
+                        const val = Number(r![b.key] ?? 0);
+                        if (val === 0) {
+                          return <td key={b.key} style={{ padding: '8px 10px', textAlign: 'right', color: 'var(--ink-faint, #B5B5B5)' }}>—</td>;
+                        }
+                        const drillKey = `${cat}:${b.col}`;
+                        const isActive = drill === drillKey;
+                        return (
+                          <td key={b.key} style={{ padding: '8px 10px', textAlign: 'right', background: isActive ? 'var(--primary, #1F3A2E)' : 'transparent' }}>
+                            <a href={linkBase(selectedMonth, drillKey)} style={{
+                              color: isActive ? 'var(--paper, #FFFFFF)' : 'var(--accent, #B8542A)',
+                              textDecoration: 'underline', fontWeight: 600,
+                            }}>{val}</a>
+                          </td>
+                        );
+                      })}
+                      <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, background: 'var(--surface-alt, #F4EFE0)' }}>
+                        {hasData ? r!.rn_total : <span style={{ color: 'var(--ink-faint, #B5B5B5)' }}>—</span>}
+                      </td>
+                    </tr>
+                  </>
                 );
               })}
               {allCategories.length === 0 && (
