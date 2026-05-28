@@ -13,7 +13,7 @@
 
 import { usePathname } from 'next/navigation';
 
-interface DeptLink { label: string; slug: string; href?: string }
+interface DeptLink { label: string; slug: string; href?: string; openInNewWindow?: boolean; color?: string }
 
 const CANONICAL_DEPTS: DeptLink[] = [
   { label: 'Revenue',    slug: 'revenue'    },
@@ -31,9 +31,13 @@ const SLUG_SET = new Set(CANONICAL_DEPTS.map((d) => d.slug));
 // Holding-mode strip (PBS 2026-05-14): when the user is on /holding the
 // dept menu collapses to the holding-scoped depts. For now two links —
 // Legal (Carla) and IT (Kit). More holding depts will be added later.
+// PBS 2026-05-28: + Strategy (Fox) and Legal · Lao (John), both opening their
+// chat in a new window (target=_blank) and lit in the holding brass colour.
 const HOLDING_DEPTS: DeptLink[] = [
-  { label: 'Legal', slug: 'legal', href: '/holding/legal' },
-  { label: 'IT',    slug: 'it',    href: '/holding/it'    },
+  { label: 'Legal',        slug: 'legal',     href: '/holding/legal'     },
+  { label: 'Legal · Lao',  slug: 'legal-lao', href: '/holding/legal-lao', openInNewWindow: true, color: '#8B4513' },
+  { label: 'Strategy',     slug: 'strategy',  href: '/holding/strategy', openInNewWindow: true, color: 'var(--brass)' },
+  { label: 'IT',           slug: 'it',        href: '/holding/it'        },
 ];
 const HOLDING_SLUG_SET = new Set(HOLDING_DEPTS.map((d) => d.slug));
 
@@ -111,8 +115,10 @@ export default function TopDeptStrip() {
               key={d.slug}
               href={d.href ?? `/holding/${d.slug}`}
               aria-current={active ? 'page' : undefined}
+              target={d.openInNewWindow ? '_blank' : undefined}
+              rel={d.openInNewWindow ? 'noopener noreferrer' : undefined}
               style={{
-                color: active ? 'var(--brass)' : 'var(--ink-mute, var(--text-1, #f0e5cb))',
+                color: active ? 'var(--brass)' : (d.color ?? 'var(--ink-mute, var(--text-1, #f0e5cb))'),
                 textDecoration: 'none',
                 fontFamily: "'JetBrains Mono', ui-monospace, monospace",
                 fontSize: 11,
