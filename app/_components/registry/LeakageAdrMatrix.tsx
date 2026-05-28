@@ -1,11 +1,14 @@
 // app/_components/registry/LeakageAdrMatrix.tsx
-// PBS 2026-05-26 (#252): ADR analytics matrix on /leakage.
-// Rows = canonical room categories, Cols = ADR buckets (<200..>=2000),
-// Cells = roomnight counts. Click a cell to drill into reservations.
+// PBS 2026-05-28: renamed "ADR Analytics" → "Price Spread". All canonical
+// room categories now render (even when 0 RN in the selected month — shown
+// as em-dashes). Month picker is a dropdown in the Container action slot.
+// OTHER category excluded from the display.
+//
 // URL state: ?adr_month=YYYY-MM &adr_drill=ROOM:BUCKET
 
 import { Container } from '@/app/(cockpit)/_design';
 import { supabase } from '@/lib/supabase';
+import AdrMonthDropdown from './AdrMonthDropdown';
 
 interface Props {
   propertyId: number;
@@ -52,13 +55,20 @@ const BUCKETS: Array<{ key: keyof MatrixRow; col: string; label: string }> = [
   { key: 'rn_gte_2000', col: 'gte_2000', label: '>= 2000' },
 ];
 
+const CATEGORY_ORDER = ['DBL', 'JR_SUITE', 'SUITE', 'PENTHOUSE', 'VILLA', 'GLAMPING'];
+
+const FRIENDLY_CAT: Record<string, string> = {
+  DBL: 'Double', JR_SUITE: 'Junior Suite', SUITE: 'Suite',
+  PENTHOUSE: 'Penthouse', VILLA: 'Villa', GLAMPING: 'Glamping',
+};
+
 export default async function LeakageAdrMatrix({ propertyId, searchParams }: Props) {
   const ccy: '$' | '€' = propertyId === 1000001 ? '€' : '$';
   const todayMonth = new Date().toISOString().slice(0, 7);
   const selectedMonth = String(searchParams?.adr_month ?? todayMonth);
   const drill = String(searchParams?.adr_drill ?? '');
 
-  // Fetch matrix rows for the property + selected month
+  // 1. Matrix rows for the selected month
   const { data: matrixData } = await supabase
     .from('v_adr_bucket_matrix')
     .select('*')
@@ -66,24 +76,44 @@ export default async function LeakageAdrMatrix({ propertyId, searchParams }: Pro
     .eq('month_label', selectedMonth)
     .order('rn_total', { ascending: false });
 
-  // Fetch available months for the dropdown (this property only)
+  // 2. All distinct months for this property — drives the dropdown
   const { data: monthsData } = await supabase
     .from('v_adr_bucket_matrix')
     .select('month_label')
     .eq('property_id', propertyId)
     .order('month_label', { ascending: false });
 
+  // 3. All distinct categories EVER seen for this property (so empty months
+  //    still render a row per category with em-dashes — PBS 2026-05-28).
+  const { data: catData } = await supabase
+    .from('v_adr_bucket_matrix')
+    .select('room_category')
+    .eq('property_id', propertyId);
+
   const months = Array.from(new Set((monthsData ?? []).map((r) => r.month_label as string)));
   const rows = (matrixData ?? []) as MatrixRow[];
+  const rowByCategory = new Map<string, MatrixRow>();
+  for (const r of rows) rowByCategory.set(r.room_category, r);
 
-  // Drill rows if user clicked a cell
+  // Build the canonical category list — exclude OTHER (data-quality noise),
+  // sort by canonical order, then alpha for any unknowns.
+  const seenCats = Array.from(new Set(((catData ?? []) as Array<{ room_category: string }>).map((r) => r.room_category)))
+    .filter((c) => c && c !== 'OTHER');
+  const allCategories = seenCats.sort((a, b) => {
+    const ia = CATEGORY_ORDER.indexOf(a); const ib = CATEGORY_ORDER.indexOf(b);
+    if (ia === -1 && ib === -1) return a.localeCompare(b);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+
+  // 4. Drill if requested
   let drillRows: DrillRow[] = [];
   let drillRoom = '';
   let drillBucket = '';
   if (drill && drill.includes(':')) {
     const [r, b] = drill.split(':');
-    drillRoom = r;
-    drillBucket = b;
+    drillRoom = r; drillBucket = b;
     const { data: drillData } = await supabase
       .from('v_adr_bucket_drill')
       .select('guest_name, source_name, rate_plan, nights, adr, total_amount, booking_window_days')
@@ -105,53 +135,55 @@ export default async function LeakageAdrMatrix({ propertyId, searchParams }: Pro
     return `?${params.toString()}#adr-matrix`;
   };
 
+  const dropdownAction = (
+    <AdrMonthDropdown
+      selectedMonth={selectedMonth}
+      months={months}
+      preserveParams={{ adr_drill: drill || undefined }}
+    />
+  );
+
   return (
     <div style={{ ...fullRow, display: 'flex', flexDirection: 'column', gap: 8 }} id="adr-matrix">
-      <Container title="ADR Analytics · roomnight bucket matrix" subtitle={`month=${selectedMonth} · click any cell to drill into reservations`}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 4px', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>Month:</span>
-          {months.slice(0, 36).map((m) => {
-            const isActive = m === selectedMonth;
-            return (
-              <a key={m} href={linkBase(m)} style={{
-                padding: '3px 9px', borderRadius: 4, border: '1px solid var(--hairline, #E6DFCC)',
-                textDecoration: 'none', fontSize: 11,
-                color: isActive ? 'var(--paper, #FFFFFF)' : 'var(--ink, #1B1B1B)',
-                background: isActive ? 'var(--primary, #1F3A2E)' : 'transparent',
-                fontWeight: isActive ? 600 : 400,
-              }}>{m}</a>
-            );
-          })}
-        </div>
-
-        {rows.length === 0 ? (
-          <div style={{ padding: 24, fontSize: 13, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>
-            No reservation-night data for {selectedMonth}.
-          </div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid var(--hairline, #E6DFCC)' }}>
-                  <th style={{ textAlign: 'left', padding: '8px 10px', fontWeight: 600 }}>Room category</th>
-                  {BUCKETS.map((b) => (
-                    <th key={b.key} style={{ textAlign: 'right', padding: '8px 10px', fontWeight: 600, color: 'var(--ink-soft, #5A5A5A)' }}>
-                      {ccy}{b.label}
-                    </th>
-                  ))}
-                  <th style={{ textAlign: 'right', padding: '8px 10px', fontWeight: 600, background: 'var(--surface-alt, #F4EFE0)' }}>Total RN</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.room_category} style={{ borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>
-                    <td style={{ padding: '8px 10px', fontWeight: 600 }}>{r.room_category}</td>
+      <Container
+        title="Price Spread"
+        subtitle={`Room-night counts by ADR bucket · ${selectedMonth} · click any cell to drill into reservations`}
+        action={dropdownAction}
+      >
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid var(--hairline, #E6DFCC)' }}>
+                <th style={{ textAlign: 'left', padding: '8px 10px', fontWeight: 600 }}>Room category</th>
+                {BUCKETS.map((b) => (
+                  <th key={b.key} style={{ textAlign: 'right', padding: '8px 10px', fontWeight: 600, color: 'var(--ink-soft, #5A5A5A)' }}>
+                    {ccy}{b.label}
+                  </th>
+                ))}
+                <th style={{ textAlign: 'right', padding: '8px 10px', fontWeight: 600, background: 'var(--surface-alt, #F4EFE0)' }}>Total RN</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allCategories.map((cat) => {
+                const r = rowByCategory.get(cat);
+                const hasData = !!r;
+                return (
+                  <tr key={cat} style={{ borderBottom: '1px solid var(--hairline, #E6DFCC)', opacity: hasData ? 1 : 0.55 }}>
+                    <td style={{ padding: '8px 10px', fontWeight: 600 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--ink-soft, #5A5A5A)' }}>{cat}</span>
+                      {FRIENDLY_CAT[cat] && (
+                        <span style={{ marginLeft: 6, fontWeight: 500, color: 'var(--ink, #1B1B1B)' }}>· {FRIENDLY_CAT[cat]}</span>
+                      )}
+                    </td>
                     {BUCKETS.map((b) => {
-                      const val = Number(r[b.key] ?? 0);
+                      if (!hasData) {
+                        return <td key={b.key} style={{ padding: '8px 10px', textAlign: 'right', color: 'var(--ink-faint, #B5B5B5)' }}>—</td>;
+                      }
+                      const val = Number(r![b.key] ?? 0);
                       if (val === 0) {
                         return <td key={b.key} style={{ padding: '8px 10px', textAlign: 'right', color: 'var(--ink-faint, #B5B5B5)' }}>—</td>;
                       }
-                      const drillKey = `${r.room_category}:${b.col}`;
+                      const drillKey = `${cat}:${b.col}`;
                       const isActive = drill === drillKey;
                       return (
                         <td key={b.key} style={{ padding: '8px 10px', textAlign: 'right', background: isActive ? 'var(--primary, #1F3A2E)' : 'transparent' }}>
@@ -162,13 +194,22 @@ export default async function LeakageAdrMatrix({ propertyId, searchParams }: Pro
                         </td>
                       );
                     })}
-                    <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, background: 'var(--surface-alt, #F4EFE0)' }}>{r.rn_total}</td>
+                    <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, background: 'var(--surface-alt, #F4EFE0)' }}>
+                      {hasData ? r!.rn_total : <span style={{ color: 'var(--ink-faint, #B5B5B5)' }}>—</span>}
+                    </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                );
+              })}
+              {allCategories.length === 0 && (
+                <tr>
+                  <td colSpan={BUCKETS.length + 2} style={{ padding: 24, fontSize: 13, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic', textAlign: 'center' }}>
+                    No reservation-night data on file for this property.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </Container>
 
       {drill && (
