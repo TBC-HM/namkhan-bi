@@ -90,7 +90,8 @@ export default function Chart(props: ChartProps) {
         <ResponsiveContainer width="100%" height={height}>
           <LineChart data={data} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
             <CartesianGrid stroke="var(--hairline, #E6DFCC)" vertical={false} />
-            <XAxis dataKey={xKey} stroke="var(--ink-soft, #5A5A5A)" fontSize={11} tickFormatter={formatX as (v: unknown) => string | undefined} />
+            {/* PBS 2026-05-28: Recharts default "preserveEnd" clusters labels at the right on long timelines (30+ months). Pick every-Nth tick for ~8 evenly-spaced labels across the full range, plus minTickGap so they never overlap. */}
+            <XAxis dataKey={xKey} stroke="var(--ink-soft, #5A5A5A)" fontSize={11} tickFormatter={formatX as (v: unknown) => string | undefined} interval={data.length > 12 ? Math.max(0, Math.floor((data.length - 1) / 7)) : 0} minTickGap={16} />
             <YAxis stroke="var(--ink-soft, #5A5A5A)" fontSize={11} tickFormatter={formatY} />
             {tip('line')}
             {legend !== 'none' && <Legend verticalAlign={legend === 'top' ? 'top' : 'bottom'} wrapperStyle={{ fontSize: 11 }} />}
