@@ -1,11 +1,15 @@
 // app/_components/registry/ContainerRoomIntel.tsx
 // Handler for render_type='room_intel'. Renders category KPI tiles
 // (canonical_room_type_code) for the selected period; expanding a tile
-// drills into (a) granular room_type_name table, (b) last-12-month ADR
-// line chart per granular type, (c) source-mix breakdown per room.
+// drills into (a) granular room_type_name table, (b) ADR line chart
+// across all months with data, (c) source-mix breakdown per room.
 //
 // State via URL: ?period=YYYY-MM or ?period=YTD-YYYY, ?expand=<canonical>.
 // Currency resolved per-property via public.v_property_display.
+//
+// PBS 2026-05-28: drawer "All" filter now shows every month with data
+// (Donna opened 2024-03), not just last 12. Year pills derive from data
+// instead of hardcoded — so 2024 appears for Donna.
 
 import Link from 'next/link';
 import { Container, Chart, type ChartSeries } from '@/app/(cockpit)/_design';
@@ -150,7 +154,6 @@ export default async function ContainerRoomIntel({ container, propertyId, search
   const currencySymbol = String((propRow as { display_symbol?: string } | null)?.display_symbol ?? '$');
 
   // 2b. Direct-sales share per canonical category (PBS 2026-05-22 task #87)
-  // Always YTD scope for stability; could be parameterized to active period later.
   const currentYearStr = new Date().toISOString().slice(0, 4);
   const { data: directRows } = await supabase
     .rpc('fn_room_direct_share', { p_property_id: propertyId, p_period_yyyymm: null, p_year: currentYearStr });
@@ -160,21 +163,16 @@ export default async function ContainerRoomIntel({ container, propertyId, search
   }
 
   // 3. Periods — discrete months + a YTD pill for current year.
-  // PBS 2026-05-22: future months (OTB) must be visible. Window = past 12
-  // months + current + every future month the view has data for.
   const allPeriods = Array.from(new Set(rows.map((r) => String(r.period_yyyymm ?? '')).filter(Boolean))).sort().reverse();
   const currentYm = new Date().toISOString().slice(0, 7);
   const currentYear = currentYm.slice(0, 4);
-  // PBS 2026-05-26: dropdowns must start from earliest data (Donna opened 2024-03).
-  // Use Donna's opening as the historical floor; data filter still ensures we only
-  // surface months that actually have rows.
+  // Donna opened 2024-03 — use as historical floor for the period picker.
   const HISTORICAL_FLOOR = '2024-03';
   const windowMonths = allPeriods.filter((p) => p >= HISTORICAL_FLOOR);
   const realisedMonths = windowMonths.filter((p) => p <= currentYm);
   const ytdKey = `YTD-${currentYear}`;
   const requested = String(searchParams?.period ?? '');
   const isYtd = requested === ytdKey;
-  // PBS 2026-05-26: include 2024 aggregates (Donna opened 2024-03).
   const AGGREGATE_YEARS = Array.from(new Set(allPeriods.map((p) => p.slice(0, 4))))
     .filter((y) => Boolean(y) && Number(y) >= 2024)
     .sort();
@@ -214,7 +212,7 @@ export default async function ContainerRoomIntel({ container, propertyId, search
       })
     : rows.filter((r) => String(r.period_yyyymm) === activePeriod);
 
-  // 4b. PBS 2026-05-22: same-time-last-year rows for LY comparison per tile.
+  // 4b. Same-time-last-year rows for SDLY per tile.
   function lyOf(p: string): string {
     if (p.startsWith('YTD-')) {
       const y = Number(p.slice(4));
@@ -237,7 +235,6 @@ export default async function ContainerRoomIntel({ container, propertyId, search
   }
   const lyPeriod = lyOf(activePeriod);
   const elapsedMm = currentYm.slice(5, 7);
-  // USALI #9 — comparison source (sdly default · budget clears LY rows)
   const cmpMode = String(searchParams?.cmp ?? 'sdly');
   const lyRows: DataRow[] = cmpMode === 'budget' ? [] :
     lyPeriod.startsWith('FY-')
@@ -251,11 +248,7 @@ export default async function ContainerRoomIntel({ container, propertyId, search
       })
     : rows.filter((r) => String(r.period_yyyymm) === lyPeriod);
 
-  // 5. Build category index — every REAL canonical code the property has had.
-  //    Junk buckets like 'OTHER' (1-row uncategorised fallback) are excluded so
-  //    the tile grid only shows actual room categories.
-  // Tile categories: when grouping by canonical, keep only real codes (strip OTHER junk).
-  // When grouping granular (room_type_name), keep every non-empty distinct value.
+  // 5. Build category index.
   const REAL_CATEGORIES = new Set(['DBL','JR_SUITE','SUITE','PENTHOUSE','VILLA','GLAMPING']);
   const isCanonicalGrouping = groupBy === 'canonical_room_type_code';
   const allCategories = Array.from(new Set(
@@ -274,7 +267,6 @@ export default async function ContainerRoomIntel({ container, propertyId, search
     if (!rowsByCatLy.has(k)) rowsByCatLy.set(k, []);
     rowsByCatLy.get(k)!.push(r);
   }
-  // Build label tagline from any row in this category (top revenue subtype)
   const taglineByCat = new Map<string, string>();
   for (const cat of allCategories) {
     const catRows = rows.filter((r) => r[groupBy] === cat);
@@ -301,9 +293,6 @@ export default async function ContainerRoomIntel({ container, propertyId, search
     return qs ? `?${qs}` : '';
   }
 
-  // PBS 2026-05-22: switched 24-pill bar → compact <select> dropdown.
-  // PeriodDropdown is a client component that pushes period into URL while
-  // preserving ?expand=. Default = realisedMonths[0] (latest realised month).
   const futureMonths = windowMonths.filter((p) => p > currentYm);
   const periodPicker = (
     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -331,7 +320,6 @@ export default async function ContainerRoomIntel({ container, propertyId, search
       density="compact"
       action={periodPicker}
     >
-      {/* PBS 2026-05-22: 4 headline KPIs aggregated across all categories. */}
       {(() => {
         const totalNights = periodRows.reduce((s, r) => s + num(r.room_nights), 0);
         const totalRev = periodRows.reduce((s, r) => s + num(r.room_revenue), 0);
@@ -371,7 +359,6 @@ export default async function ContainerRoomIntel({ container, propertyId, search
         );
       })()}
 
-      {/* PBS 2026-05-22 task #84: 3 graphs (ADR bar + REV bar + OCC donut) */}
       {(() => {
         const catChart = allCategories.map((code) => {
           const r = rowsByCatActive.get(code) ?? [];
@@ -379,7 +366,6 @@ export default async function ContainerRoomIntel({ container, propertyId, search
           const rev = r.reduce((s, x) => s + num(x.room_revenue), 0);
           const nights = r.reduce((s, x) => s + num(x.room_nights), 0);
           const adr = nights > 0 ? rev / nights : 0;
-          // canonical capacity = first row per period (canonical_capacity_nights is identical across granular rows in the same category/month)
           const seenP = new Set<string>();
           let cap = 0;
           for (const row of r) {
@@ -415,7 +401,6 @@ export default async function ContainerRoomIntel({ container, propertyId, search
             </div>
             <div style={chartFrameStyle}>
               <div style={chartTitleStyle}>Occupancy by category</div>
-              {/* USALI #7: donut → bar (axis comparison beats sector arcs) */}
               <Chart variant="bar" data={catChart} xKey="category"
                 series={[{ key: 'occ', label: 'Occ %', color: 'var(--terracotta, #B8542A)' }]}
                 height={180}
@@ -425,17 +410,13 @@ export default async function ContainerRoomIntel({ container, propertyId, search
         );
       })()}
 
-      {/* PBS 2026-05-26: compute average for the first tile metric across categories with data; used to colour tile frames (green over avg, orange under, red deep-under). */}
-      {(() => null)()}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
-        {(() => null)() /* avg computed inline per tile */}
         {allCategories.map((code) => {
           const catRows = rowsByCatActive.get(code) ?? [];
           const friendly = FRIENDLY[code] ?? code;
           const tagline = taglineByCat.get(code) ?? '';
           const isExpanded = code === activeExpand;
           const hasData = catRows.length > 0;
-          // PBS 2026-05-26: tile-vs-average colour-coded frame.
           const primaryMetric = spec.tile_metrics[0];
           const ownVal = primaryMetric ? computeMetric(primaryMetric, catRows, isCanonicalGrouping) : null;
           const peerVals = primaryMetric
@@ -448,9 +429,9 @@ export default async function ContainerRoomIntel({ container, propertyId, search
           let frameColor = 'var(--hairline, #E6DFCC)';
           if (isExpanded) frameColor = 'var(--primary, #1F3A2E)';
           else if (ratio != null) {
-            if (ratio > 1.05) frameColor = '#1F7A5B';        // green: above avg
-            else if (ratio < 0.85) frameColor = '#C0584C';   // red: deep under
-            else if (ratio < 0.95) frameColor = '#B8542A';   // orange: under
+            if (ratio > 1.05) frameColor = '#1F7A5B';
+            else if (ratio < 0.85) frameColor = '#C0584C';
+            else if (ratio < 0.95) frameColor = '#B8542A';
           }
           return (
             <Link key={code} href={hrefExpand(code)} style={{ textDecoration: 'none', color: 'inherit' }}>
@@ -535,7 +516,6 @@ export default async function ContainerRoomIntel({ container, propertyId, search
         })}
       </div>
 
-      {/* PBS #145: drawer slides OVER the page (true overlay) — see _design/overlay/SideDrawer. Server-rendered children preserve tooltipFormatter contract from Chart in DrillPanel. */}
       <SideDrawer
         open={!!activeExpand}
         closeHref={activeExpand ? hrefExpand(activeExpand) : ''}
@@ -574,7 +554,6 @@ interface DrillProps {
   categoryRowsActive: DataRow[];
   spec: RoomIntelSpec;
   currencySymbol: string;
-  // USALI #6 — drill filters (URL-driven server-side)
   q: string;
   rtList: string[];
   yrFilter: string;
@@ -593,43 +572,52 @@ async function DrillPanel({
     return sortDesc ? bv - av : av - bv;
   });
 
-  // 12-month ADR series per granular room_type_name from the all-time rows
-  const last12Months: string[] = (() => {
-    const months = Array.from(new Set(categoryRowsAllTime.map((r) => String(r.period_yyyymm ?? ''))))
-      .filter(Boolean).sort();
-    return months.slice(-12);
-  })();
+  // PBS 2026-05-28: "All" now spans every month with data (Donna opened 2024-03),
+  // not just the last 12. Year pills are derived from the actual data so 2024
+  // appears for Donna and you can drill any year that has rows.
+  const displayMonths: string[] = Array.from(new Set(
+    categoryRowsAllTime.map((r) => String(r.period_yyyymm ?? ''))
+  )).filter(Boolean).sort();
   const adrSeries: ChartSeries[] = [];
-  const adrData: Array<Record<string, string | number>> = last12Months.map((m) => ({ month: m }));
+  const adrData: Array<Record<string, string | number>> = displayMonths.map((m) => ({ month: m }));
   const granularTypes = Array.from(new Set(categoryRowsAllTime.map((r) => String(r.room_type_name ?? '')))).sort();
   const PALETTE = ['#1F3A2E', '#B8542A', '#B8A878', '#5B7A5A', '#8A2A1D', '#3A7CA5'];
   granularTypes.forEach((rt, idx) => {
     adrSeries.push({ key: `t${idx}`, label: rt, color: PALETTE[idx % PALETTE.length] });
-    last12Months.forEach((m, mIdx) => {
+    displayMonths.forEach((m, mIdx) => {
       const row = categoryRowsAllTime.find((r) => r.room_type_name === rt && r.period_yyyymm === m);
       adrData[mIdx][`t${idx}`] = row ? num(row.adr) : 0;
       adrData[mIdx][`t${idx}_rn`] = row ? num(row.room_nights) : 0;
-      // task #96: LOS now sourced from view's avg_los column (nights / bookings)
       adrData[mIdx][`t${idx}_los`] = row ? num(row.avg_los) : 0;
       adrData[mIdx][`t${idx}_bk`] = row ? num(row.bookings) : 0;
     });
   });
-  // labels for tooltip lookup
   const seriesLabelByKey: Record<string, string> = {};
   granularTypes.forEach((rt, idx) => { seriesLabelByKey[`t${idx}`] = rt; });
 
-  // USALI #6 — derived filter state (search + chips + year)
   const qLower = q.trim().toLowerCase();
   const granularTypesFiltered = granularTypes.filter((rt) =>
     (!qLower || rt.toLowerCase().includes(qLower)) &&
     (rtList.length === 0 || rtList.includes(rt))
   );
-  const last12MonthsFiltered = yrFilter
-    ? last12Months.filter((m) => m.startsWith(yrFilter))
-    : last12Months;
-  const adrDataFiltered = last12MonthsFiltered.map((m) => adrData.find((d) => d.month === m) ?? { month: m });
+  const displayMonthsFiltered = yrFilter
+    ? displayMonths.filter((m) => m.startsWith(yrFilter))
+    : displayMonths;
+  const adrDataFiltered = displayMonthsFiltered.map((m) => adrData.find((d) => d.month === m) ?? { month: m });
   const adrSeriesFiltered = adrSeries.filter((s) => granularTypesFiltered.some((rt) => seriesLabelByKey[String(s.key)] === rt));
   const sortedFiltered = sorted.filter((r) => granularTypesFiltered.includes(String(r.room_type_name ?? '')));
+
+  // PBS 2026-05-28: dynamic year pills — derived from the months that actually have data.
+  const dataYears = Array.from(new Set(displayMonths.map((m) => m.slice(0, 4)))).sort();
+  const yearPills: Array<{ k: string; label: string }> = [{ k: '', label: 'All' }, ...dataYears.map((y) => ({ k: y, label: y }))];
+
+  // Chart sub-header reflects whether we're scoped to a year or showing the full window.
+  const chartScopeLabel = yrFilter
+    ? `· ${yrFilter}`
+    : displayMonths.length > 0
+      ? `· since ${displayMonths[0]} (${displayMonths.length} months)`
+      : '';
+
   function hrefDrillToggle(overrides: { q?: string | null; rt?: string | null; yr?: string | null }): string {
     const params = new URLSearchParams();
     if (code) params.set('expand', code);
@@ -644,14 +632,12 @@ async function DrillPanel({
     return qs ? `?${qs}` : '';
   }
 
-  // Source mix per granular room_type (RPC call)
   const { data: sourceMixRows } = await supabase.rpc('fn_room_source_mix', {
     p_property_id: propertyId,
     p_period_yyyymm: activePeriod,
     p_canonical_code: code,
   });
   const sourceMix = (sourceMixRows ?? []) as Array<{ room_type_name: string; source_name: string; rn: number; rev: number }>;
-  // Per-room totals + per-source share
   const roomTotals = new Map<string, { rev: number; rn: number }>();
   for (const r of sourceMix) {
     const t = roomTotals.get(r.room_type_name) ?? { rev: 0, rn: 0 };
@@ -661,12 +647,10 @@ async function DrillPanel({
 
   return (
     <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {/* Granular table */}
-      {/* USALI #6 — drill filter toolbar (year · search · multi-select chips) */}
       <div style={panelStyle}>
         <div style={{ padding: '10px 14px', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>Year</div>
-          {[{ k: '', label: 'All' }, { k: '2025', label: '2025' }, { k: '2026', label: '2026' }, { k: '2027', label: '2027' }].map((y) => {
+          {yearPills.map((y) => {
             const isActive = (y.k === '' && !yrFilter) || (y.k !== '' && yrFilter === y.k);
             return (
               <Link key={y.k || 'all'} href={hrefDrillToggle({ yr: y.k || null })} style={{
@@ -788,30 +772,27 @@ async function DrillPanel({
         )}
       </div>
 
-      {/* 12-month ADR rollup */}
-      {last12MonthsFiltered.length > 0 && (
+      {displayMonthsFiltered.length > 0 && (
         <div style={panelStyle}>
           <div style={panelHeader}>
-            ADR · last 12 months <span style={panelHeaderSub}>· per granular room type</span>
+            ADR <span style={panelHeaderSub}>{chartScopeLabel} · per granular room type</span>
           </div>
           <div style={{ padding: 12 }}>
-            {/* PBS #145 hotfix-2: tooltipFormatter (a function) crashes server→client into the DashboardPage ('use client') boundary. Drop the custom formatter — default tooltip shows key/value pairs. Custom hover detail returns once Chart accepts a string enum for format. */}
             <Chart variant="line" data={adrDataFiltered} xKey="month" series={adrSeriesFiltered} height={220}
               empty={{ title: 'No ADR history for this category' }} />
           </div>
         </div>
       )}
 
-      {/* USALI #5 — OCC line chart (sibling of ADR rollup, uses filtered series + months) */}
-      {last12MonthsFiltered.length > 0 && (
+      {displayMonthsFiltered.length > 0 && (
         <div style={panelStyle}>
           <div style={panelHeader}>
-            OCC · last 12 months <span style={panelHeaderSub}>· per granular room type · % of canonical capacity</span>
+            OCC <span style={panelHeaderSub}>{chartScopeLabel} · per granular room type · % of canonical capacity</span>
           </div>
           <div style={{ padding: 12 }}>
             <Chart
               variant="line"
-              data={last12MonthsFiltered.map((m) => {
+              data={displayMonthsFiltered.map((m) => {
                 const row: Record<string, string | number> = { month: m };
                 granularTypesFiltered.forEach((rt) => {
                   const idx = granularTypes.indexOf(rt);
@@ -829,7 +810,6 @@ async function DrillPanel({
         </div>
       )}
 
-      {/* Source mix per granular room type */}
       {sourceMix.length > 0 && (
         <div style={panelStyle}>
           <div style={panelHeader}>
@@ -894,25 +874,6 @@ function formatVarPct(curr: number, ly: number): string {
   if (Math.abs(ly) < 0.01) return '';
   const pct = ((curr - ly) / Math.abs(ly)) * 100;
   return `${pct.toFixed(0)}%`;
-}
-function pillStyle(active: boolean, ytd: boolean, future: boolean = false): React.CSSProperties {
-  const borderColor = active ? 'var(--primary, #1F3A2E)'
-    : ytd ? 'var(--terracotta, #B8542A)'
-    : future ? 'var(--brass, #B8A878)'
-    : 'var(--hairline, #E6DFCC)';
-  const fg = active ? '#FFFFFF'
-    : ytd ? 'var(--terracotta, #B8542A)'
-    : future ? 'var(--brass, #B8A878)'
-    : 'var(--ink, #1B1B1B)';
-  return {
-    fontSize: 11, letterSpacing: '0.04em',
-    padding: '4px 10px', borderRadius: 99,
-    border: `1px solid ${borderColor}`,
-    background:  active ? 'var(--primary, #1F3A2E)' : 'var(--paper, #FFFFFF)',
-    color:       fg,
-    fontWeight: active || ytd || future ? 600 : 500, textDecoration: 'none',
-    fontVariantNumeric: 'tabular-nums',
-  };
 }
 const panelStyle: React.CSSProperties = {
   border: '1px solid var(--hairline, #E6DFCC)', borderRadius: 6,
