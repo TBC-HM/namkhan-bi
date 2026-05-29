@@ -28,6 +28,7 @@ import {
   type ChartSeries, type DashboardTab, type KpiTileProps,
 } from '@/app/(cockpit)/_design';
 import PageRenderer from '@/app/_components/registry/PageRenderer';
+import GrossShareByTier from '@/app/_components/registry/GrossShareByTier';
 import ChannelDrillDrawer from '@/app/_components/registry/ChannelDrillDrawer';
 import { resolvePeriod, type WindowKey } from '@/lib/period';
 import {
@@ -376,6 +377,9 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
       {/* PBS #126 (2026-05-24): 9-piece split. PageRenderer in embedded mode renders the 9 registry
           children as direct siblings of the host DashboardPage — no nested DashboardPage, no outer wrap. */}
       <PageRenderer pageSlug="channel" propertyId={pid} title="" subtitle="" embedded />
+
+      {/* PBS 2026-05-29 — full-page Gross Revenue Share by Tier primitive (replaces channel_economics) */}
+      <GrossShareByTier propertyId={pid} searchParams={searchParams as Record<string, string | string[] | undefined>} />
 
       {/* PBS #199 — click a row in any sources table to open this drawer; CTA → full per-channel page (Booking.com hardwired Bdc* panels render there). */}
       <ChannelDrillDrawer
