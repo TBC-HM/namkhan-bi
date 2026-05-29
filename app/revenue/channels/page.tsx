@@ -289,10 +289,10 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
         </Container>
       </div>
 
-      {activeTab === 'direct' && <CategoryBlock category="direct" rows={byCat.direct as unknown as Array<Record<string, unknown>>} cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'direct')} mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'direct')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} />}
-      {activeTab === 'ota'    && <CategoryBlock category="ota"    rows={byCat.ota as unknown as Array<Record<string, unknown>>}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'ota')}    mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'ota')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} />}
-      {activeTab === 'dmc'    && <CategoryBlock category="dmc"    rows={byCat.dmc as unknown as Array<Record<string, unknown>>}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'dmc')}    mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'dmc')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} />}
-      {activeTab === 'bedbank' && pid === 1000001 && <CategoryBlock category="bedbank" rows={byCat.bedbank as unknown as Array<Record<string, unknown>>} cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'bedbank')} mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'bedbank')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} />}
+      {activeTab === 'direct' && <CategoryBlock category="direct" rows={byCat.direct as unknown as Array<Record<string, unknown>>} cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'direct')} mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'direct')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} propertyId={pid} />}
+      {activeTab === 'ota'    && <CategoryBlock category="ota"    rows={byCat.ota as unknown as Array<Record<string, unknown>>}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'ota')}    mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'ota')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} propertyId={pid} />}
+      {activeTab === 'dmc'    && <CategoryBlock category="dmc"    rows={byCat.dmc as unknown as Array<Record<string, unknown>>}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'dmc')}    mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'dmc')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} propertyId={pid} />}
+      {activeTab === 'bedbank' && pid === 1000001 && <CategoryBlock category="bedbank" rows={byCat.bedbank as unknown as Array<Record<string, unknown>>} cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'bedbank')} mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'bedbank')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} propertyId={pid} />}
       {/* PBS 2026-05-28: GroupsBlock was never implemented — remove to unblock tsc. Re-add when groups feature ships. */}
       {activeTab === 'group' && null}
 
@@ -398,8 +398,8 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
 }
 
 // ─── per-category block ──────────────────────────────────────────────────────
-function CategoryBlock({
-  category, rows, cmpRows, mixWeekly, velocity, period, totalRev, netValue, moneyCurrency, drillHrefFor,
+async function CategoryBlock({
+  category, rows, cmpRows, mixWeekly, velocity, period, totalRev, netValue, moneyCurrency, drillHrefFor, propertyId,
 }: {
   category: Category;
   rows: Array<Record<string, unknown>>;
@@ -411,6 +411,7 @@ function CategoryBlock({
   netValue: Array<Record<string, unknown>>;
   moneyCurrency: 'USD' | 'EUR';
   drillHrefFor: (source: string) => string;
+  propertyId: number;
 }) {
   const bookings = rows.reduce((s, c) => s + Number(c.bookings || 0), 0);
   const revenue  = rows.reduce((s, c) => s + Number(c.gross_revenue || 0), 0);
@@ -558,6 +559,54 @@ function CategoryBlock({
     { key: 'los',      label: 'LOS' },
   ];
 
+  // PBS 2026-05-29 — monthly share + 3-box row data
+  const monthCatKey = category === 'direct' ? 'Direct' : category === 'ota' ? 'OTA' : category === 'group' ? 'Other' : 'Wholesale';
+  const { data: monthlyRevRows } = await supabase
+    .from('v_channel_performance_monthly')
+    .select('month, channel_group, rooms_revenue')
+    .eq('property_id', propertyId);
+  const monthTotals = new Map<string, number>();
+  for (const r of (monthlyRevRows ?? []) as Array<{ month: string; channel_group: string; rooms_revenue: number }>) {
+    const ym = String(r.month ?? '').slice(0, 7);
+    monthTotals.set(ym, (monthTotals.get(ym) ?? 0) + Number(r.rooms_revenue ?? 0));
+  }
+  const monthShareMap = new Map<string, { month: string; share_25: number; share_26: number }>();
+  const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  for (const r of (monthlyRevRows ?? []) as Array<{ month: string; channel_group: string; rooms_revenue: number }>) {
+    if (String(r.channel_group ?? '') !== monthCatKey) continue;
+    const ym = String(r.month ?? '').slice(0, 7);
+    const total = monthTotals.get(ym) ?? 0;
+    if (total <= 0) continue;
+    const sharePct = (Number(r.rooms_revenue ?? 0) / total) * 100;
+    const yr = Number(ym.slice(0, 4));
+    const mm = ym.slice(5, 7);
+    const label = MONTH_NAMES[Math.max(0, parseInt(mm, 10) - 1)];
+    const slot = monthShareMap.get(mm) ?? { month: label, share_25: 0, share_26: 0 };
+    if (yr === 2025) slot.share_25 = sharePct;
+    else if (yr === 2026) slot.share_26 = sharePct;
+    monthShareMap.set(mm, slot);
+  }
+  const monthlyShareData = Array.from(monthShareMap.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([, v]) => v);
+  const { data: channelTiers } = await supabase
+    .from('v_channel_mix_by_tier')
+    .select('*')
+    .eq('property_id', propertyId);
+  const tierData = ((channelTiers ?? []) as Array<Record<string, unknown>>).map((r) => ({
+    tier: String(r.tier ?? '—'),
+    reservations: Number(r.reservations ?? 0),
+    gross_revenue: Number(r.gross_revenue ?? 0),
+    gross_share_pct: Number(r.gross_share_pct ?? 0),
+  }));
+  const { data: top10Last30dRaw } = await supabase
+    .rpc('fn_source_top10_period', { p_property_id: propertyId, p_days: 30 });
+  const top10Last30d = ((top10Last30dRaw ?? []) as Array<Record<string, unknown>>).map((r) => ({
+    source: String(r.source ?? '—'),
+    tier: String(r.tier ?? '—'),
+    reservations: Number(r.reservations ?? 0),
+    gross_revenue: Number(r.gross_revenue ?? 0),
+    adr: Number(r.adr ?? 0),
+  }));
+
   const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
   return (
     <>
@@ -573,15 +622,38 @@ function CategoryBlock({
 
       {/* Two trend charts paired in a 2-up row */}
       <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
-        <Container title={`${titleOf[category]} share · weekly trend`} subtitle={period.label}>
-          <Chart variant="line" data={trendData} xKey="week"
+        <Container title={`${titleOf[category]} share by month · %`} subtitle="rooms revenue share per month · 2025 vs 2026">
+          <Chart variant="line" data={monthlyShareData} xKey="month"
             series={[{ key: 'share_25', label: '2025 %', color: '#9C9C9C' }, { key: 'share_26', label: '2026 %', color: '#1F3A2E' }]}
-            height={220} empty={{ title: 'No mix data in window' }} />
+            height={220} empty={{ title: 'No monthly mix data' }} />
         </Container>
         <Container title={`${titleOf[category]} velocity · 28d`} subtitle="bookings made per day">
           <Chart variant="line" data={velocityData} xKey="day"
             series={[{ key: 'n_25', label: '2025 bkgs', color: '#9C9C9C' }, { key: 'n_26', label: '2026 bkgs', color: '#B8542A' }]}
             height={220} empty={{ title: 'No velocity in last 28 days' }} />
+        </Container>
+      </div>
+
+      {/* PBS 2026-05-29 — 3-box row: Channel mix · Gross share by tier · Top 10 sources last 30d */}
+      <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
+        <Container title="Channel mix" subtitle="reservations by tier">
+          <Chart variant="donut" data={tierData} xKey="tier"
+            series={[{ key: 'reservations', label: 'Reservations' }]}
+            height={240} empty={{ title: 'No tier data' }} />
+        </Container>
+        <Container title="Gross revenue share by tier" subtitle="gross share %">
+          <Chart variant="donut" data={tierData} xKey="tier"
+            series={[{ key: 'gross_revenue', label: 'Gross revenue' }]}
+            height={240} empty={{ title: 'No tier data' }} />
+        </Container>
+        <Container title="Top 10 sources" subtitle="last 30 days · by gross revenue">
+          <Chart variant="table" data={top10Last30d} xKey="source"
+            series={[
+              { key: 'reservations',  label: 'Bkg' },
+              { key: 'gross_revenue', label: 'Rev' },
+              { key: 'adr',           label: 'ADR' },
+            ]}
+            height={240} empty={{ title: 'No bookings in last 30 days' }} />
         </Container>
       </div>
 
