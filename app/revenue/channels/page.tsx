@@ -606,6 +606,30 @@ async function CategoryBlock({
     gross_revenue: Number(r.gross_revenue ?? 0),
     adr: Number(r.adr ?? 0),
   }));
+  // PBS 2026-05-29 v2 — tier share %% comparison (reservations vs revenue) + monthly stacked perf
+  const totalResAcross = tierData.reduce((s, r) => s + r.reservations, 0);
+  const totalRevAcross = tierData.reduce((s, r) => s + r.gross_revenue, 0);
+  const tierShareData = tierData.map((r) => ({
+    tier: r.tier,
+    res_pct: totalResAcross > 0 ? Math.round((r.reservations / totalResAcross) * 1000) / 10 : 0,
+    rev_pct: totalRevAcross > 0 ? Math.round((r.gross_revenue / totalRevAcross) * 1000) / 10 : 0,
+  }));
+  // Pivot monthlyRevRows to stacked-bar shape: one row per month, columns = channel_groups
+  const monthlyGroupsSet = new Set<string>();
+  const monthlyPivot = new Map<string, Record<string, string | number>>();
+  for (const r of (monthlyRevRows ?? []) as Array<{ month: string; channel_group: string; rooms_revenue: number }>) {
+    const ym = String(r.month ?? '').slice(0, 7);
+    if (!ym) continue;
+    const grp = String(r.channel_group ?? '');
+    if (!grp) continue;
+    monthlyGroupsSet.add(grp);
+    const row = monthlyPivot.get(ym) ?? { month: ym } as Record<string, string | number>;
+    row[grp] = Number(row[grp] || 0) + Number(r.rooms_revenue ?? 0);
+    monthlyPivot.set(ym, row);
+  }
+  const monthlyPerfData = Array.from(monthlyPivot.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([, v]) => v).slice(-12);
+  const MONTHLY_PERF_COLORS: Record<string, string> = { OTA: '#B8542A', Direct: '#1F3A2E', Wholesale: '#B8A878', Other: '#9C9C9C', 'Walk-In': '#5B7A5A' };
+  const monthlyPerfSeries: ChartSeries[] = Array.from(monthlyGroupsSet).sort().map((g) => ({ key: g, label: g, color: MONTHLY_PERF_COLORS[g] || '#5A5A5A' }));
 
   const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
   return (
@@ -634,16 +658,14 @@ async function CategoryBlock({
         </Container>
       </div>
 
-      {/* PBS 2026-05-29 — 3-box row: Channel mix · Gross share by tier · Top 10 sources last 30d */}
+      {/* PBS 2026-05-29 v2 — 3-box row: Combined tier share · Top 10 last 30d · Channel perf by month */}
       <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
-        <Container title="Channel mix" subtitle="reservations by tier">
-          <Chart variant="donut" data={tierData} xKey="tier"
-            series={[{ key: 'reservations', label: 'Reservations' }]}
-            height={240} empty={{ title: 'No tier data' }} />
-        </Container>
-        <Container title="Gross revenue share by tier" subtitle="gross share %">
-          <Chart variant="donut" data={tierData} xKey="tier"
-            series={[{ key: 'gross_revenue', label: 'Gross revenue' }]}
+        <Container title="Channel mix · res vs revenue %" subtitle="grouped bars per tier · reservations share vs gross-revenue share">
+          <Chart variant="bar" data={tierShareData} xKey="tier"
+            series={[
+              { key: 'res_pct', label: 'Reservations %', color: '#1F3A2E' },
+              { key: 'rev_pct', label: 'Revenue %',      color: '#B8542A' },
+            ]}
             height={240} empty={{ title: 'No tier data' }} />
         </Container>
         <Container title="Top 10 sources" subtitle="last 30 days · by gross revenue">
@@ -654,6 +676,11 @@ async function CategoryBlock({
               { key: 'adr',           label: 'ADR' },
             ]}
             height={240} empty={{ title: 'No bookings in last 30 days' }} />
+        </Container>
+        <Container title="Channel perf by month" subtitle="rooms revenue · stacked by channel group · last 12 months">
+          <Chart variant="stacked_bar" data={monthlyPerfData} xKey="month"
+            series={monthlyPerfSeries}
+            height={240} empty={{ title: 'No monthly data' }} />
         </Container>
       </div>
 
