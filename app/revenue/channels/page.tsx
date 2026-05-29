@@ -564,12 +564,13 @@ async function CategoryBlock({
 
   // PBS 2026-05-29 — monthly share + 3-box row data — parallelized to avoid Vercel function timeout
   const monthCatKey = category === 'direct' ? 'Direct' : category === 'ota' ? 'OTA' : category === 'group' ? 'Other' : 'Wholesale';
-  const [monthlyRevRes, channelTiersRes, top10Res, groupRowsRes, dmcRowsRes] = await Promise.all([
+  const [monthlyRevRes, channelTiersRes, top10Res, groupRowsRes, dmcRowsRes, groupsSince24Res] = await Promise.all([
     supabase.from('v_channel_performance_monthly').select('month, channel_group, rooms_revenue').eq('property_id', propertyId),
     supabase.from('v_channel_mix_by_tier').select('*').eq('property_id', propertyId),
     supabase.rpc('fn_source_top10_period', { p_property_id: propertyId, p_days: 30 }),
     supabase.from('v_group_bookings_12mo').select('*').eq('property_id', propertyId).order('gross_revenue', { ascending: false }).limit(8),
     supabase.from('v_dmc_performance').select('partner_short_name, country, production_status, res_12mo, rn_12mo, gross_12mo').eq('property_id', propertyId).order('gross_12mo', { ascending: false }).limit(8),
+    supabase.from('v_groups_since_2024').select('source_name, market_segment, month_label, nights, total_amount, group_signal').eq('property_id', propertyId),
   ]);
   const groupBookingsInline = (groupRowsRes.data ?? []) as Array<Record<string, unknown>>;
   const dmcPerfInline = (dmcRowsRes.data ?? []) as Array<Record<string, unknown>>;
@@ -725,6 +726,68 @@ async function CategoryBlock({
             height={180} empty={{ title: 'No tier data' }} />
         </Container>
       </div>
+
+      {/* PBS 2026-05-29 — row 3: Groups since 2024 (KPIs · monthly trend · top originators) */}
+      {(() => {
+        const groupsRows = (groupsSince24Res.data ?? []) as Array<{ source_name: string; market_segment: string; month_label: string; nights: number; total_amount: number; group_signal: string }>;
+        const totalBkg = groupsRows.length;
+        const totalNights = groupsRows.reduce((s, r) => s + Number(r.nights ?? 0), 0);
+        const totalRev = groupsRows.reduce((s, r) => s + Number(r.total_amount ?? 0), 0);
+        const avgAdr = totalNights > 0 ? Math.round(totalRev / totalNights) : 0;
+        const avgSize = totalBkg > 0 ? (totalNights / totalBkg).toFixed(1) : '0';
+        const monthMap = new Map<string, Record<string, string | number>>();
+        for (const r of groupsRows) {
+          const m = String(r.month_label ?? '');
+          if (!m) continue;
+          const row = monthMap.get(m) ?? { month: m, rate_or_segment: 0, classified_source: 0, source_named: 0 } as Record<string, string | number>;
+          const sig = String(r.group_signal ?? 'rate_or_segment');
+          row[sig] = Number(row[sig] || 0) + Number(r.total_amount ?? 0);
+          monthMap.set(m, row);
+        }
+        const monthRows = Array.from(monthMap.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([, v]) => v);
+        const origMap = new Map<string, { source: string; segment: string; res: number; nights: number; revenue: number; adr: number }>();
+        for (const r of groupsRows) {
+          const key = `${r.source_name}|${r.market_segment}`;
+          const slot = origMap.get(key) ?? { source: r.source_name, segment: r.market_segment, res: 0, nights: 0, revenue: 0, adr: 0 };
+          slot.res += 1;
+          slot.nights += Number(r.nights ?? 0);
+          slot.revenue += Number(r.total_amount ?? 0);
+          origMap.set(key, slot);
+        }
+        const originatorRows = Array.from(origMap.values()).map((r) => ({ ...r, revenue: Math.round(r.revenue), adr: r.nights > 0 ? Math.round(r.revenue / r.nights) : 0 })).sort((a, b) => b.revenue - a.revenue).slice(0, 10);
+        return (
+          <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
+            <Container title="Groups · since 2024" subtitle={`${totalBkg} bookings · ${totalNights} nights · all-time since Jan 2024`}>
+              <div style={{ padding: 12, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+                <KpiTile label="Bookings" value={totalBkg} size="sm" />
+                <KpiTile label="Revenue" value={Math.round(totalRev)} currency={moneyCurrency} size="sm" />
+                <KpiTile label="ADR" value={avgAdr} currency={moneyCurrency} size="sm" />
+                <KpiTile label="Avg group size" value={`${avgSize} RN`} size="sm" footnote="RN per booking" />
+              </div>
+            </Container>
+            <Container title="Groups revenue · by month" subtitle="since 2024 · stacked by source classification">
+              <Chart variant="stacked_bar" data={monthRows} xKey="month"
+                series={[
+                  { key: 'rate_or_segment',  label: 'Rate plan / segment', color: '#1F3A2E' },
+                  { key: 'classified_source', label: 'Group source',         color: '#B8542A' },
+                  { key: 'source_named',     label: 'Other',                color: '#B8A878' },
+                ]}
+                height={180} empty={{ title: 'No groups data since 2024' }} />
+            </Container>
+            <Container title="Top group originators" subtitle="since 2024 · top 10 by revenue">
+              <Chart variant="table" data={originatorRows} xKey="source"
+                series={[
+                  { key: 'segment',  label: 'Segment' },
+                  { key: 'res',      label: 'Res' },
+                  { key: 'nights',   label: 'RN' },
+                  { key: 'revenue',  label: 'Rev' },
+                  { key: 'adr',      label: 'ADR' },
+                ]}
+                height={180} empty={{ title: 'No group originators' }} />
+            </Container>
+          </div>
+        );
+      })()}
 
       {/* "Still owed" container removed 2026-05-26 (task #235) */}
     </>
