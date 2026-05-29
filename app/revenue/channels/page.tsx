@@ -174,8 +174,8 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
     { label: 'OTA mix',     value: `${mixPct(byCat.ota).toFixed(1)}%`,    size: 'sm', footnote: `${byCat.ota.length} sources · lower = less commission drag`, status: 'amber' },
     { label: 'DMC mix',     value: `${mixPct(byCat.dmc).toFixed(1)}%`,    size: 'sm', footnote: `${byCat.dmc.length} sources · tour ops + B2B agents`, status: 'amber' },
     { label: 'Bedbank mix', value: `${mixPct(byCat.bedbank).toFixed(1)}%`,size: 'sm', footnote: `${byCat.bedbank.length} sources · net-rate exposure`, status: byCat.bedbank.length > 0 ? 'amber' : 'grey' },
-    // PBS #199 v9: Groups tile reads v_group_bookings_12mo (separately fetched)
-    { label: 'Groups',      value: (groupRows as Array<{ reservations: number }>).reduce((s, r) => s + Number(r.reservations ?? 0), 0), size: 'sm', footnote: `${(groupRows as Array<unknown>).length} group sources · last 12mo` },
+    // PBS 2026-05-29 #53: Group mix tile — share of period revenue (matches Direct/OTA/DMC/Bedbank mix pattern)
+    { label: 'Group mix',   value: `${mixPct(byCat.group).toFixed(1)}%`, size: 'sm', footnote: `${byCat.group.length} sources · MICE · retreats · weddings`, status: mixPct(byCat.group) >= 15 ? 'green' : byCat.group.length > 0 ? 'amber' : 'grey' },
     { label: `Revenue · ${period.label}`, value: Math.round(totalRev), currency: moneyCurrency, size: 'sm', footnote: `${channels.length} active sources` },
   ];
 
