@@ -223,37 +223,6 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
       subtitle={`Channel performance · ${period.label} · ${channels.length} active sources across ${[byCat.direct, byCat.ota, byCat.dmc].filter((g) => g.length > 0).length} categories`}
       tabs={tabs}
     >
-      {/* USALI tasks #14+15 — slim all-time trend (Revenue + ADR since data start) + snapshot scaffold footer */}
-      <div style={{ gridColumn: '1 / -1', marginBottom: 8 }}>
-        <Container title={`All-time channels trend · ${trendRows.length} months on record`} subtitle="Revenue + ADR per month since the earliest reservation · scaffold ready for snapshot SDLY overlay">
-          {trendRows.length === 0 ? (
-            <div style={{ padding: 14, fontSize: 12, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>
-              No data on file for property {pid}.
-            </div>
-          ) : (
-            <div style={{ padding: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12 }}>
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', marginBottom: 4 }}>Revenue · {sym} per month</div>
-                <Chart variant="line" data={trendRows} xKey="month"
-                  series={[{ key: 'revenue', label: `Revenue (${sym})`, color: 'var(--primary, #1F3A2E)' }]}
-                  height={140}
-                  empty={{ title: 'No revenue data' }} />
-              </div>
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', marginBottom: 4 }}>ADR · {sym} per month</div>
-                <Chart variant="line" data={trendRows} xKey="month"
-                  series={[{ key: 'adr', label: `ADR (${sym})`, color: 'var(--terracotta, #B8542A)' }]}
-                  height={140}
-                  empty={{ title: 'No ADR data' }} />
-              </div>
-            </div>
-          )}
-          <div style={{ padding: '4px 14px 12px', fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>
-            Snapshot scaffold: per-day OTB snapshots from <code>pms.otb_snapshots</code> are not yet ingested. Once shipped, a snapshot SDLY overlay will appear alongside the live line.
-          </div>
-        </Container>
-      </div>
-
       {/* PBS #199 strip-1 (2026-05-25): Headline channel-mix is now a flat strip (no Container chrome). Selectors on row 1, KPI tiles on row 2. */}
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 10, padding: '4px 0 10px', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'center', marginBottom: 12 }}>
@@ -288,6 +257,37 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
       </div>
 
 
+
+      {/* USALI tasks #14+15 — slim all-time trend (Revenue + ADR since data start) + snapshot scaffold footer */}
+      <div style={{ gridColumn: '1 / -1', marginBottom: 8 }}>
+        <Container title={`All-time channels trend · ${trendRows.length} months on record`} subtitle="Revenue + ADR per month since the earliest reservation · scaffold ready for snapshot SDLY overlay">
+          {trendRows.length === 0 ? (
+            <div style={{ padding: 14, fontSize: 12, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>
+              No data on file for property {pid}.
+            </div>
+          ) : (
+            <div style={{ padding: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', marginBottom: 4 }}>Revenue · {sym} per month</div>
+                <Chart variant="line" data={trendRows} xKey="month"
+                  series={[{ key: 'revenue', label: `Revenue (${sym})`, color: 'var(--primary, #1F3A2E)' }]}
+                  height={140}
+                  empty={{ title: 'No revenue data' }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', marginBottom: 4 }}>ADR · {sym} per month</div>
+                <Chart variant="line" data={trendRows} xKey="month"
+                  series={[{ key: 'adr', label: `ADR (${sym})`, color: 'var(--terracotta, #B8542A)' }]}
+                  height={140}
+                  empty={{ title: 'No ADR data' }} />
+              </div>
+            </div>
+          )}
+          <div style={{ padding: '4px 14px 12px', fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>
+            Snapshot scaffold: per-day OTB snapshots from <code>pms.otb_snapshots</code> are not yet ingested. Once shipped, a snapshot SDLY overlay will appear alongside the live line.
+          </div>
+        </Container>
+      </div>
 
       {activeTab === 'direct' && <CategoryBlock category="direct" rows={byCat.direct as unknown as Array<Record<string, unknown>>} cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'direct')} mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'direct')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} />}
       {activeTab === 'ota'    && <CategoryBlock category="ota"    rows={byCat.ota as unknown as Array<Record<string, unknown>>}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'ota')}    mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'ota')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} />}
