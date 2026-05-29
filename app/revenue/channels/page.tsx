@@ -30,6 +30,7 @@ import {
 import PageRenderer from '@/app/_components/registry/PageRenderer';
 import GrossShareByTier from '@/app/_components/registry/GrossShareByTier';
 import ChannelDrillDrawer from '@/app/_components/registry/ChannelDrillDrawer';
+import ChannelControlsDropdown from '@/app/_components/registry/ChannelControlsDropdown';
 import { resolvePeriod, type WindowKey } from '@/lib/period';
 import {
   getChannelEconomics, getChannelEconomicsForRange,
@@ -251,31 +252,16 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
 
       {/* PBS #199 strip-1 (2026-05-25): Headline channel-mix is now a flat strip (no Container chrome). Selectors on row 1, KPI tiles on row 2. */}
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 10, padding: '4px 0 10px', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'center', marginBottom: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>Window</span>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-              {(['7d', '30d', '90d'] as WindowKey[]).map((k) => {
-                const active = k === period.win;
-                return (
-                  <a key={k} href={hrefFor(k)} style={pillStyle(active)}>{k}</a>
-                );
-              })}
-            </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-            <span style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>Category</span>
-            <div style={subTabRow}>
-              {visibleTabs(pid).map((t) => {
-                const active = t.key === activeTab;
-                return (
-                  <Link key={t.key} href={tabHrefFor(t.key)} style={subTabStyle(active)}>
-                    <span style={{ fontSize: 12, fontWeight: 600 }}>{t.label}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
+        <div style={{ marginBottom: 12 }}>
+          <ChannelControlsDropdown
+            basePath={basePath}
+            windowOptions={[{ label: '7 days', value: '7d' }, { label: '30 days', value: '30d' }, { label: '90 days', value: '90d' }]}
+            categoryOptions={visibleTabs(pid).map((t) => ({ label: t.label, value: t.key }))}
+            currentWindow={period.win}
+            currentCategory={activeTab}
+            defaultWindow="30d"
+            defaultCategory="direct"
+          />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
           {pageMixTiles.map((t, i) => <KpiTile key={i} {...t} />)}
