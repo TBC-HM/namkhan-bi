@@ -92,7 +92,6 @@ export default async function GrossShareByTier({ propertyId, searchParams }: Pro
             series={[{ key: 'gross_share_pct', label: 'Share of gross (%)', color: '#1F3A2E' }]}
             height={240}
             empty={{ title: 'No tier data for this period' }}
-            formatY={(v: number) => `${Number(v).toFixed(1)}%`}
           />
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginTop: 12 }}>
             <thead>
