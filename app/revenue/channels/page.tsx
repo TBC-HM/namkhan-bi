@@ -50,6 +50,8 @@ const OTA_RX = /booking\.com|expedia|agoda|airbnb|ctrip|trip\.com|hotels\.com|tr
 const BEDBANK_RX = /hotelbeds|webbeds|sunhotels|bonotel|miki|destimo|sidetours|wbs-|wtb-|sun-|ago-/i;
 const DMC_RX = /khiri|trails of|tui|jet2|tour operator|gta|tourico|wholesale|reseller|dmc/i;
 const DIRECT_RX = /direct|website|booking engine|^email|walk[- ]?in|witbooking|whatsapp|mews operations|in person|telephone/i;
+// PBS 2026-05-29 #43: GROUP catches Biig Holiday / Retreat Reseller / Vigeosport / Email Groups (cleared before DIRECT so "Email Groups" lands in Group, not Direct)
+const GROUP_RX = /biig holiday|retreat reseller|vigeosport|email groups/i;
 
 type Category = 'direct' | 'ota' | 'dmc' | 'bedbank' | 'group';
 
@@ -58,6 +60,7 @@ type Category = 'direct' | 'ota' | 'dmc' | 'bedbank' | 'group';
 // and made invisible to all tabs). "other" still exists in the type for safety but classify never returns it.
 function classify(source: string): Category | 'other' {
   const s = (source || '').toLowerCase();
+  if (GROUP_RX.test(s))    return 'group';   // PBS 2026-05-29 — before DIRECT so "Email Groups" routes here
   if (DIRECT_RX.test(s))   return 'direct';
   if (OTA_RX.test(s))      return 'ota';
   if (BEDBANK_RX.test(s))  return 'bedbank';
@@ -192,31 +195,22 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
   if (commissionPctOfRev > 12) chips.push(`⚠ Commission load · ${commissionPctOfRev.toFixed(1)}% of rev (${fmtMoney(totalCommission, 'USD')})`);
 
   const tabs: DashboardTab[] = subPages.map((s) => ({ key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/channels') }));
-  const hrefFor = (newWin: WindowKey) => {
+  // PBS 2026-05-29 #56: URL builders preserve ALL existing searchParams and only override the targeted key (prior versions dropped ch/gst_month/etc on click)
+  const buildHref = (overrides: Record<string, string | undefined>) => {
     const p = new URLSearchParams();
-    if (newWin !== '30d') p.set('win', newWin);
-    if (period.cmp && period.cmp !== 'none') p.set('cmp', period.cmp);
-    if (activeTab !== 'direct') p.set('tab', activeTab);
+    for (const [k, v] of Object.entries(searchParams as Record<string, string | string[] | undefined>)) {
+      if (typeof v === 'string' && v) p.set(k, v);
+    }
+    for (const [k, v] of Object.entries(overrides)) {
+      if (v == null || v === '') p.delete(k);
+      else p.set(k, v);
+    }
     const qs = p.toString();
     return `${basePath}${qs ? '?' + qs : ''}`;
   };
-  const drillHrefFor = (source: string) => {
-    const p = new URLSearchParams();
-    if (period.win !== '30d') p.set('win', period.win);
-    if (period.cmp && period.cmp !== 'none') p.set('cmp', period.cmp);
-    if (activeTab !== 'direct') p.set('tab', activeTab);
-    p.set('drill', source);
-    return `${basePath}?${p.toString()}`;
-  };
-
-  const tabHrefFor = (newTab: Category) => {
-    const p = new URLSearchParams();
-    if (period.win !== '30d') p.set('win', period.win);
-    if (period.cmp && period.cmp !== 'none') p.set('cmp', period.cmp);
-    if (newTab !== 'direct') p.set('tab', newTab);
-    const qs = p.toString();
-    return `${basePath}${qs ? '?' + qs : ''}`;
-  };
+  const hrefFor      = (newWin: WindowKey) => buildHref({ win: newWin === '30d' ? '' : newWin });
+  const tabHrefFor   = (newTab: Category)  => buildHref({ tab: newTab === 'direct' ? '' : newTab });
+  const drillHrefFor = (source: string)    => buildHref({ drill: source });
 
   return (
     <DashboardPage
@@ -294,8 +288,8 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
       {activeTab === 'ota'    && <CategoryBlock category="ota"    rows={byCat.ota as unknown as Array<Record<string, unknown>>}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'ota')}    mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'ota')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} propertyId={pid} />}
       {activeTab === 'dmc'    && <CategoryBlock category="dmc"    rows={byCat.dmc as unknown as Array<Record<string, unknown>>}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'dmc')}    mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'dmc')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} propertyId={pid} />}
       {activeTab === 'bedbank' && pid === 1000001 && <CategoryBlock category="bedbank" rows={byCat.bedbank as unknown as Array<Record<string, unknown>>} cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'bedbank')} mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'bedbank')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} propertyId={pid} />}
-      {/* PBS 2026-05-28: GroupsBlock was never implemented — remove to unblock tsc. Re-add when groups feature ships. */}
-      {activeTab === 'group' && null}
+      {/* PBS 2026-05-29 #43: Groups tab wired via CategoryBlock — byCat.group now populated by classify() match on Biig Holiday / Retreat Reseller / Vigeosport / Email Groups */}
+      {activeTab === 'group' && <CategoryBlock category="group" rows={byCat.group as unknown as Array<Record<string, unknown>>} cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'group')} mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'group')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} propertyId={pid} />}
 
       {/* PBS #199 fix-2: top-level Sources · 2024/2025/2026 table is ALSO clickable. Click any source to open the drawer. */}
       <div style={{ gridColumn: '1 / -1' }}>
