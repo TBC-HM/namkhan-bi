@@ -573,12 +573,6 @@ async function CategoryBlock({
   ]);
   const groupBookingsInline = (groupRowsRes.data ?? []) as Array<Record<string, unknown>>;
   const dmcPerfInline = (dmcRowsRes.data ?? []) as Array<Record<string, unknown>>;
-  // Compute gross share per tier (for row 2 box 3)
-  const tierGrossTotal = tierData.reduce((s, r) => s + r.gross_revenue, 0);
-  const grossShareData = tierData.map((r) => ({
-    tier: r.tier,
-    share_pct: tierGrossTotal > 0 ? Math.round((r.gross_revenue / tierGrossTotal) * 1000) / 10 : 0,
-  }));
   const monthlyRevRows = monthlyRevRes.data;
   const monthTotals = new Map<string, number>();
   for (const r of (monthlyRevRows ?? []) as Array<{ month: string; channel_group: string; rooms_revenue: number }>) {
@@ -608,6 +602,12 @@ async function CategoryBlock({
     reservations: Number(r.reservations ?? 0),
     gross_revenue: Number(r.gross_revenue ?? 0),
     gross_share_pct: Number(r.gross_share_pct ?? 0),
+  }));
+  // PBS 2026-05-29 — gross share per tier (for row 2 box 3) — derived from tierData
+  const tierGrossTotal = tierData.reduce((s, r) => s + r.gross_revenue, 0);
+  const grossShareData = tierData.map((r) => ({
+    tier: r.tier,
+    share_pct: tierGrossTotal > 0 ? Math.round((r.gross_revenue / tierGrossTotal) * 1000) / 10 : 0,
   }));
   const top10Last30dRaw = top10Res.data;
   const top10Last30d = ((top10Last30dRaw ?? []) as Array<Record<string, unknown>>).map((r) => ({
