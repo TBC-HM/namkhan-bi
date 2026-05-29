@@ -563,12 +563,14 @@ async function CategoryBlock({
     { key: 'los',      label: 'LOS' },
   ];
 
-  // PBS 2026-05-29 — monthly share + 3-box row data
+  // PBS 2026-05-29 — monthly share + 3-box row data — parallelized to avoid Vercel function timeout
   const monthCatKey = category === 'direct' ? 'Direct' : category === 'ota' ? 'OTA' : category === 'group' ? 'Other' : 'Wholesale';
-  const { data: monthlyRevRows } = await supabase
-    .from('v_channel_performance_monthly')
-    .select('month, channel_group, rooms_revenue')
-    .eq('property_id', propertyId);
+  const [monthlyRevRes, channelTiersRes, top10Res] = await Promise.all([
+    supabase.from('v_channel_performance_monthly').select('month, channel_group, rooms_revenue').eq('property_id', propertyId),
+    supabase.from('v_channel_mix_by_tier').select('*').eq('property_id', propertyId),
+    supabase.rpc('fn_source_top10_period', { p_property_id: propertyId, p_days: 30 }),
+  ]);
+  const monthlyRevRows = monthlyRevRes.data;
   const monthTotals = new Map<string, number>();
   for (const r of (monthlyRevRows ?? []) as Array<{ month: string; channel_group: string; rooms_revenue: number }>) {
     const ym = String(r.month ?? '').slice(0, 7);
@@ -591,18 +593,14 @@ async function CategoryBlock({
     monthShareMap.set(mm, slot);
   }
   const monthlyShareData = Array.from(monthShareMap.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([, v]) => v);
-  const { data: channelTiers } = await supabase
-    .from('v_channel_mix_by_tier')
-    .select('*')
-    .eq('property_id', propertyId);
+  const channelTiers = channelTiersRes.data;
   const tierData = ((channelTiers ?? []) as Array<Record<string, unknown>>).map((r) => ({
     tier: String(r.tier ?? '—'),
     reservations: Number(r.reservations ?? 0),
     gross_revenue: Number(r.gross_revenue ?? 0),
     gross_share_pct: Number(r.gross_share_pct ?? 0),
   }));
-  const { data: top10Last30dRaw } = await supabase
-    .rpc('fn_source_top10_period', { p_property_id: propertyId, p_days: 30 });
+  const top10Last30dRaw = top10Res.data;
   const top10Last30d = ((top10Last30dRaw ?? []) as Array<Record<string, unknown>>).map((r) => ({
     source: String(r.source ?? '—'),
     tier: String(r.tier ?? '—'),
