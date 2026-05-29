@@ -378,8 +378,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
           children as direct siblings of the host DashboardPage — no nested DashboardPage, no outer wrap. */}
       <PageRenderer pageSlug="channel" propertyId={pid} title="" subtitle="" embedded />
 
-      {/* PBS 2026-05-29 — full-page Gross Revenue Share by Tier primitive (replaces channel_economics) */}
-      <GrossShareByTier propertyId={pid} searchParams={searchParams as Record<string, string | string[] | undefined>} />
+      {/* PBS 2026-05-29 — Gross share by tier moved inline into CategoryBlock row 2 */}
 
       {/* PBS #199 — click a row in any sources table to open this drawer; CTA → full per-channel page (Booking.com hardwired Bdc* panels render there). */}
       <ChannelDrillDrawer
@@ -565,11 +564,21 @@ async function CategoryBlock({
 
   // PBS 2026-05-29 — monthly share + 3-box row data — parallelized to avoid Vercel function timeout
   const monthCatKey = category === 'direct' ? 'Direct' : category === 'ota' ? 'OTA' : category === 'group' ? 'Other' : 'Wholesale';
-  const [monthlyRevRes, channelTiersRes, top10Res] = await Promise.all([
+  const [monthlyRevRes, channelTiersRes, top10Res, groupRowsRes, dmcRowsRes] = await Promise.all([
     supabase.from('v_channel_performance_monthly').select('month, channel_group, rooms_revenue').eq('property_id', propertyId),
     supabase.from('v_channel_mix_by_tier').select('*').eq('property_id', propertyId),
     supabase.rpc('fn_source_top10_period', { p_property_id: propertyId, p_days: 30 }),
+    supabase.from('v_group_bookings_12mo').select('*').eq('property_id', propertyId).order('gross_revenue', { ascending: false }).limit(8),
+    supabase.from('v_dmc_performance').select('partner_short_name, country, production_status, res_12mo, rn_12mo, gross_12mo').eq('property_id', propertyId).order('gross_12mo', { ascending: false }).limit(8),
   ]);
+  const groupBookingsInline = (groupRowsRes.data ?? []) as Array<Record<string, unknown>>;
+  const dmcPerfInline = (dmcRowsRes.data ?? []) as Array<Record<string, unknown>>;
+  // Compute gross share per tier (for row 2 box 3)
+  const tierGrossTotal = tierData.reduce((s, r) => s + r.gross_revenue, 0);
+  const grossShareData = tierData.map((r) => ({
+    tier: r.tier,
+    share_pct: tierGrossTotal > 0 ? Math.round((r.gross_revenue / tierGrossTotal) * 1000) / 10 : 0,
+  }));
   const monthlyRevRows = monthlyRevRes.data;
   const monthTotals = new Map<string, number>();
   for (const r of (monthlyRevRows ?? []) as Array<{ month: string; channel_group: string; rooms_revenue: number }>) {
@@ -668,7 +677,7 @@ async function CategoryBlock({
               { key: 'res_pct', label: 'Reservations %', color: '#1F3A2E' },
               { key: 'rev_pct', label: 'Revenue %',      color: '#B8542A' },
             ]}
-            height={240} empty={{ title: 'No tier data' }} />
+            height={180} empty={{ title: 'No tier data' }} />
         </Container>
         <Container title="Top 10 sources" subtitle="last 30 days · by gross revenue">
           <Chart variant="table" data={top10Last30d} xKey="source"
@@ -677,12 +686,43 @@ async function CategoryBlock({
               { key: 'gross_revenue', label: 'Rev' },
               { key: 'adr',           label: 'ADR' },
             ]}
-            height={240} empty={{ title: 'No bookings in last 30 days' }} />
+            height={180} empty={{ title: 'No bookings in last 30 days' }} />
         </Container>
         <Container title="Channel perf by month" subtitle="rooms revenue · stacked by channel group · last 12 months">
           <Chart variant="stacked_bar" data={monthlyPerfData} xKey="month"
             series={monthlyPerfSeries}
-            height={240} empty={{ title: 'No monthly data' }} />
+            height={180} empty={{ title: 'No monthly data' }} />
+        </Container>
+      </div>
+
+      {/* PBS 2026-05-29 — row 2: Group Bookings · DMC Performance · Gross share by tier */}
+      <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
+        <Container title="Group Bookings" subtitle="12 months · top by gross revenue">
+          <Chart variant="table" data={groupBookingsInline} xKey="source"
+            series={[
+              { key: 'channel_group',  label: 'Tier' },
+              { key: 'reservations',   label: 'Res' },
+              { key: 'room_nights',    label: 'RN' },
+              { key: 'gross_revenue',  label: 'Gross' },
+              { key: 'group_adr',      label: 'ADR' },
+            ]}
+            height={180} empty={{ title: 'No group bookings on file' }} />
+        </Container>
+        <Container title="DMC Performance" subtitle="12 months · active contracts">
+          <Chart variant="table" data={dmcPerfInline} xKey="partner_short_name"
+            series={[
+              { key: 'country',           label: 'Ctry' },
+              { key: 'production_status', label: 'Status' },
+              { key: 'res_12mo',          label: 'Res' },
+              { key: 'rn_12mo',           label: 'RN' },
+              { key: 'gross_12mo',        label: 'Gross' },
+            ]}
+            height={180} empty={{ title: 'No DMC contracts on file' }} />
+        </Container>
+        <Container title="Gross share by tier" subtitle="12 months · % of total gross">
+          <Chart variant="bar" data={grossShareData} xKey="tier"
+            series={[{ key: 'share_pct', label: 'Share of gross (%)', color: '#1F3A2E' }]}
+            height={180} empty={{ title: 'No tier data' }} />
         </Container>
       </div>
 
