@@ -74,8 +74,10 @@ export default function SortableSourcesTable({ rows, moneyCurrency, initialSort 
       return mul * av.localeCompare(bv);
     }
     // numeric — push nulls to the bottom regardless of direction
-    const ax = av == null ? Number.NEGATIVE_INFINITY * dir : (av as number);
-    const bx = bv == null ? Number.NEGATIVE_INFINITY * dir : (bv as number);
+    // nulls sort to the bottom regardless of direction: use -Infinity in desc (mul=-1) and +Infinity in asc (mul=1)
+    const nullSentinel = mul === 1 ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY;
+    const ax = av == null ? nullSentinel : (av as number);
+    const bx = bv == null ? nullSentinel : (bv as number);
     return mul * (ax - bx);
   }
 
