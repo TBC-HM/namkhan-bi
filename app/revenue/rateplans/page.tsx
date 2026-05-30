@@ -87,8 +87,14 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     supabase.from('v_rate_plan_classified').select('rate_id', { count: 'exact', head: true }).eq('property_id', pid).eq('is_active', true).then((r) => r.count ?? 0),
   ]);
 
-  // Aggregate Section 1 KPIs across YTD
-  const totals = (nrrMonthly as Array<Record<string, unknown>>).reduce((acc, r) => {
+  // Aggregate Section 1 KPIs across YTD — explicit accumulator type so tsc doesn't widen acc to unknown
+  type NrrTotals = {
+    bookings_active: number; bookings_nrr: number; bookings_advance_purchase: number;
+    bookings_flex: number; bookings_promo: number;
+    revenue_total: number; revenue_nrr: number; revenue_advance_purchase: number;
+    revenue_flex: number; revenue_promo: number; cash_collected_nrr: number;
+  };
+  const totals = (nrrMonthly as Array<Record<string, unknown>>).reduce<NrrTotals>((acc, r) => {
     acc.bookings_active           += Number(r.bookings_active ?? 0);
     acc.bookings_nrr              += Number(r.bookings_nrr ?? 0);
     acc.bookings_advance_purchase += Number(r.bookings_advance_purchase ?? 0);
