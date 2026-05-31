@@ -55,7 +55,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     supabase.from('v_rate_plan_nrr_kpis_monthly')
       .select('month, bookings_active, bookings_nrr, bookings_nrr_locked, bookings_advance_purchase, bookings_flex, bookings_flex_bucket, bookings_semi_flex, bookings_promo, bookings_package, bookings_other, bookings_ro, bookings_with_meal, revenue_total, revenue_nrr, revenue_nrr_locked, revenue_advance_purchase, revenue_flex, revenue_flex_bucket, revenue_promo, revenue_package, revenue_other, revenue_ro, revenue_bb, cash_collected_nrr, cash_collected_total, cancel_rate_nrr_pct, cancel_rate_flex_pct, adr_nrr, adr_flex, avg_lead_nrr, avg_lead_flex')
       .eq('property_id', pid)
-      .gte('month', ytdStart).lt('month', ytdEndExclusive)
+      .gte('month', ytdStart).lt('month', '2027-01-01')
       .order('month').then((r) => r.data ?? []),
     supabase.from('v_rate_plan_lead_time_realized')
       .select('check_in_month, rate_kind, lead_bucket, lead_sort, bookings, room_nights, adr, revenue')
@@ -101,7 +101,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     revenue_nrr: number; revenue_advance_purchase: number; revenue_flex: number;
     cash_collected_nrr: number;
   };
-  const totals = (nrrMonthly as Array<Record<string, unknown>>).reduce<NrrTotals>((acc, r) => {
+  const totals = (nrrMonthly as Array<Record<string, unknown>>).filter((r) => String(r.month) < ytdEndExclusive).reduce<NrrTotals>((acc, r) => {
     acc.bookings_active           += Number(r.bookings_active ?? 0);
     acc.bookings_nrr_locked       += Number(r.bookings_nrr_locked ?? 0);
     acc.bookings_flex_bucket      += Number(r.bookings_flex_bucket ?? 0);
@@ -212,7 +212,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
       tabs={tabs}
     >
       {/* Section 1 — NRR cash-discipline strip */}
-      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 12 }}>
+      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: `repeat(${strip.length}, minmax(0, 1fr))`, gap: 8, marginBottom: 12 }}>
         {strip.map((t, i) => <KpiTile key={i} {...t} />)}
       </div>
 
