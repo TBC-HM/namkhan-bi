@@ -10,6 +10,7 @@ import {
   DashboardPage, Container, KpiTile, Chart,
   type DashboardTab, type KpiTileProps,
 } from '@/app/(cockpit)/_design';
+import RoTooltipChart from '@/app/_components/registry/RoTooltipChart';
 import { supabase } from '@/lib/supabase';
 import { REVENUE_SUBPAGES } from '../_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
@@ -50,7 +51,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
 
   // Parallel data fetch
   const [
-    nrrMonthly, leadTime, mealCompare, promoImpact, restrictions, sleeping, orphans, classifiedCount,
+    nrrMonthly, leadTime, mealCompare, promoImpact, restrictions, sleeping, orphans, classifiedCount, cashTiming,
   ] = await Promise.all([
     supabase.from('v_rate_plan_nrr_kpis_monthly')
       .select('month, bookings_active, bookings_nrr, bookings_nrr_locked, bookings_advance_purchase, bookings_flex, bookings_flex_bucket, bookings_semi_flex, bookings_promo, bookings_package, bookings_other, bookings_ro, bookings_with_meal, revenue_total, revenue_nrr, revenue_nrr_locked, revenue_advance_purchase, revenue_flex, revenue_flex_bucket, revenue_promo, revenue_package, revenue_other, revenue_ro, revenue_bb, cash_collected_nrr, cash_collected_total, cancel_rate_nrr_pct, cancel_rate_flex_pct, adr_nrr, adr_flex, avg_lead_nrr, avg_lead_flex')
@@ -85,6 +86,11 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
       .eq('property_id', pid)
       .order('bookings_lifetime', { ascending: false }).limit(30).then((r) => r.data ?? []),
     supabase.from('v_rate_plan_classified').select('rate_id', { count: 'exact', head: true }).eq('property_id', pid).eq('is_active', true).then((r) => r.count ?? 0),
+    supabase.from('v_rate_plan_nrr_cash_timing')
+      .select('booking_month, lead_bucket, lead_sort, bookings, cash_collected')
+      .eq('property_id', pid)
+      .gte('booking_month', '2026-01-01').lt('booking_month', '2027-01-01')
+      .order('booking_month').order('lead_sort').then((r) => r.data ?? []),
   ]);
 
   // Aggregate Section 1 KPIs across YTD — explicit accumulator type so tsc doesn't widen acc to unknown
@@ -139,17 +145,41 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
   // PBS 2026-05-31 #67 — chart data for 3 top graphs (RO 2026 · NRR vs BAR vs BB · all rate-plan buckets)
   const chartRows2026 = (nrrMonthly as Array<Record<string, unknown>>)
     .filter((r) => String(r.month).startsWith('2026'))
-    .map((r) => ({
-      month:      String(r.month).slice(0, 7),
-      ro:         Number(r.revenue_ro ?? 0),
-      nrr_locked: Number(r.revenue_nrr_locked ?? 0),
-      flex_bar:   Number(r.revenue_flex_bucket ?? 0),
-      bb:         Number(r.revenue_bb ?? 0),
-      promo:      Number(r.revenue_promo ?? 0),
-      packageRev: Number(r.revenue_package ?? 0),
-      other:      Number(r.revenue_other ?? 0),
-      total:      Number(r.revenue_total ?? 0),
-    }));
+    .map((r) => {
+      const bk_total = Number(r.bookings_active ?? 0);
+      const bk_ro    = Number(r.bookings_ro ?? 0);
+      return {
+        month:          String(r.month).slice(0, 7),
+        ro:             Number(r.revenue_ro ?? 0),
+        nrr_locked:     Number(r.revenue_nrr_locked ?? 0),
+        flex_bar:       Number(r.revenue_flex_bucket ?? 0),
+        bb:             Number(r.revenue_bb ?? 0),
+        promo:          Number(r.revenue_promo ?? 0),
+        packageRev:     Number(r.revenue_package ?? 0),
+        other:          Number(r.revenue_other ?? 0),
+        total:          Number(r.revenue_total ?? 0),
+        ro_occ_pct:     bk_total > 0 ? 100 * bk_ro / bk_total : 0,
+        bookings_ro:    bk_ro,
+        bookings_total: bk_total,
+      };
+    });
+
+  // PBS 2026-05-31 #72 — NRR cash-timing rows (one per booking month, stacked by lead bucket)
+  type CashRow = { month: string; d_0_30: number; d_31_60: number; d_61_90: number; d_91_120: number; d_121_plus: number; total: number };
+  const cashByMonth: Record<string, CashRow> = {};
+  (cashTiming as Array<Record<string, unknown>>).forEach((r) => {
+    const m = String(r.booking_month).slice(0, 7);
+    const bucket = String(r.lead_bucket);
+    const cash = Number(r.cash_collected ?? 0);
+    if (!cashByMonth[m]) cashByMonth[m] = { month: m, d_0_30: 0, d_31_60: 0, d_61_90: 0, d_91_120: 0, d_121_plus: 0, total: 0 };
+    if (bucket === '0-30d')   cashByMonth[m].d_0_30     += cash;
+    if (bucket === '31-60d')  cashByMonth[m].d_31_60    += cash;
+    if (bucket === '61-90d')  cashByMonth[m].d_61_90    += cash;
+    if (bucket === '91-120d') cashByMonth[m].d_91_120   += cash;
+    if (bucket === '121d+')   cashByMonth[m].d_121_plus += cash;
+    cashByMonth[m].total += cash;
+  });
+  const cashTimingRows = Object.values(cashByMonth).sort((a, b) => a.month.localeCompare(b.month));
 
   const mewsCashHidden = pid === PROPERTY_ID_DONNA; // Mews sync doesn't deliver paid_amount
 
@@ -217,16 +247,27 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
         {strip.map((t, i) => <KpiTile key={i} {...t} />)}
       </div>
 
+      {/* PBS 2026-05-31 #72 — NRR cash-timing slim chart (full width). Stacks = cash per booking-month × days-to-check-in. €400k/mo = self-funding threshold (above → only security; below → real working capital). */}
+      <div style={{ gridColumn: '1 / -1', marginBottom: 12 }}>
+        <Container title="NRR cash-timing · cash collected per booking month × lead bucket"
+                   subtitle={`Stacked by days-to-check-in (0-30 / 31-60 / 61-90 / 91-120 / 121+) · winter cash from summer bookings · €400k/mo = self-funding threshold`}>
+          <Chart variant="stacked_bar" data={cashTimingRows} xKey="month"
+            series={[
+              { key: 'd_0_30',    label: '0-30d',   color: 'var(--terracotta, #B8542A)' },
+              { key: 'd_31_60',   label: '31-60d',  color: '#C97A4E' },
+              { key: 'd_61_90',   label: '61-90d',  color: '#8C7A4E' },
+              { key: 'd_91_120',  label: '91-120d', color: '#5C9BB5' },
+              { key: 'd_121_plus',label: '121d+',   color: 'var(--primary, #1F3A2E)' },
+            ]}
+            height={160}
+            empty={{ title: 'No NRR cash data' }} />
+        </Container>
+      </div>
+
       {/* PBS 2026-05-31 #67 — 3 top graphs below KPIs */}
       <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12, marginBottom: 12 }}>
-        <Container title="Room Only · 2026 revenue per month" subtitle={`meal_plan = 'RO' · ${sym} per month`}>
-          <Chart variant="line" data={chartRows2026} xKey="month"
-            series={[
-              { key: 'ro',    label: `RO revenue (${sym})`,    color: 'var(--primary, #1F3A2E)' },
-              { key: 'total', label: `Total revenue (${sym})`, color: 'var(--terracotta, #B8542A)' },
-            ]}
-            height={180}
-            empty={{ title: 'No RO data' }} />
+        <Container title="Room Only · 2026 revenue per month" subtitle={`meal_plan = 'RO' · hover shows monthly OCC share of bookings`}>
+          <RoTooltipChart data={chartRows2026} sym={sym} />
         </Container>
         <Container title="NRR vs Flex/BAR vs Breakfast · 2026 revenue per month" subtitle="3 lines: NRR-locked · Flex+BAR · BB-included">
           <Chart variant="line" data={chartRows2026} xKey="month"
