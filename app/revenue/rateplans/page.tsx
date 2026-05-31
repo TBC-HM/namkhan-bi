@@ -333,8 +333,8 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
                       <td style={tdLabel}>{String(r.rate_name)}</td>
                       <td style={tdLabel}>{String(r.rate_kind)}</td>
                       <td style={tdLabel}>{String(r.restriction_kind ?? '—')} {r.channel_restriction ? `· ${r.channel_restriction}` : ''} {r.is_member ? '· members' : ''}</td>
-                      <td style={tdLabel}>{r.meal_plan ?? '—'}</td>
-                      <td style={tdNum}>{r.min_los_nights ?? '—'}</td>
+                      <td style={tdLabel}>{(r.meal_plan as string | null) ?? '—'}</td>
+                      <td style={tdNum}>{(r.min_los_nights as number | null) ?? '—'}</td>
                       <td style={tdNum}>{Number(r.bookings_active ?? 0)}</td>
                       <td style={tdNum}>{money(Number(r.revenue_active ?? 0), sym)}</td>
                       <td style={tdLabel}>{r.last_stay ? String(r.last_stay) : '—'}</td>
