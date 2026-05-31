@@ -51,7 +51,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
 
   // Parallel data fetch
   const [
-    nrrMonthly, leadTime, mealCompare, promoImpact, restrictions, sleeping, orphans, classifiedCount, cashTiming,
+    nrrMonthly, leadTime, mealCompare, promoImpact, restrictions, sleeping, orphans, classifiedCount, cashTiming, cashByStay,
   ] = await Promise.all([
     supabase.from('v_rate_plan_nrr_kpis_monthly')
       .select('month, bookings_active, bookings_nrr, bookings_nrr_locked, bookings_advance_purchase, bookings_flex, bookings_flex_bucket, bookings_semi_flex, bookings_promo, bookings_package, bookings_other, bookings_ro, bookings_with_meal, revenue_total, revenue_nrr, revenue_nrr_locked, revenue_advance_purchase, revenue_flex, revenue_flex_bucket, revenue_promo, revenue_package, revenue_other, revenue_ro, revenue_bb, room_nights_ro, room_nights_flex_bucket, cash_collected_nrr, cash_collected_total, cancel_rate_nrr_pct, cancel_rate_flex_pct, adr_nrr, adr_flex, avg_lead_nrr, avg_lead_flex')
@@ -91,6 +91,11 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
       .eq('property_id', pid)
       .gte('booking_month', '2026-01-01').lt('booking_month', '2027-01-01')
       .order('booking_month').order('lead_sort').then((r) => r.data ?? []),
+    supabase.from('v_rate_plan_nrr_cash_by_stay_month')
+      .select('stay_month, stay_month_no, is_need_window, bookings, cash_locked, stay_revenue, room_nights, adr, avg_lead_days')
+      .eq('property_id', pid)
+      .gte('stay_month', '2026-01-01').lt('stay_month', '2027-01-01')
+      .order('stay_month').then((r) => r.data ?? []),
   ]);
 
   // Aggregate Section 1 KPIs across YTD — explicit accumulator type so tsc doesn't widen acc to unknown
@@ -172,14 +177,17 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     });
 
   // PBS 2026-05-31 #72 — NRR cash-timing rows (one per booking month, stacked by lead bucket)
-  type CashRow = { month: string; d_0_30: number; d_31_60: number; d_61_90: number; d_91_120: number; d_121_plus: number; total: number };
+  // PBS 2026-05-31 #73 — 7 lead-bucket tiers (0-30 split into 0-7 / 8-14 / 15-30)
+  type CashRow = { month: string; d_0_7: number; d_8_14: number; d_15_30: number; d_31_60: number; d_61_90: number; d_91_120: number; d_121_plus: number; total: number };
   const cashByMonth: Record<string, CashRow> = {};
   (cashTiming as Array<Record<string, unknown>>).forEach((r) => {
     const m = String(r.booking_month).slice(0, 7);
     const bucket = String(r.lead_bucket);
     const cash = Number(r.cash_collected ?? 0);
-    if (!cashByMonth[m]) cashByMonth[m] = { month: m, d_0_30: 0, d_31_60: 0, d_61_90: 0, d_91_120: 0, d_121_plus: 0, total: 0 };
-    if (bucket === '0-30d')   cashByMonth[m].d_0_30     += cash;
+    if (!cashByMonth[m]) cashByMonth[m] = { month: m, d_0_7: 0, d_8_14: 0, d_15_30: 0, d_31_60: 0, d_61_90: 0, d_91_120: 0, d_121_plus: 0, total: 0 };
+    if (bucket === '0-7d')    cashByMonth[m].d_0_7      += cash;
+    if (bucket === '8-14d')   cashByMonth[m].d_8_14     += cash;
+    if (bucket === '15-30d')  cashByMonth[m].d_15_30    += cash;
     if (bucket === '31-60d')  cashByMonth[m].d_31_60    += cash;
     if (bucket === '61-90d')  cashByMonth[m].d_61_90    += cash;
     if (bucket === '91-120d') cashByMonth[m].d_91_120   += cash;
@@ -187,6 +195,22 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     cashByMonth[m].total += cash;
   });
   const cashTimingRows = Object.values(cashByMonth).sort((a, b) => a.month.localeCompare(b.month));
+
+  // PBS 2026-05-31 #73 — cash locked per STAY month (winter need-window Nov-Apr separated)
+  type StayRow = { month: string; cash_winter: number; cash_summer: number; total: number; is_winter: boolean };
+  const stayRows: StayRow[] = (cashByStay as Array<Record<string, unknown>>)
+    .map((r) => {
+      const winter = Boolean(r.is_need_window);
+      const cash = Number(r.cash_locked ?? 0);
+      return {
+        month:       String(r.stay_month).slice(0, 7),
+        cash_winter: winter ? cash : 0,
+        cash_summer: winter ? 0 : cash,
+        total:       cash,
+        is_winter:   winter,
+      };
+    })
+    .sort((a, b) => a.month.localeCompare(b.month));
 
   const mewsCashHidden = pid === PROPERTY_ID_DONNA; // Mews sync doesn't deliver paid_amount
 
@@ -259,14 +283,30 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
                    subtitle={`Stacked by days-to-check-in (0-30 / 31-60 / 61-90 / 91-120 / 121+) · winter cash from summer bookings · €400k/mo = self-funding threshold`}>
           <Chart variant="stacked_bar" data={cashTimingRows} xKey="month"
             series={[
-              { key: 'd_0_30',    label: '0-30d',   color: 'var(--terracotta, #B8542A)' },
-              { key: 'd_31_60',   label: '31-60d',  color: '#C97A4E' },
-              { key: 'd_61_90',   label: '61-90d',  color: '#8C7A4E' },
-              { key: 'd_91_120',  label: '91-120d', color: '#5C9BB5' },
-              { key: 'd_121_plus',label: '121d+',   color: 'var(--primary, #1F3A2E)' },
+              { key: 'd_0_7',    label: '0-7d',    color: 'var(--terracotta, #B8542A)' },
+              { key: 'd_8_14',   label: '8-14d',   color: '#D89469' },
+              { key: 'd_15_30',  label: '15-30d',  color: '#C97A4E' },
+              { key: 'd_31_60',  label: '31-60d',  color: '#A86A4A' },
+              { key: 'd_61_90',  label: '61-90d',  color: '#8C7A4E' },
+              { key: 'd_91_120', label: '91-120d', color: '#5C9BB5' },
+              { key: 'd_121_plus',label: '121d+',  color: 'var(--primary, #1F3A2E)' },
             ]}
             height={160}
             empty={{ title: 'No NRR cash data' }} />
+        </Container>
+      </div>
+
+      {/* PBS 2026-05-31 #73 — Cash already locked per stay month · winter need-window (Nov-Apr) highlighted */}
+      <div style={{ gridColumn: '1 / -1', marginBottom: 12 }}>
+        <Container title="NRR cash locked · per stay month · winter need-window (Nov-Apr) highlighted"
+                   subtitle="Cash already collected for each upcoming stay-month · dark green = months where you need the cash (Nov-Apr) · keep NRR high in winter-feeding booking months; wind down when stays land in summer cash flush">
+          <Chart variant="stacked_bar" data={stayRows} xKey="month"
+            series={[
+              { key: 'cash_winter', label: 'Stays Nov-Apr (need)', color: 'var(--primary, #1F3A2E)' },
+              { key: 'cash_summer', label: 'Stays May-Oct (peak)', color: '#D89469' },
+            ]}
+            height={160}
+            empty={{ title: 'No locked cash' }} />
         </Container>
       </div>
 
