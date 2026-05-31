@@ -31,6 +31,7 @@ import PageRenderer from '@/app/_components/registry/PageRenderer';
 import GrossShareByTier from '@/app/_components/registry/GrossShareByTier';
 import ChannelDrillDrawer from '@/app/_components/registry/ChannelDrillDrawer';
 import ChannelControlsDropdown from '@/app/_components/registry/ChannelControlsDropdown';
+import SortableSourcesTable from '@/app/_components/registry/SortableSourcesTable';
 import { resolvePeriod, type WindowKey } from '@/lib/period';
 import {
   getChannelEconomics, getChannelEconomicsForRange,
@@ -100,27 +101,24 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
     .eq('property_id', pid)
     .order('category')
     .order('res_total', { ascending: false });
-  const sourcesAllYearsRows = ((sourcesAllYears ?? []) as Array<Record<string, unknown>>).map((r) => {
-    const dev = r.sdly_dev_pct == null ? null : Number(r.sdly_dev_pct);
-    const devStr = dev == null ? '—' : (dev > 0 ? '↑ ' : dev < 0 ? '↓ ' : '→ ') + `${Math.round(dev)}%`;
-    return {
-      category: String(r.category ?? 'Other'),
-      source:   String(r.source_name ?? 'Unknown'),
-      res_24:   Number(r.res_24 ?? 0),
-      res_25:   Number(r.res_25 ?? 0),
-      res_26:   Number(r.res_26 ?? 0),
-      rev_24:   r.rev_24 != null ? `${sym}${Math.round(Number(r.rev_24)).toLocaleString('en-US')}` : '—',
-      rev_25:   r.rev_25 != null ? `${sym}${Math.round(Number(r.rev_25)).toLocaleString('en-US')}` : '—',
-      rev_26:   r.rev_26 != null ? `${sym}${Math.round(Number(r.rev_26)).toLocaleString('en-US')}` : '—',
-      adr_24:   r.adr_24 != null ? `${sym}${Math.round(Number(r.adr_24)).toLocaleString('en-US')}` : '—',
-      adr_25:   r.adr_25 != null ? `${sym}${Math.round(Number(r.adr_25)).toLocaleString('en-US')}` : '—',
-      adr_26:   r.adr_26 != null ? `${sym}${Math.round(Number(r.adr_26)).toLocaleString('en-US')}` : '—',
-      rn_26:    r.rn_26 != null ? Number(r.rn_26) : 0,
-      window_d: r.avg_window_days != null ? `${Math.round(Number(r.avg_window_days))}d` : '—',
-      los_d:    r.avg_los != null ? `${Number(r.avg_los).toFixed(1)}n` : '—',
-      sdly:     devStr,
-    };
-  });
+  // PBS 2026-05-31 #57: raw numeric mapper — SortableSourcesTable sorts on numbers and formats client-side
+  const sourcesAllYearsRows = ((sourcesAllYears ?? []) as Array<Record<string, unknown>>).map((r) => ({
+    category:        String(r.category ?? 'Other'),
+    source:          String(r.source_name ?? 'Unknown'),
+    res_24:          Number(r.res_24 ?? 0),
+    res_25:          Number(r.res_25 ?? 0),
+    res_26:          Number(r.res_26 ?? 0),
+    rev_24:          r.rev_24 != null ? Number(r.rev_24) : null,
+    rev_25:          r.rev_25 != null ? Number(r.rev_25) : null,
+    rev_26:          r.rev_26 != null ? Number(r.rev_26) : null,
+    adr_24:          r.adr_24 != null ? Number(r.adr_24) : null,
+    adr_25:          r.adr_25 != null ? Number(r.adr_25) : null,
+    adr_26:          r.adr_26 != null ? Number(r.adr_26) : null,
+    rn_26:           r.rn_26 != null ? Number(r.rn_26) : 0,
+    avg_window_days: r.avg_window_days != null ? Number(r.avg_window_days) : null,
+    avg_los:         r.avg_los != null ? Number(r.avg_los) : null,
+    sdly_dev_pct:    r.sdly_dev_pct != null ? Number(r.sdly_dev_pct) : null,
+  }));
   const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
   const basePath = pid !== PROPERTY_ID_NAMKHAN ? `/h/${pid}/revenue/channels` : '/revenue/channels';
   const period = resolvePeriod(searchParams);
@@ -306,50 +304,10 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
           {filteredSources.length === 0 ? (
             <div style={{ padding: 16, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>No sources data</div>
           ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                <thead>
-                  <tr style={{ background: 'var(--bg, #F4EFE2)', textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: 10, color: 'var(--ink-soft, #5A5A5A)' }}>
-                    <th style={thStyle}>Source</th>
-                    <th style={thStyle}>Group</th>
-                    <th style={{ ...thStyle, textAlign: 'right' }}>Res 24</th>
-                    <th style={{ ...thStyle, textAlign: 'right' }}>Res 25</th>
-                    <th style={{ ...thStyle, textAlign: 'right' }}>Res 26</th>
-                    <th style={{ ...thStyle, textAlign: 'right' }}>SDLY 26 vs 25</th>
-                    <th style={{ ...thStyle, textAlign: 'right' }}>Rev 24</th>
-                    <th style={{ ...thStyle, textAlign: 'right' }}>Rev 25</th>
-                    <th style={{ ...thStyle, textAlign: 'right' }}>Rev 26</th>
-                    <th style={{ ...thStyle, textAlign: 'right' }}>ADR 24</th>
-                    <th style={{ ...thStyle, textAlign: 'right' }}>ADR 25</th>
-                    <th style={{ ...thStyle, textAlign: 'right' }}>ADR 26</th>
-                    <th style={{ ...thStyle, textAlign: 'right' }}>RN 26</th>
-                    <th style={{ ...thStyle, textAlign: 'right' }}>Avg window</th>
-                    <th style={{ ...thStyle, textAlign: 'right' }}>Avg LOS</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredSources.map((r, i) => (
-                    <tr key={i} style={{ borderTop: '1px solid var(--hairline, #E6DFCC)' }}>
-                      <td style={tdLabelStyle}><Link href={drillHrefFor(r.source)} style={sourceLinkStyle}>{r.source}</Link></td>
-                      <td style={tdLabelStyle}>{r.category}</td>
-                      <td style={tdNumStyle}>{r.res_24}</td>
-                      <td style={tdNumStyle}>{r.res_25}</td>
-                      <td style={tdNumStyle}>{r.res_26}</td>
-                      <td style={tdNumStyle}>{r.sdly}</td>
-                      <td style={tdNumStyle}>{r.rev_24}</td>
-                      <td style={tdNumStyle}>{r.rev_25}</td>
-                      <td style={tdNumStyle}>{r.rev_26}</td>
-                      <td style={tdNumStyle}>{r.adr_24}</td>
-                      <td style={tdNumStyle}>{r.adr_25}</td>
-                      <td style={tdNumStyle}>{r.adr_26}</td>
-                      <td style={tdNumStyle}>{r.rn_26}</td>
-                      <td style={tdNumStyle}>{r.window_d}</td>
-                      <td style={tdNumStyle}>{r.los_d}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <SortableSourcesTable
+              rows={filteredSources.map((r) => ({ ...r, drillHref: drillHrefFor(r.source) }))}
+              moneyCurrency={moneyCurrency}
+            />
           )}
         </Container>
       </div>
