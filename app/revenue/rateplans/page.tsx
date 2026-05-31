@@ -148,6 +148,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
       promo:      Number(r.revenue_promo ?? 0),
       packageRev: Number(r.revenue_package ?? 0),
       other:      Number(r.revenue_other ?? 0),
+      total:      Number(r.revenue_total ?? 0),
     }));
 
   const mewsCashHidden = pid === PROPERTY_ID_DONNA; // Mews sync doesn't deliver paid_amount
@@ -158,7 +159,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     { label: 'Promo',       value: `${promoShare.toFixed(1)}%`,     size: 'sm', footnote: `${money(totals.revenue_promo, sym)} · promotional rates`, status: promoShare >= 10 ? 'amber' : 'grey' },
     { label: 'Package',     value: `${packageShare.toFixed(1)}%`,   size: 'sm', footnote: `${money(totals.revenue_package, sym)} · packages + retreats` },
     { label: 'Other',       value: `${otherShare.toFixed(1)}%`,     size: 'sm', footnote: `${money(totals.revenue_other, sym)} · corporate / member / group / comp` },
-    { label: 'Room Only',   value: `${roShareBookings.toFixed(1)}%`,size: 'sm', footnote: `${totals.bookings_ro} of ${totals.bookings_active} bookings · ${roShareRevenue.toFixed(1)}% of revenue` },
+    { label: 'Room Only',   value: `${roShareBookings.toFixed(1)}%`,size: 'sm', footnote: totals.bookings_ro === 0 ? `0 of ${totals.bookings_active} bookings · property doesn''t tag RO in rate names` : `${totals.bookings_ro} of ${totals.bookings_active} bookings · ${roShareRevenue.toFixed(1)}% of revenue` },
     { label: 'NRR cash collected YTD', value: mewsCashHidden ? '—' : money(totals.cash_collected_nrr, sym), size: 'sm', footnote: mewsCashHidden ? 'Mews payment sync pending' : 'paid_amount sum · cash banked' },
   ];
 
@@ -220,7 +221,10 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
       <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12, marginBottom: 12 }}>
         <Container title="Room Only · 2026 revenue per month" subtitle={`meal_plan = 'RO' · ${sym} per month`}>
           <Chart variant="line" data={chartRows2026} xKey="month"
-            series={[{ key: 'ro', label: `RO revenue (${sym})`, color: 'var(--primary, #1F3A2E)' }]}
+            series={[
+              { key: 'ro',    label: `RO revenue (${sym})`,    color: 'var(--primary, #1F3A2E)' },
+              { key: 'total', label: `Total revenue (${sym})`, color: 'var(--terracotta, #B8542A)' },
+            ]}
             height={180}
             empty={{ title: 'No RO data' }} />
         </Container>
