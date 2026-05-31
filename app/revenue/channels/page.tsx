@@ -32,6 +32,7 @@ import GrossShareByTier from '@/app/_components/registry/GrossShareByTier';
 import ChannelDrillDrawer from '@/app/_components/registry/ChannelDrillDrawer';
 import ChannelControlsDropdown from '@/app/_components/registry/ChannelControlsDropdown';
 import SortableSourcesTable from '@/app/_components/registry/SortableSourcesTable';
+import TrendCategoryDropdown from '@/app/_components/registry/TrendCategoryDropdown';
 import { resolvePeriod, type WindowKey } from '@/lib/period';
 import {
   getChannelEconomics, getChannelEconomicsForRange,
@@ -149,13 +150,24 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
   ]);
   const channels = channelsRaw;
 
-  // USALI tasks #14+15 — all-time monthly trend (separate fetch, no touch to existing Promise.all)
-  const allTimeTrend = ((await supabase
-    .from('v_channels_all_time_trend')
-    .select('period_yyyymm, bookings, room_nights, total_revenue, adr')
-    .eq('property_id', pid)
-    .order('period_yyyymm', { ascending: true })
-    .then((r) => r.data ?? [])) as Array<Record<string, unknown>>);
+  // PBS 2026-05-31 #55: trend category — if ?cat= is set, read per-category view (v_channel_trend_by_category_monthly); else aggregate (v_channels_all_time_trend)
+  const trendCatRaw = String(searchParams.cat ?? 'all').toLowerCase();
+  const trendCat: 'all' | 'direct' | 'ota' | 'bedbank' | 'dmc' | 'group' =
+    (['all','direct','ota','bedbank','dmc','group'].includes(trendCatRaw) ? trendCatRaw : 'all') as 'all' | 'direct' | 'ota' | 'bedbank' | 'dmc' | 'group';
+  const allTimeTrend = (trendCat === 'all'
+    ? await supabase
+        .from('v_channels_all_time_trend')
+        .select('period_yyyymm, bookings, room_nights, total_revenue, adr')
+        .eq('property_id', pid)
+        .order('period_yyyymm', { ascending: true })
+        .then((r) => r.data ?? [])
+    : await supabase
+        .from('v_channel_trend_by_category_monthly')
+        .select('period_yyyymm, bookings, room_nights, total_revenue, adr')
+        .eq('property_id', pid)
+        .eq('category', trendCat)
+        .order('period_yyyymm', { ascending: true })
+        .then((r) => r.data ?? [])) as Array<Record<string, unknown>>;
   const trendRows = allTimeTrend.map((r) => ({
     month: String(r.period_yyyymm ?? ''),
     revenue: Number(r.total_revenue ?? 0),
@@ -219,7 +231,10 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
     >
       {/* USALI tasks #14+15 — slim all-time trend (Revenue + ADR since data start) + snapshot scaffold footer */}
       <div style={{ gridColumn: '1 / -1', marginBottom: 8 }}>
-        <Container title={`All-time channels trend · ${trendRows.length} months on record`} subtitle="Revenue + ADR per month since the earliest reservation · scaffold ready for snapshot SDLY overlay">
+        <Container title={`All-time channels trend · ${trendCat === 'all' ? 'all channels' : trendCat.toUpperCase()} · ${trendRows.length} months on record`} subtitle="Revenue + ADR per month since the earliest reservation · scaffold ready for snapshot SDLY overlay">
+          <div style={{ padding: '8px 14px 0', display: 'flex', justifyContent: 'flex-end' }}>
+            <TrendCategoryDropdown basePath={basePath} current={trendCat} options={[{ label: 'All channels', value: 'all' }, { label: 'Direct', value: 'direct' }, { label: 'OTA', value: 'ota' }, { label: 'Bedbanks', value: 'bedbank' }, { label: 'DMC', value: 'dmc' }, { label: 'Groups', value: 'group' }]} />
+          </div>
           {trendRows.length === 0 ? (
             <div style={{ padding: 14, fontSize: 12, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>
               No data on file for property {pid}.
