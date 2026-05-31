@@ -7,7 +7,7 @@
 // Hygiene reuses v_rate_plan_sleeping + v_rate_plan_orphans.
 
 import {
-  DashboardPage, Container, KpiTile,
+  DashboardPage, Container, KpiTile, Chart,
   type DashboardTab, type KpiTileProps,
 } from '@/app/(cockpit)/_design';
 import { supabase } from '@/lib/supabase';
@@ -53,7 +53,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     nrrMonthly, leadTime, mealCompare, promoImpact, restrictions, sleeping, orphans, classifiedCount,
   ] = await Promise.all([
     supabase.from('v_rate_plan_nrr_kpis_monthly')
-      .select('month, bookings_active, bookings_nrr, bookings_nrr_locked, bookings_advance_purchase, bookings_flex, bookings_flex_bucket, bookings_semi_flex, bookings_promo, bookings_package, bookings_other, bookings_ro, bookings_with_meal, revenue_total, revenue_nrr, revenue_nrr_locked, revenue_advance_purchase, revenue_flex, revenue_flex_bucket, revenue_promo, revenue_package, revenue_other, revenue_ro, cash_collected_nrr, cash_collected_total, cancel_rate_nrr_pct, cancel_rate_flex_pct, adr_nrr, adr_flex, avg_lead_nrr, avg_lead_flex')
+      .select('month, bookings_active, bookings_nrr, bookings_nrr_locked, bookings_advance_purchase, bookings_flex, bookings_flex_bucket, bookings_semi_flex, bookings_promo, bookings_package, bookings_other, bookings_ro, bookings_with_meal, revenue_total, revenue_nrr, revenue_nrr_locked, revenue_advance_purchase, revenue_flex, revenue_flex_bucket, revenue_promo, revenue_package, revenue_other, revenue_ro, revenue_bb, cash_collected_nrr, cash_collected_total, cancel_rate_nrr_pct, cancel_rate_flex_pct, adr_nrr, adr_flex, avg_lead_nrr, avg_lead_flex')
       .eq('property_id', pid)
       .gte('month', ytdStart).lt('month', ytdEndExclusive)
       .order('month').then((r) => r.data ?? []),
@@ -136,6 +136,20 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
   const roShareBookings = totals.bookings_active > 0 ? 100 * totals.bookings_ro / totals.bookings_active : 0;
   const roShareRevenue  = totals.revenue_total   > 0 ? 100 * totals.revenue_ro / totals.revenue_total : 0;
 
+  // PBS 2026-05-31 #67 — chart data for 3 top graphs (RO 2026 · NRR vs BAR vs BB · all rate-plan buckets)
+  const chartRows2026 = (nrrMonthly as Array<Record<string, unknown>>)
+    .filter((r) => String(r.month).startsWith('2026'))
+    .map((r) => ({
+      month:      String(r.month).slice(0, 7),
+      ro:         Number(r.revenue_ro ?? 0),
+      nrr_locked: Number(r.revenue_nrr_locked ?? 0),
+      flex_bar:   Number(r.revenue_flex_bucket ?? 0),
+      bb:         Number(r.revenue_bb ?? 0),
+      promo:      Number(r.revenue_promo ?? 0),
+      packageRev: Number(r.revenue_package ?? 0),
+      other:      Number(r.revenue_other ?? 0),
+    }));
+
   const mewsCashHidden = pid === PROPERTY_ID_DONNA; // Mews sync doesn't deliver paid_amount
 
   const strip: KpiTileProps[] = [
@@ -200,6 +214,38 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
       {/* Section 1 — NRR cash-discipline strip */}
       <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 12 }}>
         {strip.map((t, i) => <KpiTile key={i} {...t} />)}
+      </div>
+
+      {/* PBS 2026-05-31 #67 — 3 top graphs below KPIs */}
+      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12, marginBottom: 12 }}>
+        <Container title="Room Only · 2026 revenue per month" subtitle={`meal_plan = 'RO' · ${sym} per month`}>
+          <Chart variant="line" data={chartRows2026} xKey="month"
+            series={[{ key: 'ro', label: `RO revenue (${sym})`, color: 'var(--primary, #1F3A2E)' }]}
+            height={180}
+            empty={{ title: 'No RO data' }} />
+        </Container>
+        <Container title="NRR vs Flex/BAR vs Breakfast · 2026 revenue per month" subtitle="3 lines: NRR-locked · Flex+BAR · BB-included">
+          <Chart variant="line" data={chartRows2026} xKey="month"
+            series={[
+              { key: 'nrr_locked', label: 'NRR locked',  color: 'var(--primary, #1F3A2E)' },
+              { key: 'flex_bar',   label: 'Flex / BAR',  color: 'var(--terracotta, #B8542A)' },
+              { key: 'bb',         label: 'BB included', color: '#8C7A4E' },
+            ]}
+            height={180}
+            empty={{ title: 'No 2026 data' }} />
+        </Container>
+        <Container title="All rate plans · 2026 revenue per month" subtitle="5 mutually-exclusive buckets · sum = total revenue">
+          <Chart variant="line" data={chartRows2026} xKey="month"
+            series={[
+              { key: 'nrr_locked', label: 'NRR locked', color: 'var(--primary, #1F3A2E)' },
+              { key: 'flex_bar',   label: 'Flex / BAR', color: 'var(--terracotta, #B8542A)' },
+              { key: 'promo',      label: 'Promo',      color: '#8C7A4E' },
+              { key: 'packageRev', label: 'Package',    color: '#5C9BB5' },
+              { key: 'other',      label: 'Other',      color: '#A0A0A0' },
+            ]}
+            height={180}
+            empty={{ title: 'No 2026 data' }} />
+        </Container>
       </div>
 
       {/* Section 2 — discount-timing heat-table */}
