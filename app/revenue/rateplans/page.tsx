@@ -305,6 +305,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
                     <th style={{ ...thStyle, textAlign: 'right' }}>HB · nights</th>
                     <th style={{ ...thStyle, textAlign: 'right' }}>HB · ADR</th>
                     <th style={{ ...thStyle, textAlign: 'right' }}>BB premium (vs RO)</th>
+                    <th style={{ ...thStyle, textAlign: 'right' }}>Total revenue</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -321,6 +322,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
                         <td style={tdNum}>{hb ? hb.nights : '—'}</td>
                         <td style={tdNum}>{hb ? money(hb.adr, sym) : '—'}</td>
                         <td style={tdNum}>{premium != null ? money(premium, sym) : '—'}</td>
+                        <td style={tdNum}>{money((bb?.revenue ?? 0) + (ro?.revenue ?? 0) + (hb?.revenue ?? 0), sym)}</td>
                       </tr>
                     );
                   })}
