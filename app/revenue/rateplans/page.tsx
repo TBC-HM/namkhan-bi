@@ -54,7 +54,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     nrrMonthly, leadTime, mealCompare, promoImpact, restrictions, sleeping, orphans, classifiedCount, cashTiming,
   ] = await Promise.all([
     supabase.from('v_rate_plan_nrr_kpis_monthly')
-      .select('month, bookings_active, bookings_nrr, bookings_nrr_locked, bookings_advance_purchase, bookings_flex, bookings_flex_bucket, bookings_semi_flex, bookings_promo, bookings_package, bookings_other, bookings_ro, bookings_with_meal, revenue_total, revenue_nrr, revenue_nrr_locked, revenue_advance_purchase, revenue_flex, revenue_flex_bucket, revenue_promo, revenue_package, revenue_other, revenue_ro, revenue_bb, cash_collected_nrr, cash_collected_total, cancel_rate_nrr_pct, cancel_rate_flex_pct, adr_nrr, adr_flex, avg_lead_nrr, avg_lead_flex')
+      .select('month, bookings_active, bookings_nrr, bookings_nrr_locked, bookings_advance_purchase, bookings_flex, bookings_flex_bucket, bookings_semi_flex, bookings_promo, bookings_package, bookings_other, bookings_ro, bookings_with_meal, revenue_total, revenue_nrr, revenue_nrr_locked, revenue_advance_purchase, revenue_flex, revenue_flex_bucket, revenue_promo, revenue_package, revenue_other, revenue_ro, revenue_bb, room_nights_ro, room_nights_flex_bucket, cash_collected_nrr, cash_collected_total, cancel_rate_nrr_pct, cancel_rate_flex_pct, adr_nrr, adr_flex, avg_lead_nrr, avg_lead_flex')
       .eq('property_id', pid)
       .gte('month', ytdStart).lt('month', '2027-01-01')
       .order('month').then((r) => r.data ?? []),
@@ -105,6 +105,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     revenue_package: number; revenue_other: number;
     revenue_ro: number;
     revenue_nrr: number; revenue_advance_purchase: number; revenue_flex: number;
+    room_nights_ro: number; room_nights_flex_bucket: number;
     cash_collected_nrr: number;
   };
   const totals = (nrrMonthly as Array<Record<string, unknown>>).filter((r) => String(r.month) < ytdEndExclusive).reduce<NrrTotals>((acc, r) => {
@@ -126,12 +127,14 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     acc.revenue_package           += Number(r.revenue_package ?? 0);
     acc.revenue_other             += Number(r.revenue_other ?? 0);
     acc.revenue_ro                += Number(r.revenue_ro ?? 0);
+    acc.room_nights_ro            += Number(r.room_nights_ro ?? 0);
+    acc.room_nights_flex_bucket   += Number(r.room_nights_flex_bucket ?? 0);
     acc.revenue_nrr               += Number(r.revenue_nrr ?? 0);
     acc.revenue_advance_purchase  += Number(r.revenue_advance_purchase ?? 0);
     acc.revenue_flex              += Number(r.revenue_flex ?? 0);
     acc.cash_collected_nrr        += Number(r.cash_collected_nrr ?? 0);
     return acc;
-  }, { bookings_active: 0, bookings_nrr_locked: 0, bookings_flex_bucket: 0, bookings_promo: 0, bookings_package: 0, bookings_other: 0, bookings_ro: 0, bookings_with_meal: 0, bookings_nrr: 0, bookings_advance_purchase: 0, bookings_flex: 0, revenue_total: 0, revenue_nrr_locked: 0, revenue_flex_bucket: 0, revenue_promo: 0, revenue_package: 0, revenue_other: 0, revenue_ro: 0, revenue_nrr: 0, revenue_advance_purchase: 0, revenue_flex: 0, cash_collected_nrr: 0 });
+  }, { bookings_active: 0, bookings_nrr_locked: 0, bookings_flex_bucket: 0, bookings_promo: 0, bookings_package: 0, bookings_other: 0, bookings_ro: 0, bookings_with_meal: 0, bookings_nrr: 0, bookings_advance_purchase: 0, bookings_flex: 0, revenue_total: 0, revenue_nrr_locked: 0, revenue_flex_bucket: 0, revenue_promo: 0, revenue_package: 0, revenue_other: 0, revenue_ro: 0, revenue_nrr: 0, revenue_advance_purchase: 0, revenue_flex: 0, room_nights_ro: 0, room_nights_flex_bucket: 0, cash_collected_nrr: 0 });
 
   // PBS 2026-05-31 #66 — mutually-exclusive revenue buckets summing to 100% + Room Only (meal-plan dimension)
   const nrrLockedShare = totals.revenue_total > 0 ? 100 * totals.revenue_nrr_locked  / totals.revenue_total : 0;
@@ -141,6 +144,10 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
   const otherShare     = totals.revenue_total > 0 ? 100 * totals.revenue_other       / totals.revenue_total : 0;
   const roShareBookings = totals.bookings_active > 0 ? 100 * totals.bookings_ro / totals.bookings_active : 0;
   const roShareRevenue  = totals.revenue_total   > 0 ? 100 * totals.revenue_ro / totals.revenue_total : 0;
+  // PBS 2026-05-31 #74 — YTD revenue loss of RO vs BAR/Flex (= (Flex ADR − RO ADR) × RO nights)
+  const adrRoYtd   = totals.room_nights_ro          > 0 ? totals.revenue_ro          / totals.room_nights_ro          : 0;
+  const adrFlexYtd = totals.room_nights_flex_bucket > 0 ? totals.revenue_flex_bucket / totals.room_nights_flex_bucket : 0;
+  const roLossVsBar = totals.room_nights_ro > 0 && adrFlexYtd > 0 ? (adrFlexYtd - adrRoYtd) * totals.room_nights_ro : 0;
 
   // PBS 2026-05-31 #67 — chart data for 3 top graphs (RO 2026 · NRR vs BAR vs BB · all rate-plan buckets)
   const chartRows2026 = (nrrMonthly as Array<Record<string, unknown>>)
@@ -189,7 +196,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     { label: 'Promo',       value: `${promoShare.toFixed(1)}%`,     size: 'sm', footnote: `${money(totals.revenue_promo, sym)} · promotional rates`, status: promoShare >= 10 ? 'amber' : 'grey' },
     { label: 'Package',     value: `${packageShare.toFixed(1)}%`,   size: 'sm', footnote: `${money(totals.revenue_package, sym)} · packages + retreats` },
     { label: 'Other',       value: `${otherShare.toFixed(1)}%`,     size: 'sm', footnote: `${money(totals.revenue_other, sym)} · corporate / member / group / comp` },
-    { label: 'Room Only',   value: `${roShareBookings.toFixed(1)}%`,size: 'sm', footnote: totals.bookings_ro === 0 ? `0 of ${totals.bookings_active} bookings · property doesn''t tag RO in rate names` : `${totals.bookings_ro} of ${totals.bookings_active} bookings · ${roShareRevenue.toFixed(1)}% of revenue` },
+    { label: 'Room Only',   value: `${roShareBookings.toFixed(1)}%`,size: 'sm', footnote: totals.bookings_ro === 0 ? `0 of ${totals.bookings_active} bookings · property doesn''t tag RO in rate names` : `${totals.room_nights_ro} RN · ${totals.bookings_ro}/${totals.bookings_active} bk · loss vs BAR ${money(roLossVsBar, sym)} (${roShareRevenue.toFixed(1)}% of rev)` },
     { label: 'NRR cash collected YTD', value: mewsCashHidden ? '—' : money(totals.cash_collected_nrr, sym), size: 'sm', footnote: mewsCashHidden ? 'Mews payment sync pending' : 'paid_amount sum · cash banked' },
   ];
 
