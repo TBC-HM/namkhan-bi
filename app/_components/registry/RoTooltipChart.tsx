@@ -24,7 +24,7 @@ export default function RoTooltipChart({ data, sym }: Props) {
   return (
     <Chart
       variant="line"
-      data={data}
+      data={data as unknown as Record<string, unknown>[]}
       xKey="month"
       series={[
         { key: 'ro',    label: `RO revenue (${sym})`,    color: 'var(--primary, #1F3A2E)' },
