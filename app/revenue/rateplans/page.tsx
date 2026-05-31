@@ -53,7 +53,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     nrrMonthly, leadTime, mealCompare, promoImpact, restrictions, sleeping, orphans, classifiedCount,
   ] = await Promise.all([
     supabase.from('v_rate_plan_nrr_kpis_monthly')
-      .select('month, bookings_active, bookings_nrr, bookings_advance_purchase, bookings_flex, bookings_semi_flex, bookings_promo, revenue_total, revenue_nrr, revenue_advance_purchase, revenue_flex, revenue_promo, cash_collected_nrr, cash_collected_total, cancel_rate_nrr_pct, cancel_rate_flex_pct, adr_nrr, adr_flex, avg_lead_nrr, avg_lead_flex')
+      .select('month, bookings_active, bookings_nrr, bookings_nrr_locked, bookings_advance_purchase, bookings_flex, bookings_flex_bucket, bookings_semi_flex, bookings_promo, bookings_package, bookings_other, bookings_ro, bookings_with_meal, revenue_total, revenue_nrr, revenue_nrr_locked, revenue_advance_purchase, revenue_flex, revenue_flex_bucket, revenue_promo, revenue_package, revenue_other, revenue_ro, cash_collected_nrr, cash_collected_total, cancel_rate_nrr_pct, cancel_rate_flex_pct, adr_nrr, adr_flex, avg_lead_nrr, avg_lead_flex')
       .eq('property_id', pid)
       .gte('month', ytdStart).lt('month', ytdEndExclusive)
       .order('month').then((r) => r.data ?? []),
@@ -89,40 +89,62 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
 
   // Aggregate Section 1 KPIs across YTD — explicit accumulator type so tsc doesn't widen acc to unknown
   type NrrTotals = {
-    bookings_active: number; bookings_nrr: number; bookings_advance_purchase: number;
-    bookings_flex: number; bookings_promo: number;
-    revenue_total: number; revenue_nrr: number; revenue_advance_purchase: number;
-    revenue_flex: number; revenue_promo: number; cash_collected_nrr: number;
+    bookings_active: number;
+    bookings_nrr_locked: number; bookings_flex_bucket: number; bookings_promo: number;
+    bookings_package: number; bookings_other: number;
+    bookings_ro: number; bookings_with_meal: number;
+    bookings_nrr: number; bookings_advance_purchase: number; bookings_flex: number;
+    revenue_total: number;
+    revenue_nrr_locked: number; revenue_flex_bucket: number; revenue_promo: number;
+    revenue_package: number; revenue_other: number;
+    revenue_ro: number;
+    revenue_nrr: number; revenue_advance_purchase: number; revenue_flex: number;
+    cash_collected_nrr: number;
   };
   const totals = (nrrMonthly as Array<Record<string, unknown>>).reduce<NrrTotals>((acc, r) => {
     acc.bookings_active           += Number(r.bookings_active ?? 0);
+    acc.bookings_nrr_locked       += Number(r.bookings_nrr_locked ?? 0);
+    acc.bookings_flex_bucket      += Number(r.bookings_flex_bucket ?? 0);
+    acc.bookings_promo            += Number(r.bookings_promo ?? 0);
+    acc.bookings_package          += Number(r.bookings_package ?? 0);
+    acc.bookings_other            += Number(r.bookings_other ?? 0);
+    acc.bookings_ro               += Number(r.bookings_ro ?? 0);
+    acc.bookings_with_meal        += Number(r.bookings_with_meal ?? 0);
     acc.bookings_nrr              += Number(r.bookings_nrr ?? 0);
     acc.bookings_advance_purchase += Number(r.bookings_advance_purchase ?? 0);
     acc.bookings_flex             += Number(r.bookings_flex ?? 0);
-    acc.bookings_promo            += Number(r.bookings_promo ?? 0);
     acc.revenue_total             += Number(r.revenue_total ?? 0);
+    acc.revenue_nrr_locked        += Number(r.revenue_nrr_locked ?? 0);
+    acc.revenue_flex_bucket       += Number(r.revenue_flex_bucket ?? 0);
+    acc.revenue_promo             += Number(r.revenue_promo ?? 0);
+    acc.revenue_package           += Number(r.revenue_package ?? 0);
+    acc.revenue_other             += Number(r.revenue_other ?? 0);
+    acc.revenue_ro                += Number(r.revenue_ro ?? 0);
     acc.revenue_nrr               += Number(r.revenue_nrr ?? 0);
     acc.revenue_advance_purchase  += Number(r.revenue_advance_purchase ?? 0);
     acc.revenue_flex              += Number(r.revenue_flex ?? 0);
-    acc.revenue_promo             += Number(r.revenue_promo ?? 0);
     acc.cash_collected_nrr        += Number(r.cash_collected_nrr ?? 0);
     return acc;
-  }, { bookings_active: 0, bookings_nrr: 0, bookings_advance_purchase: 0, bookings_flex: 0, bookings_promo: 0, revenue_total: 0, revenue_nrr: 0, revenue_advance_purchase: 0, revenue_flex: 0, revenue_promo: 0, cash_collected_nrr: 0 });
+  }, { bookings_active: 0, bookings_nrr_locked: 0, bookings_flex_bucket: 0, bookings_promo: 0, bookings_package: 0, bookings_other: 0, bookings_ro: 0, bookings_with_meal: 0, bookings_nrr: 0, bookings_advance_purchase: 0, bookings_flex: 0, revenue_total: 0, revenue_nrr_locked: 0, revenue_flex_bucket: 0, revenue_promo: 0, revenue_package: 0, revenue_other: 0, revenue_ro: 0, revenue_nrr: 0, revenue_advance_purchase: 0, revenue_flex: 0, cash_collected_nrr: 0 });
 
-  const nrrShareBookings = totals.bookings_active > 0 ? 100 * totals.bookings_nrr / totals.bookings_active : 0;
-  const nrrShareRevenue  = totals.revenue_total > 0 ? 100 * totals.revenue_nrr / totals.revenue_total : 0;
-  const apShareRevenue   = totals.revenue_total > 0 ? 100 * totals.revenue_advance_purchase / totals.revenue_total : 0;
-  const promoShareRevenue= totals.revenue_total > 0 ? 100 * totals.revenue_promo / totals.revenue_total : 0;
-  const flexShareRevenue = totals.revenue_total > 0 ? 100 * totals.revenue_flex / totals.revenue_total : 0;
+  // PBS 2026-05-31 #66 — mutually-exclusive revenue buckets summing to 100% + Room Only (meal-plan dimension)
+  const nrrLockedShare = totals.revenue_total > 0 ? 100 * totals.revenue_nrr_locked  / totals.revenue_total : 0;
+  const flexShare      = totals.revenue_total > 0 ? 100 * totals.revenue_flex_bucket / totals.revenue_total : 0;
+  const promoShare     = totals.revenue_total > 0 ? 100 * totals.revenue_promo       / totals.revenue_total : 0;
+  const packageShare   = totals.revenue_total > 0 ? 100 * totals.revenue_package     / totals.revenue_total : 0;
+  const otherShare     = totals.revenue_total > 0 ? 100 * totals.revenue_other       / totals.revenue_total : 0;
+  const roShareBookings = totals.bookings_active > 0 ? 100 * totals.bookings_ro / totals.bookings_active : 0;
+  const roShareRevenue  = totals.revenue_total   > 0 ? 100 * totals.revenue_ro / totals.revenue_total : 0;
 
   const mewsCashHidden = pid === PROPERTY_ID_DONNA; // Mews sync doesn't deliver paid_amount
 
   const strip: KpiTileProps[] = [
-    { label: 'NRR share · bookings', value: `${nrrShareBookings.toFixed(1)}%`, size: 'sm', footnote: `${totals.bookings_nrr} NRR · ${totals.bookings_active} total YTD`, status: nrrShareBookings >= 30 ? 'green' : nrrShareBookings >= 15 ? 'amber' : 'grey' },
-    { label: 'NRR share · revenue', value: `${nrrShareRevenue.toFixed(1)}%`, size: 'sm', footnote: `${money(totals.revenue_nrr, sym)} of ${money(totals.revenue_total, sym)}` },
-    { label: 'Advance-purchase rev', value: `${apShareRevenue.toFixed(1)}%`, size: 'sm', footnote: `${money(totals.revenue_advance_purchase, sym)} · early-bird capture` },
-    { label: 'Flex share · revenue', value: `${flexShareRevenue.toFixed(1)}%`, size: 'sm', footnote: `${money(totals.revenue_flex, sym)} kept flexible` },
-    { label: 'Promo share · revenue', value: `${promoShareRevenue.toFixed(1)}%`, size: 'sm', footnote: `${money(totals.revenue_promo, sym)} via promotions`, status: promoShareRevenue >= 10 ? 'amber' : 'grey' },
+    { label: 'NRR locked',  value: `${nrrLockedShare.toFixed(1)}%`, size: 'sm', footnote: `${money(totals.revenue_nrr_locked, sym)} · NRR + Advance Purchase`, status: nrrLockedShare >= 30 ? 'green' : nrrLockedShare >= 15 ? 'amber' : 'grey' },
+    { label: 'Flex',        value: `${flexShare.toFixed(1)}%`,      size: 'sm', footnote: `${money(totals.revenue_flex_bucket, sym)} · Flex + Semi-Flex` },
+    { label: 'Promo',       value: `${promoShare.toFixed(1)}%`,     size: 'sm', footnote: `${money(totals.revenue_promo, sym)} · promotional rates`, status: promoShare >= 10 ? 'amber' : 'grey' },
+    { label: 'Package',     value: `${packageShare.toFixed(1)}%`,   size: 'sm', footnote: `${money(totals.revenue_package, sym)} · packages + retreats` },
+    { label: 'Other',       value: `${otherShare.toFixed(1)}%`,     size: 'sm', footnote: `${money(totals.revenue_other, sym)} · corporate / member / group / comp` },
+    { label: 'Room Only',   value: `${roShareBookings.toFixed(1)}%`,size: 'sm', footnote: `${totals.bookings_ro} of ${totals.bookings_active} bookings · ${roShareRevenue.toFixed(1)}% of revenue` },
     { label: 'NRR cash collected YTD', value: mewsCashHidden ? '—' : money(totals.cash_collected_nrr, sym), size: 'sm', footnote: mewsCashHidden ? 'Mews payment sync pending' : 'paid_amount sum · cash banked' },
   ];
 
