@@ -197,7 +197,6 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     { label: 'Package',     value: `${packageShare.toFixed(1)}%`,   size: 'sm', footnote: `${money(totals.revenue_package, sym)} · packages + retreats` },
     { label: 'Other',       value: `${otherShare.toFixed(1)}%`,     size: 'sm', footnote: `${money(totals.revenue_other, sym)} · corporate / member / group / comp` },
     { label: 'Room Only',   value: `${roShareBookings.toFixed(1)}%`,size: 'sm', footnote: totals.bookings_ro === 0 ? `0 of ${totals.bookings_active} bookings · property doesn''t tag RO in rate names` : `${totals.room_nights_ro} RN · ${totals.bookings_ro}/${totals.bookings_active} bk · loss vs BAR ${money(roLossVsBar, sym)} (${roShareRevenue.toFixed(1)}% of rev)` },
-    { label: 'NRR cash collected YTD', value: mewsCashHidden ? '—' : money(totals.cash_collected_nrr, sym), size: 'sm', footnote: mewsCashHidden ? 'Mews payment sync pending' : 'paid_amount sum · cash banked' },
   ];
 
   // Section 2 — discount timing heat-table (rows = lead bucket, columns = rate_kind, cell = ADR)
