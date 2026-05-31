@@ -135,20 +135,22 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     { key: 'advance_purchase', label: 'Advance Purchase' },
     { key: 'promo',            label: 'Promo' },
   ];
-  const leadIndex: Record<string, Record<string, { adr: number; bookings: number; revenue: number }>> = {};
+  // PBS 2026-05-31 #65 — ADR must be SUM(revenue) / SUM(room_nights), NOT / bookings. Donna long-stays exposed the bug: 0-7d × NRR showed €1309 (rev/bookings) instead of €394 (rev/nights).
+  const leadIndex: Record<string, Record<string, { adr: number; bookings: number; nights: number; revenue: number }>> = {};
   (leadTime as Array<Record<string, unknown>>).forEach((r) => {
     const lb = String(r.lead_bucket); const rk = String(r.rate_kind);
     leadIndex[lb] = leadIndex[lb] ?? {};
     const existing = leadIndex[lb][rk];
+    const bookings = Number(r.bookings ?? 0);
+    const nights   = Number(r.room_nights ?? 0);
+    const revenue  = Number(r.revenue ?? 0);
     if (!existing) {
-      leadIndex[lb][rk] = { adr: Number(r.adr ?? 0), bookings: Number(r.bookings ?? 0), revenue: Number(r.revenue ?? 0) };
+      leadIndex[lb][rk] = { adr: Number(r.adr ?? 0), bookings, nights, revenue };
     } else {
-      // Multiple months in YTD — weighted-avg ADR by nights, but we don't have nights here. Use revenue-weighted ADR fallback.
-      const a = existing.revenue + Number(r.revenue ?? 0);
-      const b = existing.bookings + Number(r.bookings ?? 0);
-      existing.adr = b > 0 ? a / Math.max(1, b) : existing.adr; // approximation
-      existing.bookings = b;
-      existing.revenue = a;
+      existing.bookings += bookings;
+      existing.nights   += nights;
+      existing.revenue  += revenue;
+      existing.adr      = existing.nights > 0 ? existing.revenue / existing.nights : existing.adr;
     }
   });
 
