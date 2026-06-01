@@ -161,7 +161,7 @@ export default async function PickupPage({ propertyId }: Props = {}) {
       title="Revenue · Pickup matrix"
       subtitle={`12-month forward pickup grid · ${matrix?.property ?? 'Property ' + pid} · capacity ${matrix?.capacity ?? '—'} rooms`}
       tabs={tabs}
-      action={matrix ? <PickupActions property={matrix.property} asOfDate={matrix.asOfDate} /> : undefined}
+      action={matrix ? <PickupActions property={matrix.property} asOfDate={matrix.asOfDate} data={matrix} /> : undefined}
     >
       <style>{`
         @media print {
