@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Container, Chart, type ChartSeries } from '@/app/(cockpit)/_design';
 import { createClient } from '@/lib/supabase/client';
 import { formatValue, safeText } from './format';
+import ExpandableTableRows from './ExpandableTableRows';
 import {
   parseSort, propertyCurrencySymbol, stripPublicPrefix,
   type ContainerRegistryRow, type DataRow,
@@ -148,13 +149,21 @@ export default function ContainerMonthTable({ container, propertyId }: Props) {
           No rows for {selectedMonth ? monthLabel(selectedMonth) : 'this property'}.
         </div>
       ) : (
-        <Chart
-          variant="table"
-          data={formattedRows}
-          xKey={xKey}
-          series={series}
-          empty={{ title: 'No rows' }}
-        />
+        (container.max_rows ?? 0) > 0 ? (
+          <ExpandableTableRows
+            rows={formattedRows}
+            cols={cols.map((c) => ({ key: c.key, label: c.label, align: c.align as 'left'|'right'|'center'|undefined }))}
+            maxRows={container.max_rows ?? 5}
+          />
+        ) : (
+          <Chart
+            variant="table"
+            data={formattedRows}
+            xKey={xKey}
+            series={series}
+            empty={{ title: 'No rows' }}
+          />
+        )
       )}
     </Container>
   );
