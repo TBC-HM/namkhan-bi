@@ -1,12 +1,13 @@
 // app/revenue/markets/page.tsx
-// PBS 2026-06-01 #97 — Country / market dimension page for tactical rev-mgmt.
-// 5 sections: (1) Top 8 country KPI tiles · (2) Country × stay-month heatmap-table ·
-// (3) Country × room-type heatmap-table · (4) Country × LOS distribution · (5) Country × lead-time distribution.
-// All views read from pms.v_reservations (silver, both PMSs, guest_country_iso2 normalized).
+// PBS 2026-05-29 #98 — Country / market dimension.
+// Sections: (1) Top 8 country KPI tiles WITH SDLY YoY · (2) Revenue share donut ·
+// (3) TY vs LY paired bars · (4) Lead-time stacked bar · (5) Stay-month heatmap ·
+// (6) Room-type heatmap · (7) LOS distribution · (8) Lead-time table.
+// All aggregation in gold layer (v_country_* views) — page is thin mapping only.
 
 import {
-  DashboardPage, Container, KpiTile,
-  type DashboardTab, type KpiTileProps,
+  DashboardPage, Container, KpiTile, Chart,
+  type DashboardTab, type KpiTileProps, type ChartSeries,
 } from '@/app/(cockpit)/_design';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import { REVENUE_SUBPAGES } from '../_subpages';
@@ -19,7 +20,6 @@ const PROPERTY_ID_DONNA = 1000001;
 
 interface Props { propertyId?: number }
 
-// Minimal ISO2 → display label
 const COUNTRY_NAMES: Record<string, string> = {
   US: 'USA', GB: 'UK', DE: 'Germany', FR: 'France', IT: 'Italy', ES: 'Spain',
   CH: 'Switzerland', AT: 'Austria', NL: 'Netherlands', SE: 'Sweden', NO: 'Norway',
@@ -32,16 +32,11 @@ const COUNTRY_NAMES: Record<string, string> = {
 };
 function countryLabel(iso2: string): string { return COUNTRY_NAMES[iso2] ?? iso2; }
 
-// Heatmap intensity → cell background. Maps 0..max → cream → forest.
 function heatColor(v: number, max: number): string {
   if (!max || v <= 0) return 'transparent';
   const t = Math.min(1, v / max);
-  // Gradient from var(--bg) F4EFE2 to var(--primary) 1F3A2E
   const lerp = (a: number, b: number) => Math.round(a + (b - a) * t);
-  const r = lerp(244, 31);
-  const g = lerp(239, 58);
-  const b = lerp(226, 46);
-  return `rgb(${r}, ${g}, ${b})`;
+  return `rgb(${lerp(244, 31)}, ${lerp(239, 58)}, ${lerp(226, 46)})`;
 }
 function heatTextColor(v: number, max: number): string {
   return max && v / max > 0.55 ? '#FFFFFF' : 'var(--ink, #1B1B1B)';
@@ -50,6 +45,15 @@ function heatTextColor(v: number, max: number): string {
 const thStyle: React.CSSProperties = { padding: '6px 10px', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: 10, color: 'var(--ink-soft, #5A5A5A)', background: 'var(--bg, #F4EFE2)', fontWeight: 700, whiteSpace: 'nowrap' };
 const tdNum: React.CSSProperties = { padding: '6px 8px', fontSize: 11, textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', borderRight: '1px solid var(--hairline, #E6DFCC)' };
 const tdLabel: React.CSSProperties = { padding: '6px 10px', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', position: 'sticky', left: 0, background: 'var(--paper, #FFFFFF)', zIndex: 1, borderRight: '1px solid var(--hairline, #E6DFCC)' };
+
+const LEAD_BUCKETS_ORDERED = ['0-7d', '8-30d', '31-60d', '61-120d', '120d+'] as const;
+const LEAD_COLORS: Record<typeof LEAD_BUCKETS_ORDERED[number], string> = {
+  '0-7d':    '#C62828',
+  '8-30d':   '#EF6C00',
+  '31-60d':  '#F9A825',
+  '61-120d': '#558B2F',
+  '120d+':   '#1F3A2E',
+};
 
 export default async function MarketsPage({ propertyId }: Props = {}) {
   const pid = propertyId ?? PROPERTY_ID;
@@ -61,12 +65,24 @@ export default async function MarketsPage({ propertyId }: Props = {}) {
 
   type Rows = Array<Record<string, unknown>>;
 
-  const [summary, stayMonth, roomType, losDist, leadDist] = await Promise.all([
+  const [summary, revShare, tyVsLy, leadStack, stayMonth, roomType, losDist, leadDist] = await Promise.all([
     supabase.from('v_country_market_summary')
-      .select('guest_country_iso2, bookings, room_nights, revenue, adr, avg_los, avg_lead_days, top_channel, top_source')
+      .select('guest_country_iso2, bookings, room_nights, revenue, adr, avg_los, avg_lead_days, ly_revenue, revenue_yoy_pct, rn_yoy_pct, top_channel, top_source')
       .eq('property_id', pid)
       .order('revenue', { ascending: false })
       .limit(40)
+      .then((r) => r.data ?? []),
+    supabase.from('v_country_revenue_share')
+      .select('label, revenue, pct_of_total')
+      .eq('property_id', pid)
+      .then((r) => r.data ?? []),
+    supabase.from('v_country_ty_vs_ly')
+      .select('label, ty_revenue, ly_revenue')
+      .eq('property_id', pid)
+      .then((r) => r.data ?? []),
+    supabase.from('v_country_lead_stack')
+      .select('label, lead_bucket, bookings, pct')
+      .eq('property_id', pid)
       .then((r) => r.data ?? []),
     supabase.from('v_country_stay_month_heatmap')
       .select('guest_country_iso2, stay_month, bookings, room_nights, revenue, adr, avg_los')
@@ -86,20 +102,68 @@ export default async function MarketsPage({ propertyId }: Props = {}) {
       .then((r) => r.data ?? []),
   ]);
 
-  // Top 8 countries by YTD revenue → KPI strip
-  const top8 = (summary as Rows).slice(0, 8);
   const moneyFmt = (n: number) => `${sym}${Math.round(n).toLocaleString('en-US')}`;
+
+  // ── KPI strip — top 8 countries with SDLY delta ─────────────────────────
+  const top8 = (summary as Rows).slice(0, 8);
   const strip: KpiTileProps[] = top8.map((r) => {
     const iso = String(r.guest_country_iso2 ?? '');
+    const yoy = Number(r.revenue_yoy_pct ?? 0);
     return {
       label: countryLabel(iso),
       value: moneyFmt(Number(r.revenue ?? 0)),
       size: 'sm',
+      delta: {
+        value: yoy,
+        period: 'vs LY same window',
+        direction: yoy > 0.5 ? 'up' : yoy < -0.5 ? 'down' : 'flat',
+        isGoodWhenUp: true,
+      },
       footnote: `${Number(r.room_nights ?? 0)} RN · ADR ${moneyFmt(Number(r.adr ?? 0))} · LOS ${Number(r.avg_los ?? 0).toFixed(1)} · lead ${Number(r.avg_lead_days ?? 0)}d · ${String(r.top_channel ?? '—')}`,
     };
   });
 
-  // Country × stay-month heatmap — rows = top 12 countries by lifetime revenue, cols = next 12 months
+  // ── Revenue share donut ─────────────────────────────────────────────────
+  const revShareData = (revShare as Rows).map((r) => ({
+    label: String(r.label),
+    revenue: Number(r.revenue ?? 0),
+    pct_of_total: Number(r.pct_of_total ?? 0),
+  })) as unknown as Record<string, unknown>[];
+
+  // ── TY vs LY paired bars (top 10) ───────────────────────────────────────
+  const tyLyData = (tyVsLy as Rows).slice(0, 10).map((r) => ({
+    label: countryLabel(String(r.label)),
+    ty_revenue: Number(r.ty_revenue ?? 0),
+    ly_revenue: Number(r.ly_revenue ?? 0),
+  })) as unknown as Record<string, unknown>[];
+  const tyLySeries: ChartSeries[] = [
+    { key: 'ty_revenue', label: '2026 YTD', color: '#1F3A2E' },
+    { key: 'ly_revenue', label: '2025 same window', color: '#B3A78A' },
+  ];
+
+  // ── Lead-time stacked (pivot long→wide) ─────────────────────────────────
+  type LeadWide = { label: string; total: number } & Record<string, string | number>;
+  const leadWide = new Map<string, LeadWide>();
+  (leadStack as Rows).forEach((r) => {
+    const lbl = String(r.label);
+    if (!leadWide.has(lbl)) {
+      leadWide.set(lbl, { label: countryLabel(lbl), total: 0,
+        '0-7d': 0, '8-30d': 0, '31-60d': 0, '61-120d': 0, '120d+': 0,
+      });
+    }
+    const w = leadWide.get(lbl)!;
+    const bkt = String(r.lead_bucket);
+    w[bkt] = Number(r.pct ?? 0);
+    w.total += Number(r.bookings ?? 0);
+  });
+  const leadStackData = Array.from(leadWide.values())
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 10) as unknown as Record<string, unknown>[];
+  const leadStackSeries: ChartSeries[] = LEAD_BUCKETS_ORDERED.map((b) => ({
+    key: b, label: b, color: LEAD_COLORS[b],
+  }));
+
+  // ── Stay-month heatmap (rows=top 12, cols=months) ───────────────────────
   const top12 = (summary as Rows).slice(0, 12).map((r) => String(r.guest_country_iso2));
   const monthsSet = new Set<string>();
   (stayMonth as Rows).forEach((r) => monthsSet.add(String(r.stay_month)));
@@ -107,8 +171,7 @@ export default async function MarketsPage({ propertyId }: Props = {}) {
   type StayCell = { rn: number; rev: number; adr: number };
   const stayMap = new Map<string, StayCell>();
   (stayMonth as Rows).forEach((r) => {
-    const k = `${r.guest_country_iso2}|${r.stay_month}`;
-    stayMap.set(k, {
+    stayMap.set(`${r.guest_country_iso2}|${r.stay_month}`, {
       rn:  Number(r.room_nights ?? 0),
       rev: Number(r.revenue ?? 0),
       adr: Number(r.adr ?? 0),
@@ -116,15 +179,14 @@ export default async function MarketsPage({ propertyId }: Props = {}) {
   });
   const maxStayRn = Math.max(0, ...Array.from(stayMap.values()).map((c) => c.rn));
 
-  // Country × room-type heatmap
+  // ── Room-type heatmap ───────────────────────────────────────────────────
   const roomTypesSet = new Set<string>();
   (roomType as Rows).forEach((r) => roomTypesSet.add(String(r.room_type_name)));
   const roomTypesArr = Array.from(roomTypesSet).sort();
   type RtCell = { rn: number; rev: number; adr: number };
   const rtMap = new Map<string, RtCell>();
   (roomType as Rows).forEach((r) => {
-    const k = `${r.guest_country_iso2}|${r.room_type_name}`;
-    rtMap.set(k, {
+    rtMap.set(`${r.guest_country_iso2}|${r.room_type_name}`, {
       rn:  Number(r.room_nights ?? 0),
       rev: Number(r.revenue ?? 0),
       adr: Number(r.adr ?? 0),
@@ -132,7 +194,7 @@ export default async function MarketsPage({ propertyId }: Props = {}) {
   });
   const maxRtRn = Math.max(0, ...Array.from(rtMap.values()).map((c) => c.rn));
 
-  // LOS distribution — top 8 countries × 5 buckets
+  // ── LOS + lead tables ───────────────────────────────────────────────────
   const LOS_BUCKETS = ['1-2 nights','3-5 nights','6-7 nights','8-14 nights','15+ nights'];
   type LosCell = { bookings: number; rn: number };
   const losMap = new Map<string, LosCell>();
@@ -153,15 +215,51 @@ export default async function MarketsPage({ propertyId }: Props = {}) {
   return (
     <DashboardPage
       title="Revenue · Markets"
-      subtitle={`Origin-country dimension · top 40 countries · ${(summary as Rows).length} active · YTD ${new Date().getUTCFullYear()}`}
+      subtitle={`Origin-country dimension · top 40 countries · ${(summary as Rows).length} active · YTD ${new Date().getUTCFullYear()} · all aggregation in gold layer`}
       tabs={tabs}
     >
-      {/* KPI strip — top 8 countries */}
+      {/* KPI strip — top 8 with SDLY delta */}
       <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: `repeat(${Math.max(1, strip.length)}, minmax(0, 1fr))`, gap: 8, marginBottom: 12 }}>
         {strip.map((t, i) => <KpiTile key={i} {...t} />)}
       </div>
 
-      {/* Section 1 — Country × Stay-month heatmap */}
+      {/* Three graphs row */}
+      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 12 }}>
+        <Container title="Revenue share · top 10 + Other (YTD)"
+                   subtitle="Where the money came from this year">
+          <Chart variant="donut"
+                 data={revShareData}
+                 xKey="label"
+                 yKey="revenue"
+                 height={260}
+                 legend="right"
+                 empty={{ title: 'No revenue this YTD' }}/>
+        </Container>
+
+        <Container title="2026 YTD vs 2025 same window · top 10"
+                   subtitle={`Paired bars · LY = same calendar window 1 year ago · ${sym}`}>
+          <Chart variant="bar"
+                 data={tyLyData}
+                 xKey="label"
+                 series={tyLySeries}
+                 height={260}
+                 legend="top"
+                 empty={{ title: 'No LY comparison data' }}/>
+        </Container>
+
+        <Container title="Booking-window mix · top 10 countries"
+                   subtitle="Stacked % per origin · long lead = early-bird friendly · 120d+ green good · 0-7d red last-minute">
+          <Chart variant="stacked_bar"
+                 data={leadStackData}
+                 xKey="label"
+                 series={leadStackSeries}
+                 height={260}
+                 legend="top"
+                 empty={{ title: 'No lead-time data' }}/>
+        </Container>
+      </div>
+
+      {/* Section — Country × Stay-month heatmap */}
       <div style={{ gridColumn: '1 / -1' }}>
         <Container title="Country × stay-month · room-night intensity (next 12 months)"
                    subtitle="Heat = RN volume · darker green = more · cell shows ADR · use to spot demand pockets per origin segment">
@@ -195,7 +293,7 @@ export default async function MarketsPage({ propertyId }: Props = {}) {
         </Container>
       </div>
 
-      {/* Section 2 — Country × Room-type heatmap */}
+      {/* Section — Country × Room-type heatmap */}
       <div style={{ gridColumn: '1 / -1' }}>
         <Container title="Country × room-type · room-night intensity (YTD)"
                    subtitle="Which countries gravitate to which inventory · darker = more · hover for revenue + ADR">
@@ -229,7 +327,7 @@ export default async function MarketsPage({ propertyId }: Props = {}) {
         </Container>
       </div>
 
-      {/* Section 3 + 4 side-by-side */}
+      {/* Section — LOS + lead-time tables */}
       <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 12 }}>
         <Container title="Country × LOS distribution" subtitle="Per-country booking count by length-of-stay bucket">
           <div style={{ overflowX: 'auto' }}>
