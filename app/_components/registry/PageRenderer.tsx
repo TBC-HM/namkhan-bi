@@ -125,13 +125,20 @@ export default async function PageRenderer({ pageSlug, propertyId, title, subtit
           // containers (long tables) below in a 2-up grid. fullRow lets each
           // group span the DashboardPage body width.
           const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
+          // PBS 2026-06-01 #81 — three render rows: (1) graph_registry items, (2) container_registry render_type=chart items in a sister row directly below at same size, (3) remaining containers in 2-up grid.
           const graphItems     = items.filter((it) => it.kind === 'graph');
-          const containerItems = items.filter((it) => it.kind === 'container');
+          const chartContainerItems = items.filter((it) => it.kind === 'container' && it.container?.render_type === 'chart');
+          const containerItems = items.filter((it) => it.kind === 'container' && it.container?.render_type !== 'chart');
           return (
             <>
               {graphItems.length > 0 && (
                 <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
                   {graphItems.map((it, idx) => renderItem(it, idx))}
+                </div>
+              )}
+              {chartContainerItems.length > 0 && (
+                <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
+                  {chartContainerItems.map((it, idx) => renderItem(it, idx))}
                 </div>
               )}
               {containerItems.length > 0 && (
