@@ -233,8 +233,8 @@ const S: Record<string, CSSProperties> = {
   table: {
     borderCollapse: 'separate',
     borderSpacing: 0,
-    width: '100%',
-    minWidth: 1280,
+    width: 'auto',
+    minWidth: 0,
     fontFamily: 'inherit',
     fontSize: 10,
     background: PAPER,
