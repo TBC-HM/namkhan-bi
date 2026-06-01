@@ -212,6 +212,7 @@ const REVENUE_CFG: DeptCfg = {
     { label: 'Rooms',      href: '/revenue/rooms'     },
     { label: 'Channels',   href: '/revenue/channels'  },
     { label: 'Rate Plans', href: '/revenue/rateplans' },
+    { label: 'Markets',    href: '/revenue/markets'   },
     // PBS 2026-05-15: Pricing renamed to Calendar; the page now hosts
     // two tabs: Pricing (rate grid) + Density (country-holidays overlay).
     { label: 'Calendar',   href: '/revenue/pricing'   },
