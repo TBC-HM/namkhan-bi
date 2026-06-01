@@ -273,9 +273,9 @@ const S: Record<string, CSSProperties> = {
   rowHead: {
     padding: '2px 6px',
     textAlign: 'left',
-    minWidth: 64,
-    width: 64,
-    maxWidth: 64,
+    minWidth: 84,
+    width: 84,
+    maxWidth: 84,
     borderRight: `1px solid ${HAIRLINE}`,
     color: INK,
     verticalAlign: 'middle',
@@ -307,5 +307,5 @@ const S: Record<string, CSSProperties> = {
   },
   frozen: { position: 'sticky', left: 0, zIndex: 1 },
   // PBS 2026-06-01 #90 — frozen header cell needs its own width cap (body rowHead alone wasn't enough)
-  frozenHead: { zIndex: 3, top: 0, minWidth: 64, width: 64, maxWidth: 64, overflow: 'hidden', textOverflow: 'ellipsis' },
+  frozenHead: { zIndex: 3, top: 0, minWidth: 84, width: 84, maxWidth: 84, overflow: 'hidden', textOverflow: 'ellipsis' },
 };
