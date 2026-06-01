@@ -215,7 +215,8 @@ function DeltaCell({ d, metric, kind, borderTop }: { d: PickupDelta | undefined;
   const c = deltaCell(d, metric, kind);
   // Tinted background only — no chip border, no fill change on tone='mute'.
   const bg = c.tone === 'good' ? '#E8F2E4' : c.tone === 'bad' ? '#F7E2DC' : 'transparent';
-  const fg = c.tone === 'good' ? '#1F3A2E' : c.tone === 'bad' ? '#8A2A1D' : INK_SOFT;
+  // PBS 2026-06-01: brighter green for positive deltas + keep red for negative
+  const fg = c.tone === 'good' ? '#2E7D32' : c.tone === 'bad' ? '#C62828' : INK_SOFT;
   return (
     <td style={{ ...S.td, borderTop, background: bg, color: fg, fontStyle: c.tone === 'mute' ? 'italic' : 'normal' }}>
       {c.text}
@@ -243,8 +244,8 @@ const S: Record<string, CSSProperties> = {
   groupTh: {
     padding: '6px 10px',
     textAlign: 'center',
-    color: INK,
-    fontWeight: 700,
+    color: '#000000',
+    fontWeight: 800,
     fontSize: 10,
     letterSpacing: '0.1em',
     textTransform: 'uppercase',
@@ -255,8 +256,8 @@ const S: Record<string, CSSProperties> = {
   headerTh: {
     padding: '5px 8px',
     textAlign: 'right',
-    color: INK,
-    fontWeight: 600,
+    color: '#000000',
+    fontWeight: 700,
     fontSize: 10,
     letterSpacing: '0.02em',
     background: PAPER,
@@ -287,8 +288,8 @@ const S: Record<string, CSSProperties> = {
     whiteSpace: 'nowrap',
     fontVariantNumeric: 'tabular-nums',
     height: 18,
-    maxWidth: 56,
-    minWidth: 44,
+    maxWidth: 72,
+    minWidth: 52,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   },
