@@ -102,7 +102,7 @@ export default function PickupMatrix({ data }: Props) {
         <thead>
           <tr>
             <th style={{ ...S.groupTh, ...S.frozen, ...S.frozenHead, textAlign: 'left' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: INK }}>As of {data.asOfDate}</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: INK, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{data.asOfDate}</div>
               {data.stalenessNote && (
                 <div style={{ fontSize: 10, color: INK_SOFT, marginTop: 2, fontStyle: 'italic' }}>{data.stalenessNote}</div>
               )}
@@ -114,7 +114,7 @@ export default function PickupMatrix({ data }: Props) {
             <th style={S.groupTh} colSpan={2}>SDLY · {data.sdlyDate}</th>
           </tr>
           <tr>
-            <th style={{ ...S.headerTh, ...S.frozen, ...S.frozenHead, textAlign: 'left' }}>Month · Metric</th>
+            <th style={{ ...S.headerTh, ...S.frozen, ...S.frozenHead, textAlign: 'left' }}>Period</th>
             <th style={S.headerTh}>2023 RO</th>
             <th style={S.headerTh}>2024 RO</th>
             <th style={S.headerTh}>2025 RO</th>
@@ -306,5 +306,6 @@ const S: Record<string, CSSProperties> = {
     letterSpacing: '0.04em',
   },
   frozen: { position: 'sticky', left: 0, zIndex: 1 },
-  frozenHead: { zIndex: 3, top: 0 },
+  // PBS 2026-06-01 #90 — frozen header cell needs its own width cap (body rowHead alone wasn't enough)
+  frozenHead: { zIndex: 3, top: 0, minWidth: 64, width: 64, maxWidth: 64, overflow: 'hidden', textOverflow: 'ellipsis' },
 };
