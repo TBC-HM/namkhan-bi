@@ -30,6 +30,7 @@ export interface ContainerRegistryRow {
   default_sort: string | null;
   property_scope: PropertyScope;
   active: boolean;
+  max_rows: number | null;
 }
 
 export interface GraphRegistryRow {
