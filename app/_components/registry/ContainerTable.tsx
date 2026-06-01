@@ -6,6 +6,7 @@
 import { Container, Chart, type ChartSeries } from '@/app/(cockpit)/_design';
 import { supabase } from '@/lib/supabase';
 import { formatValue, safeText } from './format';
+import ExpandableTableRows from './ExpandableTableRows';
 import {
   parseSort, propertyCurrencySymbol, stripPublicPrefix,
   type ContainerRegistryRow, type DataRow,
@@ -93,16 +94,26 @@ export default async function ContainerTable({ container, propertyId, searchPara
     );
   }
 
+  // PBS 2026-06-01 #80 — when container.max_rows is set, render an expandable table (first N + "show more")
+  const useExpandable = (container.max_rows ?? 0) > 0;
   return (
     <Container title={container.container_name} subtitle={container.subtitle ?? undefined}>
       {yearPills}
-      <Chart
-        variant="table"
-        data={formattedRows}
-        xKey={xKey}
-        series={series}
-        empty={{ title: 'No rows', hint: view }}
-      />
+      {useExpandable ? (
+        <ExpandableTableRows
+          rows={formattedRows}
+          cols={cols.map((c) => ({ key: c.key, label: c.label, align: c.align as 'left'|'right'|'center'|undefined }))}
+          maxRows={container.max_rows ?? 5}
+        />
+      ) : (
+        <Chart
+          variant="table"
+          data={formattedRows}
+          xKey={xKey}
+          series={series}
+          empty={{ title: 'No rows', hint: view }}
+        />
+      )}
     </Container>
   );
 }
