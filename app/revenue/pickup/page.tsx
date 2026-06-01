@@ -43,11 +43,13 @@ export default async function PickupPage({ propertyId }: Props = {}) {
       .then((r) => r.data ?? []),
     supabase.from('v_pickup_30d')
       .select('stay_date, otb_rooms, otb_rooms_7d_ago, otb_rooms_30d_ago')
+      .eq('property_id', pid)
       .gte('stay_date', todayIso)
       .order('stay_date')
       .then((r) => r.data ?? []),
     supabase.from('v_pickup_velocity_28d')
       .select('day, bookings_made, ma_7d, bucket')
+      .eq('property_id', pid)
       .order('day')
       .then((r) => r.data ?? []),
     supabase.from('v_chart_pace_comparison')
