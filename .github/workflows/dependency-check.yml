@@ -1,7 +1,17 @@
 name: Dependency Check
 
 # Cockpit Health Arm — daily npm audit + outdated check.
-# Fails the run on high/critical vulns; outdated is informational.
+# Fails the run on CRITICAL vulns. High/moderate are tracked in GitHub issues
+# but do not fail CI — see 2026-06-03 audit decision in claude_md v3.9 §0.16.
+#
+# Residual accepted-risk inventory (re-evaluate when bumping Next major):
+#   high     · next DoS triad   — Image Optimizer remotePatterns / RSC HTTP /
+#                                  rewrites smuggling. All require Next 16.x
+#                                  (breaking App Router changes — separate bump).
+#                                  Vercel edge rate-limit mitigates DoS class.
+#   high     · xlsx              — Prototype Pollution + ReDoS. NO upstream fix
+#                                  published. Attack surface = our own exports.
+#   moderate · postcss           — Transitive via Next; resolves with Next 16.x.
 
 on:
   schedule:
@@ -21,7 +31,11 @@ jobs:
 
       - run: npm ci
 
-      - name: npm audit (high+critical)
+      - name: npm audit (critical only)
+        run: npm audit --audit-level=critical
+
+      - name: npm audit (high informational, no gate)
+        continue-on-error: true
         run: npm audit --audit-level=high
 
       - name: Outdated check
