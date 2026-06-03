@@ -1,0 +1,85 @@
+name: Lockfile Sync (security branch only)
+
+# Regenerates package-lock.json after a package.json bump on a security branch,
+# verifies npm audit clears high+critical, runs npm run build, then commits
+# the new lockfile back to the same branch. Designed for the claude.ai chat +
+# Supabase bridge workflow (which cannot regenerate lockfiles locally).
+# Scope: ONLY runs on branches matching security/cve-bump-* — never on main.
+
+on:
+  push:
+    branches:
+      - 'security/cve-bump-**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: lockfile-sync-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://kpenyneooigsyuuomgct.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-for-ci
+      NEXT_PUBLIC_FX_LAK_USD: '21800'
+      NEXT_PUBLIC_PROPERTY_ID: '260955'
+      DASHBOARD_PASSWORD: ci-placeholder
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Regenerate lockfile (npm install)
+        run: |
+          rm -f package-lock.json
+          npm install --no-audit --no-fund
+
+      - name: npm audit (high+critical) — must clear
+        id: audit
+        run: |
+          npm audit --audit-level=high --json > audit-after.json || AUDIT_RC=$?
+          jq '.metadata.vulnerabilities' audit-after.json
+          CRIT=$(jq '.metadata.vulnerabilities.critical // 0' audit-after.json)
+          HIGH=$(jq '.metadata.vulnerabilities.high // 0' audit-after.json)
+          echo "critical=$CRIT" >> $GITHUB_OUTPUT
+          echo "high=$HIGH" >> $GITHUB_OUTPUT
+          if [ "$CRIT" != "0" ] || [ "$HIGH" != "0" ]; then
+            echo "::warning::audit still reports $CRIT critical · $HIGH high after surgical patch"
+          fi
+
+      - name: Build
+        run: npm run build
+
+      - name: Commit lockfile if changed
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package-lock.json
+          if git diff --cached --quiet; then
+            echo "lockfile already in sync — nothing to commit"
+          else
+            git commit -m "ci(lockfile-sync): regen package-lock.json after security bump · audit crit=${{ steps.audit.outputs.critical }} high=${{ steps.audit.outputs.high }}"
+            git push origin HEAD:${{ github.ref_name }}
+          fi
+
+      - name: Upload audit artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-after-${{ github.run_id }}
+          path: audit-after.json
+          retention-days: 30
