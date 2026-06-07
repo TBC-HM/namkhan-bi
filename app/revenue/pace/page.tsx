@@ -165,6 +165,9 @@ export default async function PacePage({
   propertyId?: number;
 }) {
   const pid = propertyId ?? PROPERTY_ID;
+  const PROPERTY_ID_DONNA = 1000001;
+  const sym: string = pid === PROPERTY_ID_DONNA ? '€' : '$';
+  const moneyCurrency: 'USD' | 'EUR' = pid === PROPERTY_ID_DONNA ? 'EUR' : 'USD';
   const win = parseWin(searchParams.win);
   const gran = parseGran(searchParams.gran);
   const period = resolvePeriod({ win, cmp: searchParams.cmp });
@@ -234,13 +237,13 @@ export default async function PacePage({
       footnote: period.label,
     },
     {
-      label: 'OTB Revenue', value: tileRev, currency: 'USD', size: 'sm',
+      label: 'OTB Revenue', value: tileRev, currency: moneyCurrency, size: 'sm',
       delta: cmpActive && tileStlyRev > 0 ? { value: pctChange(tileRev, tileStlyRev), period: cmpLabel,
         direction: tileRev >= tileStlyRev ? 'up' : 'down' } : undefined,
       footnote: period.label,
     },
     {
-      label: 'OTB ADR', value: Math.round(tileAdr), currency: 'USD', size: 'sm',
+      label: 'OTB ADR', value: Math.round(tileAdr), currency: moneyCurrency, size: 'sm',
       delta: cmpActive && tileStlyAdr > 0 ? { value: pctChange(tileAdr, tileStlyAdr), period: cmpLabel,
         direction: tileAdr >= tileStlyAdr ? 'up' : 'down' } : undefined,
     },
@@ -291,7 +294,7 @@ export default async function PacePage({
   const bucketTable = buckets.map((b) => ({
     bucket:   formatLabel(b.key),
     rns:      b.rns.toLocaleString('en-US'),
-    rev:      `$${Math.round(b.rev).toLocaleString('en-US')}`,
+    rev:      `${sym}${Math.round(b.rev).toLocaleString('en-US')}`,
     occ:      b.capacity > 0 ? `${((b.rns / b.capacity) * 100).toFixed(1)}%` : '—',
     cxl:      b.cxl,
     stly_pct: b.stlyRn > 0 ? `${Math.round((b.rns / b.stlyRn) * 100)}%` : '—',
@@ -349,7 +352,7 @@ export default async function PacePage({
       </div>
 
       <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, alignItems: 'stretch' }}>
-      <Container title="Booking pace curve" subtitle="rooms occupied per day · Actual (green) · OTB (brass) · STLY (grey) · Budget (orange) — window −30d → +30d, ticks below as MM-DD">
+      <Container title="Booking pace curve" subtitle="Daily rooms occupied · −30d to +30d window">
         <Chart
           variant="line"
           data={paceCurveData}
@@ -360,28 +363,28 @@ export default async function PacePage({
         />
       </Container>
 
-      <Container title="OTB by stay-bucket · with STLY % overlay" subtitle={`Confirmed room nights + OTB ÷ STLY at same lead time · ${gran}`}>
+      <Container title="OTB by stay-bucket · with STLY % overlay" subtitle={`Bars = TY confirmed RN · Line = TY ÷ STLY at same lead time · per ${gran}`}>
         <Chart
-          variant="bar"
+          variant="combo"
           data={bucketBar}
           xKey="bucket"
           series={[
-            { key: 'rns',      label: 'Rooms',  color: '#1F3A2E' },
-            { key: 'stly_pct', label: 'STLY %', color: '#B8A878' },
+            { key: 'rns',      label: 'Rooms',  color: '#1F3A2E', yAxisId: 'left',  type: 'bar' },
+            { key: 'stly_pct', label: 'STLY %', color: '#B8A878', yAxisId: 'right', type: 'line' },
           ]}
           height={260}
           empty={{ title: 'No on-the-books in this window' }}
         />
       </Container>
 
-      <Container title={`Pace by stay-bucket · ${buckets.length} ${gran}${buckets.length === 1 ? '' : 's'}`} subtitle="v_otb_pace · mv_kpi_daily">
+      <Container title={`Pace by stay-bucket · ${buckets.length} ${gran}${buckets.length === 1 ? '' : 's'}`} subtitle={`forward window · grouped per ${gran}`}>
         <Chart
           variant="table"
           data={bucketTable}
           xKey="bucket"
           series={[
             { key: 'rns',      label: 'RNs' },
-            { key: 'rev',      label: 'Rev (USD)' },
+            { key: 'rev',      label: 'Revenue' },
             { key: 'occ',      label: 'Occ %' },
             { key: 'cxl',      label: 'Cxl' },
             { key: 'stly_pct', label: 'STLY %' },
@@ -435,8 +438,8 @@ export default async function PacePage({
                           <td style={tdN}>{Number(r.room_nights ?? 0).toLocaleString('en-US')}</td>
                           <td style={tdN}>{r.ly_room_nights == null ? '—' : Number(r.ly_room_nights).toLocaleString('en-US')}</td>
                           <td style={{ ...tdN, color: rnColor, fontWeight: 600 }}>{rnVar == null ? '—' : `${rnVar > 0 ? '+' : ''}${rnVar.toFixed(1)}%`}</td>
-                          <td style={tdN}>${Math.round(Number(r.revenue ?? 0)).toLocaleString('en-US')}</td>
-                          <td style={tdN}>{r.ly_revenue == null ? '—' : `$${Math.round(Number(r.ly_revenue)).toLocaleString('en-US')}`}</td>
+                          <td style={tdN}>{sym}{Math.round(Number(r.revenue ?? 0)).toLocaleString('en-US')}</td>
+                          <td style={tdN}>{r.ly_revenue == null ? '—' : `${sym}${Math.round(Number(r.ly_revenue)).toLocaleString('en-US')}`}</td>
                           <td style={{ ...tdN, color: revColor, fontWeight: 600 }}>{revVar == null ? '—' : `${revVar > 0 ? '+' : ''}${revVar.toFixed(1)}%`}</td>
                         </tr>
                       );
