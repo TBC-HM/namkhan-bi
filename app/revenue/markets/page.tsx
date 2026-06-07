@@ -58,6 +58,7 @@ const LEAD_COLORS: Record<typeof LEAD_BUCKETS_ORDERED[number], string> = {
 export default async function MarketsPage({ propertyId }: Props = {}) {
   const pid = propertyId ?? PROPERTY_ID;
   const sym  = pid === PROPERTY_ID_DONNA ? '€' : '$';
+  const curYear = new Date().getUTCFullYear();
   const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
   const tabs: DashboardTab[] = subPages.map((s) => ({
     key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/markets'),
@@ -137,8 +138,8 @@ export default async function MarketsPage({ propertyId }: Props = {}) {
     ly_revenue: Number(r.ly_revenue ?? 0),
   })) as unknown as Record<string, unknown>[];
   const tyLySeries: ChartSeries[] = [
-    { key: 'ty_revenue', label: '2026 YTD', color: '#1F3A2E' },
-    { key: 'ly_revenue', label: '2025 same window', color: '#B3A78A' },
+    { key: 'ty_revenue', label: `${curYear} YTD`, color: '#1F3A2E' },
+    { key: 'ly_revenue', label: `${curYear - 1} same window`, color: '#B3A78A' },
   ];
 
   // ── Lead-time stacked (pivot long→wide) ─────────────────────────────────
@@ -215,7 +216,7 @@ export default async function MarketsPage({ propertyId }: Props = {}) {
   return (
     <DashboardPage
       title="Revenue · Markets"
-      subtitle={`Origin-country dimension · top 40 countries · ${(summary as Rows).length} active · YTD ${new Date().getUTCFullYear()} · all aggregation in gold layer`}
+      subtitle={`Origin-country dimension · top 40 countries · ${(summary as Rows).length} active · YTD ${new Date().getUTCFullYear()}`}
       tabs={tabs}
     >
       {/* KPI strip — top 8 with SDLY delta */}
@@ -236,7 +237,7 @@ export default async function MarketsPage({ propertyId }: Props = {}) {
                  empty={{ title: 'No revenue this YTD' }}/>
         </Container>
 
-        <Container title="2026 YTD vs 2025 same window · top 10"
+        <Container title={`${curYear} YTD vs ${curYear - 1} same window · top 10`}
                    subtitle={`Paired bars · LY = same calendar window 1 year ago · ${sym}`}>
           <Chart variant="bar"
                  data={tyLyData}
@@ -248,7 +249,7 @@ export default async function MarketsPage({ propertyId }: Props = {}) {
         </Container>
 
         <Container title="Booking-window mix · top 10 countries"
-                   subtitle="Stacked % per origin · long lead = early-bird friendly · 120d+ green good · 0-7d red last-minute">
+                   subtitle="Stacked % per origin · long lead = early-bird friendly">
           <Chart variant="stacked_bar"
                  data={leadStackData}
                  xKey="label"
