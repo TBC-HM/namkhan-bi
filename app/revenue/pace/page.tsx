@@ -445,7 +445,6 @@ export default async function PacePage({
                       <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>LY Total Revenue</th>
                       <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>Rev var %</th>
                     </tr>
-                  </thead>
                       </thead>
                       <tbody>
                         {yearRows.map((r) => {
