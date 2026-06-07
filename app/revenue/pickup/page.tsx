@@ -47,8 +47,8 @@ export default async function PickupPage({ propertyId }: Props = {}) {
       .gte('stay_date', todayIso)
       .order('stay_date')
       .then((r) => r.data ?? []),
-    supabase.from('v_pickup_velocity_28d')
-      .select('day, bookings_made, ma_7d, bucket')
+    supabase.from('v_pickup_velocity_15d30d')
+      .select('day, day_pos, pickup_ota, pickup_direct, pickup_other, pickup_total, sdly_ota, sdly_direct, sdly_total, ma_7d')
       .eq('property_id', pid)
       .order('day')
       .then((r) => r.data ?? []),
@@ -97,10 +97,10 @@ export default async function PickupPage({ propertyId }: Props = {}) {
     ? next60Days.reduce((s, r) => s + (Number.isFinite(Number(r.yoy_rooms_pct)) ? Number(r.yoy_rooms_pct) : 0), 0) / next60Days.length
     : 0;
 
-  // Velocity — most recent ma_7d + bucket label
-  const lastVel        = (velocity28d as Rows).at(-1) as Record<string, unknown> | undefined;
-  const velMA7d        = Number(lastVel?.ma_7d ?? 0);
-  const velBucket      = String(lastVel?.bucket ?? '');
+  // Velocity — today's row (day_pos = 0) for the 7d MA tile
+  const todayVel       = (velocity28d as Rows).find((r) => Number(r.day_pos) === 0);
+  const velMA7d        = Number(todayVel?.ma_7d ?? 0);
+  const velBucket      = 'rolling 7d';
 
   // Current month forecast (OTB) — pickup_monthly current year+month
   const curY = today.getUTCFullYear();
@@ -149,11 +149,17 @@ export default async function PickupPage({ propertyId }: Props = {}) {
     ly_rn:    Number(r.ly_room_nights ?? 0),
   }));
 
-  // 4) Velocity 28d
+  // 4) Velocity 15d back + 30d forward (TY pickup on past days, SDLY on all days)
   const velocityRows = (velocity28d as Rows).map((r) => ({
     day:           String(r.day).slice(5),
-    bookings_made: Number(r.bookings_made ?? 0),
-    ma_7d:         Number(r.ma_7d ?? 0),
+    pickup_ota:    r.pickup_ota    == null ? null : Number(r.pickup_ota),
+    pickup_direct: r.pickup_direct == null ? null : Number(r.pickup_direct),
+    pickup_other:  r.pickup_other  == null ? null : Number(r.pickup_other),
+    pickup_total:  r.pickup_total  == null ? null : Number(r.pickup_total),
+    sdly_ota:      Number(r.sdly_ota ?? 0),
+    sdly_direct:   Number(r.sdly_direct ?? 0),
+    sdly_total:    Number(r.sdly_total ?? 0),
+    ma_7d:         r.ma_7d         == null ? null : Number(r.ma_7d),
   }));
 
   return (
@@ -217,16 +223,19 @@ export default async function PickupPage({ propertyId }: Props = {}) {
         </Container>
       </div>
 
-      {/* Row 3 — Velocity 28d (full width slim) */}
+      {/* Row 3 — Velocity: 15d back + 30d forward (full width slim) */}
       <div style={{ gridColumn: '1 / -1' }}>
-        <Container title="Pickup velocity · last 28 days"
-                   subtitle="New bookings made per day · 7-day moving average overlay">
-          <Chart variant="bar" data={velocityRows} xKey="day"
+        <Container title="Pickup velocity · last 15d + next 30d"
+                   subtitle="Bars = bookings made per day (OTA + Direct, past only) · lines = same-day-last-year SDLY pickup · hover for split">
+          <Chart variant="combo" data={velocityRows} xKey="day"
             series={[
-              { key: 'bookings_made', label: 'Bookings made/day', color: 'var(--terracotta, #B8542A)' },
-              { key: 'ma_7d',         label: '7-day MA',          color: 'var(--primary, #1F3A2E)' },
+              { key: 'pickup_ota',    label: 'OTA on day',    color: 'var(--primary, #1F3A2E)', type: 'bar',  yAxisId: 'left' },
+              { key: 'pickup_direct', label: 'Direct on day', color: 'var(--terracotta, #B8542A)', type: 'bar',  yAxisId: 'left' },
+              { key: 'sdly_ota',      label: 'SDLY OTA',      color: '#8E8E8E',                   type: 'line', yAxisId: 'left' },
+              { key: 'sdly_direct',   label: 'SDLY Direct',   color: '#C8C0A6',                   type: 'line', yAxisId: 'left' },
+              { key: 'ma_7d',         label: '7d MA (TY)',    color: '#1F3A2E',                   type: 'line', yAxisId: 'left' },
             ]}
-            height={160}
+            height={200}
             empty={{ title: 'No velocity data' }} />
         </Container>
       </div>
