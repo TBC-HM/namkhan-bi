@@ -1,12 +1,14 @@
 // app/revenue/demand/page.tsx
-// 2026-05-23 (#105/#106/#107) — restructured per PBS:
-//   Row 1 (3-up):  Room-nights · Revenue · Delta heat  (3 graphs on top)
-//   Row 2 (full):  OTB headline KPI strip (4 tiles)
-//   Row 3 (full):  Pace signals KPI strip (4 tiles)
-//   Row 4 (full):  Window selector (forward horizon pills)
-//   Row 5 (full):  Pace by check-in month — anchored here, starts Jan-2025
+// 2026-06-07 (#103) — full audit pass per PBS:
+//   · property-aware currency (Donna EUR / Namkhan USD) — was hardcoded USD/$ in 7 spots
+//   · country normalization via silver guest_country_iso2 + ISO2 → display label map
+//   · "Delta heat" was a bar, not a heatmap → renamed
+//   · drop "deferred" / "owed" TODO disclaimers leaking into subtitles
+//   · drop view names from user-facing subtitles
+//   · format Strongest/Softest month as "Jul 2026" not "2026-07-01"
+//   · cleaner RevPAR / Pace signals subtitles
+//   · channel mix "Rest" → "Other"
 // Shared body for /revenue/demand (Namkhan) and /h/[id]/revenue/demand.
-// Legacy preserved at /revenue/demand/legacy.
 
 import {
   DashboardPage, Container, KpiTile, Chart,
@@ -20,6 +22,8 @@ import { PROPERTY_ID, supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
+
+const PROPERTY_ID_DONNA = 1000001;
 
 const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
 const threeUp: React.CSSProperties = {
@@ -40,17 +44,47 @@ interface DemandRow {
   revenue_delta: number;
 }
 
+// ISO2 → display label (subset; unknown codes fall through unchanged).
+const COUNTRY_NAMES: Record<string, string> = {
+  US: 'USA', GB: 'UK', DE: 'Germany', FR: 'France', IT: 'Italy', ES: 'Spain',
+  CH: 'Switzerland', AT: 'Austria', NL: 'Netherlands', SE: 'Sweden', NO: 'Norway',
+  DK: 'Denmark', BE: 'Belgium', LU: 'Luxembourg', PL: 'Poland', IE: 'Ireland',
+  CA: 'Canada', AU: 'Australia', NZ: 'New Zealand', SG: 'Singapore', JP: 'Japan',
+  CN: 'China', KR: 'South Korea', TH: 'Thailand', LA: 'Laos', VN: 'Vietnam',
+  IN: 'India', MY: 'Malaysia', PH: 'Philippines', ID: 'Indonesia', HK: 'Hong Kong',
+  AE: 'UAE', SA: 'Saudi Arabia', IL: 'Israel', BR: 'Brazil', MX: 'Mexico',
+  AR: 'Argentina', CL: 'Chile', ZA: 'South Africa', RU: 'Russia', UA: 'Ukraine',
+};
+function countryLabel(iso2: string): string {
+  if (!iso2 || iso2 === '??' || iso2 === 'Unknown') return 'Unknown';
+  return COUNTRY_NAMES[iso2] ?? iso2;
+}
+
 function fmtInt(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(Number(n))) return '—';
   return Math.round(Number(n)).toLocaleString('en-US');
 }
-function fmtUSD(n: number | null | undefined): string {
+function fmtMoney(n: number | null | undefined, sym: string): string {
   if (n == null || !Number.isFinite(Number(n))) return '—';
-  return '$' + Math.round(Number(n)).toLocaleString('en-US');
+  return sym + Math.round(Number(n)).toLocaleString('en-US');
 }
 function fmtSigned(n: number): string {
   const sign = n > 0 ? '+' : n < 0 ? '−' : '';
   return `${sign}${Math.abs(n).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+}
+function fmtSignedMoney(n: number, sym: string): string {
+  const sign = n > 0 ? '+' : n < 0 ? '−' : '';
+  return `${sign}${sym}${Math.abs(Math.round(n)).toLocaleString('en-US')}`;
+}
+// "2026-07" or "2026-07-01" → "Jul 2026"
+function fmtMonthLabel(ci_month: string | null | undefined): string {
+  if (!ci_month) return '—';
+  const s = String(ci_month);
+  const yy = s.slice(0, 4);
+  const mm = Number(s.slice(5, 7));
+  if (!Number.isFinite(mm) || mm < 1 || mm > 12) return s;
+  const NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${NAMES[mm - 1]} ${yy}`;
 }
 
 interface Props {
@@ -60,6 +94,8 @@ interface Props {
 
 export default async function DemandPage({ searchParams, propertyId }: Props = {}) {
   const pid = propertyId ?? PROPERTY_ID;
+  const sym: string = pid === PROPERTY_ID_DONNA ? '€' : '$';
+  const moneyCurrency: 'USD' | 'EUR' = pid === PROPERTY_ID_DONNA ? 'EUR' : 'USD';
   const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
   const tabs: DashboardTab[] = subPages.map((s) => ({
     key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/demand'),
@@ -67,7 +103,6 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
 
   const period = resolvePeriod(searchParams ?? {});
   const [pace, losDist, bwDist, losWindow, countryLW, sdly, chanMix, actualsMonthly] = await Promise.all([
-    // ↓ existing 5 (kept verbatim — only line replaced is the await header above)
     getPaceOtb(period, pid).catch(() => [] as Record<string, unknown>[]),
     supabase.from('v_chart_los_distribution').select('los_bucket, bucket_order, total_reservations, total_revenue, adr, share_pct').eq('property_id', pid).order('bucket_order'),
     supabase.from('v_chart_booking_window_distribution').select('booking_window_bucket, bucket_order, total_reservations, total_revenue, adr, share_pct').eq('property_id', pid).order('bucket_order'),
@@ -77,7 +112,7 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
     supabase.from('v_chart_channel_mix_monthly').select('ci_month, ota_bookings, direct_bookings, rest_bookings').eq('property_id', pid).gte('ci_month', '2024-01').order('ci_month'),
     supabase.from('v_chart_actuals_monthly').select('ci_month, roomnights, revenue, adr, occ_pct').eq('property_id', pid).order('ci_month'),
   ]);
-  // PBS 2026-05-26: actualsMonthly destructured above as 8th Promise.all result.
+
   const allRows: DemandRow[] = (pace as Array<Record<string, unknown>>).map((r) => ({
     ci_month:         String(r.ci_month),
     otb_roomnights:   Number(r.otb_roomnights || 0),
@@ -87,9 +122,6 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
     stly_revenue:     Number(r.stly_revenue || 0),
     revenue_delta:    Number(r.revenue_delta || 0),
   }));
-
-  // PBS 2026-05-26: pace table = all forward months from mv_pace_otb (CURRENT month → ~12 months forward).
-  // mv_pace_otb is forward-only by design — there's no historical pace bucket here.
   const rows = allRows;
   const paceTableRows = allRows;
 
@@ -115,14 +147,12 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
         direction: paceDeltaRn >= 0 ? 'up' : 'down' } : undefined,
       footnote: period.label,
       status: paceDeltaRn >= 0 ? 'green' : 'red' },
-    { label: 'OTB Revenue', value: Math.round(total.rev), currency: 'USD', size: 'sm',
+    { label: 'OTB Revenue', value: Math.round(total.rev), currency: moneyCurrency, size: 'sm',
       delta: total.stlyRev > 0 ? { value: revDeltaPct, period: 'STLY',
         direction: revDelta >= 0 ? 'up' : 'down' } : undefined,
       footnote: period.label,
       status: revDelta >= 0 ? 'green' : 'red' },
-    // PBS 2026-05-26: replaced redundant "Pace Δ" absolute tiles (same as % delta in tiles 1+2)
-    // with two NEW forward-window KPIs that aren't shown anywhere else.
-    { label: 'OTB ADR (fwd)', value: total.otb > 0 ? Math.round(total.rev / total.otb) : 0, currency: 'USD', size: 'sm',
+    { label: 'OTB ADR (fwd)', value: total.otb > 0 ? Math.round(total.rev / total.otb) : 0, currency: moneyCurrency, size: 'sm',
       footnote: 'forward avg rate on the books',
       status: 'grey' },
     { label: 'Months on books', value: rows.length, size: 'sm',
@@ -132,10 +162,10 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
   const signals: KpiTileProps[] = [
     { label: 'Months ahead of pace', value: monthsAhead, size: 'sm', footnote: 'Δ RN > 0', status: monthsAhead > 0 ? 'green' : 'grey' },
     { label: 'Months behind', value: monthsBehind, size: 'sm', footnote: 'Δ RN < 0', status: monthsBehind === 0 ? 'green' : 'amber' },
-    { label: 'Strongest month', value: best ? best.ci_month : '—', size: 'sm',
+    { label: 'Strongest month', value: best ? fmtMonthLabel(best.ci_month) : '—', size: 'sm',
       footnote: best ? `${fmtSigned(best.roomnights_delta)} RN vs STLY` : 'no data',
       status: best ? 'green' : 'grey' },
-    { label: 'Softest month', value: worst ? worst.ci_month : '—', size: 'sm',
+    { label: 'Softest month', value: worst ? fmtMonthLabel(worst.ci_month) : '—', size: 'sm',
       footnote: worst ? `${fmtSigned(worst.roomnights_delta)} RN vs STLY` : 'no data',
       status: worst ? (worst.roomnights_delta < 0 ? 'amber' : 'green') : 'grey' },
   ];
@@ -150,24 +180,6 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
   const revSeries: ChartSeries[] = [
     { key: 'otb_rev',  label: 'OTB revenue', color: '#1F3A2E' },
     { key: 'stly_rev', label: 'STLY revenue', color: '#B8542A' },
-  ];
-
-  const tableRows = paceTableRows.map((r) => ({
-    ci_month:  r.ci_month,
-    otb_rn:    fmtInt(r.otb_roomnights),
-    stly_rn:   fmtInt(r.stly_roomnights),
-    rn_delta:  fmtSigned(r.roomnights_delta),
-    otb_rev:   fmtUSD(r.otb_revenue),
-    stly_rev:  fmtUSD(r.stly_revenue),
-    rev_delta: fmtSigned(r.revenue_delta) + ' $',
-  }));
-  const tableCols: ChartSeries[] = [
-    { key: 'otb_rn',    label: 'OTB RN' },
-    { key: 'stly_rn',   label: 'STLY RN' },
-    { key: 'rn_delta',  label: 'Δ RN' },
-    { key: 'otb_rev',   label: 'OTB Rev' },
-    { key: 'stly_rev',  label: 'STLY Rev' },
-    { key: 'rev_delta', label: 'Δ Rev' },
   ];
 
   const basePath = pid !== PROPERTY_ID ? `/h/${pid}/revenue/demand` : '/revenue/demand';
@@ -189,9 +201,6 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
       subtitle={`Find the gap before the calendar gets soft · ${period.label} · ${rows.length} month${rows.length === 1 ? '' : 's'} on the books`}
       tabs={tabs}
     >
-      {/* PBS #189 (2026-05-24): Window selector merged INTO the OTB headline container —
-          one container, two stacked rows. Saves vertical space + keeps the horizon control
-          immediately above the tiles it filters. */}
       <div style={fullRow}>
         <Container title="OTB headline" subtitle={`forward window · ${period.label}`} density="compact">
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}>
@@ -215,33 +224,30 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
         </Container>
       </div>
 
-      {/* Row 3 · Pace signals KPI strip */}
       <div style={fullRow}>
-        <Container title="Pace signals" subtitle="month-level distribution" density="compact">
+        <Container title="Pace signals" subtitle="where the year is ahead vs behind STLY" density="compact">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
             {signals.map((t, i) => <KpiTile key={i} {...t} />)}
           </div>
         </Container>
       </div>
 
-      {/* Row 4 · 3 graphs (3-up, equal size) */}
       <div style={threeUp}>
         <Container title="Room-nights · OTB vs STLY" subtitle="by check-in month">
           <Chart variant="line" data={trendData} xKey="ci_month" series={trendSeries} height={220}
             empty={{ title: 'No demand rows', hint: 'mv_pace_otb returned 0 rows' }} />
         </Container>
-        <Container title="Revenue · OTB vs STLY" subtitle="by check-in month · USD">
+        <Container title="Revenue · OTB vs STLY" subtitle={`by check-in month · ${moneyCurrency}`}>
           <Chart variant="line" data={revData} xKey="ci_month" series={revSeries} height={220}
             empty={{ title: 'No revenue rows' }} />
         </Container>
-        <Container title="Delta heat · room-nights" subtitle="positive = ahead of STLY">
+        <Container title="Δ Room-nights · monthly vs STLY" subtitle="positive = ahead of STLY · negative = behind">
           <Chart variant="bar" data={deltaData} xKey="ci_month"
             series={[{ key: 'rn_delta', label: 'Δ RN vs STLY', color: '#1F3A2E' }]}
             height={220} empty={{ title: 'No delta rows' }} />
         </Container>
       </div>
 
-      {/* Row 4 · Pace by check-in month — moved under KPIs (#107); positive variance green, negative red (#106) */}
       <div style={fullRow}>
         <Container title={`Pace by check-in month · ${paceTableRows.length} forward month${paceTableRows.length === 1 ? '' : 's'}`} subtitle="forward OTB pace vs STLY (same-time-last-year) · green = ahead · red = behind">
           <div style={{ overflowX: 'auto' }}>
@@ -260,13 +266,13 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
               <tbody>
                 {paceTableRows.map((r) => (
                   <tr key={r.ci_month}>
-                    <td style={{ padding: '6px 8px', borderBottom: '1px solid var(--hairline, #F0EBD8)' }}>{r.ci_month}</td>
+                    <td style={{ padding: '6px 8px', borderBottom: '1px solid var(--hairline, #F0EBD8)' }}>{fmtMonthLabel(r.ci_month)}</td>
                     <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #F0EBD8)', fontVariantNumeric: 'tabular-nums' }}>{fmtInt(r.otb_roomnights)}</td>
                     <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #F0EBD8)', fontVariantNumeric: 'tabular-nums' }}>{fmtInt(r.stly_roomnights)}</td>
                     <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #F0EBD8)', fontVariantNumeric: 'tabular-nums', color: r.roomnights_delta > 0 ? '#1F7A4B' : r.roomnights_delta < 0 ? '#B22222' : 'var(--ink-soft, #5A5A5A)', fontWeight: 600 }}>{fmtSigned(r.roomnights_delta)}</td>
-                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #F0EBD8)', fontVariantNumeric: 'tabular-nums' }}>{fmtUSD(r.otb_revenue)}</td>
-                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #F0EBD8)', fontVariantNumeric: 'tabular-nums' }}>{fmtUSD(r.stly_revenue)}</td>
-                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #F0EBD8)', fontVariantNumeric: 'tabular-nums', color: r.revenue_delta > 0 ? '#1F7A4B' : r.revenue_delta < 0 ? '#B22222' : 'var(--ink-soft, #5A5A5A)', fontWeight: 600 }}>{fmtSigned(r.revenue_delta) + ' $'}</td>
+                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #F0EBD8)', fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(r.otb_revenue, sym)}</td>
+                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #F0EBD8)', fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(r.stly_revenue, sym)}</td>
+                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #F0EBD8)', fontVariantNumeric: 'tabular-nums', color: r.revenue_delta > 0 ? '#1F7A4B' : r.revenue_delta < 0 ? '#B22222' : 'var(--ink-soft, #5A5A5A)', fontWeight: 600 }}>{fmtSignedMoney(r.revenue_delta, sym)}</td>
                   </tr>
                 ))}
                 {paceTableRows.length === 0 && (
@@ -278,11 +284,8 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
         </Container>
       </div>
 
-
-
-      {/* Row 5 · LOS + Booking window distributions (2-up) */}
       <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, alignItems: 'stretch' }}>
-        <Container title="LOS bucket distribution" subtitle="all-time (lifetime aggregate) · reservations by length-of-stay bucket · 25/26 side-by-side comparison is a deeper view rewrite (deferred)">
+        <Container title="LOS bucket distribution" subtitle="all-time · reservations by length-of-stay bucket">
           <Chart variant="bar" data={(losDist.data ?? []).map((r) => ({
             bucket: String((r as Record<string, unknown>).los_bucket ?? ''),
             reservations: Number((r as Record<string, unknown>).total_reservations ?? 0),
@@ -291,7 +294,7 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
             series={[{ key: 'reservations', label: 'Reservations', color: '#1F3A2E' }]}
             height={220} empty={{ title: 'No LOS distribution data' }} />
         </Container>
-        <Container title="Booking window distribution" subtitle="all-time (lifetime aggregate) · reservations by lead-time bucket · 25/26 side-by-side comparison is a deeper view rewrite (deferred)">
+        <Container title="Booking window distribution" subtitle="all-time · reservations by booking-window bucket">
           <Chart variant="bar" data={(bwDist.data ?? []).map((r) => ({
             bucket: String((r as Record<string, unknown>).booking_window_bucket ?? ''),
             reservations: Number((r as Record<string, unknown>).total_reservations ?? 0),
@@ -302,7 +305,6 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
         </Container>
       </div>
 
-      {/* Row 8 · SDLY trends (3-up): ADR · LOS · RevPAR */}
       <div style={threeUp}>
         <Container title="ADR · TY vs LY" subtitle="monthly · by check-in month">
           <Chart variant="line" data={((sdly.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
@@ -328,7 +330,7 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
             ]}
             height={200} empty={{ title: 'No LOS data' }} />
         </Container>
-        <Container title="RevPAR · TY vs LY" subtitle="monthly · rooms-revenue / room-capacity">
+        <Container title="RevPAR · TY vs LY" subtitle="rooms revenue ÷ available room-nights · by month">
           <Chart variant="line" data={((sdly.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
             ci_month: String(r.ci_month),
             ty_revpar: Number(r.ty_revpar ?? 0),
@@ -342,25 +344,23 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
         </Container>
       </div>
 
-      {/* Row 9 · Channel mix monthly trend (full row) */}
       <div style={fullRow}>
-        <Container title="Channel mix · monthly trend" subtitle="OTAs · Direct · Rest (rest = wholesale/group/other)">
+        <Container title="Channel mix · monthly trend" subtitle="OTAs · Direct · Other (wholesale / group / corporate)">
           <Chart variant="line" data={((chanMix.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
             ci_month: String(r.ci_month),
             ota:      Number(r.ota_bookings ?? 0),
             direct:   Number(r.direct_bookings ?? 0),
-            rest:     Number(r.rest_bookings ?? 0),
+            other:    Number(r.rest_bookings ?? 0),
           }))} xKey="ci_month"
             series={[
               { key: 'ota',    label: 'OTAs',   color: '#1F3A2E' },
               { key: 'direct', label: 'Direct', color: '#B8542A' },
-              { key: 'rest',   label: 'Rest',   color: '#B8A878' },
+              { key: 'other',  label: 'Other',  color: '#B8A878' },
             ]}
             height={240} empty={{ title: 'No channel mix data' }} />
         </Container>
       </div>
 
-      {/* Bottom: behaviour heatmaps (PBS #153 + #154 — moved to end of page) */}
       <div style={fullRow}>
         <Container title="LOS × Booking-window correlation" subtitle="x = LOS bucket · y = booking-window bucket · cell intensity = reservation count">
           <Chart variant="heatmap" data={((losWindow.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
@@ -377,7 +377,6 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
       </div>
 
       <div style={fullRow}>
-        {/* PBS 2026-05-26: year filter strip for Country × LOS × Window table — RPC honours p_year. */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center', fontSize: 11 }}>
           <span style={{ color: 'var(--ink-soft, #5A5A5A)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Year:</span>
           {(['all', '2024', '2025', '2026'] as const).map((y) => {
@@ -389,15 +388,15 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
             );
           })}
         </div>
-        <Container title="Country × LOS × Booking-window" subtitle="who books late vs who plans · short-window % flags reactive bookers · top 20 by volume · 90/180/365-day trailing dropdown owed">
+        <Container title="Country × LOS × Booking-window" subtitle="who books late vs who plans · short-window % flags reactive bookers · top 20 by volume">
           <Chart variant="table" data={((countryLW.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
-            country:           String(r.guest_country ?? 'Unknown'),
+            country:           countryLabel(String(r.guest_country ?? '')),
             reservations:      Number(r.reservations ?? 0),
             avg_los:           Number(r.avg_los ?? 0).toFixed(1) + ' n',
             avg_window:        Number(r.avg_window_days ?? 0).toFixed(0) + ' d',
             short_window_pct:  Number(r.short_window_pct ?? 0).toFixed(1) + '%',
             share_pct:         Number(r.share_pct ?? 0).toFixed(1) + '%',
-            adr:               r.adr != null ? `$${Math.round(Number(r.adr)).toLocaleString('en-US')}` : '—',
+            adr:               r.adr != null ? fmtMoney(Number(r.adr), sym) : '—',
           }))}
             xKey="country"
             series={[
@@ -412,9 +411,8 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
         </Container>
       </div>
 
-      {/* PBS 2026-05-26: actuals since opening — mv_kpi_daily rolled up monthly. Donna 2024-03 → present, Namkhan 2019-01 → present. */}
       <div style={fullRow}>
-        <Container title="Actuals since opening · monthly RN + revenue + ADR" subtitle="v_chart_actuals_monthly · realised (past months only) · separate from forward pace above">
+        <Container title="Actuals since opening · monthly RN + revenue + ADR" subtitle="realised (past months only) · separate from forward pace above">
           <Chart variant="combo" data={((actualsMonthly.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
             ci_month: String(r.ci_month),
             roomnights: Number(r.roomnights ?? 0),
