@@ -394,7 +394,7 @@ export default async function PacePage({
       </div>
       {/* #106 — Pace by check-in month (Jan-2025 → forward); RN bar + LY overlay + variance table */}
       <div style={{ gridColumn: '1 / -1', marginTop: 8 }}>
-        <Container title="Pace by check-in month" subtitle="Room-nights on the books per check-in month · Jan-2025 onwards · variance vs LY">
+        <Container title="Pace by check-in month · Total Revenue" subtitle={`Total Revenue (room rate + taxes + fees + ancillary · ${moneyCurrency}) · variance vs LY · click a year to expand`}>
           {paceCiMonthRows.length === 0 ? (
             <div style={{ padding: 14, fontSize: 12, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>
               No data on file for property {pid}.
@@ -412,21 +412,43 @@ export default async function PacePage({
                 ]}
                 height={220}
                 empty={{ title: 'No pace data' }} />
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                  <thead>
-                    <tr style={{ background: '#FAFAF7' }}>
+              {Array.from(new Set(paceCiMonthRows.map((r) => String(r.ci_month).slice(0, 4)))).sort().map((yr) => {
+              const yearRows = paceCiMonthRows.filter((r) => String(r.ci_month).startsWith(yr));
+              const sumRn    = yearRows.reduce((s, r) => s + Number(r.room_nights ?? 0), 0);
+              const sumLyRn  = yearRows.reduce((s, r) => s + Number(r.ly_room_nights ?? 0), 0);
+              const sumRev   = yearRows.reduce((s, r) => s + Number(r.revenue ?? 0), 0);
+              const sumLyRev = yearRows.reduce((s, r) => s + Number(r.ly_revenue ?? 0), 0);
+              const rnPct   = sumLyRn  > 0 ? ((sumRn  - sumLyRn ) / sumLyRn ) * 100 : null;
+              const revPct  = sumLyRev > 0 ? ((sumRev - sumLyRev) / sumLyRev) * 100 : null;
+              const curY    = new Date().getUTCFullYear();
+              const openByDefault = Number(yr) >= curY;
+              const sumPctStyle = (p: number | null): React.CSSProperties => p == null ? {} : { color: p > 0 ? 'var(--status-green, #2E7D32)' : p < 0 ? 'var(--terracotta, #B8542A)' : 'var(--ink-soft, #5A5A5A)', fontWeight: 600 };
+              return (
+                <details key={yr} open={openByDefault} style={{ border: '1px solid var(--hairline, #E6DFCC)', borderRadius: 4, background: 'var(--paper, #FFFFFF)' }}>
+                  <summary style={{ cursor: 'pointer', padding: '8px 12px', fontSize: 12, color: 'var(--ink, #1B1B1B)', background: '#FAFAF7', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>
+                    <strong style={{ marginRight: 12 }}>{yr}</strong>
+                    <span style={{ color: 'var(--ink-soft, #5A5A5A)' }}>{yearRows.length} mo</span>
+                    <span style={{ marginLeft: 12 }}>RN {sumRn.toLocaleString('en-US')}</span>
+                    {rnPct != null && <span style={{ marginLeft: 6, ...sumPctStyle(rnPct) }}>({rnPct > 0 ? '+' : ''}{rnPct.toFixed(1)}%)</span>}
+                    <span style={{ marginLeft: 12 }}>Total Revenue {sym}{Math.round(sumRev).toLocaleString('en-US')}</span>
+                    {revPct != null && <span style={{ marginLeft: 6, ...sumPctStyle(revPct) }}>({revPct > 0 ? '+' : ''}{revPct.toFixed(1)}%)</span>}
+                  </summary>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ background: '#FAFAF7' }}>
                       <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>Month</th>
                       <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>RN</th>
                       <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>LY RN</th>
                       <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>RN var %</th>
-                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>Revenue</th>
-                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>LY Revenue</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>Total Revenue</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>LY Total Revenue</th>
                       <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>Rev var %</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {paceCiMonthRows.map((r) => {
+                      </thead>
+                      <tbody>
+                        {yearRows.map((r) => {
                       const rnVar = r.rn_var_pct == null ? null : Number(r.rn_var_pct);
                       const revVar = r.rev_var_pct == null ? null : Number(r.rev_var_pct);
                       const rnColor = rnVar == null ? 'var(--ink-soft, #5A5A5A)' : rnVar > 0 ? 'var(--status-green, #2E7D32)' : rnVar < 0 ? 'var(--terracotta, #B8542A)' : 'var(--ink-soft, #5A5A5A)';
@@ -444,9 +466,12 @@ export default async function PacePage({
                         </tr>
                       );
                     })}
-                  </tbody>
-                </table>
-              </div>
+                        </tbody>
+                      </table>
+                    </div>
+                  </details>
+                );
+              })}
             </div>
           )}
         </Container>
