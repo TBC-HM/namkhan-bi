@@ -250,19 +250,14 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
         </Container>
       </div>
 
-      <div style={threeUp}>
-        <Container title="Room-nights · OTB vs STLY" subtitle="by check-in month · gap between lines = Δ shown in bar chart →">
+      <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 10, alignItems: 'stretch' }}>
+        <Container title="Room-nights · OTB vs STLY" subtitle="by check-in month">
           <Chart variant="line" data={trendData} xKey="ci_month" series={trendSeries} height={220}
             empty={{ title: 'No demand rows', hint: 'mv_pace_otb returned 0 rows' }} />
         </Container>
         <Container title="Revenue · OTB vs STLY" subtitle={`by check-in month · ${moneyCurrency}`}>
           <Chart variant="line" data={revData} xKey="ci_month" series={revSeries} height={220}
             empty={{ title: 'No revenue rows' }} />
-        </Container>
-        <Container title="Δ Room-nights · monthly vs STLY" subtitle="= OTB RN − STLY RN · same data as the line chart, plotted as the gap · positive = ahead">
-          <Chart variant="bar" data={deltaData} xKey="ci_month"
-            series={[{ key: 'rn_delta', label: 'Δ RN vs STLY', color: '#1F3A2E' }]}
-            height={220} empty={{ title: 'No delta rows' }} />
         </Container>
       </div>
 
