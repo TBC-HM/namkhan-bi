@@ -169,11 +169,13 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
     adr:        r.adr,
     occupancy:  r.occupancy_pct,
     stly_revpar: stlyByDate.get(r.night_date)?.revpar ?? null,
+    stly_adr:    stlyByDate.get(r.night_date)?.adr    ?? null,
   }));
   const heroSeries: ChartSeries[] = [
     { key: 'revpar',      label: 'RevPAR',      color: '#1F3A2E' },
     { key: 'adr',         label: 'ADR',         color: '#B8A878' },
     { key: 'stly_revpar', label: 'STLY RevPAR', color: '#5A5A5A' },
+    { key: 'stly_adr',    label: 'STLY ADR',    color: '#A89A78' },
   ];
 
   // ─── tabs + URL builders ──────────────────────────────────────────────
