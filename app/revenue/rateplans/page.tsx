@@ -46,8 +46,10 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
 
   // Period: default = YTD-2026 (Jan-now) per PBS YTD preference
   const today = new Date();
-  const ytdStart = `${today.getUTCFullYear()}-01-01`;
-  const ytdEndExclusive = new Date(today.getUTCFullYear(), today.getUTCMonth() + 1, 1).toISOString().slice(0, 10);
+  const curYear = today.getUTCFullYear();
+  const ytdStart = `${curYear}-01-01`;
+  const nextYearStart = `${curYear + 1}-01-01`;
+  const ytdEndExclusive = new Date(curYear, today.getUTCMonth() + 1, 1).toISOString().slice(0, 10);
 
   // Parallel data fetch
   const [
@@ -72,10 +74,12 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     supabase.from('v_rate_plan_promo_impact')
       .select('rate_plan, bookings_active, bookings_cancelled, cancel_rate_pct, revenue_active, nights_active, promo_adr, flex_adr, adr_gap, foregone_revenue, avg_lead_days, first_stay, last_stay')
       .eq('property_id', pid)
+      .gt('revenue_active', 0)
       .order('revenue_active', { ascending: false }).then((r) => r.data ?? []),
     supabase.from('v_rate_plan_restrictions')
       .select('rate_name, rate_kind, meal_plan, is_member, channel_restriction, min_los_nights, bookings_active, revenue_active, last_stay, restriction_kind')
       .eq('property_id', pid)
+      .gt('bookings_active', 0)
       .order('bookings_active', { ascending: false }).then((r) => r.data ?? []),
     supabase.from('v_rate_plan_sleeping')
       .select('rate_name, rate_type, last_booked, days_since')
@@ -89,12 +93,12 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     supabase.from('v_rate_plan_nrr_cash_timing')
       .select('booking_month, lead_bucket, lead_sort, bookings, cash_collected')
       .eq('property_id', pid)
-      .gte('booking_month', '2026-01-01').lt('booking_month', '2027-01-01')
+      .gte('booking_month', ytdStart).lt('booking_month', nextYearStart)
       .order('booking_month').order('lead_sort').then((r) => r.data ?? []),
     supabase.from('v_rate_plan_nrr_cash_by_stay_month')
       .select('stay_month, stay_month_no, is_need_window, bookings, cash_locked, stay_revenue, room_nights, adr, avg_lead_days')
       .eq('property_id', pid)
-      .gte('stay_month', '2026-01-01').lt('stay_month', '2027-01-01')
+      .gte('stay_month', ytdStart)
       .order('stay_month').then((r) => r.data ?? []),
   ]);
 
@@ -155,8 +159,8 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
   const roLossVsBar = totals.room_nights_ro > 0 && adrFlexYtd > 0 ? (adrFlexYtd - adrRoYtd) * totals.room_nights_ro : 0;
 
   // PBS 2026-05-31 #67 — chart data for 3 top graphs (RO 2026 · NRR vs BAR vs BB · all rate-plan buckets)
-  const chartRows2026 = (nrrMonthly as Array<Record<string, unknown>>)
-    .filter((r) => String(r.month).startsWith('2026'))
+  const chartRowsThisYear = (nrrMonthly as Array<Record<string, unknown>>)
+    .filter((r) => String(r.month).startsWith(String(curYear)))
     .map((r) => {
       const bk_total = Number(r.bookings_active ?? 0);
       const bk_ro    = Number(r.bookings_ro ?? 0);
@@ -212,7 +216,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
     })
     .sort((a, b) => a.month.localeCompare(b.month));
 
-  const mewsCashHidden = pid === PROPERTY_ID_DONNA; // Mews sync doesn't deliver paid_amount
+  const mewsCashHidden = false; // PBS 2026-06-07: fixed via silver-layer COALESCE on paid_amount (Mews-wipes-paid pattern); v_rate_plan_nrr_cash_timing now returns real Donna cash
 
   const strip: KpiTileProps[] = [
     { label: 'NRR locked',  value: `${nrrLockedShare.toFixed(1)}%`, size: 'sm', footnote: `${money(totals.revenue_nrr_locked, sym)} · NRR + Advance Purchase`, status: nrrLockedShare >= 30 ? 'green' : nrrLockedShare >= 15 ? 'amber' : 'grey' },
@@ -277,10 +281,10 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
         {strip.map((t, i) => <KpiTile key={i} {...t} />)}
       </div>
 
-      {/* PBS 2026-05-31 #72 — NRR cash-timing slim chart (full width). Stacks = cash per booking-month × days-to-check-in. €400k/mo = self-funding threshold (above → only security; below → real working capital). */}
+      {/* PBS 2026-05-31 #72 — NRR cash-timing slim chart (full width). Stacks = cash per booking-month × days-to-check-in. ${sym}400k/mo = self-funding threshold (above → only security; below → real working capital). */}
       <div style={{ gridColumn: '1 / -1', marginBottom: 12 }}>
         <Container title="NRR cash-timing · cash collected per booking month × lead bucket"
-                   subtitle={`Stacked by days-to-check-in (0-30 / 31-60 / 61-90 / 91-120 / 121+) · winter cash from summer bookings · €400k/mo = self-funding threshold`}>
+                   subtitle={`Stacked by days-to-check-in (0-30 / 31-60 / 61-90 / 91-120 / 121+) · winter cash from summer bookings · ${sym}400k/mo = self-funding threshold`}>
           <Chart variant="stacked_bar" data={cashTimingRows} xKey="month"
             series={[
               { key: 'd_0_7',    label: '0-7d',    color: 'var(--terracotta, #B8542A)' },
@@ -312,21 +316,21 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
 
       {/* PBS 2026-05-31 #67 — 3 top graphs below KPIs */}
       <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12, marginBottom: 12 }}>
-        <Container title="Room Only · 2026 revenue per month" subtitle={`meal_plan = 'RO' · hover shows monthly OCC share of bookings`}>
-          <RoTooltipChart data={chartRows2026} sym={sym} />
+        <Container title={`Room Only · ${curYear} revenue per month`} subtitle={`meal_plan = 'RO' · hover shows monthly OCC share of bookings`}>
+          <RoTooltipChart data={chartRowsThisYear} sym={sym} />
         </Container>
-        <Container title="NRR vs Flex/BAR vs Breakfast · 2026 revenue per month" subtitle="3 lines: NRR-locked · Flex+BAR · BB-included">
-          <Chart variant="line" data={chartRows2026} xKey="month"
+        <Container title={`NRR vs Flex/BAR vs Breakfast · ${curYear} revenue per month`} subtitle="3 lines: NRR-locked · Flex+BAR · BB-included">
+          <Chart variant="line" data={chartRowsThisYear} xKey="month"
             series={[
               { key: 'nrr_locked', label: 'NRR locked',  color: 'var(--primary, #1F3A2E)' },
               { key: 'flex_bar',   label: 'Flex / BAR',  color: 'var(--terracotta, #B8542A)' },
               { key: 'bb',         label: 'BB included', color: '#8C7A4E' },
             ]}
             height={180}
-            empty={{ title: 'No 2026 data' }} />
+            empty={{ title: `No ${curYear} data` }} />
         </Container>
-        <Container title="All rate plans · 2026 revenue per month" subtitle="5 mutually-exclusive buckets · sum = total revenue">
-          <Chart variant="line" data={chartRows2026} xKey="month"
+        <Container title={`All rate plans · ${curYear} revenue per month`} subtitle="5 mutually-exclusive buckets · sum = total revenue">
+          <Chart variant="line" data={chartRowsThisYear} xKey="month"
             series={[
               { key: 'nrr_locked', label: 'NRR locked', color: 'var(--primary, #1F3A2E)' },
               { key: 'flex_bar',   label: 'Flex / BAR', color: 'var(--terracotta, #B8542A)' },
@@ -335,7 +339,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
               { key: 'other',      label: 'Other',      color: '#A0A0A0' },
             ]}
             height={180}
-            empty={{ title: 'No 2026 data' }} />
+            empty={{ title: `No ${curYear} data` }} />
         </Container>
       </div>
 
