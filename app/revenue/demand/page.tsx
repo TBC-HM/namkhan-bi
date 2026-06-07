@@ -251,7 +251,7 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
       </div>
 
       <div style={threeUp}>
-        <Container title="Room-nights · OTB vs STLY" subtitle="by check-in month">
+        <Container title="Room-nights · OTB vs STLY" subtitle="by check-in month · gap between lines = Δ shown in bar chart →">
           <Chart variant="line" data={trendData} xKey="ci_month" series={trendSeries} height={220}
             empty={{ title: 'No demand rows', hint: 'mv_pace_otb returned 0 rows' }} />
         </Container>
@@ -259,7 +259,7 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
           <Chart variant="line" data={revData} xKey="ci_month" series={revSeries} height={220}
             empty={{ title: 'No revenue rows' }} />
         </Container>
-        <Container title="Δ Room-nights · monthly vs STLY" subtitle="positive = ahead of STLY · negative = behind">
+        <Container title="Δ Room-nights · monthly vs STLY" subtitle="= OTB RN − STLY RN · same data as the line chart, plotted as the gap · positive = ahead">
           <Chart variant="bar" data={deltaData} xKey="ci_month"
             series={[{ key: 'rn_delta', label: 'Δ RN vs STLY', color: '#1F3A2E' }]}
             height={220} empty={{ title: 'No delta rows' }} />
@@ -267,7 +267,7 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
       </div>
 
       <div style={fullRow}>
-        <Container title={`Pace by check-in month · ${paceTableRows.length} forward month${paceTableRows.length === 1 ? '' : 's'}`} subtitle="forward OTB pace vs STLY (same-time-last-year) · green = ahead · red = behind">
+        <Container title={`Pace by check-in month · ${paceTableRows.length} forward month${paceTableRows.length === 1 ? '' : 's'}`} subtitle={`Room revenue only (no tax / fee / ancillary · ${moneyCurrency}) · forward OTB pace vs STLY · green = ahead · red = behind`}>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
@@ -276,9 +276,9 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
                   <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #E6DFCC)', fontWeight: 600 }}>OTB RN</th>
                   <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #E6DFCC)', fontWeight: 600 }}>STLY RN</th>
                   <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #E6DFCC)', fontWeight: 600 }}>Δ RN</th>
-                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #E6DFCC)', fontWeight: 600 }}>OTB Rev</th>
-                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #E6DFCC)', fontWeight: 600 }}>STLY Rev</th>
-                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #E6DFCC)', fontWeight: 600 }}>Δ Rev</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #E6DFCC)', fontWeight: 600 }}>OTB Room Rev</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #E6DFCC)', fontWeight: 600 }}>STLY Room Rev</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #E6DFCC)', fontWeight: 600 }}>Δ Room Rev</th>
                 </tr>
               </thead>
               <tbody>
