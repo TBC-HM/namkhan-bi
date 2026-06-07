@@ -102,7 +102,7 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
   }));
 
   const period = resolvePeriod(searchParams ?? {});
-  const [pace, losDist, bwDist, losWindow, countryLW, sdly, chanMix, actualsMonthly] = await Promise.all([
+  const [pace, losDist, bwDist, losWindow, countryLW, sdly, chanMix, actualsMonthly, cxl] = await Promise.all([
     getPaceOtb(period, pid).catch(() => [] as Record<string, unknown>[]),
     supabase.from('v_chart_los_distribution').select('los_bucket, bucket_order, total_reservations, total_revenue, adr, share_pct').eq('property_id', pid).order('bucket_order'),
     supabase.from('v_chart_booking_window_distribution').select('booking_window_bucket, bucket_order, total_reservations, total_revenue, adr, share_pct').eq('property_id', pid).order('bucket_order'),
@@ -110,7 +110,8 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
     supabase.rpc('fn_chart_country_los_window', { p_property_id: pid, p_year: String(searchParams?.yr ?? '') || null }).then((res) => ({ data: (res.data ?? []).slice(0, 20) })),
     supabase.from('v_chart_demand_monthly_sdly').select('ci_month, ty_adr, ly_adr, ty_avg_los, ly_avg_los, ty_revpar, ly_revpar, ty_bookings, ly_bookings').eq('property_id', pid).gte('ci_month', '2024-01').order('ci_month'),
     supabase.from('v_chart_channel_mix_monthly').select('ci_month, ota_bookings, direct_bookings, rest_bookings').eq('property_id', pid).gte('ci_month', '2024-01').order('ci_month'),
-    supabase.from('v_chart_actuals_monthly').select('ci_month, roomnights, revenue, adr, occ_pct').eq('property_id', pid).order('ci_month'),
+    supabase.from('v_chart_actuals_monthly').select('ci_month, roomnights, revenue, adr, occ_pct').eq('property_id', pid).gte('ci_month', '2023-01').order('ci_month'),
+    supabase.from('v_cancellation_impact_monthly').select('cancel_year, cancel_month, cancellations, lost_room_nights, lost_revenue').eq('property_id', pid),
   ]);
 
   const allRows: DemandRow[] = (pace as Array<Record<string, unknown>>).map((r) => ({
@@ -141,6 +142,17 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
   const worst = rows.length > 0 ? [...rows].sort((a, b) => a.roomnights_delta - b.roomnights_delta)[0] : null;
   const best  = rows.length > 0 ? [...rows].sort((a, b) => b.roomnights_delta - a.roomnights_delta)[0] : null;
 
+  // Cancellations · YTD vs LY same window (gold: public.v_cancellation_impact_monthly)
+  const nowYr = new Date().getUTCFullYear();
+  const nowMo = new Date().getUTCMonth() + 1;
+  type CxlRow = { cancel_year: number; cancel_month: number; cancellations: number | null; lost_room_nights: number | null; lost_revenue: number | null };
+  const cxlRows = ((cxl as { data: CxlRow[] | null }).data ?? []);
+  const cxlYtd     = cxlRows.filter((r) => Number(r.cancel_year) === nowYr).reduce((s, r) => s + Number(r.cancellations ?? 0), 0);
+  const lostRnYtd  = cxlRows.filter((r) => Number(r.cancel_year) === nowYr).reduce((s, r) => s + Number(r.lost_room_nights ?? 0), 0);
+  const lostRevYtd = cxlRows.filter((r) => Number(r.cancel_year) === nowYr).reduce((s, r) => s + Number(r.lost_revenue ?? 0), 0);
+  const cxlLy      = cxlRows.filter((r) => Number(r.cancel_year) === nowYr - 1 && Number(r.cancel_month) <= nowMo).reduce((s, r) => s + Number(r.cancellations ?? 0), 0);
+  const cxlYoyPct  = cxlLy > 0 ? ((cxlYtd - cxlLy) / cxlLy) * 100 : null;
+
   const tiles: KpiTileProps[] = [
     { label: 'OTB Roomnights', value: fmtInt(total.otb), size: 'sm',
       delta: total.stly > 0 ? { value: paceDeltaRnPct, period: 'STLY',
@@ -158,6 +170,12 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
     { label: 'Months on books', value: rows.length, size: 'sm',
       footnote: `forward · ${monthsAhead} ahead · ${monthsBehind} behind STLY`,
       status: monthsAhead >= monthsBehind ? 'green' : 'amber' },
+    { label: 'Cancelled (YTD)', value: fmtInt(cxlYtd), size: 'sm',
+      delta: cxlYoyPct != null ? { value: cxlYoyPct, period: 'vs LY same window',
+        direction: cxlYtd < cxlLy ? 'down' : cxlYtd > cxlLy ? 'up' : 'flat',
+        isGoodWhenUp: false } : undefined,
+      footnote: `${fmtInt(lostRnYtd)} lost RN · ${sym}${fmtInt(lostRevYtd)} lost rev · YTD ${nowYr}`,
+      status: cxlYoyPct == null ? 'grey' : cxlYoyPct <= 0 ? 'green' : 'amber' },
   ];
   const signals: KpiTileProps[] = [
     { label: 'Months ahead of pace', value: monthsAhead, size: 'sm', footnote: 'Δ RN > 0', status: monthsAhead > 0 ? 'green' : 'grey' },
