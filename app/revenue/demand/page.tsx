@@ -267,25 +267,25 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr>
-                  <th style={{ textAlign: 'left',  padding: '6px 8px', borderBottom: '1px solid var(--hairline, #E6DFCC)', fontWeight: 600 }}>Check-in month</th>
-                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #E6DFCC)', fontWeight: 600 }}>OTB RN</th>
-                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #E6DFCC)', fontWeight: 600 }}>STLY RN</th>
-                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #E6DFCC)', fontWeight: 600 }}>Δ RN</th>
-                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #E6DFCC)', fontWeight: 600 }}>OTB Room Rev</th>
-                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #E6DFCC)', fontWeight: 600 }}>STLY Room Rev</th>
-                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #E6DFCC)', fontWeight: 600 }}>Δ Room Rev</th>
+                  <th style={{ textAlign: 'left',  padding: '6px 8px', borderBottom: '2px solid #000', fontWeight: 700, color: '#000', background: '#FFFFFF' }}>Check-in month</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '2px solid #000', fontWeight: 700, color: '#000', background: '#FFFFFF' }}>OTB RN</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '2px solid #000', fontWeight: 700, color: '#000', background: '#FFFFFF' }}>STLY RN</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '2px solid #000', fontWeight: 700, color: '#000', background: '#FFFFFF' }}>Δ RN</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '2px solid #000', fontWeight: 700, color: '#000', background: '#FFFFFF' }}>OTB Room Rev</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '2px solid #000', fontWeight: 700, color: '#000', background: '#FFFFFF' }}>STLY Room Rev</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '2px solid #000', fontWeight: 700, color: '#000', background: '#FFFFFF' }}>Δ Room Rev</th>
                 </tr>
               </thead>
               <tbody>
                 {paceTableRows.map((r) => (
                   <tr key={r.ci_month}>
-                    <td style={{ padding: '6px 8px', borderBottom: '1px solid var(--hairline, #F0EBD8)' }}>{fmtMonthLabel(r.ci_month)}</td>
-                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #F0EBD8)', fontVariantNumeric: 'tabular-nums' }}>{fmtInt(r.otb_roomnights)}</td>
-                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #F0EBD8)', fontVariantNumeric: 'tabular-nums' }}>{fmtInt(r.stly_roomnights)}</td>
-                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #F0EBD8)', fontVariantNumeric: 'tabular-nums', color: r.roomnights_delta > 0 ? '#1F7A4B' : r.roomnights_delta < 0 ? '#B22222' : 'var(--ink-soft, #5A5A5A)', fontWeight: 600 }}>{fmtSigned(r.roomnights_delta)}</td>
-                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #F0EBD8)', fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(r.otb_revenue, sym)}</td>
-                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #F0EBD8)', fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(r.stly_revenue, sym)}</td>
-                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--hairline, #F0EBD8)', fontVariantNumeric: 'tabular-nums', color: r.revenue_delta > 0 ? '#1F7A4B' : r.revenue_delta < 0 ? '#B22222' : 'var(--ink-soft, #5A5A5A)', fontWeight: 600 }}>{fmtSignedMoney(r.revenue_delta, sym)}</td>
+                    <td style={{ padding: '6px 8px', borderBottom: '1px solid #E0E0E0' }}>{fmtMonthLabel(r.ci_month)}</td>
+                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid #E0E0E0', fontVariantNumeric: 'tabular-nums' }}>{fmtInt(r.otb_roomnights)}</td>
+                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid #E0E0E0', fontVariantNumeric: 'tabular-nums' }}>{fmtInt(r.stly_roomnights)}</td>
+                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid #E0E0E0', fontVariantNumeric: 'tabular-nums', color: r.roomnights_delta > 0 ? '#1F7A4B' : r.roomnights_delta < 0 ? '#B22222' : 'var(--ink-soft, #5A5A5A)', fontWeight: 600 }}>{fmtSigned(r.roomnights_delta)}</td>
+                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid #E0E0E0', fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(r.otb_revenue, sym)}</td>
+                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid #E0E0E0', fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(r.stly_revenue, sym)}</td>
+                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid #E0E0E0', fontVariantNumeric: 'tabular-nums', color: r.revenue_delta > 0 ? '#1F7A4B' : r.revenue_delta < 0 ? '#B22222' : 'var(--ink-soft, #5A5A5A)', fontWeight: 600 }}>{fmtSignedMoney(r.revenue_delta, sym)}</td>
                   </tr>
                 ))}
                 {paceTableRows.length === 0 && (
@@ -402,25 +402,37 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
           })}
         </div>
         <Container title="Country × LOS × Booking-window" subtitle="who books late vs who plans · short-window % flags reactive bookers · top 20 by volume">
-          <Chart variant="table" data={((countryLW.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
-            country:           countryLabel(String(r.guest_country ?? '')),
-            reservations:      Number(r.reservations ?? 0),
-            avg_los:           Number(r.avg_los ?? 0).toFixed(1) + ' n',
-            avg_window:        Number(r.avg_window_days ?? 0).toFixed(0) + ' d',
-            short_window_pct:  Number(r.short_window_pct ?? 0).toFixed(1) + '%',
-            share_pct:         Number(r.share_pct ?? 0).toFixed(1) + '%',
-            adr:               r.adr != null ? fmtMoney(Number(r.adr), sym) : '—',
-          }))}
-            xKey="country"
-            series={[
-              { key: 'reservations',     label: 'Bookings' },
-              { key: 'avg_los',          label: 'Avg LOS' },
-              { key: 'avg_window',       label: 'Avg window' },
-              { key: 'short_window_pct', label: '≤7d %' },
-              { key: 'share_pct',        label: 'Share' },
-              { key: 'adr',              label: 'ADR' },
-            ]}
-            empty={{ title: 'No country reservations data' }} />
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left',  padding: '6px 8px', borderBottom: '2px solid #000', fontWeight: 700, color: '#000', background: '#FFFFFF' }}>Country</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '2px solid #000', fontWeight: 700, color: '#000', background: '#FFFFFF' }}>Bookings</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '2px solid #000', fontWeight: 700, color: '#000', background: '#FFFFFF' }}>Avg LOS</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '2px solid #000', fontWeight: 700, color: '#000', background: '#FFFFFF' }}>Avg window</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '2px solid #000', fontWeight: 700, color: '#000', background: '#FFFFFF' }}>≤7d %</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '2px solid #000', fontWeight: 700, color: '#000', background: '#FFFFFF' }}>Share</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '2px solid #000', fontWeight: 700, color: '#000', background: '#FFFFFF' }}>ADR</th>
+                </tr>
+              </thead>
+              <tbody>
+                {((countryLW.data ?? []) as Array<Record<string, unknown>>).map((r, i) => (
+                  <tr key={i}>
+                    <td style={{ padding: '6px 8px', borderBottom: '1px solid #E0E0E0' }}>{countryLabel(String(r.guest_country ?? ''))}</td>
+                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid #E0E0E0', fontVariantNumeric: 'tabular-nums' }}>{Number(r.reservations ?? 0)}</td>
+                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid #E0E0E0', fontVariantNumeric: 'tabular-nums' }}>{Number(r.avg_los ?? 0).toFixed(1)} n</td>
+                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid #E0E0E0', fontVariantNumeric: 'tabular-nums' }}>{Number(r.avg_window_days ?? 0).toFixed(0)} d</td>
+                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid #E0E0E0', fontVariantNumeric: 'tabular-nums' }}>{Number(r.short_window_pct ?? 0).toFixed(1)}%</td>
+                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid #E0E0E0', fontVariantNumeric: 'tabular-nums' }}>{Number(r.share_pct ?? 0).toFixed(1)}%</td>
+                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid #E0E0E0', fontVariantNumeric: 'tabular-nums' }}>{r.adr != null ? fmtMoney(Number(r.adr), sym) : '—'}</td>
+                  </tr>
+                ))}
+                {((countryLW.data ?? []) as Array<unknown>).length === 0 && (
+                  <tr><td colSpan={7} style={{ padding: 16, textAlign: 'center', color: '#555' }}>No country reservations data</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </Container>
       </div>
 
