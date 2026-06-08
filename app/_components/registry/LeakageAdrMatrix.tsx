@@ -175,13 +175,13 @@ export default async function LeakageAdrMatrix({ propertyId, searchParams }: Pro
                 return (
                   <>
                     {isNewGroup && canon && (
-                      <tr key={`group-${canon}`} style={{ background: '#FAFAF7' }}>
+                      <tr key={`group-${canon}`} style={{ background: '#F5F5F5' }}>
                         <td colSpan={BUCKETS.length + 2} style={{ padding: '6px 10px', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>
                           {canon}
                         </td>
                       </tr>
                     )}
-                    <tr key={cat} style={{ borderBottom: '1px solid var(--hairline, #E6DFCC)', opacity: hasData ? 1 : 0.55 }}>
+                    <tr key={cat} style={{ borderBottom: '1px solid #E0E0E0', opacity: hasData ? 1 : 0.55 }}>
                       <td style={{ padding: '8px 10px 8px 22px', fontWeight: 500 }}>{cat}</td>
                       {BUCKETS.map((b) => {
                         if (!hasData) {
@@ -243,7 +243,7 @@ export default async function LeakageAdrMatrix({ propertyId, searchParams }: Pro
                 </thead>
                 <tbody>
                   {drillRows.map((r, i) => (
-                    <tr key={i} style={{ borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>
+                    <tr key={i} style={{ borderBottom: '1px solid #E0E0E0' }}>
                       <td style={{ padding: '8px 10px' }}>{r.guest_name}</td>
                       <td style={{ padding: '8px 10px' }}>{r.source_name}</td>
                       <td style={{ padding: '8px 10px' }}>{r.rate_plan}</td>
