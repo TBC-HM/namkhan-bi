@@ -186,14 +186,16 @@ export default async function HolidayScheduleTabContent({
         // PBS 2026-05-23 #144: re-scope the dark cream/brass tokens to paper-white
         // when this component is embedded inside the new design pricing page.
         <div style={{
-          ['--brass' as any]: '#7A5C2E',
-          ['--ink' as any]: '#1B1B1B',
+          // PBS 2026-06-08 #125 — B&W token re-scope for the embedded Pricing/Calendar tab
+          ['--brass' as any]: '#1B1B1B',
+          ['--ink' as any]: '#000',
           ['--ink-mute' as any]: '#5A5A5A',
           ['--ink-faint' as any]: '#9A9A9A',
-          ['--paper-warm' as any]: '#FAFAF7',
-          ['--line-soft' as any]: '#E0DAC4',
+          ['--paper-warm' as any]: '#FFFFFF',
+          ['--line-soft' as any]: '#E0E0E0',
+          ['--kpi-frame' as any]: '#E0E0E0',
           ['--mono' as any]: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-          color: '#1B1B1B',
+          color: '#000',
         }}>{children}</div>
       )
     : ({ children }: { children: React.ReactNode }) => (
@@ -213,7 +215,7 @@ export default async function HolidayScheduleTabContent({
     <Wrap>
 
       <Container title="Holidays · KPI" density="compact">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(125px, 1fr))', gap: 12 }}>
           <KpiTile label="Total" value={yearRows.length} footnote={`${selectedYear} holidays`} />
           <KpiTile label="National" value={nNational} footnote="state-wide" />
           <KpiTile label="Regional" value={nRegional} footnote={regionName ? regionName.split('·')[1]?.trim() ?? '—' : '—'} />
@@ -223,7 +225,6 @@ export default async function HolidayScheduleTabContent({
             value={nextOne ? new Date(nextOne.date + 'T00:00:00Z').toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '—'}
             footnote={nextOne ? nextOne.name_en : 'none upcoming'}
           />
-          <KpiTile label="Country" value={`${flag || '·'} ${countryName || '—'}`} footnote={regionName ?? '—'} />
           <KpiTile label="Verified" value={yearRows.filter((h) => h.verified).length} footnote={`of ${yearRows.length}`} />
           <KpiTile
             label="School-break days"
@@ -503,16 +504,17 @@ export default async function HolidayScheduleTabContent({
           <section style={{
             marginTop: 18,
             padding: 12,
-            border: '1px solid var(--kpi-frame, rgba(168,133,74,0.45))',
-            background: 'var(--paper-warm)',
+            border: '1px solid #E0E0E0',
+            background: '#FFFFFF',
             borderRadius: 4,
-            fontSize: 'var(--t-sm)',
-            color: 'var(--ink-mute)',
+            fontSize: 12,
+            color: '#5A5A5A',
+            lineHeight: 1.5,
           }}>
-            <strong style={{ color: 'var(--ink)' }}>How to update</strong> — edit
-            {' '}<code>app/operations/staff/_components/holidays-data.ts</code>.
-            Local fiestas must be confirmed each December via BOIB (Spain) / MoLSW circular (Laos).
-            Entries with status <em>review</em> are best-guess and need PBS confirmation before they trigger payroll rules.
+            <strong style={{ color: '#000' }}>How to update</strong> — edit
+            {' '}<code style={{ background: '#F5F5F5', padding: '1px 4px', borderRadius: 2, fontSize: 11 }}>app/operations/staff/_components/holidays-data.ts</code>.
+            Local holidays must be confirmed each December via BOIB (Spain) / MoLSW circular (Laos).
+            Entries marked <em>review</em> are best-guess (lunar / municipal) and need PBS confirmation before they trigger payroll rules.
           </section>
         </>
       )}
