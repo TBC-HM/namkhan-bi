@@ -241,15 +241,21 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
       footnote: `${fmtInt(lostRnYtd)} lost RN · ${sym}${fmtInt(lostRevYtd)} lost rev · YTD ${nowYr}`,
       status: cxlYoyPct == null ? 'grey' : cxlYoyPct <= 0 ? 'green' : 'amber' },
   ];
+  // PBS 2026-06-08 #132: Strongest/Softest are meaningful only when there are
+  // genuinely contrasting months. With 1 row (e.g. next7 → only current month) the
+  // same row was rendered twice as best AND worst. Hide each tile when its sign
+  // doesn't match (best must be > 0 ahead, worst must be < 0 behind).
+  const showStrongest = best  && Number(best.roomnights_delta)  > 0;
+  const showSoftest   = worst && Number(worst.roomnights_delta) < 0;
   const signals: KpiTileProps[] = [
     { label: 'Months ahead of pace', value: monthsAhead, size: 'sm', footnote: 'Δ RN > 0', status: monthsAhead > 0 ? 'green' : 'grey' },
     { label: 'Months behind', value: monthsBehind, size: 'sm', footnote: 'Δ RN < 0', status: monthsBehind === 0 ? 'green' : 'amber' },
-    { label: 'Strongest month', value: best ? fmtMonthLabel(best.ci_month) : '—', size: 'sm',
-      footnote: best ? `${fmtSigned(best.roomnights_delta)} RN vs STLY` : 'no data',
-      status: best ? 'green' : 'grey' },
-    { label: 'Softest month', value: worst ? fmtMonthLabel(worst.ci_month) : '—', size: 'sm',
-      footnote: worst ? `${fmtSigned(worst.roomnights_delta)} RN vs STLY` : 'no data',
-      status: worst ? (worst.roomnights_delta < 0 ? 'amber' : 'green') : 'grey' },
+    { label: 'Strongest month', value: showStrongest ? fmtMonthLabel(best.ci_month) : '—', size: 'sm',
+      footnote: showStrongest ? `${fmtSigned(best.roomnights_delta)} RN vs STLY` : 'no month ahead of pace',
+      status: showStrongest ? 'green' : 'grey' },
+    { label: 'Softest month', value: showSoftest ? fmtMonthLabel(worst.ci_month) : '—', size: 'sm',
+      footnote: showSoftest ? `${fmtSigned(worst.roomnights_delta)} RN vs STLY` : 'no month behind pace',
+      status: showSoftest ? 'amber' : 'grey' },
   ];
 
   const trendData = rows.map((r) => ({ ci_month: r.ci_month, otb_rn: r.otb_roomnights, stly_rn: r.stly_roomnights }));
