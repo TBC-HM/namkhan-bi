@@ -102,7 +102,12 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
   }));
 
   const period = resolvePeriod({ ...(searchParams ?? {}), win: (searchParams?.win ?? 'next90') } as Record<string, string | string[] | undefined>); // PBS #130: default this surface to forward next90, not backward 30d
-  const [pace, losDist, bwDist, losWindow, countryLW, sdly, chanMix, actualsMonthly, cxl, countryLosBucket, countryWindowBucket] = await Promise.all([
+  // PBS 2026-06-08 #131: day-grain OTB clip for tiles. mv_pace_otb is monthly so
+  // sub-month windows (next7/next30) over-reported revenue. v_otb_pace gives per-night
+  // OTB; v_reservations_unified gives LY same-window realized for the STLY tile.
+  const stlyFrom = (() => { const d = new Date(period.from + 'T00:00:00Z'); d.setUTCFullYear(d.getUTCFullYear() - 1); return d.toISOString().slice(0,10); })();
+  const stlyTo   = (() => { const d = new Date(period.to   + 'T00:00:00Z'); d.setUTCFullYear(d.getUTCFullYear() - 1); return d.toISOString().slice(0,10); })();
+  const [pace, losDist, bwDist, losWindow, countryLW, sdly, chanMix, actualsMonthly, cxl, countryLosBucket, countryWindowBucket, clipFwdResp, clipStlyResp] = await Promise.all([
     getPaceOtb(period, pid).catch(() => [] as Record<string, unknown>[]),
     supabase.from('v_chart_los_distribution').select('los_bucket, bucket_order, total_reservations, total_revenue, adr, share_pct').eq('property_id', pid).order('bucket_order'),
     supabase.from('v_chart_booking_window_distribution').select('booking_window_bucket, bucket_order, total_reservations, total_revenue, adr, share_pct').eq('property_id', pid).order('bucket_order'),
@@ -114,6 +119,8 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
     supabase.from('v_cancellation_impact_monthly').select('cancel_year, cancel_month, cancellations, lost_room_nights, lost_revenue').eq('property_id', pid),
     supabase.from('v_country_los_distribution').select('guest_country_iso2, los_bucket, bookings, room_nights, revenue').eq('property_id', pid),
     supabase.from('v_country_lead_time_distribution').select('guest_country_iso2, lead_bucket, bookings, room_nights, revenue').eq('property_id', pid),
+    supabase.from('v_otb_pace').select('night_date, confirmed_rooms, confirmed_revenue').eq('property_id', pid).gte('night_date', period.from).lte('night_date', period.to),
+    supabase.from('v_reservations_unified').select('nights, total_amount').eq('property_id', pid).eq('is_cancelled', false).gte('check_in_date', stlyFrom).lte('check_in_date', stlyTo),
   ]);
 
   const allRows: DemandRow[] = (pace as Array<Record<string, unknown>>).map((r) => ({
@@ -128,13 +135,16 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
   const rows = allRows;
   const paceTableRows = allRows;
 
-  const total = rows.reduce(
-    (a, r) => ({
-      otb: a.otb + r.otb_roomnights, rev: a.rev + r.otb_revenue,
-      stly: a.stly + r.stly_roomnights, stlyRev: a.stlyRev + r.stly_revenue,
-    }),
-    { otb: 0, rev: 0, stly: 0, stlyRev: 0 },
-  );
+  // PBS 2026-06-08 #131: day-grain totals for OTB Roomnights / OTB Revenue tiles.
+  // (Pace table below keeps using rows[] from mv_pace_otb — that view is correctly month-grained.)
+  const clipFwd  = (clipFwdResp.data ?? []) as Array<{ night_date: string; confirmed_rooms: number | null; confirmed_revenue: number | null }>;
+  const clipStly = (clipStlyResp.data ?? []) as Array<{ nights: number | null; total_amount: number | null }>;
+  const total = {
+    otb:     clipFwd.reduce((s, r) => s + Number(r.confirmed_rooms ?? 0), 0),
+    rev:     clipFwd.reduce((s, r) => s + Number(r.confirmed_revenue ?? 0), 0),
+    stly:    clipStly.reduce((s, r) => s + Number(r.nights ?? 0), 0),
+    stlyRev: clipStly.reduce((s, r) => s + Number(r.total_amount ?? 0), 0),
+  };
   const paceDeltaRn = total.otb - total.stly;
   const paceDeltaRnPct = total.stly ? (paceDeltaRn / total.stly) * 100 : 0;
   const revDelta = total.rev - total.stlyRev;
