@@ -63,11 +63,11 @@ export interface PickupMatrixData {
 interface Props { data: PickupMatrixData }
 
 const PAPER       = '#FFFFFF';
-const BLOCK_TINT  = '#FAFAF7';   // subtle alt-block tint
+const BLOCK_TINT  = '#F8F8F8';   // subtle alt-block tint (neutral grey)
 const INK         = '#1B1B1B';
 const INK_SOFT    = '#5A5A5A';
-const HAIRLINE    = '#E0DAC4';
-const BLOCK_RULE  = '#E6DFCC';   // hairline rule between month blocks (was ink-black — too heavy)
+const HAIRLINE    = '#E0E0E0';
+const BLOCK_RULE  = '#000000';   // black rule between month blocks
 
 const fmtInt   = (n: number) => Math.round(n).toLocaleString('en-US');
 const fmtUsd   = (n: number) => '€' + Math.round(n).toLocaleString('en-US');
