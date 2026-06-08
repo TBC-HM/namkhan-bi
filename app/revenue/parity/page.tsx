@@ -257,11 +257,15 @@ export default async function ParityPage({ propertyId }: Props) {
       subtitle={lastShopIso ? `competitive pricing position · last shop ${fmtIsoDate(lastShopIso)}` : 'awaiting first shop'}
       tabs={tabs}
     >
-      <Container title="Parity headline" subtitle="our position vs the comp set" density="compact">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
+      {/* PBS 2026-06-08 #128 — single-row 6-up head strip, mirrors LeakageYtdTiles pattern */}
+      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 4, padding: '2px 0 8px', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>
+        <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>
+          Parity headline · our position vs the comp set{lastShopIso ? ` · last shop ${fmtIsoDate(lastShopIso)}` : ''}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 6 }}>
           {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
         </div>
-      </Container>
+      </div>
 
       <Container title="Our rate vs comp range" subtitle="namkhan_usd plotted against cheapest / median / highest comp · per stay date">
         <Chart variant="line" data={rangeData} xKey="stay_date"
