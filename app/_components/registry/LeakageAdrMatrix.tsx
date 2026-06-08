@@ -47,7 +47,9 @@ interface DrillRow {
   booking_window_days: number | null;
 }
 
-const BUCKETS: Array<{ key: keyof MatrixRow; col: string; label: string }> = [
+// PBS 2026-06-08: Namkhan buckets shifted lower (rooms cheaper) — view branches on property_id,
+// component picks the matching label set.
+const BUCKETS_DONNA: Array<{ key: keyof MatrixRow; col: string; label: string }> = [
   { key: 'rn_lt_200',  col: 'lt_200',  label: '< 200' },
   { key: 'rn_lt_300',  col: 'lt_300',  label: '< 300' },
   { key: 'rn_lt_400',  col: 'lt_400',  label: '< 400' },
@@ -59,11 +61,24 @@ const BUCKETS: Array<{ key: keyof MatrixRow; col: string; label: string }> = [
   { key: 'rn_lt_2000', col: 'lt_2000', label: '< 2000' },
   { key: 'rn_gte_2000', col: 'gte_2000', label: '>= 2000' },
 ];
+const BUCKETS_NAMKHAN: Array<{ key: keyof MatrixRow; col: string; label: string }> = [
+  { key: 'rn_lt_200',  col: 'lt_200',  label: '< 50' },
+  { key: 'rn_lt_300',  col: 'lt_300',  label: '< 75' },
+  { key: 'rn_lt_400',  col: 'lt_400',  label: '< 100' },
+  { key: 'rn_lt_500',  col: 'lt_500',  label: '< 125' },
+  { key: 'rn_lt_600',  col: 'lt_600',  label: '< 150' },
+  { key: 'rn_lt_800',  col: 'lt_800',  label: '< 200' },
+  { key: 'rn_lt_1000', col: 'lt_1000', label: '< 250' },
+  { key: 'rn_lt_1500', col: 'lt_1500', label: '< 300' },
+  { key: 'rn_lt_2000', col: 'lt_2000', label: '< 400' },
+  { key: 'rn_gte_2000', col: 'gte_2000', label: '>= 400' },
+];
 
 const CANONICAL_ORDER = ['DBL', 'JR_SUITE', 'SUITE', 'PENTHOUSE', 'VILLA', 'GLAMPING'];
 
 export default async function LeakageAdrMatrix({ propertyId, searchParams }: Props) {
   const ccy: '$' | '€' = propertyId === 1000001 ? '€' : '$';
+  const BUCKETS = propertyId === 260955 ? BUCKETS_NAMKHAN : BUCKETS_DONNA;
   const todayMonth = new Date().toISOString().slice(0, 7);
   const selectedMonth = String(searchParams?.adr_month ?? todayMonth);
   const drill = String(searchParams?.adr_drill ?? '');
