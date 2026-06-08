@@ -124,6 +124,7 @@ export default async function PricingPage({ searchParams, propertyId }: { search
               xKey="day"
               yKey="month"
               series={[{ key: 'occ', label: 'Occ %' }]}
+              valueSuffix="%"
               height={Math.max(220, Math.min(560, new Set(heat.map((c) => c.month)).size * 60))}
               empty={{ title: 'No OTB rows in next 90 days' }}
             />
