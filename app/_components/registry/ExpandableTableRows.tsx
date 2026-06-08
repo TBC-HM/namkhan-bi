@@ -25,9 +25,10 @@ const thStyle: React.CSSProperties = {
   textTransform: 'uppercase',
   letterSpacing: '0.06em',
   fontSize: 10,
-  color: 'var(--ink-soft, #5A5A5A)',
-  background: 'var(--bg, #F4EFE2)',
-  fontWeight: 600,
+  color: '#000',
+  background: '#FFFFFF',
+  fontWeight: 700,
+  borderBottom: '2px solid #000',
   whiteSpace: 'nowrap',
 };
 const tdStyle: React.CSSProperties = {
@@ -63,7 +64,7 @@ export default function ExpandableTableRows({ rows, cols, maxRows }: Props) {
           </thead>
           <tbody>
             {visible.map((r, i) => (
-              <tr key={i} style={{ borderTop: '1px solid var(--hairline, #E6DFCC)' }}>
+              <tr key={i} style={{ borderTop: '1px solid #E0E0E0' }}>
                 {cols.map((c) => (
                   <td key={c.key} style={{ ...tdStyle, textAlign: c.align ?? 'left' }}>
                     {String(r[c.key] ?? '—')}
@@ -82,7 +83,7 @@ export default function ExpandableTableRows({ rows, cols, maxRows }: Props) {
           style={{
             marginTop: 6,
             background: 'transparent',
-            border: '1px solid var(--hairline, #E6DFCC)',
+            border: '1px solid #000',
             borderRadius: 4,
             padding: '4px 12px',
             fontSize: 11,
