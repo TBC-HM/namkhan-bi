@@ -47,7 +47,7 @@ function parseWin(raw: string | undefined): WindowKey {
   return (VALID_FWD.includes(raw as WindowKey) ? raw : 'next90') as WindowKey;
 }
 
-interface SearchParams { win?: string; gran?: string; cmp?: string; tab?: string; y?: string; school?: string }
+interface SearchParams { win?: string; gran?: string; cmp?: string; tab?: string; y?: string; school?: string; roff?: string }
 
 const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
 
@@ -133,60 +133,24 @@ export default async function PricingPage({ searchParams, propertyId }: { search
     );
   }
 
-  // ─── Tab: Rate calendar (date × room-type, extended window) ───────────
-  if (tab === 'rate') {
-    const period = resolvePeriod({ win });
-    const [roomTypes, inventory] = await Promise.all([
-      getRoomTypes(pid),
-      getRateInventory(period.from, period.to, { propertyId: pid }),
-    ]);
-    const cellMap = new Map<string, number>();
-    for (const r of inventory) {
-      const rate = Number(r.rate);
-      const stop = Boolean((r as unknown as Record<string, unknown>).stop_sell);
-      if (stop || rate < RATE_MIN) continue;
-      const date = String((r as unknown as Record<string, unknown>).inventory_date ?? '').slice(0, 10);
-      const rt = roomTypes.find((x) => x.room_type_id === r.room_type_id);
-      const rtName = rt?.room_type_name ?? `room_${r.room_type_id}`;
-      const key = `${date}|${rtName}`;
-      const cur = cellMap.get(key);
-      if (cur == null || rate < cur) cellMap.set(key, rate);
-    }
-    const heatmapData = Array.from(cellMap.entries()).map(([key, rate]) => {
-      const [date, room] = key.split('|');
-      return { date, room, rate: Math.round(rate) };
-    });
-    return (
-      <DashboardPage title="Revenue · Calendar" subtitle={`rate calendar · ${period.label}`} tabs={tabs}>
-        {stripBlock}
-        <WindowPills win={win} basePath={`${basePath}?tab=rate`} />
-        <div style={fullRow}>
-          <Container title="Rate calendar · date × room type" subtitle={`cheapest sellable rate · USD · ${period.label}`}>
-            <Chart
-              variant="heatmap"
-              data={heatmapData}
-              xKey="date"
-              yKey="room"
-              series={[{ key: 'rate', label: 'Rate (USD)' }]}
-              height={Math.max(240, Math.min(720, new Set(heatmapData.map((d) => d.room)).size * 44))}
-              empty={{ title: 'No sellable rates in window' }}
-            />
-          </Container>
-        </div>
-      </DashboardPage>
-    );
-  }
 
   // ─── Tab: Restrictions (MinLOS + stop-sell) ───────────────────────────
   if (tab === 'restrictions') {
-    const today = new Date(); today.setUTCHours(0,0,0,0);
-    const horizon = new Date(today); horizon.setUTCDate(today.getUTCDate() + 60);
-    const fromIso = today.toISOString().slice(0,10);
-    const toIso = horizon.toISOString().slice(0,10);
+    const roff = Math.max(0, Math.min(11, Number(searchParams.roff ?? 0)));
+    const todayD = new Date(); todayD.setUTCHours(0,0,0,0);
+    const startD = new Date(todayD); startD.setUTCDate(todayD.getUTCDate() + roff * 7);
+    const endD = new Date(startD); endD.setUTCDate(startD.getUTCDate() + 6);
+    const fromIso = startD.toISOString().slice(0,10);
+    const toIso = endD.toISOString().slice(0,10);
     const [roomTypes, inventory] = await Promise.all([
       getRoomTypes(pid),
       getRateInventory(fromIso, toIso, { propertyId: pid }),
     ]);
+    const dateCols: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(startD); d.setUTCDate(startD.getUTCDate() + i);
+      dateCols.push(d.toISOString().slice(0,10));
+    }
     const cellMap = new Map<string, number>();
     for (const r of inventory) {
       const stop = Boolean((r as unknown as Record<string, unknown>).stop_sell);
@@ -199,88 +163,66 @@ export default async function PricingPage({ searchParams, propertyId }: { search
       const cur = cellMap.get(key);
       if (cur == null || value > cur) cellMap.set(key, value);
     }
-    const data = Array.from(cellMap.entries()).map(([key, value]) => {
-      const [date, room] = key.split('|');
-      return { date, room, restriction: value };
-    });
+    const roomNames = Array.from(new Set(roomTypes.map((rt) => rt.room_type_name))).sort();
+    const rhref = (n: number) => `${basePath}?tab=restrictions&roff=${n}`;
+    const pillStyle: React.CSSProperties = {
+      display: 'inline-block', padding: '4px 10px', border: '1px solid #000', borderRadius: 4,
+      background: '#FFFFFF', color: '#000', fontSize: 11, fontWeight: 500, textDecoration: 'none',
+      letterSpacing: '0.06em', textTransform: 'uppercase',
+    };
     return (
-      <DashboardPage title="Revenue · Calendar" subtitle="restrictions · MinLOS + stop-sell · next 60d" tabs={tabs}>
+      <DashboardPage title="Revenue · Calendar" subtitle={`restrictions · ${fromIso} → ${toIso}`} tabs={tabs}>
         {stripBlock}
         <div style={fullRow}>
-          <Container title="Restrictions calendar" subtitle="WIRED — reads rate_inventory.minimum_stay + stop_sell from Cloudbeds. Each cell shows minimum-nights-required for that room×date; 99 (red) = stop-sell. Next 60 days.">
-            <Chart
-              variant="heatmap"
-              data={data}
-              xKey="date"
-              yKey="room"
-              series={[{ key: 'restriction', label: 'MinLOS · 99=stop' }]}
-              height={Math.max(220, Math.min(560, new Set(data.map((d) => d.room)).size * 44))}
-              empty={{ title: 'No active restrictions next 60d' }}
-            />
+          <Container
+            title="Next 7 days"
+            subtitle={`WIRED — rate_inventory.minimum_stay + stop_sell from Cloudbeds. Cell = min nights for room×date; 99 (red) = stop-sell. Window: ${fromIso} → ${toIso}.`}
+          >
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+              <a href={rhref(Math.max(0, roff - 1))} style={{ ...pillStyle, opacity: roff === 0 ? 0.4 : 1, pointerEvents: roff === 0 ? 'none' : 'auto' }}>← prev 7</a>
+              {roff !== 0 && <a href={rhref(0)} style={pillStyle}>today</a>}
+              <a href={rhref(Math.min(11, roff + 1))} style={{ ...pillStyle, opacity: roff >= 11 ? 0.4 : 1, pointerEvents: roff >= 11 ? 'none' : 'auto' }}>next 7 →</a>
+              <span style={{ marginLeft: 'auto', fontSize: 11, color: '#5A5A5A', letterSpacing: '0.06em', textTransform: 'uppercase' }}>{fromIso} → {toIso}</span>
+            </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left', padding: '6px 8px', borderBottom: '1px solid #000', fontWeight: 600, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Room type</th>
+                  {dateCols.map((d) => (
+                    <th key={d} style={{ textAlign: 'center', padding: '6px 4px', borderBottom: '1px solid #000', fontWeight: 600, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', width: 64 }}>
+                      {d.slice(5)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {roomNames.map((room) => (
+                  <tr key={room}>
+                    <td style={{ padding: '6px 8px', borderBottom: '1px solid #F0F0F0', fontWeight: 500, fontSize: 12 }}>{room}</td>
+                    {dateCols.map((d) => {
+                      const v = cellMap.get(`${d}|${room}`);
+                      const bg = v === 99 ? '#FCE7E6' : (v != null && v > 1) ? '#FEF8E0' : '#FFFFFF';
+                      const txt = v === 99 ? '×' : v != null ? String(v) : '·';
+                      const color = v === 99 ? '#900' : '#000';
+                      return (
+                        <td key={d} style={{ padding: '6px 4px', borderBottom: '1px solid #F0F0F0', textAlign: 'center', fontVariantNumeric: 'tabular-nums', fontSize: 12, background: bg, color, width: 64 }}>
+                          {txt}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+                {roomNames.length === 0 && (
+                  <tr><td colSpan={8} style={{ padding: 20, textAlign: 'center', color: '#5A5A5A' }}>No room types found</td></tr>
+                )}
+              </tbody>
+            </table>
           </Container>
         </div>
       </DashboardPage>
     );
   }
 
-  // ─── Tab: Parity (date × OTA gap USD vs cheapest BAR) ─────────────────
-  if (tab === 'parity') {
-    const today = new Date(); today.setUTCHours(0,0,0,0);
-    const horizon = new Date(today); horizon.setUTCDate(today.getUTCDate() + 60);
-    const fromIso = today.toISOString().slice(0,10);
-    const toIso = horizon.toISOString().slice(0,10);
-    const [compResp, inventory] = await Promise.all([
-      supabase.from('v_compset_competitor_rate_matrix')
-        .select('stay_date, channel, rate_usd, is_available')
-        .gte('stay_date', fromIso)
-        .lte('stay_date', toIso),
-      getRateInventory(fromIso, toIso, { propertyId: pid }),
-    ]);
-    const comp = (compResp.data ?? []) as Array<{ stay_date: string; channel: string; rate_usd: number | null; is_available: boolean | null }>;
-    const bar = new Map<string, number>();
-    for (const r of inventory) {
-      const rate = Number(r.rate);
-      const stop = Boolean((r as unknown as Record<string, unknown>).stop_sell);
-      if (stop || rate < RATE_MIN) continue;
-      const date = String((r as unknown as Record<string, unknown>).inventory_date ?? '').slice(0, 10);
-      const cur = bar.get(date);
-      if (cur == null || rate < cur) bar.set(date, rate);
-    }
-    const cellMap = new Map<string, number[]>();
-    for (const r of comp) {
-      if (r.is_available === false || r.rate_usd == null) continue;
-      const ourRate = bar.get(r.stay_date);
-      if (ourRate == null) continue;
-      const gap = ourRate - Number(r.rate_usd);
-      const key = `${r.stay_date}|${r.channel || 'unknown'}`;
-      const arr = cellMap.get(key) ?? [];
-      arr.push(gap);
-      cellMap.set(key, arr);
-    }
-    const data = Array.from(cellMap.entries()).map(([key, gaps]) => {
-      const [date, channel] = key.split('|');
-      const avg = gaps.reduce((s, x) => s + x, 0) / gaps.length;
-      return { date, channel, gap: Math.round(avg) };
-    });
-    return (
-      <DashboardPage title="Revenue · Calendar" subtitle="parity · our BAR vs comp set · next 60d" tabs={tabs}>
-        {stripBlock}
-        <div style={fullRow}>
-          <Container title="Parity calendar · date × OTA gap (USD)" subtitle="positive = we are MORE expensive than channel · next 60d">
-            <Chart
-              variant="heatmap"
-              data={data}
-              xKey="date"
-              yKey="channel"
-              series={[{ key: 'gap', label: 'Gap (USD)' }]}
-              height={Math.max(220, Math.min(560, new Set(data.map((d) => d.channel)).size * 36))}
-              empty={{ title: 'No comp data next 60d' }}
-            />
-          </Container>
-        </div>
-      </DashboardPage>
-    );
-  }
 
   // ─── Default: Pricing tab (the original, kept intact) ────────────────
   const period = resolvePeriod({ win });
@@ -470,13 +412,6 @@ export default async function PricingPage({ searchParams, propertyId }: { search
             height={Math.max(220, Math.min(560, new Set(heatmapData.map((d) => d.room)).size * 40))}
             empty={{ title: 'No sellable rates in next 14 days' }}
           />
-        </Container>
-      </div>
-      <div style={fullRow}>
-        <Container title="BAR ladder · full Mon-Sun grid" subtitle="bespoke calendar (legacy shell — port pending Calendar primitive)">
-          <div style={{ padding: '24px 8px', textAlign: 'center', color: 'var(--ink-soft, #5A5A5A)', fontSize: 12 }}>
-            Full Mon–Sun rate-by-day calendar available at <Link href="/revenue/pricing/calendar" style={linkStyle}>/revenue/pricing/calendar</Link>.
-          </div>
         </Container>
       </div>
     </DashboardPage>
