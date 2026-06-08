@@ -82,25 +82,51 @@ export const ES_CALVIA_HOLIDAYS: Holiday[] = [
 // Buddhist holidays follow the lunar calendar — dates shift year to year.
 
 export const LA_NAMKHAN_HOLIDAYS: Holiday[] = [
+  // PBS 2026-06-08 #125 — Luang Prabang local festivals + Buddhist lunar holidays added.
+  // All lunar/cultural dates are best-guess from past years — verify each year via:
+  //   • MoLSW circular for Buddhist lunar holidays
+  //   • Luang Prabang Tourism Office for Lai Heua Fai · Boat Racing
+  //   • luangprabangfilmfestival.org for LPFF dates
+  //   • UXO Lao / Hmong community for Hmong New Year
   // ---- 2025 ----
-  { date: '2025-01-01', name_local: 'ປີໃໝ່ສາກົນ',            name_en: 'International New Year',   scope: 'national', kind: 'civic',     verified: true },
-  { date: '2025-03-08', name_local: 'ວັນແມ່ຍິງສາກົນ',          name_en: "International Women's Day", scope: 'national', kind: 'civic',    verified: true },
-  { date: '2025-04-14', name_local: 'ປີໃໝ່ລາວ (ມື້ທີ 1)',     name_en: 'Lao New Year — day 1',     scope: 'national', kind: 'cultural',  verified: true },
-  { date: '2025-04-15', name_local: 'ປີໃໝ່ລາວ (ມື້ທີ 2)',     name_en: 'Lao New Year — day 2',     scope: 'national', kind: 'cultural',  verified: true },
-  { date: '2025-04-16', name_local: 'ປີໃໝ່ລາວ (ມື້ທີ 3)',     name_en: 'Lao New Year — day 3',     scope: 'national', kind: 'cultural',  verified: true },
-  { date: '2025-05-01', name_local: 'ວັນກຳມະກອນສາກົນ',       name_en: 'Labour Day',               scope: 'national', kind: 'civic',     verified: true },
-  { date: '2025-10-07', name_local: 'ບຸນອອກພັນສາ',           name_en: 'Boun Awk Phansa',          scope: 'national', kind: 'religious', verified: false, notes: 'Lunar — verify MoLSW circular' },
-  { date: '2025-12-02', name_local: 'ວັນຊາດລາວ',             name_en: 'Lao National Day',         scope: 'national', kind: 'civic',     verified: true },
+  { date: '2025-01-01', name_local: 'ປີໃໝ່ສາກົນ',            name_en: 'International New Year',          scope: 'national', kind: 'civic',     verified: true },
+  { date: '2025-03-08', name_local: 'ວັນແມ່ຍິງສາກົນ',          name_en: "International Women's Day",       scope: 'national', kind: 'civic',     verified: true },
+  { date: '2025-04-14', name_local: 'ປີໃໝ່ລາວ (ມື້ທີ 1)',     name_en: 'Lao New Year — day 1',            scope: 'national', kind: 'cultural',  verified: true },
+  { date: '2025-04-15', name_local: 'ປີໃໝ່ລາວ (ມື້ທີ 2)',     name_en: 'Lao New Year — day 2',            scope: 'national', kind: 'cultural',  verified: true },
+  { date: '2025-04-16', name_local: 'ປີໃໝ່ລາວ (ມື້ທີ 3)',     name_en: 'Lao New Year — day 3',            scope: 'national', kind: 'cultural',  verified: true },
+  { date: '2025-05-01', name_local: 'ວັນກຳມະກອນສາກົນ',       name_en: 'Labour Day',                      scope: 'national', kind: 'civic',     verified: true },
+  { date: '2025-05-12', name_local: 'ບຸນວິສາຂະບູຊາ',           name_en: 'Vesak (Visakha Bucha)',           scope: 'national', kind: 'religious', verified: false, notes: 'Lunar — May full moon · verify MoLSW' },
+  { date: '2025-05-13', name_local: 'ບຸນບັ້ງໄຟ',              name_en: 'Boun Bang Fai (Rocket Festival)', scope: 'regional', kind: 'cultural',  verified: false, notes: 'Pre-monsoon · varies by village' },
+  { date: '2025-07-10', name_local: 'ບຸນເຂົ້າພັນສາ',          name_en: 'Boun Khao Phansa (Lent begins)',  scope: 'national', kind: 'religious', verified: false, notes: 'Lunar — Jul full moon · verify MoLSW' },
+  { date: '2025-08-15', name_local: 'ວັນລັດຖະທຳມະນູນ',        name_en: 'Lao Constitution Day',            scope: 'national', kind: 'civic',     verified: true },
+  { date: '2025-09-07', name_local: 'ບຸນຫໍ່ເຂົ້າປະດັບດິນ',     name_en: 'Boun Ho Khao Padap Din (Dead)',   scope: 'national', kind: 'religious', verified: false, notes: 'Lunar — Festival of the Dead' },
+  { date: '2025-10-07', name_local: 'ບຸນອອກພັນສາ',           name_en: 'Boun Awk Phansa (Lent ends)',     scope: 'national', kind: 'religious', verified: false, notes: 'Lunar — verify MoLSW circular' },
+  { date: '2025-10-07', name_local: 'ບຸນລາຍເຮືອໄຟ',          name_en: 'Lai Heua Fai (Light Boat) · LP',  scope: 'local',    kind: 'cultural',  verified: false, notes: 'Luang Prabang signature event — evening of Awk Phansa, lanterns on Mekong + Nam Khan' },
+  { date: '2025-10-08', name_local: 'ບຸນຊ່ວງເຮືອ',           name_en: 'Boun Suang Heua (Boat Race) · LP',scope: 'local',    kind: 'cultural',  verified: false, notes: 'Luang Prabang Mekong boat races — day after Awk Phansa' },
+  { date: '2025-11-05', name_local: 'ບຸນທາດຫຼວງ',            name_en: 'Boun That Luang',                 scope: 'national', kind: 'religious', verified: false, notes: 'Lunar — Nov full moon · main event in Vientiane' },
+  { date: '2025-12-02', name_local: 'ວັນຊາດລາວ',             name_en: 'Lao National Day',                scope: 'national', kind: 'civic',     verified: true },
+  { date: '2025-12-06', name_local: 'ງານເທດສະການຮູບເງົາ',     name_en: 'Luang Prabang Film Festival',     scope: 'local',    kind: 'cultural',  verified: false, notes: '~5-day festival · luangprabangfilmfestival.org' },
+  { date: '2025-12-20', name_local: 'ປີໃໝ່ມົ້ງ',             name_en: 'Hmong New Year',                  scope: 'regional', kind: 'cultural',  verified: false, notes: 'Northern Laos Hmong communities · approx late Dec' },
 
   // ---- 2026 ----
-  { date: '2026-01-01', name_local: 'ປີໃໝ່ສາກົນ',            name_en: 'International New Year',   scope: 'national', kind: 'civic',     verified: true },
-  { date: '2026-03-08', name_local: 'ວັນແມ່ຍິງສາກົນ',          name_en: "International Women's Day", scope: 'national', kind: 'civic',    verified: true },
-  { date: '2026-04-14', name_local: 'ປີໃໝ່ລາວ (ມື້ທີ 1)',     name_en: 'Lao New Year — day 1',     scope: 'national', kind: 'cultural',  verified: true },
-  { date: '2026-04-15', name_local: 'ປີໃໝ່ລາວ (ມື້ທີ 2)',     name_en: 'Lao New Year — day 2',     scope: 'national', kind: 'cultural',  verified: true },
-  { date: '2026-04-16', name_local: 'ປີໃໝ່ລາວ (ມື້ທີ 3)',     name_en: 'Lao New Year — day 3',     scope: 'national', kind: 'cultural',  verified: true },
-  { date: '2026-05-01', name_local: 'ວັນກຳມະກອນສາກົນ',       name_en: 'Labour Day',               scope: 'national', kind: 'civic',     verified: true },
-  { date: '2026-10-26', name_local: 'ບຸນອອກພັນສາ',           name_en: 'Boun Awk Phansa',          scope: 'national', kind: 'religious', verified: false, notes: 'Lunar — verify MoLSW circular' },
-  { date: '2026-12-02', name_local: 'ວັນຊາດລາວ',             name_en: 'Lao National Day',         scope: 'national', kind: 'civic',     verified: true },
+  { date: '2026-01-01', name_local: 'ປີໃໝ່ສາກົນ',            name_en: 'International New Year',          scope: 'national', kind: 'civic',     verified: true },
+  { date: '2026-03-08', name_local: 'ວັນແມ່ຍິງສາກົນ',          name_en: "International Women's Day",       scope: 'national', kind: 'civic',     verified: true },
+  { date: '2026-04-14', name_local: 'ປີໃໝ່ລາວ (ມື້ທີ 1)',     name_en: 'Lao New Year — day 1',            scope: 'national', kind: 'cultural',  verified: true },
+  { date: '2026-04-15', name_local: 'ປີໃໝ່ລາວ (ມື້ທີ 2)',     name_en: 'Lao New Year — day 2',            scope: 'national', kind: 'cultural',  verified: true },
+  { date: '2026-04-16', name_local: 'ປີໃໝ່ລາວ (ມື້ທີ 3)',     name_en: 'Lao New Year — day 3',            scope: 'national', kind: 'cultural',  verified: true },
+  { date: '2026-05-01', name_local: 'ວັນກຳມະກອນສາກົນ',       name_en: 'Labour Day',                      scope: 'national', kind: 'civic',     verified: true },
+  { date: '2026-05-30', name_local: 'ບຸນບັ້ງໄຟ',              name_en: 'Boun Bang Fai (Rocket Festival)', scope: 'regional', kind: 'cultural',  verified: false, notes: 'Pre-monsoon · varies by village' },
+  { date: '2026-05-31', name_local: 'ບຸນວິສາຂະບູຊາ',           name_en: 'Vesak (Visakha Bucha)',           scope: 'national', kind: 'religious', verified: false, notes: 'Lunar — May full moon · verify MoLSW' },
+  { date: '2026-07-29', name_local: 'ບຸນເຂົ້າພັນສາ',          name_en: 'Boun Khao Phansa (Lent begins)',  scope: 'national', kind: 'religious', verified: false, notes: 'Lunar — Jul full moon · verify MoLSW' },
+  { date: '2026-08-15', name_local: 'ວັນລັດຖະທຳມະນູນ',        name_en: 'Lao Constitution Day',            scope: 'national', kind: 'civic',     verified: true },
+  { date: '2026-09-26', name_local: 'ບຸນຫໍ່ເຂົ້າປະດັບດິນ',     name_en: 'Boun Ho Khao Padap Din (Dead)',   scope: 'national', kind: 'religious', verified: false, notes: 'Lunar — Festival of the Dead' },
+  { date: '2026-10-26', name_local: 'ບຸນອອກພັນສາ',           name_en: 'Boun Awk Phansa (Lent ends)',     scope: 'national', kind: 'religious', verified: false, notes: 'Lunar — verify MoLSW circular' },
+  { date: '2026-10-26', name_local: 'ບຸນລາຍເຮືອໄຟ',          name_en: 'Lai Heua Fai (Light Boat) · LP',  scope: 'local',    kind: 'cultural',  verified: false, notes: 'Luang Prabang signature event — evening of Awk Phansa, lanterns on Mekong + Nam Khan' },
+  { date: '2026-10-27', name_local: 'ບຸນຊ່ວງເຮືອ',           name_en: 'Boun Suang Heua (Boat Race) · LP',scope: 'local',    kind: 'cultural',  verified: false, notes: 'Luang Prabang Mekong boat races — day after Awk Phansa' },
+  { date: '2026-11-24', name_local: 'ບຸນທາດຫຼວງ',            name_en: 'Boun That Luang',                 scope: 'national', kind: 'religious', verified: false, notes: 'Lunar — Nov full moon · main event in Vientiane' },
+  { date: '2026-12-02', name_local: 'ວັນຊາດລາວ',             name_en: 'Lao National Day',                scope: 'national', kind: 'civic',     verified: true },
+  { date: '2026-12-05', name_local: 'ງານເທດສະການຮູບເງົາ',     name_en: 'Luang Prabang Film Festival',     scope: 'local',    kind: 'cultural',  verified: false, notes: '~5-day festival · luangprabangfilmfestival.org' },
+  { date: '2026-12-19', name_local: 'ປີໃໝ່ມົ້ງ',             name_en: 'Hmong New Year',                  scope: 'regional', kind: 'cultural',  verified: false, notes: 'Northern Laos Hmong communities · approx late Dec' },
 ];
 
 // =============================================================================
