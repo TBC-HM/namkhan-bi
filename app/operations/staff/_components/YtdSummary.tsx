@@ -24,9 +24,9 @@ export default function YtdSummary({ rows, lastPeriod }: Props) {
       <div style={{
         padding: '16px',
         textAlign: 'center',
-        color: 'var(--ink-mute)',
-        fontSize: 'var(--t-sm)',
-        background: 'var(--paper-warm)',
+        color: '#5A5A5A',
+        fontSize: 12,
+        background: '#FFFFFF',
         border: '1px dashed var(--paper-deep)',
         borderRadius: 8,
       }}>
@@ -74,7 +74,7 @@ export default function YtdSummary({ rows, lastPeriod }: Props) {
       <Tile label="Benefits accrued" primary={
         benefitsLak > 0
           ? <UsdLak lak={benefitsLak} fx={fx} bold tone="pos" />
-          : <span style={{ color: 'var(--ink-faint)' }}>—</span>
+          : <span style={{ color: '#9A9A9A' }}>—</span>
       } sub="SC + transport + comms + other" />
 
       <Tile label="Tax + SSO paid" primary={
@@ -83,16 +83,16 @@ export default function YtdSummary({ rows, lastPeriod }: Props) {
 
       <Tile label="Days · W/Off/AL/PH/Sick" primary={
         <span style={{
-          fontFamily: 'var(--mono)',
-          fontSize: 'var(--t-md)',
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+          fontSize: 14,
           fontVariantNumeric: 'tabular-nums',
-          color: 'var(--ink)',
+          color: '#000',
           fontWeight: 600,
         }}>
           {dWorked}/{dOff}/{dAL}/{dPH}/{dSick}
         </span>
       } sub={
-        <span style={{ color: onTrack ? 'var(--moss-glow)' : 'var(--st-bad)' }}>
+        <span style={{ color: onTrack ? '#1F7A4B' : '#B22222' }}>
           {ytd.length}/{expectedRuns} payroll runs · {onTrack ? 'on track' : 'gap'}
         </span>
       } />
@@ -103,28 +103,28 @@ export default function YtdSummary({ rows, lastPeriod }: Props) {
 function Tile({ label, primary, sub }: { label: string; primary: React.ReactNode; sub: React.ReactNode }) {
   return (
     <div style={{
-      background: 'var(--paper-warm)',
+      background: '#FFFFFF',
       border: '1px solid var(--paper-deep)',
       borderRadius: 8,
       padding: '10px 14px',
     }}>
       <div style={{
-        fontFamily: 'var(--mono)',
-        fontSize: 'var(--t-xs)',
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        fontSize: 11,
         textTransform: 'uppercase',
-        letterSpacing: 'var(--ls-extra)',
-        color: 'var(--brass)',
+        letterSpacing: '0.14em',
+        color: '#000',
         marginBottom: 8,
       }}>
         {label}
       </div>
-      <div style={{ fontSize: 'var(--t-md)', lineHeight: 1.2 }}>
+      <div style={{ fontSize: 14, lineHeight: 1.2 }}>
         {primary}
       </div>
       <div style={{
         marginTop: 6,
-        fontSize: 'var(--t-xs)',
-        color: 'var(--ink-mute)',
+        fontSize: 11,
+        color: '#5A5A5A',
       }}>
         {sub}
       </div>
