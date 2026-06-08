@@ -42,9 +42,9 @@ function heatTextColor(v: number, max: number): string {
   return max && v / max > 0.55 ? '#FFFFFF' : 'var(--ink, #1B1B1B)';
 }
 
-const thStyle: React.CSSProperties = { padding: '6px 10px', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: 10, color: 'var(--ink-soft, #5A5A5A)', background: 'var(--bg, #F4EFE2)', fontWeight: 700, whiteSpace: 'nowrap' };
-const tdNum: React.CSSProperties = { padding: '6px 8px', fontSize: 11, textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', borderRight: '1px solid var(--hairline, #E6DFCC)' };
-const tdLabel: React.CSSProperties = { padding: '6px 10px', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', position: 'sticky', left: 0, background: 'var(--paper, #FFFFFF)', zIndex: 1, borderRight: '1px solid var(--hairline, #E6DFCC)' };
+const thStyle: React.CSSProperties = { padding: '6px 10px', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: 10, color: '#000', background: '#FFFFFF', borderBottom: '2px solid #000', fontWeight: 700, whiteSpace: 'nowrap' };
+const tdNum: React.CSSProperties = { padding: '6px 8px', fontSize: 11, textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', borderRight: '1px solid #E0E0E0' };
+const tdLabel: React.CSSProperties = { padding: '6px 10px', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', position: 'sticky', left: 0, background: 'var(--paper, #FFFFFF)', zIndex: 1, borderRight: '1px solid #E0E0E0' };
 
 const LEAD_BUCKETS_ORDERED = ['0-7d', '8-30d', '31-60d', '61-120d', '120d+'] as const;
 const LEAD_COLORS: Record<typeof LEAD_BUCKETS_ORDERED[number], string> = {
@@ -274,7 +274,7 @@ export default async function MarketsPage({ propertyId }: Props = {}) {
               </thead>
               <tbody>
                 {top12.map((iso) => (
-                  <tr key={iso} style={{ borderTop: '1px solid var(--hairline, #E6DFCC)' }}>
+                  <tr key={iso} style={{ borderTop: '1px solid #E0E0E0' }}>
                     <td style={tdLabel}>{countryLabel(iso)}</td>
                     {monthsArr.map((m) => {
                       const c = stayMap.get(`${iso}|${m}`);
@@ -308,7 +308,7 @@ export default async function MarketsPage({ propertyId }: Props = {}) {
               </thead>
               <tbody>
                 {top12.map((iso) => (
-                  <tr key={iso} style={{ borderTop: '1px solid var(--hairline, #E6DFCC)' }}>
+                  <tr key={iso} style={{ borderTop: '1px solid #E0E0E0' }}>
                     <td style={tdLabel}>{countryLabel(iso)}</td>
                     {roomTypesArr.map((rt) => {
                       const c = rtMap.get(`${iso}|${rt}`);
@@ -341,7 +341,7 @@ export default async function MarketsPage({ propertyId }: Props = {}) {
               </thead>
               <tbody>
                 {top12.map((iso) => (
-                  <tr key={iso} style={{ borderTop: '1px solid var(--hairline, #E6DFCC)' }}>
+                  <tr key={iso} style={{ borderTop: '1px solid #E0E0E0' }}>
                     <td style={tdLabel}>{countryLabel(iso)}</td>
                     {LOS_BUCKETS.map((b) => {
                       const c = losMap.get(`${iso}|${b}`);
@@ -364,7 +364,7 @@ export default async function MarketsPage({ propertyId }: Props = {}) {
               </thead>
               <tbody>
                 {top12.map((iso) => (
-                  <tr key={iso} style={{ borderTop: '1px solid var(--hairline, #E6DFCC)' }}>
+                  <tr key={iso} style={{ borderTop: '1px solid #E0E0E0' }}>
                     <td style={tdLabel}>{countryLabel(iso)}</td>
                     {LEAD_BUCKETS.map((b) => {
                       const c = leadMap.get(`${iso}|${b}`);
