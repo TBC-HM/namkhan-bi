@@ -305,8 +305,8 @@ export default async function PricingPage({ searchParams, propertyId }: { search
     { label: 'Avg rate', value: Math.round(avgRate), currency: 'USD', size: 'sm', footnote: 'mean · window', status: avgRate > 0 ? 'green' : 'grey' },
     { label: 'BAR floor', value: Math.round(minRate), currency: 'USD', size: 'sm', footnote: 'lowest sellable · window', status: minRate > 0 ? 'green' : 'grey' },
     { label: 'Ceiling', value: Math.round(maxRate), currency: 'USD', size: 'sm', footnote: 'highest rate · window', status: maxRate > 0 ? 'green' : 'grey' },
-    { label: 'Stop-sell', value: stopSells, size: 'sm', footnote: 'cells blocked', status: stopSells > 0 ? 'amber' : 'green' },
-    { label: 'Min-stay', value: minStayRows, size: 'sm', footnote: 'minimum_stay > 1', status: minStayRows > 0 ? 'amber' : 'green' },
+    { label: 'Stop-sell cells', value: stopSells, size: 'sm', footnote: 'room × day combos blocked for sale · in window', status: stopSells > 0 ? 'amber' : 'green' },
+    { label: 'MinLOS cells', value: minStayRows, size: 'sm', footnote: 'room × day combos with min-stay > 1 night · in window', status: minStayRows > 0 ? 'amber' : 'green' },
   ];
 
   // ── #138: 30-day calendar with arrow nav (URL ?off=0/30/60/90) ──────────
