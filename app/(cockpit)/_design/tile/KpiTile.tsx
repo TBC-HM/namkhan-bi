@@ -189,7 +189,7 @@ const S: Record<string, CSSProperties> = {
   valueRow: { display: 'flex', alignItems: 'baseline', gap: 6, fontWeight: 600, color: 'var(--ink, #1B1B1B)', fontVariantNumeric: 'tabular-nums', lineHeight: 1.15, minWidth: 0 },
   valueText: { wordBreak: 'break-word', minWidth: 0 },
   unit: { color: 'var(--ink-soft, #5A5A5A)', fontWeight: 500 },
-  deltaLine: { display: 'flex', alignItems: 'baseline', gap: 4, fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums' },
+  deltaLine: { display: 'flex', alignItems: 'baseline', gap: 4, fontSize: 12, fontWeight: 600, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', flexWrap: 'nowrap', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' },
   arrow: { fontSize: 14 },
   deltaPeriod: { color: 'var(--ink-soft, #5A5A5A)', fontWeight: 400, marginLeft: 4 },
   compareStack: { display: 'flex', flexDirection: 'column', gap: 2 },
