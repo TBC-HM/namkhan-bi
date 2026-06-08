@@ -301,7 +301,6 @@ export default async function PricingPage({ searchParams, propertyId }: { search
   ];
 
   const windowTiles: KpiTileProps[] = [
-    { label: 'Inventory cells', value: totalInv, size: 'sm', footnote: 'room_type × day · window', status: totalInv > 0 ? 'green' : 'grey' },
     { label: 'Avg rate', value: Math.round(avgRate), currency: 'USD', size: 'sm', footnote: 'mean · window', status: avgRate > 0 ? 'green' : 'grey' },
     { label: 'BAR floor', value: Math.round(minRate), currency: 'USD', size: 'sm', footnote: 'lowest sellable · window', status: minRate > 0 ? 'green' : 'grey' },
     { label: 'Ceiling', value: Math.round(maxRate), currency: 'USD', size: 'sm', footnote: 'highest rate · window', status: maxRate > 0 ? 'green' : 'grey' },
@@ -373,11 +372,43 @@ export default async function PricingPage({ searchParams, propertyId }: { search
     letterSpacing: '0.06em', textTransform: 'uppercase',
   });
 
+  // PBS 2026-06-08 #124 — 3 dynamic graphs at the bottom
+  const [dowResp, leadResp] = await Promise.all([
+    supabase.from('v_pricing_dow_positioning').select('dow, dow_label, avg_namkhan_usd, avg_comp_median_usd, avg_comp_cheapest_usd, avg_comp_dearest_usd').order('dow'),
+    supabase.from('v_pricing_leadtime_pattern').select('leadtime_bucket, avg_rate_usd, obs_count').eq('is_self', true),
+  ]);
+  type DowRow = { dow: number; dow_label: string; avg_namkhan_usd: number | null; avg_comp_median_usd: number | null; avg_comp_cheapest_usd: number | null; avg_comp_dearest_usd: number | null };
+  type LeadRow = { leadtime_bucket: string; avg_rate_usd: number | null; obs_count: number };
+  const dowData = ((dowResp.data ?? []) as DowRow[]).map((r) => ({
+    dow_label: r.dow_label,
+    namkhan: Number(r.avg_namkhan_usd ?? 0),
+    comp_median: Number(r.avg_comp_median_usd ?? 0),
+    comp_cheap: Number(r.avg_comp_cheapest_usd ?? 0),
+    comp_dear: Number(r.avg_comp_dearest_usd ?? 0),
+  }));
+  const LEAD_ORDER = ['0-7d', '8-14d', '15-30d', '31-60d', '61-90d', '90d+'];
+  const leadData = ((leadResp.data ?? []) as LeadRow[])
+    .slice()
+    .sort((a, b) => LEAD_ORDER.indexOf(a.leadtime_bucket) - LEAD_ORDER.indexOf(b.leadtime_bucket))
+    .map((r) => ({ bucket: r.leadtime_bucket, rate: Math.round(Number(r.avg_rate_usd ?? 0)) }));
+  const occRateRows: { day: string; rate: number; occ: number }[] = (() => {
+    const out: { day: string; rate: number; occ: number }[] = [];
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(calFrom); d.setUTCDate(calFrom.getUTCDate() + i);
+      const iso = d.toISOString().slice(0, 10);
+      const row = calByDay.get(iso);
+      const rate = row && row.base_rate != null ? Math.round(Number(row.base_rate)) : 0;
+      const occ = row && row.occ_pct != null ? Math.round(Number(row.occ_pct) * 10) / 10 : 0;
+      out.push({ day: iso.slice(5), rate, occ });
+    }
+    return out;
+  })();
+
   return (
     <DashboardPage title="Revenue · Calendar" subtitle={`pricing · ${period.label}`} tabs={tabs}>
       {stripBlock}
 
-      {/* note#178: KPI stripe at the top */}
+      {/* PBS 2026-06-08 #124 — both KPI rows stacked at the top, then calendar, heatmap, graphs */}
       <div style={fullRow}>
         <Container title="Pricing snapshot" subtitle="actionable now" density="compact">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
@@ -385,6 +416,15 @@ export default async function PricingPage({ searchParams, propertyId }: { search
           </div>
         </Container>
       </div>
+
+      <div style={fullRow}>
+        <Container title="Window aggregates" subtitle={period.label} density="compact">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+            {windowTiles.map((t, i) => <KpiTile key={i} {...t} />)}
+          </div>
+        </Container>
+      </div>
+      <WindowPills win={win} basePath={basePath} />
 
       <div style={fullRow}>
         <Container title={`30-day pricing calendar · ${calRangeLabel}`} subtitle="hover any day for base rate · rooms available · OCC · category. arrow to slide next month (max +90d)">
@@ -398,19 +438,50 @@ export default async function PricingPage({ searchParams, propertyId }: { search
       </div>
 
       <div style={fullRow}>
-        <Container title="Window aggregates" subtitle={period.label} density="compact">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-            {windowTiles.map((t, i) => <KpiTile key={i} {...t} />)}
-          </div>
-        </Container>
-      </div>
-      <WindowPills win={win} basePath={basePath} />
-      <div style={fullRow}>
         <Container title="Two-week glance · cheapest sellable rate" subtitle="date × room type · USD per night · next 14d">
           <Chart variant="heatmap" data={heatmapData} xKey="date" yKey="room"
             series={[{ key: 'rate', label: 'Rate (USD)' }]}
             height={Math.max(220, Math.min(560, new Set(heatmapData.map((d) => d.room)).size * 40))}
             empty={{ title: 'No sellable rates in next 14 days' }}
+          />
+        </Container>
+      </div>
+
+      {/* PBS #124 — 3 dynamic graphs */}
+      <div style={fullRow}>
+        <Container title="Day-of-week rate positioning · own vs comp set" subtitle="avg sellable rate per weekday — Namkhan vs comp set median/cheapest/dearest">
+          <Chart variant="bar" data={dowData} xKey="dow_label"
+            series={[
+              { key: 'namkhan',     label: 'Namkhan' },
+              { key: 'comp_median', label: 'Comp median' },
+              { key: 'comp_cheap',  label: 'Cheapest comp' },
+              { key: 'comp_dear',   label: 'Dearest comp' },
+            ]}
+            height={280}
+            empty={{ title: 'No DOW data yet' }}
+          />
+        </Container>
+      </div>
+
+      <div style={fullRow}>
+        <Container title="Lead-time rate pattern · price by booking window" subtitle="avg sellable rate by lead-time bucket — flags pricing drift between near-in and far-out windows">
+          <Chart variant="bar" data={leadData} xKey="bucket"
+            series={[{ key: 'rate', label: 'Avg rate (USD)' }]}
+            height={260}
+            empty={{ title: 'No lead-time data yet' }}
+          />
+        </Container>
+      </div>
+
+      <div style={fullRow}>
+        <Container title="OCC × BAR · next 30 days" subtitle="bar: base sellable rate · line: forward OCC % per day — spot pricing gaps where high OCC meets low BAR (or vice-versa)">
+          <Chart variant="combo" data={occRateRows} xKey="day"
+            series={[
+              { key: 'rate', label: 'BAR (USD)', kind: 'bar' },
+              { key: 'occ',  label: 'OCC %',     kind: 'line' },
+            ]}
+            height={280}
+            empty={{ title: 'No 30d rate data' }}
           />
         </Container>
       </div>
