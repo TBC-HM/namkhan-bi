@@ -242,7 +242,7 @@ function TableView({ data, series, xKey, formatY, formatX, onRowClick }: { data:
     <div style={{ overflowX: 'auto' }}>
       <table style={S.table}>
         <thead>
-          <tr style={{ background: 'var(--bg, #F4EFE2)' }}>
+          <tr style={{ background: '#FFFFFF', borderBottom: '2px solid #000' }}>
             {xKey && <th style={S.th}>{xKey}</th>}
             {series.map((s) => <th key={s.key} style={{ ...S.th, textAlign: 'right' }}>{s.label}</th>)}
           </tr>
@@ -252,7 +252,7 @@ function TableView({ data, series, xKey, formatY, formatX, onRowClick }: { data:
             <tr
               key={i}
               style={{ cursor: onRowClick ? 'pointer' : 'default' }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg, #F4EFE2)'; }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#F5F5F5'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
               onClick={() => onRowClick?.(row)}
             >
@@ -315,8 +315,8 @@ function CardsView({ data, renderItem, series, xKey }: { data: Record<string, un
 
 const S: Record<string, CSSProperties> = {
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: 'var(--sans, "Inter Tight", system-ui, sans-serif)' },
-  th: { textAlign: 'left', padding: '8px 12px', borderBottom: '1px solid var(--hairline, #E6DFCC)', color: 'var(--ink-soft, #5A5A5A)', fontWeight: 500, textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.04em' },
-  td: { padding: '8px 12px', borderBottom: '1px solid var(--hairline, #E6DFCC)', color: 'var(--ink, #1B1B1B)' },
+  th: { textAlign: 'left', padding: '8px 12px', borderBottom: '2px solid #000', color: '#000', fontWeight: 700, textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.04em', background: '#FFFFFF' },
+  td: { padding: '8px 12px', borderBottom: '1px solid #E0E0E0', color: '#000' },
   tileWrap: { background: 'var(--paper, #FFFFFF)', border: '1px solid var(--hairline, #E6DFCC)', borderRadius: 8, padding: 16, display: 'flex', flexDirection: 'column', gap: 4 },
   tileLabel: { fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', textTransform: 'uppercase', letterSpacing: '0.04em' },
   tileValue: { fontSize: 28, fontWeight: 600, fontVariantNumeric: 'tabular-nums' },
