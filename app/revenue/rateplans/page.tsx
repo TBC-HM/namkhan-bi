@@ -24,10 +24,10 @@ const PROPERTY_ID_DONNA   = 1000001;
 interface Props { searchParams: Record<string, string | string[] | undefined>; propertyId?: number }
 
 // Reused styling for the cell-based tables (paper white + hairlines per design system)
-const thStyle: React.CSSProperties = { padding: '6px 10px', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: 10, color: 'var(--ink-soft, #5A5A5A)', background: 'var(--bg, #F4EFE2)' };
+const thStyle: React.CSSProperties = { padding: '6px 10px', textAlign: 'left', textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: 10, color: '#000', background: '#FFFFFF', borderBottom: '2px solid #000', fontWeight: 700 };
 const tdLabel: React.CSSProperties = { padding: '6px 10px', whiteSpace: 'nowrap' };
 const tdNum:   React.CSSProperties = { padding: '6px 10px', textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' };
-const rowSep: React.CSSProperties  = { borderTop: '1px solid var(--hairline, #E6DFCC)' };
+const rowSep: React.CSSProperties  = { borderTop: '1px solid #E0E0E0' };
 
 function pct(num: number, den: number): string { return den > 0 ? `${(100 * num / den).toFixed(1)}%` : '—'; }
 function money(v: number | null | undefined, sym: string): string {
