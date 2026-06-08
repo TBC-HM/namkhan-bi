@@ -102,7 +102,7 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
   }));
 
   const period = resolvePeriod(searchParams ?? {});
-  const [pace, losDist, bwDist, losWindow, countryLW, sdly, chanMix, actualsMonthly, cxl] = await Promise.all([
+  const [pace, losDist, bwDist, losWindow, countryLW, sdly, chanMix, actualsMonthly, cxl, countryLosBucket, countryWindowBucket] = await Promise.all([
     getPaceOtb(period, pid).catch(() => [] as Record<string, unknown>[]),
     supabase.from('v_chart_los_distribution').select('los_bucket, bucket_order, total_reservations, total_revenue, adr, share_pct').eq('property_id', pid).order('bucket_order'),
     supabase.from('v_chart_booking_window_distribution').select('booking_window_bucket, bucket_order, total_reservations, total_revenue, adr, share_pct').eq('property_id', pid).order('bucket_order'),
@@ -112,6 +112,8 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
     supabase.from('v_chart_channel_mix_monthly').select('ci_month, ota_bookings, direct_bookings, rest_bookings').eq('property_id', pid).gte('ci_month', '2024-01').order('ci_month'),
     supabase.from('v_chart_actuals_monthly').select('ci_month, roomnights, revenue, adr, occ_pct').eq('property_id', pid).gte('ci_month', '2023-01').order('ci_month'),
     supabase.from('v_cancellation_impact_monthly').select('cancel_year, cancel_month, cancellations, lost_room_nights, lost_revenue').eq('property_id', pid),
+    supabase.from('v_country_los_distribution').select('guest_country_iso2, los_bucket, bookings, room_nights, revenue').eq('property_id', pid),
+    supabase.from('v_country_lead_time_distribution').select('guest_country_iso2, lead_bucket, bookings, room_nights, revenue').eq('property_id', pid),
   ]);
 
   const allRows: DemandRow[] = (pace as Array<Record<string, unknown>>).map((r) => ({
@@ -152,6 +154,58 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
   const lostRevYtd = cxlRows.filter((r) => Number(r.cancel_year) === nowYr).reduce((s, r) => s + Number(r.lost_revenue ?? 0), 0);
   const cxlLy      = cxlRows.filter((r) => Number(r.cancel_year) === nowYr - 1 && Number(r.cancel_month) <= nowMo).reduce((s, r) => s + Number(r.cancellations ?? 0), 0);
   const cxlYoyPct  = cxlLy > 0 ? ((cxlYtd - cxlLy) / cxlLy) * 100 : null;
+
+  // PBS 2026-06-08 #115 — Country dimension: 2 heatmaps + scatter w/ trendline
+  const LOS_BUCKETS_TOP = ['1-2 nights','3-5 nights','6-7 nights','8-14 nights','15+ nights'];
+  const WIN_BUCKETS_TOP = ['0-7d','8-30d','31-60d','61-120d','120d+'];
+  type CwRow = { c: string; res: number; los: number; adr: number };
+  const cwData: CwRow[] = ((countryLW.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+    c: String(r.guest_country ?? ''),
+    res: Number(r.reservations ?? 0),
+    los: Number(r.avg_los ?? 0),
+    adr: Number(r.adr ?? 0),
+  }));
+  const topCountries = cwData.slice(0, 10).map((r) => r.c);
+  type Cell = { bk: number; rn: number; rev: number };
+  const losMap = new Map<string, Cell>();
+  ((countryLosBucket.data ?? []) as Array<Record<string, unknown>>).forEach((r) => {
+    losMap.set(`${r.guest_country_iso2}|${r.los_bucket}`, { bk: Number(r.bookings ?? 0), rn: Number(r.room_nights ?? 0), rev: Number(r.revenue ?? 0) });
+  });
+  const winMap = new Map<string, Cell>();
+  ((countryWindowBucket.data ?? []) as Array<Record<string, unknown>>).forEach((r) => {
+    winMap.set(`${r.guest_country_iso2}|${r.lead_bucket}`, { bk: Number(r.bookings ?? 0), rn: Number(r.room_nights ?? 0), rev: Number(r.revenue ?? 0) });
+  });
+  // Build value matrices restricted to top 10 countries for clean color scaling
+  const losVals: number[] = [];
+  for (const ct of topCountries) for (const b of LOS_BUCKETS_TOP) { const x = losMap.get(`${ct}|${b}`); if (x) losVals.push(x.bk); }
+  const winAdrs: number[] = [];
+  for (const ct of topCountries) for (const b of WIN_BUCKETS_TOP) { const x = winMap.get(`${ct}|${b}`); if (x && x.rn > 0) winAdrs.push(x.rev / x.rn); }
+  const maxLosBk = Math.max(1, ...losVals);
+  const maxWinAdr = Math.max(1, ...winAdrs);
+  const bw = (t: number): string => { const v = Math.round(255 - Math.min(1, Math.max(0, t)) * 200); return `rgb(${v},${v},${v})`; };
+  const bwTxt = (t: number): string => t > 0.5 ? '#FFFFFF' : '#000';
+  // Scatter + linear regression: per-country avg LOS (x) vs ADR (y), dot size = sqrt(reservations)
+  type ScatPt = { c: string; x: number; y: number; rn: number };
+  const scatterPts: ScatPt[] = cwData.filter((r) => r.los > 0 && r.adr > 0).slice(0, 12).map((r) => ({ c: r.c, x: r.los, y: r.adr, rn: r.res }));
+  let trend: { m: number; b: number } | null = null;
+  if (scatterPts.length >= 2) {
+    const n = scatterPts.length;
+    let sx = 0, sy = 0, sxy = 0, sxx = 0;
+    for (const p of scatterPts) { sx += p.x; sy += p.y; sxy += p.x * p.y; sxx += p.x * p.x; }
+    const denom = n * sxx - sx * sx;
+    if (Math.abs(denom) > 1e-9) { const m = (n * sxy - sx * sy) / denom; trend = { m, b: (sy - m * sx) / n }; }
+  }
+  const sxs = scatterPts.map((p) => p.x);
+  const sys = scatterPts.map((p) => p.y);
+  const sxMin = sxs.length ? Math.max(0.5, Math.min(...sxs) - 0.5) : 1;
+  const sxMax = sxs.length ? Math.max(...sxs) * 1.10 : 15;
+  const syMin = 0;
+  const syMax = sys.length ? Math.max(...sys) * 1.10 : 500;
+  const scaleX = (v: number): number => 60 + ((v - sxMin) / (sxMax - sxMin)) * 720;
+  const scaleY = (v: number): number => 280 - ((v - syMin) / (syMax - syMin)) * 250;
+  const trendX1 = sxMin, trendX2 = sxMax;
+  const trendY1 = trend ? trend.m * trendX1 + trend.b : null;
+  const trendY2 = trend ? trend.m * trendX2 + trend.b : null;
 
   const tiles: KpiTileProps[] = [
     { label: 'OTB Roomnights', value: fmtInt(total.otb), size: 'sm',
@@ -401,13 +455,99 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
             );
           })}
         </div>
-        <Container title="Country × LOS × Booking-window" subtitle="who books late vs who plans · short-window % flags reactive bookers · top 20 by volume">
+        <Container title="Country × LOS bucket · bookings heatmap" subtitle="darker grey = more bookings · top 10 countries · all-time">
+          <Container title="Country × LOS bucket · bookings heatmap" subtitle="darker grey = more bookings · top 10 countries · all-time">
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr>
-                  <th style={{ textAlign: 'left',  padding: '6px 8px', borderBottom: '2px solid #000', fontWeight: 700, color: '#000', background: '#FFFFFF' }}>Country</th>
-                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '2px solid #000', fontWeight: 700, color: '#000', background: '#FFFFFF' }}>Bookings</th>
+                  <th style={{ textAlign: 'left', padding: '6px 8px', borderBottom: '2px solid #000', fontWeight: 700, color: '#000', background: '#FFFFFF' }}>Country</th>
+                  {LOS_BUCKETS_TOP.map((b) => <th key={b} style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '2px solid #000', fontWeight: 700, color: '#000', background: '#FFFFFF' }}>{b}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {topCountries.map((iso) => (
+                  <tr key={iso}>
+                    <td style={{ padding: '6px 8px', borderBottom: '1px solid #E0E0E0', fontWeight: 600 }}>{countryLabel(iso)}</td>
+                    {LOS_BUCKETS_TOP.map((b) => {
+                      const c = losMap.get(`${iso}|${b}`);
+                      const v = c?.bk ?? 0;
+                      const t = v / maxLosBk;
+                      return <td key={b} style={{ background: bw(t), color: bwTxt(t), padding: '6px 8px', textAlign: 'right', borderBottom: '1px solid #E0E0E0', fontVariantNumeric: 'tabular-nums' }} title={c ? `${v} bk · ${c.rn} RN · ${fmtMoney(c.rev, sym)}` : 'no data'}>{v > 0 ? v : ''}</td>;
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Container>
+      </div>
+
+      <div style={fullRow}>
+        <Container title="Country × Booking-window bucket · ADR heatmap" subtitle={`darker grey = higher ADR · top 10 countries · all-time · ${moneyCurrency}`}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left', padding: '6px 8px', borderBottom: '2px solid #000', fontWeight: 700, color: '#000', background: '#FFFFFF' }}>Country</th>
+                  {WIN_BUCKETS_TOP.map((b) => <th key={b} style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '2px solid #000', fontWeight: 700, color: '#000', background: '#FFFFFF' }}>{b}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {topCountries.map((iso) => (
+                  <tr key={iso}>
+                    <td style={{ padding: '6px 8px', borderBottom: '1px solid #E0E0E0', fontWeight: 600 }}>{countryLabel(iso)}</td>
+                    {WIN_BUCKETS_TOP.map((b) => {
+                      const c = winMap.get(`${iso}|${b}`);
+                      const adr = c && c.rn > 0 ? c.rev / c.rn : 0;
+                      const t = adr / maxWinAdr;
+                      return <td key={b} style={{ background: bw(t), color: bwTxt(t), padding: '6px 8px', textAlign: 'right', borderBottom: '1px solid #E0E0E0', fontVariantNumeric: 'tabular-nums' }} title={c ? `${c.bk} bk · ${c.rn} RN · ADR ${fmtMoney(adr, sym)}` : 'no data'}>{adr > 0 ? fmtMoney(adr, sym) : ''}</td>;
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Container>
+      </div>
+
+      <div style={fullRow}>
+        <Container title="Avg LOS × ADR correlation per country" subtitle={`dot size = reservation volume · dashed line = linear trend${trend ? ` · slope ${trend.m >= 0 ? '+' : ''}${trend.m.toFixed(1)} ${sym}/night` : ''} · ${moneyCurrency}`}>
+          {scatterPts.length === 0 ? (
+            <div style={{ padding: 16, color: '#555', fontStyle: 'italic' }}>Not enough country data points</div>
+          ) : (
+            <svg width="100%" height="320" viewBox="0 0 800 320" preserveAspectRatio="xMidYMid meet" style={{ display: 'block' }}>
+              <line x1="60" y1="280" x2="780" y2="280" stroke="#000" strokeWidth={1.5} />
+              <line x1="60" y1="20" x2="60" y2="280" stroke="#000" strokeWidth={1.5} />
+              {[2, 4, 6, 8, 10, 12, 14].filter((v) => v >= sxMin && v <= sxMax).map((v) => (
+                <g key={`xt-${v}`}>
+                  <line x1={scaleX(v)} y1="280" x2={scaleX(v)} y2="284" stroke="#000" strokeWidth={1} />
+                  <text x={scaleX(v)} y="298" textAnchor="middle" fontSize="11" fill="#000">{v}n</text>
+                </g>
+              ))}
+              <text x="420" y="316" textAnchor="middle" fontSize="11" fontWeight={700} fill="#000">Avg LOS (nights)</text>
+              {Array.from({ length: 5 }, (_, i) => syMin + (syMax - syMin) * (i + 1) / 5).map((v) => (
+                <g key={`yt-${v.toFixed(0)}`}>
+                  <line x1="56" y1={scaleY(v)} x2="60" y2={scaleY(v)} stroke="#000" strokeWidth={1} />
+                  <text x="52" y={scaleY(v) + 4} textAnchor="end" fontSize="11" fill="#000">{sym}{Math.round(v).toLocaleString('en-US')}</text>
+                </g>
+              ))}
+              <text x="14" y="150" textAnchor="middle" fontSize="11" fontWeight={700} fill="#000" transform="rotate(-90 14 150)">ADR</text>
+              {trend && trendY1 != null && trendY2 != null && (
+                <line x1={scaleX(trendX1)} y1={scaleY(trendY1)} x2={scaleX(trendX2)} y2={scaleY(trendY2)} stroke="#000" strokeWidth={2} strokeDasharray="6 3" />
+              )}
+              {scatterPts.map((p, i) => {
+                const r = Math.max(4, Math.min(18, Math.sqrt(p.rn) / 2));
+                return (
+                  <g key={`p-${i}`}>
+                    <circle cx={scaleX(p.x)} cy={scaleY(p.y)} r={r} fill="#000" fillOpacity={0.7} stroke="#000" strokeWidth={1} />
+                    <text x={scaleX(p.x) + r + 4} y={scaleY(p.y) + 4} fontSize="10" fill="#000">{countryLabel(p.c)}</text>
+                  </g>
+                );
+              })}
+            </svg>
+          )}
+        </Container><!-- DROP REST
                   <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '2px solid #000', fontWeight: 700, color: '#000', background: '#FFFFFF' }}>Avg LOS</th>
                   <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '2px solid #000', fontWeight: 700, color: '#000', background: '#FFFFFF' }}>Avg window</th>
                   <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '2px solid #000', fontWeight: 700, color: '#000', background: '#FFFFFF' }}>≤7d %</th>
