@@ -1,9 +1,8 @@
 // app/operations/spa/page.tsx
-// Re-restored 2026-05-05 — SlimHero · 2 KpiStrips · 3 cards · P&L grid · GL detail · trend · raw POS.
+// PBS 2026-06-09 #136 — B&W primitives reskin. Same layout, same dynamic data.
 
 import FilterStrip from '@/components/nav/FilterStrip';
-import KpiStrip, { type KpiStripItem } from '@/components/kpi/KpiStrip';
-import Page from '@/components/page/Page';
+import { DashboardPage, Container, KpiTile, type KpiTileProps, type DashboardTab } from '@/app/(cockpit)/_design';
 import { OPERATIONS_SUBPAGES } from '../_subpages';
 import PnlGrid from '@/components/pl/PnlGrid';
 import DeptTrendChart from '@/components/pl/DeptTrendChart';
@@ -21,6 +20,9 @@ export const revalidate = 60;
 export const dynamic = 'force-dynamic';
 
 interface Props { searchParams: Record<string, string | string[] | undefined>; }
+
+const fmtUsd = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('en-US')}`;
+const fmtPct = (n: number) => `${(Number(n) || 0).toFixed(1)}%`;
 
 export default async function SpaPage({ searchParams }: Props) {
   const period = resolvePeriod(searchParams);
@@ -46,62 +48,85 @@ export default async function SpaPage({ searchParams }: Props) {
   const perOccRn = captureP ? Number(captureP.spend_per_occ) : 0;
   const recent30 = spa12?.by_month?.[spa12.by_month.length - 1];
 
+  const row1: KpiTileProps[] = [
+    { label: 'Spa Revenue',    value: fmtUsd(Number(a30?.spa_revenue ?? 0)), status: 'green', size: 'sm' },
+    { label: 'Spa / Occ Rn',   value: fmtUsd(perOccRn), footnote: 'benchmark $25-40',
+      status: (perOccRn >= 25 ? 'green' : 'amber') as 'green'|'amber', size: 'sm' },
+    { label: 'Capture %',      value: fmtPct(captureRate), footnote: 'benchmark ≥ 35%', status: 'grey', size: 'sm' },
+    { label: 'Treatments / day', value: recent30 ? Number(recent30.avg_per_day) : 0, footnote: 'latest month', status: 'grey', size: 'sm' },
+    { label: 'Months',         value: tileSrc ? tileSrc.months_used.length : 0, footnote: tileSrc ? tileSrc.months_used[0] : '—', status: 'grey', size: 'sm' },
+    { label: 'Therapist util', value: '0%', footnote: 'scheduler not synced', status: 'grey', size: 'sm' },
+  ];
+
+  const row2: KpiTileProps[] = [
+    { label: 'Spa Cost %', value: fmtPct(tileSrc ? tileSrc.spa_cost_pct : 0), footnote: 'target ≤ 12%',
+      status: (tileSrc && tileSrc.spa_cost_pct <= 12 ? 'green' : 'amber') as 'green'|'amber', size: 'sm' },
+    { label: 'Labor %',    value: fmtPct(tileSrc ? tileSrc.labor_cost_pct : 0), footnote: 'target ≤ 35%',
+      status: (tileSrc && tileSrc.labor_cost_pct <= 35 ? 'green' : 'red') as 'green'|'red', size: 'sm' },
+    { label: 'GOP %',      value: fmtPct(tileSrc ? tileSrc.gop_pct : 0), footnote: 'target ≥ 50%',
+      status: (tileSrc && tileSrc.gop_pct >= 50 ? 'green' : tileSrc && tileSrc.gop_pct >= 0 ? 'amber' : 'red') as 'green'|'amber'|'red', size: 'sm' },
+    { label: 'Revenue (QB)', value: fmtUsd(tileSrc ? tileSrc.revenue : 0), footnote: tileSrc ? `${tileSrc.months_used.length} mo` : '—', status: 'grey', size: 'sm' },
+    { label: 'Spa COGS',   value: fmtUsd(tileSrc ? tileSrc.spa_cost : 0), status: 'grey', size: 'sm' },
+    { label: 'Payroll',    value: fmtUsd(tileSrc ? tileSrc.payroll : 0), status: 'grey', size: 'sm' },
+  ];
+
+  const tabs: DashboardTab[] = OPERATIONS_SUBPAGES.map((s) => ({ key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/spa') })) as DashboardTab[];
+
+  const summaryStyle: React.CSSProperties = {
+    cursor: 'pointer', padding: '10px 14px', fontSize: 12, fontWeight: 600,
+    color: '#000', background: '#FFFFFF', border: '1px solid #E0E0E0', borderRadius: 6, letterSpacing: '0.04em',
+  };
+
   return (
-    <Page
-      eyebrow={`Operations · Spa · ${period.label}`}
-      title={<>Wellness <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>treatments</em></>}
-      subPages={OPERATIONS_SUBPAGES}
+    <DashboardPage
+      title={`Wellness treatments · ${period.label}`}
+      subtitle="Operations · Spa · live from QB GL + PMS · USALI rollup"
+      tabs={tabs}
     >
+      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <Container title="Operating snapshot" subtitle="revenue · capture · treatments — current period" density="compact">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+            {row1.map((t, i) => <KpiTile key={i} {...t} />)}
+          </div>
+        </Container>
 
-      <KpiStrip items={[
-        { label: 'Spa Revenue',    value: Number(a30?.spa_revenue ?? 0), kind: 'money', tone: 'pos' },
-        { label: 'Spa / Occ Rn',   value: perOccRn, kind: 'money', tone: perOccRn >= 25 ? 'pos' : 'warn', hint: 'benchmark $25-40' },
-        { label: 'Capture %',      value: captureRate, kind: 'pct', hint: 'benchmark ≥ 35%' },
-        { label: 'Treatments / day', value: recent30 ? Number(recent30.avg_per_day) : 0, kind: 'count', hint: 'latest month' },
-        { label: 'Months',         value: tileSrc ? tileSrc.months_used.length : 0, kind: 'count', hint: tileSrc ? tileSrc.months_used[0] : '—' },
-        { label: 'Therapist util', value: 0, kind: 'pct', hint: 'scheduler not synced' },
-      ] satisfies KpiStripItem[]} />
+        <Container title="Cost discipline · USALI" subtitle="targets: spa cost ≤12% · labor ≤35% · GOP ≥50%" density="compact">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+            {row2.map((t, i) => <KpiTile key={i} {...t} />)}
+          </div>
+        </Container>
 
-      <KpiStrip items={[
-        { label: 'Spa Cost %', value: tileSrc ? tileSrc.spa_cost_pct : 0, kind: 'pct', tone: tileSrc && tileSrc.spa_cost_pct <= 12 ? 'pos' : 'warn', hint: 'target ≤ 12%' },
-        { label: 'Labor %',    value: tileSrc ? tileSrc.labor_cost_pct : 0, kind: 'pct', tone: tileSrc && tileSrc.labor_cost_pct <= 35 ? 'pos' : 'neg', hint: 'target ≤ 35%' },
-        { label: 'GOP %',      value: tileSrc ? tileSrc.gop_pct : 0, kind: 'pct', tone: tileSrc && tileSrc.gop_pct >= 50 ? 'pos' : tileSrc && tileSrc.gop_pct >= 0 ? 'warn' : 'neg', hint: 'target ≥ 50%' },
-        { label: 'Revenue (QB)', value: tileSrc ? tileSrc.revenue : 0, kind: 'money', hint: tileSrc ? `${tileSrc.months_used.length} mo` : '—' },
-        { label: 'Spa COGS',   value: tileSrc ? tileSrc.spa_cost : 0, kind: 'money' },
-        { label: 'Payroll',    value: tileSrc ? tileSrc.payroll : 0, kind: 'money' },
-      ] satisfies KpiStripItem[]} />
-
-      {/* Canonical: selectors UNDER KPI tiles. */}
-      <div style={{ marginTop: 14 }}>
         <FilterStrip showForward={false} showCompare={false} showSegment={false} liveSource="PMS · live" />
+
+        <Container title="Monthly trend · revenue · costs · GOP %" subtitle="last 16 months — live from gl.v_dept_pl_namkhan">
+          <DeptTrendChart rows={pl} dept="spa" />
+        </Container>
+
+        <Container title="P&L · QB GL · USALI rollup" subtitle="targets: spa cost ≤12% · labor ≤35% · GOP ≥50%">
+          <PnlGrid rows={pl} dept="spa" targets={{ spa_cost_pct: 12, labor_cost_pct: 35, gop_pct: 50 }} defaultRows={6} />
+        </Container>
+
+        <details>
+          <summary style={summaryStyle}>GL detail · Spa accounts</summary>
+          <div style={{ marginTop: 10 }}>
+            <FnbGlBreakdown data={glBreakdown} defaultMonths={4} />
+          </div>
+        </details>
+
+        <details open>
+          <summary style={summaryStyle}>Top spa treatments · trend since Jan 26</summary>
+          <div style={{ marginTop: 10 }}>
+            <FnbTopSellerTrend data={topTrend} />
+          </div>
+        </details>
+
+        <details>
+          <summary style={summaryStyle}>All POS transactions · search &amp; reconcile <span style={{ fontWeight: 400, color: '#5A5A5A', marginLeft: 6 }}>({rawTxns.length} most recent)</span></summary>
+          <div style={{ marginTop: 10 }}>
+            <FnbRawTransactions data={rawTxns} pageSize={200} />
+          </div>
+        </details>
       </div>
-
-      <h2 style={{ marginTop: 28, marginBottom: 6, fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>Monthly trend · revenue · costs · GOP %</h2>
-      <DeptTrendChart rows={pl} dept="spa" />
-
-      <h2 style={{ marginTop: 28, marginBottom: 6, fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>P&amp;L · QB GL · USALI rollup</h2>
-      <PnlGrid rows={pl} dept="spa" targets={{ spa_cost_pct: 12, labor_cost_pct: 35, gop_pct: 50 }} defaultRows={6} />
-
-      <details style={{ marginTop: 24 }}>
-        <summary style={{ cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)', padding: '8px 0' }}>
-          GL detail · Spa accounts ▾
-        </summary>
-        <FnbGlBreakdown data={glBreakdown} defaultMonths={4} />
-      </details>
-
-      <details style={{ marginTop: 24 }} open>
-        <summary style={{ cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)', padding: '8px 0' }}>
-          Top spa treatments · trend since Jan 26 ▾
-        </summary>
-        <FnbTopSellerTrend data={topTrend} />
-      </details>
-
-      <details style={{ marginTop: 24 }}>
-        <summary style={{ cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)', padding: '8px 0' }}>
-          All POS transactions · search &amp; reconcile ▾  <span style={{ color: 'var(--ink-soft)', textTransform: 'none', letterSpacing: 'normal' }}>({rawTxns.length} most recent)</span>
-        </summary>
-        <FnbRawTransactions data={rawTxns} pageSize={200} />
-      </details>
-    </Page>
+    </DashboardPage>
   );
 }
