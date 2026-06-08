@@ -59,9 +59,10 @@ export default async function StaffDetailContent({
   const monthlyUsd = Number(d.monthly_salary || 0) * fx;
   const annualNative = Number(d.monthly_salary || 0) * 12;
 
+  // PBS 2026-06-08 #135: Staff detail now lives under HR (Finance), not Operations.
   const backHref = propertyId === 260955
-    ? '/operations/staff'
-    : `/h/${propertyId}/operations/staff`;
+    ? '/finance/hr'
+    : `/h/${propertyId}/finance/hr`;
 
   return (
     <DashboardPage
@@ -76,7 +77,7 @@ export default async function StaffDetailContent({
         textTransform: 'uppercase', color: '#5A5A5A', marginBottom: 12,
       }}>
         <Link href={backHref} style={{ color: '#000', textDecoration: 'underline' }}>
-          ← Staff register
+          ← HR · Staff register
         </Link>
         <span style={{ margin: '0 8px', color: '#9A9A9A' }}>/</span>
         <span style={{ color: '#000' }}>{d.emp_id}</span>
