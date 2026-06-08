@@ -23,7 +23,7 @@ function periodLabel(iso: string | null): string {
 export default function CompBreakdown({ row }: Props) {
   if (!row) {
     return (
-      <div style={{ padding: '16px', textAlign: 'center', color: 'var(--ink-mute)', fontSize: 'var(--t-sm)' }}>
+      <div style={{ padding: '16px', textAlign: 'center', color: '#5A5A5A', fontSize: 12 }}>
         No payroll has been calculated yet for this employee.
       </div>
     );
@@ -75,11 +75,11 @@ export default function CompBreakdown({ row }: Props) {
   return (
     <div>
       <div style={{
-        fontFamily: 'var(--mono)',
-        fontSize: 'var(--t-xs)',
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        fontSize: 11,
         textTransform: 'uppercase',
-        letterSpacing: 'var(--ls-extra)',
-        color: 'var(--ink-mute)',
+        letterSpacing: '0.14em',
+        color: '#5A5A5A',
         marginBottom: 12,
       }}>
         Period · {periodLabel(row.period_month)} · FX ₭{fx.toLocaleString()} per $
@@ -107,8 +107,8 @@ export default function CompBreakdown({ row }: Props) {
       {/* NET PAY (employee receives) + COMPANY COST */}
       <div style={{
         marginTop: 16,
-        background: 'var(--moss)',
-        color: 'var(--paper-warm)',
+        background: '#1F7A4B',
+        color: '#FFFFFF',
         borderRadius: 8,
         overflow: 'hidden',
       }}>
@@ -119,23 +119,23 @@ export default function CompBreakdown({ row }: Props) {
           alignItems: 'baseline',
         }}>
           <span style={{
-            fontFamily: 'var(--mono)',
-            fontSize: 'var(--t-xs)',
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+            fontSize: 11,
             textTransform: 'uppercase',
-            letterSpacing: 'var(--ls-extra)',
+            letterSpacing: '0.14em',
             color: '#c4a06b',
           }}>Net pay · employee receives</span>
           <span style={{
-            fontFamily: 'var(--serif)',
+            fontFamily: 'ui-serif, Georgia, serif',
             fontStyle: 'italic',
-            fontSize: 'var(--t-xl)',
+            fontSize: 18,
             fontVariantNumeric: 'tabular-nums',
           }}>
             ${Math.round(netUsd).toLocaleString('en-US')}
             <span style={{
-              fontFamily: 'var(--mono)',
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
               fontStyle: 'normal',
-              fontSize: 'var(--t-xs)',
+              fontSize: 11,
               marginLeft: 8,
               color: '#c4a06b',
             }}>
@@ -152,21 +152,21 @@ export default function CompBreakdown({ row }: Props) {
           background: 'rgba(0,0,0,0.15)',
         }}>
           <span style={{
-            fontFamily: 'var(--mono)',
-            fontSize: 'var(--t-xs)',
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+            fontSize: 11,
             textTransform: 'uppercase',
-            letterSpacing: 'var(--ls-extra)',
+            letterSpacing: '0.14em',
             color: '#c4a06b',
             opacity: 0.85,
           }}>Total cost · company pays</span>
           <span style={{
-            fontFamily: 'var(--mono)',
-            fontSize: 'var(--t-sm)',
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+            fontSize: 12,
             fontVariantNumeric: 'tabular-nums',
-            color: 'var(--paper-warm)',
+            color: '#FFFFFF',
           }}>
             ${Math.round(costUsd).toLocaleString('en-US')}
-            <span style={{ marginLeft: 6, color: '#c4a06b', fontSize: 'var(--t-xs)' }}>
+            <span style={{ marginLeft: 6, color: '#c4a06b', fontSize: 11 }}>
               (₭{Math.round(costLak / 1_000_000).toLocaleString()}M · gross before tax/SSO)
             </span>
           </span>
@@ -186,17 +186,17 @@ function Section({ title, totalLabel, totalLak, fx, tone, children }: {
 }) {
   return (
     <div style={{
-      background: 'var(--paper)',
+      background: '#FFFFFF',
       border: '1px solid var(--paper-deep)',
       borderRadius: 8,
       padding: '12px 14px',
     }}>
       <div style={{
-        fontFamily: 'var(--mono)',
-        fontSize: 'var(--t-xs)',
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        fontSize: 11,
         textTransform: 'uppercase',
-        letterSpacing: 'var(--ls-extra)',
-        color: 'var(--brass)',
+        letterSpacing: '0.14em',
+        color: '#000',
         marginBottom: 10,
       }}>
         {title}
@@ -212,7 +212,7 @@ function Section({ title, totalLabel, totalLak, fx, tone, children }: {
         justifyContent: 'space-between',
         alignItems: 'baseline',
       }}>
-        <span style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-soft)', fontWeight: 600 }}>
+        <span style={{ fontSize: 12, color: '#000', fontWeight: 600 }}>
           {totalLabel}
         </span>
         <UsdLak lak={totalLak} fx={fx} bold tone={tone} />
@@ -228,9 +228,9 @@ function Line({ label, lak, fx, tone }: { label: string; lak: number; fx: number
       justifyContent: 'space-between',
       alignItems: 'baseline',
       gap: 12,
-      fontSize: 'var(--t-sm)',
+      fontSize: 12,
     }}>
-      <span style={{ color: 'var(--ink-soft)' }}>{label}</span>
+      <span style={{ color: '#000' }}>{label}</span>
       <UsdLak lak={lak} fx={fx} tone={tone} />
     </div>
   );
@@ -245,8 +245,8 @@ function Subtotal({ label, lak, fx }: { label: string; lak: number; fx: number }
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'baseline',
-      fontSize: 'var(--t-xs)',
-      color: 'var(--ink-mute)',
+      fontSize: 11,
+      color: '#5A5A5A',
       fontStyle: 'italic',
     }}>
       <span>{label}</span>
