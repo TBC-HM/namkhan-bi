@@ -498,7 +498,7 @@ export default async function ContainerRoomIntel({ container, propertyId, search
                   <div style={{
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                     fontSize: 10, color: 'var(--ink-soft, #5A5A5A)',
-                    borderTop: '1px solid var(--hairline, #E6DFCC)',
+                    borderTop: '1px solid #E0E0E0',
                     paddingTop: 4, marginTop: 4, letterSpacing: '0.04em',
                   }}>
                     <span>Direct sales (YTD)</span>
@@ -514,7 +514,7 @@ export default async function ContainerRoomIntel({ container, propertyId, search
               <div style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 fontSize: 11, paddingTop: 6, marginTop: 2,
-                borderTop: '1px solid var(--hairline, #E6DFCC)',
+                borderTop: '1px solid #E0E0E0',
               }}>
                 <Link href={hrefReservations(code)} style={{
                   textDecoration: 'none', fontWeight: 600,
@@ -624,7 +624,7 @@ async function ReservationsPanel({ propertyId, roomTypeName, activePeriod, curre
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
-              <tr style={{ background: '#FAFAF7' }}>
+              <tr style={{ background: '#FFFFFF', borderBottom: '2px solid #000' }}>
                 <th style={th}>Reservation</th>
                 <th style={th}>Source</th>
                 <th style={th}>Rate plan</th>
@@ -639,7 +639,7 @@ async function ReservationsPanel({ propertyId, roomTypeName, activePeriod, curre
             </thead>
             <tbody>
               {reservations.map((r) => (
-                <tr key={r.reservation_id} style={{ borderTop: '1px solid var(--hairline, #E6DFCC)' }}>
+                <tr key={r.reservation_id} style={{ borderTop: '1px solid #E0E0E0' }}>
                   <td style={tdLeft}>{r.reservation_id}</td>
                   <td style={tdLeft}>{r.source_name ?? '—'}</td>
                   <td style={tdLeft}>{r.rate_plan ?? '—'}</td>
@@ -815,7 +815,7 @@ async function DrillPanel({
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
-              <tr style={{ background: '#FAFAF7' }}>
+              <tr style={{ background: '#FFFFFF', borderBottom: '2px solid #000' }}>
                 <th style={th}>Room type</th>
                 <th style={th}>Month</th>
                 <th style={{ ...th, textAlign: 'right' }}>RN</th>
@@ -836,7 +836,7 @@ async function DrillPanel({
                 const occLy = ly ? num(ly.occ_pct_of_canonical) : null;
                 const rowKey = `${String(r[spec.drill.row_field as keyof DataRow] ?? i)}|${period}`;
                 return (
-                  <tr key={rowKey} style={{ borderTop: '1px solid var(--hairline, #E6DFCC)' }}>
+                  <tr key={rowKey} style={{ borderTop: '1px solid #E0E0E0' }}>
                     <td style={tdLeft}>{String(r[spec.drill.row_field as keyof DataRow] ?? '—')}</td>
                     <td style={tdLeft}>{period || '—'}</td>
                     <td style={tdRight}>
@@ -894,7 +894,7 @@ async function DrillPanel({
           {Array.from(roomTotals.entries()).sort(([, a], [, b]) => b.rev - a.rev).map(([rt, total]) => {
             const rows = sourceMix.filter((r) => r.room_type_name === rt).sort((a, b) => Number(b.rev) - Number(a.rev));
             return (
-              <div key={rt} style={{ padding: '10px 14px', borderTop: '1px solid var(--hairline, #E6DFCC)' }}>
+              <div key={rt} style={{ padding: '10px 14px', borderTop: '1px solid #E0E0E0' }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink, #1B1B1B)', marginBottom: 6 }}>
                   {rt} <span style={{ color: 'var(--ink-soft, #5A5A5A)', fontWeight: 400 }}>· {currencySymbol}{Math.round(total.rev).toLocaleString('en-US')} · {total.rn} RN</span>
                 </div>
@@ -949,7 +949,7 @@ const panelStyle: React.CSSProperties = {
   background: 'var(--paper, #FFFFFF)', overflow: 'hidden',
 };
 const panelHeader: React.CSSProperties = {
-  padding: '8px 14px', borderBottom: '1px solid var(--hairline, #E6DFCC)',
+  padding: '8px 14px', borderBottom: '1px solid #E0E0E0',
   fontSize: 12, fontWeight: 600,
 };
 const panelHeaderSub: React.CSSProperties = { color: 'var(--ink-soft, #5A5A5A)', fontWeight: 400 };
@@ -960,7 +960,7 @@ const closeLinkStyle: React.CSSProperties = {
 const th: React.CSSProperties = {
   padding: '7px 12px', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
   textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', textAlign: 'left',
-  borderBottom: '1px solid var(--hairline, #E6DFCC)',
+  borderBottom: '1px solid #E0E0E0',
 };
 const tdLeft:  React.CSSProperties = { padding: '6px 12px', fontSize: 12, color: 'var(--ink, #1B1B1B)' };
 const tdRight: React.CSSProperties = { padding: '6px 12px', fontSize: 12, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--ink, #1B1B1B)' };
