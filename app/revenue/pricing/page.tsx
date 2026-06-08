@@ -477,8 +477,8 @@ export default async function PricingPage({ searchParams, propertyId }: { search
         <Container title="OCC × BAR · next 30 days" subtitle="bar: base sellable rate · line: forward OCC % per day — spot pricing gaps where high OCC meets low BAR (or vice-versa)">
           <Chart variant="combo" data={occRateRows} xKey="day"
             series={[
-              { key: 'rate', label: 'BAR (USD)', kind: 'bar' },
-              { key: 'occ',  label: 'OCC %',     kind: 'line' },
+              { key: 'rate', label: 'BAR (USD)', type: 'bar' },
+              { key: 'occ',  label: 'OCC %',     type: 'line' },
             ]}
             height={280}
             empty={{ title: 'No 30d rate data' }}
