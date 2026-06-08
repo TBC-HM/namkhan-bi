@@ -424,8 +424,8 @@ export default async function PacePage({
               const openByDefault = Number(yr) >= curY;
               const sumPctStyle = (p: number | null): React.CSSProperties => p == null ? {} : { color: p > 0 ? 'var(--status-green, #2E7D32)' : p < 0 ? 'var(--terracotta, #B8542A)' : 'var(--ink-soft, #5A5A5A)', fontWeight: 600 };
               return (
-                <details key={yr} open={openByDefault} style={{ border: '1px solid var(--hairline, #E6DFCC)', borderRadius: 4, background: 'var(--paper, #FFFFFF)' }}>
-                  <summary style={{ cursor: 'pointer', padding: '8px 12px', fontSize: 12, color: 'var(--ink, #1B1B1B)', background: '#FAFAF7', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>
+                <details key={yr} open={openByDefault} style={{ border: '1px solid #E0E0E0', borderRadius: 4, background: 'var(--paper, #FFFFFF)' }}>
+                  <summary style={{ cursor: 'pointer', padding: '8px 12px', fontSize: 12, color: 'var(--ink, #1B1B1B)', background: '#FFFFFF', borderBottom: '2px solid #000' }}>
                     <strong style={{ marginRight: 12 }}>{yr}</strong>
                     <span style={{ color: 'var(--ink-soft, #5A5A5A)' }}>{yearRows.length} mo</span>
                     <span style={{ marginLeft: 12 }}>RN {sumRn.toLocaleString('en-US')}</span>
@@ -436,14 +436,14 @@ export default async function PacePage({
                   <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                       <thead>
-                        <tr style={{ background: '#FAFAF7' }}>
-                      <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>Month</th>
-                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>RN</th>
-                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>LY RN</th>
-                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>RN var %</th>
-                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>Total Revenue</th>
-                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>LY Total Revenue</th>
-                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>Rev var %</th>
+                        <tr style={{ background: '#FFFFFF' }}>
+                      <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #000' }}>Month</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #000' }}>RN</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #000' }}>LY RN</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #000' }}>RN var %</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #000' }}>Total Revenue</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #000' }}>LY Total Revenue</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #000' }}>Rev var %</th>
                     </tr>
                       </thead>
                       <tbody>
@@ -452,10 +452,10 @@ export default async function PacePage({
                       const revVar = r.rev_var_pct == null ? null : Number(r.rev_var_pct);
                       const rnColor = rnVar == null ? 'var(--ink-soft, #5A5A5A)' : rnVar > 0 ? 'var(--status-green, #2E7D32)' : rnVar < 0 ? 'var(--terracotta, #B8542A)' : 'var(--ink-soft, #5A5A5A)';
                       const revColor = revVar == null ? 'var(--ink-soft, #5A5A5A)' : revVar > 0 ? 'var(--status-green, #2E7D32)' : revVar < 0 ? 'var(--terracotta, #B8542A)' : 'var(--ink-soft, #5A5A5A)';
-                      const tdN: React.CSSProperties = { padding: '4px 10px', fontSize: 11, color: 'var(--ink, #1B1B1B)', textAlign: 'right', fontVariantNumeric: 'tabular-nums', borderTop: '1px solid var(--hairline, #E6DFCC)' };
+                      const tdN: React.CSSProperties = { padding: '4px 10px', fontSize: 11, color: 'var(--ink, #1B1B1B)', textAlign: 'right', fontVariantNumeric: 'tabular-nums', borderTop: '1px solid #E0E0E0' };
                       return (
                         <tr key={r.ci_month}>
-                          <td style={{ padding: '4px 10px', fontSize: 11, color: 'var(--ink, #1B1B1B)', borderTop: '1px solid var(--hairline, #E6DFCC)' }}>{r.ci_month}</td>
+                          <td style={{ padding: '4px 10px', fontSize: 11, color: 'var(--ink, #1B1B1B)', borderTop: '1px solid #E0E0E0' }}>{r.ci_month}</td>
                           <td style={tdN}>{Number(r.room_nights ?? 0).toLocaleString('en-US')}</td>
                           <td style={tdN}>{r.ly_room_nights == null ? '—' : Number(r.ly_room_nights).toLocaleString('en-US')}</td>
                           <td style={{ ...tdN, color: rnColor, fontWeight: 600 }}>{rnVar == null ? '—' : `${rnVar > 0 ? '+' : ''}${rnVar.toFixed(1)}%`}</td>
