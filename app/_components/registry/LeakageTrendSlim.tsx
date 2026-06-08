@@ -22,6 +22,7 @@ export default async function LeakageTrendSlim({ propertyId }: Props) {
     .from('v_leakage_monthly_total')
     .select('*')
     .eq('property_id', propertyId)
+    .gte('month_label', '2024-01')
     .order('month_label', { ascending: true });
 
   const rows = (data ?? []) as Row[];
@@ -36,7 +37,7 @@ export default async function LeakageTrendSlim({ propertyId }: Props) {
 
   return (
     <div style={{ gridColumn: '1 / -1' }}>
-      <Container title="Leakage Trend" subtitle="monthly total leakage since data start · all 4 channel categories combined">
+      <Container title="Leakage Trend" subtitle="monthly total leakage · since 2024-01 · all 4 channel categories combined">
         <Chart
           variant="bar"
           data={chartData}
