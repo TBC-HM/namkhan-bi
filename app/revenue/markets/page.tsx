@@ -68,7 +68,7 @@ export default async function MarketsPage({ propertyId }: Props = {}) {
 
   const [summary, revShare, tyVsLy, leadStack, stayMonth, roomType, losDist, leadDist] = await Promise.all([
     supabase.from('v_country_market_summary')
-      .select('guest_country_iso2, bookings, room_nights, revenue, adr, avg_los, avg_lead_days, ly_revenue, revenue_yoy_pct, rn_yoy_pct, top_channel, top_source')
+      .select('guest_country_iso2, bookings, room_nights, revenue, adr, avg_los, avg_lead_days, ly_revenue, ly12_revenue, revenue_yoy_pct, rn_yoy_pct, top_channel, top_source')
       .eq('property_id', pid)
       .order('revenue', { ascending: false })
       .limit(40)
@@ -120,7 +120,7 @@ export default async function MarketsPage({ propertyId }: Props = {}) {
         direction: yoy > 0.5 ? 'up' : yoy < -0.5 ? 'down' : 'flat',
         isGoodWhenUp: true,
       },
-      footnote: `${Number(r.room_nights ?? 0)} RN · ADR ${moneyFmt(Number(r.adr ?? 0))} · LOS ${Number(r.avg_los ?? 0).toFixed(1)} · lead ${Number(r.avg_lead_days ?? 0)}d · ${String(r.top_channel ?? '—')}`,
+      footnote: `${Number(r.room_nights ?? 0)} RN · LY ${curYear - 1} (full) ${moneyFmt(Number(r.ly12_revenue ?? 0))} · ADR ${moneyFmt(Number(r.adr ?? 0))} · LOS ${Number(r.avg_los ?? 0).toFixed(1)} · lead ${Number(r.avg_lead_days ?? 0)}d`,
     };
   });
 
