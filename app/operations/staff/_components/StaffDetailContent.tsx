@@ -19,8 +19,8 @@ import { DqStrip } from './DqStrip';
 import CompBreakdown from './CompBreakdown';
 import YtdSummary from './YtdSummary';
 import { SkillsEditor } from './SkillsEditor';
-import KpiStrip, { type KpiStripItem } from '@/components/kpi/KpiStrip';
-import Page from '@/components/page/Page';
+// PBS 2026-06-08 #134: legacy Page+KpiStrip swapped for B&W primitives.
+import { DashboardPage, Container, KpiTile, type KpiTileProps, type DashboardTab } from '@/app/(cockpit)/_design';
 import NativeAmount from './NativeAmount';
 import { OPERATIONS_SUBPAGES } from '../../_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
@@ -64,38 +64,28 @@ export default async function StaffDetailContent({
     : `/h/${propertyId}/operations/staff`;
 
   return (
-    <Page
-      eyebrow={
-        propertyLabel
-          ? `Operations · Staff · ${propertyLabel} · ${d.emp_id}`
-          : `Operations · Staff · ${d.emp_id}`
-      }
-      title={
-        <>
-          {d.full_name}{' '}
-          <em style={{ color: 'var(--brass)', fontStyle: 'italic', fontSize: '0.6em' }}>
-            · {d.position_title}
-          </em>
-        </>
-      }
-      subPages={rewriteSubPagesForProperty(OPERATIONS_SUBPAGES, propertyId)}
+    <DashboardPage
+      title={`${d.full_name} · ${d.position_title}`}
+      subtitle={propertyLabel ? `Operations · Staff · ${propertyLabel} · ${d.emp_id}` : `Operations · Staff · ${d.emp_id}`}
+      tabs={rewriteSubPagesForProperty(OPERATIONS_SUBPAGES, propertyId).map((s) => ({ key: s.href, label: s.label, href: s.href, active: s.href.includes('/operations/staff') })) as DashboardTab[]}
     >
+      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 18 }}>
       {/* Breadcrumb */}
       <nav style={{
-        fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.14em',
-        textTransform: 'uppercase', color: 'var(--ink-mute)', marginBottom: 12,
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 11, letterSpacing: '0.14em',
+        textTransform: 'uppercase', color: '#5A5A5A', marginBottom: 12,
       }}>
-        <Link href={backHref} style={{ color: 'var(--brass)', textDecoration: 'none' }}>
+        <Link href={backHref} style={{ color: '#000', textDecoration: 'underline' }}>
           ← Staff register
         </Link>
-        <span style={{ margin: '0 8px', color: 'var(--ink-faint)' }}>/</span>
-        <span style={{ color: 'var(--ink-soft)' }}>{d.emp_id}</span>
-        <span style={{ margin: '0 8px', color: 'var(--ink-faint)' }}>·</span>
+        <span style={{ margin: '0 8px', color: '#9A9A9A' }}>/</span>
+        <span style={{ color: '#000' }}>{d.emp_id}</span>
+        <span style={{ margin: '0 8px', color: '#9A9A9A' }}>·</span>
         <StatusPill active={d.is_active} />
-        <span style={{ margin: '0 8px', color: 'var(--ink-faint)' }}>·</span>
+        <span style={{ margin: '0 8px', color: '#9A9A9A' }}>·</span>
         <span style={{
-          padding: '2px 8px', borderRadius: 3, border: '1px solid var(--kpi-frame)',
-          background: 'var(--paper-deep)', color: 'var(--ink)',
+          padding: '2px 8px', borderRadius: 3, border: '1px solid #E0E0E0',
+          background: '#FFFFFF', color: '#000',
         }}>
           {d.employment_type}
         </span>
@@ -109,15 +99,20 @@ export default async function StaffDetailContent({
       )}
 
       {/* CANONICAL KPI STRIP */}
-      <KpiStrip items={[
-        { label: `Monthly cost · ${ccy}`, value: fmtNative(d.monthly_salary, ccy), hint: `≈ $${Math.round(monthlyUsd).toLocaleString('en-US')}` },
-        { label: `Annual cost · ${ccy}`, value: fmtNative(annualNative, ccy), hint: `≈ $${Math.round(annualNative * fx).toLocaleString('en-US')}` },
-        { label: 'Hourly cost · LAK', value: d.hourly_cost_lak ? fmtNative(d.hourly_cost_lak, 'LAK') : '—', hint: d.contract_hours_pw ? `${d.contract_hours_pw} h/wk` : '' },
-        { label: 'Tenure', value: d.tenure_years != null ? `${d.tenure_years} yrs` : '—', hint: d.hire_date ?? 'Backfill required' },
-        { label: 'Attendance score', value: d.attendance_score ?? 0, kind: 'count', tone: (d.attendance_score ?? 0) >= 80 ? 'pos' : (d.attendance_score ?? 0) >= 50 ? 'warn' : 'neg', hint: '0-100 · 30d' },
-        { label: 'Hours · YTD',      value: d.attendance_hours_ytd != null ? `${Math.round(d.attendance_hours_ytd)}h` : '—', hint: 'logged clock-in' },
-        { label: 'Service charge · YTD', value: d.service_charge_ytd_lak ? fmtNative(d.service_charge_ytd_lak, 'LAK') : '—', hint: 'F&B tip pool' },
-      ] satisfies KpiStripItem[]} />
+      <Container title="Compensation headline" subtitle="live from public.v_staff_register_extended" density="compact">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+          {([
+            { label: `Monthly cost · ${ccy}`,    value: fmtNative(d.monthly_salary, ccy),  footnote: `≈ $${Math.round(monthlyUsd).toLocaleString('en-US')}`, status: 'grey' as const },
+            { label: `Annual cost · ${ccy}`,     value: fmtNative(annualNative, ccy),      footnote: `≈ $${Math.round(annualNative * fx).toLocaleString('en-US')}`, status: 'grey' as const },
+            { label: 'Hourly cost · LAK',        value: d.hourly_cost_lak ? fmtNative(d.hourly_cost_lak, 'LAK') : '—', footnote: d.contract_hours_pw ? `${d.contract_hours_pw} h/wk` : 'no contract hours', status: 'grey' as const },
+            { label: 'Tenure',                   value: d.tenure_years != null ? `${d.tenure_years} yrs` : '—', footnote: d.hire_date ?? 'Backfill required', status: (d.hire_date ? 'grey' : 'amber') as 'grey' | 'amber' },
+            { label: 'Attendance score',         value: d.attendance_score ?? 0,           footnote: '0-100 · 30d',
+              status: ((d.attendance_score ?? 0) >= 80 ? 'green' : (d.attendance_score ?? 0) >= 50 ? 'amber' : 'red') as 'green'|'amber'|'red' },
+            { label: 'Hours · YTD',              value: d.attendance_hours_ytd != null ? `${Math.round(d.attendance_hours_ytd)}h` : '—', footnote: 'logged clock-in', status: 'grey' as const },
+            { label: 'Service charge · YTD',     value: d.service_charge_ytd_lak ? fmtNative(d.service_charge_ytd_lak, 'LAK') : '—', footnote: 'F&B tip pool', status: 'grey' as const },
+          ] satisfies KpiTileProps[]).map((t, i) => <KpiTile key={i} size="sm" {...t} />)}
+        </div>
+      </Container>
 
       {/* TWO-COLUMN BODY */}
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 18, marginTop: 20 }}>
@@ -162,12 +157,12 @@ export default async function StaffDetailContent({
             {d.nationality && <Row label="Nationality" value={d.nationality} />}
             {d.email && (
               <Row label="Email" value={
-                <a href={`mailto:${d.email}`} style={{ color: 'var(--brass)' }}>{d.email}</a>
+                <a href={`mailto:${d.email}`} style={{ color: '#000', textDecoration: 'underline' }}>{d.email}</a>
               } />
             )}
             {d.phone_canonical && (
               <Row label="Phone" value={
-                <a href={`tel:${d.phone_canonical.replace(/\s+/g, '')}`} style={{ color: 'var(--brass)' }}>{d.phone_canonical}</a>
+                <a href={`tel:${d.phone_canonical.replace(/\s+/g, '')}`} style={{ color: '#000', textDecoration: 'underline' }}>{d.phone_canonical}</a>
               } />
             )}
           </Panel>
@@ -177,7 +172,7 @@ export default async function StaffDetailContent({
             {d.last_raise_date ? (
               <>
                 <Row label="Last raise" value={
-                  <span style={{ color: (d.last_raise_pct ?? 0) >= 0 ? 'var(--st-good)' : 'var(--oxblood-soft)' }}>
+                  <span style={{ color: (d.last_raise_pct ?? 0) >= 0 ? '#1F7A4B' : '#B22222' }}>
                     {(d.last_raise_pct ?? 0) >= 0 ? '+' : ''}{d.last_raise_pct}%
                   </span>
                 } mono />
@@ -235,7 +230,7 @@ export default async function StaffDetailContent({
                 ))}
               </div>
             ) : (
-              <div style={{ fontSize: 12, color: 'var(--ink-faint)', fontStyle: 'italic' }}>
+              <div style={{ fontSize: 12, color: '#9A9A9A', fontStyle: 'italic' }}>
                 — no skills tagged · click Edit to add
               </div>
             )}
@@ -269,7 +264,8 @@ export default async function StaffDetailContent({
           </Panel>
         </div>
       </div>
-    </Page>
+      </div>
+    </DashboardPage>
   );
 }
 
@@ -286,24 +282,24 @@ function Panel({
   return (
     <section style={{
       borderRadius: 6,
-      border: '1px solid var(--kpi-frame)',
-      background: 'var(--paper-warm)',
+      border: '1px solid #E0E0E0',
+      background: '#FFFFFF',
       overflow: 'hidden',
     }}>
       <header style={{
         padding: '10px 14px',
-        borderBottom: '1px solid var(--line-soft)',
-        background: 'var(--paper)',
+        borderBottom: '1px solid #E0E0E0',
+        background: '#FFFFFF',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         <div>
           <h3 style={{
-            fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
-            letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase',
-            color: 'var(--brass)', margin: 0,
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 11,
+            letterSpacing: '0.14em', textTransform: 'uppercase',
+            color: '#000', margin: 0, fontWeight: 600,
           }}>{title}</h3>
           {sub && (
-            <p style={{ marginTop: 3, fontSize: 11, color: 'var(--ink-mute)' }}>{sub}</p>
+            <p style={{ marginTop: 3, fontSize: 11, color: '#5A5A5A' }}>{sub}</p>
           )}
         </div>
         {action}
@@ -325,10 +321,10 @@ function Row({
       display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12,
       padding: '4px 0', fontSize: 12,
     }}>
-      <span style={{ color: 'var(--ink-mute)' }}>{label}</span>
+      <span style={{ color: '#5A5A5A' }}>{label}</span>
       <span style={{
-        color: 'var(--ink)',
-        fontFamily: mono ? 'var(--mono)' : undefined,
+        color: '#000',
+        fontFamily: mono ? 'ui-monospace, SFMono-Regular, Menlo, monospace' : undefined,
         textAlign: 'right',
       }}>{value}</span>
     </div>
@@ -336,13 +332,13 @@ function Row({
 }
 
 const chip: React.CSSProperties = {
-  background: 'var(--paper-deep)',
-  color: 'var(--ink)',
-  border: '1px solid var(--kpi-frame)',
+  background: '#F5F5F5',
+  color: '#000',
+  border: '1px solid #E0E0E0',
   padding: '3px 8px',
   borderRadius: 4,
   fontSize: 11,
-  fontFamily: 'var(--mono)',
+  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
   letterSpacing: '0.06em',
 };
 
@@ -350,10 +346,10 @@ function StatusPill({ active }: { active: boolean }) {
   return (
     <span style={{
       padding: '2px 8px', borderRadius: 3,
-      background: active ? 'rgba(107,147,121,0.18)' : 'var(--paper-deep)',
-      color: active ? 'var(--st-good, #2c7a4b)' : 'var(--ink-mute)',
-      border: '1px solid var(--kpi-frame)',
-      fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '0.14em',
+      background: active ? 'rgba(46,125,50,0.12)' : '#F5F5F5',
+      color: active ? '#1F7A4B' : '#5A5A5A',
+      border: '1px solid #E0E0E0',
+      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 9, letterSpacing: '0.14em',
       textTransform: 'uppercase', fontWeight: 600,
     }}>{active ? 'Active' : 'Archived'}</span>
   );
@@ -364,15 +360,15 @@ function DocRow({ label, ok, hint }: { label: string; ok: boolean; hint: string 
     <div style={{
       display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
       gap: 12, padding: '6px 0',
-      borderBottom: '1px solid var(--line-soft)',
+      borderBottom: '1px solid #F0F0F0',
     }}>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ color: 'var(--ink)', fontWeight: 500, fontSize: 13, margin: 0 }}>{label}</p>
-        <p style={{ color: 'var(--ink-mute)', fontSize: 11, margin: '2px 0 0' }}>{hint}</p>
+        <p style={{ color: '#000', fontWeight: 500, fontSize: 13, margin: 0 }}>{label}</p>
+        <p style={{ color: '#5A5A5A', fontSize: 11, margin: '2px 0 0' }}>{hint}</p>
       </div>
       <span style={{
         marginTop: 6, width: 8, height: 8, borderRadius: '50%',
-        background: ok ? 'var(--st-good, #2c7a4b)' : 'var(--ink-faint)',
+        background: ok ? '#1F7A4B' : '#B5B5B5',
         flexShrink: 0,
       }} />
     </div>
