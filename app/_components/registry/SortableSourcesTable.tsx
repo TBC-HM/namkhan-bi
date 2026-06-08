@@ -104,8 +104,8 @@ export default function SortableSourcesTable({ rows, moneyCurrency, initialSort 
           textAlign: align ?? 'left',
           cursor: 'pointer',
           userSelect: 'none',
-          color: active ? 'var(--primary, #1F3A2E)' : 'var(--ink-soft, #5A5A5A)',
-          fontWeight: active ? 700 : 600,
+          color: '#000',
+          fontWeight: 700,
         }}
       >
         {label}{arrow}
@@ -121,7 +121,7 @@ export default function SortableSourcesTable({ rows, moneyCurrency, initialSort 
     <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
-          <tr style={{ background: 'var(--bg, #F4EFE2)', textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: 10 }}>
+          <tr style={{ background: '#FFFFFF', borderBottom: '2px solid #000', textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: 10 }}>
             <HeaderCell k="source" label="Source" />
             <HeaderCell k="category" label="Group" />
             <HeaderCell k="res_24" label="Res 24" align="right" />
@@ -141,7 +141,7 @@ export default function SortableSourcesTable({ rows, moneyCurrency, initialSort 
         </thead>
         <tbody>
           {sorted.map((r, i) => (
-            <tr key={`${r.source}-${i}`} style={{ borderTop: '1px solid var(--hairline, #E6DFCC)' }}>
+            <tr key={`${r.source}-${i}`} style={{ borderTop: '1px solid #E0E0E0' }}>
               <td style={tdLabelStyle}><Link href={r.drillHref} style={sourceLinkStyle}>{r.source}</Link></td>
               <td style={tdLabelStyle}>{r.category}</td>
               <td style={tdNumStyle}>{r.res_24}</td>
