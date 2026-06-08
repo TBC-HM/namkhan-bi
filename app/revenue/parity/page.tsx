@@ -1,8 +1,15 @@
 // app/revenue/parity/page.tsx
-// 2026-05-19 refactor onto @/app/(cockpit)/_design primitives.
-// Lighthouse-style filter bar (member rate/device/LOS/etc.) removed —
-// reinstate via primitives v6 if needed. Date×OTA grid → Chart variant=heatmap.
-// Breach list → Chart variant=table with pre-formatted cells.
+// 2026-06-08 #127 rewrite — wire the actual gold views:
+//   • v_parity_summary        — breach severity counts (rollup tiles)
+//   • v_parity_matrix         — our_rate vs comp range per stay_date
+//                               (line chart + Δ bars + grid)
+//   • v_parity_grid           — OTA-by-day rate breakdown (wide format)
+//   • v_parity_open_breaches  — actionable breach list (when populated)
+//
+// Prior code expected v_parity_grid in LONG format
+// (.channel / .our_rate_usd / .their_rate_usd / .gap_pct / .severity)
+// but the view is WIDE (one row per stay_date with booking_usd / agoda_usd /
+// expedia_usd / direct_usd / etc. columns). Heatmap silently rendered empty.
 
 import {
   DashboardPage, Container, KpiTile, Chart,
@@ -18,9 +25,34 @@ export const dynamic = 'force-dynamic';
 
 interface Props { searchParams: Record<string, string | string[] | undefined>; propertyId?: number }
 
-interface SeverityRow {
+interface SummaryRow {
   open_critical: number; open_high: number; open_medium: number; open_low: number; open_total: number;
   detected_7d: number; detected_30d: number; last_detected_at: string | null;
+}
+interface MatrixRow {
+  stay_date: string;
+  namkhan_usd: number | null;
+  namkhan_shop_date: string | null;
+  comp_median_usd: number | null;
+  comp_lowest_usd: number | null;
+  comp_highest_usd: number | null;
+  comps_with_price: number | null;
+  comps_sold_out: number | null;
+  comps_undercutting: string[] | null;
+  num_comps_undercutting: number | null;
+  pct_vs_cheapest_comp: number | null;
+}
+interface GridRow {
+  stay_date: string;
+  direct_usd:  number | null; direct_avail:  boolean | null;
+  booking_usd: number | null; booking_avail: boolean | null;
+  expedia_usd: number | null; expedia_avail: boolean | null;
+  agoda_usd:   number | null; agoda_avail:   boolean | null;
+  hotels_usd:  number | null; hotels_avail:  boolean | null;
+  trip_usd:    number | null; trip_avail:    boolean | null;
+  last_shop_date: string | null;
+  loss_channels:  string[] | null;
+  comp_lowest_usd: number | null;
 }
 interface BreachRow {
   breach_id: string; detected_at: string; shop_date: string; stay_date: string;
@@ -30,37 +62,32 @@ interface BreachRow {
   delta_usd: number | null; delta_pct: number | null;
   raw_room_type: string | null;
 }
-interface AgentRow {
-  agent_id: string; status: string; schedule_human: string | null;
-  monthly_budget_usd: number | null; month_to_date_cost_usd: number | null;
-  last_run_at: string | null;
-}
-interface GridRow {
-  stay_date: string; channel: string;
-  our_rate_usd: number | null; their_rate_usd: number | null;
-  gap_pct: number | null; severity: string | null;
-  last_shop_date: string | null;
-}
 
-async function loadAll(): Promise<{ agent: AgentRow | null; summary: SeverityRow | null; breaches: BreachRow[]; grid: GridRow[] }> {
-  const agentP = supabase.schema('governance').from('agents')
-    .select('agent_id, status, schedule_human, monthly_budget_usd, month_to_date_cost_usd, last_run_at')
-    .eq('code', 'parity_agent')
-    .maybeSingle();
-
-  const [agentR, summaryR, breachesR, gridR] = await Promise.all([
-    agentP,
+async function loadAll(): Promise<{
+  summary: SummaryRow | null;
+  matrix: MatrixRow[];
+  grid: GridRow[];
+  breaches: BreachRow[];
+}> {
+  const [summaryR, matrixR, gridR, breachesR] = await Promise.all([
     supabase.from('v_parity_summary').select('*'),
+    supabase.from('v_parity_matrix').select('*').order('stay_date'),
+    supabase.from('v_parity_grid').select('*').order('stay_date'),
     supabase.from('v_parity_open_breaches').select('*').limit(50),
-    supabase.from('v_parity_grid').select('*').order('stay_date', { ascending: true }),
   ]);
-
   return {
-    agent:    (agentR.data ?? null) as AgentRow | null,
-    summary:  ((summaryR.data ?? []) as SeverityRow[])[0] ?? null,
-    breaches: (breachesR.data ?? []) as BreachRow[],
+    summary:  ((summaryR.data ?? []) as SummaryRow[])[0] ?? null,
+    matrix:   (matrixR.data ?? []) as MatrixRow[],
     grid:     (gridR.data ?? []) as GridRow[],
+    breaches: (breachesR.data ?? []) as BreachRow[],
   };
+}
+
+function fmtPct(v: number | null | undefined, signed = false): string {
+  if (v == null) return EMPTY;
+  const n = Number(v);
+  const sign = signed && n > 0 ? '+' : n < 0 ? '−' : '';
+  return `${sign}${Math.abs(n).toFixed(1)}%`;
 }
 
 function fmtRelative(iso: string | null | undefined): string {
@@ -84,37 +111,117 @@ export default async function ParityPage({ propertyId }: Props) {
 
   const data = await loadAll();
   const summary = data.summary;
-  const agent = data.agent;
+  const matrix = data.matrix;
   const grid = data.grid;
-  const lastShopIso = grid.map((r) => r.last_shop_date).filter((d): d is string => !!d).sort().pop() ?? null;
 
-  // KPI tiles
+  const lastShopMatrix = matrix.map((r) => r.namkhan_shop_date).filter((d): d is string => !!d).sort().pop() ?? null;
+  const lastShopGrid   = grid.map((r) => r.last_shop_date).filter((d): d is string => !!d).sort().pop() ?? null;
+  const lastShopIso    = [lastShopMatrix, lastShopGrid].filter((x): x is string => !!x).sort().pop() ?? null;
+
+  // ── Metrics computed from v_parity_matrix ──────────────────────────────
+  const matrixWithPct  = matrix.filter((r) => r.pct_vs_cheapest_comp != null);
+  const daysShopped    = matrix.filter((r) => r.namkhan_usd != null && (r.comps_with_price ?? 0) > 0).length;
+  const avgPctVsCheap  = matrixWithPct.length === 0 ? null
+    : matrixWithPct.reduce((acc, r) => acc + Number(r.pct_vs_cheapest_comp ?? 0), 0) / matrixWithPct.length;
+  const daysUndercut   = matrix.filter((r) => (r.num_comps_undercutting ?? 0) > 0).length;
+  const avgNumUndercut = matrix.length === 0 ? 0
+    : matrix.reduce((acc, r) => acc + Number(r.num_comps_undercutting ?? 0), 0) / matrix.length;
+
+  // ── KPI tiles ──────────────────────────────────────────────────────────
   const tiles: KpiTileProps[] = [
+    { label: 'Days shopped', value: daysShopped, size: 'sm',
+      footnote: lastShopIso ? `last shop ${fmtIsoDate(lastShopIso)}` : 'no shop yet',
+      status: daysShopped === 0 ? 'grey' : 'green' },
+    { label: 'Avg Δ vs cheapest comp', value: avgPctVsCheap != null ? fmtPct(avgPctVsCheap, true) : EMPTY, size: 'sm',
+      footnote: 'positive = we sit ABOVE the cheapest comp',
+      status: avgPctVsCheap == null ? 'grey' : avgPctVsCheap > 20 ? 'red' : avgPctVsCheap > 5 ? 'amber' : 'green' },
+    { label: 'Days undercut by comps', value: daysUndercut, size: 'sm',
+      footnote: `of ${matrix.length} stay-dates shopped`,
+      status: daysUndercut === 0 ? 'green' : daysUndercut >= matrix.length / 2 ? 'red' : 'amber' },
+    { label: 'Avg # comps under us', value: avgNumUndercut.toFixed(1), size: 'sm',
+      footnote: 'mean per stay-date',
+      status: avgNumUndercut > 3 ? 'red' : avgNumUndercut > 1 ? 'amber' : 'green' },
     { label: 'Open breaches · total', value: summary?.open_total ?? 0, size: 'sm',
-      footnote: lastShopIso ? `shopped ${fmtIsoDate(lastShopIso)}` : 'no shop yet',
+      footnote: 'cross-channel rate-parity rule hits',
       status: (summary?.open_total ?? 0) === 0 ? 'green' : (summary?.open_total ?? 0) >= 5 ? 'red' : 'amber' },
-    { label: 'Critical · open', value: summary?.open_critical ?? 0, size: 'sm',
-      footnote: 'non-refundable above refundable',
-      status: (summary?.open_critical ?? 0) === 0 ? 'green' : 'red' },
-    { label: 'High · open', value: summary?.open_high ?? 0, size: 'sm',
-      status: (summary?.open_high ?? 0) === 0 ? 'green' : 'amber' },
     { label: 'Detected · last 7d', value: summary?.detected_7d ?? 0, size: 'sm',
+      footnote: `last 30d: ${summary?.detected_30d ?? 0}`,
       status: 'grey' },
-    { label: 'Detected · last 30d', value: summary?.detected_30d ?? 0, size: 'sm',
-      status: 'grey' },
-    { label: 'Agent status', value: agent?.status ?? '—', size: 'sm',
-      footnote: agent?.last_run_at ? `last run ${fmtRelative(agent.last_run_at)}` : 'never run',
-      status: agent?.status === 'active' ? 'green' : 'grey' },
   ];
 
-  // Date×OTA heatmap data (gap_pct as cell value, signed)
-  const heatmapData = grid.map((r) => ({
+  // ── Chart 1: Our rate vs comp range (line) ─────────────────────────────
+  const rangeData = matrix.map((r) => ({
     stay_date: r.stay_date,
-    channel:   r.channel,
-    gap:       Number(r.gap_pct ?? 0),
+    namkhan: r.namkhan_usd != null ? Number(r.namkhan_usd) : null,
+    lowest:  r.comp_lowest_usd  != null ? Number(r.comp_lowest_usd)  : null,
+    median:  r.comp_median_usd  != null ? Number(r.comp_median_usd)  : null,
+    highest: r.comp_highest_usd != null ? Number(r.comp_highest_usd) : null,
   }));
+  const rangeSeries: ChartSeries[] = [
+    { key: 'namkhan', label: 'Namkhan' },
+    { key: 'lowest',  label: 'Cheapest comp' },
+    { key: 'median',  label: 'Median comp' },
+    { key: 'highest', label: 'Highest comp' },
+  ];
 
-  // Breach table rows (pre-formatted)
+  // ── Chart 2: Δ vs cheapest comp (signed bar) ───────────────────────────
+  const deltaData = matrix
+    .filter((r) => r.pct_vs_cheapest_comp != null)
+    .map((r) => ({
+      stay_date: r.stay_date,
+      delta_pct: Math.round(Number(r.pct_vs_cheapest_comp ?? 0) * 10) / 10,
+    }));
+  const deltaSeries: ChartSeries[] = [
+    { key: 'delta_pct', label: 'Δ vs cheapest %' },
+  ];
+
+  // ── Data table 1: Daily parity grid (from v_parity_matrix) ─────────────
+  const matrixTable = matrix.map((r) => ({
+    stay_date:  fmtIsoDate(r.stay_date),
+    namkhan:    fmtTableUsd(r.namkhan_usd),
+    lowest:     fmtTableUsd(r.comp_lowest_usd),
+    median:     fmtTableUsd(r.comp_median_usd),
+    highest:    fmtTableUsd(r.comp_highest_usd),
+    comps:      r.comps_with_price ?? EMPTY,
+    undercut:   r.num_comps_undercutting ?? EMPTY,
+    delta_pct:  fmtPct(r.pct_vs_cheapest_comp, true),
+  }));
+  const matrixCols: ChartSeries[] = [
+    { key: 'stay_date', label: 'Stay date' },
+    { key: 'namkhan',   label: 'Our rate' },
+    { key: 'lowest',    label: 'Cheapest' },
+    { key: 'median',    label: 'Median' },
+    { key: 'highest',   label: 'Highest' },
+    { key: 'comps',     label: 'Comps' },
+    { key: 'undercut',  label: '# under us' },
+    { key: 'delta_pct', label: 'Δ vs cheapest' },
+  ];
+
+  // ── Data table 2: OTA channel breakdown (from v_parity_grid wide) ──────
+  const otaTable = grid.map((r) => ({
+    stay_date:   fmtIsoDate(r.stay_date),
+    direct:      r.direct_usd  != null ? fmtTableUsd(r.direct_usd)  : EMPTY,
+    booking:     r.booking_usd != null ? fmtTableUsd(r.booking_usd) : EMPTY,
+    agoda:       r.agoda_usd   != null ? fmtTableUsd(r.agoda_usd)   : EMPTY,
+    expedia:     r.expedia_usd != null ? fmtTableUsd(r.expedia_usd) : EMPTY,
+    hotels:      r.hotels_usd  != null ? fmtTableUsd(r.hotels_usd)  : EMPTY,
+    trip:        r.trip_usd    != null ? fmtTableUsd(r.trip_usd)    : EMPTY,
+    comp_lowest: fmtTableUsd(r.comp_lowest_usd),
+    last_shop:   r.last_shop_date ? fmtIsoDate(r.last_shop_date) : EMPTY,
+  }));
+  const otaCols: ChartSeries[] = [
+    { key: 'stay_date',   label: 'Stay date' },
+    { key: 'direct',      label: 'Direct' },
+    { key: 'booking',     label: 'Booking' },
+    { key: 'agoda',       label: 'Agoda' },
+    { key: 'expedia',     label: 'Expedia' },
+    { key: 'hotels',      label: 'Hotels' },
+    { key: 'trip',        label: 'Trip' },
+    { key: 'comp_lowest', label: 'Comp ↓' },
+    { key: 'last_shop',   label: 'Last shop' },
+  ];
+
+  // ── Open breaches table ────────────────────────────────────────────────
   const breachRows = data.breaches
     .slice()
     .sort((a, b) => (SEVERITY_ORDER[a.severity] ?? 9) - (SEVERITY_ORDER[b.severity] ?? 9))
@@ -129,12 +236,9 @@ export default async function ParityPage({ propertyId }: Props) {
       delta:    b.delta_usd != null
         ? (b.delta_usd >= 0 ? '+' : '−') + fmtTableUsd(Math.abs(b.delta_usd))
         : EMPTY,
-      delta_pct: b.delta_pct != null
-        ? (b.delta_pct >= 0 ? '+' : '−') + Math.abs(b.delta_pct).toFixed(1) + '%'
-        : EMPTY,
-      detected: fmtRelative(b.detected_at),
+      delta_pct: fmtPct(b.delta_pct, true),
+      detected:  fmtRelative(b.detected_at),
     }));
-
   const breachCols: ChartSeries[] = [
     { key: 'rule',      label: 'Rule' },
     { key: 'stay',      label: 'Stay' },
@@ -150,24 +254,46 @@ export default async function ParityPage({ propertyId }: Props) {
   return (
     <DashboardPage
       title="Revenue · Parity"
-      subtitle="Watch the price line, close the leaks."
+      subtitle={lastShopIso ? `competitive pricing position · last shop ${fmtIsoDate(lastShopIso)}` : 'awaiting first shop'}
       tabs={tabs}
     >
-      <Container title="Parity headline" subtitle={lastShopIso ? `last shop ${fmtIsoDate(lastShopIso)}` : 'awaiting first shop'} density="compact">
+      <Container title="Parity headline" subtitle="our position vs the comp set" density="compact">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
           {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
         </div>
       </Container>
 
-      <Container title="Date × OTA · gap heatmap" subtitle="positive % = we're priced ABOVE channel">
-        <Chart variant="heatmap" data={heatmapData} xKey="channel" yKey="stay_date"
-          series={[{ key: 'gap', label: 'Gap %' }]}
-          height={Math.max(220, Math.min(560, new Set(grid.map((r) => r.stay_date)).size * 22))}
-          empty={{ title: 'No parity grid data', hint: 'v_parity_grid returned 0 rows' }}
+      <Container title="Our rate vs comp range" subtitle="namkhan_usd plotted against cheapest / median / highest comp · per stay date">
+        <Chart variant="line" data={rangeData} xKey="stay_date"
+          series={rangeSeries}
+          height={300}
+          empty={{ title: 'No parity matrix data', hint: 'v_parity_matrix returned 0 rows' }}
         />
       </Container>
 
-      <Container title={`Open breaches · ${data.breaches.length}`} subtitle="actionable list">
+      <Container title="Δ vs cheapest comp · per stay date" subtitle="positive = we sit ABOVE the cheapest competing rate · negative = we are below">
+        <Chart variant="bar" data={deltaData} xKey="stay_date"
+          series={deltaSeries}
+          height={260}
+          empty={{ title: 'No comparable rates', hint: 'no overlap between our rate and any comp rate' }}
+        />
+      </Container>
+
+      <Container title={`Daily parity grid · ${matrix.length} stay-dates shopped`} subtitle="raw competitive position per stay date">
+        <Chart variant="table" data={matrixTable} xKey="stay_date"
+          series={matrixCols}
+          empty={{ title: 'No matrix rows' }}
+        />
+      </Container>
+
+      <Container title={`OTA channel rates · ${grid.length} stay-dates shopped`} subtitle="our distribution channel rates from comp-set shopping · NULL = not shopped that day">
+        <Chart variant="table" data={otaTable} xKey="stay_date"
+          series={otaCols}
+          empty={{ title: 'No grid rows' }}
+        />
+      </Container>
+
+      <Container title={`Open breaches · ${data.breaches.length}`} subtitle="cross-channel rate-parity rule hits requiring action">
         <Chart variant="table" data={breachRows} xKey="severity"
           series={breachCols}
           empty={{ title: 'No open breaches', hint: 'parity holds across all checks' }}
