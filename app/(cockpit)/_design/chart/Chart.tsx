@@ -188,7 +188,7 @@ export default function Chart(props: ChartProps) {
       );
     }
 
-    case 'heatmap':  return <>{sel}<HeatmapView data={data} xKey={xKey ?? 'x'} yKey={(Array.isArray(yKey) ? yKey[0] : yKey) ?? 'y'} valueKey={series[0]?.key ?? 'value'} height={height} formatY={formatY} /></>;
+    case 'heatmap':  return <>{sel}<HeatmapView data={data} xKey={xKey ?? 'x'} yKey={(Array.isArray(yKey) ? yKey[0] : yKey) ?? 'y'} valueKey={series[0]?.key ?? 'value'} height={height} formatY={formatY} valueSuffix={props.valueSuffix} /></>;
     case 'table':    return <>{sel}<TableView data={data} series={series} xKey={xKey} formatY={formatY} formatX={formatX} onRowClick={onRowClick} /></>;
     case 'tile':     return <>{sel}<TileView data={data} series={series} xKey={xKey} formatY={formatY} /></>;
     case 'cards':    return <>{sel}<CardsView data={data} renderItem={renderItem} series={series} xKey={xKey} /></>;
@@ -199,7 +199,8 @@ export default function Chart(props: ChartProps) {
 
 // ─── Custom variant views ─────────────────────────────────────────────────
 
-function HeatmapView({ data, xKey, yKey, valueKey, height, formatY }: { data: Record<string, unknown>[]; xKey: string; yKey: string; valueKey: string; height: number; formatY?: (v: number) => string }) {
+function HeatmapView({ data, xKey, yKey, valueKey, height, formatY, valueSuffix }: { data: Record<string, unknown>[]; xKey: string; yKey: string; valueKey: string; height: number; formatY?: (v: number) => string; valueSuffix?: string }) {
+  const fmtVal = (v: number) => formatY ? formatY(v) : `${v.toLocaleString('en-US')}${valueSuffix ?? ''}`;
   const xs = Array.from(new Set(data.map((d) => String(d[xKey]))));
   const ys = Array.from(new Set(data.map((d) => String(d[yKey]))));
   const lookup = new Map<string, number>();
@@ -225,8 +226,8 @@ function HeatmapView({ data, xKey, yKey, valueKey, height, formatY }: { data: Re
               const bg = `rgba(31, 58, 46, ${Math.max(0.05, intensity)})`;
               const fg = intensity > 0.55 ? '#FFF' : 'var(--ink, #1B1B1B)';
               return (
-                <div key={`cell-${x}-${y}`} title={`${y} · ${x} · ${formatY ? formatY(v) : v.toLocaleString('en-US')}`} style={{ background: bg, color: fg, padding: '8px 4px', textAlign: 'center', borderRadius: 2, fontVariantNumeric: 'tabular-nums' }}>
-                  {formatY ? formatY(v) : v.toLocaleString('en-US')}
+                <div key={`cell-${x}-${y}`} title={`${y} · ${x} · ${fmtVal(v)}`} style={{ background: bg, color: fg, padding: '8px 4px', textAlign: 'center', borderRadius: 2, fontVariantNumeric: 'tabular-nums', cursor: 'help' }}>
+                  {fmtVal(v)}
                 </div>
               );
             })}
