@@ -101,7 +101,7 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
     key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/demand'),
   }));
 
-  const period = resolvePeriod(searchParams ?? {});
+  const period = resolvePeriod({ ...(searchParams ?? {}), win: (searchParams?.win ?? 'next90') } as Record<string, string | string[] | undefined>); // PBS #130: default this surface to forward next90, not backward 30d
   const [pace, losDist, bwDist, losWindow, countryLW, sdly, chanMix, actualsMonthly, cxl, countryLosBucket, countryWindowBucket] = await Promise.all([
     getPaceOtb(period, pid).catch(() => [] as Record<string, unknown>[]),
     supabase.from('v_chart_los_distribution').select('los_bucket, bucket_order, total_reservations, total_revenue, adr, share_pct').eq('property_id', pid).order('bucket_order'),
@@ -261,7 +261,7 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
   ];
   const hrefFor = (newWin: WindowKey) => {
     const p = new URLSearchParams();
-    if (newWin !== 'next90') p.set('win', newWin);
+    p.set('win', newWin); // PBS 2026-06-08 #130: resolvePeriod defaults to "30d" (backward), so we must ALWAYS pin ?win= here, otherwise +90d silently → Last 30 days
     if (period.cmp && period.cmp !== 'none') p.set('cmp', period.cmp);
     const qs = p.toString();
     return `${basePath}${qs ? '?' + qs : ''}`;
