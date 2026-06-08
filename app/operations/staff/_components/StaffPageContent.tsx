@@ -18,8 +18,8 @@ import DeptPicker from './DeptPicker';
 import { fmtPeriodLabel } from './period-utils';
 import StaffTabStrip from './StaffTabStrip';
 import UploadPayslipsButton from './UploadPayslipsButton';
-import KpiStrip, { type KpiStripItem } from '@/components/kpi/KpiStrip';
-import { DashboardPage, Container } from '@/app/(cockpit)/_design';
+// PBS 2026-06-08 #133: legacy KpiStrip swapped for canonical KpiTile grid (B&W primitives)
+import { DashboardPage, Container, KpiTile, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { OPERATIONS_SUBPAGES } from '../../_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 
@@ -450,80 +450,48 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
     >
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 18 }}>
       <StaffTabStrip propertyId={propertyId} />
-      <KpiStrip items={[
-        { label: 'Active', value: totalActive, kind: 'count', hint: 'on register' },
-        { label: 'Archived', value: archived.length, kind: 'count', hint: 'departed' },
-        { label: 'Headcount paid', value: selHc, kind: 'count', hint: fmtPeriodLabel(selectedMonth) },
-        // PBS 2026-05-13: workforce mix from Factorial contract_pattern.
-        // Only shown when data is available (Donna today).
-        ...(hasContractPattern ? [
-          { label: '12-month workforce', value: cnt12mo,    kind: 'count' as const, tone: 'pos' as const,     hint: 'year-round (≥11 mo · 2025)' },
-          { label: '9-month / seasonal', value: cntSeasonal, kind: 'count' as const, tone: 'neutral' as const, hint: 'fijo discontinuo + seasonal' },
-        ] : []),
-        // PBS 2026-05-14: Company cost KPI shows the most recent 2 months
-        // (always, independent of selectedMonth) + MoM % delta.
-        // Tone: green if cost down, brass-warn if cost up, neutral otherwise.
-        {
-          label: `Company cost · ${shortMonth(mPrevIso)} / ${shortMonth(mCurrIso)}`,
-          value: mCurrIso
-            ? `${fmtCcyShort(usdToCcy(costPrevUsd, dominantCcy), dominantCcy)} → ${fmtCcyShort(usdToCcy(costCurrUsd, dominantCcy), dominantCcy)}`
-            : '—',
-          tone: momPct == null ? 'neutral' : (momPct > 0.5 ? 'warn' : momPct < -0.5 ? 'pos' : 'neutral'),
-          hint: momPct == null ? 'no prior month' : `${momPct >= 0 ? '+' : '−'}${Math.abs(momPct).toFixed(1)}% MoM`,
-        },
-        { label: 'Cost / head', value: fmtCcyShort(usdToCcy(selCph, dominantCcy), dominantCcy), hint: `${dominantCcy} this month` },
-        { label: 'Monthly base', value: fmtCcyShort(usdToCcy(totalMonthlyUSD, dominantCcy), dominantCcy), hint: `register sum · ${dominantCcy}` },
-        { label: 'DQ flags', value: totalFlags, kind: 'count', tone: totalFlags > 0 ? 'warn' : 'pos', hint: 'anomalies' },
-      ] satisfies KpiStripItem[]} />
-
-      <div style={{ marginTop: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
-          <h2 style={{
-            fontFamily: 'var(--mono)',
-            fontSize: 'var(--t-xs)',
-            letterSpacing: 'var(--ls-extra)',
-            textTransform: 'uppercase',
-            color: 'var(--brass)',
-          }}>
-            Trend · {selectedDeptName}
-          </h2>
-          <DeptPicker options={deptOptions} selected={selectedDept} />
+      {/* PBS #133: KPI strip → B&W KpiTile grid in a Container */}
+      <Container title="Workforce headline" subtitle={`${fmtPeriodLabel(selectedMonth)} · live from public.v_staff_register_extended`} density="compact">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+          {([
+            { label: 'Active',          value: totalActive,      footnote: 'on register',
+              status: totalActive > 0 ? 'green' : 'grey' },
+            { label: 'Archived',        value: archived.length,  footnote: 'departed',
+              status: 'grey' },
+            { label: 'Headcount paid',  value: selHc,            footnote: fmtPeriodLabel(selectedMonth),
+              status: selHc > 0 ? 'green' : 'grey' },
+            ...(hasContractPattern ? [
+              { label: '12-month workforce',  value: cnt12mo,     footnote: 'year-round (≥11 mo · 2025)', status: 'green' as const },
+              { label: '9-month / seasonal',  value: cntSeasonal, footnote: 'fijo discontinuo + seasonal', status: 'grey' as const },
+            ] : []),
+            {
+              label: `Company cost · ${shortMonth(mPrevIso)} / ${shortMonth(mCurrIso)}`,
+              value: mCurrIso
+                ? `${fmtCcyShort(usdToCcy(costPrevUsd, dominantCcy), dominantCcy)} → ${fmtCcyShort(usdToCcy(costCurrUsd, dominantCcy), dominantCcy)}`
+                : '—',
+              footnote: momPct == null ? 'no prior month' : `${momPct >= 0 ? '+' : '−'}${Math.abs(momPct).toFixed(1)}% MoM`,
+              status: (momPct == null ? 'grey' : (momPct > 0.5 ? 'amber' : momPct < -0.5 ? 'green' : 'grey')) as 'grey' | 'amber' | 'green',
+            },
+            { label: 'Cost / head',  value: fmtCcyShort(usdToCcy(selCph, dominantCcy), dominantCcy),         footnote: `${dominantCcy} this month`,           status: 'grey' as const },
+            { label: 'Monthly base', value: fmtCcyShort(usdToCcy(totalMonthlyUSD, dominantCcy), dominantCcy), footnote: `register sum · ${dominantCcy}`,       status: 'grey' as const },
+            { label: 'DQ flags',     value: totalFlags,                                                       footnote: 'anomalies',                            status: totalFlags > 0 ? 'amber' : 'green' },
+          ] satisfies KpiTileProps[]).map((t, i) => <KpiTile key={i} size="sm" {...t} />)}
         </div>
+      </Container>
+
+      <Container title={`Trend · ${selectedDeptName}`} subtitle="monthly headcount + payroll cost · live from ops.v_payroll_dept_monthly" action={<DeptPicker options={deptOptions} selected={selectedDept} />}>
         <StaffMiniCharts rows={trendPoints} selectedMonth={selectedMonth} nativeCurrency={dominantCcy} />
-      </div>
+      </Container>
 
       {noData && (
-        <div className="panel dashed" style={{
-          marginTop: 20, padding: 20, textAlign: 'center', color: 'var(--ink-mute)',
-        }}>
-          <div style={{
-            fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
-            letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase',
-            color: 'var(--brass)', marginBottom: 6,
-          }}>
-            No staff data yet for this property
+        <Container title="No staff data yet" subtitle="upload payslips or sync HR data to populate the register">
+          <div style={{ padding: '20px 4px', fontSize: 13, color: '#5A5A5A', textAlign: 'center' }}>
+            This property has no register, no archived records, and no department rollup yet.
           </div>
-          <div style={{ fontSize: 'var(--t-sm)' }}>
-            Upload payslips or sync HR data to populate the register.
-          </div>
-        </div>
+        </Container>
       )}
 
-      <section style={{ marginTop: 28 }}>
-        <div style={{ marginBottom: 10, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-          <h2 style={{
-            fontFamily: 'var(--mono)',
-            fontSize: 'var(--t-xs)',
-            letterSpacing: 'var(--ls-extra)',
-            textTransform: 'uppercase',
-            color: 'var(--brass)',
-          }}>
-            Workforce insights
-          </h2>
-          <span style={{ fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--ink-mute)' }}>
-            ops.fn_staff_insights
-          </span>
-        </div>
+      <Container title="Workforce insights" subtitle="live from ops.fn_staff_insights">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
           {insightBoxes.slice(0, 4).map((b, i) => (
             <InsightCard
@@ -536,34 +504,11 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
             />
           ))}
         </div>
-      </section>
+      </Container>
 
-      <section style={{ marginTop: 28 }}>
-        <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <h2 style={{
-              fontFamily: 'var(--mono)',
-              fontSize: 'var(--t-xs)',
-              letterSpacing: 'var(--ls-extra)',
-              textTransform: 'uppercase',
-              color: 'var(--brass)',
-            }}>
-              Department breakdown
-            </h2>
-            <MonthPicker months={availableMonths} selected={selectedMonth} />
-          </div>
-          <span style={{
-            fontFamily: 'var(--mono)',
-            fontSize: 10,
-            letterSpacing: 'var(--ls-extra)',
-            textTransform: 'uppercase',
-            color: 'var(--ink-mute)',
-          }}>
-            ops.v_payroll_dept_monthly
-          </span>
-        </div>
+      <Container title="Department breakdown" subtitle="live from ops.v_payroll_dept_monthly" action={<MonthPicker months={availableMonths} selected={selectedMonth} />}>
         {deptRows.length === 0 ? (
-          <div className="panel dashed" style={{ padding: 16, color: 'var(--ink-mute)', fontStyle: 'italic', textAlign: 'center' }}>
+          <div style={{ padding: 16, color: '#5A5A5A', fontStyle: 'italic', textAlign: 'center', fontSize: 13 }}>
             No payroll rows for {fmtPeriodLabel(selectedMonth)}.
           </div>
         ) : (
@@ -574,36 +519,28 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
             employeesByDept={employeesByDept}
           />
         )}
-      </section>
+      </Container>
 
-      <details open style={{ marginTop: 28 }}>
+      <Container
+        title={`Staff register · ${totalActive} active`}
+        subtitle={`click row to drill down · ${fmtCcyShort(usdToCcy(totalMonthlyUSD, dominantCcy), dominantCcy)} monthly base · live from public.v_staff_register_extended`}
+      >
+        <StaffShell rows={safeRows} />
+      </Container>
+
+      <details style={{ marginTop: 8 }}>
         <summary style={{
           cursor: 'pointer',
-          padding: '8px 0',
-          fontFamily: 'var(--mono)',
-          fontSize: 'var(--t-xs)',
-          letterSpacing: 'var(--ls-extra)',
-          textTransform: 'uppercase',
-          color: 'var(--brass)',
+          padding: '10px 14px',
+          fontSize: 12,
+          fontWeight: 600,
+          color: '#000',
+          background: '#FFFFFF',
+          border: '1px solid #E0E0E0',
+          borderRadius: 6,
+          letterSpacing: '0.04em',
         }}>
-          Staff register · {totalActive} active ▾ <span style={{ textTransform: 'none', letterSpacing: 'normal', color: 'var(--ink-mute)' }}>click row to drill down · {fmtCcyShort(usdToCcy(totalMonthlyUSD, dominantCcy), dominantCcy)} monthly base</span>
-        </summary>
-        <div style={{ marginTop: 10 }}>
-          <StaffShell rows={safeRows} />
-        </div>
-      </details>
-
-      <details style={{ marginTop: 16 }}>
-        <summary style={{
-          cursor: 'pointer',
-          padding: '8px 0',
-          fontFamily: 'var(--mono)',
-          fontSize: 'var(--t-xs)',
-          letterSpacing: 'var(--ls-extra)',
-          textTransform: 'uppercase',
-          color: 'var(--brass)',
-        }}>
-          Archived staff · {archived.length} ▾ <span style={{ textTransform: 'none', letterSpacing: 'normal', color: 'var(--ink-mute)' }}>departed · payroll history retained</span>
+          Archived staff · {archived.length} <span style={{ fontWeight: 400, color: '#5A5A5A', marginLeft: 6 }}>departed · payroll history retained</span>
         </summary>
         <div style={{ marginTop: 10 }}>
           <ArchivedStaffTable rows={archived} />
