@@ -431,7 +431,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
       {/* Section 4 — Promo impact */}
       <div style={{ gridColumn: '1 / -1' }}>
         <Container title="Promo rate plans · impact vs Flex baseline"
-                   subtitle={`Each promo · bookings · cancel rate · ADR vs Flex/Semi-Flex baseline · forgone revenue = (flex_adr − promo_adr) × nights`}>
+                   subtitle={`All-time active bookings · cancel rate · ADR vs Flex/Semi-Flex baseline · forgone revenue = (flex_adr − promo_adr) × nights`}>
           {(promoImpact as Array<unknown>).length === 0 ? (
             <div style={{ padding: 14, fontSize: 12, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>No promo rate plans booked.</div>
           ) : (
@@ -476,7 +476,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
       {/* Section 5 — Restrictions */}
       <div style={{ gridColumn: '1 / -1' }}>
         <Container title="Rate plans with restrictions · channel / LOS / member"
-                   subtitle={`Plans gated by a channel restriction, a minimum LOS, or member-only access · sorted by bookings`}>
+                   subtitle={`All-time active bookings · gated by channel restriction, minimum LOS, or member-only access · sorted by bookings`}>
           {(restrictions as Array<unknown>).length === 0 ? (
             <div style={{ padding: 14, fontSize: 12, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>No restricted rate plans active.</div>
           ) : (
@@ -516,7 +516,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
 
       {/* Section 6 — Hygiene */}
       <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 12 }}>
-        <Container title="Sleeping rate plans · no recent bookings" subtitle="Candidates to retire or refresh">
+        <Container title="Sleeping rate plans · no recent bookings" subtitle="All-time catalogue · top 30 with the most days since last booking · candidates to retire or refresh">
           {(sleeping as Array<unknown>).length === 0 ? (
             <div style={{ padding: 14, fontSize: 12, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>None.</div>
           ) : (
@@ -537,7 +537,7 @@ export default async function RatePlansPage({ searchParams, propertyId }: Props)
             </div>
           )}
         </Container>
-        <Container title="Orphan rate plans · booked but not in catalogue" subtitle="Sync gap · PMS dropped the catalogue entry but bookings exist">
+        <Container title="Orphan rate plans · booked but not in catalogue" subtitle="Lifetime · top 30 with most bookings against dropped catalogue entries · PMS sync gap to investigate">
           {(orphans as Array<unknown>).length === 0 ? (
             <div style={{ padding: 14, fontSize: 12, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>None.</div>
           ) : (
