@@ -86,7 +86,7 @@ export default async function MarketsPage({ propertyId }: Props = {}) {
       .eq('property_id', pid)
       .then((r) => r.data ?? []),
     supabase.from('v_country_stay_month_heatmap')
-      .select('guest_country_iso2, stay_month, bookings, room_nights, revenue, adr, avg_los')
+      .select('guest_country_iso2, stay_month, bookings, room_nights, revenue, adr, avg_los, ly_room_nights, ly_revenue, ly_adr')
       .eq('property_id', pid)
       .then((r) => r.data ?? []),
     supabase.from('v_country_room_type_heatmap')
@@ -169,13 +169,16 @@ export default async function MarketsPage({ propertyId }: Props = {}) {
   const monthsSet = new Set<string>();
   (stayMonth as Rows).forEach((r) => monthsSet.add(String(r.stay_month)));
   const monthsArr = Array.from(monthsSet).sort();
-  type StayCell = { rn: number; rev: number; adr: number };
+  type StayCell = { rn: number; rev: number; adr: number; ly_rn: number; ly_rev: number; ly_adr: number };
   const stayMap = new Map<string, StayCell>();
   (stayMonth as Rows).forEach((r) => {
     stayMap.set(`${r.guest_country_iso2}|${r.stay_month}`, {
-      rn:  Number(r.room_nights ?? 0),
-      rev: Number(r.revenue ?? 0),
-      adr: Number(r.adr ?? 0),
+      rn:     Number(r.room_nights ?? 0),
+      rev:    Number(r.revenue ?? 0),
+      adr:    Number(r.adr ?? 0),
+      ly_rn:  Number(r.ly_room_nights ?? 0),
+      ly_rev: Number(r.ly_revenue ?? 0),
+      ly_adr: Number(r.ly_adr ?? 0),
     });
   });
   const maxStayRn = Math.max(0, ...Array.from(stayMap.values()).map((c) => c.rn));
@@ -263,7 +266,7 @@ export default async function MarketsPage({ propertyId }: Props = {}) {
       {/* Section — Country × Stay-month heatmap */}
       <div style={{ gridColumn: '1 / -1' }}>
         <Container title="Country × stay-month · room-night intensity (next 12 months)"
-                   subtitle="Heat = RN volume · darker green = more · cell shows ADR · use to spot demand pockets per origin segment">
+                   subtitle="Heat = TY RN intensity · darker green = more · each cell shows TY (bold) + LY same-month · hover for revenue + ADR breakdown">
           <div style={{ overflowX: 'auto' }}>
             <table style={{ borderCollapse: 'collapse', fontSize: 11, width: '100%' }}>
               <thead>
