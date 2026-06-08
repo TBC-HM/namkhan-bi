@@ -238,7 +238,7 @@ export function StaffTable({ rows, onSelect, selectedId }: StaffTableProps) {
                   key={r.staff_id}
                   onClick={() => {
                     if (onSelect) onSelect(r.staff_id);
-                    else router.push(`/operations/staff/${encodeURIComponent(r.staff_id)}`);
+                    else router.push(`/finance/hr/${encodeURIComponent(r.staff_id)}`);
                   }}
                   style={{
                     cursor: 'pointer',
