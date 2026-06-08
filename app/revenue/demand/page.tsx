@@ -547,32 +547,6 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
               })}
             </svg>
           )}
-        </Container><!-- DROP REST
-                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '2px solid #000', fontWeight: 700, color: '#000', background: '#FFFFFF' }}>Avg LOS</th>
-                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '2px solid #000', fontWeight: 700, color: '#000', background: '#FFFFFF' }}>Avg window</th>
-                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '2px solid #000', fontWeight: 700, color: '#000', background: '#FFFFFF' }}>≤7d %</th>
-                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '2px solid #000', fontWeight: 700, color: '#000', background: '#FFFFFF' }}>Share</th>
-                  <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '2px solid #000', fontWeight: 700, color: '#000', background: '#FFFFFF' }}>ADR</th>
-                </tr>
-              </thead>
-              <tbody>
-                {((countryLW.data ?? []) as Array<Record<string, unknown>>).map((r, i) => (
-                  <tr key={i}>
-                    <td style={{ padding: '6px 8px', borderBottom: '1px solid #E0E0E0' }}>{countryLabel(String(r.guest_country ?? ''))}</td>
-                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid #E0E0E0', fontVariantNumeric: 'tabular-nums' }}>{Number(r.reservations ?? 0)}</td>
-                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid #E0E0E0', fontVariantNumeric: 'tabular-nums' }}>{Number(r.avg_los ?? 0).toFixed(1)} n</td>
-                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid #E0E0E0', fontVariantNumeric: 'tabular-nums' }}>{Number(r.avg_window_days ?? 0).toFixed(0)} d</td>
-                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid #E0E0E0', fontVariantNumeric: 'tabular-nums' }}>{Number(r.short_window_pct ?? 0).toFixed(1)}%</td>
-                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid #E0E0E0', fontVariantNumeric: 'tabular-nums' }}>{Number(r.share_pct ?? 0).toFixed(1)}%</td>
-                    <td style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid #E0E0E0', fontVariantNumeric: 'tabular-nums' }}>{r.adr != null ? fmtMoney(Number(r.adr), sym) : '—'}</td>
-                  </tr>
-                ))}
-                {((countryLW.data ?? []) as Array<unknown>).length === 0 && (
-                  <tr><td colSpan={7} style={{ padding: 16, textAlign: 'center', color: '#555' }}>No country reservations data</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
         </Container>
       </div>
 
