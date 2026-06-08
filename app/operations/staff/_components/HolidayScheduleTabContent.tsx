@@ -12,8 +12,8 @@
 //
 // Data lives in holidays-data.ts and is property-aware.
 
-import KpiStrip, { type KpiStripItem } from '@/components/kpi/KpiStrip';
-import { DashboardPage } from '@/app/(cockpit)/_design';
+import { DashboardPage, Container, KpiTile } from '@/app/(cockpit)/_design';
+
 import { OPERATIONS_SUBPAGES } from '../../_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import StaffTabStrip from './StaffTabStrip';
@@ -212,37 +212,39 @@ export default async function HolidayScheduleTabContent({
   return (
     <Wrap>
 
-      <KpiStrip items={[
-        { label: 'Total', value: yearRows.length, kind: 'count', hint: `${selectedYear} festivos` },
-        { label: 'National', value: nNational, kind: 'count', hint: 'state-wide' },
-        { label: 'Regional', value: nRegional, kind: 'count', hint: regionName ? regionName.split('·')[1]?.trim() ?? '—' : '—' },
-        { label: 'Local',    value: nLocal,    kind: 'count', tone: nLocal > 0 ? 'pos' : 'neutral', hint: regionName ? regionName.split('·')[0].trim() : '—' },
-        {
-          label: 'Next holiday',
-          value: nextOne ? new Date(nextOne.date + 'T00:00:00Z').toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '—',
-          hint: nextOne ? nextOne.name_en : 'none upcoming',
-        },
-        { label: 'Country', value: `${flag || '·'} ${countryName || '—'}`, hint: regionName ?? '—' },
-        { label: 'Verified', value: yearRows.filter((h) => h.verified).length, kind: 'count', tone: 'pos', hint: `of ${yearRows.length}` },
-        // PBS 2026-05-14 — school-break overlay metrics
-        {
-          label: 'School-break days',
-          value: schoolBreakDayCount,
-          kind: 'count',
-          tone: schoolBreakDayCount > 0 ? 'pos' : 'neutral',
-          hint: enabledSources && enabledSources.size === 1
-            ? `${SOURCE_META[[...enabledSources][0]].label} only`
-            : enabledSources ? `${enabledSources.size} sources overlaid` : 'overlay off',
-        },
-        {
-          label: 'Peak overlap',
-          value: peakDay
-            ? `${peakDay.count}× · ${new Date(peakDay.iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}`
-            : '—',
-          tone: peakDay && peakDay.count >= 3 ? 'warn' : 'neutral',
-          hint: peakDay ? 'simultaneously on break' : 'no overlap',
-        },
-      ] satisfies KpiStripItem[]} />
+      <Container title="Holidays · KPI" density="compact">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+          <KpiTile label="Total" value={yearRows.length} footnote={`${selectedYear} holidays`} />
+          <KpiTile label="National" value={nNational} footnote="state-wide" />
+          <KpiTile label="Regional" value={nRegional} footnote={regionName ? regionName.split('·')[1]?.trim() ?? '—' : '—'} />
+          <KpiTile label="Local" value={nLocal} footnote={regionName ? regionName.split('·')[0].trim() : '—'} />
+          <KpiTile
+            label="Next holiday"
+            value={nextOne ? new Date(nextOne.date + 'T00:00:00Z').toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '—'}
+            footnote={nextOne ? nextOne.name_en : 'none upcoming'}
+          />
+          <KpiTile label="Country" value={`${flag || '·'} ${countryName || '—'}`} footnote={regionName ?? '—'} />
+          <KpiTile label="Verified" value={yearRows.filter((h) => h.verified).length} footnote={`of ${yearRows.length}`} />
+          <KpiTile
+            label="School-break days"
+            value={schoolBreakDayCount}
+            footnote={
+              enabledSources && enabledSources.size === 1
+                ? `${SOURCE_META[[...enabledSources][0]].label} only`
+                : enabledSources ? `${enabledSources.size} sources overlaid` : 'overlay off'
+            }
+          />
+          <KpiTile
+            label="Peak overlap"
+            value={
+              peakDay
+                ? `${peakDay.count}× · ${new Date(peakDay.iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}`
+                : '—'
+            }
+            footnote={peakDay ? 'simultaneously on break' : 'no overlap'}
+          />
+        </div>
+      </Container>
 
       {/* PBS 2026-05-14 — School-holidays overlay dropdown.
           PBS 2026-05-16 — palette swap to Asia for Namkhan, plus Events toggle. */}
@@ -429,7 +431,7 @@ export default async function HolidayScheduleTabContent({
                 letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase',
                 color: 'var(--brass)',
               }}>
-                {selectedYear} festivo list · {countryName}
+                {selectedYear} holiday list · {countryName}
               </h2>
               <span style={{
                 fontFamily: 'var(--mono)', fontSize: 10,
