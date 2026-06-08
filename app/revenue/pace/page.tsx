@@ -363,7 +363,7 @@ export default async function PacePage({
         />
       </Container>
 
-      <Container title="OTB by stay-bucket · with STLY % overlay" subtitle={`Bars = TY confirmed RN · Line = TY ÷ STLY at same lead time · per ${gran}`}>
+      <Container title="OTB by stay-bucket · with STLY % overlay" subtitle={`Forward-only · TY counts only nights ≥ today (so current month is partial — use /demand Pace table for whole-month totals) · Bars = TY confirmed RN · Line = TY ÷ STLY at same lead time · per ${gran}`}>
         <Chart
           variant="combo"
           data={bucketBar}
