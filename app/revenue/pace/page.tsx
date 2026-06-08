@@ -219,11 +219,11 @@ export default async function PacePage({
   const stlyAdr = stlyRnTotal > 0 ? stlyRevTotal / stlyRnTotal : 0;
   const stlyOcc = capacityRn > 0 ? (stlyRnTotal / capacityRn) * 100 : 0;
 
-  // PBS #200: KPI tiles use the SAME totals as /demand (mv_pace_otb via getPaceOtb) — same OTB Revenue number across the two pages.
-  const tileRns  = demandTotal.otb;
-  const tileRev  = demandTotal.rev;
-  const tileStly = demandTotal.stly;
-  const tileStlyRev = demandTotal.stlyRev;
+  // PBS 2026-06-08 — window-correct: when window is sub-month (7d / 30d), demandTotal.otb (whole-month from mv_pace_otb) over-counts the numerator, so OCC = 106/168 looked like 63.1% on 7d. Use totalRns/totalRev which are summed from v_otb_pace for the actual window.
+  const tileRns  = totalRns;
+  const tileRev  = totalRev;
+  const tileStly = stlyRnTotal;
+  const tileStlyRev = stlyRevTotal;
   const tileAdr  = tileRns > 0 ? tileRev / tileRns : 0;
   const tileStlyAdr = tileStly > 0 ? tileStlyRev / tileStly : 0;
   const tileOcc  = capacityRn > 0 ? (tileRns / capacityRn) * 100 : 0;
@@ -377,7 +377,7 @@ export default async function PacePage({
         />
       </Container>
 
-      <Container title={`Pace by stay-bucket · ${buckets.length} ${gran}${buckets.length === 1 ? '' : 's'}`} subtitle={`forward window · grouped per ${gran}`}>
+      <Container title={`Pace by stay-bucket · ${buckets.length} ${gran}${buckets.length === 1 ? '' : 's'}`} subtitle={`forward-only · from today onward · for current month, only nights ≥ today are counted (use /demand Pace table for whole-month totals) · grouped per ${gran}`}>
         <Chart
           variant="table"
           data={bucketTable}
