@@ -97,7 +97,7 @@ export default function ContainerTopNDrill({ container, propertyId }: Props) {
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: 'var(--sans, "Inter Tight", system-ui)' }}>
           <thead>
-            <tr style={{ background: 'var(--bg, #F4EFE2)' }}>
+            <tr style={{ background: '#FFFFFF', borderBottom: '2px solid #000' }}>
               <th style={th('left')}>#</th>
               {cols.map((c) => (
                 <th key={c.key} style={th(c.align ?? 'left')}>{c.label}</th>
@@ -119,8 +119,8 @@ export default function ContainerTopNDrill({ container, propertyId }: Props) {
                     onClick={drillView ? () => toggleExpand(i, r) : undefined}
                     style={{
                       cursor: drillView ? 'pointer' : 'default',
-                      background: isOpen ? 'var(--bg, #F4EFE2)' : 'transparent',
-                      borderBottom: '1px solid var(--hairline, #E6DFCC)',
+                      background: isOpen ? '#F5F5F5' : 'transparent',
+                      borderBottom: '1px solid #E0E0E0',
                     }}
                   >
                     <td style={td('left')}>{i + 1}</td>
@@ -138,7 +138,7 @@ export default function ContainerTopNDrill({ container, propertyId }: Props) {
                   </tr>
                   {isOpen && drillView && (
                     <tr key={`detail-${i}`}>
-                      <td colSpan={cols.length + (drillView ? 2 : 1)} style={{ padding: 0, background: 'var(--bg, #F4EFE2)' }}>
+                      <td colSpan={cols.length + (drillView ? 2 : 1)} style={{ padding: 0, background: '#F5F5F5' }}>
                         <DrillDetail
                           state={detailCache[i]}
                           symbol={symbol}
@@ -185,13 +185,13 @@ function DrillDetail({
         <thead>
           <tr>
             {keys.map((k) => (
-              <th key={k} style={{ textAlign: 'left', padding: '4px 6px', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>{k}</th>
+              <th key={k} style={{ textAlign: 'left', padding: '4px 6px', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '1px solid #E0E0E0' }}>{k}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {state.slice(0, 200).map((row, i) => (
-            <tr key={i} style={{ borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>
+            <tr key={i} style={{ borderBottom: '1px solid #E0E0E0' }}>
               {keys.map((k) => {
                 const v = row[k];
                 const display = typeof v === 'number'
@@ -218,12 +218,12 @@ function th(align: string): React.CSSProperties {
   return {
     textAlign: align as 'left' | 'right' | 'center',
     padding: '8px 10px',
-    color: 'var(--ink-soft, #5A5A5A)',
-    fontWeight: 500,
+    color: '#000',
+    fontWeight: 700,
     fontSize: 10,
     letterSpacing: '0.04em',
     textTransform: 'uppercase',
-    borderBottom: '1px solid var(--hairline, #E6DFCC)',
+    borderBottom: '2px solid #000',
   };
 }
 function td(align: string): React.CSSProperties {
