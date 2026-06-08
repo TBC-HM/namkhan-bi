@@ -456,7 +456,6 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
           })}
         </div>
         <Container title="Country × LOS bucket · bookings heatmap" subtitle="darker grey = more bookings · top 10 countries · all-time">
-          <Container title="Country × LOS bucket · bookings heatmap" subtitle="darker grey = more bookings · top 10 countries · all-time">
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
