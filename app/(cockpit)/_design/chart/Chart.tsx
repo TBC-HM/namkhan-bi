@@ -225,7 +225,7 @@ function HeatmapView({ data, xKey, yKey, valueKey, height, formatY }: { data: Re
               const bg = `rgba(31, 58, 46, ${Math.max(0.05, intensity)})`;
               const fg = intensity > 0.55 ? '#FFF' : 'var(--ink, #1B1B1B)';
               return (
-                <div key={`cell-${x}-${y}`} title={`${y} · ${x} · ${v}`} style={{ background: bg, color: fg, padding: '8px 4px', textAlign: 'center', borderRadius: 2, fontVariantNumeric: 'tabular-nums' }}>
+                <div key={`cell-${x}-${y}`} title={`${y} · ${x} · ${formatY ? formatY(v) : v.toLocaleString('en-US')}`} style={{ background: bg, color: fg, padding: '8px 4px', textAlign: 'center', borderRadius: 2, fontVariantNumeric: 'tabular-nums' }}>
                   {formatY ? formatY(v) : v.toLocaleString('en-US')}
                 </div>
               );
