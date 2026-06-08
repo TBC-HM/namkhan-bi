@@ -129,7 +129,7 @@ function Section({ title, rows, sym, kind }: SectionProps) {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
-              <tr style={{ background: '#FAFAF7' }}>
+              <tr style={{ background: '#FFFFFF', borderBottom: '2px solid #000' }}>
                 <th style={th}>{kind === 'booking' ? 'Booked' : 'Cancelled'}</th>
                 <th style={th}>Source</th>
                 <th style={th}>Room</th>
@@ -167,8 +167,7 @@ function Section({ title, rows, sym, kind }: SectionProps) {
 
 const th: React.CSSProperties = {
   padding: '7px 12px', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
-  textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', textAlign: 'left',
-  borderBottom: '1px solid var(--hairline, #E6DFCC)',
+  textTransform: 'uppercase', color: '#000', textAlign: 'left',
 };
 const tdLeft: React.CSSProperties = {
   padding: '6px 12px', fontSize: 12, color: 'var(--ink, #1B1B1B)',
