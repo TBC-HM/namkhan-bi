@@ -79,6 +79,8 @@ export interface ChartProps {
   empty?: { title: string; hint?: string };
   formatY?: (v: number) => string;
   formatX?: (v: unknown) => string;
+  /** Plain-string suffix appended to the value (e.g. "%", "USD"). RSC-safe alternative to formatY. */
+  valueSuffix?: string;
   legend?: 'top' | 'right' | 'bottom' | 'none';
   tooltipFormatter?: (point: Record<string, unknown>, series?: string) => ReactNode;
   dimensions?: ChartDimension[];
