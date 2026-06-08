@@ -1,117 +1,181 @@
 // app/operations/activities/page.tsx
-// Re-restored 2026-05-05 — SlimHero · 2 KpiStrips · 3 cards · P&L grid · GL detail · trend · raw POS.
+// PBS 2026-06-09 #136 — Activities ops page (new, B&W primitives).
+// Layout mirrors /operations/restaurant + /operations/spa:
+//   KPI tiles → operating snapshot, cost/margin → catalog table → top sellers.
+// Data sources:
+//   public.v_activity_catalog (bridges sales.activity_catalog + content.activities_catalog)
 
 import FilterStrip from '@/components/nav/FilterStrip';
-import KpiStrip, { type KpiStripItem } from '@/components/kpi/KpiStrip';
-import Page from '@/components/page/Page';
+import { DashboardPage, Container, KpiTile, Chart, type KpiTileProps, type DashboardTab, type ChartSeries } from '@/app/(cockpit)/_design';
 import { OPERATIONS_SUBPAGES } from '../_subpages';
-import PnlGrid from '@/components/pl/PnlGrid';
-import DeptTrendChart from '@/components/pl/DeptTrendChart';
-import FnbGlBreakdown from '@/components/pl/FnbGlBreakdown';
-import FnbTopSellerTrend from '@/components/pl/FnbTopSellerTrend';
-import FnbRawTransactions from '@/components/pl/FnbRawTransactions';
-import {
-  getKpiDaily, aggregateDaily, getDeptPl,
-  getDeptCaptureForPeriod, getActivitiesCostsForPeriod,
-  getDeptGlBreakdown, getDeptTopSellerTrend, getDeptRawTransactions,
-} from '@/lib/data';
-import { resolvePeriod } from '@/lib/period';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
+import { resolvePeriod } from '@/lib/period';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
 
 interface Props { searchParams: Record<string, string | string[] | undefined>; }
 
+const FX_LAK_PER_USD = 21800;
+const fmtUsd  = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('en-US')}`;
+const fmtLak  = (n: number) => `${Math.round(Number(n) || 0).toLocaleString('en-US')} LAK`;
+const fmtPct  = (n: number) => `${(Number(n) || 0).toFixed(1)}%`;
+const lakToUsd = (lak: number | null | undefined) => (Number(lak) || 0) / FX_LAK_PER_USD;
+
+interface ActivityRow {
+  activity_id: string;
+  property_id: number;
+  name: string;
+  category: string | null;
+  duration_min: number | null;
+  group_type: string | null;
+  cost_lak: number | null;
+  sell_lak: number | null;
+  margin_pct: number | null;
+  popularity_score: number | null;
+  is_signature: boolean | null;
+  weather_dependent: boolean | null;
+  season_from: string | null;
+  season_to: string | null;
+  is_active: boolean | null;
+  is_complimentary: boolean | null;
+  status: string | null;
+}
+
 export default async function ActivitiesPage({ searchParams }: Props) {
   const period = resolvePeriod(searchParams);
+  const pid = PROPERTY_ID;
 
-  const [daily, pl, periodCosts, captureP, glBreakdown, topTrend, rawTxns, transportRow] = await Promise.all([
-    getKpiDaily(period.from, period.to).catch(() => []),
-    getDeptPl('activities', 16).catch(() => []),
-    getActivitiesCostsForPeriod(period.from, period.to).catch(() => null),
-    getDeptCaptureForPeriod({ usali_dept: 'Other Operated', usali_subdept: 'Activities' }, period.from, period.to).catch(() => null),
-    getDeptGlBreakdown('Activities', 16).catch(() => ({ periods: [], lines: [] })),
-    getDeptTopSellerTrend({ usali_dept: 'Other Operated', usali_subdept: 'Activities' }, '2026-01-01', 8).catch(() => ({ periods: [], items: [] })),
-    getDeptRawTransactions({ usali_dept: 'Other Operated', usali_subdept: 'Activities' }, 2000).catch(() => []),
-    supabase
-      .from('mv_classified_transactions')
-      .select('amount')
-      .eq('property_id', PROPERTY_ID)
-      .eq('usali_dept', 'Other Operated')
-      .eq('usali_subdept', 'Transportation')
-      .gte('transaction_date', period.from)
-      .lte('transaction_date', period.to)
-      .then(r => ({ data: r.data ?? [] })),
-  ]);
+  const { data } = await supabase
+    .from('v_activity_catalog')
+    .select('*')
+    .eq('property_id', pid)
+    .order('popularity_score', { ascending: false });
 
-  const a30 = aggregateDaily(daily, period.capacityMode);
-  const plLatest = pl.find(r => r.revenue > 0) ?? null;
-  const tileSrc = periodCosts ?? (plLatest ? {
-    revenue: plLatest.revenue, total_cost: plLatest.total_cost, payroll: plLatest.payroll,
-    gop: plLatest.gop, labor_cost_pct: plLatest.labor_cost_pct, gop_pct: plLatest.gop_pct,
-    months_used: [plLatest.period],
-  } : null);
-  const captureRate = captureP ? Number(captureP.capture_pct) : 0;
-  const perOccRn = captureP ? Number(captureP.spend_per_occ) : 0;
-  const transportRev = (transportRow.data ?? []).reduce((s: number, t: any) => s + Number(t.amount || 0), 0);
+  const rows = (data ?? []) as ActivityRow[];
+  const active     = rows.filter((r) => r.is_active !== false && (r.status ?? 'active') === 'active');
+  const signature  = active.filter((r) => r.is_signature);
+  const comp       = active.filter((r) => r.is_complimentary);
+  const paid       = active.filter((r) => !r.is_complimentary && (r.sell_lak ?? 0) > 0);
+  const weather    = active.filter((r) => r.weather_dependent);
+
+  // Margin / pricing stats
+  const margins  = paid.map((r) => Number(r.margin_pct ?? 0)).filter((x) => x > 0);
+  const avgMargin = margins.length ? margins.reduce((a, b) => a + b, 0) / margins.length : 0;
+  const avgSellUsd = paid.length ? paid.reduce((s, r) => s + lakToUsd(r.sell_lak), 0) / paid.length : 0;
+  const avgCostUsd = paid.length ? paid.reduce((s, r) => s + lakToUsd(r.cost_lak), 0) / paid.length : 0;
+  const totalPotentialMarginUsd = paid.reduce((s, r) => s + (lakToUsd(r.sell_lak) - lakToUsd(r.cost_lak)), 0);
+
+  // Category breakdown
+  const byCategory = new Map<string, { count: number; signature: number }>();
+  for (const r of active) {
+    const cat = String(r.category ?? 'OTHER').toUpperCase();
+    const cur = byCategory.get(cat) ?? { count: 0, signature: 0 };
+    cur.count += 1;
+    if (r.is_signature) cur.signature += 1;
+    byCategory.set(cat, cur);
+  }
+  const catRows = Array.from(byCategory.entries())
+    .map(([cat, v]) => ({ category: cat, count: v.count, signature: v.signature }))
+    .sort((a, b) => b.count - a.count);
+
+  const row1: KpiTileProps[] = [
+    { label: 'Active offers',  value: active.length,    footnote: `${rows.length - active.length} archived`,                  status: active.length > 0 ? 'green' : 'grey', size: 'sm' },
+    { label: 'Paid catalogue', value: paid.length,      footnote: `${comp.length} complimentary`,                              status: paid.length > 0 ? 'green' : 'grey', size: 'sm' },
+    { label: 'Signature',      value: signature.length, footnote: 'marked is_signature in sales.activity_catalog',             status: signature.length > 0 ? 'green' : 'grey', size: 'sm' },
+    { label: 'Avg sell',       value: fmtUsd(avgSellUsd), footnote: 'USD · paid offers',                                       status: 'grey', size: 'sm' },
+    { label: 'Avg cost',       value: fmtUsd(avgCostUsd), footnote: 'USD · paid offers',                                       status: 'grey', size: 'sm' },
+    { label: 'Avg margin %',   value: fmtPct(avgMargin),  footnote: 'target ≥ 50%',
+      status: (avgMargin >= 50 ? 'green' : avgMargin >= 30 ? 'amber' : 'red') as 'green'|'amber'|'red', size: 'sm' },
+  ];
+
+  const row2: KpiTileProps[] = [
+    { label: 'Potential margin / cohort', value: fmtUsd(totalPotentialMarginUsd), footnote: 'sum(sell − cost) · USD',                                status: 'grey', size: 'sm' },
+    { label: 'Weather-dependent',         value: weather.length,                  footnote: 'season/weather risk',                                    status: weather.length > 0 ? 'amber' : 'green', size: 'sm' },
+    { label: 'Categories',                value: catRows.length,                  footnote: `${catRows[0]?.category ?? '—'} dominates`,               status: 'grey', size: 'sm' },
+    { label: 'Avg duration',              value: active.length ? `${Math.round(active.reduce((s, r) => s + Number(r.duration_min || 0), 0) / active.length)} min` : '—', footnote: 'minutes', status: 'grey', size: 'sm' },
+    { label: 'Bookings',                  value: '—',                              footnote: 'no GL feed yet · POS integration pending',                status: 'grey', size: 'sm' },
+    { label: 'GOP %',                     value: '—',                              footnote: 'P&L surfaces once activity dept maps in QB',              status: 'grey', size: 'sm' },
+  ];
+
+  const tabs: DashboardTab[] = OPERATIONS_SUBPAGES.map((s) => ({ key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/activities') })) as DashboardTab[];
+
+  // Catalogue table data
+  const catalogTable = active.slice(0, 50).map((r) => ({
+    name:      r.name,
+    category:  String(r.category ?? '—').toLowerCase(),
+    duration:  r.duration_min ? `${r.duration_min} min` : '—',
+    type:      r.is_complimentary ? 'comp' : 'paid',
+    cost:      r.cost_lak ? fmtUsd(lakToUsd(r.cost_lak)) : '—',
+    sell:      r.sell_lak ? fmtUsd(lakToUsd(r.sell_lak)) : '—',
+    margin:    r.margin_pct != null ? fmtPct(Number(r.margin_pct)) : '—',
+    signature: r.is_signature ? '★' : '',
+    weather:   r.weather_dependent ? '☔' : '',
+  }));
+  const catalogCols: ChartSeries[] = [
+    { key: 'name',      label: 'Activity' },
+    { key: 'category',  label: 'Category' },
+    { key: 'duration',  label: 'Duration' },
+    { key: 'type',      label: 'Type' },
+    { key: 'cost',      label: 'Cost' },
+    { key: 'sell',      label: 'Sell' },
+    { key: 'margin',    label: 'Margin %' },
+    { key: 'signature', label: '★' },
+    { key: 'weather',   label: '☔' },
+  ];
+
+  // Category breakdown chart
+  const catChart = catRows.map((r) => ({ category: r.category, count: r.count, signature: r.signature }));
+
+  const summaryStyle: React.CSSProperties = {
+    cursor: 'pointer', padding: '10px 14px', fontSize: 12, fontWeight: 600,
+    color: '#000', background: '#FFFFFF', border: '1px solid #E0E0E0', borderRadius: 6, letterSpacing: '0.04em',
+  };
 
   return (
-    <Page
-      eyebrow={`Operations · Activities · ${period.label}`}
-      title={<>Excursions <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>&amp; experiences</em></>}
-      subPages={OPERATIONS_SUBPAGES}
+    <DashboardPage
+      title={`Activities catalogue · ${period.label}`}
+      subtitle="Operations · Activities · live from public.v_activity_catalog"
+      tabs={tabs}
     >
+      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <Container title="Operating snapshot" subtitle="catalogue size · paid vs complimentary · signature offers" density="compact">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+            {row1.map((t, i) => <KpiTile key={i} {...t} />)}
+          </div>
+        </Container>
 
-      <KpiStrip items={[
-        { label: 'Activity Revenue', value: Number(a30?.activity_revenue ?? 0), kind: 'money', tone: 'pos' },
-        { label: 'Activity / Occ Rn', value: perOccRn, kind: 'money', tone: perOccRn >= 20 ? 'pos' : 'warn', hint: 'benchmark $20-35' },
-        { label: 'Capture %', value: captureRate, kind: 'pct', tone: captureRate >= 30 ? 'pos' : captureRate >= 15 ? 'warn' : 'neg', hint: 'benchmark 30%+' },
-        { label: 'Transport Revenue', value: transportRev, kind: 'money', hint: 'airport · transfers' },
-        { label: 'Months', value: tileSrc ? tileSrc.months_used.length : 0, kind: 'count', hint: tileSrc ? tileSrc.months_used[0] : '—' },
-        { label: 'Supplier margin', value: 0, kind: 'pct', hint: 'supplier ledger not synced' },
-      ] satisfies KpiStripItem[]} />
+        <Container title="Margin & risk" subtitle="potential margin if entire cohort sells once · weather + seasonal risk" density="compact">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+            {row2.map((t, i) => <KpiTile key={i} {...t} />)}
+          </div>
+        </Container>
 
-      <KpiStrip items={[
-        { label: 'Labor %', value: tileSrc ? tileSrc.labor_cost_pct : 0, kind: 'pct', tone: tileSrc && tileSrc.labor_cost_pct <= 35 ? 'pos' : 'neg', hint: 'target ≤ 35%' },
-        { label: 'GOP %', value: tileSrc ? tileSrc.gop_pct : 0, kind: 'pct', tone: tileSrc && tileSrc.gop_pct >= 50 ? 'pos' : tileSrc && tileSrc.gop_pct >= 0 ? 'warn' : 'neg', hint: 'target ≥ 50%' },
-        { label: 'Revenue (QB)', value: tileSrc ? tileSrc.revenue : 0, kind: 'money', hint: tileSrc ? `${tileSrc.months_used.length} mo` : '—' },
-        { label: 'Total cost', value: tileSrc ? tileSrc.total_cost : 0, kind: 'money' },
-        { label: 'Payroll', value: tileSrc ? tileSrc.payroll : 0, kind: 'money' },
-        { label: 'GOP', value: tileSrc ? tileSrc.gop : 0, kind: 'money', tone: tileSrc && tileSrc.gop >= 0 ? 'pos' : 'neg' },
-      ] satisfies KpiStripItem[]} />
-
-      {/* Canonical: selectors UNDER KPI tiles. */}
-      <div style={{ marginTop: 14 }}>
         <FilterStrip showForward={false} showCompare={false} showSegment={false} liveSource="PMS · live" />
+
+        <Container title="Catalogue by category" subtitle="active offers per category · signature highlighted">
+          <Chart variant="bar" data={catChart} xKey="category"
+            series={[
+              { key: 'count',     label: 'Total active' },
+              { key: 'signature', label: 'Signature' },
+            ]}
+            height={260}
+            empty={{ title: 'No active activities', hint: 'sales.activity_catalog has no rows for this property' }}
+          />
+        </Container>
+
+        <Container title={`Catalogue · ${active.length} active offers`} subtitle="popularity-sorted · cost/sell shown in USD via 21,800 FX">
+          <Chart variant="table" data={catalogTable} xKey="name" series={catalogCols} empty={{ title: 'No catalogue rows' }} />
+        </Container>
+
+        <details>
+          <summary style={summaryStyle}>Booking trend (coming soon)</summary>
+          <div style={{ marginTop: 10, padding: 14, fontSize: 13, color: '#5A5A5A', background: '#FAFAFA', border: '1px solid #E0E0E0', borderRadius: 6 }}>
+            Activity POS / GL feed not wired yet. When QB maps an `Activities` USALI sub-dept, the same
+            DeptTrendChart + PnlGrid pattern as Restaurant/Spa will surface here automatically.
+          </div>
+        </details>
       </div>
-
-      <h2 style={{ marginTop: 28, marginBottom: 6, fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>Monthly trend · revenue · costs · GOP %</h2>
-      <DeptTrendChart rows={pl} dept="activities" />
-
-      <h2 style={{ marginTop: 28, marginBottom: 6, fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>P&amp;L · QB GL · USALI rollup</h2>
-      <PnlGrid rows={pl} dept="activities" targets={{ labor_cost_pct: 35, gop_pct: 50 }} defaultRows={6} />
-
-      <details style={{ marginTop: 24 }}>
-        <summary style={{ cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)', padding: '8px 0' }}>
-          GL detail · Activities accounts ▾
-        </summary>
-        <FnbGlBreakdown data={glBreakdown} defaultMonths={4} />
-      </details>
-
-      <details style={{ marginTop: 24 }} open>
-        <summary style={{ cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)', padding: '8px 0' }}>
-          Top activities · trend since Jan 26 ▾
-        </summary>
-        <FnbTopSellerTrend data={topTrend} />
-      </details>
-
-      <details style={{ marginTop: 24 }}>
-        <summary style={{ cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)', padding: '8px 0' }}>
-          All POS transactions · search &amp; reconcile ▾  <span style={{ color: 'var(--ink-soft)', textTransform: 'none', letterSpacing: 'normal' }}>({rawTxns.length} most recent)</span>
-        </summary>
-        <FnbRawTransactions data={rawTxns} pageSize={200} />
-      </details>
-    </Page>
+    </DashboardPage>
   );
 }
