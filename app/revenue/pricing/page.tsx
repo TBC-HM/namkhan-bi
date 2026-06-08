@@ -23,18 +23,19 @@ import { supabase } from '@/lib/supabase';
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
 
-type CalendarTab = 'pricing' | 'holidays' | 'otb_density' | 'rate' | 'restrictions' | 'parity';
-const VALID_TABS: CalendarTab[] = ['pricing','holidays','otb_density','rate','restrictions','parity'];
+// PBS 2026-06-08 — dropped 'parity' tab (richer surface at /revenue/parity using v_parity_summary/grid/open_breaches) + merged 'rate' into 'pricing' (both heatmap rate inventory)
+type CalendarTab = 'pricing' | 'holidays' | 'otb_density' | 'restrictions';
+const VALID_TABS: CalendarTab[] = ['pricing','holidays','otb_density','restrictions'];
 const TAB_LABELS: Record<CalendarTab, string> = {
-  pricing:      'Pricing',
+  pricing:      'Pricing & Rate',
   holidays:     'Holidays',
   otb_density:  'OTB Density',
-  rate:         'Rate',
   restrictions: 'Restrictions',
-  parity:       'Parity',
 };
 function parseTab(raw: string | undefined): CalendarTab {
   if (raw === 'density') return 'holidays'; // backwards-compat
+  if (raw === 'rate')    return 'pricing';  // PBS 2026-06-08 — merged into Pricing
+  if (raw === 'parity')  return 'pricing';  // PBS 2026-06-08 — moved to /revenue/parity
   return (VALID_TABS.includes(raw as CalendarTab) ? raw : 'pricing') as CalendarTab;
 }
 
@@ -63,7 +64,7 @@ export default async function PricingPage({ searchParams, propertyId }: { search
 
   const stripBlock = (
     <div style={fullRow}>
-      <Container title="Calendar" subtitle="pricing · holidays · OTB density · rate · restrictions · parity" density="compact">
+      <Container title="Calendar" subtitle="pricing & rate · holidays · OTB density · restrictions · (parity → /revenue/parity)" density="compact">
         <CalendarTabStrip active={tab} basePath={basePath} />
       </Container>
     </div>
@@ -116,7 +117,7 @@ export default async function PricingPage({ searchParams, propertyId }: { search
       <DashboardPage title="Revenue · Calendar" subtitle="forward OTB occupancy · next 90 days" tabs={tabs}>
         {stripBlock}
         <div style={fullRow}>
-          <Container title="OTB occupancy · forward 90d" subtitle="occupancy % per night (NOT rate — see Rate tab for price heatmap). Confirmed rooms ÷ sellable. Colour intensity = % occ.">
+          <Container title="OTB occupancy · forward 90d" subtitle="occupancy % per night · confirmed rooms ÷ sellable · colour intensity = % occ · hover any cell for month · day · occ%">
             <Chart
               variant="heatmap"
               data={heat}
@@ -290,6 +291,24 @@ export default async function PricingPage({ searchParams, propertyId }: { search
     getPricingKpis(pid),
   ]);
   void ratePlans;
+
+  // PBS 2026-06-08 — also build the rate heatmap (was on the dropped Rate tab)
+  const _rateCellMap = new Map<string, number>();
+  for (const r of inventory) {
+    const rate = Number(r.rate);
+    const stop = Boolean((r as unknown as Record<string, unknown>).stop_sell);
+    if (stop || rate < RATE_MIN) continue;
+    const date = String((r as unknown as Record<string, unknown>).inventory_date ?? '').slice(0, 10);
+    const rt = roomTypes.find((x) => x.room_type_id === r.room_type_id);
+    const rtName = rt?.room_type_name ?? `room_${r.room_type_id}`;
+    const key = `${date}|${rtName}`;
+    const cur = _rateCellMap.get(key);
+    if (cur == null || rate < cur) _rateCellMap.set(key, rate);
+  }
+  const rateHeatmap = Array.from(_rateCellMap.entries()).map(([key, rate]) => {
+    const [date, room] = key.split('|');
+    return { date, room, rate: Math.round(rate) };
+  });
 
   const allRates = inventory.map((r) => Number(r.rate) || 0).filter((x) => x >= RATE_MIN);
   const avgRate = allRates.length > 0 ? allRates.reduce((a, b) => a + b, 0) / allRates.length : 0;
