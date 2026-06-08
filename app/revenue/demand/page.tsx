@@ -539,7 +539,7 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
                 const r = Math.max(4, Math.min(18, Math.sqrt(p.rn) / 2));
                 return (
                   <g key={`p-${i}`}>
-                    <circle cx={scaleX(p.x)} cy={scaleY(p.y)} r={r} fill="#000" fillOpacity={0.7} stroke="#000" strokeWidth={1} />
+                    <circle cx={scaleX(p.x)} cy={scaleY(p.y)} r={r} fill="#000" fillOpacity={0.7} stroke="#000" strokeWidth={1}><title>{`${countryLabel(p.c)} · Avg LOS ${p.x.toFixed(1)}n · ADR ${sym}${Math.round(p.y).toLocaleString('en-US')} · ${p.rn} reservations`}</title></circle>
                     <text x={scaleX(p.x) + r + 4} y={scaleY(p.y) + 4} fontSize="10" fill="#000">{countryLabel(p.c)}</text>
                   </g>
                 );
