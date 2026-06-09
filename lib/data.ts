@@ -840,23 +840,30 @@ export interface DeptCaptureForPeriod {
   res_in_house: number; res_with_purchase: number; revenue: number; roomnights: number;
   capture_pct: number; spend_per_occ: number;
 }
-export async function getDeptCaptureForPeriod(filter: { usali_dept: string; usali_subdept?: string }, fromIso: string, toIso: string): Promise<DeptCaptureForPeriod | null> {
-  let q = supabase.schema('kpi').from('v_capture_rate_daily')
-    .select('reservations_in_house, res_with_purchase, revenue, occupied_room_nights')
-    .eq('usali_dept', filter.usali_dept).gte('stay_date', fromIso).lte('stay_date', toIso);
-  if (filter.usali_subdept) q = q.eq('usali_subdept', filter.usali_subdept);
-  const { data, error } = await q;
+export // PBS 2026-06-09 #170 — kpi.v_capture_rate_daily was renamed/removed. Read from
+// kpi.v_ancillary_capture_daily instead. Column naming is per-dept-prefix
+// (fb_*, spa_*, activity_*, retail_*) + property_id filter to Namkhan.
+async function getDeptCaptureForPeriod(filter: { usali_dept: string; usali_subdept?: string }, fromIso: string, toIso: string): Promise<DeptCaptureForPeriod | null> {
+  const prefix = filter.usali_dept === 'F&B' ? 'fb'
+    : filter.usali_dept === 'Spa' ? 'spa'
+    : filter.usali_dept === 'Activities' ? 'activity'
+    : filter.usali_dept === 'Retail' ? 'retail'
+    : null;
+  if (!prefix) return null;
+  const { data, error } = await supabase.schema('kpi').from('v_ancillary_capture_daily')
+    .select(`night_date, occupied_rooms, ${prefix}_capturing_rooms, ${prefix}_revenue`)
+    .eq('property_id', PROPERTY_ID)
+    .gte('night_date', fromIso).lte('night_date', toIso);
   if (error || !data) return null;
-  let rih = 0, rwp = 0, rev = 0, rn = 0;
-  for (const r of data as any[]) {
-    rih += Number(r.reservations_in_house ?? 0);
-    rwp += Number(r.res_with_purchase ?? 0);
-    rev += Number(r.revenue ?? 0);
-    rn  += Number(r.occupied_room_nights ?? 0);
+  let rwp = 0, rev = 0, rn = 0;
+  for (const r of data as Array<Record<string, unknown>>) {
+    rn  += Number(r['occupied_rooms'] ?? 0);
+    rwp += Number(r[`${prefix}_capturing_rooms`] ?? 0);
+    rev += Number(r[`${prefix}_revenue`] ?? 0);
   }
-  if (rih === 0 && rn === 0) return null;
-  return { res_in_house: rih, res_with_purchase: rwp, revenue: rev, roomnights: rn,
-    capture_pct: rih > 0 ? (100 * rwp / rih) : 0, spend_per_occ: rn > 0 ? rev / rn : 0 };
+  if (rn === 0) return null;
+  return { res_in_house: rn, res_with_purchase: rwp, revenue: rev, roomnights: rn,
+    capture_pct: rn > 0 ? (100 * rwp / rn) : 0, spend_per_occ: rn > 0 ? rev / rn : 0 };
 }
 export const getFnbCaptureForPeriod = (f: string, t: string) => getDeptCaptureForPeriod({ usali_dept: 'F&B' }, f, t);
 
