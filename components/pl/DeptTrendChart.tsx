@@ -118,9 +118,7 @@ export default function DeptTrendChart({
           )}
           <Bar yAxisId="usd" dataKey="cogs"    stackId="cost" fill={C.cogs}    name="COGS" />
           <Bar yAxisId="usd" dataKey="payroll" stackId="cost" fill={C.payroll} name="Payroll" />
-          {/* PBS #168 — total revenue + COGS trendlines on the USD axis */}
-          <Line yAxisId="usd" type="monotone" dataKey="total_rev_line" stroke="#000" strokeWidth={2}
-                dot={{ r: 3, fill: "#000" }} activeDot={{ r: 5 }} name="Total revenue" />
+          {/* PBS #174 — dropped Total revenue line (didn't add value); COGS trendline stays */}
           <Line yAxisId="usd" type="monotone" dataKey="cogs_line" stroke={C.cogs} strokeWidth={2} strokeDasharray="4 3"
                 dot={{ r: 3, fill: C.cogs }} activeDot={{ r: 5 }} name="COGS trend" />
           <Line yAxisId="pct" type="monotone" dataKey="gop_pct" stroke={C.gop} strokeWidth={2}
