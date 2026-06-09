@@ -1,14 +1,9 @@
 'use client';
 
 // components/pl/FnbGlBreakdown.tsx
-//
-// Wide table: one row per (USALI subcategory + raw QB account_name),
-// one column per month. Reads from `lib/data.getFnbGlBreakdown()`.
-// Used on /operations/restaurant to expose accounts the rolled-up grid hides
-// (Staff Canteen Materials, Employee Meal, Animal Food, Maintenance, etc.).
-//
-// Collapsible: by default shows the latest 4 months. Toggle expands to the
-// full window (typically 16 months).
+// PBS 2026-06-09 #172 — rebuilt B&W. Drops the legacy QB-export table aesthetic.
+// One row per (USALI subcategory + raw QB account_name), one column per month.
+// Reads from `lib/data.getFnbGlBreakdown()`. Used on /operations/restaurant.
 
 import { useState, type CSSProperties } from 'react';
 import type { FnbGlBreakdown as Data, FnbGlLine } from '@/lib/data';
@@ -18,6 +13,14 @@ interface Props {
   /** How many months to show before "Show full history". Default 4. */
   defaultMonths?: number;
 }
+
+const INK = '#000';
+const INK_MUTED = '#5A5A5A';
+const HAIRLINE = '#E0E0E0';
+const HAIRLINE_SOFT = '#F0F0F0';
+const HOVER = '#FAFAFA';
+const SECTION_BG = '#F5F5F5';
+const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 
 export default function FnbGlBreakdown({ data, defaultMonths = 4 }: Props) {
   const [expanded, setExpanded] = useState(false);
@@ -40,24 +43,50 @@ export default function FnbGlBreakdown({ data, defaultMonths = 4 }: Props) {
     return `${sign}$${Math.round(abs).toLocaleString('en-US')}`;
   };
 
-  const cell: CSSProperties = {
-    padding: '6px 10px',
-    borderBottom: '1px solid #E0E0E0',
+  const th: CSSProperties = {
     textAlign: 'right',
-    fontVariantNumeric: 'tabular-nums',
+    padding: '8px 10px',
+    borderBottom: `1px solid ${INK}`,
+    fontFamily: MONO,
+    fontSize: 10,
+    letterSpacing: '0.05em',
+    textTransform: 'uppercase',
+    color: INK_MUTED,
+    fontWeight: 500,
+    whiteSpace: 'nowrap',
   };
-  const cellL: CSSProperties = { ...cell, textAlign: 'left' };
-  const subHead: CSSProperties = {
-    background: '#F5F5F5',
-    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-    fontSize: '11px',
+  const thL: CSSProperties = { ...th, textAlign: 'left', minWidth: 220 };
+  const td: CSSProperties = {
+    padding: '6px 10px',
+    borderBottom: `1px solid ${HAIRLINE_SOFT}`,
+    textAlign: 'right',
+    fontFamily: MONO,
+    fontSize: 12,
+    fontVariantNumeric: 'tabular-nums',
+    color: INK,
+    whiteSpace: 'nowrap',
+  };
+  const tdL: CSSProperties = { ...td, textAlign: 'left', fontFamily: 'inherit', color: INK };
+  const sectionRow: CSSProperties = {
+    background: SECTION_BG,
+    fontSize: 11,
+    fontWeight: 600,
     letterSpacing: '0.04em',
     textTransform: 'uppercase',
-    color: '#000',
-    padding: '6px 10px',
+    color: INK,
+    padding: '8px 10px',
+    borderTop: `1px solid ${HAIRLINE}`,
+    borderBottom: `1px solid ${HAIRLINE}`,
+  };
+  const subtotalRow: CSSProperties = {
+    ...td,
+    fontWeight: 700,
+    borderTop: `1px solid ${HAIRLINE}`,
+    borderBottom: `2px solid ${INK}`,
+    background: '#FFFFFF',
   };
 
-  // Group lines by USALI subcategory in the table
+  // Group lines by USALI subcategory
   const groups: { sub: string; lines: FnbGlLine[]; subTotalByPeriod: Record<string, number>; subTotal: number }[] = [];
   const seen = new Set<string>();
   for (const line of data.lines) {
@@ -76,81 +105,53 @@ export default function FnbGlBreakdown({ data, defaultMonths = 4 }: Props) {
   }
 
   return (
-    <div style={{ overflowX: 'auto' }}>
+    <div style={{ overflowX: 'auto', background: '#FFFFFF' }}>
       <table style={{
         width: '100%',
         borderCollapse: 'collapse',
-        fontSize: '12px',
+        fontSize: 12,
       }}>
         <thead>
           <tr>
-            <th style={{
-              textAlign: 'left',
-              padding: '8px 10px',
-              borderBottom: '1px solid #E0E0E0',
-              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-              fontSize: '11px',
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase',
-              color: '#000',
-              fontWeight: 500,
-              minWidth: 240,
-            }}>QB Account</th>
+            <th style={thL}>QB Account</th>
             {visiblePeriods.map((p) => (
-              <th key={p} style={{
-                textAlign: 'right',
-                padding: '8px 10px',
-                borderBottom: '1px solid #E0E0E0',
-                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                fontSize: '11px',
-                letterSpacing: '0.04em',
-                textTransform: 'uppercase',
-                color: '#000',
-                fontWeight: 500,
-              }}>{monthLabel(p)}</th>
+              <th key={p} style={th}>{monthLabel(p)}</th>
             ))}
-            <th style={{
-              textAlign: 'right',
-              padding: '8px 10px',
-              borderBottom: '1px solid #E0E0E0',
-              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-              fontSize: '11px',
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase',
-              color: '#000',
-              fontWeight: 500,
-            }}>Total</th>
+            <th style={th}>Total</th>
           </tr>
         </thead>
         <tbody>
           {groups.length === 0 ? (
             <tr>
-              <td colSpan={visiblePeriods.length + 2} style={{ padding: 16, color: '#5A5A5A', fontStyle: 'italic' }}>
-                No F&amp;B GL lines in window. Check QB upload.
+              <td colSpan={visiblePeriods.length + 2} style={{ padding: 24, color: INK_MUTED, fontStyle: 'italic', textAlign: 'center', fontSize: 12 }}>
+                No F&amp;B GL lines in window — check QB upload.
               </td>
             </tr>
           ) : groups.map((g) => (
             <>
               <tr key={`head-${g.sub}`}>
-                <td style={subHead} colSpan={visiblePeriods.length + 2}>{g.sub}</td>
+                <td style={sectionRow} colSpan={visiblePeriods.length + 2}>{g.sub}</td>
               </tr>
               {g.lines.map((line) => (
-                <tr key={`${g.sub}-${line.account_name}`}>
-                  <td style={{ ...cellL, paddingLeft: 24 }}>{line.account_name}</td>
+                <tr key={`${g.sub}-${line.account_name}`}
+                    style={{ transition: 'background 0.1s' }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = HOVER)}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}>
+                  <td style={{ ...tdL, paddingLeft: 22 }}>{line.account_name}</td>
                   {visiblePeriods.map((p) => (
-                    <td key={p} style={cell}>{fmtMoney(line.amounts_by_period[p] ?? 0)}</td>
+                    <td key={p} style={td}>{fmtMoney(line.amounts_by_period[p] ?? 0)}</td>
                   ))}
-                  <td style={{ ...cell, fontWeight: 600 }}>{fmtMoney(line.total_usd)}</td>
+                  <td style={{ ...td, fontWeight: 600 }}>{fmtMoney(line.total_usd)}</td>
                 </tr>
               ))}
               <tr key={`sub-${g.sub}`}>
-                <td style={{ ...cellL, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '11px', letterSpacing: '0.04em', textTransform: 'uppercase', color: '#000' }}>
+                <td style={{ ...subtotalRow, textAlign: 'left', fontFamily: 'inherit', textTransform: 'uppercase', fontSize: 11, letterSpacing: '0.04em' }}>
                   Subtotal · {g.sub}
                 </td>
                 {visiblePeriods.map((p) => (
-                  <td key={p} style={{ ...cell, fontWeight: 600 }}>{fmtMoney(g.subTotalByPeriod[p] ?? 0)}</td>
+                  <td key={p} style={subtotalRow}>{fmtMoney(g.subTotalByPeriod[p] ?? 0)}</td>
                 ))}
-                <td style={{ ...cell, fontWeight: 700 }}>{fmtMoney(g.subTotal)}</td>
+                <td style={{ ...subtotalRow, fontWeight: 700 }}>{fmtMoney(g.subTotal)}</td>
               </tr>
             </>
           ))}
@@ -158,20 +159,21 @@ export default function FnbGlBreakdown({ data, defaultMonths = 4 }: Props) {
       </table>
 
       {collapsible && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8, padding: '0 4px' }}>
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
             style={{
               background: 'transparent',
-              border: 0,
-              padding: '6px 10px',
+              border: `1px solid ${HAIRLINE}`,
+              padding: '6px 12px',
               cursor: 'pointer',
-              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-              fontSize: '11px',
+              fontFamily: MONO,
+              fontSize: 11,
               letterSpacing: '0.04em',
               textTransform: 'uppercase',
-              color: '#000',
+              color: INK,
+              borderRadius: 4,
             }}
           >
             {expanded
