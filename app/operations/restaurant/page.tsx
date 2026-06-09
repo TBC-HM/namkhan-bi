@@ -38,7 +38,7 @@ export default async function FnbPage({ searchParams }: Props) {
   const Q1_FROM = '2026-01-01';
   const Q1_TO   = '2026-03-31';
   const Q1_LABEL = 'Q1 2026 (Jan-Mar) · last fully-mapped GL quarter';
-  const [daily, pl, periodCosts, captureP, canteenQ1, glBreakdown, topTrend, rawTxns, bkfstQ1, covers, glRevSplitResp] = await Promise.all([
+  const [daily, pl, periodCosts, captureP, canteenQ1, glBreakdown, topTrend, rawTxns, bkfstQ1, covers, glRevSplitResp, glCostSplitResp, bkfstQ1Resp] = await Promise.all([
     getKpiDaily(period.from, period.to).catch(() => []),
     getDeptPl('fnb', 16).catch(() => []),
     getFnbCostsForPeriod(Q1_FROM, Q1_TO).catch(() => null),
@@ -56,6 +56,16 @@ export default async function FnbPage({ searchParams }: Props) {
       .ilike('usali_department', 'f%b')
       .eq('usali_subcategory', 'Revenue')
       .in('period_yyyymm', ['2026-01','2026-02','2026-03'])
+      .then((r) => r),
+    supabase.schema('gl').from('mv_usali_pl_monthly')
+      .select('usali_subcategory, usali_line_label, account_name, amount_usd')
+      .ilike('usali_department', 'f%b')
+      .in('usali_subcategory', ['Cost of Sales','Payroll & Related'])
+      .in('period_yyyymm', ['2026-01','2026-02','2026-03'])
+      .then((r) => r),
+    supabase.from('v_breakfast_allocation_q1_2026')
+      .select('room_nights, adult_nights, child_nights, alloc_usd')
+      .eq('property_id', 260955)
       .then((r) => r),
   ]);
   // GL revenue is a credit → negative. Flip the sign for display.
