@@ -39,7 +39,7 @@ export default function FnbTopSellerTrend({ data }: Props) {
 
   const cell: CSSProperties = {
     padding: '6px 10px',
-    borderBottom: '1px solid var(--rule, #e3dfd3)',
+    borderBottom: '1px solid #E0E0E0',
     textAlign: 'right',
     fontVariantNumeric: 'tabular-nums',
   };
@@ -91,7 +91,7 @@ export default function FnbTopSellerTrend({ data }: Props) {
       <table style={{
         width: '100%',
         borderCollapse: 'collapse',
-        fontSize: 'var(--t-sm)',
+        fontSize: '12px',
       }}>
         <thead>
           <tr>
@@ -109,12 +109,12 @@ export default function FnbTopSellerTrend({ data }: Props) {
               <th key={i} style={{
                 textAlign: c.a,
                 padding: '8px 10px',
-                borderBottom: '1px solid var(--rule, #e3dfd3)',
-                fontFamily: 'var(--mono)',
-                fontSize: 'var(--t-xs)',
-                letterSpacing: 'var(--ls-extra)',
+                borderBottom: '1px solid #E0E0E0',
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                fontSize: '11px',
+                letterSpacing: '0.04em',
                 textTransform: 'uppercase',
-                color: 'var(--brass)',
+                color: '#000',
                 fontWeight: 500,
               }}>{c.l}</th>
             ))}
@@ -143,7 +143,7 @@ export default function FnbTopSellerTrend({ data }: Props) {
                 <td style={cell}>{it.last_sold ?? '—'}</td>
                 <td style={cell}>{it.active_months}</td>
                 <td style={cell}>{it.total_units}</td>
-                <td style={{ ...cell, color: 'var(--ink-soft)' }}>—</td>
+                <td style={{ ...cell, color: '#5A5A5A' }}>—</td>
                 <td style={{ ...cell, ...tStyle }}>
                   {it.delta_pct == null
                     ? '—'
