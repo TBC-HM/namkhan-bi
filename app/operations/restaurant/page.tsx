@@ -15,6 +15,7 @@ import {
   getKpiDaily, aggregateDaily, getDeptPl, getFnbCovers,
   getFnbCostsForPeriod, getFnbCaptureForPeriod, getCanteenForPeriod,
   getFnbGlBreakdown, getFnbTopSellerTrend, getBreakfastAllocation, getFnbRawTransactions,
+  getFnbRevenueByCategoryForPeriod,
 } from '@/lib/data';
 import { resolvePeriod } from '@/lib/period';
 import { supabase } from '@/lib/supabase';
@@ -57,7 +58,7 @@ export default async function FnbPage({ searchParams }: Props) {
   const Q1_FROM = '2026-01-01';
   const Q1_TO   = '2026-03-31';
   const Q1_LABEL = 'Q1 2026 (Jan-Mar) · last fully-mapped GL quarter';
-  const [daily, pl, periodCosts, captureP, canteenQ1, glBreakdown, topTrend, rawTxns, bkfstQ1, covers, glRevSplitResp, glCostSplitResp, bkfstQ1Resp, captureOp, coversOp, folioRowsResp, folioLatestResp, bkfstMonthlyResp, fnbCosMonthlyResp, fbCaptureResp, fbAvgTicketResp, fbCategoryResp] = await Promise.all([
+  const [daily, pl, periodCosts, captureP, canteenQ1, glBreakdown, topTrend, rawTxns, bkfstQ1, covers, glRevSplitResp, glCostSplitResp, bkfstQ1Resp, captureOp, coversOp, folioRowsResp, folioLatestResp, bkfstMonthlyResp, fnbCosMonthlyResp, fbCaptureResp, fbAvgTicketResp, fbCategoryResp, fbCatByPeriod] = await Promise.all([
     getKpiDaily(period.from, period.to).catch(() => []),
     getDeptPl('fnb', 18).catch(() => []),  // PBS #161 — extend to Jan 2025 onwards (was 12, missed 2025 H1 disaster)
     getFnbCostsForPeriod(Q1_FROM, Q1_TO).catch(() => null),
@@ -130,6 +131,7 @@ export default async function FnbPage({ searchParams }: Props) {
       .gte('period_yyyymm', (() => { const d = new Date(opToday); d.setUTCMonth(d.getUTCMonth() - 11); return d.toISOString().slice(0, 7); })())
       .lte('period_yyyymm', opToIso.slice(0, 7))
       .then((r) => r),
+    getFnbRevenueByCategoryForPeriod(opFromIso, opEndIso).catch(() => [] as Array<{ category: string; revenue_usd: number; tx_count: number; share_pct: number }>),
   ]);
   // GL revenue is a credit → negative. Flip the sign for display.
   const glLines = ((glRevSplitResp?.data ?? []) as GlLineRow[]);
@@ -299,6 +301,25 @@ export default async function FnbPage({ searchParams }: Props) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
             {row1.map((t, i) => <KpiTile key={i} {...t} />)}
           </div>
+          {fbCatByPeriod.length > 0 && (
+            <>
+              <div style={{ marginTop: 14, fontSize: 11, color: '#5A5A5A', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                Revenue by category · {opLabel}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginTop: 6 }}>
+                {fbCatByPeriod.map((c) => (
+                  <KpiTile
+                    key={c.category}
+                    label={c.category}
+                    value={`$${Math.round(c.revenue_usd).toLocaleString('en-US')}`}
+                    footnote={`${c.share_pct.toFixed(1)}% of F&B · ${c.tx_count} tx`}
+                    status="grey"
+                    size="sm"
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </Container>
 
         {/* PBS #159 — three mini-charts under the head KPI strip */}
