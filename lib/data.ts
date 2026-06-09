@@ -987,12 +987,12 @@ export interface TopSellerTrend {
   usali_subdept: string | null;
 }
 export async function getDeptTopSellerTrend(filter: { usali_dept: string; usali_subdept?: string }, startIso = '2026-01-01', topN = 200): Promise<{ periods: string[]; items: TopSellerTrend[] }> {
-  // PBS 2026-06-09 #174 — read from gold view v_fb_top_seller_trend (one row per description, pre-aggregated).
-  // Previous version selected raw txn rows from mv_classified_transactions but hit supabase-js's default
-  // 1000-row LIMIT, truncating ~80% of rows and making last_sold stuck on old dates.
-  if (filter.usali_dept !== 'F&B') return { periods: [], items: [] };
-  let q = supabase.from('v_fb_top_seller_trend')
+  // PBS 2026-06-09 #190/#191 — dept-agnostic via gl.v_dept_top_seller_trend.
+  // Spa/Activities now read the same shape via property_id + usali_dept (+ optional subdept).
+  let q = supabase.from('v_dept_top_seller_trend')
     .select('description, usali_subdept, total_revenue_usd, total_units, last_sold, active_months, avg_rev_per_active_month, monthly')
+    .eq('property_id', PROPERTY_ID)
+    .eq('usali_dept', filter.usali_dept)
     .order('total_revenue_usd', { ascending: false }).limit(topN);
   if (filter.usali_subdept) q = q.eq('usali_subdept', filter.usali_subdept);
   const { data } = await q;
@@ -1135,9 +1135,10 @@ export async function getFnbRevenueByCategoryForPeriod(
   fromIso: string,
   toIso: string,
 ): Promise<Array<{ category: string; revenue_usd: number; tx_count: number; share_pct: number }>> {
-  const { data } = await supabase.from('v_fnb_revenue_by_category_daily')
+  const { data } = await supabase.from('v_dept_revenue_by_category_daily')
     .select('category, revenue_usd, tx_count')
     .eq('property_id', PROPERTY_ID)
+    .eq('usali_dept', 'F&B')
     .gte('service_date', fromIso).lte('service_date', toIso);
   if (!data || data.length === 0) return [];
   const byCat = new Map<string, { revenue_usd: number; tx_count: number }>();
