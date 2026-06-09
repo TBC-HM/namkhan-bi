@@ -1,7 +1,7 @@
 // app/operations/spa/page.tsx
-// PBS 2026-06-09 #190 — full rebuild mirroring /operations/restaurant.
-// No canteen, no breakfast. Spa has 1 category → operating-snapshot strip's
-// 2nd row is the top-10 treatments for the selected period.
+// PBS 2026-06-09 #190/#195 — mirrors restaurant. Now includes 3 mini-charts
+// (Capture · Avg ticket · Top treatments) below the Operating snapshot,
+// matching the F&B page anatomy.
 
 import Link from 'next/link';
 import { DashboardPage, Container, KpiTile, type KpiTileProps, type DashboardTab } from '@/app/(cockpit)/_design';
@@ -28,7 +28,6 @@ const fmtUsd = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('en-
 const fmtPct = (n: number) => `${(Number(n) || 0).toFixed(1)}%`;
 
 export default async function SpaPage({ searchParams }: Props) {
-  // ─── period selector (yesterday / 7d / 30d / YTD), mirrors restaurant ───
   const opPeriodRaw = typeof searchParams.op === 'string' ? searchParams.op : '30d';
   const opPeriod = (['yesterday','7d','30d','ytd'].includes(opPeriodRaw) ? opPeriodRaw : '30d') as 'yesterday'|'7d'|'30d'|'ytd';
   const opToday = new Date(); opToday.setUTCHours(0,0,0,0);
@@ -49,7 +48,7 @@ export default async function SpaPage({ searchParams }: Props) {
   const Q1_FROM = '2026-01-01', Q1_TO = '2026-03-31';
   const Q1_LABEL = 'Q1 2026 (Jan-Mar) · last fully-mapped GL quarter';
 
-  const [pl, captureOp, periodCosts, topTrend, glBreakdown, rawTxns, topProductsOp] = await Promise.all([
+  const [pl, captureOp, periodCosts, topTrend, glBreakdown, rawTxns, topProductsOp, spaCapResp, spaAvgResp, spaTopMonthlyResp] = await Promise.all([
     getDeptPl('spa', 16).catch(() => []),
     getDeptCaptureForPeriod({ usali_dept: 'Spa' }, opFromIso, opEndIso).catch(() => null),
     getSpaCostsForPeriod(Q1_FROM, Q1_TO).catch(() => null),
@@ -57,7 +56,6 @@ export default async function SpaPage({ searchParams }: Props) {
     getDeptGlBreakdown('Spa', 16).catch(() => ({ periods: [], lines: [] })),
     getDeptRawTransactions({ usali_dept: 'Other Operated', usali_subdept: 'Spa' }, 2000).catch(() => []),
     getDeptTopSellerTrend({ usali_dept: 'Other Operated', usali_subdept: 'Spa' }, opFromIso, 50).catch(() => ({ periods: [], items: [] as TopSellerTrend[] })),
-    // PBS 2026-06-09 #195 — 3 mini-charts (capture / avg ticket / top treatments) — same shape as F&B page.
     supabase.from('v_spa_capture_monthly')
       .select('period_yyyymm, capture_pct, res_in_house, res_with_purchase')
       .eq('property_id', 260955)
@@ -75,8 +73,6 @@ export default async function SpaPage({ searchParams }: Props) {
       .then((r) => r),
   ]);
   const top10 = (topProductsOp.items ?? []).slice(0, 10);
-  const spaCapResp     = arguments[0] as unknown; void spaCapResp;
-  // NB: the new resp variables were destructured at array tail in Promise.all.
 
   const revP    = captureOp ? Number(captureOp.revenue) : 0;
   const occRn   = captureOp ? Number(captureOp.roomnights) : 0;
@@ -85,20 +81,15 @@ export default async function SpaPage({ searchParams }: Props) {
   const capPct  = captureOp ? Number(captureOp.capture_pct) : 0;
 
   const row1: KpiTileProps[] = [
-    { label: 'Spa Revenue',  value: fmtUsd(revP),
-      footnote: `Cloudbeds folio · ${opLabel}`,
+    { label: 'Spa Revenue',  value: fmtUsd(revP), footnote: `Cloudbeds folio · ${opLabel}`,
       status: revP > 0 ? 'green' : 'grey', size: 'sm' },
-    { label: 'Treatments',   value: String(treats),
-      footnote: `occ rn w/ treatment · ${opLabel}`,
+    { label: 'Treatments',   value: String(treats), footnote: `occ rn w/ treatment · ${opLabel}`,
       status: treats > 0 ? 'green' : 'grey', size: 'sm' },
     { label: 'Avg ticket',   value: treats > 0 ? fmtUsd(revP / treats) : '—',
-      footnote: `revenue ÷ treatments · ${opLabel}`,
-      status: 'grey', size: 'sm' },
-    { label: 'Spa / Occ Rn', value: fmtUsd(spc),
-      footnote: `spend per occupied room · ${opLabel}`,
+      footnote: `revenue ÷ treatments · ${opLabel}`, status: 'grey', size: 'sm' },
+    { label: 'Spa / Occ Rn', value: fmtUsd(spc), footnote: `spend per occupied room · ${opLabel}`,
       status: spc >= 25 ? 'green' : 'grey', size: 'sm' },
-    { label: 'Capture %',    value: fmtPct(capPct),
-      footnote: `${treats}/${occRn} occ rn · ${opLabel}`,
+    { label: 'Capture %',    value: fmtPct(capPct), footnote: `${treats}/${occRn} occ rn · ${opLabel}`,
       status: capPct >= 35 ? 'green' : 'grey', size: 'sm' },
   ];
 
@@ -166,6 +157,19 @@ export default async function SpaPage({ searchParams }: Props) {
             </>
           )}
         </Container>
+
+        {/* 3 mini-charts row — mirrors F&B page anatomy */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
+          <Container title="Capture %" subtitle="since Jan 2025 · spa-capturing rooms ÷ occupied rooms" density="compact">
+            <FbCaptureChart rows={(spaCapResp?.data ?? []) as Array<{ period_yyyymm: string; capture_pct: number | string | null; res_in_house: number; res_with_purchase: number }>} />
+          </Container>
+          <Container title="Avg ticket" subtitle="since Jan 2025 · revenue ÷ treatments served" density="compact">
+            <FbAvgTicketChart rows={(spaAvgResp?.data ?? []) as Array<{ period_yyyymm: string; avg_check: number | string | null; revenue: number | string; reservations: number | string }>} />
+          </Container>
+          <Container title="Top treatments" subtitle="last 12 months · top 5 stacked" density="compact">
+            <FbCategoryChart rows={(spaTopMonthlyResp?.data ?? []) as Array<{ period_yyyymm: string; category: string; revenue: number | string }>} />
+          </Container>
+        </div>
 
         {row2.length > 0 && (
           <Container title={`USALI Effective view · ${Q1_LABEL}`} subtitle="cost discipline derived from QB GL · scoped Q1 because GL Spa rows blank after April." density="compact">
