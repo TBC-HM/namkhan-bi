@@ -10,6 +10,8 @@ import DeptTrendChart from '@/components/pl/DeptTrendChart';
 import FnbGlBreakdown from '@/components/pl/FnbGlBreakdown';
 import FnbTopSellerTrend from '@/components/pl/FnbTopSellerTrend';
 import FnbRawTransactions from '@/components/pl/FnbRawTransactions';
+import { FbCaptureChart, FbAvgTicketChart, FbCategoryChart } from '@/components/pl/FbMiniCharts';
+import { supabase } from '@/lib/supabase';
 import {
   getDeptPl, getDeptCaptureForPeriod, getSpaCostsForPeriod,
   getDeptGlBreakdown, getDeptTopSellerTrend, getDeptRawTransactions,
@@ -55,8 +57,26 @@ export default async function SpaPage({ searchParams }: Props) {
     getDeptGlBreakdown('Spa', 16).catch(() => ({ periods: [], lines: [] })),
     getDeptRawTransactions({ usali_dept: 'Other Operated', usali_subdept: 'Spa' }, 2000).catch(() => []),
     getDeptTopSellerTrend({ usali_dept: 'Other Operated', usali_subdept: 'Spa' }, opFromIso, 50).catch(() => ({ periods: [], items: [] as TopSellerTrend[] })),
+    // PBS 2026-06-09 #195 — 3 mini-charts (capture / avg ticket / top treatments) — same shape as F&B page.
+    supabase.from('v_spa_capture_monthly')
+      .select('period_yyyymm, capture_pct, res_in_house, res_with_purchase')
+      .eq('property_id', 260955)
+      .order('period_yyyymm', { ascending: true })
+      .then((r) => r),
+    supabase.from('v_spa_avg_ticket_monthly')
+      .select('period_yyyymm, avg_check, revenue, reservations')
+      .eq('property_id', 260955)
+      .order('period_yyyymm', { ascending: true })
+      .then((r) => r),
+    supabase.from('v_spa_top_treatments_monthly')
+      .select('period_yyyymm, category, revenue')
+      .eq('property_id', 260955)
+      .order('period_yyyymm', { ascending: true })
+      .then((r) => r),
   ]);
   const top10 = (topProductsOp.items ?? []).slice(0, 10);
+  const spaCapResp     = arguments[0] as unknown; void spaCapResp;
+  // NB: the new resp variables were destructured at array tail in Promise.all.
 
   const revP    = captureOp ? Number(captureOp.revenue) : 0;
   const occRn   = captureOp ? Number(captureOp.roomnights) : 0;
