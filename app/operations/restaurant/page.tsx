@@ -3,7 +3,6 @@
 // to DashboardPage+Container+KpiTile. Layout, data sources, and collapsible
 // sections preserved 1:1. All numbers still live from /lib/data fetchers.
 
-import FilterStrip from '@/components/nav/FilterStrip';
 import { DashboardPage, Container, KpiTile, type KpiTileProps, type DashboardTab } from '@/app/(cockpit)/_design';
 import { OPERATIONS_SUBPAGES } from '../_subpages';
 import PnlGrid from '@/components/pl/PnlGrid';
@@ -57,9 +56,9 @@ export default async function FnbPage({ searchParams }: Props) {
   const Q1_FROM = '2026-01-01';
   const Q1_TO   = '2026-03-31';
   const Q1_LABEL = 'Q1 2026 (Jan-Mar) · last fully-mapped GL quarter';
-  const [daily, pl, periodCosts, captureP, canteenQ1, glBreakdown, topTrend, rawTxns, bkfstQ1, covers, glRevSplitResp, glCostSplitResp, bkfstQ1Resp, captureOp, coversOp, folioRowsResp, folioLatestResp] = await Promise.all([
+  const [daily, pl, periodCosts, captureP, canteenQ1, glBreakdown, topTrend, rawTxns, bkfstQ1, covers, glRevSplitResp, glCostSplitResp, bkfstQ1Resp, captureOp, coversOp, folioRowsResp, folioLatestResp, bkfstMonthlyResp] = await Promise.all([
     getKpiDaily(period.from, period.to).catch(() => []),
-    getDeptPl('fnb', 16).catch(() => []),
+    getDeptPl('fnb', 12).catch(() => []),
     getFnbCostsForPeriod(Q1_FROM, Q1_TO).catch(() => null),
     getFnbCaptureForPeriod(period.from, period.to).catch(() => null),
     getCanteenForPeriod(Q1_FROM, Q1_TO).catch(() => null),
@@ -98,6 +97,12 @@ export default async function FnbPage({ searchParams }: Props) {
     supabase.from('v_fb_outlet_daily')
       .select('service_date').eq('property_id', 260955)
       .order('service_date', { ascending: false }).limit(1).maybeSingle()
+      .then((r) => r),
+    // PBS 2026-06-09 #150 — monthly breakfast allocation for trailing 12 months
+    supabase.from('v_breakfast_allocation_monthly')
+      .select('period_yyyymm, alloc_usd')
+      .eq('property_id', 260955)
+      .order('period_yyyymm', { ascending: false }).limit(12)
       .then((r) => r),
   ]);
   // GL revenue is a credit → negative. Flip the sign for display.
@@ -275,8 +280,6 @@ export default async function FnbPage({ searchParams }: Props) {
           </div>
         </Container>
 
-        <FilterStrip showForward={false} showCompare={false} showSegment={false} liveSource="PMS · live" />
-
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10 }}>
           <Container title="Staff canteen" subtitle={period.label}>
             <div style={{ fontFamily: 'ui-serif, Georgia, serif', fontStyle: 'italic', fontSize: 22, lineHeight: 1.15, color: '#000', marginBottom: 6 }}>
@@ -321,8 +324,8 @@ export default async function FnbPage({ searchParams }: Props) {
           </Container>
         </div>
 
-        <Container title="Monthly trend · revenue · costs · GOP %" subtitle="last 16 months — live from gl.v_dept_pl_namkhan">
-          <DeptTrendChart rows={pl} dept="fnb" />
+        <Container title="Monthly trend · revenue · costs · GOP %" subtitle="trailing 12 months — live from gl.v_dept_pl_namkhan · breakfast bar = USALI fair-value reclass">
+          <DeptTrendChart rows={pl} dept="fnb" breakfastByPeriod={Object.fromEntries(((bkfstMonthlyResp?.data ?? []) as Array<{ period_yyyymm: string; alloc_usd: number | string }>).map((r) => [r.period_yyyymm, Number(r.alloc_usd)]))} />
         </Container>
 
         <Container title="P&L · QB GL · USALI rollup" subtitle="targets: food ≤30% · bev ≤25% · labor ≤35% · GOP ≥25%">
