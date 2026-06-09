@@ -58,20 +58,20 @@ export default function FnbRawTransactions({ data, pageSize = 200 }: Props) {
 
   const cell: CSSProperties = {
     padding: '5px 10px',
-    borderBottom: '1px solid var(--rule, #e3dfd3)',
+    borderBottom: '1px solid #E0E0E0',
     textAlign: 'right',
     fontVariantNumeric: 'tabular-nums',
-    fontSize: 'var(--t-sm)',
+    fontSize: '12px',
   };
   const cellL: CSSProperties = { ...cell, textAlign: 'left' };
   const inputStyle: CSSProperties = {
-    fontFamily: 'var(--mono)',
-    fontSize: 'var(--t-sm)',
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+    fontSize: '12px',
     padding: '6px 10px',
     border: '1px solid var(--paper-deep)',
     borderRadius: 4,
     background: 'var(--paper-warm)',
-    color: 'var(--ink)',
+    color: '#000',
     minWidth: 240,
   };
   const selStyle: CSSProperties = { ...inputStyle, minWidth: 120 };
@@ -96,7 +96,7 @@ export default function FnbRawTransactions({ data, pageSize = 200 }: Props) {
           <option value="Food">Food only</option>
           <option value="Beverage">Beverage only</option>
         </select>
-        <span style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-soft)' }}>
+        <span style={{ fontSize: '11px', color: '#5A5A5A' }}>
           {filtered.length.toLocaleString()} rows · {fmtAmt(totalAmount)} charges{refundsAmount < 0 ? ` · ${fmtAmt(refundsAmount)} refunds` : ''}
         </span>
       </div>
@@ -117,12 +117,12 @@ export default function FnbRawTransactions({ data, pageSize = 200 }: Props) {
                 <th key={i} style={{
                   textAlign: c.a,
                   padding: '8px 10px',
-                  borderBottom: '2px solid var(--rule, #e3dfd3)',
-                  fontFamily: 'var(--mono)',
-                  fontSize: 'var(--t-xs)',
-                  letterSpacing: 'var(--ls-extra)',
+                  borderBottom: '2px solid #E0E0E0',
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                  fontSize: '11px',
+                  letterSpacing: '0.04em',
                   textTransform: 'uppercase',
-                  color: 'var(--brass)',
+                  color: '#000',
                   fontWeight: 500,
                   whiteSpace: 'nowrap',
                 }}>{c.l}</th>
@@ -132,18 +132,18 @@ export default function FnbRawTransactions({ data, pageSize = 200 }: Props) {
           <tbody>
             {visible.length === 0 ? (
               <tr>
-                <td colSpan={6} style={{ padding: 16, color: 'var(--ink-soft)', fontStyle: 'italic', textAlign: 'center' }}>
+                <td colSpan={6} style={{ padding: 16, color: '#5A5A5A', fontStyle: 'italic', textAlign: 'center' }}>
                   No rows match the filter.
                 </td>
               </tr>
             ) : visible.map((t) => (
               <tr key={t.transaction_id}>
-                <td style={{ ...cellL, whiteSpace: 'nowrap', color: 'var(--ink-soft)' }}>{fmtDate(t.transaction_date)}</td>
+                <td style={{ ...cellL, whiteSpace: 'nowrap', color: '#5A5A5A' }}>{fmtDate(t.transaction_date)}</td>
                 <td style={cellL}>{t.description}</td>
-                <td style={{ ...cellL, color: 'var(--ink-soft)', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>{t.usali_subdept ?? '—'}</td>
-                <td style={{ ...cellL, fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>{t.reservation_id ?? '—'}</td>
-                <td style={{ ...cellL, color: 'var(--ink-soft)', fontSize: 'var(--t-xs)' }}>{t.user_name ?? '—'}</td>
-                <td style={{ ...cell, color: t.amount < 0 ? 'var(--bad, #b53a2a)' : 'var(--ink)' }}>
+                <td style={{ ...cellL, color: '#5A5A5A', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '11px' }}>{t.usali_subdept ?? '—'}</td>
+                <td style={{ ...cellL, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '11px' }}>{t.reservation_id ?? '—'}</td>
+                <td style={{ ...cellL, color: '#5A5A5A', fontSize: '11px' }}>{t.user_name ?? '—'}</td>
+                <td style={{ ...cell, color: t.amount < 0 ? 'var(--bad, #b53a2a)' : '#000' }}>
                   {fmtAmt(t.amount)}
                 </td>
               </tr>
@@ -163,11 +163,11 @@ export default function FnbRawTransactions({ data, pageSize = 200 }: Props) {
               border: 0,
               padding: '6px 10px',
               cursor: 'pointer',
-              fontFamily: 'var(--mono)',
-              fontSize: 'var(--t-xs)',
-              letterSpacing: 'var(--ls-extra)',
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+              fontSize: '11px',
+              letterSpacing: '0.04em',
               textTransform: 'uppercase',
-              color: 'var(--brass)',
+              color: '#000',
             }}
           >
             Show next {pageSize} ▾  ({filtered.length - pageEnd} more)
