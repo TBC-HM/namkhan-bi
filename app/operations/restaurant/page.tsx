@@ -72,8 +72,25 @@ export default async function FnbPage({ searchParams }: Props) {
   const glLines = ((glRevSplitResp?.data ?? []) as GlLineRow[]);
   const foodRevQ1 = -1 * glLines.filter((r) => /food/i.test(r.usali_line_label)).reduce((s, r) => s + Number(r.amount_usd ?? 0), 0);
   const bevRevQ1  = -1 * glLines.filter((r) => /beverage|drink|bar/i.test(r.usali_line_label)).reduce((s, r) => s + Number(r.amount_usd ?? 0), 0);
+  // PBS 2026-06-09 #140 — Cost split Q1 (Food + Beverage + Total Labour). Canteen accounts (EMPLOYEE MEAL / STAFF CANTEEN MATERIALS) explicitly excluded.
+  type GlCostRow = { usali_subcategory: string; usali_line_label: string | null; account_name: string | null; amount_usd: number | string | null };
+  const costLines = ((glCostSplitResp?.data ?? []) as GlCostRow[]);
+  const isCanteenAcct = (a: string | null) => !!a && /(employee\s*meal|staff\s*canteen)/i.test(a);
+  const foodCostQ1 = costLines.filter((r) => r.usali_subcategory === 'Cost of Sales' && /^food cost$/i.test(r.usali_line_label ?? '') && !isCanteenAcct(r.account_name)).reduce((s, r) => s + Number(r.amount_usd ?? 0), 0);
+  const bevCostQ1 = costLines.filter((r) => r.usali_subcategory === 'Cost of Sales' && /^beverage cost$/i.test(r.usali_line_label ?? '') && !isCanteenAcct(r.account_name)).reduce((s, r) => s + Number(r.amount_usd ?? 0), 0);
+  const labourQ1Gross = costLines.filter((r) => r.usali_subcategory === 'Payroll & Related').reduce((s, r) => s + Number(r.amount_usd ?? 0), 0);
+  const labourCanteenPortion = costLines.filter((r) => r.usali_subcategory === 'Payroll & Related' && isCanteenAcct(r.account_name)).reduce((s, r) => s + Number(r.amount_usd ?? 0), 0);
+  const labourQ1 = labourQ1Gross - labourCanteenPortion;
+
+  // PBS 2026-06-09 #140 — correct breakfast allocation (was $1,940 due to 1000-row cap on reservations).
+  type BfastRow = { room_nights: number; adult_nights: number; child_nights: number; alloc_usd: number | string };
+  const bfastRows = ((bkfstQ1Resp?.data ?? []) as BfastRow[]);
+  const bfastAdultNights = bfastRows.reduce((s, r) => s + Number(r.adult_nights ?? 0), 0);
+  const bfastChildNights = bfastRows.reduce((s, r) => s + Number(r.child_nights ?? 0), 0);
+  const bfastAllocUsd    = bfastRows.reduce((s, r) => s + Number(r.alloc_usd ?? 0), 0);
+
   const canteen = canteenQ1;
-  const bkfst   = bkfstQ1;
+  const bkfst = bfastAllocUsd > 0 ? { ...((bkfstQ1 ?? {}) as Record<string, unknown>), total_alloc_usd: bfastAllocUsd, adult_nights: bfastAdultNights, child_nights: bfastChildNights } : bkfstQ1;
   void daily;
   void covers;
   const a30 = aggregateDaily(daily, period.capacityMode);
