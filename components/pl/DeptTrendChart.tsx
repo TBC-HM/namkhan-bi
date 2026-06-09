@@ -41,16 +41,23 @@ export default function DeptTrendChart({
   // Sort ascending by period for left-to-right trend
   const series = [...rows]
     .sort((a, b) => a.period.localeCompare(b.period))
-    .map(r => ({
-      m: monthLabel(r.period),
-      food: Number(r.food_revenue || 0),
-      bev:  Number(r.bev_revenue || 0),
-      breakfast: Number(breakfastByPeriod?.[r.period] || 0),
-      rev:  Number(r.revenue || 0),
-      cogs: Number(r.cogs || 0) || (Number(r.food_cost || 0) + Number(r.bev_cost || 0) + Number(r.spa_cost || 0)),
-      payroll: Number(r.payroll || 0),
-      gop_pct: Number(r.gop_pct || 0),
-    }))
+    .map(r => {
+      const food = Number(r.food_revenue || 0);
+      const bev  = Number(r.bev_revenue || 0);
+      const breakfast = Number(breakfastByPeriod?.[r.period] || 0);
+      const cogs = Number(r.cogs || 0) || (Number(r.food_cost || 0) + Number(r.bev_cost || 0) + Number(r.spa_cost || 0));
+      return {
+        m: monthLabel(r.period),
+        food, bev, breakfast,
+        rev: Number(r.revenue || 0),
+        cogs,
+        payroll: Number(r.payroll || 0),
+        gop_pct: Number(r.gop_pct || 0),
+        // PBS 2026-06-09 #168 — trendlines on top of bars
+        total_rev_line: dept === 'fnb' ? (food + bev + breakfast) : Number(r.revenue || 0),
+        cogs_line: cogs,
+      };
+    })
     .filter(d => d.rev > 0 || d.cogs > 0 || d.payroll > 0 || d.breakfast > 0);
 
   if (series.length === 0) {
@@ -87,6 +94,11 @@ export default function DeptTrendChart({
           )}
           <Bar yAxisId="usd" dataKey="cogs"    stackId="cost" fill={C.cogs}    name="COGS" />
           <Bar yAxisId="usd" dataKey="payroll" stackId="cost" fill={C.payroll} name="Payroll" />
+          {/* PBS #168 — total revenue + COGS trendlines on the USD axis */}
+          <Line yAxisId="usd" type="monotone" dataKey="total_rev_line" stroke="#000" strokeWidth={2}
+                dot={{ r: 3, fill: "#000" }} activeDot={{ r: 5 }} name="Total revenue" />
+          <Line yAxisId="usd" type="monotone" dataKey="cogs_line" stroke={C.cogs} strokeWidth={2} strokeDasharray="4 3"
+                dot={{ r: 3, fill: C.cogs }} activeDot={{ r: 5 }} name="COGS trend" />
           <Line yAxisId="pct" type="monotone" dataKey="gop_pct" stroke={C.gop} strokeWidth={2}
                 dot={{ r: 3, fill: C.gop }} activeDot={{ r: 5 }} name="GOP %" />
         </ComposedChart>
