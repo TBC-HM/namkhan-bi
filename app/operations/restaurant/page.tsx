@@ -184,6 +184,10 @@ export default async function FnbPage({ searchParams }: Props) {
     { label: 'Canteen / Occ', value: fmtUsd(Number(canteen?.cost_per_occ_room ?? 0)),
       footnote: 'Q1 2026 · per occupied room-night · QB GL',
       status: 'grey', size: 'sm' },
+    // PBS 2026-06-09 #144 — canteen $ per day (Q1 = 90 days)
+    { label: 'Canteen / day', value: fmtUsd(Number(canteen?.total_usd ?? 0) / 90),
+      footnote: `Q1 2026 · canteen total ÷ 90 days (Jan-Mar) · QB GL`,
+      status: 'grey', size: 'sm' },
     // — Margin ratios (USALI targets) —
     { label: 'Effective GOP $', value: fmtUsd(Number(effectiveGopUsd ?? 0)),
       footnote: 'Effective rev − total cost · Q1 2026',
