@@ -126,7 +126,7 @@ export default function FnbTopSellerTrend({ data, hideSegments = false }: Props)
               <span style={{ marginLeft: 6, opacity: 0.6, fontSize: 10 }}>{countFor(s)}</span>
             </button>
           ))}
-        </div>
+        </div>}
         <span style={{ fontSize: 11, color: INK_MUTED, fontFamily: MONO, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
           Top {Math.min(visible.length, filtered.length)} of {filtered.length}
         </span>
