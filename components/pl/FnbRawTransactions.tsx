@@ -23,6 +23,7 @@ export default function FnbRawTransactions({ data, pageSize = 50 }: Props) {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('');
   const [page, setPage] = useState(0);
+  const [showAll, setShowAll] = useState(false);
 
   // PBS 2026-06-09 #183 — distinct categories sorted by frequency for dropdown filter.
   const categories = useMemo(() => {
@@ -53,8 +54,11 @@ export default function FnbRawTransactions({ data, pageSize = 50 }: Props) {
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, totalPages - 1);
-  const visible = filtered.slice(safePage * pageSize, (safePage + 1) * pageSize);
+  const visible = showAll
+    ? filtered
+    : filtered.slice(safePage * pageSize, (safePage + 1) * pageSize);
   const totalAmount = filtered.reduce((s, t) => s + (t.amount ?? 0), 0);
+  const collapsible = filtered.length > pageSize;
 
   if (data.length === 0) {
     return (
