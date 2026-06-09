@@ -57,7 +57,7 @@ export default async function FnbPage({ searchParams }: Props) {
   const Q1_FROM = '2026-01-01';
   const Q1_TO   = '2026-03-31';
   const Q1_LABEL = 'Q1 2026 (Jan-Mar) · last fully-mapped GL quarter';
-  const [daily, pl, periodCosts, captureP, canteenQ1, glBreakdown, topTrend, rawTxns, bkfstQ1, covers, glRevSplitResp, glCostSplitResp, bkfstQ1Resp, captureOp, coversOp] = await Promise.all([
+  const [daily, pl, periodCosts, captureP, canteenQ1, glBreakdown, topTrend, rawTxns, bkfstQ1, covers, glRevSplitResp, glCostSplitResp, bkfstQ1Resp, captureOp, coversOp, folioRowsResp, folioLatestResp] = await Promise.all([
     getKpiDaily(period.from, period.to).catch(() => []),
     getDeptPl('fnb', 16).catch(() => []),
     getFnbCostsForPeriod(Q1_FROM, Q1_TO).catch(() => null),
@@ -89,6 +89,16 @@ export default async function FnbPage({ searchParams }: Props) {
     // PBS #143 — op-scoped capture + covers for the Row 1 drilldown
     getFnbCaptureForPeriod(opFromIso, opEndIso).catch(() => null),
     getFnbCovers(opFromIso, opEndIso).catch(() => null),
+    // PBS #145 — Cloudbeds folio source for live F&B revenue. POS is for reconciliation only.
+    supabase.from('v_fb_outlet_daily')
+      .select('service_date, revenue, reservations')
+      .eq('property_id', 260955)
+      .gte('service_date', opFromIso).lte('service_date', opEndIso)
+      .then((r) => r),
+    supabase.from('v_fb_outlet_daily')
+      .select('service_date').eq('property_id', 260955)
+      .order('service_date', { ascending: false }).limit(1).maybeSingle()
+      .then((r) => r),
   ]);
   // GL revenue is a credit → negative. Flip the sign for display.
   const glLines = ((glRevSplitResp?.data ?? []) as GlLineRow[]);
@@ -110,6 +120,16 @@ export default async function FnbPage({ searchParams }: Props) {
   const bfastAdultNights = bfastRows.reduce((s, r) => s + Number(r.adult_nights ?? 0), 0);
   const bfastChildNights = bfastRows.reduce((s, r) => s + Number(r.child_nights ?? 0), 0);
   const bfastAllocUsd    = bfastRows.reduce((s, r) => s + Number(r.alloc_usd ?? 0), 0);
+
+  // PBS 2026-06-09 #145 — Cloudbeds folio F&B revenue (op-scoped).
+  type FolioRow = { service_date: string; revenue: number | string; reservations: number };
+  const folioRows = ((folioRowsResp?.data ?? []) as FolioRow[]);
+  const folioRev = folioRows.reduce((s, r) => s + Number(r.revenue ?? 0), 0);
+  const folioRes = folioRows.reduce((s, r) => s + Number(r.reservations ?? 0), 0);
+  const folioActiveDays = new Set(folioRows.map((r) => String(r.service_date).slice(0,10))).size;
+  const folioAvgCheck = folioRes > 0 ? folioRev / folioRes : 0;
+  const folioLatestDate = (folioLatestResp?.data as { service_date?: string } | null)?.service_date ?? null;
+  const folioIsStale = folioLatestDate ? (folioLatestDate < opEndIso) : true;
 
   const canteen = canteenQ1;
   const bkfst = bfastAllocUsd > 0 ? { ...((bkfstQ1 ?? {}) as Record<string, unknown>), total_alloc_usd: bfastAllocUsd, adult_nights: bfastAdultNights, child_nights: bfastChildNights } : bkfstQ1;
