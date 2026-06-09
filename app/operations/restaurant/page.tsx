@@ -56,7 +56,7 @@ export default async function FnbPage({ searchParams }: Props) {
   const Q1_FROM = '2026-01-01';
   const Q1_TO   = '2026-03-31';
   const Q1_LABEL = 'Q1 2026 (Jan-Mar) · last fully-mapped GL quarter';
-  const [daily, pl, periodCosts, captureP, canteenQ1, glBreakdown, topTrend, rawTxns, bkfstQ1, covers, glRevSplitResp, glCostSplitResp, bkfstQ1Resp, captureOp, coversOp, folioRowsResp, folioLatestResp, bkfstMonthlyResp] = await Promise.all([
+  const [daily, pl, periodCosts, captureP, canteenQ1, glBreakdown, topTrend, rawTxns, bkfstQ1, covers, glRevSplitResp, glCostSplitResp, bkfstQ1Resp, captureOp, coversOp, folioRowsResp, folioLatestResp, bkfstMonthlyResp, fnbCosMonthlyResp] = await Promise.all([
     getKpiDaily(period.from, period.to).catch(() => []),
     getDeptPl('fnb', 12).catch(() => []),
     getFnbCostsForPeriod(Q1_FROM, Q1_TO).catch(() => null),
@@ -103,6 +103,12 @@ export default async function FnbPage({ searchParams }: Props) {
       .select('period_yyyymm, alloc_usd')
       .eq('property_id', 260955)
       .order('period_yyyymm', { ascending: false }).limit(12)
+      .then((r) => r),
+    // PBS 2026-06-09 #152 — monthly F&B Cost of Sales Jan-Dec for the cost strip
+    supabase.from('v_fnb_cos_monthly')
+      .select('period_yyyymm, food_cost, bev_cost, total_cost')
+      .gte('period_yyyymm', '2026-01').lte('period_yyyymm', '2026-12')
+      .order('period_yyyymm', { ascending: true })
       .then((r) => r),
   ]);
   // GL revenue is a credit → negative. Flip the sign for display.
@@ -326,6 +332,37 @@ export default async function FnbPage({ searchParams }: Props) {
 
         <Container title="Monthly trend · revenue · costs · GOP %" subtitle="trailing 12 months — live from gl.v_dept_pl_namkhan · breakfast bar = USALI fair-value reclass">
           <DeptTrendChart rows={pl} dept="fnb" breakfastByPeriod={Object.fromEntries(((bkfstMonthlyResp?.data ?? []) as Array<{ period_yyyymm: string; alloc_usd: number | string }>).map((r) => [r.period_yyyymm, Number(r.alloc_usd)]))} />
+        </Container>
+
+        {/* PBS #152 — monthly F&B Cost of Sales strip Jan-Dec (gold view v_fnb_cos_monthly, canteen-excluded, account-id based to catch the Jan QB class leak). Empty months = '—'. */}
+        <Container title="F&B Cost of Sales · month-by-month" subtitle="2026 · Jan-Dec · canteen excluded · live from gl.v_fnb_cos_monthly · QB GL stops at April">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, minmax(0, 1fr))', gap: 6 }}>
+            {(() => {
+              type CosRow = { period_yyyymm: string; food_cost: number | string | null; bev_cost: number | string | null; total_cost: number | string | null };
+              const rows = (fnbCosMonthlyResp?.data ?? []) as CosRow[];
+              const byMonth: Record<number, CosRow | undefined> = {};
+              for (const r of rows) {
+                const m = Number((r.period_yyyymm ?? '').slice(5, 7));
+                if (m >= 1 && m <= 12) byMonth[m] = r;
+              }
+              const monthAbbr = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+              return monthAbbr.map((mon, idx) => {
+                const m = idx + 1;
+                const r = byMonth[m];
+                const total = Number(r?.total_cost ?? 0);
+                const food  = Number(r?.food_cost  ?? 0);
+                const bev   = Number(r?.bev_cost   ?? 0);
+                const hasData = total > 0;
+                return (
+                  <KpiTile key={mon} size="sm"
+                    label={mon}
+                    value={hasData ? `$${Math.round(total).toLocaleString('en-US')}` : '—'}
+                    footnote={hasData ? `Food $${Math.round(food).toLocaleString('en-US')} · Bev $${Math.round(bev).toLocaleString('en-US')}` : 'no QB GL'}
+                    status={hasData ? 'grey' : 'grey'} />
+                );
+              });
+            })()}
+          </div>
         </Container>
 
         <Container title="P&L · QB GL · USALI rollup" subtitle="targets: food ≤30% · bev ≤25% · labor ≤35% · GOP ≥25%">
