@@ -1067,21 +1067,25 @@ export const getFnbTopSellerTrend = (s = '2026-01-01', n = 200) => getDeptTopSel
 // Raw POS transactions (any dept)
 export interface FnbRawTxn {
   transaction_id: string; reservation_id: string | null; transaction_date: string;
+  local_laos_str: string | null;
   description: string; amount: number; currency: string;
   category: string | null; item_category_name: string | null;
   user_name: string | null; usali_subdept: string | null;
+  guest_name: string | null; room_name: string | null; source_name: string | null;
 }
 export async function getDeptRawTransactions(filter: { usali_dept: string; usali_subdept?: string }, limit = 2000): Promise<FnbRawTxn[]> {
-  let q = supabase.from('mv_classified_transactions')
-    .select('transaction_id, reservation_id, transaction_date, description, amount, currency, category, item_category_name, user_name, usali_subdept')
+  // PBS 2026-06-09 #177 — read enriched view that joins reservation guest + room + Laos local time.
+  let q = supabase.from('v_fnb_raw_txn_enriched')
+    .select('transaction_id, reservation_id, transaction_date, local_laos_str, description, amount, currency, category, item_category_name, user_name, usali_subdept, guest_name, room_name, source_name')
     .eq('property_id', PROPERTY_ID).eq('usali_dept', filter.usali_dept)
     .order('transaction_date', { ascending: false }).limit(limit);
   if (filter.usali_subdept) q = q.eq('usali_subdept', filter.usali_subdept);
   const { data } = await q;
-  return ((data ?? []) as any[]).map((r) => ({
+  return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
     transaction_id: String(r.transaction_id),
     reservation_id: r.reservation_id ? String(r.reservation_id) : null,
     transaction_date: String(r.transaction_date),
+    local_laos_str: r.local_laos_str ? String(r.local_laos_str) : null,
     description: String(r.description ?? '—'),
     amount: Number(r.amount ?? 0),
     currency: String(r.currency ?? 'USD'),
@@ -1089,6 +1093,9 @@ export async function getDeptRawTransactions(filter: { usali_dept: string; usali
     item_category_name: r.item_category_name ? String(r.item_category_name) : null,
     user_name: r.user_name ? String(r.user_name) : null,
     usali_subdept: r.usali_subdept ? String(r.usali_subdept) : null,
+    guest_name: r.guest_name ? String(r.guest_name) : null,
+    room_name: r.room_name ? String(r.room_name) : null,
+    source_name: r.source_name ? String(r.source_name) : null,
   }));
 }
 export const getFnbRawTransactions = (limit = 2000) => getDeptRawTransactions({ usali_dept: 'F&B' }, limit);
