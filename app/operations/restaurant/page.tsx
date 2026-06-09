@@ -10,6 +10,7 @@ import DeptTrendChart from '@/components/pl/DeptTrendChart';
 import FnbGlBreakdown from '@/components/pl/FnbGlBreakdown';
 import FnbTopSellerTrend from '@/components/pl/FnbTopSellerTrend';
 import FnbRawTransactions from '@/components/pl/FnbRawTransactions';
+import { FbCaptureChart, FbAvgTicketChart, FbCategoryChart } from '@/components/pl/FbMiniCharts';
 import {
   getKpiDaily, aggregateDaily, getDeptPl, getFnbCovers,
   getFnbCostsForPeriod, getFnbCaptureForPeriod, getCanteenForPeriod,
@@ -56,7 +57,7 @@ export default async function FnbPage({ searchParams }: Props) {
   const Q1_FROM = '2026-01-01';
   const Q1_TO   = '2026-03-31';
   const Q1_LABEL = 'Q1 2026 (Jan-Mar) · last fully-mapped GL quarter';
-  const [daily, pl, periodCosts, captureP, canteenQ1, glBreakdown, topTrend, rawTxns, bkfstQ1, covers, glRevSplitResp, glCostSplitResp, bkfstQ1Resp, captureOp, coversOp, folioRowsResp, folioLatestResp, bkfstMonthlyResp, fnbCosMonthlyResp] = await Promise.all([
+  const [daily, pl, periodCosts, captureP, canteenQ1, glBreakdown, topTrend, rawTxns, bkfstQ1, covers, glRevSplitResp, glCostSplitResp, bkfstQ1Resp, captureOp, coversOp, folioRowsResp, folioLatestResp, bkfstMonthlyResp, fnbCosMonthlyResp, fbCaptureResp, fbAvgTicketResp, fbCategoryResp] = await Promise.all([
     getKpiDaily(period.from, period.to).catch(() => []),
     getDeptPl('fnb', 12).catch(() => []),
     getFnbCostsForPeriod(Q1_FROM, Q1_TO).catch(() => null),
@@ -112,6 +113,22 @@ export default async function FnbPage({ searchParams }: Props) {
       .select('period_yyyymm, food_cost, bev_cost, total_cost, cost_pct_of_eff_rev, food_cost_pct, bev_cost_pct')
       .gte('period_yyyymm', '2026-01').lte('period_yyyymm', '2026-12')
       .order('period_yyyymm', { ascending: true })
+      .then((r) => r),
+    // PBS #159 — three mini-charts data (capture, avg ticket, category breakdown), since Jan 2025.
+    supabase.from('v_fb_capture_monthly')
+      .select('period_yyyymm, res_in_house, res_with_purchase, capture_pct')
+      .gte('period_yyyymm', '2025-01').lte('period_yyyymm', opToIso.slice(0, 7))
+      .order('period_yyyymm', { ascending: true })
+      .then((r) => r),
+    supabase.from('v_fb_avg_ticket_monthly')
+      .select('period_yyyymm, revenue, reservations, avg_check')
+      .gte('period_yyyymm', '2025-01').lte('period_yyyymm', opToIso.slice(0, 7))
+      .order('period_yyyymm', { ascending: true })
+      .then((r) => r),
+    supabase.from('v_fb_category_monthly')
+      .select('period_yyyymm, category, revenue')
+      .gte('period_yyyymm', (() => { const d = new Date(opToday); d.setUTCMonth(d.getUTCMonth() - 11); return d.toISOString().slice(0, 7); })())
+      .lte('period_yyyymm', opToIso.slice(0, 7))
       .then((r) => r),
   ]);
   // GL revenue is a credit → negative. Flip the sign for display.
@@ -282,6 +299,19 @@ export default async function FnbPage({ searchParams }: Props) {
             {row1.map((t, i) => <KpiTile key={i} {...t} />)}
           </div>
         </Container>
+
+        {/* PBS #159 — three mini-charts under the head KPI strip */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
+          <Container title="Capture %" subtitle="since Jan 2025 · folio purchases ÷ in-house res" density="compact">
+            <FbCaptureChart rows={(fbCaptureResp?.data ?? []) as Array<{ period_yyyymm: string; capture_pct: number | string | null; res_in_house: number; res_with_purchase: number }>} />
+          </Container>
+          <Container title="Avg check" subtitle="since Jan 2025 · revenue ÷ reservations served" density="compact">
+            <FbAvgTicketChart rows={(fbAvgTicketResp?.data ?? []) as Array<{ period_yyyymm: string; avg_check: number | string | null; revenue: number | string; reservations: number | string }>} />
+          </Container>
+          <Container title="Revenue by category" subtitle="last 12 months · top categories stacked" density="compact">
+            <FbCategoryChart rows={(fbCategoryResp?.data ?? []) as Array<{ period_yyyymm: string; category: string; revenue: number | string }>} />
+          </Container>
+        </div>
 
         <Container title={`USALI Effective view · ${Q1_LABEL}`} subtitle="net of breakfast fair-value reclass — what the GL would say if the JE were posted. Scoped to Q1 2026 because QB GL F&B rows are empty after April (reclass to Undistributed)." density="compact">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
