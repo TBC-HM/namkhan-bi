@@ -21,20 +21,35 @@ const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 
 export default function FnbRawTransactions({ data, pageSize = 50 }: Props) {
   const [query, setQuery] = useState('');
+  const [category, setCategory] = useState('');
   const [page, setPage] = useState(0);
 
+  // PBS 2026-06-09 #183 — distinct categories sorted by frequency for dropdown filter.
+  const categories = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of data) {
+      const c = (t.item_category_name ?? 'Uncategorized').trim() || 'Uncategorized';
+      m.set(c, (m.get(c) ?? 0) + 1);
+    }
+    return Array.from(m.entries()).sort((a, b) => b[1] - a[1]);
+  }, [data]);
+
   const filtered = useMemo(() => {
-    if (!query.trim()) return data;
-    const q = query.toLowerCase();
-    return data.filter((t) =>
-      (t.description ?? '').toLowerCase().includes(q) ||
-      (t.guest_name ?? '').toLowerCase().includes(q) ||
-      (t.room_name ?? '').toLowerCase().includes(q) ||
-      (t.item_category_name ?? '').toLowerCase().includes(q) ||
-      (t.transaction_id ?? '').toLowerCase().includes(q) ||
-      (t.user_name ?? '').toLowerCase().includes(q),
-    );
-  }, [data, query]);
+    const q = query.trim().toLowerCase();
+    if (!q && !category) return data;
+    return data.filter((t) => {
+      if (category && (t.item_category_name ?? 'Uncategorized') !== category) return false;
+      if (!q) return true;
+      return (
+        (t.description ?? '').toLowerCase().includes(q) ||
+        (t.guest_name ?? '').toLowerCase().includes(q) ||
+        (t.room_name ?? '').toLowerCase().includes(q) ||
+        (t.item_category_name ?? '').toLowerCase().includes(q) ||
+        (t.transaction_id ?? '').toLowerCase().includes(q) ||
+        (t.user_name ?? '').toLowerCase().includes(q)
+      );
+    });
+  }, [data, query, category]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, totalPages - 1);
@@ -76,8 +91,22 @@ export default function FnbRawTransactions({ data, pageSize = 50 }: Props) {
             fontFamily: MONO, fontSize: 12, color: INK, outline: 'none', background: '#FFF',
           }}
         />
+        <select
+          value={category}
+          onChange={(e) => { setCategory(e.target.value); setPage(0); }}
+          style={{
+            flex: '0 1 220px', padding: '8px 12px',
+            border: `1px solid ${HAIRLINE}`, borderRadius: 4,
+            fontFamily: MONO, fontSize: 12, color: INK, outline: 'none', background: '#FFF',
+          }}
+        >
+          <option value="">All categories ({categories.reduce((s, [, n]) => s + n, 0)})</option>
+          {categories.map(([cat, count]) => (
+            <option key={cat} value={cat}>{cat} ({count})</option>
+          ))}
+        </select>
         <span style={{ fontSize: 11, color: INK_MUTED, fontFamily: MONO, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-          {filtered.length} txn · {fmtUsd(totalAmount)} · times in Laos (UTC+7)
+          {filtered.length} txn · {fmtUsd(totalAmount)}{category ? ` · ${category}` : ''} · times in Laos (UTC+7)
         </span>
       </div>
 
