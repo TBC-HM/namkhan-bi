@@ -28,18 +28,27 @@ const fmtPct = (n: number) => `${(Number(n) || 0).toFixed(1)}%`;
 
 export default async function FnbPage({ searchParams }: Props) {
   const period = resolvePeriod(searchParams);
-  const [daily, pl, periodCosts, captureP, canteen, glBreakdown, topTrend, rawTxns, bkfst, covers] = await Promise.all([
+  // PBS 2026-06-09 #139 — QB GL post-April 2026 has empty F&B rows (reclass
+  // to Undistributed). Scope the USALI Effective row + Staff Canteen to the
+  // last fully-mapped quarter (Q1 2026) instead of the rolling window so the
+  // tiles reflect a meaningful comparison instead of $0 / NaN.
+  const Q1_FROM = '2026-01-01';
+  const Q1_TO   = '2026-03-31';
+  const Q1_LABEL = 'Q1 2026 (Jan-Mar) · last fully-mapped GL quarter';
+  const [daily, pl, periodCosts, captureP, canteenQ1, glBreakdown, topTrend, rawTxns, bkfstQ1, covers] = await Promise.all([
     getKpiDaily(period.from, period.to).catch(() => []),
     getDeptPl('fnb', 16).catch(() => []),
-    getFnbCostsForPeriod(period.from, period.to).catch(() => null),
+    getFnbCostsForPeriod(Q1_FROM, Q1_TO).catch(() => null),
     getFnbCaptureForPeriod(period.from, period.to).catch(() => null),
-    getCanteenForPeriod(period.from, period.to).catch(() => null),
+    getCanteenForPeriod(Q1_FROM, Q1_TO).catch(() => null),
     getFnbGlBreakdown(16).catch(() => ({ periods: [], lines: [] })),
     getFnbTopSellerTrend('2026-01-01', 8).catch(() => ({ periods: [], items: [] })),
     getFnbRawTransactions(2000).catch(() => []),
-    getBreakfastAllocation(period.from, period.to).catch(() => null),
+    getBreakfastAllocation(Q1_FROM, Q1_TO).catch(() => null),
     getFnbCovers(period.from, period.to).catch(() => null),
   ]);
+  const canteen = canteenQ1;
+  const bkfst   = bkfstQ1;
   void covers;
   const a30 = aggregateDaily(daily, period.capacityMode);
   const plLatest = pl.find(r => r.revenue > 0) ?? null;
@@ -92,13 +101,13 @@ export default async function FnbPage({ searchParams }: Props) {
       tabs={tabs}
     >
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <Container title="Operating snapshot" subtitle="capture · spend · staff canteen — current period" density="compact">
+        <Container title="Operating snapshot" subtitle={`capture · spend · staff canteen — Q1 2026 (GL) + ${period.label} (PMS) · Food/Beverage tiles read non-existent kpi columns, currently always $0 — POS feed TODO`} density="compact">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
             {row1.map((t, i) => <KpiTile key={i} {...t} />)}
           </div>
         </Container>
 
-        <Container title="USALI Effective view" subtitle="net of breakfast fair-value reclass — what the GL would say if the JE were posted" density="compact">
+        <Container title={`USALI Effective view · ${Q1_LABEL}`} subtitle="net of breakfast fair-value reclass — what the GL would say if the JE were posted. Scoped to Q1 2026 because QB GL F&B rows are empty after April (reclass to Undistributed)." density="compact">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
             {row2.map((t, i) => <KpiTile key={i} {...t} />)}
           </div>
