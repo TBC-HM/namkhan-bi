@@ -106,7 +106,7 @@ export default async function FnbPage({ searchParams }: Props) {
       .then((r) => r),
     // PBS 2026-06-09 #152 — monthly F&B Cost of Sales Jan-Dec for the cost strip
     supabase.from('v_fnb_cos_monthly')
-      .select('period_yyyymm, food_cost, bev_cost, total_cost')
+      .select('period_yyyymm, food_cost, bev_cost, total_cost, cost_pct_of_eff_rev')
       .gte('period_yyyymm', '2026-01').lte('period_yyyymm', '2026-12')
       .order('period_yyyymm', { ascending: true })
       .then((r) => r),
@@ -338,7 +338,7 @@ export default async function FnbPage({ searchParams }: Props) {
         <Container title="F&B Cost of Sales · month-by-month" subtitle="2026 · Jan-Dec · canteen excluded · live from gl.v_fnb_cos_monthly · QB GL stops at April">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, minmax(0, 1fr))', gap: 6 }}>
             {(() => {
-              type CosRow = { period_yyyymm: string; food_cost: number | string | null; bev_cost: number | string | null; total_cost: number | string | null };
+              type CosRow = { period_yyyymm: string; food_cost: number | string | null; bev_cost: number | string | null; total_cost: number | string | null; cost_pct_of_eff_rev: number | string | null };
               const rows = (fnbCosMonthlyResp?.data ?? []) as CosRow[];
               const byMonth: Record<number, CosRow | undefined> = {};
               for (const r of rows) {
@@ -352,12 +352,14 @@ export default async function FnbPage({ searchParams }: Props) {
                 const total = Number(r?.total_cost ?? 0);
                 const food  = Number(r?.food_cost  ?? 0);
                 const bev   = Number(r?.bev_cost   ?? 0);
+                const pct   = r?.cost_pct_of_eff_rev != null ? Number(r.cost_pct_of_eff_rev) : null;
                 const hasData = total > 0;
+                const pctTail = pct != null && hasData ? ` · ${pct.toFixed(1)}% of rev` : '';
                 return (
                   <KpiTile key={mon} size="sm"
                     label={mon}
                     value={hasData ? `$${Math.round(total).toLocaleString('en-US')}` : '—'}
-                    footnote={hasData ? `Food $${Math.round(food).toLocaleString('en-US')} · Bev $${Math.round(bev).toLocaleString('en-US')}` : 'no QB GL'}
+                    footnote={hasData ? `Food $${Math.round(food).toLocaleString('en-US')} · Bev $${Math.round(bev).toLocaleString('en-US')}${pctTail}` : 'no QB GL'}
                     status={hasData ? 'grey' : 'grey'} />
                 );
               });
