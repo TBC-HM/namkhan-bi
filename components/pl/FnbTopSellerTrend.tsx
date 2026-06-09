@@ -19,7 +19,7 @@ const GOOD = '#1c4d3a';
 const BAD = '#8e3a35';
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 
-type Segment = 'all' | 'food' | 'drink';
+type Segment = 'all' | 'food' | 'drink' | 'minibar';
 
 export default function FnbTopSellerTrend({ data }: Props) {
   const [segment, setSegment] = useState<Segment>('all');
@@ -30,8 +30,10 @@ export default function FnbTopSellerTrend({ data }: Props) {
     if (segment === 'all') return items;
     return items.filter((it) => {
       const sd = (it.usali_subdept ?? '').toLowerCase();
-      if (segment === 'food') return sd === 'food';
-      return sd === 'beverage' || sd === 'minibar';
+      if (segment === 'food')    return sd === 'food';
+      if (segment === 'drink')   return sd === 'beverage';
+      if (segment === 'minibar') return sd === 'minibar';
+      return false;
     });
   }, [items, segment]);
 
@@ -101,19 +103,24 @@ export default function FnbTopSellerTrend({ data }: Props) {
     border: 'none', cursor: 'pointer', fontWeight: active ? 600 : 500,
   });
 
-  const countFor = (s: Segment) => s === 'all' ? items.length : items.filter((it) => {
-    const sd = (it.usali_subdept ?? '').toLowerCase();
-    if (s === 'food') return sd === 'food';
-    return sd === 'beverage' || sd === 'minibar';
-  }).length;
+  const countFor = (s: Segment) => {
+    if (s === 'all') return items.length;
+    return items.filter((it) => {
+      const sd = (it.usali_subdept ?? '').toLowerCase();
+      if (s === 'food')    return sd === 'food';
+      if (s === 'drink')   return sd === 'beverage';
+      if (s === 'minibar') return sd === 'minibar';
+      return false;
+    }).length;
+  };
 
   return (
     <div style={{ background: '#FFFFFF' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <div style={pillRow}>
-          {(['all', 'food', 'drink'] as Segment[]).map((s) => (
+          {(['all', 'food', 'drink', 'minibar'] as Segment[]).map((s) => (
             <button key={s} type="button" onClick={() => { setSegment(s); setExpanded(false); }} style={pill(segment === s)}>
-              {s === 'all' ? 'All' : s === 'food' ? 'Food' : 'Drink'}
+              {s === 'all' ? 'All' : s === 'food' ? 'Food' : s === 'drink' ? 'Drink' : 'Minibar'}
               <span style={{ marginLeft: 6, opacity: 0.6, fontSize: 10 }}>{countFor(s)}</span>
             </button>
           ))}
