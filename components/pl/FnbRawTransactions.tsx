@@ -150,7 +150,19 @@ export default function FnbRawTransactions({ data, pageSize = 50 }: Props) {
         </table>
       </div>
 
-      {totalPages > 1 && (
+      {collapsible && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8, padding: '0 4px' }}>
+          <button type="button" onClick={() => { setShowAll((v) => !v); setPage(0); }}
+            style={{
+              background: 'transparent', border: `1px solid ${HAIRLINE}`, padding: '6px 12px',
+              cursor: 'pointer', fontFamily: MONO, fontSize: 11, letterSpacing: '0.04em',
+              textTransform: 'uppercase', color: INK, borderRadius: 4,
+            }}>
+            {showAll ? `Paginate (${pageSize}/page) ▴` : `Show all (${filtered.length}) ▾`}
+          </button>
+        </div>
+      )}
+      {!showAll && totalPages > 1 && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, padding: '0 4px' }}>
           <span style={{ fontSize: 11, color: INK_MUTED, fontFamily: MONO, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
             Page {safePage + 1} of {totalPages}
