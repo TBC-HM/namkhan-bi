@@ -697,23 +697,25 @@ export async function getDeptPl(dept: 'fnb' | 'spa' | 'activities' | 'retail', m
   // F&B). The gold view filters by account_id IN ('607100','607200') so 2025 food/bev costs
   // surface even with the broken dept mapping.
   if (dept === 'fnb') {
+    // PBS #161 — gold view v_fnb_cos_monthly is the SINGLE SOURCE OF TRUTH for F&B costs.
+    // Catches account_id 607100/607200/631102 with canteen excluded, regardless of usali_department
+    // tagging (2025 had dept NULL for both Cost-of-Sales AND Payroll & Related on F&B accounts).
     const { data: fnbCos } = await supabase
       .from('v_fnb_cos_monthly')
-      .select('period_yyyymm, food_cost, bev_cost, total_cost')
+      .select('period_yyyymm, food_cost, bev_cost, total_cost, payroll')
       .gte('period_yyyymm', startStr);
-    for (const row of (fnbCos ?? []) as Array<{ period_yyyymm: string; food_cost: number | string | null; bev_cost: number | string | null; total_cost: number | string | null }>) {
+    for (const row of (fnbCos ?? []) as Array<{ period_yyyymm: string; food_cost: number | string | null; bev_cost: number | string | null; total_cost: number | string | null; payroll: number | string | null }>) {
       const m = String(row.period_yyyymm);
       if (!byMonth[m]) byMonth[m] = blankPlRow(m);
       const fc = Number(row.food_cost ?? 0);
       const bc = Number(row.bev_cost ?? 0);
       const tc = Number(row.total_cost ?? 0);
-      // Only overlay if gold view has stronger value (catches 2025 NULL-dept case without clobbering 2026 data).
-      if (tc > byMonth[m].cogs) {
-        byMonth[m].food_cost = fc;
-        byMonth[m].bev_cost  = bc;
-        byMonth[m].cogs      = tc;
-        byMonth[m].total_cost = byMonth[m].payroll + byMonth[m].other_oe + tc;
-      }
+      const py = Number(row.payroll ?? 0);
+      byMonth[m].food_cost = fc;
+      byMonth[m].bev_cost  = bc;
+      byMonth[m].cogs      = tc;
+      byMonth[m].payroll   = py;
+      byMonth[m].total_cost = tc + py + byMonth[m].other_oe;
     }
   }
   const todayPeriod = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}`;
