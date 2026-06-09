@@ -111,7 +111,7 @@ export default async function FnbPage({ searchParams }: Props) {
       .then((r) => r),
     // PBS 2026-06-09 #152 — monthly F&B Cost of Sales Jan-Dec for the cost strip
     supabase.from('v_fnb_cos_monthly')
-      .select('period_yyyymm, food_cost, bev_cost, total_cost, cost_pct_of_eff_rev, food_cost_pct, bev_cost_pct')
+      .select('period_yyyymm, food_cost, bev_cost, total_cost, cost_pct_of_eff_rev, food_cost_pct, bev_cost_pct, food_rev, breakfast_alloc')
       .gte('period_yyyymm', '2026-01').lte('period_yyyymm', '2026-12')
       .order('period_yyyymm', { ascending: true })
       .then((r) => r),
@@ -257,9 +257,20 @@ export default async function FnbPage({ searchParams }: Props) {
     { label: 'Eff Labor %', value: fmtPct(Number(effectiveLaborPct ?? 0)),
       footnote: 'payroll ÷ effective rev · target ≤ 35% · Q1 2026',
       status: 'grey', size: 'sm' },
-    // PBS 2026-06-09 #165 — USALI food cost % = food cost ÷ (food rev + breakfast). Don't divide by TOTAL F&B + breakfast (that ratio runs ~20pp lower and disagrees with the monthly cost strip below).
-    { label: 'Eff Food %', value: fmtPct((foodRevQ1 + Number(bkfst?.total_alloc_usd ?? 0)) > 0 && tileSrc ? (tileSrc.food_cost / (foodRevQ1 + Number(bkfst?.total_alloc_usd ?? 0))) * 100 : 0),
-      footnote: 'food cost ÷ (food rev + breakfast) · USALI · target ≤ 30% · Q1 2026',
+    // PBS 2026-06-09 #186 — Eff Food % now aligns with monthly cost strip below.
+    // Both read from v_fnb_cos_monthly (canteen-excluded, room-night breakfast at $10/rn).
+    // Previously divided by Q1 per-cover breakfast ($23,800 from adult×$10+child×$5) which
+    // gave ~32.7% — disagreed with monthly tiles. Now uses room-night breakfast ($9,160 Q1)
+    // matching the strip → ~48% as expected.
+    { label: 'Eff Food %', value: fmtPct((() => {
+        const q1 = ((fnbCosMonthlyResp?.data ?? []) as Array<{ period_yyyymm: string; food_cost: number | string | null; food_rev: number | string | null; breakfast_alloc: number | string | null }>)
+          .filter((r) => ['2026-01','2026-02','2026-03'].includes(r.period_yyyymm));
+        const fc = q1.reduce((s, r) => s + Number(r.food_cost ?? 0), 0);
+        const fr = q1.reduce((s, r) => s + Number(r.food_rev ?? 0), 0);
+        const bk = q1.reduce((s, r) => s + Number(r.breakfast_alloc ?? 0), 0);
+        return (fr + bk) > 0 ? (fc / (fr + bk)) * 100 : 0;
+      })()),
+      footnote: 'food cost ÷ (food rev + breakfast) · v_fnb_cos_monthly · target ≤ 30% · Q1 2026',
       status: 'grey', size: 'sm' },
   ];
 
