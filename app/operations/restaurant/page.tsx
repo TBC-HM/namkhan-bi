@@ -116,7 +116,7 @@ export default async function FnbPage({ searchParams }: Props) {
       .then((r) => r),
     // PBS #159 — three mini-charts data (capture, avg ticket, category breakdown), since Jan 2025.
     supabase.from('v_fb_capture_monthly')
-      .select('period_yyyymm, res_in_house, res_with_purchase, capture_pct')
+      .select('period_yyyymm, res_in_house, res_with_purchase, capture_pct, sold_room_nights, fb_cover_days, capture_per_rn_pct')
       .gte('period_yyyymm', '2025-01').lte('period_yyyymm', opToIso.slice(0, 7))
       .order('period_yyyymm', { ascending: true })
       .then((r) => r),
