@@ -98,10 +98,13 @@ export default async function FnbPage({ searchParams }: Props) {
       .select('service_date').eq('property_id', 260955)
       .order('service_date', { ascending: false }).limit(1).maybeSingle()
       .then((r) => r),
-    // PBS 2026-06-09 #150 — monthly breakfast allocation for trailing 12 months
+    // PBS 2026-06-09 #150/#156 — monthly breakfast alloc for trailing 12 HISTORICAL months.
+    // Reservations span into 2027 (pre-booked), so without an upper bound the LIMIT 12 grabs future
+    // months and the breakfast map ends up with zero overlap on the chart's rows array.
     supabase.from('v_breakfast_allocation_monthly')
       .select('period_yyyymm, alloc_usd')
       .eq('property_id', 260955)
+      .lte('period_yyyymm', opToIso.slice(0, 7))
       .order('period_yyyymm', { ascending: false }).limit(12)
       .then((r) => r),
     // PBS 2026-06-09 #152 — monthly F&B Cost of Sales Jan-Dec for the cost strip
