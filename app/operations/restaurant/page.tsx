@@ -255,8 +255,9 @@ export default async function FnbPage({ searchParams }: Props) {
     { label: 'Eff Labor %', value: fmtPct(Number(effectiveLaborPct ?? 0)),
       footnote: 'payroll ÷ effective rev · target ≤ 35% · Q1 2026',
       status: 'grey', size: 'sm' },
-    { label: 'Eff Food %', value: fmtPct(effectiveFnbRev > 0 && tileSrc ? (tileSrc.food_cost / effectiveFnbRev) * 100 : 0),
-      footnote: 'food cost ÷ effective rev · target ≤ 30% · Q1 2026',
+    // PBS 2026-06-09 #165 — USALI food cost % = food cost ÷ (food rev + breakfast). Don't divide by TOTAL F&B + breakfast (that ratio runs ~20pp lower and disagrees with the monthly cost strip below).
+    { label: 'Eff Food %', value: fmtPct((foodRevQ1 + Number(bkfst?.total_alloc_usd ?? 0)) > 0 && tileSrc ? (tileSrc.food_cost / (foodRevQ1 + Number(bkfst?.total_alloc_usd ?? 0))) * 100 : 0),
+      footnote: 'food cost ÷ (food rev + breakfast) · USALI · target ≤ 30% · Q1 2026',
       status: 'grey', size: 'sm' },
   ];
 
