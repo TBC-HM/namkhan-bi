@@ -421,8 +421,8 @@ const OPERATIONS_CFG: DeptCfg = {
     { label: 'F&B',              href: '/operations/restaurant'      },
     { label: 'Spa',              href: '/operations/spa'             },
     { label: 'Activities',       href: '/operations/activities'      },
-    { label: 'Inventory',        href: '/operations/inventory'       },
-    { label: 'Suppliers',        href: '/operations/suppliers'       },
+    { label: 'Retail',           href: '/operations/retail'          },
+    { label: 'Transport',        href: '/operations/transport'       },
     // PBS 2026-05-16: Reports always sits flush-right (SubPagesStrip detects label).
     { label: 'Reports',          href: '/h/260955/reports?dept=operations' },
   ],
@@ -431,8 +431,8 @@ const OPERATIONS_CFG: DeptCfg = {
     { label: 'F&B',        href: '/operations/restaurant'  },
     { label: 'Spa',        href: '/operations/spa'         },
     { label: 'Activities', href: '/operations/activities'  },
-    { label: 'Inventory',  href: '/operations/inventory'   },
-    { label: 'Suppliers',  href: '/operations/suppliers'   },
+    { label: 'Retail',     href: '/operations/retail'      },
+    { label: 'Transport',  href: '/operations/transport'   },
   ],
   defaultAttn: [
     { id: 'l1', label: 'F&B waste +18% vs last week',         severity: 'medium', kind: 'leakage'     },
@@ -567,6 +567,9 @@ const FINANCE_CFG: DeptCfg = {
     { label: 'Legal',   href: '/finance/legal'                          },
     // Messy data lifted out of submenu — now lives as the orange button
     // under the HoD chat input (see extraChatButtons below).
+    // PBS 2026-06-09 #194 — Inventory + Suppliers moved from Operations to Finance.
+    { label: 'Inventory', href: '/finance/inventory'                      },
+    { label: 'Suppliers', href: '/finance/suppliers'                      },
     { label: 'Reports', href: '/h/260955/reports?dept=finance'          },
   ],
   quickChips: [
@@ -574,7 +577,9 @@ const FINANCE_CFG: DeptCfg = {
     { label: 'P&L',     href: '/finance/pnl'          },
     { label: 'Ledger',  href: '/finance/ledger'       },
     { label: 'Acc',     href: '/finance/acc'          },
-    { label: 'HR',      href: '/finance/hr'           },
+    { label: 'HR',         href: '/finance/hr'           },
+    { label: 'Inventory',  href: '/finance/inventory'    },
+    { label: 'Suppliers',  href: '/finance/suppliers'    },
   ],
   // PBS 2026-05-15: Messy data pulled out of submenu, surfaced as an
   // orange accent button under the HoD chat input on /finance.
