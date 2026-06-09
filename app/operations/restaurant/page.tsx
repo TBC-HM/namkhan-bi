@@ -191,7 +191,7 @@ export default async function FnbPage({ searchParams }: Props) {
       tabs={tabs}
     >
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <Container title="Operating snapshot" subtitle={`mixed period · PMS metrics use the rolling window (${period.label}) · GL-derived tiles pinned to Q1 2026 (last fully-mapped QB quarter)`} density="compact">
+        <Container title="Operating snapshot" subtitle={`PMS / Cloudbeds only · revenue + capture · rolling window (${period.label})`} density="compact">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
             {row1.map((t, i) => <KpiTile key={i} {...t} />)}
           </div>
