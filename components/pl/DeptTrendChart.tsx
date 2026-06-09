@@ -77,11 +77,35 @@ export default function DeptTrendChart({
           <YAxis yAxisId="usd" tick={{ fill: C.axis, fontSize: 11 }} tickFormatter={fmtUsdShort} />
           <YAxis yAxisId="pct" orientation="right" tick={{ fill: C.gop, fontSize: 11 }}
                  tickFormatter={(v: number) => `${Math.round(v)}%`} domain={[-50, 100]} />
-          <Tooltip
-            contentStyle={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, color: C.label, fontSize: 12 }}
-            formatter={(v: any, k: any) => k === 'gop_pct' ? [`${Number(v).toFixed(1)}%`, 'GOP %']
-              : [fmtUsd(Number(v)), labelOf(k)]}
-          />
+          <Tooltip content={(props: any) => {
+            if (!props.active || !props.payload?.length) return null;
+            const p = props.payload as Array<{ dataKey: string; value: number; color: string; name: string }>;
+            const get = (k: string) => p.find(x => x.dataKey === k)?.value ?? 0;
+            const food = get('food'); const bev = get('bev'); const bkf = get('breakfast');
+            const cogs = get('cogs'); const payroll = get('payroll'); const gop = get('gop_pct');
+            const totalRev = food + bev + bkf || get('rev');
+            const Row = ({ label, val, color, pct }: { label: string; val: string; color?: string; pct?: boolean }) => (
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '2px 0', fontSize: 11 }}>
+                <span style={{ color: color ?? '#5A5A5A' }}>{label}</span>
+                <span style={{ color: '#000', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{val}</span>
+              </div>
+            );
+            return (
+              <div style={{ background: '#FFFFFF', border: '1px solid #E0E0E0', borderRadius: 4, padding: '8px 10px', minWidth: 180 }}>
+                <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 12 }}>{props.label}</div>
+                <div style={{ color: '#5A5A5A', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: 4 }}>Revenue</div>
+                {food > 0 && <Row label="Food" val={fmtUsd(food)} color={C.food} />}
+                {bev > 0 && <Row label="Beverage" val={fmtUsd(bev)} color={C.bev} />}
+                {bkf > 0 && <Row label="Breakfast alloc" val={fmtUsd(bkf)} color={C.breakfast} />}
+                <Row label="Total" val={fmtUsd(totalRev)} />
+                <div style={{ color: '#5A5A5A', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: 6 }}>Cost</div>
+                {cogs > 0 && <Row label="COGS" val={fmtUsd(cogs)} color={C.cogs} />}
+                {payroll > 0 && <Row label="Payroll" val={fmtUsd(payroll)} color={C.payroll} />}
+                <div style={{ color: '#5A5A5A', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: 6 }}>Margin</div>
+                <Row label="GOP %" val={`${Number(gop).toFixed(1)}%`} color={C.gop} pct />
+              </div>
+            );
+          }} />
           <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
           {dept === 'fnb' ? (
             <>
