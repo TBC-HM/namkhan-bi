@@ -8,6 +8,8 @@ import type { TopSellerTrend } from '@/lib/data';
 
 interface Props {
   data: { periods: string[]; items: TopSellerTrend[] };
+  /** When true (Spa/Activities), suppress the All/Food/Drink/Minibar pill row. */
+  hideSegments?: boolean;
 }
 
 const INK = '#000';
@@ -21,7 +23,7 @@ const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 
 type Segment = 'all' | 'food' | 'drink' | 'minibar';
 
-export default function FnbTopSellerTrend({ data }: Props) {
+export default function FnbTopSellerTrend({ data, hideSegments = false }: Props) {
   const [segment, setSegment] = useState<Segment>('all');
   const [expanded, setExpanded] = useState(false);
   const { periods, items } = data;
