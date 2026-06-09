@@ -386,17 +386,13 @@ export default async function FnbPage({ searchParams }: Props) {
                 const food  = Number(r?.food_cost  ?? 0);
                 const bev   = Number(r?.bev_cost   ?? 0);
                 const pct   = r?.cost_pct_of_eff_rev != null ? Number(r.cost_pct_of_eff_rev) : null;
-                const foodPct = r?.food_cost_pct != null ? Number(r.food_cost_pct) : null;
-                const bevPct  = r?.bev_cost_pct  != null ? Number(r.bev_cost_pct)  : null;
                 const hasData = total > 0;
-                const fTail = foodPct != null ? ` (${foodPct.toFixed(0)}%)` : '';
-                const bTail = bevPct  != null ? ` (${bevPct.toFixed(0)}%)` : '';
-                const totalTail = pct != null && hasData ? ` · ${pct.toFixed(1)}% of rev` : '';
+                void food; void bev;
                 return (
                   <KpiTile key={mon} size="sm"
                     label={mon}
                     value={hasData ? `$${Math.round(total).toLocaleString('en-US')}` : '—'}
-                    footnote={hasData ? `Food $${Math.round(food).toLocaleString('en-US')}${fTail} · Bev $${Math.round(bev).toLocaleString('en-US')}${bTail}${totalTail}` : 'no QB GL'}
+                    footnote={hasData && pct != null ? `${pct.toFixed(1)}% of revenue (incl breakfast)` : hasData ? 'cost only · no rev posted' : 'no QB GL'}
                     status={hasData ? 'grey' : 'grey'} />
                 );
               });
