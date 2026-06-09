@@ -26,8 +26,12 @@ function monthLabel(yyyymm: string): string {
   return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
 }
 
-export function FbCaptureChart({ rows }: { rows: Array<{ period_yyyymm: string; capture_pct: number | string | null; res_in_house: number; res_with_purchase: number }> }) {
-  const data = rows.map(r => ({ m: monthLabel(r.period_yyyymm), pct: Number(r.capture_pct ?? 0), in_house: r.res_in_house, buys: r.res_with_purchase }));
+export function FbCaptureChart({ rows }: { rows: Array<{ period_yyyymm: string; capture_pct: number | string | null; res_in_house: number; res_with_purchase: number; sold_room_nights?: number; fb_cover_days?: number; capture_per_rn_pct?: number | string | null }> }) {
+  const data = rows.map(r => ({
+    m: monthLabel(r.period_yyyymm),
+    per_res: Number(r.capture_pct ?? 0),
+    per_rn: Number(r.capture_per_rn_pct ?? 0),
+  }));
   return (
     <div style={{ width: '100%', height: 140 }}>
       <ResponsiveContainer>
@@ -35,8 +39,11 @@ export function FbCaptureChart({ rows }: { rows: Array<{ period_yyyymm: string; 
           <CartesianGrid stroke={C.grid} strokeDasharray="2 4" vertical={false} />
           <XAxis dataKey="m" tick={{ fill: C.axis, fontSize: 10 }} />
           <YAxis tick={{ fill: C.axis, fontSize: 10 }} domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} />
-          <Tooltip contentStyle={{ background: C.bg, border: `1px solid ${C.grid}`, borderRadius: 4, color: C.ink, fontSize: 11 }} />
-          <Line type="monotone" dataKey="pct" stroke={C.good} strokeWidth={2} dot={{ r: 2, fill: C.good }} activeDot={{ r: 4 }} name="Capture %" />
+          <Tooltip contentStyle={{ background: C.bg, border: `1px solid ${C.grid}`, borderRadius: 4, color: C.ink, fontSize: 11 }}
+                   formatter={(v: any, k: any) => [`${Number(v).toFixed(1)}%`, k === 'per_res' ? 'per res' : 'per room-night']} />
+          <Legend wrapperStyle={{ fontSize: 10, color: C.axis }} />
+          <Line type="monotone" dataKey="per_res" stroke={C.good} strokeWidth={2} dot={{ r: 2, fill: C.good }} activeDot={{ r: 4 }} name="per res" />
+          <Line type="monotone" dataKey="per_rn"  stroke={C.ink}  strokeWidth={2} strokeDasharray="4 3" dot={{ r: 2, fill: C.ink }} activeDot={{ r: 4 }} name="per room-night" />
         </LineChart>
       </ResponsiveContainer>
     </div>
