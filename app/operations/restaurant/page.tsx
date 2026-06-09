@@ -154,25 +154,31 @@ export default async function FnbPage({ searchParams }: Props) {
   // (PMS-driven tiles run on the rolling search-params window; GL-driven tiles
   // are pinned to Q1 2026, the last fully-mapped QB quarter).
   void a30;
-  // PBS 2026-06-09 #143 — Row 1 reads op-scoped captureOp + coversOp instead of
-  // the global resolvePeriod window so the drilldown pills (?op_period=) drive it.
+  // PBS 2026-06-09 #145 — Row 1 reads CLOUDBEDS FOLIO (live source of truth).
+  // POS transactions live elsewhere for reconciliation only — they had 56%% null
+  // reservation_ids that inflated covers, and the feed is also stale.
+  const folioFresh = !folioIsStale;
+  const staleFootnote = folioLatestDate
+    ? `Cloudbeds folio last refreshed ${folioLatestDate}`
+    : 'Cloudbeds folio · no data';
   const row1: KpiTileProps[] = [
-    { label: 'F&B Revenue (PMS)', value: fmtUsd(Number(coversOp?.revenue ?? 0)),
-      footnote: coversOp ? `PMS POS · ${coversOp.covers} covers · ${opLabel}` : `PMS POS · ${opLabel} · no data`,
-      status: (coversOp?.revenue ?? 0) > 0 ? 'green' : 'grey', size: 'sm' },
-    { label: 'F&B Covers',  value: coversOp ? String(coversOp.covers) : '—',
-      footnote: coversOp ? `${coversOp.days_active} active days · ${opLabel}` : `${opLabel} · no data`,
-      status: (coversOp?.covers ?? 0) > 0 ? 'green' : 'grey', size: 'sm' },
-    { label: 'Avg check',   value: coversOp ? fmtUsd(coversOp.avg_check_usd) : '—',
-      footnote: `PMS POS · ${opLabel}`,
-      status: (coversOp?.avg_check_usd ?? 0) > 0 ? 'green' : 'grey', size: 'sm' },
+    { label: 'F&B Revenue (Cloudbeds)', value: fmtUsd(folioRev),
+      footnote: folioFresh ? `Cloudbeds folio · ${folioActiveDays} active days · ${opLabel}` : `${staleFootnote} · ${opLabel}`,
+      status: folioFresh && folioRev > 0 ? 'green' : 'grey', size: 'sm' },
+    { label: 'Reservations served', value: String(folioRes),
+      footnote: folioFresh ? `Cloudbeds folio · ${opLabel}` : `${staleFootnote} · ${opLabel}`,
+      status: folioFresh && folioRes > 0 ? 'green' : 'grey', size: 'sm' },
+    { label: 'Avg check', value: folioRes > 0 ? fmtUsd(folioAvgCheck) : '—',
+      footnote: folioFresh ? `Cloudbeds folio · revenue ÷ reservations · ${opLabel}` : `${staleFootnote} · ${opLabel}`,
+      status: folioFresh && folioAvgCheck > 0 ? 'green' : 'grey', size: 'sm' },
     { label: 'F&B / Occ Rn', value: captureOp ? fmtUsd(Number(captureOp.spend_per_occ)) : '—',
-      footnote: `PMS · spend per occupied room · ${captureOp ? opLabel : 'no capture rows'}`,
+      footnote: `Cloudbeds · spend per occupied room · ${captureOp ? opLabel : 'no capture rows'}`,
       status: captureOp ? 'green' : 'grey', size: 'sm' },
-    { label: 'Capture %',    value: captureOp ? fmtPct(Number(captureOp.capture_pct)) : '—',
-      footnote: captureOp ? `PMS · ${captureOp.res_with_purchase}/${captureOp.res_in_house} res · ${opLabel}` : `PMS · ${opLabel} · no data`,
+    { label: 'Capture %', value: captureOp ? fmtPct(Number(captureOp.capture_pct)) : '—',
+      footnote: captureOp ? `Cloudbeds · ${captureOp.res_with_purchase}/${captureOp.res_in_house} res · ${opLabel}` : `Cloudbeds · ${opLabel} · no data`,
       status: 'grey', size: 'sm' },
   ];
+
 
 
   // PBS 2026-06-09 #141 — Row 2 = USALI Effective view, Q1 2026 only.
