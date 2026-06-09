@@ -132,6 +132,50 @@ export default async function FnbPage({ searchParams }: Props) {
       status: 'grey', size: 'sm' },
   ];
 
+  // PBS 2026-06-09 #141 — Row 2 = USALI Effective view, Q1 2026 only.
+  // ALL revenue + cost tiles live here so the Effective F&B Rev derivation is auditable.
+  const row2: KpiTileProps[] = [
+    // — Revenue side —
+    { label: 'F&B Rev (excl breakfast)', value: fmtUsd(foodRevQ1 + bevRevQ1),
+      footnote: `Q1 2026 · Food $${Math.round(foodRevQ1).toLocaleString('en-US')} + Beverage $${Math.round(bevRevQ1).toLocaleString('en-US')} · QB GL`,
+      status: 'grey', size: 'sm' },
+    { label: 'Breakfast alloc', value: fmtUsd(Number(bkfst?.total_alloc_usd ?? 0)),
+      footnote: `Q1 2026 · ${bfastAdultNights.toLocaleString('en-US')} adult-nights × $10 + ${bfastChildNights.toLocaleString('en-US')} child-nights × $5`,
+      status: 'grey', size: 'sm' },
+    { label: 'Effective F&B Rev', value: fmtUsd(effectiveFnbRev),
+      footnote: `GL rev + breakfast · Q1 2026 · $${Math.round(foodRevQ1+bevRevQ1).toLocaleString('en-US')} + $${Math.round(Number(bkfst?.total_alloc_usd ?? 0)).toLocaleString('en-US')}`,
+      status: 'green', size: 'sm' },
+    // — Cost side —
+    { label: 'Food Cost', value: fmtUsd(foodCostQ1),
+      footnote: 'Q1 2026 · Cost of Sales · canteen excluded · QB GL',
+      status: foodCostQ1 > 0 ? 'amber' : 'grey', size: 'sm' },
+    { label: 'Beverage Cost', value: fmtUsd(bevCostQ1),
+      footnote: 'Q1 2026 · Cost of Sales · canteen excluded · QB GL',
+      status: bevCostQ1 > 0 ? 'amber' : 'grey', size: 'sm' },
+    { label: 'Total Labour', value: fmtUsd(labourQ1),
+      footnote: `Q1 2026 · Wages & Benefits + Other Staff Cost · EMPLOYEE MEAL excluded ($${Math.round(labourCanteenPortion).toLocaleString('en-US')})`,
+      status: labourQ1 > 0 ? 'amber' : 'grey', size: 'sm' },
+    { label: 'Staff Canteen', value: fmtUsd(Number(canteen?.total_usd ?? 0)),
+      footnote: 'Q1 2026 · EMPLOYEE MEAL + STAFF CANTEEN MATERIALS · QB GL',
+      status: 'grey', size: 'sm' },
+    { label: 'Canteen / Occ', value: fmtUsd(Number(canteen?.cost_per_occ_room ?? 0)),
+      footnote: 'Q1 2026 · per occupied room-night · QB GL',
+      status: 'grey', size: 'sm' },
+    // — Margin ratios (USALI targets) —
+    { label: 'Effective GOP $', value: fmtUsd(Number(effectiveGopUsd ?? 0)),
+      footnote: 'Effective rev − total cost · Q1 2026',
+      status: (effectiveGopUsd != null && effectiveGopUsd > 0 ? 'green' : 'red') as 'green'|'red', size: 'sm' },
+    { label: 'Effective GOP %', value: fmtPct(Number(effectiveGopPct ?? 0)),
+      footnote: 'target ≥ 25% · Q1 2026',
+      status: (effectiveGopPct != null && effectiveGopPct >= 25 ? 'green' : 'amber') as 'green'|'amber', size: 'sm' },
+    { label: 'Eff Labor %', value: fmtPct(Number(effectiveLaborPct ?? 0)),
+      footnote: 'payroll ÷ effective rev · target ≤ 35% · Q1 2026',
+      status: 'grey', size: 'sm' },
+    { label: 'Eff Food %', value: fmtPct(effectiveFnbRev > 0 && tileSrc ? (tileSrc.food_cost / effectiveFnbRev) * 100 : 0),
+      footnote: 'food cost ÷ effective rev · target ≤ 30% · Q1 2026',
+      status: 'grey', size: 'sm' },
+  ];
+
 
   const tabs: DashboardTab[] = OPERATIONS_SUBPAGES.map((s) => ({ key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/restaurant') })) as DashboardTab[];
 
