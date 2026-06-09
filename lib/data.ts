@@ -675,9 +675,12 @@ export async function getDeptPl(dept: 'fnb' | 'spa' | 'activities' | 'retail', m
     const sub = String(row.usali_subcategory ?? '');
     const line = String(row.usali_line_label ?? '');
     if (sub === 'Revenue') {
-      byMonth[m].revenue += -amt;
-      if (/^food/i.test(line))      byMonth[m].food_revenue += -amt;
-      else if (/^bev/i.test(line))  byMonth[m].bev_revenue  += -amt;
+      // PBS 2026-06-09 #155 — GL sign convention flipped at year-end: 2025 stores rev as positive, 2026 as negative.
+      // Use Math.abs so revenue bars are always positive regardless of how QB posted the credit.
+      const rev = Math.abs(amt);
+      byMonth[m].revenue += rev;
+      if (/^food/i.test(line))      byMonth[m].food_revenue += rev;
+      else if (/^bev/i.test(line))  byMonth[m].bev_revenue  += rev;
     } else {
       byMonth[m].total_cost += amt;
       if (sub === 'Cost of Sales') {
