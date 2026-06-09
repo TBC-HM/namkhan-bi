@@ -692,6 +692,30 @@ export async function getDeptPl(dept: 'fnb' | 'spa' | 'activities' | 'retail', m
       else byMonth[m].other_oe += amt;
     }
   }
+  // PBS 2026-06-09 #158 — overlay F&B costs from gold view v_fnb_cos_monthly.
+  // 2025 QB postings have usali_department NULL on Cost of Sales entries (only revenue was tagged
+  // F&B). The gold view filters by account_id IN ('607100','607200') so 2025 food/bev costs
+  // surface even with the broken dept mapping.
+  if (dept === 'fnb') {
+    const { data: fnbCos } = await supabase
+      .from('v_fnb_cos_monthly')
+      .select('period_yyyymm, food_cost, bev_cost, total_cost')
+      .gte('period_yyyymm', startStr);
+    for (const row of (fnbCos ?? []) as Array<{ period_yyyymm: string; food_cost: number | string | null; bev_cost: number | string | null; total_cost: number | string | null }>) {
+      const m = String(row.period_yyyymm);
+      if (!byMonth[m]) byMonth[m] = blankPlRow(m);
+      const fc = Number(row.food_cost ?? 0);
+      const bc = Number(row.bev_cost ?? 0);
+      const tc = Number(row.total_cost ?? 0);
+      // Only overlay if gold view has stronger value (catches 2025 NULL-dept case without clobbering 2026 data).
+      if (tc > byMonth[m].cogs) {
+        byMonth[m].food_cost = fc;
+        byMonth[m].bev_cost  = bc;
+        byMonth[m].cogs      = tc;
+        byMonth[m].total_cost = byMonth[m].payroll + byMonth[m].other_oe + tc;
+      }
+    }
+  }
   const todayPeriod = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}`;
   const out: DeptPlRow[] = Object.values(byMonth).map((r) => {
     const cbRev = cbByMonth[r.period] ?? null;
