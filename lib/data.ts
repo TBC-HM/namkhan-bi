@@ -1013,9 +1013,11 @@ export async function getDeptTopSellerTrend(filter: { usali_dept: string; usali_
     const latest_revenue = active[active.length - 1]?.revenue ?? 0;
     const delta_pct = first_revenue > 0 ? ((latest_revenue - first_revenue) / first_revenue) * 100 : null;
     return {
+      // PBS 2026-06-09 #189 — totals from gold view are LIFETIME (incl. 2025).
+      // Recompute from the windowed monthlyArr so Minibar et al match the YTD KPI tile.
       description: String(r.description ?? 'Unknown'),
-      total_revenue_usd: Number(r.total_revenue_usd ?? 0),
-      total_units: Number(r.total_units ?? 0),
+      total_revenue_usd: monthlyArr.reduce((s, m) => s + m.revenue, 0),
+      total_units: monthlyArr.reduce((s, m) => s + m.units, 0),
       monthly: monthlyArr,
       first_revenue, latest_revenue, delta_pct,
       last_sold: r.last_sold ? String(r.last_sold) : null,
@@ -1023,7 +1025,9 @@ export async function getDeptTopSellerTrend(filter: { usali_dept: string; usali_
       avg_rev_per_active_month: active.length > 0 ? monthlyArr.reduce((s, m) => s + m.revenue, 0) / active.length : 0,
       usali_subdept: (r.usali_subdept as string | null) ?? null,
     };
-  }).filter((it) => it.monthly.length > 0); // PBS #175 — drop items with no data in window; was filtering on total_revenue_usd which is lifetime and let empty-monthly items through, crashing sparkline
+  }).filter((it) => it.monthly.length > 0)
+     // PBS #189 — re-sort by WINDOWED totals (SQL order was by lifetime total_revenue_usd).
+     .sort((a, b) => b.total_revenue_usd - a.total_revenue_usd);
   const periods = Array.from(periodSet).sort();
   return { periods, items };
 }
