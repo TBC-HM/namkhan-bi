@@ -984,7 +984,48 @@ export interface TopSellerTrend {
   last_sold: string | null; active_months: number; avg_rev_per_active_month: number;
   usali_subdept: string | null;
 }
-export async function getDeptTopSellerTrend(filter: { usali_dept: string; usali_subdept?: string }, startIso = '2026-01-01', topN = 8): Promise<{ periods: string[]; items: TopSellerTrend[] }> {
+export async function getDeptTopSellerTrend(filter: { usali_dept: string; usali_subdept?: string }, startIso = '2026-01-01', topN = 200): Promise<{ periods: string[]; items: TopSellerTrend[] }> {
+  // PBS 2026-06-09 #174 — read from gold view v_fb_top_seller_trend (one row per description, pre-aggregated).
+  // Previous version selected raw txn rows from mv_classified_transactions but hit supabase-js's default
+  // 1000-row LIMIT, truncating ~80% of rows and making last_sold stuck on old dates.
+  if (filter.usali_dept !== 'F&B') return { periods: [], items: [] };
+  let q = supabase.from('v_fb_top_seller_trend')
+    .select('description, usali_subdept, total_revenue_usd, total_units, last_sold, active_months, avg_rev_per_active_month, monthly')
+    .order('total_revenue_usd', { ascending: false }).limit(topN);
+  if (filter.usali_subdept) q = q.eq('usali_subdept', filter.usali_subdept);
+  const { data } = await q;
+  if (!data) return { periods: [], items: [] };
+  const startPeriod = startIso.slice(0, 7);
+  const periodSet = new Set<string>();
+  const items: TopSellerTrend[] = (data as Array<Record<string, unknown>>).map((r) => {
+    const monthlyObj = (r.monthly as Record<string, { rev: number; units: number }>) ?? {};
+    const monthlyArr: { period: string; revenue: number; units: number }[] = [];
+    for (const [period, v] of Object.entries(monthlyObj)) {
+      if (period < startPeriod) continue;
+      periodSet.add(period);
+      monthlyArr.push({ period, revenue: Number(v?.rev ?? 0), units: Number(v?.units ?? 0) });
+    }
+    monthlyArr.sort((a, b) => a.period.localeCompare(b.period));
+    const active = monthlyArr.filter((m) => m.revenue > 0);
+    const first_revenue = active[0]?.revenue ?? 0;
+    const latest_revenue = active[active.length - 1]?.revenue ?? 0;
+    const delta_pct = first_revenue > 0 ? ((latest_revenue - first_revenue) / first_revenue) * 100 : null;
+    return {
+      description: String(r.description ?? 'Unknown'),
+      total_revenue_usd: Number(r.total_revenue_usd ?? 0),
+      total_units: Number(r.total_units ?? 0),
+      monthly: monthlyArr,
+      first_revenue, latest_revenue, delta_pct,
+      last_sold: r.last_sold ? String(r.last_sold) : null,
+      active_months: active.length,
+      avg_rev_per_active_month: active.length > 0 ? monthlyArr.reduce((s, m) => s + m.revenue, 0) / active.length : 0,
+      usali_subdept: (r.usali_subdept as string | null) ?? null,
+    };
+  }).filter((it) => it.total_revenue_usd > 0);
+  const periods = Array.from(periodSet).sort();
+  return { periods, items };
+}
+async function _legacyGetDeptTopSellerTrend(filter: { usali_dept: string; usali_subdept?: string }, startIso = '2026-01-01', topN = 8): Promise<{ periods: string[]; items: TopSellerTrend[] }> {
   let q = supabase.from('mv_classified_transactions')
     .select('description, amount, transaction_date, usali_subdept')
     .eq('property_id', PROPERTY_ID).eq('usali_dept', filter.usali_dept).gte('transaction_date', startIso);
