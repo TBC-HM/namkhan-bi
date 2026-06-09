@@ -119,7 +119,7 @@ export default function FnbTopSellerTrend({ data, hideSegments = false }: Props)
   return (
     <div style={{ background: '#FFFFFF' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <div style={pillRow}>
+        {!hideSegments && <div style={pillRow}>
           {(['all', 'food', 'drink', 'minibar'] as Segment[]).map((s) => (
             <button key={s} type="button" onClick={() => { setSegment(s); setExpanded(false); }} style={pill(segment === s)}>
               {s === 'all' ? 'All' : s === 'food' ? 'Food' : s === 'drink' ? 'Drink' : 'Minibar'}
