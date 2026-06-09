@@ -20,7 +20,7 @@ const C = {
   axis:      '#7d7565',
   food:      '#a8854a', // brass
   bev:       '#6b9379', // moss-glow
-  breakfast: '#d4b06a', // pale brass — breakfast fair-value reclass
+  breakfast: '#5a7da3', // slate blue — breakfast fair-value reclass (high contrast vs brass food + moss bev)
   rev:       '#a8854a',
   cogs:      '#8e3a35', // bad
   payroll:   '#c4a06b', // brass-soft
