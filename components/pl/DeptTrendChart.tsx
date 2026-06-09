@@ -6,6 +6,9 @@
 // (F&B, Spa, Activities). Reads DeptPlRow[] from lib/data.getDeptPl(). Bars =
 // revenue components (food/bev for F&B, single bar elsewhere) + COGS, line =
 // GOP %. Always-visible above the P&L grid.
+// PBS 2026-06-09 #150 — add optional breakfast-alloc series for F&B, stacked
+// on top of food + bev so the chart shows revenue *as USALI would post it* if
+// the monthly breakfast JE were applied.
 
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid,
@@ -13,25 +16,27 @@ import {
 import type { DeptPlRow } from '@/lib/data';
 
 const C = {
-  grid:    'var(--line-soft)',
-  axis:    '#7d7565',
-  food:    '#a8854a', // brass
-  bev:     '#6b9379', // moss-glow
-  rev:     '#a8854a',
-  cogs:    '#8e3a35', // bad
-  payroll: '#c4a06b', // brass-soft
-  gop:     '#1c4d3a', // moss
-  bg:      '#fbf9f2',
-  border:  'var(--line-soft)',
-  label:   '#1c1815',
+  grid:      'var(--line-soft)',
+  axis:      '#7d7565',
+  food:      '#a8854a', // brass
+  bev:       '#6b9379', // moss-glow
+  breakfast: '#d4b06a', // pale brass — breakfast fair-value reclass
+  rev:       '#a8854a',
+  cogs:      '#8e3a35', // bad
+  payroll:   '#c4a06b', // brass-soft
+  gop:       '#1c4d3a', // moss
+  bg:        '#fbf9f2',
+  border:    'var(--line-soft)',
+  label:     '#1c1815',
 };
 
 export default function DeptTrendChart({
-  rows, dept, height = 240,
+  rows, dept, height = 240, breakfastByPeriod,
 }: {
   rows: DeptPlRow[];
   dept: 'fnb' | 'spa' | 'activities' | 'retail';
   height?: number;
+  breakfastByPeriod?: Record<string, number>;
 }) {
   // Sort ascending by period for left-to-right trend
   const series = [...rows]
@@ -40,12 +45,13 @@ export default function DeptTrendChart({
       m: monthLabel(r.period),
       food: Number(r.food_revenue || 0),
       bev:  Number(r.bev_revenue || 0),
+      breakfast: Number(breakfastByPeriod?.[r.period] || 0),
       rev:  Number(r.revenue || 0),
       cogs: Number(r.cogs || 0) || (Number(r.food_cost || 0) + Number(r.bev_cost || 0) + Number(r.spa_cost || 0)),
       payroll: Number(r.payroll || 0),
       gop_pct: Number(r.gop_pct || 0),
     }))
-    .filter(d => d.rev > 0 || d.cogs > 0 || d.payroll > 0);
+    .filter(d => d.rev > 0 || d.cogs > 0 || d.payroll > 0 || d.breakfast > 0);
 
   if (series.length === 0) {
     return (
@@ -72,8 +78,9 @@ export default function DeptTrendChart({
           <Legend wrapperStyle={{ fontSize: 11, color: C.axis }} />
           {dept === 'fnb' ? (
             <>
-              <Bar yAxisId="usd" dataKey="food" stackId="rev" fill={C.food} name="Food rev" />
-              <Bar yAxisId="usd" dataKey="bev"  stackId="rev" fill={C.bev}  name="Bev rev" />
+              <Bar yAxisId="usd" dataKey="food"      stackId="rev" fill={C.food}      name="Food rev" />
+              <Bar yAxisId="usd" dataKey="bev"       stackId="rev" fill={C.bev}       name="Bev rev" />
+              <Bar yAxisId="usd" dataKey="breakfast" stackId="rev" fill={C.breakfast} name="Breakfast alloc" />
             </>
           ) : (
             <Bar yAxisId="usd" dataKey="rev" fill={C.rev} name="Revenue" />
@@ -103,6 +110,7 @@ function fmtUsd(v: number): string {
 function labelOf(k: string): string {
   if (k === 'food') return 'Food rev';
   if (k === 'bev') return 'Bev rev';
+  if (k === 'breakfast') return 'Breakfast alloc';
   if (k === 'rev') return 'Revenue';
   if (k === 'cogs') return 'COGS';
   if (k === 'payroll') return 'Payroll';
