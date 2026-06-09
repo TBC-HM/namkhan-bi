@@ -75,6 +75,7 @@ export default function FnbTopSellerTrend({ data }: Props) {
   const sparkW = 100;
   const sparkH = 24;
   function sparkline(monthly: TopSellerTrend['monthly'], itemName: string) {
+    if (monthly.length === 0) return <span style={{ color: INK_MUTED, fontStyle: 'italic', fontSize: 11 }}>—</span>;
     const max = Math.max(...monthly.map((m) => m.revenue), 1);
     const dx = monthly.length > 1 ? sparkW / (monthly.length - 1) : sparkW;
     const points = monthly
