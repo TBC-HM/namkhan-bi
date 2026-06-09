@@ -42,18 +42,18 @@ export default function FnbGlBreakdown({ data, defaultMonths = 4 }: Props) {
 
   const cell: CSSProperties = {
     padding: '6px 10px',
-    borderBottom: '1px solid var(--rule, #e3dfd3)',
+    borderBottom: '1px solid #E0E0E0',
     textAlign: 'right',
     fontVariantNumeric: 'tabular-nums',
   };
   const cellL: CSSProperties = { ...cell, textAlign: 'left' };
   const subHead: CSSProperties = {
-    background: 'rgba(180, 130, 40, 0.06)',
-    fontFamily: 'var(--mono)',
-    fontSize: 'var(--t-xs)',
-    letterSpacing: 'var(--ls-extra)',
+    background: '#F5F5F5',
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+    fontSize: '11px',
+    letterSpacing: '0.04em',
     textTransform: 'uppercase',
-    color: 'var(--brass)',
+    color: '#000',
     padding: '6px 10px',
   };
 
@@ -80,19 +80,19 @@ export default function FnbGlBreakdown({ data, defaultMonths = 4 }: Props) {
       <table style={{
         width: '100%',
         borderCollapse: 'collapse',
-        fontSize: 'var(--t-sm)',
+        fontSize: '12px',
       }}>
         <thead>
           <tr>
             <th style={{
               textAlign: 'left',
               padding: '8px 10px',
-              borderBottom: '1px solid var(--rule, #e3dfd3)',
-              fontFamily: 'var(--mono)',
-              fontSize: 'var(--t-xs)',
-              letterSpacing: 'var(--ls-extra)',
+              borderBottom: '1px solid #E0E0E0',
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+              fontSize: '11px',
+              letterSpacing: '0.04em',
               textTransform: 'uppercase',
-              color: 'var(--brass)',
+              color: '#000',
               fontWeight: 500,
               minWidth: 240,
             }}>QB Account</th>
@@ -100,24 +100,24 @@ export default function FnbGlBreakdown({ data, defaultMonths = 4 }: Props) {
               <th key={p} style={{
                 textAlign: 'right',
                 padding: '8px 10px',
-                borderBottom: '1px solid var(--rule, #e3dfd3)',
-                fontFamily: 'var(--mono)',
-                fontSize: 'var(--t-xs)',
-                letterSpacing: 'var(--ls-extra)',
+                borderBottom: '1px solid #E0E0E0',
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                fontSize: '11px',
+                letterSpacing: '0.04em',
                 textTransform: 'uppercase',
-                color: 'var(--brass)',
+                color: '#000',
                 fontWeight: 500,
               }}>{monthLabel(p)}</th>
             ))}
             <th style={{
               textAlign: 'right',
               padding: '8px 10px',
-              borderBottom: '1px solid var(--rule, #e3dfd3)',
-              fontFamily: 'var(--mono)',
-              fontSize: 'var(--t-xs)',
-              letterSpacing: 'var(--ls-extra)',
+              borderBottom: '1px solid #E0E0E0',
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+              fontSize: '11px',
+              letterSpacing: '0.04em',
               textTransform: 'uppercase',
-              color: 'var(--brass)',
+              color: '#000',
               fontWeight: 500,
             }}>Total</th>
           </tr>
@@ -125,7 +125,7 @@ export default function FnbGlBreakdown({ data, defaultMonths = 4 }: Props) {
         <tbody>
           {groups.length === 0 ? (
             <tr>
-              <td colSpan={visiblePeriods.length + 2} style={{ padding: 16, color: 'var(--ink-soft)', fontStyle: 'italic' }}>
+              <td colSpan={visiblePeriods.length + 2} style={{ padding: 16, color: '#5A5A5A', fontStyle: 'italic' }}>
                 No F&amp;B GL lines in window. Check QB upload.
               </td>
             </tr>
@@ -144,7 +144,7 @@ export default function FnbGlBreakdown({ data, defaultMonths = 4 }: Props) {
                 </tr>
               ))}
               <tr key={`sub-${g.sub}`}>
-                <td style={{ ...cellL, fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)' }}>
+                <td style={{ ...cellL, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '11px', letterSpacing: '0.04em', textTransform: 'uppercase', color: '#000' }}>
                   Subtotal · {g.sub}
                 </td>
                 {visiblePeriods.map((p) => (
@@ -167,11 +167,11 @@ export default function FnbGlBreakdown({ data, defaultMonths = 4 }: Props) {
               border: 0,
               padding: '6px 10px',
               cursor: 'pointer',
-              fontFamily: 'var(--mono)',
-              fontSize: 'var(--t-xs)',
-              letterSpacing: 'var(--ls-extra)',
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+              fontSize: '11px',
+              letterSpacing: '0.04em',
               textTransform: 'uppercase',
-              color: 'var(--brass)',
+              color: '#000',
             }}
           >
             {expanded
