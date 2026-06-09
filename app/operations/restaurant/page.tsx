@@ -320,50 +320,6 @@ export default async function FnbPage({ searchParams }: Props) {
           </div>
         </Container>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10 }}>
-          <Container title="Staff canteen" subtitle={period.label}>
-            <div style={{ fontFamily: 'ui-serif, Georgia, serif', fontStyle: 'italic', fontSize: 22, lineHeight: 1.15, color: '#000', marginBottom: 6 }}>
-              {canteen ? `$${Math.round(canteen.total_usd).toLocaleString()}` : '—'}
-            </div>
-            <div style={{ fontSize: 12, color: '#5A5A5A', lineHeight: 1.4 }}>
-              <code style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 11 }}>EMPLOYEE MEAL</code> + <code style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 11 }}>STAFF CANTEEN MATERIALS</code> across all depts.
-            </div>
-            {canteen && canteen.by_dept.length > 0 && (
-              <div style={{ fontSize: 11, color: '#5A5A5A', marginTop: 6 }}>
-                By dept: {canteen.by_dept.map(d => `${d.dept} $${Math.round(d.usd).toLocaleString()}`).join(' · ')}
-              </div>
-            )}
-            <div style={{ fontSize: 11, color: '#B22222', background: 'rgba(178,34,34,0.08)', padding: '6px 8px', borderLeft: '2px solid #B22222', marginTop: 8 }}>
-              <strong>Watch:</strong> Mar / Apr 2026 reclassified F&amp;B → Undistributed. The &quot;labor drop&quot; is a posting reclass, not a real saving.
-            </div>
-          </Container>
-
-          <Container title="Breakfast allocation · USALI" subtitle="rooms → f&b">
-            <div style={{ fontFamily: 'ui-serif, Georgia, serif', fontStyle: 'italic', fontSize: 22, lineHeight: 1.15, color: '#000', marginBottom: 6 }}>
-              {bkfst ? `$${Math.round(bkfst.total_alloc_usd).toLocaleString()}` : '—'}
-            </div>
-            <div style={{ fontSize: 12, color: '#5A5A5A', lineHeight: 1.4 }}>
-              {bkfst ? <>{bkfst.adult_nights} adult-nights × $10 + {bkfst.child_nights} child-nights × $5 (fair value).</> : 'Pax-nights × $10/adult + $5/child.'}
-              {' '}Configurable via <code style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 11 }}>BREAKFAST_USD_ADULT</code>.
-            </div>
-            {effectiveLaborPct != null && tileSrc && (
-              <div style={{ fontSize: 11, color: '#5A5A5A', marginTop: 6 }}>
-                Labor% drops {tileSrc.labor_cost_pct.toFixed(1)}% → {effectiveLaborPct.toFixed(1)}% if JE applied.
-              </div>
-            )}
-            <div style={{ fontSize: 11, color: '#1F7A4B', background: 'rgba(31,122,75,0.10)', padding: '6px 8px', borderLeft: '2px solid #1F7A4B', marginTop: 8 }}>
-              <strong>Action:</strong> Monthly QB JE — <code style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>DR Rooms Rev · CR Food Rev</code>. Zero P&amp;L impact, USALI-clean.
-            </div>
-          </Container>
-
-          <Container title="Menu engineering" subtitle="coming soon">
-            <div style={{ fontFamily: 'ui-serif, Georgia, serif', fontStyle: 'italic', fontSize: 18, lineHeight: 1.15, color: '#5A5A5A', marginBottom: 6 }}>Stars · Plowhorses · Puzzles · Dogs</div>
-            <div style={{ fontSize: 12, color: '#5A5A5A', lineHeight: 1.4 }}>
-              Each dish on popularity × profitability. Needs POS qty + recipe sheets in <code style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 11 }}>inv.recipes</code>.
-            </div>
-          </Container>
-        </div>
-
         <Container title="Monthly trend · revenue · costs · GOP %" subtitle="Jan 2025 → current · live from gl.v_fnb_cos_monthly · breakfast bar = USALI fair-value reclass">
           <DeptTrendChart rows={pl} dept="fnb" breakfastByPeriod={Object.fromEntries(((bkfstMonthlyResp?.data ?? []) as Array<{ period_yyyymm: string; alloc_usd: number | string }>).map((r) => [r.period_yyyymm, Number(r.alloc_usd)]))} />
         </Container>
