@@ -131,12 +131,23 @@ export default async function FnbPage({ searchParams }: Props) {
     { label: 'Canteen / Occ', value: fmtUsd(Number(canteen?.cost_per_occ_room ?? 0)),
       footnote: 'QB GL · Q1 2026 · per occupied room-night',
       status: 'grey', size: 'sm' },
+    // PBS 2026-06-09 #140 — 3 new tiles: Food Cost · Beverage Cost · Total Labour Q1.
+    { label: 'Food Cost',     value: fmtUsd(foodCostQ1),
+      footnote: 'QB GL · Q1 2026 · Cost of Sales · canteen excluded',
+      status: foodCostQ1 > 0 ? 'amber' : 'grey', size: 'sm' },
+    { label: 'Beverage Cost', value: fmtUsd(bevCostQ1),
+      footnote: 'QB GL · Q1 2026 · Cost of Sales · canteen excluded',
+      status: bevCostQ1 > 0 ? 'amber' : 'grey', size: 'sm' },
+    { label: 'Total Labour',  value: fmtUsd(labourQ1),
+      footnote: 'QB GL · Q1 2026 · Wages & Benefits + Other Staff Cost · EMPLOYEE MEAL excluded ($' + Math.round(labourCanteenPortion).toLocaleString('en-US') + ')',
+      status: labourQ1 > 0 ? 'amber' : 'grey', size: 'sm' },
+
   ];
 
   // Row 2 — USALI Effective view. ALL tiles read QB GL pinned to Q1 2026.
   const row2: KpiTileProps[] = [
     { label: 'Breakfast alloc',    value: fmtUsd(Number(bkfst?.total_alloc_usd ?? 0)),
-      footnote: 'USALI fair value · Q1 2026 · pax × $10/adult + $5/child',
+      footnote: 'Q1 2026 · ' + bfastAdultNights.toLocaleString('en-US') + ' adult-nights × $10 + ' + bfastChildNights.toLocaleString('en-US') + ' child-nights × $5 (USALI fair value)',
       status: 'grey', size: 'sm' },
     { label: 'Effective F&B Rev',  value: fmtUsd(effectiveFnbRev),
       footnote: 'GL F&B Rev + breakfast alloc · Q1 2026',
