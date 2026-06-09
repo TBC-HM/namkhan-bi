@@ -17,6 +17,9 @@ import {
   getFnbGlBreakdown, getFnbTopSellerTrend, getBreakfastAllocation, getFnbRawTransactions,
 } from '@/lib/data';
 import { resolvePeriod } from '@/lib/period';
+import { supabase } from '@/lib/supabase';
+
+interface GlLineRow { usali_line_label: string; amount_usd: number | string | null }
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -35,7 +38,7 @@ export default async function FnbPage({ searchParams }: Props) {
   const Q1_FROM = '2026-01-01';
   const Q1_TO   = '2026-03-31';
   const Q1_LABEL = 'Q1 2026 (Jan-Mar) · last fully-mapped GL quarter';
-  const [daily, pl, periodCosts, captureP, canteenQ1, glBreakdown, topTrend, rawTxns, bkfstQ1, covers] = await Promise.all([
+  const [daily, pl, periodCosts, captureP, canteenQ1, glBreakdown, topTrend, rawTxns, bkfstQ1, covers, glRevSplitResp] = await Promise.all([
     getKpiDaily(period.from, period.to).catch(() => []),
     getDeptPl('fnb', 16).catch(() => []),
     getFnbCostsForPeriod(Q1_FROM, Q1_TO).catch(() => null),
@@ -46,9 +49,22 @@ export default async function FnbPage({ searchParams }: Props) {
     getFnbRawTransactions(2000).catch(() => []),
     getBreakfastAllocation(Q1_FROM, Q1_TO).catch(() => null),
     getFnbCovers(period.from, period.to).catch(() => null),
+    // PBS 2026-06-09 #140 — live Food/Beverage revenue split from QB GL.
+    // (the previous a30.fnb_food_revenue / fnb_beverage_revenue columns dont exist).
+    supabase.schema('gl').from('mv_usali_pl_monthly')
+      .select('usali_line_label, amount_usd')
+      .ilike('usali_department', 'f%b')
+      .eq('usali_subcategory', 'Revenue')
+      .in('period_yyyymm', ['2026-01','2026-02','2026-03'])
+      .then((r) => r),
   ]);
+  // GL revenue is a credit → negative. Flip the sign for display.
+  const glLines = ((glRevSplitResp?.data ?? []) as GlLineRow[]);
+  const foodRevQ1 = -1 * glLines.filter((r) => /food/i.test(r.usali_line_label)).reduce((s, r) => s + Number(r.amount_usd ?? 0), 0);
+  const bevRevQ1  = -1 * glLines.filter((r) => /beverage|drink|bar/i.test(r.usali_line_label)).reduce((s, r) => s + Number(r.amount_usd ?? 0), 0);
   const canteen = canteenQ1;
   const bkfst   = bkfstQ1;
+  void daily;
   void covers;
   const a30 = aggregateDaily(daily, period.capacityMode);
   const plLatest = pl.find(r => r.revenue > 0) ?? null;
@@ -65,26 +81,51 @@ export default async function FnbPage({ searchParams }: Props) {
   const effectiveGopUsd = tileSrc ? (effectiveFnbRev - tileSrc.total_cost) : null;
   const effectiveGopPct = effectiveFnbRev > 0 && effectiveGopUsd != null ? (effectiveGopUsd / effectiveFnbRev) * 100 : null;
 
-  // Row 1 — Operating snapshot
+  // Row 1 — Operating snapshot. Each tile labels its OWN period in the footnote
+  // (PMS-driven tiles run on the rolling search-params window; GL-driven tiles
+  // are pinned to Q1 2026, the last fully-mapped QB quarter).
+  void a30;
   const row1: KpiTileProps[] = [
-    { label: 'F&B / Occ Rn',  value: captureP ? fmtUsd(Number(captureP.spend_per_occ)) : '—', footnote: captureP ? period.label : 'no data — try 30d+', status: captureP ? 'green' : 'grey', size: 'sm' },
-    { label: 'Capture %',     value: captureP ? fmtPct(Number(captureP.capture_pct)) : '—', footnote: captureP ? `${captureP.res_with_purchase}/${captureP.res_in_house} res` : 'no data', status: 'grey', size: 'sm' },
-    { label: 'Food Rev',      value: fmtUsd(Number(a30?.fnb_food_revenue ?? 0)),    status: 'grey', size: 'sm' },
-    { label: 'Beverage Rev',  value: fmtUsd(Number(a30?.fnb_beverage_revenue ?? 0)), status: 'grey', size: 'sm' },
-    { label: 'Staff Canteen', value: fmtUsd(Number(canteen?.total_usd ?? 0)),       status: 'grey', size: 'sm' },
-    { label: 'Canteen / Occ', value: fmtUsd(Number(canteen?.cost_per_occ_room ?? 0)), status: 'grey', size: 'sm' },
+    { label: 'F&B / Occ Rn',  value: captureP ? fmtUsd(Number(captureP.spend_per_occ)) : '—',
+      footnote: `PMS · ${captureP ? period.label : 'no capture rows — widen the window'}`,
+      status: captureP ? 'green' : 'grey', size: 'sm' },
+    { label: 'Capture %',     value: captureP ? fmtPct(Number(captureP.capture_pct)) : '—',
+      footnote: captureP ? `PMS · ${captureP.res_with_purchase}/${captureP.res_in_house} res · ${period.label}` : `PMS · ${period.label} · no data`,
+      status: 'grey', size: 'sm' },
+    { label: 'Food Rev',      value: fmtUsd(foodRevQ1),
+      footnote: 'QB GL · Q1 2026 (Jan-Mar)',
+      status: foodRevQ1 > 0 ? 'green' : 'grey', size: 'sm' },
+    { label: 'Beverage Rev',  value: fmtUsd(bevRevQ1),
+      footnote: 'QB GL · Q1 2026 (Jan-Mar)',
+      status: bevRevQ1 > 0 ? 'green' : 'grey', size: 'sm' },
+    { label: 'Staff Canteen', value: fmtUsd(Number(canteen?.total_usd ?? 0)),
+      footnote: 'QB GL · Q1 2026 · EMPLOYEE MEAL + STAFF CANTEEN MATERIALS',
+      status: 'grey', size: 'sm' },
+    { label: 'Canteen / Occ', value: fmtUsd(Number(canteen?.cost_per_occ_room ?? 0)),
+      footnote: 'QB GL · Q1 2026 · per occupied room-night',
+      status: 'grey', size: 'sm' },
   ];
 
-  // Row 2 — USALI Effective view
+  // Row 2 — USALI Effective view. ALL tiles read QB GL pinned to Q1 2026.
   const row2: KpiTileProps[] = [
-    { label: 'Breakfast alloc',    value: fmtUsd(Number(bkfst?.total_alloc_usd ?? 0)), footnote: 'USALI fair value', status: 'grey', size: 'sm' },
-    { label: 'Effective F&B Rev',  value: fmtUsd(effectiveFnbRev), status: 'green', size: 'sm' },
+    { label: 'Breakfast alloc',    value: fmtUsd(Number(bkfst?.total_alloc_usd ?? 0)),
+      footnote: 'USALI fair value · Q1 2026 · pax × $10/adult + $5/child',
+      status: 'grey', size: 'sm' },
+    { label: 'Effective F&B Rev',  value: fmtUsd(effectiveFnbRev),
+      footnote: 'GL F&B Rev + breakfast alloc · Q1 2026',
+      status: 'green', size: 'sm' },
     { label: 'Effective GOP $',    value: fmtUsd(Number(effectiveGopUsd ?? 0)),
+      footnote: 'Effective rev − total cost · Q1 2026',
       status: (effectiveGopUsd != null && effectiveGopUsd > 0 ? 'green' : 'red') as 'green'|'red', size: 'sm' },
-    { label: 'Effective GOP %',    value: fmtPct(Number(effectiveGopPct ?? 0)), footnote: 'target ≥ 25%',
+    { label: 'Effective GOP %',    value: fmtPct(Number(effectiveGopPct ?? 0)),
+      footnote: 'target ≥ 25% · Q1 2026',
       status: (effectiveGopPct != null && effectiveGopPct >= 25 ? 'green' : 'amber') as 'green'|'amber', size: 'sm' },
-    { label: 'Eff Labor %',        value: fmtPct(Number(effectiveLaborPct ?? 0)), footnote: 'target ≤ 35%', status: 'grey', size: 'sm' },
-    { label: 'Eff Food %',         value: fmtPct(effectiveFnbRev > 0 && tileSrc ? (tileSrc.food_cost / effectiveFnbRev) * 100 : 0), footnote: 'target ≤ 30%', status: 'grey', size: 'sm' },
+    { label: 'Eff Labor %',        value: fmtPct(Number(effectiveLaborPct ?? 0)),
+      footnote: 'payroll ÷ effective rev · target ≤ 35% · Q1 2026',
+      status: 'grey', size: 'sm' },
+    { label: 'Eff Food %',         value: fmtPct(effectiveFnbRev > 0 && tileSrc ? (tileSrc.food_cost / effectiveFnbRev) * 100 : 0),
+      footnote: 'food cost ÷ effective rev · target ≤ 30% · Q1 2026',
+      status: 'grey', size: 'sm' },
   ];
 
   const tabs: DashboardTab[] = OPERATIONS_SUBPAGES.map((s) => ({ key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/restaurant') })) as DashboardTab[];
@@ -101,7 +142,7 @@ export default async function FnbPage({ searchParams }: Props) {
       tabs={tabs}
     >
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <Container title="Operating snapshot" subtitle={`capture · spend · staff canteen — Q1 2026 (GL) + ${period.label} (PMS) · Food/Beverage tiles read non-existent kpi columns, currently always $0 — POS feed TODO`} density="compact">
+        <Container title="Operating snapshot" subtitle={`mixed period · PMS metrics use the rolling window (${period.label}) · GL-derived tiles pinned to Q1 2026 (last fully-mapped QB quarter)`} density="compact">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
             {row1.map((t, i) => <KpiTile key={i} {...t} />)}
           </div>
