@@ -1,18 +1,19 @@
 // app/operations/spa/page.tsx
-// PBS 2026-06-09 #136 — B&W primitives reskin. Same layout, same dynamic data.
+// PBS 2026-06-09 #190 — full rebuild mirroring /operations/restaurant.
+// No canteen, no breakfast. Spa has 1 category → operating-snapshot strip's
+// 2nd row is the top-10 treatments for the selected period.
 
-import FilterStrip from '@/components/nav/FilterStrip';
+import Link from 'next/link';
 import { DashboardPage, Container, KpiTile, type KpiTileProps, type DashboardTab } from '@/app/(cockpit)/_design';
 import { OPERATIONS_SUBPAGES } from '../_subpages';
-import PnlGrid from '@/components/pl/PnlGrid';
 import DeptTrendChart from '@/components/pl/DeptTrendChart';
 import FnbGlBreakdown from '@/components/pl/FnbGlBreakdown';
 import FnbTopSellerTrend from '@/components/pl/FnbTopSellerTrend';
 import FnbRawTransactions from '@/components/pl/FnbRawTransactions';
 import {
-  getKpiDaily, aggregateDaily, getDeptPl, getSpaTreatments,
-  getDeptCaptureForPeriod, getSpaCostsForPeriod,
+  getDeptPl, getDeptCaptureForPeriod, getSpaCostsForPeriod,
   getDeptGlBreakdown, getDeptTopSellerTrend, getDeptRawTransactions,
+  type TopSellerTrend,
 } from '@/lib/data';
 import { resolvePeriod } from '@/lib/period';
 
@@ -25,50 +26,89 @@ const fmtUsd = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('en-
 const fmtPct = (n: number) => `${(Number(n) || 0).toFixed(1)}%`;
 
 export default async function SpaPage({ searchParams }: Props) {
+  // ─── period selector (yesterday / 7d / 30d / YTD), mirrors restaurant ───
+  const opPeriodRaw = typeof searchParams.op === 'string' ? searchParams.op : '30d';
+  const opPeriod = (['yesterday','7d','30d','ytd'].includes(opPeriodRaw) ? opPeriodRaw : '30d') as 'yesterday'|'7d'|'30d'|'ytd';
+  const opToday = new Date(); opToday.setUTCHours(0,0,0,0);
+  const opToIso = opToday.toISOString().slice(0,10);
+  const opFromIso = (() => {
+    const d = new Date(opToday);
+    if (opPeriod === 'yesterday') { d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0,10); }
+    if (opPeriod === '7d')  { d.setUTCDate(d.getUTCDate() - 6);  return d.toISOString().slice(0,10); }
+    if (opPeriod === '30d') { d.setUTCDate(d.getUTCDate() - 29); return d.toISOString().slice(0,10); }
+    return `${opToday.getUTCFullYear()}-01-01`;
+  })();
+  const opEndIso = opPeriod === 'yesterday'
+    ? (() => { const d = new Date(opToday); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0,10); })()
+    : opToIso;
+  const opLabel = opPeriod === 'yesterday' ? 'Yesterday' : opPeriod === '7d' ? 'Last 7 days' : opPeriod === '30d' ? 'Last 30 days' : 'YTD';
+
   const period = resolvePeriod(searchParams);
-  const [daily, pl, periodCosts, captureP, glBreakdown, topTrend, rawTxns, spa12] = await Promise.all([
-    getKpiDaily(period.from, period.to).catch(() => []),
+  const Q1_FROM = '2026-01-01', Q1_TO = '2026-03-31';
+  const Q1_LABEL = 'Q1 2026 (Jan-Mar) · last fully-mapped GL quarter';
+
+  const [pl, captureOp, periodCosts, topTrend, glBreakdown, rawTxns, topProductsOp] = await Promise.all([
     getDeptPl('spa', 16).catch(() => []),
-    getSpaCostsForPeriod(period.from, period.to).catch(() => null),
-    getDeptCaptureForPeriod({ usali_dept: 'Other Operated', usali_subdept: 'Spa' }, period.from, period.to).catch(() => null),
+    getDeptCaptureForPeriod({ usali_dept: 'Spa' }, opFromIso, opEndIso).catch(() => null),
+    getSpaCostsForPeriod(Q1_FROM, Q1_TO).catch(() => null),
+    getDeptTopSellerTrend({ usali_dept: 'Other Operated', usali_subdept: 'Spa' }, '2026-01-01', 500).catch(() => ({ periods: [], items: [] as TopSellerTrend[] })),
     getDeptGlBreakdown('Spa', 16).catch(() => ({ periods: [], lines: [] })),
-    getDeptTopSellerTrend({ usali_dept: 'Other Operated', usali_subdept: 'Spa' }, '2026-01-01', 8).catch(() => ({ periods: [], items: [] })),
     getDeptRawTransactions({ usali_dept: 'Other Operated', usali_subdept: 'Spa' }, 2000).catch(() => []),
-    getSpaTreatments(12).catch(() => null),
+    getDeptTopSellerTrend({ usali_dept: 'Other Operated', usali_subdept: 'Spa' }, opFromIso, 50).catch(() => ({ periods: [], items: [] as TopSellerTrend[] })),
   ]);
-  const a30 = aggregateDaily(daily, period.capacityMode);
-  const plLatest = pl.find(r => r.revenue > 0) ?? null;
-  const tileSrc = periodCosts ?? (plLatest ? {
-    revenue: plLatest.revenue, spa_cost: plLatest.spa_cost, payroll: plLatest.payroll,
-    total_cost: plLatest.total_cost, gop: plLatest.gop,
-    spa_cost_pct: plLatest.spa_cost_pct, labor_cost_pct: plLatest.labor_cost_pct, gop_pct: plLatest.gop_pct,
-    months_used: [plLatest.period],
-  } : null);
-  const captureRate = captureP ? Number(captureP.capture_pct) : 0;
-  const perOccRn = captureP ? Number(captureP.spend_per_occ) : 0;
-  const recent30 = spa12?.by_month?.[spa12.by_month.length - 1];
+  const top10 = (topProductsOp.items ?? []).slice(0, 10);
+
+  const revP    = captureOp ? Number(captureOp.revenue) : 0;
+  const occRn   = captureOp ? Number(captureOp.roomnights) : 0;
+  const treats  = captureOp ? Number(captureOp.res_with_purchase) : 0;
+  const spc     = captureOp ? Number(captureOp.spend_per_occ) : 0;
+  const capPct  = captureOp ? Number(captureOp.capture_pct) : 0;
 
   const row1: KpiTileProps[] = [
-    { label: 'Spa Revenue',    value: fmtUsd(Number(a30?.spa_revenue ?? 0)), status: 'green', size: 'sm' },
-    { label: 'Spa / Occ Rn',   value: fmtUsd(perOccRn), footnote: 'benchmark $25-40',
-      status: (perOccRn >= 25 ? 'green' : 'amber') as 'green'|'amber', size: 'sm' },
-    { label: 'Capture %',      value: fmtPct(captureRate), footnote: 'benchmark ≥ 35%', status: 'grey', size: 'sm' },
-    { label: 'Treatments / day', value: recent30 ? Number(recent30.avg_per_day) : 0, footnote: 'latest month', status: 'grey', size: 'sm' },
-    { label: 'Months',         value: tileSrc ? tileSrc.months_used.length : 0, footnote: tileSrc ? tileSrc.months_used[0] : '—', status: 'grey', size: 'sm' },
-    { label: 'Therapist util', value: '0%', footnote: 'scheduler not synced', status: 'grey', size: 'sm' },
+    { label: 'Spa Revenue',  value: fmtUsd(revP),
+      footnote: `Cloudbeds folio · ${opLabel}`,
+      status: revP > 0 ? 'green' : 'grey', size: 'sm' },
+    { label: 'Treatments',   value: String(treats),
+      footnote: `occ rn w/ treatment · ${opLabel}`,
+      status: treats > 0 ? 'green' : 'grey', size: 'sm' },
+    { label: 'Avg ticket',   value: treats > 0 ? fmtUsd(revP / treats) : '—',
+      footnote: `revenue ÷ treatments · ${opLabel}`,
+      status: 'grey', size: 'sm' },
+    { label: 'Spa / Occ Rn', value: fmtUsd(spc),
+      footnote: `spend per occupied room · ${opLabel}`,
+      status: spc >= 25 ? 'green' : 'grey', size: 'sm' },
+    { label: 'Capture %',    value: fmtPct(capPct),
+      footnote: `${treats}/${occRn} occ rn · ${opLabel}`,
+      status: capPct >= 35 ? 'green' : 'grey', size: 'sm' },
   ];
 
-  const row2: KpiTileProps[] = [
-    { label: 'Spa Cost %', value: fmtPct(tileSrc ? tileSrc.spa_cost_pct : 0), footnote: 'target ≤ 12%',
-      status: (tileSrc && tileSrc.spa_cost_pct <= 12 ? 'green' : 'amber') as 'green'|'amber', size: 'sm' },
-    { label: 'Labor %',    value: fmtPct(tileSrc ? tileSrc.labor_cost_pct : 0), footnote: 'target ≤ 35%',
-      status: (tileSrc && tileSrc.labor_cost_pct <= 35 ? 'green' : 'red') as 'green'|'red', size: 'sm' },
-    { label: 'GOP %',      value: fmtPct(tileSrc ? tileSrc.gop_pct : 0), footnote: 'target ≥ 50%',
-      status: (tileSrc && tileSrc.gop_pct >= 50 ? 'green' : tileSrc && tileSrc.gop_pct >= 0 ? 'amber' : 'red') as 'green'|'amber'|'red', size: 'sm' },
-    { label: 'Revenue (QB)', value: fmtUsd(tileSrc ? tileSrc.revenue : 0), footnote: tileSrc ? `${tileSrc.months_used.length} mo` : '—', status: 'grey', size: 'sm' },
-    { label: 'Spa COGS',   value: fmtUsd(tileSrc ? tileSrc.spa_cost : 0), status: 'grey', size: 'sm' },
-    { label: 'Payroll',    value: fmtUsd(tileSrc ? tileSrc.payroll : 0), status: 'grey', size: 'sm' },
-  ];
+  const row2: KpiTileProps[] = periodCosts ? [
+    { label: 'Spa Rev (QB)',  value: fmtUsd(periodCosts.revenue), footnote: 'Q1 2026 · QB GL', status: 'grey', size: 'sm' },
+    { label: 'Spa COGS',      value: fmtUsd(periodCosts.spa_cost), footnote: 'Q1 2026 · QB GL', status: 'grey', size: 'sm' },
+    { label: 'Payroll',       value: fmtUsd(periodCosts.payroll),  footnote: 'Q1 2026 · QB GL', status: 'grey', size: 'sm' },
+    { label: 'Spa Cost %',    value: fmtPct(periodCosts.spa_cost_pct), footnote: 'target ≤ 12%',
+      status: periodCosts.spa_cost_pct <= 12 ? 'green' : 'amber', size: 'sm' },
+    { label: 'Labor %',       value: fmtPct(periodCosts.labor_cost_pct), footnote: 'target ≤ 35%',
+      status: periodCosts.labor_cost_pct <= 35 ? 'green' : 'red', size: 'sm' },
+    { label: 'GOP %',         value: fmtPct(periodCosts.gop_pct), footnote: 'target ≥ 50%',
+      status: periodCosts.gop_pct >= 50 ? 'green' : periodCosts.gop_pct >= 0 ? 'amber' : 'red', size: 'sm' },
+  ] : [];
+
+  const opPillStyle = (active: boolean): React.CSSProperties => ({
+    padding: '6px 12px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+    fontSize: 11, letterSpacing: '0.04em', textTransform: 'uppercase',
+    color: active ? '#FFFFFF' : '#000', background: active ? '#000' : 'transparent',
+    border: 'none', cursor: 'pointer', fontWeight: active ? 600 : 500, textDecoration: 'none',
+  });
+  const opPills = (
+    <div style={{ display: 'flex', alignItems: 'stretch', borderRadius: 4, border: '1px solid #E0E0E0', overflow: 'hidden' }}>
+      {(['yesterday', '7d', '30d', 'ytd'] as const).map((p) => (
+        <Link key={p} href={`?op=${p}`} style={opPillStyle(opPeriod === p)}>
+          {p === 'yesterday' ? 'Yesterday' : p === '7d' ? '7d' : p === '30d' ? '30d' : 'YTD'}
+        </Link>
+      ))}
+    </div>
+  );
 
   const tabs: DashboardTab[] = OPERATIONS_SUBPAGES.map((s) => ({ key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/spa') })) as DashboardTab[];
 
@@ -77,51 +117,67 @@ export default async function SpaPage({ searchParams }: Props) {
     color: '#000', background: '#FFFFFF', border: '1px solid #E0E0E0', borderRadius: 6, letterSpacing: '0.04em',
   };
 
+  void period;
+
   return (
     <DashboardPage
-      title={`Wellness treatments · ${period.label}`}
-      subtitle="Operations · Spa · live from QB GL + PMS · USALI rollup"
+      title="Wellness treatments"
+      subtitle="Operations · Spa · live from QB GL + Cloudbeds folio · USALI rollup"
       tabs={tabs}
     >
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <Container title="Operating snapshot" subtitle="revenue · capture · treatments — current period" density="compact">
+        <Container title="Operating snapshot" subtitle={`Cloudbeds folio · revenue + capture · ${opLabel}`} density="compact" action={opPills}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
             {row1.map((t, i) => <KpiTile key={i} {...t} />)}
           </div>
+          {top10.length > 0 && (
+            <>
+              <div style={{ marginTop: 14, fontSize: 11, color: '#5A5A5A', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                Top 10 treatments · {opLabel}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginTop: 6 }}>
+                {top10.map((p) => (
+                  <KpiTile key={p.description} label={p.description}
+                    value={fmtUsd(p.total_revenue_usd)}
+                    footnote={`${p.total_units} units · last ${p.last_sold ?? '—'}`}
+                    status="grey" size="sm" />
+                ))}
+              </div>
+            </>
+          )}
         </Container>
 
-        <Container title="Cost discipline · USALI" subtitle="targets: spa cost ≤12% · labor ≤35% · GOP ≥50%" density="compact">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
-            {row2.map((t, i) => <KpiTile key={i} {...t} />)}
-          </div>
-        </Container>
+        {row2.length > 0 && (
+          <Container title={`USALI Effective view · ${Q1_LABEL}`} subtitle="cost discipline derived from QB GL · scoped Q1 because GL Spa rows blank after April." density="compact">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+              {row2.map((t, i) => <KpiTile key={i} {...t} />)}
+            </div>
+          </Container>
+        )}
 
-        <FilterStrip showForward={false} showCompare={false} showSegment={false} liveSource="PMS · live" />
-
-        <Container title="Monthly trend · revenue · costs · GOP %" subtitle="last 16 months — live from gl.v_dept_pl_namkhan">
+        <Container title="Monthly trend · revenue · costs · GOP %" subtitle="last 16 months · live from gl.mv_usali_pl_monthly">
           <DeptTrendChart rows={pl} dept="spa" />
         </Container>
 
-        <Container title="P&L · QB GL · USALI rollup" subtitle="targets: spa cost ≤12% · labor ≤35% · GOP ≥50%">
-          <PnlGrid rows={pl} dept="spa" targets={{ spa_cost_pct: 12, labor_cost_pct: 35, gop_pct: 50 }} defaultRows={6} />
-        </Container>
-
         <details>
-          <summary style={summaryStyle}>GL detail · Spa accounts</summary>
+          <summary style={summaryStyle}>GL detail · Spa accounts (every QB line)</summary>
           <div style={{ marginTop: 10 }}>
-            <FnbGlBreakdown data={glBreakdown} defaultMonths={4} />
+            <FnbGlBreakdown data={glBreakdown} defaultMonths={3} />
           </div>
         </details>
 
         <details open>
-          <summary style={summaryStyle}>Top spa treatments · trend since Jan 26</summary>
+          <summary style={summaryStyle}>Top treatments · trend since Jan 26</summary>
           <div style={{ marginTop: 10 }}>
-            <FnbTopSellerTrend data={topTrend} />
+            <FnbTopSellerTrend data={topTrend} hideSegments />
           </div>
         </details>
 
         <details>
-          <summary style={summaryStyle}>All POS transactions · search &amp; reconcile <span style={{ fontWeight: 400, color: '#5A5A5A', marginLeft: 6 }}>({rawTxns.length} most recent)</span></summary>
+          <summary style={summaryStyle}>
+            All POS transactions · search &amp; reconcile
+            <span style={{ fontWeight: 400, color: '#5A5A5A', marginLeft: 6 }}>({rawTxns.length} most recent)</span>
+          </summary>
           <div style={{ marginTop: 10 }}>
             <FnbRawTransactions data={rawTxns} pageSize={200} />
           </div>
