@@ -1021,7 +1021,7 @@ export async function getDeptTopSellerTrend(filter: { usali_dept: string; usali_
       avg_rev_per_active_month: active.length > 0 ? monthlyArr.reduce((s, m) => s + m.revenue, 0) / active.length : 0,
       usali_subdept: (r.usali_subdept as string | null) ?? null,
     };
-  }).filter((it) => it.total_revenue_usd > 0);
+  }).filter((it) => it.monthly.length > 0); // PBS #175 — drop items with no data in window; was filtering on total_revenue_usd which is lifetime and let empty-monthly items through, crashing sparkline
   const periods = Array.from(periodSet).sort();
   return { periods, items };
 }
