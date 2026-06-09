@@ -63,7 +63,7 @@ export default async function FnbPage({ searchParams }: Props) {
     getFnbCostsForPeriod(Q1_FROM, Q1_TO).catch(() => null),
     getFnbCaptureForPeriod(period.from, period.to).catch(() => null),
     getCanteenForPeriod(Q1_FROM, Q1_TO).catch(() => null),
-    getFnbGlBreakdown(16).catch(() => ({ periods: [], lines: [] })),
+    getFnbGlBreakdown(18).catch(() => ({ periods: [], lines: [] })),
     getFnbTopSellerTrend('2026-01-01', 8).catch(() => ({ periods: [], items: [] })),
     getFnbRawTransactions(2000).catch(() => []),
     getBreakfastAllocation(Q1_FROM, Q1_TO).catch(() => null),
@@ -408,7 +408,7 @@ export default async function FnbPage({ searchParams }: Props) {
         <details>
           <summary style={summaryStyle}>GL detail · F&amp;B accounts (every QB line)</summary>
           <div style={{ marginTop: 10 }}>
-            <FnbGlBreakdown data={glBreakdown} defaultMonths={4} />
+            <FnbGlBreakdown data={glBreakdown} defaultMonths={6} />
           </div>
         </details>
 
