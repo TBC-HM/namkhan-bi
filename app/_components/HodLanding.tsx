@@ -23,9 +23,12 @@ import AttentionList from '@/app/revenue/_components/AttentionList';
 interface Props {
   slug: DeptSlug;            // 'finance' | 'sales' | 'marketing' | 'operations'
   propertyId?: number;
+  /** PBS 2026-06-09 #138 — override the static cfg.kpiTiles with live values
+   * (e.g. operations HoD fetches today's occupancy + check-in/out counts). */
+  liveTiles?: KpiTileProps[];
 }
 
-export default async function HodLanding({ slug, propertyId }: Props) {
+export default async function HodLanding({ slug, propertyId, liveTiles }: Props) {
   const pid = propertyId ?? PROPERTY_ID;
   const cfg = pid === PROPERTY_ID ? DEPT_CFG[slug] : getDeptCfg(slug, pid);
 
@@ -52,7 +55,10 @@ export default async function HodLanding({ slug, propertyId }: Props) {
   }>;
   const dueTasksCount = dueTasksRes.count ?? 0;
 
-  const tiles: KpiTileProps[] = (cfg.kpiTiles ?? []).map((k) => ({
+  // PBS #138: liveTiles take precedence over the static cfg.kpiTiles when a HoD
+  // page wants to surface real-time values (operations HoD does this for today's
+  // occupancy + check-ins + check-outs).
+  const tiles: KpiTileProps[] = liveTiles ?? (cfg.kpiTiles ?? []).map((k) => ({
     label: k.k, value: k.v, size: 'sm', footnote: k.d,
   }));
 
