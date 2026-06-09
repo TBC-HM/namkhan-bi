@@ -1,23 +1,46 @@
 'use client';
 
 // components/pl/FnbTopSellerTrend.tsx
-//
-// Replaces the static "deadfish" top-sellers table on /operations/restaurant.
-// One row per item: name, sparkline (revenue per month since startIso), total
-// revenue, units, Jan→latest delta %. Sort by total revenue desc.
+// PBS 2026-06-09 #173 — full B&W rebuild + Food/Drink/All segment toggle + Top 10 collapsed default.
 
-import type { CSSProperties } from 'react';
+import { useState, useMemo, type CSSProperties } from 'react';
 import type { TopSellerTrend } from '@/lib/data';
 
 interface Props {
   data: { periods: string[]; items: TopSellerTrend[] };
 }
 
+const INK = '#000';
+const INK_MUTED = '#5A5A5A';
+const HAIRLINE = '#E0E0E0';
+const HAIRLINE_SOFT = '#F0F0F0';
+const HOVER = '#FAFAFA';
+const GOOD = '#1c4d3a';
+const BAD = '#8e3a35';
+const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
+
+type Segment = 'all' | 'food' | 'drink';
+
 export default function FnbTopSellerTrend({ data }: Props) {
+  const [segment, setSegment] = useState<Segment>('all');
+  const [expanded, setExpanded] = useState(false);
   const { periods, items } = data;
+
+  const filtered = useMemo(() => {
+    if (segment === 'all') return items;
+    return items.filter((it) => {
+      const sd = (it.usali_subdept ?? '').toLowerCase();
+      if (segment === 'food') return sd === 'food';
+      return sd === 'beverage' || sd === 'minibar';
+    });
+  }, [items, segment]);
+
+  const visible = expanded ? filtered : filtered.slice(0, 10);
+  const collapsible = filtered.length > 10;
+
   if (items.length === 0) {
     return (
-      <div style={{ padding: 24, color: 'var(--ink-mute)', fontStyle: 'italic' }}>
+      <div style={{ padding: 24, color: INK_MUTED, fontStyle: 'italic', textAlign: 'center', fontSize: 12 }}>
         No F&amp;B transactions in window.
       </div>
     );
@@ -28,7 +51,7 @@ export default function FnbTopSellerTrend({ data }: Props) {
     const abs = Math.abs(n);
     const sign = n < 0 ? '−' : '';
     if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
-    if (abs >= 1_000)     return `${sign}$${(abs / 1_000).toFixed(1)}k`;
+    if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(1)}k`;
     return `${sign}$${Math.round(abs).toLocaleString('en-US')}`;
   };
   const monthLabel = (yyyymm: string) => {
@@ -37,17 +60,20 @@ export default function FnbTopSellerTrend({ data }: Props) {
     return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-GB', { month: 'short' });
   };
 
-  const cell: CSSProperties = {
-    padding: '6px 10px',
-    borderBottom: '1px solid #E0E0E0',
-    textAlign: 'right',
-    fontVariantNumeric: 'tabular-nums',
+  const th: CSSProperties = {
+    textAlign: 'right', padding: '8px 10px', borderBottom: `1px solid ${INK}`,
+    fontFamily: MONO, fontSize: 10, letterSpacing: '0.05em', textTransform: 'uppercase',
+    color: INK_MUTED, fontWeight: 500, whiteSpace: 'nowrap',
   };
-  const cellL: CSSProperties = { ...cell, textAlign: 'left' };
+  const thL: CSSProperties = { ...th, textAlign: 'left' };
+  const td: CSSProperties = {
+    padding: '8px 10px', borderBottom: `1px solid ${HAIRLINE_SOFT}`, textAlign: 'right',
+    fontFamily: MONO, fontSize: 12, fontVariantNumeric: 'tabular-nums', color: INK, whiteSpace: 'nowrap',
+  };
+  const tdL: CSSProperties = { ...td, textAlign: 'left', fontFamily: 'inherit' };
 
-  // SVG sparkline maker
-  const sparkW = 120;
-  const sparkH = 28;
+  const sparkW = 100;
+  const sparkH = 24;
   function sparkline(monthly: TopSellerTrend['monthly'], itemName: string) {
     const max = Math.max(...monthly.map((m) => m.revenue), 1);
     const dx = monthly.length > 1 ? sparkW / (monthly.length - 1) : sparkW;
@@ -55,105 +81,107 @@ export default function FnbTopSellerTrend({ data }: Props) {
       .map((m, i) => `${(i * dx).toFixed(1)},${(sparkH - (m.revenue / max) * sparkH).toFixed(1)}`)
       .join(' ');
     const lastIdx = monthly.length - 1;
-    const lastY = sparkH - (monthly[lastIdx].revenue / max) * sparkH;
-    const summaryTitle = `${itemName} · ${monthly.length} months · peak ${fmtMoney(max)} · last ${fmtMoney(monthly[lastIdx]?.revenue ?? 0)} (${monthly[lastIdx]?.period ?? '—'}) · v_fnb_top_seller_trend`;
     return (
       <svg width={sparkW} height={sparkH} style={{ display: 'block' }}>
-        <title>{summaryTitle}</title>
-        <polyline
-          points={points}
-          fill="none"
-          stroke="var(--brass, #b48228)"
-          strokeWidth={1.2}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        >
-          <title>{summaryTitle}</title>
-        </polyline>
-        {monthly.map((m, i) => (
-          <circle
-            key={m.period}
-            cx={i * dx}
-            cy={sparkH - (m.revenue / max) * sparkH}
-            r={i === lastIdx ? 2 : 1.4}
-            fill="var(--brass, #b48228)"
-            fillOpacity={i === lastIdx ? 1 : 0}
-          >
-            <title>{`${itemName} · ${m.period} · ${fmtMoney(m.revenue)} · v_fnb_top_seller_trend`}</title>
-          </circle>
-        ))}
+        <title>{`${itemName} · ${monthly.length} months · peak ${fmtMoney(max)} · last ${fmtMoney(monthly[lastIdx]?.revenue ?? 0)}`}</title>
+        <polyline points={points} fill="none" stroke={INK} strokeWidth={1.2} strokeLinejoin="round" strokeLinecap="round" />
+        <circle cx={lastIdx * dx} cy={sparkH - (monthly[lastIdx].revenue / max) * sparkH} r={2} fill={INK} />
       </svg>
     );
   }
 
+  const pillRow: CSSProperties = {
+    display: 'flex', gap: 0, alignItems: 'stretch', borderRadius: 4,
+    border: `1px solid ${HAIRLINE}`, overflow: 'hidden', width: 'fit-content',
+  };
+  const pill = (active: boolean): CSSProperties => ({
+    padding: '6px 14px', fontFamily: MONO, fontSize: 11, letterSpacing: '0.04em', textTransform: 'uppercase',
+    color: active ? '#FFF' : INK, background: active ? INK : 'transparent',
+    border: 'none', cursor: 'pointer', fontWeight: active ? 600 : 500,
+  });
+
+  const countFor = (s: Segment) => s === 'all' ? items.length : items.filter((it) => {
+    const sd = (it.usali_subdept ?? '').toLowerCase();
+    if (s === 'food') return sd === 'food';
+    return sd === 'beverage' || sd === 'minibar';
+  }).length;
+
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <table style={{
-        width: '100%',
-        borderCollapse: 'collapse',
-        fontSize: '12px',
-      }}>
-        <thead>
-          <tr>
-            {[
-              { l: 'Item', a: 'left' as const },
-              { l: `Trend (${periods.length > 0 ? `${monthLabel(periods[0])}→${monthLabel(periods[periods.length - 1])}` : '—'})`, a: 'left' as const },
-              { l: 'Total rev', a: 'right' as const },
-              { l: 'Avg / mo', a: 'right' as const },
-              { l: 'Last sold', a: 'right' as const },
-              { l: 'Months active', a: 'right' as const },
-              { l: 'POS lines', a: 'right' as const },
-              { l: 'Margin %', a: 'right' as const },
-              { l: 'Δ first→latest', a: 'right' as const },
-            ].map((c, i) => (
-              <th key={i} style={{
-                textAlign: c.a,
-                padding: '8px 10px',
-                borderBottom: '1px solid #E0E0E0',
-                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                fontSize: '11px',
-                letterSpacing: '0.04em',
-                textTransform: 'uppercase',
-                color: '#000',
-                fontWeight: 500,
-              }}>{c.l}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((it) => {
-            const tone =
-              it.delta_pct == null  ? 'muted' :
-              it.delta_pct >  10    ? 'pos'   :
-              it.delta_pct < -10    ? 'neg'   :
-                                       'muted';
-            const tStyle: CSSProperties = {
-              color:
-                tone === 'pos' ? 'var(--good, #2c7a4b)' :
-                tone === 'neg' ? 'var(--bad, #b53a2a)' :
-                                 'var(--ink-soft, #6b675f)',
-              fontVariantNumeric: 'tabular-nums',
-            };
-            return (
-              <tr key={it.description}>
-                <td style={cellL}><strong>{it.description}</strong></td>
-                <td style={cellL}>{sparkline(it.monthly, it.description)}</td>
-                <td style={cell}>{fmtMoney(it.total_revenue_usd)}</td>
-                <td style={cell}>{fmtMoney(it.avg_rev_per_active_month)}</td>
-                <td style={cell}>{it.last_sold ?? '—'}</td>
-                <td style={cell}>{it.active_months}</td>
-                <td style={cell}>{it.total_units}</td>
-                <td style={{ ...cell, color: '#5A5A5A' }}>—</td>
-                <td style={{ ...cell, ...tStyle }}>
-                  {it.delta_pct == null
-                    ? '—'
-                    : `${it.delta_pct > 0 ? '+' : ''}${it.delta_pct.toFixed(0)}%`}
+    <div style={{ background: '#FFFFFF' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <div style={pillRow}>
+          {(['all', 'food', 'drink'] as Segment[]).map((s) => (
+            <button key={s} type="button" onClick={() => { setSegment(s); setExpanded(false); }} style={pill(segment === s)}>
+              {s === 'all' ? 'All' : s === 'food' ? 'Food' : 'Drink'}
+              <span style={{ marginLeft: 6, opacity: 0.6, fontSize: 10 }}>{countFor(s)}</span>
+            </button>
+          ))}
+        </div>
+        <span style={{ fontSize: 11, color: INK_MUTED, fontFamily: MONO, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+          Top {Math.min(visible.length, filtered.length)} of {filtered.length}
+        </span>
+      </div>
+
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr>
+              <th style={thL}>Rank</th>
+              <th style={thL}>Item</th>
+              <th style={thL}>{periods.length > 0 ? `${monthLabel(periods[0])} → ${monthLabel(periods[periods.length - 1])}` : 'Trend'}</th>
+              <th style={th}>Total rev</th>
+              <th style={th}>Avg / mo</th>
+              <th style={th}>Months active</th>
+              <th style={th}>Units</th>
+              <th style={th}>Last sold</th>
+              <th style={th}>Δ first→latest</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visible.length === 0 ? (
+              <tr>
+                <td colSpan={9} style={{ padding: 24, color: INK_MUTED, fontStyle: 'italic', textAlign: 'center', fontSize: 12 }}>
+                  No items in this segment.
                 </td>
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
+            ) : visible.map((it, idx) => {
+              const tone = it.delta_pct == null ? 'muted' : it.delta_pct > 10 ? 'pos' : it.delta_pct < -10 ? 'neg' : 'muted';
+              const deltaColor = tone === 'pos' ? GOOD : tone === 'neg' ? BAD : INK_MUTED;
+              return (
+                <tr key={it.description}
+                    style={{ transition: 'background 0.1s' }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = HOVER)}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}>
+                  <td style={{ ...td, textAlign: 'left', color: INK_MUTED, fontWeight: 500 }}>{idx + 1}</td>
+                  <td style={{ ...tdL, fontWeight: 600 }}>{it.description}</td>
+                  <td style={tdL}>{sparkline(it.monthly, it.description)}</td>
+                  <td style={{ ...td, fontWeight: 600 }}>{fmtMoney(it.total_revenue_usd)}</td>
+                  <td style={td}>{fmtMoney(it.avg_rev_per_active_month)}</td>
+                  <td style={td}>{it.active_months}</td>
+                  <td style={td}>{it.total_units}</td>
+                  <td style={{ ...td, color: INK_MUTED }}>{it.last_sold ?? '—'}</td>
+                  <td style={{ ...td, color: deltaColor, fontWeight: 600 }}>
+                    {it.delta_pct == null ? '—' : `${it.delta_pct > 0 ? '+' : ''}${it.delta_pct.toFixed(0)}%`}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {collapsible && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8, padding: '0 4px' }}>
+          <button type="button" onClick={() => setExpanded((v) => !v)}
+            style={{
+              background: 'transparent', border: `1px solid ${HAIRLINE}`, padding: '6px 12px',
+              cursor: 'pointer', fontFamily: MONO, fontSize: 11, letterSpacing: '0.04em',
+              textTransform: 'uppercase', color: INK, borderRadius: 4,
+            }}>
+            {expanded ? 'Show top 10 ▴' : `Show all (${filtered.length}) ▾`}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
