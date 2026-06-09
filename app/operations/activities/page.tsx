@@ -1,14 +1,20 @@
 // app/operations/activities/page.tsx
-// PBS 2026-06-09 #136 — Activities ops page (new, B&W primitives).
-// Layout mirrors /operations/restaurant + /operations/spa:
-//   KPI tiles → operating snapshot, cost/margin → catalog table → top sellers.
-// Data sources:
-//   public.v_activity_catalog (bridges sales.activity_catalog + content.activities_catalog)
+// PBS 2026-06-09 #191 — full rebuild mirroring /operations/restaurant.
+// 4 categories (Inside / Mekong Tours / External / Retreat) → per-category KPI sub-row.
 
-import FilterStrip from '@/components/nav/FilterStrip';
-import { DashboardPage, Container, KpiTile, Chart, type KpiTileProps, type DashboardTab, type ChartSeries } from '@/app/(cockpit)/_design';
+import Link from 'next/link';
+import { DashboardPage, Container, KpiTile, type KpiTileProps, type DashboardTab } from '@/app/(cockpit)/_design';
 import { OPERATIONS_SUBPAGES } from '../_subpages';
-import { supabase, PROPERTY_ID } from '@/lib/supabase';
+import DeptTrendChart from '@/components/pl/DeptTrendChart';
+import FnbGlBreakdown from '@/components/pl/FnbGlBreakdown';
+import FnbTopSellerTrend from '@/components/pl/FnbTopSellerTrend';
+import FnbRawTransactions from '@/components/pl/FnbRawTransactions';
+import {
+  getDeptPl, getDeptCaptureForPeriod,
+  getDeptGlBreakdown, getDeptTopSellerTrend, getDeptRawTransactions,
+  getDeptRevenueByCategoryForPeriod,
+  type TopSellerTrend,
+} from '@/lib/data';
 import { resolvePeriod } from '@/lib/period';
 
 export const revalidate = 60;
@@ -16,163 +22,172 @@ export const dynamic = 'force-dynamic';
 
 interface Props { searchParams: Record<string, string | string[] | undefined>; }
 
-const FX_LAK_PER_USD = 21800;
-const fmtUsd  = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('en-US')}`;
-const fmtLak  = (n: number) => `${Math.round(Number(n) || 0).toLocaleString('en-US')} LAK`;
-const fmtPct  = (n: number) => `${(Number(n) || 0).toFixed(1)}%`;
-const lakToUsd = (lak: number | null | undefined) => (Number(lak) || 0) / FX_LAK_PER_USD;
-
-interface ActivityRow {
-  activity_id: string;
-  property_id: number;
-  name: string;
-  category: string | null;
-  duration_min: number | null;
-  group_type: string | null;
-  cost_lak: number | null;
-  sell_lak: number | null;
-  margin_pct: number | null;
-  popularity_score: number | null;
-  is_signature: boolean | null;
-  weather_dependent: boolean | null;
-  season_from: string | null;
-  season_to: string | null;
-  is_active: boolean | null;
-  is_complimentary: boolean | null;
-  status: string | null;
-}
+const fmtUsd = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('en-US')}`;
+const fmtPct = (n: number) => `${(Number(n) || 0).toFixed(1)}%`;
 
 export default async function ActivitiesPage({ searchParams }: Props) {
+  const opPeriodRaw = typeof searchParams.op === 'string' ? searchParams.op : '30d';
+  const opPeriod = (['yesterday','7d','30d','ytd'].includes(opPeriodRaw) ? opPeriodRaw : '30d') as 'yesterday'|'7d'|'30d'|'ytd';
+  const opToday = new Date(); opToday.setUTCHours(0,0,0,0);
+  const opToIso = opToday.toISOString().slice(0,10);
+  const opFromIso = (() => {
+    const d = new Date(opToday);
+    if (opPeriod === 'yesterday') { d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0,10); }
+    if (opPeriod === '7d')  { d.setUTCDate(d.getUTCDate() - 6);  return d.toISOString().slice(0,10); }
+    if (opPeriod === '30d') { d.setUTCDate(d.getUTCDate() - 29); return d.toISOString().slice(0,10); }
+    return `${opToday.getUTCFullYear()}-01-01`;
+  })();
+  const opEndIso = opPeriod === 'yesterday'
+    ? (() => { const d = new Date(opToday); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0,10); })()
+    : opToIso;
+  const opLabel = opPeriod === 'yesterday' ? 'Yesterday' : opPeriod === '7d' ? 'Last 7 days' : opPeriod === '30d' ? 'Last 30 days' : 'YTD';
+
   const period = resolvePeriod(searchParams);
-  const pid = PROPERTY_ID;
+  const Q1_LABEL = 'Q1 2026 (Jan-Mar) · last fully-mapped GL quarter';
 
-  const { data } = await supabase
-    .from('v_activity_catalog')
-    .select('*')
-    .eq('property_id', pid)
-    .order('popularity_score', { ascending: false });
+  const [pl, captureOp, topTrend, glBreakdown, rawTxns, catsPeriod] = await Promise.all([
+    getDeptPl('activities', 16).catch(() => []),
+    getDeptCaptureForPeriod({ usali_dept: 'Activities' }, opFromIso, opEndIso).catch(() => null),
+    getDeptTopSellerTrend({ usali_dept: 'Other Operated', usali_subdept: 'Activities' }, '2026-01-01', 500).catch(() => ({ periods: [], items: [] as TopSellerTrend[] })),
+    getDeptGlBreakdown('Activities', 16).catch(() => ({ periods: [], lines: [] })),
+    getDeptRawTransactions({ usali_dept: 'Other Operated', usali_subdept: 'Activities' }, 2000).catch(() => []),
+    getDeptRevenueByCategoryForPeriod('Other Operated', opFromIso, opEndIso, 'Activities').catch(() => []),
+  ]);
 
-  const rows = (data ?? []) as ActivityRow[];
-  const active     = rows.filter((r) => r.is_active !== false && (r.status ?? 'active') === 'active');
-  const signature  = active.filter((r) => r.is_signature);
-  const comp       = active.filter((r) => r.is_complimentary);
-  const paid       = active.filter((r) => !r.is_complimentary && (r.sell_lak ?? 0) > 0);
-  const weather    = active.filter((r) => r.weather_dependent);
+  // Q1 sums from pl for USALI Effective row
+  const Q1_MONTHS = ['2026-01','2026-02','2026-03'];
+  const q1Rows = pl.filter((r) => Q1_MONTHS.includes(r.period));
+  const q1Revenue = q1Rows.reduce((s, r) => s + r.revenue, 0);
+  const q1Payroll = q1Rows.reduce((s, r) => s + r.payroll, 0);
+  const q1Cogs    = q1Rows.reduce((s, r) => s + r.cogs, 0);
+  const q1Total   = q1Rows.reduce((s, r) => s + r.total_cost, 0);
+  const q1Gop     = q1Revenue - q1Total;
+  const q1LaborPct = q1Revenue > 0 ? (q1Payroll / q1Revenue) * 100 : 0;
+  const q1CogsPct  = q1Revenue > 0 ? (q1Cogs / q1Revenue) * 100 : 0;
+  const q1GopPct   = q1Revenue > 0 ? (q1Gop / q1Revenue) * 100 : 0;
 
-  // Margin / pricing stats
-  const margins  = paid.map((r) => Number(r.margin_pct ?? 0)).filter((x) => x > 0);
-  const avgMargin = margins.length ? margins.reduce((a, b) => a + b, 0) / margins.length : 0;
-  const avgSellUsd = paid.length ? paid.reduce((s, r) => s + lakToUsd(r.sell_lak), 0) / paid.length : 0;
-  const avgCostUsd = paid.length ? paid.reduce((s, r) => s + lakToUsd(r.cost_lak), 0) / paid.length : 0;
-  const totalPotentialMarginUsd = paid.reduce((s, r) => s + (lakToUsd(r.sell_lak) - lakToUsd(r.cost_lak)), 0);
-
-  // Category breakdown
-  const byCategory = new Map<string, { count: number; signature: number }>();
-  for (const r of active) {
-    const cat = String(r.category ?? 'OTHER').toUpperCase();
-    const cur = byCategory.get(cat) ?? { count: 0, signature: 0 };
-    cur.count += 1;
-    if (r.is_signature) cur.signature += 1;
-    byCategory.set(cat, cur);
-  }
-  const catRows = Array.from(byCategory.entries())
-    .map(([cat, v]) => ({ category: cat, count: v.count, signature: v.signature }))
-    .sort((a, b) => b.count - a.count);
+  const revP    = captureOp ? Number(captureOp.revenue) : 0;
+  const occRn   = captureOp ? Number(captureOp.roomnights) : 0;
+  const bookings = captureOp ? Number(captureOp.res_with_purchase) : 0;
+  const spc     = captureOp ? Number(captureOp.spend_per_occ) : 0;
+  const capPct  = captureOp ? Number(captureOp.capture_pct) : 0;
 
   const row1: KpiTileProps[] = [
-    { label: 'Active offers',  value: active.length,    footnote: `${rows.length - active.length} archived`,                  status: active.length > 0 ? 'green' : 'grey', size: 'sm' },
-    { label: 'Paid catalogue', value: paid.length,      footnote: `${comp.length} complimentary`,                              status: paid.length > 0 ? 'green' : 'grey', size: 'sm' },
-    { label: 'Signature',      value: signature.length, footnote: 'marked is_signature in sales.activity_catalog',             status: signature.length > 0 ? 'green' : 'grey', size: 'sm' },
-    { label: 'Avg sell',       value: fmtUsd(avgSellUsd), footnote: 'USD · paid offers',                                       status: 'grey', size: 'sm' },
-    { label: 'Avg cost',       value: fmtUsd(avgCostUsd), footnote: 'USD · paid offers',                                       status: 'grey', size: 'sm' },
-    { label: 'Avg margin %',   value: fmtPct(avgMargin),  footnote: 'target ≥ 50%',
-      status: (avgMargin >= 50 ? 'green' : avgMargin >= 30 ? 'amber' : 'red') as 'green'|'amber'|'red', size: 'sm' },
+    { label: 'Activity Rev', value: fmtUsd(revP),
+      footnote: `Cloudbeds folio · ${opLabel}`,
+      status: revP > 0 ? 'green' : 'grey', size: 'sm' },
+    { label: 'Bookings',     value: String(bookings),
+      footnote: `occ rn w/ activity · ${opLabel}`,
+      status: bookings > 0 ? 'green' : 'grey', size: 'sm' },
+    { label: 'Avg ticket',   value: bookings > 0 ? fmtUsd(revP / bookings) : '—',
+      footnote: `revenue ÷ bookings · ${opLabel}`,
+      status: 'grey', size: 'sm' },
+    { label: 'Activity / Occ Rn', value: fmtUsd(spc),
+      footnote: `spend per occupied room · ${opLabel}`,
+      status: spc >= 20 ? 'green' : 'grey', size: 'sm' },
+    { label: 'Capture %',    value: fmtPct(capPct),
+      footnote: `${bookings}/${occRn} occ rn · ${opLabel}`,
+      status: capPct >= 25 ? 'green' : 'grey', size: 'sm' },
   ];
 
-  const row2: KpiTileProps[] = [
-    { label: 'Potential margin / cohort', value: fmtUsd(totalPotentialMarginUsd), footnote: 'sum(sell − cost) · USD',                                status: 'grey', size: 'sm' },
-    { label: 'Weather-dependent',         value: weather.length,                  footnote: 'season/weather risk',                                    status: weather.length > 0 ? 'amber' : 'green', size: 'sm' },
-    { label: 'Categories',                value: catRows.length,                  footnote: `${catRows[0]?.category ?? '—'} dominates`,               status: 'grey', size: 'sm' },
-    { label: 'Avg duration',              value: active.length ? `${Math.round(active.reduce((s, r) => s + Number(r.duration_min || 0), 0) / active.length)} min` : '—', footnote: 'minutes', status: 'grey', size: 'sm' },
-    { label: 'Bookings',                  value: '—',                              footnote: 'no GL feed yet · POS integration pending',                status: 'grey', size: 'sm' },
-    { label: 'GOP %',                     value: '—',                              footnote: 'P&L surfaces once activity dept maps in QB',              status: 'grey', size: 'sm' },
-  ];
+  const row2: KpiTileProps[] = q1Revenue > 0 ? [
+    { label: 'Activity Rev (QB)', value: fmtUsd(q1Revenue), footnote: 'Q1 2026 · QB GL', status: 'grey', size: 'sm' },
+    { label: 'COGS',              value: fmtUsd(q1Cogs),    footnote: 'Q1 2026 · QB GL', status: 'grey', size: 'sm' },
+    { label: 'Payroll',           value: fmtUsd(q1Payroll), footnote: 'Q1 2026 · QB GL', status: 'grey', size: 'sm' },
+    { label: 'COGS %',            value: fmtPct(q1CogsPct), footnote: 'target ≤ 30%',
+      status: q1CogsPct <= 30 ? 'green' : 'amber', size: 'sm' },
+    { label: 'Labor %',           value: fmtPct(q1LaborPct), footnote: 'target ≤ 35%',
+      status: q1LaborPct <= 35 ? 'green' : 'red', size: 'sm' },
+    { label: 'GOP %',             value: fmtPct(q1GopPct), footnote: 'target ≥ 40%',
+      status: q1GopPct >= 40 ? 'green' : q1GopPct >= 0 ? 'amber' : 'red', size: 'sm' },
+  ] : [];
+
+  const opPillStyle = (active: boolean): React.CSSProperties => ({
+    padding: '6px 12px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+    fontSize: 11, letterSpacing: '0.04em', textTransform: 'uppercase',
+    color: active ? '#FFFFFF' : '#000', background: active ? '#000' : 'transparent',
+    border: 'none', cursor: 'pointer', fontWeight: active ? 600 : 500, textDecoration: 'none',
+  });
+  const opPills = (
+    <div style={{ display: 'flex', alignItems: 'stretch', borderRadius: 4, border: '1px solid #E0E0E0', overflow: 'hidden' }}>
+      {(['yesterday', '7d', '30d', 'ytd'] as const).map((p) => (
+        <Link key={p} href={`?op=${p}`} style={opPillStyle(opPeriod === p)}>
+          {p === 'yesterday' ? 'Yesterday' : p === '7d' ? '7d' : p === '30d' ? '30d' : 'YTD'}
+        </Link>
+      ))}
+    </div>
+  );
 
   const tabs: DashboardTab[] = OPERATIONS_SUBPAGES.map((s) => ({ key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/activities') })) as DashboardTab[];
-
-  // Catalogue table data
-  const catalogTable = active.slice(0, 50).map((r) => ({
-    name:      r.name,
-    category:  String(r.category ?? '—').toLowerCase(),
-    duration:  r.duration_min ? `${r.duration_min} min` : '—',
-    type:      r.is_complimentary ? 'comp' : 'paid',
-    cost:      r.cost_lak ? fmtUsd(lakToUsd(r.cost_lak)) : '—',
-    sell:      r.sell_lak ? fmtUsd(lakToUsd(r.sell_lak)) : '—',
-    margin:    r.margin_pct != null ? fmtPct(Number(r.margin_pct)) : '—',
-    signature: r.is_signature ? '★' : '',
-    weather:   r.weather_dependent ? '☔' : '',
-  }));
-  const catalogCols: ChartSeries[] = [
-    { key: 'name',      label: 'Activity' },
-    { key: 'category',  label: 'Category' },
-    { key: 'duration',  label: 'Duration' },
-    { key: 'type',      label: 'Type' },
-    { key: 'cost',      label: 'Cost' },
-    { key: 'sell',      label: 'Sell' },
-    { key: 'margin',    label: 'Margin %' },
-    { key: 'signature', label: '★' },
-    { key: 'weather',   label: '☔' },
-  ];
-
-  // Category breakdown chart
-  const catChart = catRows.map((r) => ({ category: r.category, count: r.count, signature: r.signature }));
 
   const summaryStyle: React.CSSProperties = {
     cursor: 'pointer', padding: '10px 14px', fontSize: 12, fontWeight: 600,
     color: '#000', background: '#FFFFFF', border: '1px solid #E0E0E0', borderRadius: 6, letterSpacing: '0.04em',
   };
 
+  void period;
+
   return (
     <DashboardPage
-      title={`Activities catalogue · ${period.label}`}
-      subtitle="Operations · Activities · live from public.v_activity_catalog"
+      title="Activities & excursions"
+      subtitle="Operations · Activities · live from QB GL + Cloudbeds folio · USALI rollup"
       tabs={tabs}
     >
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <Container title="Operating snapshot" subtitle="catalogue size · paid vs complimentary · signature offers" density="compact">
+        <Container title="Operating snapshot" subtitle={`Cloudbeds folio · revenue + capture · ${opLabel}`} density="compact" action={opPills}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
             {row1.map((t, i) => <KpiTile key={i} {...t} />)}
           </div>
+          {catsPeriod.length > 0 && (
+            <>
+              <div style={{ marginTop: 14, fontSize: 11, color: '#5A5A5A', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                Revenue by category · {opLabel}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginTop: 6 }}>
+                {catsPeriod.map((c) => (
+                  <KpiTile key={c.category} label={c.category}
+                    value={fmtUsd(c.revenue_usd)}
+                    footnote={`${c.share_pct.toFixed(1)}% of activity · ${c.tx_count} tx`}
+                    status="grey" size="sm" />
+                ))}
+              </div>
+            </>
+          )}
         </Container>
 
-        <Container title="Margin & risk" subtitle="potential margin if entire cohort sells once · weather + seasonal risk" density="compact">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
-            {row2.map((t, i) => <KpiTile key={i} {...t} />)}
-          </div>
-        </Container>
+        {row2.length > 0 && (
+          <Container title={`USALI Effective view · ${Q1_LABEL}`} subtitle="cost discipline derived from QB GL · scoped Q1 because GL Activities rows blank after April." density="compact">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+              {row2.map((t, i) => <KpiTile key={i} {...t} />)}
+            </div>
+          </Container>
+        )}
 
-        <FilterStrip showForward={false} showCompare={false} showSegment={false} liveSource="PMS · live" />
-
-        <Container title="Catalogue by category" subtitle="active offers per category · signature highlighted">
-          <Chart variant="bar" data={catChart} xKey="category"
-            series={[
-              { key: 'count',     label: 'Total active' },
-              { key: 'signature', label: 'Signature' },
-            ]}
-            height={260}
-            empty={{ title: 'No active activities', hint: 'sales.activity_catalog has no rows for this property' }}
-          />
-        </Container>
-
-        <Container title={`Catalogue · ${active.length} active offers`} subtitle="popularity-sorted · cost/sell shown in USD via 21,800 FX">
-          <Chart variant="table" data={catalogTable} xKey="name" series={catalogCols} empty={{ title: 'No catalogue rows' }} />
+        <Container title="Monthly trend · revenue · costs · GOP %" subtitle="last 16 months · live from gl.mv_usali_pl_monthly">
+          <DeptTrendChart rows={pl} dept="activities" />
         </Container>
 
         <details>
-          <summary style={summaryStyle}>Booking trend (coming soon)</summary>
-          <div style={{ marginTop: 10, padding: 14, fontSize: 13, color: '#5A5A5A', background: '#FAFAFA', border: '1px solid #E0E0E0', borderRadius: 6 }}>
-            Activity POS / GL feed not wired yet. When QB maps an `Activities` USALI sub-dept, the same
-            DeptTrendChart + PnlGrid pattern as Restaurant/Spa will surface here automatically.
+          <summary style={summaryStyle}>GL detail · Activities accounts (every QB line)</summary>
+          <div style={{ marginTop: 10 }}>
+            <FnbGlBreakdown data={glBreakdown} defaultMonths={3} />
+          </div>
+        </details>
+
+        <details open>
+          <summary style={summaryStyle}>Top experiences · trend since Jan 26</summary>
+          <div style={{ marginTop: 10 }}>
+            <FnbTopSellerTrend data={topTrend} hideSegments />
+          </div>
+        </details>
+
+        <details>
+          <summary style={summaryStyle}>
+            All POS transactions · search &amp; reconcile
+            <span style={{ fontWeight: 400, color: '#5A5A5A', marginLeft: 6 }}>({rawTxns.length} most recent)</span>
+          </summary>
+          <div style={{ marginTop: 10 }}>
+            <FnbRawTransactions data={rawTxns} pageSize={200} />
           </div>
         </details>
       </div>
