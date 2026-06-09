@@ -134,25 +134,26 @@ export default async function FnbPage({ searchParams }: Props) {
   // (PMS-driven tiles run on the rolling search-params window; GL-driven tiles
   // are pinned to Q1 2026, the last fully-mapped QB quarter).
   void a30;
-  // PBS 2026-06-09 #141 — Row 1 = PMS / Cloudbeds only (rolling window).
-  // All GL/Q1-derived tiles moved to Row 2 (USALI Effective view).
+  // PBS 2026-06-09 #143 — Row 1 reads op-scoped captureOp + coversOp instead of
+  // the global resolvePeriod window so the drilldown pills (?op_period=) drive it.
   const row1: KpiTileProps[] = [
-    { label: 'F&B Revenue (PMS)', value: fmtUsd(Number(covers?.revenue ?? 0)),
-      footnote: covers ? `PMS POS · ${covers.covers} covers · ${period.label}` : `PMS POS · ${period.label} · no data`,
-      status: (covers?.revenue ?? 0) > 0 ? 'green' : 'grey', size: 'sm' },
-    { label: 'F&B Covers',  value: covers ? String(covers.covers) : '—',
-      footnote: covers ? `${covers.days_active} active days · ${period.label}` : `${period.label} · no data`,
-      status: (covers?.covers ?? 0) > 0 ? 'green' : 'grey', size: 'sm' },
-    { label: 'Avg check',   value: covers ? fmtUsd(covers.avg_check_usd) : '—',
-      footnote: `PMS POS · ${period.label}`,
-      status: (covers?.avg_check_usd ?? 0) > 0 ? 'green' : 'grey', size: 'sm' },
-    { label: 'F&B / Occ Rn', value: captureP ? fmtUsd(Number(captureP.spend_per_occ)) : '—',
-      footnote: `PMS · spend per occupied room · ${captureP ? period.label : 'no capture rows'}`,
-      status: captureP ? 'green' : 'grey', size: 'sm' },
-    { label: 'Capture %',    value: captureP ? fmtPct(Number(captureP.capture_pct)) : '—',
-      footnote: captureP ? `PMS · ${captureP.res_with_purchase}/${captureP.res_in_house} res · ${period.label}` : `PMS · ${period.label} · no data`,
+    { label: 'F&B Revenue (PMS)', value: fmtUsd(Number(coversOp?.revenue ?? 0)),
+      footnote: coversOp ? `PMS POS · ${coversOp.covers} covers · ${opLabel}` : `PMS POS · ${opLabel} · no data`,
+      status: (coversOp?.revenue ?? 0) > 0 ? 'green' : 'grey', size: 'sm' },
+    { label: 'F&B Covers',  value: coversOp ? String(coversOp.covers) : '—',
+      footnote: coversOp ? `${coversOp.days_active} active days · ${opLabel}` : `${opLabel} · no data`,
+      status: (coversOp?.covers ?? 0) > 0 ? 'green' : 'grey', size: 'sm' },
+    { label: 'Avg check',   value: coversOp ? fmtUsd(coversOp.avg_check_usd) : '—',
+      footnote: `PMS POS · ${opLabel}`,
+      status: (coversOp?.avg_check_usd ?? 0) > 0 ? 'green' : 'grey', size: 'sm' },
+    { label: 'F&B / Occ Rn', value: captureOp ? fmtUsd(Number(captureOp.spend_per_occ)) : '—',
+      footnote: `PMS · spend per occupied room · ${captureOp ? opLabel : 'no capture rows'}`,
+      status: captureOp ? 'green' : 'grey', size: 'sm' },
+    { label: 'Capture %',    value: captureOp ? fmtPct(Number(captureOp.capture_pct)) : '—',
+      footnote: captureOp ? `PMS · ${captureOp.res_with_purchase}/${captureOp.res_in_house} res · ${opLabel}` : `PMS · ${opLabel} · no data`,
       status: 'grey', size: 'sm' },
   ];
+
 
   // PBS 2026-06-09 #141 — Row 2 = USALI Effective view, Q1 2026 only.
   // ALL revenue + cost tiles live here so the Effective F&B Rev derivation is auditable.
@@ -206,6 +207,25 @@ export default async function FnbPage({ searchParams }: Props) {
     color: '#000', background: '#FFFFFF', border: '1px solid #E0E0E0', borderRadius: 6, letterSpacing: '0.04em',
   };
 
+  // PBS #143 — period-drilldown pills (server-rendered <a> links, RSC-safe)
+  const opPills = (
+    <div style={{ display: 'flex', gap: 4 }}>
+      {OP_PERIODS.map((p) => {
+        const label = p === 'yesterday' ? 'Yesterday' : p === '7d' ? 'Last 7d' : p === '30d' ? 'Last 30d' : 'YTD';
+        const active = p === opPeriod;
+        return (
+          <a key={p} href={`/operations/restaurant?op_period=${p}`} style={{
+            padding: '3px 8px', fontSize: 11, borderRadius: 4,
+            border: active ? '1px solid #000' : '1px solid #E0E0E0',
+            background: active ? '#000' : '#FFFFFF', color: active ? '#FFFFFF' : '#000',
+            textDecoration: 'none', fontWeight: active ? 600 : 500,
+            letterSpacing: '0.04em', textTransform: 'uppercase',
+          }}>{label}</a>
+        );
+      })}
+    </div>
+  );
+
   return (
     <DashboardPage
       title={`Roots restaurant · ${period.label}`}
@@ -213,7 +233,7 @@ export default async function FnbPage({ searchParams }: Props) {
       tabs={tabs}
     >
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <Container title="Operating snapshot" subtitle={`PMS / Cloudbeds only · revenue + capture · rolling window (${period.label})`} density="compact">
+        <Container title="Operating snapshot" subtitle={`PMS / Cloudbeds POS · revenue + capture · ${opLabel}`} density="compact" action={opPills}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
             {row1.map((t, i) => <KpiTile key={i} {...t} />)}
           </div>
