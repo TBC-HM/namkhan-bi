@@ -982,15 +982,16 @@ export interface TopSellerTrend {
   monthly: { period: string; revenue: number; units: number }[];
   first_revenue: number; latest_revenue: number; delta_pct: number | null;
   last_sold: string | null; active_months: number; avg_rev_per_active_month: number;
+  usali_subdept: string | null;
 }
 export async function getDeptTopSellerTrend(filter: { usali_dept: string; usali_subdept?: string }, startIso = '2026-01-01', topN = 8): Promise<{ periods: string[]; items: TopSellerTrend[] }> {
   let q = supabase.from('mv_classified_transactions')
-    .select('description, amount, transaction_date')
+    .select('description, amount, transaction_date, usali_subdept')
     .eq('property_id', PROPERTY_ID).eq('usali_dept', filter.usali_dept).gte('transaction_date', startIso);
   if (filter.usali_subdept) q = q.eq('usali_subdept', filter.usali_subdept);
   const { data } = await q;
   const periodSet = new Set<string>();
-  const map: Record<string, { totalRev: number; totalUnits: number; lastSold: string | null; byPeriod: Record<string, { rev: number; units: number }> }> = {};
+  const map: Record<string, { totalRev: number; totalUnits: number; lastSold: string | null; byPeriod: Record<string, { rev: number; units: number }>; subdept: string | null }> = {};
   for (const r of (data ?? []) as any[]) {
     const desc = (r.description ?? 'Unknown') as string;
     const dateIso = String(r.transaction_date).slice(0, 10);
@@ -998,7 +999,7 @@ export async function getDeptTopSellerTrend(filter: { usali_dept: string; usali_
     const amt = Number(r.amount ?? 0);
     if (amt <= 0) continue;
     periodSet.add(period);
-    if (!map[desc]) map[desc] = { totalRev: 0, totalUnits: 0, lastSold: null, byPeriod: {} };
+    if (!map[desc]) map[desc] = { totalRev: 0, totalUnits: 0, lastSold: null, byPeriod: {}, subdept: (r.usali_subdept as string | null) ?? null };
     map[desc].totalRev += amt; map[desc].totalUnits += 1;
     if (!map[desc].lastSold || dateIso > map[desc].lastSold) map[desc].lastSold = dateIso;
     if (!map[desc].byPeriod[period]) map[desc].byPeriod[period] = { rev: 0, units: 0 };
@@ -1008,6 +1009,7 @@ export async function getDeptTopSellerTrend(filter: { usali_dept: string; usali_
   const all = Object.entries(map).map(([description, x]) => ({
     description, total_revenue_usd: x.totalRev, total_units: x.totalUnits, last_sold: x.lastSold,
     monthly: periods.map((p) => ({ period: p, revenue: x.byPeriod[p]?.rev ?? 0, units: x.byPeriod[p]?.units ?? 0 })),
+    usali_subdept: x.subdept,
   })).sort((a, b) => b.total_revenue_usd - a.total_revenue_usd).slice(0, topN);
   const items: TopSellerTrend[] = all.map((it) => {
     const m = it.monthly.filter((x) => x.revenue > 0);
@@ -1019,7 +1021,7 @@ export async function getDeptTopSellerTrend(filter: { usali_dept: string; usali_
   });
   return { periods, items };
 }
-export const getFnbTopSellerTrend = (s = '2026-01-01', n = 8) => getDeptTopSellerTrend({ usali_dept: 'F&B' }, s, n);
+export const getFnbTopSellerTrend = (s = '2026-01-01', n = 200) => getDeptTopSellerTrend({ usali_dept: 'F&B' }, s, n);
 
 // Raw POS transactions (any dept)
 export interface FnbRawTxn {
