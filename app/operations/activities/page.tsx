@@ -9,6 +9,8 @@ import DeptTrendChart from '@/components/pl/DeptTrendChart';
 import FnbGlBreakdown from '@/components/pl/FnbGlBreakdown';
 import FnbTopSellerTrend from '@/components/pl/FnbTopSellerTrend';
 import FnbRawTransactions from '@/components/pl/FnbRawTransactions';
+import { FbCaptureChart, FbAvgTicketChart, FbCategoryChart } from '@/components/pl/FbMiniCharts';
+import { supabase } from '@/lib/supabase';
 import {
   getDeptPl, getDeptCaptureForPeriod,
   getDeptGlBreakdown, getDeptTopSellerTrend, getDeptRawTransactions,
@@ -52,7 +54,23 @@ export default async function ActivitiesPage({ searchParams }: Props) {
     getDeptGlBreakdown('Activities', 16).catch(() => ({ periods: [], lines: [] })),
     getDeptRawTransactions({ usali_dept: 'Other Operated', usali_subdept: 'Activities' }, 2000).catch(() => []),
     getDeptRevenueByCategoryForPeriod('Other Operated', opFromIso, opEndIso, 'Activities').catch(() => []),
-  ]);
+    // PBS 2026-06-09 #196 — 3 mini-charts (Capture · Avg ticket · Revenue by category).
+    supabase.from('v_activity_capture_monthly')
+      .select('period_yyyymm, capture_pct, res_in_house, res_with_purchase')
+      .eq('property_id', 260955)
+      .order('period_yyyymm', { ascending: true })
+      .then((r) => r),
+    supabase.from('v_activity_avg_ticket_monthly')
+      .select('period_yyyymm, avg_check, revenue, reservations')
+      .eq('property_id', 260955)
+      .order('period_yyyymm', { ascending: true })
+      .then((r) => r),
+    supabase.from('v_activity_category_monthly')
+      .select('period_yyyymm, category, revenue')
+      .eq('property_id', 260955)
+      .order('period_yyyymm', { ascending: true })
+      .then((r) => r),
+  ]) as [Awaited<ReturnType<typeof getDeptPl>>, Awaited<ReturnType<typeof getDeptCaptureForPeriod>>, Awaited<ReturnType<typeof getDeptTopSellerTrend>>, Awaited<ReturnType<typeof getDeptGlBreakdown>>, Awaited<ReturnType<typeof getDeptRawTransactions>>, Awaited<ReturnType<typeof getDeptRevenueByCategoryForPeriod>>, { data: Array<{ period_yyyymm: string; capture_pct: number | string | null; res_in_house: number; res_with_purchase: number }> | null }, { data: Array<{ period_yyyymm: string; avg_check: number | string | null; revenue: number | string; reservations: number | string }> | null }, { data: Array<{ period_yyyymm: string; category: string; revenue: number | string }> | null }];
 
   // Q1 sums from pl for USALI Effective row
   const Q1_MONTHS = ['2026-01','2026-02','2026-03'];
