@@ -423,6 +423,7 @@ const OPERATIONS_CFG: DeptCfg = {
     { label: 'Activities',       href: '/operations/activities'      },
     { label: 'Retail',           href: '/operations/retail'          },
     { label: 'Transport',        href: '/operations/transport'       },
+    { label: 'Other',            href: '/operations/other'           },
     // PBS 2026-05-16: Reports always sits flush-right (SubPagesStrip detects label).
     { label: 'Reports',          href: '/h/260955/reports?dept=operations' },
   ],
@@ -433,6 +434,7 @@ const OPERATIONS_CFG: DeptCfg = {
     { label: 'Activities', href: '/operations/activities'  },
     { label: 'Retail',     href: '/operations/retail'      },
     { label: 'Transport',  href: '/operations/transport'   },
+    { label: 'Other',      href: '/operations/other'       },
   ],
   defaultAttn: [
     { id: 'l1', label: 'F&B waste +18% vs last week',         severity: 'medium', kind: 'leakage'     },
