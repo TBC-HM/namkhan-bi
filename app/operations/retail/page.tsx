@@ -1,6 +1,5 @@
 // app/operations/retail/page.tsx
-// PBS 2026-06-09 #192 — Retail page, restaurant pattern. usali_dept='Retail'.
-// 5 categories (product dominant) → per-category KPI sub-row.
+// PBS 2026-06-09 #196/#197 — full Restaurant-pattern parity. usali_dept='Retail'.
 
 import Link from 'next/link';
 import { DashboardPage, Container, KpiTile, type KpiTileProps, type DashboardTab } from '@/app/(cockpit)/_design';
@@ -9,6 +8,8 @@ import DeptTrendChart from '@/components/pl/DeptTrendChart';
 import FnbGlBreakdown from '@/components/pl/FnbGlBreakdown';
 import FnbTopSellerTrend from '@/components/pl/FnbTopSellerTrend';
 import FnbRawTransactions from '@/components/pl/FnbRawTransactions';
+import { FbCaptureChart, FbAvgTicketChart, FbCategoryChart } from '@/components/pl/FbMiniCharts';
+import { supabase } from '@/lib/supabase';
 import {
   getDeptPl, getDeptCaptureForPeriod,
   getDeptGlBreakdown, getDeptTopSellerTrend, getDeptRawTransactions,
@@ -46,13 +47,19 @@ export default async function RetailPage({ searchParams }: Props) {
   const Q1_LABEL = 'Q1 2026 (Jan-Mar) · last fully-mapped GL quarter';
   const Q1_MONTHS = ['2026-01','2026-02','2026-03'];
 
-  const [pl, captureOp, topTrend, glBreakdown, rawTxns, catsPeriod] = await Promise.all([
+  const [pl, captureOp, topTrend, glBreakdown, rawTxns, catsPeriod, capResp, avgResp, catResp] = await Promise.all([
     getDeptPl('retail', 16).catch(() => []),
     getDeptCaptureForPeriod({ usali_dept: 'Retail' }, opFromIso, opEndIso).catch(() => null),
     getDeptTopSellerTrend({ usali_dept: 'Retail' }, '2026-01-01', 500).catch(() => ({ periods: [], items: [] as TopSellerTrend[] })),
     getDeptGlBreakdown('Retail', 16).catch(() => ({ periods: [], lines: [] })),
     getDeptRawTransactions({ usali_dept: 'Retail' }, 2000).catch(() => []),
     getDeptRevenueByCategoryForPeriod('Retail', opFromIso, opEndIso).catch(() => []),
+    supabase.from('v_retail_capture_monthly').select('period_yyyymm, capture_pct, res_in_house, res_with_purchase')
+      .eq('property_id', 260955).order('period_yyyymm', { ascending: true }).then((r) => r),
+    supabase.from('v_retail_avg_ticket_monthly').select('period_yyyymm, avg_check, revenue, reservations')
+      .eq('property_id', 260955).order('period_yyyymm', { ascending: true }).then((r) => r),
+    supabase.from('v_retail_category_monthly').select('period_yyyymm, category, revenue')
+      .eq('property_id', 260955).order('period_yyyymm', { ascending: true }).then((r) => r),
   ]);
 
   const q1Rows = pl.filter((r) => Q1_MONTHS.includes(r.period));
@@ -72,28 +79,20 @@ export default async function RetailPage({ searchParams }: Props) {
   const capPct  = captureOp ? Number(captureOp.capture_pct) : 0;
 
   const row1: KpiTileProps[] = [
-    { label: 'Retail Revenue', value: fmtUsd(revP), footnote: `Cloudbeds folio · ${opLabel}`,
-      status: revP > 0 ? 'green' : 'grey', size: 'sm' },
-    { label: 'Buyers', value: String(buyers), footnote: `occ rn w/ purchase · ${opLabel}`,
-      status: buyers > 0 ? 'green' : 'grey', size: 'sm' },
-    { label: 'Avg basket', value: buyers > 0 ? fmtUsd(revP / buyers) : '—',
-      footnote: `revenue ÷ buyers · ${opLabel}`, status: 'grey', size: 'sm' },
-    { label: 'Retail / Occ Rn', value: fmtUsd(spc), footnote: `spend per occupied room · ${opLabel}`,
-      status: spc >= 15 ? 'green' : 'grey', size: 'sm' },
-    { label: 'Capture %', value: fmtPct(capPct), footnote: `${buyers}/${occRn} occ rn · ${opLabel}`,
-      status: capPct >= 20 ? 'green' : 'grey', size: 'sm' },
+    { label: 'Retail Revenue', value: fmtUsd(revP), footnote: `Cloudbeds folio · ${opLabel}`, status: revP > 0 ? 'green' : 'grey', size: 'sm' },
+    { label: 'Buyers', value: String(buyers), footnote: `occ rn w/ purchase · ${opLabel}`, status: buyers > 0 ? 'green' : 'grey', size: 'sm' },
+    { label: 'Avg basket', value: buyers > 0 ? fmtUsd(revP / buyers) : '—', footnote: `revenue ÷ buyers · ${opLabel}`, status: 'grey', size: 'sm' },
+    { label: 'Retail / Occ Rn', value: fmtUsd(spc), footnote: `spend per occupied room · ${opLabel}`, status: spc >= 15 ? 'green' : 'grey', size: 'sm' },
+    { label: 'Capture %', value: fmtPct(capPct), footnote: `${buyers}/${occRn} occ rn · ${opLabel}`, status: capPct >= 20 ? 'green' : 'grey', size: 'sm' },
   ];
 
   const row2: KpiTileProps[] = q1Revenue > 0 ? [
     { label: 'Retail Rev (QB)', value: fmtUsd(q1Revenue), footnote: 'Q1 2026 · QB GL', status: 'grey', size: 'sm' },
     { label: 'COGS', value: fmtUsd(q1Cogs), footnote: 'Q1 2026 · QB GL', status: 'grey', size: 'sm' },
     { label: 'Payroll', value: fmtUsd(q1Payroll), footnote: 'Q1 2026 · QB GL', status: 'grey', size: 'sm' },
-    { label: 'COGS %', value: fmtPct(q1CogsPct), footnote: 'target ≤ 55%',
-      status: q1CogsPct <= 55 ? 'green' : 'amber', size: 'sm' },
-    { label: 'Labor %', value: fmtPct(q1LaborPct), footnote: 'target ≤ 25%',
-      status: q1LaborPct <= 25 ? 'green' : 'red', size: 'sm' },
-    { label: 'GOP %', value: fmtPct(q1GopPct), footnote: 'target ≥ 30%',
-      status: q1GopPct >= 30 ? 'green' : q1GopPct >= 0 ? 'amber' : 'red', size: 'sm' },
+    { label: 'COGS %', value: fmtPct(q1CogsPct), footnote: 'target ≤ 55%', status: q1CogsPct <= 55 ? 'green' : 'amber', size: 'sm' },
+    { label: 'Labor %', value: fmtPct(q1LaborPct), footnote: 'target ≤ 25%', status: q1LaborPct <= 25 ? 'green' : 'red', size: 'sm' },
+    { label: 'GOP %', value: fmtPct(q1GopPct), footnote: 'target ≥ 30%', status: q1GopPct >= 30 ? 'green' : q1GopPct >= 0 ? 'amber' : 'red', size: 'sm' },
   ] : [];
 
   const opPillStyle = (active: boolean): React.CSSProperties => ({
@@ -105,9 +104,7 @@ export default async function RetailPage({ searchParams }: Props) {
   const opPills = (
     <div style={{ display: 'flex', alignItems: 'stretch', borderRadius: 4, border: '1px solid #E0E0E0', overflow: 'hidden' }}>
       {(['yesterday', '7d', '30d', 'ytd'] as const).map((p) => (
-        <Link key={p} href={`?op=${p}`} style={opPillStyle(opPeriod === p)}>
-          {p === 'yesterday' ? 'Yesterday' : p === '7d' ? '7d' : p === '30d' ? '30d' : 'YTD'}
-        </Link>
+        <Link key={p} href={`?op=${p}`} style={opPillStyle(opPeriod === p)}>{p === 'yesterday' ? 'Yesterday' : p === '7d' ? '7d' : p === '30d' ? '30d' : 'YTD'}</Link>
       ))}
     </div>
   );
@@ -130,20 +127,28 @@ export default async function RetailPage({ searchParams }: Props) {
           </div>
           {catsPeriod.length > 0 && (
             <>
-              <div style={{ marginTop: 14, fontSize: 11, color: '#5A5A5A', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                Revenue by category · {opLabel}
-              </div>
+              <div style={{ marginTop: 14, fontSize: 11, color: '#5A5A5A', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Revenue by category · {opLabel}</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginTop: 6 }}>
                 {catsPeriod.map((c) => (
-                  <KpiTile key={c.category} label={c.category}
-                    value={fmtUsd(c.revenue_usd)}
-                    footnote={`${c.share_pct.toFixed(1)}% of retail · ${c.tx_count} tx`}
-                    status="grey" size="sm" />
+                  <KpiTile key={c.category} label={c.category} value={fmtUsd(c.revenue_usd)}
+                    footnote={`${c.share_pct.toFixed(1)}% of retail · ${c.tx_count} tx`} status="grey" size="sm" />
                 ))}
               </div>
             </>
           )}
         </Container>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
+          <Container title="Capture %" subtitle="since Jan 2025 · retail buyers ÷ occupied rooms" density="compact">
+            <FbCaptureChart rows={(capResp?.data ?? []) as Array<{ period_yyyymm: string; capture_pct: number | string | null; res_in_house: number; res_with_purchase: number }>} />
+          </Container>
+          <Container title="Avg ticket" subtitle="since Jan 2025 · revenue ÷ transactions" density="compact">
+            <FbAvgTicketChart rows={(avgResp?.data ?? []) as Array<{ period_yyyymm: string; avg_check: number | string | null; revenue: number | string; reservations: number | string }>} />
+          </Container>
+          <Container title="Revenue by category" subtitle="last 12 months · Other Products / Handicrafts / Hotel Shop / Books" density="compact">
+            <FbCategoryChart rows={(catResp?.data ?? []) as Array<{ period_yyyymm: string; category: string; revenue: number | string }>} />
+          </Container>
+        </div>
 
         {row2.length > 0 && (
           <Container title={`USALI Effective view · ${Q1_LABEL}`} subtitle="cost discipline derived from QB GL · scoped Q1." density="compact">
