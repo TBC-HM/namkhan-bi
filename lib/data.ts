@@ -850,7 +850,9 @@ async function getDeptCaptureForPeriod(filter: { usali_dept: string; usali_subde
     : filter.usali_dept === 'Retail' ? 'retail'
     : null;
   if (!prefix) return null;
-  const { data, error } = await supabase.schema('kpi').from('v_ancillary_capture_daily')
+  // PBS 2026-06-09 #188 — kpi schema isn't exposed via PostgREST (only public + gl).
+  // Read the public mirror instead so the F&B/Occ Rn + Capture % tiles populate.
+  const { data, error } = await supabase.from('v_ancillary_capture_daily')
     .select(`night_date, occupied_rooms, ${prefix}_capturing_rooms, ${prefix}_revenue`)
     .eq('property_id', PROPERTY_ID)
     .gte('night_date', fromIso).lte('night_date', toIso);
