@@ -22,12 +22,14 @@ const HOVER = '#FAFAFA';
 const SECTION_BG = '#F5F5F5';
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 
-export default function FnbGlBreakdown({ data, defaultMonths = 4 }: Props) {
+export default function FnbGlBreakdown({ data, defaultMonths = 6 }: Props) {
   const [expanded, setExpanded] = useState(false);
-  const collapsible = data.periods.length > defaultMonths;
+  // PBS #174 — sort chronologically ascending (Jan first), default 6 columns visible, expand reveals all.
+  const sortedPeriods = [...data.periods].sort((a, b) => a.localeCompare(b));
+  const collapsible = sortedPeriods.length > defaultMonths;
   const visiblePeriods = expanded || !collapsible
-    ? data.periods
-    : data.periods.slice(0, defaultMonths);
+    ? sortedPeriods
+    : sortedPeriods.slice(-defaultMonths);
 
   const monthLabel = (yyyymm: string) => {
     const [y, m] = yyyymm.split('-').map(Number);
