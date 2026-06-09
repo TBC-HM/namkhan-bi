@@ -1131,6 +1131,41 @@ export async function getFnbCovers(fromIso: string, toIso: string): Promise<{ co
 // Source: public.v_fnb_revenue_by_category_daily (gl.v_... mirror) — built today.
 // Returns one row per canonical category with revenue, tx count, and share %
 // of the period total. Sorted by revenue desc.
+// PBS 2026-06-09 #190/#191 — dept-agnostic per-category revenue. Used by Activities (4 cats) + Spa (1 cat) +
+// could replace the F&B-specific helper below. Reads gl.v_dept_revenue_by_category_daily.
+export async function getDeptRevenueByCategoryForPeriod(
+  usaliDept: string,
+  fromIso: string,
+  toIso: string,
+  usaliSubdept?: string,
+): Promise<Array<{ category: string; revenue_usd: number; tx_count: number; share_pct: number }>> {
+  let q = supabase.from('v_dept_revenue_by_category_daily')
+    .select('category, revenue_usd, tx_count, usali_subdept')
+    .eq('property_id', PROPERTY_ID)
+    .eq('usali_dept', usaliDept)
+    .gte('service_date', fromIso).lte('service_date', toIso);
+  if (usaliSubdept) q = q.eq('usali_subdept', usaliSubdept);
+  const { data } = await q;
+  if (!data || data.length === 0) return [];
+  const byCat = new Map<string, { revenue_usd: number; tx_count: number }>();
+  for (const r of data as unknown as Array<{ category: string; revenue_usd: number | string | null; tx_count: number | string | null }>) {
+    const cat = r.category ?? 'Uncategorized';
+    const cur = byCat.get(cat) ?? { revenue_usd: 0, tx_count: 0 };
+    cur.revenue_usd += Number(r.revenue_usd ?? 0);
+    cur.tx_count   += Number(r.tx_count ?? 0);
+    byCat.set(cat, cur);
+  }
+  const total = Array.from(byCat.values()).reduce((s, v) => s + v.revenue_usd, 0);
+  return Array.from(byCat.entries())
+    .map(([category, v]) => ({
+      category,
+      revenue_usd: v.revenue_usd,
+      tx_count: v.tx_count,
+      share_pct: total > 0 ? (v.revenue_usd / total) * 100 : 0,
+    }))
+    .sort((a, b) => b.revenue_usd - a.revenue_usd);
+}
+
 export async function getFnbRevenueByCategoryForPeriod(
   fromIso: string,
   toIso: string,
