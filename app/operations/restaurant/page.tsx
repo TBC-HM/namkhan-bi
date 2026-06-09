@@ -30,6 +30,25 @@ const fmtUsd = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('en-
 const fmtPct = (n: number) => `${(Number(n) || 0).toFixed(1)}%`;
 
 export default async function FnbPage({ searchParams }: Props) {
+  // PBS 2026-06-09 #143 — independent period drilldown for the Row 1 PMS strip.
+  const OP_PERIODS = ['yesterday','7d','30d','ytd'] as const;
+  type OpPeriod = typeof OP_PERIODS[number];
+  const rawOp = String((searchParams ?? {}).op_period ?? '30d');
+  const opPeriod: OpPeriod = (OP_PERIODS as readonly string[]).includes(rawOp) ? rawOp as OpPeriod : '30d';
+  const opToday = new Date(); opToday.setUTCHours(0,0,0,0);
+  const opToIso = opToday.toISOString().slice(0,10);
+  const opFromIso = (() => {
+    const d = new Date(opToday);
+    if (opPeriod === 'yesterday') { d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0,10); }
+    if (opPeriod === '7d')  { d.setUTCDate(d.getUTCDate() - 6);  return d.toISOString().slice(0,10); }
+    if (opPeriod === '30d') { d.setUTCDate(d.getUTCDate() - 29); return d.toISOString().slice(0,10); }
+    return `${opToday.getUTCFullYear()}-01-01`;
+  })();
+  const opEndIso = opPeriod === 'yesterday'
+    ? (() => { const d = new Date(opToday); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0,10); })()
+    : opToIso;
+  const opLabel = opPeriod === 'yesterday' ? 'Yesterday' : opPeriod === '7d' ? 'Last 7 days' : opPeriod === '30d' ? 'Last 30 days' : 'YTD';
+
   const period = resolvePeriod(searchParams);
   // PBS 2026-06-09 #139 — QB GL post-April 2026 has empty F&B rows (reclass
   // to Undistributed). Scope the USALI Effective row + Staff Canteen to the
