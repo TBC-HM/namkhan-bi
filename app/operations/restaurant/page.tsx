@@ -59,7 +59,7 @@ export default async function FnbPage({ searchParams }: Props) {
   const Q1_LABEL = 'Q1 2026 (Jan-Mar) · last fully-mapped GL quarter';
   const [daily, pl, periodCosts, captureP, canteenQ1, glBreakdown, topTrend, rawTxns, bkfstQ1, covers, glRevSplitResp, glCostSplitResp, bkfstQ1Resp, captureOp, coversOp, folioRowsResp, folioLatestResp, bkfstMonthlyResp, fnbCosMonthlyResp, fbCaptureResp, fbAvgTicketResp, fbCategoryResp] = await Promise.all([
     getKpiDaily(period.from, period.to).catch(() => []),
-    getDeptPl('fnb', 12).catch(() => []),
+    getDeptPl('fnb', 18).catch(() => []),  // PBS #161 — extend to Jan 2025 onwards (was 12, missed 2025 H1 disaster)
     getFnbCostsForPeriod(Q1_FROM, Q1_TO).catch(() => null),
     getFnbCaptureForPeriod(period.from, period.to).catch(() => null),
     getCanteenForPeriod(Q1_FROM, Q1_TO).catch(() => null),
@@ -363,7 +363,7 @@ export default async function FnbPage({ searchParams }: Props) {
           </Container>
         </div>
 
-        <Container title="Monthly trend · revenue · costs · GOP %" subtitle="trailing 12 months — live from gl.v_dept_pl_namkhan · breakfast bar = USALI fair-value reclass">
+        <Container title="Monthly trend · revenue · costs · GOP %" subtitle="Jan 2025 → current · live from gl.v_fnb_cos_monthly · breakfast bar = USALI fair-value reclass">
           <DeptTrendChart rows={pl} dept="fnb" breakfastByPeriod={Object.fromEntries(((bkfstMonthlyResp?.data ?? []) as Array<{ period_yyyymm: string; alloc_usd: number | string }>).map((r) => [r.period_yyyymm, Number(r.alloc_usd)]))} />
         </Container>
 
