@@ -46,19 +46,27 @@ export default function DeptTrendChart({
       const bev  = Number(r.bev_revenue || 0);
       const breakfast = Number(breakfastByPeriod?.[r.period] || 0);
       const cogs = Number(r.cogs || 0) || (Number(r.food_cost || 0) + Number(r.bev_cost || 0) + Number(r.spa_cost || 0));
+      // PBS 2026-06-10 #209 — Cloudbeds folio revenue (bronze, post-classifier).
+      // For non-F&B depts QB GL lumps spa/activities/retail into Other Operated
+      // and is blind to Pass 2 reclassification, so prefer folio when bigger.
+      const folio = Number(r.folio_revenue || 0);
+      const qbRev = Number(r.revenue || 0);
+      const rev = dept === 'fnb' ? qbRev : Math.max(folio, qbRev);
       return {
         m: monthLabel(r.period),
         food, bev, breakfast,
-        rev: Number(r.revenue || 0),
+        rev,
+        folio,
+        qb_rev: qbRev,
         cogs,
         payroll: Number(r.payroll || 0),
         gop_pct: Number(r.gop_pct || 0),
         // PBS 2026-06-09 #168 — trendlines on top of bars
-        total_rev_line: dept === 'fnb' ? (food + bev + breakfast) : Number(r.revenue || 0),
+        total_rev_line: dept === 'fnb' ? (food + bev + breakfast) : rev,
         cogs_line: cogs,
       };
     })
-    .filter(d => d.rev > 0 || d.cogs > 0 || d.payroll > 0 || d.breakfast > 0);
+    .filter(d => d.rev > 0 || d.cogs > 0 || d.payroll > 0 || d.breakfast > 0 || d.folio > 0);
 
   if (series.length === 0) {
     return (
