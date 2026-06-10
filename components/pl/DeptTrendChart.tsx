@@ -34,7 +34,7 @@ export default function DeptTrendChart({
   rows, dept, height = 240, breakfastByPeriod,
 }: {
   rows: DeptPlRow[];
-  dept: 'fnb' | 'spa' | 'activities' | 'retail';
+  dept: 'fnb' | 'spa' | 'activities' | 'retail' | 'transport';
   height?: number;
   breakfastByPeriod?: Record<string, number>;
 }) {
