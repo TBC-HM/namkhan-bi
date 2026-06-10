@@ -628,6 +628,7 @@ export interface DeptPlRow {
   labor_cost_pct: number;
   cb_revenue: number | null;
   cb_qb_variance_pct: number | null;
+  folio_revenue: number;
 }
 
 const PL_DEPT_MAP: Record<'fnb' | 'spa' | 'activities' | 'retail', { qb: string; cb: string }> = {
@@ -644,6 +645,7 @@ function blankPlRow(m: string): DeptPlRow {
     payroll: 0, other_oe: 0, total_cost: 0, gop: 0, gop_pct: 0,
     food_cost_pct: 0, bev_cost_pct: 0, spa_cost_pct: 0, labor_cost_pct: 0,
     cb_revenue: null, cb_qb_variance_pct: null,
+    folio_revenue: 0,
   };
 }
 
@@ -718,6 +720,26 @@ export async function getDeptPl(dept: 'fnb' | 'spa' | 'activities' | 'retail', m
       byMonth[m].total_cost = tc + py + byMonth[m].other_oe;
     }
   }
+  // PBS 2026-06-10 #209 — Cloudbeds folio revenue overlay (bronze, post-classifier).
+  // gl.v_dept_revenue_monthly aggregates pms.transactions_cb after every Pass 2
+  // description override. The non-F&B trend chart prefers this over QB GL revenue.
+  const folioFilter: { usali_dept: string; usali_subdept?: string } =
+    dept === 'fnb'        ? { usali_dept: 'F&B' } :
+    dept === 'spa'        ? { usali_dept: 'Other Operated', usali_subdept: 'Spa' } :
+    dept === 'activities' ? { usali_dept: 'Other Operated', usali_subdept: 'Activities' } :
+                              { usali_dept: 'Retail' };
+  let folioQ = supabase.from('v_dept_revenue_monthly')
+    .select('period_yyyymm, folio_revenue')
+    .eq('property_id', PROPERTY_ID)
+    .eq('usali_dept', folioFilter.usali_dept)
+    .gte('period_yyyymm', startStr);
+  if (folioFilter.usali_subdept) folioQ = folioQ.eq('usali_subdept', folioFilter.usali_subdept);
+  const { data: folio } = await folioQ;
+  const folioByMonth: Record<string, number> = {};
+  for (const r of (folio ?? []) as Array<{ period_yyyymm: string; folio_revenue: number | string }>) {
+    const m = String(r.period_yyyymm);
+    folioByMonth[m] = (folioByMonth[m] ?? 0) + Number(r.folio_revenue ?? 0);
+  }
   const todayPeriod = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}`;
   const out: DeptPlRow[] = Object.values(byMonth).map((r) => {
     const cbRev = cbByMonth[r.period] ?? null;
@@ -731,14 +753,21 @@ export async function getDeptPl(dept: 'fnb' | 'spa' | 'activities' | 'retail', m
       labor_cost_pct: r.revenue > 0 ? (r.payroll  / r.revenue) * 100 : 0,
       cb_revenue: cbRev,
       cb_qb_variance_pct: cbRev != null && cbRev > 0 ? ((r.revenue - cbRev) / cbRev) * 100 : null,
+      folio_revenue: folioByMonth[r.period] ?? 0,
     };
   });
   for (const m of Object.keys(cbByMonth)) {
     if (!byMonth[m] && cbByMonth[m] > 0 && m <= todayPeriod) {
-      out.push({ ...blankPlRow(m), cb_revenue: cbByMonth[m] });
+      out.push({ ...blankPlRow(m), cb_revenue: cbByMonth[m], folio_revenue: folioByMonth[m] ?? 0 });
     }
   }
-  return out.filter(r => r.period <= todayPeriod && (r.revenue > 0 || (r.cb_revenue ?? 0) > 0))
+  // PBS #209 — folio-only months (when QB GL has no posting yet but bronze does).
+  for (const m of Object.keys(folioByMonth)) {
+    if (!byMonth[m] && !cbByMonth[m] && folioByMonth[m] > 0 && m <= todayPeriod) {
+      out.push({ ...blankPlRow(m), folio_revenue: folioByMonth[m] });
+    }
+  }
+  return out.filter(r => r.period <= todayPeriod && (r.revenue > 0 || (r.cb_revenue ?? 0) > 0 || (r.folio_revenue ?? 0) > 0))
     .sort((a, b) => b.period.localeCompare(a.period));
 }
 
