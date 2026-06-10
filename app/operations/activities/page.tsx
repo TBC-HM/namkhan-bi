@@ -182,7 +182,7 @@ export default async function ActivitiesPage({ searchParams }: Props) {
           </Container>
         )}
 
-        <Container title="Monthly trend · revenue · costs · GOP %" subtitle="last 16 months · live from gl.mv_usali_pl_monthly">
+        <Container title="Monthly trend · revenue · costs · GOP %" subtitle="last 16 months · live from Cloudbeds folio (gl.v_dept_revenue_monthly) · QB GL fallback when folio is empty">
           <DeptTrendChart rows={pl} dept="activities" />
         </Container>
 
