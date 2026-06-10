@@ -127,9 +127,24 @@ export default function FnbTopSellerTrend({ data, hideSegments = false }: Props)
             </button>
           ))}
         </div>}
-        <span style={{ fontSize: 11, color: INK_MUTED, fontFamily: MONO, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-          Top {Math.min(visible.length, filtered.length)} of {filtered.length}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 11, color: INK_MUTED, fontFamily: MONO, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+            {expanded ? `All ${filtered.length}` : `Top ${Math.min(visible.length, filtered.length)} of ${filtered.length}`}
+          </span>
+          {collapsible && (
+            <button type="button" onClick={() => setExpanded((v) => !v)}
+              style={{
+                background: expanded ? INK : 'transparent',
+                color: expanded ? '#FFF' : INK,
+                border: `1px solid ${INK}`, padding: '6px 14px',
+                cursor: 'pointer', fontFamily: MONO, fontSize: 11,
+                letterSpacing: '0.04em', textTransform: 'uppercase',
+                borderRadius: 4, fontWeight: 600,
+              }}>
+              {expanded ? `▴ Collapse` : `▾ Show all ${filtered.length}`}
+            </button>
+          )}
+        </div>
       </div>
 
       <div style={{ overflowX: 'auto' }}>
