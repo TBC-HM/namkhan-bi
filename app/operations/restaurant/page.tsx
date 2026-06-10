@@ -132,6 +132,11 @@ export default async function FnbPage({ searchParams }: Props) {
       .lte('period_yyyymm', opToIso.slice(0, 7))
       .then((r) => r),
     getFnbRevenueByCategoryForPeriod(opFromIso, opEndIso).catch(() => [] as Array<{ category: string; revenue_usd: number; tx_count: number; share_pct: number }>),
+    // PBS 2026-06-10 #207 — Cloudbeds folio ↔ QB GL reconciliation (live gold view).
+    supabase.from('v_fnb_folio_vs_gl_monthly')
+      .select('period_yyyymm, folio_total, gl_total, delta_total_usd, folio_pct_of_gl, folio_food_rev, folio_bev_rev, folio_minibar_rev, gl_food_rev, gl_bev_rev')
+      .order('period_yyyymm', { ascending: true })
+      .then((r) => r),
   ]);
   // GL revenue is a credit → negative. Flip the sign for display.
   const glLines = ((glRevSplitResp?.data ?? []) as GlLineRow[]);
