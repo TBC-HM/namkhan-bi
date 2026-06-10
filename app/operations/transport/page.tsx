@@ -55,6 +55,8 @@ export default async function TransportPage({ searchParams }: Props) {
       .eq('property_id', 260955).order('period_yyyymm', { ascending: true }).then((r) => r),
     supabase.from('v_transport_top_items_monthly').select('period_yyyymm, category, revenue')
       .eq('property_id', 260955).order('period_yyyymm', { ascending: true }).then((r) => r),
+    // PBS 2026-06-10 #209 — Cloudbeds folio-only Monthly trend (QB GL has no Transportation line).
+    getDeptPl('transport', 16).catch(() => []),
   ]);
   const top10 = (topProductsOp.items ?? []).slice(0, 10);
 
