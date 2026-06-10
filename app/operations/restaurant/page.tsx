@@ -65,7 +65,7 @@ export default async function FnbPage({ searchParams }: Props) {
     getFnbCaptureForPeriod(period.from, period.to).catch(() => null),
     getCanteenForPeriod(Q1_FROM, Q1_TO).catch(() => null),
     getFnbGlBreakdown(18).catch(() => ({ periods: [], lines: [] })),
-    getFnbTopSellerTrend('2026-01-01', 500).catch(() => ({ periods: [], items: [] })),
+    getFnbTopSellerTrend('2026-01-01', 2000).catch(() => ({ periods: [], items: [] })),
     getFnbRawTransactions(2000).catch(() => []),
     getBreakfastAllocation(Q1_FROM, Q1_TO).catch(() => null),
     getFnbCovers(period.from, period.to).catch(() => null),
