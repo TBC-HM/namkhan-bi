@@ -11,9 +11,10 @@ import FnbRawTransactions from '@/components/pl/FnbRawTransactions';
 import { FbCaptureChart, FbAvgTicketChart, FbCategoryChart } from '@/components/pl/FbMiniCharts';
 import { supabase } from '@/lib/supabase';
 import {
-  getDeptCaptureForPeriod, getDeptTopSellerTrend, getDeptRawTransactions,
+  getDeptCaptureForPeriod, getDeptTopSellerTrend, getDeptRawTransactions, getDeptPl,
   type TopSellerTrend,
 } from '@/lib/data';
+import DeptTrendChart from '@/components/pl/DeptTrendChart';
 import { resolvePeriod } from '@/lib/period';
 
 export const revalidate = 60;
@@ -43,7 +44,7 @@ export default async function TransportPage({ searchParams }: Props) {
 
   const period = resolvePeriod(searchParams);
 
-  const [topTrend, rawTxns, topProductsOp, capProxy, capResp, avgResp, topItemsResp] = await Promise.all([
+  const [topTrend, rawTxns, topProductsOp, capProxy, capResp, avgResp, topItemsResp, pl] = await Promise.all([
     getDeptTopSellerTrend({ usali_dept: 'Other Operated', usali_subdept: 'Transportation' }, '2026-01-01', 500).catch(() => ({ periods: [], items: [] as TopSellerTrend[] })),
     getDeptRawTransactions({ usali_dept: 'Other Operated', usali_subdept: 'Transportation' }, 2000).catch(() => []),
     getDeptTopSellerTrend({ usali_dept: 'Other Operated', usali_subdept: 'Transportation' }, opFromIso, 50).catch(() => ({ periods: [], items: [] as TopSellerTrend[] })),
@@ -129,10 +130,10 @@ export default async function TransportPage({ searchParams }: Props) {
           </Container>
         </div>
 
-        <Container title="GL note" subtitle="Transportation revenue posts to QB under usali_department='Other Operated' alongside Spa + Activities + Addon + Front Office, so there is no clean GL roll-up. Numbers above come from Cloudbeds folio.">
-          <div style={{ padding: '10px 14px', fontSize: 12, color: '#5A5A5A', fontStyle: 'italic' }}>
-            Once QB adds a Transportation line label, the USALI Effective view + Monthly trend will surface here.
-          </div>
+        {/* PBS 2026-06-10 #209 — Monthly trend backed by Cloudbeds folio (post-classifier).
+            QB GL has no Transportation line (lumped into Other Operated) so folio is the only source. */}
+        <Container title="Monthly trend · revenue · costs · GOP %" subtitle="last 16 months · live from Cloudbeds folio (gl.v_dept_revenue_monthly) · QB GL has no isolated Transportation line">
+          <DeptTrendChart rows={pl} dept="transport" />
         </Container>
 
         <details open>
