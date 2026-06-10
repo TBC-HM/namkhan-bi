@@ -58,7 +58,7 @@ export default async function FnbPage({ searchParams }: Props) {
   const Q1_FROM = '2026-01-01';
   const Q1_TO   = '2026-03-31';
   const Q1_LABEL = 'Q1 2026 (Jan-Mar) · last fully-mapped GL quarter';
-  const [daily, pl, periodCosts, captureP, canteenQ1, glBreakdown, topTrend, rawTxns, bkfstQ1, covers, glRevSplitResp, glCostSplitResp, bkfstQ1Resp, captureOp, coversOp, folioRowsResp, folioLatestResp, bkfstMonthlyResp, fnbCosMonthlyResp, fbCaptureResp, fbAvgTicketResp, fbCategoryResp, fbCatByPeriod] = await Promise.all([
+  const [daily, pl, periodCosts, captureP, canteenQ1, glBreakdown, topTrend, rawTxns, bkfstQ1, covers, glRevSplitResp, glCostSplitResp, bkfstQ1Resp, captureOp, coversOp, folioRowsResp, folioLatestResp, bkfstMonthlyResp, fnbCosMonthlyResp, fbCaptureResp, fbAvgTicketResp, fbCategoryResp, fbCatByPeriod, reconResp] = await Promise.all([
     getKpiDaily(period.from, period.to).catch(() => []),
     getDeptPl('fnb', 18).catch(() => []),  // PBS #161 — extend to Jan 2025 onwards (was 12, missed 2025 H1 disaster)
     getFnbCostsForPeriod(Q1_FROM, Q1_TO).catch(() => null),
@@ -350,6 +350,62 @@ export default async function FnbPage({ searchParams }: Props) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
             {row2.map((t, i) => <KpiTile key={i} {...t} />)}
           </div>
+        </Container>
+
+        {/* PBS 2026-06-10 #207 — Cloudbeds folio ↔ QB GL reconciliation */}
+        <Container title="Cloudbeds folio ↔ QB GL · reconciliation" subtitle="folio = POS receipts (live) · GL = bookkeeper-posted (lags ~1 mo) · delta surfaces group billing not on folio OR mis-tagged QB lines">
+          {(() => {
+            type ReconRow = { period_yyyymm: string; folio_total: number | string; gl_total: number | string; delta_total_usd: number | string; folio_pct_of_gl: number | string | null; folio_food_rev: number | string; folio_bev_rev: number | string; folio_minibar_rev: number | string; gl_food_rev: number | string; gl_bev_rev: number | string };
+            const rows = ((reconResp?.data ?? []) as ReconRow[]).filter((r) => Number(r.folio_total) > 0 || Number(r.gl_total) > 0);
+            const q1 = rows.filter((r) => ['2026-01','2026-02','2026-03'].includes(r.period_yyyymm));
+            const q1Folio = q1.reduce((s, r) => s + Number(r.folio_total ?? 0), 0);
+            const q1Gl    = q1.reduce((s, r) => s + Number(r.gl_total ?? 0), 0);
+            const q1Delta = q1Folio - q1Gl;
+            const q1Pct   = q1Gl > 0 ? (q1Folio / q1Gl * 100) : 0;
+            const tiles: KpiTileProps[] = [
+              { label: 'Folio rev · Q1', value: fmtUsd(q1Folio), footnote: 'Cloudbeds POS receipts', status: 'grey', size: 'sm' },
+              { label: 'QB GL rev · Q1', value: fmtUsd(q1Gl), footnote: 'bookkeeper-posted', status: 'grey', size: 'sm' },
+              { label: 'Δ · Q1', value: `${q1Delta >= 0 ? '+' : ''}${fmtUsd(q1Delta)}`, footnote: q1Delta >= 0 ? 'folio over GL · unposted or group' : 'GL over folio · likely B2B billing',
+                status: (Math.abs(q1Delta) / Math.max(q1Gl, 1) < 0.05 ? 'green' : Math.abs(q1Delta) / Math.max(q1Gl, 1) < 0.15 ? 'amber' : 'red') as 'green'|'amber'|'red', size: 'sm' },
+              { label: 'Folio % of GL · Q1', value: `${q1Pct.toFixed(1)}%`, footnote: 'target ~100%',
+                status: (q1Pct >= 95 && q1Pct <= 110 ? 'green' : q1Pct >= 85 && q1Pct <= 120 ? 'amber' : 'red') as 'green'|'amber'|'red', size: 'sm' },
+            ];
+            const monthLabel = (yyyymm: string) => { const [y, m] = yyyymm.split('-').map(Number); return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }); };
+            return (
+              <div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+                  {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
+                </div>
+                <div style={{ marginTop: 14, overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
+                    <thead><tr style={{ borderBottom: '1px solid #000' }}>
+                      <th style={{ textAlign: 'left', padding: 6 }}>Month</th>
+                      <th style={{ textAlign: 'right', padding: 6 }}>Folio</th>
+                      <th style={{ textAlign: 'right', padding: 6 }}>GL</th>
+                      <th style={{ textAlign: 'right', padding: 6 }}>Δ</th>
+                      <th style={{ textAlign: 'right', padding: 6 }}>Folio % GL</th>
+                    </tr></thead>
+                    <tbody>{rows.map((r) => {
+                      const folio = Number(r.folio_total);
+                      const gl = Number(r.gl_total);
+                      const delta = Number(r.delta_total_usd);
+                      const pct = r.folio_pct_of_gl == null ? null : Number(r.folio_pct_of_gl);
+                      const flagColor = pct == null ? '#5A5A5A' : pct >= 95 && pct <= 110 ? '#1c4d3a' : Math.abs(delta) / Math.max(gl, 1) < 0.15 ? '#5A5A5A' : '#8e3a35';
+                      return (
+                        <tr key={r.period_yyyymm} style={{ borderBottom: '1px solid #F0F0F0' }}>
+                          <td style={{ padding: 6, fontFamily: 'inherit' }}>{monthLabel(r.period_yyyymm)}</td>
+                          <td style={{ padding: 6, textAlign: 'right' }}>{fmtUsd(folio)}</td>
+                          <td style={{ padding: 6, textAlign: 'right' }}>{fmtUsd(gl)}</td>
+                          <td style={{ padding: 6, textAlign: 'right', color: delta >= 0 ? '#1c4d3a' : '#8e3a35' }}>{delta >= 0 ? '+' : ''}{fmtUsd(delta)}</td>
+                          <td style={{ padding: 6, textAlign: 'right', color: flagColor, fontWeight: 600 }}>{pct == null ? '—' : pct.toFixed(1) + '%'}</td>
+                        </tr>
+                      );
+                    })}</tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
         </Container>
 
         <Container title="Monthly trend · revenue · costs · GOP %" subtitle="Jan 2025 → current · live from gl.v_fnb_cos_monthly · breakfast bar = USALI fair-value reclass">
