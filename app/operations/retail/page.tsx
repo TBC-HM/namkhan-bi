@@ -158,7 +158,7 @@ export default async function RetailPage({ searchParams }: Props) {
           </Container>
         )}
 
-        <Container title="Monthly trend · revenue · costs · GOP %" subtitle="last 16 months · live from gl.mv_usali_pl_monthly">
+        <Container title="Monthly trend · revenue · costs · GOP %" subtitle="last 16 months · live from Cloudbeds folio (gl.v_dept_revenue_monthly) · QB GL has no isolated Retail line">
           <DeptTrendChart rows={pl} dept="retail" />
         </Container>
 
