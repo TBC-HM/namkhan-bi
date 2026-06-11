@@ -631,15 +631,15 @@ export interface DeptPlRow {
   folio_revenue: number;
 }
 
-const PL_DEPT_MAP: Record<'fnb' | 'spa' | 'activities' | 'retail' | 'transport', { qb: string; cb: string }> = {
+const PL_DEPT_MAP: Record<'fnb' | 'spa' | 'activities' | 'retail' | 'transport' | 'rooms', { qb: string; cb: string }> = {
   fnb:        { qb: 'F&B',           cb: 'fnb_revenue'      },
   spa:        { qb: 'Spa',           cb: 'spa_revenue'      },
   activities: { qb: 'Activities',    cb: 'activity_revenue' },
   retail:     { qb: 'Retail',        cb: 'retail_revenue'   },
-  // PBS 2026-06-10 #209 — QB GL has no Transportation line (lumped into Other
-  // Operated). The QB query will return [] and the chart will fall back to
-  // folio_revenue from the v_dept_revenue_monthly overlay (bronze + classifier).
   transport:  { qb: 'Transportation', cb: 'transport_revenue' },
+  // PBS 2026-06-11 #211 — Rooms dept page. QB GL has a clean Rooms account;
+  // folio overlay catches rate postings + room upgrade / extra bed reclass.
+  rooms:      { qb: 'Rooms',         cb: 'rooms_revenue'    },
 };
 
 function blankPlRow(m: string): DeptPlRow {
@@ -653,7 +653,7 @@ function blankPlRow(m: string): DeptPlRow {
   };
 }
 
-export async function getDeptPl(dept: 'fnb' | 'spa' | 'activities' | 'retail' | 'transport', monthsBack = 16): Promise<DeptPlRow[]> {
+export async function getDeptPl(dept: 'fnb' | 'spa' | 'activities' | 'retail' | 'transport' | 'rooms', monthsBack = 16): Promise<DeptPlRow[]> {
   const cfg = PL_DEPT_MAP[dept];
   const today = new Date();
   const start = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - (monthsBack - 1), 1));
@@ -732,6 +732,7 @@ export async function getDeptPl(dept: 'fnb' | 'spa' | 'activities' | 'retail' | 
     dept === 'spa'        ? { usali_dept: 'Other Operated', usali_subdept: 'Spa' } :
     dept === 'activities' ? { usali_dept: 'Other Operated', usali_subdept: 'Activities' } :
     dept === 'transport'  ? { usali_dept: 'Other Operated', usali_subdept: 'Transportation' } :
+    dept === 'rooms'      ? { usali_dept: 'Rooms' } :
                               { usali_dept: 'Retail' };
   let folioQ = supabase.from('v_dept_revenue_monthly')
     .select('period_yyyymm, folio_revenue')
