@@ -418,6 +418,8 @@ const OPERATIONS_CFG: DeptCfg = {
     // PBS 2026-05-15: Staff moved to Finance · HR (people-cost is a finance
     // concern, not an operations one). Snapshot renamed HoD.
     { label: 'HoD',              href: '/operations'                 },
+    // PBS 2026-06-11 #211 — Rooms ops view (similar anatomy to F&B page).
+    { label: 'Rooms',            href: '/operations/rooms'           },
     { label: 'F&B',              href: '/operations/restaurant'      },
     { label: 'Spa',              href: '/operations/spa'             },
     { label: 'Activities',       href: '/operations/activities'      },
@@ -429,6 +431,7 @@ const OPERATIONS_CFG: DeptCfg = {
   ],
   quickChips: [
     { label: 'HoD',        href: '/operations'             },
+    { label: 'Rooms',      href: '/operations/rooms'       },
     { label: 'F&B',        href: '/operations/restaurant'  },
     { label: 'Spa',        href: '/operations/spa'         },
     { label: 'Activities', href: '/operations/activities'  },
