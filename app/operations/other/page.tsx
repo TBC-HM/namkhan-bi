@@ -43,6 +43,8 @@ export default async function OtherPage({ searchParams }: Props) {
     supabase.from('v_fnb_raw_txn_enriched')
       .select('transaction_id, reservation_id, transaction_date, local_laos_str, description, amount, currency, category, item_category_name, user_name, usali_dept, usali_subdept, guest_name, room_name, source_name')
       .eq('property_id', 260955)
+      // PBS 2026-06-11 #210 — exclude payment-method rows (Bank Transfer / CC / Cash)
+      .neq('category', 'payment')
       .or('usali_dept.in.(Fee,Tax,Adjustment),and(usali_dept.eq.Other Operated,usali_subdept.in.(Addon,Front Office)),usali_dept.is.null')
       .order('transaction_date', { ascending: false }).limit(2000)
       .then((r) => r),
