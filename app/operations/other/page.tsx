@@ -37,7 +37,7 @@ export default async function OtherPage({ searchParams }: Props) {
 
   const period = resolvePeriod(searchParams);
 
-  const [monthlyResp, rawTxnsResp] = await Promise.all([
+  const [monthlyResp, rawTxnsResp, servicesResp] = await Promise.all([
     supabase.from('v_other_dept_monthly').select('period_yyyymm, bucket, tx_count, revenue')
       .eq('property_id', 260955).order('period_yyyymm', { ascending: true }).then((r) => r),
     supabase.from('v_fnb_raw_txn_enriched')
@@ -47,6 +47,12 @@ export default async function OtherPage({ searchParams }: Props) {
       .neq('category', 'payment')
       .or('usali_dept.in.(Fee,Tax,Adjustment),and(usali_dept.eq.Other Operated,usali_subdept.in.(Addon,Front Office)),usali_dept.is.null')
       .order('transaction_date', { ascending: false }).limit(2000)
+      .then((r) => r),
+    // PBS 2026-06-12 #213 — voucher sales (Services row in QB GL, no Cloudbeds folio source)
+    supabase.schema('gl').from('mv_usali_pl_monthly')
+      .select('period_yyyymm, amount_usd')
+      .eq('usali_line_label', 'Services Revenue')
+      .order('period_yyyymm', { ascending: true })
       .then((r) => r),
   ]);
 
@@ -120,6 +126,37 @@ export default async function OtherPage({ searchParams }: Props) {
   return (
     <DashboardPage title="Other ops" subtitle="Operations · everything without a home (Fee · Tax · Adjustment · Addon · Front Office · Unclassified)" tabs={tabs}>
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* PBS 2026-06-12 #213 — voucher sales · GL-only revenue (no Cloudbeds folio) */}
+        <Container title="Voucher sales · Services" subtitle="QB GL · non-refundable voucher revenue · not included in Cloudbeds folio">
+          {(() => {
+            type SvcRow = { period_yyyymm: string; amount_usd: number | string };
+            const rows = ((servicesResp?.data ?? []) as SvcRow[]).map((r) => ({ p: r.period_yyyymm, v: -Number(r.amount_usd ?? 0) })).filter((r) => r.v !== 0);
+            const ytd = rows.filter((r) => r.p >= '2026-01' && r.p <= opToIso.slice(0,7)).reduce((s, r) => s + r.v, 0);
+            const lifetime = rows.reduce((s, r) => s + r.v, 0);
+            const latest = rows.length > 0 ? rows[rows.length - 1] : null;
+            const monthLabel = (yyyymm: string) => { const [y, m] = yyyymm.split('-').map(Number); return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }); };
+            const tiles: KpiTileProps[] = [
+              { label: 'Vouchers · YTD', value: `$${Math.round(ytd).toLocaleString('en-US')}`, footnote: 'non-refundable · 708125 Services', status: 'grey', size: 'sm' },
+              { label: 'Vouchers · lifetime', value: `$${Math.round(lifetime).toLocaleString('en-US')}`, footnote: `${rows.length} mo with activity`, status: 'grey', size: 'sm' },
+              ...(latest ? [{ label: `Latest · ${monthLabel(latest.p)}`, value: `$${Math.round(latest.v).toLocaleString('en-US')}`, footnote: 'most recent posting', status: 'grey' as const, size: 'sm' as const }] : []),
+            ];
+            return (
+              <div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+                  {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
+                </div>
+                {rows.length > 0 ? (
+                  <div style={{ marginTop: 12, fontSize: 12, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', color: '#5A5A5A' }}>
+                    Posted months: {rows.map((r) => `${monthLabel(r.p)} $${Math.round(r.v).toLocaleString('en-US')}`).join(' · ')}
+                  </div>
+                ) : (
+                  <div style={{ marginTop: 8, fontSize: 12, fontStyle: 'italic', color: '#8a8170' }}>No voucher revenue posted yet.</div>
+                )}
+              </div>
+            );
+          })()}
+        </Container>
+
         <Container title="Operating snapshot" subtitle={`bucket totals · ${opLabel}`} density="compact" action={opPills}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
             {row1.map((t, i) => <KpiTile key={i} {...t} />)}
