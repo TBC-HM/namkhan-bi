@@ -120,8 +120,8 @@ export default async function RoomsPage({ searchParams }: Props) {
   // Operating snapshot (period totals from mv_kpi_daily via getKpiDaily/aggregateDaily)
   const periodRev = a30.rooms_revenue ?? 0;
   const periodSold = a30.rooms_sold ?? 0;
-  const periodAvail = a30.rooms_available ?? 0;
-  const periodOccPct = (a30.rooms_available ?? 0) > 0 ? ((a30.rooms_sold ?? 0) / (a30.rooms_available ?? 0)) * 100 : 0;
+  const periodAvail = a30.available_roomnights ?? 0;
+  const periodOccPct = (a30.available_roomnights ?? 0) > 0 ? ((a30.rooms_sold ?? 0) / (a30.available_roomnights ?? 0)) * 100 : 0;
   const periodAdr = periodSold > 0 ? periodRev / periodSold : 0;
   const periodRevpar = periodAvail > 0 ? periodRev / periodAvail : 0;
   // ALOS from YTD perf view rolled up
@@ -199,7 +199,6 @@ export default async function RoomsPage({ searchParams }: Props) {
       title="Operations · Rooms"
       subtitle={`Ops manager view · live from Cloudbeds folio + QB GL · ${opLabel}`}
       tabs={tabs}
-      slug="operations/rooms"
     >
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 14 }}>
         {/* Operating snapshot */}
