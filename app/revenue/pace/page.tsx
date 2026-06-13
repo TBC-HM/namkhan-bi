@@ -394,7 +394,7 @@ export default async function PacePage({
       </div>
       {/* #106 — Pace by check-in month (Jan-2025 → forward); RN bar + LY overlay + variance table */}
       <div style={{ gridColumn: '1 / -1', marginTop: 8 }}>
-        <Container title="Pace by check-in month · Total Revenue" subtitle={`Total Revenue (room rate + taxes + fees + ancillary · ${moneyCurrency}) · variance vs LY · click a year to expand`}>
+        <Container title="Pace by check-in month · Total Revenue" subtitle={`Source: Cloudbeds folio per check-in month (room rate + taxes + fees + ancillaries · ${moneyCurrency}) — NOT QB GL Rooms Revenue (PMS folio runs 30-100% higher on closed months because GL Rooms is room-rate only) · variance vs LY · click a year to expand`}>
           {paceCiMonthRows.length === 0 ? (
             <div style={{ padding: 14, fontSize: 12, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>
               No data on file for property {pid}.
