@@ -121,15 +121,17 @@ export default async function PnLPage({ searchParams }: Props) {
   const cur = monthValid ? monthParam : autoCur;
   const prior = priorPeriod(cur);
 
-  // Dropdown options: Jan 2025 → latest closed month (auto). Always include
-  // through the auto-detected latest so the user can flip back to "current".
+  // Dropdown options: Jan 2025 → Dec of current fiscal year.
+  // PBS 2026-06-17 #216: extend past the latest closed month so user can
+  // see future months (forecast / not-yet-posted). Closed months show GL
+  // data; future months will render blank tiles until QB posts them.
   const monthOptions = (() => {
     const months: string[] = [];
-    const [endY, endM] = autoCur.split('-').map(Number);
-    // Start at 2025-01 so the closed prior year is selectable. PBS 2026-05-16.
-    for (let y = 2025, m = 1; (y < endY) || (y === endY && m <= endM); m += 1) {
-      months.push(`${y}-${String(m).padStart(2, '0')}`);
-      if (m === 12) { y += 1; m = 0; }
+    const endY = Number(autoCur.split('-')[0]);
+    for (let y = 2025; y <= endY; y += 1) {
+      for (let m = 1; m <= 12; m += 1) {
+        months.push(`${y}-${String(m).padStart(2, '0')}`);
+      }
     }
     return months;
   })();
