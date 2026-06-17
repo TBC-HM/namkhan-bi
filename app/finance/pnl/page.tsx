@@ -145,7 +145,10 @@ export default async function PnLPage({ searchParams }: Props) {
   const houseCur = pickPeriod(houseRows, cur);
   const gop = houseCur?.gop ?? null;
   const gopMargin = (gop != null && totalRev > 0) ? (gop / totalRev) * 100 : null;
-  const ebitda = (gop != null) ? gop - (houseCur?.depreciation || 0) - (houseCur?.interest || 0) - (houseCur?.income_tax || 0) : null;
+  // PBS 2026-06-17 #218 — USALI EBITDA fix. GOP already excludes D/I/T (those
+  // sit BELOW GOP in the schedule). The old formula gave Net Income, not EBITDA.
+  // Correct EBITDA = NOI = GOP minus management fees (if any).
+  const ebitda = (gop != null) ? gop - (houseCur?.mgmt_fees || 0) : null;
 
   // Window stats: scope to the latest closed period only so the secondary KPIs
   // line up with the primary KPIs (both reflect April when calendar=May).
