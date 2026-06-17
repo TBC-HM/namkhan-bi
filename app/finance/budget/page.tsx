@@ -39,18 +39,33 @@ export default async function BudgetPage() {
     const k = `${r.period_yyyymm}|${r.usali_subcategory}`;
     cell.set(k, (cell.get(k) ?? 0) + Number(r.amount_usd || 0));
   }
-  const colSum = new Map<string, number>();
+  // PBS 2026-06-17 #217 — Revenue and Costs MUST be separate.
+  // v_budget_lines stores all amounts as positive (no sign convention), so
+  // any total row that adds Revenue + Cost together is meaningless.
+  // Net Income = Revenue - (Cost of Sales + every other expense subcategory).
+  const REV_SUBCATS = new Set(['Revenue']);
+  const revMonth = new Map<string, number>();
+  const costMonth = new Map<string, number>();
   const rowSum = new Map<string, number>();
-  let grand = 0;
+  let revTotal = 0;
+  let costTotal = 0;
   for (const m of MONTHS_2026) {
     for (const s of SUBCAT_ORDER) {
       const v = cell.get(`${m}|${s}`) ?? 0;
-      colSum.set(m, (colSum.get(m) ?? 0) + v);
       rowSum.set(s, (rowSum.get(s) ?? 0) + v);
-      grand += v;
+      if (REV_SUBCATS.has(s)) {
+        revMonth.set(m, (revMonth.get(m) ?? 0) + v);
+        revTotal += v;
+      } else {
+        costMonth.set(m, (costMonth.get(m) ?? 0) + v);
+        costTotal += v;
+      }
     }
   }
-  const monthsCovered = MONTHS_2026.filter((m) => (colSum.get(m) ?? 0) > 0).length;
+  const netMonth = new Map<string, number>();
+  for (const m of MONTHS_2026) netMonth.set(m, (revMonth.get(m) ?? 0) - (costMonth.get(m) ?? 0));
+  const netTotal = revTotal - costTotal;
+  const monthsCovered = MONTHS_2026.filter((m) => ((revMonth.get(m) ?? 0) + (costMonth.get(m) ?? 0)) > 0).length;
   const subcatsCovered = SUBCAT_ORDER.filter((s) => (rowSum.get(s) ?? 0) > 0).length;
   const coveragePct = SUBCAT_ORDER.length > 0 ? (subcatsCovered / SUBCAT_ORDER.length) * 100 : 0;
 
@@ -62,11 +77,13 @@ export default async function BudgetPage() {
   }));
 
   const tiles: KpiTileProps[] = [
-    { label: 'Budget rows', value: totalRows, size: 'sm', footnote: 'gl.v_budget_lines' },
-    { label: 'Annual total', value: Math.round(grand), currency: 'USD', size: 'sm', footnote: 'sum across all subcats × months', status: grand > 0 ? 'green' : 'amber' },
+    { label: 'Budget Revenue · FY', value: Math.round(revTotal), currency: 'USD', size: 'sm', footnote: 'Revenue subcat only', status: 'green' },
+    { label: 'Budget Costs · FY', value: Math.round(costTotal), currency: 'USD', size: 'sm', footnote: 'COGS + Payroll + OpEx + A&G + S&M + POM + Util + Int + FX', status: 'amber' },
+    { label: 'Budget Net Income · FY', value: Math.round(netTotal), currency: 'USD', size: 'sm', footnote: 'Revenue − all cost subcats', status: netTotal > 0 ? 'green' : 'red' },
     { label: 'Months covered', value: `${monthsCovered}/12`, size: 'sm', footnote: 'months with ≥1 budget row' },
     { label: 'Subcats covered', value: `${subcatsCovered}/${SUBCAT_ORDER.length}`, size: 'sm', footnote: 'USALI subcategories with rows' },
     { label: 'Coverage %', value: `${coveragePct.toFixed(0)}%`, size: 'sm', status: coveragePct >= 80 ? 'green' : coveragePct >= 50 ? 'amber' : 'red' },
+    { label: 'Budget rows', value: totalRows, size: 'sm', footnote: 'gl.v_budget_lines' },
   ];
 
   return (
@@ -103,10 +120,24 @@ export default async function BudgetPage() {
                     <td style={{ ...td, textAlign: 'right' }}><strong>{fmtK(rowSum.get(s) ?? 0)}</strong></td>
                   </tr>
                 ))}
+                {/* PBS #217 — three rollup rows: Revenue · Costs · Net Income */}
                 <tr style={{ borderTop: '2px solid var(--ink-soft, #5a5a5a)' }}>
-                  <td style={td}><strong>Monthly total</strong></td>
-                  {MONTHS_2026.map((m) => <td key={m} style={{ ...td, textAlign: 'right' }}><strong>{fmtK(colSum.get(m) ?? 0)}</strong></td>)}
-                  <td style={{ ...td, textAlign: 'right' }}><strong>{fmtK(grand)}</strong></td>
+                  <td style={td}><strong>Revenue (sum)</strong></td>
+                  {MONTHS_2026.map((m) => <td key={m} style={{ ...td, textAlign: 'right' }}><strong>{fmtK(revMonth.get(m) ?? 0)}</strong></td>)}
+                  <td style={{ ...td, textAlign: 'right' }}><strong>{fmtK(revTotal)}</strong></td>
+                </tr>
+                <tr>
+                  <td style={td}><strong>Total Costs</strong></td>
+                  {MONTHS_2026.map((m) => <td key={m} style={{ ...td, textAlign: 'right' }}><strong>{fmtK(costMonth.get(m) ?? 0)}</strong></td>)}
+                  <td style={{ ...td, textAlign: 'right' }}><strong>{fmtK(costTotal)}</strong></td>
+                </tr>
+                <tr style={{ borderTop: '1px solid var(--ink-soft, #5a5a5a)' }}>
+                  <td style={td}><strong>Net Income (Rev − Costs)</strong></td>
+                  {MONTHS_2026.map((m) => {
+                    const v = netMonth.get(m) ?? 0;
+                    return <td key={m} style={{ ...td, textAlign: 'right', color: v >= 0 ? 'var(--status-green, #2E7D32)' : 'var(--terracotta, #B8542A)', fontWeight: 700 }}>{fmtK(v)}</td>;
+                  })}
+                  <td style={{ ...td, textAlign: 'right', color: netTotal >= 0 ? 'var(--status-green, #2E7D32)' : 'var(--terracotta, #B8542A)', fontWeight: 700 }}>{fmtK(netTotal)}</td>
                 </tr>
               </tbody>
             </table>
