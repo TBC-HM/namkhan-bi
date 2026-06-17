@@ -66,8 +66,15 @@ function aggregateMonth(rows: TwelveMonthRow[], period: string) {
       revA += Math.abs(a);
       revB += Math.abs(b);
     } else if (COGS_SUBCATS.has(x.usali_subcategory)) { cogsA += a; cogsB += b; }
-    else if (PAYROLL_SUBCATS.has(x.usali_subcategory)) { payA += a; payB += b; }
-    else if (OPEX_SUBCATS.has(x.usali_subcategory)) { opexA += a; opexB += b; }
+    // PBS 2026-06-17 #218 — undistributed payroll/opex must roll into undist (not dept payroll).
+    else if (PAYROLL_SUBCATS.has(x.usali_subcategory)) {
+      if (x.usali_department === 'Undistributed' || !x.usali_department) { undistA += a; undistB += b; }
+      else { payA += a; payB += b; }
+    }
+    else if (OPEX_SUBCATS.has(x.usali_subcategory)) {
+      if (x.usali_department === 'Undistributed' || !x.usali_department) { undistA += a; undistB += b; }
+      else { opexA += a; opexB += b; }
+    }
     else if (UNDIST_SUBCATS.has(x.usali_subcategory)) { undistA += a; undistB += b; }
   }
   const deptProfitA = revA - cogsA - payA - opexA;
