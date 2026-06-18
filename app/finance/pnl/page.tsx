@@ -689,9 +689,9 @@ export default async function PnLPage({ searchParams }: Props) {
               })}
             </div>
           </Container>
+          </details>
         );
       })()}
-      </details>
 
       {/* PBS 2026-06-18 #224 — collapsible dept schedule table */}
       <details open style={{ gridColumn: '1 / -1' }}>
