@@ -659,7 +659,6 @@ export default async function PnLPage({ searchParams }: Props) {
         const depts = Array.from(byDept.keys()).sort();
         if (depts.length === 0) return null;
         return (
-          {/* PBS 2026-06-18 #225 — collapsible container */}
           <details style={{ gridColumn: '1 / -1' }}>
           <summary style={{ cursor: 'pointer', padding: '10px 14px', fontSize: 12, fontWeight: 600, color: 'var(--ink, #000)', background: 'var(--paper, #FFFFFF)', border: '1px solid var(--hairline, #E0E0E0)', borderRadius: 6, letterSpacing: '0.04em', marginBottom: 8 }}>Accounts behind the lines · click to expand</summary>
           <Container title="Accounts behind the lines" subtitle={`gl entries for ${cur} · click a department to expand`} density="compact">
