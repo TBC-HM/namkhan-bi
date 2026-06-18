@@ -261,6 +261,20 @@ export default async function PnLPage({ searchParams }: Props) {
   // not P&L). Only fetching latest commentary now.
   const latestCommentary = await getLatestCommentary(cur);
 
+  // PBS 2026-06-18 #228 — room metrics for cur month/quarter, sourced from public.v_room_metrics_monthly
+  // (bridge over kpi.v_goppar_monthly + kpi.v_adr_daily). Filtered to Namkhan property.
+  const roomRows = await supabaseGl
+    .from('v_room_metrics_monthly')
+    .select('period_yyyymm, rooms_sold, rooms_available, rooms_revenue')
+    .eq('property_id', 260955)
+    .in('period_yyyymm', curMonths)
+    .then(r => r.data ?? [] as any[]);
+  const curRoomsSold     = roomRows.reduce((s: number, r: any) => s + Number(r.rooms_sold     || 0), 0);
+  const curRoomsAvail    = roomRows.reduce((s: number, r: any) => s + Number(r.rooms_available || 0), 0);
+  const curRoomsRevenue  = roomRows.reduce((s: number, r: any) => s + Number(r.rooms_revenue   || 0), 0);
+  const curOccPct: number | null = curRoomsAvail > 0 ? (curRoomsSold / curRoomsAvail) * 100 : null;
+  const curAdr:    number | null = curRoomsSold  > 0 ? curRoomsRevenue / curRoomsSold       : null;
+
   // Comparison mode (?compare=budget|forecast|ly) — controls which scenario
   // populates the "Budget"-coded columns in the main USALI grid + Δ math.
   const compareParam = (searchParams.compare as string | undefined) || 'budget';
@@ -564,7 +578,6 @@ export default async function PnLPage({ searchParams }: Props) {
       <TabStrip tabs={PNL_TABS} activeKey="pnl" />
       {/* PBS 2026-06-18 #224 — dropdowns ABOVE the KPI strip so they're first thing user touches */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end', padding: '4px 0 6px' }}>
-        <CompareDropdown value={compareMode} />
         <MonthDropdown value={cur} options={monthOptions} />
       </div>
       {/* PBS 2026-05-13: pnl-page wrapper brings back the 196 globals.css
@@ -624,16 +637,16 @@ export default async function PnLPage({ searchParams }: Props) {
         <KpiBox value={channelsCommissionPct ?? (agg && agg.commission_pct != null ? Number(agg.commission_pct) : null)} unit="pct" label="Distribution cost %"
           state={(channelsCommissionPct == null && (!agg || agg.commission_pct == null)) ? 'data-needed' : 'live'}
           tooltip="OTA commissions (gl.account_id 624*) ÷ total revenue." />
-        <KpiBox value={ytdOccPct} unit="pct" label="Occupancy · YTD"
-          compare={(ytdOccPct != null && budgetOccPct != null)
-            ? { value: ytdOccPct - budgetOccPct, unit: 'pp', period: 'vs Bgt' }
+        <KpiBox value={curOccPct} unit="pct" label={`Occupancy · ${monthLabel}`}
+          compare={(curOccPct != null && budgetOccPct != null)
+            ? { value: curOccPct - budgetOccPct, unit: 'pp', period: 'vs Bgt' }
             : undefined}
-          tooltip="plan.drivers · Actuals 2026 YTD · occupancy_pct" />
-        <KpiBox value={ytdAdr} unit="usd" dp={0} label="ADR · YTD"
-          compare={(ytdAdr != null && budgetAdr != null && budgetAdr > 0)
-            ? { value: ((ytdAdr - budgetAdr) / budgetAdr) * 100, unit: 'pct', period: 'vs Bgt' }
+          tooltip={`Rooms sold ÷ rooms available, ${monthLabel} · v_room_metrics_monthly`} />
+        <KpiBox value={curAdr} unit="usd" dp={0} label={`ADR · ${monthLabel}`}
+          compare={(curAdr != null && budgetAdr != null && budgetAdr > 0)
+            ? { value: ((curAdr - budgetAdr) / budgetAdr) * 100, unit: 'pct', period: 'vs Bgt' }
             : undefined}
-          tooltip="plan.drivers · Actuals 2026 YTD · adr_usd" />
+          tooltip={`Rooms revenue ÷ rooms sold, ${monthLabel} · v_room_metrics_monthly`} />
       </div>
       {/* ─── 3. GRAPHS ──────────────────────────────────────────────── */}
 
@@ -818,10 +831,7 @@ export default async function PnLPage({ searchParams }: Props) {
       <Container
         title={`USALI department schedule · ${monthLabel} (MTD) · vs ${compareLabel}`}
         subtitle={compareSource}
-        action={<div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <CompareDropdown value={compareMode} />
-          <MonthDropdown value={cur} options={monthOptions} />
-        </div>}
+        action={<MonthDropdown value={cur} options={monthOptions} />}
       >
           <div className="meta">
             Materiality: 5% AND $1,000. Coloring — green ≤5% · amber 5–10% · red &gt;10% AND &gt;$1k.
