@@ -133,7 +133,6 @@ export default function TwelveMonthPanel({ rows, fy, demand = [] }: Props) {
     <section className="twelve-mo">
       <button type="button" className="header-toggle" onClick={() => setOpen(o => !o)} aria-expanded={open}>
         <span className="caret">{open ? '▼' : '▶'}</span>
-        <span className="title">12-month rollup · FY 2026</span>
         <span className="meta">
           Revenue actual {fmtK(ytdRevA)} · budget {fmtK(ytdRevB)} ·
           GOP actual {fmtK(ytdGopA)} · budget {fmtK(ytdGopB)}
@@ -328,11 +327,11 @@ export default function TwelveMonthPanel({ rows, fy, demand = [] }: Props) {
       )}
 
       <style>{`
-        .twelve-mo { margin: 32px 0; border: 1px solid var(--line, #e7e2d8); border-radius: 8px; background: var(--card, #fff); overflow: hidden; }
+        .twelve-mo { margin: 8px 0; border: 1px solid var(--line, #e7e2d8); border-radius: 6px; background: var(--card, #fff); overflow: hidden; }
         .header-toggle {
-          display: flex; align-items: center; gap: 12px; width: 100%;
+          display: flex; align-items: center; gap: 10px; width: 100%;
           background: var(--surf-2, #f5f1e7); border: none; cursor: pointer;
-          padding: 14px 18px; text-align: left; font: inherit;
+          padding: 7px 12px; text-align: left; font: inherit;
         }
         .header-toggle:hover { background: var(--surf-hover, #faf7ee); }
         .header-toggle .caret { color: var(--brass, #a17a4f); width: 18px; }
