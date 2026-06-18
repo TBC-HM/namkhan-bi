@@ -275,6 +275,25 @@ export default async function PnLPage({ searchParams }: Props) {
   const curOccPct: number | null = curRoomsAvail > 0 ? (curRoomsSold / curRoomsAvail) * 100 : null;
   const curAdr:    number | null = curRoomsSold  > 0 ? curRoomsRevenue / curRoomsSold       : null;
 
+  // PBS 2026-06-18 #232 — LY room metrics (cur months shifted -1 year). Powers Row 2 OCC/ADR LY pills.
+  const lyMonths: string[] = curMonths.map(m => {
+    const mq = m.match(/^(\d{4})-Q([1-4])$/);
+    if (mq) return `${Number(mq[1]) - 1}-Q${mq[2]}`;
+    const [yy, mm] = m.split('-');
+    return `${Number(yy) - 1}-${mm}`;
+  });
+  const lyRoomRows = await supabaseGl
+    .from('v_room_metrics_monthly')
+    .select('rooms_sold, rooms_available, rooms_revenue')
+    .eq('property_id', 260955)
+    .in('period_yyyymm', lyMonths)
+    .then(r => r.data ?? [] as any[]);
+  const lyRoomsSold    = lyRoomRows.reduce((s: number, r: any) => s + Number(r.rooms_sold     || 0), 0);
+  const lyRoomsAvail   = lyRoomRows.reduce((s: number, r: any) => s + Number(r.rooms_available || 0), 0);
+  const lyRoomsRevenue = lyRoomRows.reduce((s: number, r: any) => s + Number(r.rooms_revenue   || 0), 0);
+  const lyOccPct: number | null = lyRoomsAvail > 0 ? (lyRoomsSold / lyRoomsAvail) * 100 : null;
+  const lyAdr:    number | null = lyRoomsSold  > 0 ? lyRoomsRevenue / lyRoomsSold       : null;
+
   // Comparison mode (?compare=budget|forecast|ly) — controls which scenario
   // populates the "Budget"-coded columns in the main USALI grid + Δ math.
   const compareParam = (searchParams.compare as string | undefined) || 'budget';
@@ -660,28 +679,92 @@ export default async function PnLPage({ searchParams }: Props) {
         );
       })()}
 
-      {/* Row 2 — Drivers (PBS #229: cur-month scoped) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
-        <KpiBox value={labourPct} unit="pct" label="Labour cost %"
-          state={labourPct == null ? 'data-needed' : 'live'}
-          tooltip="Total payroll ÷ total revenue (closed-month scope). Target ≤ 35%." />
-        <KpiBox value={fbLabourPct} unit="pct" label="F&B labour %"
-          state={fbLabourPct == null ? 'data-needed' : 'live'}
-          tooltip="F&B payroll ÷ F&B revenue. Industry norm 28–32%." />
-        <KpiBox value={channelsCommissionPct ?? (agg && agg.commission_pct != null ? Number(agg.commission_pct) : null)} unit="pct" label="Distribution cost %"
-          state={(channelsCommissionPct == null && (!agg || agg.commission_pct == null)) ? 'data-needed' : 'live'}
-          tooltip="OTA commissions (gl.account_id 624*) ÷ total revenue." />
-        <KpiBox value={curOccPct} unit="pct" label={`Occupancy · ${monthLabel}`}
-          compare={(curOccPct != null && budgetOccPct != null)
-            ? { value: curOccPct - budgetOccPct, unit: 'pp', period: 'vs Bgt' }
-            : undefined}
-          tooltip={`Rooms sold ÷ rooms available, ${monthLabel} · v_room_metrics_monthly`} />
-        <KpiBox value={curAdr} unit="usd" dp={0} label={`ADR · ${monthLabel}`}
-          compare={(curAdr != null && budgetAdr != null && budgetAdr > 0)
-            ? { value: ((curAdr - budgetAdr) / budgetAdr) * 100, unit: 'pct', period: 'vs Bgt' }
-            : undefined}
-          tooltip={`Rooms revenue ÷ rooms sold, ${monthLabel} · v_room_metrics_monthly`} />
-      </div>
+      {/* PBS 2026-06-18 #232 — Row 2 Drivers: custom tiles with LY+Bgt pills (parity with Row 1) */}
+      {(() => {
+        const G = '#1c4d3a', R = '#B8542A';
+        const fmtPctVal = (n: number | null | undefined) => (n == null || !isFinite(Number(n))) ? '—' : `${Number(n).toFixed(1)}%`;
+        const fmtUsdVal = (n: number | null | undefined) => (n == null || !isFinite(Number(n))) ? '—' : `$${Math.round(Number(n))}`;
+        const fmtSigned = (n: number | null | undefined, suffix: 'pp' | '%' = '%') => (n == null || !isFinite(Number(n))) ? '' : (Number(n) > 0 ? '+' : '') + Number(n).toFixed(1) + suffix;
+        const tileSx: React.CSSProperties = { background: 'var(--paper, #fff)', border: '1px solid var(--hairline, #E0E0E0)', borderRadius: 6, padding: 14, display: 'flex', flexDirection: 'column', gap: 4 };
+        const labelSx: React.CSSProperties = { fontSize: 10, color: 'var(--ink-soft, #5A5A5A)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 500 };
+        const valueSx: React.CSSProperties = { fontSize: 24, fontWeight: 600, color: 'var(--ink, #1B1B1B)', fontVariantNumeric: 'tabular-nums', lineHeight: 1.05 };
+        const rowSx:   React.CSSProperties = { fontSize: 11, fontVariantNumeric: 'tabular-nums', display: 'flex', gap: 6, alignItems: 'baseline' };
+        const muted = { color: 'var(--ink-soft, #5A5A5A)' };
+        type CmpRow = { abs: string; pct: number | null; pctSuffix?: 'pp' | '%' };
+        const Tile = ({ label, value, ly, bgt }: { label: string; value: string; ly: CmpRow; bgt: CmpRow }) => (
+          <div style={tileSx}>
+            <div style={labelSx}>{label}</div>
+            <div style={valueSx}>{value}</div>
+            <div style={rowSx}>
+              <span style={muted}>LY</span>
+              <span>{ly.abs}</span>
+              {ly.pct != null && <span style={{ color: ly.pct >= 0 ? G : R, fontWeight: 600, marginLeft: 4 }}>{fmtSigned(ly.pct, ly.pctSuffix ?? '%')}</span>}
+            </div>
+            <div style={rowSx}>
+              <span style={muted}>Bgt</span>
+              <span>{bgt.abs}</span>
+              {bgt.pct != null && <span style={{ color: bgt.pct >= 0 ? G : R, fontWeight: 600, marginLeft: 4 }}>{fmtSigned(bgt.pct, bgt.pctSuffix ?? '%')}</span>}
+            </div>
+          </div>
+        );
+
+        // Compute LY/Bgt versions of the cost ratios using scenario_stack (LY now real after #232 view rewrite).
+        const sumByDept = (field: 'actual_usd'|'budget_usd'|'ly_usd', subcat: string, dept?: string): number =>
+          scenarioCur.reduce((s: number, r: any) =>
+            r.usali_subcategory === subcat && (dept == null || r.usali_department === dept)
+              ? s + Number(r[field] || 0) : s, 0);
+
+        const payrollAct = sumByDept('actual_usd', 'Payroll & Related');
+        const payrollBgt = sumByDept('budget_usd', 'Payroll & Related');
+        const payrollLy  = sumByDept('ly_usd',     'Payroll & Related');
+        const fbPayAct   = sumByDept('actual_usd', 'Payroll & Related', 'F&B');
+        const fbPayBgt   = sumByDept('budget_usd', 'Payroll & Related', 'F&B');
+        const fbPayLy    = sumByDept('ly_usd',     'Payroll & Related', 'F&B');
+        const fbRevAct   = sumByDept('actual_usd', 'Revenue', 'F&B');
+        const fbRevBgt   = sumByDept('budget_usd', 'Revenue', 'F&B');
+        const fbRevLy    = sumByDept('ly_usd',     'Revenue', 'F&B');
+        // Distribution cost % proxy: Sales & Marketing subcategory ÷ Revenue
+        const smAct = sumByDept('actual_usd', 'Sales & Marketing');
+        const smBgt = sumByDept('budget_usd', 'Sales & Marketing');
+        const smLy  = sumByDept('ly_usd',     'Sales & Marketing');
+
+        const labourPctBgt  = bgtRevStack  > 0 ? (payrollBgt  / bgtRevStack)  * 100 : null;
+        const labourPctLy   = lyRevStack   > 0 ? (payrollLy   / lyRevStack)   * 100 : null;
+        const fbLabourPctBgt = fbRevBgt > 0 ? (fbPayBgt / fbRevBgt) * 100 : null;
+        const fbLabourPctLy  = fbRevLy  > 0 ? (fbPayLy  / fbRevLy)  * 100 : null;
+        const distPctAct = bgtRevStack > 0 ? (smAct / Math.max(totalRev, 1)) * 100 : (channelsCommissionPct ?? null);
+        const distPctBgt = bgtRevStack > 0 ? (smBgt / bgtRevStack) * 100 : null;
+        const distPctLy  = lyRevStack  > 0 ? (smLy  / lyRevStack)  * 100 : null;
+        const occBgtPp = (curOccPct != null && budgetOccPct != null) ? curOccPct - budgetOccPct : null;
+        const occLyPp  = (curOccPct != null && lyOccPct != null)     ? curOccPct - lyOccPct     : null;
+        const adrBgtPct = (curAdr != null && budgetAdr != null && budgetAdr > 0) ? ((curAdr - budgetAdr) / budgetAdr) * 100 : null;
+        const adrLyPct  = (curAdr != null && lyAdr    != null && lyAdr    > 0) ? ((curAdr - lyAdr)    / lyAdr)    * 100 : null;
+
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
+            <Tile label={`Labour cost % · ${monthLabel}`}
+                  value={fmtPctVal(labourPct)}
+                  ly={{  abs: fmtPctVal(labourPctLy),  pct: labourPct != null && labourPctLy  != null ? labourPct - labourPctLy  : null, pctSuffix: 'pp' }}
+                  bgt={{ abs: fmtPctVal(labourPctBgt), pct: labourPct != null && labourPctBgt != null ? labourPct - labourPctBgt : null, pctSuffix: 'pp' }} />
+            <Tile label={`F&B labour % · ${monthLabel}`}
+                  value={fmtPctVal(fbLabourPct)}
+                  ly={{  abs: fmtPctVal(fbLabourPctLy),  pct: fbLabourPct != null && fbLabourPctLy  != null ? fbLabourPct - fbLabourPctLy  : null, pctSuffix: 'pp' }}
+                  bgt={{ abs: fmtPctVal(fbLabourPctBgt), pct: fbLabourPct != null && fbLabourPctBgt != null ? fbLabourPct - fbLabourPctBgt : null, pctSuffix: 'pp' }} />
+            <Tile label={`S&M cost % · ${monthLabel}`}
+                  value={fmtPctVal(distPctAct)}
+                  ly={{  abs: fmtPctVal(distPctLy),  pct: distPctAct != null && distPctLy  != null ? distPctAct - distPctLy  : null, pctSuffix: 'pp' }}
+                  bgt={{ abs: fmtPctVal(distPctBgt), pct: distPctAct != null && distPctBgt != null ? distPctAct - distPctBgt : null, pctSuffix: 'pp' }} />
+            <Tile label={`Occupancy · ${monthLabel}`}
+                  value={fmtPctVal(curOccPct)}
+                  ly={{  abs: fmtPctVal(lyOccPct),     pct: occLyPp,  pctSuffix: 'pp' }}
+                  bgt={{ abs: fmtPctVal(budgetOccPct), pct: occBgtPp, pctSuffix: 'pp' }} />
+            <Tile label={`ADR · ${monthLabel}`}
+                  value={fmtUsdVal(curAdr)}
+                  ly={{  abs: fmtUsdVal(lyAdr),     pct: adrLyPct }}
+                  bgt={{ abs: fmtUsdVal(budgetAdr), pct: adrBgtPct }} />
+          </div>
+        );
+      })()}
       {/* ─── 3. GRAPHS ──────────────────────────────────────────────── */}
 
       {/* PBS 2026-06-18 #225 — 3 CFO charts: Revenue · Net Income · Cost ratio (12-mo from pl_section_monthly) */}
