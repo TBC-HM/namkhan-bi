@@ -1,6 +1,6 @@
 // components/kpi/KpiBox.tsx — PBS #226 v4 (2026-06-18)
--- v4: add `compare2` prop so KPI tiles can show TWO secondary pills (vs LY + vs Bgt).
--- KpiTile already supports a compare[] array — we just append a second item.
+// v4: add `compare2` prop so KPI tiles can show TWO secondary pills (vs LY + vs Bgt).
+// KpiTile already supports a compare[] array — we just append a second item.
 //
 // Every existing KpiBox call site auto-upgrades — zero call-site edits.
 
