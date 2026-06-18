@@ -595,38 +595,57 @@ export default async function PnLPage({ searchParams }: Props) {
                    USALI mapping gaps (/finance/messy-data),
                    Staff on roll (/h/.../operations/staff). */}
 
-      {/* Row 1 — Outcomes */}
-      <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12,
-        margin: '8px 0 6px',
-      }}>
-        <KpiBox value={totalRev} unit="usd" dp={0} label={`Revenue · ${monthLabel}`}
-          compare={revVsLyPctTile  != null ? { value: revVsLyPctTile,  unit: 'pct', period: 'vs LY'  } : undefined}
-          compare2={revVsBgtPctTile != null ? { value: revVsBgtPctTile, unit: 'pct', period: 'vs Bgt' } : undefined}
-          tooltip={`Sum of gl.pl_sections.amount_usd where section='income' for ${monthLabel}. Pills: vs LY / vs Budget from scenario_stack.`} />
-        <KpiBox value={gop} unit="usd" dp={0} label="GOP $"
-          state={gop == null ? 'data-needed' : 'live'}
-          compare={gopVsLyPct  != null ? { value: gopVsLyPct,  unit: 'pct', period: 'vs LY'  } : undefined}
-          compare2={gopVsBgtPct != null ? { value: gopVsBgtPct, unit: 'pct', period: 'vs Bgt' } : undefined}
-          needs={gop == null ? 'load gl_entries' : undefined}
-          tooltip="Net Earnings from xlsx P&L · matches QB P&L bottom line. Pills: vs LY / vs Budget from scenario_stack." />
-        <KpiBox value={gopMargin} unit="pct" label="GOP margin"
-          state={gopMargin == null ? 'data-needed' : 'live'}
-          compare={gopMarginVsLyPp  != null ? { value: gopMarginVsLyPp,  unit: 'pp', period: 'vs LY'  } : undefined}
-          compare2={gopMarginVsBgtPp != null ? { value: gopMarginVsBgtPp, unit: 'pp', period: 'vs Bgt' } : undefined}
-          tooltip="gop ÷ total_revenue × 100. Δ shown in percentage-points." />
-        <KpiBox value={ebitda} unit="usd" dp={0} label="EBITDA"
-          state={ebitda == null ? 'data-needed' : 'live'}
-          compare={ebitdaVsLyPct  != null ? { value: ebitdaVsLyPct,  unit: 'pct', period: 'vs LY'  } : undefined}
-          compare2={ebitdaVsBgtPct != null ? { value: ebitdaVsBgtPct, unit: 'pct', period: 'vs Bgt' } : undefined}
-          tooltip="net income + depreciation + interest + tax + fx. Pills compare against scenario_stack GOP (no below-GOP rows in stack)." />
-        <KpiBox value={revVsLyPct} unit="pct" label="Revenue vs LY"
-          state={revVsLyPct == null ? 'data-needed' : 'live'}
-          needs={revVsLyPct == null ? 'no LY row' : undefined}
-          tooltip="Current month revenue vs same month last year. Source: gl.pnl_snapshot." />
-      </div>
+      {/* PBS 2026-06-18 #229 — Row 1 Outcomes: custom 4-tile grid with LY+Bgt absolute $ AND %. */}
+      {(() => {
+        const G = '#1c4d3a', R = '#B8542A';
+        const fmtK = (n: number | null | undefined) => (n == null || !isFinite(Number(n))) ? '—' : (Number(n) < 0 ? '-' : '') + '$' + (Math.abs(Number(n)) / 1000).toFixed(1) + 'k';
+        const fmtPctVal = (n: number | null | undefined) => (n == null || !isFinite(Number(n))) ? '—' : `${Number(n).toFixed(1)}%`;
+        const fmtSigned = (n: number | null | undefined, suffix: 'pp' | '%' = '%') => (n == null || !isFinite(Number(n))) ? '' : (Number(n) > 0 ? '+' : '') + Number(n).toFixed(1) + suffix;
+        const tileSx: React.CSSProperties = { background: 'var(--paper, #fff)', border: '1px solid var(--hairline, #E0E0E0)', borderRadius: 6, padding: 14, display: 'flex', flexDirection: 'column', gap: 4 };
+        const labelSx: React.CSSProperties = { fontSize: 10, color: 'var(--ink-soft, #5A5A5A)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 500 };
+        const valueSx: React.CSSProperties = { fontSize: 24, fontWeight: 600, color: 'var(--ink, #1B1B1B)', fontVariantNumeric: 'tabular-nums', lineHeight: 1.05 };
+        const rowSx:   React.CSSProperties = { fontSize: 11, fontVariantNumeric: 'tabular-nums', display: 'flex', gap: 6, alignItems: 'baseline' };
+        const muted = { color: 'var(--ink-soft, #5A5A5A)' };
+        type CmpRow = { abs: string; pct: number | null; pctSuffix?: 'pp' | '%' };
+        const Tile = ({ label, value, ly, bgt }: { label: string; value: string; ly: CmpRow; bgt: CmpRow }) => (
+          <div style={tileSx}>
+            <div style={labelSx}>{label}</div>
+            <div style={valueSx}>{value}</div>
+            <div style={rowSx}>
+              <span style={muted}>LY</span>
+              <span>{ly.abs}</span>
+              {ly.pct != null && <span style={{ color: ly.pct >= 0 ? G : R, fontWeight: 600, marginLeft: 4 }}>{fmtSigned(ly.pct, ly.pctSuffix ?? '%')}</span>}
+            </div>
+            <div style={rowSx}>
+              <span style={muted}>Bgt</span>
+              <span>{bgt.abs}</span>
+              {bgt.pct != null && <span style={{ color: bgt.pct >= 0 ? G : R, fontWeight: 600, marginLeft: 4 }}>{fmtSigned(bgt.pct, bgt.pctSuffix ?? '%')}</span>}
+            </div>
+          </div>
+        );
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, margin: '8px 0 6px' }}>
+            <Tile label={`Revenue · ${monthLabel}`}
+                  value={fmtK(totalRev)}
+                  ly={{  abs: fmtK(lyRevStack),  pct: revVsLyPctTile  }}
+                  bgt={{ abs: fmtK(bgtRevStack), pct: revVsBgtPctTile }} />
+            <Tile label={`Net Income · ${monthLabel}`}
+                  value={fmtK(gop)}
+                  ly={{  abs: fmtK(lyGop),  pct: gopVsLyPct  }}
+                  bgt={{ abs: fmtK(bgtGop), pct: gopVsBgtPct }} />
+            <Tile label={`Net Income margin · ${monthLabel}`}
+                  value={fmtPctVal(gopMargin)}
+                  ly={{  abs: fmtPctVal(lyGopMargin),  pct: gopMarginVsLyPp,  pctSuffix: 'pp' }}
+                  bgt={{ abs: fmtPctVal(bgtGopMargin), pct: gopMarginVsBgtPp, pctSuffix: 'pp' }} />
+            <Tile label={`EBITDA · ${monthLabel}`}
+                  value={fmtK(ebitda)}
+                  ly={{  abs: fmtK(lyGop),  pct: ebitdaVsLyPct  }}
+                  bgt={{ abs: fmtK(bgtGop), pct: ebitdaVsBgtPct }} />
+          </div>
+        );
+      })()}
 
-      {/* Row 2 — Drivers */}
+      {/* Row 2 — Drivers (PBS #229: cur-month scoped) */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
         <KpiBox value={labourPct} unit="pct" label="Labour cost %"
           state={labourPct == null ? 'data-needed' : 'live'}
