@@ -489,6 +489,11 @@ export default async function PnLPage({ searchParams }: Props) {
     >
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 18 }}>
       <TabStrip tabs={PNL_TABS} activeKey="pnl" />
+      {/* PBS 2026-06-18 #224 — dropdowns ABOVE the KPI strip so they're first thing user touches */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end', padding: '4px 0 6px' }}>
+        <CompareDropdown value={compareMode} />
+        <MonthDropdown value={cur} options={monthOptions} />
+      </div>
       {/* PBS 2026-05-13: pnl-page wrapper brings back the 196 globals.css
           rules scoped to .pnl-page (variance bars, USALI table tones,
           warn-banner, etc.) that were lost when the page was rewrapped
@@ -550,15 +555,6 @@ export default async function PnLPage({ searchParams }: Props) {
             : undefined}
           tooltip="plan.drivers · Actuals 2026 YTD · adr_usd" />
       </div>
-
-      {/* ─── 2. DROPDOWNS — PBS 2026-06-18 #223: removed legacy time-granular
-          chooser (timeOptions/compareOptions, unwired) — kept the right-side
-          CompareDropdown + MonthDropdown which are wired. */}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end', padding: '4px 0 12px' }}>
-        <CompareDropdown value={compareMode} />
-        <MonthDropdown value={cur} options={monthOptions} />
-      </div>
-
       {/* ─── 3. GRAPHS ──────────────────────────────────────────────── */}
 
       <Container title={`Top variances · ${VAR_LABEL[varianceBase]}`} subtitle="v_usali_dept_summary">
@@ -667,6 +663,9 @@ export default async function PnLPage({ searchParams }: Props) {
         );
       })()}
 
+      {/* PBS 2026-06-18 #224 — collapsible dept schedule table */}
+      <details open style={{ gridColumn: '1 / -1' }}>
+      <summary style={{ cursor: 'pointer', padding: '10px 14px', fontSize: 12, fontWeight: 600, color: 'var(--ink, #000)', background: 'var(--paper, #FFFFFF)', border: '1px solid var(--hairline, #E0E0E0)', borderRadius: 6, letterSpacing: '0.04em', marginBottom: 8 }}>USALI department schedule · {monthLabel} · click to collapse/expand</summary>
       <Container
         title={`USALI department schedule · ${monthLabel} (MTD) · vs ${compareLabel}`}
         subtitle={compareSource}
@@ -948,6 +947,7 @@ export default async function PnLPage({ searchParams }: Props) {
             </tbody>
           </table>
       </Container>
+      </details>
 
       <div style={{ height: 14 }} />
 
