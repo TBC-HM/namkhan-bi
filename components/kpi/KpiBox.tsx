@@ -1,8 +1,6 @@
-// components/kpi/KpiBox.tsx — PBS #205 v3 (2026-05-25)
-// Legacy KPI box adapted to delegate to canonical KpiTile.
-// v3 (FIX): preserves BOTH delta + compare second-pill via KpiTile.compare[]
-// array, plus passes tooltip through to footnote so info from the legacy
-// hover survives. data-needed pills surface as status='amber' AND value='—'.
+// components/kpi/KpiBox.tsx — PBS #226 v4 (2026-06-18)
+-- v4: add `compare2` prop so KPI tiles can show TWO secondary pills (vs LY + vs Bgt).
+-- KpiTile already supports a compare[] array — we just append a second item.
 //
 // Every existing KpiBox call site auto-upgrades — zero call-site edits.
 
@@ -25,6 +23,8 @@ export interface KpiBoxProps {
   label: string;
   delta?: KpiDelta;
   compare?: KpiDelta;
+  /** PBS #226: second compare pill (e.g. vs Budget when compare is vs LY). */
+  compare2?: KpiDelta;
   state?: 'live' | 'data-needed' | 'pending';
   needs?: string;
   valueText?: ReactNode;
@@ -60,7 +60,7 @@ function asCompareItem(d: KpiDelta | undefined): import('@/app/(cockpit)/_design
 }
 
 export default function KpiBox(props: KpiBoxProps) {
-  const { value, unit, label, delta, compare, state = 'live', needs, valueText, dp, tooltip } = props;
+  const { value, unit, label, delta, compare, compare2, state = 'live', needs, valueText, dp, tooltip } = props;
 
   // Value formatting
   const display: string =
@@ -88,11 +88,11 @@ export default function KpiBox(props: KpiBoxProps) {
   // Map delta → KpiTile.delta (primary movement, top)
   const tileDelta = asTileDelta(delta);
 
-  // Map compare → KpiTile.compare[] (secondary comparisons, render below value).
-  // KpiTile supports 0..n comparisons. The legacy "compare" prop was always one
-  // pill, so we pass a single-item array.
-  const cmpItem = asCompareItem(compare);
-  const compareItems = cmpItem ? [cmpItem] : undefined;
+  // Map compare + compare2 → KpiTile.compare[] (secondary comparisons, rendered below value).
+  const cmpItem  = asCompareItem(compare);
+  const cmpItem2 = asCompareItem(compare2);
+  const compareList = [cmpItem, cmpItem2].filter((x): x is NonNullable<typeof x> => x != null);
+  const compareItems = compareList.length ? compareList : undefined;
 
   return (
     <KpiTile
