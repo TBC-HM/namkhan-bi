@@ -640,7 +640,8 @@ export default async function PnLPage({ searchParams }: Props) {
       {/* PBS 2026-06-18 #225 — 3 CFO charts: Revenue · Net Income · Cost ratio (12-mo from pl_section_monthly) */}
       <Container title="CFO trend · 12-month" subtitle="revenue · net income · cost ratio · all from gl.pl_section_monthly (live)">
         {(() => {
-          // Build 12-month series from plSections (Jan to current month of FY2026)
+          // PBS 2026-06-18 #227 — proper SVG bar charts instead of HTML div-bars.
+          // Build 12-month series from plSections (Jan-Dec FY2026)
           const series = fy2026.map((m) => {
             const inc = plSections.find(r => r.period_yyyymm === m && r.section === 'income')?.amount_usd ?? 0;
             const ne  = plSections.find(r => r.period_yyyymm === m && r.section === 'net_earnings')?.amount_usd ?? 0;
@@ -650,48 +651,86 @@ export default async function PnLPage({ searchParams }: Props) {
             const ratio = Number(inc) > 0 ? (totalCost / Number(inc)) * 100 : null;
             return { m: m.slice(5), inc: Number(inc), ne: Number(ne), ratio };
           });
-          const maxAbsInc = Math.max(1, ...series.map(s => Math.abs(s.inc)));
-          const maxAbsNe  = Math.max(1, ...series.map(s => Math.abs(s.ne)));
-          const maxRatio  = Math.max(100, ...series.map(s => s.ratio ?? 0));
-          const bar = (val: number, max: number, neg = false) => {
-            const w = Math.max(2, Math.round((Math.abs(val) / max) * 60));
-            return <div style={{ display: 'inline-block', width: w, height: 8, background: val < 0 ? '#B8542A' : (neg ? '#1c4d3a' : '#a8854a'), verticalAlign: 'middle' }} />;
-          };
-          const fmtUsdK = (n: number) => n === 0 ? '—' : (n < 0 ? '-' : '') + '$' + (Math.abs(n) / 1000).toFixed(1) + 'k';
-          const tileStyle: React.CSSProperties = { background: 'var(--paper, #fff)', border: '1px solid var(--hairline, #E0E0E0)', borderRadius: 6, padding: 12 };
-          const titleStyle: React.CSSProperties = { fontSize: 12, fontWeight: 700, marginBottom: 8, color: 'var(--ink, #1B1B1B)' };
-          const rowStyle: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, padding: '2px 0', fontVariantNumeric: 'tabular-nums' };
+          const fmtUsdK = (n: number) => (n < 0 ? '-' : '') + '$' + (Math.abs(n) / 1000).toFixed(1) + 'k';
+          const ytdInc = series.reduce((s, r) => s + r.inc, 0);
+          const ytdNe  = series.reduce((s, r) => s + r.ne, 0);
+          const lastRatio = [...series].reverse().find(s => s.ratio != null)?.ratio ?? null;
+
+          // Chart geometry (responsive via viewBox)
+          const W = 360, H = 150;
+          const padL = 30, padR = 8, padT = 16, padB = 22;
+          const iw = W - padL - padR;
+          const ih = H - padT - padB;
+          const step = iw / series.length;
+          const barW = step * 0.62;
+          const tileStyle: React.CSSProperties = { background: 'var(--paper, #fff)', border: '1px solid var(--hairline, #E0E0E0)', borderRadius: 6, padding: 10 };
+          const titleStyle: React.CSSProperties = { fontSize: 12, fontWeight: 700, marginBottom: 4, color: 'var(--ink, #1B1B1B)' };
+          const footStyle: React.CSSProperties = { fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', display: 'flex', justifyContent: 'space-between', marginTop: 4, fontVariantNumeric: 'tabular-nums' };
+
+          function BarChart({ accessor, posColor, negColor, fmt, refLine, fixedMin, fixedMax }: {
+            accessor: (s: typeof series[number]) => number | null;
+            posColor: string; negColor: string;
+            fmt: (v: number) => string;
+            refLine?: number;
+            fixedMin?: number; fixedMax?: number;
+          }) {
+            const vals = series.map(accessor).filter((v): v is number => v != null);
+            const dMax = Math.max(0, ...vals);
+            const dMin = Math.min(0, ...vals);
+            const maxV = fixedMax != null ? Math.max(fixedMax, dMax) : dMax;
+            const minV = fixedMin != null ? Math.min(fixedMin, dMin) : dMin;
+            const range = Math.max(1, maxV - minV);
+            const yZero = padT + ((maxV - 0) / range) * ih;
+            const refY = refLine != null ? padT + ((maxV - refLine) / range) * ih : null;
+            return (
+              <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" style={{ display: 'block' }}>
+                {/* zero baseline */}
+                <line x1={padL} x2={W - padR} y1={yZero} y2={yZero} stroke="#E0E0E0" />
+                {refY != null && (
+                  <g>
+                    <line x1={padL} x2={W - padR} y1={refY} y2={refY} stroke="#B8542A" strokeDasharray="3 3" strokeWidth="1" />
+                    <text x={W - padR} y={refY - 3} textAnchor="end" fontSize="9" fill="#B8542A">{fmt(refLine!)}</text>
+                  </g>
+                )}
+                {series.map((s, i) => {
+                  const v = accessor(s);
+                  const cx = padL + step * i + step / 2;
+                  if (v == null || v === 0) {
+                    return <text key={s.m} x={cx} y={H - 6} textAnchor="middle" fontSize="9" fill="#8a8170">{s.m}</text>;
+                  }
+                  const x = cx - barW / 2;
+                  const h = Math.abs(v) / range * ih;
+                  const y = v >= 0 ? yZero - h : yZero;
+                  const col = v >= 0 ? posColor : negColor;
+                  return (
+                    <g key={s.m}>
+                      <rect x={x} y={y} width={barW} height={h} fill={col} rx="1">
+                        <title>{`${s.m} 2026 · ${fmt(v)}`}</title>
+                      </rect>
+                      <text x={cx} y={H - 6} textAnchor="middle" fontSize="9" fill="#8a8170">{s.m}</text>
+                    </g>
+                  );
+                })}
+              </svg>
+            );
+          }
+
           return (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
               <div style={tileStyle}>
                 <div style={titleStyle}>Revenue · FY2026 monthly</div>
-                {series.map(s => (
-                  <div key={s.m} style={rowStyle}>
-                    <span style={{ width: 32, color: 'var(--ink-soft, #5A5A5A)' }}>{s.m}</span>
-                    {bar(s.inc, maxAbsInc)}
-                    <span style={{ width: 70, textAlign: 'right' }}>{fmtUsdK(s.inc)}</span>
-                  </div>
-                ))}
+                <BarChart accessor={s => s.inc} posColor="#a8854a" negColor="#B8542A" fmt={fmtUsdK} />
+                <div style={footStyle}><span>monthly · usd</span><span>YTD {fmtUsdK(ytdInc)}</span></div>
               </div>
               <div style={tileStyle}>
                 <div style={titleStyle}>Net Income · FY2026 monthly</div>
-                {series.map(s => (
-                  <div key={s.m} style={rowStyle}>
-                    <span style={{ width: 32, color: 'var(--ink-soft, #5A5A5A)' }}>{s.m}</span>
-                    {bar(s.ne, maxAbsNe, true)}
-                    <span style={{ width: 70, textAlign: 'right', color: s.ne < 0 ? '#B8542A' : '#1c4d3a', fontWeight: 600 }}>{fmtUsdK(s.ne)}</span>
-                  </div>
-                ))}
+                <BarChart accessor={s => s.ne} posColor="#1c4d3a" negColor="#B8542A" fmt={fmtUsdK} />
+                <div style={footStyle}><span style={{ color: ytdNe < 0 ? '#B8542A' : '#1c4d3a' }}>monthly · usd</span><span style={{ color: ytdNe < 0 ? '#B8542A' : '#1c4d3a', fontWeight: 600 }}>YTD {fmtUsdK(ytdNe)}</span></div>
               </div>
               <div style={tileStyle}>
-                <div style={titleStyle}>Cost ratio (Total Cost ÷ Revenue) · FY2026 monthly</div>
-                {series.map(s => (
-                  <div key={s.m} style={rowStyle}>
-                    <span style={{ width: 32, color: 'var(--ink-soft, #5A5A5A)' }}>{s.m}</span>
-                    {s.ratio == null ? <span style={{ color: 'var(--ink-soft, #5A5A5A)' }}>—</span> : bar(s.ratio, maxRatio, s.ratio <= 100)}
-                    <span style={{ width: 70, textAlign: 'right', color: (s.ratio ?? 0) > 100 ? '#B8542A' : '#1c4d3a', fontWeight: 600 }}>{s.ratio == null ? '—' : `${s.ratio.toFixed(0)}%`}</span>
-                  </div>
-                ))}
+                <div style={titleStyle}>Cost ratio · FY2026 monthly</div>
+                <BarChart accessor={s => s.ratio} posColor="#1c4d3a" negColor="#B8542A" fmt={(v) => `${Math.round(v)}%`} refLine={100} fixedMin={0} fixedMax={120} />
+                <div style={footStyle}><span>break-even = 100%</span><span style={{ color: (lastRatio ?? 0) > 100 ? '#B8542A' : '#1c4d3a', fontWeight: 600 }}>last {lastRatio == null ? '—' : `${Math.round(lastRatio)}%`}</span></div>
               </div>
             </div>
           );
