@@ -551,35 +551,13 @@ export default async function PnLPage({ searchParams }: Props) {
           tooltip="plan.drivers · Actuals 2026 YTD · adr_usd" />
       </div>
 
-      {/* ─── 2. SELECTORS + DROPDOWNS ─────────────────────────────────
-          PBS 2026-05-15: P&L periods are monthly, not daily. Today/7d/LW
-          make no sense here. Trimmed to CFO-grade windows + compare. */}
-      <PeriodSelectorRow
-        basePath="/finance/pnl"
-        win={period.win}
-        cmp={period.cmp}
-        timeOptions={[
-          { win: 'mtd',    label: 'MTD'         },
-          { win: '30d',    label: 'Last month'  },
-          { win: 'qtd',    label: 'QTD'         },
-          { win: 'ytd',    label: 'YTD'         },
-          { win: 'l12m',   label: 'Last 12m'    },
-          { win: 'fy',     label: 'Full year'   },
-        ]}
-        compareOptions={[
-          { cmp: 'none',     label: 'None'        },
-          { cmp: 'budget',   label: 'vs Budget'   },
-          { cmp: 'forecast', label: 'vs Forecast' },
-          { cmp: 'stly',     label: 'vs LY'       },
-        ]}
-        preserve={{ seg: period.seg, month: cur, compare: compareMode, varBase: varianceBase }}
-        rightSlot={
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <CompareDropdown value={compareMode} />
-            <MonthDropdown value={cur} options={monthOptions} />
-          </div>
-        }
-      />
+      {/* ─── 2. DROPDOWNS — PBS 2026-06-18 #223: removed legacy time-granular
+          chooser (timeOptions/compareOptions, unwired) — kept the right-side
+          CompareDropdown + MonthDropdown which are wired. */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end', padding: '4px 0 12px' }}>
+        <CompareDropdown value={compareMode} />
+        <MonthDropdown value={cur} options={monthOptions} />
+      </div>
 
       {/* ─── 3. GRAPHS ──────────────────────────────────────────────── */}
 
