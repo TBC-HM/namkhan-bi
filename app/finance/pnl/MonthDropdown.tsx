@@ -15,6 +15,9 @@ interface Props {
 }
 
 function fmtMonth(yyyymm: string): string {
+  // PBS 2026-06-18 #226: quarter tokens like "2026-Q1" render as "Q1 2026"
+  const qm = yyyymm.match(/^(\d{4})-Q([1-4])$/);
+  if (qm) return `Q${qm[2]} ${qm[1]}`;
   const [y, m] = yyyymm.split('-').map(Number);
   return new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
 }
