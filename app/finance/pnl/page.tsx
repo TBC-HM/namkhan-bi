@@ -117,7 +117,7 @@ export default async function PnLPage({ searchParams }: Props) {
   // PBS 2026-05-16: allow 2025 months too so the dropdown can roll back into
   // the closed FY2025 view.
   const monthParam = (searchParams.month as string | undefined) || '';
-  const monthValid = /^20(25|26)-(0[1-9]|1[0-2])$/.test(monthParam);
+  const monthValid = /^20(25|26)-(0[1-9]|1[0-2]|Q[1-4])$/.test(monthParam);
   const cur = monthValid ? monthParam : autoCur;
   const prior = priorPeriod(cur);
 
@@ -624,7 +624,7 @@ export default async function PnLPage({ searchParams }: Props) {
           </div>
         );
         return (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, margin: '8px 0 6px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, margin: '8px 0 6px' }}>
             <Tile label={`Revenue · ${monthLabel}`}
                   value={fmtK(totalRev)}
                   ly={{  abs: fmtK(lyRevStack),  pct: revVsLyPctTile  }}
@@ -641,6 +641,21 @@ export default async function PnLPage({ searchParams }: Props) {
                   value={fmtK(ebitda)}
                   ly={{  abs: fmtK(lyGop),  pct: ebitdaVsLyPct  }}
                   bgt={{ abs: fmtK(bgtGop), pct: ebitdaVsBgtPct }} />
+            {/* PBS 2026-06-18 #231 — Revenue vs LY 5th tile, wired to scenario_stack (Q-mode aware) */}
+            <div style={tileSx}>
+              <div style={labelSx}>Revenue vs LY · {monthLabel}</div>
+              <div style={{ ...valueSx, color: revVsLyPctTile == null ? 'var(--ink, #1B1B1B)' : (revVsLyPctTile >= 0 ? G : R) }}>
+                {revVsLyPctTile == null ? '—' : (revVsLyPctTile > 0 ? '+' : '') + revVsLyPctTile.toFixed(1) + '%'}
+              </div>
+              <div style={rowSx}>
+                <span style={muted}>LY rev</span>
+                <span>{fmtK(lyRevStack)}</span>
+              </div>
+              <div style={rowSx}>
+                <span style={muted}>Cur rev</span>
+                <span>{fmtK(totalRev)}</span>
+              </div>
+            </div>
           </div>
         );
       })()}
