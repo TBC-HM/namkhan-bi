@@ -126,7 +126,8 @@ export default async function PnLPage({ searchParams }: Props) {
   // see future months (forecast / not-yet-posted). Closed months show GL
   // data; future months will render blank tiles until QB posts them.
   const monthOptions = (() => {
-    const months: string[] = [];
+    // PBS 2026-06-18 #226 — quarter shortcuts at top of list
+    const months: string[] = ['2026-Q1', '2026-Q2'];
     const endY = Number(autoCur.split('-')[0]);
     for (let y = 2025; y <= endY; y += 1) {
       for (let m = 1; m <= 12; m += 1) {
@@ -137,19 +138,40 @@ export default async function PnLPage({ searchParams }: Props) {
   })();
   const plPrior = plSections.filter(r => r.period_yyyymm === prior);
 
-  // KPI calculations from gl.* — `cur` is the latest closed month with revenue
-  const totalRev = pickSection(plSections.filter(r => r.period_yyyymm === cur), 'income');
+  // PBS 2026-06-18 #226 — quarter shortcut: cur='2026-Q1' aggregates Jan+Feb+Mar across every KPI calc below.
+  const isQuarter = /^\d{4}-Q[1-4]$/.test(cur);
+  const curMonths: string[] = isQuarter
+    ? (() => {
+        const [yy, qStr] = cur.split('-Q');
+        const q = Number(qStr);
+        const start = (q - 1) * 3 + 1;
+        return [start, start + 1, start + 2].map(m => `${yy}-${String(m).padStart(2, '0')}`);
+      })()
+    : [cur];
+
+  // KPI calculations from gl.* — `cur` is the latest closed month with revenue (or a quarter when isQuarter)
+  const totalRev = curMonths.reduce((s, p) => s + pickSection(plSections.filter(r => r.period_yyyymm === p), 'income'), 0);
   const priorTotalRev = pickSection(plPrior, 'income');
   const revVsPriorPct = priorTotalRev ? ((totalRev - priorTotalRev) / priorTotalRev) * 100 : 0;
 
   const houseCur = pickPeriod(houseRows, cur);
   // PBS 2026-06-18 #221 — "GOP" tile = bottom-line Net Earnings from xlsx P&L,
   // sourced from pl_section_monthly so the number matches the QB P&L exactly.
-  const netEarnings = pickSection(plSections.filter(r => r.period_yyyymm === cur), 'net_earnings');
+  // PBS 2026-06-18 #226 — aggregate net_earnings across curMonths (single month OR Q1/Q2)
+  const netEarnings = curMonths.reduce((s, p) => s + pickSection(plSections.filter(r => r.period_yyyymm === p), 'net_earnings'), 0);
   const gop = netEarnings;
   const gopMargin = (gop != null && totalRev > 0) ? (gop / totalRev) * 100 : null;
-  // EBITDA = Net Earnings + Depreciation + Interest + Tax + FX (add back below-GOP items).
-  const ebitda = gop + (houseCur?.depreciation || 0) + (houseCur?.interest || 0) + (houseCur?.income_tax || 0) + (houseCur?.fx_pnl || 0);
+  // EBITDA = Net Earnings + Depreciation + Interest + Tax + FX (add back below-GOP items). Sum below-GOP add-backs across curMonths too.
+  const houseSum = curMonths.reduce((acc, p) => {
+    const h = pickPeriod(houseRows, p);
+    return {
+      depreciation: acc.depreciation + Number(h?.depreciation || 0),
+      interest:     acc.interest     + Number(h?.interest || 0),
+      income_tax:   acc.income_tax   + Number(h?.income_tax || 0),
+      fx_pnl:       acc.fx_pnl       + Number(h?.fx_pnl || 0),
+    };
+  }, { depreciation: 0, interest: 0, income_tax: 0, fx_pnl: 0 });
+  const ebitda = gop + houseSum.depreciation + houseSum.interest + houseSum.income_tax + houseSum.fx_pnl;
 
   // Window stats: scope to the latest closed period only so the secondary KPIs
   // line up with the primary KPIs (both reflect April when calendar=May).
@@ -179,7 +201,26 @@ export default async function PnLPage({ searchParams }: Props) {
     .reduce((s, r) => s + Number(r.amount_usd || 0), 0);
 
   // Dept rows for USALI table — current period only
-  const deptCurMap = new Map(deptRows.filter(r => r.period_yyyymm === cur).map(r => [r.usali_department, r]));
+  // PBS 2026-06-18 #226 — for Q-mode, aggregate dept rows across the 3 months.
+  const deptCurMap = (() => {
+    const map = new Map<string, any>();
+    for (const p of curMonths) {
+      for (const r of deptRows.filter(rr => rr.period_yyyymm === p)) {
+        const d = (r as any).usali_department as string;
+        const ex = map.get(d);
+        if (ex) {
+          ex.revenue              = Number(ex.revenue || 0)              + Number((r as any).revenue || 0);
+          ex.cost_of_sales        = Number(ex.cost_of_sales || 0)        + Number((r as any).cost_of_sales || 0);
+          ex.payroll              = Number(ex.payroll || 0)              + Number((r as any).payroll || 0);
+          ex.opex                 = Number(ex.opex || 0)                 + Number((r as any).opex || 0);
+          ex.departmental_profit  = Number(ex.departmental_profit || 0)  + Number((r as any).departmental_profit || 0);
+        } else {
+          map.set(d, { ...(r as any) });
+        }
+      }
+    }
+    return map;
+  })();
 
   // LY fetch (parallel with rest is overkill — happens after we know `cur`)
   // Pull last 5 closed months for the heatmap + per-dept LY for the grid.
@@ -284,7 +325,9 @@ export default async function PnLPage({ searchParams }: Props) {
   // Display label always reflects the latest CLOSED month (cur), not whatever
   // calendar-current month has stray $13. cur was already chosen with this
   // logic earlier; reuse it for every "this month" label on the page.
-  const monthLabel = cur ? new Date(cur + '-01').toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : 'Apr 2026';
+  const monthLabel = isQuarter
+    ? (() => { const [yy, q] = cur.split('-Q'); return `Q${q} ${yy}`; })()
+    : (cur ? new Date(cur + '-01').toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : 'Apr 2026');
   const priorLabel = prior ? new Date(prior + '-01').toLocaleDateString('en-GB', { month: 'short' }) : '—';
 
   // === MoM variance per dept (replaces budget-variance waterfall) ============
@@ -302,7 +345,37 @@ export default async function PnLPage({ searchParams }: Props) {
   const ratioFilter = ((searchParams.ratio as string | undefined) ?? 'all').toLowerCase();
 
   // Aggregate scenario_stack rows into dept-level departmental_profit for cur.
-  const scenarioCur = (twelveMonth as any[]).filter(r => r.period_yyyymm === cur);
+  // PBS 2026-06-18 #226 — for quarter mode (cur='2026-Q1'), curMonths is the 3 months in the quarter.
+  const scenarioCur = (twelveMonth as any[]).filter(r => curMonths.includes(r.period_yyyymm));
+
+  // PBS 2026-06-18 #226 — tile-level scenario aggregates (Revenue / GOP / Margin / EBITDA) from scenario_stack
+  // so each KPI tile can show vs LY% and vs Budget% pills (green if positive, red if negative).
+  function sumStack(field: 'actual_usd'|'budget_usd'|'ly_usd'|'forecast_usd', sub: (s: string) => boolean): number {
+    return scenarioCur.reduce((s: number, r: any) => sub(r.usali_subcategory) ? s + Number(r[field] || 0) : s, 0);
+  }
+  const isRev    = (s: string) => s === 'Revenue';
+  const isDeptExp = (s: string) => s === 'Cost of Sales' || s === 'Payroll & Related' || s === 'Other Operating Expenses';
+  const isUndist = (s: string) => s === 'A&G' || s === 'Sales & Marketing' || s === 'POM' || s === 'Utilities' || s === 'Mgmt Fees';
+
+  const lyRevStack   = Math.abs(sumStack('ly_usd', isRev));
+  const bgtRevStack  = Math.abs(sumStack('budget_usd', isRev));
+  const revVsLyPctTile  = lyRevStack  > 0 ? ((totalRev - lyRevStack)  / lyRevStack)  * 100 : null;
+  const revVsBgtPctTile = bgtRevStack > 0 ? ((totalRev - bgtRevStack) / bgtRevStack) * 100 : null;
+
+  function gopFromField(field: 'budget_usd'|'ly_usd'): number {
+    return Math.abs(sumStack(field, isRev)) - sumStack(field, isDeptExp) - sumStack(field, isUndist);
+  }
+  const bgtGop = gopFromField('budget_usd');
+  const lyGop  = gopFromField('ly_usd');
+  const gopVsBgtPct = bgtGop !== 0 ? ((gop - bgtGop) / Math.abs(bgtGop)) * 100 : null;
+  const gopVsLyPct  = lyGop  !== 0 ? ((gop - lyGop)  / Math.abs(lyGop))  * 100 : null;
+  const bgtGopMargin = bgtRevStack > 0 ? (bgtGop / bgtRevStack) * 100 : null;
+  const lyGopMargin  = lyRevStack  > 0 ? (lyGop  / lyRevStack)  * 100 : null;
+  const gopMarginVsBgtPp = (gopMargin != null && bgtGopMargin != null) ? gopMargin - bgtGopMargin : null;
+  const gopMarginVsLyPp  = (gopMargin != null && lyGopMargin  != null) ? gopMargin - lyGopMargin  : null;
+  // EBITDA vs Bgt/LY: scenario_stack has no below-GOP rows, so compare against scenario GOP as an approximation.
+  const ebitdaVsBgtPct = bgtGop !== 0 ? ((ebitda - bgtGop) / Math.abs(bgtGop)) * 100 : null;
+  const ebitdaVsLyPct  = lyGop  !== 0 ? ((ebitda - lyGop)  / Math.abs(lyGop))  * 100 : null;
   function dpFromScenario(d: string, scenarioField: 'actual_usd' | 'budget_usd' | 'forecast_usd' | 'ly_usd'): number {
     let rev = 0, cogs = 0, pay = 0, opex = 0;
     for (const row of scenarioCur) {
@@ -515,18 +588,25 @@ export default async function PnLPage({ searchParams }: Props) {
         margin: '8px 0 6px',
       }}>
         <KpiBox value={totalRev} unit="usd" dp={0} label={`Revenue · ${monthLabel}`}
-          compare={priorTotalRev > 0 ? { value: revVsPriorPct, unit: 'pct', period: 'vs prior mo' } : undefined}
-          tooltip={`Sum of gl.pl_sections.amount_usd where section='income' for ${cur}.`} />
+          compare={revVsLyPctTile  != null ? { value: revVsLyPctTile,  unit: 'pct', period: 'vs LY'  } : undefined}
+          compare2={revVsBgtPctTile != null ? { value: revVsBgtPctTile, unit: 'pct', period: 'vs Bgt' } : undefined}
+          tooltip={`Sum of gl.pl_sections.amount_usd where section='income' for ${monthLabel}. Pills: vs LY / vs Budget from scenario_stack.`} />
         <KpiBox value={gop} unit="usd" dp={0} label="GOP $"
           state={gop == null ? 'data-needed' : 'live'}
+          compare={gopVsLyPct  != null ? { value: gopVsLyPct,  unit: 'pct', period: 'vs LY'  } : undefined}
+          compare2={gopVsBgtPct != null ? { value: gopVsBgtPct, unit: 'pct', period: 'vs Bgt' } : undefined}
           needs={gop == null ? 'load gl_entries' : undefined}
-          tooltip="gl.v_usali_house_summary.gop — total revenue minus dept expenses minus undistributed operating expenses." />
+          tooltip="Net Earnings from xlsx P&L · matches QB P&L bottom line. Pills: vs LY / vs Budget from scenario_stack." />
         <KpiBox value={gopMargin} unit="pct" label="GOP margin"
           state={gopMargin == null ? 'data-needed' : 'live'}
-          tooltip="gop ÷ total_revenue × 100." />
+          compare={gopMarginVsLyPp  != null ? { value: gopMarginVsLyPp,  unit: 'pp', period: 'vs LY'  } : undefined}
+          compare2={gopMarginVsBgtPp != null ? { value: gopMarginVsBgtPp, unit: 'pp', period: 'vs Bgt' } : undefined}
+          tooltip="gop ÷ total_revenue × 100. Δ shown in percentage-points." />
         <KpiBox value={ebitda} unit="usd" dp={0} label="EBITDA"
           state={ebitda == null ? 'data-needed' : 'live'}
-          tooltip="gop − depreciation − interest − income_tax." />
+          compare={ebitdaVsLyPct  != null ? { value: ebitdaVsLyPct,  unit: 'pct', period: 'vs LY'  } : undefined}
+          compare2={ebitdaVsBgtPct != null ? { value: ebitdaVsBgtPct, unit: 'pct', period: 'vs Bgt' } : undefined}
+          tooltip="net income + depreciation + interest + tax + fx. Pills compare against scenario_stack GOP (no below-GOP rows in stack)." />
         <KpiBox value={revVsLyPct} unit="pct" label="Revenue vs LY"
           state={revVsLyPct == null ? 'data-needed' : 'live'}
           needs={revVsLyPct == null ? 'no LY row' : undefined}
@@ -642,7 +722,7 @@ export default async function PnLPage({ searchParams }: Props) {
         const { data: glRows } = await supabaseGl
           .from('v_gl_entries_enriched')
           .select('account_id,account_name,usali_department,amount_usd')
-          .eq('period_yyyymm', cur)
+          .in('period_yyyymm', curMonths)
           .eq('is_pl', true);
         const byDept = new Map<string, Array<{ id: string; name: string; amt: number }>>();
         for (const r of (glRows ?? [])) {
@@ -660,7 +740,7 @@ export default async function PnLPage({ searchParams }: Props) {
         if (depts.length === 0) return null;
         return (
           <details style={{ gridColumn: '1 / -1' }}>
-          <summary style={{ cursor: 'pointer', padding: '10px 14px', fontSize: 12, fontWeight: 600, color: 'var(--ink, #000)', background: 'var(--paper, #FFFFFF)', border: '1px solid var(--hairline, #E0E0E0)', borderRadius: 6, letterSpacing: '0.04em', marginBottom: 8 }}>Accounts behind the lines · click to expand</summary>
+          <summary style={{ cursor: 'pointer', padding: '10px 14px', fontSize: 12, fontWeight: 600, color: 'var(--ink, #000)', background: 'var(--paper, #FFFFFF)', border: '1px solid var(--hairline, #E0E0E0)', borderRadius: 6, letterSpacing: '0.04em', marginBottom: 8 }}><span style={{ display: 'inline-block', marginRight: 8, transition: 'transform 120ms' }}>▸</span>Accounts behind the lines · click to expand/collapse</summary>
           <Container title="Accounts behind the lines" subtitle={`gl entries for ${cur} · click a department to expand`} density="compact">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {depts.map(d => {
