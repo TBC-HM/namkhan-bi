@@ -557,49 +557,76 @@ export default async function PnLPage({ searchParams }: Props) {
       </div>
       {/* ─── 3. GRAPHS ──────────────────────────────────────────────── */}
 
-      <Container title={`Top variances · ${VAR_LABEL[varianceBase]}`} subtitle="v_usali_dept_summary">
-        <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
-          {(['mom', 'budget', 'forecast', 'ly'] as const).map((b) => {
-            const active = varianceBase === b;
-            const params = new URLSearchParams({
-              ...(period.win !== '30d' ? { win: period.win } : {}),
-              ...(period.cmp !== 'none' ? { cmp: period.cmp } : {}),
-              ...(monthValid ? { month: cur } : {}),
-              ...(compareMode !== 'budget' ? { compare: compareMode } : {}),
-              ...(b !== 'mom' ? { varBase: b } : {}),
-            });
-            return (
-              <a key={b} href={`/finance/pnl${params.toString() ? '?' + params.toString() : ''}`} style={{
-                padding: '4px 12px', borderRadius: 4, border: '1px solid var(--paper-deep)',
-                background: active ? 'var(--moss)' : 'var(--paper-warm)',
-                color: active ? 'var(--paper-warm)' : 'var(--ink-soft)',
-                fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
-                letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase',
-                fontWeight: 600, textDecoration: 'none',
-              }}>{b}</a>
-            );
-          })}
-        </div>
-        <div className="waterfall">
-          {variances.length === 0 ? (
-            <div className="meta" style={{ padding: 8 }}>No dept rows for {cur} or comparison base.</div>
-          ) : variances.map(v => {
-            const pct = (Math.abs(v.delta) / maxAbsVar) * 100;
-            const cls = v.delta >= 0 ? 'pos' : 'neg';
-            const sign = v.delta >= 0 ? '+' : '−';
-            return (
-              <div className="wfr" key={v.dept}>
-                <div className="lbl">{v.dept} dept profit</div>
-                <div><div className={`bar ${cls}`} style={{ width: `${pct.toFixed(0)}%` }} /></div>
-                <div className={`num ${cls}`}>{sign}${(Math.abs(v.delta)/1000).toFixed(1)}k</div>
+      {/* PBS 2026-06-18 #225 — 3 CFO charts: Revenue · Net Income · Cost ratio (12-mo from pl_section_monthly) */}
+      <Container title="CFO trend · 12-month" subtitle="revenue · net income · cost ratio · all from gl.pl_section_monthly (live)">
+        {(() => {
+          // Build 12-month series from plSections (Jan to current month of FY2026)
+          const series = fy2026.map((m) => {
+            const inc = plSections.find(r => r.period_yyyymm === m && r.section === 'income')?.amount_usd ?? 0;
+            const ne  = plSections.find(r => r.period_yyyymm === m && r.section === 'net_earnings')?.amount_usd ?? 0;
+            const exp = plSections.find(r => r.period_yyyymm === m && r.section === 'expenses')?.amount_usd ?? 0;
+            const cos = plSections.find(r => r.period_yyyymm === m && r.section === 'cost_of_sales')?.amount_usd ?? 0;
+            const totalCost = Number(exp) + Number(cos);
+            const ratio = Number(inc) > 0 ? (totalCost / Number(inc)) * 100 : null;
+            return { m: m.slice(5), inc: Number(inc), ne: Number(ne), ratio };
+          });
+          const maxAbsInc = Math.max(1, ...series.map(s => Math.abs(s.inc)));
+          const maxAbsNe  = Math.max(1, ...series.map(s => Math.abs(s.ne)));
+          const maxRatio  = Math.max(100, ...series.map(s => s.ratio ?? 0));
+          const bar = (val: number, max: number, neg = false) => {
+            const w = Math.max(2, Math.round((Math.abs(val) / max) * 60));
+            return <div style={{ display: 'inline-block', width: w, height: 8, background: val < 0 ? '#B8542A' : (neg ? '#1c4d3a' : '#a8854a'), verticalAlign: 'middle' }} />;
+          };
+          const fmtUsdK = (n: number) => n === 0 ? '—' : (n < 0 ? '-' : '') + '$' + (Math.abs(n) / 1000).toFixed(1) + 'k';
+          const tileStyle: React.CSSProperties = { background: 'var(--paper, #fff)', border: '1px solid var(--hairline, #E0E0E0)', borderRadius: 6, padding: 12 };
+          const titleStyle: React.CSSProperties = { fontSize: 12, fontWeight: 700, marginBottom: 8, color: 'var(--ink, #1B1B1B)' };
+          const rowStyle: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, padding: '2px 0', fontVariantNumeric: 'tabular-nums' };
+          return (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
+              <div style={tileStyle}>
+                <div style={titleStyle}>Revenue · FY2026 monthly</div>
+                {series.map(s => (
+                  <div key={s.m} style={rowStyle}>
+                    <span style={{ width: 32, color: 'var(--ink-soft, #5A5A5A)' }}>{s.m}</span>
+                    {bar(s.inc, maxAbsInc)}
+                    <span style={{ width: 70, textAlign: 'right' }}>{fmtUsdK(s.inc)}</span>
+                  </div>
+                ))}
               </div>
-            );
-          })}
-        </div>
+              <div style={tileStyle}>
+                <div style={titleStyle}>Net Income · FY2026 monthly</div>
+                {series.map(s => (
+                  <div key={s.m} style={rowStyle}>
+                    <span style={{ width: 32, color: 'var(--ink-soft, #5A5A5A)' }}>{s.m}</span>
+                    {bar(s.ne, maxAbsNe, true)}
+                    <span style={{ width: 70, textAlign: 'right', color: s.ne < 0 ? '#B8542A' : '#1c4d3a', fontWeight: 600 }}>{fmtUsdK(s.ne)}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={tileStyle}>
+                <div style={titleStyle}>Cost ratio (Total Cost ÷ Revenue) · FY2026 monthly</div>
+                {series.map(s => (
+                  <div key={s.m} style={rowStyle}>
+                    <span style={{ width: 32, color: 'var(--ink-soft, #5A5A5A)' }}>{s.m}</span>
+                    {s.ratio == null ? <span style={{ color: 'var(--ink-soft, #5A5A5A)' }}>—</span> : bar(s.ratio, maxRatio, s.ratio <= 100)}
+                    <span style={{ width: 70, textAlign: 'right', color: (s.ratio ?? 0) > 100 ? '#B8542A' : '#1c4d3a', fontWeight: 600 }}>{s.ratio == null ? '—' : `${s.ratio.toFixed(0)}%`}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
       </Container>
 
       <div style={{ height: 14 }} />
       {/* PBS 2026-06-17 #219 — FY2025 rollup removed. 2025 GL had double-booked reclass JE entries that broke the abs-value sum (showed Jan rev $171.5k vs real $86k). FY2026 rollup below is the live one. */}
+      {/* PBS 2026-06-18 #225 — re-added FY2025 rollup (data now clean from gl_pnl_snapshot re-ingest) */}
+      <Container title="12-month rollup · FY2025" subtitle="actual · closed prior year · live from gl_entries">
+        <TwelveMonthPanel rows={twelveMonth2025} fy={fy2025} />
+      </Container>
+
+      <div style={{ height: 14 }} />
+
       <Container title="12-month rollup · FY2026" subtitle="actual · budget · forecast · ly">
         <TwelveMonthPanel rows={twelveMonth} fy={fy2026} demand={demandFy} />
       </Container>
@@ -632,6 +659,9 @@ export default async function PnLPage({ searchParams }: Props) {
         const depts = Array.from(byDept.keys()).sort();
         if (depts.length === 0) return null;
         return (
+          {/* PBS 2026-06-18 #225 — collapsible container */}
+          <details style={{ gridColumn: '1 / -1' }}>
+          <summary style={{ cursor: 'pointer', padding: '10px 14px', fontSize: 12, fontWeight: 600, color: 'var(--ink, #000)', background: 'var(--paper, #FFFFFF)', border: '1px solid var(--hairline, #E0E0E0)', borderRadius: 6, letterSpacing: '0.04em', marginBottom: 8 }}>Accounts behind the lines · click to expand</summary>
           <Container title="Accounts behind the lines" subtitle={`gl entries for ${cur} · click a department to expand`} density="compact">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {depts.map(d => {
@@ -662,6 +692,7 @@ export default async function PnLPage({ searchParams }: Props) {
           </Container>
         );
       })()}
+      </details>
 
       {/* PBS 2026-06-18 #224 — collapsible dept schedule table */}
       <details open style={{ gridColumn: '1 / -1' }}>
