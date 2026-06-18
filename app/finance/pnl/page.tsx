@@ -944,18 +944,19 @@ export default async function PnLPage({ searchParams }: Props) {
                       <td title="vs Budget %">{(() => { const b = bg('Mgmt Fees'); const a = houseCur?.mgmt_fees ?? null; if (b == null || a == null || b === 0) return <span>xx</span>; const p = ((a - b) / Math.abs(b)) * 100; return <span className={p <= 0 ? 'var-green' : 'var-amber'}>{fmtPctV(p)}</span>; })()}</td>
                     </tr>
 
+                    {/* PBS 2026-06-18 #222 — bottom-line row uses xlsx Net Earnings */}
                     <tr className="gop">
-                      <td>GOP after Undistributed</td>
-                      <td>{fmtK(houseCur?.gop ?? null)}</td>
+                      <td>Net Earnings (P&amp;L bottom-line)</td>
+                      <td>{fmtK(gop)}</td>
                       <td title="Dept profit budget minus undistributed budget">{budgetGop !== 0 ? fmtK(budgetGop) : <span>xx</span>}</td>
                       <td title="LY · Actuals 2025 GOP composite">{lyGop !== 0 ? fmtK(lyGop) : <span>xx</span>}</td>
-                      <VarBgt a={houseCur?.gop ?? null} b={budgetGop} />
-                      <MomCell cur_={houseCur?.gop ?? null} prior_={priorGop} />
-                      <FlowPct a={houseCur?.gop ?? null} b={budgetGop} />
+                      <VarBgt a={gop} b={budgetGop} />
+                      <MomCell cur_={gop} prior_={priorGop} />
+                      <FlowPct a={gop} b={budgetGop} />
                     </tr>
 
                     <tr className="ebitda">
-                      <td>EBITDA</td>
+                      <td>EBITDA (Net Earnings + D + I + Tax + FX)</td>
                       <td>{fmtK(ebitda)}</td>
                       <td title="GOP budget minus depreciation/interest/tax/FX/non-op budget">{budgetEbitda !== 0 ? fmtK(budgetEbitda) : <span>xx</span>}</td>
                       <td title="LY · Actuals 2025 EBITDA composite">{lyEbitda !== 0 ? fmtK(lyEbitda) : <span>xx</span>}</td>
