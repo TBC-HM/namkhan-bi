@@ -143,12 +143,13 @@ export default async function PnLPage({ searchParams }: Props) {
   const revVsPriorPct = priorTotalRev ? ((totalRev - priorTotalRev) / priorTotalRev) * 100 : 0;
 
   const houseCur = pickPeriod(houseRows, cur);
-  const gop = houseCur?.gop ?? null;
+  // PBS 2026-06-18 #221 — "GOP" tile = bottom-line Net Earnings from xlsx P&L,
+  // sourced from pl_section_monthly so the number matches the QB P&L exactly.
+  const netEarnings = pickSection(plSections.filter(r => r.period_yyyymm === cur), 'net_earnings');
+  const gop = netEarnings;
   const gopMargin = (gop != null && totalRev > 0) ? (gop / totalRev) * 100 : null;
-  // PBS 2026-06-17 #218 — USALI EBITDA fix. GOP already excludes D/I/T (those
-  // sit BELOW GOP in the schedule). The old formula gave Net Income, not EBITDA.
-  // Correct EBITDA = NOI = GOP minus management fees (if any).
-  const ebitda = (gop != null) ? gop - (houseCur?.mgmt_fees || 0) : null;
+  // EBITDA = Net Earnings + Depreciation + Interest + Tax + FX (add back below-GOP items).
+  const ebitda = gop + (houseCur?.depreciation || 0) + (houseCur?.interest || 0) + (houseCur?.income_tax || 0) + (houseCur?.fx_pnl || 0);
 
   // Window stats: scope to the latest closed period only so the secondary KPIs
   // line up with the primary KPIs (both reflect April when calendar=May).
