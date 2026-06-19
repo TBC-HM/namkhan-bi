@@ -185,13 +185,13 @@ export default async function PacePage({
   // #106: pace by check-in month — separate fetch from public.v_pace_by_ci_month (Jan-2025 onwards, with LY pair)
   const paceCiMonthRes = await supabase
     .from('v_pace_by_ci_month')
-    .select('ci_month, ci_month_start, ci_year, ci_mm, room_nights, revenue, adr, ly_room_nights, ly_revenue, ly_adr, rn_var_pct, rev_var_pct')
+    .select('ci_month, ci_month_start, ci_year, ci_mm, room_nights, revenue, rooms_revenue, adr, ly_room_nights, ly_revenue, ly_rooms_revenue, ly_adr, rn_var_pct, rev_var_pct')
     .eq('property_id', pid)
     .order('ci_month', { ascending: true });
   const paceCiMonthRows = ((paceCiMonthRes.data ?? []) as Array<{
     ci_month: string; ci_month_start: string; ci_year: number; ci_mm: number;
-    room_nights: number; revenue: number; adr: number;
-    ly_room_nights: number | null; ly_revenue: number | null; ly_adr: number | null;
+    room_nights: number; revenue: number; rooms_revenue: number; adr: number | null;
+    ly_room_nights: number | null; ly_revenue: number | null; ly_rooms_revenue: number | null; ly_adr: number | null;
     rn_var_pct: number | null; rev_var_pct: number | null;
   }>);
   // Aggregate /demand-equivalent totals (ci_month grain)
@@ -412,12 +412,38 @@ export default async function PacePage({
                 ]}
                 height={220}
                 empty={{ title: 'No pace data' }} />
-              {Array.from(new Set(paceCiMonthRows.map((r) => String(r.ci_month).slice(0, 4)))).sort().map((yr) => {
-              const yearRows = paceCiMonthRows.filter((r) => String(r.ci_month).startsWith(yr));
-              const sumRn    = yearRows.reduce((s, r) => s + Number(r.room_nights ?? 0), 0);
-              const sumLyRn  = yearRows.reduce((s, r) => s + Number(r.ly_room_nights ?? 0), 0);
-              const sumRev   = yearRows.reduce((s, r) => s + Number(r.revenue ?? 0), 0);
-              const sumLyRev = yearRows.reduce((s, r) => s + Number(r.ly_revenue ?? 0), 0);
+              {(() => {
+                const curY = new Date().getUTCFullYear();
+                // PBS 2026-06-19 #236: include current+future years even if no rows yet (e.g. 2027 = all 12 months even if 0)
+                const allYears = new Set(paceCiMonthRows.map((r) => String(r.ci_month).slice(0, 4)));
+                allYears.add(String(curY));
+                allYears.add(String(curY + 1));
+                return Array.from(allYears).sort();
+              })().map((yr) => {
+              const curY = new Date().getUTCFullYear();
+              const yearRowsRaw = paceCiMonthRows.filter((r) => String(r.ci_month).startsWith(yr));
+              // For current+future years, pad to all 12 months so future planning shows the full year
+              const yearRows = Number(yr) >= curY
+                ? Array.from({ length: 12 }, (_, i) => {
+                    const mm = String(i + 1).padStart(2, '0');
+                    const ci = yr + '-' + mm;
+                    const found = yearRowsRaw.find((r) => r.ci_month === ci);
+                    return found ?? {
+                      ci_month: ci, ci_month_start: ci + '-01', ci_year: Number(yr), ci_mm: i + 1,
+                      room_nights: 0, revenue: 0, rooms_revenue: 0, adr: null,
+                      ly_room_nights: null, ly_revenue: null, ly_rooms_revenue: null, ly_adr: null,
+                      rn_var_pct: null, rev_var_pct: null,
+                    } as typeof yearRowsRaw[number];
+                  })
+                : yearRowsRaw;
+              const sumRn         = yearRows.reduce((s, r) => s + Number(r.room_nights ?? 0), 0);
+              const sumLyRn       = yearRows.reduce((s, r) => s + Number(r.ly_room_nights ?? 0), 0);
+              const sumRev        = yearRows.reduce((s, r) => s + Number(r.revenue ?? 0), 0);
+              const sumLyRev      = yearRows.reduce((s, r) => s + Number(r.ly_revenue ?? 0), 0);
+              const sumRoomsRev   = yearRows.reduce((s, r) => s + Number(r.rooms_revenue ?? 0), 0);
+              const sumLyRoomsRev = yearRows.reduce((s, r) => s + Number(r.ly_rooms_revenue ?? 0), 0);
+              const totalAdr      = sumRn   > 0 ? sumRoomsRev   / sumRn   : null;
+              const totalLyAdr    = sumLyRn > 0 ? sumLyRoomsRev / sumLyRn : null;
               const rnPct   = sumLyRn  > 0 ? ((sumRn  - sumLyRn ) / sumLyRn ) * 100 : null;
               const revPct  = sumLyRev > 0 ? ((sumRev - sumLyRev) / sumLyRev) * 100 : null;
               const curY    = new Date().getUTCFullYear();
@@ -441,6 +467,10 @@ export default async function PacePage({
                       <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #000' }}>RN</th>
                       <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #000' }}>LY RN</th>
                       <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #000' }}>RN var %</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #000' }}>ADR</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #000' }}>LY ADR</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #000' }}>Room Rev</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #000' }}>LY Room Rev</th>
                       <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #000' }}>Total Revenue</th>
                       <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #000' }}>LY Total Revenue</th>
                       <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #000' }}>Rev var %</th>
@@ -459,12 +489,30 @@ export default async function PacePage({
                           <td style={tdN}>{Number(r.room_nights ?? 0).toLocaleString('en-US')}</td>
                           <td style={tdN}>{r.ly_room_nights == null ? '—' : Number(r.ly_room_nights).toLocaleString('en-US')}</td>
                           <td style={{ ...tdN, color: rnColor, fontWeight: 600 }}>{rnVar == null ? '—' : `${rnVar > 0 ? '+' : ''}${rnVar.toFixed(1)}%`}</td>
+                          <td style={tdN}>{r.adr == null ? '—' : `${sym}${Math.round(Number(r.adr)).toLocaleString('en-US')}`}</td>
+                          <td style={tdN}>{r.ly_adr == null ? '—' : `${sym}${Math.round(Number(r.ly_adr)).toLocaleString('en-US')}`}</td>
+                          <td style={tdN}>{sym}{Math.round(Number(r.rooms_revenue ?? 0)).toLocaleString('en-US')}</td>
+                          <td style={tdN}>{r.ly_rooms_revenue == null ? '—' : `${sym}${Math.round(Number(r.ly_rooms_revenue)).toLocaleString('en-US')}`}</td>
                           <td style={tdN}>{sym}{Math.round(Number(r.revenue ?? 0)).toLocaleString('en-US')}</td>
                           <td style={tdN}>{r.ly_revenue == null ? '—' : `${sym}${Math.round(Number(r.ly_revenue)).toLocaleString('en-US')}`}</td>
                           <td style={{ ...tdN, color: revColor, fontWeight: 600 }}>{revVar == null ? '—' : `${revVar > 0 ? '+' : ''}${revVar.toFixed(1)}%`}</td>
                         </tr>
                       );
                     })}
+                        {/* PBS 2026-06-19 #236: sum row */}
+                        <tr style={{ background: '#FAFAF7', borderTop: '2px solid #000', fontWeight: 700 }}>
+                          <td style={{ padding: '5px 10px', fontSize: 11, color: 'var(--ink, #1B1B1B)' }}>TOTAL</td>
+                          <td style={{ padding: '5px 10px', fontSize: 11, color: 'var(--ink, #1B1B1B)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{sumRn.toLocaleString('en-US')}</td>
+                          <td style={{ padding: '5px 10px', fontSize: 11, color: 'var(--ink, #1B1B1B)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{sumLyRn > 0 ? sumLyRn.toLocaleString('en-US') : '—'}</td>
+                          <td style={{ padding: '5px 10px', fontSize: 11, color: 'var(--ink, #1B1B1B)', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, ...sumPctStyle(rnPct) }}>{rnPct == null ? '—' : `${rnPct > 0 ? '+' : ''}${rnPct.toFixed(1)}%`}</td>
+                          <td style={{ padding: '5px 10px', fontSize: 11, color: 'var(--ink, #1B1B1B)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{totalAdr == null ? '—' : `${sym}${Math.round(totalAdr).toLocaleString('en-US')}`}</td>
+                          <td style={{ padding: '5px 10px', fontSize: 11, color: 'var(--ink, #1B1B1B)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{totalLyAdr == null ? '—' : `${sym}${Math.round(totalLyAdr).toLocaleString('en-US')}`}</td>
+                          <td style={{ padding: '5px 10px', fontSize: 11, color: 'var(--ink, #1B1B1B)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{sym}{Math.round(sumRoomsRev).toLocaleString('en-US')}</td>
+                          <td style={{ padding: '5px 10px', fontSize: 11, color: 'var(--ink, #1B1B1B)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{sumLyRoomsRev > 0 ? `${sym}${Math.round(sumLyRoomsRev).toLocaleString('en-US')}` : '—'}</td>
+                          <td style={{ padding: '5px 10px', fontSize: 11, color: 'var(--ink, #1B1B1B)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{sym}{Math.round(sumRev).toLocaleString('en-US')}</td>
+                          <td style={{ padding: '5px 10px', fontSize: 11, color: 'var(--ink, #1B1B1B)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{sumLyRev > 0 ? `${sym}${Math.round(sumLyRev).toLocaleString('en-US')}` : '—'}</td>
+                          <td style={{ padding: '5px 10px', fontSize: 11, color: 'var(--ink, #1B1B1B)', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, ...sumPctStyle(revPct) }}>{revPct == null ? '—' : `${revPct > 0 ? '+' : ''}${revPct.toFixed(1)}%`}</td>
+                        </tr>
                         </tbody>
                       </table>
                     </div>
