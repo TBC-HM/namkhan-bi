@@ -1,0 +1,81 @@
+/* KpiTooltip — tooltip bubble, trigger icon, wrapper */
+
+.wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: default;
+  outline: none;
+}
+
+.wrapper:focus-visible {
+  outline: 2px solid var(--brass, #b8972b);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+.icon {
+  font-size: var(--t-xs, 0.7rem);
+  opacity: 0.55;
+  line-height: 1;
+  flex-shrink: 0;
+  color: var(--brass, #b8972b);
+  transition: opacity 0.15s;
+}
+
+.wrapper:hover .icon,
+.wrapper:focus-visible .icon {
+  opacity: 1;
+}
+
+.bubble {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+
+  /* clamp so it never overflows viewport */
+  width: max-content;
+  max-width: min(280px, 90vw);
+
+  background: var(--surface-overlay, #1c1a14);
+  color: var(--on-overlay, #f2ead8);
+  border: 1px solid var(--brass, #b8972b);
+  border-radius: 6px;
+  padding: 8px 11px;
+  font-size: var(--t-xs, 0.7rem);
+  line-height: 1.45;
+  font-family: var(--font-sans, sans-serif);
+  font-style: normal;
+  pointer-events: none;
+  white-space: pre-wrap;
+
+  /* soft shadow */
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+
+  /* flip below when near top of viewport handled via JS? No — use CSS anchor fallback */
+  animation: ktt-in 0.12s ease both;
+}
+
+/* arrow */
+.bubble::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--brass, #b8972b);
+}
+
+@keyframes ktt-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(4px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0);   }
+}
+
+/* dark-mode override (if host already sets dark class) */
+:global(.dark) .bubble {
+  background: var(--surface-overlay, #111009);
+}
