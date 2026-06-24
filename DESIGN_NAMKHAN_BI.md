@@ -2990,3 +2990,12 @@ Mid-session bug: my earlier currency-neutralisation patch on `app/revenue/channe
 - DB RLS / SQL / `custom_access_token_hook` UNTOUCHED on the auth branch — ADR-112 DB side stays locked.
 - Auth code merged to a BRANCH, not main. Site is still open until PBS explicitly merges PR #312.
 - Frozen `legacy2` snapshot preserves the working HoD if the next iteration breaks anything.
+
+
+### 2026-05-23 — ADR-112 auth front door · CI cleared via main re-merge
+
+- **Branch HEAD now `2ccee9805d`** (re-merge of main `c0121ed8` into `auth/adr-112-frontdoor` at 00:59Z). PR #312 hard checks green: `tsc --noEmit` ✅, `lint · typecheck · build` ✅. Soft warnings (`design-doc-check`, `lighthouse`) are non-blocking — this entry clears the design-doc-check warning.
+- **Root cause of the prior red CI** — not a real bug. The earlier re-merge at `af2b4d3a` pulled an older main, so the branch was missing #104's tsc fixes (`lib/data/pickup.ts` `.catch` on `PromiseLike`, `lib/data-pulse.ts` `PulsePickupRow` cast, `app/revenue/reports/render/page.tsx` unused `@ts-expect-error`). Fresh main merge brought all 3 files to identical SHAs as main; no source edits required.
+- **Fix recipe (reusable for any future ADR branch).** When CI is red but main is green, diff file SHAs across refs via `/contents/<path>?ref=<branch>` vs `?ref=main` before assuming the branch has real bugs. If SHAs differ on every flagged file, it's branch staleness — a single `POST /repos/.../merges` fixes it without touching source.
+- **What's NOT touched.** No changes to `middleware.ts`, `app/login/page.tsx`, or `app/auth/callback/route.ts`. The auth surface stays exactly as staged — only main's drift was reconciled. PBS's 3 Supabase dashboard toggles (`custom_access_token_hook`, Google provider, Site URL + redirect URLs) remain the gating step before merge.
+- **Old Buffer.from → atob speculation retired.** Memory file `project_adr112_auth_frontdoor_status.md` updated: previous plan blamed `Buffer.from()` in edge runtime, but Vercel preview was always ✅ so runtime never broke. The tsc reds were unrelated stale files dragged in by the prior re-merge. Lesson: pull tsc annotations + diff file SHAs across refs before pattern-matching from primitive names.
