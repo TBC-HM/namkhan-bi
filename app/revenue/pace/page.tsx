@@ -446,7 +446,6 @@ export default async function PacePage({
               const totalLyAdr    = sumLyRn > 0 ? sumLyRoomsRev / sumLyRn : null;
               const rnPct   = sumLyRn  > 0 ? ((sumRn  - sumLyRn ) / sumLyRn ) * 100 : null;
               const revPct  = sumLyRev > 0 ? ((sumRev - sumLyRev) / sumLyRev) * 100 : null;
-              const curY    = new Date().getUTCFullYear();
               const openByDefault = Number(yr) >= curY;
               const sumPctStyle = (p: number | null): React.CSSProperties => p == null ? {} : { color: p > 0 ? 'var(--status-green, #2E7D32)' : p < 0 ? 'var(--terracotta, #B8542A)' : 'var(--ink-soft, #5A5A5A)', fontWeight: 600 };
               return (
