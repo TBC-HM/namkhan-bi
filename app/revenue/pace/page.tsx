@@ -451,7 +451,7 @@ export default async function PacePage({
               const sumPctStyle = (p: number | null): React.CSSProperties => p == null ? {} : { color: p > 0 ? 'var(--status-green, #2E7D32)' : p < 0 ? 'var(--terracotta, #B8542A)' : 'var(--ink-soft, #5A5A5A)', fontWeight: 600 };
               return (
                 <details key={yr} open={openByDefault} style={{ border: '1px solid #E0E0E0', borderRadius: 4, background: 'var(--paper, #FFFFFF)' }}>
-                  <summary style={{ cursor: 'pointer', padding: '8px 12px', fontSize: 12, color: 'var(--ink, #1B1B1B)', background: '#FFFFFF', borderBottom: '2px solid #000' }}>
+                  <summary style={{ cursor: 'pointer', padding: '8px 12px', fontSize: 12, color: 'var(--ink, #1B1B1B)', background: '#FFFFFF', borderBottom: '2px solid #BDBDBD' }}>
                     <strong style={{ marginRight: 12 }}>{yr}</strong>
                     <span style={{ color: 'var(--ink-soft, #5A5A5A)' }}>{yearRows.length} mo</span>
                     <span style={{ marginLeft: 12 }}>RN {sumRn.toLocaleString('en-US')}</span>
@@ -463,17 +463,17 @@ export default async function PacePage({
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                       <thead>
                         <tr style={{ background: '#FFFFFF' }}>
-                      <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #000' }}>Month</th>
-                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #000' }}>RN</th>
-                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #000' }}>LY RN</th>
-                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #000' }}>RN var %</th>
-                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #000' }}>ADR</th>
-                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #000' }}>LY ADR</th>
-                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #000' }}>Room Rev</th>
-                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #000' }}>LY Room Rev</th>
-                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #000' }}>Total Revenue</th>
-                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #000' }}>LY Total Revenue</th>
-                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #000' }}>Rev var %</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'left', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #BDBDBD' }}>Month</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #BDBDBD' }}>RN</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #BDBDBD' }}>LY RN</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #BDBDBD' }}>RN var %</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #BDBDBD' }}>ADR</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #BDBDBD' }}>LY ADR</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #BDBDBD' }}>Room Rev</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #BDBDBD' }}>LY Room Rev</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #BDBDBD' }}>Total Revenue</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #BDBDBD' }}>LY Total Revenue</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #BDBDBD' }}>Rev var %</th>
                     </tr>
                       </thead>
                       <tbody>
@@ -500,7 +500,7 @@ export default async function PacePage({
                       );
                     })}
                         {/* PBS 2026-06-19 #236: sum row */}
-                        <tr style={{ background: '#FAFAF7', borderTop: '2px solid #000', fontWeight: 700 }}>
+                        <tr style={{ background: '#FAFAF7', borderTop: '2px solid #BDBDBD', fontWeight: 700 }}>
                           <td style={{ padding: '5px 10px', fontSize: 11, color: 'var(--ink, #1B1B1B)' }}>TOTAL</td>
                           <td style={{ padding: '5px 10px', fontSize: 11, color: 'var(--ink, #1B1B1B)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{sumRn.toLocaleString('en-US')}</td>
                           <td style={{ padding: '5px 10px', fontSize: 11, color: 'var(--ink, #1B1B1B)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{sumLyRn > 0 ? sumLyRn.toLocaleString('en-US') : '—'}</td>
