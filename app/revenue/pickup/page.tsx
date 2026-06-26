@@ -31,6 +31,7 @@ export default async function PickupPage({ propertyId }: Props = {}) {
   const todayIso = new Date().toISOString().slice(0, 10);
   const today    = new Date(todayIso);
   const ytdStart = `${today.getUTCFullYear()}-01-01`;
+  const monthStartIso = todayIso.slice(0, 8) + '01';
 
   // Parallel fan-out
   const [matrix, otbPace, pickup30d, velocity28d, paceComparison, paceByMonth, paceCurve, pickupMonthly] = await Promise.all([
@@ -55,7 +56,7 @@ export default async function PickupPage({ propertyId }: Props = {}) {
     supabase.from('v_chart_pace_comparison')
       .select('stay_year_month, otb_today_rooms, otb_30d_ago_rooms, otb_stly_rooms, otb_today_revenue, otb_stly_revenue, pickup_30d_rooms, yoy_rooms_pct')
       .eq('property_id', pid)
-      .gte('target_stay_date', todayIso)
+      .gte('target_stay_date', monthStartIso)
       .order('target_stay_date')
       .then((r) => r.data ?? []),
     supabase.from('v_pace_by_ci_month')
