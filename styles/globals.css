@@ -2939,8 +2939,7 @@ body table {
 }
 body table:not(.data-table) th,
 body table:not(.data-table) thead th,
-body table.tbl th,
-body table th {
+body table.tbl th {
   color: var(--brass) !important;
   background: var(--paper-deep) !important;
   border-bottom: 2px solid var(--kpi-frame, rgba(168,133,74,0.45)) !important;
@@ -2953,8 +2952,7 @@ body table th {
 }
 body table:not(.data-table) tbody td,
 body table:not(.data-table) td,
-body table.tbl td,
-body table td {
+body table.tbl td {
   color: var(--ink) !important;
   background: transparent !important;
   border-bottom: 1px solid var(--line-soft) !important;
@@ -2963,13 +2961,11 @@ body table td {
   font-size: 13px !important;
 }
 body table:not(.data-table) tbody tr:nth-child(even) td,
-body table.tbl tbody tr:nth-child(even) td,
-body table tbody tr:nth-child(even) td {
+body table.tbl tbody tr:nth-child(even) td {
   background: rgba(168,133,74,0.04) !important;
 }
 body table:not(.data-table) tbody tr:hover td,
-body table.tbl tbody tr:hover td,
-body table tbody tr:hover td {
+body table.tbl tbody tr:hover td {
   background: rgba(168,133,74,0.10) !important;
   color: var(--ink) !important;
 }

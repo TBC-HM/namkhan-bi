@@ -104,7 +104,7 @@ export default function PickupMatrix({ data }: Props) {
   CURRENCY_SYMBOL = data.currencySymbol ?? '€';
   return (
     <div style={S.scroll}>
-      <table style={S.table}>
+      <table className="data-table" style={S.table}>
         <thead>
           <tr>
             <th style={{ ...S.groupTh, ...S.frozen, ...S.frozenHead, textAlign: 'left' }}>
