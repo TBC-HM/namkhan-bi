@@ -58,6 +58,7 @@ export interface PickupMatrixData {
   months: PickupMatrixMonth[];
   total: PickupMatrixRow[];
   stalenessNote?: string;
+  currencySymbol?: string;
 }
 
 interface Props { data: PickupMatrixData }
@@ -70,7 +71,8 @@ const HAIRLINE    = '#E0E0E0';
 const BLOCK_RULE  = '#000000';   // black rule between month blocks
 
 const fmtInt   = (n: number) => Math.round(n).toLocaleString('en-US');
-const fmtUsd   = (n: number) => '€' + Math.round(n).toLocaleString('en-US');
+let CURRENCY_SYMBOL = '€';
+const fmtUsd   = (n: number) => CURRENCY_SYMBOL + Math.round(n).toLocaleString('en-US');
 const fmtPct   = (n: number) => `${n.toFixed(1)}%`;
 const fmtDelta = (n: number, asPct: boolean) => (n >= 0 ? '+' : '') + (asPct ? fmtPct(n) : fmtInt(n));
 
@@ -96,6 +98,7 @@ function deltaCell(d: PickupDelta | undefined, metric: PickupMetric, kind: 'abs'
 }
 
 export default function PickupMatrix({ data }: Props) {
+  CURRENCY_SYMBOL = data.currencySymbol ?? '€';
   return (
     <div style={S.scroll}>
       <table style={S.table}>
