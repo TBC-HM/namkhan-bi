@@ -125,7 +125,7 @@ export default function PickupMatrix({ data }: Props) {
             <th style={S.headerTh}>2024 RO</th>
             <th style={S.headerTh}>2025 RO</th>
             <th style={S.headerTh}>Budget 2026</th>
-            <th style={S.headerTh}>OTB ALL 2026</th>
+            <th style={S.headerTh}>2026 RO</th>
             <th style={S.headerTh}>Monthly<div style={S.headerSub}>{data.monthlySnapshotLabel}</div></th>
             <th style={S.headerTh}>Monday<div style={S.headerSub}>{data.mondaySnapshotLabel}</div></th>
             <th style={S.headerTh}>Yesterday<div style={S.headerSub}>{data.yesterdaySnapshotLabel}</div></th>
@@ -203,7 +203,7 @@ function MonthBlock({ month, isAlt, isTotal }: { month: PickupMatrixMonth; isAlt
 function Cell({ val, metric, emphasis, borderTop }: { val: number | null; metric: PickupMetric; emphasis?: boolean; borderTop: string }) {
   const c = cell(val, metric);
   // Negative absolute values get red, positive emphasis cells stay ink.
-  const color = c.muted ? INK_SOFT : c.negative ? '#C62828' : INK;
+  const color = c.muted ? INK_SOFT : metric === 'OCC' ? (c.negative ? '#C62828' : '#2E7D32') : c.negative ? '#C62828' : INK;
   return (
     <td style={{
       ...S.td,
