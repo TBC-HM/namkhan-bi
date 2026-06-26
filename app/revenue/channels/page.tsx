@@ -157,13 +157,13 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
   const allTimeTrend = (trendCat === 'all'
     ? await supabase
         .from('v_channels_all_time_trend')
-        .select('period_yyyymm, bookings, room_nights, total_revenue, adr')
+        .select('period_yyyymm, bookings, room_nights, total_revenue, adr, revpar')
         .eq('property_id', pid)
         .order('period_yyyymm', { ascending: true })
         .then((r) => r.data ?? [])
     : await supabase
         .from('v_channel_trend_by_category_monthly')
-        .select('period_yyyymm, bookings, room_nights, total_revenue, adr')
+        .select('period_yyyymm, bookings, room_nights, total_revenue, adr, revpar')
         .eq('property_id', pid)
         .eq('category', trendCat)
         .order('period_yyyymm', { ascending: true })
@@ -172,6 +172,8 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
     month: String(r.period_yyyymm ?? ''),
     revenue: Number(r.total_revenue ?? 0),
     adr: Number(r.adr ?? 0),
+    revpar: Number(r.revpar ?? 0),
+    roomNights: Number(r.room_nights ?? 0),
   }));
 
   // Group all channels by category
@@ -240,7 +242,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
               No data on file for property {pid}.
             </div>
           ) : (
-            <div style={{ padding: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12 }}>
+            <div style={{ padding: 12, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
               <div>
                 <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', marginBottom: 4 }}>Revenue · {sym} per month</div>
                 <Chart variant="line" data={trendRows} xKey="month"
@@ -254,6 +256,20 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
                   series={[{ key: 'adr', label: `ADR (${sym})`, color: 'var(--terracotta, #B8542A)' }]}
                   height={140}
                   empty={{ title: 'No ADR data' }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', marginBottom: 4 }}>RevPAR · {sym} per month</div>
+                <Chart variant="line" data={trendRows} xKey="month"
+                  series={[{ key: 'revpar', label: `RevPAR (${sym})`, color: 'var(--sand, #B8A878)' }]}
+                  height={140}
+                  empty={{ title: 'No RevPAR data' }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', marginBottom: 4 }}>Sold room-nights · per month</div>
+                <Chart variant="line" data={trendRows} xKey="month"
+                  series={[{ key: 'roomNights', label: 'Sold room-nights', color: 'var(--primary, #1F3A2E)' }]}
+                  height={140}
+                  empty={{ title: 'No room-night data' }} />
               </div>
             </div>
           )}
