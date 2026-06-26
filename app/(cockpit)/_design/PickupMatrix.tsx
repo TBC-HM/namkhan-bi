@@ -200,7 +200,7 @@ function MonthBlock({ month, isAlt, isTotal }: { month: PickupMatrixMonth; isAlt
 function Cell({ val, metric, emphasis, borderTop }: { val: number | null; metric: PickupMetric; emphasis?: boolean; borderTop: string }) {
   const c = cell(val, metric);
   // Negative absolute values get red, positive emphasis cells stay ink.
-  const color = c.muted ? INK_SOFT : c.negative ? '#8A2A1D' : INK;
+  const color = c.muted ? INK_SOFT : c.negative ? '#C62828' : INK;
   return (
     <td style={{
       ...S.td,
@@ -217,7 +217,7 @@ function Cell({ val, metric, emphasis, borderTop }: { val: number | null; metric
 function DeltaCell({ d, metric, kind, borderTop }: { d: PickupDelta | undefined; metric: PickupMetric; kind: 'abs' | 'pct'; borderTop: string }) {
   const c = deltaCell(d, metric, kind);
   // Tinted background only — no chip border, no fill change on tone='mute'.
-  const bg = c.tone === 'good' ? '#E8F2E4' : c.tone === 'bad' ? '#F7E2DC' : 'transparent';
+  const bg = c.tone === 'good' ? '#E8F2E4' : c.tone === 'bad' ? '#FBEAEA' : 'transparent';
   // PBS 2026-06-01: brighter green for positive deltas + keep red for negative
   const fg = c.tone === 'good' ? '#2E7D32' : c.tone === 'bad' ? '#C62828' : INK_SOFT;
   return (
@@ -253,7 +253,7 @@ const S: Record<string, CSSProperties> = {
     letterSpacing: '0.1em',
     textTransform: 'uppercase',
     background: PAPER,
-    borderBottom: `2px solid ${BLOCK_RULE}`,
+    borderBottom: `1px solid ${HAIRLINE}`,
     borderRight: `1px solid ${HAIRLINE}`,
   },
   headerTh: {
