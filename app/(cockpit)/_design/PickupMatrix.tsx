@@ -68,13 +68,12 @@ const BLOCK_TINT  = '#F8F8F8';   // subtle alt-block tint (neutral grey)
 const INK         = '#1B1B1B';
 const INK_SOFT    = '#5A5A5A';
 const HAIRLINE    = '#E0E0E0';
-const BLOCK_RULE  = '#000000';   // black rule between month blocks
+const BLOCK_RULE  = '#BDBDBD';   // black rule between month blocks
 
 const fmtInt   = (n: number) => Math.round(n).toLocaleString('en-US');
 let CURRENCY_SYMBOL = '€';
 const fmtUsd   = (n: number) => CURRENCY_SYMBOL + Math.round(n).toLocaleString('en-US');
 const fmtPct   = (n: number) => `${n.toFixed(1)}%`;
-const fmtDelta = (n: number, asPct: boolean) => (n >= 0 ? '+' : '') + (asPct ? fmtPct(n) : fmtInt(n));
 
 function fmtMetric(metric: PickupMetric, val: number): string {
   if (metric === 'OCC') return fmtPct(val);
@@ -90,10 +89,14 @@ function cell(val: number | null, metric: PickupMetric): { text: string; muted: 
 function deltaCell(d: PickupDelta | undefined, metric: PickupMetric, kind: 'abs' | 'pct') {
   const raw = kind === 'abs' ? d?.abs : d?.pct;
   if (raw == null || !Number.isFinite(raw)) return { text: '—', tone: 'mute' as const };
-  const positive = raw > 0;
-  const negative = raw < 0;
-  const text = kind === 'abs' ? fmtDelta(raw, false) + (metric === 'OCC' ? 'pp' : '') : fmtDelta(raw, true);
-  const tone = positive ? 'good' : negative ? 'bad' : 'mute';
+  const isOcc = metric === 'OCC';
+  const rounded = (kind === 'pct' || isOcc) ? Math.round(raw * 10) / 10 : Math.round(raw);
+  if (rounded === 0) return { text: '—', tone: 'mute' as const };
+  const sign = rounded > 0 ? '+' : '';
+  const text = kind === 'abs'
+    ? (isOcc ? sign + rounded.toFixed(1) + 'pp' : sign + fmtInt(rounded))
+    : sign + rounded.toFixed(1) + '%';
+  const tone = rounded > 0 ? 'good' : 'bad';
   return { text, tone };
 }
 
@@ -247,7 +250,7 @@ const S: Record<string, CSSProperties> = {
   groupTh: {
     padding: '6px 10px',
     textAlign: 'center',
-    color: '#000000',
+    color: INK,
     fontWeight: 800,
     fontSize: 10,
     letterSpacing: '0.1em',
@@ -259,7 +262,7 @@ const S: Record<string, CSSProperties> = {
   headerTh: {
     padding: '5px 8px',
     textAlign: 'right',
-    color: '#000000',
+    color: INK,
     fontWeight: 700,
     fontSize: 10,
     letterSpacing: '0.02em',
