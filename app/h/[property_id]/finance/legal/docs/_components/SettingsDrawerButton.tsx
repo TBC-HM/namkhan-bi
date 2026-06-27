@@ -214,15 +214,31 @@ function MattersTab({ propertyId, projects, rpc }:
     <>
       <Hint>
         Matter = case_ref (if linked) ELSE project. This tab manages the <em>project</em> side —
-        for the case side, switch to the Cases tab.
+        for the case side, switch to the Cases tab. Projects with 0 docs are vocab-only entries
+        seeded here; they show up in the Matter editor dropdown immediately so you can pre-create
+        a project before assigning docs.
       </Hint>
       <AddRowForm placeholder="New project name"
-        onAdd={(v) => rpc('fn_doc_project_seed', { p_property_id: propertyId, p_project: v })} />
+        onAdd={(v) => rpc('fn_doc_project_seed', { p_property_id: propertyId, p_project: v, p_description: null })} />
       <Table cols={['Project', 'Docs', 'Rename to', '']}>
         {projects.length === 0 && <EmptyRow cols={4} />}
         {projects.map((p) => (
-          <RenameRow key={p.project} value={p.project} count={p.n} colsCount={4}
-            onRename={(next) => rpc('fn_doc_project_rename', { p_property_id: propertyId, p_old: p.project, p_new: next })} />
+          <tr key={p.project} style={trStyle}>
+            <td style={tdStyle}>{p.project}</td>
+            <td style={{ ...tdStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: p.n === 0 ? INK_SOFT : INK }}>
+              {p.n}
+            </td>
+            <td style={tdStyle}>
+              <InlineEdit value="" placeholder={`rename "${p.project}"`} commitOnEnter
+                onCommit={(next) => rpc('fn_doc_project_rename', { p_property_id: propertyId, p_old: p.project, p_new: next })} />
+            </td>
+            <td style={tdStyle}>
+              <button onClick={() => {
+                if (!window.confirm(`Delete project "${p.project}"? Refuses if any document is still using it.`)) return;
+                rpc('fn_doc_project_delete', { p_property_id: propertyId, p_project: p.project });
+              }} style={delBtn}>Delete</button>
+            </td>
+          </tr>
         ))}
       </Table>
     </>

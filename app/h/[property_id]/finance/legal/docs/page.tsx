@@ -131,8 +131,11 @@ export default async function DocsTriagePage({ params, searchParams }: Props) {
   ] = await Promise.all([
     supabase.from('v_doc_cases').select('case_ref, title, matter_type, status').eq('property_id', propertyId).order('case_ref'),
     supabase.from('v_doc_collections').select('name, description, is_smart').eq('property_id', propertyId).order('name'),
-    // Distinct `project` values + counts via dms.documents (project = the project arm of matters).
-    supabase.from('v_doc_register').select('project').eq('property_id', propertyId),
+    // v_doc_projects UNIONs in-use projects (n_docs > 0) with vocab-only ones
+    // seeded via the settings drawer (n_docs = 0). Without the vocab union,
+    // "Add matter" looked like a no-op because router.refresh() refetched the
+    // documents-derived list and a 0-doc project vanished.
+    supabase.from('v_doc_projects').select('project_name, n_docs').eq('property_id', propertyId).order('n_docs', { ascending: false }).order('project_name'),
     // Distinct tags via dms.documents.tags — array_agg-able from the register's array projection.
     supabase.from('v_doc_register').select('tags').eq('property_id', propertyId),
   ]);
@@ -140,13 +143,8 @@ export default async function DocsTriagePage({ params, searchParams }: Props) {
   const cases = (caseRows ?? []) as { case_ref: string; title: string | null; matter_type: string | null; status: string | null }[];
   const collections = (collRows ?? []) as { name: string; description: string | null; is_smart?: boolean }[];
 
-  const projectCounts = new Map<string, number>();
-  for (const r of (projectRows ?? []) as { project: string | null }[]) {
-    const k = (r.project ?? '').trim();
-    if (!k) continue;
-    projectCounts.set(k, (projectCounts.get(k) ?? 0) + 1);
-  }
-  const projects = Array.from(projectCounts.entries()).map(([project, n]) => ({ project, n })).sort((a, b) => b.n - a.n);
+  const projects = ((projectRows ?? []) as { project_name: string; n_docs: number }[])
+    .map((r) => ({ project: r.project_name, n: r.n_docs }));
 
   const tagCounts = new Map<string, number>();
   for (const r of (tagRows ?? []) as { tags: string[] | null }[]) {
