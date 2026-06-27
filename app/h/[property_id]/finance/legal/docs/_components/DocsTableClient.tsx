@@ -28,6 +28,7 @@ interface DocRow {
   version: number | null; is_current_version: boolean | null;
   tags: string[] | null; project: string | null; matter: string | null;
   case_refs: string[] | null; n_collections: number | null;
+  collection_names: string[] | null;
   retention_until: string | null; needs_review: boolean | null; needs_review_reason: string | null;
 }
 interface QueryState {
@@ -59,21 +60,24 @@ const PAPER       = '#FFFFFF';
 const REVIEW_TINT = '#FFF8F0';
 
 // Brief §3: sortable columns + labels in display order.
+// Collections & Tags are arrays — not sortable directly server-side; render-only.
 const COLUMNS: { key: string; label: string; align?: 'left' | 'right' | 'center'; sortable?: boolean }[] = [
-  { key: 'title',           label: 'Title' },
-  { key: 'doc_type',        label: 'Family' },
-  { key: 'doc_subtype',     label: 'Subtype' },
-  { key: 'status',          label: 'Status' },
-  { key: 'matter',          label: 'Matter' },
-  { key: 'doc_date',        label: 'Doc date',     align: 'right' },
-  { key: 'expiry_date',     label: 'Expiry',       align: 'right' },
-  { key: 'signed',          label: 'Signed',       align: 'center' },
-  { key: 'sensitivity',     label: 'Sens.' },
-  { key: 'importance',      label: 'Imp.' },
-  { key: 'uploaded_at',     label: 'Uploaded',     align: 'right' },
-  { key: 'last_updated_at', label: 'Updated',      align: 'right' },
-  { key: 'has_file',        label: 'File',         align: 'center' },
-  { key: '__actions',       label: 'Actions',      align: 'right', sortable: false },
+  { key: 'title',            label: 'Title' },
+  { key: 'doc_type',         label: 'Family' },
+  { key: 'doc_subtype',      label: 'Subtype' },
+  { key: 'status',           label: 'Status' },
+  { key: 'matter',           label: 'Matter' },
+  { key: 'collection_names', label: 'Collections', sortable: false },
+  { key: 'tags',             label: 'Tags',        sortable: false },
+  { key: 'doc_date',         label: 'Doc date',     align: 'right' },
+  { key: 'expiry_date',      label: 'Expiry',       align: 'right' },
+  { key: 'signed',           label: 'Signed',       align: 'center' },
+  { key: 'sensitivity',      label: 'Sens.' },
+  { key: 'importance',       label: 'Imp.' },
+  { key: 'uploaded_at',      label: 'Uploaded',     align: 'right' },
+  { key: 'last_updated_at',  label: 'Updated',      align: 'right' },
+  { key: 'has_file',         label: 'File',         align: 'center' },
+  { key: '__actions',        label: 'Actions',      align: 'right', sortable: false },
 ];
 
 const STATUS_OPTIONS      = ['draft', 'active', 'expired', 'superseded', 'archived'];
@@ -329,7 +333,35 @@ export default function DocsTableClient({
                       </select>
                     ) : (r.status ?? '—')}
                   </td>
-                  <td style={tdStyle}>{r.matter ?? '—'}</td>
+                  {/* MATTER — editable: pick existing case OR existing/new project. */}
+                  <td style={tdStyle}>
+                    {isEditing ? (
+                      <MatterEditor row={r} caseRefs={caseRefs} matters={matters}
+                        onLinkCase={(ref) => callRpc('fn_doc_link_case', { p_doc_id: r.doc_id, p_case_ref: ref, p_doc_role: 'evidence', p_title: null })}
+                        onSetProject={(proj) => onRemap(r.doc_id, { project: proj })} />
+                    ) : (r.matter ?? '—')}
+                  </td>
+
+                  {/* COLLECTIONS — chips. In edit mode each chip has × (unlink); + opens picker. */}
+                  <td style={tdStyle}>
+                    <ChipList
+                      items={r.collection_names ?? []}
+                      isEditing={isEditing}
+                      onRemove={(name) => callRpc('fn_doc_unlink_collection', { p_doc_id: r.doc_id, p_collection_name: name })}
+                      onAddClick={() => openPicker(r.doc_id, 'collection')}
+                    />
+                  </td>
+
+                  {/* TAGS — chips. + opens picker; × removes tag (fn_doc_tag with p_add=false). */}
+                  <td style={tdStyle}>
+                    <ChipList
+                      items={r.tags ?? []}
+                      isEditing={isEditing}
+                      onRemove={(tag) => callRpc('fn_doc_tag', { p_doc_id: r.doc_id, p_tag: tag, p_add: false })}
+                      onAddClick={() => openPicker(r.doc_id, 'tag')}
+                    />
+                  </td>
+
                   <td style={{ ...tdStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                     {isEditing ? (
                       <input type="date" defaultValue={r.doc_date ?? ''}
@@ -501,4 +533,101 @@ function pageBtn(disabled: boolean): React.CSSProperties {
     background: PAPER, color: disabled ? INK_SOFT : INK,
     cursor: disabled ? 'not-allowed' : 'pointer', fontSize: 11,
   };
+}
+
+// ── ChipList ─────────────────────────────────────────────────────────────────
+// Render an array of strings as small chips. In edit mode each chip shows a ×
+// button to unlink, plus a trailing "+" button to open the row's picker.
+function ChipList({ items, isEditing, onRemove, onAddClick }: {
+  items: string[]; isEditing: boolean;
+  onRemove: (item: string) => unknown;
+  onAddClick: () => void;
+}) {
+  if (!items.length && !isEditing) return <span style={{ color: INK_SOFT }}>—</span>;
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+      {items.map((it) => (
+        <span key={it} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          padding: '2px 6px', border: `1px solid ${HAIRLINE}`, borderRadius: 10,
+          background: '#F8F8F8', fontSize: 10, color: INK,
+        }}>
+          {it}
+          {isEditing && (
+            <button onClick={() => onRemove(it)}
+              aria-label={`Unlink ${it}`}
+              style={{
+                appearance: 'none', background: 'transparent', border: 'none',
+                color: '#C62828', cursor: 'pointer', fontSize: 11, lineHeight: 1, padding: 0,
+              }}>×</button>
+          )}
+        </span>
+      ))}
+      {isEditing && (
+        <button onClick={onAddClick}
+          aria-label="Add"
+          style={{
+            padding: '2px 6px', border: `1px dashed ${INK_SOFT}`, borderRadius: 10,
+            background: PAPER, color: INK_SOFT, fontSize: 10, cursor: 'pointer',
+          }}>+</button>
+      )}
+    </div>
+  );
+}
+
+// ── MatterEditor ─────────────────────────────────────────────────────────────
+// Two-path matter editor: either link an existing case (autocomplete from
+// caseRefs, falls through to fn_doc_link_case which auto-creates new ones), or
+// set the free-text project (autocomplete from existing matters). Surface both
+// at once so PBS can pick the right path without thinking about the underlying
+// data model.
+function MatterEditor({ row, caseRefs, matters, onLinkCase, onSetProject }: {
+  row: DocRow; caseRefs: string[]; matters: string[];
+  onLinkCase: (ref: string) => unknown;
+  onSetProject: (project: string) => unknown;
+}) {
+  const [caseV, setCaseV] = useState('');
+  const [projV, setProjV] = useState(row.project ?? '');
+  const linkedCases = row.case_refs ?? [];
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 200 }}>
+      {linkedCases.length > 0 && (
+        <div style={{ fontSize: 10, color: INK_SOFT }}>
+          linked: {linkedCases.map((cr) => <code key={cr} style={{ marginRight: 4 }}>{cr}</code>)}
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        <input list={`matter-cases-${row.doc_id}`}
+          placeholder="link case…"
+          value={caseV}
+          onChange={(e) => setCaseV(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              const v = caseV.trim(); if (!v) return;
+              onLinkCase(v); setCaseV('');
+            }
+          }}
+          style={{ ...inlineInput, flex: 1, minWidth: 80, fontSize: 10 }} />
+        <datalist id={`matter-cases-${row.doc_id}`}>
+          {caseRefs.map((c) => <option key={c} value={c} />)}
+        </datalist>
+      </div>
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        <input list={`matter-projs-${row.doc_id}`}
+          placeholder="or set project…"
+          value={projV}
+          onChange={(e) => setProjV(e.target.value)}
+          onBlur={(e) => {
+            const v = e.target.value.trim();
+            if (v !== (row.project ?? '')) onSetProject(v);
+          }}
+          onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+          style={{ ...inlineInput, flex: 1, minWidth: 80, fontSize: 10 }} />
+        <datalist id={`matter-projs-${row.doc_id}`}>
+          {matters.map((m) => <option key={m} value={m} />)}
+        </datalist>
+      </div>
+    </div>
+  );
 }
