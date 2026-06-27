@@ -124,9 +124,21 @@ export default async function DocsTriagePage({ params, searchParams }: Props) {
   const families = Array.from(familyCounts.keys()).sort();
   const familiesWithCounts = Array.from(familyCounts.entries()).map(([doc_type, n]) => ({ doc_type, n })).sort((a, b) => b.n - a.n);
 
-  const { data: matterRows } = await supabase
-    .from('v_doc_register').select('matter').eq('property_id', propertyId);
-  const matters = Array.from(new Set((matterRows ?? []).map((r: any) => String(r.matter ?? '')).filter(Boolean))).sort();
+  // Matters = union of every case_ref AND every project (in-use + vocab-only).
+  // Reading from v_doc_register.matter (distinct) misses vocab-only matters
+  // seeded via the settings drawer — PBS added "PLL" and it never appeared
+  // in the dropdown because no doc had project='PLL' yet.
+  const [
+    { data: matterProjectRows },
+    { data: matterCaseRows },
+  ] = await Promise.all([
+    supabase.from('v_doc_projects').select('project_name').eq('property_id', propertyId),
+    supabase.from('v_doc_cases').select('case_ref').eq('property_id', propertyId),
+  ]);
+  const matters = Array.from(new Set([
+    ...((matterProjectRows ?? []) as { project_name: string | null }[]).map((r) => (r.project_name ?? '').trim()),
+    ...((matterCaseRows    ?? []) as { case_ref: string | null }[]).map((r) => (r.case_ref ?? '').trim()),
+  ].filter(Boolean))).sort();
 
   const { data: statusRows } = await supabase
     .from('v_doc_register').select('status').eq('property_id', propertyId);
