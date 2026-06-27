@@ -32,7 +32,7 @@ interface DocRow {
   retention_until: string | null; needs_review: boolean | null; needs_review_reason: string | null;
 }
 interface QueryState {
-  q: string; family: string; matter: string; status: string;
+  q: string; family: string; subtype: string; matter: string; status: string;
   nr: boolean; exp: boolean;
   sort: string; dir: 'asc' | 'desc' | '';
   page: number;
@@ -104,6 +104,12 @@ export default function DocsTableClient({
   const [error, setError] = useState<string | null>(null);
   // Per-row picker state: which row has which picker open, and the typed value.
   const [picker, setPicker] = useState<{ docId: string; kind: 'case' | 'collection' | 'tag'; value: string } | null>(null);
+  // Multi-select state — set of selected doc_ids across this page only.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const allOnPage = useMemo(() => rows.map((r) => r.doc_id), [rows]);
+  const allSelected = allOnPage.length > 0 && allOnPage.every((id) => selected.has(id));
+  const someSelected = allOnPage.some((id) => selected.has(id));
 
   // Group vocab by doc_type so the row subtype dropdown is filtered cheaply.
   const vocabByType = useMemo(() => {
@@ -120,7 +126,8 @@ export default function DocsTableClient({
   function pushParams(patch: Partial<Record<string, string | null>>) {
     const sp = new URLSearchParams();
     const base: Record<string, string> = {
-      q: query.q, family: query.family, matter: query.matter, status: query.status,
+      q: query.q, family: query.family, subtype: query.subtype,
+      matter: query.matter, status: query.status,
       nr: query.nr ? '1' : '0',
       exp: query.exp ? '1' : '',
       sort: query.sort, dir: query.dir,
@@ -178,6 +185,83 @@ export default function DocsTableClient({
   function openPicker(docId: string, kind: 'case' | 'collection' | 'tag') {
     setPicker({ docId, kind, value: '' });
   }
+
+  // --- Multi-select helpers --------------------------------------------
+  function toggleRow(docId: string, on?: boolean) {
+    setSelected((cur) => {
+      const next = new Set(cur);
+      const willAdd = on ?? !next.has(docId);
+      if (willAdd) next.add(docId); else next.delete(docId);
+      return next;
+    });
+  }
+  function toggleAllOnPage(on: boolean) {
+    setSelected((cur) => {
+      const next = new Set(cur);
+      for (const id of allOnPage) {
+        if (on) next.add(id); else next.delete(id);
+      }
+      return next;
+    });
+  }
+  function clearSelection() { setSelected(new Set()); }
+
+  // --- File actions per row --------------------------------------------
+  function fileHref(docId: string, mode: 'download' | 'preview') {
+    return `/api/legal/docs/file/${encodeURIComponent(docId)}?mode=${mode}`;
+  }
+  function openInTab(href: string) {
+    window.open(href, '_blank', 'noopener,noreferrer');
+  }
+  function downloadOne(docId: string) {
+    // Same-tab navigation triggers the browser's download dialogue cleanly.
+    window.location.href = fileHref(docId, 'download');
+  }
+
+  // --- Bulk actions on the selected set ---------------------------------
+  async function bulkDownload() {
+    if (!selected.size) return;
+    setBulkBusy(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/legal/docs/bulk-download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ doc_ids: Array.from(selected) }),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({}));
+        throw new Error(detail?.error ?? `bulk download failed (${res.status})`);
+      }
+      const blob = await res.blob();
+      const cd   = res.headers.get('content-disposition') ?? '';
+      const fn   = /filename="([^"]+)"/.exec(cd)?.[1] ?? 'legal-docs.zip';
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = fn; document.body.appendChild(a); a.click();
+      a.remove(); URL.revokeObjectURL(url);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+  function bulkMailto() {
+    if (!selected.size) return;
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const rowsById = new Map(rows.map((r) => [r.doc_id, r]));
+    const lines: string[] = ['Documents from the Namkhan register:', ''];
+    for (const id of selected) {
+      const r = rowsById.get(id);
+      const name = r?.file_name?.trim() || r?.title?.trim() || id;
+      lines.push(`• ${name}`);
+      lines.push(`  ${origin}${fileHref(id, 'download')}`);
+      lines.push('');
+    }
+    const subject = `Documents from Namkhan · ${selected.size} file${selected.size === 1 ? '' : 's'}`;
+    const href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\n'))}`;
+    window.location.href = href;
+  }
   async function onRemap(doc_id: string, patch: Record<string, unknown>) {
     const args: Record<string, unknown> = { p_doc_id: doc_id };
     if ('doc_type'   in patch) args.p_doc_type    = patch.doc_type;
@@ -197,6 +281,35 @@ export default function DocsTableClient({
   // --- Render -----------------------------------------------------------
   return (
     <div>
+      {/* Bulk action toolbar — shown only when at least one row is selected. */}
+      {selected.size > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
+          background: '#F4EFE2', border: `1px solid ${INK}`, borderRadius: 4,
+          marginBottom: 8, fontSize: 11, color: INK,
+        }}>
+          <strong>{selected.size} selected</strong>
+          <button onClick={bulkDownload} disabled={bulkBusy}
+            style={{ padding: '4px 10px', border: `1px solid ${INK}`, borderRadius: 3,
+                     background: INK, color: PAPER, fontSize: 11, cursor: bulkBusy ? 'wait' : 'pointer' }}>
+            {bulkBusy ? 'Zipping…' : '⤓ Download ZIP'}
+          </button>
+          <button onClick={bulkMailto}
+            style={{ padding: '4px 10px', border: `1px solid ${INK}`, borderRadius: 3,
+                     background: PAPER, color: INK, fontSize: 11, cursor: 'pointer' }}>
+            ✉ Mail to…
+          </button>
+          <button onClick={clearSelection}
+            style={{ padding: '4px 10px', border: `1px solid ${HAIRLINE}`, borderRadius: 3,
+                     background: PAPER, color: INK_SOFT, fontSize: 11, cursor: 'pointer' }}>
+            Clear
+          </button>
+          <span style={{ marginLeft: 'auto', color: INK_SOFT, fontSize: 11 }}>
+            ZIP contains the bytes verbatim · mail composes a draft with download links
+          </span>
+        </div>
+      )}
+
       {/* Filter bar */}
       <div style={{
         display: 'flex', flexWrap: 'wrap', gap: 8, padding: '8px 0 12px 0',
@@ -210,10 +323,25 @@ export default function DocsTableClient({
           onKeyDown={(e) => { if (e.key === 'Enter') pushParams({ q: (e.target as HTMLInputElement).value, page: '1' }); }}
           style={{ padding: '4px 8px', border: `1px solid ${HAIRLINE}`, borderRadius: 3, minWidth: 200, fontSize: 11 }}
         />
-        <select value={query.family} onChange={(e) => pushParams({ family: e.target.value })}
+        <select value={query.family}
+          onChange={(e) => pushParams({ family: e.target.value, subtype: '' })}
           style={selectStyle}>
           <option value="">All families</option>
           {families.map((f) => <option key={f} value={f}>{f}</option>)}
+        </select>
+        {/* Subtype dropdown — narrows to the selected family's vocab when one is set.
+            When family = all, shows the platform-wide vocab. */}
+        <select value={query.subtype}
+          onChange={(e) => pushParams({ subtype: e.target.value })}
+          title={query.family ? `Subtypes for ${query.family}` : 'All subtypes (across families)'}
+          style={selectStyle}>
+          <option value="">All subtypes</option>
+          {(query.family ? vocab.filter((v) => v.doc_type === query.family) : vocab)
+            .map((v) => (
+              <option key={`${v.doc_type}·${v.subtype_slug}`} value={v.subtype_slug}>
+                {v.label || v.subtype_slug}{!query.family ? ` · ${v.doc_type}` : ''}
+              </option>
+            ))}
         </select>
         <select value={query.matter} onChange={(e) => pushParams({ matter: e.target.value })}
           style={selectStyle}>
@@ -257,6 +385,17 @@ export default function DocsTableClient({
         }}>
           <thead>
             <tr>
+              <th style={{
+                padding: '8px 10px', textAlign: 'center', background: PAPER,
+                borderBottom: '2px solid #000', width: 28, fontSize: 10,
+              }}>
+                <input type="checkbox"
+                  aria-label="Select all on page"
+                  ref={(el) => { if (el) el.indeterminate = someSelected && !allSelected; }}
+                  checked={allSelected}
+                  onChange={(e) => toggleAllOnPage(e.target.checked)}
+                />
+              </th>
               {COLUMNS.map((c) => {
                 const active = query.sort === c.key;
                 const arrow = !active ? '' : query.dir === 'asc' ? ' ▲' : ' ▼';
@@ -285,7 +424,7 @@ export default function DocsTableClient({
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={COLUMNS.length} style={{ padding: '24px 12px', color: INK_SOFT, textAlign: 'center', fontStyle: 'italic' }}>
+              <tr><td colSpan={COLUMNS.length + 1} style={{ padding: '24px 12px', color: INK_SOFT, textAlign: 'center', fontStyle: 'italic' }}>
                 No documents match this filter.
               </td></tr>
             )}
@@ -295,6 +434,13 @@ export default function DocsTableClient({
               const subtypesForType = (r.doc_type && vocabByType.get(r.doc_type)) || [];
               return (
                 <tr key={r.doc_id} style={{ background: tint, borderBottom: `1px solid ${HAIRLINE}` }}>
+                  <td style={{ ...tdStyle, textAlign: 'center', width: 28 }}>
+                    <input type="checkbox"
+                      aria-label={`Select ${r.title ?? r.file_name ?? r.doc_id}`}
+                      checked={selected.has(r.doc_id)}
+                      onChange={(e) => toggleRow(r.doc_id, e.target.checked)}
+                    />
+                  </td>
                   <td style={tdStyle}>
                     <div style={{ fontWeight: 500, color: INK }}>{r.title || r.file_name || '—'}</div>
                     {r.needs_review && (
@@ -404,6 +550,14 @@ export default function DocsTableClient({
                   <td style={{ ...tdStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: INK_SOFT }}>{fmtDate(r.last_updated_at)}</td>
                   <td style={{ ...tdStyle, textAlign: 'center' }}>{r.has_file ? '✓' : '·'}</td>
                   <td style={{ ...tdStyle, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    {r.has_file && (
+                      <>
+                        <button onClick={() => openInTab(fileHref(r.doc_id, 'preview'))}
+                          title="Open inline (new tab)" style={actionBtn()}>👁 Preview</button>
+                        <button onClick={() => downloadOne(r.doc_id)}
+                          title="Save the original file" style={actionBtn()}>⤓ Download</button>
+                      </>
+                    )}
                     <button onClick={() => setEditingId(isEditing ? null : r.doc_id)} style={actionBtn(isEditing)}>
                       {isEditing ? 'Done' : 'Edit'}
                     </button>
@@ -437,7 +591,7 @@ export default function DocsTableClient({
               return [
                 rowEl,
                 <tr key={`${r.doc_id}-picker`} style={{ background: '#FAFAFA', borderBottom: `1px solid ${HAIRLINE}` }}>
-                  <td colSpan={COLUMNS.length} style={{ padding: '8px 10px' }}>
+                  <td colSpan={COLUMNS.length + 1} style={{ padding: '8px 10px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: INK }}>
                       <strong style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                         link {picker.kind} →

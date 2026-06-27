@@ -44,6 +44,7 @@ export default async function DocsTriagePage({ params, searchParams }: Props) {
   // --- URL → query state -------------------------------------------------
   const q       = asStr(searchParams.q).trim();
   const family  = asStr(searchParams.family).trim();        // doc_type
+  const subtype = asStr(searchParams.subtype).trim();       // doc_subtype slug
   const matter  = asStr(searchParams.matter).trim();
   const status  = asStr(searchParams.status).trim();
   const nrRaw   = asStr(searchParams.nr);
@@ -68,6 +69,7 @@ export default async function DocsTriagePage({ params, searchParams }: Props) {
 
   if (nr)             qry = qry.eq('needs_review', true);
   if (family)         qry = qry.eq('doc_type', family);
+  if (subtype)        qry = qry.eq('doc_subtype', subtype);
   if (matter)         qry = qry.eq('matter', matter);
   if (status)         qry = qry.eq('status', status);
   if (exp) {
@@ -198,7 +200,7 @@ export default async function DocsTriagePage({ params, searchParams }: Props) {
             caseRefs={caseRefs}
             collectionNames={collectionNames}
             tagList={tagList}
-            query={{ q, family, matter, status, nr, exp, sort, dir, page }}
+            query={{ q, family, subtype, matter, status, nr, exp, sort, dir, page }}
             totalRows={total}
             totalPages={totalPages}
             pageSize={PAGE_SIZE}
