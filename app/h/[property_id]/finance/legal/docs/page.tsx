@@ -57,9 +57,12 @@ export default async function DocsTriagePage({ params, searchParams }: Props) {
 
   // --- Query -------------------------------------------------------------
   const supabase = getSupabaseAdmin();
+  // count:'exact' — the doc register is small (≤ a few thousand rows per
+  // property) so the planner estimate is wildly off after recent inserts;
+  // exact count keeps "X matching · page A/B" honest and pagination correct.
   let qry = supabase
     .from('v_doc_register')
-    .select('*', { count: 'planned' })
+    .select('*', { count: 'exact' })
     .eq('property_id', propertyId);
 
   if (nr)             qry = qry.eq('needs_review', true);
