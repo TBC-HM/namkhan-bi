@@ -12,6 +12,7 @@ import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_de
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { financeSubPagesForProperty } from '@/app/finance/_subpages';
 import DocsTableClient from './_components/DocsTableClient';
+import SettingsDrawerButton from './_components/SettingsDrawerButton';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -98,19 +99,69 @@ export default async function DocsTriagePage({ params, searchParams }: Props) {
   // --- Subtype vocab (whole table — 100s of rows, cached in client) ------
   const { data: vocab } = await supabase
     .from('v_doc_subtype_vocab')
-    .select('doc_type, subtype_slug, label, time_model')
+    .select('doc_type, subtype_slug, label, time_model, sort_order')
     .order('doc_type').order('label');
 
   // --- Filter dropdown sources (cheap distinct queries) ------------------
   const { data: familyRows } = await supabase
     .from('v_doc_register').select('doc_type').eq('property_id', propertyId);
-  const families = Array.from(new Set((familyRows ?? []).map((r: any) => String(r.doc_type ?? '')).filter(Boolean))).sort();
+  const familyCounts = new Map<string, number>();
+  for (const r of (familyRows ?? []) as { doc_type: string | null }[]) {
+    const k = String(r.doc_type ?? '');
+    if (!k) continue;
+    familyCounts.set(k, (familyCounts.get(k) ?? 0) + 1);
+  }
+  const families = Array.from(familyCounts.keys()).sort();
+  const familiesWithCounts = Array.from(familyCounts.entries()).map(([doc_type, n]) => ({ doc_type, n })).sort((a, b) => b.n - a.n);
+
   const { data: matterRows } = await supabase
     .from('v_doc_register').select('matter').eq('property_id', propertyId);
   const matters = Array.from(new Set((matterRows ?? []).map((r: any) => String(r.matter ?? '')).filter(Boolean))).sort();
+
   const { data: statusRows } = await supabase
     .from('v_doc_register').select('status').eq('property_id', propertyId);
   const statuses = Array.from(new Set((statusRows ?? []).map((r: any) => String(r.status ?? '')).filter(Boolean))).sort();
+
+  // --- Master vocab for the settings drawer + the row autocomplete pickers
+  const [
+    { data: caseRows },
+    { data: collRows },
+    { data: projectRows },
+    { data: tagRows },
+  ] = await Promise.all([
+    supabase.from('v_doc_cases').select('case_ref, title, matter_type, status').eq('property_id', propertyId).order('case_ref'),
+    supabase.from('v_doc_collections').select('name, description, is_smart').eq('property_id', propertyId).order('name'),
+    // Distinct `project` values + counts via dms.documents (project = the project arm of matters).
+    supabase.from('v_doc_register').select('project').eq('property_id', propertyId),
+    // Distinct tags via dms.documents.tags — array_agg-able from the register's array projection.
+    supabase.from('v_doc_register').select('tags').eq('property_id', propertyId),
+  ]);
+
+  const cases = (caseRows ?? []) as { case_ref: string; title: string | null; matter_type: string | null; status: string | null }[];
+  const collections = (collRows ?? []) as { name: string; description: string | null; is_smart?: boolean }[];
+
+  const projectCounts = new Map<string, number>();
+  for (const r of (projectRows ?? []) as { project: string | null }[]) {
+    const k = (r.project ?? '').trim();
+    if (!k) continue;
+    projectCounts.set(k, (projectCounts.get(k) ?? 0) + 1);
+  }
+  const projects = Array.from(projectCounts.entries()).map(([project, n]) => ({ project, n })).sort((a, b) => b.n - a.n);
+
+  const tagCounts = new Map<string, number>();
+  for (const r of (tagRows ?? []) as { tags: string[] | null }[]) {
+    for (const t of r.tags ?? []) {
+      const k = (t ?? '').trim();
+      if (!k) continue;
+      tagCounts.set(k, (tagCounts.get(k) ?? 0) + 1);
+    }
+  }
+  const tags = Array.from(tagCounts.entries()).map(([tag, n]) => ({ tag, n })).sort((a, b) => b.n - a.n);
+
+  // For row pickers — flat lists (existing → add new).
+  const caseRefs       = cases.map((c) => c.case_ref);
+  const collectionNames = collections.map((c) => c.name);
+  const tagList        = Array.from(tagCounts.keys()).sort();
 
   const tabs: DashboardTab[] = financeSubPagesForProperty(propertyId).map((s) => ({
     key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/finance/legal/docs'),
@@ -127,6 +178,17 @@ export default async function DocsTriagePage({ params, searchParams }: Props) {
           title="Document register"
           subtitle="Triage queue · classify, archive, link to cases/collections · inline remap clears needs_review"
           density="compact"
+          action={
+            <SettingsDrawerButton
+              propertyId={propertyId}
+              families={familiesWithCounts}
+              subtypeVocab={(vocab ?? []) as any[]}
+              projects={projects}
+              cases={cases}
+              collections={collections}
+              tags={tags}
+            />
+          }
         >
           <DocsTableClient
             propertyId={propertyId}
@@ -135,6 +197,9 @@ export default async function DocsTriagePage({ params, searchParams }: Props) {
             families={families}
             matters={matters}
             statuses={statuses}
+            caseRefs={caseRefs}
+            collectionNames={collectionNames}
+            tagList={tagList}
             query={{ q, family, matter, status, nr, exp, sort, dir, page }}
             totalRows={total}
             totalPages={totalPages}

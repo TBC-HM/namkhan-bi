@@ -43,6 +43,9 @@ interface Props {
   families: string[];
   matters: string[];
   statuses: string[];
+  caseRefs: string[];        // existing case_refs for the autocomplete picker
+  collectionNames: string[]; // existing collection names
+  tagList: string[];         // existing tags (distinct)
   query: QueryState;
   totalRows: number;
   totalPages: number;
@@ -86,13 +89,17 @@ function fmtBool(b: boolean | null): string {
 }
 
 export default function DocsTableClient({
-  propertyId, rows, vocab, families, matters, statuses, query, totalRows, totalPages, pageSize,
+  propertyId, rows, vocab, families, matters, statuses,
+  caseRefs, collectionNames, tagList,
+  query, totalRows, totalPages, pageSize,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const [pending, startTransition] = useTransition();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Per-row picker state: which row has which picker open, and the typed value.
+  const [picker, setPicker] = useState<{ docId: string; kind: 'case' | 'collection' | 'tag'; value: string } | null>(null);
 
   // Group vocab by doc_type so the row subtype dropdown is filtered cheaply.
   const vocabByType = useMemo(() => {
@@ -154,21 +161,18 @@ export default function DocsTableClient({
     if (!window.confirm('Permanently DELETE this archived doc? Blocks if any external reference still points at it.')) return;
     await callRpc('fn_doc_purge', { p_doc_id: doc_id });
   }
-  async function onAddCase(doc_id: string) {
-    const case_ref = window.prompt('Case ref to link (auto-created if new):')?.trim();
-    if (!case_ref) return;
-    const role = window.prompt('Doc role (default = evidence):', 'evidence')?.trim() || 'evidence';
-    await callRpc('fn_doc_link_case', { p_doc_id: doc_id, p_case_ref: case_ref, p_doc_role: role, p_title: null });
+  async function commitPicker() {
+    if (!picker) return;
+    const v = picker.value.trim();
+    if (!v) { setPicker(null); return; }
+    let ok = false;
+    if (picker.kind === 'case')       ok = await callRpc('fn_doc_link_case',        { p_doc_id: picker.docId, p_case_ref: v, p_doc_role: 'evidence', p_title: null });
+    if (picker.kind === 'collection') ok = await callRpc('fn_doc_link_collection',  { p_doc_id: picker.docId, p_collection_name: v });
+    if (picker.kind === 'tag')        ok = await callRpc('fn_doc_tag',              { p_doc_id: picker.docId, p_tag: v, p_add: true });
+    if (ok) setPicker(null);
   }
-  async function onAddCollection(doc_id: string) {
-    const name = window.prompt('Collection name (auto-created if new):')?.trim();
-    if (!name) return;
-    await callRpc('fn_doc_link_collection', { p_doc_id: doc_id, p_collection_name: name });
-  }
-  async function onTag(doc_id: string) {
-    const tag = window.prompt('Tag to add:')?.trim();
-    if (!tag) return;
-    await callRpc('fn_doc_tag', { p_doc_id: doc_id, p_tag: tag, p_add: true });
+  function openPicker(docId: string, kind: 'case' | 'collection' | 'tag') {
+    setPicker({ docId, kind, value: '' });
   }
   async function onRemap(doc_id: string, patch: Record<string, unknown>) {
     const args: Record<string, unknown> = { p_doc_id: doc_id };
@@ -373,9 +377,9 @@ export default function DocsTableClient({
                     </button>
                     {!r.is_archived && (
                       <>
-                        <button onClick={() => onAddCase(r.doc_id)} style={actionBtn()}>+ Case</button>
-                        <button onClick={() => onAddCollection(r.doc_id)} style={actionBtn()}>+ Coll.</button>
-                        <button onClick={() => onTag(r.doc_id)} style={actionBtn()}>+ Tag</button>
+                        <button onClick={() => openPicker(r.doc_id, 'case')}       style={actionBtn(picker?.docId === r.doc_id && picker.kind === 'case')}>+ Case</button>
+                        <button onClick={() => openPicker(r.doc_id, 'collection')} style={actionBtn(picker?.docId === r.doc_id && picker.kind === 'collection')}>+ Coll.</button>
+                        <button onClick={() => openPicker(r.doc_id, 'tag')}        style={actionBtn(picker?.docId === r.doc_id && picker.kind === 'tag')}>+ Tag</button>
                         <button onClick={() => onArchive(r.doc_id)} style={actionBtn()}>Archive</button>
                       </>
                     )}
@@ -388,6 +392,57 @@ export default function DocsTableClient({
                   </td>
                 </tr>
               );
+            }).flatMap((rowEl, idx) => {
+              const r = rows[idx];
+              if (picker?.docId !== r.doc_id) return [rowEl];
+              const existing = picker.kind === 'case' ? caseRefs : picker.kind === 'collection' ? collectionNames : tagList;
+              const listId = `dl-${picker.kind}-${r.doc_id}`;
+              const placeholder =
+                picker.kind === 'case'       ? 'pick existing case_ref, or type a new one'  :
+                picker.kind === 'collection' ? 'pick existing collection, or type new'      :
+                                               'pick existing tag, or type new';
+              const showAddNew = picker.value.trim() && !existing.includes(picker.value.trim());
+              return [
+                rowEl,
+                <tr key={`${r.doc_id}-picker`} style={{ background: '#FAFAFA', borderBottom: `1px solid ${HAIRLINE}` }}>
+                  <td colSpan={COLUMNS.length} style={{ padding: '8px 10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: INK }}>
+                      <strong style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                        link {picker.kind} →
+                      </strong>
+                      <input
+                        list={listId}
+                        autoFocus
+                        type="text"
+                        value={picker.value}
+                        placeholder={placeholder}
+                        onChange={(e) => setPicker({ ...picker, value: e.target.value })}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') { e.preventDefault(); commitPicker(); }
+                          if (e.key === 'Escape') { setPicker(null); }
+                        }}
+                        style={{ flex: 1, padding: '4px 8px', border: `1px solid ${HAIRLINE}`, borderRadius: 3, fontSize: 11 }}
+                      />
+                      <datalist id={listId}>
+                        {existing.map((opt) => <option key={opt} value={opt} />)}
+                      </datalist>
+                      <button onClick={commitPicker}
+                        style={{ padding: '4px 10px', border: `1px solid ${INK}`, borderRadius: 3,
+                                 background: showAddNew ? '#2E7D32' : INK, color: PAPER, fontSize: 11, cursor: 'pointer' }}>
+                        {showAddNew ? `+ Add new "${picker.value.trim()}"` : 'Link'}
+                      </button>
+                      <button onClick={() => setPicker(null)}
+                        style={{ padding: '4px 8px', border: `1px solid ${HAIRLINE}`, borderRadius: 3,
+                                 background: PAPER, color: INK_SOFT, fontSize: 11, cursor: 'pointer' }}>
+                        Cancel
+                      </button>
+                    </div>
+                    <div style={{ fontSize: 10, color: INK_SOFT, marginTop: 4 }}>
+                      {existing.length} existing {picker.kind}{existing.length === 1 ? '' : picker.kind === 'case' ? 's' : 's'} — type to filter, Enter to confirm.
+                    </div>
+                  </td>
+                </tr>,
+              ];
             })}
           </tbody>
         </table>
