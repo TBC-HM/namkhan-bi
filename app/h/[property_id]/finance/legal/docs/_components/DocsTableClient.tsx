@@ -33,6 +33,7 @@ interface DocRow {
 }
 interface QueryState {
   q: string; family: string; subtype: string; matter: string; status: string;
+  caseF: string; collF: string; tagF: string;
   nr: boolean; exp: boolean;
   sort: string; dir: 'asc' | 'desc' | '';
   page: number;
@@ -128,6 +129,7 @@ export default function DocsTableClient({
     const base: Record<string, string> = {
       q: query.q, family: query.family, subtype: query.subtype,
       matter: query.matter, status: query.status,
+      case: query.caseF, coll: query.collF, tag: query.tagF,
       nr: query.nr ? '1' : '0',
       exp: query.exp ? '1' : '',
       sort: query.sort, dir: query.dir,
@@ -208,7 +210,12 @@ export default function DocsTableClient({
 
   // --- File actions per row --------------------------------------------
   function fileHref(docId: string, mode: 'download' | 'preview') {
-    return `/api/legal/docs/file/${encodeURIComponent(docId)}?mode=${mode}`;
+    // Download path 302s to a Supabase signed URL with attachment disposition.
+    // Preview path is a Next page that picks the right inline viewer per MIME
+    // (PDF + image native, Office via view.officeapps.live.com); without the
+    // wrapper page, browsers download anything they can't render natively.
+    if (mode === 'preview') return `/legal/docs/preview/${encodeURIComponent(docId)}`;
+    return `/api/legal/docs/file/${encodeURIComponent(docId)}?mode=download`;
   }
   function openInTab(href: string) {
     window.open(href, '_blank', 'noopener,noreferrer');
@@ -352,6 +359,25 @@ export default function DocsTableClient({
           style={selectStyle}>
           <option value="">All statuses</option>
           {statuses.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        {/* Array-membership filters — server uses .contains() on text[] cols. */}
+        <select value={query.caseF} onChange={(e) => pushParams({ case: e.target.value })}
+          style={selectStyle}
+          title="Filter to docs linked to this case">
+          <option value="">All cases</option>
+          {caseRefs.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select value={query.collF} onChange={(e) => pushParams({ coll: e.target.value })}
+          style={selectStyle}
+          title="Filter to docs in this collection">
+          <option value="">All collections</option>
+          {collectionNames.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select value={query.tagF} onChange={(e) => pushParams({ tag: e.target.value })}
+          style={selectStyle}
+          title="Filter to docs carrying this tag">
+          <option value="">All tags</option>
+          {tagList.map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
         <label style={pillStyle(query.nr)}>
           <input type="checkbox" checked={query.nr} onChange={(e) => pushParams({ nr: e.target.checked ? '1' : '0' })}

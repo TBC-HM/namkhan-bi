@@ -47,6 +47,9 @@ export default async function DocsTriagePage({ params, searchParams }: Props) {
   const subtype = asStr(searchParams.subtype).trim();       // doc_subtype slug
   const matter  = asStr(searchParams.matter).trim();
   const status  = asStr(searchParams.status).trim();
+  const caseF   = asStr(searchParams.case).trim();          // case_ref filter
+  const collF   = asStr(searchParams.coll).trim();          // collection name filter
+  const tagF    = asStr(searchParams.tag).trim();           // tag filter
   const nrRaw   = asStr(searchParams.nr);
   const nr      = nrRaw === '' ? true : nrRaw === '1';      // default: needs_review = true
   const exp     = asStr(searchParams.exp) === '1';          // expiring ≤ 90d
@@ -72,6 +75,11 @@ export default async function DocsTriagePage({ params, searchParams }: Props) {
   if (subtype)        qry = qry.eq('doc_subtype', subtype);
   if (matter)         qry = qry.eq('matter', matter);
   if (status)         qry = qry.eq('status', status);
+  // Array-membership filters — case_refs / collection_names / tags are text[]
+  // on v_doc_register; .contains() compiles to PostgreSQL `@>`.
+  if (caseF)          qry = qry.contains('case_refs',        [caseF]);
+  if (collF)          qry = qry.contains('collection_names', [collF]);
+  if (tagF)           qry = qry.contains('tags',             [tagF]);
   if (exp) {
     const today = new Date().toISOString().slice(0, 10);
     const in90  = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10);
@@ -200,7 +208,7 @@ export default async function DocsTriagePage({ params, searchParams }: Props) {
             caseRefs={caseRefs}
             collectionNames={collectionNames}
             tagList={tagList}
-            query={{ q, family, subtype, matter, status, nr, exp, sort, dir, page }}
+            query={{ q, family, subtype, matter, status, caseF, collF, tagF, nr, exp, sort, dir, page }}
             totalRows={total}
             totalPages={totalPages}
             pageSize={PAGE_SIZE}
