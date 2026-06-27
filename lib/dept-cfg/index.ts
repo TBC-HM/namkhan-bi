@@ -570,6 +570,8 @@ const FINANCE_CFG: DeptCfg = {
     // PBS 2026-05-16: Legal = chief-legal-officer view (contracts, liabilities,
     // calendar of dates + deadlines, licenses, lawyer-mail inbox, running cases).
     { label: 'Legal',   href: '/finance/legal'                          },
+    // PBS 2026-06-27 ADR-145 — Document Triage Register sits next to Legal.
+    { label: 'Docs',    href: '/finance/legal/docs'                     },
     // Messy data lifted out of submenu — now lives as the orange button
     // under the HoD chat input (see extraChatButtons below).
     // PBS 2026-06-09 #194 — Inventory + Suppliers moved from Operations to Finance.

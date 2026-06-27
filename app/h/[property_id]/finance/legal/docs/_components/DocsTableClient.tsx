@@ -1,0 +1,449 @@
+'use client';
+// app/h/[property_id]/finance/legal/docs/_components/DocsTableClient.tsx
+// Client-side glue for the Document Triage Register.
+// - URL-param-driven sort/filter/page (server re-renders on every change).
+// - Inline remap (doc_type, doc_subtype, status, doc_date, expiry_date, signed,
+//   reference_number, sensitivity, importance, project) → fn_doc_remap.
+// - Row actions: Archive, Restore, Delete permanently (guarded purge surfaces
+//   raised message), Add to case, Add to collection, +Tag.
+//
+// B&W header law per claude_md §0.9 (#FFF bg, 2px solid #000 bottom, #000 700).
+// Opted out of the global dark-th theme via className="data-table" (yesterday's
+// fix to styles/globals.css).
+
+import { useRouter, usePathname } from 'next/navigation';
+import { useMemo, useState, useTransition } from 'react';
+import { supabase } from '@/lib/supabase';
+
+interface VocabRow { doc_type: string; subtype_slug: string; label: string | null; time_model: string | null }
+interface DocRow {
+  doc_id: string; property_id: number; title: string | null; title_lo: string | null;
+  file_name: string | null; doc_type: string | null; doc_subtype: string | null;
+  subtype_label: string | null; time_model: string | null; status: string | null;
+  is_archived: boolean | null; sensitivity: string | null; importance: string | null;
+  signed: boolean | null; signed_at: string | null; doc_date: string | null;
+  expiry_date: string | null; uploaded_at: string | null; last_updated_at: string | null;
+  reference_number: string | null; language: string | null; has_file: boolean | null;
+  mime: string | null; file_size_bytes: number | null; page_count: number | null;
+  version: number | null; is_current_version: boolean | null;
+  tags: string[] | null; project: string | null; matter: string | null;
+  case_refs: string[] | null; n_collections: number | null;
+  retention_until: string | null; needs_review: boolean | null; needs_review_reason: string | null;
+}
+interface QueryState {
+  q: string; family: string; matter: string; status: string;
+  nr: boolean; exp: boolean;
+  sort: string; dir: 'asc' | 'desc' | '';
+  page: number;
+}
+interface Props {
+  propertyId: number;
+  rows: DocRow[];
+  vocab: VocabRow[];
+  families: string[];
+  matters: string[];
+  statuses: string[];
+  query: QueryState;
+  totalRows: number;
+  totalPages: number;
+  pageSize: number;
+}
+
+const INK         = '#1B1B1B';
+const INK_SOFT    = '#5A5A5A';
+const HAIRLINE    = '#E0E0E0';
+const PAPER       = '#FFFFFF';
+const REVIEW_TINT = '#FFF8F0';
+
+// Brief §3: sortable columns + labels in display order.
+const COLUMNS: { key: string; label: string; align?: 'left' | 'right' | 'center'; sortable?: boolean }[] = [
+  { key: 'title',           label: 'Title' },
+  { key: 'doc_type',        label: 'Family' },
+  { key: 'doc_subtype',     label: 'Subtype' },
+  { key: 'status',          label: 'Status' },
+  { key: 'matter',          label: 'Matter' },
+  { key: 'doc_date',        label: 'Doc date',     align: 'right' },
+  { key: 'expiry_date',     label: 'Expiry',       align: 'right' },
+  { key: 'signed',          label: 'Signed',       align: 'center' },
+  { key: 'sensitivity',     label: 'Sens.' },
+  { key: 'importance',      label: 'Imp.' },
+  { key: 'uploaded_at',     label: 'Uploaded',     align: 'right' },
+  { key: 'last_updated_at', label: 'Updated',      align: 'right' },
+  { key: 'has_file',        label: 'File',         align: 'center' },
+  { key: '__actions',       label: 'Actions',      align: 'right', sortable: false },
+];
+
+const STATUS_OPTIONS      = ['draft', 'active', 'expired', 'superseded', 'archived'];
+const SENSITIVITY_OPTIONS = ['public', 'internal', 'confidential', 'restricted'];
+const IMPORTANCE_OPTIONS  = ['low', 'standard', 'high', 'critical'];
+
+function fmtDate(s: string | null): string {
+  if (!s) return '—';
+  return s.length >= 10 ? s.slice(0, 10) : s;
+}
+function fmtBool(b: boolean | null): string {
+  if (b === true) return '✓'; if (b === false) return '·'; return '—';
+}
+
+export default function DocsTableClient({
+  propertyId, rows, vocab, families, matters, statuses, query, totalRows, totalPages, pageSize,
+}: Props) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [pending, startTransition] = useTransition();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Group vocab by doc_type so the row subtype dropdown is filtered cheaply.
+  const vocabByType = useMemo(() => {
+    const m = new Map<string, VocabRow[]>();
+    for (const r of vocab) {
+      const k = r.doc_type;
+      if (!m.has(k)) m.set(k, []);
+      m.get(k)!.push(r);
+    }
+    return m;
+  }, [vocab]);
+
+  // --- URL navigation helpers -------------------------------------------
+  function pushParams(patch: Partial<Record<string, string | null>>) {
+    const sp = new URLSearchParams();
+    const base: Record<string, string> = {
+      q: query.q, family: query.family, matter: query.matter, status: query.status,
+      nr: query.nr ? '1' : '0',
+      exp: query.exp ? '1' : '',
+      sort: query.sort, dir: query.dir,
+      page: String(query.page),
+    };
+    const merged = { ...base, ...patch };
+    for (const [k, v] of Object.entries(merged)) {
+      if (v != null && v !== '') sp.set(k, String(v));
+    }
+    // Reset to page 1 unless the patch explicitly set a page.
+    if (!('page' in patch)) sp.set('page', '1');
+    startTransition(() => router.push(`${pathname}?${sp.toString()}`));
+  }
+
+  function toggleSort(col: string) {
+    if (query.sort !== col) return pushParams({ sort: col, dir: 'asc' });
+    if (query.dir  === 'asc')  return pushParams({ sort: col, dir: 'desc' });
+    return pushParams({ sort: '', dir: '' });
+  }
+
+  // --- RPC helpers ------------------------------------------------------
+  async function callRpc(name: string, args: Record<string, unknown>): Promise<boolean> {
+    setError(null);
+    const { error: e } = await supabase.rpc(name, args);
+    if (e) {
+      setError(`${name}: ${e.message}`);
+      return false;
+    }
+    startTransition(() => router.refresh());
+    return true;
+  }
+
+  // --- Row action handlers ----------------------------------------------
+  async function onArchive(doc_id: string) {
+    const reason = window.prompt('Archive reason? (optional)') ?? null;
+    await callRpc('fn_doc_archive', { p_doc_id: doc_id, p_reason: reason });
+  }
+  async function onUnarchive(doc_id: string) {
+    await callRpc('fn_doc_unarchive', { p_doc_id: doc_id, p_status: 'active' });
+  }
+  async function onPurge(doc_id: string) {
+    if (!window.confirm('Permanently DELETE this archived doc? Blocks if any external reference still points at it.')) return;
+    await callRpc('fn_doc_purge', { p_doc_id: doc_id });
+  }
+  async function onAddCase(doc_id: string) {
+    const case_ref = window.prompt('Case ref to link (auto-created if new):')?.trim();
+    if (!case_ref) return;
+    const role = window.prompt('Doc role (default = evidence):', 'evidence')?.trim() || 'evidence';
+    await callRpc('fn_doc_link_case', { p_doc_id: doc_id, p_case_ref: case_ref, p_doc_role: role, p_title: null });
+  }
+  async function onAddCollection(doc_id: string) {
+    const name = window.prompt('Collection name (auto-created if new):')?.trim();
+    if (!name) return;
+    await callRpc('fn_doc_link_collection', { p_doc_id: doc_id, p_collection_name: name });
+  }
+  async function onTag(doc_id: string) {
+    const tag = window.prompt('Tag to add:')?.trim();
+    if (!tag) return;
+    await callRpc('fn_doc_tag', { p_doc_id: doc_id, p_tag: tag, p_add: true });
+  }
+  async function onRemap(doc_id: string, patch: Record<string, unknown>) {
+    const args: Record<string, unknown> = { p_doc_id: doc_id };
+    if ('doc_type'   in patch) args.p_doc_type    = patch.doc_type;
+    if ('doc_subtype'in patch) args.p_doc_subtype = patch.doc_subtype;
+    if ('status'     in patch) args.p_status      = patch.status;
+    if ('doc_date'   in patch) args.p_doc_date    = patch.doc_date;
+    if ('expiry'     in patch) args.p_expiry      = patch.expiry;
+    if ('signed'     in patch) args.p_signed      = patch.signed;
+    if ('reference'  in patch) args.p_reference   = patch.reference;
+    if ('sensitivity'in patch) args.p_sensitivity = patch.sensitivity;
+    if ('importance' in patch) args.p_importance  = patch.importance;
+    if ('project'    in patch) args.p_project     = patch.project;
+    const ok = await callRpc('fn_doc_remap', args);
+    if (ok) setEditingId(null);
+  }
+
+  // --- Render -----------------------------------------------------------
+  return (
+    <div>
+      {/* Filter bar */}
+      <div style={{
+        display: 'flex', flexWrap: 'wrap', gap: 8, padding: '8px 0 12px 0',
+        borderBottom: `1px solid ${HAIRLINE}`, marginBottom: 8,
+        fontSize: 11, color: INK,
+      }}>
+        <input
+          type="search"
+          placeholder="Search title / reference"
+          defaultValue={query.q}
+          onKeyDown={(e) => { if (e.key === 'Enter') pushParams({ q: (e.target as HTMLInputElement).value, page: '1' }); }}
+          style={{ padding: '4px 8px', border: `1px solid ${HAIRLINE}`, borderRadius: 3, minWidth: 200, fontSize: 11 }}
+        />
+        <select value={query.family} onChange={(e) => pushParams({ family: e.target.value })}
+          style={selectStyle}>
+          <option value="">All families</option>
+          {families.map((f) => <option key={f} value={f}>{f}</option>)}
+        </select>
+        <select value={query.matter} onChange={(e) => pushParams({ matter: e.target.value })}
+          style={selectStyle}>
+          <option value="">All matters</option>
+          {matters.map((m) => <option key={m} value={m}>{m}</option>)}
+        </select>
+        <select value={query.status} onChange={(e) => pushParams({ status: e.target.value })}
+          style={selectStyle}>
+          <option value="">All statuses</option>
+          {statuses.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <label style={pillStyle(query.nr)}>
+          <input type="checkbox" checked={query.nr} onChange={(e) => pushParams({ nr: e.target.checked ? '1' : '0' })}
+            style={{ marginRight: 6 }} />
+          Needs review
+        </label>
+        <label style={pillStyle(query.exp)}>
+          <input type="checkbox" checked={query.exp} onChange={(e) => pushParams({ exp: e.target.checked ? '1' : '' })}
+            style={{ marginRight: 6 }} />
+          Expiring ≤ 90d
+        </label>
+        <span style={{ marginLeft: 'auto', color: INK_SOFT }}>
+          {totalRows.toLocaleString('en-US')} matching · page {query.page} / {totalPages}
+        </span>
+      </div>
+
+      {error && (
+        <div style={{
+          background: '#FBEAEA', color: '#C62828', padding: '6px 10px',
+          border: '1px solid #C62828', borderRadius: 3, marginBottom: 8, fontSize: 11,
+        }}>
+          {error}
+        </div>
+      )}
+
+      {/* The register table */}
+      <div style={{ overflowX: 'auto', border: `1px solid ${HAIRLINE}`, borderRadius: 4, background: PAPER }}>
+        <table className="data-table" style={{
+          width: '100%', borderCollapse: 'separate', borderSpacing: 0,
+          fontFamily: 'inherit', fontSize: 11, background: PAPER, lineHeight: 1.3,
+        }}>
+          <thead>
+            <tr>
+              {COLUMNS.map((c) => {
+                const active = query.sort === c.key;
+                const arrow = !active ? '' : query.dir === 'asc' ? ' ▲' : ' ▼';
+                const sortable = c.sortable !== false;
+                return (
+                  <th key={c.key} style={{
+                    padding: '8px 10px',
+                    textAlign: c.align ?? 'left',
+                    color: INK,
+                    fontWeight: 700,
+                    fontSize: 10,
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
+                    background: PAPER,
+                    borderBottom: '2px solid #000',
+                    whiteSpace: 'nowrap',
+                    cursor: sortable ? 'pointer' : 'default',
+                    userSelect: 'none',
+                  }}
+                  onClick={() => sortable && toggleSort(c.key)}>
+                    {c.label}{arrow}
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && (
+              <tr><td colSpan={COLUMNS.length} style={{ padding: '24px 12px', color: INK_SOFT, textAlign: 'center', fontStyle: 'italic' }}>
+                No documents match this filter.
+              </td></tr>
+            )}
+            {rows.map((r) => {
+              const isEditing = editingId === r.doc_id;
+              const tint = r.needs_review ? REVIEW_TINT : PAPER;
+              const subtypesForType = (r.doc_type && vocabByType.get(r.doc_type)) || [];
+              return (
+                <tr key={r.doc_id} style={{ background: tint, borderBottom: `1px solid ${HAIRLINE}` }}>
+                  <td style={tdStyle}>
+                    <div style={{ fontWeight: 500, color: INK }}>{r.title || r.file_name || '—'}</div>
+                    {r.needs_review && (
+                      <div style={{ fontSize: 10, color: '#B8542A', marginTop: 2 }}>
+                        needs review · {r.needs_review_reason}
+                      </div>
+                    )}
+                  </td>
+                  <td style={tdStyle}>
+                    {isEditing ? (
+                      <select defaultValue={r.doc_type ?? ''}
+                        onChange={(e) => onRemap(r.doc_id, { doc_type: e.target.value })}
+                        style={inlineSelect}>
+                        {families.map((f) => <option key={f} value={f}>{f}</option>)}
+                      </select>
+                    ) : (r.doc_type ?? '—')}
+                  </td>
+                  <td style={tdStyle}>
+                    {isEditing ? (
+                      <select defaultValue={r.doc_subtype ?? ''}
+                        onChange={(e) => onRemap(r.doc_id, { doc_subtype: e.target.value })}
+                        style={inlineSelect}>
+                        <option value="">(none)</option>
+                        {subtypesForType.map((v) => (
+                          <option key={v.subtype_slug} value={v.subtype_slug}>{v.label || v.subtype_slug}</option>
+                        ))}
+                      </select>
+                    ) : (r.subtype_label || r.doc_subtype || '—')}
+                  </td>
+                  <td style={tdStyle}>
+                    {isEditing ? (
+                      <select defaultValue={r.status ?? ''}
+                        onChange={(e) => onRemap(r.doc_id, { status: e.target.value })}
+                        style={inlineSelect}>
+                        {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    ) : (r.status ?? '—')}
+                  </td>
+                  <td style={tdStyle}>{r.matter ?? '—'}</td>
+                  <td style={{ ...tdStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                    {isEditing ? (
+                      <input type="date" defaultValue={r.doc_date ?? ''}
+                        onBlur={(e) => e.target.value !== (r.doc_date ?? '') && onRemap(r.doc_id, { doc_date: e.target.value || null })}
+                        style={inlineInput} />
+                    ) : fmtDate(r.doc_date)}
+                  </td>
+                  <td style={{ ...tdStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                    {isEditing ? (
+                      <input type="date" defaultValue={r.expiry_date ?? ''}
+                        onBlur={(e) => e.target.value !== (r.expiry_date ?? '') && onRemap(r.doc_id, { expiry: e.target.value || null })}
+                        style={inlineInput} />
+                    ) : fmtDate(r.expiry_date)}
+                  </td>
+                  <td style={{ ...tdStyle, textAlign: 'center' }}>
+                    {isEditing ? (
+                      <input type="checkbox" defaultChecked={!!r.signed}
+                        onChange={(e) => onRemap(r.doc_id, { signed: e.target.checked })} />
+                    ) : fmtBool(r.signed)}
+                  </td>
+                  <td style={tdStyle}>
+                    {isEditing ? (
+                      <select defaultValue={r.sensitivity ?? ''}
+                        onChange={(e) => onRemap(r.doc_id, { sensitivity: e.target.value })}
+                        style={inlineSelect}>
+                        {SENSITIVITY_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    ) : (r.sensitivity ?? '—')}
+                  </td>
+                  <td style={tdStyle}>
+                    {isEditing ? (
+                      <select defaultValue={r.importance ?? ''}
+                        onChange={(e) => onRemap(r.doc_id, { importance: e.target.value })}
+                        style={inlineSelect}>
+                        {IMPORTANCE_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    ) : (r.importance ?? '—')}
+                  </td>
+                  <td style={{ ...tdStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: INK_SOFT }}>{fmtDate(r.uploaded_at)}</td>
+                  <td style={{ ...tdStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: INK_SOFT }}>{fmtDate(r.last_updated_at)}</td>
+                  <td style={{ ...tdStyle, textAlign: 'center' }}>{r.has_file ? '✓' : '·'}</td>
+                  <td style={{ ...tdStyle, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    <button onClick={() => setEditingId(isEditing ? null : r.doc_id)} style={actionBtn(isEditing)}>
+                      {isEditing ? 'Done' : 'Edit'}
+                    </button>
+                    {!r.is_archived && (
+                      <>
+                        <button onClick={() => onAddCase(r.doc_id)} style={actionBtn()}>+ Case</button>
+                        <button onClick={() => onAddCollection(r.doc_id)} style={actionBtn()}>+ Coll.</button>
+                        <button onClick={() => onTag(r.doc_id)} style={actionBtn()}>+ Tag</button>
+                        <button onClick={() => onArchive(r.doc_id)} style={actionBtn()}>Archive</button>
+                      </>
+                    )}
+                    {r.is_archived && (
+                      <>
+                        <button onClick={() => onUnarchive(r.doc_id)} style={actionBtn()}>Restore</button>
+                        <button onClick={() => onPurge(r.doc_id)} style={{ ...actionBtn(), color: '#C62828', borderColor: '#C62828' }}>Delete</button>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Pagination */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 0', fontSize: 11, color: INK }}>
+        <button disabled={query.page <= 1 || pending}
+          onClick={() => pushParams({ page: String(Math.max(1, query.page - 1)) })}
+          style={pageBtn(query.page <= 1)}>
+          ← Prev
+        </button>
+        <span style={{ color: INK_SOFT }}>
+          rows {(query.page - 1) * pageSize + 1}–{Math.min(query.page * pageSize, totalRows)} of {totalRows.toLocaleString('en-US')}
+        </span>
+        <button disabled={query.page >= totalPages || pending}
+          onClick={() => pushParams({ page: String(Math.min(totalPages, query.page + 1)) })}
+          style={pageBtn(query.page >= totalPages)}>
+          Next →
+        </button>
+        {pending && <span style={{ color: INK_SOFT, marginLeft: 8 }}>loading…</span>}
+      </div>
+    </div>
+  );
+}
+
+const tdStyle: React.CSSProperties = {
+  padding: '6px 10px', verticalAlign: 'top',
+  borderBottom: `1px solid ${HAIRLINE}`,
+  color: INK,
+};
+const selectStyle: React.CSSProperties = {
+  padding: '4px 6px', border: `1px solid ${HAIRLINE}`, borderRadius: 3, fontSize: 11, background: PAPER, color: INK,
+};
+const inlineSelect: React.CSSProperties = { ...selectStyle, fontSize: 11 };
+const inlineInput: React.CSSProperties = {
+  padding: '3px 6px', border: `1px solid ${HAIRLINE}`, borderRadius: 3, fontSize: 11, background: PAPER, color: INK,
+};
+function pillStyle(active: boolean): React.CSSProperties {
+  return {
+    display: 'inline-flex', alignItems: 'center', padding: '4px 8px',
+    border: `1px solid ${active ? INK : HAIRLINE}`, borderRadius: 3,
+    fontSize: 11, color: INK, background: active ? '#F4EFE2' : PAPER, cursor: 'pointer',
+  };
+}
+function actionBtn(active = false): React.CSSProperties {
+  return {
+    padding: '3px 8px', marginLeft: 4, border: `1px solid ${active ? INK : HAIRLINE}`,
+    borderRadius: 3, background: active ? INK : PAPER, color: active ? PAPER : INK,
+    fontSize: 10, cursor: 'pointer',
+  };
+}
+function pageBtn(disabled: boolean): React.CSSProperties {
+  return {
+    padding: '4px 10px', border: `1px solid ${HAIRLINE}`, borderRadius: 3,
+    background: PAPER, color: disabled ? INK_SOFT : INK,
+    cursor: disabled ? 'not-allowed' : 'pointer', fontSize: 11,
+  };
+}
