@@ -576,7 +576,8 @@ const FINANCE_CFG: DeptCfg = {
     // Messy data lifted out of submenu — now lives as the orange button
     // under the HoD chat input (see extraChatButtons below).
     // PBS 2026-06-09 #194 — Inventory + Suppliers moved from Operations to Finance.
-    { label: 'Inventory', href: '/finance/inventory'                      },
+    // PBS 2026-06-29: Inventory dropped from the strip — no data yet, will be
+    // re-added when the inventory layer ships.
     { label: 'Suppliers', href: '/finance/suppliers'                      },
     { label: 'Reports', href: '/h/260955/reports?dept=finance'          },
   ],
@@ -586,7 +587,6 @@ const FINANCE_CFG: DeptCfg = {
     { label: 'Ledger',  href: '/finance/ledger'       },
     { label: 'Acc',     href: '/finance/acc'          },
     { label: 'HR',         href: '/finance/hr'           },
-    { label: 'Inventory',  href: '/finance/inventory'    },
     { label: 'Suppliers',  href: '/finance/suppliers'    },
   ],
   // PBS 2026-05-15: Messy data pulled out of submenu, surfaced as an
