@@ -766,7 +766,7 @@ export default function DocsTableClient({
                     {isEditing ? (
                       <MatterEditor row={r} caseRefs={caseRefs} matters={matters}
                         onLinkCase={(ref) => callRpc('fn_doc_link_case', { p_doc_id: r.doc_id, p_case_ref: ref, p_doc_role: 'evidence', p_title: null })}
-                        onUnlinkCase={(ref) => callRpc('fn_doc_unlink_case', { p_doc_id: r.doc_id, p_case_ref: ref }, { silent: true, field: 'case', docId: r.doc_id })}
+                        onUnlinkCase={(ref) => callRpc('fn_doc_unlink_case', { p_doc_id: r.doc_id, p_case_ref: ref })}
                         onSetProject={(proj) => onRemap(r.doc_id, { project: proj })} />
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -1084,12 +1084,12 @@ function MatterEditor({ row, caseRefs, matters, onLinkCase, onUnlinkCase, onSetP
           placeholder="link case…"
           value={caseV}
           onChange={(e) => setCaseV(e.target.value)}
+          onBlur={() => {
+            const v = caseV.trim(); if (!v) return;
+            onLinkCase(v); setCaseV('');
+          }}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              const v = caseV.trim(); if (!v) return;
-              onLinkCase(v); setCaseV('');
-            }
+            if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
           }}
           style={{ ...inlineInput, flex: 1, minWidth: 80, fontSize: 10 }} />
         <datalist id={`matter-cases-${row.doc_id}`}>
