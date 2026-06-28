@@ -32,6 +32,15 @@ const LICENSE_SUBTYPES = new Set<string>([
   'enterprise_registration','business_registration','land_title_deed','property_deed',
 ]);
 
+// Title-pattern heuristic for "this is an application / submission rather
+// than an issued license". Catches: Application for X / Enquiry letter /
+// Request letter / Notice of (Company) Dissolution / Liquidator's report.
+const APP_RE = /\bapplication\b|\benquiry letter\b|\brequest letter\b|\bnotice of (company )?dissolution\b|\bliquidator/i;
+
+function isApplication(r: { title: string | null; file_name: string | null }): boolean {
+  return APP_RE.test(`${r.title ?? ''} ${r.file_name ?? ''}`);
+}
+
 // Filed-at-court documents only. Pre-litigation correspondence (letters,
 // notices) stays in Correspondence.
 const COURT_FILING_SUBTYPES = new Set<string>([
@@ -63,13 +72,16 @@ interface DocRow {
   uploaded_at: string | null;
 }
 
-type Bucket = 'document' | 'contract' | 'license' | 'court_filing' | 'correspondence' | 'photo';
+type Bucket = 'document' | 'contract' | 'license' | 'application' | 'court_filing' | 'correspondence' | 'photo';
 
 function classify(row: DocRow): Bucket {
   if ((row.mime ?? '').startsWith('image/') || row.file_type === 'image') return 'photo';
-  if (row.doc_type === 'compliance') return 'license';
+  // Application title heuristic wins over license/compliance bucketing so
+  // "Application for X" submissions land in their own bucket, not Licenses.
+  const looksLikeApp = isApplication(row);
+  if (row.doc_type === 'compliance') return looksLikeApp ? 'application' : 'license';
   if (row.doc_subtype && CONTRACT_SUBTYPES.has(row.doc_subtype)) return 'contract';
-  if (row.doc_subtype && LICENSE_SUBTYPES.has(row.doc_subtype)) return 'license';
+  if (row.doc_subtype && LICENSE_SUBTYPES.has(row.doc_subtype)) return looksLikeApp ? 'application' : 'license';
   if (row.doc_subtype && COURT_FILING_SUBTYPES.has(row.doc_subtype)) return 'court_filing';
   if (row.doc_subtype && CORRESPONDENCE_SUBTYPES.has(row.doc_subtype)) return 'correspondence';
   return 'document';
@@ -129,7 +141,7 @@ export default async function CaseOverviewPage({ params }: Props) {
     .sort((a, b) => (b.uploaded_at ?? '').localeCompare(a.uploaded_at ?? ''))[0];
 
   const buckets: Record<Bucket, DocRow[]> = {
-    document: [], contract: [], license: [], court_filing: [], correspondence: [], photo: [],
+    document: [], contract: [], license: [], application: [], court_filing: [], correspondence: [], photo: [],
   };
   for (const r of rows) buckets[classify(r)].push(r);
 
@@ -141,6 +153,7 @@ export default async function CaseOverviewPage({ params }: Props) {
     + `${rows.length} doc${rows.length === 1 ? '' : 's'} · `
     + `${buckets.contract.length} contracts · `
     + `${buckets.license.length} licenses/reg. · `
+    + `${buckets.application.length} applications · `
     + `${buckets.court_filing.length} court filings · `
     + `${buckets.correspondence.length} correspondence · `
     + `${buckets.photo.length} photos · `
@@ -166,7 +179,8 @@ export default async function CaseOverviewPage({ params }: Props) {
         {chronology && <FeaturedChronology row={chronology} origin={origin} />}
 
         <CaseBucket origin={origin} title="Contracts"                subtitle="Loan · security · pledges · lease · share transfer · party-to-party agreements" rows={buckets.contract} />
-        <CaseBucket origin={origin} title="Licenses / Registrations" subtitle="Compliance permits · operating licenses · articles · POAs · enterprise registration · title deeds" rows={buckets.license} />
+        <CaseBucket origin={origin} title="Licenses / Registrations" subtitle="Issued permits + operating licenses + articles + POAs + enterprise registration + title deeds" rows={buckets.license} />
+        <CaseBucket origin={origin} title="Applications"             subtitle="Filings + enquiry letters + dissolution notices + liquidator filings — submitted, not yet granted" rows={buckets.application} />
         <CaseBucket origin={origin} title="Court filings"            subtitle="Case filings · pleadings · judgments · declarations — anything actually filed at court" rows={buckets.court_filing} />
         <CaseBucket origin={origin} title="Correspondence"           subtitle="Letters · notices · memoranda · legal opinions — pre-litigation paper trail" rows={buckets.correspondence} />
         <CaseBucket origin={origin} title="Documents"                subtitle="Evidence · everything else" rows={buckets.document} />
