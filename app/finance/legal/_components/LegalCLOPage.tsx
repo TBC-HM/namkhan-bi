@@ -16,6 +16,7 @@
 
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import LegalQuickActions from './LegalQuickActions';
 
 interface Props {
   propertyId: number;
@@ -210,6 +211,50 @@ export default async function LegalCLOPage({ propertyId, propertyLabel, subPages
           <div style={{ fontSize: 13, color: 'var(--ink-soft, #5a5a5a)', lineHeight: 1.55 }}>
             Everything legally relevant to {propertyLabel ?? 'this property'} in one place: the contract stack, insurance coverage, license / permit renewals, ongoing litigation, and a direct line to {propertyId === 260955 ? 'John (Lao legal counsel)' : propertyId === 1000001 ? 'Carla (holding legal lead) and Vera (Balearic labour-law specialist)' : 'the legal team'}. Each tile below counts what's in <code>dms.documents</code> right now; click a metric to drill into that subset, click into a case to see its dossier, or drop a question into the chat at the bottom.
           </div>
+        </Container>
+      </div>
+
+      {/* Quick actions — upload + drop-to-translate + drop-to-summarize + chat */}
+      <div style={fullRow}>
+        <Container title="Quick actions" subtitle="Drop a file to translate or summarize · upload a doc · chat with John" density="compact">
+          <LegalQuickActions propertyId={propertyId} />
+        </Container>
+      </div>
+
+      {/* Daily brief — surfaces the urgent counters in one glance */}
+      <div style={fullRow}>
+        <Container title="Daily brief · what needs you" subtitle="Auto-rolls up the most urgent counters across every panel below" density="compact">
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: '#1B1B1B' }}>
+            {licenses.expired > 0 && (
+              <li style={briefRowDanger}>
+                <strong style={{ color: '#C62828' }}>🔴 {licenses.expired} license{licenses.expired === 1 ? '' : 's'} expired</strong>
+                <a href={`/h/${propertyId}/finance/legal/register/licenses?status=expired`} style={briefLink}>open →</a>
+              </li>
+            )}
+            {licenses.expiring_90d > 0 && (
+              <li style={briefRowWarn}>
+                <strong style={{ color: '#B8860B' }}>🟡 {licenses.expiring_90d} license{licenses.expiring_90d === 1 ? '' : 's'} expiring within 90 days</strong>
+                <a href={`/h/${propertyId}/finance/legal/register/licenses?status=expiring_90d`} style={briefLink}>open →</a>
+              </li>
+            )}
+            {insurance.past_expiry > 0 && (
+              <li style={briefRowDanger}>
+                <strong style={{ color: '#C62828' }}>🔴 {insurance.past_expiry} insurance{insurance.past_expiry === 1 ? '' : 's'} past expiry</strong>
+                <a href={`/h/${propertyId}/finance/legal/register/insurance?status=past_expiry`} style={briefLink}>open →</a>
+              </li>
+            )}
+            {runningCases.length > 0 && (
+              <li style={briefRowNeutral}>
+                <strong>⌛ {runningCases.length} running case{runningCases.length === 1 ? '' : 's'}: {runningCases.map(c => c.case_ref).join(' · ')}</strong>
+                <a href={`/h/${propertyId}/finance/legal/cases/${encodeURIComponent(runningCases[0]?.case_ref ?? '')}`} style={briefLink}>open first →</a>
+              </li>
+            )}
+            {licenses.expired === 0 && licenses.expiring_90d === 0 && insurance.past_expiry === 0 && runningCases.length === 0 && (
+              <li style={briefRowNeutral}>
+                <strong style={{ color: '#5A5A5A' }}>✓ nothing urgent on file</strong>
+              </li>
+            )}
+          </ul>
         </Container>
       </div>
 
@@ -423,6 +468,15 @@ function ComingSoon({ title, subtitle, icon, hint }: { title: string; subtitle: 
     </Container>
   );
 }
+
+const briefRowBase: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: 8,
+  padding: '6px 10px', border: '1px solid #E0E0E0', borderRadius: 4,
+};
+const briefRowDanger:  React.CSSProperties = { ...briefRowBase, background: '#FDECEC', borderColor: '#F5C2C2' };
+const briefRowWarn:    React.CSSProperties = { ...briefRowBase, background: '#FFF8E1', borderColor: '#E8C972' };
+const briefRowNeutral: React.CSSProperties = { ...briefRowBase, background: '#FFFFFF' };
+const briefLink:       React.CSSProperties = { marginLeft: 'auto', color: '#1B1B1B', textDecoration: 'underline', fontSize: 11 };
 
 const cardLink: React.CSSProperties = {
   display: 'flex', alignItems: 'baseline', gap: 8,
