@@ -193,6 +193,13 @@ export default async function LegalCLOPage({ propertyId, propertyLabel, subPages
                     : propertyId === 1000001 ? 'legal_specialist_donna'
                     : null;
 
+  // Per-property strip: ONLY the primary specialist (PBS 2026-06-29).
+  // Namkhan → John; Donna → Carla. Other legal agents stay in the registry
+  // but aren't pinned on this landing page.
+  const visibleAgents: AgentLink[] = primaryRole
+    ? legalAgents.filter((a) => a.role === primaryRole)
+    : legalAgents;
+
   const reg = (s: 'contracts' | 'insurance' | 'licenses') => `/h/${propertyId}/finance/legal/register/${s}`;
 
   return (
@@ -321,7 +328,7 @@ export default async function LegalCLOPage({ propertyId, propertyLabel, subPages
             </div>
           ) : (
             <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 8 }}>
-              {legalAgents.map((a) => {
+              {visibleAgents.map((a) => {
                 const isPrimary = a.role === primaryRole;
                 const href = `/h/${propertyId}/it/cockpit/chat/${encodeURIComponent(a.role)}`;
                 return (
