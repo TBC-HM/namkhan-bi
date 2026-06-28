@@ -501,7 +501,7 @@ export default function DocsTableClient({
               if (e.key === 'Enter') pushParams({ q: searchQ, page: '1' });
               if (e.key === 'Escape') { setSearchQ(''); pushParams({ q: '', page: '1' }); }
             }}
-            style={{ padding: '4px 22px 4px 8px', border: `1px solid ${HAIRLINE}`, borderRadius: 3, minWidth: 200, fontSize: 11 }}
+            style={{ padding: '4px 22px 4px 8px', border: `1px solid ${HAIRLINE}`, borderRadius: 3, minWidth: 200, fontSize: 11, background: PAPER, color: INK, WebkitAppearance: 'none', appearance: 'none' }}
           />
           {searchQ && (
             <button type="button"
