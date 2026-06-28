@@ -163,12 +163,22 @@ export default async function LegalCLOPage({ propertyId, propertyLabel, subPages
   const applicationsActive = apps.filter((r) => true).length;
 
   // ── Legal agents ─────────────────────────────────────────────────────────
-  const scope = propertyId === 260955 ? 'namkhan' : propertyId === 1000001 ? 'donna' : 'all';
-  const { data: roster } = await supabase.rpc('cockpit_agent_roster', { p_scope: scope });
+  // Use the 'all' scope: every legal agent is scoped Holding (John, Carla,
+  // Sherlock) or Donna (Vera); calling with p_scope='namkhan' previously
+  // returned an empty list. We de-dupe by role since 'all' returns multiple
+  // rows per agent (one per scope they're visible from).
+  const { data: roster } = await supabase.rpc('cockpit_agent_roster', { p_scope: 'all' });
+  const seenRoles = new Set<string>();
   const legalAgents: AgentLink[] = (Array.isArray(roster) ? roster : [])
     .filter((r: { dept?: string; role?: string; status?: string }) =>
       r.status === 'active' && (r.dept === 'legal' || (r.role ?? '').includes('legal'))
     )
+    .filter((r: { role?: string }) => {
+      const role = r.role ?? '';
+      if (!role || seenRoles.has(role)) return false;
+      seenRoles.add(role);
+      return true;
+    })
     .map((r: Partial<AgentLink>) => ({
       role: r.role ?? '',
       display_name: r.display_name ?? null,
@@ -178,6 +188,7 @@ export default async function LegalCLOPage({ propertyId, propertyLabel, subPages
       scope_label: r.scope_label ?? null,
     }))
     .filter((a) => a.role);
+  // For the property's primary specialist: John for Namkhan, Carla for Donna.
   const primaryRole = propertyId === 260955 ? 'legal_specialist'
                     : propertyId === 1000001 ? 'legal_specialist_donna'
                     : null;
