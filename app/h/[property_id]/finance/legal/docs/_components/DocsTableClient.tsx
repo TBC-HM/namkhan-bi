@@ -123,6 +123,32 @@ export default function DocsTableClient({
   // Multi-select state — set of selected doc_ids across this page only.
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  // Inline Translate/Summarize row actions — busy is "<docId>:<mode>" while
+  // a request is in flight; actionResult holds the latest response for a
+  // fixed-position floating panel at the bottom of the page.
+  const [actionBusy, setActionBusy] = useState<string | null>(null);
+  const [actionResult, setActionResult] = useState<{ docTitle: string; mode: 'translate' | 'summarize'; ok: boolean; text?: string; error?: string } | null>(null);
+  async function runDocAction(docId: string, mode: 'translate' | 'summarize', title: string) {
+    setActionBusy(`${docId}:${mode}`);
+    setActionResult(null);
+    try {
+      const endpoint = mode === 'translate' ? '/api/legal/docs/translate' : '/api/legal/docs/summarize';
+      const reqBody = mode === 'translate' ? { doc_id: docId, to: 'en' } : { doc_id: docId };
+      const r = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(reqBody) });
+      const j = await r.json().catch(() => ({ ok: false, error: 'invalid response' }));
+      if (!r.ok || !j.ok) {
+        setActionResult({ docTitle: title, mode, ok: false, error: j?.error || `${r.status}` });
+      } else {
+        const text = mode === 'translate' ? j.translation : j.summary;
+        setActionResult({ docTitle: title, mode, ok: true, text });
+        if (mode === 'summarize') startTransition(() => router.refresh());
+      }
+    } catch (e: any) {
+      setActionResult({ docTitle: title, mode, ok: false, error: e?.message ?? 'failed' });
+    } finally {
+      setActionBusy(null);
+    }
+  }
   // Search input local state — defaultValue was getting re-applied on parent
   // re-render (every filter click), causing the field to jump back to the
   // URL's q value mid-edit. Controlled state with useEffect-sync gives the
@@ -368,6 +394,28 @@ export default function DocsTableClient({
   // --- Render -----------------------------------------------------------
   return (
     <div>
+      {actionResult && (
+        <div style={{
+          position: 'fixed', bottom: 16, right: 16, maxWidth: 560, maxHeight: '70vh', overflow: 'auto',
+          padding: 12, border: `1px solid ${actionResult.ok ? '#1B1B1B' : '#C62828'}`,
+          background: actionResult.ok ? '#FCFBF5' : '#FDECEC',
+          borderRadius: 4, fontSize: 12, color: '#1B1B1B',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.15)', zIndex: 1000,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
+            <strong style={{ flex: 1, fontSize: 12 }}>
+              {actionResult.mode === 'translate' ? '🌐 Translation' : '✍️ Summary'} · {actionResult.docTitle.length > 60 ? actionResult.docTitle.slice(0, 57) + '…' : actionResult.docTitle}
+            </strong>
+            <button onClick={() => setActionResult(null)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 16, color: '#5A5A5A' }} title="Close">×</button>
+          </div>
+          {actionResult.error && (
+            <pre style={{ color: '#C62828', whiteSpace: 'pre-wrap', margin: 0, fontSize: 11 }}>{actionResult.error}</pre>
+          )}
+          {actionResult.text && (
+            <pre style={{ whiteSpace: 'pre-wrap', margin: 0, fontFamily: 'inherit', fontSize: 12, lineHeight: 1.45 }}>{actionResult.text}</pre>
+          )}
+        </div>
+      )}
       {/* Bulk action toolbar — shown only when at least one row is selected. */}
       {selected.size > 0 && (
         <div style={{
@@ -898,9 +946,20 @@ export default function DocsTableClient({
                     </button>
                     {!r.is_archived && (
                       <>
-                        <button onClick={() => openPicker(r.doc_id, 'case')}       style={actionBtn(picker?.docId === r.doc_id && picker.kind === 'case')}>+ Case</button>
-                        <button onClick={() => openPicker(r.doc_id, 'collection')} style={actionBtn(picker?.docId === r.doc_id && picker.kind === 'collection')}>+ Coll.</button>
-                        <button onClick={() => openPicker(r.doc_id, 'tag')}        style={actionBtn(picker?.docId === r.doc_id && picker.kind === 'tag')}>+ Tag</button>
+                        <button
+                          onClick={() => runDocAction(r.doc_id, 'translate', r.title || r.file_name || '—')}
+                          disabled={actionBusy !== null}
+                          title="Translate to English"
+                          style={actionBtn(actionBusy === `${r.doc_id}:translate`)}>
+                          {actionBusy === `${r.doc_id}:translate` ? '⏳' : '🌐 Translate'}
+                        </button>
+                        <button
+                          onClick={() => runDocAction(r.doc_id, 'summarize', r.title || r.file_name || '—')}
+                          disabled={actionBusy !== null}
+                          title="Summarize (writes to ★ note)"
+                          style={actionBtn(actionBusy === `${r.doc_id}:summarize`)}>
+                          {actionBusy === `${r.doc_id}:summarize` ? '⏳' : '✍️ Summarize'}
+                        </button>
                         <button onClick={() => onArchive(r.doc_id)} style={actionBtn()}>Archive</button>
                       </>
                     )}
