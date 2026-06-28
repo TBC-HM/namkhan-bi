@@ -2,14 +2,17 @@
 // Chief Legal Officer landing page. Mounted at /finance/legal (Namkhan
 // default) and /h/[property_id]/finance/legal — shared component, propertyId
 // threads through. Six containers in a 3×2 grid:
-//   1. Contracts            — counts by status (wired)
-//   2. Insurances           — wired, flags past-expiry rows (was Liabilities)
+//   1. Contracts            — counts by status (wired); tiles click into
+//                             /register/contracts?status=
+//   2. Insurances           — wired, flags past-expiry; tiles click into
+//                             /register/insurance?status=
 //   3. Dates calendar       — placeholder (not yet wired)
-//   4. Licenses · deadlines — wired, expiry breakdown
+//   4. Licenses · deadlines — wired, expiry breakdown; tiles click into
+//                             /register/licenses?status=
 //   5. Lawyer-mail inbox    — placeholder
 //   6. Running cases        — wired (case_ref list links to /cases/[ref])
 // Plus a dynamic legal-team strip at the bottom: clickable chat cards for
-// every active legal-department agent, pulled from cockpit_agent_roster.
+// every active legal-department agent.
 
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -52,11 +55,10 @@ interface InsuranceTallies {
 
 interface LicenseTallies {
   total: number;
-  expired: number;        // valid_until in the past
-  expiring_90d: number;   // valid_until within next 90 days
-  current: number;        // valid_until in the future, > 90 days
-  no_expiry: number;      // no valid_until set
-  oldest_expiry_label: string | null;
+  expired: number;
+  expiring_90d: number;
+  current: number;
+  no_expiry: number;
 }
 
 const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
@@ -76,7 +78,7 @@ export default async function LegalCLOPage({ propertyId, propertyLabel, subPages
 
   const supabase = getSupabaseAdmin();
 
-  // ── Running cases (already wired) ────────────────────────────────────────
+  // ── Running cases ────────────────────────────────────────────────────────
   const { data: caseRows } = await supabase
     .from('v_doc_cases')
     .select('case_ref, title, status, n_docs')
@@ -125,7 +127,6 @@ export default async function LegalCLOPage({ propertyId, propertyLabel, subPages
   };
 
   // ── Licenses / deadlines ─────────────────────────────────────────────────
-  // Compliance family + the governance/title subtypes from the legal family.
   const { data: licRows1 } = await supabase
     .from('v_doc_register')
     .select('doc_id,doc_type,doc_subtype,expiry_date')
@@ -150,13 +151,9 @@ export default async function LegalCLOPage({ propertyId, propertyLabel, subPages
     expiring_90d: licArr.filter((r) => r.expiry_date && r.expiry_date >= today && r.expiry_date <= in90).length,
     current: licArr.filter((r) => r.expiry_date && r.expiry_date > in90).length,
     no_expiry: licArr.filter((r) => !r.expiry_date).length,
-    oldest_expiry_label: licArr
-      .map((r) => r.expiry_date)
-      .filter((d): d is string => !!d && d >= today)
-      .sort()[0] ?? null,
   };
 
-  // ── Legal agents — dynamic from cockpit_agent_roster ─────────────────────
+  // ── Legal agents ─────────────────────────────────────────────────────────
   const scope = propertyId === 260955 ? 'namkhan' : propertyId === 1000001 ? 'donna' : 'all';
   const { data: roster } = await supabase.rpc('cockpit_agent_roster', { p_scope: scope });
   const legalAgents: AgentLink[] = (Array.isArray(roster) ? roster : [])
@@ -172,74 +169,74 @@ export default async function LegalCLOPage({ propertyId, propertyLabel, subPages
       scope_label: r.scope_label ?? null,
     }))
     .filter((a) => a.role);
-
-  // For the property's primary specialist: John for Namkhan, Carla for Donna.
   const primaryRole = propertyId === 260955 ? 'legal_specialist'
                     : propertyId === 1000001 ? 'legal_specialist_donna'
                     : null;
 
+  const reg = (s: 'contracts' | 'insurance' | 'licenses') => `/h/${propertyId}/finance/legal/register/${s}`;
+
   return (
     <DashboardPage title={title} subtitle={subtitle} tabs={tabs.length ? tabs : undefined}>
-      {/* Intro context — operator-facing, not placeholder copy */}
+      {/* Intro */}
       <div style={fullRow}>
         <Container title="Chief Legal Officer view" subtitle={`one screen for ${propertyLabel ?? 'the property'} · contracts · insurance · licenses · cases · counsel`} density="compact">
           <div style={{ fontSize: 13, color: 'var(--ink-soft, #5a5a5a)', lineHeight: 1.55 }}>
-            Everything legally relevant to {propertyLabel ?? 'this property'} in one place: the contract stack, insurance coverage, license / permit renewals, ongoing litigation, and a direct line to {propertyId === 260955 ? 'John (Lao legal counsel)' : propertyId === 1000001 ? 'Carla (holding legal lead) and Vera (Balearic labour-law specialist)' : 'the legal team'}. Each tile below counts what's in <code>dms.documents</code> right now; click into a case to see its dossier, or drop a question into the chat at the bottom.
+            Everything legally relevant to {propertyLabel ?? 'this property'} in one place: the contract stack, insurance coverage, license / permit renewals, ongoing litigation, and a direct line to {propertyId === 260955 ? 'John (Lao legal counsel)' : propertyId === 1000001 ? 'Carla (holding legal lead) and Vera (Balearic labour-law specialist)' : 'the legal team'}. Each tile below counts what's in <code>dms.documents</code> right now; click a metric to drill into that subset, click into a case to see its dossier, or drop a question into the chat at the bottom.
           </div>
         </Container>
       </div>
 
-      {/* 1. Contracts (wired) */}
+      {/* 1. Contracts */}
       <Container title={`Contracts · ${contracts.total}`} subtitle="Loan · security · pledges · lease · party-to-party agreements" density="compact">
         <Tile
           icon="§"
           metrics={[
-            { label: 'active', value: contracts.active },
-            { label: 'draft', value: contracts.draft },
-            { label: 'other', value: contracts.other },
+            { label: 'active', value: contracts.active, href: `${reg('contracts')}?status=active` },
+            { label: 'draft',  value: contracts.draft,  href: `${reg('contracts')}?status=draft` },
+            { label: 'other',  value: contracts.other,  href: `${reg('contracts')}?status=other` },
           ]}
-          href={`/h/${propertyId}/finance/legal/docs?family=legal&subtype=contract`}
+          href={reg('contracts')}
           hrefLabel="open contract register →"
         />
       </Container>
 
-      {/* 2. Insurances (replaces Liabilities) */}
+      {/* 2. Insurances */}
       <Container title={`Insurances · ${insurance.total}`} subtitle="Coverage · policies · past-expiry alert" density="compact">
         <Tile
           icon="🛡"
           metrics={[
-            { label: 'active', value: insurance.active },
-            { label: 'past expiry', value: insurance.past_expiry, danger: insurance.past_expiry > 0 },
+            { label: 'active',      value: insurance.active,      href: `${reg('insurance')}?status=active` },
+            { label: 'past expiry', value: insurance.past_expiry, href: `${reg('insurance')}?status=past_expiry`, danger: insurance.past_expiry > 0 },
           ]}
           extra={insurance.next_expiry ? `next expiry: ${insurance.next_expiry}` : 'no upcoming expiry on record'}
-          href={`/h/${propertyId}/finance/legal/docs?family=insurance`}
+          href={reg('insurance')}
           hrefLabel="open insurance register →"
         />
       </Container>
 
-      {/* 3. Dates calendar (placeholder) */}
+      {/* 3. Dates calendar */}
       <ComingSoon title="Dates calendar" subtitle="Renewals · hearings · filings" icon="⌖" hint="Time-axis view of every legal deadline (contract renewals, court hearings, regulatory filings, licence expiries). Colour-coded by 30/60/90-day proximity." />
 
-      {/* 4. Licenses · deadlines (wired) */}
+      {/* 4. Licenses */}
       <Container title={`Licenses · ${licenses.total}`} subtitle="Compliance permits · operating licenses · governance instruments · titles" density="compact">
         <Tile
           icon="✱"
           metrics={[
-            { label: 'expired',       value: licenses.expired,      danger: licenses.expired > 0 },
-            { label: 'expiring ≤90d', value: licenses.expiring_90d, danger: licenses.expiring_90d > 0 },
-            { label: 'current',       value: licenses.current },
-            { label: 'no expiry set', value: licenses.no_expiry,    warn: licenses.no_expiry > 0 },
+            { label: 'expired',       value: licenses.expired,      href: `${reg('licenses')}?status=expired`,      danger: licenses.expired > 0 },
+            { label: 'expiring ≤90d', value: licenses.expiring_90d, href: `${reg('licenses')}?status=expiring_90d`, danger: licenses.expiring_90d > 0 },
+            { label: 'current',       value: licenses.current,      href: `${reg('licenses')}?status=current` },
+            { label: 'no expiry set', value: licenses.no_expiry,    href: `${reg('licenses')}?status=no_expiry`,    warn: licenses.no_expiry > 0 },
           ]}
           extra={`Lao licenses typically renew annually. ${licenses.no_expiry} doc${licenses.no_expiry === 1 ? '' : 's'} have no valid_until on file — set one in the register to enable countdowns.`}
-          href={`/h/${propertyId}/finance/legal/docs?family=compliance`}
+          href={reg('licenses')}
           hrefLabel="open license register →"
         />
       </Container>
 
-      {/* 5. Lawyer-mail (placeholder) */}
+      {/* 5. Lawyer-mail */}
       <ComingSoon title="Lawyer-mail inbox" subtitle="External counsel · routed mail only" icon="✉" hint="Filtered cockpit_tickets feed: only mail from / to external counsel + the legal team. Threaded by case." />
 
-      {/* 6. Running cases (already wired) */}
+      {/* 6. Running cases */}
       <Container title="Running cases" subtitle="Open + closed register · click for case file" density="compact">
         <div style={{ padding: '4px 0' }}>
           <div style={{ fontSize: 28, color: 'var(--accent, #b8a878)', opacity: 0.6, marginBottom: 8 }}>⌛</div>
@@ -265,7 +262,7 @@ export default async function LegalCLOPage({ propertyId, propertyLabel, subPages
         </div>
       </Container>
 
-      {/* Legal counsel chat strip — dynamic from cockpit_agent_roster */}
+      {/* Legal counsel strip */}
       <div style={fullRow}>
         <Container title="Talk to the legal team" subtitle="Direct chat · agents pulled from the cockpit roster" density="compact">
           {legalAgents.length === 0 ? (
@@ -312,7 +309,7 @@ export default async function LegalCLOPage({ propertyId, propertyLabel, subPages
 // ── Inline helpers ─────────────────────────────────────────────────────────
 function Tile({ icon, metrics, extra, href, hrefLabel }: {
   icon: string;
-  metrics: { label: string; value: number; danger?: boolean; warn?: boolean }[];
+  metrics: { label: string; value: number; href?: string; danger?: boolean; warn?: boolean }[];
   extra?: string;
   href: string;
   hrefLabel: string;
@@ -321,16 +318,25 @@ function Tile({ icon, metrics, extra, href, hrefLabel }: {
     <div style={{ padding: '4px 0' }}>
       <div style={{ fontSize: 28, color: 'var(--accent, #b8a878)', opacity: 0.6, marginBottom: 8 }}>{icon}</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 10 }}>
-        {metrics.map((m) => (
-          <div key={m.label} style={{
+        {metrics.map((m) => {
+          const inner = (
+            <>
+              <div style={{ fontSize: 20, fontWeight: 600, color: m.danger ? '#C62828' : m.warn ? '#B8860B' : '#1B1B1B', fontVariantNumeric: 'tabular-nums' }}>{m.value}</div>
+              <div style={{ fontSize: 10, color: '#5A5A5A', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{m.label}</div>
+            </>
+          );
+          const styleBase: React.CSSProperties = {
             padding: '6px 10px', border: '1px solid #E0E0E0', borderRadius: 4,
             background: m.danger ? '#FDECEC' : m.warn ? '#FFF8E1' : '#FFFFFF',
-            minWidth: 80,
-          }}>
-            <div style={{ fontSize: 20, fontWeight: 600, color: m.danger ? '#C62828' : m.warn ? '#B8860B' : '#1B1B1B', fontVariantNumeric: 'tabular-nums' }}>{m.value}</div>
-            <div style={{ fontSize: 10, color: '#5A5A5A', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{m.label}</div>
-          </div>
-        ))}
+            minWidth: 80, textDecoration: 'none', color: 'inherit', display: 'block',
+            cursor: m.href ? 'pointer' : 'default',
+          };
+          return m.href ? (
+            <a key={m.label} href={m.href} style={styleBase} title={`Drill into ${m.label}`}>{inner}</a>
+          ) : (
+            <div key={m.label} style={styleBase}>{inner}</div>
+          );
+        })}
       </div>
       {extra && (
         <div style={{ fontSize: 11, color: '#5A5A5A', lineHeight: 1.4, marginBottom: 10 }}>{extra}</div>
@@ -364,8 +370,7 @@ function ComingSoon({ title, subtitle, icon, hint }: { title: string; subtitle: 
 const cardLink: React.CSSProperties = {
   display: 'flex', alignItems: 'baseline', gap: 8,
   padding: '6px 8px', border: '1px solid #E0E0E0', borderRadius: 3,
-  background: '#FFFFFF', color: '#1B1B1B', textDecoration: 'none',
-  fontSize: 12,
+  background: '#FFFFFF', color: '#1B1B1B', textDecoration: 'none', fontSize: 12,
 };
 
 const agentCard: React.CSSProperties = {
