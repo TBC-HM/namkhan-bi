@@ -44,8 +44,9 @@ export default async function AgentChatPage({
   let agent: RosterRow | null = null;
 
   // 1. Try roster RPC first (returns scope_label, reports_to, etc.)
-  const scope = propertyId === 260955 ? 'namkhan' : propertyId === 1000001 ? 'donna' : 'all';
-  const { data: roster } = await supabase.rpc('cockpit_agent_roster', { p_scope: scope });
+  // PBS 2026-06-29: use 'all' scope so Holding-scoped agents (John, Carla,
+  // Sherlock) resolve from property-scoped chat URLs.
+  const { data: roster } = await supabase.rpc('cockpit_agent_roster', { p_scope: 'all' });
   if (Array.isArray(roster)) {
     agent = (roster as RosterRow[]).find((r) => r.role === role) ?? null;
   }
