@@ -14,6 +14,7 @@
 
 import { notFound } from 'next/navigation';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import DocActionsRail from './_components/DocActionsRail';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -87,7 +88,8 @@ export default async function DocPreviewPage({ params }: Props) {
         <a href={downloadHref} download style={S.dlBtn}>⤓ Download</a>
       </header>
 
-      <section style={S.viewer}>
+      <section style={{ ...S.viewer, display: 'flex' }}>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
         {viewer === 'pdf'    && <iframe src={url} title={fileName} style={S.frame} />}
         {viewer === 'image'  && <img src={url} alt={fileName} style={S.image} />}
         {viewer === 'office' && <iframe src={officeUrl} title={fileName} style={S.frame} />}
@@ -100,6 +102,8 @@ export default async function DocPreviewPage({ params }: Props) {
             <a href={downloadHref} download style={S.dlBtn}>⤓ Download</a>
           </div>
         )}
+        </div>
+        <DocActionsRail docId={docId} />
       </section>
     </main>
   );
