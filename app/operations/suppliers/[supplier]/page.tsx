@@ -1,22 +1,17 @@
 // app/operations/suppliers/[supplier]/page.tsx
-// Operations · Suppliers · detail — thin wrapper around SupplierDetailView.
+// PBS 2026-06-09 #194: Suppliers moved Operations → Finance.
+// PBS 2026-06-29: this legacy URL now permanently redirects to
+// /finance/suppliers/[name] so the operations chrome never appears for
+// supplier surfaces. The shared SupplierDetailView lives in this directory
+// but is consumed only via the /finance/suppliers/[supplier] wrapper.
 
-import SupplierDetailView from './_components/SupplierDetailView';
-import { OPERATIONS_SUBPAGES } from '../../_subpages';
+import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 60;
+export const revalidate = 0;
 
 interface Props { params: { supplier: string } }
 
-export default async function SupplierDetailPage({ params }: Props) {
-  return (
-    <SupplierDetailView
-      supplierName={decodeURIComponent(params.supplier)}
-      subPages={OPERATIONS_SUBPAGES}
-      activeHrefSuffix="/operations/suppliers"
-      surfaceLabel="Operations"
-      registerHref="/operations/suppliers"
-    />
-  );
+export default function LegacyOperationsSupplierDetail({ params }: Props) {
+  redirect(`/finance/suppliers/${params.supplier}`);
 }
