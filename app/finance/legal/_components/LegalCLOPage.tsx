@@ -303,10 +303,7 @@ export default async function LegalCLOPage({ propertyId, propertyLabel, subPages
         />
       </Container>
 
-      {/* 3. Dates calendar */}
-      <ComingSoon title="Dates calendar" subtitle="Renewals · hearings · filings" icon="⌖" hint="Time-axis view of every legal deadline (contract renewals, court hearings, regulatory filings, licence expiries). Colour-coded by 30/60/90-day proximity." />
-
-      {/* 4. Licenses */}
+      {/* 3. Licenses (Dates calendar dropped 2026-06-29 — not yet wired) */}
       <Container title={`Licenses · ${licenses.total}`} subtitle="Compliance permits · operating licenses · governance · titles · APPLICATIONS EXCLUDED" density="compact">
         <Tile
           icon="✱"
@@ -416,37 +413,39 @@ function Tile({ icon, metrics, extra, href, hrefLabel }: {
   href: string;
   hrefLabel: string;
 }) {
+  // Compact tile: small icon row, inline metrics, terse footnote. The whole
+  // container body remains clickable via the bottom hrefLabel link.
   return (
-    <div style={{ padding: '4px 0' }}>
-      <div style={{ fontSize: 28, color: 'var(--accent, #b8a878)', opacity: 0.6, marginBottom: 8 }}>{icon}</div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 10 }}>
+    <a href={href} style={{ display: 'block', padding: '4px 0', textDecoration: 'none', color: 'inherit' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+        <span style={{ fontSize: 16, opacity: 0.7 }}>{icon}</span>
+        <span style={{ fontSize: 10, color: '#5A5A5A', textTransform: 'uppercase', letterSpacing: '0.06em', flex: 1 }}>{hrefLabel.replace(' →', '')}</span>
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {metrics.map((m) => {
           const inner = (
-            <>
-              <div style={{ fontSize: 20, fontWeight: 600, color: m.danger ? '#C62828' : m.warn ? '#B8860B' : '#1B1B1B', fontVariantNumeric: 'tabular-nums' }}>{m.value}</div>
-              <div style={{ fontSize: 10, color: '#5A5A5A', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{m.label}</div>
-            </>
+            <span style={{
+              display: 'inline-flex', alignItems: 'baseline', gap: 6,
+              padding: '3px 8px', borderRadius: 3,
+              border: `1px solid ${m.danger ? '#F5C2C2' : m.warn ? '#E8C972' : '#E0E0E0'}`,
+              background: m.danger ? '#FDECEC' : m.warn ? '#FFF8E1' : '#FFFFFF',
+              color: '#1B1B1B', fontSize: 11, textDecoration: 'none',
+            }}>
+              <span style={{ fontWeight: 600, color: m.danger ? '#C62828' : m.warn ? '#B8860B' : '#1B1B1B', fontVariantNumeric: 'tabular-nums' }}>{m.value}</span>
+              <span style={{ fontSize: 10, color: '#5A5A5A' }}>{m.label}</span>
+            </span>
           );
-          const styleBase: React.CSSProperties = {
-            padding: '6px 10px', border: '1px solid #E0E0E0', borderRadius: 4,
-            background: m.danger ? '#FDECEC' : m.warn ? '#FFF8E1' : '#FFFFFF',
-            minWidth: 80, textDecoration: 'none', color: 'inherit', display: 'block',
-            cursor: m.href ? 'pointer' : 'default',
-          };
           return m.href ? (
-            <a key={m.label} href={m.href} style={styleBase} title={`Drill into ${m.label}`}>{inner}</a>
+            <a key={m.label} href={m.href} onClick={(e) => e.stopPropagation()} title={`Drill into ${m.label}`} style={{ textDecoration: 'none' }}>{inner}</a>
           ) : (
-            <div key={m.label} style={styleBase}>{inner}</div>
+            <span key={m.label}>{inner}</span>
           );
         })}
       </div>
       {extra && (
-        <div style={{ fontSize: 11, color: '#5A5A5A', lineHeight: 1.4, marginBottom: 10 }}>{extra}</div>
+        <div style={{ fontSize: 10, color: '#5A5A5A', lineHeight: 1.35, marginTop: 6, maxHeight: 28, overflow: 'hidden' }}>{extra}</div>
       )}
-      <a href={href} style={{ fontSize: 11, color: '#1B1B1B', textDecoration: 'underline' }}>
-        {hrefLabel}
-      </a>
-    </div>
+    </a>
   );
 }
 
