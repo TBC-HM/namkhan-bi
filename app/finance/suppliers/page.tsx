@@ -1,6 +1,7 @@
 // app/finance/suppliers/page.tsx
 // Finance · Suppliers — thin wrapper around the shared SuppliersView.
-// Threads FINANCE_SUBPAGES so the Finance sub-page strip shows up.
+// Threads FINANCE_SUBPAGES + linkBase so row clicks route to
+// /finance/suppliers/[name] rather than jumping to /operations.
 // PBS 2026-06-09 #194 — Suppliers moved from Operations to Finance arm.
 
 import SuppliersView from '@/app/operations/suppliers/_components/SuppliersView';
@@ -15,6 +16,7 @@ export default async function FinanceSuppliersPage() {
       subPages={FINANCE_SUBPAGES}
       activeHrefSuffix="/finance/suppliers"
       surfaceLabel="Finance"
+      linkBase="/finance/suppliers"
     />
   );
 }
