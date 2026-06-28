@@ -153,6 +153,16 @@ export default async function CaseOverviewPage({ params }: Props) {
       tabs={tabs}
     >
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <a href={`/h/${propertyId}/finance/legal`} style={{
+            padding: '4px 10px', border: '1px solid #1B1B1B', borderRadius: 3,
+            background: '#FFFFFF', color: '#1B1B1B', textDecoration: 'none', fontSize: 11,
+          }}>← Back to Legal</a>
+          <a href={`/h/${propertyId}/finance/legal/docs?case=${encodeURIComponent(caseRef)}`} style={{
+            padding: '4px 10px', border: '1px solid #1B1B1B', borderRadius: 3,
+            background: '#FFFFFF', color: '#1B1B1B', textDecoration: 'none', fontSize: 11,
+          }}>📋 Edit in Docs register (case-filtered)</a>
+        </div>
         {chronology && <FeaturedChronology row={chronology} origin={origin} />}
 
         <CaseBucket origin={origin} title="Contracts"                subtitle="Loan · security · pledges · lease · share transfer · party-to-party agreements" rows={buckets.contract} />
