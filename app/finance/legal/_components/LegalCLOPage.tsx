@@ -4,11 +4,19 @@
 // chrome both surfaces, subPagesOverride threads through tabs prop.
 
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 interface Props {
   propertyId: number;
   propertyLabel?: string;
   subPagesOverride?: { label: string; href: string }[];
+}
+
+interface CaseLink {
+  case_ref: string;
+  title: string | null;
+  status: string | null;
+  n_docs: number;
 }
 
 interface CLOPanelDef {
@@ -59,11 +67,26 @@ const PANELS: CLOPanelDef[] = [
 
 const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
 
-export default function LegalCLOPage({ propertyId, propertyLabel, subPagesOverride }: Props) {
+export default async function LegalCLOPage({ propertyId, propertyLabel, subPagesOverride }: Props) {
   const title = `Legal · ${propertyLabel ?? 'Property'}`;
   const subtitle = 'Chief Legal Officer · contracts · liabilities · deadlines · cases';
 
   const tabs = (subPagesOverride ?? []).map((s) => ({ key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/finance/legal') }));
+
+  // Running cases — dynamic from v_doc_cases. Any case_ref linked to a doc
+  // appears here automatically; new cases get a new link with no UI edit.
+  const supabase = getSupabaseAdmin();
+  const { data: caseRows } = await supabase
+    .from('v_doc_cases')
+    .select('case_ref, title, status, n_docs')
+    .eq('property_id', propertyId)
+    .order('case_ref');
+  const runningCases: CaseLink[] = ((caseRows ?? []) as Partial<CaseLink>[]).map((c) => ({
+    case_ref: c.case_ref ?? '',
+    title: c.title ?? null,
+    status: c.status ?? null,
+    n_docs: typeof c.n_docs === 'number' ? c.n_docs : 0,
+  })).filter((c) => c.case_ref);
 
   return (
     <DashboardPage title={title} subtitle={subtitle} tabs={tabs.length ? tabs : undefined}>
@@ -76,8 +99,42 @@ export default function LegalCLOPage({ propertyId, propertyLabel, subPagesOverri
         </Container>
       </div>
 
-      {/* 6 CLO panels — each its own grid cell so they auto-fit on wide screens */}
-      {PANELS.map((p) => (
+      {/* 6 CLO panels — each its own grid cell so they auto-fit on wide screens.
+          "Running cases" is the only one wired so far; the rest stay placeholders. */}
+      {PANELS.map((p) => p.title === 'Running cases' ? (
+        <Container key={p.title} title={p.title} subtitle={p.subtitle} density="compact">
+          <div style={{ padding: '4px 0' }}>
+            <div style={{ fontSize: 28, color: 'var(--accent, #b8a878)', opacity: 0.6, marginBottom: 8 }}>{p.icon}</div>
+            {runningCases.length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--ink-soft, #5a5a5a)' }}>
+                No active cases yet. Link a doc to a new case_ref to seed one.
+              </div>
+            ) : (
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {runningCases.map((c) => {
+                  const href = `/h/${propertyId}/finance/legal/cases/${encodeURIComponent(c.case_ref)}`;
+                  return (
+                    <li key={c.case_ref}>
+                      <a href={href} style={{
+                        display: 'flex', alignItems: 'baseline', gap: 8,
+                        padding: '6px 8px', border: '1px solid #E0E0E0', borderRadius: 3,
+                        background: '#FFFFFF', color: '#1B1B1B', textDecoration: 'none',
+                        fontSize: 12,
+                      }}>
+                        <code style={{ fontSize: 12, fontWeight: 500 }}>{c.case_ref}</code>
+                        {c.title && <span style={{ color: '#5A5A5A', fontSize: 11 }}>· {c.title}</span>}
+                        <span style={{ marginLeft: 'auto', fontSize: 10, color: '#5A5A5A' }}>
+                          {c.n_docs} doc{c.n_docs === 1 ? '' : 's'}{c.status ? ` · ${c.status}` : ''}
+                        </span>
+                      </a>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </Container>
+      ) : (
         <Container key={p.title} title={p.title} subtitle={p.subtitle} density="compact">
           <div style={{ padding: '4px 0' }}>
             <div style={{ fontSize: 28, color: 'var(--accent, #b8a878)', opacity: 0.6, marginBottom: 8 }}>{p.icon}</div>
