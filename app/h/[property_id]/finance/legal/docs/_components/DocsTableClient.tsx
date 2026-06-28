@@ -644,7 +644,7 @@ export default function DocsTableClient({
                             type="text"
                             defaultValue={r.title ?? ''}
                             placeholder="Title"
-                            onBlur={(e) => e.target.value !== (r.title ?? '') && onRemap(r.doc_id, { title: e.target.value || null })}
+                            onBlur={(e) => e.target.value !== (r.title ?? '') && onRemap(r.doc_id, { title: e.target.value })}
                             style={{ ...inlineInput, fontWeight: 500, flex: 1 }}
                           />
                           {tickFor('title')}
@@ -654,7 +654,7 @@ export default function DocsTableClient({
                             type="text"
                             defaultValue={r.file_name ?? ''}
                             placeholder="file_name.ext"
-                            onBlur={(e) => e.target.value !== (r.file_name ?? '') && onRemap(r.doc_id, { file_name: e.target.value || null })}
+                            onBlur={(e) => e.target.value !== (r.file_name ?? '') && onRemap(r.doc_id, { file_name: e.target.value })}
                             style={{ ...inlineInput, fontSize: 10, color: INK_SOFT, fontFamily: 'monospace', flex: 1 }}
                           />
                           {tickFor('file_name')}
@@ -664,7 +664,7 @@ export default function DocsTableClient({
                             defaultValue={r.summary ?? ''}
                             placeholder="note (hover to read later)"
                             rows={2}
-                            onBlur={(e) => e.target.value !== (r.summary ?? '') && onRemap(r.doc_id, { summary: e.target.value || null })}
+                            onBlur={(e) => e.target.value !== (r.summary ?? '') && onRemap(r.doc_id, { summary: e.target.value })}
                             style={{ ...inlineInput, resize: 'vertical', minHeight: 32, fontSize: 10, flex: 1 }}
                           />
                           {tickFor('summary')}
@@ -710,7 +710,7 @@ export default function DocsTableClient({
                         <input list={`dl-authors-${r.doc_id}`}
                           defaultValue={r.author ?? ''}
                           placeholder="author / company / ministry"
-                          onBlur={(e) => e.target.value !== (r.author ?? '') && onRemap(r.doc_id, { author: e.target.value || null })}
+                          onBlur={(e) => e.target.value !== (r.author ?? '') && onRemap(r.doc_id, { author: e.target.value })}
                           style={{ ...inlineInput, minWidth: 140 }} />
                         <datalist id={`dl-authors-${r.doc_id}`}>
                           {authorList.map((a) => <option key={a} value={a} />)}
@@ -766,6 +766,7 @@ export default function DocsTableClient({
                     {isEditing ? (
                       <MatterEditor row={r} caseRefs={caseRefs} matters={matters}
                         onLinkCase={(ref) => callRpc('fn_doc_link_case', { p_doc_id: r.doc_id, p_case_ref: ref, p_doc_role: 'evidence', p_title: null })}
+                        onUnlinkCase={(ref) => callRpc('fn_doc_unlink_case', { p_doc_id: r.doc_id, p_case_ref: ref }, { silent: true, field: 'case', docId: r.doc_id })}
                         onSetProject={(proj) => onRemap(r.doc_id, { project: proj })} />
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -1047,9 +1048,10 @@ function ChipList({ items, isEditing, onRemove, onAddClick }: {
 // set the free-text project (autocomplete from existing matters). Surface both
 // at once so PBS can pick the right path without thinking about the underlying
 // data model.
-function MatterEditor({ row, caseRefs, matters, onLinkCase, onSetProject }: {
+function MatterEditor({ row, caseRefs, matters, onLinkCase, onUnlinkCase, onSetProject }: {
   row: DocRow; caseRefs: string[]; matters: string[];
   onLinkCase: (ref: string) => unknown;
+  onUnlinkCase: (ref: string) => unknown;
   onSetProject: (project: string) => unknown;
 }) {
   const [caseV, setCaseV] = useState('');
@@ -1058,8 +1060,23 @@ function MatterEditor({ row, caseRefs, matters, onLinkCase, onSetProject }: {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 200 }}>
       {linkedCases.length > 0 && (
-        <div style={{ fontSize: 10, color: INK_SOFT }}>
-          linked: {linkedCases.map((cr) => <code key={cr} style={{ marginRight: 4 }}>{cr}</code>)}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center', fontSize: 10, color: INK_SOFT }}>
+          <span>linked:</span>
+          {linkedCases.map((cr) => (
+            <span key={cr} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              padding: '1px 4px 1px 6px', border: `1px solid ${HAIRLINE}`,
+              borderRadius: 8, background: '#F8F8F8', color: INK,
+            }}>
+              <code>{cr}</code>
+              <button type="button" onClick={() => onUnlinkCase(cr)}
+                title={`Unlink case ${cr}`}
+                style={{
+                  border: 'none', background: 'transparent', color: INK_SOFT,
+                  cursor: 'pointer', padding: 0, fontSize: 11, lineHeight: 1,
+                }}>×</button>
+            </span>
+          ))}
         </div>
       )}
       <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
