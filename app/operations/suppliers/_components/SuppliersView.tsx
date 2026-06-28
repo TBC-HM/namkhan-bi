@@ -20,6 +20,8 @@ interface Props {
   activeHrefSuffix: string;
   /** Eyebrow line context (e.g. "Operations" or "Finance"). */
   surfaceLabel: string;
+  /** Base path for supplier detail links (so /finance rows route to /finance/[name]). */
+  linkBase?: string;
 }
 
 interface OverviewRow {
@@ -103,7 +105,7 @@ function daysSince(iso: string | null): number | null {
   return Math.floor((Date.now() - t) / 86_400_000);
 }
 
-export default async function SuppliersView({ subPages, activeHrefSuffix, surfaceLabel }: Props) {
+export default async function SuppliersView({ subPages, activeHrefSuffix, surfaceLabel, linkBase }: Props) {
   const [overview, vendorMap, unpaidMap] = await Promise.all([
     getSupplierOverview(),
     getVendorMeta(),
@@ -170,7 +172,7 @@ export default async function SuppliersView({ subPages, activeHrefSuffix, surfac
           subtitle="gl.v_supplier_overview · join gl.vendors · join messy.unpaid_bills · click a row → supplier detail"
           density="compact"
         >
-          <SuppliersTable rows={rows} />
+          <SuppliersTable rows={rows} linkBase={linkBase} />
         </Container>
       </div>
     </DashboardPage>
