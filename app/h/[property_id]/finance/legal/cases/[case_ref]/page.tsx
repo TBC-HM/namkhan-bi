@@ -1,16 +1,13 @@
 // app/h/[property_id]/finance/legal/cases/[case_ref]/page.tsx
 // Read-only case overview. Layout:
-//   1. Featured chronology doc at top (matched by title pattern
-//      "Namkhan Chronology For Counsel%") — full-width card with Preview /
-//      Download / Email so PBS can grab the latest counsel-facing chronology
-//      in one click.
-//   2. 5 collapsible buckets (Contracts · Licenses/Registrations ·
-//      Correspondence · Documents · Photos) via native <details>/<summary>
-//      so there's no client JS, no flicker.
-//   3. One full chronology container at the bottom — every linked doc in
-//      doc_date asc order, regardless of bucket.
-// Every container is dynamic: tag a doc with this case_ref and it shows up
-// on next render in the matching bucket(s).
+//   1. Featured chronology doc at top.
+//   2. 6 collapsible buckets (Contracts · Licenses/Registrations · Court
+//      filings · Correspondence · Documents · Photos) via native
+//      <details>/<summary> — no client JS.
+//   3. One full chronology container at the bottom.
+// Court filings vs Correspondence: court filings are documents actually filed
+// at a court (case_filing, pleading, judgment, declaration). Letters,
+// memoranda, enforcement notices and legal opinions stay in Correspondence.
 
 import { notFound } from 'next/navigation';
 import { headers } from 'next/headers';
@@ -23,8 +20,6 @@ export const revalidate = 0;
 
 const KNOWN_LABEL: Record<number, string> = { 260955: 'Namkhan', 1000001: 'Donna' };
 
-// Title pattern that flags a doc as the "featured" counsel-facing chronology.
-// Robust to suffixes like "v2" / "new 8" / "(1)" — pulls newest one if multiple.
 const CHRONOLOGY_TITLE_RE = /^Namkhan Chronology For Counsel/i;
 
 const CONTRACT_SUBTYPES = new Set<string>([
@@ -37,9 +32,14 @@ const LICENSE_SUBTYPES = new Set<string>([
   'enterprise_registration','business_registration','land_title_deed','property_deed',
 ]);
 
+// Filed-at-court documents only. Pre-litigation correspondence (letters,
+// notices) stays in Correspondence.
+const COURT_FILING_SUBTYPES = new Set<string>([
+  'case_filing','pleading','judgment','declaration',
+]);
+
 const CORRESPONDENCE_SUBTYPES = new Set<string>([
-  'correspondence','enforcement_notice','memorandum','case_filing',
-  'pleading','judgment','declaration','legal_opinion',
+  'correspondence','enforcement_notice','memorandum','legal_opinion',
 ]);
 
 interface Props {
@@ -63,13 +63,14 @@ interface DocRow {
   uploaded_at: string | null;
 }
 
-type Bucket = 'document' | 'contract' | 'license' | 'correspondence' | 'photo';
+type Bucket = 'document' | 'contract' | 'license' | 'court_filing' | 'correspondence' | 'photo';
 
 function classify(row: DocRow): Bucket {
   if ((row.mime ?? '').startsWith('image/') || row.file_type === 'image') return 'photo';
   if (row.doc_type === 'compliance') return 'license';
   if (row.doc_subtype && CONTRACT_SUBTYPES.has(row.doc_subtype)) return 'contract';
   if (row.doc_subtype && LICENSE_SUBTYPES.has(row.doc_subtype)) return 'license';
+  if (row.doc_subtype && COURT_FILING_SUBTYPES.has(row.doc_subtype)) return 'court_filing';
   if (row.doc_subtype && CORRESPONDENCE_SUBTYPES.has(row.doc_subtype)) return 'correspondence';
   return 'document';
 }
@@ -123,14 +124,12 @@ export default async function CaseOverviewPage({ params }: Props) {
 
   const rows = (rowsRaw ?? []) as DocRow[];
 
-  // Featured chronology — newest matching title wins (sorted by uploaded_at
-  // desc among matches). Stays in the buckets too so nothing is hidden.
   const chronology = rows
     .filter((r) => r.title && CHRONOLOGY_TITLE_RE.test(r.title))
     .sort((a, b) => (b.uploaded_at ?? '').localeCompare(a.uploaded_at ?? ''))[0];
 
   const buckets: Record<Bucket, DocRow[]> = {
-    document: [], contract: [], license: [], correspondence: [], photo: [],
+    document: [], contract: [], license: [], court_filing: [], correspondence: [], photo: [],
   };
   for (const r of rows) buckets[classify(r)].push(r);
 
@@ -142,6 +141,7 @@ export default async function CaseOverviewPage({ params }: Props) {
     + `${rows.length} doc${rows.length === 1 ? '' : 's'} · `
     + `${buckets.contract.length} contracts · `
     + `${buckets.license.length} licenses/reg. · `
+    + `${buckets.court_filing.length} court filings · `
     + `${buckets.correspondence.length} correspondence · `
     + `${buckets.photo.length} photos · `
     + `status: ${caseRow.status ?? '—'}`;
@@ -157,8 +157,9 @@ export default async function CaseOverviewPage({ params }: Props) {
 
         <CaseBucket origin={origin} title="Contracts"                subtitle="Loan · security · pledges · lease · share transfer · party-to-party agreements" rows={buckets.contract} />
         <CaseBucket origin={origin} title="Licenses / Registrations" subtitle="Compliance permits · operating licenses · articles · POAs · enterprise registration · title deeds" rows={buckets.license} />
-        <CaseBucket origin={origin} title="Correspondence"           subtitle="Letters · notices · case filings · memoranda" rows={buckets.correspondence} />
-        <CaseBucket origin={origin} title="Documents"                subtitle="Evidence · filings · everything else" rows={buckets.document} />
+        <CaseBucket origin={origin} title="Court filings"            subtitle="Case filings · pleadings · judgments · declarations — anything actually filed at court" rows={buckets.court_filing} />
+        <CaseBucket origin={origin} title="Correspondence"           subtitle="Letters · notices · memoranda · legal opinions — pre-litigation paper trail" rows={buckets.correspondence} />
+        <CaseBucket origin={origin} title="Documents"                subtitle="Evidence · everything else" rows={buckets.document} />
         <CaseBucket origin={origin} title="Photos"                   subtitle="Field photos · maps · screenshots" rows={buckets.photo} />
 
         <CaseBucket origin={origin} title="All docs · chronology"    subtitle="Every linked doc · oldest → newest · cross-bucket merged view" rows={rows} initiallyOpen />
@@ -202,7 +203,6 @@ function FeaturedChronology({ row, origin }: { row: DocRow; origin: string }) {
 }
 
 // --- Collapsible bucket -------------------------------------------------------
-// Uses native <details>/<summary> so collapse/expand is JS-free.
 function CaseBucket({ title, subtitle, rows, origin, initiallyOpen }: {
   title: string; subtitle: string; rows: DocRow[]; origin: string; initiallyOpen?: boolean;
 }) {
