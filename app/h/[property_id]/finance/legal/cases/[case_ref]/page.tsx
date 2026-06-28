@@ -1,9 +1,10 @@
 // app/h/[property_id]/finance/legal/cases/[case_ref]/page.tsx
-// Read-only case overview — 4 containers (Documents · Contracts ·
-// Correspondence · Photos). Every doc linked to the named case shows up here,
-// classified by subtype + mime. No edit/delete buttons — only Preview, Download,
-// Email per row. Server-rendered; mailto: and download links are static anchors.
-// Dynamic [case_ref] segment so any future case_ref gets the same overview.
+// Read-only case overview — 5 containers (Documents · Contracts · Licenses /
+// Registrations · Correspondence · Photos). Every doc linked to the named case
+// shows up here, classified by subtype + mime. No edit/delete buttons — only
+// Preview, Download, Email per row. Server-rendered; mailto: and download
+// links are static anchors. Dynamic [case_ref] segment so any future case_ref
+// gets the same overview.
 
 import { notFound } from 'next/navigation';
 import { headers } from 'next/headers';
@@ -16,13 +17,33 @@ export const revalidate = 0;
 
 const KNOWN_LABEL: Record<number, string> = { 260955: 'Namkhan', 1000001: 'Donna' };
 
-// Subtype classifier — anything in either set hits the corresponding bucket;
-// anything else falls through to Documents. Photos win on mime check first.
+// Subtype classifiers — anything in CONTRACT or LICENSE hits the matching
+// bucket; correspondence has its own set; photos win on mime; everything else
+// falls through to Documents.
+//
+// CONTRACT = party-to-party commercial agreements.
+// LICENSE  = govt-issued authority, corporate-governance instruments, title
+//            deeds and registrations. The line is "did parties negotiate this
+//            with each other" (contract) vs "does this confer / register a
+//            standalone right" (license / registration / deed).
 const CONTRACT_SUBTYPES = new Set<string>([
-  'lease_agreement','loan_agreement','security_agreement','share_pledge',
-  'share_transfer','partnership_agreement','contract','articles_of_association',
-  'shareholder_resolution','power_of_attorney','enterprise_registration',
+  'contract',
+  'lease_agreement',
+  'loan_agreement',
+  'security_agreement',
+  'share_pledge',
+  'share_transfer',
+  'partnership_agreement',
+]);
+
+const LICENSE_SUBTYPES = new Set<string>([
+  'articles_of_association',
+  'shareholder_resolution',
+  'power_of_attorney',
+  'enterprise_registration',
   'business_registration',
+  'land_title_deed',
+  'property_deed',
 ]);
 
 const CORRESPONDENCE_SUBTYPES = new Set<string>([
@@ -50,11 +71,12 @@ interface DocRow {
   summary: string | null;
 }
 
-type Bucket = 'document' | 'contract' | 'correspondence' | 'photo';
+type Bucket = 'document' | 'contract' | 'license' | 'correspondence' | 'photo';
 
 function classify(row: DocRow): Bucket {
   if ((row.mime ?? '').startsWith('image/') || row.file_type === 'image') return 'photo';
   if (row.doc_subtype && CONTRACT_SUBTYPES.has(row.doc_subtype)) return 'contract';
+  if (row.doc_subtype && LICENSE_SUBTYPES.has(row.doc_subtype)) return 'license';
   if (row.doc_subtype && CORRESPONDENCE_SUBTYPES.has(row.doc_subtype)) return 'correspondence';
   return 'document';
 }
@@ -72,8 +94,6 @@ export default async function CaseOverviewPage({ params }: Props) {
   if (!label) notFound();
   const caseRef = decodeURIComponent(params.case_ref);
 
-  // Build origin for absolute URLs in mailto: bodies (recipients can't use
-  // relative paths). Falls back to the prod host if headers are missing.
   const h = headers();
   const host = h.get('host') ?? 'namkhan-bi.vercel.app';
   const proto = h.get('x-forwarded-proto') ?? 'https';
@@ -100,7 +120,7 @@ export default async function CaseOverviewPage({ params }: Props) {
   const rows = (rowsRaw ?? []) as DocRow[];
 
   const buckets: Record<Bucket, DocRow[]> = {
-    document: [], contract: [], correspondence: [], photo: [],
+    document: [], contract: [], license: [], correspondence: [], photo: [],
   };
   for (const r of rows) buckets[classify(r)].push(r);
 
@@ -111,6 +131,7 @@ export default async function CaseOverviewPage({ params }: Props) {
   const summary = `${label} · ${caseRow.title ?? '—'} · `
     + `${rows.length} doc${rows.length === 1 ? '' : 's'} · `
     + `${buckets.contract.length} contracts · `
+    + `${buckets.license.length} licenses/reg. · `
     + `${buckets.correspondence.length} correspondence · `
     + `${buckets.photo.length} photos · `
     + `status: ${caseRow.status ?? '—'}`;
@@ -122,10 +143,11 @@ export default async function CaseOverviewPage({ params }: Props) {
       tabs={tabs}
     >
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <CaseBucket origin={origin} title="Documents"      subtitle="Filings · deeds · titles · evidence" rows={buckets.document} />
-        <CaseBucket origin={origin} title="Contracts"      subtitle="Loan · security · pledges · agreements" rows={buckets.contract} />
-        <CaseBucket origin={origin} title="Correspondence" subtitle="Letters · notices · case filings · memoranda" rows={buckets.correspondence} />
-        <CaseBucket origin={origin} title="Photos"         subtitle="Field photos · maps · screenshots" rows={buckets.photo} />
+        <CaseBucket origin={origin} title="Contracts"                subtitle="Loan · security · pledges · lease · share transfer · party-to-party agreements" rows={buckets.contract} />
+        <CaseBucket origin={origin} title="Licenses / Registrations" subtitle="Articles · shareholder resolutions · POAs · enterprise registration · title deeds" rows={buckets.license} />
+        <CaseBucket origin={origin} title="Correspondence"           subtitle="Letters · notices · case filings · memoranda" rows={buckets.correspondence} />
+        <CaseBucket origin={origin} title="Documents"                subtitle="Evidence · filings · everything else" rows={buckets.document} />
+        <CaseBucket origin={origin} title="Photos"                   subtitle="Field photos · maps · screenshots" rows={buckets.photo} />
       </div>
     </DashboardPage>
   );
