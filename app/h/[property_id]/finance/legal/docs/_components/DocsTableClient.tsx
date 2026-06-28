@@ -12,7 +12,7 @@
 // fix to styles/globals.css).
 
 import { useRouter, usePathname } from 'next/navigation';
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import { supabase } from '@/lib/supabase';
 
 interface VocabRow { doc_type: string; subtype_slug: string; label: string | null; time_model: string | null }
@@ -123,6 +123,12 @@ export default function DocsTableClient({
   // Multi-select state — set of selected doc_ids across this page only.
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  // Search input local state — defaultValue was getting re-applied on parent
+  // re-render (every filter click), causing the field to jump back to the
+  // URL's q value mid-edit. Controlled state with useEffect-sync gives the
+  // user free editing, with the URL only updated on Enter / clear.
+  const [searchQ, setSearchQ] = useState(query.q);
+  useEffect(() => { setSearchQ(query.q); }, [query.q]);
   const allOnPage = useMemo(() => rows.map((r) => r.doc_id), [rows]);
   const allSelected = allOnPage.length > 0 && allOnPage.every((id) => selected.has(id));
   const someSelected = allOnPage.some((id) => selected.has(id));
@@ -485,13 +491,29 @@ export default function DocsTableClient({
         borderBottom: `1px solid ${HAIRLINE}`, marginBottom: 8,
         fontSize: 11, color: INK,
       }}>
-        <input
-          type="search"
-          placeholder="Search title / reference"
-          defaultValue={query.q}
-          onKeyDown={(e) => { if (e.key === 'Enter') pushParams({ q: (e.target as HTMLInputElement).value, page: '1' }); }}
-          style={{ padding: '4px 8px', border: `1px solid ${HAIRLINE}`, borderRadius: 3, minWidth: 200, fontSize: 11 }}
-        />
+        <div style={{ position: 'relative', display: 'inline-flex' }}>
+          <input
+            type="search"
+            placeholder="Search title / reference"
+            value={searchQ}
+            onChange={(e) => setSearchQ(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') pushParams({ q: searchQ, page: '1' });
+              if (e.key === 'Escape') { setSearchQ(''); pushParams({ q: '', page: '1' }); }
+            }}
+            style={{ padding: '4px 22px 4px 8px', border: `1px solid ${HAIRLINE}`, borderRadius: 3, minWidth: 200, fontSize: 11 }}
+          />
+          {searchQ && (
+            <button type="button"
+              onClick={() => { setSearchQ(''); pushParams({ q: '', page: '1' }); }}
+              title="Clear search"
+              style={{
+                position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)',
+                border: 'none', background: 'transparent', color: INK_SOFT,
+                cursor: 'pointer', padding: '0 4px', fontSize: 13, lineHeight: 1,
+              }}>×</button>
+          )}
+        </div>
         <select value={query.family}
           onChange={(e) => pushParams({ family: e.target.value, subtype: '' })}
           style={selectStyle}>
