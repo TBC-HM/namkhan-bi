@@ -32,6 +32,7 @@ interface DocRow {
   retention_until: string | null; needs_review: boolean | null; needs_review_reason: string | null;
   author: string | null;
   file_type: string | null;
+  summary: string | null;   // per-doc note shown as hover tooltip
 }
 interface QueryState {
   q: string; family: string; subtype: string; matter: string; status: string;
@@ -259,6 +260,48 @@ export default function DocsTableClient({
       setBulkBusy(false);
     }
   }
+  // --- Bulk edit: apply a single field across every selected doc -------
+  // Fires fn_doc_remap (or fn_doc_link_case / link_collection / tag) once per
+  // selected doc_id in parallel. Refreshes the page after the last write.
+  type BulkField = 'family' | 'subtype' | 'status' | 'sensitivity' | 'importance'
+                 | 'matter_case' | 'matter_project' | 'author' | 'collection' | 'tag';
+  const [bulkField, setBulkField] = useState<BulkField | ''>('');
+  const [bulkValue, setBulkValue] = useState<string>('');
+
+  async function bulkApply() {
+    if (!selected.size || !bulkField) return;
+    setBulkBusy(true); setError(null);
+    const ids = Array.from(selected);
+    try {
+      const calls = ids.map(async (id) => {
+        switch (bulkField) {
+          case 'family':         return supabase.rpc('fn_doc_remap', { p_doc_id: id, p_doc_type: bulkValue });
+          case 'subtype':        return supabase.rpc('fn_doc_remap', { p_doc_id: id, p_doc_subtype: bulkValue });
+          case 'status':         return supabase.rpc('fn_doc_remap', { p_doc_id: id, p_status: bulkValue });
+          case 'sensitivity':    return supabase.rpc('fn_doc_remap', { p_doc_id: id, p_sensitivity: bulkValue });
+          case 'importance':     return supabase.rpc('fn_doc_remap', { p_doc_id: id, p_importance: bulkValue });
+          case 'author':         return supabase.rpc('fn_doc_remap', { p_doc_id: id, p_author: bulkValue });
+          case 'matter_project': return supabase.rpc('fn_doc_remap', { p_doc_id: id, p_project: bulkValue });
+          case 'matter_case':    return supabase.rpc('fn_doc_link_case',       { p_doc_id: id, p_case_ref: bulkValue, p_doc_role: 'evidence', p_title: null });
+          case 'collection':     return supabase.rpc('fn_doc_link_collection', { p_doc_id: id, p_collection_name: bulkValue });
+          case 'tag':            return supabase.rpc('fn_doc_tag',             { p_doc_id: id, p_tag: bulkValue, p_add: true });
+        }
+      });
+      const results = await Promise.all(calls);
+      const failed = results.filter((r: any) => r?.error).map((r: any) => r.error.message);
+      if (failed.length) {
+        setError(`${failed.length} of ${ids.length} writes failed: ${failed[0]}${failed.length>1 ? ` (+${failed.length-1} more)` : ''}`);
+      }
+      // Refresh regardless — even partial writes need the new state on screen.
+      startTransition(() => router.refresh());
+      setBulkValue('');
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   function bulkMailto() {
     if (!selected.size) return;
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -297,29 +340,117 @@ export default function DocsTableClient({
       {/* Bulk action toolbar — shown only when at least one row is selected. */}
       {selected.size > 0 && (
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
+          display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 12px',
           background: '#F4EFE2', border: `1px solid ${INK}`, borderRadius: 4,
           marginBottom: 8, fontSize: 11, color: INK,
         }}>
-          <strong>{selected.size} selected</strong>
-          <button onClick={bulkDownload} disabled={bulkBusy}
-            style={{ padding: '4px 10px', border: `1px solid ${INK}`, borderRadius: 3,
-                     background: INK, color: PAPER, fontSize: 11, cursor: bulkBusy ? 'wait' : 'pointer' }}>
-            {bulkBusy ? 'Zipping…' : '⤓ Download ZIP'}
-          </button>
-          <button onClick={bulkMailto}
-            style={{ padding: '4px 10px', border: `1px solid ${INK}`, borderRadius: 3,
-                     background: PAPER, color: INK, fontSize: 11, cursor: 'pointer' }}>
-            ✉ Mail to…
-          </button>
-          <button onClick={clearSelection}
-            style={{ padding: '4px 10px', border: `1px solid ${HAIRLINE}`, borderRadius: 3,
-                     background: PAPER, color: INK_SOFT, fontSize: 11, cursor: 'pointer' }}>
-            Clear
-          </button>
-          <span style={{ marginLeft: 'auto', color: INK_SOFT, fontSize: 11 }}>
-            ZIP contains the bytes verbatim · mail composes a draft with download links
-          </span>
+          {/* Row 1: file actions */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <strong>{selected.size} selected</strong>
+            <button onClick={bulkDownload} disabled={bulkBusy}
+              style={{ padding: '4px 10px', border: `1px solid ${INK}`, borderRadius: 3,
+                       background: INK, color: PAPER, fontSize: 11, cursor: bulkBusy ? 'wait' : 'pointer' }}>
+              {bulkBusy ? 'Working…' : '⤓ Download ZIP'}
+            </button>
+            <button onClick={bulkMailto}
+              style={{ padding: '4px 10px', border: `1px solid ${INK}`, borderRadius: 3,
+                       background: PAPER, color: INK, fontSize: 11, cursor: 'pointer' }}>
+              ✉ Mail to…
+            </button>
+            <button onClick={clearSelection}
+              style={{ padding: '4px 10px', border: `1px solid ${HAIRLINE}`, borderRadius: 3,
+                       background: PAPER, color: INK_SOFT, fontSize: 11, cursor: 'pointer' }}>
+              Clear
+            </button>
+            <span style={{ marginLeft: 'auto', color: INK_SOFT, fontSize: 11 }}>
+              ZIP contains bytes verbatim · mail composes a draft with download links
+            </span>
+          </div>
+
+          {/* Row 2: bulk-edit — pick a field, set a value, Apply to all selected.
+              Each path fires fn_doc_remap / link_case / link_collection / tag once per row in parallel. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: INK_SOFT }}>Bulk edit</span>
+            <select value={bulkField} onChange={(e) => { setBulkField(e.target.value as any); setBulkValue(''); }}
+              style={{ ...selectStyle, fontSize: 11 }}>
+              <option value="">— pick field —</option>
+              <option value="family">Set Family (doc_type)</option>
+              <option value="subtype">Set Subtype</option>
+              <option value="status">Set Status</option>
+              <option value="sensitivity">Set Sensitivity</option>
+              <option value="importance">Set Importance</option>
+              <option value="author">Set Author</option>
+              <option value="matter_project">Set Project (matter)</option>
+              <option value="matter_case">Link to Case (matter)</option>
+              <option value="collection">Add to Collection</option>
+              <option value="tag">Add Tag</option>
+            </select>
+
+            {/* Value editor — context-sensitive per chosen field. */}
+            {bulkField === 'family' && (
+              <select value={bulkValue} onChange={(e) => setBulkValue(e.target.value)} style={selectStyle}>
+                <option value="">— value —</option>
+                {families.map((f) => <option key={f} value={f}>{f}</option>)}
+              </select>
+            )}
+            {bulkField === 'subtype' && (
+              <select value={bulkValue} onChange={(e) => setBulkValue(e.target.value)} style={selectStyle}>
+                <option value="">— value —</option>
+                {vocab.map((v) => (
+                  <option key={`${v.doc_type}·${v.subtype_slug}`} value={v.subtype_slug}>
+                    {v.label || v.subtype_slug} · {v.doc_type}
+                  </option>
+                ))}
+              </select>
+            )}
+            {bulkField === 'status' && (
+              <select value={bulkValue} onChange={(e) => setBulkValue(e.target.value)} style={selectStyle}>
+                <option value="">— value —</option>
+                {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            )}
+            {bulkField === 'sensitivity' && (
+              <select value={bulkValue} onChange={(e) => setBulkValue(e.target.value)} style={selectStyle}>
+                <option value="">— value —</option>
+                {SENSITIVITY_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            )}
+            {bulkField === 'importance' && (
+              <select value={bulkValue} onChange={(e) => setBulkValue(e.target.value)} style={selectStyle}>
+                <option value="">— value —</option>
+                {IMPORTANCE_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            )}
+            {(bulkField === 'author' || bulkField === 'matter_project' || bulkField === 'matter_case' || bulkField === 'collection' || bulkField === 'tag') && (
+              <>
+                <input list={`dl-bulk-${bulkField}`} value={bulkValue}
+                  onChange={(e) => setBulkValue(e.target.value)}
+                  placeholder={
+                    bulkField === 'author'         ? 'author / company / ministry' :
+                    bulkField === 'matter_project' ? 'project name (existing or new)' :
+                    bulkField === 'matter_case'    ? 'case_ref (existing or new)' :
+                    bulkField === 'collection'     ? 'collection name (existing or new)' :
+                                                     'tag (existing or new)'
+                  }
+                  style={{ padding: '4px 8px', border: `1px solid ${HAIRLINE}`, borderRadius: 3, fontSize: 11, minWidth: 180 }} />
+                <datalist id={`dl-bulk-${bulkField}`}>
+                  {(bulkField === 'author' ? authorList :
+                    bulkField === 'matter_project' ? matters :
+                    bulkField === 'matter_case' ? caseRefs :
+                    bulkField === 'collection' ? collectionNames :
+                    tagList).map((v) => <option key={v} value={v} />)}
+                </datalist>
+              </>
+            )}
+
+            <button onClick={bulkApply} disabled={!bulkField || !bulkValue.trim() || bulkBusy}
+              style={{ padding: '4px 12px', border: `1px solid ${INK}`, borderRadius: 3,
+                       background: !bulkField || !bulkValue.trim() ? '#888' : INK,
+                       color: PAPER, fontSize: 11,
+                       cursor: !bulkField || !bulkValue.trim() ? 'not-allowed' : 'pointer' }}>
+              Apply to {selected.size}
+            </button>
+          </div>
         </div>
       )}
 
@@ -473,12 +604,54 @@ export default function DocsTableClient({
                       onChange={(e) => toggleRow(r.doc_id, e.target.checked)}
                     />
                   </td>
-                  {/* TITLE */}
+                  {/* TITLE — editable title + file_name in Edit mode; star + tooltip when summary set. */}
                   <td style={tdStyle}>
-                    <div style={{ fontWeight: 500, color: INK }}>{r.title || r.file_name || '—'}</div>
-                    {r.needs_review && (
-                      <div style={{ fontSize: 10, color: '#B8542A', marginTop: 2 }}>
-                        needs review · {r.needs_review_reason}
+                    {isEditing ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 220 }}>
+                        <input
+                          type="text"
+                          defaultValue={r.title ?? ''}
+                          placeholder="Title"
+                          onBlur={(e) => e.target.value !== (r.title ?? '') && onRemap(r.doc_id, { title: e.target.value || null })}
+                          style={{ ...inlineInput, fontWeight: 500 }}
+                        />
+                        <input
+                          type="text"
+                          defaultValue={r.file_name ?? ''}
+                          placeholder="file_name.ext"
+                          onBlur={(e) => e.target.value !== (r.file_name ?? '') && onRemap(r.doc_id, { file_name: e.target.value || null })}
+                          style={{ ...inlineInput, fontSize: 10, color: INK_SOFT, fontFamily: 'monospace' }}
+                        />
+                        <textarea
+                          defaultValue={r.summary ?? ''}
+                          placeholder="note (hover to read later)"
+                          rows={2}
+                          onBlur={(e) => e.target.value !== (r.summary ?? '') && onRemap(r.doc_id, { summary: e.target.value || null })}
+                          style={{ ...inlineInput, resize: 'vertical', minHeight: 32, fontSize: 10 }}
+                        />
+                      </div>
+                    ) : (
+                      <div>
+                        <div style={{ fontWeight: 500, color: INK, display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span>{r.title || r.file_name || '—'}</span>
+                          {r.summary && (
+                            <span
+                              title={r.summary}
+                              aria-label={`Note: ${r.summary}`}
+                              style={{ cursor: 'help', color: '#B8860B', fontSize: 12, lineHeight: 1 }}
+                            >★</span>
+                          )}
+                        </div>
+                        {r.file_name && r.file_name !== r.title && (
+                          <div style={{ fontSize: 10, color: INK_SOFT, marginTop: 2, fontFamily: 'monospace' }} title={r.file_name}>
+                            {r.file_name.length > 60 ? r.file_name.slice(0, 57) + '…' : r.file_name}
+                          </div>
+                        )}
+                        {r.needs_review && (
+                          <div style={{ fontSize: 10, color: '#B8542A', marginTop: 2 }}>
+                            needs review · {r.needs_review_reason}
+                          </div>
+                        )}
                       </div>
                     )}
                   </td>
@@ -546,13 +719,38 @@ export default function DocsTableClient({
                       </select>
                     ) : (r.status ?? '—')}
                   </td>
-                  {/* MATTER — editable: pick existing case OR existing/new project. */}
+                  {/* MATTER — editable: pick existing case OR existing/new project.
+                      Display: when both case_refs AND project exist, show both so
+                      project changes are visible even when a case is linked. */}
                   <td style={tdStyle}>
                     {isEditing ? (
                       <MatterEditor row={r} caseRefs={caseRefs} matters={matters}
                         onLinkCase={(ref) => callRpc('fn_doc_link_case', { p_doc_id: r.doc_id, p_case_ref: ref, p_doc_role: 'evidence', p_title: null })}
                         onSetProject={(proj) => onRemap(r.doc_id, { project: proj })} />
-                    ) : (r.matter ?? '—')}
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {(r.case_refs ?? []).length > 0 && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                            {(r.case_refs ?? []).map((cr) => (
+                              <span key={cr} style={{
+                                display: 'inline-block', padding: '1px 6px',
+                                border: `1px solid ${HAIRLINE}`, borderRadius: 8,
+                                background: '#F8F8F8', fontSize: 10, color: INK,
+                              }}>case: {cr}</span>
+                            ))}
+                          </div>
+                        )}
+                        {r.project && (
+                          <span style={{
+                            display: 'inline-block', padding: '1px 6px',
+                            border: `1px solid ${HAIRLINE}`, borderRadius: 8,
+                            background: '#F8F8F8', fontSize: 10, color: INK,
+                            alignSelf: 'flex-start',
+                          }}>project: {r.project}</span>
+                        )}
+                        {!(r.case_refs ?? []).length && !r.project && <span style={{ color: INK_SOFT }}>—</span>}
+                      </div>
+                    )}
                   </td>
                   {/* COLLECTIONS */}
                   <td style={tdStyle}>
@@ -618,7 +816,19 @@ export default function DocsTableClient({
                           title="Save the original file" style={actionBtn()}>⤓ Download</button>
                       </>
                     )}
-                    <button onClick={() => setEditingId(isEditing ? null : r.doc_id)} style={actionBtn(isEditing)}>
+                    <button
+                      onClick={() => {
+                        if (isEditing) {
+                          setEditingId(null);
+                          // Done also closes any picker open on THIS row so the row collapses
+                          // cleanly. If PBS typed in a picker but didn't click Link / Add new,
+                          // the picker just dismisses — no implicit writes.
+                          if (picker?.docId === r.doc_id) setPicker(null);
+                        } else {
+                          setEditingId(r.doc_id);
+                        }
+                      }}
+                      style={actionBtn(isEditing)}>
                       {isEditing ? 'Done' : 'Edit'}
                     </button>
                     {!r.is_archived && (
