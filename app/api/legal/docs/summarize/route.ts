@@ -52,9 +52,9 @@ export async function POST(req: NextRequest) {
   // filename + title if the body is empty, though quality drops.
   const text = await extractText({ buffer, mimeType: row.mime ?? '', fileName: row.file_name ?? 'doc' });
 
-  // Pull title for context.
+  // Pull title for context (via the public bridge view).
   const { data: meta } = await supabase
-    .from('dms_documents_min')
+    .from('v_doc_register')
     .select('title')
     .eq('doc_id', docId)
     .maybeSingle();
