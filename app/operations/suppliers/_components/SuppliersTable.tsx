@@ -67,7 +67,7 @@ function sortValue(r: SupplierRow, k: SortKey): string | number {
   }
 }
 
-export default function SuppliersTable({ rows }: { rows: SupplierRow[] }) {
+export default function SuppliersTable({ rows, linkBase = '/operations/suppliers' }: { rows: SupplierRow[]; linkBase?: string }) {
   const [sortKey, setSortKey] = useState<SortKey>('grossUsd');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
 
@@ -124,7 +124,7 @@ export default function SuppliersTable({ rows }: { rows: SupplierRow[] }) {
               <tr key={r.name}>
                 <td className="lbl">
                   <Link
-                    href={`/operations/suppliers/${encodeURIComponent(r.name)}`}
+                    href={`${linkBase}/${encodeURIComponent(r.name)}`}
                     style={{ color: 'var(--brass)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 8 }}
                   >
                     <span
