@@ -202,8 +202,10 @@ export default async function SupplierDetailView({ supplierName, subPages, activ
     >
       {/* Back link + meta strip */}
       <div style={{ gridColumn: '1 / -1' }}>
-        <Container title={
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+        <Container title={supplierName}
+        subtitle="Vendor profile · QB overview · open AP · transactions ledger"
+        density="compact">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', padding: '4px 0', fontSize: 11, color: '#5A5A5A' }}>
             <span aria-hidden style={{
               width: 32, height: 32, borderRadius: '50%',
               background: '#B8860B', color: '#FFFFFF',
@@ -211,12 +213,6 @@ export default async function SupplierDetailView({ supplierName, subPages, activ
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
               lineHeight: 1, flexShrink: 0,
             }}>{initials(supplierName)}</span>
-            <span>{supplierName}</span>
-          </span> as unknown as string
-        }
-        subtitle="Vendor profile · QB overview · open AP · transactions ledger"
-        density="compact">
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, padding: '4px 0', fontSize: 11, color: '#5A5A5A' }}>
             <a href={registerHref} style={{
               padding: '4px 10px', border: '1px solid #1B1B1B', borderRadius: 3,
               background: '#FFFFFF', color: '#1B1B1B', textDecoration: 'none',
