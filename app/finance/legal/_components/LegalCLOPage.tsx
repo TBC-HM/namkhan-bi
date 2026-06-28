@@ -186,6 +186,23 @@ export default async function LegalCLOPage({ propertyId, propertyLabel, subPages
         </Container>
       </div>
 
+      {/* Sublinks — docs register lives here now (removed from main strip) */}
+      <div style={fullRow}>
+        <Container title="Document register" subtitle="Triage / edit / classify every doc · property-scoped" density="compact">
+          <a href={`/h/${propertyId}/finance/legal/docs`} style={{
+            display: 'inline-block', padding: '6px 12px',
+            border: '1px solid #1B1B1B', borderRadius: 3,
+            background: '#1B1B1B', color: '#FFFFFF', textDecoration: 'none',
+            fontSize: 12, fontWeight: 500,
+          }}>
+            📋 Open Docs register →
+          </a>
+          <div style={{ fontSize: 11, color: '#5A5A5A', marginTop: 6 }}>
+            The full editable doc-triage page. Use the read-only registers below (Contracts / Insurance / Licenses) for share-with-counsel views.
+          </div>
+        </Container>
+      </div>
+
       {/* 1. Contracts */}
       <Container title={`Contracts · ${contracts.total}`} subtitle="Loan · security · pledges · lease · party-to-party agreements" density="compact">
         <Tile
