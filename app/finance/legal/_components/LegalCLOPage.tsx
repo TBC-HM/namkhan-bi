@@ -216,7 +216,17 @@ export default async function LegalCLOPage({ propertyId, propertyLabel, subPages
 
       {/* Quick actions — upload + drop-to-translate + drop-to-summarize + chat */}
       <div style={fullRow}>
-        <Container title="Quick actions" subtitle="Drop a file to translate or summarize · upload a doc · chat with John" density="compact">
+        <Container title="Quick actions" subtitle="Open the editable Docs register · drop a file to translate or summarize · upload a doc · chat with John" density="compact">
+          <div style={{ marginBottom: 10 }}>
+            <a href={`/h/${propertyId}/finance/legal/docs`} style={{
+              display: 'inline-block', padding: '6px 12px',
+              border: '1px solid #1B1B1B', borderRadius: 3,
+              background: '#1B1B1B', color: '#FFFFFF', textDecoration: 'none',
+              fontSize: 12, fontWeight: 500,
+            }}>
+              📋 Open Docs register →
+            </a>
+          </div>
           <LegalQuickActions propertyId={propertyId} />
         </Container>
       </div>
@@ -361,7 +371,9 @@ export default async function LegalCLOPage({ propertyId, propertyLabel, subPages
         </div>
       </Container>
 
-      {/* Legal counsel strip */}
+      {/* Bottom legal-team strip removed 2026-06-29 — John card now lives
+          at the top in Quick Actions to avoid the duplicate. */}
+      {false && (
       <div style={fullRow}>
         <Container title="Talk to the legal team" subtitle="Direct chat · agents pulled from the cockpit roster" density="compact">
           {legalAgents.length === 0 ? (
@@ -401,6 +413,7 @@ export default async function LegalCLOPage({ propertyId, propertyLabel, subPages
           )}
         </Container>
       </div>
+      )}
     </DashboardPage>
   );
 }
@@ -413,39 +426,40 @@ function Tile({ icon, metrics, extra, href, hrefLabel }: {
   href: string;
   hrefLabel: string;
 }) {
-  // Compact tile: small icon row, inline metrics, terse footnote. The whole
-  // container body remains clickable via the bottom hrefLabel link.
+  // Compact tile: div wrapper (anchors can't nest) with metric chips that
+  // can themselves be drill-down links. The "open register" link sits as an
+  // underlined eyebrow at the top right so the whole metric row stays clean.
   return (
-    <a href={href} style={{ display: 'block', padding: '4px 0', textDecoration: 'none', color: 'inherit' }}>
+    <div style={{ padding: '4px 0' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
         <span style={{ fontSize: 16, opacity: 0.7 }}>{icon}</span>
-        <span style={{ fontSize: 10, color: '#5A5A5A', textTransform: 'uppercase', letterSpacing: '0.06em', flex: 1 }}>{hrefLabel.replace(' →', '')}</span>
+        <a href={href} style={{ fontSize: 10, color: '#1B1B1B', textTransform: 'uppercase', letterSpacing: '0.06em', flex: 1, textDecoration: 'underline' }}>{hrefLabel.replace(' →', '')}</a>
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {metrics.map((m) => {
-          const inner = (
+          const chip = (
             <span style={{
               display: 'inline-flex', alignItems: 'baseline', gap: 6,
               padding: '3px 8px', borderRadius: 3,
               border: `1px solid ${m.danger ? '#F5C2C2' : m.warn ? '#E8C972' : '#E0E0E0'}`,
               background: m.danger ? '#FDECEC' : m.warn ? '#FFF8E1' : '#FFFFFF',
-              color: '#1B1B1B', fontSize: 11, textDecoration: 'none',
+              color: '#1B1B1B', fontSize: 11,
             }}>
               <span style={{ fontWeight: 600, color: m.danger ? '#C62828' : m.warn ? '#B8860B' : '#1B1B1B', fontVariantNumeric: 'tabular-nums' }}>{m.value}</span>
               <span style={{ fontSize: 10, color: '#5A5A5A' }}>{m.label}</span>
             </span>
           );
           return m.href ? (
-            <a key={m.label} href={m.href} onClick={(e) => e.stopPropagation()} title={`Drill into ${m.label}`} style={{ textDecoration: 'none' }}>{inner}</a>
+            <a key={m.label} href={m.href} title={`Drill into ${m.label}`} style={{ textDecoration: 'none' }}>{chip}</a>
           ) : (
-            <span key={m.label}>{inner}</span>
+            <span key={m.label}>{chip}</span>
           );
         })}
       </div>
       {extra && (
         <div style={{ fontSize: 10, color: '#5A5A5A', lineHeight: 1.35, marginTop: 6, maxHeight: 28, overflow: 'hidden' }}>{extra}</div>
       )}
-    </a>
+    </div>
   );
 }
 
