@@ -90,13 +90,14 @@ export default async function DocsTriagePage({ params, searchParams }: Props) {
     qry = qry.or(`title.ilike.%${safe}%,reference_number.ilike.%${safe}%`);
   }
 
-  // Sort: explicit > default (expiry_date asc nulls last when nr=true) > uploaded_at desc.
+  // Sort: explicit user choice wins, otherwise default to doc_date asc nulls
+  // last (oldest first) — PBS 2026-06-28: always chronological so drilldowns
+  // (filter changes) keep the same time order rather than flipping between
+  // expiry_date asc / uploaded_at desc depending on which filter is active.
   if (sort && dir) {
     qry = qry.order(sort, { ascending: dir === 'asc', nullsFirst: false });
-  } else if (nr) {
-    qry = qry.order('expiry_date', { ascending: true, nullsFirst: false });
   } else {
-    qry = qry.order('uploaded_at', { ascending: false, nullsFirst: false });
+    qry = qry.order('doc_date', { ascending: true, nullsFirst: false });
   }
   // Stable tiebreaker so pagination doesn't shuffle when sort key has ties.
   qry = qry.order('doc_id', { ascending: true });
