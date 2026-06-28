@@ -1,10 +1,16 @@
 // app/h/[property_id]/finance/legal/cases/[case_ref]/page.tsx
-// Read-only case overview — 5 containers (Contracts · Licenses / Registrations
-// · Correspondence · Documents · Photos). Every doc linked to the named case
-// shows up here, classified by subtype + family + mime. No edit/delete
-// buttons — only Preview, Download, Email per row. Server-rendered; mailto:
-// and download links are static anchors. Dynamic [case_ref] segment so any
-// future case_ref gets the same overview.
+// Read-only case overview. Layout:
+//   1. Featured chronology doc at top (matched by title pattern
+//      "Namkhan Chronology For Counsel%") — full-width card with Preview /
+//      Download / Email so PBS can grab the latest counsel-facing chronology
+//      in one click.
+//   2. 5 collapsible buckets (Contracts · Licenses/Registrations ·
+//      Correspondence · Documents · Photos) via native <details>/<summary>
+//      so there's no client JS, no flicker.
+//   3. One full chronology container at the bottom — every linked doc in
+//      doc_date asc order, regardless of bucket.
+// Every container is dynamic: tag a doc with this case_ref and it shows up
+// on next render in the matching bucket(s).
 
 import { notFound } from 'next/navigation';
 import { headers } from 'next/headers';
@@ -17,35 +23,18 @@ export const revalidate = 0;
 
 const KNOWN_LABEL: Record<number, string> = { 260955: 'Namkhan', 1000001: 'Donna' };
 
-// Classifier sets:
-//   CONTRACT  = party-to-party commercial agreements (legal family).
-//   LICENSE   = govt-issued authority + corporate-governance instruments + title
-//               deeds + registrations. We also treat the *entire* 'compliance'
-//               doc_type as license (alcohol_license / fire_safety_cert /
-//               environmental_permit / business_license / etc.) since that
-//               family is by definition license / permit / registration docs.
-//   CORRESP   = letters, notices, court filings.
-//   PHOTO     = any image/* mime.
-//   DOCUMENT  = catch-all for everything else.
+// Title pattern that flags a doc as the "featured" counsel-facing chronology.
+// Robust to suffixes like "v2" / "new 8" / "(1)" — pulls newest one if multiple.
+const CHRONOLOGY_TITLE_RE = /^Namkhan Chronology For Counsel/i;
+
 const CONTRACT_SUBTYPES = new Set<string>([
-  'contract',
-  'lease_agreement',
-  'loan_agreement',
-  'security_agreement',
-  'share_pledge',
-  'share_transfer',
-  'partnership_agreement',
+  'contract','lease_agreement','loan_agreement','security_agreement',
+  'share_pledge','share_transfer','partnership_agreement',
 ]);
 
 const LICENSE_SUBTYPES = new Set<string>([
-  // Legal-family governance / title docs
-  'articles_of_association',
-  'shareholder_resolution',
-  'power_of_attorney',
-  'enterprise_registration',
-  'business_registration',
-  'land_title_deed',
-  'property_deed',
+  'articles_of_association','shareholder_resolution','power_of_attorney',
+  'enterprise_registration','business_registration','land_title_deed','property_deed',
 ]);
 
 const CORRESPONDENCE_SUBTYPES = new Set<string>([
@@ -71,6 +60,7 @@ interface DocRow {
   importance: string | null;
   author: string | null;
   summary: string | null;
+  uploaded_at: string | null;
 }
 
 type Bucket = 'document' | 'contract' | 'license' | 'correspondence' | 'photo';
@@ -89,6 +79,17 @@ function fmtDate(d: string | null): string {
   try {
     return new Date(d).toLocaleDateString('en-GB', { year: 'numeric', month: 'short', day: '2-digit' });
   } catch { return d; }
+}
+
+function makeMailto(r: DocRow, origin: string): string {
+  const dlHref = `/api/legal/docs/file/${encodeURIComponent(r.doc_id)}?mode=download`;
+  const previewHref = `/legal/docs/preview/${encodeURIComponent(r.doc_id)}`;
+  const subject = `Case doc: ${r.title ?? r.file_name ?? r.doc_id}`;
+  const body = `${r.title ?? r.file_name ?? '(untitled)'}`
+    + (r.doc_date ? ` (${r.doc_date})` : '')
+    + `\n\nPreview: ${origin}${previewHref}`
+    + `\nDownload: ${origin}${dlHref}`;
+  return `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
 export default async function CaseOverviewPage({ params }: Props) {
@@ -114,13 +115,19 @@ export default async function CaseOverviewPage({ params }: Props) {
 
   const { data: rowsRaw } = await supabase
     .from('v_doc_register')
-    .select('doc_id,title,file_name,doc_type,doc_subtype,mime,file_type,doc_date,status,sensitivity,importance,author,summary,case_refs')
+    .select('doc_id,title,file_name,doc_type,doc_subtype,mime,file_type,doc_date,status,sensitivity,importance,author,summary,uploaded_at,case_refs')
     .eq('property_id', propertyId)
     .contains('case_refs', [caseRef])
     .neq('status', 'archived')
     .order('doc_date', { ascending: true, nullsFirst: false });
 
   const rows = (rowsRaw ?? []) as DocRow[];
+
+  // Featured chronology — newest matching title wins (sorted by uploaded_at
+  // desc among matches). Stays in the buckets too so nothing is hidden.
+  const chronology = rows
+    .filter((r) => r.title && CHRONOLOGY_TITLE_RE.test(r.title))
+    .sort((a, b) => (b.uploaded_at ?? '').localeCompare(a.uploaded_at ?? ''))[0];
 
   const buckets: Record<Bucket, DocRow[]> = {
     document: [], contract: [], license: [], correspondence: [], photo: [],
@@ -146,70 +153,115 @@ export default async function CaseOverviewPage({ params }: Props) {
       tabs={tabs}
     >
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {chronology && <FeaturedChronology row={chronology} origin={origin} />}
+
         <CaseBucket origin={origin} title="Contracts"                subtitle="Loan · security · pledges · lease · share transfer · party-to-party agreements" rows={buckets.contract} />
         <CaseBucket origin={origin} title="Licenses / Registrations" subtitle="Compliance permits · operating licenses · articles · POAs · enterprise registration · title deeds" rows={buckets.license} />
         <CaseBucket origin={origin} title="Correspondence"           subtitle="Letters · notices · case filings · memoranda" rows={buckets.correspondence} />
         <CaseBucket origin={origin} title="Documents"                subtitle="Evidence · filings · everything else" rows={buckets.document} />
         <CaseBucket origin={origin} title="Photos"                   subtitle="Field photos · maps · screenshots" rows={buckets.photo} />
+
+        <CaseBucket origin={origin} title="All docs · chronology"    subtitle="Every linked doc · oldest → newest · cross-bucket merged view" rows={rows} initiallyOpen />
       </div>
     </DashboardPage>
   );
 }
 
-function CaseBucket({ title, subtitle, rows, origin }: {
-  title: string; subtitle: string; rows: DocRow[]; origin: string;
+// --- Featured chronology card -------------------------------------------------
+function FeaturedChronology({ row, origin }: { row: DocRow; origin: string }) {
+  const dlHref      = `/api/legal/docs/file/${encodeURIComponent(row.doc_id)}?mode=download`;
+  const previewHref = `/legal/docs/preview/${encodeURIComponent(row.doc_id)}`;
+  const mailto      = makeMailto(row, origin);
+  return (
+    <Container title="📜 Chronology · for counsel" subtitle="Featured · top of case file" density="compact">
+      <div style={{
+        display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12,
+        padding: '8px 12px', borderLeft: '3px solid #B8860B', background: '#FCFBF5',
+      }}>
+        <div style={{ flex: 1, minWidth: 240 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#1B1B1B' }}>
+            {row.title || row.file_name || '—'}
+          </div>
+          <div style={{ fontSize: 11, color: '#5A5A5A', marginTop: 2 }}>
+            {row.author ? `${row.author} · ` : ''}{fmtDate(row.doc_date)}{row.importance ? ` · ${row.importance}` : ''}
+          </div>
+          {row.summary && (
+            <div style={{ fontSize: 11, color: '#5A5A5A', marginTop: 6, lineHeight: 1.4 }}>
+              {row.summary}
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+          <a href={previewHref} target="_blank" rel="noopener noreferrer" style={primaryAction}>👁 Preview</a>
+          <a href={dlHref} download style={primaryAction}>⤓ Download</a>
+          <a href={mailto} style={primaryAction}>✉ Email</a>
+        </div>
+      </div>
+    </Container>
+  );
+}
+
+// --- Collapsible bucket -------------------------------------------------------
+// Uses native <details>/<summary> so collapse/expand is JS-free.
+function CaseBucket({ title, subtitle, rows, origin, initiallyOpen }: {
+  title: string; subtitle: string; rows: DocRow[]; origin: string; initiallyOpen?: boolean;
 }) {
+  const isOpen = !!initiallyOpen;
   return (
     <Container title={`${title} · ${rows.length}`} subtitle={subtitle} density="compact">
       {rows.length === 0 ? (
         <div style={{ padding: 12, fontSize: 11, color: '#5A5A5A' }}>No items yet.</div>
       ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, color: '#1B1B1B' }}>
-          <thead>
-            <tr style={{ textAlign: 'left', color: '#5A5A5A', borderBottom: '1px solid #E0E0E0' }}>
-              <th style={th}>Title</th>
-              <th style={th}>Doc date</th>
-              <th style={th}>Sens.</th>
-              <th style={th}>Imp.</th>
-              <th style={{ ...th, textAlign: 'right' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => {
-              const dlHref      = `/api/legal/docs/file/${encodeURIComponent(r.doc_id)}?mode=download`;
-              const previewHref = `/legal/docs/preview/${encodeURIComponent(r.doc_id)}`;
-              const mailSubject = `Case doc: ${r.title ?? r.file_name ?? r.doc_id}`;
-              const mailBody    = `${r.title ?? r.file_name ?? '(untitled)'}`
-                + (r.doc_date ? ` (${r.doc_date})` : '')
-                + `\n\nPreview: ${origin}${previewHref}`
-                + `\nDownload: ${origin}${dlHref}`;
-              const mailto = `mailto:?subject=${encodeURIComponent(mailSubject)}&body=${encodeURIComponent(mailBody)}`;
-              return (
-                <tr key={r.doc_id} style={{ borderBottom: '1px solid #F0F0F0' }}>
-                  <td style={td}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span>{r.title || r.file_name || '—'}</span>
-                      {r.summary && (
-                        <span title={r.summary} style={{ cursor: 'help', color: '#B8860B', fontSize: 12, lineHeight: 1 }}>★</span>
+        <details {...(isOpen ? { open: true } : {})}>
+          <summary style={{
+            cursor: 'pointer', userSelect: 'none',
+            padding: '6px 8px', fontSize: 11, color: '#5A5A5A',
+            listStyle: 'revert',
+          }}>
+            {isOpen ? 'Hide' : 'Show'} {rows.length} item{rows.length === 1 ? '' : 's'}
+          </summary>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, color: '#1B1B1B', marginTop: 4 }}>
+            <thead>
+              <tr style={{ textAlign: 'left', color: '#5A5A5A', borderBottom: '1px solid #E0E0E0' }}>
+                <th style={th}>Title</th>
+                <th style={th}>Doc date</th>
+                <th style={th}>Sens.</th>
+                <th style={th}>Imp.</th>
+                <th style={{ ...th, textAlign: 'right' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const dlHref      = `/api/legal/docs/file/${encodeURIComponent(r.doc_id)}?mode=download`;
+                const previewHref = `/legal/docs/preview/${encodeURIComponent(r.doc_id)}`;
+                const mailto      = makeMailto(r, origin);
+                return (
+                  <tr key={r.doc_id} style={{ borderBottom: '1px solid #F0F0F0' }}>
+                    <td style={td}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span>{r.title || r.file_name || '—'}</span>
+                        {r.summary && (
+                          <span title={r.summary} style={{ cursor: 'help', color: '#B8860B', fontSize: 12, lineHeight: 1 }}>★</span>
+                        )}
+                      </div>
+                      {r.author && (
+                        <div style={{ fontSize: 10, color: '#5A5A5A', marginTop: 2 }}>{r.author}</div>
                       )}
-                    </div>
-                    {r.author && (
-                      <div style={{ fontSize: 10, color: '#5A5A5A', marginTop: 2 }}>{r.author}</div>
-                    )}
-                  </td>
-                  <td style={{ ...td, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fmtDate(r.doc_date)}</td>
-                  <td style={td}>{r.sensitivity ?? '—'}</td>
-                  <td style={td}>{r.importance ?? '—'}</td>
-                  <td style={{ ...td, textAlign: 'right', whiteSpace: 'nowrap' }}>
-                    <a href={previewHref} target="_blank" rel="noopener noreferrer" style={actionLink} title="Preview in new tab">👁 Preview</a>
-                    <a href={dlHref} download style={actionLink} title="Download">⤓ Download</a>
-                    <a href={mailto} style={actionLink} title="Compose email with link">✉ Email</a>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    </td>
+                    <td style={{ ...td, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fmtDate(r.doc_date)}</td>
+                    <td style={td}>{r.sensitivity ?? '—'}</td>
+                    <td style={td}>{r.importance ?? '—'}</td>
+                    <td style={{ ...td, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      <a href={previewHref} target="_blank" rel="noopener noreferrer" style={actionLink} title="Preview in new tab">👁 Preview</a>
+                      <a href={dlHref} download style={actionLink} title="Download">⤓ Download</a>
+                      <a href={mailto} style={actionLink} title="Compose email with link">✉ Email</a>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </details>
       )}
     </Container>
   );
@@ -221,4 +273,9 @@ const actionLink: React.CSSProperties = {
   display: 'inline-block', marginLeft: 8, padding: '2px 8px',
   border: '1px solid #1B1B1B', borderRadius: 3,
   background: '#FFFFFF', color: '#1B1B1B', textDecoration: 'none', fontSize: 10,
+};
+const primaryAction: React.CSSProperties = {
+  display: 'inline-block', padding: '4px 10px',
+  border: '1px solid #1B1B1B', borderRadius: 3,
+  background: '#1B1B1B', color: '#FFFFFF', textDecoration: 'none', fontSize: 11,
 };
