@@ -330,8 +330,15 @@ export default function DocsTableClient({
     if ('sensitivity'in patch) args.p_sensitivity = patch.sensitivity;
     if ('importance' in patch) args.p_importance  = patch.importance;
     if ('project'    in patch) args.p_project     = patch.project;
+    if ('author'     in patch) args.p_author      = patch.author;
+    if ('title'      in patch) args.p_title       = patch.title;
+    if ('file_name'  in patch) args.p_file_name   = patch.file_name;
+    if ('summary'    in patch) args.p_summary     = patch.summary;
     const ok = await callRpc('fn_doc_remap', args);
-    if (ok) setEditingId(null);
+    // Don't auto-close Edit on field-level writes — the user is still in flow.
+    // The Edit button toggles closed when they're done; auto-close caused
+    // them to lose their place after every blur.
+    if (!ok) return;
   }
 
   // --- Render -----------------------------------------------------------
