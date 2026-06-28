@@ -205,8 +205,18 @@ export default async function RegisterPage({ params, searchParams }: Props) {
     >
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 12 }}>
         <Container title={`${icon}  ${pageTitle}`} subtitle={pageSubtitle} density="compact">
-          <div style={{ fontSize: 11, color: '#5A5A5A', padding: '4px 0' }}>
-            Read-only view. To edit a row, jump to the docs register: <a href={`/h/${propertyId}/finance/legal/docs`} style={{ color: '#1B1B1B' }}>open editable docs page →</a>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, padding: '4px 0', fontSize: 11, color: '#5A5A5A' }}>
+            <a href={`/h/${propertyId}/finance/legal`} style={{
+              padding: '4px 10px', border: '1px solid #1B1B1B', borderRadius: 3,
+              background: '#FFFFFF', color: '#1B1B1B', textDecoration: 'none',
+            }}>← Back to Legal</a>
+            <a href={`/h/${propertyId}/finance/legal/docs`} style={{
+              padding: '4px 10px', border: '1px solid #1B1B1B', borderRadius: 3,
+              background: '#FFFFFF', color: '#1B1B1B', textDecoration: 'none',
+            }}>📋 Edit in Docs register</a>
+            <span style={{ alignSelf: 'center' }}>
+              Read-only view for sharing with counsel. Use Docs register to edit a row.
+            </span>
           </div>
         </Container>
 
