@@ -27,6 +27,7 @@ interface CollRow    { name: string; description: string | null; is_smart?: bool
 interface FamilyRow  { doc_type: string; n: number }
 interface ProjectRow { project: string; n: number }
 interface TagRow     { tag: string; n: number }
+interface AuthorRow  { author: string; n: number }
 
 interface Props {
   propertyId: number;
@@ -36,6 +37,7 @@ interface Props {
   cases:       CaseRow[];
   collections: CollRow[];
   tags:        TagRow[];
+  authors:     AuthorRow[];
 }
 
 const INK      = '#1B1B1B';
@@ -43,10 +45,11 @@ const INK_SOFT = '#5A5A5A';
 const HAIRLINE = '#E0E0E0';
 const PAPER    = '#FFFFFF';
 
-const TABS = ['Families', 'Subtypes', 'Matters', 'Cases', 'Collections', 'Tags'] as const;
+const TABS = ['Families', 'Subtypes', 'Matters', 'Cases', 'Collections', 'Tags', 'Authors'] as const;
 type Tab = typeof TABS[number];
 
 export default function SettingsDrawerButton(props: Props) {
+  // Render is identical; props pass through to Drawer.
   const [open, setOpen]   = useState(false);
   const [mounted, setM]   = useState(false);
   useEffect(() => setM(true), []);
@@ -71,7 +74,7 @@ export default function SettingsDrawerButton(props: Props) {
   );
 }
 
-function Drawer({ propertyId, families, subtypeVocab, projects, cases, collections, tags, onClose }:
+function Drawer({ propertyId, families, subtypeVocab, projects, cases, collections, tags, authors, onClose }:
   Props & { onClose: () => void }) {
   const [tab, setTab]     = useState<Tab>('Families');
   const [error, setError] = useState<string | null>(null);
@@ -121,6 +124,7 @@ function Drawer({ propertyId, families, subtypeVocab, projects, cases, collectio
           {tab === 'Cases'       && <CasesTab       propertyId={propertyId} cases={cases} rpc={rpc} />}
           {tab === 'Collections' && <CollectionsTab propertyId={propertyId} collections={collections} rpc={rpc} />}
           {tab === 'Tags'        && <TagsTab        propertyId={propertyId} tags={tags} rpc={rpc} />}
+          {tab === 'Authors'     && <AuthorsTab     propertyId={propertyId} authors={authors} rpc={rpc} />}
           {pending && <div style={{ color: INK_SOFT, fontSize: 11, padding: 8 }}>refreshing…</div>}
         </section>
       </aside>
@@ -331,6 +335,43 @@ function TagsTab({ propertyId, tags, rpc }:
               <button onClick={() => {
                 if (!window.confirm(`Delete tag "${t.tag}" from every doc?`)) return;
                 rpc('fn_doc_tag_delete', { p_property_id: propertyId, p_tag: t.tag });
+              }} style={delBtn}>Delete</button>
+            </td>
+          </tr>
+        ))}
+      </Table>
+    </>
+  );
+}
+
+function AuthorsTab({ propertyId, authors, rpc }:
+  { propertyId: number; authors: AuthorRow[]; rpc: (n: string, a: Record<string, unknown>) => Promise<boolean> }) {
+  return (
+    <>
+      <Hint>
+        Authors = who issued / authored the doc (person, company, ministry, department, …).
+        Adding an author here makes it appear immediately in the Author column's autocomplete,
+        even before any doc references it. Rename merges every doc that carries the old name
+        into the new one. Delete refuses if any doc still uses the author.
+      </Hint>
+      <AddRowForm placeholder="New author / company / ministry"
+        onAdd={(v) => rpc('fn_doc_author_seed', { p_property_id: propertyId, p_author: v, p_kind: null, p_description: null })} />
+      <Table cols={['Author', 'Docs', 'Rename to', '']}>
+        {authors.length === 0 && <EmptyRow cols={4} />}
+        {authors.map((a) => (
+          <tr key={a.author} style={trStyle}>
+            <td style={tdStyle}>{a.author}</td>
+            <td style={{ ...tdStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: a.n === 0 ? INK_SOFT : INK }}>
+              {a.n}
+            </td>
+            <td style={tdStyle}>
+              <InlineEdit value="" placeholder={`rename "${a.author}"`} commitOnEnter
+                onCommit={(next) => rpc('fn_doc_author_rename', { p_property_id: propertyId, p_old: a.author, p_new: next })} />
+            </td>
+            <td style={tdStyle}>
+              <button onClick={() => {
+                if (!window.confirm(`Delete author "${a.author}"? Refuses if any document is still using it.`)) return;
+                rpc('fn_doc_author_delete', { p_property_id: propertyId, p_author: a.author });
               }} style={delBtn}>Delete</button>
             </td>
           </tr>

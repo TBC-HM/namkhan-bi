@@ -30,6 +30,8 @@ interface DocRow {
   case_refs: string[] | null; n_collections: number | null;
   collection_names: string[] | null;
   retention_until: string | null; needs_review: boolean | null; needs_review_reason: string | null;
+  author: string | null;
+  file_type: string | null;
 }
 interface QueryState {
   q: string; family: string; subtype: string; matter: string; status: string;
@@ -48,6 +50,7 @@ interface Props {
   caseRefs: string[];        // existing case_refs for the autocomplete picker
   collectionNames: string[]; // existing collection names
   tagList: string[];         // existing tags (distinct)
+  authorList: string[];      // existing authors (vocab + in-use)
   query: QueryState;
   totalRows: number;
   totalPages: number;
@@ -60,24 +63,27 @@ const HAIRLINE    = '#E0E0E0';
 const PAPER       = '#FFFFFF';
 const REVIEW_TINT = '#FFF8F0';
 
-// Brief §3: sortable columns + labels in display order.
-// Collections & Tags are arrays — not sortable directly server-side; render-only.
+// Brief §3 + PBS 2026-06-28: sortable columns + labels in display order.
+// Collections & Tags are arrays — not sortable server-side; render-only.
+// Doc date is pulled up next to Title so it lives beside the title visibly,
+// distinct from Uploaded (separate column near the end).
 const COLUMNS: { key: string; label: string; align?: 'left' | 'right' | 'center'; sortable?: boolean }[] = [
   { key: 'title',            label: 'Title' },
+  { key: 'doc_date',         label: 'Doc date',     align: 'right' },
+  { key: 'author',           label: 'Author' },
   { key: 'doc_type',         label: 'Family' },
   { key: 'doc_subtype',      label: 'Subtype' },
+  { key: 'file_type',        label: 'File type' },
   { key: 'status',           label: 'Status' },
   { key: 'matter',           label: 'Matter' },
   { key: 'collection_names', label: 'Collections', sortable: false },
   { key: 'tags',             label: 'Tags',        sortable: false },
-  { key: 'doc_date',         label: 'Doc date',     align: 'right' },
   { key: 'expiry_date',      label: 'Expiry',       align: 'right' },
   { key: 'signed',           label: 'Signed',       align: 'center' },
   { key: 'sensitivity',      label: 'Sens.' },
   { key: 'importance',       label: 'Imp.' },
   { key: 'uploaded_at',      label: 'Uploaded',     align: 'right' },
   { key: 'last_updated_at',  label: 'Updated',      align: 'right' },
-  { key: 'has_file',         label: 'File',         align: 'center' },
   { key: '__actions',        label: 'Actions',      align: 'right', sortable: false },
 ];
 
@@ -95,7 +101,7 @@ function fmtBool(b: boolean | null): string {
 
 export default function DocsTableClient({
   propertyId, rows, vocab, families, matters, statuses,
-  caseRefs, collectionNames, tagList,
+  caseRefs, collectionNames, tagList, authorList,
   query, totalRows, totalPages, pageSize,
 }: Props) {
   const router = useRouter();
@@ -467,6 +473,7 @@ export default function DocsTableClient({
                       onChange={(e) => toggleRow(r.doc_id, e.target.checked)}
                     />
                   </td>
+                  {/* TITLE */}
                   <td style={tdStyle}>
                     <div style={{ fontWeight: 500, color: INK }}>{r.title || r.file_name || '—'}</div>
                     {r.needs_review && (
@@ -475,6 +482,30 @@ export default function DocsTableClient({
                       </div>
                     )}
                   </td>
+                  {/* DOC DATE — promoted next to Title; editable in Edit mode. */}
+                  <td style={{ ...tdStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                    {isEditing ? (
+                      <input type="date" defaultValue={r.doc_date ?? ''}
+                        onBlur={(e) => e.target.value !== (r.doc_date ?? '') && onRemap(r.doc_id, { doc_date: e.target.value || null })}
+                        style={inlineInput} />
+                    ) : fmtDate(r.doc_date)}
+                  </td>
+                  {/* AUTHOR — free text with datalist autocomplete from authorList. */}
+                  <td style={tdStyle}>
+                    {isEditing ? (
+                      <>
+                        <input list={`dl-authors-${r.doc_id}`}
+                          defaultValue={r.author ?? ''}
+                          placeholder="author / company / ministry"
+                          onBlur={(e) => e.target.value !== (r.author ?? '') && onRemap(r.doc_id, { author: e.target.value || null })}
+                          style={{ ...inlineInput, minWidth: 140 }} />
+                        <datalist id={`dl-authors-${r.doc_id}`}>
+                          {authorList.map((a) => <option key={a} value={a} />)}
+                        </datalist>
+                      </>
+                    ) : (r.author ?? '—')}
+                  </td>
+                  {/* FAMILY */}
                   <td style={tdStyle}>
                     {isEditing ? (
                       <select defaultValue={r.doc_type ?? ''}
@@ -484,6 +515,7 @@ export default function DocsTableClient({
                       </select>
                     ) : (r.doc_type ?? '—')}
                   </td>
+                  {/* SUBTYPE */}
                   <td style={tdStyle}>
                     {isEditing ? (
                       <select defaultValue={r.doc_subtype ?? ''}
@@ -496,6 +528,15 @@ export default function DocsTableClient({
                       </select>
                     ) : (r.subtype_label || r.doc_subtype || '—')}
                   </td>
+                  {/* FILE TYPE — derived; not editable. */}
+                  <td style={tdStyle}>
+                    <span style={{
+                      display: 'inline-block', padding: '1px 6px',
+                      border: `1px solid ${HAIRLINE}`, borderRadius: 8,
+                      background: '#F8F8F8', fontSize: 10, color: INK,
+                    }}>{r.file_type ?? 'other'}</span>
+                  </td>
+                  {/* STATUS */}
                   <td style={tdStyle}>
                     {isEditing ? (
                       <select defaultValue={r.status ?? ''}
@@ -513,8 +554,7 @@ export default function DocsTableClient({
                         onSetProject={(proj) => onRemap(r.doc_id, { project: proj })} />
                     ) : (r.matter ?? '—')}
                   </td>
-
-                  {/* COLLECTIONS — chips. In edit mode each chip has × (unlink); + opens picker. */}
+                  {/* COLLECTIONS */}
                   <td style={tdStyle}>
                     <ChipList
                       items={r.collection_names ?? []}
@@ -523,8 +563,7 @@ export default function DocsTableClient({
                       onAddClick={() => openPicker(r.doc_id, 'collection')}
                     />
                   </td>
-
-                  {/* TAGS — chips. + opens picker; × removes tag (fn_doc_tag with p_add=false). */}
+                  {/* TAGS */}
                   <td style={tdStyle}>
                     <ChipList
                       items={r.tags ?? []}
@@ -533,14 +572,7 @@ export default function DocsTableClient({
                       onAddClick={() => openPicker(r.doc_id, 'tag')}
                     />
                   </td>
-
-                  <td style={{ ...tdStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                    {isEditing ? (
-                      <input type="date" defaultValue={r.doc_date ?? ''}
-                        onBlur={(e) => e.target.value !== (r.doc_date ?? '') && onRemap(r.doc_id, { doc_date: e.target.value || null })}
-                        style={inlineInput} />
-                    ) : fmtDate(r.doc_date)}
-                  </td>
+                  {/* EXPIRY */}
                   <td style={{ ...tdStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                     {isEditing ? (
                       <input type="date" defaultValue={r.expiry_date ?? ''}
@@ -548,12 +580,14 @@ export default function DocsTableClient({
                         style={inlineInput} />
                     ) : fmtDate(r.expiry_date)}
                   </td>
+                  {/* SIGNED */}
                   <td style={{ ...tdStyle, textAlign: 'center' }}>
                     {isEditing ? (
                       <input type="checkbox" defaultChecked={!!r.signed}
                         onChange={(e) => onRemap(r.doc_id, { signed: e.target.checked })} />
                     ) : fmtBool(r.signed)}
                   </td>
+                  {/* SENS */}
                   <td style={tdStyle}>
                     {isEditing ? (
                       <select defaultValue={r.sensitivity ?? ''}
@@ -563,6 +597,7 @@ export default function DocsTableClient({
                       </select>
                     ) : (r.sensitivity ?? '—')}
                   </td>
+                  {/* IMP */}
                   <td style={tdStyle}>
                     {isEditing ? (
                       <select defaultValue={r.importance ?? ''}
@@ -574,7 +609,6 @@ export default function DocsTableClient({
                   </td>
                   <td style={{ ...tdStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: INK_SOFT }}>{fmtDate(r.uploaded_at)}</td>
                   <td style={{ ...tdStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: INK_SOFT }}>{fmtDate(r.last_updated_at)}</td>
-                  <td style={{ ...tdStyle, textAlign: 'center' }}>{r.has_file ? '✓' : '·'}</td>
                   <td style={{ ...tdStyle, textAlign: 'right', whiteSpace: 'nowrap' }}>
                     {r.has_file && (
                       <>

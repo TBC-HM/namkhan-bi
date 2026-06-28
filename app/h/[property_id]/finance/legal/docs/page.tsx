@@ -20,11 +20,11 @@ export const revalidate = 0;
 const KNOWN_LABEL: Record<number, string> = { 260955: 'Namkhan', 1000001: 'Donna' };
 const PAGE_SIZE = 50;
 
-// Brief §3: every column on this list is sortable server-side.
+// Brief §3 + PBS 2026-06-28: every column on this list is sortable server-side.
 const SORTABLE = new Set([
-  'title', 'doc_type', 'doc_subtype', 'status', 'matter',
-  'doc_date', 'expiry_date', 'signed', 'sensitivity', 'importance',
-  'uploaded_at', 'last_updated_at', 'has_file',
+  'title', 'doc_date', 'author', 'doc_type', 'doc_subtype', 'file_type',
+  'status', 'matter', 'expiry_date', 'signed', 'sensitivity', 'importance',
+  'uploaded_at', 'last_updated_at',
 ]);
 
 interface Props {
@@ -150,6 +150,7 @@ export default async function DocsTriagePage({ params, searchParams }: Props) {
     { data: collRows },
     { data: projectRows },
     { data: tagRows },
+    { data: authorRows },
   ] = await Promise.all([
     supabase.from('v_doc_cases').select('case_ref, title, matter_type, status').eq('property_id', propertyId).order('case_ref'),
     supabase.from('v_doc_collections').select('name, description, is_smart').eq('property_id', propertyId).order('name'),
@@ -160,6 +161,8 @@ export default async function DocsTriagePage({ params, searchParams }: Props) {
     supabase.from('v_doc_projects').select('project_name, n_docs').eq('property_id', propertyId).order('n_docs', { ascending: false }).order('project_name'),
     // Distinct tags via dms.documents.tags — array_agg-able from the register's array projection.
     supabase.from('v_doc_register').select('tags').eq('property_id', propertyId),
+    // Authors — vocab + in-use, same union pattern as projects.
+    supabase.from('v_doc_authors').select('author_name, n_docs').eq('property_id', propertyId).order('n_docs', { ascending: false }).order('author_name'),
   ]);
 
   const cases = (caseRows ?? []) as { case_ref: string; title: string | null; matter_type: string | null; status: string | null }[];
@@ -182,6 +185,9 @@ export default async function DocsTriagePage({ params, searchParams }: Props) {
   const caseRefs       = cases.map((c) => c.case_ref);
   const collectionNames = collections.map((c) => c.name);
   const tagList        = Array.from(tagCounts.keys()).sort();
+  const authors        = ((authorRows ?? []) as { author_name: string; n_docs: number }[])
+    .map((r) => ({ author: r.author_name, n: r.n_docs }));
+  const authorList     = authors.map((a) => a.author).sort();
 
   const tabs: DashboardTab[] = financeSubPagesForProperty(propertyId).map((s) => ({
     key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/finance/legal/docs'),
@@ -207,6 +213,7 @@ export default async function DocsTriagePage({ params, searchParams }: Props) {
               cases={cases}
               collections={collections}
               tags={tags}
+              authors={authors}
             />
           }
         >
@@ -220,6 +227,7 @@ export default async function DocsTriagePage({ params, searchParams }: Props) {
             caseRefs={caseRefs}
             collectionNames={collectionNames}
             tagList={tagList}
+            authorList={authorList}
             query={{ q, family, subtype, matter, status, caseF, collF, tagF, nr, exp, sort, dir, page }}
             totalRows={total}
             totalPages={totalPages}
