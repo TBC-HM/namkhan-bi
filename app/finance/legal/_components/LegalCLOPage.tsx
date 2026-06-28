@@ -68,6 +68,11 @@ const CONTRACT_SUBTYPES = [
   'share_pledge','share_transfer','partnership_agreement',
 ] as const;
 
+// Application title heuristic — peeled off from the License pool so the tile
+// shows true issued-licenses count.
+const APP_RE = /\bapplication\b|\benquiry letter\b|\brequest letter\b|\bnotice of (company )?dissolution\b|\bliquidator/i;
+const isApp = (t: string | null | undefined, f: string | null | undefined) => APP_RE.test(`${t ?? ''} ${f ?? ''}`);
+
 export default async function LegalCLOPage({ propertyId, propertyLabel, subPagesOverride }: Props) {
   const title = `Legal · ${propertyLabel ?? 'Property'}`;
   const subtitle = `Chief Legal Officer view — single screen for ${propertyLabel ?? 'the property'} · contracts · insurance · licenses · cases · counsel`;
@@ -129,13 +134,13 @@ export default async function LegalCLOPage({ propertyId, propertyLabel, subPages
   // ── Licenses / deadlines ─────────────────────────────────────────────────
   const { data: licRows1 } = await supabase
     .from('v_doc_register')
-    .select('doc_id,doc_type,doc_subtype,expiry_date')
+    .select('doc_id,doc_type,doc_subtype,expiry_date,title,file_name')
     .eq('property_id', propertyId)
     .neq('status', 'archived')
     .eq('doc_type', 'compliance');
   const { data: licRows2 } = await supabase
     .from('v_doc_register')
-    .select('doc_id,doc_type,doc_subtype,expiry_date')
+    .select('doc_id,doc_type,doc_subtype,expiry_date,title,file_name')
     .eq('property_id', propertyId)
     .neq('status', 'archived')
     .eq('doc_type', 'legal')
@@ -143,7 +148,9 @@ export default async function LegalCLOPage({ propertyId, propertyLabel, subPages
       'articles_of_association','shareholder_resolution','power_of_attorney',
       'enterprise_registration','business_registration','land_title_deed','property_deed',
     ]);
-  const licArr = [...(licRows1 ?? []), ...(licRows2 ?? [])] as { expiry_date: string | null }[];
+  const licPool = [...(licRows1 ?? []), ...(licRows2 ?? [])] as { expiry_date: string | null; title: string | null; file_name: string | null }[];
+  const apps = licPool.filter((r) => isApp(r.title, r.file_name));
+  const licArr = licPool.filter((r) => !isApp(r.title, r.file_name));
   const in90 = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10);
   const licenses: LicenseTallies = {
     total: licArr.length,
@@ -152,6 +159,8 @@ export default async function LegalCLOPage({ propertyId, propertyLabel, subPages
     current: licArr.filter((r) => r.expiry_date && r.expiry_date > in90).length,
     no_expiry: licArr.filter((r) => !r.expiry_date).length,
   };
+  const applicationsCount = apps.length;
+  const applicationsActive = apps.filter((r) => true).length;
 
   // ── Legal agents ─────────────────────────────────────────────────────────
   const scope = propertyId === 260955 ? 'namkhan' : propertyId === 1000001 ? 'donna' : 'all';
@@ -235,7 +244,7 @@ export default async function LegalCLOPage({ propertyId, propertyLabel, subPages
       <ComingSoon title="Dates calendar" subtitle="Renewals · hearings · filings" icon="⌖" hint="Time-axis view of every legal deadline (contract renewals, court hearings, regulatory filings, licence expiries). Colour-coded by 30/60/90-day proximity." />
 
       {/* 4. Licenses */}
-      <Container title={`Licenses · ${licenses.total}`} subtitle="Compliance permits · operating licenses · governance instruments · titles" density="compact">
+      <Container title={`Licenses · ${licenses.total}`} subtitle="Compliance permits · operating licenses · governance · titles · APPLICATIONS EXCLUDED" density="compact">
         <Tile
           icon="✱"
           metrics={[
@@ -247,6 +256,19 @@ export default async function LegalCLOPage({ propertyId, propertyLabel, subPages
           extra={`Lao licenses typically renew annually. ${licenses.no_expiry} doc${licenses.no_expiry === 1 ? '' : 's'} have no valid_until on file — set one in the register to enable countdowns.`}
           href={reg('licenses')}
           hrefLabel="open license register →"
+        />
+      </Container>
+
+      {/* 4b. Applications */}
+      <Container title={`Applications · ${applicationsCount}`} subtitle="Filings · enquiry letters · dissolution notices · liquidator filings" density="compact">
+        <Tile
+          icon="📨"
+          metrics={[
+            { label: 'submitted', value: applicationsActive, href: `/h/${propertyId}/finance/legal/register/applications?status=active` },
+          ]}
+          extra="Anything you have submitted that is not yet a granted license — the License box only counts issued grants."
+          href={`/h/${propertyId}/finance/legal/register/applications`}
+          hrefLabel="open applications register →"
         />
       </Container>
 
