@@ -1,10 +1,10 @@
 // app/h/[property_id]/finance/legal/cases/[case_ref]/page.tsx
-// Read-only case overview — 5 containers (Documents · Contracts · Licenses /
-// Registrations · Correspondence · Photos). Every doc linked to the named case
-// shows up here, classified by subtype + mime. No edit/delete buttons — only
-// Preview, Download, Email per row. Server-rendered; mailto: and download
-// links are static anchors. Dynamic [case_ref] segment so any future case_ref
-// gets the same overview.
+// Read-only case overview — 5 containers (Contracts · Licenses / Registrations
+// · Correspondence · Documents · Photos). Every doc linked to the named case
+// shows up here, classified by subtype + family + mime. No edit/delete
+// buttons — only Preview, Download, Email per row. Server-rendered; mailto:
+// and download links are static anchors. Dynamic [case_ref] segment so any
+// future case_ref gets the same overview.
 
 import { notFound } from 'next/navigation';
 import { headers } from 'next/headers';
@@ -17,15 +17,16 @@ export const revalidate = 0;
 
 const KNOWN_LABEL: Record<number, string> = { 260955: 'Namkhan', 1000001: 'Donna' };
 
-// Subtype classifiers — anything in CONTRACT or LICENSE hits the matching
-// bucket; correspondence has its own set; photos win on mime; everything else
-// falls through to Documents.
-//
-// CONTRACT = party-to-party commercial agreements.
-// LICENSE  = govt-issued authority, corporate-governance instruments, title
-//            deeds and registrations. The line is "did parties negotiate this
-//            with each other" (contract) vs "does this confer / register a
-//            standalone right" (license / registration / deed).
+// Classifier sets:
+//   CONTRACT  = party-to-party commercial agreements (legal family).
+//   LICENSE   = govt-issued authority + corporate-governance instruments + title
+//               deeds + registrations. We also treat the *entire* 'compliance'
+//               doc_type as license (alcohol_license / fire_safety_cert /
+//               environmental_permit / business_license / etc.) since that
+//               family is by definition license / permit / registration docs.
+//   CORRESP   = letters, notices, court filings.
+//   PHOTO     = any image/* mime.
+//   DOCUMENT  = catch-all for everything else.
 const CONTRACT_SUBTYPES = new Set<string>([
   'contract',
   'lease_agreement',
@@ -37,6 +38,7 @@ const CONTRACT_SUBTYPES = new Set<string>([
 ]);
 
 const LICENSE_SUBTYPES = new Set<string>([
+  // Legal-family governance / title docs
   'articles_of_association',
   'shareholder_resolution',
   'power_of_attorney',
@@ -75,6 +77,7 @@ type Bucket = 'document' | 'contract' | 'license' | 'correspondence' | 'photo';
 
 function classify(row: DocRow): Bucket {
   if ((row.mime ?? '').startsWith('image/') || row.file_type === 'image') return 'photo';
+  if (row.doc_type === 'compliance') return 'license';
   if (row.doc_subtype && CONTRACT_SUBTYPES.has(row.doc_subtype)) return 'contract';
   if (row.doc_subtype && LICENSE_SUBTYPES.has(row.doc_subtype)) return 'license';
   if (row.doc_subtype && CORRESPONDENCE_SUBTYPES.has(row.doc_subtype)) return 'correspondence';
@@ -144,7 +147,7 @@ export default async function CaseOverviewPage({ params }: Props) {
     >
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 12 }}>
         <CaseBucket origin={origin} title="Contracts"                subtitle="Loan · security · pledges · lease · share transfer · party-to-party agreements" rows={buckets.contract} />
-        <CaseBucket origin={origin} title="Licenses / Registrations" subtitle="Articles · shareholder resolutions · POAs · enterprise registration · title deeds" rows={buckets.license} />
+        <CaseBucket origin={origin} title="Licenses / Registrations" subtitle="Compliance permits · operating licenses · articles · POAs · enterprise registration · title deeds" rows={buckets.license} />
         <CaseBucket origin={origin} title="Correspondence"           subtitle="Letters · notices · case filings · memoranda" rows={buckets.correspondence} />
         <CaseBucket origin={origin} title="Documents"                subtitle="Evidence · filings · everything else" rows={buckets.document} />
         <CaseBucket origin={origin} title="Photos"                   subtitle="Field photos · maps · screenshots" rows={buckets.photo} />
