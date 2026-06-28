@@ -112,6 +112,14 @@ export default function DocsTableClient({
   const [error, setError] = useState<string | null>(null);
   // Per-row picker state: which row has which picker open, and the typed value.
   const [picker, setPicker] = useState<{ docId: string; kind: 'case' | 'collection' | 'tag'; value: string } | null>(null);
+  // Tracks edit-session dirty state per row. router.refresh() is DEFERRED
+  // until the user clicks Done; otherwise every blur during typing triggers
+  // a full SSR refresh which yanks focus from the next input and makes the
+  // edit panel feel like it's collapsing. (PBS report 2026-06-28.)
+  const [dirtyDocId, setDirtyDocId] = useState<string | null>(null);
+  // Brief "✓ saved" flash next to the last edited field so the user sees the
+  // round-trip even though the row doesn't refresh until Done.
+  const [savedFlash, setSavedFlash] = useState<{ docId: string; key: string; at: number } | null>(null);
   // Multi-select state — set of selected doc_ids across this page only.
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -158,14 +166,25 @@ export default function DocsTableClient({
   }
 
   // --- RPC helpers ------------------------------------------------------
-  async function callRpc(name: string, args: Record<string, unknown>): Promise<boolean> {
+  // `silent` skips router.refresh — used for inline edits inside an open
+  // Edit panel so the focus + DOM don't churn on every blur. Refresh is
+  // deferred to the Done click via dirtyDocId.
+  async function callRpc(name: string, args: Record<string, unknown>, opts?: { silent?: boolean; field?: string; docId?: string }): Promise<boolean> {
     setError(null);
     const { error: e } = await supabase.rpc(name, args);
     if (e) {
       setError(`${name}: ${e.message}`);
       return false;
     }
-    startTransition(() => router.refresh());
+    if (opts?.silent) {
+      // Mark the row dirty so Done knows to refresh once.
+      if (opts.docId) setDirtyDocId(opts.docId);
+      if (opts.docId && opts.field) {
+        setSavedFlash({ docId: opts.docId, key: opts.field, at: Date.now() });
+      }
+    } else {
+      startTransition(() => router.refresh());
+    }
     return true;
   }
 
@@ -334,11 +353,10 @@ export default function DocsTableClient({
     if ('title'      in patch) args.p_title       = patch.title;
     if ('file_name'  in patch) args.p_file_name   = patch.file_name;
     if ('summary'    in patch) args.p_summary     = patch.summary;
-    const ok = await callRpc('fn_doc_remap', args);
-    // Don't auto-close Edit on field-level writes — the user is still in flow.
-    // The Edit button toggles closed when they're done; auto-close caused
-    // them to lose their place after every blur.
-    if (!ok) return;
+    // First (and usually only) key in the patch identifies the field for the
+    // ✓ Saved flash.
+    const field = Object.keys(patch)[0];
+    await callRpc('fn_doc_remap', args, { silent: true, field, docId: doc_id });
   }
 
   // --- Render -----------------------------------------------------------
@@ -602,6 +620,12 @@ export default function DocsTableClient({
               const isEditing = editingId === r.doc_id;
               const tint = r.needs_review ? REVIEW_TINT : PAPER;
               const subtypesForType = (r.doc_type && vocabByType.get(r.doc_type)) || [];
+              // Small ✓ saved indicator that appears next to the field just
+              // edited. Stays until the next field is saved or Done is clicked.
+              const tickFor = (field: string) =>
+                savedFlash?.docId === r.doc_id && savedFlash?.key === field
+                  ? <span style={{ color: '#2E7D32', fontSize: 10, marginLeft: 4, fontWeight: 600 }}>✓</span>
+                  : null;
               return (
                 <tr key={r.doc_id} style={{ background: tint, borderBottom: `1px solid ${HAIRLINE}` }}>
                   <td style={{ ...tdStyle, textAlign: 'center', width: 28 }}>
@@ -615,27 +639,36 @@ export default function DocsTableClient({
                   <td style={tdStyle}>
                     {isEditing ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 220 }}>
-                        <input
-                          type="text"
-                          defaultValue={r.title ?? ''}
-                          placeholder="Title"
-                          onBlur={(e) => e.target.value !== (r.title ?? '') && onRemap(r.doc_id, { title: e.target.value || null })}
-                          style={{ ...inlineInput, fontWeight: 500 }}
-                        />
-                        <input
-                          type="text"
-                          defaultValue={r.file_name ?? ''}
-                          placeholder="file_name.ext"
-                          onBlur={(e) => e.target.value !== (r.file_name ?? '') && onRemap(r.doc_id, { file_name: e.target.value || null })}
-                          style={{ ...inlineInput, fontSize: 10, color: INK_SOFT, fontFamily: 'monospace' }}
-                        />
-                        <textarea
-                          defaultValue={r.summary ?? ''}
-                          placeholder="note (hover to read later)"
-                          rows={2}
-                          onBlur={(e) => e.target.value !== (r.summary ?? '') && onRemap(r.doc_id, { summary: e.target.value || null })}
-                          style={{ ...inlineInput, resize: 'vertical', minHeight: 32, fontSize: 10 }}
-                        />
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <input
+                            type="text"
+                            defaultValue={r.title ?? ''}
+                            placeholder="Title"
+                            onBlur={(e) => e.target.value !== (r.title ?? '') && onRemap(r.doc_id, { title: e.target.value || null })}
+                            style={{ ...inlineInput, fontWeight: 500, flex: 1 }}
+                          />
+                          {tickFor('title')}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <input
+                            type="text"
+                            defaultValue={r.file_name ?? ''}
+                            placeholder="file_name.ext"
+                            onBlur={(e) => e.target.value !== (r.file_name ?? '') && onRemap(r.doc_id, { file_name: e.target.value || null })}
+                            style={{ ...inlineInput, fontSize: 10, color: INK_SOFT, fontFamily: 'monospace', flex: 1 }}
+                          />
+                          {tickFor('file_name')}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+                          <textarea
+                            defaultValue={r.summary ?? ''}
+                            placeholder="note (hover to read later)"
+                            rows={2}
+                            onBlur={(e) => e.target.value !== (r.summary ?? '') && onRemap(r.doc_id, { summary: e.target.value || null })}
+                            style={{ ...inlineInput, resize: 'vertical', minHeight: 32, fontSize: 10, flex: 1 }}
+                          />
+                          {tickFor('summary')}
+                        </div>
                       </div>
                     ) : (
                       <div>
@@ -827,10 +860,12 @@ export default function DocsTableClient({
                       onClick={() => {
                         if (isEditing) {
                           setEditingId(null);
-                          // Done also closes any picker open on THIS row so the row collapses
-                          // cleanly. If PBS typed in a picker but didn't click Link / Add new,
-                          // the picker just dismisses — no implicit writes.
                           if (picker?.docId === r.doc_id) setPicker(null);
+                          // Flush the deferred refresh if anything on this row was edited.
+                          if (dirtyDocId === r.doc_id) {
+                            setDirtyDocId(null);
+                            startTransition(() => router.refresh());
+                          }
                         } else {
                           setEditingId(r.doc_id);
                         }
