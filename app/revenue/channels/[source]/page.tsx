@@ -57,7 +57,12 @@ function shortDay(iso: string): string {
 export default async function ChannelDetailPage({ params, searchParams }: Props) {
   const sourceName = decodeURIComponent(params.source);
   const isBookingCom = /Booking\.com/i.test(sourceName);
-  const period = resolvePeriod(searchParams);
+  // PBS 2026-06-29: per-source landing defaults to YTD (not the global 30d). Most
+  // non-Booking sources have <30 bookings/year — a 30-day window shows "empty" for
+  // every DMC partner outside their booking pulse. YTD gives an honest read by default;
+  // user can still narrow via ?win=30d in the URL.
+  const sp = (searchParams?.win) ? searchParams : { ...searchParams, win: 'ytd' };
+  const period = resolvePeriod(sp);
   const cmpFrom = period.compareFrom;
   const cmpTo = period.compareTo;
 
