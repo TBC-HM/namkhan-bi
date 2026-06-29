@@ -286,6 +286,8 @@
   --text-place: var(--ink-faint);
   --border-1:   var(--line);
   --border-2:   var(--line);
+  /* PBS 2026-06-29: Page eyebrow ink (keeps --accent as peach elsewhere on holding). */
+  --eyebrow-fg: var(--ink-soft);
 }
 
 /* Holding pages get the cream-white canvas, not the global #0a0a0a body bg. */
