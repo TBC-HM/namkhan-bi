@@ -134,47 +134,7 @@ export default function AgentChatShell({ agent, propertyId }: Props) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, height: '70vh' }}>
-      {/* Agent header strip */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 14,
-          padding: '12px 16px',
-          background: 'var(--surf-1, #0f0d0a)',
-          border: '1px solid var(--border-1, #1f1c15)',
-          borderRadius: 10,
-        }}
-      >
-        <div
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 22,
-            background: swatch,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--surf-0, #0a0a0a)',
-            fontWeight: 700,
-            fontFamily: "'Fraunces', Georgia, serif",
-          }}
-          aria-hidden
-        >
-          {agent.avatar ?? initials(agent.display_name)}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 18, color: 'var(--text-0, #e9e1ce)' }}>
-            {agent.display_name}
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--text-mute, #9b907a)', letterSpacing: '0.05em' }}>
-            {agent.dept ? `${agent.dept} · ` : ''}{agent.scope_label}
-            {agent.reports_to && (
-              <> · Reports to: <span style={{ color: 'var(--text-dim, #7d7565)' }}>{agent.reports_to}</span></>
-            )}
-          </div>
-        </div>
-      </div>
+      {/* PBS 2026-06-29: internal header strip removed — outer <Page> chrome already shows it. */}
 
       {/* Transcript */}
       <div
@@ -239,9 +199,9 @@ export default function AgentChatShell({ agent, propertyId }: Props) {
           style={{
             flex: 1,
             resize: 'none',
-            background: 'var(--surf-1, #0f0d0a)',
-            color: 'var(--text-0, #e9e1ce)',
-            border: '1px solid var(--border-2, #2a261d)',
+            background: 'var(--paper-warm, #FFFFFF)',
+            color: 'var(--ink, #1B1B1B)',
+            border: '1px solid var(--line, #d8d2c0)',
             borderRadius: 8,
             padding: '10px 12px',
             fontFamily: "'Inter Tight', system-ui, sans-serif",
