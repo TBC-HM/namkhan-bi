@@ -88,17 +88,8 @@ export default async function AgentChatPage({
 
   return (
     <Page
-      eyebrow={`Cockpit · ${agent.dept ?? 'Agent'} · Chat`}
-      title={
-        <>
-          {agent.display_name ?? agent.role}
-          {agent.tagline && (
-            <em style={{ color: 'var(--accent, #a8854a)', fontSize: '0.5em', marginLeft: 12 }}>
-              {agent.tagline}
-            </em>
-          )}
-        </>
-      }
+      eyebrow={`Chat · ${agent.dept ?? 'Agent'}`}
+      title={agent.display_name ?? agent.role}
     >
       {/* PBS 2026-06-29: Holding-scoped agents (John, Carla, etc.) keep their Beyond Circle palette regardless of which property URL launched the chat. */}
       {agent.property_id === null && <HoldingThemeOverride />}
