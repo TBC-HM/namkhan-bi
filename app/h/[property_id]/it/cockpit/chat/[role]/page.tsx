@@ -8,6 +8,7 @@
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import AgentChatShell from '@/components/cockpit/AgentChatShell';
+import HoldingThemeOverride from '@/components/HoldingThemeOverride';
 import Page from '@/components/page/Page';
 
 export const dynamic = 'force-dynamic';
@@ -99,6 +100,8 @@ export default async function AgentChatPage({
         </>
       }
     >
+      {/* PBS 2026-06-29: Holding-scoped agents (John, Carla, etc.) keep their Beyond Circle palette regardless of which property URL launched the chat. */}
+      {agent.property_id === null && <HoldingThemeOverride />}
       <AgentChatShell
         agent={{
           role: agent.role,
