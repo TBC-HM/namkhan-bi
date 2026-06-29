@@ -71,7 +71,10 @@ const S: Record<string, CSSProperties> = {
     fontFamily: 'var(--sans, "Inter Tight", system-ui, sans-serif)',
   },
   // PBS #199 v7: drawer scrim lightened (40% black → 12% black) so the underlying page remains clearly visible while drawer is open.
-  scrim: { position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.12)' },
+  // PBS 2026-06-29: pointerEvents on root, scrim transparent + click-through-to-close.
+  // On dark themes (Namkhan) any opacity reads as "page went blank". Keep the
+  // click-to-close behaviour but lose the visible tint.
+  scrim: { position: 'absolute', inset: 0, background: 'transparent' },
   panel: {
     position: 'relative', height: '100vh',
     background: 'var(--paper, #FFFFFF)',
