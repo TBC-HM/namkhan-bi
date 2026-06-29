@@ -157,15 +157,10 @@ export async function POST(req: NextRequest) {
     sizeBytes = buffer.length;
   }
 
-  // --- 0. SHA-256 dedup (silent skip): if same file already ingested, return existing row.
+  // --- 0. SHA-256 dedup via SECURITY DEFINER RPC (PostgREST only exposes public)
   const crypto = await import('crypto');
   const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
-  const { data: existing } = await admin
-    .schema('dms').from('documents')
-    .select('doc_id, title, doc_type, importance, sensitivity, storage_bucket, storage_path, valid_from, valid_until, external_party, summary, tags, keywords')
-    .eq('file_checksum', sha256)
-    .limit(1)
-    .maybeSingle();
+  const { data: existing } = await admin.rpc('fn_doc_find_by_checksum', { p_checksum: sha256 });
   if (existing) {
     // Clean up any staging upload — we won't use it
     if (stagingBucket && stagingPath) {
@@ -297,81 +292,40 @@ export async function POST(req: NextRequest) {
     },
   };
 
-  const { data: inserted, error: insErr } = await admin
-    .schema('dms')
-    .from('documents')
-    .insert(insertRow)
-    .select('doc_id, title, doc_type, importance, sensitivity, storage_bucket, storage_path, valid_from, valid_until, external_party, summary, tags, keywords')
-    .single();
+  // PBS 2026-06-29: persist via SECURITY DEFINER RPC (does insert + chunks + supersession
+  // in one transaction). PostgREST only exposes the `public` schema, so we can't write
+  // to dms.* directly. The RPC lives at public.fn_doc_ingest_persist with search_path
+  // set to public,dms.
+  let persistChunks: any[] = [];
+  if (storeBody && extractedText.length >= 200) {
+    const chunkArr = chunkBody(extractedText.slice(0, 200_000));
+    persistChunks = chunkArr.map(c => ({
+      chunk_idx: c.chunk_idx,
+      page_num: c.page_num,
+      content: c.content,
+      char_start: c.char_start,
+      char_end: c.char_end,
+    }));
+  }
 
-  if (insErr) {
+  const { data: persistResult, error: persistErr } = await admin.rpc('fn_doc_ingest_persist', {
+    p_payload: insertRow,
+    p_chunks: persistChunks,
+  });
+
+  if (persistErr || !(persistResult as any)?.ok) {
     // Roll back the storage upload
     await admin.storage.from(finalBucket).remove([finalPath]);
     return NextResponse.json({
       ok: false,
       stage: 'db_insert',
-      error: insErr.message,
+      error: persistErr?.message ?? (persistResult as any)?.error ?? 'persist_failed',
     }, { status: 500 });
   }
 
-  // --- 6. Build chunks for paragraph-level retrieval (only if we have body)
-  let chunkCount = 0;
-  if (storeBody && extractedText.length >= 200) {
-    const chunks = chunkBody(extractedText.slice(0, 200_000));
-    if (chunks.length > 0) {
-      const rows = chunks.map(c => ({
-        doc_id: inserted.doc_id,
-        chunk_idx: c.chunk_idx,
-        page_num: c.page_num,
-        content: c.content,
-        char_start: c.char_start,
-        char_end: c.char_end,
-      }));
-      const { error: chunkErr } = await admin.schema('dms').from('chunks').insert(rows);
-      if (chunkErr) {
-        console.error('[docs/ingest] chunk insert failed:', chunkErr.message);
-        // Non-fatal — doc is still searchable via doc-level tsv
-      } else {
-        chunkCount = rows.length;
-      }
-    }
-  }
-
-  // Supersession detection: if this new doc looks like a newer version of an
-  // existing one (same external_party + same doc_subtype + later valid_from),
-  // mark the old one as superseded and link parent_doc_id.
-  let supersededId: string | null = null;
-  if (cls.external_party && cls.doc_subtype && cls.valid_from) {
-    try {
-      const { data: candidates } = await admin
-        .schema('dms')
-        .from('documents')
-        .select('doc_id, valid_from, title')
-        .eq('external_party', cls.external_party)
-        .eq('doc_subtype', cls.doc_subtype)
-        .eq('is_current_version', true)
-        .neq('doc_id', inserted.doc_id)
-        .lt('valid_from', cls.valid_from)
-        .order('valid_from', { ascending: false })
-        .limit(1);
-      if (candidates && candidates.length > 0) {
-        supersededId = candidates[0].doc_id;
-        // Mark old as superseded
-        await admin.schema('dms').from('documents').update({
-          is_current_version: false,
-          tags: [...(cls.tags || []), `superseded_by:${inserted.doc_id}`].slice(0, 8),
-        }).eq('doc_id', supersededId);
-        // Mark new with parent_doc_id pointer + supersedes tag
-        await admin.schema('dms').from('documents').update({
-          parent_doc_id: supersededId,
-          version: 2, // bump (could be smarter — read parent's version + 1)
-          tags: [...(cls.tags || []), `supersedes:${supersededId}`].slice(0, 8),
-        }).eq('doc_id', inserted.doc_id);
-      }
-    } catch (e: any) {
-      console.error('[docs/ingest] supersession check failed:', e?.message);
-    }
-  }
+  const inserted = (persistResult as any).doc;
+  const chunkCount = (persistResult as any).chunks ?? 0;
+  const supersededId = (persistResult as any).superseded_id ?? null;
 
   // Mode B: success — clean up the staging file (best-effort, ignore errors)
   if (stagingBucket && stagingPath) {
