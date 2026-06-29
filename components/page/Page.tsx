@@ -201,7 +201,9 @@ const S: Record<string, React.CSSProperties> = {
     fontSize:      10,
     letterSpacing: '0.22em',
     textTransform: 'uppercase',
-    color:         'var(--accent, #a8854a)',
+    // PBS 2026-06-29: --eyebrow-fg lets the holding theme override eyebrow ink
+    // without disturbing other --accent uses (badges, link accents, etc).
+    color:         'var(--eyebrow-fg, var(--accent, #a8854a))',
     marginBottom:  6,
     marginLeft:    56, // clear the global N
   },
