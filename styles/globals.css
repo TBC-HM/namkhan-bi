@@ -274,6 +274,18 @@
   /* KPI frame — peach on teal-white for the holding look */
   --kpi-frame:        rgba(247, 172, 103, 0.45);
   --kpi-frame-hover:  rgba(247, 172, 103, 0.80);
+
+  /* PBS 2026-06-29: alias dark-Namkhan tokens to Beyond Circle palette. */
+  --surf-0:     var(--paper-warm);
+  --surf-1:     var(--paper);
+  --text-0:     var(--ink);
+  --text-mute:  var(--ink-mute);
+  --text-dim:   var(--ink-faint);
+  --text-soft:  var(--ink-mute);
+  --text-2:     var(--ink-soft);
+  --text-place: var(--ink-faint);
+  --border-1:   var(--line);
+  --border-2:   var(--line);
 }
 
 /* Holding pages get the cream-white canvas, not the global #0a0a0a body bg. */
