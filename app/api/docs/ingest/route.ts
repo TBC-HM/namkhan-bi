@@ -161,7 +161,7 @@ export async function POST(req: NextRequest) {
   const crypto = await import('crypto');
   const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
   const { data: existing } = await admin
-    .schema('docs').from('documents')
+    .schema('dms').from('documents')
     .select('doc_id, title, doc_type, importance, sensitivity, storage_bucket, storage_path, valid_from, valid_until, external_party, summary, tags, keywords')
     .eq('file_checksum', sha256)
     .limit(1)
@@ -298,7 +298,7 @@ export async function POST(req: NextRequest) {
   };
 
   const { data: inserted, error: insErr } = await admin
-    .schema('docs')
+    .schema('dms')
     .from('documents')
     .insert(insertRow)
     .select('doc_id, title, doc_type, importance, sensitivity, storage_bucket, storage_path, valid_from, valid_until, external_party, summary, tags, keywords')
@@ -327,7 +327,7 @@ export async function POST(req: NextRequest) {
         char_start: c.char_start,
         char_end: c.char_end,
       }));
-      const { error: chunkErr } = await admin.schema('docs').from('chunks').insert(rows);
+      const { error: chunkErr } = await admin.schema('dms').from('chunks').insert(rows);
       if (chunkErr) {
         console.error('[docs/ingest] chunk insert failed:', chunkErr.message);
         // Non-fatal — doc is still searchable via doc-level tsv
@@ -344,7 +344,7 @@ export async function POST(req: NextRequest) {
   if (cls.external_party && cls.doc_subtype && cls.valid_from) {
     try {
       const { data: candidates } = await admin
-        .schema('docs')
+        .schema('dms')
         .from('documents')
         .select('doc_id, valid_from, title')
         .eq('external_party', cls.external_party)
@@ -357,12 +357,12 @@ export async function POST(req: NextRequest) {
       if (candidates && candidates.length > 0) {
         supersededId = candidates[0].doc_id;
         // Mark old as superseded
-        await admin.schema('docs').from('documents').update({
+        await admin.schema('dms').from('documents').update({
           is_current_version: false,
           tags: [...(cls.tags || []), `superseded_by:${inserted.doc_id}`].slice(0, 8),
         }).eq('doc_id', supersededId);
         // Mark new with parent_doc_id pointer + supersedes tag
-        await admin.schema('docs').from('documents').update({
+        await admin.schema('dms').from('documents').update({
           parent_doc_id: supersededId,
           version: 2, // bump (could be smarter — read parent's version + 1)
           tags: [...(cls.tags || []), `supersedes:${supersededId}`].slice(0, 8),
