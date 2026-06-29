@@ -347,7 +347,11 @@ export default async function StaffPageContent({ propertyId, propertyLabel, sear
     stats: Array<{ label: string; value: string | number; accent?: 'ok' | 'amber' | 'red' | 'muted' }>;
     people: Array<{ staff_id: string; full_name: string; dept_name: string; meta?: string | null }>;
   };
-  const insightBoxes: InsightBox[] = (insightsJson as { boxes?: InsightBox[] } | null)?.boxes ?? [];
+  const rawInsightBoxes: InsightBox[] = (insightsJson as { boxes?: InsightBox[] } | null)?.boxes ?? [];
+  // PBS 2026-06-29: Attendance health uses Factorial timeclock — Donna only.
+  const insightBoxes: InsightBox[] = propertyId === 260955
+    ? rawInsightBoxes.filter((b) => b.title !== 'Attendance health')
+    : rawInsightBoxes;
 
   const employeesByDept: Record<string, DeptEmployee[]> = {};
   for (const r of safeRows) {
