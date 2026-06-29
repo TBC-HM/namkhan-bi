@@ -193,7 +193,7 @@ export default function AgentChatShell({ agent, propertyId }: Props) {
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
           }}
-          placeholder={agent.tagline ?? `Ask ${agent.display_name}…`}
+          placeholder={`Ask ${agent.display_name}…`}
           rows={2}
           disabled={streaming}
           style={{
