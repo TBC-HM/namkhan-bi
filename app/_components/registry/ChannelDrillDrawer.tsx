@@ -22,7 +22,9 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Drawer, KpiTile, type KpiTileProps } from '@/app/(cockpit)/_design';
 import type { DmcContract } from '@/lib/dmc';
-import { matchSourceToContract } from '@/lib/dmc';
+// PBS 2026-06-29: import the pure matcher from the client-safe sub-module
+// (lib/dmc.ts pulls the server-only admin client at top level).
+import { matchSourceToContract } from '@/lib/dmc-match';
 
 export interface ChannelDrillRow {
   source_name: string;
