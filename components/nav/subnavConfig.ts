@@ -72,8 +72,9 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
   // ===== 04 Operations =====
   // Note: Front Office unfolded to its own top-level pillar 2026-05-01 (sibling of Sales/Marketing/Ops).
   // Old /operations/frontoffice placeholder removed; redirect set in next.config.js.
+  // PBS 2026-06-29: Staff moved out of Operations into Finance · HR. /operations/staff
+  // still 307-redirects to /finance/hr (operations/staff/page.tsx).
   operations: [
-    { href: '/operations/staff',            label: 'Staff' },
     { href: '/operations',                  label: 'Snapshot' },
     // Today merged into /operations 2026-05-04 — /operations/today now 307-redirects.
     { href: '/operations/restaurant',       label: 'F&B' },
@@ -114,8 +115,11 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
   ],
 
   // ===== 04 Finance =====
+  // PBS 2026-06-29: HR added (was hanging under /operations/staff). Staff
+  // landing now lives at /finance/hr — single source of truth.
   finance: [
     { href: '/finance',                  label: 'Snapshot' },
+    { href: '/finance/hr',               label: 'HR' },
     { href: '/finance/pnl',              label: 'P&L' },
     { href: '/finance/ledger',           label: 'Ledger' },
     { href: '/finance/transactions',     label: 'Transactions' },
@@ -162,7 +166,7 @@ export const PILLAR_HEADER: Record<
   operations:  { eyebrow: 'Pillar 04 · Operations',     title: 'Operations',   emphasis: 'live',            sub: 'Today · F&B · spa · activities · property' },
   frontOffice: { eyebrow: 'Pillar 04b · Front Office',  title: 'Arrivals',     emphasis: 'cockpit',         sub: 'Arrivals · in-house · departures · VIP · groups · roster' },
   guest:       { eyebrow: 'Pillar 05 · Guest',          title: 'Guest',        emphasis: 'voice',           sub: 'Reputation · journey · loyalty' },
-  finance:     { eyebrow: 'Pillar 06 · Finance',        title: 'USALI',        emphasis: 'ledger',          sub: 'P&L · ledger · budget · variance' },
+  finance:     { eyebrow: 'Pillar 06 · Finance',        title: 'USALI',        emphasis: 'ledger',          sub: 'HR · P&L · ledger · budget · variance' },
   knowledge:   { eyebrow: 'Knowledge',                  title: 'Repos',        emphasis: '& agents',        sub: 'SOPs · brand · automation' },
   settings:    { eyebrow: 'Settings',                   title: 'Property',     emphasis: 'configuration',   sub: 'Preferences · users · API keys' },
 };
