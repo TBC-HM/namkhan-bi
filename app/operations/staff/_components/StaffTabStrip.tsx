@@ -1,9 +1,11 @@
 // app/operations/staff/_components/StaffTabStrip.tsx
 // PBS 2026-05-15 — HR tab strip. URL home is /finance/hr/*. Tabs:
-// Register · Lifecycle · Attendance · Schedule · Holidays · Recruitment · Data.
+// Register · Lifecycle · Holidays · Recruitment · Data.
 // Lifecycle merges what used to be Onboarding + Offboarding into one parent
 // with 3 internal sub-tabs (onboarding / offboarding / warnings). Old /onboarding
 // and /offboarding URLs 307-redirect into ?view= on the Lifecycle page.
+// PBS 2026-06-29: Attendance + Schedule removed from the strip. Pages still
+// exist at /finance/hr/{attendance,schedule} for direct URL access.
 
 'use client';
 
@@ -12,13 +14,11 @@ import { usePathname } from 'next/navigation';
 
 interface Tab {
   label: string;
-  slug: '' | 'lifecycle' | 'attendance' | 'schedule' | 'holidays' | 'data' | 'recruitment';
+  slug: '' | 'lifecycle' | 'holidays' | 'data' | 'recruitment';
 }
 const TABS: Tab[] = [
   { label: 'Register',    slug: ''            },
   { label: 'Lifecycle',   slug: 'lifecycle'   },
-  { label: 'Attendance',  slug: 'attendance'  },
-  { label: 'Schedule',    slug: 'schedule'    },
   { label: 'Holidays',    slug: 'holidays'    },
   { label: 'Recruitment', slug: 'recruitment' },
   { label: 'Data',        slug: 'data'        },
@@ -31,8 +31,6 @@ export default function StaffTabStrip({ propertyId }: { propertyId: number }) {
   // Legacy /onboarding + /offboarding still light up Lifecycle until the
   // redirects finish propagating from any cached link.
   const activeSlug: Tab['slug'] =
-    pathname.endsWith('/attendance')   ? 'attendance'   :
-    pathname.endsWith('/schedule')     ? 'schedule'     :
     pathname.endsWith('/holidays')     ? 'holidays'     :
     pathname.endsWith('/recruitment')  ? 'recruitment'  :
     pathname.endsWith('/data')         ? 'data'         :
