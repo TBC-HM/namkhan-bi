@@ -7,7 +7,6 @@
 // content score, photo audit — PBS will populate from Booking.com download.
 
 import Link from 'next/link';
-import Page from '@/components/page/Page';
 import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
 import { REVENUE_SUBPAGES } from '../../_subpages';
 import { resolvePeriod } from '@/lib/period';
@@ -57,11 +56,10 @@ function shortDay(iso: string): string {
 export default async function ChannelDetailPage({ params, searchParams }: Props) {
   const sourceName = decodeURIComponent(params.source);
   const isBookingCom = /Booking\.com/i.test(sourceName);
-  // PBS 2026-06-29: per-source landing defaults to YTD (not the global 30d). Most
-  // non-Booking sources have <30 bookings/year — a 30-day window shows "empty" for
-  // every DMC partner outside their booking pulse. YTD gives an honest read by default;
-  // user can still narrow via ?win=30d in the URL.
-  const sp = (searchParams?.win) ? searchParams : { ...searchParams, win: 'ytd' };
+  // PBS 2026-06-29: default to last-12-months. Covers every active source's bookings
+  // without the heavy all-time scan (which made clicks "take forever" on cold caches).
+  // Zero-history sources fall through to the profile fallback. User can override via ?win=
+  const sp = (searchParams?.win) ? searchParams : { ...searchParams, win: 'l12m' };
   const period = resolvePeriod(sp);
   const cmpFrom = period.compareFrom;
   const cmpTo = period.compareTo;
@@ -80,32 +78,14 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
         getChannelPickupForSource(sourceName, 28).catch(() => []),
       ]);
 
-  let meta = allRows.find((r) => r.source_name === sourceName);
-  let cmpMeta = allCmpRows.find((r) => r.source_name === sourceName);
+  const meta = allRows.find((r) => r.source_name === sourceName);
+  const cmpMeta = allCmpRows.find((r) => r.source_name === sourceName);
   const cat = categorize(sourceName);
-
-  // PBS 2026-06-29: if the current window has no bookings for this source,
-  // auto-widen to all-time so the landing page still renders. Every source
-  // (even zero-bookings ones) deserves a landing — content > 30-day truncation.
-  let widenedToAllTime = false;
-  let widenedDailyRows: typeof dailyRows = [];
-  let widenedMixRows: typeof mixRows = [];
-  if (!isBookingCom && !meta) {
-    const allTimeFrom = '2024-01-01';
-    const allTimeTo = new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString().slice(0, 10);
-    const [allTimeRows, allTimeDaily, allTimeMix] = await Promise.all([
-      getChannelEconomicsForRange(allTimeFrom, allTimeTo).catch(() => []),
-      getChannelDailyForRange(sourceName, allTimeFrom, allTimeTo).catch(() => []),
-      getChannelRoomMixForRange(sourceName, allTimeFrom, allTimeTo).catch(() => []),
-    ]);
-    meta = allTimeRows.find((r) => r.source_name === sourceName);
-    widenedDailyRows = allTimeDaily;
-    widenedMixRows = allTimeMix;
-    widenedToAllTime = !!meta;
-  }
-  // If we widened, use the all-time data for the body sections.
-  const effectiveDaily = widenedToAllTime ? widenedDailyRows : dailyRows;
-  const effectiveMix   = widenedToAllTime ? widenedMixRows   : mixRows;
+  // PBS 2026-06-29: l12m default covers active sources without the perf hit of an
+  // all-time widen. Aliases for downstream code (was effectiveDaily/Mix previously).
+  const effectiveDaily = dailyRows;
+  const effectiveMix   = mixRows;
+  const widenedToAllTime = false;
 
   // Booking.com — primitives shell (PBS #201). 4 tabs collapsed to 3: Now / Profile / History.
   // History merges Trends + Signals (both time-axis agent views).
@@ -198,23 +178,19 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
   }
 
   if (!meta) {
+    const noMetaTabs: DashboardTab[] = REVENUE_SUBPAGES.map((s) => ({
+      key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/channels'),
+    }));
     return (
-      <Page
-        eyebrow={`Revenue · Channels · ${sourceName}`}
-        title={<MaybeOtaBadge name={sourceName} />}
-        subPages={REVENUE_SUBPAGES}
-        topRight={<Link href="/settings/channel-contacts" style={{
-          padding: '8px 14px',
-          fontFamily: 'var(--mono)',
-          fontSize: 'var(--t-xs)',
-          textTransform: 'uppercase',
-          letterSpacing: 'var(--ls-extra)',
-          color: 'var(--paper-warm)',
-          background: 'var(--moss)',
-          border: 'none',
-          borderRadius: 4,
-          textDecoration: 'none',
-          display: 'inline-block',
+      <DashboardPage
+        title={sourceName}
+        subtitle={`Revenue · Channels · ${sourceName} · ${cat} · no bookings on file`}
+        tabs={noMetaTabs}
+        action={<Link href="/settings/channel-contacts" style={{
+          padding: '6px 14px', fontSize: 11, letterSpacing: '0.08em',
+          textTransform: 'uppercase', fontWeight: 600,
+          background: 'var(--primary, #1F3A2E)', color: '#FFFFFF',
+          borderRadius: 4, textDecoration: 'none',
         }}>⚙ Channel settings</Link>}
       >
         {/* PBS 2026-06-29: every source has a landing, even with zero bookings.
@@ -237,7 +213,7 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
             </div>
           </div>
         </div>
-      </Page>
+      </DashboardPage>
     );
   }
 
@@ -256,23 +232,20 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
     return { text: `${arrow} ${Math.abs(pct).toFixed(0)}% ${period.cmpLabel.replace('vs ', '')}`, tone };
   }
 
+  const mainTabs: DashboardTab[] = REVENUE_SUBPAGES.map((s) => ({
+    key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/channels'),
+  }));
+
   return (
-    <Page
-      eyebrow={`Revenue · Channels · ${sourceName}`}
-      title={<>{sourceName}</>}
-      subPages={REVENUE_SUBPAGES}
-      topRight={<Link href="/settings/channel-contacts" style={{
-        padding: '8px 14px',
-        fontFamily: 'var(--mono)',
-        fontSize: 'var(--t-xs)',
-        textTransform: 'uppercase',
-        letterSpacing: 'var(--ls-extra)',
-        color: 'var(--paper-warm)',
-        background: 'var(--moss)',
-        border: 'none',
-        borderRadius: 4,
-        textDecoration: 'none',
-        display: 'inline-block',
+    <DashboardPage
+      title={sourceName}
+      subtitle={`Revenue · Channels · ${sourceName} · ${cat} · ${period.label}`}
+      tabs={mainTabs}
+      action={<Link href="/settings/channel-contacts" style={{
+        padding: '6px 14px', fontSize: 11, letterSpacing: '0.08em',
+        textTransform: 'uppercase', fontWeight: 600,
+        background: 'var(--primary, #1F3A2E)', color: '#FFFFFF',
+        borderRadius: 4, textDecoration: 'none',
       }}>⚙ Channel settings</Link>}
     >
 
@@ -298,7 +271,7 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
       </div>
 
       {/* Daily revenue trend — auto-widens to all-time when the active window is empty */}
-      <Section title={`Daily revenue · ${widenedToAllTime ? 'all time' : period.label}`} sub={`${effectiveDaily.length} active dates · max $${dailyMaxRev.toFixed(0)}${widenedToAllTime ? ' · widened to all-time (no bookings in active window)' : ''}`}>
+      <Container title={`Daily revenue · ${widenedToAllTime ? 'all time' : period.label}`} subtitle={`${effectiveDaily.length} active dates · max $${dailyMaxRev.toFixed(0)}${widenedToAllTime ? ' · widened to all-time (no bookings in active window)' : ''}`}>
         {effectiveDaily.length === 0 ? (
           <Empty>No bookings from this source on these dates.</Empty>
         ) : (
@@ -315,10 +288,10 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
             })}
           </div>
         )}
-      </Section>
+      </Container>
 
       {/* Pickup velocity for this source — last 28 days */}
-      <Section title="Pickup velocity · last 28 days" sub="Daily NEW bookings made (booking_date)">
+      <Container title="Pickup velocity · last 28 days" subtitle="Daily NEW bookings made (booking_date)">
         {pickupRows.length === 0 ? (
           <Empty>No new bookings made from this source in the last 28 days.</Empty>
         ) : (
@@ -335,10 +308,10 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
             })}
           </div>
         )}
-      </Section>
+      </Container>
 
       {/* Room-type mix */}
-      <Section title={`Room-type mix · ${widenedToAllTime ? 'all time' : period.label}`} sub={`${effectiveMix.length} room types · total $${totalMixRev.toFixed(0)}`}>
+      <Container title={`Room-type mix · ${widenedToAllTime ? 'all time' : period.label}`} subtitle={`${effectiveMix.length} room types · total $${totalMixRev.toFixed(0)}`}>
         {effectiveMix.length === 0 ? (
           <Empty>No room-type mix to report.</Empty>
         ) : (
@@ -367,7 +340,7 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
             </tbody>
           </table>
         )}
-      </Section>
+      </Container>
 
       {/* Other OTAs — placeholders until per-OTA exports are wired */}
       {cat === 'OTA' && (
@@ -388,10 +361,10 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
       )}
 
       {/* Source-anchored decisions queue (placeholder — no rows yet) */}
-      <Section title="Decisions queued for this source" sub="Filtered by source_agent or scope_section · governance.decision_queue">
+      <Container title="Decisions queued for this source" subtitle="Filtered by source_agent or scope_section · governance.decision_queue">
         <Empty>No decisions queued. An agent watching {sourceName} will populate this when it detects an actionable play.</Empty>
-      </Section>
-    </Page>
+      </Container>
+    </DashboardPage>
   );
 }
 
