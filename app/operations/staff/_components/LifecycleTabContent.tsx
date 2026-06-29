@@ -47,8 +47,6 @@ export default async function LifecycleTabContent({ propertyId, propertyLabel, s
       <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 18 }}>
       <StaffTabStrip propertyId={propertyId} />
 
-      {/* PBS 2026-06-29: seniority band + charts are Donna-only (Lao law n/a) */}
-      {isDonna && (<>
       {/* PBS 2026-06-29: seniority band + charts are Donna-only (Lao Labour Code 2014 has no statutory seniority) */}
       {isDonna && (<>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, margin: '14px 0 8px' }}>
