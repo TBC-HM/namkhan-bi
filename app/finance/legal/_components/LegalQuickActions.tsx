@@ -32,11 +32,19 @@ async function uploadAndIngest(file: File): Promise<IngestResult> {
   if (!put.ok) return { ok: false, error: `upload failed: ${put.status}` };
 
   // Step 3 — ingest (classification + dms.documents row)
-  const fd = new FormData();
-  fd.append('file_name', file.name);
-  fd.append('staging_bucket', sign.staging_bucket);
-  fd.append('staging_path', sign.staging_path);
-  const ing = await fetch('/api/docs/ingest', { method: 'POST', body: fd });
+  // PBS 2026-06-29 fix: use JSON (Mode B) since the file is already in storage.
+  // The old FormData path triggered the "no_file" guard in /api/docs/ingest
+  // because Mode A expects a `file` blob in the form, not staging refs.
+  const ing = await fetch('/api/docs/ingest', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      file_name: file.name,
+      staging_bucket: sign.staging_bucket,
+      staging_path: sign.staging_path,
+      mime: file.type,
+    }),
+  });
   const j = await ing.json().catch(() => ({ ok: false, error: 'invalid ingest response' }));
   if (!ing.ok || !j.ok) return { ok: false, error: j?.error || `ingest failed: ${ing.status}` };
   return { ok: true, doc_id: j.doc_id, title: j.title };
