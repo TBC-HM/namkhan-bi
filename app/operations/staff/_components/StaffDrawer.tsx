@@ -236,7 +236,15 @@ export function StaffDrawer({ staffId, onClose }: Props) {
 
               {/* 5. DOCUMENTS */}
               <Section title="Documents">
-                <Field label="Contract"   value={detail.contract_doc_id ? '✓ uploaded' : '— missing'} mono />
+                <Field
+                  label="Contract"
+                  mono
+                  value={
+                    detail.contract_doc_id
+                      ? <DocLink docId={detail.contract_doc_id}>✓ open</DocLink>
+                      : '— missing'
+                  }
+                />
                 <Field label="Payslip"    value={detail.payslip_pdf_status ?? 'never'} mono />
                 <Field label="Last slip"  value={detail.last_payslip_period ?? '—'} mono />
               </Section>
@@ -744,7 +752,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Field({ label, value, mono, hint }: { label: string; value: string; mono?: boolean; hint?: string }) {
+function Field({ label, value, mono, hint }: { label: string; value: React.ReactNode; mono?: boolean; hint?: string }) {
   return (
     <div style={S.field}>
       <span style={S.fieldLabel}>{label}</span>
@@ -753,6 +761,31 @@ function Field({ label, value, mono, hint }: { label: string; value: string; mon
         {hint && <span style={S.contactSub}>{hint}</span>}
       </span>
     </div>
+  );
+}
+
+// PBS 2026-06-29: Resolve signed URL on click + open in new tab.
+function DocLink({ docId, children }: { docId: string; children: React.ReactNode }) {
+  const [loading, setLoading] = useState(false);
+  const open = async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/docs/signed-url?doc_id=${encodeURIComponent(docId)}&exp=600`);
+      const json = await res.json();
+      if (json?.ok && json.url) window.open(json.url, '_blank', 'noopener');
+      else alert(json?.error || 'Could not open document');
+    } finally {
+      setLoading(false);
+    }
+  };
+  return (
+    <button type="button" onClick={open} disabled={loading}
+      style={{ background: 'none', border: 'none', padding: 0,
+        color: 'var(--accent, #2b6cb0)', textDecoration: 'underline',
+        fontFamily: 'inherit', fontSize: 'inherit', cursor: loading ? 'wait' : 'pointer' }}>
+      {loading ? '…' : children}
+    </button>
   );
 }
 
