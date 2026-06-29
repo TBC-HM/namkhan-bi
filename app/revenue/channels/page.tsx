@@ -42,6 +42,7 @@ import { fmtMoney } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
 import { REVENUE_SUBPAGES } from '../_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
+import { getDmcContracts } from '@/lib/dmc';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -138,7 +139,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
     ? { ...period, from: period.compareFrom, to: period.compareTo, cmp: 'none' as const }
     : null;
 
-  const [channelsRaw, channelsCmp, mixWeekly, netValue, velocity, groupRows] = await Promise.all([
+  const [channelsRaw, channelsCmp, mixWeekly, netValue, velocity, groupRows, dmcContracts] = await Promise.all([
     getChannelEconomics(period, pid).catch(() => [] as Awaited<ReturnType<typeof getChannelEconomics>>),
     cmpPeriod
       ? getChannelEconomicsForRange(cmpPeriod.from, cmpPeriod.to, pid).catch(() => [] as Array<Record<string, unknown>>)
@@ -147,6 +148,8 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
     getChannelNetValueForRange(period.from, period.to, pid).catch(() => [] as Array<Record<string, unknown>>),
     getChannelVelocity28dByCat(pid).catch(() => [] as Array<Record<string, unknown>>),
     supabase.from('v_group_bookings_12mo').select('channel_group, source, reservations, room_nights, gross_revenue, group_adr, est_commission, net_revenue').eq('property_id', pid).order('gross_revenue', { ascending: false }).then((r) => r.data ?? [] as Array<Record<string, unknown>>),
+    // PBS 2026-06-29: fetch DMC contracts so ChannelDrillDrawer can surface contract metadata + PDF preview when a source matches a partner.
+    getDmcContracts().catch(() => []),
   ]);
   const channels = channelsRaw;
 
@@ -364,6 +367,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
         }))}
         currencyCode={moneyCurrency}
         basePath={basePath}
+        dmcContracts={dmcContracts}
       />
     </DashboardPage>
   );
