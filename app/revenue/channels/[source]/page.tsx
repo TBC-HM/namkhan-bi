@@ -80,9 +80,32 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
         getChannelPickupForSource(sourceName, 28).catch(() => []),
       ]);
 
-  const meta = allRows.find((r) => r.source_name === sourceName);
-  const cmpMeta = allCmpRows.find((r) => r.source_name === sourceName);
+  let meta = allRows.find((r) => r.source_name === sourceName);
+  let cmpMeta = allCmpRows.find((r) => r.source_name === sourceName);
   const cat = categorize(sourceName);
+
+  // PBS 2026-06-29: if the current window has no bookings for this source,
+  // auto-widen to all-time so the landing page still renders. Every source
+  // (even zero-bookings ones) deserves a landing — content > 30-day truncation.
+  let widenedToAllTime = false;
+  let widenedDailyRows: typeof dailyRows = [];
+  let widenedMixRows: typeof mixRows = [];
+  if (!isBookingCom && !meta) {
+    const allTimeFrom = '2024-01-01';
+    const allTimeTo = new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+    const [allTimeRows, allTimeDaily, allTimeMix] = await Promise.all([
+      getChannelEconomicsForRange(allTimeFrom, allTimeTo).catch(() => []),
+      getChannelDailyForRange(sourceName, allTimeFrom, allTimeTo).catch(() => []),
+      getChannelRoomMixForRange(sourceName, allTimeFrom, allTimeTo).catch(() => []),
+    ]);
+    meta = allTimeRows.find((r) => r.source_name === sourceName);
+    widenedDailyRows = allTimeDaily;
+    widenedMixRows = allTimeMix;
+    widenedToAllTime = !!meta;
+  }
+  // If we widened, use the all-time data for the body sections.
+  const effectiveDaily = widenedToAllTime ? widenedDailyRows : dailyRows;
+  const effectiveMix   = widenedToAllTime ? widenedMixRows   : mixRows;
 
   // Booking.com — primitives shell (PBS #201). 4 tabs collapsed to 3: Now / Profile / History.
   // History merges Trends + Signals (both time-axis agent views).
@@ -194,16 +217,35 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
           display: 'inline-block',
         }}>⚙ Channel settings</Link>}
       >
-        <div style={{ padding: 24, color: 'var(--ink-mute)' }}>No bookings from this source in the active window.</div>
+        {/* PBS 2026-06-29: every source has a landing, even with zero bookings.
+            Show the channel contact + linked DMC contract + category context so
+            the user knows the source exists and is being tracked. */}
+        <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 14, alignItems: 'flex-start', marginTop: 12 }}>
+          <ChannelContactCard sourceName={sourceName} />
+          <div style={{
+            padding: 18, background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)',
+            borderRadius: 6, color: 'var(--ink)',
+          }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+              No bookings on file
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--ink-mute)', lineHeight: 1.5 }}>
+              {sourceName} is tracked as a <strong>{cat}</strong> channel but has not produced any bookings in your PMS history. This could mean: (a) the partnership is new, (b) the partner books under a different source name in Cloudbeds, or (c) the relationship is dormant.
+              {cat === 'DMC' && (
+                <> Check the contract details under <Link href="/sales/b2b" style={{ color: 'var(--brass)' }}>B2B / DMC</Link> for commercial terms.</>
+              )}
+            </div>
+          </div>
+        </div>
       </Page>
     );
   }
 
   const netAdr = Number(meta.adr || 0) * (1 - Number(meta.commission_pct || 0) / 100);
-  const dailyMaxRev = Math.max(1, ...dailyRows.map((d) => d.gross_revenue));
+  const dailyMaxRev = Math.max(1, ...effectiveDaily.map((d) => d.gross_revenue));
   const pickupMax = Math.max(1, ...pickupRows.map((d) => d.bookings));
   let totalMixRev = 0;
-  for (const r of mixRows) totalMixRev += r.gross_revenue;
+  for (const r of effectiveMix) totalMixRev += r.gross_revenue;
 
   // Delta helper using cmp data
   function delta(now: number, prior: number, suffix = ''): { text: string; tone: 'pos' | 'neg' | 'flat' } {
@@ -255,13 +297,13 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
         <Tile label="Avg LOS" value={Number(meta.avg_los || 0).toFixed(1)} sub="nights / stay" />
       </div>
 
-      {/* Daily revenue trend */}
-      <Section title={`Daily revenue · ${period.label}`} sub={`${dailyRows.length} active dates · max $${dailyMaxRev.toFixed(0)}`}>
-        {dailyRows.length === 0 ? (
+      {/* Daily revenue trend — auto-widens to all-time when the active window is empty */}
+      <Section title={`Daily revenue · ${widenedToAllTime ? 'all time' : period.label}`} sub={`${effectiveDaily.length} active dates · max $${dailyMaxRev.toFixed(0)}${widenedToAllTime ? ' · widened to all-time (no bookings in active window)' : ''}`}>
+        {effectiveDaily.length === 0 ? (
           <Empty>No bookings from this source on these dates.</Empty>
         ) : (
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, minHeight: 160, padding: '8px 0', borderBottom: '1px solid var(--paper-deep)' }}>
-            {dailyRows.map((d) => {
+            {effectiveDaily.map((d) => {
               const h = (d.gross_revenue / dailyMaxRev) * 140;
               return (
                 <div
@@ -296,8 +338,8 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
       </Section>
 
       {/* Room-type mix */}
-      <Section title={`Room-type mix · ${period.label}`} sub={`${mixRows.length} room types · total $${totalMixRev.toFixed(0)}`}>
-        {mixRows.length === 0 ? (
+      <Section title={`Room-type mix · ${widenedToAllTime ? 'all time' : period.label}`} sub={`${effectiveMix.length} room types · total $${totalMixRev.toFixed(0)}`}>
+        {effectiveMix.length === 0 ? (
           <Empty>No room-type mix to report.</Empty>
         ) : (
           <table className="tbl">
@@ -312,7 +354,7 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
               </tr>
             </thead>
             <tbody>
-              {mixRows.map((r) => (
+              {effectiveMix.map((r) => (
                 <tr key={r.room_type_name}>
                   <td className="lbl"><strong>{r.room_type_name}</strong></td>
                   <td className="num">{r.bookings}</td>
