@@ -16,7 +16,7 @@ import {
   type DashboardTab, type KpiTileProps, type KpiComparison,
 } from '@/app/(cockpit)/_design';
 import BackButton from '@/components/nav/BackButton';
-import DataTable, { type Column } from '@/components/ui/DataTable';
+import RoomTypeMixTable from './_components/RoomTypeMixTable';
 import { REVENUE_SUBPAGES } from '../../_subpages';
 import { resolvePeriod } from '@/lib/period';
 import {
@@ -24,10 +24,9 @@ import {
   getChannelDailyForRange,
   getChannelRoomMixForRange,
   getChannelPickupForSource,
-  type ChannelRoomMixRow,
 } from '@/lib/data-channels';
 import { getDmcContracts, matchSourceToContract, type DmcContract } from '@/lib/dmc';
-import { fmtMoney, fmtTableUsd } from '@/lib/format';
+import { fmtMoney } from '@/lib/format';
 import BdcPanels from '@/components/channels/BdcPanels';
 import BdcExtraPanels from '@/components/channels/BdcExtraPanels';
 import BdcAttentionCards from '@/components/channels/BdcAttentionCards';
@@ -325,7 +324,7 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
         title={`Room-type mix · ${period.label}`}
         subtitle={`${mixRows.length} room types · $${Math.round(totalMixRev).toLocaleString('en-US')} total`}
       >
-        <RoomTypeMixTable rows={mixRows as ChannelRoomMixRow[]} />
+        <RoomTypeMixTable rows={mixRows as Array<{ room_type_name: string; bookings: number; room_nights: number; gross_revenue: number; share_pct: number; }>} />
       </Container>
 
       {/* (7) Channel contact — only when there is NO DMC contract */}
@@ -340,61 +339,6 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
         <Empty>No decisions queued. An agent watching {sourceName} will populate this when it detects an actionable play.</Empty>
       </Container>
     </DashboardPage>
-  );
-}
-
-// ─── Room-type mix on canonical DataTable primitive ────────────────────────
-function RoomTypeMixTable({ rows }: { rows: ChannelRoomMixRow[] }) {
-  const columns: Column<ChannelRoomMixRow>[] = [
-    {
-      key: 'room_type_name',
-      header: 'Room type',
-      sortValue: (r) => r.room_type_name,
-      render: (r) => <strong>{r.room_type_name}</strong>,
-    },
-    {
-      key: 'bookings',
-      header: 'Bookings',
-      numeric: true,
-      sortValue: (r) => r.bookings,
-      render: (r) => r.bookings.toLocaleString('en-US'),
-    },
-    {
-      key: 'rn',
-      header: 'Room nights',
-      numeric: true,
-      sortValue: (r) => r.room_nights,
-      render: (r) => r.room_nights.toLocaleString('en-US'),
-    },
-    {
-      key: 'rev',
-      header: 'Revenue',
-      numeric: true,
-      sortValue: (r) => r.gross_revenue,
-      render: (r) => fmtTableUsd(r.gross_revenue),
-    },
-    {
-      key: 'share',
-      header: 'Share',
-      numeric: true,
-      sortValue: (r) => r.share_pct,
-      render: (r) => `${r.share_pct.toFixed(1)}%`,
-    },
-    {
-      key: 'bar',
-      header: 'Bar',
-      render: (r) => (
-        <div style={{ height: 8, background: 'var(--brass)', opacity: 0.6, width: `${r.share_pct}%`, maxWidth: 200, borderRadius: 2 }} />
-      ),
-    },
-  ];
-  return (
-    <DataTable<ChannelRoomMixRow>
-      columns={columns}
-      rows={rows}
-      rowKey={(r) => r.room_type_name}
-      emptyState="No room-type mix to report."
-    />
   );
 }
 
