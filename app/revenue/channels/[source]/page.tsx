@@ -1,19 +1,22 @@
 // app/revenue/channels/[source]/page.tsx
 // Per-source detail landing page.
 //
-// PBS 2026-06-30 (v3): single layout — every source shows the same chrome
-// (DMC panel if any · KPI tiles always · daily revenue · room mix). No more
-// special "no meta" branch. Empty tiles render with zeros.
-//
-// DMC contract panel:
-//   - Edit button → /settings/channel-contacts (one source of truth)
-//   - Preview contract button → /api/dmc/contract/[id]/preview (302 → signed)
-//   - Black/ink labels, no brass/brown legacy typography
-// When a DMC contract exists, the contact card is suppressed (no duplication).
+// PBS 2026-06-30 (v4):
+//   - 2 back routes: ← Channels  AND  ← B2B/DMC (visible when DMC matched)
+//   - All KPI tiles carry 3 trailing windows (L30d / L90d / L365d) via
+//     KpiTile.compare[] (native primitive support, not a custom local atom)
+//   - Daily revenue subtitle clarifies window + sum + tooltip retained
+//   - Room-type mix moved to DataTable primitive (no legacy <table className="tbl">)
+//   - DMC panel: ink-black labels, Edit + Preview Contract buttons inline
+//   - When DMC contract matches: Channel-contact container suppressed (no dup)
 
 import Link from 'next/link';
-import { DashboardPage, Container, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
+import {
+  DashboardPage, Container, KpiTile,
+  type DashboardTab, type KpiTileProps, type KpiComparison,
+} from '@/app/(cockpit)/_design';
 import BackButton from '@/components/nav/BackButton';
+import DataTable, { type Column } from '@/components/ui/DataTable';
 import { REVENUE_SUBPAGES } from '../../_subpages';
 import { resolvePeriod } from '@/lib/period';
 import {
@@ -21,9 +24,10 @@ import {
   getChannelDailyForRange,
   getChannelRoomMixForRange,
   getChannelPickupForSource,
+  type ChannelRoomMixRow,
 } from '@/lib/data-channels';
 import { getDmcContracts, matchSourceToContract, type DmcContract } from '@/lib/dmc';
-import { fmtMoney } from '@/lib/format';
+import { fmtMoney, fmtTableUsd } from '@/lib/format';
 import BdcPanels from '@/components/channels/BdcPanels';
 import BdcExtraPanels from '@/components/channels/BdcExtraPanels';
 import BdcAttentionCards from '@/components/channels/BdcAttentionCards';
@@ -59,23 +63,36 @@ function shortDay(iso: string): string {
   catch { return iso; }
 }
 
+function isoBack(days: number): string {
+  return new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+}
+
 export default async function ChannelDetailPage({ params, searchParams }: Props) {
   const sourceName = decodeURIComponent(params.source);
   const isBookingCom = /Booking\.com/i.test(sourceName);
   const sp = (searchParams?.win) ? searchParams : { ...searchParams, win: 'l12m' };
   const period = resolvePeriod(sp);
 
-  const [allRows, dailyRows, mixRows, pickupRows, dmcContracts] = isBookingCom
-    ? [[], [], [], [], [] as DmcContract[]] as const
+  const today = new Date().toISOString().slice(0, 10);
+  const d30  = isoBack(30);
+  const d90  = isoBack(90);
+  const d365 = isoBack(365);
+
+  const [econ30, econ90, econ365, dailyRows, mixRows, pickupRows, dmcContracts] = isBookingCom
+    ? [[], [], [], [], [], [], [] as DmcContract[]] as const
     : await Promise.all([
-        getChannelEconomicsForRange(period.from, period.to).catch(() => []),
+        getChannelEconomicsForRange(d30,  today).catch(() => []),
+        getChannelEconomicsForRange(d90,  today).catch(() => []),
+        getChannelEconomicsForRange(d365, today).catch(() => []),
         getChannelDailyForRange(sourceName, period.from, period.to).catch(() => []),
         getChannelRoomMixForRange(sourceName, period.from, period.to).catch(() => []),
         getChannelPickupForSource(sourceName, 28).catch(() => []),
         getDmcContracts().catch(() => [] as DmcContract[]),
       ]);
 
-  const meta = allRows.find((r) => r.source_name === sourceName);
+  const m30  = econ30.find((r)  => r.source_name === sourceName);
+  const m90  = econ90.find((r)  => r.source_name === sourceName);
+  const m365 = econ365.find((r) => r.source_name === sourceName);
 
   const dmcMatch = !isBookingCom
     ? matchSourceToContract(sourceName, dmcContracts)
@@ -85,6 +102,7 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
     : null;
 
   const cat = categorize(sourceName, !!dmcContract);
+  const hasAnyBookings = !!m365 && m365.bookings > 0;
 
   // ─── Booking.com — hardwired BDC layout (unchanged) ─────────────────────
   if (isBookingCom) {
@@ -170,22 +188,28 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
     );
   }
 
-  // ─── Generic layout — single path for all other sources ────────────────
-  const hasBookings = !!meta && meta.bookings > 0;
-  const bookings = meta?.bookings ?? 0;
-  const canceled = meta?.canceled ?? 0;
-  const grossRev = Number(meta?.gross_revenue ?? 0);
-  const rns = Number(meta?.roomnights ?? 0);
-  const adr = Number(meta?.adr ?? 0);
-  const commissionPct = Number(meta?.commission_pct ?? 0);
-  const commissionUsd = Number(meta?.commission_usd ?? 0);
-  const cancelPct = Number(meta?.cancel_pct ?? 0);
-  const leadDays = Number(meta?.avg_lead_days ?? 0);
-  const los = Number(meta?.avg_los ?? 0);
-  const netAdr = adr * (1 - commissionPct / 100);
+  // ─── Trailing-window helpers ────────────────────────────────────────────
+  const v = (m: typeof m30, k: 'bookings'|'canceled'|'gross_revenue'|'roomnights'|'adr'|'commission_pct'|'commission_usd'|'cancel_pct'|'avg_lead_days'|'avg_los') =>
+    m ? Number((m as Record<string, unknown>)[k] ?? 0) : 0;
+
+  const netAdr = (m: typeof m30) => v(m, 'adr') * (1 - v(m, 'commission_pct') / 100);
+
+  // Build [L90d, L365d] compare arrays for each tile (main value = L30d).
+  const cmp = (
+    label: string,
+    val90: number,
+    val365: number,
+    format: 'absolute' | 'currency' | 'percent' = 'absolute',
+  ): KpiComparison[] => [
+    { label: 'L90d',  value: val90,  format, direction: 'flat' },
+    { label: 'L365d', value: val365, format, direction: 'flat' },
+  ];
 
   const dailyMaxRev = Math.max(1, ...dailyRows.map((d) => d.gross_revenue));
+  const dailyTotalRev = dailyRows.reduce((s, d) => s + d.gross_revenue, 0);
+  const dailyTotalBkg = dailyRows.reduce((s, d) => s + d.bookings, 0);
   const pickupMax = Math.max(1, ...pickupRows.map((d) => d.bookings));
+  const pickupTotalBkg = pickupRows.reduce((s, d) => s + d.bookings, 0);
   let totalMixRev = 0;
   for (const r of mixRows) totalMixRev += r.gross_revenue;
 
@@ -196,16 +220,19 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
   return (
     <DashboardPage
       title={sourceName}
-      subtitle={`Revenue · Channels · ${sourceName} · ${cat} · ${period.label}`}
+      subtitle={`Revenue · Channels · ${sourceName} · ${cat} · trailing L30d / L90d / L365d`}
       tabs={mainTabs}
       action={
         <div style={{ display: 'flex', gap: 8 }}>
           <BackButton fallback="/revenue/channels" label="← Channels" />
+          {dmcContract && (
+            <Link href="/sales/b2b" style={navBtnStyle}>← B2B / DMC</Link>
+          )}
         </div>
       }
     >
-      {/* (1) Explanatory pane at the TOP when there are no bookings */}
-      {!hasBookings && (
+      {/* (1) Explanatory pane at the TOP when there are no bookings even in L365 */}
+      {!hasAnyBookings && (
         <div style={{ gridColumn: '1 / -1', padding: '12px 16px', background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 6, marginBottom: 6 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', marginBottom: 4 }}>
             No bookings on file for {sourceName} ({cat})
@@ -216,31 +243,44 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
         </div>
       )}
 
-      {/* (2) DMC contract panel (when matched) — Edit + Preview buttons inline */}
+      {/* (2) DMC contract panel (when matched) */}
       {dmcContract && (
         <div style={{ gridColumn: '1 / -1' }}>
           <DmcContractPanel c={dmcContract} sourceName={sourceName} />
         </div>
       )}
 
-      {/* (3) Standard KPI tiles — always shown, even with zeros */}
+      {/* (3) Trailing-window KPI tiles — L30d main · L90d + L365d via compare[] */}
       <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10, marginTop: 12, marginBottom: 14 }}>
         {([
-          { label: 'Bookings',      value: bookings,                              size: 'sm', footnote: `${canceled} cancelled` },
-          { label: 'Gross revenue', value: Math.round(grossRev), currency: 'USD', size: 'sm', footnote: `${rns} room nights` },
-          { label: 'ADR',           value: Math.round(adr),      currency: 'USD', size: 'sm', footnote: 'rev ÷ RNs' },
-          { label: 'Net ADR',       value: Math.round(netAdr),   currency: 'USD', size: 'sm', footnote: `after ${commissionPct.toFixed(0)}% commission` },
-          { label: 'Commission',    value: Math.round(commissionUsd), currency: 'USD', size: 'sm', footnote: grossRev > 0 ? `${(commissionUsd / grossRev * 100).toFixed(1)}% of rev` : '—', status: (commissionPct >= 18 ? 'amber' : 'green') as 'amber' | 'green' },
-          { label: 'Cancel rate',   value: `${cancelPct.toFixed(1)}%`,             size: 'sm', footnote: `${canceled} of ${bookings + canceled}`, status: (cancelPct >= 25 ? 'red' : cancelPct >= 10 ? 'amber' : 'green') as 'red' | 'amber' | 'green' },
-          { label: 'Lead time',     value: `${Math.round(leadDays)}d`,             size: 'sm', footnote: 'booking → arrival' },
-          { label: 'LOS',           value: los.toFixed(1),                         size: 'sm', footnote: 'nights / stay' },
+          { label: 'Bookings',      value: v(m30, 'bookings'),                                                size: 'md', footnote: `${v(m30, 'canceled')} cancelled · L30d`,
+            compare: cmp('Bookings', v(m90, 'bookings'), v(m365, 'bookings')) },
+          { label: 'Gross revenue', value: Math.round(v(m30, 'gross_revenue')), currency: 'USD',              size: 'md', footnote: `${v(m30, 'roomnights')} RN · L30d`,
+            compare: cmp('Gross', Math.round(v(m90, 'gross_revenue')), Math.round(v(m365, 'gross_revenue')), 'currency') },
+          { label: 'ADR',           value: Math.round(v(m30, 'adr')),           currency: 'USD',              size: 'md', footnote: 'rev ÷ RNs · L30d',
+            compare: cmp('ADR', Math.round(v(m90, 'adr')), Math.round(v(m365, 'adr')), 'currency') },
+          { label: 'Net ADR',       value: Math.round(netAdr(m30)),             currency: 'USD',              size: 'md', footnote: `after ${v(m30, 'commission_pct').toFixed(0)}% commission · L30d`,
+            compare: cmp('Net ADR', Math.round(netAdr(m90)), Math.round(netAdr(m365)), 'currency') },
+          { label: 'Commission',    value: Math.round(v(m30, 'commission_usd')), currency: 'USD',             size: 'md', footnote: v(m30, 'gross_revenue') > 0 ? `${(v(m30, 'commission_usd') / v(m30, 'gross_revenue') * 100).toFixed(1)}% of rev · L30d` : '—',
+            status: (v(m30, 'commission_pct') >= 18 ? 'amber' : 'green') as 'amber' | 'green',
+            compare: cmp('Commission', Math.round(v(m90, 'commission_usd')), Math.round(v(m365, 'commission_usd')), 'currency') },
+          { label: 'Cancel rate',   value: `${v(m30, 'cancel_pct').toFixed(1)}%`,                              size: 'md', footnote: `${v(m30, 'canceled')} of ${v(m30, 'bookings') + v(m30, 'canceled')} · L30d`,
+            status: (v(m30, 'cancel_pct') >= 25 ? 'red' : v(m30, 'cancel_pct') >= 10 ? 'amber' : 'green') as 'red' | 'amber' | 'green',
+            compare: cmp('Cancel', Number(v(m90, 'cancel_pct').toFixed(1)), Number(v(m365, 'cancel_pct').toFixed(1)), 'percent') },
+          { label: 'Lead time',     value: `${Math.round(v(m30, 'avg_lead_days'))}d`,                          size: 'md', footnote: 'booking → arrival · L30d',
+            compare: cmp('Lead', Math.round(v(m90, 'avg_lead_days')), Math.round(v(m365, 'avg_lead_days'))) },
+          { label: 'LOS',           value: v(m30, 'avg_los').toFixed(1),                                       size: 'md', footnote: 'nights / stay · L30d',
+            compare: cmp('LOS', Number(v(m90, 'avg_los').toFixed(1)), Number(v(m365, 'avg_los').toFixed(1))) },
         ] as KpiTileProps[]).map((t, i) => <KpiTile key={i} {...t} />)}
       </div>
 
       {/* (4) Daily revenue trend */}
-      <Container title={`Daily revenue · ${period.label}`} subtitle={`${dailyRows.length} active dates · max $${dailyMaxRev.toFixed(0)}`}>
+      <Container
+        title={`Daily revenue · ${period.label}`}
+        subtitle={`${dailyRows.length} active dates · $${Math.round(dailyTotalRev).toLocaleString('en-US')} total · ${dailyTotalBkg} bookings · max $${Math.round(dailyMaxRev).toLocaleString('en-US')}/day · hover a bar for details`}
+      >
         {dailyRows.length === 0 ? (
-          <Empty>No bookings from this source on these dates.</Empty>
+          <Empty>No bookings from this source in the last 12 months.</Empty>
         ) : (
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, minHeight: 160, padding: '8px 0', borderBottom: '1px solid var(--paper-deep)' }}>
             {dailyRows.map((d) => {
@@ -248,7 +288,7 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
               return (
                 <div
                   key={d.day}
-                  title={`${shortDay(d.day)} · ${d.bookings} bkg · ${d.room_nights} RN · $${d.gross_revenue.toFixed(0)}`}
+                  title={`${shortDay(d.day)} · ${d.bookings} bkg · ${d.room_nights} RN · $${Math.round(d.gross_revenue).toLocaleString('en-US')}`}
                   style={{ flex: 1, height: Math.max(2, h), minWidth: 2, background: 'var(--brass)', opacity: 0.85 }}
                 />
               );
@@ -258,7 +298,10 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
       </Container>
 
       {/* (5) Pickup velocity last 28 days */}
-      <Container title="Pickup velocity · last 28 days" subtitle="Daily NEW bookings made (booking_date)">
+      <Container
+        title="Pickup velocity · last 28 days"
+        subtitle={`${pickupTotalBkg} new bookings · ${pickupRows.length} days · max ${pickupMax}/day · hover for daily count`}
+      >
         {pickupRows.length === 0 ? (
           <Empty>No new bookings made from this source in the last 28 days.</Empty>
         ) : (
@@ -277,39 +320,15 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
         )}
       </Container>
 
-      {/* (6) Room-type mix */}
-      <Container title={`Room-type mix · ${period.label}`} subtitle={`${mixRows.length} room types · total $${totalMixRev.toFixed(0)}`}>
-        {mixRows.length === 0 ? (
-          <Empty>No room-type mix to report.</Empty>
-        ) : (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Room type</th>
-                <th className="num">Bookings</th>
-                <th className="num">Room nights</th>
-                <th className="num">Revenue</th>
-                <th className="num">Share</th>
-                <th>Bar</th>
-              </tr>
-            </thead>
-            <tbody>
-              {mixRows.map((r) => (
-                <tr key={r.room_type_name}>
-                  <td className="lbl"><strong>{r.room_type_name}</strong></td>
-                  <td className="num">{r.bookings}</td>
-                  <td className="num">{r.room_nights}</td>
-                  <td className="num">{fmtMoney(r.gross_revenue, 'USD')}</td>
-                  <td className="num">{r.share_pct.toFixed(1)}%</td>
-                  <td><div style={{ height: 8, background: 'var(--brass)', opacity: 0.6, width: `${r.share_pct}%`, maxWidth: 200, borderRadius: 2 }} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+      {/* (6) Room-type mix — DataTable primitive (no legacy .tbl) */}
+      <Container
+        title={`Room-type mix · ${period.label}`}
+        subtitle={`${mixRows.length} room types · $${Math.round(totalMixRev).toLocaleString('en-US')} total`}
+      >
+        <RoomTypeMixTable rows={mixRows} />
       </Container>
 
-      {/* (7) Channel contact — only when there is NO DMC contract (no duplication) */}
+      {/* (7) Channel contact — only when there is NO DMC contract */}
       {!dmcContract && (
         <Container title="Channel contact" subtitle="Edit at /settings/channel-contacts">
           <ChannelContactCard sourceName={sourceName} />
@@ -324,6 +343,61 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
   );
 }
 
+// ─── Room-type mix on canonical DataTable primitive ────────────────────────
+function RoomTypeMixTable({ rows }: { rows: ChannelRoomMixRow[] }) {
+  const columns: Column<ChannelRoomMixRow>[] = [
+    {
+      key: 'room_type_name',
+      header: 'Room type',
+      sortValue: (r) => r.room_type_name,
+      render: (r) => <strong>{r.room_type_name}</strong>,
+    },
+    {
+      key: 'bookings',
+      header: 'Bookings',
+      numeric: true,
+      sortValue: (r) => r.bookings,
+      render: (r) => r.bookings.toLocaleString('en-US'),
+    },
+    {
+      key: 'rn',
+      header: 'Room nights',
+      numeric: true,
+      sortValue: (r) => r.room_nights,
+      render: (r) => r.room_nights.toLocaleString('en-US'),
+    },
+    {
+      key: 'rev',
+      header: 'Revenue',
+      numeric: true,
+      sortValue: (r) => r.gross_revenue,
+      render: (r) => fmtTableUsd(r.gross_revenue),
+    },
+    {
+      key: 'share',
+      header: 'Share',
+      numeric: true,
+      sortValue: (r) => r.share_pct,
+      render: (r) => `${r.share_pct.toFixed(1)}%`,
+    },
+    {
+      key: 'bar',
+      header: 'Bar',
+      render: (r) => (
+        <div style={{ height: 8, background: 'var(--brass)', opacity: 0.6, width: `${r.share_pct}%`, maxWidth: 200, borderRadius: 2 }} />
+      ),
+    },
+  ];
+  return (
+    <DataTable<ChannelRoomMixRow>
+      columns={columns}
+      rows={rows}
+      rowKey={(r) => r.room_type_name}
+      emptyState="No room-type mix to report."
+    />
+  );
+}
+
 // ─── DMC contract panel (inline, black labels, edit + preview buttons) ──
 function DmcContractPanel({ c, sourceName }: { c: DmcContract; sourceName: string }) {
   const statusBg = c.computed_status === 'active' ? 'var(--st-good-bg)' : c.computed_status === 'expiring' ? 'var(--st-warn-bg)' : 'var(--st-bad-bg)';
@@ -332,8 +406,6 @@ function DmcContractPanel({ c, sourceName }: { c: DmcContract; sourceName: strin
   const statusEmoji = c.computed_status === 'active' ? '🟢' : c.computed_status === 'expiring' ? '🟡' : c.computed_status === 'expired' ? '🔴' : '○';
   const daysLeft = c.days_to_expiry;
 
-  // PBS 2026-06-30: labels rendered in INK (black) not BRASS to drop the
-  // legacy brown-uppercase typography.
   const labelStyle: React.CSSProperties = {
     fontSize: 'var(--t-xs)',
     color: 'var(--ink)',
@@ -364,7 +436,6 @@ function DmcContractPanel({ c, sourceName }: { c: DmcContract; sourceName: strin
       title={`DMC contract · ${c.partner_short_name}`}
       subtitle={`Commercial terms from governance.dmc_contracts · ${c.partner_type} · ${c.country_flag ?? ''} ${c.country ?? '—'}`}
     >
-      {/* Status + action buttons */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
           <span style={{ background: statusBg, border: `1px solid ${statusBd}`, color: statusFg, padding: '3px 10px', borderRadius: 12, fontSize: 'var(--t-sm)', fontWeight: 600 }}>
@@ -381,21 +452,14 @@ function DmcContractPanel({ c, sourceName }: { c: DmcContract; sourceName: strin
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {previewHref ? (
-            <a href={previewHref} target="_blank" rel="noopener noreferrer" style={pdfBtnStyle}>
-              📄 Preview contract
-            </a>
+            <a href={previewHref} target="_blank" rel="noopener noreferrer" style={pdfBtnStyle}>📄 Preview contract</a>
           ) : (
-            <span style={{ ...pdfBtnStyle, opacity: 0.5, cursor: 'not-allowed' }}>
-              📄 No PDF on file
-            </span>
+            <span style={{ ...pdfBtnStyle, opacity: 0.5, cursor: 'not-allowed' }}>📄 No PDF on file</span>
           )}
-          <Link href={editHref} style={editBtnStyle}>
-            ✎ Edit
-          </Link>
+          <Link href={editHref} style={editBtnStyle}>✎ Edit</Link>
         </div>
       </div>
 
-      {/* 3-column grid: pricing · contact · renewal */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
         <div style={cellStyle}>
           <div style={labelStyle}>Pricing posture</div>
@@ -406,7 +470,6 @@ function DmcContractPanel({ c, sourceName }: { c: DmcContract; sourceName: strin
             {c.extra_bed_usd != null ? <><br />extra bed ${c.extra_bed_usd}</> : null}
           </div>
         </div>
-
         <div style={cellStyle}>
           <div style={labelStyle}>Contact</div>
           <div style={valStyle}>
@@ -418,7 +481,6 @@ function DmcContractPanel({ c, sourceName }: { c: DmcContract; sourceName: strin
             {c.contact_phone ? <a href={`tel:${c.contact_phone}`} style={{ color: 'var(--ink)', textDecoration: 'underline' }}>📞 {c.contact_phone}</a> : <span style={{ color: 'var(--ink-faint)' }}>📞 —</span>}
           </div>
         </div>
-
         <div style={cellStyle}>
           <div style={labelStyle}>Renewal countdown</div>
           <div style={valStyle}>
@@ -437,7 +499,6 @@ function DmcContractPanel({ c, sourceName }: { c: DmcContract; sourceName: strin
         </div>
       </div>
 
-      {/* Identity / clause row */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
         <div style={cellStyle}>
           <div style={labelStyle}>Legal identity</div>
@@ -461,6 +522,15 @@ function DmcContractPanel({ c, sourceName }: { c: DmcContract; sourceName: strin
 }
 
 // ─── Local UI atoms ─────────────────────────────────────────────────────
+const navBtnStyle: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: 4,
+  padding: '5px 12px', fontSize: 11, letterSpacing: '0.08em',
+  textTransform: 'uppercase', fontWeight: 600,
+  background: 'transparent', color: 'var(--ink, #1B1B1B)',
+  border: '1px solid var(--hairline, #E6DFCC)',
+  borderRadius: 4, textDecoration: 'none',
+};
+
 const pdfBtnStyle: React.CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
