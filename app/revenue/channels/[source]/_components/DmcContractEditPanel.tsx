@@ -7,6 +7,10 @@
 // - Read mode: identical chrome to the server-rendered view.
 // - Edit mode: form fields for every editable column. Save → POST to
 //   /api/dmc/contract/[id]/update → on success router.refresh().
+// PBS 2026-06-30 (2):
+//   - "B2B" action button surfaced alongside Preview/No-PDF + Edit.
+//   - Renewal cell upgraded: shows signed date + valid-until, calls out
+//     "EXPIRED — no rate agreement" loudly when past expiry.
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
@@ -129,12 +133,13 @@ export default function DmcContractEditPanel({ contract: c }: Props) {
             Auto-renew {c.auto_renew ? <strong style={{ color: 'var(--moss-glow)' }}>YES</strong> : <strong style={{ color: 'var(--st-bad)' }}>NO</strong>}
           </span>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {previewHref ? (
             <a href={previewHref} target="_blank" rel="noopener noreferrer" style={pdfBtnStyle}>📄 Preview contract</a>
           ) : (
             <span style={{ ...pdfBtnStyle, opacity: 0.5, cursor: 'not-allowed' }}>📄 No PDF on file</span>
           )}
+          <Link href="/sales/b2b" style={pdfBtnStyle}>🏢 B2B</Link>
           {!editing ? (
             <button type="button" onClick={() => setEditing(true)} style={editBtnStyle}>✎ Edit</button>
           ) : (
@@ -182,16 +187,34 @@ export default function DmcContractEditPanel({ contract: c }: Props) {
               </div>
             </div>
             <div style={cellStyle}>
-              <div style={labelStyle}>Renewal countdown</div>
+              <div style={labelStyle}>Validity</div>
               <div style={valStyle}>
+                <span style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-soft)' }}>Signed</span>{' '}
+                <strong>{c.signed_date ?? <span style={{ color: 'var(--ink-faint)', fontWeight: 400 }}>—</span>}</strong>
+                <br />
+                <span style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-soft)' }}>Valid until</span>{' '}
+                <strong>{c.expiry_date ?? <span style={{ color: 'var(--ink-faint)', fontWeight: 400 }}>—</span>}</strong>
+                <br />
                 {daysLeft != null && daysLeft > 0 ? (
                   <>
-                    <strong style={{ fontSize: 'var(--t-lg)', color: daysLeft < 90 ? 'var(--brass)' : 'var(--ink)' }}>{daysLeft} days</strong>
+                    <strong style={{ fontSize: 'var(--t-lg)', color: daysLeft < 90 ? 'var(--brass)' : 'var(--ink)' }}>{daysLeft} days left</strong>
                     <br />
                     <span style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-soft)' }}>auto-alerts at 90/60/30/14/7/1 days</span>
                   </>
                 ) : daysLeft != null && daysLeft <= 0 ? (
-                  <strong style={{ color: 'var(--st-bad)' }}>EXPIRED — needs renewal</strong>
+                  <span style={{
+                    display: 'inline-block',
+                    marginTop: 4,
+                    padding: '4px 10px',
+                    background: 'var(--st-bad-bg)',
+                    border: '1px solid var(--st-bad-bd)',
+                    color: 'var(--st-bad)',
+                    borderRadius: 4,
+                    fontSize: 'var(--t-sm)',
+                    fontWeight: 700,
+                  }}>
+                    🔴 EXPIRED — no rate agreement
+                  </span>
                 ) : (
                   <span style={{ color: 'var(--ink-faint)' }}>no expiry on file</span>
                 )}
