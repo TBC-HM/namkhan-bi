@@ -256,7 +256,9 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
   };
   const hrefFor      = (newWin: WindowKey) => buildHref({ win: newWin === '30d' ? '' : newWin });
   const tabHrefFor   = (newTab: Category)  => buildHref({ tab: newTab === 'direct' ? '' : newTab });
-  const drillHrefFor = (source: string)    => buildHref({ drill: source });
+  // PBS 2026-06-30: skip the drawer — source rows jump straight to the
+  // full per-source landing page (merged DMC + channel surface).
+  const drillHrefFor = (source: string)    => `${basePath}/${encodeURIComponent(source)}`;
 
   return (
     <DashboardPage
