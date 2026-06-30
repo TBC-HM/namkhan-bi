@@ -17,6 +17,7 @@ import {
 } from '@/app/(cockpit)/_design';
 import BackButton from '@/components/nav/BackButton';
 import RoomTypeMixTable from './_components/RoomTypeMixTable';
+import DmcContractEditPanel from './_components/DmcContractEditPanel';
 import { REVENUE_SUBPAGES } from '../../_subpages';
 import { resolvePeriod } from '@/lib/period';
 import {
@@ -242,10 +243,10 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
         </div>
       )}
 
-      {/* (2) DMC contract panel (when matched) */}
+      {/* (2) DMC contract panel (when matched) — inline read/edit */}
       {dmcContract && (
         <div style={{ gridColumn: '1 / -1' }}>
-          <DmcContractPanel c={dmcContract} sourceName={sourceName} />
+          <DmcContractEditPanel contract={dmcContract} />
         </div>
       )}
 
@@ -342,128 +343,6 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
   );
 }
 
-// ─── DMC contract panel (inline, black labels, edit + preview buttons) ──
-function DmcContractPanel({ c, sourceName }: { c: DmcContract; sourceName: string }) {
-  const statusBg = c.computed_status === 'active' ? 'var(--st-good-bg)' : c.computed_status === 'expiring' ? 'var(--st-warn-bg)' : 'var(--st-bad-bg)';
-  const statusBd = c.computed_status === 'active' ? 'var(--st-good-bd)' : c.computed_status === 'expiring' ? 'var(--st-warn-bd)' : 'var(--st-bad-bd)';
-  const statusFg = c.computed_status === 'active' ? 'var(--moss-glow)' : c.computed_status === 'expiring' ? 'var(--brass)' : 'var(--st-bad)';
-  const statusEmoji = c.computed_status === 'active' ? '🟢' : c.computed_status === 'expiring' ? '🟡' : c.computed_status === 'expired' ? '🔴' : '○';
-  const daysLeft = c.days_to_expiry;
-
-  const labelStyle: React.CSSProperties = {
-    fontSize: 'var(--t-xs)',
-    color: 'var(--ink)',
-    fontWeight: 600,
-    textTransform: 'uppercase',
-    letterSpacing: '0.04em',
-    marginBottom: 6,
-  };
-  const valStyle: React.CSSProperties = {
-    fontSize: 'var(--t-base)',
-    color: 'var(--ink)',
-    lineHeight: 1.55,
-  };
-  const cellStyle: React.CSSProperties = {
-    background: 'var(--paper)',
-    border: '1px solid var(--paper-deep)',
-    borderRadius: 6,
-    padding: '12px 14px',
-  };
-
-  const previewHref = c.pdf_storage_path
-    ? `/api/dmc/contract/${c.contract_id}/preview`
-    : null;
-  const editHref = `/settings/channel-contacts?source=${encodeURIComponent(sourceName)}`;
-
-  return (
-    <Container
-      title={`DMC contract · ${c.partner_short_name}`}
-      subtitle={`Commercial terms from governance.dmc_contracts · ${c.partner_type} · ${c.country_flag ?? ''} ${c.country ?? '—'}`}
-    >
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-          <span style={{ background: statusBg, border: `1px solid ${statusBd}`, color: statusFg, padding: '3px 10px', borderRadius: 12, fontSize: 'var(--t-sm)', fontWeight: 600 }}>
-            {statusEmoji} {c.computed_status.charAt(0).toUpperCase() + c.computed_status.slice(1)}
-          </span>
-          <span style={{ fontSize: 'var(--t-sm)', color: 'var(--ink)' }}>
-            LPA {c.effective_date?.slice(0, 4) ?? '—'}–{c.expiry_date?.slice(0, 4) ?? '—'}
-            {c.expiry_date ? ` · expires ${c.expiry_date}` : ''}
-            {daysLeft != null ? ` (${daysLeft > 0 ? `${daysLeft} days` : daysLeft === 0 ? 'today' : `${Math.abs(daysLeft)}d ago`})` : ''}
-          </span>
-          <span style={{ fontSize: 'var(--t-sm)', color: 'var(--ink)' }}>
-            Auto-renew {c.auto_renew ? <strong style={{ color: 'var(--moss-glow)' }}>YES</strong> : <strong style={{ color: 'var(--st-bad)' }}>NO</strong>}
-          </span>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {previewHref ? (
-            <a href={previewHref} target="_blank" rel="noopener noreferrer" style={pdfBtnStyle}>📄 Preview contract</a>
-          ) : (
-            <span style={{ ...pdfBtnStyle, opacity: 0.5, cursor: 'not-allowed' }}>📄 No PDF on file</span>
-          )}
-          <Link href={editHref} style={editBtnStyle}>✎ Edit</Link>
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
-        <div style={cellStyle}>
-          <div style={labelStyle}>Pricing posture</div>
-          <div style={valStyle}>
-            <strong>{c.pricing_model}</strong>
-            {c.group_surcharge_pct != null ? <><br />group surcharge +{c.group_surcharge_pct}%</> : null}
-            {c.group_threshold != null ? <> ({c.group_threshold}+ keys)</> : null}
-            {c.extra_bed_usd != null ? <><br />extra bed ${c.extra_bed_usd}</> : null}
-          </div>
-        </div>
-        <div style={cellStyle}>
-          <div style={labelStyle}>Contact</div>
-          <div style={valStyle}>
-            {c.contact_name ?? <span style={{ color: 'var(--ink-faint)' }}>—</span>}
-            {c.contact_role ? <> · {c.contact_role}</> : null}
-            <br />
-            {c.contact_email ? <a href={`mailto:${c.contact_email}`} style={{ color: 'var(--ink)', textDecoration: 'underline' }}>✉ {c.contact_email}</a> : <span style={{ color: 'var(--ink-faint)' }}>✉ —</span>}
-            <br />
-            {c.contact_phone ? <a href={`tel:${c.contact_phone}`} style={{ color: 'var(--ink)', textDecoration: 'underline' }}>📞 {c.contact_phone}</a> : <span style={{ color: 'var(--ink-faint)' }}>📞 —</span>}
-          </div>
-        </div>
-        <div style={cellStyle}>
-          <div style={labelStyle}>Renewal countdown</div>
-          <div style={valStyle}>
-            {daysLeft != null && daysLeft > 0 ? (
-              <>
-                <strong style={{ fontSize: 'var(--t-lg)', color: daysLeft < 90 ? 'var(--brass)' : 'var(--ink)' }}>{daysLeft} days</strong>
-                <br />
-                <span style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-soft)' }}>auto-alerts at 90/60/30/14/7/1 days</span>
-              </>
-            ) : daysLeft != null && daysLeft <= 0 ? (
-              <strong style={{ color: 'var(--st-bad)' }}>EXPIRED — needs renewal</strong>
-            ) : (
-              <span style={{ color: 'var(--ink-faint)' }}>no expiry on file</span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
-        <div style={cellStyle}>
-          <div style={labelStyle}>Legal identity</div>
-          <div style={valStyle}>
-            VAT: <code style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-sm)' }}>{c.vat_number ?? '—'}</code>
-            <br />
-            Address: {c.address ?? <span style={{ color: 'var(--ink-faint)' }}>—</span>}
-          </div>
-        </div>
-        <div style={cellStyle}>
-          <div style={labelStyle}>Anti-publication clause</div>
-          <div style={{ ...valStyle, fontSize: 'var(--t-sm)' }}>
-            {c.anti_publication_clause
-              ? <><strong style={{ color: 'var(--moss-glow)' }}>✓ Present</strong> — {c.anti_publication_clause.slice(0, 180)}{c.anti_publication_clause.length > 180 ? '…' : ''}</>
-              : <span style={{ color: 'var(--ink-faint)' }}>not captured</span>}
-          </div>
-        </div>
-      </div>
-    </Container>
-  );
-}
 
 // ─── Local UI atoms ─────────────────────────────────────────────────────
 const navBtnStyle: React.CSSProperties = {
@@ -475,33 +354,6 @@ const navBtnStyle: React.CSSProperties = {
   borderRadius: 4, textDecoration: 'none',
 };
 
-const pdfBtnStyle: React.CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 6,
-  padding: '6px 12px',
-  background: 'var(--paper)',
-  color: 'var(--ink)',
-  border: '1px solid var(--ink)',
-  borderRadius: 4,
-  fontSize: 12,
-  fontWeight: 500,
-  textDecoration: 'none',
-};
-
-const editBtnStyle: React.CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 6,
-  padding: '6px 12px',
-  background: 'var(--primary, #1F3A2E)',
-  color: '#FFFFFF',
-  border: '1px solid var(--primary, #1F3A2E)',
-  borderRadius: 4,
-  fontSize: 12,
-  fontWeight: 600,
-  textDecoration: 'none',
-};
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
