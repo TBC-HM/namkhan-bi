@@ -2,14 +2,19 @@
 // Sales › B2B/DMC — Contracts list. Shows ALL partners:
 //   - contracts on file (governance.dmc_contracts)
 //   - PLUS sources sending LPA reservations with NO contract on file (revenue at risk)
+//
+// PBS 2026-06-30: migrated chrome to DashboardPage + Container (v6/v7).
+// Data layer was already dynamic (force-dynamic + revalidate=60) — no behaviour
+// change there. Added BackButton.
 
 import B2bSubNav from './_components/B2bSubNav';
 import B2bKpiStrip from './_components/B2bKpiStrip';
 import UploadContractButton from './_components/UploadContractButton';
 import B2bContractsTable, { type DisplayRow } from './_components/B2bContractsTable';
 import { getDmcContracts, getLpaReservations, matchSourceToContract } from '@/lib/dmc';
-import Page from '@/components/page/Page';
+import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
 import { SALES_SUBPAGES } from '../_subpages';
+import BackButton from '@/components/nav/BackButton';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -94,21 +99,37 @@ export default async function B2bDmcContractsPage() {
   uncontractedRows.sort((a, b) => b.revenue - a.revenue);
   const allRows = [...contractRows, ...uncontractedRows];
 
+  const salesTabs: DashboardTab[] = SALES_SUBPAGES.map((s) => ({
+    key: s.href, label: s.label, href: s.href, active: s.href.startsWith('/sales/b2b'),
+  }));
+
   return (
-    <Page
-      eyebrow="Sales · B2B / DMC › Partners"
-      title={<>B2B / DMC · <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>{contracts.length} on file · {uncontractedRows.length} uncontracted</em></>}
-      subPages={SALES_SUBPAGES}
-      topRight={<UploadContractButton />}
+    <DashboardPage
+      title="B2B / DMC partners"
+      subtitle={`${contracts.length} contracts on file · ${uncontractedRows.length} uncontracted sources sending LPA business`}
+      tabs={salesTabs}
+      action={
+        <div style={{ display: 'flex', gap: 8 }}>
+          <BackButton fallback="/sales" label="← Sales" />
+          <UploadContractButton />
+        </div>
+      }
     >
-      <B2bSubNav />
-      <B2bKpiStrip />
+      <Container title="KPIs · live" subtitle="Contract pipeline + revenue at risk · refreshes every 60s">
+        <B2bSubNav />
+        <B2bKpiStrip />
+      </Container>
 
-      <B2bContractsTable rows={allRows} />
+      <Container
+        title={`Partners · ${allRows.length}`}
+        subtitle="Contracts on file (top) followed by uncontracted sources sending LPA business (yellow rows = revenue at risk)"
+      >
+        <B2bContractsTable rows={allRows} />
+      </Container>
 
-      <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--st-good-bg)', border: '1px solid var(--st-good-bd)', borderRadius: 6, color: 'var(--moss)', fontSize: "var(--t-sm)" }}>
-        <strong>✓ Wired.</strong> {contractRows.length} contracts on file · {uncontractedRows.length} uncontracted sources sending LPA business. Yellow rows = revenue at risk — create contracts for them via Reconciliation queue.
+      <div style={{ gridColumn: '1 / -1', marginTop: 4, padding: '10px 14px', background: 'var(--st-good-bg, #EEF5EE)', border: '1px solid var(--st-good-bd, #C8DFC8)', borderRadius: 6, color: 'var(--moss, #2C5F4F)', fontSize: 12 }}>
+        <strong>✓ Wired.</strong> {contractRows.length} contracts on file · {uncontractedRows.length} uncontracted sources sending LPA business. Yellow rows = revenue at risk — create contracts for them via the Reconciliation queue.
       </div>
-    </Page>
+    </DashboardPage>
   );
 }
