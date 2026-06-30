@@ -7,7 +7,7 @@
 // content score, photo audit — PBS will populate from Booking.com download.
 
 import Link from 'next/link';
-import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
+import { DashboardPage, Container, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { REVENUE_SUBPAGES } from '../../_subpages';
 import { resolvePeriod } from '@/lib/period';
 import {
@@ -249,25 +249,18 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
       }}>⚙ Channel settings</Link>}
     >
 
-      {/* HERO KPI strip — 8 tiles */}
+      {/* HERO KPI strip — 8 tiles on v6/v7 KpiTile primitive */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10, marginTop: 12, marginBottom: 14 }}>
-        <Tile label="Bookings" value={String(meta.bookings)} sub={`${meta.canceled} cancelled`}
-          deltaText={delta(meta.bookings, cmpMeta?.bookings ?? 0).text}
-          deltaTone={delta(meta.bookings, cmpMeta?.bookings ?? 0).tone}
-        />
-        <Tile label="Gross revenue" value={fmtMoney(Number(meta.gross_revenue), 'USD')} sub={`${meta.roomnights} room nights`}
-          deltaText={delta(Number(meta.gross_revenue), Number(cmpMeta?.gross_revenue ?? 0)).text}
-          deltaTone={delta(Number(meta.gross_revenue), Number(cmpMeta?.gross_revenue ?? 0)).tone}
-        />
-        <Tile label="ADR" value={fmtMoney(Number(meta.adr), 'USD')} sub="rev ÷ RNs"
-          deltaText={delta(Number(meta.adr), Number(cmpMeta?.adr ?? 0)).text}
-          deltaTone={delta(Number(meta.adr), Number(cmpMeta?.adr ?? 0)).tone}
-        />
-        <Tile label="Net ADR" value={fmtMoney(netAdr, 'USD')} sub={`after ${Number(meta.commission_pct).toFixed(0)}% commission`} />
-        <Tile label="Commission $" value={fmtMoney(Number(meta.commission_usd), 'USD')} sub={`${(Number(meta.commission_usd) / Math.max(1, Number(meta.gross_revenue)) * 100).toFixed(1)}% of rev`} tone={Number(meta.commission_pct) >= 18 ? 'warn' : 'flat'} />
-        <Tile label="Cancel %" value={`${Number(meta.cancel_pct).toFixed(1)}%`} sub={`${meta.canceled} of ${meta.bookings + meta.canceled}`} tone={Number(meta.cancel_pct) >= 25 ? 'bad' : Number(meta.cancel_pct) >= 10 ? 'warn' : 'flat'} />
-        <Tile label="Avg lead time" value={`${Number(meta.avg_lead_days || 0).toFixed(0)}d`} sub="booking → arrival" />
-        <Tile label="Avg LOS" value={Number(meta.avg_los || 0).toFixed(1)} sub="nights / stay" />
+        {([
+          { label: 'Bookings',     value: meta.bookings,                                                       size: 'sm', footnote: `${meta.canceled} cancelled` },
+          { label: 'Gross revenue', value: Math.round(Number(meta.gross_revenue)),  currency: 'USD',           size: 'sm', footnote: `${meta.roomnights} room nights` },
+          { label: 'ADR',          value: Math.round(Number(meta.adr)),             currency: 'USD',           size: 'sm', footnote: 'rev ÷ RNs' },
+          { label: 'Net ADR',      value: Math.round(netAdr),                       currency: 'USD',           size: 'sm', footnote: `after ${Number(meta.commission_pct).toFixed(0)}% commission` },
+          { label: 'Commission',   value: Math.round(Number(meta.commission_usd)),  currency: 'USD',           size: 'sm', footnote: `${(Number(meta.commission_usd) / Math.max(1, Number(meta.gross_revenue)) * 100).toFixed(1)}% of rev`, status: (Number(meta.commission_pct) >= 18 ? 'amber' : 'green') as 'amber' | 'green' },
+          { label: 'Cancel rate',  value: `${Number(meta.cancel_pct).toFixed(1)}%`,                            size: 'sm', footnote: `${meta.canceled} of ${meta.bookings + meta.canceled}`, status: (Number(meta.cancel_pct) >= 25 ? 'red' : Number(meta.cancel_pct) >= 10 ? 'amber' : 'green') as 'red' | 'amber' | 'green' },
+          { label: 'Lead time',    value: `${Math.round(Number(meta.avg_lead_days || 0))}d`,                  size: 'sm', footnote: 'booking → arrival' },
+          { label: 'LOS',          value: Number(meta.avg_los || 0).toFixed(1),                                size: 'sm', footnote: 'nights / stay' },
+        ] as KpiTileProps[]).map((t, i) => <KpiTile key={i} {...t} />)}
       </div>
 
       {/* Daily revenue trend — auto-widens to all-time when the active window is empty */}
@@ -370,32 +363,7 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
 
 // ─── Local UI atoms ─────────────────────────────────────────────────────────
 
-function Tile({ label, value, sub, tone = 'flat', deltaText, deltaTone = 'flat' }: {
-  label: string; value: string; sub: string;
-  tone?: 'flat' | 'warn' | 'bad';
-  deltaText?: string; deltaTone?: 'pos' | 'neg' | 'flat';
-}) {
-  const valueColor =
-    tone === 'bad' ? 'var(--st-bad-tx, #b03826)' :
-    tone === 'warn' ? 'var(--st-warn-tx, #8a6418)' :
-    'var(--ink)';
-  const deltaColor =
-    deltaTone === 'pos' ? 'var(--moss-glow)' :
-    deltaTone === 'neg' ? 'var(--st-bad-tx, #b03826)' :
-    'var(--ink-mute)';
-  return (
-    <div className="kpi-box">
-      <div className="kpi-tile-scope">{label}</div>
-      <div className="kpi-box-value" style={{ color: valueColor }}>{value}</div>
-      <div className="kpi-tile-sub">{sub}</div>
-      {deltaText && (
-        <div style={{ marginTop: 4, fontSize: 'var(--t-xs)', color: deltaColor, fontFamily: 'var(--mono)' }}>
-          {deltaText}
-        </div>
-      )}
-    </div>
-  );
-}
+// PBS 2026-06-30: local Tile retired — using KpiTile primitive everywhere now.
 
 function Section({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
   return (
