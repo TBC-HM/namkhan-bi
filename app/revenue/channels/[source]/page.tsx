@@ -19,6 +19,7 @@ import BackButton from '@/components/nav/BackButton';
 import RoomTypeMixTable from './_components/RoomTypeMixTable';
 import DmcContractEditPanel from './_components/DmcContractEditPanel';
 import SourceBookingsTable, { type SourceBookingRow } from './_components/SourceBookingsTable';
+import SourceQbTransactionsTable, { type QbTxnRow } from './_components/SourceQbTransactionsTable';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { REVENUE_SUBPAGES } from '../../_subpages';
 import { resolvePeriod } from '@/lib/period';
@@ -80,18 +81,20 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
   const d90  = isoBack(90);
   const d365 = isoBack(365);
 
-  const [econ30, econ90, econ365, dailyRows, mixRows, pickupRows, dmcContracts, bookingsRes] = isBookingCom
-    ? [[], [], [], [], [], [], [] as DmcContract[], { data: [] }] as const
+  const [econ30, econ90, econ365, econAll, dailyRows, mixRows, pickupRows, dmcContracts, bookingsRes, qbRes] = isBookingCom
+    ? [[], [], [], [], [], [], [], [] as DmcContract[], { data: [] }, { data: [] }] as const
     : await Promise.all([
         getChannelEconomicsForRange(d30,  today).catch(() => []),
         getChannelEconomicsForRange(d90,  today).catch(() => []),
         getChannelEconomicsForRange(d365, today).catch(() => []),
+        // PBS 2026-06-30: "all-time" totals so partners with bookings older than
+        // L365 (e.g. Nakarath's history goes back to 2023) still show meaningful
+        // numbers in the KPI tiles.
+        getChannelEconomicsForRange('2020-01-01', today).catch(() => []),
         getChannelDailyForRange(sourceName, period.from, period.to).catch(() => []),
         getChannelRoomMixForRange(sourceName, period.from, period.to).catch(() => []),
         getChannelPickupForSource(sourceName, 28).catch(() => []),
         getDmcContracts().catch(() => [] as DmcContract[]),
-        // PBS 2026-06-30: per-source reservation list (gold view v_source_bookings).
-        // Newest booking first, capped at 500 to keep the table snappy.
         getSupabaseAdmin()
           .from('v_source_bookings')
           .select('reservation_id, booking_id, booking_date, check_in_date, check_out_date, room_type_name, guest_name, los, adr, total_amount, currency, status, is_cancelled')
@@ -100,12 +103,24 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
           .limit(500)
           .then((r) => ({ data: (r.data ?? []) as SourceBookingRow[] }))
           .catch(() => ({ data: [] as SourceBookingRow[] })),
+        // QB transactions (gl.transactions, filtered to party_name).
+        // Fuzzy match: try the PMS source name AND the matched DMC partner name.
+        getSupabaseAdmin()
+          .from('v_source_qb_transactions')
+          .select('txn_id, txn_date, txn_type, txn_number, party_name, section_account, line_account, class, description, amount_native, currency_native, amount_usd')
+          .ilike('party_name', `%${sourceName}%`)
+          .order('txn_date', { ascending: false })
+          .limit(500)
+          .then((r) => ({ data: (r.data ?? []) as QbTxnRow[] }))
+          .catch(() => ({ data: [] as QbTxnRow[] })),
       ]);
   const sourceBookings: SourceBookingRow[] = bookingsRes?.data ?? [];
+  const qbTransactions: QbTxnRow[] = qbRes?.data ?? [];
 
   const m30  = econ30.find((r)  => r.source_name === sourceName);
   const m90  = econ90.find((r)  => r.source_name === sourceName);
   const m365 = econ365.find((r) => r.source_name === sourceName);
+  const mAll = econAll.find((r) => r.source_name === sourceName);
 
   const dmcMatch = !isBookingCom
     ? matchSourceToContract(sourceName, dmcContracts)
@@ -115,7 +130,10 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
     : null;
 
   const cat = categorize(sourceName, !!dmcContract);
-  const hasAnyBookings = !!m365 && m365.bookings > 0;
+  // PBS 2026-06-30: derive "has any bookings ever" from all-time, not L365 —
+  // partners with old history (Nakarath, Asian Trails) shouldn't fall through
+  // to the "no bookings" message just because their last booking was ≥365d ago.
+  const hasAnyBookings = !!mAll && mAll.bookings > 0;
 
   // ─── Booking.com — hardwired BDC layout (unchanged) ─────────────────────
   if (isBookingCom) {
@@ -207,13 +225,16 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
 
   const netAdr = (m: typeof m30) => v(m, 'adr') * (1 - v(m, 'commission_pct') / 100);
 
-  // Build [L90d, L365d] compare arrays for each tile (main value = L30d).
-  const cmp = (
-    label: string,
+  // 3-window trailing compare row. Main tile value carries all-time (mAll),
+  // compare[] surfaces the 3 recent windows so PBS sees both "since contract"
+  // and "this period" simultaneously.
+  const trail3 = (
+    val30: number,
     val90: number,
     val365: number,
     format: 'absolute' | 'currency' | 'percent' = 'absolute',
   ): KpiComparison[] => [
+    { label: 'L30d',  value: val30,  format, direction: 'flat' },
     { label: 'L90d',  value: val90,  format, direction: 'flat' },
     { label: 'L365d', value: val365, format, direction: 'flat' },
   ];
@@ -273,27 +294,31 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
         </div>
       )}
 
-      {/* (3) Trailing-window KPI tiles — L30d main · L90d + L365d via compare[] */}
+      {/* (3) KPI tiles — main = ALL-TIME · compare[] = L30d · L90d · L365d.
+              PBS 2026-06-30: partners with bookings outside L365 (e.g. Nakarath)
+              must still surface meaningful numbers. All-time as main + 3 trail
+              windows in compare[] gives a stable "total since we work with them"
+              read regardless of recency. */}
       <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10, marginTop: 12, marginBottom: 14 }}>
         {([
-          { label: 'Bookings',      value: v(m30, 'bookings'),                                                size: 'md', footnote: `${v(m30, 'canceled')} cancelled · L30d`,
-            compare: cmp('Bookings', v(m90, 'bookings'), v(m365, 'bookings')) },
-          { label: 'Gross revenue', value: Math.round(v(m30, 'gross_revenue')), currency: 'USD',              size: 'md', footnote: `${v(m30, 'roomnights')} RN · L30d`,
-            compare: cmp('Gross', Math.round(v(m90, 'gross_revenue')), Math.round(v(m365, 'gross_revenue')), 'currency') },
-          { label: 'ADR',           value: Math.round(v(m30, 'adr')),           currency: 'USD',              size: 'md', footnote: 'rev ÷ RNs · L30d',
-            compare: cmp('ADR', Math.round(v(m90, 'adr')), Math.round(v(m365, 'adr')), 'currency') },
-          { label: 'Net ADR',       value: Math.round(netAdr(m30)),             currency: 'USD',              size: 'md', footnote: `after ${v(m30, 'commission_pct').toFixed(0)}% commission · L30d`,
-            compare: cmp('Net ADR', Math.round(netAdr(m90)), Math.round(netAdr(m365)), 'currency') },
-          { label: 'Commission',    value: Math.round(v(m30, 'commission_usd')), currency: 'USD',             size: 'md', footnote: v(m30, 'gross_revenue') > 0 ? `${(v(m30, 'commission_usd') / v(m30, 'gross_revenue') * 100).toFixed(1)}% of rev · L30d` : '—',
-            status: (v(m30, 'commission_pct') >= 18 ? 'amber' : 'green') as 'amber' | 'green',
-            compare: cmp('Commission', Math.round(v(m90, 'commission_usd')), Math.round(v(m365, 'commission_usd')), 'currency') },
-          { label: 'Cancel rate',   value: `${v(m30, 'cancel_pct').toFixed(1)}%`,                              size: 'md', footnote: `${v(m30, 'canceled')} of ${v(m30, 'bookings') + v(m30, 'canceled')} · L30d`,
-            status: (v(m30, 'cancel_pct') >= 25 ? 'red' : v(m30, 'cancel_pct') >= 10 ? 'amber' : 'green') as 'red' | 'amber' | 'green',
-            compare: cmp('Cancel', Number(v(m90, 'cancel_pct').toFixed(1)), Number(v(m365, 'cancel_pct').toFixed(1)), 'percent') },
-          { label: 'Lead time',     value: `${Math.round(v(m30, 'avg_lead_days'))}d`,                          size: 'md', footnote: 'booking → arrival · L30d',
-            compare: cmp('Lead', Math.round(v(m90, 'avg_lead_days')), Math.round(v(m365, 'avg_lead_days'))) },
-          { label: 'LOS',           value: v(m30, 'avg_los').toFixed(1),                                       size: 'md', footnote: 'nights / stay · L30d',
-            compare: cmp('LOS', Number(v(m90, 'avg_los').toFixed(1)), Number(v(m365, 'avg_los').toFixed(1))) },
+          { label: 'Bookings',      value: v(mAll, 'bookings'),                                                size: 'md', footnote: `${v(mAll, 'canceled')} cancelled · all-time`,
+            compare: trail3(v(m30, 'bookings'), v(m90, 'bookings'), v(m365, 'bookings')) },
+          { label: 'Gross revenue', value: Math.round(v(mAll, 'gross_revenue')), currency: 'USD',              size: 'md', footnote: `${v(mAll, 'roomnights')} RN · all-time`,
+            compare: trail3(Math.round(v(m30, 'gross_revenue')), Math.round(v(m90, 'gross_revenue')), Math.round(v(m365, 'gross_revenue')), 'currency') },
+          { label: 'ADR',           value: Math.round(v(mAll, 'adr')),           currency: 'USD',              size: 'md', footnote: 'rev ÷ RNs · all-time',
+            compare: trail3(Math.round(v(m30, 'adr')), Math.round(v(m90, 'adr')), Math.round(v(m365, 'adr')), 'currency') },
+          { label: 'Net ADR',       value: Math.round(netAdr(mAll)),             currency: 'USD',              size: 'md', footnote: `after ${v(mAll, 'commission_pct').toFixed(0)}% commission · all-time`,
+            compare: trail3(Math.round(netAdr(m30)), Math.round(netAdr(m90)), Math.round(netAdr(m365)), 'currency') },
+          { label: 'Commission',    value: Math.round(v(mAll, 'commission_usd')), currency: 'USD',             size: 'md', footnote: v(mAll, 'gross_revenue') > 0 ? `${(v(mAll, 'commission_usd') / v(mAll, 'gross_revenue') * 100).toFixed(1)}% of rev · all-time` : '—',
+            status: (v(mAll, 'commission_pct') >= 18 ? 'amber' : 'green') as 'amber' | 'green',
+            compare: trail3(Math.round(v(m30, 'commission_usd')), Math.round(v(m90, 'commission_usd')), Math.round(v(m365, 'commission_usd')), 'currency') },
+          { label: 'Cancel rate',   value: `${v(mAll, 'cancel_pct').toFixed(1)}%`,                              size: 'md', footnote: `${v(mAll, 'canceled')} of ${v(mAll, 'bookings') + v(mAll, 'canceled')} · all-time`,
+            status: (v(mAll, 'cancel_pct') >= 25 ? 'red' : v(mAll, 'cancel_pct') >= 10 ? 'amber' : 'green') as 'red' | 'amber' | 'green',
+            compare: trail3(Number(v(m30, 'cancel_pct').toFixed(1)), Number(v(m90, 'cancel_pct').toFixed(1)), Number(v(m365, 'cancel_pct').toFixed(1)), 'percent') },
+          { label: 'Lead time',     value: `${Math.round(v(mAll, 'avg_lead_days'))}d`,                          size: 'md', footnote: 'booking → arrival · all-time',
+            compare: trail3(Math.round(v(m30, 'avg_lead_days')), Math.round(v(m90, 'avg_lead_days')), Math.round(v(m365, 'avg_lead_days'))) },
+          { label: 'LOS',           value: v(mAll, 'avg_los').toFixed(1),                                       size: 'md', footnote: 'nights / stay · all-time',
+            compare: trail3(Number(v(m30, 'avg_los').toFixed(1)), Number(v(m90, 'avg_los').toFixed(1)), Number(v(m365, 'avg_los').toFixed(1))) },
         ] as KpiTileProps[]).map((t, i) => <KpiTile key={i} {...t} />)}
       </div>
 
@@ -365,6 +390,16 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
           subtitle="Newest first · Check-in · Room type · LOS · ADR · Invoice total · Cloudbeds reservation # — wired to v_source_bookings"
         >
           <SourceBookingsTable rows={sourceBookings} />
+        </Container>
+      </div>
+
+      {/* (9) Full-width per-source QuickBooks transactions */}
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Container
+          title={`QuickBooks transactions · ${sourceName} · ${qbTransactions.length}`}
+          subtitle="Newest first · Type · Ref # · Account · Class · USD — gl.transactions filtered to party_name (v_source_qb_transactions)"
+        >
+          <SourceQbTransactionsTable rows={qbTransactions} />
         </Container>
       </div>
     </DashboardPage>
