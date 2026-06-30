@@ -8,9 +8,14 @@
 //
 // Cancelled rows render greyed + struck-through so the user sees them but
 // they don't blend with active business.
+// PBS 2026-06-30 (2): default to 10 rows visible. "Show all" / "Show 10"
+// toggle reveals the full list (still newest-first under the user's sort).
 
+import { useState } from 'react';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import { fmtTableUsd } from '@/lib/format';
+
+const INITIAL_LIMIT = 10;
 
 export interface SourceBookingRow {
   reservation_id: string;
@@ -34,6 +39,10 @@ function fmtDate(s: string | null): string {
 }
 
 export default function SourceBookingsTable({ rows }: { rows: SourceBookingRow[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? rows : rows.slice(0, INITIAL_LIMIT);
+  const hidden = rows.length - visible.length;
+
   if (rows.length === 0) {
     return (
       <div style={{
@@ -119,12 +128,38 @@ export default function SourceBookingsTable({ rows }: { rows: SourceBookingRow[]
   ];
 
   return (
-    <DataTable<SourceBookingRow>
-      columns={columns}
-      rows={rows}
-      rowKey={(r) => r.reservation_id}
-      rowClassName={(r) => r.is_cancelled ? 'row-warn' : undefined}
-      defaultSort={{ key: 'booking_date', dir: 'desc' }}
-    />
+    <div>
+      <DataTable<SourceBookingRow>
+        columns={columns}
+        rows={visible}
+        rowKey={(r) => r.reservation_id}
+        rowClassName={(r) => r.is_cancelled ? 'row-warn' : undefined}
+        defaultSort={{ key: 'booking_date', dir: 'desc' }}
+      />
+      {rows.length > INITIAL_LIMIT && (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 0' }}>
+          <button
+            type="button"
+            onClick={() => setExpanded((e) => !e)}
+            style={{
+              padding: '6px 14px',
+              fontSize: 12,
+              fontWeight: 600,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              background: '#FFFFFF',
+              color: '#1B1B1B',
+              border: '1px solid #E6DFCC',
+              borderRadius: 4,
+              cursor: 'pointer',
+            }}
+          >
+            {expanded
+              ? `Show first ${INITIAL_LIMIT}`
+              : `Show all ${rows.length} (+${hidden} hidden)`}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
