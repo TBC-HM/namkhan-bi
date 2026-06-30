@@ -222,8 +222,6 @@ export default function DmcContractEditPanel({ contract: c }: Props) {
                 )}
               </div>
             </div>
-          </div>
-
             <div style={{ ...cellStyle, display: 'flex', flexDirection: 'column' }}>
               <div style={labelStyle}>Legal identity</div>
               <div style={valStyle}>
