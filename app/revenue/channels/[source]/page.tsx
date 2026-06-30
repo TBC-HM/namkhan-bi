@@ -325,7 +325,7 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
         title={`Room-type mix · ${period.label}`}
         subtitle={`${mixRows.length} room types · $${Math.round(totalMixRev).toLocaleString('en-US')} total`}
       >
-        <RoomTypeMixTable rows={mixRows} />
+        <RoomTypeMixTable rows={mixRows as ChannelRoomMixRow[]} />
       </Container>
 
       {/* (7) Channel contact — only when there is NO DMC contract */}
