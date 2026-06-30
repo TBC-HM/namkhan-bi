@@ -17,6 +17,25 @@ export interface RoomMixRow {
 }
 
 export default function RoomTypeMixTable({ rows }: { rows: RoomMixRow[] }) {
+  // PBS 2026-06-30: render a paper-white empty state inline. The default
+  // DataTable empty wrapper uses var(--paper-warm) which is #15110c under
+  // the Namkhan token ladder — would render as a black box.
+  if (rows.length === 0) {
+    return (
+      <div style={{
+        padding: '24px 20px',
+        background: '#FFFFFF',
+        border: '1px solid #E6DFCC',
+        borderRadius: 6,
+        textAlign: 'center',
+        color: '#5A5A5A',
+        fontSize: 13,
+      }}>
+        No room-type mix to report — this source has 0 bookings in the active window.
+      </div>
+    );
+  }
+
   const columns: Column<RoomMixRow>[] = [
     {
       key: 'room_type_name',
