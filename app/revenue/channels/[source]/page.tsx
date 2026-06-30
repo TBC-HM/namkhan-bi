@@ -8,6 +8,7 @@
 
 import Link from 'next/link';
 import { DashboardPage, Container, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
+import BackButton from '@/components/nav/BackButton';
 import { REVENUE_SUBPAGES } from '../../_subpages';
 import { resolvePeriod } from '@/lib/period';
 import {
@@ -106,12 +107,17 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
         title={sourceName}
         subtitle={`Revenue · Channels · ${sourceName} — Booking.com hardwired data`}
         tabs={revenueTabs}
-        action={<Link href="/settings/channel-contacts" style={{
-          padding: '6px 14px', fontSize: 11, letterSpacing: '0.08em',
-          textTransform: 'uppercase', fontWeight: 600,
-          background: 'var(--primary, #1F3A2E)', color: '#FFFFFF',
-          borderRadius: 4, textDecoration: 'none',
-        }}>⚙ Channel settings</Link>}
+        action={
+          <div style={{ display: 'flex', gap: 8 }}>
+            <BackButton fallback="/revenue/channels" label="← Channels" />
+            <Link href="/settings/channel-contacts" style={{
+              padding: '6px 14px', fontSize: 11, letterSpacing: '0.08em',
+              textTransform: 'uppercase', fontWeight: 600,
+              background: 'var(--primary, #1F3A2E)', color: '#FFFFFF',
+              borderRadius: 4, textDecoration: 'none',
+            }}>⚙ Channel settings</Link>
+          </div>
+        }
       >
 
         {/* Sub-tab strip — 3 tabs now */}
@@ -186,12 +192,17 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
         title={sourceName}
         subtitle={`Revenue · Channels · ${sourceName} · ${cat} · no bookings on file`}
         tabs={noMetaTabs}
-        action={<Link href="/settings/channel-contacts" style={{
-          padding: '6px 14px', fontSize: 11, letterSpacing: '0.08em',
-          textTransform: 'uppercase', fontWeight: 600,
-          background: 'var(--primary, #1F3A2E)', color: '#FFFFFF',
-          borderRadius: 4, textDecoration: 'none',
-        }}>⚙ Channel settings</Link>}
+        action={
+          <div style={{ display: 'flex', gap: 8 }}>
+            <BackButton fallback="/revenue/channels" label="← Channels" />
+            <Link href="/settings/channel-contacts" style={{
+              padding: '6px 14px', fontSize: 11, letterSpacing: '0.08em',
+              textTransform: 'uppercase', fontWeight: 600,
+              background: 'var(--primary, #1F3A2E)', color: '#FFFFFF',
+              borderRadius: 4, textDecoration: 'none',
+            }}>⚙ Channel settings</Link>
+          </div>
+        }
       >
         {/* PBS 2026-06-29: every source has a landing, even with zero bookings.
             Show the channel contact + linked DMC contract + category context so
@@ -241,12 +252,17 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
       title={sourceName}
       subtitle={`Revenue · Channels · ${sourceName} · ${cat} · ${period.label}`}
       tabs={mainTabs}
-      action={<Link href="/settings/channel-contacts" style={{
-        padding: '6px 14px', fontSize: 11, letterSpacing: '0.08em',
-        textTransform: 'uppercase', fontWeight: 600,
-        background: 'var(--primary, #1F3A2E)', color: '#FFFFFF',
-        borderRadius: 4, textDecoration: 'none',
-      }}>⚙ Channel settings</Link>}
+      action={
+        <div style={{ display: 'flex', gap: 8 }}>
+          <BackButton fallback="/revenue/channels" label="← Channels" />
+          <Link href="/settings/channel-contacts" style={{
+            padding: '6px 14px', fontSize: 11, letterSpacing: '0.08em',
+            textTransform: 'uppercase', fontWeight: 600,
+            background: 'var(--primary, #1F3A2E)', color: '#FFFFFF',
+            borderRadius: 4, textDecoration: 'none',
+          }}>⚙ Channel settings</Link>
+        </div>
+      }
     >
 
       {/* HERO KPI strip — 8 tiles on v6/v7 KpiTile primitive */}
