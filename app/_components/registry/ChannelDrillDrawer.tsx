@@ -135,12 +135,31 @@ export default function ChannelDrillDrawer({ rows, currencyCode, basePath, dmcCo
           ))}
         </div>
       ) : (
-        <p style={emptyStyle}>
-          No summary for <strong>{drill}</strong> in the active window. Open the full page for historical detail.
-        </p>
+        // PBS 2026-06-30: richer empty state — was a single line, looked blank.
+        // Now shows category guess + tells user where to find more detail.
+        <div style={{ padding: '12px 0' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--ink, #1B1B1B)' }}>
+            No bookings from {drill} in the active window
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--ink-soft, #5A5A5A)', lineHeight: 1.5 }}>
+            This source either hasn't produced bookings in the current filter window, or is
+            classified outside the Direct / OTA / DMC / Other groups (e.g., group/bedbank).
+            Click <strong>Open full page →</strong> below to see all-time history, or check
+            the contract details below if it's a DMC partner.
+          </div>
+        </div>
       )}
 
       {matched && <DmcContractPanel contract={matched} />}
+
+      {/* Even when there's no booking summary AND no DMC contract match, show a
+          last-resort hint so the slider isn't empty. */}
+      {!active && !matched && (
+        <div style={{ marginTop: 16, padding: 12, background: 'var(--paper-warm, #FAFAFA)', border: '1px dashed var(--hairline, #E6DFCC)', borderRadius: 4, fontSize: 11, color: 'var(--ink-soft, #5A5A5A)' }}>
+          If this source should show data, verify the booking date range and that the
+          source isn't blocked by a category filter on the parent page.
+        </div>
+      )}
     </Drawer>
   );
 }
