@@ -718,9 +718,15 @@ table:not(.data-table) tbody tr:hover td {
  * Locked spec per user 2026-05-03. Header bold mono uppercase letterspaced
  * (matches tab nav voice); body sans regular; numeric columns tabular-nums
  * + right-aligned; subtle bottom dividers, no full-grid lines; hover tint. */
+/* PBS 2026-06-30: tables ALWAYS render paper-white with hairline borders.
+ * Was using var(--paper-warm) which falls through to #15110c (dark) in the
+ * Namkhan default token ladder — every DataTable rendered as a black box.
+ * Hairline #E6DFCC + ink-colored headers match the "Tables · default to paper
+ * white + hairlines, never cream/coloured bands" rule.
+ */
 .data-table-wrap {
-  background: var(--paper-warm);
-  border: 1px solid var(--paper-deep);
+  background: #FFFFFF;
+  border: 1px solid #E6DFCC;
   border-radius: 8px;
   overflow: hidden;
 }
@@ -729,7 +735,7 @@ table:not(.data-table) tbody tr:hover td {
   border-collapse: collapse;
   font-family: var(--sans);
   font-size: var(--t-base);
-  color: var(--ink);
+  color: #1B1B1B;
 }
 .data-table-th {
   font-family: var(--mono);
@@ -737,22 +743,23 @@ table:not(.data-table) tbody tr:hover td {
   font-size: var(--t-xs);
   letter-spacing: var(--ls-extra);
   text-transform: uppercase;
-  color: var(--brass);
-  background: var(--paper-warm);
+  color: #1B1B1B;
+  background: #FFFFFF;
   padding: 12px 14px;
-  border-bottom: 1px solid var(--paper-deep);
+  border-bottom: 1px solid #E6DFCC;
   white-space: nowrap;
   user-select: none;
 }
 .data-table-th.sortable { cursor: pointer; transition: color 120ms ease; }
-.data-table-th.sortable:hover { color: var(--ink); }
-.data-table-th.active { color: var(--ink); }
+.data-table-th.sortable:hover { color: #1F3A2E; }
+.data-table-th.active { color: #1F3A2E; }
 
 .data-table-td {
   padding: 10px 14px;
-  border-bottom: 1px solid var(--paper-deep);
+  border-bottom: 1px solid #E6DFCC;
   font-size: var(--t-base);
-  color: var(--ink);
+  color: #1B1B1B;
+  background: #FFFFFF;
   vertical-align: middle;
 }
 .data-table-td.tabular,
@@ -760,15 +767,16 @@ table:not(.data-table) tbody tr:hover td {
 .data-table-th.align-right { font-variant-numeric: tabular-nums; }
 
 .data-table-row { transition: background 120ms ease; }
-.data-table-row:hover .data-table-td { background: var(--paper-deep); }
+.data-table-row:hover .data-table-td { background: #FAF6E9; }
 .data-table tr:last-child .data-table-td { border-bottom: 0; }
 
 /* footer row (totals) */
 .data-table tfoot td {
   padding: 12px 14px;
   font-weight: 600;
-  border-top: 2px solid var(--paper-deep);
-  background: var(--paper-warm);
+  border-top: 2px solid #E6DFCC;
+  background: #FFFFFF;
+  color: #1B1B1B;
 }
 
 /* alignment classes */
@@ -782,12 +790,12 @@ table:not(.data-table) tbody tr:hover td {
 .data-table-row.row-good .data-table-td { background: var(--st-good-bg); }
 
 .data-table-empty {
-  background: var(--paper-warm);
-  border: 1px dashed var(--line-soft);
+  background: #FFFFFF;
+  border: 1px dashed #E6DFCC;
   border-radius: 8px;
   padding: 40px 20px;
   text-align: center;
-  color: var(--ink-mute);
+  color: #5A5A5A;
   font-size: var(--t-md);
 }
 
