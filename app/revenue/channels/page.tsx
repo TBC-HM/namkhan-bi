@@ -42,7 +42,7 @@ import { fmtMoney } from '@/lib/format';
 import { supabase } from '@/lib/supabase';
 import { REVENUE_SUBPAGES } from '../_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
-import { getDmcContracts } from '@/lib/dmc';
+import { getDmcContracts, matchSourceToContract } from '@/lib/dmc';
 
 // PBS 2026-06-30: dropped force-dynamic. With it, every drawer ?drill= URL
 // change triggered a full server re-render → 5-10s blank state below the slider.
@@ -131,11 +131,6 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
   const rawTab = String(searchParams.tab ?? 'direct').toLowerCase();
   // USALI task #12 — channel-group filter for Sources · 2024/25/26 table
   const chFilter = String(searchParams.ch ?? 'all').toLowerCase();
-  const filteredSources = chFilter === 'all'
-    ? sourcesAllYearsRows
-    : chFilter === 'rest'
-    ? sourcesAllYearsRows.filter((r) => !['direct','ota','dmc'].includes(String(r.category).toLowerCase()))
-    : sourcesAllYearsRows.filter((r) => String(r.category).toLowerCase() === chFilter);
   const activeTab: Category = (TAB_DEFS.find((t) => t.key === rawTab)?.key) ?? 'direct';
 
   const cmpPeriod = period.cmp !== 'none' && period.compareFrom && period.compareTo
@@ -155,6 +150,38 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
     getDmcContracts().catch(() => []),
   ]);
   const channels = channelsRaw;
+
+  // PBS 2026-06-30: append DMC partners that have NO PMS bookings to the
+  // Sources · 2024/25/26 table so every contract is clickable from the
+  // master channels table (not just sources with revenue history).
+  if (dmcContracts.length > 0) {
+    const matchedContractIds = new Set<string>();
+    for (const r of sourcesAllYearsRows) {
+      const m = matchSourceToContract(r.source, dmcContracts);
+      if (m.contract_id) matchedContractIds.add(m.contract_id);
+    }
+    for (const c of dmcContracts) {
+      if (matchedContractIds.has(c.contract_id)) continue;
+      sourcesAllYearsRows.push({
+        category: 'dmc',
+        source: c.partner_short_name,
+        res_24: 0, res_25: 0, res_26: 0,
+        rev_24: null, rev_25: null, rev_26: null,
+        adr_24: null, adr_25: null, adr_26: null,
+        rn_26: 0,
+        avg_window_days: null,
+        avg_los: null,
+        sdly_dev_pct: null,
+      });
+    }
+  }
+
+  // PBS 2026-06-30: filteredSources computed AFTER DMC contracts are merged.
+  const filteredSources = chFilter === 'all'
+    ? sourcesAllYearsRows
+    : chFilter === 'rest'
+    ? sourcesAllYearsRows.filter((r) => !['direct','ota','dmc'].includes(String(r.category).toLowerCase()))
+    : sourcesAllYearsRows.filter((r) => String(r.category).toLowerCase() === chFilter);
 
   // PBS 2026-05-31 #55: trend category — if ?cat= is set, read per-category view (v_channel_trend_by_category_monthly); else aggregate (v_channels_all_time_trend)
   const trendCatRaw = String(searchParams.cat ?? 'all').toLowerCase();
@@ -685,7 +712,28 @@ async function CategoryBlock({
             ]}
             height={180} empty={{ title: 'No group bookings on file' }} />
         </Container>
-        <Container title="DMC Performance" subtitle="12 months · active contracts">
+        <Container
+          title="DMC Performance"
+          subtitle="12 months · active contracts"
+          action={
+            <Link
+              href="/sales/b2b"
+              style={{
+                padding: '5px 12px',
+                fontSize: 11,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                fontWeight: 600,
+                background: 'var(--primary, #1F3A2E)',
+                color: '#FFFFFF',
+                borderRadius: 4,
+                textDecoration: 'none',
+              }}
+            >
+              B2B / DMC →
+            </Link>
+          }
+        >
           <Chart variant="table" data={dmcPerfInline} xKey="partner_short_name"
             series={[
               { key: 'country',           label: 'Ctry' },
