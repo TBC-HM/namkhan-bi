@@ -18,6 +18,8 @@ import {
 import BackButton from '@/components/nav/BackButton';
 import RoomTypeMixTable from './_components/RoomTypeMixTable';
 import DmcContractEditPanel from './_components/DmcContractEditPanel';
+import SourceBookingsTable, { type SourceBookingRow } from './_components/SourceBookingsTable';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { REVENUE_SUBPAGES } from '../../_subpages';
 import { resolvePeriod } from '@/lib/period';
 import {
@@ -78,8 +80,8 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
   const d90  = isoBack(90);
   const d365 = isoBack(365);
 
-  const [econ30, econ90, econ365, dailyRows, mixRows, pickupRows, dmcContracts] = isBookingCom
-    ? [[], [], [], [], [], [], [] as DmcContract[]] as const
+  const [econ30, econ90, econ365, dailyRows, mixRows, pickupRows, dmcContracts, bookingsRes] = isBookingCom
+    ? [[], [], [], [], [], [], [] as DmcContract[], { data: [] }] as const
     : await Promise.all([
         getChannelEconomicsForRange(d30,  today).catch(() => []),
         getChannelEconomicsForRange(d90,  today).catch(() => []),
@@ -88,7 +90,18 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
         getChannelRoomMixForRange(sourceName, period.from, period.to).catch(() => []),
         getChannelPickupForSource(sourceName, 28).catch(() => []),
         getDmcContracts().catch(() => [] as DmcContract[]),
+        // PBS 2026-06-30: per-source reservation list (gold view v_source_bookings).
+        // Newest booking first, capped at 500 to keep the table snappy.
+        getSupabaseAdmin()
+          .from('v_source_bookings')
+          .select('reservation_id, booking_id, booking_date, check_in_date, check_out_date, room_type_name, guest_name, los, adr, total_amount, currency, status, is_cancelled')
+          .eq('source_name', sourceName)
+          .order('booking_date', { ascending: false })
+          .limit(500)
+          .then((r) => ({ data: (r.data ?? []) as SourceBookingRow[] }))
+          .catch(() => ({ data: [] as SourceBookingRow[] })),
       ]);
+  const sourceBookings: SourceBookingRow[] = bookingsRes?.data ?? [];
 
   const m30  = econ30.find((r)  => r.source_name === sourceName);
   const m90  = econ90.find((r)  => r.source_name === sourceName);
@@ -345,10 +358,15 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
         </Container>
       )}
 
-      {/* (8) Decisions queue placeholder */}
-      <Container title="Decisions queued for this source" subtitle="Filtered by source_agent or scope_section · governance.decision_queue">
-        <Empty>No decisions queued. An agent watching {sourceName} will populate this when it detects an actionable play.</Empty>
-      </Container>
+      {/* (8) Full-width per-source booking list — newest first */}
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Container
+          title={`Bookings from ${sourceName} · ${sourceBookings.length}`}
+          subtitle="Newest first · Check-in · Room type · LOS · ADR · Invoice total · Cloudbeds reservation # — wired to v_source_bookings"
+        >
+          <SourceBookingsTable rows={sourceBookings} />
+        </Container>
+      </div>
     </DashboardPage>
   );
 }
