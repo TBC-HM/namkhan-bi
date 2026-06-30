@@ -50,6 +50,11 @@ export default function DmcContractEditPanel({ contract: c }: Props) {
     group_threshold:         c.group_threshold ?? '',
     extra_bed_usd:           c.extra_bed_usd ?? '',
     anti_publication_clause: c.anti_publication_clause ?? '',
+    bank_name:             c.bank_name ?? '',
+    bank_account_holder:   c.bank_account_holder ?? '',
+    bank_account_number:   c.bank_account_number ?? '',
+    bank_swift_bic:        c.bank_swift_bic ?? '',
+    bank_iban:             c.bank_iban ?? '',
   });
 
   const set = (k: keyof typeof form, v: string | boolean | number) =>
@@ -60,7 +65,7 @@ export default function DmcContractEditPanel({ contract: c }: Props) {
     // Build patch — only include fields the user can actually clear; coerce
     // blank strings on numeric/date fields to null so the RPC writes NULL.
     const patch: Record<string, unknown> = {};
-    const text = ['partner_short_name','partner_legal_name','partner_type','country','country_flag','vat_number','address','contact_name','contact_role','contact_email','contact_phone','pricing_model','anti_publication_clause'] as const;
+    const text = ['partner_short_name','partner_legal_name','partner_type','country','country_flag','vat_number','address','contact_name','contact_role','contact_email','contact_phone','pricing_model','anti_publication_clause','bank_name','bank_account_holder','bank_account_number','bank_swift_bic','bank_iban'] as const;
     const dates = ['effective_date','expiry_date'] as const;
     const nums  = ['commission_pct','group_surcharge_pct','extra_bed_usd'] as const;
     const ints  = ['group_threshold'] as const;
@@ -231,11 +236,13 @@ export default function DmcContractEditPanel({ contract: c }: Props) {
               </div>
             </div>
             <div style={{ ...cellStyle, display: 'flex', flexDirection: 'column' }}>
-              <div style={labelStyle}>Anti-publication clause</div>
+              <div style={labelStyle}>Bank & account info</div>
               <div style={{ ...valStyle, fontSize: 'var(--t-sm)' }}>
-                {c.anti_publication_clause
-                  ? <><strong style={{ color: 'var(--moss-glow)' }}>✓ Present</strong> — {c.anti_publication_clause.slice(0, 180)}{c.anti_publication_clause.length > 180 ? '…' : ''}</>
-                  : <span style={{ color: 'var(--ink-faint)' }}>not captured</span>}
+                {c.bank_name ? <><strong>{c.bank_name}</strong><br /></> : <><span style={{ color: 'var(--ink-faint)' }}>bank not set</span><br /></>}
+                {c.bank_account_holder ? <>{c.bank_account_holder}<br /></> : null}
+                {c.bank_account_number ? <>Acct: <code style={{ fontFamily: 'var(--mono)' }}>{c.bank_account_number}</code><br /></> : null}
+                {c.bank_iban ? <>IBAN: <code style={{ fontFamily: 'var(--mono)' }}>{c.bank_iban}</code><br /></> : null}
+                {c.bank_swift_bic ? <>SWIFT/BIC: <code style={{ fontFamily: 'var(--mono)' }}>{c.bank_swift_bic}</code></> : null}
               </div>
             </div>
             <div style={{ ...cellStyle, display: 'flex', flexDirection: 'column' }}>
@@ -344,6 +351,28 @@ export default function DmcContractEditPanel({ contract: c }: Props) {
             </Field>
           </div>
 
+          <h4 style={sectionHeaderStyle}>Bank & account info</h4>
+          <div style={twoCol}>
+            <Field label="Bank name">
+              <input value={form.bank_name} onChange={(e) => set('bank_name', e.target.value)} style={inputStyle} />
+            </Field>
+            <Field label="Account holder">
+              <input value={form.bank_account_holder} onChange={(e) => set('bank_account_holder', e.target.value)} style={inputStyle} />
+            </Field>
+          </div>
+          <div style={threeCol}>
+            <Field label="Account number">
+              <input value={form.bank_account_number} onChange={(e) => set('bank_account_number', e.target.value)} style={inputStyle} />
+            </Field>
+            <Field label="IBAN">
+              <input value={form.bank_iban} onChange={(e) => set('bank_iban', e.target.value)} style={inputStyle} />
+            </Field>
+            <Field label="SWIFT / BIC">
+              <input value={form.bank_swift_bic} onChange={(e) => set('bank_swift_bic', e.target.value)} style={inputStyle} />
+            </Field>
+          </div>
+
+          <h4 style={sectionHeaderStyle}>Anti-publication (legacy)</h4>
           <Field label="Anti-publication clause">
             <textarea value={form.anti_publication_clause} onChange={(e) => set('anti_publication_clause', e.target.value)} rows={3} style={{ ...inputStyle, fontFamily: 'inherit' }} />
           </Field>
