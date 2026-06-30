@@ -74,17 +74,19 @@ export default function ChannelDrillDrawer({ rows, currencyCode, basePath, dmcCo
     router.push(qs ? `${pathname}?${qs}` : pathname);  // URL/state catch-up
   }, [router, pathname, sp]);
 
-  if (!drill || dismissed) return null;
-  const fullPageHref = `${basePath}/${encodeURIComponent(drill)}`;
-  const isBdc = /Booking\.com/i.test(drill);
-
-  // DMC contract match (best-effort fuzzy via lib/dmc helper)
+  // PBS 2026-06-30 FIX: ALL hooks must run before any early return. Moved
+  // matched useMemo above the !drill||dismissed gate. (Previous order caused
+  // "rendered fewer hooks than expected" — the client-side crash.)
   const matched = useMemo(() => {
     if (!drill || dmcContracts.length === 0) return null;
     const m = matchSourceToContract(drill, dmcContracts);
     if (!m.contract_id) return null;
     return dmcContracts.find((c) => c.contract_id === m.contract_id) ?? null;
   }, [drill, dmcContracts]);
+
+  if (!drill || dismissed) return null;
+  const fullPageHref = `${basePath}/${encodeURIComponent(drill)}`;
+  const isBdc = /Booking\.com/i.test(drill);
 
   const tiles: KpiTileProps[] = active
     ? [
