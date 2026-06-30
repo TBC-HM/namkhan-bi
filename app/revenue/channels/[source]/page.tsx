@@ -231,13 +231,23 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
         </div>
       }
     >
-      {/* (1) Explanatory pane at the TOP when there are no bookings even in L365 */}
+      {/* (1) Explanatory pane at the TOP when there are no bookings even in L365.
+              PBS 2026-06-30: explicit paper-white + hairline so it stays readable
+              under the Namkhan default-dark token ladder (var(--paper-warm) is
+              #15110c in :root and would render as a black box). */}
       {!hasAnyBookings && (
-        <div style={{ gridColumn: '1 / -1', padding: '12px 16px', background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 6, marginBottom: 6 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', marginBottom: 4 }}>
+        <div style={{
+          gridColumn: '1 / -1',
+          padding: '12px 16px',
+          background: '#FFFFFF',
+          border: '1px solid #E6DFCC',
+          borderRadius: 6,
+          marginBottom: 6,
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#1B1B1B', marginBottom: 4 }}>
             No bookings on file for {sourceName} ({cat})
           </div>
-          <div style={{ fontSize: 12, color: 'var(--ink-soft)', lineHeight: 1.5 }}>
+          <div style={{ fontSize: 12, color: '#5A5A5A', lineHeight: 1.5 }}>
             This source is tracked but has not produced bookings in PMS history. Possible reasons: (a) the partnership is new, (b) the partner books under a different source name in Cloudbeds, or (c) the relationship is dormant.{dmcContract ? ' Contract terms below.' : ''}
           </div>
         </div>
