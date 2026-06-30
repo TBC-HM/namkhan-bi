@@ -44,8 +44,11 @@ import { REVENUE_SUBPAGES } from '../_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { getDmcContracts } from '@/lib/dmc';
 
+// PBS 2026-06-30: dropped force-dynamic. With it, every drawer ?drill= URL
+// change triggered a full server re-render → 5-10s blank state below the slider.
+// revalidate=60 keeps freshness; the drawer state (drill) is now just a URL
+// param the client reads, no re-fetch.
 export const revalidate = 60;
-export const dynamic = 'force-dynamic';
 
 const PROPERTY_ID_NAMKHAN = 260955;
 
