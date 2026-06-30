@@ -1,10 +1,13 @@
 // app/revenue/channels/[source]/page.tsx
-// Per-source (OTA / Direct / Wholesale) detail landing page.
+// Per-source (OTA / Direct / Wholesale / DMC) detail landing page.
 // Source slug = encodeURIComponent(source_name).
 //
+// PBS 2026-06-29 merge: absorbs the old /sales/b2b/partner/[id] view.
+// When the source matches a governance.dmc_contracts row (fuzzy matcher),
+// the full commercial panel (status · pricing · clauses · contact · renewal)
+// renders inline at the top. /sales/b2b/partner/[id] now redirects here.
+//
 // All numbers live from Supabase. No hardcoded narrative.
-// Empty placeholder cards left for: BDC search impressions, OTA ranking,
-// content score, photo audit — PBS will populate from Booking.com download.
 
 import Link from 'next/link';
 import { DashboardPage, Container, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
@@ -17,6 +20,7 @@ import {
   getChannelRoomMixForRange,
   getChannelPickupForSource,
 } from '@/lib/data-channels';
+import { getDmcContracts, matchSourceToContract, type DmcContract } from '@/lib/dmc';
 import { fmtMoney } from '@/lib/format';
 import BdcPanels from '@/components/channels/BdcPanels';
 import BdcExtraPanels from '@/components/channels/BdcExtraPanels';
@@ -27,11 +31,9 @@ import BdcHeroStrip from '@/components/channels/BdcHeroStrip';
 import BdcKpiStrip from '@/components/channels/BdcKpiStrip';
 import BdcProfileTab from '@/components/channels/BdcProfileTab';
 import ChannelContactCard from '@/components/channels/ChannelContactCard';
-import { MaybeOtaBadge } from '@/components/ota/OtaBadge';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-// 2026-05-06 cache-bust marker after RLS fix
 
 interface Props {
   params: { source: string };
@@ -42,10 +44,11 @@ const OTA_RX = /booking\.com|expedia|agoda|airbnb|ctrip|trip\.com|hotels\.com|tr
 const DIRECT_RX = /direct|website|booking engine|email|walk[\- ]?in/i;
 const WHOLESALE_RX = /hotelbeds|gta|tourico|wholesale|bonotel|miki|reseller|khiri|trails of/i;
 
-function categorize(name: string): 'OTA' | 'Direct' | 'Wholesale' | 'Other' {
+function categorize(name: string, isDmc: boolean): 'OTA' | 'Direct' | 'Wholesale' | 'DMC' | 'Other' {
   if (OTA_RX.test(name)) return 'OTA';
   if (DIRECT_RX.test(name)) return 'Direct';
   if (WHOLESALE_RX.test(name)) return 'Wholesale';
+  if (isDmc) return 'DMC';
   return 'Other';
 }
 
@@ -57,18 +60,16 @@ function shortDay(iso: string): string {
 export default async function ChannelDetailPage({ params, searchParams }: Props) {
   const sourceName = decodeURIComponent(params.source);
   const isBookingCom = /Booking\.com/i.test(sourceName);
-  // PBS 2026-06-29: default to last-12-months. Covers every active source's bookings
-  // without the heavy all-time scan (which made clicks "take forever" on cold caches).
-  // Zero-history sources fall through to the profile fallback. User can override via ?win=
+  // PBS 2026-06-29: default last-12-months. Covers every active source's bookings
+  // without the heavy all-time scan. User can override via ?win=
   const sp = (searchParams?.win) ? searchParams : { ...searchParams, win: 'l12m' };
   const period = resolvePeriod(sp);
   const cmpFrom = period.compareFrom;
   const cmpTo = period.compareTo;
 
-  // For Booking.com we don't need the period-scoped channel-economics panels
-  // since the BDC block has its own 12-month data. Skip the heavy queries.
-  const [allRows, allCmpRows, dailyRows, mixRows, pickupRows] = isBookingCom
-    ? [[], [], [], [], []] as const
+  // For Booking.com the BDC block has its own 12-month data — skip heavy queries.
+  const [allRows, allCmpRows, dailyRows, mixRows, pickupRows, dmcContracts] = isBookingCom
+    ? [[], [], [], [], [], [] as DmcContract[]] as const
     : await Promise.all([
         getChannelEconomicsForRange(period.from, period.to).catch(() => []),
         cmpFrom && cmpTo
@@ -77,23 +78,30 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
         getChannelDailyForRange(sourceName, period.from, period.to).catch(() => []),
         getChannelRoomMixForRange(sourceName, period.from, period.to).catch(() => []),
         getChannelPickupForSource(sourceName, 28).catch(() => []),
+        getDmcContracts().catch(() => [] as DmcContract[]),
       ]);
 
   const meta = allRows.find((r) => r.source_name === sourceName);
   const cmpMeta = allCmpRows.find((r) => r.source_name === sourceName);
-  const cat = categorize(sourceName);
-  // PBS 2026-06-29: l12m default covers active sources without the perf hit of an
-  // all-time widen. Aliases for downstream code (was effectiveDaily/Mix previously).
+
+  // Fuzzy-match to a DMC contract. When matched, the full commercial panel
+  // renders inline (absorbing the old /sales/b2b/partner/[id] view).
+  const dmcMatch = !isBookingCom
+    ? matchSourceToContract(sourceName, dmcContracts)
+    : { contract_id: null, partner_short_name: null };
+  const dmcContract: DmcContract | null = dmcMatch.contract_id
+    ? dmcContracts.find((c) => c.contract_id === dmcMatch.contract_id) ?? null
+    : null;
+
+  const cat = categorize(sourceName, !!dmcContract);
   const effectiveDaily = dailyRows;
   const effectiveMix   = mixRows;
   const widenedToAllTime = false;
 
-  // Booking.com — primitives shell (PBS #201). 4 tabs collapsed to 3: Now / Profile / History.
-  // History merges Trends + Signals (both time-axis agent views).
+  // Booking.com — primitives shell (PBS #201). 3 tabs: Now / Profile / History.
   if (isBookingCom) {
     const bdcTab = (() => {
       const raw = String(searchParams.bdc_tab ?? 'now').toLowerCase();
-      // Backwards-compat: old "trend" + "signals" URLs both land on "history".
       if (raw === 'trend' || raw === 'signals') return 'history';
       if (raw === 'now' || raw === 'profile' || raw === 'history') return raw;
       return 'now';
@@ -119,8 +127,6 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
           </div>
         }
       >
-
-        {/* Sub-tab strip — 3 tabs now */}
         <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 0, borderBottom: '1px solid var(--hairline, #E6DFCC)', marginBottom: 8 }}>
           {[
             { key: 'now',     label: 'Now',     sub: 'Live snapshot · actions · signals' },
@@ -183,6 +189,7 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
     );
   }
 
+  // No PMS bookings on file: still show contact card + DMC panel (if any) + helper text.
   if (!meta) {
     const noMetaTabs: DashboardTab[] = REVENUE_SUBPAGES.map((s) => ({
       key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/channels'),
@@ -204,9 +211,11 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
           </div>
         }
       >
-        {/* PBS 2026-06-29: every source has a landing, even with zero bookings.
-            Show the channel contact + linked DMC contract + category context so
-            the user knows the source exists and is being tracked. */}
+        {dmcContract && (
+          <div style={{ gridColumn: '1 / -1' }}>
+            <DmcContractPanel c={dmcContract} />
+          </div>
+        )}
         <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 14, alignItems: 'flex-start', marginTop: 12 }}>
           <ChannelContactCard sourceName={sourceName} />
           <div style={{
@@ -217,9 +226,9 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
               No bookings on file
             </div>
             <div style={{ fontSize: 12, color: 'var(--ink-mute)', lineHeight: 1.5 }}>
-              {sourceName} is tracked as a <strong>{cat}</strong> channel but has not produced any bookings in your PMS history. This could mean: (a) the partnership is new, (b) the partner books under a different source name in Cloudbeds, or (c) the relationship is dormant.
-              {cat === 'DMC' && (
-                <> Check the contract details under <Link href="/sales/b2b" style={{ color: 'var(--brass)' }}>B2B / DMC</Link> for commercial terms.</>
+              {sourceName} is tracked as a <strong>{cat}</strong> channel but has not produced any bookings in PMS history. This could mean: (a) the partnership is new, (b) the partner books under a different source name in Cloudbeds, or (c) the relationship is dormant.
+              {dmcContract && (
+                <> Contract terms shown above.</>
               )}
             </div>
           </div>
@@ -233,15 +242,6 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
   const pickupMax = Math.max(1, ...pickupRows.map((d) => d.bookings));
   let totalMixRev = 0;
   for (const r of effectiveMix) totalMixRev += r.gross_revenue;
-
-  // Delta helper using cmp data
-  function delta(now: number, prior: number, suffix = ''): { text: string; tone: 'pos' | 'neg' | 'flat' } {
-    if (!cmpFrom || prior === 0) return { text: suffix || '—', tone: 'flat' };
-    const pct = ((now - prior) / prior) * 100;
-    const arrow = pct > 0.5 ? '▲' : pct < -0.5 ? '▼' : '·';
-    const tone = Math.abs(pct) < 0.5 ? 'flat' : pct > 0 ? 'pos' : 'neg';
-    return { text: `${arrow} ${Math.abs(pct).toFixed(0)}% ${period.cmpLabel.replace('vs ', '')}`, tone };
-  }
 
   const mainTabs: DashboardTab[] = REVENUE_SUBPAGES.map((s) => ({
     key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/channels'),
@@ -265,8 +265,15 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
       }
     >
 
+      {/* DMC contract panel — only when the source maps to a governance.dmc_contracts row */}
+      {dmcContract && (
+        <div style={{ gridColumn: '1 / -1' }}>
+          <DmcContractPanel c={dmcContract} />
+        </div>
+      )}
+
       {/* HERO KPI strip — 8 tiles on v6/v7 KpiTile primitive */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10, marginTop: 12, marginBottom: 14 }}>
+      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10, marginTop: 12, marginBottom: 14 }}>
         {([
           { label: 'Bookings',     value: meta.bookings,                                                       size: 'sm', footnote: `${meta.canceled} cancelled` },
           { label: 'Gross revenue', value: Math.round(Number(meta.gross_revenue)),  currency: 'USD',           size: 'sm', footnote: `${meta.roomnights} room nights` },
@@ -279,8 +286,8 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
         ] as KpiTileProps[]).map((t, i) => <KpiTile key={i} {...t} />)}
       </div>
 
-      {/* Daily revenue trend — auto-widens to all-time when the active window is empty */}
-      <Container title={`Daily revenue · ${widenedToAllTime ? 'all time' : period.label}`} subtitle={`${effectiveDaily.length} active dates · max $${dailyMaxRev.toFixed(0)}${widenedToAllTime ? ' · widened to all-time (no bookings in active window)' : ''}`}>
+      {/* Daily revenue trend */}
+      <Container title={`Daily revenue · ${period.label}`} subtitle={`${effectiveDaily.length} active dates · max $${dailyMaxRev.toFixed(0)}`}>
         {effectiveDaily.length === 0 ? (
           <Empty>No bookings from this source on these dates.</Empty>
         ) : (
@@ -320,7 +327,7 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
       </Container>
 
       {/* Room-type mix */}
-      <Container title={`Room-type mix · ${widenedToAllTime ? 'all time' : period.label}`} subtitle={`${effectiveMix.length} room types · total $${totalMixRev.toFixed(0)}`}>
+      <Container title={`Room-type mix · ${period.label}`} subtitle={`${effectiveMix.length} room types · total $${totalMixRev.toFixed(0)}`}>
         {effectiveMix.length === 0 ? (
           <Empty>No room-type mix to report.</Empty>
         ) : (
@@ -351,11 +358,16 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
         )}
       </Container>
 
-      {/* Other OTAs — placeholders until per-OTA exports are wired */}
+      {/* Channel contact card lives at the right side under the main grid */}
+      <Container title="Channel contact" subtitle="Edit at /settings/channel-contacts">
+        <ChannelContactCard sourceName={sourceName} />
+      </Container>
+
+      {/* Other OTAs — placeholders */}
       {cat === 'OTA' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
+        <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
           <Empty title="Search impressions / clicks / ranking">
-            Per-OTA partner API or extranet export needed. Once loaded into a `revenue.{`{ota}`}_*` table this card auto-populates (Booking.com is wired — see above).
+            Per-OTA partner API or extranet export needed. Once loaded into a `revenue.{`{ota}`}_*` table this card auto-populates (Booking.com is wired — see Booking.com page).
           </Empty>
           <Empty title="Content score · photos · description">
             OTA scorecard import pending for {sourceName}.
@@ -369,7 +381,7 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
         </div>
       )}
 
-      {/* Source-anchored decisions queue (placeholder — no rows yet) */}
+      {/* Source-anchored decisions queue */}
       <Container title="Decisions queued for this source" subtitle="Filtered by source_agent or scope_section · governance.decision_queue">
         <Empty>No decisions queued. An agent watching {sourceName} will populate this when it detects an actionable play.</Empty>
       </Container>
@@ -377,21 +389,118 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
   );
 }
 
-// ─── Local UI atoms ─────────────────────────────────────────────────────────
+// ─── DMC contract panel (inline) ────────────────────────────────────────────
+// Absorbs the old /sales/b2b/partner/[id] view. Renders the full commercial
+// surface of a governance.dmc_contracts row.
 
-// PBS 2026-06-30: local Tile retired — using KpiTile primitive everywhere now.
+function DmcContractPanel({ c }: { c: DmcContract }) {
+  const statusBg = c.computed_status === 'active' ? 'var(--st-good-bg)' : c.computed_status === 'expiring' ? 'var(--st-warn-bg)' : 'var(--st-bad-bg)';
+  const statusBd = c.computed_status === 'active' ? 'var(--st-good-bd)' : c.computed_status === 'expiring' ? 'var(--st-warn-bd)' : 'var(--st-bad-bd)';
+  const statusFg = c.computed_status === 'active' ? 'var(--moss-glow)' : c.computed_status === 'expiring' ? 'var(--brass)' : 'var(--st-bad)';
+  const statusEmoji = c.computed_status === 'active' ? '🟢' : c.computed_status === 'expiring' ? '🟡' : c.computed_status === 'expired' ? '🔴' : '○';
 
-function Section({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
+  const daysLeft = c.days_to_expiry;
+  const renewalTone = daysLeft != null && daysLeft <= 0
+    ? 'var(--st-bad)'
+    : daysLeft != null && daysLeft < 90
+      ? 'var(--brass)'
+      : 'var(--ink-soft)';
+
   return (
-    <div style={{ background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, padding: '14px 16px', marginBottom: 14 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
-        <h2 style={{ margin: 0, fontFamily: 'var(--serif)', fontWeight: 500, fontSize: 'var(--t-xl)' }}>{title}</h2>
-        {sub && <span style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-mute)' }}>{sub}</span>}
+    <Container
+      title={`DMC contract · ${c.partner_short_name}`}
+      subtitle={`Commercial terms from governance.dmc_contracts · ${c.partner_type} · ${c.country_flag ?? ''} ${c.country ?? '—'}`}
+    >
+      {/* Status strip */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 12 }}>
+        <span style={{ background: statusBg, border: `1px solid ${statusBd}`, color: statusFg, padding: '3px 10px', borderRadius: 12, fontSize: 'var(--t-sm)', fontWeight: 600 }}>
+          {statusEmoji} {c.computed_status.charAt(0).toUpperCase() + c.computed_status.slice(1)}
+        </span>
+        <span style={{ fontSize: 'var(--t-base)', color: 'var(--ink-mute)' }}>
+          LPA {c.effective_date?.slice(0, 4) ?? '—'}–{c.expiry_date?.slice(0, 4) ?? '—'}
+          {c.expiry_date ? ` · expires ${c.expiry_date}` : ''}
+          {daysLeft != null ? ` (${daysLeft > 0 ? `${daysLeft} days` : daysLeft === 0 ? 'today' : `${Math.abs(daysLeft)}d ago`})` : ''}
+        </span>
+        <span style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-mute)' }}>
+          Auto-renew {c.auto_renew ? <strong style={{ color: 'var(--moss-glow)' }}>YES</strong> : <strong style={{ color: 'var(--st-bad)' }}>NO</strong>}
+        </span>
       </div>
-      {children}
-    </div>
+
+      {/* 3-column commercial grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
+        {/* Commercial */}
+        <div style={{ background: 'var(--paper)', border: '1px solid var(--paper-deep)', borderRadius: 6, padding: '12px 14px' }}>
+          <div style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Pricing posture</div>
+          <div style={{ fontSize: 'var(--t-base)', color: 'var(--ink-soft)', lineHeight: 1.6 }}>
+            <strong>{c.pricing_model}</strong>
+            {(c as { commission_pct?: number | null }).commission_pct != null ? <> · {(c as { commission_pct?: number | null }).commission_pct}% commission</> : null}
+            {c.group_surcharge_pct != null ? <><br />group surcharge +{c.group_surcharge_pct}%</> : null}
+            {(c as { group_threshold?: number | null }).group_threshold != null ? <> ({(c as { group_threshold?: number | null }).group_threshold}+ keys)</> : null}
+            {c.extra_bed_usd != null ? <><br />extra bed ${c.extra_bed_usd}</> : null}
+          </div>
+        </div>
+
+        {/* Contact */}
+        <div style={{ background: 'var(--paper)', border: '1px solid var(--paper-deep)', borderRadius: 6, padding: '12px 14px' }}>
+          <div style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Contact</div>
+          <div style={{ fontSize: 'var(--t-base)', color: 'var(--ink-soft)', lineHeight: 1.6 }}>
+            {c.contact_name ?? <span style={{ color: 'var(--ink-faint)' }}>—</span>}
+            {c.contact_role ? <> · {c.contact_role}</> : null}
+            <br />
+            {c.contact_email ? <a href={`mailto:${c.contact_email}`} style={{ color: 'var(--brass)', textDecoration: 'none' }}>✉ {c.contact_email}</a> : <span style={{ color: 'var(--ink-faint)' }}>✉ —</span>}
+            <br />
+            {c.contact_phone ? <a href={`tel:${c.contact_phone}`} style={{ color: 'var(--brass)', textDecoration: 'none' }}>📞 {c.contact_phone}</a> : <span style={{ color: 'var(--ink-faint)' }}>📞 —</span>}
+          </div>
+        </div>
+
+        {/* Renewal countdown */}
+        <div style={{ background: 'var(--paper)', border: '1px solid var(--paper-deep)', borderRadius: 6, padding: '12px 14px' }}>
+          <div style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Renewal countdown</div>
+          <div style={{ fontSize: 'var(--t-base)', color: 'var(--ink-soft)', lineHeight: 1.6 }}>
+            {daysLeft != null && daysLeft > 0 ? (
+              <>
+                <strong style={{ color: renewalTone, fontSize: 'var(--t-lg)' }}>{daysLeft} days</strong>
+                <br />
+                <span style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-mute)' }}>auto-alerts at 90/60/30/14/7/1 days</span>
+              </>
+            ) : daysLeft != null && daysLeft <= 0 ? (
+              <strong style={{ color: 'var(--st-bad)' }}>EXPIRED — needs renewal</strong>
+            ) : (
+              <span style={{ color: 'var(--ink-faint)' }}>no expiry on file</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Identity / address row */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+        <div style={{ background: 'var(--paper)', border: '1px solid var(--paper-deep)', borderRadius: 6, padding: '12px 14px' }}>
+          <div style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Legal identity</div>
+          <div style={{ fontSize: 'var(--t-base)', color: 'var(--ink-soft)', lineHeight: 1.6 }}>
+            VAT: <code style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-sm)' }}>{c.vat_number ?? '—'}</code>
+            <br />
+            Address: {c.address ?? <span style={{ color: 'var(--ink-faint)' }}>—</span>}
+          </div>
+        </div>
+        <div style={{ background: 'var(--paper)', border: '1px solid var(--paper-deep)', borderRadius: 6, padding: '12px 14px' }}>
+          <div style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Anti-publication clause</div>
+          <div style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-soft)', lineHeight: 1.6 }}>
+            {c.anti_publication_clause
+              ? <><strong style={{ color: 'var(--moss-glow)' }}>✓ Present</strong> — {c.anti_publication_clause.slice(0, 180)}{c.anti_publication_clause.length > 180 ? '…' : ''}</>
+              : <span style={{ color: 'var(--ink-faint)' }}>not captured</span>}
+          </div>
+        </div>
+      </div>
+
+      {/* Doc link */}
+      <div style={{ marginTop: 12, fontSize: 'var(--t-sm)', color: 'var(--ink-mute)' }}>
+        Contract PDF in <Link href="/legal/docs" style={{ color: 'var(--brass)' }}>Legal · Documents</Link> (DMC contracts auto-sync to the central registry).
+      </div>
+    </Container>
   );
 }
+
+// ─── Local UI atoms ─────────────────────────────────────────────────────────
 
 function Empty({ title, children }: { title?: string; children: React.ReactNode }) {
   return (
