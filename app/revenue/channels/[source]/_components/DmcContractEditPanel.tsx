@@ -163,9 +163,11 @@ export default function DmcContractEditPanel({ contract: c }: Props) {
 
       {!editing ? (
         // ─── READ MODE ─────────────────────────────────────────────────
+        // PBS 2026-06-30: single 3×2 grid with grid-auto-rows: 1fr so every
+        // cell renders at identical size.
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
-            <div style={cellStyle}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gridAutoRows: '1fr', gap: 12 }}>
+            <div style={{ ...cellStyle, display: 'flex', flexDirection: 'column' }}>
               <div style={labelStyle}>Pricing posture</div>
               <div style={valStyle}>
                 <strong>{c.pricing_model}</strong>
@@ -175,7 +177,7 @@ export default function DmcContractEditPanel({ contract: c }: Props) {
                 {c.extra_bed_usd != null ? <><br />extra bed ${c.extra_bed_usd}</> : null}
               </div>
             </div>
-            <div style={cellStyle}>
+            <div style={{ ...cellStyle, display: 'flex', flexDirection: 'column' }}>
               <div style={labelStyle}>Contact</div>
               <div style={valStyle}>
                 {c.contact_name ?? <span style={{ color: 'var(--ink-faint)' }}>—</span>}
@@ -186,7 +188,7 @@ export default function DmcContractEditPanel({ contract: c }: Props) {
                 {c.contact_phone ? <a href={`tel:${c.contact_phone}`} style={{ color: 'var(--ink)', textDecoration: 'underline' }}>📞 {c.contact_phone}</a> : <span style={{ color: 'var(--ink-faint)' }}>📞 —</span>}
               </div>
             </div>
-            <div style={cellStyle}>
+            <div style={{ ...cellStyle, display: 'flex', flexDirection: 'column' }}>
               <div style={labelStyle}>Validity</div>
               <div style={valStyle}>
                 <span style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-soft)' }}>Signed</span>{' '}
@@ -222,8 +224,7 @@ export default function DmcContractEditPanel({ contract: c }: Props) {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
-            <div style={cellStyle}>
+            <div style={{ ...cellStyle, display: 'flex', flexDirection: 'column' }}>
               <div style={labelStyle}>Legal identity</div>
               <div style={valStyle}>
                 VAT: <code style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-sm)' }}>{c.vat_number ?? '—'}</code>
@@ -231,11 +232,25 @@ export default function DmcContractEditPanel({ contract: c }: Props) {
                 Address: {c.address ?? <span style={{ color: 'var(--ink-faint)' }}>—</span>}
               </div>
             </div>
-            <div style={cellStyle}>
+            <div style={{ ...cellStyle, display: 'flex', flexDirection: 'column' }}>
               <div style={labelStyle}>Anti-publication clause</div>
               <div style={{ ...valStyle, fontSize: 'var(--t-sm)' }}>
                 {c.anti_publication_clause
                   ? <><strong style={{ color: 'var(--moss-glow)' }}>✓ Present</strong> — {c.anti_publication_clause.slice(0, 180)}{c.anti_publication_clause.length > 180 ? '…' : ''}</>
+                  : <span style={{ color: 'var(--ink-faint)' }}>not captured</span>}
+              </div>
+            </div>
+            <div style={{ ...cellStyle, display: 'flex', flexDirection: 'column' }}>
+              <div style={labelStyle}>Termination & cancellation</div>
+              <div style={{ ...valStyle, fontSize: 'var(--t-sm)' }}>
+                <strong style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-soft)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Termination</strong>{' '}
+                {c.termination_clause
+                  ? <>{c.termination_clause.slice(0, 100)}{c.termination_clause.length > 100 ? '…' : ''}</>
+                  : <span style={{ color: 'var(--ink-faint)' }}>not captured</span>}
+                <br />
+                <strong style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-soft)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Cancellation</strong>{' '}
+                {c.cancellation_policy
+                  ? <>{c.cancellation_policy.slice(0, 100)}{c.cancellation_policy.length > 100 ? '…' : ''}</>
                   : <span style={{ color: 'var(--ink-faint)' }}>not captured</span>}
               </div>
             </div>
