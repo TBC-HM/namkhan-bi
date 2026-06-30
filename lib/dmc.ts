@@ -42,6 +42,8 @@ export interface DmcContract {
   group_threshold: number | null;
   extra_bed_usd: number | null;
   anti_publication_clause: string | null;
+  termination_clause: string | null;
+  cancellation_policy: string | null;
   notes: string | null;
   pdf_storage_path: string | null;
   commission_pct?: number | null;
