@@ -116,6 +116,10 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
       ]);
   const sourceBookings: SourceBookingRow[] = bookingsRes?.data ?? [];
   const qbTransactions: QbTxnRow[] = qbRes?.data ?? [];
+  // PBS 2026-06-30: surface the most recent booking date in the Bookings tile.
+  // sourceBookings is already sorted DESC by booking_date in the SQL, so [0] is
+  // the newest. Slice off the time portion (we only care about the day).
+  const lastBookingDate = sourceBookings[0]?.booking_date?.slice(0, 10) ?? null;
 
   const m30  = econ30.find((r)  => r.source_name === sourceName);
   const m90  = econ90.find((r)  => r.source_name === sourceName);
@@ -301,7 +305,7 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
               read regardless of recency. */}
       <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10, marginTop: 12, marginBottom: 14 }}>
         {([
-          { label: 'Bookings',      value: v(mAll, 'bookings'),                                                size: 'md', footnote: `${v(mAll, 'canceled')} cancelled · all-time`,
+          { label: 'Bookings',      value: v(mAll, 'bookings'),                                                size: 'md', footnote: `${v(mAll, 'canceled')} cancelled · last ${lastBookingDate ?? '—'}`,
             compare: trail3(v(m30, 'bookings'), v(m90, 'bookings'), v(m365, 'bookings')) },
           { label: 'Gross revenue', value: Math.round(v(mAll, 'gross_revenue')), currency: 'USD',              size: 'md', footnote: `${v(mAll, 'roomnights')} RN · all-time`,
             compare: trail3(Math.round(v(m30, 'gross_revenue')), Math.round(v(m90, 'gross_revenue')), Math.round(v(m365, 'gross_revenue')), 'currency') },
