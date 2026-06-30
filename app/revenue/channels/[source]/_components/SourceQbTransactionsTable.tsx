@@ -3,9 +3,13 @@
 // app/revenue/channels/[source]/_components/SourceQbTransactionsTable.tsx
 // Wired to public.v_source_qb_transactions (gl.transactions, filtered to party_name).
 // Newest first. Used on every channel landing page below the booking list.
+// PBS 2026-06-30: default to 10 rows · expand toggle reveals the full list.
 
+import { useState } from 'react';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import { fmtTableUsd } from '@/lib/format';
+
+const INITIAL_LIMIT = 10;
 
 export interface QbTxnRow {
   txn_id: number;
@@ -28,6 +32,10 @@ function shortDate(s: string | null): string {
 }
 
 export default function SourceQbTransactionsTable({ rows }: { rows: QbTxnRow[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? rows : rows.slice(0, INITIAL_LIMIT);
+  const hidden = rows.length - visible.length;
+
   if (rows.length === 0) {
     return (
       <div style={{
@@ -92,11 +100,37 @@ export default function SourceQbTransactionsTable({ rows }: { rows: QbTxnRow[] }
   ];
 
   return (
-    <DataTable<QbTxnRow>
-      columns={columns}
-      rows={rows}
-      rowKey={(r) => String(r.txn_id)}
-      defaultSort={{ key: 'txn_date', dir: 'desc' }}
-    />
+    <div>
+      <DataTable<QbTxnRow>
+        columns={columns}
+        rows={visible}
+        rowKey={(r) => String(r.txn_id)}
+        defaultSort={{ key: 'txn_date', dir: 'desc' }}
+      />
+      {rows.length > INITIAL_LIMIT && (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 0' }}>
+          <button
+            type="button"
+            onClick={() => setExpanded((e) => !e)}
+            style={{
+              padding: '6px 14px',
+              fontSize: 12,
+              fontWeight: 600,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              background: '#FFFFFF',
+              color: '#1B1B1B',
+              border: '1px solid #E6DFCC',
+              borderRadius: 4,
+              cursor: 'pointer',
+            }}
+          >
+            {expanded
+              ? `Show first ${INITIAL_LIMIT}`
+              : `Show all ${rows.length} (+${hidden} hidden)`}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
