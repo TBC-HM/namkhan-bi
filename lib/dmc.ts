@@ -47,6 +47,12 @@ export interface DmcContract {
   notes: string | null;
   pdf_storage_path: string | null;
   commission_pct?: number | null;
+  /* Bank & account info — added 2026-06-30 (governance.dmc_contracts). */
+  bank_name: string | null;
+  bank_account_holder: string | null;
+  bank_account_number: string | null;
+  bank_swift_bic: string | null;
+  bank_iban: string | null;
 }
 
 export async function getDmcContracts(): Promise<DmcContract[]> {
