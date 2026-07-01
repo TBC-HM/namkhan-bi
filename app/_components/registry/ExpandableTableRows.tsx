@@ -25,10 +25,10 @@ const thStyle: React.CSSProperties = {
   textTransform: 'uppercase',
   letterSpacing: '0.06em',
   fontSize: 10,
-  color: '#000',
+  color: '#1B1B1B',
   background: '#FFFFFF',
   fontWeight: 700,
-  borderBottom: '2px solid #000',
+  borderBottom: '1px solid #E6DFCC',
   whiteSpace: 'nowrap',
 };
 const tdStyle: React.CSSProperties = {
@@ -83,7 +83,7 @@ export default function ExpandableTableRows({ rows, cols, maxRows }: Props) {
           style={{
             marginTop: 6,
             background: 'transparent',
-            border: '1px solid #000',
+            border: '1px solid #E6DFCC',
             borderRadius: 4,
             padding: '4px 12px',
             fontSize: 11,
