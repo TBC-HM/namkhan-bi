@@ -9,11 +9,15 @@ interface Opt { label: string; value: string }
 interface Props {
   basePath: string;
   windowOptions: Opt[];
-  categoryOptions: Opt[];
   currentWindow: string;
-  currentCategory: string;
   defaultWindow: string;
-  defaultCategory: string;
+  // PBS 2026-07-01: Category selector deprecated — CategoryCompareGrid now
+  // shows all 3 categories simultaneously. Props remain optional so consumers
+  // that still pass them don't need to change; the select renders only when
+  // categoryOptions has entries.
+  categoryOptions?: Opt[];
+  currentCategory?: string;
+  defaultCategory?: string;
 }
 
 const labelStyle: React.CSSProperties = {
@@ -56,19 +60,21 @@ export default function ChannelControlsDropdown(p: Props) {
           ))}
         </select>
       </label>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={labelStyle}>Category</span>
-        <select
-          aria-label="Category"
-          style={selectStyle}
-          value={p.currentCategory}
-          onChange={(e) => navigate('tab', e.target.value, p.defaultCategory)}
-        >
-          {p.categoryOptions.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
-      </label>
+      {p.categoryOptions && p.categoryOptions.length > 0 && (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={labelStyle}>Category</span>
+          <select
+            aria-label="Category"
+            style={selectStyle}
+            value={p.currentCategory ?? ''}
+            onChange={(e) => navigate('tab', e.target.value, p.defaultCategory ?? '')}
+          >
+            {p.categoryOptions.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </label>
+      )}
     </div>
   );
 }
