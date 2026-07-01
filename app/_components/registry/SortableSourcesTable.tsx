@@ -119,7 +119,7 @@ export default function SortableSourcesTable({ rows, moneyCurrency, initialSort 
 
   return (
     <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+      <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
           <tr style={{ background: '#FFFFFF', borderBottom: '1px solid #E6DFCC', textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: 10, color: '#1B1B1B' }}>
             <HeaderCell k="source" label="Source" />
