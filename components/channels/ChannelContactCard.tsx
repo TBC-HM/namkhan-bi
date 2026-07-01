@@ -39,11 +39,11 @@ async function getContact(sourceName: string): Promise<ContactRow | null> {
 function Field({ label, value, href }: { label: string; value: string | null | undefined; href?: string }) {
   return (
     <div style={{ marginBottom: 10 }}>
-      <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: 'var(--ls-extra)', color: 'var(--brass)', marginBottom: 2 }}>
+      <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: 'var(--ls-extra)', color: '#1B1B1B', marginBottom: 2 }}>
         {label}
       </div>
-      <div style={{ fontSize: 'var(--t-sm)', color: value ? 'var(--ink)' : 'var(--ink-mute)', lineHeight: 1.35, wordBreak: 'break-word' }}>
-        {!value ? EMPTY : href ? <a href={href} style={{ color: 'var(--brass)', textDecoration: 'underline' }}>{value}</a> : value}
+      <div style={{ fontSize: 'var(--t-sm)', color: value ? '#1B1B1B' : '#8A8A8A', lineHeight: 1.35, wordBreak: 'break-word' }}>
+        {!value ? EMPTY : href ? <a href={href} style={{ color: '#1B1B1B', textDecoration: 'underline' }}>{value}</a> : value}
       </div>
     </div>
   );
@@ -70,29 +70,29 @@ export default async function ChannelContactCard({ sourceName }: { sourceName: s
 
   return (
     <div style={{
-      background: 'var(--paper-warm)',
-      border: '1px solid var(--paper-deep)',
+      background: '#FFFFFF',
+      border: '1px solid #E6DFCC',
       borderRadius: 8,
       padding: '14px 16px',
       position: 'sticky',
       top: 12,
     }}>
       <div style={{ marginBottom: 12 }}>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: 'var(--ls-extra)', color: 'var(--brass)' }}>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: 'var(--ls-extra)', color: '#1B1B1B' }}>
           Channel contact
         </div>
         <div style={{ fontFamily: 'var(--serif)', fontSize: 'var(--t-xl)', fontWeight: 500, color: 'var(--ink)', marginTop: 4 }}>
           {empty.source_name}
         </div>
         {empty.property_url && (
-          <a href={empty.property_url} target="_blank" rel="noopener noreferrer" style={{ display: 'block', fontSize: 'var(--t-xs)', color: 'var(--brass)', marginTop: 4, wordBreak: 'break-all' }}>
+          <a href={empty.property_url} target="_blank" rel="noopener noreferrer" style={{ display: 'block', fontSize: 'var(--t-xs)', color: '#1B1B1B', marginTop: 4, wordBreak: 'break-all' }}>
             {empty.property_url.replace(/^https?:\/\/(www\.)?/, '')}
           </a>
         )}
       </div>
 
-      <div style={{ borderTop: '1px solid var(--paper-deep)', paddingTop: 10, marginBottom: 4 }}>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: 'var(--ls-extra)', color: 'var(--ink-mute)', marginBottom: 8 }}>
+      <div style={{ borderTop: '1px solid #E6DFCC', paddingTop: 10, marginBottom: 4 }}>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: 'var(--ls-extra)', color: '#5A5A5A', marginBottom: 8 }}>
           Account
         </div>
         <Field label="Account ID" value={empty.account_id} />
@@ -100,8 +100,8 @@ export default async function ChannelContactCard({ sourceName }: { sourceName: s
         <Field label="Connectivity" value={empty.connectivity_provider} />
       </div>
 
-      <div style={{ borderTop: '1px solid var(--paper-deep)', paddingTop: 10, marginBottom: 4 }}>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: 'var(--ls-extra)', color: 'var(--ink-mute)', marginBottom: 8 }}>
+      <div style={{ borderTop: '1px solid #E6DFCC', paddingTop: 10, marginBottom: 4 }}>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: 'var(--ls-extra)', color: '#5A5A5A', marginBottom: 8 }}>
           Channel manager
         </div>
         <Field label="Name" value={empty.channel_manager_name ? `${empty.channel_manager_name}${empty.channel_manager_role ? ` · ${empty.channel_manager_role}` : ''}` : null} />
@@ -109,8 +109,8 @@ export default async function ChannelContactCard({ sourceName }: { sourceName: s
         <Field label="Phone" value={empty.channel_manager_phone} href={empty.channel_manager_phone ? `tel:${empty.channel_manager_phone}` : undefined} />
       </div>
 
-      <div style={{ borderTop: '1px solid var(--paper-deep)', paddingTop: 10, marginBottom: 4 }}>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: 'var(--ls-extra)', color: 'var(--ink-mute)', marginBottom: 8 }}>
+      <div style={{ borderTop: '1px solid #E6DFCC', paddingTop: 10, marginBottom: 4 }}>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: 'var(--ls-extra)', color: '#5A5A5A', marginBottom: 8 }}>
           Accounting
         </div>
         <Field label="Contact" value={empty.accounting_name} />
@@ -118,8 +118,8 @@ export default async function ChannelContactCard({ sourceName }: { sourceName: s
         <Field label="Phone" value={empty.accounting_phone} href={empty.accounting_phone ? `tel:${empty.accounting_phone}` : undefined} />
       </div>
 
-      <div style={{ borderTop: '1px solid var(--paper-deep)', paddingTop: 10, marginBottom: 4 }}>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: 'var(--ls-extra)', color: 'var(--ink-mute)', marginBottom: 8 }}>
+      <div style={{ borderTop: '1px solid #E6DFCC', paddingTop: 10, marginBottom: 4 }}>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: 'var(--ls-extra)', color: '#5A5A5A', marginBottom: 8 }}>
           Contract
         </div>
         <Field label="Start" value={empty.contract_start} />
@@ -127,12 +127,12 @@ export default async function ChannelContactCard({ sourceName }: { sourceName: s
       </div>
 
       {empty.notes && (
-        <div style={{ borderTop: '1px solid var(--paper-deep)', paddingTop: 10, fontSize: 'var(--t-xs)', color: 'var(--ink-mute)', lineHeight: 1.4 }}>
+        <div style={{ borderTop: '1px solid #E6DFCC', paddingTop: 10, fontSize: 'var(--t-xs)', color: '#5A5A5A', lineHeight: 1.4 }}>
           {empty.notes}
         </div>
       )}
 
-      <div style={{ marginTop: 12, paddingTop: 8, borderTop: '1px solid var(--paper-deep)', fontSize: '10px', color: 'var(--ink-mute)', fontFamily: 'var(--mono)' }}>
+      <div style={{ marginTop: 12, paddingTop: 8, borderTop: '1px solid #E6DFCC', fontSize: '10px', color: '#5A5A5A', fontFamily: 'var(--mono)' }}>
         Updated {updatedLabel} · edit via /settings/channel-contacts
       </div>
     </div>
