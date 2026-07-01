@@ -339,7 +339,14 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
         <div style={{ marginBottom: 12 }}>
           <ChannelControlsDropdown
             basePath={basePath}
-            windowOptions={[{ label: '7 days', value: '7d' }, { label: '30 days', value: '30d' }, { label: '90 days', value: '90d' }]}
+            windowOptions={[
+              { label: '7 days',     value: '7d'   },
+              { label: '30 days',    value: '30d'  },
+              { label: '90 days',    value: '90d'  },
+              { label: 'YTD',        value: 'ytd'  },
+              { label: 'Last 365',   value: 'l12m' },
+              { label: 'Last year',  value: 'ly'   },
+            ]}
             currentWindow={period.win}
             defaultWindow="30d"
           />
@@ -849,7 +856,7 @@ async function CategoryBlock({
     supabase.rpc('fn_source_top10_period', { p_property_id: propertyId, p_days: 30 }),
     supabase.from('v_group_bookings_12mo').select('*').eq('property_id', propertyId).order('gross_revenue', { ascending: false }).limit(8),
     supabase.from('v_dmc_performance').select('partner_short_name, country, production_status, res_12mo, rn_12mo, gross_12mo').eq('property_id', propertyId).order('gross_12mo', { ascending: false }).limit(8),
-    supabase.from('v_groups_since_2024').select('source_name, market_segment, month_label, nights, total_amount, group_signal').eq('property_id', propertyId),
+    supabase.from('v_groups_since_2024').select('source_name, market_segment, month_label, nights, total_amount, group_signal, check_in_date').eq('property_id', propertyId),
   ]);
   const groupBookingsInline = (groupRowsRes.data ?? []) as Array<Record<string, unknown>>;
   const dmcPerfInline = (dmcRowsRes.data ?? []) as Array<Record<string, unknown>>;
@@ -1005,8 +1012,15 @@ async function CategoryBlock({
           monthMap.set(m, row);
         }
         const monthRows = Array.from(monthMap.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([, v]) => v);
+        // PBS 2026-07-01: Group Performance now covers the last 12 months only
+        // (same window as DMC / OTA / Direct Performance containers). We filter
+        // groupsRows by check_in_date so the aggregation stays date-scoped.
+        const last12moCutoff = new Date();
+        last12moCutoff.setFullYear(last12moCutoff.getFullYear() - 1);
+        const last12moCutoffIso = last12moCutoff.toISOString().slice(0, 10);
+        const groupsRows12mo = groupsRows.filter((r) => String((r as unknown as { check_in_date?: string }).check_in_date ?? '') >= last12moCutoffIso);
         const origMap = new Map<string, { source: string; segment: string; res: number; nights: number; revenue: number; adr: number }>();
-        for (const r of groupsRows) {
+        for (const r of groupsRows12mo) {
           const key = `${r.source_name}|${r.market_segment}`;
           const slot = origMap.get(key) ?? { source: r.source_name, segment: r.market_segment, res: 0, nights: 0, revenue: 0, adr: 0 };
           slot.res += 1;
@@ -1034,7 +1048,7 @@ async function CategoryBlock({
                 ]}
                 height={180} empty={{ title: 'No groups data since 2024' }} />
             </Container>
-            <Container title="Group Performance" subtitle="since 2024 · top 10 by revenue">
+            <Container title="Group Performance" subtitle="12 months · top 10 by revenue">
               <Chart variant="table" data={originatorRows} xKey="source"
                 series={[
                   { key: 'segment',  label: 'Segment' },
