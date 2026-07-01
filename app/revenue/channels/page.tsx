@@ -636,7 +636,7 @@ function CategoryCompareGrid({
           Category compare · {period.label} · date basis: booking_date
         </div>
       </div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--sans)' }}>
+      <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--sans)' }}>
         <thead>
           <tr>
             <th style={{ ...headerCell, textAlign: 'left' }}>Category</th>
