@@ -480,7 +480,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
 
       {/* PBS #126 (2026-05-24): 9-piece split. PageRenderer in embedded mode renders the 9 registry
           children as direct siblings of the host DashboardPage — no nested DashboardPage, no outer wrap. */}
-      <PageRenderer pageSlug="channel" propertyId={pid} title="" subtitle="" embedded />
+      <PageRenderer pageSlug="channel" propertyId={pid} title="" subtitle="" embedded layout="graphs-first" />
 
       {/* PBS 2026-05-29 — Gross share by tier moved inline into CategoryBlock row 2 */}
 
