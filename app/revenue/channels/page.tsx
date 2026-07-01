@@ -988,20 +988,9 @@ async function CategoryBlock({
         </Container>
       </div>
 
-      {/* PBS 2026-07-01: row 2 slimmed to Group Bookings · Gross share by tier.
-          DMC Performance removed — duplicated by the top DMC/OTA/Direct strip. */}
-      <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
-        <Container title="Group Bookings" subtitle="12 months · top by gross revenue · date basis: booking_date">
-          <Chart variant="table" data={groupBookingsInline} xKey="source"
-            series={[
-              { key: 'channel_group',  label: 'Tier' },
-              { key: 'reservations',   label: 'Res' },
-              { key: 'room_nights',    label: 'RN' },
-              { key: 'gross_revenue',  label: 'Gross' },
-              { key: 'group_adr',      label: 'ADR' },
-            ]}
-            height={180} empty={{ title: 'No group bookings on file' }} />
-        </Container>
+      {/* PBS 2026-07-01 rev6: Group Bookings removed — duplicated by Group Performance.
+          Row 2 now shows Gross share by tier full-width. */}
+      <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(1, minmax(0, 1fr))', gap: 12 }}>
         <Container title="Gross share by tier" subtitle="12 months · % of total gross · date basis: booking_date">
           <Chart variant="bar" data={grossShareData} xKey="tier"
             series={[{ key: 'share_pct', label: 'Share of gross (%)', color: '#1F3A2E' }]}
@@ -1045,34 +1034,32 @@ async function CategoryBlock({
         }
         const originatorRows = Array.from(origMap.values()).map((r) => ({ ...r, revenue: Math.round(r.revenue), adr: r.nights > 0 ? Math.round(r.revenue / r.nights) : 0 })).sort((a, b) => b.revenue - a.revenue).slice(0, 10);
         return (
-          <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
-            <Container title="Groups · since 2024" subtitle={`${totalBkg} bookings · ${totalNights} nights · all-time since Jan 2024`}>
-              <div style={{ padding: 12, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
-                <KpiTile label="Bookings" value={totalBkg} size="sm" />
-                <KpiTile label="Revenue" value={Math.round(totalRev)} currency={moneyCurrency} size="sm" />
-                <KpiTile label="ADR" value={avgAdr} currency={moneyCurrency} size="sm" />
-                <KpiTile label="Avg group size" value={`${avgSize} RN`} size="sm" footnote="RN per booking" />
+          <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gridAutoRows: '1fr', gap: 12, alignItems: 'stretch' }}>
+            {/* PBS 2026-07-01 rev6: Groups · since 2024 KPI-tile card removed
+                — replaced by data on the Category Compare grid (Groups row). */}
+            <Container title="Groups revenue · by month" subtitle="since Jan 2024 · stacked by source classification · date basis: check_in_date">
+              <div style={{ minHeight: 300, display: 'flex', flexDirection: 'column', flex: 1 }}>
+                <Chart variant="stacked_bar" data={monthRows} xKey="month"
+                  series={[
+                    { key: 'rate_or_segment',  label: 'Rate plan / segment', color: '#1F3A2E' },
+                    { key: 'classified_source', label: 'Group source',         color: '#B8542A' },
+                    { key: 'source_named',     label: 'Other',                color: '#B8A878' },
+                  ]}
+                  height={260} empty={{ title: 'No groups data since 2024' }} />
               </div>
             </Container>
-            <Container title="Groups revenue · by month" subtitle="since 2024 · stacked by source classification">
-              <Chart variant="stacked_bar" data={monthRows} xKey="month"
-                series={[
-                  { key: 'rate_or_segment',  label: 'Rate plan / segment', color: '#1F3A2E' },
-                  { key: 'classified_source', label: 'Group source',         color: '#B8542A' },
-                  { key: 'source_named',     label: 'Other',                color: '#B8A878' },
-                ]}
-                height={180} empty={{ title: 'No groups data since 2024' }} />
-            </Container>
             <Container title="Group Performance" subtitle="12 months · top 10 by revenue · date basis: check_in_date">
-              <Chart variant="table" data={originatorRows} xKey="source"
-                series={[
-                  { key: 'segment',  label: 'Segment' },
-                  { key: 'res',      label: 'Res' },
-                  { key: 'nights',   label: 'RN' },
-                  { key: 'revenue',  label: 'Rev' },
-                  { key: 'adr',      label: 'ADR' },
-                ]}
-                height={180} empty={{ title: 'No group originators' }} />
+              <div style={{ minHeight: 300, display: 'flex', flexDirection: 'column', flex: 1 }}>
+                <Chart variant="table" data={originatorRows} xKey="source"
+                  series={[
+                    { key: 'segment',  label: 'Segment' },
+                    { key: 'res',      label: 'Res' },
+                    { key: 'nights',   label: 'RN' },
+                    { key: 'revenue',  label: 'Rev' },
+                    { key: 'adr',      label: 'ADR' },
+                  ]}
+                  height={260} empty={{ title: 'No group originators' }} />
+              </div>
             </Container>
           </div>
         );
