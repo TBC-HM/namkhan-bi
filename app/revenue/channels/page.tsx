@@ -352,12 +352,18 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
         </div>
       </div>
 
-      {/* PBS 2026-07-01: category KPI strips stacked · Direct → OTAs → DMC.
-          Same tile row that used to render only inside the active tab; now every
-          category shows its header + tiles simultaneously so PBS can compare. */}
-      <CategoryKpiStrip category="direct" rows={byCat.direct as unknown as Array<Record<string, unknown>>} cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'direct')} moneyCurrency={moneyCurrency} totalRev={totalRev} period={period} />
-      <CategoryKpiStrip category="ota"    rows={byCat.ota    as unknown as Array<Record<string, unknown>>} cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'ota')}    moneyCurrency={moneyCurrency} totalRev={totalRev} period={period} />
-      <CategoryKpiStrip category="dmc"    rows={byCat.dmc    as unknown as Array<Record<string, unknown>>} cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'dmc')}    moneyCurrency={moneyCurrency} totalRev={totalRev} period={period} />
+      {/* PBS 2026-07-01 rev2: 3 categories rolled into ONE compact comparison
+          grid — same numbers, ~1/3 the vertical space, easier to scan side-by-side. */}
+      <CategoryCompareGrid
+        period={period}
+        totalRev={totalRev}
+        moneyCurrency={moneyCurrency}
+        rows={{
+          direct: byCat.direct as unknown as Array<Record<string, unknown>>,
+          ota:    byCat.ota    as unknown as Array<Record<string, unknown>>,
+          dmc:    byCat.dmc    as unknown as Array<Record<string, unknown>>,
+        }}
+      />
 
       {activeTab === 'direct' && <CategoryBlock category="direct" rows={byCat.direct as unknown as Array<Record<string, unknown>>} cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'direct')} mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'direct')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} propertyId={pid} />}
       {activeTab === 'ota'    && <CategoryBlock category="ota"    rows={byCat.ota as unknown as Array<Record<string, unknown>>}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'ota')}    mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'ota')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} propertyId={pid} />}
@@ -479,9 +485,115 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
   );
 }
 
-// ─── per-category KPI strip (mini-header + tile grid) ──────────────────────
+// ─── compact 3-row comparison grid (Direct · OTAs · DMC) ────────────────────
+// PBS 2026-07-01 rev2: dense side-by-side read of all 3 categories in one
+// table-like card. Rows = categories, columns = metrics. Replaces the earlier
+// stacked "one full KPI strip per category" layout (too much space).
+function CategoryCompareGrid({
+  rows, moneyCurrency, totalRev, period,
+}: {
+  rows: { direct: Array<Record<string, unknown>>; ota: Array<Record<string, unknown>>; dmc: Array<Record<string, unknown>> };
+  moneyCurrency: 'USD' | 'EUR';
+  totalRev: number;
+  period: { label: string };
+}) {
+  const sym = moneyCurrency === 'EUR' ? '€' : '$';
+  const compute = (list: Array<Record<string, unknown>>) => {
+    const bookings   = list.reduce((s, c) => s + Number(c.bookings || 0), 0);
+    const revenue    = list.reduce((s, c) => s + Number(c.gross_revenue || 0), 0);
+    const roomnights = list.reduce((s, c) => s + Number(c.roomnights || 0), 0);
+    const commission = list.reduce((s, c) => s + Number(c.commission_usd || 0), 0);
+    const cancellations = list.reduce((s, c) => s + Number(c.cancellations || 0), 0);
+    const adr        = roomnights > 0 ? revenue / roomnights : 0;
+    const commPct    = revenue > 0 ? (commission / revenue) * 100 : 0;
+    const netAdr     = adr * (1 - commPct / 100);
+    const totalB     = bookings + cancellations;
+    const cancelPct  = totalB > 0 ? (cancellations / totalB) * 100 : 0;
+    const shareRev   = totalRev > 0 ? (revenue / totalRev) * 100 : 0;
+    const leadW      = list.reduce((s, c) => s + Number(c.bookings || 0) * Number(c.avg_lead_days || 0), 0);
+    const avgLead    = bookings > 0 ? leadW / bookings : 0;
+    const sources    = list.length;
+    return { bookings, revenue, adr, commPct, netAdr, cancelPct, shareRev, avgLead, sources };
+  };
+
+  const D = compute(rows.direct);
+  const O = compute(rows.ota);
+  const M = compute(rows.dmc);
+
+  const money = (n: number) => `${sym}${Math.round(n).toLocaleString('en-US')}`;
+  const pct = (n: number) => `${n.toFixed(1)}%`;
+
+  // 8 columns: category | Sources | Bkg | Rev | ADR | Comm% | Cancel% | Share%
+  const headerCell: React.CSSProperties = {
+    padding: '6px 10px', textAlign: 'right', fontFamily: 'var(--mono, monospace)',
+    fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase',
+    color: '#5A5A5A', fontWeight: 600, borderBottom: '1px solid #E6DFCC',
+  };
+  const bodyCell: React.CSSProperties = {
+    padding: '8px 10px', textAlign: 'right', fontSize: 13,
+    color: '#1B1B1B', fontVariantNumeric: 'tabular-nums',
+    borderBottom: '1px solid #E6DFCC',
+  };
+  const labelCell: React.CSSProperties = {
+    padding: '8px 10px', textAlign: 'left', fontSize: 13,
+    color: '#1B1B1B', fontWeight: 600, borderBottom: '1px solid #E6DFCC',
+  };
+
+  const commTone = (c: number) => c > 18 ? '#B03826' : c > 12 ? '#B8542A' : '#2C5F4F';
+  const cancelTone = (c: number) => c > 25 ? '#B03826' : c > 10 ? '#B8542A' : '#2C5F4F';
+  const shareTone = (c: number) => c >= 30 ? '#2C5F4F' : '#B8542A';
+
+  const row = (name: string, stats: ReturnType<typeof compute>) => (
+    <tr>
+      <td style={labelCell}>{name} <span style={{ color: '#8A8A8A', fontWeight: 400, fontSize: 11 }}>· {stats.sources} sources</span></td>
+      <td style={bodyCell}>{stats.bookings.toLocaleString('en-US')}</td>
+      <td style={bodyCell}>{money(stats.revenue)}</td>
+      <td style={bodyCell}>{money(stats.adr)}</td>
+      <td style={bodyCell}>{money(stats.netAdr)}</td>
+      <td style={{ ...bodyCell, color: commTone(stats.commPct) }}>{pct(stats.commPct)}</td>
+      <td style={{ ...bodyCell, color: cancelTone(stats.cancelPct) }}>{pct(stats.cancelPct)}</td>
+      <td style={{ ...bodyCell, color: shareTone(stats.shareRev) }}>{pct(stats.shareRev)}</td>
+      <td style={bodyCell}>{Math.round(stats.avgLead)}d</td>
+    </tr>
+  );
+
+  return (
+    <div style={{ gridColumn: '1 / -1', background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 8, overflow: 'hidden', marginBottom: 10 }}>
+      <div style={{ padding: '10px 14px 6px', borderBottom: '1px solid #E6DFCC' }}>
+        <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#5A5A5A', fontWeight: 600 }}>
+          Category compare · {period.label}
+        </div>
+      </div>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--sans)' }}>
+        <thead>
+          <tr>
+            <th style={{ ...headerCell, textAlign: 'left' }}>Category</th>
+            <th style={headerCell}>Bkg</th>
+            <th style={headerCell}>Revenue</th>
+            <th style={headerCell}>ADR</th>
+            <th style={headerCell}>Net ADR</th>
+            <th style={headerCell}>Comm %</th>
+            <th style={headerCell}>Cancel %</th>
+            <th style={headerCell}>Share %</th>
+            <th style={headerCell}>Lead</th>
+          </tr>
+        </thead>
+        <tbody>
+          {row('Direct', D)}
+          {row('OTAs',   O)}
+          {row('DMC',    M)}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ─── per-category KPI strip (mini-header + tile grid) — kept for reference ──
 // PBS 2026-07-01: extracted from CategoryBlock so the same tile row can render
 // for Direct, OTA, and DMC simultaneously (stacked), regardless of active tab.
+// PBS 2026-07-01 rev2: superseded by CategoryCompareGrid above (too much space).
+// Left in the file in case a future ask wants the full-tile version back.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function CategoryKpiStrip({
   category, rows, cmpRows, moneyCurrency, totalRev, period,
 }: {
