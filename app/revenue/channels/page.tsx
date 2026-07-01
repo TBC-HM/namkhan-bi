@@ -340,11 +340,8 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
           <ChannelControlsDropdown
             basePath={basePath}
             windowOptions={[{ label: '7 days', value: '7d' }, { label: '30 days', value: '30d' }, { label: '90 days', value: '90d' }]}
-            categoryOptions={visibleTabs(pid).map((t) => ({ label: t.label, value: t.key }))}
             currentWindow={period.win}
-            currentCategory={activeTab}
             defaultWindow="30d"
-            defaultCategory="direct"
           />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
