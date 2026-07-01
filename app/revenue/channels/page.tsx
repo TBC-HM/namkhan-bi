@@ -52,6 +52,19 @@ export const revalidate = 60;
 
 const PROPERTY_ID_NAMKHAN = 260955;
 
+// PBS 2026-07-01: shared action-button style for the DMC/OTA/Direct performance strip.
+const perfActionStyle: React.CSSProperties = {
+  padding: '5px 12px',
+  fontSize: 11,
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase',
+  fontWeight: 600,
+  background: 'var(--primary, #1F3A2E)',
+  color: '#FFFFFF',
+  borderRadius: 4,
+  textDecoration: 'none',
+};
+
 const OTA_RX = /booking\.com|expedia|agoda|airbnb|ctrip|trip\.com|hotels\.com|traveloka|a-expedia|a-hotels|bdc-|exp-/i;
 // PBS #199: split Bedbanks (rate wholesalers) from DMCs (B2B tour operators)
 const BEDBANK_RX = /hotelbeds|webbeds|sunhotels|bonotel|miki|destimo|sidetours|wbs-|wtb-|sun-|ago-/i;
@@ -137,7 +150,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
     ? { ...period, from: period.compareFrom, to: period.compareTo, cmp: 'none' as const }
     : null;
 
-  const [channelsRaw, channelsCmp, mixWeekly, netValue, velocity, groupRows, dmcContracts] = await Promise.all([
+  const [channelsRaw, channelsCmp, mixWeekly, netValue, velocity, groupRows, dmcContracts, dmcPerfRes, otaPerfRes, directPerfRes] = await Promise.all([
     getChannelEconomics(period, pid).catch(() => [] as Awaited<ReturnType<typeof getChannelEconomics>>),
     cmpPeriod
       ? getChannelEconomicsForRange(cmpPeriod.from, cmpPeriod.to, pid).catch(() => [] as Array<Record<string, unknown>>)
@@ -148,7 +161,14 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
     supabase.from('v_group_bookings_12mo').select('channel_group, source, reservations, room_nights, gross_revenue, group_adr, est_commission, net_revenue').eq('property_id', pid).order('gross_revenue', { ascending: false }).then((r) => r.data ?? [] as Array<Record<string, unknown>>),
     // PBS 2026-06-29: fetch DMC contracts so ChannelDrillDrawer can surface contract metadata + PDF preview when a source matches a partner.
     getDmcContracts().catch(() => []),
+    // PBS 2026-07-01: top-8 performance tables under the KPI strip — DMC + OTA + Direct.
+    supabase.from('v_dmc_performance').select('partner_short_name, country, production_status, res_12mo, rn_12mo, gross_12mo').eq('property_id', pid).order('gross_12mo', { ascending: false }).limit(8).then((r) => ({ data: (r.data ?? []) as Array<Record<string, unknown>> })).catch(() => ({ data: [] as Array<Record<string, unknown>> })),
+    supabase.from('v_ota_performance').select('source_name, production_status, res_12mo, rn_12mo, gross_12mo, last_booking').eq('property_id', pid).order('gross_12mo', { ascending: false }).limit(8).then((r) => ({ data: (r.data ?? []) as Array<Record<string, unknown>> })).catch(() => ({ data: [] as Array<Record<string, unknown>> })),
+    supabase.from('v_direct_performance').select('source_name, production_status, res_12mo, rn_12mo, gross_12mo, last_booking').eq('property_id', pid).order('gross_12mo', { ascending: false }).limit(8).then((r) => ({ data: (r.data ?? []) as Array<Record<string, unknown>> })).catch(() => ({ data: [] as Array<Record<string, unknown>> })),
   ]);
+  const dmcPerfTop = dmcPerfRes.data;
+  const otaPerfTop = otaPerfRes.data;
+  const directPerfTop = directPerfRes.data;
   const channels = channelsRaw;
 
   // PBS 2026-06-30: append DMC partners that have NO PMS bookings to the
@@ -332,7 +352,55 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
         </div>
       </div>
 
-
+      {/* PBS 2026-07-01: top-8 performance row (DMC · OTA · Direct) directly under
+          the KPI strip. Same visual template as the DMC Performance container that
+          used to live inside CategoryBlock. Wired to gold views v_dmc_performance,
+          v_ota_performance, v_direct_performance. */}
+      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
+        <Container
+          title="DMC Performance"
+          subtitle="12 months · top 8 by gross"
+          action={<Link href="/sales/b2b" style={perfActionStyle}>B2B / DMC →</Link>}
+        >
+          <Chart variant="table" data={dmcPerfTop} xKey="partner_short_name"
+            series={[
+              { key: 'country',           label: 'Ctry' },
+              { key: 'production_status', label: 'Status' },
+              { key: 'res_12mo',          label: 'Res' },
+              { key: 'rn_12mo',           label: 'RN' },
+              { key: 'gross_12mo',        label: 'Gross' },
+            ]}
+            height={220} empty={{ title: 'No DMC contracts on file' }} />
+        </Container>
+        <Container
+          title="OTA Performance"
+          subtitle="12 months · top 8 by gross"
+        >
+          <Chart variant="table" data={otaPerfTop} xKey="source_name"
+            series={[
+              { key: 'production_status', label: 'Status' },
+              { key: 'res_12mo',          label: 'Res' },
+              { key: 'rn_12mo',           label: 'RN' },
+              { key: 'gross_12mo',        label: 'Gross' },
+              { key: 'last_booking',      label: 'Last bkg' },
+            ]}
+            height={220} empty={{ title: 'No OTA bookings in the last 12 months' }} />
+        </Container>
+        <Container
+          title="Direct Performance"
+          subtitle="12 months · top 8 by gross"
+        >
+          <Chart variant="table" data={directPerfTop} xKey="source_name"
+            series={[
+              { key: 'production_status', label: 'Status' },
+              { key: 'res_12mo',          label: 'Res' },
+              { key: 'rn_12mo',           label: 'RN' },
+              { key: 'gross_12mo',        label: 'Gross' },
+              { key: 'last_booking',      label: 'Last bkg' },
+            ]}
+            height={220} empty={{ title: 'No Direct bookings in the last 12 months' }} />
+        </Container>
+      </div>
 
       {activeTab === 'direct' && <CategoryBlock category="direct" rows={byCat.direct as unknown as Array<Record<string, unknown>>} cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'direct')} mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'direct')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} propertyId={pid} />}
       {activeTab === 'ota'    && <CategoryBlock category="ota"    rows={byCat.ota as unknown as Array<Record<string, unknown>>}    cmpRows={(channelsCmp as Array<Record<string, unknown>>).filter((c) => classify(String(c.source_name || '')) === 'ota')}    mixWeekly={mixWeekly as unknown as Array<Record<string, unknown>>} velocity={velocity as unknown as Array<Record<string, unknown>>} period={period} totalRev={totalRev} netValue={(netValue as unknown as Array<Record<string, unknown>>).filter((r) => classify(String(r.source_name || r.channel || '')) === 'ota')} drillHrefFor={drillHrefFor} moneyCurrency={moneyCurrency} propertyId={pid} />}
