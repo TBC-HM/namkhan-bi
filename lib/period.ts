@@ -15,7 +15,7 @@
 import { format } from 'date-fns';
 
 export type WindowKey =
-  | 'today' | '7d' | '30d' | '90d' | 'ytd' | 'l12m'
+  | 'today' | '7d' | '30d' | '90d' | 'ytd' | 'l12m' | 'ly'
   | 'next7' | 'next30' | 'next90' | 'next180' | 'next365';
 
 // CompareKey: PBS 2026-05-09 expanded the set so every revenue/finance page
@@ -65,7 +65,7 @@ export interface ResolvedPeriod {
 }
 
 // ---------- Allowed values, defaults ----------
-const WIN_VALUES: WindowKey[] = ['today','7d','30d','90d','ytd','l12m','next7','next30','next90','next180','next365'];
+const WIN_VALUES: WindowKey[] = ['today','7d','30d','90d','ytd','l12m','ly','next7','next30','next90','next180','next365'];
 const CMP_VALUES: CompareKey[] = ['none','pp','stly','sdly','lw','lm','budget'];
 const SEG_VALUES: SegmentKey[] = ['all','retail','dmc','group','discount','comp','unsegmented'];
 const CAP_VALUES: CapacityMode[] = ['selling','live','total'];
@@ -112,6 +112,14 @@ function windowRange(win: WindowKey, today = new Date()):
       return { from: jan1, to: today, direction: 'back', days, label: 'Year to date' };
     }
     case 'l12m':    return { from: addYears(today, -1), to: today, direction: 'back', days: 365, label: 'Last 12 months' };
+    case 'ly': {
+      // Last full calendar year (Jan 1 → Dec 31 of prior year).
+      const lastYr = today.getFullYear() - 1;
+      const start = new Date(lastYr, 0, 1);
+      const end   = new Date(lastYr, 11, 31);
+      const days  = Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1;
+      return { from: start, to: end, direction: 'back', days, label: `Year ${lastYr}` };
+    }
     case 'next7':   return { from: today, to: addDays(today, 6),   direction: 'fwd', days: 7, label: 'Next 7 days' };
     case 'next30':  return { from: today, to: addDays(today, 29),  direction: 'fwd', days: 30, label: 'Next 30 days' };
     case 'next90':  return { from: today, to: addDays(today, 89),  direction: 'fwd', days: 90, label: 'Next 90 days' };
