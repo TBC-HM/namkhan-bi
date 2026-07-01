@@ -152,7 +152,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
     ? { ...period, from: period.compareFrom, to: period.compareTo, cmp: 'none' as const }
     : null;
 
-  const [channelsRaw, channelsCmp, mixWeekly, netValue, velocity, groupRows, dmcContracts, dmcPerfRes, otaPerfRes, directPerfRes, otbSdlyRes] = await Promise.all([
+  const [channelsRaw, channelsCmp, mixWeekly, netValue, velocity, groupRows, dmcContracts, dmcPerfRes, otaPerfRes, directPerfRes, otbSdlyRes, pageGroupsRes] = await Promise.all([
     getChannelEconomics(period, pid).catch(() => [] as Awaited<ReturnType<typeof getChannelEconomics>>),
     cmpPeriod
       ? getChannelEconomicsForRange(cmpPeriod.from, cmpPeriod.to, pid).catch(() => [] as Array<Record<string, unknown>>)
@@ -169,11 +169,27 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
     supabase.from('v_direct_performance').select('source_name, production_status, res_12mo, rn_12mo, gross_12mo, last_booking').eq('property_id', pid).order('gross_12mo', { ascending: false }).limit(8).then((r) => ({ data: (r.data ?? []) as Array<Record<string, unknown>> })).catch(() => ({ data: [] as Array<Record<string, unknown>> })),
     // PBS 2026-07-01: forward-looking Top 10 sources (next 90 arrivals) vs SDLY.
     supabase.from('v_source_top10_otb_vs_sdly').select('source_name, bkg_otb, rn_otb, rev_otb, bkg_sdly, rn_sdly, rev_sdly, rev_delta_pct, adr_otb').eq('property_id', pid).order('rev_otb', { ascending: false }).limit(10).then((r) => ({ data: (r.data ?? []) as OtbSdlyRow[] })).catch(() => ({ data: [] as OtbSdlyRow[] })),
+    // PBS 2026-07-01: groups since 2024 for the page-bottom "Groups revenue by month" chart.
+    supabase.from('v_groups_since_2024').select('month_label, total_amount, group_signal').eq('property_id', pid).then((r) => ({ data: (r.data ?? []) as Array<{ month_label: string; total_amount: number; group_signal: string }> })).catch(() => ({ data: [] as Array<{ month_label: string; total_amount: number; group_signal: string }> })),
   ]);
   const dmcPerfTop = dmcPerfRes.data;
   const otaPerfTop = otaPerfRes.data;
   const directPerfTop = directPerfRes.data;
   const otbSdlyTop = (otbSdlyRes?.data ?? []) as OtbSdlyRow[];
+  // PBS 2026-07-01: Groups revenue by month — aggregation for the page-bottom container.
+  const pageGroupsRows = pageGroupsRes?.data ?? [];
+  const pageGroupsMonthMap = new Map<string, { month: string; rate_or_segment: number; classified_source: number; source_named: number }>();
+  for (const r of pageGroupsRows) {
+    const m = String(r.month_label ?? '');
+    if (!m) continue;
+    const slot = pageGroupsMonthMap.get(m) ?? { month: m, rate_or_segment: 0, classified_source: 0, source_named: 0 };
+    const sig = (String(r.group_signal ?? 'rate_or_segment')) as 'rate_or_segment' | 'classified_source' | 'source_named';
+    slot[sig] = Number(slot[sig] || 0) + Number(r.total_amount ?? 0);
+    pageGroupsMonthMap.set(m, slot);
+  }
+  const pageGroupsMonthRows = Array.from(pageGroupsMonthMap.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([, v]) => v);
   const channels = channelsRaw;
 
   // PBS 2026-06-30: append DMC partners that have NO PMS bookings to the
@@ -498,6 +514,19 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
       {/* PBS #126 (2026-05-24): 9-piece split. PageRenderer in embedded mode renders the 9 registry
           children as direct siblings of the host DashboardPage — no nested DashboardPage, no outer wrap. */}
       <PageRenderer pageSlug="channel" propertyId={pid} title="" subtitle="" embedded layout="graphs-first" />
+
+      {/* PBS 2026-07-01: Groups revenue · by month · moved to page bottom per PBS. */}
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Container title="Groups revenue · by month" subtitle="since Jan 2024 · stacked by source classification · date basis: check_in_date">
+          <Chart variant="stacked_bar" data={pageGroupsMonthRows} xKey="month"
+            series={[
+              { key: 'rate_or_segment',   label: 'Rate plan / segment', color: '#1F3A2E' },
+              { key: 'classified_source', label: 'Group source',        color: '#B8542A' },
+              { key: 'source_named',      label: 'Other',               color: '#B8A878' },
+            ]}
+            height={260} empty={{ title: 'No groups data since 2024' }} />
+        </Container>
+      </div>
 
       {/* PBS 2026-05-29 — Gross share by tier moved inline into CategoryBlock row 2 */}
 
@@ -1063,61 +1092,8 @@ async function CategoryBlock({
         </Container>
       </div>
 
-      {/* PBS 2026-05-29 — row 3: Groups since 2024 (KPIs · monthly trend · top originators) */}
-      {(() => {
-        const groupsRows = (groupsSince24Res.data ?? []) as Array<{ source_name: string; market_segment: string; month_label: string; nights: number; total_amount: number; group_signal: string }>;
-        const totalBkg = groupsRows.length;
-        const totalNights = groupsRows.reduce((s, r) => s + Number(r.nights ?? 0), 0);
-        const totalRev = groupsRows.reduce((s, r) => s + Number(r.total_amount ?? 0), 0);
-        const avgAdr = totalNights > 0 ? Math.round(totalRev / totalNights) : 0;
-        const avgSize = totalBkg > 0 ? (totalNights / totalBkg).toFixed(1) : '0';
-        const monthMap = new Map<string, Record<string, string | number>>();
-        for (const r of groupsRows) {
-          const m = String(r.month_label ?? '');
-          if (!m) continue;
-          const row = monthMap.get(m) ?? { month: m, rate_or_segment: 0, classified_source: 0, source_named: 0 } as Record<string, string | number>;
-          const sig = String(r.group_signal ?? 'rate_or_segment');
-          row[sig] = Number(row[sig] || 0) + Number(r.total_amount ?? 0);
-          monthMap.set(m, row);
-        }
-        const monthRows = Array.from(monthMap.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([, v]) => v);
-        // PBS 2026-07-01: Group Performance now covers the last 12 months only
-        // (same window as DMC / OTA / Direct Performance containers). We filter
-        // groupsRows by check_in_date so the aggregation stays date-scoped.
-        const last12moCutoff = new Date();
-        last12moCutoff.setFullYear(last12moCutoff.getFullYear() - 1);
-        const last12moCutoffIso = last12moCutoff.toISOString().slice(0, 10);
-        const groupsRows12mo = groupsRows.filter((r) => String((r as unknown as { check_in_date?: string }).check_in_date ?? '') >= last12moCutoffIso);
-        const origMap = new Map<string, { source: string; segment: string; res: number; nights: number; revenue: number; adr: number }>();
-        for (const r of groupsRows12mo) {
-          const key = `${r.source_name}|${r.market_segment}`;
-          const slot = origMap.get(key) ?? { source: r.source_name, segment: r.market_segment, res: 0, nights: 0, revenue: 0, adr: 0 };
-          slot.res += 1;
-          slot.nights += Number(r.nights ?? 0);
-          slot.revenue += Number(r.total_amount ?? 0);
-          origMap.set(key, slot);
-        }
-        const originatorRows = Array.from(origMap.values()).map((r) => ({ ...r, revenue: Math.round(r.revenue), adr: r.nights > 0 ? Math.round(r.revenue / r.nights) : 0 })).sort((a, b) => b.revenue - a.revenue).slice(0, 10);
-        return (
-          <div style={{ ...fullRow }}>
-            {/* PBS 2026-07-01 rev7: Group Performance moved to the Top 10 sources row above.
-                Only Groups revenue · by month chart remains here, full width. */}
-            <Container title="Groups revenue · by month" subtitle="since Jan 2024 · stacked by source classification · date basis: check_in_date">
-              <div style={{ minHeight: 300, display: 'flex', flexDirection: 'column', flex: 1 }}>
-                <Chart variant="stacked_bar" data={monthRows} xKey="month"
-                  series={[
-                    { key: 'rate_or_segment',  label: 'Rate plan / segment', color: '#1F3A2E' },
-                    { key: 'classified_source', label: 'Group source',         color: '#B8542A' },
-                    { key: 'source_named',     label: 'Other',                color: '#B8A878' },
-                  ]}
-                  height={260} empty={{ title: 'No groups data since 2024' }} />
-              </div>
-            </Container>
-          </div>
-        );
-      })()}
-
-      {/* "Still owed" container removed 2026-05-26 (task #235) */}
+      {/* PBS 2026-07-01: Groups revenue · by month moved to page bottom.
+          "Still owed" container removed 2026-05-26 (task #235). */}
     </>
   );
 }
