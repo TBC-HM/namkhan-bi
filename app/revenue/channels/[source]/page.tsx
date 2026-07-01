@@ -40,6 +40,9 @@ import BdcHeroStrip from '@/components/channels/BdcHeroStrip';
 import BdcKpiStrip from '@/components/channels/BdcKpiStrip';
 import BdcProfileTab from '@/components/channels/BdcProfileTab';
 import ChannelContactCard from '@/components/channels/ChannelContactCard';
+import SourceAccountEditPanel, { type ChannelAccountRow } from './_components/SourceAccountEditPanel';
+
+const PROPERTY_ID_NAMKHAN = 260955;
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -81,8 +84,8 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
   const d90  = isoBack(90);
   const d365 = isoBack(365);
 
-  const [econ30, econ90, econ365, econAll, dailyRows, mixRows, pickupRows, dmcContracts, bookingsRes, qbRes] = isBookingCom
-    ? [[], [], [], [], [], [], [], [] as DmcContract[], { data: [] }, { data: [] }] as const
+  const [econ30, econ90, econ365, econAll, dailyRows, mixRows, pickupRows, dmcContracts, bookingsRes, qbRes, accountRes] = isBookingCom
+    ? [[], [], [], [], [], [], [], [] as DmcContract[], { data: [] }, { data: [] }, { data: null }] as const
     : await Promise.all([
         getChannelEconomicsForRange(d30,  today).catch(() => []),
         getChannelEconomicsForRange(d90,  today).catch(() => []),
@@ -113,9 +116,20 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
           .limit(500)
           .then((r) => ({ data: (r.data ?? []) as QbTxnRow[] }))
           .catch(() => ({ data: [] as QbTxnRow[] })),
+        // PBS 2026-07-01: channel-account row for the SourceAccountEditPanel
+        // (OTA/Wholesale/Other landing pages get the same top panel as DMC).
+        getSupabaseAdmin()
+          .from('v_channel_contacts')
+          .select('*')
+          .eq('property_id', PROPERTY_ID_NAMKHAN)
+          .eq('source_name', sourceName)
+          .maybeSingle()
+          .then((r) => ({ data: r.data as ChannelAccountRow | null }))
+          .catch(() => ({ data: null })),
       ]);
   const sourceBookings: SourceBookingRow[] = bookingsRes?.data ?? [];
   const qbTransactions: QbTxnRow[] = qbRes?.data ?? [];
+  const channelContact: ChannelAccountRow | null = accountRes?.data ?? null;
   // PBS 2026-06-30: surface the most recent booking date in the Bookings tile.
   // sourceBookings is already sorted DESC by booking_date in the SQL, so [0] is
   // the newest. Slice off the time portion (we only care about the day).
@@ -304,12 +318,31 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
               info immediately below the header. Direct sources skip this entirely. */}
       {!dmcContract && cat !== 'Direct' && (
         <div style={{ gridColumn: '1 / -1' }}>
-          <Container
-            title={`Channel account · ${sourceName}`}
-            subtitle={`Contact · account · commission · edit at /settings/channel-contacts`}
-          >
-            <ChannelContactCard sourceName={sourceName} />
-          </Container>
+          <SourceAccountEditPanel
+            contact={channelContact ?? {
+              source_name: sourceName,
+              property_id: PROPERTY_ID_NAMKHAN,
+              partner_type: cat,
+              partner_legal_name: null, country: null, country_flag: null,
+              vat_number: null, address: null,
+              account_id: null, property_url: null,
+              channel_manager_name: null, channel_manager_role: null,
+              channel_manager_email: null, channel_manager_phone: null,
+              accounting_name: null, accounting_email: null, accounting_phone: null,
+              connectivity_provider: null, commission_pct: null,
+              contract_start: null, contract_renewal: null, auto_renew: false,
+              pricing_model: null,
+              group_surcharge_pct: null, group_threshold: null, extra_bed_usd: null,
+              anti_publication_clause: null, termination_clause: null, cancellation_policy: null,
+              notes: null,
+              bank_name: null, bank_account_holder: null, bank_account_number: null,
+              bank_swift_bic: null, bank_iban: null,
+              computed_status: 'draft', days_to_expiry: null,
+            }}
+            sourceName={sourceName}
+            propertyId={PROPERTY_ID_NAMKHAN}
+            cat={cat}
+          />
         </div>
       )}
 
