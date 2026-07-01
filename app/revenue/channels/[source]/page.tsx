@@ -298,6 +298,21 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
         </div>
       )}
 
+      {/* (2b) Channel contact + account panel — for non-DMC, non-Direct sources.
+              PBS 2026-07-01: same top-of-page position as the DMC contract panel
+              so OTAs and Wholesalers show contact / account / bank / commission
+              info immediately below the header. Direct sources skip this entirely. */}
+      {!dmcContract && cat !== 'Direct' && (
+        <div style={{ gridColumn: '1 / -1' }}>
+          <Container
+            title={`Channel account · ${sourceName}`}
+            subtitle={`Contact · account · commission · edit at /settings/channel-contacts`}
+          >
+            <ChannelContactCard sourceName={sourceName} />
+          </Container>
+        </div>
+      )}
+
       {/* (3) KPI tiles — main = ALL-TIME · compare[] = L30d · L90d · L365d.
               PBS 2026-06-30: partners with bookings outside L365 (e.g. Nakarath)
               must still surface meaningful numbers. All-time as main + 3 trail
@@ -380,12 +395,8 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
         <RoomTypeMixTable rows={mixRows as Array<{ room_type_name: string; bookings: number; room_nights: number; gross_revenue: number; share_pct: number; }>} />
       </Container>
 
-      {/* (7) Channel contact — only when there is NO DMC contract */}
-      {!dmcContract && (
-        <Container title="Channel contact" subtitle="Edit at /settings/channel-contacts">
-          <ChannelContactCard sourceName={sourceName} />
-        </Container>
-      )}
+      {/* (7) Channel contact container removed 2026-07-01 — merged into (2b)
+              at the top of the page (like the DMC contract panel). */}
 
       {/* (8) Full-width per-source booking list — newest first */}
       <div style={{ gridColumn: '1 / -1' }}>
