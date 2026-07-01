@@ -160,6 +160,44 @@ export default function SortableSourcesTable({ rows, moneyCurrency, initialSort 
             </tr>
           ))}
         </tbody>
+        {/* PBS 2026-07-01: totals row. ADR is night-weighted (sum_rev / sum_rn)
+            so mixed-length stays don't distort the average. */}
+        {(() => {
+          const t = sorted.reduce(
+            (a, r) => {
+              a.res_24 += r.res_24; a.res_25 += r.res_25; a.res_26 += r.res_26;
+              a.rev_24 += r.rev_24 ?? 0; a.rev_25 += r.rev_25 ?? 0; a.rev_26 += r.rev_26 ?? 0;
+              const rn24 = r.adr_24 && r.rev_24 ? Math.round((r.rev_24 ?? 0) / r.adr_24) : 0;
+              const rn25 = r.adr_25 && r.rev_25 ? Math.round((r.rev_25 ?? 0) / r.adr_25) : 0;
+              a.rn_24 += rn24; a.rn_25 += rn25; a.rn_26 += r.rn_26 ?? 0;
+              return a;
+            },
+            { res_24: 0, res_25: 0, res_26: 0, rev_24: 0, rev_25: 0, rev_26: 0, rn_24: 0, rn_25: 0, rn_26: 0 },
+          );
+          const adr = (rev: number, rn: number) => rn > 0 ? Math.round(rev / rn) : null;
+          const sdlyPct = t.res_25 > 0 ? Math.round(((t.res_26 - t.res_25) / t.res_25) * 100) : null;
+          return (
+            <tfoot>
+              <tr style={{ borderTop: '2px solid #000', background: '#FFFFFF', fontWeight: 700 }}>
+                <td style={{ ...tdLabelStyle, fontWeight: 700 }}>Total · {sorted.length} sources</td>
+                <td style={tdLabelStyle}>—</td>
+                <td style={tdNumStyle}>{t.res_24.toLocaleString('en-US')}</td>
+                <td style={tdNumStyle}>{t.res_25.toLocaleString('en-US')}</td>
+                <td style={tdNumStyle}>{t.res_26.toLocaleString('en-US')}</td>
+                <td style={tdNumStyle}>{sdlyPct == null ? '—' : `${sdlyPct > 0 ? '↑ ' : sdlyPct < 0 ? '↓ ' : '→ '}${sdlyPct}%`}</td>
+                <td style={tdNumStyle}>{fmtCurrency(t.rev_24, sym)}</td>
+                <td style={tdNumStyle}>{fmtCurrency(t.rev_25, sym)}</td>
+                <td style={tdNumStyle}>{fmtCurrency(t.rev_26, sym)}</td>
+                <td style={tdNumStyle}>{fmtCurrency(adr(t.rev_24, t.rn_24), sym)}</td>
+                <td style={tdNumStyle}>{fmtCurrency(adr(t.rev_25, t.rn_25), sym)}</td>
+                <td style={tdNumStyle}>{fmtCurrency(adr(t.rev_26, t.rn_26), sym)}</td>
+                <td style={tdNumStyle}>{t.rn_26.toLocaleString('en-US')}</td>
+                <td style={tdNumStyle}>—</td>
+                <td style={tdNumStyle}>—</td>
+              </tr>
+            </tfoot>
+          );
+        })()}
       </table>
     </div>
   );
