@@ -729,19 +729,8 @@ async function CategoryBlock({
         </div>
       </div>
 
-      {/* Two trend charts paired in a 2-up row */}
-      <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
-        <Container title={`${titleOf[category]} share by month · %`} subtitle="rooms revenue share per month · 2025 vs 2026">
-          <Chart variant="line" data={monthlyShareData} xKey="month"
-            series={[{ key: 'share_25', label: '2025 %', color: '#9C9C9C' }, { key: 'share_26', label: '2026 %', color: '#1F3A2E' }]}
-            height={220} empty={{ title: 'No monthly mix data' }} />
-        </Container>
-        <Container title={`${titleOf[category]} velocity · 28d`} subtitle="bookings made per day">
-          <Chart variant="line" data={velocityData} xKey="day"
-            series={[{ key: 'n_25', label: '2025 bkgs', color: '#9C9C9C' }, { key: 'n_26', label: '2026 bkgs', color: '#B8542A' }]}
-            height={220} empty={{ title: 'No velocity in last 28 days' }} />
-        </Container>
-      </div>
+      {/* PBS 2026-07-01: dropped share-by-month + velocity-28d 2-up row per PBS
+          — noise. Data lives on the per-source landing pages now. */}
 
       {/* PBS 2026-05-29 v2 — 3-box row: Combined tier share · Top 10 last 30d · Channel perf by month */}
       <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
