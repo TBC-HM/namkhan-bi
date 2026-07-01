@@ -920,15 +920,9 @@ async function CategoryBlock({
   const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
   return (
     <>
-      {/* PBS #199 strip-2 (2026-05-25): per-category headline is now a flat strip (no Container chrome). */}
-      <div style={{ ...fullRow, display: 'flex', flexDirection: 'column', gap: 6, padding: '2px 0 10px', borderBottom: '1px solid var(--hairline, #E6DFCC)' }}>
-        <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>
-          {titleOf[category]} · {period.label} · {rows.length} active sources
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
-          {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
-        </div>
-      </div>
+      {/* PBS 2026-07-01 rev3: per-category KPI strip removed from CategoryBlock —
+          duplicated by the top-of-page CategoryCompareGrid. Category-specific
+          detail lives in the rest of this block (top 10, mix, etc.). */}
 
       {/* PBS 2026-07-01: dropped share-by-month + velocity-28d 2-up row per PBS
           — noise. Data lives on the per-source landing pages now. */}
