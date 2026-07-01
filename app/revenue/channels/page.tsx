@@ -32,6 +32,7 @@ import GrossShareByTier from '@/app/_components/registry/GrossShareByTier';
 import ChannelDrillDrawer from '@/app/_components/registry/ChannelDrillDrawer';
 import ChannelControlsDropdown from '@/app/_components/registry/ChannelControlsDropdown';
 import TopSourcesOtbTable, { type OtbSdlyRow } from '@/app/_components/registry/TopSourcesOtbTable';
+import SourceLinkTable from '@/app/_components/registry/SourceLinkTable';
 import SortableSourcesTable from '@/app/_components/registry/SortableSourcesTable';
 import TrendCategoryDropdown from '@/app/_components/registry/TrendCategoryDropdown';
 import { resolvePeriod, type WindowKey } from '@/lib/period';
@@ -390,43 +391,55 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
           subtitle="12 months · top 8 by gross · date basis: booking_date"
           action={<Link href="/sales/b2b" style={perfActionStyle}>B2B / DMC →</Link>}
         >
-          <Chart variant="table" data={dmcPerfTop} xKey="partner_short_name"
-            series={[
-              { key: 'country',           label: 'Ctry' },
-              { key: 'production_status', label: 'Status' },
-              { key: 'res_12mo',          label: 'Res' },
-              { key: 'rn_12mo',           label: 'RN' },
-              { key: 'gross_12mo',        label: 'Gross' },
+          <SourceLinkTable
+            rows={dmcPerfTop.map((r) => ({ ...r, source: (r as Record<string, unknown>).partner_short_name }))}
+            sourceKey="source"
+            columns={[
+              { key: 'source',            label: 'Partner' },
+              { key: 'country',           label: 'Ctry',   align: 'left' },
+              { key: 'production_status', label: 'Status', align: 'left' },
+              { key: 'res_12mo',          label: 'Res',    format: 'int' },
+              { key: 'rn_12mo',           label: 'RN',     format: 'int' },
+              { key: 'gross_12mo',        label: 'Gross',  format: 'money' },
             ]}
-            height={220} empty={{ title: 'No DMC contracts on file' }} />
+            emptyText="No DMC contracts on file"
+          />
         </Container>
         <Container
           title="OTA Performance"
           subtitle="12 months · top 8 by gross · date basis: booking_date"
         >
-          <Chart variant="table" data={otaPerfTop} xKey="source_name"
-            series={[
-              { key: 'production_status', label: 'Status' },
-              { key: 'res_12mo',          label: 'Res' },
-              { key: 'rn_12mo',           label: 'RN' },
-              { key: 'gross_12mo',        label: 'Gross' },
-              { key: 'last_booking',      label: 'Last bkg' },
+          <SourceLinkTable
+            rows={otaPerfTop.map((r) => ({ ...r, source: (r as Record<string, unknown>).source_name }))}
+            sourceKey="source"
+            columns={[
+              { key: 'source',            label: 'Source' },
+              { key: 'production_status', label: 'Status', align: 'left' },
+              { key: 'res_12mo',          label: 'Res',    format: 'int' },
+              { key: 'rn_12mo',           label: 'RN',     format: 'int' },
+              { key: 'gross_12mo',        label: 'Gross',  format: 'money' },
+              { key: 'last_booking',      label: 'Last bkg', align: 'left' },
             ]}
-            height={220} empty={{ title: 'No OTA bookings in the last 12 months' }} />
+            emptyText="No OTA bookings in the last 12 months"
+          />
         </Container>
         <Container
           title="Direct Performance"
           subtitle="12 months · top 8 by gross · date basis: booking_date"
         >
-          <Chart variant="table" data={directPerfTop} xKey="source_name"
-            series={[
-              { key: 'production_status', label: 'Status' },
-              { key: 'res_12mo',          label: 'Res' },
-              { key: 'rn_12mo',           label: 'RN' },
-              { key: 'gross_12mo',        label: 'Gross' },
-              { key: 'last_booking',      label: 'Last bkg' },
+          <SourceLinkTable
+            rows={directPerfTop.map((r) => ({ ...r, source: (r as Record<string, unknown>).source_name }))}
+            sourceKey="source"
+            columns={[
+              { key: 'source',            label: 'Source' },
+              { key: 'production_status', label: 'Status', align: 'left' },
+              { key: 'res_12mo',          label: 'Res',    format: 'int' },
+              { key: 'rn_12mo',           label: 'RN',     format: 'int' },
+              { key: 'gross_12mo',        label: 'Gross',  format: 'money' },
+              { key: 'last_booking',      label: 'Last bkg', align: 'left' },
             ]}
-            height={220} empty={{ title: 'No Direct bookings in the last 12 months' }} />
+            emptyText="No Direct bookings in the last 12 months"
+          />
         </Container>
       </div>
 
@@ -996,13 +1009,17 @@ async function CategoryBlock({
       <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gridAutoRows: '1fr', gap: 12, alignItems: 'stretch' }}>
         <Container title="Top 10 sources" subtitle="last 30 days · by gross revenue · date basis: booking_date">
           <div style={{ minHeight: 300, display: 'flex', flexDirection: 'column', flex: 1 }}>
-            <Chart variant="table" data={top10Last30d} xKey="source"
-              series={[
-                { key: 'reservations',  label: 'Bkg' },
-                { key: 'gross_revenue', label: 'Rev' },
-                { key: 'adr',           label: 'ADR' },
+            <SourceLinkTable
+              rows={top10Last30d as Array<Record<string, unknown>>}
+              sourceKey="source"
+              columns={[
+                { key: 'source',        label: 'Source' },
+                { key: 'reservations',  label: 'Bkg',  format: 'int' },
+                { key: 'gross_revenue', label: 'Rev',  format: 'money' },
+                { key: 'adr',           label: 'ADR',  format: 'money' },
               ]}
-              height={260} empty={{ title: 'No bookings in last 30 days' }} />
+              emptyText="No bookings in last 30 days"
+            />
           </div>
         </Container>
         <Container title="Group Performance" subtitle="12 months · top 10 by revenue · date basis: check_in_date">
@@ -1027,15 +1044,19 @@ async function CategoryBlock({
                 .sort((a, b) => b.revenue - a.revenue)
                 .slice(0, 10);
               return (
-                <Chart variant="table" data={originatorRows} xKey="source"
-                  series={[
-                    { key: 'segment',  label: 'Segment' },
-                    { key: 'res',      label: 'Res' },
-                    { key: 'nights',   label: 'RN' },
-                    { key: 'revenue',  label: 'Rev' },
-                    { key: 'adr',      label: 'ADR' },
+                <SourceLinkTable
+                  rows={originatorRows as Array<Record<string, unknown>>}
+                  sourceKey="source"
+                  columns={[
+                    { key: 'source',   label: 'Source' },
+                    { key: 'segment',  label: 'Segment', align: 'left' },
+                    { key: 'res',      label: 'Res',     format: 'int' },
+                    { key: 'nights',   label: 'RN',      format: 'int' },
+                    { key: 'revenue',  label: 'Rev',     format: 'money' },
+                    { key: 'adr',      label: 'ADR',     format: 'money' },
                   ]}
-                  height={260} empty={{ title: 'No group originators' }} />
+                  emptyText="No group originators"
+                />
               );
             })()}
           </div>
