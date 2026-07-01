@@ -31,6 +31,7 @@ import PageRenderer from '@/app/_components/registry/PageRenderer';
 import GrossShareByTier from '@/app/_components/registry/GrossShareByTier';
 import ChannelDrillDrawer from '@/app/_components/registry/ChannelDrillDrawer';
 import ChannelControlsDropdown from '@/app/_components/registry/ChannelControlsDropdown';
+import TopSourcesOtbTable, { type OtbSdlyRow } from '@/app/_components/registry/TopSourcesOtbTable';
 import SortableSourcesTable from '@/app/_components/registry/SortableSourcesTable';
 import TrendCategoryDropdown from '@/app/_components/registry/TrendCategoryDropdown';
 import { resolvePeriod, type WindowKey } from '@/lib/period';
@@ -150,7 +151,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
     ? { ...period, from: period.compareFrom, to: period.compareTo, cmp: 'none' as const }
     : null;
 
-  const [channelsRaw, channelsCmp, mixWeekly, netValue, velocity, groupRows, dmcContracts, dmcPerfRes, otaPerfRes, directPerfRes] = await Promise.all([
+  const [channelsRaw, channelsCmp, mixWeekly, netValue, velocity, groupRows, dmcContracts, dmcPerfRes, otaPerfRes, directPerfRes, otbSdlyRes] = await Promise.all([
     getChannelEconomics(period, pid).catch(() => [] as Awaited<ReturnType<typeof getChannelEconomics>>),
     cmpPeriod
       ? getChannelEconomicsForRange(cmpPeriod.from, cmpPeriod.to, pid).catch(() => [] as Array<Record<string, unknown>>)
@@ -165,10 +166,13 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
     supabase.from('v_dmc_performance').select('partner_short_name, country, production_status, res_12mo, rn_12mo, gross_12mo').eq('property_id', pid).order('gross_12mo', { ascending: false }).limit(8).then((r) => ({ data: (r.data ?? []) as Array<Record<string, unknown>> })).catch(() => ({ data: [] as Array<Record<string, unknown>> })),
     supabase.from('v_ota_performance').select('source_name, production_status, res_12mo, rn_12mo, gross_12mo, last_booking').eq('property_id', pid).order('gross_12mo', { ascending: false }).limit(8).then((r) => ({ data: (r.data ?? []) as Array<Record<string, unknown>> })).catch(() => ({ data: [] as Array<Record<string, unknown>> })),
     supabase.from('v_direct_performance').select('source_name, production_status, res_12mo, rn_12mo, gross_12mo, last_booking').eq('property_id', pid).order('gross_12mo', { ascending: false }).limit(8).then((r) => ({ data: (r.data ?? []) as Array<Record<string, unknown>> })).catch(() => ({ data: [] as Array<Record<string, unknown>> })),
+    // PBS 2026-07-01: forward-looking Top 10 sources (next 90 arrivals) vs SDLY.
+    supabase.from('v_source_top10_otb_vs_sdly').select('source_name, bkg_otb, rn_otb, rev_otb, bkg_sdly, rn_sdly, rev_sdly, rev_delta_pct, adr_otb').eq('property_id', pid).order('rev_otb', { ascending: false }).limit(10).then((r) => ({ data: (r.data ?? []) as OtbSdlyRow[] })).catch(() => ({ data: [] as OtbSdlyRow[] })),
   ]);
   const dmcPerfTop = dmcPerfRes.data;
   const otaPerfTop = otaPerfRes.data;
   const directPerfTop = directPerfRes.data;
+  const otbSdlyTop = (otbSdlyRes?.data ?? []) as OtbSdlyRow[];
   const channels = channelsRaw;
 
   // PBS 2026-06-30: append DMC partners that have NO PMS bookings to the
@@ -383,7 +387,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
       <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
         <Container
           title="DMC Performance"
-          subtitle="12 months · top 8 by gross"
+          subtitle="12 months · top 8 by gross · date basis: booking_date"
           action={<Link href="/sales/b2b" style={perfActionStyle}>B2B / DMC →</Link>}
         >
           <Chart variant="table" data={dmcPerfTop} xKey="partner_short_name"
@@ -398,7 +402,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
         </Container>
         <Container
           title="OTA Performance"
-          subtitle="12 months · top 8 by gross"
+          subtitle="12 months · top 8 by gross · date basis: booking_date"
         >
           <Chart variant="table" data={otaPerfTop} xKey="source_name"
             series={[
@@ -412,7 +416,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
         </Container>
         <Container
           title="Direct Performance"
-          subtitle="12 months · top 8 by gross"
+          subtitle="12 months · top 8 by gross · date basis: booking_date"
         >
           <Chart variant="table" data={directPerfTop} xKey="source_name"
             series={[
@@ -572,7 +576,7 @@ function CategoryCompareGrid({
     <div style={{ gridColumn: '1 / -1', background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 8, overflow: 'hidden', marginBottom: 10 }}>
       <div style={{ padding: '10px 14px 6px', borderBottom: '1px solid #E6DFCC' }}>
         <div style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#5A5A5A', fontWeight: 600 }}>
-          Category compare · {period.label}
+          Category compare · {period.label} · date basis: booking_date
         </div>
       </div>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--sans)' }}>
@@ -939,44 +943,55 @@ async function CategoryBlock({
       {/* PBS 2026-07-01: dropped share-by-month + velocity-28d 2-up row per PBS
           — noise. Data lives on the per-source landing pages now. */}
 
-      {/* PBS 2026-07-01 rev4: 3-box row equal-size. gridAutoRows:1fr + inner
-          flex ensures all three Containers render at the same height regardless
-          of chart content (empty state, table with 10 rows, bar chart, etc.). */}
-      <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gridAutoRows: '1fr', gap: 12 }}>
-        <Container title="Channel mix · res vs revenue %" subtitle="grouped bars per tier · reservations share vs gross-revenue share">
-          <div style={{ minHeight: 260, display: 'flex', flexDirection: 'column' }}>
+      {/* PBS 2026-07-01 rev5: 3-box row equal-size. minHeight bumped to 420 so
+          Top 10 sources table (up to 10 rows) doesn't overflow while empty-state
+          boxes stretch to match. All containers footnote the date basis. */}
+      <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gridAutoRows: '1fr', gap: 12, alignItems: 'stretch' }}>
+        <Container title="Channel mix · res vs revenue %" subtitle="grouped bars per tier · date basis: booking_date">
+          <div style={{ minHeight: 420, display: 'flex', flexDirection: 'column', flex: 1 }}>
             <Chart variant="bar" data={tierShareData} xKey="tier"
               series={[
                 { key: 'res_pct', label: 'Reservations %', color: '#1F3A2E' },
                 { key: 'rev_pct', label: 'Revenue %',      color: '#B8542A' },
               ]}
-              height={240} empty={{ title: 'No tier data' }} />
+              height={380} empty={{ title: 'No tier data' }} />
           </div>
         </Container>
-        <Container title="Top 10 sources" subtitle="last 30 days · by gross revenue">
-          <div style={{ minHeight: 260, display: 'flex', flexDirection: 'column' }}>
+        <Container title="Top 10 sources" subtitle="last 30 days · by gross revenue · date basis: booking_date">
+          <div style={{ minHeight: 420, display: 'flex', flexDirection: 'column', flex: 1 }}>
             <Chart variant="table" data={top10Last30d} xKey="source"
               series={[
                 { key: 'reservations',  label: 'Bkg' },
                 { key: 'gross_revenue', label: 'Rev' },
                 { key: 'adr',           label: 'ADR' },
               ]}
-              height={240} empty={{ title: 'No bookings in last 30 days' }} />
+              height={380} empty={{ title: 'No bookings in last 30 days' }} />
           </div>
         </Container>
-        <Container title="Channel perf by month" subtitle="rooms revenue · stacked by channel group · last 12 months">
-          <div style={{ minHeight: 260, display: 'flex', flexDirection: 'column' }}>
+        <Container title="Channel perf by month" subtitle="last 12 months · stacked by channel group · date basis: arrival month">
+          <div style={{ minHeight: 420, display: 'flex', flexDirection: 'column', flex: 1 }}>
             <Chart variant="stacked_bar" data={monthlyPerfData} xKey="month"
               series={monthlyPerfSeries}
-              height={240} empty={{ title: 'No monthly data' }} />
+              height={380} empty={{ title: 'No monthly data' }} />
           </div>
+        </Container>
+      </div>
+
+      {/* PBS 2026-07-01: forward-looking Top 10 sources — arrivals in next 90d
+          on-the-books vs same-day-last-year. Same column shape as Top 10 above. */}
+      <div style={{ ...fullRow }}>
+        <Container
+          title="Top 10 sources · on the books (next 90d) vs SDLY"
+          subtitle="forward-looking · date basis: check_in_date (arrivals) · SDLY = same booking-cutoff last year"
+        >
+          <TopSourcesOtbTable rows={otbSdlyTop} />
         </Container>
       </div>
 
       {/* PBS 2026-07-01: row 2 slimmed to Group Bookings · Gross share by tier.
           DMC Performance removed — duplicated by the top DMC/OTA/Direct strip. */}
       <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
-        <Container title="Group Bookings" subtitle="12 months · top by gross revenue">
+        <Container title="Group Bookings" subtitle="12 months · top by gross revenue · date basis: booking_date">
           <Chart variant="table" data={groupBookingsInline} xKey="source"
             series={[
               { key: 'channel_group',  label: 'Tier' },
@@ -987,7 +1002,7 @@ async function CategoryBlock({
             ]}
             height={180} empty={{ title: 'No group bookings on file' }} />
         </Container>
-        <Container title="Gross share by tier" subtitle="12 months · % of total gross">
+        <Container title="Gross share by tier" subtitle="12 months · % of total gross · date basis: booking_date">
           <Chart variant="bar" data={grossShareData} xKey="tier"
             series={[{ key: 'share_pct', label: 'Share of gross (%)', color: '#1F3A2E' }]}
             height={180} empty={{ title: 'No tier data' }} />
@@ -1048,7 +1063,7 @@ async function CategoryBlock({
                 ]}
                 height={180} empty={{ title: 'No groups data since 2024' }} />
             </Container>
-            <Container title="Group Performance" subtitle="12 months · top 10 by revenue">
+            <Container title="Group Performance" subtitle="12 months · top 10 by revenue · date basis: check_in_date">
               <Chart variant="table" data={originatorRows} xKey="source"
                 series={[
                   { key: 'segment',  label: 'Segment' },
