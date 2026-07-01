@@ -644,6 +644,9 @@ table:not(.data-table) {
   font-size: var(--t-base);
   color: var(--ink);
 }
+/* PBS 2026-07-01: legacy `table:not(.data-table)` block rewritten to paper-white
+ * + hairline + ink so every legacy table (Pace, Demand, Markets, Rate Plans,
+ * Leakage, and any raw <table> in pages) inherits the correct look. */
 table:not(.data-table) thead th,
 table:not(.data-table) th {
   font-family: var(--mono) !important;
@@ -651,26 +654,27 @@ table:not(.data-table) th {
   font-size: var(--t-xs) !important;
   letter-spacing: var(--ls-extra) !important;
   text-transform: uppercase !important;
-  color: var(--brass) !important;
-  background: var(--paper-warm) !important;
+  color: #1B1B1B !important;
+  background: #FFFFFF !important;
   padding: 12px 14px !important;
-  border-bottom: 1px solid var(--paper-deep) !important;
+  border-bottom: 1px solid #E6DFCC !important;
   white-space: nowrap;
   text-align: left;
 }
 table:not(.data-table) tbody td,
 table:not(.data-table) td {
   padding: 10px 14px !important;
-  border-bottom: 1px solid var(--paper-deep) !important;
+  border-bottom: 1px solid #E6DFCC !important;
   font-size: var(--t-base) !important;
-  color: var(--ink) !important;
+  color: #1B1B1B !important;
+  background: #FFFFFF !important;
   vertical-align: middle;
 }
 table:not(.data-table) tbody tr:hover td {
-  background: var(--paper-deep) !important;
+  background: #FAF6E9 !important;
 }
 .bc-redesign table tr:hover td {
-  background: var(--paper-deep) !important;
+  background: #FAF6E9 !important;
 }
 .pnl-page table.usali tr.section td {
   background: var(--paper-deep) !important;
@@ -2959,13 +2963,18 @@ body table {
   background: transparent !important;
   font-size: 13px;
 }
+/* PBS 2026-07-01: legacy dark-header rule (brass on paper-deep) rewritten to
+ * paper-white + hairline + ink. This fixes every table site-wide that hasn't
+ * opted into .data-table — Pace, Demand, Markets, Rate Plans, Leakage, etc.
+ * If any surface needs the old dark chrome back, add a specific className. */
 body table:not(.data-table) th,
 body table:not(.data-table) thead th,
 body table.tbl th {
-  color: var(--brass) !important;
-  background: var(--paper-deep) !important;
-  border-bottom: 2px solid var(--kpi-frame, rgba(168,133,74,0.45)) !important;
-  font-weight: 700 !important;
+  color: #1B1B1B !important;
+  background: #FFFFFF !important;
+  border-bottom: 1px solid #E6DFCC !important;
+  font-family: var(--mono, ui-monospace, monospace) !important;
+  font-weight: 600 !important;
   padding: 10px 10px !important;
   letter-spacing: 0.06em !important;
   text-transform: uppercase !important;
@@ -2975,21 +2984,21 @@ body table.tbl th {
 body table:not(.data-table) tbody td,
 body table:not(.data-table) td,
 body table.tbl td {
-  color: var(--ink) !important;
-  background: transparent !important;
-  border-bottom: 1px solid var(--line-soft) !important;
+  color: #1B1B1B !important;
+  background: #FFFFFF !important;
+  border-bottom: 1px solid #E6DFCC !important;
   font-weight: 500 !important;
   padding: 9px 10px !important;
   font-size: 13px !important;
 }
 body table:not(.data-table) tbody tr:nth-child(even) td,
 body table.tbl tbody tr:nth-child(even) td {
-  background: rgba(168,133,74,0.04) !important;
+  background: #FFFFFF !important;
 }
 body table:not(.data-table) tbody tr:hover td,
 body table.tbl tbody tr:hover td {
-  background: rgba(168,133,74,0.10) !important;
-  color: var(--ink) !important;
+  background: #FAF6E9 !important;
+  color: #1B1B1B !important;
 }
 body table .lbl strong, body table td strong { color: var(--ink) !important; font-weight: 600; }
 body table .text-mute, body table .ink-mute, body table td.text-mute, body table .lbl.text-mute { color: var(--ink-mute) !important; }
