@@ -359,6 +359,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
           direct: byCat.direct as unknown as Array<Record<string, unknown>>,
           ota:    byCat.ota    as unknown as Array<Record<string, unknown>>,
           dmc:    byCat.dmc    as unknown as Array<Record<string, unknown>>,
+          group:  byCat.group  as unknown as Array<Record<string, unknown>>,
         }}
       />
 
@@ -489,7 +490,12 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
 function CategoryCompareGrid({
   rows, moneyCurrency, totalRev, period,
 }: {
-  rows: { direct: Array<Record<string, unknown>>; ota: Array<Record<string, unknown>>; dmc: Array<Record<string, unknown>> };
+  rows: {
+    direct: Array<Record<string, unknown>>;
+    ota:    Array<Record<string, unknown>>;
+    dmc:    Array<Record<string, unknown>>;
+    group:  Array<Record<string, unknown>>;
+  };
   moneyCurrency: 'USD' | 'EUR';
   totalRev: number;
   period: { label: string };
@@ -516,6 +522,7 @@ function CategoryCompareGrid({
   const D = compute(rows.direct);
   const O = compute(rows.ota);
   const M = compute(rows.dmc);
+  const G = compute(rows.group);
 
   const money = (n: number) => `${sym}${Math.round(n).toLocaleString('en-US')}`;
   const pct = (n: number) => `${n.toFixed(1)}%`;
@@ -579,6 +586,7 @@ function CategoryCompareGrid({
           {row('Direct', D)}
           {row('OTAs',   O)}
           {row('DMC',    M)}
+          {row('Groups', G)}
         </tbody>
       </table>
     </div>
@@ -924,29 +932,37 @@ async function CategoryBlock({
       {/* PBS 2026-07-01: dropped share-by-month + velocity-28d 2-up row per PBS
           — noise. Data lives on the per-source landing pages now. */}
 
-      {/* PBS 2026-05-29 v2 — 3-box row: Combined tier share · Top 10 last 30d · Channel perf by month */}
-      <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
+      {/* PBS 2026-07-01 rev4: 3-box row equal-size. gridAutoRows:1fr + inner
+          flex ensures all three Containers render at the same height regardless
+          of chart content (empty state, table with 10 rows, bar chart, etc.). */}
+      <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gridAutoRows: '1fr', gap: 12 }}>
         <Container title="Channel mix · res vs revenue %" subtitle="grouped bars per tier · reservations share vs gross-revenue share">
-          <Chart variant="bar" data={tierShareData} xKey="tier"
-            series={[
-              { key: 'res_pct', label: 'Reservations %', color: '#1F3A2E' },
-              { key: 'rev_pct', label: 'Revenue %',      color: '#B8542A' },
-            ]}
-            height={180} empty={{ title: 'No tier data' }} />
+          <div style={{ minHeight: 260, display: 'flex', flexDirection: 'column' }}>
+            <Chart variant="bar" data={tierShareData} xKey="tier"
+              series={[
+                { key: 'res_pct', label: 'Reservations %', color: '#1F3A2E' },
+                { key: 'rev_pct', label: 'Revenue %',      color: '#B8542A' },
+              ]}
+              height={240} empty={{ title: 'No tier data' }} />
+          </div>
         </Container>
         <Container title="Top 10 sources" subtitle="last 30 days · by gross revenue">
-          <Chart variant="table" data={top10Last30d} xKey="source"
-            series={[
-              { key: 'reservations',  label: 'Bkg' },
-              { key: 'gross_revenue', label: 'Rev' },
-              { key: 'adr',           label: 'ADR' },
-            ]}
-            height={180} empty={{ title: 'No bookings in last 30 days' }} />
+          <div style={{ minHeight: 260, display: 'flex', flexDirection: 'column' }}>
+            <Chart variant="table" data={top10Last30d} xKey="source"
+              series={[
+                { key: 'reservations',  label: 'Bkg' },
+                { key: 'gross_revenue', label: 'Rev' },
+                { key: 'adr',           label: 'ADR' },
+              ]}
+              height={240} empty={{ title: 'No bookings in last 30 days' }} />
+          </div>
         </Container>
         <Container title="Channel perf by month" subtitle="rooms revenue · stacked by channel group · last 12 months">
-          <Chart variant="stacked_bar" data={monthlyPerfData} xKey="month"
-            series={monthlyPerfSeries}
-            height={180} empty={{ title: 'No monthly data' }} />
+          <div style={{ minHeight: 260, display: 'flex', flexDirection: 'column' }}>
+            <Chart variant="stacked_bar" data={monthlyPerfData} xKey="month"
+              series={monthlyPerfSeries}
+              height={240} empty={{ title: 'No monthly data' }} />
+          </div>
         </Container>
       </div>
 
@@ -1018,7 +1034,7 @@ async function CategoryBlock({
                 ]}
                 height={180} empty={{ title: 'No groups data since 2024' }} />
             </Container>
-            <Container title="Top group originators" subtitle="since 2024 · top 10 by revenue">
+            <Container title="Group Performance" subtitle="since 2024 · top 10 by revenue">
               <Chart variant="table" data={originatorRows} xKey="source"
                 series={[
                   { key: 'segment',  label: 'Segment' },
