@@ -441,32 +441,36 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
         </Container>
       </div>
 
-      {/* PBS #199 fix-2: top-level Sources · 2024/2025/2026 table is ALSO clickable. Click any source to open the drawer. */}
+      {/* PBS 2026-07-01: filter chips moved INTO the Container action slot (top-right). */}
       <div style={{ gridColumn: '1 / -1' }}>
-        {/* USALI task #12 — channel-group filter chips (ADD-only sibling, sits ABOVE the Container) */}
-        <div style={{ padding: '8px 14px', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)' }}>Filter</div>
-          {[{ k: 'all', label: 'All' }, { k: 'direct', label: 'Direct' }, { k: 'ota', label: 'OTA' }, { k: 'dmc', label: 'DMC' }, { k: 'rest', label: 'Rest' }].map((c) => {
-            const isActive = c.k === chFilter || (c.k === 'all' && chFilter === 'all');
-            const params = new URLSearchParams();
-            for (const [k, v] of Object.entries(searchParams as Record<string, string | string[] | undefined>)) {
-              if (k === 'ch') continue;
-              if (typeof v === 'string' && v) params.set(k, v);
-            }
-            if (c.k !== 'all') params.set('ch', c.k);
-            const qs = params.toString();
-            return (
-              <Link key={c.k} href={qs ? `?${qs}` : '?'} style={{
-                fontSize: 12, padding: '3px 10px', borderRadius: 4,
-                border: `1px solid ${isActive ? 'var(--primary, #1F3A2E)' : 'var(--hairline, #E6DFCC)'}`,
-                background: isActive ? 'var(--primary, #1F3A2E)' : 'var(--paper, #FFFFFF)',
-                color: isActive ? 'var(--paper, #FFFFFF)' : 'var(--ink, #1B1B1B)',
-                textDecoration: 'none', fontWeight: isActive ? 600 : 400,
-              }}>{c.label}</Link>
-            );
-          })}
-        </div>
-        <Container title={`Sources · 2024 / 2025 / 2026 · ${filteredSources.length} of ${sourcesAllYearsRows.length} sources`} subtitle="every active source since 2024, grouped Direct / OTA / DMC. Click any source name to open the drawer.">
+        <Container
+          title={`Sources · 2024 / 2025 / 2026 · ${filteredSources.length} of ${sourcesAllYearsRows.length} sources`}
+          subtitle="every active source since 2024, grouped Direct / OTA / DMC. Click any source name to open the drawer."
+          action={
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+              {[{ k: 'all', label: 'All' }, { k: 'direct', label: 'Direct' }, { k: 'ota', label: 'OTA' }, { k: 'dmc', label: 'DMC' }, { k: 'rest', label: 'Rest' }].map((c) => {
+                const isActive = c.k === chFilter || (c.k === 'all' && chFilter === 'all');
+                const params = new URLSearchParams();
+                for (const [k, v] of Object.entries(searchParams as Record<string, string | string[] | undefined>)) {
+                  if (k === 'ch') continue;
+                  if (typeof v === 'string' && v) params.set(k, v);
+                }
+                if (c.k !== 'all') params.set('ch', c.k);
+                const qs = params.toString();
+                return (
+                  <Link key={c.k} href={qs ? `?${qs}` : '?'} style={{
+                    fontSize: 11, padding: '4px 10px', borderRadius: 4,
+                    border: `1px solid ${isActive ? 'var(--primary, #1F3A2E)' : 'var(--hairline, #E6DFCC)'}`,
+                    background: isActive ? 'var(--primary, #1F3A2E)' : 'var(--paper, #FFFFFF)',
+                    color: isActive ? 'var(--paper, #FFFFFF)' : 'var(--ink, #1B1B1B)',
+                    textDecoration: 'none', fontWeight: isActive ? 600 : 500,
+                    letterSpacing: '0.04em', textTransform: 'uppercase',
+                  }}>{c.label}</Link>
+                );
+              })}
+            </div>
+          }
+        >
           {filteredSources.length === 0 ? (
             <div style={{ padding: 16, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>No sources data</div>
           ) : (
@@ -968,15 +972,11 @@ async function CategoryBlock({
               height={380} empty={{ title: 'No tier data' }} />
           </div>
         </Container>
-        <Container title="Top 10 sources" subtitle="last 30 days · by gross revenue · date basis: booking_date">
+        <Container title="Gross share by tier" subtitle="12 months · % of total gross · date basis: booking_date">
           <div style={{ minHeight: 420, display: 'flex', flexDirection: 'column', flex: 1 }}>
-            <Chart variant="table" data={top10Last30d} xKey="source"
-              series={[
-                { key: 'reservations',  label: 'Bkg' },
-                { key: 'gross_revenue', label: 'Rev' },
-                { key: 'adr',           label: 'ADR' },
-              ]}
-              height={380} empty={{ title: 'No bookings in last 30 days' }} />
+            <Chart variant="bar" data={grossShareData} xKey="tier"
+              series={[{ key: 'share_pct', label: 'Share of gross (%)', color: '#1F3A2E' }]}
+              height={380} empty={{ title: 'No tier data' }} />
           </div>
         </Container>
         <Container title="Channel perf by month" subtitle="last 12 months · stacked by channel group · date basis: arrival month">
@@ -988,13 +988,57 @@ async function CategoryBlock({
         </Container>
       </div>
 
-      {/* PBS 2026-07-01 rev6: Group Bookings removed — duplicated by Group Performance.
-          Row 2 now shows Gross share by tier full-width. */}
-      <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(1, minmax(0, 1fr))', gap: 12 }}>
-        <Container title="Gross share by tier" subtitle="12 months · % of total gross · date basis: booking_date">
-          <Chart variant="bar" data={grossShareData} xKey="tier"
-            series={[{ key: 'share_pct', label: 'Share of gross (%)', color: '#1F3A2E' }]}
-            height={180} empty={{ title: 'No tier data' }} />
+      {/* PBS 2026-07-01 rev7: Top 10 sources moved here next to Group Performance
+          (2-column row of tables). Gross share by tier promoted into the 3-graph
+          row above so all three top charts stay same-size. Group Performance
+          renders in the group IIFE below — this row hosts just Top 10 for now
+          so it sits directly above Group Performance on desktop. */}
+      <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gridAutoRows: '1fr', gap: 12, alignItems: 'stretch' }}>
+        <Container title="Top 10 sources" subtitle="last 30 days · by gross revenue · date basis: booking_date">
+          <div style={{ minHeight: 300, display: 'flex', flexDirection: 'column', flex: 1 }}>
+            <Chart variant="table" data={top10Last30d} xKey="source"
+              series={[
+                { key: 'reservations',  label: 'Bkg' },
+                { key: 'gross_revenue', label: 'Rev' },
+                { key: 'adr',           label: 'ADR' },
+              ]}
+              height={260} empty={{ title: 'No bookings in last 30 days' }} />
+          </div>
+        </Container>
+        <Container title="Group Performance" subtitle="12 months · top 10 by revenue · date basis: check_in_date">
+          <div style={{ minHeight: 300, display: 'flex', flexDirection: 'column', flex: 1 }}>
+            {(() => {
+              const groupsRows = (groupsSince24Res.data ?? []) as Array<{ source_name: string; market_segment: string; month_label: string; nights: number; total_amount: number; check_in_date?: string }>;
+              const cutoff = new Date();
+              cutoff.setFullYear(cutoff.getFullYear() - 1);
+              const iso = cutoff.toISOString().slice(0, 10);
+              const rows12 = groupsRows.filter((r) => String(r.check_in_date ?? '') >= iso);
+              const origMap = new Map<string, { source: string; segment: string; res: number; nights: number; revenue: number; adr: number }>();
+              for (const r of rows12) {
+                const key = `${r.source_name}|${r.market_segment}`;
+                const slot = origMap.get(key) ?? { source: r.source_name, segment: r.market_segment, res: 0, nights: 0, revenue: 0, adr: 0 };
+                slot.res += 1;
+                slot.nights += Number(r.nights ?? 0);
+                slot.revenue += Number(r.total_amount ?? 0);
+                origMap.set(key, slot);
+              }
+              const originatorRows = Array.from(origMap.values())
+                .map((r) => ({ ...r, revenue: Math.round(r.revenue), adr: r.nights > 0 ? Math.round(r.revenue / r.nights) : 0 }))
+                .sort((a, b) => b.revenue - a.revenue)
+                .slice(0, 10);
+              return (
+                <Chart variant="table" data={originatorRows} xKey="source"
+                  series={[
+                    { key: 'segment',  label: 'Segment' },
+                    { key: 'res',      label: 'Res' },
+                    { key: 'nights',   label: 'RN' },
+                    { key: 'revenue',  label: 'Rev' },
+                    { key: 'adr',      label: 'ADR' },
+                  ]}
+                  height={260} empty={{ title: 'No group originators' }} />
+              );
+            })()}
+          </div>
         </Container>
       </div>
 
@@ -1034,9 +1078,9 @@ async function CategoryBlock({
         }
         const originatorRows = Array.from(origMap.values()).map((r) => ({ ...r, revenue: Math.round(r.revenue), adr: r.nights > 0 ? Math.round(r.revenue / r.nights) : 0 })).sort((a, b) => b.revenue - a.revenue).slice(0, 10);
         return (
-          <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gridAutoRows: '1fr', gap: 12, alignItems: 'stretch' }}>
-            {/* PBS 2026-07-01 rev6: Groups · since 2024 KPI-tile card removed
-                — replaced by data on the Category Compare grid (Groups row). */}
+          <div style={{ ...fullRow }}>
+            {/* PBS 2026-07-01 rev7: Group Performance moved to the Top 10 sources row above.
+                Only Groups revenue · by month chart remains here, full width. */}
             <Container title="Groups revenue · by month" subtitle="since Jan 2024 · stacked by source classification · date basis: check_in_date">
               <div style={{ minHeight: 300, display: 'flex', flexDirection: 'column', flex: 1 }}>
                 <Chart variant="stacked_bar" data={monthRows} xKey="month"
@@ -1046,19 +1090,6 @@ async function CategoryBlock({
                     { key: 'source_named',     label: 'Other',                color: '#B8A878' },
                   ]}
                   height={260} empty={{ title: 'No groups data since 2024' }} />
-              </div>
-            </Container>
-            <Container title="Group Performance" subtitle="12 months · top 10 by revenue · date basis: check_in_date">
-              <div style={{ minHeight: 300, display: 'flex', flexDirection: 'column', flex: 1 }}>
-                <Chart variant="table" data={originatorRows} xKey="source"
-                  series={[
-                    { key: 'segment',  label: 'Segment' },
-                    { key: 'res',      label: 'Res' },
-                    { key: 'nights',   label: 'RN' },
-                    { key: 'revenue',  label: 'Rev' },
-                    { key: 'adr',      label: 'ADR' },
-                  ]}
-                  height={260} empty={{ title: 'No group originators' }} />
               </div>
             </Container>
           </div>
