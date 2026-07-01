@@ -121,7 +121,7 @@ export default function SortableSourcesTable({ rows, moneyCurrency, initialSort 
     <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
-          <tr style={{ background: '#FFFFFF', borderBottom: '2px solid #000', textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: 10 }}>
+          <tr style={{ background: '#FFFFFF', borderBottom: '1px solid #E6DFCC', textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: 10, color: '#1B1B1B' }}>
             <HeaderCell k="source" label="Source" />
             <HeaderCell k="category" label="Group" />
             <HeaderCell k="res_24" label="Res 24" align="right" />
@@ -141,7 +141,7 @@ export default function SortableSourcesTable({ rows, moneyCurrency, initialSort 
         </thead>
         <tbody>
           {sorted.map((r, i) => (
-            <tr key={`${r.source}-${i}`} style={{ borderTop: '1px solid #E0E0E0' }}>
+            <tr key={`${r.source}-${i}`} style={{ borderTop: '1px solid #E6DFCC' }}>
               <td style={tdLabelStyle}><Link href={r.drillHref} style={sourceLinkStyle}>{r.source}</Link></td>
               <td style={tdLabelStyle}>{r.category}</td>
               <td style={tdNumStyle}>{r.res_24}</td>
@@ -178,7 +178,7 @@ export default function SortableSourcesTable({ rows, moneyCurrency, initialSort 
           const sdlyPct = t.res_25 > 0 ? Math.round(((t.res_26 - t.res_25) / t.res_25) * 100) : null;
           return (
             <tfoot>
-              <tr style={{ borderTop: '2px solid #000', background: '#FFFFFF', fontWeight: 700 }}>
+              <tr style={{ borderTop: '2px solid #E6DFCC', background: '#FFFFFF', fontWeight: 700, color: '#1B1B1B' }}>
                 <td style={{ ...tdLabelStyle, fontWeight: 700 }}>Total · {sorted.length} sources</td>
                 <td style={tdLabelStyle}>—</td>
                 <td style={tdNumStyle}>{t.res_24.toLocaleString('en-US')}</td>
