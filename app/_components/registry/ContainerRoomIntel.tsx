@@ -624,7 +624,7 @@ async function ReservationsPanel({ propertyId, roomTypeName, activePeriod, curre
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
-              <tr style={{ background: '#FFFFFF', borderBottom: '2px solid #000' }}>
+              <tr style={{ background: '#FFFFFF', borderBottom: '1px solid #E6DFCC' }}>
                 <th style={th}>Reservation</th>
                 <th style={th}>Source</th>
                 <th style={th}>Rate plan</th>
@@ -815,7 +815,7 @@ async function DrillPanel({
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
-              <tr style={{ background: '#FFFFFF', borderBottom: '2px solid #000' }}>
+              <tr style={{ background: '#FFFFFF', borderBottom: '1px solid #E6DFCC' }}>
                 <th style={th}>Room type</th>
                 <th style={th}>Month</th>
                 <th style={{ ...th, textAlign: 'right' }}>RN</th>
