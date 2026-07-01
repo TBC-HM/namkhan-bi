@@ -5,6 +5,7 @@
 // compared to Same Day Last Year (SDLY). Same column shape as Top 10 sources.
 // PBS 2026-07-01.
 
+import Link from 'next/link';
 import { fmtTableUsd } from '@/lib/format';
 
 export interface OtbSdlyRow {
@@ -78,7 +79,21 @@ export default function TopSourcesOtbTable({ rows }: { rows: OtbSdlyRow[] }) {
         <tbody>
           {rows.map((r) => (
             <tr key={r.source_name}>
-              <td style={tdLabel}>{r.source_name}</td>
+              <td style={tdLabel}>
+                <Link
+                  href={`/revenue/channels/${encodeURIComponent(r.source_name)}`}
+                  style={{
+                    color: '#1F3A2E', fontWeight: 600,
+                    textDecoration: 'underline', textDecorationColor: '#C79A6B',
+                    textDecorationThickness: 2, textUnderlineOffset: 3,
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                  }}
+                  title={`Open landing page for ${r.source_name}`}
+                >
+                  {r.source_name}
+                  <span style={{ color: '#C79A6B', fontSize: 11 }}>→</span>
+                </Link>
+              </td>
               <td style={td}>{r.bkg_otb.toLocaleString('en-US')}</td>
               <td style={td}>{fmtTableUsd(r.rev_otb)}</td>
               <td style={td}>{r.adr_otb != null ? fmtTableUsd(r.adr_otb) : '—'}</td>
