@@ -430,6 +430,17 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
         </Container>
       </div>
 
+      {/* PBS 2026-07-01: forward-looking Top 10 sources · OTB (next 90 arrivals)
+          vs same-day-last-year snapshot. Wired to public.v_source_top10_otb_vs_sdly. */}
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Container
+          title="Top 10 sources · on the books (next 90d) vs SDLY"
+          subtitle="forward-looking · date basis: check_in_date · SDLY = same booking-cutoff last year"
+        >
+          <TopSourcesOtbTable rows={otbSdlyTop} />
+        </Container>
+      </div>
+
       {/* PBS #199 fix-2: top-level Sources · 2024/2025/2026 table is ALSO clickable. Click any source to open the drawer. */}
       <div style={{ gridColumn: '1 / -1' }}>
         {/* USALI task #12 — channel-group filter chips (ADD-only sibling, sits ABOVE the Container) */}
@@ -974,17 +985,6 @@ async function CategoryBlock({
               series={monthlyPerfSeries}
               height={380} empty={{ title: 'No monthly data' }} />
           </div>
-        </Container>
-      </div>
-
-      {/* PBS 2026-07-01: forward-looking Top 10 sources — arrivals in next 90d
-          on-the-books vs same-day-last-year. Same column shape as Top 10 above. */}
-      <div style={{ ...fullRow }}>
-        <Container
-          title="Top 10 sources · on the books (next 90d) vs SDLY"
-          subtitle="forward-looking · date basis: check_in_date (arrivals) · SDLY = same booking-cutoff last year"
-        >
-          <TopSourcesOtbTable rows={otbSdlyTop} />
         </Container>
       </div>
 
