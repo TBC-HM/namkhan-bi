@@ -758,8 +758,9 @@ async function CategoryBlock({
         </Container>
       </div>
 
-      {/* PBS 2026-05-29 — row 2: Group Bookings · DMC Performance · Gross share by tier */}
-      <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
+      {/* PBS 2026-07-01: row 2 slimmed to Group Bookings · Gross share by tier.
+          DMC Performance removed — duplicated by the top DMC/OTA/Direct strip. */}
+      <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
         <Container title="Group Bookings" subtitle="12 months · top by gross revenue">
           <Chart variant="table" data={groupBookingsInline} xKey="source"
             series={[
@@ -770,38 +771,6 @@ async function CategoryBlock({
               { key: 'group_adr',      label: 'ADR' },
             ]}
             height={180} empty={{ title: 'No group bookings on file' }} />
-        </Container>
-        <Container
-          title="DMC Performance"
-          subtitle="12 months · active contracts"
-          action={
-            <Link
-              href="/sales/b2b"
-              style={{
-                padding: '5px 12px',
-                fontSize: 11,
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-                fontWeight: 600,
-                background: 'var(--primary, #1F3A2E)',
-                color: '#FFFFFF',
-                borderRadius: 4,
-                textDecoration: 'none',
-              }}
-            >
-              B2B / DMC →
-            </Link>
-          }
-        >
-          <Chart variant="table" data={dmcPerfInline} xKey="partner_short_name"
-            series={[
-              { key: 'country',           label: 'Ctry' },
-              { key: 'production_status', label: 'Status' },
-              { key: 'res_12mo',          label: 'Res' },
-              { key: 'rn_12mo',           label: 'RN' },
-              { key: 'gross_12mo',        label: 'Gross' },
-            ]}
-            height={180} empty={{ title: 'No DMC contracts on file' }} />
         </Container>
         <Container title="Gross share by tier" subtitle="12 months · % of total gross">
           <Chart variant="bar" data={grossShareData} xKey="tier"
