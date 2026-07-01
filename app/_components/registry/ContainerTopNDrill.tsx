@@ -97,7 +97,7 @@ export default function ContainerTopNDrill({ container, propertyId }: Props) {
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, fontFamily: 'var(--sans, "Inter Tight", system-ui)' }}>
           <thead>
-            <tr style={{ background: '#FFFFFF', borderBottom: '2px solid #000' }}>
+            <tr style={{ background: '#FFFFFF', borderBottom: '1px solid #E6DFCC' }}>
               <th style={th('left')}>#</th>
               {cols.map((c) => (
                 <th key={c.key} style={th(c.align ?? 'left')}>{c.label}</th>
@@ -218,12 +218,12 @@ function th(align: string): React.CSSProperties {
   return {
     textAlign: align as 'left' | 'right' | 'center',
     padding: '8px 10px',
-    color: '#000',
+    color: '#1B1B1B',
     fontWeight: 700,
     fontSize: 10,
     letterSpacing: '0.04em',
     textTransform: 'uppercase',
-    borderBottom: '2px solid #000',
+    borderBottom: '1px solid #E6DFCC',
   };
 }
 function td(align: string): React.CSSProperties {
