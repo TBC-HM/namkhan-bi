@@ -81,7 +81,7 @@ export default function SourceLinkTable({
 
   return (
     <div style={{ background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 8, overflow: 'hidden' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--sans)' }}>
+      <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--sans)' }}>
         <thead>
           <tr>
             {columns.map((c, i) => (
