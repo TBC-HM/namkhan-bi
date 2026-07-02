@@ -94,12 +94,12 @@ function btnStyle(busy = false): React.CSSProperties {
     border: '1px solid #E6DFCC',
     color: busy ? '#8A8A8A' : '#1B1B1B',
     cursor: busy ? 'wait' : 'pointer',
-    padding: '6px 12px',
+    padding: '6px 14px',
     borderRadius: 4,
     fontFamily: 'inherit',
-    fontSize: 11,
-    letterSpacing: '0.06em',
-    textTransform: 'uppercase',
-    fontWeight: 600,
+    fontSize: 13,
+    letterSpacing: 0,
+    textTransform: 'none',
+    fontWeight: 500,
   };
 }
