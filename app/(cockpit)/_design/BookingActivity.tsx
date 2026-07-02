@@ -27,6 +27,7 @@ interface Row {
   total_amount: number | null;
   booking_date: string | null;
   cancellation_date: string | null;
+  check_in_date: string | null;
   is_cancelled: boolean | null;
   currency: string | null;
 }
@@ -67,14 +68,14 @@ export default async function BookingActivity({
   // Two parallel queries: new bookings + cancellations in the window
   const [bookingsRes, cancelsRes] = await Promise.all([
     supabase.from('v_reservations_unified')
-      .select('reservation_id, source_name, room_type_name, rate_plan, nights, total_amount, booking_date, cancellation_date, is_cancelled, currency')
+      .select('reservation_id, source_name, room_type_name, rate_plan, nights, total_amount, booking_date, cancellation_date, check_in_date, is_cancelled, currency')
       .eq('property_id', propertyId)
       .eq('is_cancelled', false)
       .gte('booking_date', cutoffIso)
       .order('booking_date', { ascending: false })
       .limit(100),
     supabase.from('v_reservations_unified')
-      .select('reservation_id, source_name, room_type_name, rate_plan, nights, total_amount, booking_date, cancellation_date, is_cancelled, currency')
+      .select('reservation_id, source_name, room_type_name, rate_plan, nights, total_amount, booking_date, cancellation_date, check_in_date, is_cancelled, currency')
       .eq('property_id', propertyId)
       .eq('is_cancelled', true)
       .gte('cancellation_date', cutoffDate)
@@ -129,8 +130,9 @@ function Section({ title, rows, sym, kind }: SectionProps) {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
-              <tr style={{ background: '#FFFFFF', borderBottom: '2px solid #000' }}>
+              <tr style={{ background: '#FFFFFF', borderBottom: '1px solid #E6DFCC' }}>
                 <th style={th}>{kind === 'booking' ? 'Booked' : 'Cancelled'}</th>
+                <th style={th}>Check-in</th>
                 <th style={th}>Source</th>
                 <th style={th}>Room</th>
                 <th style={th}>Rate plan</th>
@@ -148,6 +150,7 @@ function Section({ title, rows, sym, kind }: SectionProps) {
                 return (
                   <tr key={r.reservation_id} style={{ borderTop: '1px solid var(--hairline, #E6DFCC)' }}>
                     <td style={tdLeft} title={ts ?? ''}>{relTime(ts)}</td>
+                    <td style={tdLeft} title={r.check_in_date ?? ''}>{r.check_in_date ? r.check_in_date.slice(0, 10) : '—'}</td>
                     <td style={tdLeft}>{r.source_name ?? '—'}</td>
                     <td style={tdLeft}>{r.room_type_name ?? '—'}</td>
                     <td style={tdLeft}>{r.rate_plan ?? '—'}</td>
