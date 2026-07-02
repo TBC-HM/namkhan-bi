@@ -394,7 +394,7 @@ export default async function PacePage({
       </div>
       {/* #106 — Pace by check-in month (Jan-2025 → forward); RN bar + LY overlay + variance table */}
       <div style={{ gridColumn: '1 / -1', marginTop: 8 }}>
-        <Container title="Pace by check-in month · Room Nights" subtitle={`Source: Cloudbeds (pms.v_transactions · USALI-classified) · Rooms + Extras (F&B / spa / activities / etc.) net of taxes/fees · matches Cloudbeds Occupancy Statistics report · RN = night-stayed · variance vs LY · click a year to expand · ${moneyCurrency}`}>
+        <Container title="Pace by check-in month · Room Nights" subtitle={`Source: Cloudbeds OTB (on-the-books). Rooms = pms.v_reservation_rooms × balanceDetailed.subTotal weight (net-of-discount, multi-room aware). Extras = GREATEST(booked additionalItems, posted non-Rooms USALI depts) — future months from booking, past from posted. Net of taxes/fees. Matches Cloudbeds Occupancy Statistics rooms within ~1%. RN = night-stayed · variance vs LY · click a year to expand · ${moneyCurrency}`}>
           {paceCiMonthRows.length === 0 ? (
             <div style={{ padding: 14, fontSize: 12, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>
               No data on file for property {pid}.
