@@ -3,6 +3,9 @@
 // to new-design CeoEntry (paper-white · DashboardPage · Container · KpiTile).
 // Legacy DeptEntry stays intact — still used by the 7 dept hubs. This page
 // (the property landing = CEO home) is the pilot for the new design.
+//
+// 2026-07-02b: forward searchParams to CeoEntry so BookingActivity's
+// 1–7d day-picker (?activityDays=…) round-trips.
 
 import CeoEntry, { type CeoConfig } from './_components/CeoEntry';
 
@@ -35,8 +38,10 @@ const CEO_BY_PROPERTY: Record<number, CeoConfig> = {
 
 export default async function PropertyHome({
   params,
+  searchParams,
 }: {
   params: { property_id: string };
+  searchParams?: Record<string, string | string[] | undefined>;
 }) {
   const propertyId = Number(params.property_id);
   const cfg = CEO_BY_PROPERTY[propertyId] ?? {
@@ -48,5 +53,5 @@ export default async function PropertyHome({
     ceoTagline: 'AI Hotel CEO.',
     humanPartner: '—',
   };
-  return <CeoEntry cfg={cfg} />;
+  return <CeoEntry cfg={cfg} searchParams={searchParams} />;
 }
