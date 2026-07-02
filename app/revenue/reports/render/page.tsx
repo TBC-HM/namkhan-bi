@@ -5,19 +5,15 @@
 // keeps the A4-ready ink-on-paper output. Inner renderers (PulseReport, etc.)
 // still use the existing Panel block, which already prints cleanly.
 
+import Link from 'next/link';
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { resolvePeriod } from '@/lib/period';
 import { supabase } from '@/lib/supabase';
-import LetterheadHeader from './LetterheadHeader';
 import PrintControls from './PrintControls';
 import PulseReport from './_renderers/PulseReport';
 import PaceReport from './_renderers/PaceReport';
 import ChannelsReport from './_renderers/ChannelsReport';
 import PlMonthReport from './_renderers/PlMonthReport';
-import PricingReport from './_renderers/PricingReport';
-import ForecastReport from './_renderers/ForecastReport';
-import CompSetReport from './_renderers/CompSetReport';
-import VarianceReport from './_renderers/VarianceReport';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -98,10 +94,20 @@ export default async function RevenueReportRender({ searchParams }: Props) {
     });
   }
 
+  // PBS 2026-07-03: fold Letterhead into DashboardPage subtitle so header is one block.
+  const propertyMeta = await supabase
+    .from('v_property_display')
+    .select('property_name, address')
+    .eq('property_id', propertyId)
+    .maybeSingle();
+  const propName = String((propertyMeta.data as { property_name?: string } | null)?.property_name ?? propertyLabel);
+  const propAddr = String((propertyMeta.data as { address?: string } | null)?.address ?? '').replace(/\s*,\s*/g, ' · ');
+  const stamp = new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
   return (
     <DashboardPage
-      title={`${titleWord} report · ${propertyLabel}`}
-      subtitle={`Revenue · ${period.label}${month ? ` · ${month}` : ''}`}
+      title={`${titleWord} · ${propName}`}
+      subtitle={`${period.label}${month ? ` · ${month}` : ''}${propAddr ? ` · ${propAddr}` : ''} · Generated ${stamp}`}
       tabs={tabs}
       action={<PrintControls reportType={type} />}
     >
@@ -125,8 +131,8 @@ export default async function RevenueReportRender({ searchParams }: Props) {
         }
       `}</style>
 
-      {/* PBS 2026-05-22: letterhead — property name left, address right, generated stamp */}
-      <LetterheadHeader propertyId={propertyId} reportLabel={`${titleWord} report`} periodLabel={`${period.label}${month ? ` · ${month}` : ''}`} />
+      {/* PBS 2026-07-03: letterhead removed — property name / address / generated
+          stamp are now inline in the DashboardPage title + subtitle above. */}
 
       {needsNamkhanData ? (
         <div data-panel style={{
@@ -152,30 +158,68 @@ export default async function RevenueReportRender({ searchParams }: Props) {
         </div>
       ) : (
         <>
-          {type === 'pulse'    && <PulseReport period={period} />}
+          {type === 'pulse'    && <PulseReport period={period} propertyId={propertyId} />}
           {type === 'pace'     && <PaceReport period={period} />}
           {type === 'channels' && <ChannelsReport period={period} />}
           {type === 'pl-month' && <PlMonthReport period={period} month={month} />}
-          {type === 'pricing'  && <PricingReport period={period} propertyId={propertyId} />}
-          {type === 'forecast' && <ForecastReport period={period} propertyId={propertyId} />}
-          {(type === 'compset' || type === 'comp_set') && <CompSetReport period={period} propertyId={propertyId} />}
-          {type === 'variance' && <VarianceReport period={period} propertyId={propertyId} />}
+
+          {/* PBS 2026-07-03: pickup lives on the interactive page — no print
+              renderer needed; deep-link operator there instead. */}
+          {type === 'pickup' && (
+            <ComingLater
+              title="Pickup report"
+              body="The full interactive pickup table lives on the Pickup page — deltas by lead-time, day-of-week, month. Open there for filters + drill-through."
+              cta={{ label: 'Open Pickup page', href: propertyId === NAMKHAN_PROPERTY_ID ? '/revenue/pickup' : `/h/${propertyId}/revenue/pickup` }}
+            />
+          )}
+
+          {/* PBS 2026-07-03: variance / forecast / compset / pricing renderers
+              are still in scaffolding — surface a "coming later" note instead
+              of the old placeholder shells so the operator knows the state. */}
+          {(type === 'variance' || type === 'forecast' || type === 'compset' || type === 'comp_set' || type === 'pricing') && (
+            <ComingLater
+              title={`${titleWord} report — coming later`}
+              body={`This report is scoped and the URL contract works, but the printable renderer is still owed. The interactive page under ${propertyId === NAMKHAN_PROPERTY_ID ? '/revenue' : `/h/${propertyId}/revenue`} carries the underlying view for now.`}
+            />
+          )}
         </>
       )}
 
-      {!['pulse','pace','channels','pl-month','pricing','forecast','compset','comp_set','variance'].includes(type) && (
-        <div data-panel style={{
-          padding: 24,
-          border: '1px solid var(--hairline, #E6DFCC)',
-          borderRadius: 6,
-          background: 'var(--paper, #FFFFFF)',
-          color: 'var(--ink-soft, #5A5A5A)',
-          fontSize: 13,
-        }}>
-          Renderer for <strong>{type}</strong> is owed by pair-Claude — the URL
-          contract works, the dedicated print view will land here.
-        </div>
+      {!['pulse','pace','channels','pl-month','pickup','pricing','forecast','compset','comp_set','variance'].includes(type) && (
+        <ComingLater title={`Renderer for "${type}"`} body="This report type is not yet scoped. Route the request through the report builder on /revenue." />
       )}
     </DashboardPage>
+  );
+}
+
+function ComingLater({ title, body, cta }: { title: string; body: string; cta?: { label: string; href: string } }) {
+  return (
+    <div data-panel style={{
+      gridColumn: '1 / -1',
+      padding: '18px 20px',
+      background: '#FFFFFF',
+      border: '1px dashed #E6DFCC',
+      borderRadius: 6,
+      color: '#1B1B1B',
+      fontSize: 13,
+      lineHeight: 1.5,
+    }}>
+      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{title}</div>
+      <div style={{ color: '#5A5A5A', marginBottom: cta ? 10 : 0 }}>{body}</div>
+      {cta && (
+        <Link href={cta.href} style={{
+          display: 'inline-block',
+          padding: '7px 14px',
+          background: '#1F3A2E',
+          color: '#FFFFFF',
+          textDecoration: 'none',
+          borderRadius: 4,
+          fontSize: 12,
+          fontWeight: 600,
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+        }}>{cta.label} →</Link>
+      )}
+    </div>
   );
 }
