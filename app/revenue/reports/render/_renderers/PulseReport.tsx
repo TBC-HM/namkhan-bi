@@ -29,6 +29,11 @@ interface ChanRow { source_name: string | null; total_amount: number | null }
 
 function isoBack(days: number): string { return new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10); }
 function isoFwd(days: number): string  { return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10); }
+function shiftYearIso(iso: string, dy: number): string {
+  const d = new Date(iso + 'T00:00:00Z');
+  d.setUTCFullYear(d.getUTCFullYear() + dy);
+  return d.toISOString().slice(0, 10);
+}
 function fmt$(n: number): string { return `$${Math.round(n).toLocaleString('en-US')}`; }
 function pctDelta(now: number, prior: number): { value: number; direction: 'up' | 'down' | 'flat' } {
   if (prior <= 0) return { value: 0, direction: 'flat' };
@@ -58,8 +63,12 @@ export default async function PulseReport({ period, propertyId }: Props) {
   const in30 = isoFwd(30);
   const yst = isoBack(1);
   const kpiSelect = 'metric_date,rooms_available,rooms_sold,rooms_revenue,total_revenue,is_actual';
-  const cmpActive = period.compareFrom && period.compareTo;
-  const cmpLabelShort = (period.cmpLabel ?? '').replace(/^vs\s+/i, '') || 'SDLY';
+  // PBS 2026-07-03: SDLY compare is baked in — no picker, always compute vs
+  // same-day-last-year for whichever window the user picked.
+  const sdlyFrom = shiftYearIso(period.from, -1);
+  const sdlyTo   = shiftYearIso(period.to,   -1);
+  const cmpActive = true;
+  const cmpLabelShort = 'SDLY';
 
   const [
     mainKpi, cmpKpi, todayKpi, otbPace,
@@ -68,9 +77,7 @@ export default async function PulseReport({ period, propertyId }: Props) {
     channelsPeriod, alerts,
   ] = await Promise.all([
     supabase.from('v_kpi_daily').select(kpiSelect).gte('metric_date', period.from).lte('metric_date', period.to).eq('is_actual', true).then(r => (r.data ?? []) as KpiRow[]).catch(() => [] as KpiRow[]),
-    cmpActive
-      ? supabase.from('v_kpi_daily').select(kpiSelect).gte('metric_date', period.compareFrom!).lte('metric_date', period.compareTo!).eq('is_actual', true).then(r => (r.data ?? []) as KpiRow[]).catch(() => [] as KpiRow[])
-      : Promise.resolve([] as KpiRow[]),
+    supabase.from('v_kpi_daily').select(kpiSelect).gte('metric_date', sdlyFrom).lte('metric_date', sdlyTo).eq('is_actual', true).then(r => (r.data ?? []) as KpiRow[]).catch(() => [] as KpiRow[]),
     supabase.from('v_kpi_daily').select(kpiSelect).eq('metric_date', today).then(r => (r.data ?? []) as KpiRow[]).catch(() => [] as KpiRow[]),
     supabase.from('v_otb_pace').select('night_date,confirmed_rooms,confirmed_revenue').eq('property_id', pid).gte('night_date', today).lte('night_date', in30).order('night_date').then(r => (r.data ?? []) as OtbRow[]).catch(() => [] as OtbRow[]),
     supabase.from('v_reservations_unified').select('reservation_id,source_name,room_type_name,rate_plan,nights,total_amount,booking_date,check_in_date,cancellation_date').eq('property_id', pid).eq('is_cancelled', false).gte('booking_date', yst).order('booking_date', { ascending: false }).limit(15).then(r => (r.data ?? []) as ResRow[]).catch(() => [] as ResRow[]),
@@ -150,7 +157,7 @@ export default async function PulseReport({ period, propertyId }: Props) {
         {signalTxt}
       </div>
 
-      <KpiStrip title={period.label} subtitle={cmpActive ? `vs ${cmpLabelShort} · ${period.compareFrom} → ${period.compareTo}` : period.rangeLabel} tiles={mainTiles} />
+      <KpiStrip title={period.label} subtitle={`vs SDLY · ${sdlyFrom} → ${sdlyTo}`} tiles={mainTiles} />
       <KpiStrip title="Today" subtitle={new Date().toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' })} tiles={todayTiles} />
       <KpiStrip title="Next 30 days on the books" subtitle={`${today} → ${in30}`} tiles={fwdTiles} />
 
