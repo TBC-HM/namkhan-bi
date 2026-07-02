@@ -16,6 +16,10 @@ import { usePathname } from 'next/navigation';
 interface DeptLink { label: string; slug: string; href?: string; openInNewWindow?: boolean; color?: string }
 
 const CANONICAL_DEPTS: DeptLink[] = [
+  // PBS 2026-07-02: CEO entry in front of HoDs. Slug `''` targets the
+  // property root (/h/[id]/), which is the CEO's landing. Active state is
+  // special-cased below so it lights up when there's no dept in the URL.
+  { label: 'CEO',        slug: ''           },
   { label: 'Revenue',    slug: 'revenue'    },
   { label: 'Sales',      slug: 'sales'      },
   { label: 'Marketing',  slug: 'marketing'  },
@@ -169,11 +173,15 @@ export default function TopDeptStrip() {
       }}
     >
       {CANONICAL_DEPTS.map((d) => {
-        const active = activeSlug === d.slug;
+        // CEO row: active when the URL has no dept segment (`activeSlug` is null).
+        const active = d.slug === ''
+          ? (activeSlug === null || activeSlug === '')
+          : activeSlug === d.slug;
+        const href = d.slug === '' ? `${base}` : `${base}/${d.slug}`;
         return (
           <a
-            key={d.slug}
-            href={`${base}/${d.slug}`}
+            key={d.slug || '_ceo'}
+            href={href}
             aria-current={active ? 'page' : undefined}
             style={{
               color: active ? 'var(--brass)' : 'var(--ink-mute, var(--text-1, #f0e5cb))',
