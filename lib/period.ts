@@ -188,14 +188,41 @@ const CAP_LABELS: Record<CapacityMode, string> = {
   total: 'Total',
 };
 
+// ---------- Legacy URL param compat (2026-07-03) ─────────────────────
+// Older report-builder URLs used `?window=last_7d&compare=stly&segment=…`.
+// New URLs use `?win=7d&cmp=stly&seg=…`. Accept both — remap old values.
+const WIN_ALIASES: Record<string, string> = {
+  last_1d:   '7d',
+  last_7d:   '7d',
+  last_30d:  '30d',
+  last_90d:  '90d',
+  last_month:'last_month',
+  fwd_7d:    'next7',
+  fwd_30d:   'next30',
+  fwd_60d:   'next90',
+  fwd_90d:   'next90',
+  fwd_180d:  'next180',
+};
+function remapAlias(v: unknown, aliases: Record<string, string>): unknown {
+  const s = String(Array.isArray(v) ? v[0] : v ?? '').toLowerCase();
+  return aliases[s] ?? s;
+}
+function firstDefined(...values: Array<string | string[] | undefined>): string | string[] | undefined {
+  for (const v of values) if (v != null && String(Array.isArray(v) ? v[0] : v).length > 0) return v;
+  return undefined;
+}
+
 // ---------- Main resolver ----------
 export function resolvePeriod(
   searchParams: Record<string, string | string[] | undefined> | undefined
 ): ResolvedPeriod {
   const sp = searchParams ?? {};
-  const win = clamp(sp.win, WIN_VALUES, DEFAULT_WIN);
-  const cmp = clamp(sp.cmp, CMP_VALUES, DEFAULT_CMP);
-  const seg = clamp(sp.seg, SEG_VALUES, DEFAULT_SEG);
+  const winRaw = remapAlias(firstDefined(sp.win, sp.window, sp.horizon), WIN_ALIASES);
+  const cmpRaw = firstDefined(sp.cmp, sp.compare);
+  const segRaw = firstDefined(sp.seg, sp.segment);
+  const win = clamp(winRaw, WIN_VALUES, DEFAULT_WIN);
+  const cmp = clamp(cmpRaw, CMP_VALUES, DEFAULT_CMP);
+  const seg = clamp(segRaw, SEG_VALUES, DEFAULT_SEG);
   const cap = clamp(sp.cap, CAP_VALUES, DEFAULT_CAP);
 
   const today = new Date();
