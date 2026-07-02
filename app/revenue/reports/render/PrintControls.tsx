@@ -1,14 +1,9 @@
 'use client';
 
 // Print + Copy + Email controls for the printable revenue report.
-// PBS 2026-05-09 #report-builder repair:
-//   - "Print" → window.print() (browser also offers Save-as-PDF dialog).
-//   - "Copy link" → clipboard with the current URL (sharable).
-//   - "Email"     → POSTs to /api/cockpit/reports/send. If SMTP is wired,
-//                   that route sends a real email; otherwise it drops a
-//                   ticket in cockpit_tickets for manual processing. We
-//                   ALWAYS offer a mailto: fallback so a real human can
-//                   forward by hand without waiting on infra.
+// PBS 2026-07-03: contrast fix — buttons were `color: var(--line-soft)` on
+// paper white, unreadable. Now paper white + ink text + hairline border,
+// matches the design system pill treatment on the rest of the cockpit.
 
 import { useState } from 'react';
 
@@ -56,18 +51,17 @@ export default function PrintControls({ reportType }: Props) {
           subject: `Namkhan · ${reportType} report`,
         }),
       }).catch(() => null);
-      const body = res ? await res.json().catch(() => ({})) : ({} as any);
+      const body = res ? await res.json().catch(() => ({} as Record<string, unknown>)) : ({} as Record<string, unknown>);
       if (res && res.ok) {
-        const mode = body.mode ?? 'queued';
+        const mode = String(body.mode ?? 'queued');
         if (mode === 'smtp') {
           alert(`Email sent to ${recipients.length} recipient(s).`);
         } else {
           alert(
-            `SMTP not wired in this env — request queued as cockpit ticket #${body.ticket_id ?? '—'} for manual send.\n\nRecipients: ${recipients.join(', ')}`,
+            `SMTP not wired in this env — request queued as cockpit ticket #${String(body.ticket_id ?? '—')} for manual send.\n\nRecipients: ${recipients.join(', ')}`,
           );
         }
       } else {
-        // Fallback: open a mailto so the user can send by hand.
         const subject = encodeURIComponent(`Namkhan · ${reportType} report`);
         const bodyTxt = encodeURIComponent(
           `Latest ${reportType} report:\n\n${window.location.href}\n`,
@@ -96,15 +90,15 @@ export default function PrintControls({ reportType }: Props) {
 
 function btnStyle(busy = false): React.CSSProperties {
   return {
-    background: 'transparent',
-    border: '1px solid #2a2520',
-    color: busy ? '#7d7565' : 'var(--line-soft)',
+    background: '#FFFFFF',
+    border: '1px solid #E6DFCC',
+    color: busy ? '#8A8A8A' : '#1B1B1B',
     cursor: busy ? 'wait' : 'pointer',
-    padding: '6px 10px',
+    padding: '6px 12px',
     borderRadius: 4,
-    fontFamily: 'JetBrains Mono, ui-monospace, monospace',
+    fontFamily: 'inherit',
     fontSize: 11,
-    letterSpacing: '0.10em',
+    letterSpacing: '0.06em',
     textTransform: 'uppercase',
     fontWeight: 600,
   };
