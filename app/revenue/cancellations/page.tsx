@@ -52,6 +52,12 @@ interface BookedRow {
   booking_date: string | null;
   check_in_date: string | null;
 }
+interface RebookRow {
+  cxl_source: string | null;
+  rebook_source: string | null;
+  gap_days: number | null;
+  ci_shift_days: number | null;
+}
 
 const WIN_KEYS = ['30d','90d','365d','ytd','all'] as const;
 type Win = typeof WIN_KEYS[number];
@@ -101,7 +107,7 @@ export default async function CancellationsPage({
   const sdlyFrom = shiftYearIso(from, -1);
   const sdlyTo   = shiftYearIso(to,   -1);
 
-  const [rows, sdlyRows, monthImpact, rateOverall, chanMonthly, bookedRows] = await Promise.all([
+  const [rows, sdlyRows, monthImpact, rateOverall, chanMonthly, bookedRows, rebookRows] = await Promise.all([
     supabase.from('v_cancellations_detail')
       .select('reservation_id, cancellation_date, check_in_date, days_to_arrival, nights, source_name, guest_country, room_type_name, market_segment, rate_plan, lost_revenue, lost_room_nights, dta_bucket, los_bucket')
       .eq('property_id', pid)
@@ -146,6 +152,15 @@ export default async function CancellationsPage({
       .lte('booking_date', to)
       .limit(10000)
       .then(r => (r.data ?? []) as BookedRow[]).catch(() => [] as BookedRow[]),
+    // PBS 2026-07-03: rebook analysis — did cancelled guests come back?
+    // Matched on email or lowercased guest_name in v_cancellations_rebook.
+    supabase.from('v_cancellations_rebook')
+      .select('cxl_source, rebook_source, gap_days, ci_shift_days')
+      .eq('property_id', pid)
+      .gte('cxl_date', from)
+      .lte('cxl_date', to)
+      .limit(5000)
+      .then(r => (r.data ?? []) as RebookRow[]).catch(() => [] as RebookRow[]),
   ]);
 
   const cxlCount = rows.length;
@@ -190,8 +205,20 @@ export default async function CancellationsPage({
   const byLos      = Array.from(group(r => r.los_bucket).entries()).sort((a, b) => losOrder(a[0]) - losOrder(b[0]));
   const byDta      = Array.from(group(r => r.dta_bucket).entries()).sort((a, b) => dtaOrder(a[0]) - dtaOrder(b[0]));
 
-  const chartBySource = bySource.slice(0, 6).map(([source, v]) => ({ source, cancels: v.count, lost_usd: Math.round(v.lostRev) }));
-  const chartByDta    = byDta.map(([bucket, v]) => ({ bucket, cancels: v.count, lost_usd: Math.round(v.lostRev) }));
+  // PBS 2026-07-03: add "% of total cancels" as a right-axis line so the
+  // relative weight is obvious without eyeballing bar heights.
+  const chartBySource = bySource.slice(0, 6).map(([source, v]) => ({
+    source,
+    cancels: v.count,
+    lost_usd: Math.round(v.lostRev),
+    pct_of_total: cxlCount > 0 ? Math.round((v.count / cxlCount) * 1000) / 10 : 0,
+  }));
+  const chartByDta    = byDta.map(([bucket, v]) => ({
+    bucket,
+    cancels: v.count,
+    lost_usd: Math.round(v.lostRev),
+    pct_of_total: cxlCount > 0 ? Math.round((v.count / cxlCount) * 1000) / 10 : 0,
+  }));
 
   // Bookings-vs-cancellations monthly trend (from v_cancel_rate_by_channel_monthly, all channels summed)
   const monthMap = new Map<string, { received: number; cancels: number }>();
@@ -235,6 +262,38 @@ export default async function CancellationsPage({
     .sort((a, b) => b.rate_pct - a.rate_pct);
   const chanRateTotal = chanRateRows.reduce((s, r) => ({ received: s.received + r.received, cancels: s.cancels + r.cancels }), { received: 0, cancels: 0 });
   const chanRateOverall = chanRateTotal.received > 0 ? (chanRateTotal.cancels / chanRateTotal.received) * 100 : 0;
+
+  // PBS 2026-07-03: Rebook analytics per source. `bySource` gives total cancels
+  // in-window per source; `rebookRows` gives cancels-that-came-back. Rebook rate
+  // = rebooked / cancelled; small avg_gap = quick channel switch (e.g. SiteMinder),
+  // large gap = the guest actually re-planned the trip later.
+  const rebookAggMap = new Map<string, { rebooked: number; gapSum: number; gapN: number; ciShiftSum: number; ciShiftN: number }>();
+  for (const r of rebookRows) {
+    const key = r.cxl_source ?? 'Unknown';
+    const cur = rebookAggMap.get(key) ?? { rebooked: 0, gapSum: 0, gapN: 0, ciShiftSum: 0, ciShiftN: 0 };
+    cur.rebooked += 1;
+    if (Number.isFinite(Number(r.gap_days))) { cur.gapSum += Number(r.gap_days); cur.gapN += 1; }
+    if (Number.isFinite(Number(r.ci_shift_days))) { cur.ciShiftSum += Number(r.ci_shift_days); cur.ciShiftN += 1; }
+    rebookAggMap.set(key, cur);
+  }
+  const bySourceCount = new Map<string, number>();
+  for (const [s, v] of bySource) bySourceCount.set(s, v.count);
+  const rebookRowsAgg = Array.from(rebookAggMap.entries())
+    .map(([source, v]) => {
+      const totalCxl = bySourceCount.get(source) ?? v.rebooked;
+      return {
+        source,
+        cancels: totalCxl,
+        rebooked: v.rebooked,
+        rebook_rate: totalCxl > 0 ? (v.rebooked / totalCxl) * 100 : 0,
+        avg_gap: v.gapN > 0 ? v.gapSum / v.gapN : 0,
+        avg_ci_shift: v.ciShiftN > 0 ? v.ciShiftSum / v.ciShiftN : 0,
+      };
+    })
+    .filter(r => r.rebooked > 0)
+    .sort((a, b) => b.rebooked - a.rebooked);
+  const rebookedTotal = rebookRows.length;
+  const rebookRateOverall = cxlCount > 0 ? (rebookedTotal / cxlCount) * 100 : 0;
 
   // PBS 2026-07-03: Cancel rate by BOOKING WINDOW (lead time between booking
   // and check-in). Bookings booked 0-7d out cancel far less than those booked
@@ -319,21 +378,23 @@ export default async function CancellationsPage({
 
       {/* Three small charts */}
       <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 10 }}>
-        <Container title="Cancellations by channel" subtitle={`top ${chartBySource.length} · ${cxlCount} total`} density="compact">
-          <Chart variant="bar" data={chartBySource} xKey="source"
+        <Container title="Cancellations by channel" subtitle={`top ${chartBySource.length} · ${cxlCount} total · line = share of total`} density="compact">
+          <Chart variant="combo" data={chartBySource} xKey="source"
             series={[
-              { key: 'cancels',  label: 'Cancellations', color: '#B03826' },
-              { key: 'lost_usd', label: 'Lost $',        color: '#B8542A' },
+              { key: 'cancels',      label: 'Cancellations', color: '#B03826', yAxisId: 'left',  type: 'bar' },
+              { key: 'lost_usd',     label: 'Lost $',        color: '#B8542A', yAxisId: 'left',  type: 'bar' },
+              { key: 'pct_of_total', label: '% of total',    color: '#B8A878', yAxisId: 'right', type: 'line' },
             ]}
             height={220}
             empty={{ title: 'No cancellations in window' }} />
         </Container>
 
-        <Container title="Days-to-arrival buckets" subtitle="how much lead time do we lose the booking with" density="compact">
-          <Chart variant="bar" data={chartByDta} xKey="bucket"
+        <Container title="Days-to-arrival buckets" subtitle="lead time until check-in when cancel hits · line = share of total" density="compact">
+          <Chart variant="combo" data={chartByDta} xKey="bucket"
             series={[
-              { key: 'cancels',  label: 'Cancellations', color: '#1F3A2E' },
-              { key: 'lost_usd', label: 'Lost $',        color: '#B8542A' },
+              { key: 'cancels',      label: 'Cancellations', color: '#1F3A2E', yAxisId: 'left',  type: 'bar' },
+              { key: 'lost_usd',     label: 'Lost $',        color: '#B8542A', yAxisId: 'left',  type: 'bar' },
+              { key: 'pct_of_total', label: '% of total',    color: '#B8A878', yAxisId: 'right', type: 'line' },
             ]}
             height={220}
             empty={{ title: 'No cancellations in window' }} />
@@ -382,6 +443,42 @@ export default async function CancellationsPage({
                       </tr>
                     );
                   })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Container>
+      </div>
+
+      {/* Did cancelled guests rebook? */}
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Container title={`Rebook after cancel · ${rebookedTotal} of ${cxlCount} cancels came back`} subtitle={cxlCount > 0 ? `overall ${rebookRateOverall.toFixed(1)}% rebook rate · matched on email or guest name · small gap = quick channel switch · large gap = trip re-planned later` : 'no cancellations in window'} density="compact">
+          {rebookRowsAgg.length === 0 ? (
+            <div style={{ padding: '10px 12px', fontSize: 12, color: '#5A5A5A', fontStyle: 'italic' }}>No rebookings detected for cancels in this window.</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #E6DFCC' }}>
+                    <th style={th}>Cancelled from</th>
+                    <th style={{ ...th, textAlign: 'right' }}>Cancels</th>
+                    <th style={{ ...th, textAlign: 'right' }}>Rebooked</th>
+                    <th style={{ ...th, textAlign: 'right' }}>Rebook rate</th>
+                    <th style={{ ...th, textAlign: 'right' }}>Avg gap</th>
+                    <th style={{ ...th, textAlign: 'right' }}>Avg CI shift</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rebookRowsAgg.map((r) => (
+                    <tr key={r.source} style={{ borderTop: '1px solid #E6DFCC' }}>
+                      <td style={tdL}>{r.source}</td>
+                      <td style={tdR}>{r.cancels}</td>
+                      <td style={tdR}>{r.rebooked}</td>
+                      <td style={{ ...tdR, fontWeight: 600 }}>{r.rebook_rate.toFixed(1)}%</td>
+                      <td style={tdR}>{Math.round(r.avg_gap)}d</td>
+                      <td style={tdR}>{r.avg_ci_shift >= 0 ? '+' : ''}{Math.round(r.avg_ci_shift)}d</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
