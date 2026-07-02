@@ -185,13 +185,13 @@ export default async function PacePage({
   // #106: pace by check-in month — separate fetch from public.v_pace_by_ci_month (Jan-2025 onwards, with LY pair)
   const paceCiMonthRes = await supabase
     .from('v_pace_by_ci_month')
-    .select('ci_month, ci_month_start, ci_year, ci_mm, room_nights, revenue, rooms_revenue, adr, ly_room_nights, ly_revenue, ly_rooms_revenue, ly_adr, rn_var_pct, rev_var_pct')
+    .select('ci_month, ci_month_start, ci_year, ci_mm, room_nights, revenue, rooms_revenue, extras_revenue, adr, ly_room_nights, ly_revenue, ly_rooms_revenue, ly_extras_revenue, ly_adr, rn_var_pct, rev_var_pct')
     .eq('property_id', pid)
     .order('ci_month', { ascending: true });
   const paceCiMonthRows = ((paceCiMonthRes.data ?? []) as Array<{
     ci_month: string; ci_month_start: string; ci_year: number; ci_mm: number;
-    room_nights: number; revenue: number; rooms_revenue: number; adr: number | null;
-    ly_room_nights: number | null; ly_revenue: number | null; ly_rooms_revenue: number | null; ly_adr: number | null;
+    room_nights: number; revenue: number; rooms_revenue: number; extras_revenue: number | null; adr: number | null;
+    ly_room_nights: number | null; ly_revenue: number | null; ly_rooms_revenue: number | null; ly_extras_revenue: number | null; ly_adr: number | null;
     rn_var_pct: number | null; rev_var_pct: number | null;
   }>);
   // Aggregate /demand-equivalent totals (ci_month grain)
@@ -394,7 +394,7 @@ export default async function PacePage({
       </div>
       {/* #106 — Pace by check-in month (Jan-2025 → forward); RN bar + LY overlay + variance table */}
       <div style={{ gridColumn: '1 / -1', marginTop: 8 }}>
-        <Container title="Pace by check-in month · Room Nights" subtitle={`Source: gl.pl_section_monthly section=income (matches /finance/pnl, ${moneyCurrency}) · falls back to PMS reservation total for future periods without GL coverage · RN = night-stayed (rooms_sold per month) · variance vs LY · click a year to expand`}>
+        <Container title="Pace by check-in month · Room Nights" subtitle={`Source: Cloudbeds (pms.v_transactions · USALI-classified) · Rooms + Extras (F&B / spa / activities / etc.) net of taxes/fees · matches Cloudbeds Occupancy Statistics report · RN = night-stayed · variance vs LY · click a year to expand · ${moneyCurrency}`}>
           {paceCiMonthRows.length === 0 ? (
             <div style={{ padding: 14, fontSize: 12, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic' }}>
               No data on file for property {pid}.
@@ -430,8 +430,8 @@ export default async function PacePage({
                     const found = yearRowsRaw.find((r) => r.ci_month === ci);
                     return found ?? {
                       ci_month: ci, ci_month_start: ci + '-01', ci_year: Number(yr), ci_mm: i + 1,
-                      room_nights: 0, revenue: 0, rooms_revenue: 0, adr: null,
-                      ly_room_nights: null, ly_revenue: null, ly_rooms_revenue: null, ly_adr: null,
+                      room_nights: 0, revenue: 0, rooms_revenue: 0, extras_revenue: 0, adr: null,
+                      ly_room_nights: null, ly_revenue: null, ly_rooms_revenue: null, ly_extras_revenue: null, ly_adr: null,
                       rn_var_pct: null, rev_var_pct: null,
                     } as typeof yearRowsRaw[number];
                   })
@@ -442,10 +442,10 @@ export default async function PacePage({
               const sumLyRev      = yearRows.reduce((s, r) => s + Number(r.ly_revenue ?? 0), 0);
               const sumRoomsRev   = yearRows.reduce((s, r) => s + Number(r.rooms_revenue ?? 0), 0);
               const sumLyRoomsRev = yearRows.reduce((s, r) => s + Number(r.ly_rooms_revenue ?? 0), 0);
-              // PBS 2026-07-02: Extras = Total Revenue (QB gl.pl_section_monthly) − Rooms Revenue (PMS).
-              // Mirrors Cloudbeds' native "Total Other Revenue" split so operator can see how QB total reconciles.
-              const sumExtras     = Math.max(0, sumRev   - sumRoomsRev);
-              const sumLyExtras   = Math.max(0, sumLyRev - sumLyRoomsRev);
+              // PBS 2026-07-02: view now Cloudbeds-only (pms.v_transactions USALI-classified).
+              // Extras = Total − Rooms · matches Cloudbeds "Total Other Revenue" (F&B / spa / activities / etc.).
+              const sumExtras     = yearRows.reduce((s, r) => s + Number(r.extras_revenue ?? 0), 0);
+              const sumLyExtras   = yearRows.reduce((s, r) => s + Number(r.ly_extras_revenue ?? 0), 0);
               const totalAdr      = sumRn   > 0 ? sumRoomsRev   / sumRn   : null;
               const totalLyAdr    = sumLyRn > 0 ? sumLyRoomsRev / sumLyRn : null;
               const rnPct   = sumLyRn  > 0 ? ((sumRn  - sumLyRn ) / sumLyRn ) * 100 : null;
@@ -474,7 +474,7 @@ export default async function PacePage({
                       <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #BDBDBD' }}>LY ADR</th>
                       <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #BDBDBD' }}>Room Rev</th>
                       <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #BDBDBD' }}>LY Room Rev</th>
-                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #BDBDBD' }} title="Total Revenue (QB) − Rooms Revenue (PMS) · F&B / spa / activities / extras">Extras</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #BDBDBD' }} title="Non-rooms USALI depts from Cloudbeds pms.v_transactions (F&B / spa / activities / retail / transport / other)">Extras</th>
                       <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #BDBDBD' }}>LY Extras</th>
                       <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #BDBDBD' }}>Total Revenue</th>
                       <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #BDBDBD' }}>LY Total Revenue</th>
@@ -498,18 +498,8 @@ export default async function PacePage({
                           <td style={tdN}>{r.ly_adr == null ? '—' : `${sym}${Math.round(Number(r.ly_adr)).toLocaleString('en-US')}`}</td>
                           <td style={tdN}>{sym}{Math.round(Number(r.rooms_revenue ?? 0)).toLocaleString('en-US')}</td>
                           <td style={tdN}>{r.ly_rooms_revenue == null ? '—' : `${sym}${Math.round(Number(r.ly_rooms_revenue)).toLocaleString('en-US')}`}</td>
-                          {(() => {
-                            const extras   = Math.max(0, Number(r.revenue ?? 0)    - Number(r.rooms_revenue ?? 0));
-                            const lyExtras = (r.ly_revenue == null || r.ly_rooms_revenue == null)
-                              ? null
-                              : Math.max(0, Number(r.ly_revenue) - Number(r.ly_rooms_revenue));
-                            return (
-                              <>
-                                <td style={tdN} title="Total (QB) − Rooms (PMS)">{sym}{Math.round(extras).toLocaleString('en-US')}</td>
-                                <td style={tdN}>{lyExtras == null ? '—' : `${sym}${Math.round(lyExtras).toLocaleString('en-US')}`}</td>
-                              </>
-                            );
-                          })()}
+                          <td style={tdN} title="Non-rooms USALI depts (F&B / spa / activities / etc.)">{sym}{Math.round(Number(r.extras_revenue ?? 0)).toLocaleString('en-US')}</td>
+                          <td style={tdN}>{r.ly_extras_revenue == null ? '—' : `${sym}${Math.round(Number(r.ly_extras_revenue)).toLocaleString('en-US')}`}</td>
                           <td style={tdN}>{sym}{Math.round(Number(r.revenue ?? 0)).toLocaleString('en-US')}</td>
                           <td style={tdN}>{r.ly_revenue == null ? '—' : `${sym}${Math.round(Number(r.ly_revenue)).toLocaleString('en-US')}`}</td>
                           <td style={{ ...tdN, color: revColor, fontWeight: 600 }}>{revVar == null ? '—' : `${revVar > 0 ? '+' : ''}${revVar.toFixed(1)}%`}</td>
