@@ -10,6 +10,8 @@
 
 import Link from 'next/link';
 import { DashboardPage, Container, KpiTile, type DashboardTab, type KpiTileProps, type KpiComparison } from '@/app/(cockpit)/_design';
+import BookingActivity from '@/app/(cockpit)/_design/BookingActivity';
+import HodTasksList from '@/app/revenue/_components/HodTasksList';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export interface CeoConfig {
@@ -54,7 +56,13 @@ function isoBack(days: number): string {
   return new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
 }
 
-export default async function CeoEntry({ cfg }: { cfg: CeoConfig }) {
+export default async function CeoEntry({
+  cfg,
+  searchParams,
+}: {
+  cfg: CeoConfig;
+  searchParams?: Record<string, string | string[] | undefined>;
+}) {
   const supabase = getSupabaseAdmin();
   const today    = new Date().toISOString().slice(0, 10);
   const d30      = isoBack(30);
@@ -82,10 +90,10 @@ export default async function CeoEntry({ cfg }: { cfg: CeoConfig }) {
     pull(dSdlyStart, dSdlyEnd),
     supabase.from('cockpit_bugs').select('id,body,status,created_at,fix_link,fix_label').neq('status', 'archived').order('created_at', { ascending: false }).limit(10).then(r => (r.data ?? []) as BugRow[]).catch(() => [] as BugRow[]),
   ]);
-  // Attention / Docs / Tasks tables not yet installed — render empty state.
+  // Attention / Docs surfaces not yet installed — render empty state.
+  // Tasks now use the shared HodTasksList primitive (client component with add/due/repeat/delete).
   const attnRes: Array<{ id: string; label: string; severity: 'high'|'medium'|'low'; href: string | null }> = [];
   const docsRes: Array<{ id: string; label: string; href: string | null; uploaded_at: string }> = [];
-  const tasksRes: Array<{ id: string; label: string; done: boolean; due: string | null; alert: boolean | null }> = [];
 
   const A30       = agg(kpi30);
   const A90       = agg(kpi90);
@@ -246,22 +254,8 @@ export default async function CeoEntry({ cfg }: { cfg: CeoConfig }) {
           )}
         </Container>
 
-        <Container title={`Tasks · ${tasksRes.length}`} subtitle="Nova-owned todos">
-          {tasksRes.length === 0 ? (
-            <EmptyBlock>No open tasks. Tasks created in chat land here.</EmptyBlock>
-          ) : (
-            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {tasksRes.map((t) => (
-                <li key={t.id} style={{ padding: '8px 10px', background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 4, fontSize: 12, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                  <input type="checkbox" defaultChecked={t.done} disabled style={{ marginTop: 2 }} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ color: '#1B1B1B' }}>{t.label}</div>
-                    {t.due && <div style={{ fontSize: 10, color: t.alert ? '#B03826' : '#8A8A8A', marginTop: 2 }}>due {t.due}</div>}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+        <Container title="Tasks" subtitle="add · due-date · repeat · delete · per property" density="compact">
+          <HodTasksList deptSlug="revenue" propertyId={cfg.propertyId} />
         </Container>
       </div>
 
@@ -290,6 +284,11 @@ export default async function CeoEntry({ cfg }: { cfg: CeoConfig }) {
             </ul>
           )}
         </Container>
+      </div>
+
+      {/* Booking activity — new bookings + cancellations · 1–7d window */}
+      <div style={{ gridColumn: '1 / -1' }}>
+        <BookingActivity propertyId={cfg.propertyId} searchParams={searchParams} />
       </div>
     </DashboardPage>
   );
