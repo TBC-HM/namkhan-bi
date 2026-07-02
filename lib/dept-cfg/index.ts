@@ -11,27 +11,33 @@ import type { DeptCfg } from './types';
 // source/source-page URL. Pressing a saved report opens a print-ready doc,
 // not the live dashboard. Source pages remain reachable via the dept strip.
 const REVENUE_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
+  // PBS 2026-07-03: keys aligned to lib/period.ts resolvePeriod contract —
+  // `win` (not `window`), values `7d`/`30d` (not `last_7d`), `cmp` (not `compare`).
+  // Bug 2026-07-03: builder emitted `?window=last_30d`, resolvePeriod fell
+  // through to DEFAULT_WIN='30d' regardless of user choice. Fixed keys+values.
   { value: 'pulse', label: 'Pulse', hrefBase: '/revenue/reports/render?type=pulse', dimGroups: [
-    { key: 'window',  label: 'Window',  options: [
-      { value: 'today',     label: 'Today'    },
-      { value: 'last_7d',   label: 'Last 7d'  },
-      { value: 'last_30d',  label: 'Last 30d' },
-      { value: 'mtd',       label: 'MTD'      },
-      { value: 'ytd',       label: 'YTD'      },
+    { key: 'win',  label: 'Window',  options: [
+      { value: 'today', label: 'Today'    },
+      { value: '7d',    label: 'Last 7d'  },
+      { value: '30d',   label: 'Last 30d' },
+      { value: '90d',   label: 'Last 90d' },
+      { value: 'mtd',   label: 'MTD'      },
+      { value: 'ytd',   label: 'YTD'      },
     ]},
-    { key: 'compare', label: 'Compare', options: [
+    { key: 'cmp', label: 'Compare', options: [
       { value: 'sdly',   label: 'SDLY'        },
       { value: 'stly',   label: 'STLY'        },
       { value: 'lw',     label: 'Last week'   },
       { value: 'lm',     label: 'Last month'  },
-      { value: 'ly',     label: 'LY'          },
       { value: 'budget', label: 'Budget'      },
     ]},
-    { key: 'segment', label: 'Segment', options: [
-      { value: 'all',    label: 'All'        },
-      { value: 'room',   label: 'Room type'  },
-      { value: 'source', label: 'Source'     },
-      { value: 'rate',   label: 'Rate plan'  },
+    { key: 'seg', label: 'Segment', options: [
+      { value: 'all',      label: 'All'         },
+      { value: 'retail',   label: 'Retail'      },
+      { value: 'dmc',      label: 'DMC'         },
+      { value: 'group',    label: 'Group'       },
+      { value: 'discount', label: 'Discount'    },
+      { value: 'comp',     label: 'Comp'        },
     ]},
   ]},
   { value: 'pace', label: 'Pace', hrefBase: '/revenue/reports/render?type=pace', dimGroups: [
@@ -177,13 +183,13 @@ const REVENUE_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
     ]},
   ]},
   { value: 'all', label: 'All revenue', hrefBase: '/revenue/reports/render?type=pulse', dimGroups: [
-    { key: 'window', label: 'Window', options: [
-      { value: 'last_7d',  label: 'Last 7d'  },
-      { value: 'last_30d', label: 'Last 30d' },
-      { value: 'mtd',      label: 'MTD'      },
-      { value: 'ytd',      label: 'YTD'      },
+    { key: 'win', label: 'Window', options: [
+      { value: '7d',   label: 'Last 7d'  },
+      { value: '30d',  label: 'Last 30d' },
+      { value: 'mtd',  label: 'MTD'      },
+      { value: 'ytd',  label: 'YTD'      },
     ]},
-    { key: 'compare', label: 'Compare', options: [
+    { key: 'cmp', label: 'Compare', options: [
       { value: 'stly',   label: 'STLY'   },
       { value: 'budget', label: 'Budget' },
     ]},
