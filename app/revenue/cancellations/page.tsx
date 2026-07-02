@@ -46,6 +46,12 @@ interface ChanMonthRow {
   cancellations: number;
   cancel_rate_pct: number | null;
 }
+interface BookedRow {
+  source_name: string | null;
+  is_cancelled: boolean | null;
+  booking_date: string | null;
+  check_in_date: string | null;
+}
 
 const WIN_KEYS = ['30d','90d','365d','ytd','all'] as const;
 type Win = typeof WIN_KEYS[number];
@@ -95,7 +101,7 @@ export default async function CancellationsPage({
   const sdlyFrom = shiftYearIso(from, -1);
   const sdlyTo   = shiftYearIso(to,   -1);
 
-  const [rows, sdlyRows, monthImpact, rateOverall, chanMonthly] = await Promise.all([
+  const [rows, sdlyRows, monthImpact, rateOverall, chanMonthly, bookedRows] = await Promise.all([
     supabase.from('v_cancellations_detail')
       .select('reservation_id, cancellation_date, check_in_date, days_to_arrival, nights, source_name, guest_country, room_type_name, market_segment, rate_plan, lost_revenue, lost_room_nights, dta_bucket, los_bucket')
       .eq('property_id', pid)
@@ -129,6 +135,17 @@ export default async function CancellationsPage({
       .eq('property_id', pid)
       .gte('month', '2025-01-01')
       .then(r => (r.data ?? []) as ChanMonthRow[]).catch(() => [] as ChanMonthRow[]),
+    // PBS 2026-07-03: raw bookings received in the CHOSEN window for cancel
+    // rate by booking-window (check_in − booking_date lead time). Filter is on
+    // booking_date so we capture EVERY booking received in the window, cancel
+    // or not, exactly like the monthly view but for arbitrary date ranges.
+    supabase.from('v_reservations_unified')
+      .select('source_name, is_cancelled, booking_date, check_in_date')
+      .eq('property_id', pid)
+      .gte('booking_date', from)
+      .lte('booking_date', to)
+      .limit(10000)
+      .then(r => (r.data ?? []) as BookedRow[]).catch(() => [] as BookedRow[]),
   ]);
 
   const cxlCount = rows.length;
@@ -218,6 +235,42 @@ export default async function CancellationsPage({
     .sort((a, b) => b.rate_pct - a.rate_pct);
   const chanRateTotal = chanRateRows.reduce((s, r) => ({ received: s.received + r.received, cancels: s.cancels + r.cancels }), { received: 0, cancels: 0 });
   const chanRateOverall = chanRateTotal.received > 0 ? (chanRateTotal.cancels / chanRateTotal.received) * 100 : 0;
+
+  // PBS 2026-07-03: Cancel rate by BOOKING WINDOW (lead time between booking
+  // and check-in). Bookings booked 0-7d out cancel far less than those booked
+  // 90+d out — this table exposes that pattern.
+  const BWIN_ORDER = ['0-7d','8-30d','31-90d','91-180d','180+d'] as const;
+  type Bwin = typeof BWIN_ORDER[number];
+  function bwinBucket(lead: number): Bwin {
+    if (lead <= 7)   return '0-7d';
+    if (lead <= 30)  return '8-30d';
+    if (lead <= 90)  return '31-90d';
+    if (lead <= 180) return '91-180d';
+    return '180+d';
+  }
+  const bwinMap = new Map<Bwin, { received: number; cancels: number }>();
+  let receivedTotal = 0, cancelsTotal = 0;
+  for (const r of bookedRows) {
+    if (!r.booking_date || !r.check_in_date) continue;
+    const ci = new Date(String(r.check_in_date));
+    const bd = new Date(String(r.booking_date));
+    const lead = Math.round((ci.getTime() - bd.getTime()) / 86_400_000);
+    if (!Number.isFinite(lead) || lead < 0) continue;
+    const key = bwinBucket(lead);
+    const cur = bwinMap.get(key) ?? { received: 0, cancels: 0 };
+    cur.received += 1;
+    if (r.is_cancelled) cur.cancels += 1;
+    bwinMap.set(key, cur);
+    receivedTotal += 1;
+    if (r.is_cancelled) cancelsTotal += 1;
+  }
+  const overallRate = receivedTotal > 0 ? (cancelsTotal / receivedTotal) * 100 : 0;
+  const bwinRows = BWIN_ORDER
+    .map((b) => {
+      const v = bwinMap.get(b) ?? { received: 0, cancels: 0 };
+      return { bucket: b, received: v.received, cancels: v.cancels, rate_pct: v.received > 0 ? (v.cancels / v.received) * 100 : 0 };
+    })
+    .filter((r) => r.received > 0);
 
   const tabs: DashboardTab[] = REVENUE_SUBPAGES.map((s) => ({
     key: s.href, label: s.label, href: s.href,
@@ -325,6 +378,44 @@ export default async function CancellationsPage({
                         <td style={tdR}>{c.received}</td>
                         <td style={tdR}>{c.cancels}</td>
                         <td style={{ ...tdR, fontWeight: 600 }}>{c.rate_pct.toFixed(1)}%</td>
+                        <td style={{ ...tdR, color, fontWeight: 600 }}>{dPP >= 0 ? '+' : ''}{dPP.toFixed(1)}pp</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Container>
+      </div>
+
+      {/* Cancel rate by booking window (lead time bucket) */}
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Container title={`Cancel rate by booking window · ${WIN_LABEL[win]}`} subtitle={receivedTotal > 0 ? `${receivedTotal} bookings received · ${cancelsTotal} cancels · overall ${overallRate.toFixed(1)}% · lead time = check-in − booking date` : 'no bookings in window'} density="compact">
+          {bwinRows.length === 0 ? (
+            <div style={{ padding: '10px 12px', fontSize: 12, color: '#5A5A5A', fontStyle: 'italic' }}>No bookings in window.</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #E6DFCC' }}>
+                    <th style={th}>Lead time</th>
+                    <th style={{ ...th, textAlign: 'right' }}>Bookings received</th>
+                    <th style={{ ...th, textAlign: 'right' }}>Cancellations</th>
+                    <th style={{ ...th, textAlign: 'right' }}>Cancel rate</th>
+                    <th style={{ ...th, textAlign: 'right' }}>vs overall</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bwinRows.map((b) => {
+                    const dPP = b.rate_pct - overallRate;
+                    const color = dPP > 3 ? '#B03826' : dPP < -3 ? '#2E7D32' : '#5A5A5A';
+                    return (
+                      <tr key={b.bucket} style={{ borderTop: '1px solid #E6DFCC' }}>
+                        <td style={tdL}>{b.bucket}</td>
+                        <td style={tdR}>{b.received}</td>
+                        <td style={tdR}>{b.cancels}</td>
+                        <td style={{ ...tdR, fontWeight: 600 }}>{b.rate_pct.toFixed(1)}%</td>
                         <td style={{ ...tdR, color, fontWeight: 600 }}>{dPP >= 0 ? '+' : ''}{dPP.toFixed(1)}pp</td>
                       </tr>
                     );
