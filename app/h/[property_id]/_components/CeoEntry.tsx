@@ -63,19 +63,23 @@ export default async function CeoEntry({ cfg }: { cfg: CeoConfig }) {
   // PBS 2026-07-02: main tile value is YTD (Jan 1 of current year → today).
   const dYtd     = `${new Date().getFullYear()}-01-01`;
   const yearNow  = new Date().getFullYear();
+  // PBS 2026-07-02: SDLY YTD — Jan 1 of prior year through same month/day of prior year.
+  const dSdlyStart = `${yearNow - 1}-01-01`;
+  const dSdlyEnd   = new Date(new Date().setFullYear(yearNow - 1)).toISOString().slice(0, 10);
 
   // Namkhan-only view today. Donna would need its own view — safe fallback.
   const kpiView = cfg.propertyId === NAMKHAN_ID ? 'v_kpi_daily' : null;
   const kpiSelect = 'metric_date,rooms_available,rooms_sold,rooms_revenue,total_revenue,is_actual';
-  const pull = (from: string) => kpiView
-    ? supabase.from(kpiView).select(kpiSelect).gte('metric_date', from).lte('metric_date', today).eq('is_actual', true).then(r => (r.data ?? []) as KpiRow[]).catch(() => [] as KpiRow[])
+  const pull = (from: string, to: string = today) => kpiView
+    ? supabase.from(kpiView).select(kpiSelect).gte('metric_date', from).lte('metric_date', to).eq('is_actual', true).then(r => (r.data ?? []) as KpiRow[]).catch(() => [] as KpiRow[])
     : Promise.resolve([] as KpiRow[]);
 
-  const [kpi30, kpi90, kpi365, kpiYtd, bugsRes] = await Promise.all([
+  const [kpi30, kpi90, kpi365, kpiYtd, kpiSdlyYtd, bugsRes] = await Promise.all([
     pull(d30),
     pull(d90),
     pull(d365),
     pull(dYtd),
+    pull(dSdlyStart, dSdlyEnd),
     supabase.from('cockpit_bugs').select('id,body,status,created_at,fix_link,fix_label').neq('status', 'archived').order('created_at', { ascending: false }).limit(10).then(r => (r.data ?? []) as BugRow[]).catch(() => [] as BugRow[]),
   ]);
   // Attention / Docs / Tasks tables not yet installed — render empty state.
@@ -83,10 +87,25 @@ export default async function CeoEntry({ cfg }: { cfg: CeoConfig }) {
   const docsRes: Array<{ id: string; label: string; href: string | null; uploaded_at: string }> = [];
   const tasksRes: Array<{ id: string; label: string; done: boolean; due: string | null; alert: boolean | null }> = [];
 
-  const A30  = agg(kpi30);
-  const A90  = agg(kpi90);
-  const A365 = agg(kpi365);
-  const AYtd = agg(kpiYtd);
+  const A30       = agg(kpi30);
+  const A90       = agg(kpi90);
+  const A365      = agg(kpi365);
+  const AYtd      = agg(kpiYtd);
+  const ASdlyYtd  = agg(kpiSdlyYtd);
+
+  // Delta helper: % change vs SDLY YTD. Positive = better (revenue/RevPAR/ADR/occ).
+  const pctDelta = (now: number, prior: number): { value: number; direction: 'up' | 'down' | 'flat' } => {
+    if (prior <= 0) return { value: 0, direction: 'flat' };
+    const pct = ((now - prior) / prior) * 100;
+    return {
+      value: Math.round(pct * 10) / 10,
+      direction: pct > 0.5 ? 'up' : pct < -0.5 ? 'down' : 'flat',
+    };
+  };
+  const dOcc    = pctDelta(AYtd.occ,    ASdlyYtd.occ);
+  const dAdr    = pctDelta(AYtd.adr,    ASdlyYtd.adr);
+  const dRevpar = pctDelta(AYtd.revpar, ASdlyYtd.revpar);
+  const dRev    = pctDelta(AYtd.rev,    ASdlyYtd.rev);
 
   const cmp = (v30: number, v90: number, v365: number, format: 'absolute'|'currency'|'percent' = 'absolute'): KpiComparison[] => [
     { label: 'L30d',  value: v30,  format, direction: 'flat' },
@@ -94,19 +113,23 @@ export default async function CeoEntry({ cfg }: { cfg: CeoConfig }) {
     { label: 'L365d', value: v365, format, direction: 'flat' },
   ];
 
-  // PBS 2026-07-02: main = YTD (Jan 1 → today). compare[] = trailing 30/90/365d.
+  // PBS 2026-07-02: main = YTD (Jan 1 → today). delta = SDLY YTD %. compare[] = trailing L30/L90/L365.
   const tiles: KpiTileProps[] = [
     { label: 'Occupancy',     value: `${AYtd.occ.toFixed(1)}%`,        size: 'md',
-      footnote: `rooms sold ÷ rooms available · YTD ${yearNow}`,
+      footnote: `rooms sold ÷ rooms available · YTD ${yearNow} · SDLY ${(ASdlyYtd.occ).toFixed(1)}%`,
+      delta:   { value: dOcc.value,    period: `vs SDLY YTD ${yearNow - 1}`, direction: dOcc.direction,    isGoodWhenUp: true },
       compare: cmp(Number(A30.occ.toFixed(1)), Number(A90.occ.toFixed(1)), Number(A365.occ.toFixed(1)), 'percent') },
     { label: 'ADR',           value: Math.round(AYtd.adr),    currency: 'USD', size: 'md',
-      footnote: `rooms revenue ÷ rooms sold · YTD ${yearNow}`,
+      footnote: `rooms revenue ÷ rooms sold · YTD ${yearNow} · SDLY $${Math.round(ASdlyYtd.adr)}`,
+      delta:   { value: dAdr.value,    period: `vs SDLY YTD ${yearNow - 1}`, direction: dAdr.direction,    isGoodWhenUp: true },
       compare: cmp(Math.round(A30.adr), Math.round(A90.adr), Math.round(A365.adr), 'currency') },
     { label: 'RevPAR',        value: Math.round(AYtd.revpar), currency: 'USD', size: 'md',
-      footnote: `rooms revenue ÷ rooms available · YTD ${yearNow}`,
+      footnote: `rooms revenue ÷ rooms available · YTD ${yearNow} · SDLY $${Math.round(ASdlyYtd.revpar)}`,
+      delta:   { value: dRevpar.value, period: `vs SDLY YTD ${yearNow - 1}`, direction: dRevpar.direction, isGoodWhenUp: true },
       compare: cmp(Math.round(A30.revpar), Math.round(A90.revpar), Math.round(A365.revpar), 'currency') },
     { label: 'Rooms revenue', value: Math.round(AYtd.rev),    currency: 'USD', size: 'md',
-      footnote: `rooms-only revenue · consumed nights (excl. cancels / no-shows / F&B / extras) · YTD ${yearNow}`,
+      footnote: `rooms-only revenue · consumed nights (excl. cancels / no-shows / F&B / extras) · YTD ${yearNow} · SDLY $${Math.round(ASdlyYtd.rev).toLocaleString('en-US')}`,
+      delta:   { value: dRev.value,    period: `vs SDLY YTD ${yearNow - 1}`, direction: dRev.direction,    isGoodWhenUp: true },
       compare: cmp(Math.round(A30.rev), Math.round(A90.rev), Math.round(A365.rev), 'currency') },
   ];
 
