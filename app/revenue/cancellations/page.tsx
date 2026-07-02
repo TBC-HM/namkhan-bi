@@ -39,6 +39,13 @@ interface MonthImpactRow {
   lost_revenue: number;
   avg_days_to_arrival: number | null;
 }
+interface ChanMonthRow {
+  month: string;
+  channel_group: string | null;
+  total_reservations: number;
+  cancellations: number;
+  cancel_rate_pct: number | null;
+}
 
 const WIN_KEYS = ['30d','90d','365d','ytd','all'] as const;
 type Win = typeof WIN_KEYS[number];
@@ -88,7 +95,7 @@ export default async function CancellationsPage({
   const sdlyFrom = shiftYearIso(from, -1);
   const sdlyTo   = shiftYearIso(to,   -1);
 
-  const [rows, sdlyRows, monthImpact, rateOverall] = await Promise.all([
+  const [rows, sdlyRows, monthImpact, rateOverall, chanMonthly] = await Promise.all([
     supabase.from('v_cancellations_detail')
       .select('reservation_id, cancellation_date, check_in_date, days_to_arrival, nights, source_name, guest_country, room_type_name, market_segment, rate_plan, lost_revenue, lost_room_nights, dta_bucket, los_bucket')
       .eq('property_id', pid)
@@ -115,6 +122,13 @@ export default async function CancellationsPage({
       .eq('property_id', pid)
       .maybeSingle()
       .then(r => r.data as { cancelled_30d: number; total_30d: number; cancel_rate_30d: number; cancelled_90d: number; total_90d: number; cancel_rate_90d: number } | null).catch(() => null),
+    // PBS 2026-07-03: bookings received vs cancellations by channel · monthly.
+    // Aggregated in the page for the "bookings vs cancels" trend + per-channel rate table.
+    supabase.from('v_cancel_rate_by_channel_monthly')
+      .select('month, channel_group, total_reservations, cancellations, cancel_rate_pct')
+      .eq('property_id', pid)
+      .gte('month', '2025-01-01')
+      .then(r => (r.data ?? []) as ChanMonthRow[]).catch(() => [] as ChanMonthRow[]),
   ]);
 
   const cxlCount = rows.length;
@@ -161,11 +175,49 @@ export default async function CancellationsPage({
 
   const chartBySource = bySource.slice(0, 6).map(([source, v]) => ({ source, cancels: v.count, lost_usd: Math.round(v.lostRev) }));
   const chartByDta    = byDta.map(([bucket, v]) => ({ bucket, cancels: v.count, lost_usd: Math.round(v.lostRev) }));
-  const chartByMonth  = monthImpact.map(m => ({
-    month: m.cancel_year_month,
-    cancels: Number(m.cancellations ?? 0),
-    lost_rn: Number(m.lost_room_nights ?? 0),
-  }));
+
+  // Bookings-vs-cancellations monthly trend (from v_cancel_rate_by_channel_monthly, all channels summed)
+  const monthMap = new Map<string, { received: number; cancels: number }>();
+  for (const r of chanMonthly) {
+    const key = String(r.month).slice(0, 7);
+    const c = monthMap.get(key) ?? { received: 0, cancels: 0 };
+    c.received += Number(r.total_reservations ?? 0);
+    c.cancels  += Number(r.cancellations ?? 0);
+    monthMap.set(key, c);
+  }
+  const bookingsVsCancels = Array.from(monthMap.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([month, v]) => ({
+      month,
+      bookings_ok: Math.max(0, v.received - v.cancels),
+      cancels:     v.cancels,
+      cancel_pct:  v.received > 0 ? Math.round((v.cancels / v.received) * 1000) / 10 : 0,
+    }));
+
+  // Per-channel cancel rate over the CHOSEN window — aggregate v_cancel_rate_by_channel_monthly
+  // by clipping to months intersecting from → to. Simpler: aggregate months whose
+  // first-day is within window.
+  const chanRateMap = new Map<string, { received: number; cancels: number }>();
+  for (const r of chanMonthly) {
+    const mIso = String(r.month).slice(0, 10);
+    if (mIso < from.slice(0, 7) + '-01' || mIso > to) continue;
+    const key = r.channel_group ?? 'Unknown';
+    const c = chanRateMap.get(key) ?? { received: 0, cancels: 0 };
+    c.received += Number(r.total_reservations ?? 0);
+    c.cancels  += Number(r.cancellations ?? 0);
+    chanRateMap.set(key, c);
+  }
+  const chanRateRows = Array.from(chanRateMap.entries())
+    .map(([channel, v]) => ({
+      channel,
+      received: v.received,
+      cancels:  v.cancels,
+      rate_pct: v.received > 0 ? (v.cancels / v.received) * 100 : 0,
+    }))
+    .filter(r => r.received > 0)
+    .sort((a, b) => b.rate_pct - a.rate_pct);
+  const chanRateTotal = chanRateRows.reduce((s, r) => ({ received: s.received + r.received, cancels: s.cancels + r.cancels }), { received: 0, cancels: 0 });
+  const chanRateOverall = chanRateTotal.received > 0 ? (chanRateTotal.cancels / chanRateTotal.received) * 100 : 0;
 
   const tabs: DashboardTab[] = REVENUE_SUBPAGES.map((s) => ({
     key: s.href, label: s.label, href: s.href,
@@ -234,14 +286,53 @@ export default async function CancellationsPage({
             empty={{ title: 'No cancellations in window' }} />
         </Container>
 
-        <Container title="Monthly trend" subtitle="from v_cancellation_impact_monthly · Jan 2025 →" density="compact">
-          <Chart variant="line" data={chartByMonth} xKey="month"
+        <Container title="Bookings vs cancellations · monthly" subtitle="grouped by booking_date · cancel-rate line on right axis" density="compact">
+          <Chart variant="combo" data={bookingsVsCancels} xKey="month"
             series={[
-              { key: 'cancels', label: 'Cancellations', color: '#B03826' },
-              { key: 'lost_rn', label: 'Lost RN',       color: '#1F3A2E' },
+              { key: 'bookings_ok', label: 'Bookings kept', color: '#1F3A2E', yAxisId: 'left',  type: 'bar' },
+              { key: 'cancels',     label: 'Cancellations', color: '#B03826', yAxisId: 'left',  type: 'bar' },
+              { key: 'cancel_pct',  label: 'Cancel rate %', color: '#B8A878', yAxisId: 'right', type: 'line' },
             ]}
             height={220}
-            empty={{ title: 'No monthly impact data' }} />
+            empty={{ title: 'No monthly booking data' }} />
+        </Container>
+      </div>
+
+      {/* Cancel rate by channel — where should we focus? */}
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Container title={`Cancel rate by channel · ${WIN_LABEL[win]}`} subtitle={chanRateTotal.received > 0 ? `${chanRateTotal.received} bookings received · ${chanRateTotal.cancels} cancels · overall ${chanRateOverall.toFixed(1)}%` : 'no bookings in window'} density="compact">
+          {chanRateRows.length === 0 ? (
+            <div style={{ padding: '10px 12px', fontSize: 12, color: '#5A5A5A', fontStyle: 'italic' }}>No channel-rate data in window.</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #E6DFCC' }}>
+                    <th style={th}>Channel</th>
+                    <th style={{ ...th, textAlign: 'right' }}>Bookings received</th>
+                    <th style={{ ...th, textAlign: 'right' }}>Cancellations</th>
+                    <th style={{ ...th, textAlign: 'right' }}>Cancel rate</th>
+                    <th style={{ ...th, textAlign: 'right' }}>vs overall</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {chanRateRows.map((c) => {
+                    const dPP = c.rate_pct - chanRateOverall;
+                    const color = dPP > 3 ? '#B03826' : dPP < -3 ? '#2E7D32' : '#5A5A5A';
+                    return (
+                      <tr key={c.channel} style={{ borderTop: '1px solid #E6DFCC' }}>
+                        <td style={tdL}>{c.channel}</td>
+                        <td style={tdR}>{c.received}</td>
+                        <td style={tdR}>{c.cancels}</td>
+                        <td style={{ ...tdR, fontWeight: 600 }}>{c.rate_pct.toFixed(1)}%</td>
+                        <td style={{ ...tdR, color, fontWeight: 600 }}>{dPP >= 0 ? '+' : ''}{dPP.toFixed(1)}pp</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Container>
       </div>
 
