@@ -106,7 +106,7 @@ export default async function CeoEntry({ cfg }: { cfg: CeoConfig }) {
       footnote: `rooms revenue ÷ rooms available · YTD ${yearNow}`,
       compare: cmp(Math.round(A30.revpar), Math.round(A90.revpar), Math.round(A365.revpar), 'currency') },
     { label: 'Rooms revenue', value: Math.round(AYtd.rev),    currency: 'USD', size: 'md',
-      footnote: `rooms-only revenue (excl. F&B & extras) · YTD ${yearNow}`,
+      footnote: `rooms-only revenue · consumed nights (excl. cancels / no-shows / F&B / extras) · YTD ${yearNow}`,
       compare: cmp(Math.round(A30.rev), Math.round(A90.rev), Math.round(A365.rev), 'currency') },
   ];
 
@@ -149,8 +149,8 @@ export default async function CeoEntry({ cfg }: { cfg: CeoConfig }) {
       <div style={{ gridColumn: '1 / -1' }}>
         <Container title={`Ask ${cfg.ceoName}`} subtitle="Cross-department questions · P&L · guest experience · operations">
           <form
-            action={`/api/chat-v2/init?role=${encodeURIComponent(cfg.ceoRole)}&propertyId=${cfg.propertyId}`}
-            method="POST"
+            action={`/chat`}
+            method="GET"
             style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
           >
             <textarea
@@ -166,8 +166,12 @@ export default async function CeoEntry({ cfg }: { cfg: CeoConfig }) {
             />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {['How is the resort doing today?', 'Yesterday\'s P&L', 'Any leakage flags?', 'This week\'s pickup'].map((chip) => (
-                  <ChipHint key={chip} label={chip} propertyId={cfg.propertyId} role={cfg.ceoRole} />
+                {[
+                  { label: 'How is the resort doing today?', href: `/h/${cfg.propertyId}/revenue/pulse` },
+                  { label: 'Any leakage flags?',             href: `/h/${cfg.propertyId}/revenue/leakage` },
+                  { label: 'This week\'s pickup',            href: `/h/${cfg.propertyId}/revenue/pickup` },
+                ].map((chip) => (
+                  <ChipHint key={chip.label} label={chip.label} href={chip.href} />
                 ))}
               </div>
               <button type="submit" style={{
@@ -279,8 +283,7 @@ function EmptyBlock({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ChipHint({ label, propertyId, role }: { label: string; propertyId: number; role: string }) {
-  const href = `/api/chat-v2/init?role=${encodeURIComponent(role)}&propertyId=${propertyId}&q=${encodeURIComponent(label)}`;
+function ChipHint({ label, href }: { label: string; href: string }) {
   return (
     <a href={href} style={{
       padding: '4px 10px', background: '#FFFFFF', color: '#1B1B1B',
