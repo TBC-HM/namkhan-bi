@@ -442,6 +442,10 @@ export default async function PacePage({
               const sumLyRev      = yearRows.reduce((s, r) => s + Number(r.ly_revenue ?? 0), 0);
               const sumRoomsRev   = yearRows.reduce((s, r) => s + Number(r.rooms_revenue ?? 0), 0);
               const sumLyRoomsRev = yearRows.reduce((s, r) => s + Number(r.ly_rooms_revenue ?? 0), 0);
+              // PBS 2026-07-02: Extras = Total Revenue (QB gl.pl_section_monthly) − Rooms Revenue (PMS).
+              // Mirrors Cloudbeds' native "Total Other Revenue" split so operator can see how QB total reconciles.
+              const sumExtras     = Math.max(0, sumRev   - sumRoomsRev);
+              const sumLyExtras   = Math.max(0, sumLyRev - sumLyRoomsRev);
               const totalAdr      = sumRn   > 0 ? sumRoomsRev   / sumRn   : null;
               const totalLyAdr    = sumLyRn > 0 ? sumLyRoomsRev / sumLyRn : null;
               const rnPct   = sumLyRn  > 0 ? ((sumRn  - sumLyRn ) / sumLyRn ) * 100 : null;
@@ -470,6 +474,8 @@ export default async function PacePage({
                       <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #BDBDBD' }}>LY ADR</th>
                       <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #BDBDBD' }}>Room Rev</th>
                       <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #BDBDBD' }}>LY Room Rev</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #BDBDBD' }} title="Total Revenue (QB) − Rooms Revenue (PMS) · F&B / spa / activities / extras">Extras</th>
+                      <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #BDBDBD' }}>LY Extras</th>
                       <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #BDBDBD' }}>Total Revenue</th>
                       <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #BDBDBD' }}>LY Total Revenue</th>
                       <th style={{ padding: '5px 10px', textAlign: 'right', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)', borderBottom: '2px solid #BDBDBD' }}>Rev var %</th>
@@ -492,6 +498,18 @@ export default async function PacePage({
                           <td style={tdN}>{r.ly_adr == null ? '—' : `${sym}${Math.round(Number(r.ly_adr)).toLocaleString('en-US')}`}</td>
                           <td style={tdN}>{sym}{Math.round(Number(r.rooms_revenue ?? 0)).toLocaleString('en-US')}</td>
                           <td style={tdN}>{r.ly_rooms_revenue == null ? '—' : `${sym}${Math.round(Number(r.ly_rooms_revenue)).toLocaleString('en-US')}`}</td>
+                          {(() => {
+                            const extras   = Math.max(0, Number(r.revenue ?? 0)    - Number(r.rooms_revenue ?? 0));
+                            const lyExtras = (r.ly_revenue == null || r.ly_rooms_revenue == null)
+                              ? null
+                              : Math.max(0, Number(r.ly_revenue) - Number(r.ly_rooms_revenue));
+                            return (
+                              <>
+                                <td style={tdN} title="Total (QB) − Rooms (PMS)">{sym}{Math.round(extras).toLocaleString('en-US')}</td>
+                                <td style={tdN}>{lyExtras == null ? '—' : `${sym}${Math.round(lyExtras).toLocaleString('en-US')}`}</td>
+                              </>
+                            );
+                          })()}
                           <td style={tdN}>{sym}{Math.round(Number(r.revenue ?? 0)).toLocaleString('en-US')}</td>
                           <td style={tdN}>{r.ly_revenue == null ? '—' : `${sym}${Math.round(Number(r.ly_revenue)).toLocaleString('en-US')}`}</td>
                           <td style={{ ...tdN, color: revColor, fontWeight: 600 }}>{revVar == null ? '—' : `${revVar > 0 ? '+' : ''}${revVar.toFixed(1)}%`}</td>
@@ -508,6 +526,8 @@ export default async function PacePage({
                           <td style={{ padding: '5px 10px', fontSize: 11, color: 'var(--ink, #1B1B1B)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{totalLyAdr == null ? '—' : `${sym}${Math.round(totalLyAdr).toLocaleString('en-US')}`}</td>
                           <td style={{ padding: '5px 10px', fontSize: 11, color: 'var(--ink, #1B1B1B)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{sym}{Math.round(sumRoomsRev).toLocaleString('en-US')}</td>
                           <td style={{ padding: '5px 10px', fontSize: 11, color: 'var(--ink, #1B1B1B)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{sumLyRoomsRev > 0 ? `${sym}${Math.round(sumLyRoomsRev).toLocaleString('en-US')}` : '—'}</td>
+                          <td style={{ padding: '5px 10px', fontSize: 11, color: 'var(--ink, #1B1B1B)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{sym}{Math.round(sumExtras).toLocaleString('en-US')}</td>
+                          <td style={{ padding: '5px 10px', fontSize: 11, color: 'var(--ink, #1B1B1B)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{sumLyExtras > 0 ? `${sym}${Math.round(sumLyExtras).toLocaleString('en-US')}` : '—'}</td>
                           <td style={{ padding: '5px 10px', fontSize: 11, color: 'var(--ink, #1B1B1B)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{sym}{Math.round(sumRev).toLocaleString('en-US')}</td>
                           <td style={{ padding: '5px 10px', fontSize: 11, color: 'var(--ink, #1B1B1B)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{sumLyRev > 0 ? `${sym}${Math.round(sumLyRev).toLocaleString('en-US')}` : '—'}</td>
                           <td style={{ padding: '5px 10px', fontSize: 11, color: 'var(--ink, #1B1B1B)', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, ...sumPctStyle(revPct) }}>{revPct == null ? '—' : `${revPct > 0 ? '+' : ''}${revPct.toFixed(1)}%`}</td>
