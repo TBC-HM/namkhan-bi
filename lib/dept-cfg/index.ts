@@ -15,6 +15,9 @@ const REVENUE_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
   // `win` (not `window`), values `7d`/`30d` (not `last_7d`), `cmp` (not `compare`).
   // Bug 2026-07-03: builder emitted `?window=last_30d`, resolvePeriod fell
   // through to DEFAULT_WIN='30d' regardless of user choice. Fixed keys+values.
+  // PBS 2026-07-03: Compare + Segment removed from Pulse builder — SDLY is
+  // baked in (always the delta on the KPI strip), and segment splits belong
+  // in the Channels report where they actually change the picture.
   { value: 'pulse', label: 'Pulse', hrefBase: '/revenue/reports/render?type=pulse', dimGroups: [
     { key: 'win',  label: 'Window',  options: [
       { value: 'today', label: 'Today'    },
@@ -23,21 +26,6 @@ const REVENUE_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
       { value: '90d',   label: 'Last 90d' },
       { value: 'mtd',   label: 'MTD'      },
       { value: 'ytd',   label: 'YTD'      },
-    ]},
-    { key: 'cmp', label: 'Compare', options: [
-      { value: 'sdly',   label: 'SDLY'        },
-      { value: 'stly',   label: 'STLY'        },
-      { value: 'lw',     label: 'Last week'   },
-      { value: 'lm',     label: 'Last month'  },
-      { value: 'budget', label: 'Budget'      },
-    ]},
-    { key: 'seg', label: 'Segment', options: [
-      { value: 'all',      label: 'All'         },
-      { value: 'retail',   label: 'Retail'      },
-      { value: 'dmc',      label: 'DMC'         },
-      { value: 'group',    label: 'Group'       },
-      { value: 'discount', label: 'Discount'    },
-      { value: 'comp',     label: 'Comp'        },
     ]},
   ]},
   { value: 'pace', label: 'Pace', hrefBase: '/revenue/reports/render?type=pace', dimGroups: [
@@ -65,13 +53,24 @@ const REVENUE_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
       { value: 'month', label: 'Month' },
     ]},
   ]},
+  // PBS 2026-07-03: keys aligned to resolvePeriod contract (`win`/`cmp`/`seg`).
+  // Segment picker moved here from Pulse — segments matter for channel mix, not for
+  // the property-wide Pulse snapshot.
   { value: 'channels', label: 'Channels', hrefBase: '/revenue/reports/render?type=channels', dimGroups: [
-    { key: 'window', label: 'Window', options: [
-      { value: 'last_7d',  label: 'Last 7d'  },
-      { value: 'last_30d', label: 'Last 30d' },
-      { value: 'last_90d', label: 'Last 90d' },
-      { value: 'mtd',      label: 'MTD'      },
-      { value: 'ytd',      label: 'YTD'      },
+    { key: 'win', label: 'Window', options: [
+      { value: '7d',  label: 'Last 7d'  },
+      { value: '30d', label: 'Last 30d' },
+      { value: '90d', label: 'Last 90d' },
+      { value: 'mtd', label: 'MTD'      },
+      { value: 'ytd', label: 'YTD'      },
+    ]},
+    { key: 'seg', label: 'Segment', options: [
+      { value: 'all',      label: 'All'      },
+      { value: 'retail',   label: 'Retail'   },
+      { value: 'dmc',      label: 'DMC'      },
+      { value: 'group',    label: 'Group'    },
+      { value: 'discount', label: 'Discount' },
+      { value: 'comp',     label: 'Comp'     },
     ]},
     { key: 'channel', label: 'Channel', options: [
       { value: 'all',       label: 'All'       },
@@ -87,9 +86,9 @@ const REVENUE_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
       { value: 'net_adr',    label: 'Net ADR'    },
       { value: 'commission', label: 'Commission' },
     ]},
-    { key: 'compare', label: 'Compare', options: [
+    { key: 'cmp', label: 'Compare', options: [
       { value: 'stly', label: 'STLY' },
-      { value: 'ly',   label: 'LY'   },
+      { value: 'sdly', label: 'SDLY' },
       { value: 'lm',   label: 'Last month' },
     ]},
   ]},
