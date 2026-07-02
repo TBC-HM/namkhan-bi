@@ -25,7 +25,7 @@ const NAMKHAN = 260955;
 interface KpiRow { metric_date: string; rooms_available: number; rooms_sold: number; rooms_revenue: number; total_revenue: number; is_actual: boolean }
 interface OtbRow { night_date: string; confirmed_rooms: number; confirmed_revenue: number }
 interface ResRow { reservation_id: string; source_name: string | null; room_type_name: string | null; rate_plan: string | null; nights: number | null; total_amount: number | null; booking_date: string | null; cancellation_date: string | null; check_in_date: string | null }
-interface ChanRow { source_name: string | null; total_amount: number | null }
+interface ChanRow { source_name: string | null; room_nights: number | null; rooms_revenue: number | null }
 
 function isoBack(days: number): string { return new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10); }
 function isoFwd(days: number): string  { return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10); }
@@ -85,7 +85,10 @@ export default async function PulseReport({ period, propertyId }: Props) {
     supabase.from('v_reservations_unified').select('reservation_id', { count: 'exact', head: true }).eq('property_id', pid).eq('is_cancelled', false).eq('check_in_date', today).then(r => r.count ?? 0).catch(() => 0),
     supabase.from('v_reservations_unified').select('reservation_id', { count: 'exact', head: true }).eq('property_id', pid).eq('is_cancelled', false).eq('check_out_date', today).then(r => r.count ?? 0).catch(() => 0),
     supabase.from('v_reservations_unified').select('reservation_id', { count: 'exact', head: true }).eq('property_id', pid).eq('is_cancelled', false).lte('check_in_date', today).gt('check_out_date', today).then(r => r.count ?? 0).catch(() => 0),
-    supabase.from('v_reservations_unified').select('source_name,total_amount').eq('property_id', pid).eq('is_cancelled', false).gte('check_in_date', period.from).lte('check_in_date', period.to).then(r => (r.data ?? []) as ChanRow[]).catch(() => [] as ChanRow[]),
+    // PBS 2026-07-03: switched from check_in_date × total_amount (mis-attributed
+    // multi-night stays to their check-in week) to v_channel_nights_daily —
+    // per-night per-source rooms revenue. Matches v_kpi_daily numerator.
+    supabase.from('v_channel_nights_daily').select('source_name,room_nights,rooms_revenue').eq('property_id', pid).gte('night_date', period.from).lte('night_date', period.to).then(r => (r.data ?? []) as ChanRow[]).catch(() => [] as ChanRow[]),
     getTacticalAlertsTop().catch(() => [] as Array<Record<string, unknown>>),
   ]);
 
@@ -109,18 +112,19 @@ export default async function PulseReport({ period, propertyId }: Props) {
   const soldOutDays = otbPace.filter((r) => capToday > 0 && Number(r.confirmed_rooms ?? 0) >= capToday);
   const lowOccDays  = otbPace.filter((r) => capToday > 0 && Number(r.confirmed_rooms ?? 0) < Math.round(capToday * 0.25));
 
-  const chanMap = new Map<string, { rev: number; count: number }>();
+  const chanMap = new Map<string, { rev: number; rn: number }>();
   for (const r of channelsPeriod) {
     const key = r.source_name ?? 'Unknown';
-    const c = chanMap.get(key) ?? { rev: 0, count: 0 };
-    c.rev += Number(r.total_amount ?? 0); c.count += 1;
+    const c = chanMap.get(key) ?? { rev: 0, rn: 0 };
+    c.rev += Number(r.rooms_revenue ?? 0);
+    c.rn  += Number(r.room_nights ?? 0);
     chanMap.set(key, c);
   }
   const chanTotal = Array.from(chanMap.values()).reduce((s, c) => s + c.rev, 0);
   const chanRows = Array.from(chanMap.entries())
     .sort((a, b) => b[1].rev - a[1].rev)
     .slice(0, 8)
-    .map(([source, v]) => ({ source, bookings: v.count, revenue: v.rev, share: chanTotal > 0 ? (v.rev / chanTotal) * 100 : 0 }));
+    .map(([source, v]) => ({ source, rn: v.rn, revenue: v.rev, adr: v.rn > 0 ? v.rev / v.rn : 0, share: chanTotal > 0 ? (v.rev / chanTotal) * 100 : 0 }));
 
   const signalTxt =
     `${inHouseCount} in-house · ${arrivalsTodayCount} arr · ${departuresTodayCount} dep today · ` +
@@ -190,7 +194,7 @@ export default async function PulseReport({ period, propertyId }: Props) {
       </div>
 
       <div style={{ gridColumn: '1 / -1' }}>
-        <Container title={`Top channels · ${period.label}`} subtitle={chanTotal > 0 ? `${fmt$(chanTotal)} on the books · ${chanRows.length} sources` : 'no bookings in period'} density="compact">
+        <Container title={`Top channels · ${period.label}`} subtitle={chanTotal > 0 ? `nights consumed · ${fmt$(chanTotal)} rooms rev · ${chanRows.length} sources` : 'no room nights consumed in period'} density="compact">
           {chanRows.length === 0 ? (
             <Empty>No channel bookings in this period.</Empty>
           ) : (
@@ -199,8 +203,9 @@ export default async function PulseReport({ period, propertyId }: Props) {
                 <thead>
                   <tr style={{ borderBottom: '1px solid #E6DFCC' }}>
                     <th style={th}>Source</th>
-                    <th style={{ ...th, textAlign: 'right' }}>Bookings</th>
-                    <th style={{ ...th, textAlign: 'right' }}>Revenue</th>
+                    <th style={{ ...th, textAlign: 'right' }}>Room nights</th>
+                    <th style={{ ...th, textAlign: 'right' }}>Rooms rev</th>
+                    <th style={{ ...th, textAlign: 'right' }}>ADR</th>
                     <th style={{ ...th, textAlign: 'right' }}>Share</th>
                   </tr>
                 </thead>
@@ -208,8 +213,9 @@ export default async function PulseReport({ period, propertyId }: Props) {
                   {chanRows.map((c) => (
                     <tr key={c.source} style={{ borderTop: '1px solid #E6DFCC' }}>
                       <td style={tdL}>{c.source}</td>
-                      <td style={tdR}>{c.bookings}</td>
+                      <td style={tdR}>{c.rn}</td>
                       <td style={tdR}>{fmt$(c.revenue)}</td>
+                      <td style={tdR}>{c.adr > 0 ? fmt$(c.adr) : '—'}</td>
                       <td style={tdR}>{c.share.toFixed(1)}%</td>
                     </tr>
                   ))}
