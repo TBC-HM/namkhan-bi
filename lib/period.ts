@@ -15,7 +15,7 @@
 import { format } from 'date-fns';
 
 export type WindowKey =
-  | 'today' | '7d' | '30d' | '90d' | 'ytd' | 'l12m' | 'ly'
+  | 'today' | '7d' | '30d' | '90d' | 'mtd' | 'ytd' | 'l12m' | 'ly' | 'last_month'
   | 'next7' | 'next30' | 'next90' | 'next180' | 'next365';
 
 // CompareKey: PBS 2026-05-09 expanded the set so every revenue/finance page
@@ -65,7 +65,7 @@ export interface ResolvedPeriod {
 }
 
 // ---------- Allowed values, defaults ----------
-const WIN_VALUES: WindowKey[] = ['today','7d','30d','90d','ytd','l12m','ly','next7','next30','next90','next180','next365'];
+const WIN_VALUES: WindowKey[] = ['today','7d','30d','90d','mtd','ytd','l12m','ly','last_month','next7','next30','next90','next180','next365'];
 const CMP_VALUES: CompareKey[] = ['none','pp','stly','sdly','lw','lm','budget'];
 const SEG_VALUES: SegmentKey[] = ['all','retail','dmc','group','discount','comp','unsegmented'];
 const CAP_VALUES: CapacityMode[] = ['selling','live','total'];
@@ -106,10 +106,22 @@ function windowRange(win: WindowKey, today = new Date()):
     case '7d':      return { from: addDays(today, -6),  to: today, direction: 'back', days: 7, label: 'Last 7 days' };
     case '30d':     return { from: addDays(today, -29), to: today, direction: 'back', days: 30, label: 'Last 30 days' };
     case '90d':     return { from: addDays(today, -89), to: today, direction: 'back', days: 90, label: 'Last 90 days' };
+    case 'mtd': {
+      const first = new Date(today.getFullYear(), today.getMonth(), 1);
+      const days = Math.round((today.getTime() - first.getTime()) / 86_400_000) + 1;
+      return { from: first, to: today, direction: 'back', days, label: 'Month to date' };
+    }
     case 'ytd': {
       const jan1 = new Date(today.getFullYear(), 0, 1);
       const days = Math.round((today.getTime() - jan1.getTime()) / 86_400_000) + 1;
       return { from: jan1, to: today, direction: 'back', days, label: 'Year to date' };
+    }
+    case 'last_month': {
+      const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+      const lastMonthEnd   = new Date(thisMonthStart.getTime() - 86_400_000);
+      const days = Math.round((lastMonthEnd.getTime() - lastMonthStart.getTime()) / 86_400_000) + 1;
+      return { from: lastMonthStart, to: lastMonthEnd, direction: 'back', days, label: 'Last month' };
     }
     case 'l12m':    return { from: addYears(today, -1), to: today, direction: 'back', days: 365, label: 'Last 12 months' };
     case 'ly': {
