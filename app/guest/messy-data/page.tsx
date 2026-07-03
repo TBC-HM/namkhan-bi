@@ -268,7 +268,7 @@ export default async function MessyDataPage() {
                       {r.p.country || '—'}
                     </td>
                     <td style={{ ...td, textAlign: 'right' }}>{r.p.stays_count}</td>
-                    <td style={{ ...td, textAlign: 'right' }}>{'—', 'USD')}</td>
+                    <td style={{ ...td, textAlign: 'right' }}>{'—'}</td>
                     <td style={{ ...td, textAlign: 'right', color: 'var(--ink-mute)' }}>{r.p.last_stay_date || '—'}</td>
                   </tr>
                 ))}
