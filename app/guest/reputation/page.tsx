@@ -52,15 +52,19 @@ interface PageProps { searchParams: Record<string, string | string[] | undefined
 export default async function GuestReputationPage({ searchParams }: PageProps) {
   const sb = getSupabaseAdmin();
 
-  const [oauthR, reviewsR, mapsR] = await Promise.all([
+  const [oauthR, reviewsR, mapsR, listingsR, scrapeR] = await Promise.all([
     sb.schema('marketing').from('google_oauth_tokens').select('*').eq('property_id', PROPERTY_ID).maybeSingle(),
     sb.from('mkt_reviews').select('*').eq('property_id', PROPERTY_ID).order('reviewed_at', { ascending: false }).limit(50),
     sb.schema('kpi').from('google_maps_daily').select('date, impressions_search, impressions_maps, direction_requests, phone_taps, website_clicks').eq('property_id', PROPERTY_ID).order('date', { ascending: false }).limit(400),
+    sb.from('v_external_listings').select('*').eq('property_id', PROPERTY_ID).eq('category', 'reputation').order('channel'),
+    sb.schema('marketing').from('review_scrape_targets').select('source, last_scraped_at, next_due_at, is_active').eq('property_id', PROPERTY_ID),
   ]);
 
   const oauth: OAuthRow | null = (oauthR.data as OAuthRow | null) ?? null;
   const reviews: ReviewRow[] = (reviewsR.data as ReviewRow[]) ?? [];
   const mapsRows: MapsRow[] = (mapsR.data as MapsRow[]) ?? [];
+  const listings: any[] = (listingsR.data as any[]) ?? [];
+  const scrapeStatus: Record<string, any> = Object.fromEntries(((scrapeR.data as any[]) ?? []).map((s) => [s.source, s]));
 
   const googleReviews = reviews.filter(r => r.source === 'google');
   const googleAvg = googleReviews.length > 0
@@ -194,7 +198,8 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
                       <span style={{ color:INK_M }}>Website clicks</span> <span style={{ color:INK, textAlign:'right', fontWeight:500 }}>{fmtNum(w.website)}</span>
                     </div>
                   </div>
-                ))}
+                );
+          })}
               </div>
             )}
           </div>
@@ -204,24 +209,28 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
         <div style={{ gridColumn:'1 / -1' }}>
           <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, margin:'4px 2px 8px' }}>Review sources</div>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(280px, 1fr))', gap:8 }}>
-            {[
-              { key:'google',      label:'Google Business Profile', state: oauth ? 'connected' : 'not-connected',
-                detail: oauth ? `${oauth.location_name ?? '(auto-detect pending)'} · ${googleReviews.length} reviews here`
-                              : 'Reviews + Maps insights (impressions · directions · calls · website clicks) + reply-by-API.',
-                cta: oauth ? { label:'Force refresh', href:'/api/google/pull-now?property=260955' }
-                           : { label:'Connect Google →', href:'/api/google/oauth/connect?property=260955' } },
-              { key:'tripadvisor', label:'TripAdvisor', state:'not-connected',
-                detail:'Free Content API — last 5 reviews + location details. Read-only (reply via extranet).',
-                cta:{ label:'Wire up', href:'#' } },
-              { key:'booking',     label:'Booking.com',
-                state:'not-connected',
-                detail:'Biweekly scrape (headless Chromium via Nimble). Reply via extranet.',
-                cta:{ label:'Wire up', href:'#' } },
-              { key:'expedia',     label:'Expedia',
-                state:'not-connected',
-                detail:'Biweekly scrape. Reply via extranet.',
-                cta:{ label:'Wire up', href:'#' } },
-            ].map((ig: any) => (
+            {listings.map((li: any) => {
+              const key: string = li.channel;
+              const label: string = SOURCE_LABEL[key] ?? key;
+              const hasUrl = !!li.url;
+              const isGoogle = key === 'google';
+              const stateConnected = isGoogle ? !!oauth : (hasUrl && (scrapeStatus[key]?.last_scraped_at));
+              const nextDue = scrapeStatus[key]?.next_due_at;
+              const lastSync = scrapeStatus[key]?.last_scraped_at;
+              const detail = isGoogle
+                ? (oauth ? `${oauth.location_name ?? '(auto-detect pending)'} · ${googleReviews.length} reviews · Maps insights`
+                         : 'Reviews + Maps insights (impressions · directions · calls · website clicks) + reply-by-API.')
+                : hasUrl
+                  ? `${li.url.replace(/^https?:\/\//,'').slice(0,50)}${li.url.length>50?'…':''}${lastSync ? ' · last synced ' + new Date(lastSync).toLocaleDateString('en-GB', { day:'2-digit', month:'short' }) : ''}`
+                  : 'No URL set. Add it in Settings → Listings to enable scraping.';
+              const cta = isGoogle
+                ? (oauth ? { label:'Pull latest', href:'/api/google/pull-now?property=260955' }
+                         : { label:'Connect Google →', href:'/api/google/oauth/connect?property=260955' })
+                : hasUrl
+                  ? { label:'Edit URL', href:'/settings/marketing/listings' }
+                  : { label:'Add URL →', href:'/settings/marketing/listings' };
+              const ig = { key, label, state: stateConnected ? 'connected' : 'not-connected', detail, cta };
+              return (
               <div key={ig.key} style={{ padding:'12px 14px', borderRadius:6, background:WHITE, border:'1px solid '+HAIR, display:'flex', flexDirection:'column', gap:8 }}>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', gap:8 }}>
                   <span style={{ display:'inline-flex', alignItems:'center', gap:8, fontWeight:600, fontSize:13, color:INK }}><SourceBadge source={ig.key} />{ig.label}</span>
@@ -242,7 +251,8 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
                   pointerEvents: ig.cta.href === '#' ? 'none' : 'auto',
                 }}>{ig.cta.label}</Link>
               </div>
-            ))}
+            );
+          })}
           </div>
         </div>
 
@@ -268,7 +278,8 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
                       <td style={{ padding:'8px 12px', textAlign:'right' }}>{sr.avg != null ? sr.avg.toFixed(2) : '—'}</td>
                       <td style={{ padding:'8px 12px', textAlign:'right', color:INK_M }}>{total > 0 ? Math.round(sr.count/total*100) : 0}%</td>
                     </tr>
-                  ))}
+                  );
+          })}
                 </tbody>
               </table>
             </div>
@@ -309,7 +320,8 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
                     </div>
                   )}
                 </div>
-              ))}
+              );
+          })}
             </div>
           )}
         </div>
