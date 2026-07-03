@@ -15,8 +15,8 @@ const NAMKHAN_ID = 260955;
 const DONNA_ID   = 1000001;
 const SYMBOL: Record<number, string> = { [NAMKHAN_ID]: '$', [DONNA_ID]: '\u20AC' };
 
-interface MonthAgg { rn: number; rev: number; avail: number }
-type OtbRow = { stay_year: number; stay_month: number; rn: number; rev: number; avail_rn: number };
+interface MonthAgg { rn: number; rev: number; rev_total: number; avail: number }
+type OtbRow = { stay_year: number; stay_month: number; rn: number; rev: number; rev_total: number; avail_rn: number };
 
 const fmtIso = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -32,11 +32,13 @@ function delta(a: number | null, b: number | null): PickupDelta {
 
 function valueOf(a: MonthAgg | null, metric: PickupMetric): number | null {
   if (!a) return null;
-  if (metric === 'RN')     return a.rn;
-  if (metric === 'OCC')    return a.avail > 0 ? (a.rn / a.avail) * 100 : null;
-  if (metric === 'REV')    return a.rev;
-  if (metric === 'ADR')    return a.rn > 0 ? a.rev / a.rn : null;
-  if (metric === 'RevPAR') return a.avail > 0 ? a.rev / a.avail : null;
+  if (metric === 'RN')        return a.rn;
+  if (metric === 'OCC')       return a.avail > 0 ? (a.rn / a.avail) * 100 : null;
+  if (metric === 'REV')       return a.rev;
+  if (metric === 'REV rooms') return a.rev;
+  if (metric === 'REV total') return a.rev_total;
+  if (metric === 'ADR')       return a.rn > 0 ? a.rev / a.rn : null;
+  if (metric === 'RevPAR')    return a.avail > 0 ? a.rev / a.avail : null;
   return null;
 }
 
@@ -44,14 +46,19 @@ function bucket(rows: OtbRow[] | null, year: number): Record<number, MonthAgg> {
   const out: Record<number, MonthAgg> = {};
   for (const r of rows ?? []) {
     if (Number(r.stay_year) !== year) continue;
-    out[Number(r.stay_month)] = { rn: Number(r.rn ?? 0), rev: Number(r.rev ?? 0), avail: Number(r.avail_rn ?? 0) };
+    out[Number(r.stay_month)] = {
+      rn:        Number(r.rn ?? 0),
+      rev:       Number(r.rev ?? 0),
+      rev_total: Number(r.rev_total ?? r.rev ?? 0),
+      avail:     Number(r.avail_rn ?? 0),
+    };
   }
   return out;
 }
 
 function sumBucket(b: Record<number, MonthAgg>): MonthAgg {
-  const t: MonthAgg = { rn: 0, rev: 0, avail: 0 };
-  for (const m of Object.values(b)) { t.rn += m.rn; t.rev += m.rev; t.avail += m.avail; }
+  const t: MonthAgg = { rn: 0, rev: 0, rev_total: 0, avail: 0 };
+  for (const m of Object.values(b)) { t.rn += m.rn; t.rev += m.rev; t.rev_total += m.rev_total; t.avail += m.avail; }
   return t;
 }
 
@@ -113,15 +120,21 @@ export async function getPickupMatrix(propertyId: number): Promise<PickupMatrixD
   fillAvail(sY3, stayYear - 3);
 
   const { data: baseRows } = await supabase
-    .from('v_pickup_monthly').select('year,month,rn,rev')
+    .from('v_pickup_monthly').select('year,month,rn,rev,rev_total')
     .eq('property_id', propertyId).gte('year', stayYear - 3).lte('year', stayYear - 1);
   const baseline: Record<number, Record<number, MonthAgg>> = {};
-  for (const r of (baseRows ?? []) as Array<{ year: number; month: number; rn: number; rev: number }>) {
+  for (const r of (baseRows ?? []) as Array<{ year: number; month: number; rn: number; rev: number; rev_total: number | null }>) {
     const y = Number(r.year); const mo = Number(r.month);
-    (baseline[y] ??= {})[mo] = { rn: Number(r.rn ?? 0), rev: Number(r.rev ?? 0), avail: availY[y]?.[mo] ?? 0 };
+    (baseline[y] ??= {})[mo] = {
+      rn:        Number(r.rn ?? 0),
+      rev:       Number(r.rev ?? 0),
+      rev_total: Number(r.rev_total ?? r.rev ?? 0),
+      avail:     availY[y]?.[mo] ?? 0,
+    };
   }
 
-  const METRICS: PickupMetric[] = ['RN', 'OCC', 'REV', 'ADR', 'RevPAR'];
+  // PBS 2026-07-03: REV split into rooms-only + total (rooms + extras, Cloudbeds).
+  const METRICS: PickupMetric[] = ['RN', 'OCC', 'REV rooms', 'REV total', 'ADR', 'RevPAR'];
 
   function buildRow(metric: PickupMetric, mo: number): PickupMatrixRow {
     const tAll = valueOf(otbToday[mo] ?? null, metric);
