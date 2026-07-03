@@ -1,5 +1,7 @@
 // components/settings/panels/RoomsPanel.tsx
-// PBS 2026-05-13 rev3: brand-aware tokens.
+// PBS 2026-07-03: unit count per room type surfaced from public.v_room_type_units.
+// (Legacy 2026-05-13 brand-aware tokens; scoped override in
+// PropertySettingsClient remaps dark tokens to paper-white here.)
 import { PanelHeader, Chip, ChipList, EmptyState } from './_shared';
 
 const tierColors: Record<string, 'green' | 'default' | 'warn' | 'muted'> = {
@@ -8,14 +10,19 @@ const tierColors: Record<string, 'green' | 'default' | 'warn' | 'muted'> = {
   entry: 'default',
 };
 
-export default function RoomsPanel({ data }: { data: any[] }) {
+export default function RoomsPanel({ data, roomUnits }: { data: any[]; roomUnits?: Array<{ room_type_name: string; units: number }> }) {
+  // Lookup: canonical name (e.g. "Explorer Glamping") → number of units.
+  const unitMap = new Map<string, number>();
+  for (const u of roomUnits ?? []) unitMap.set(u.room_type_name, Number(u.units ?? 0));
+  const totalUnits = Array.from(unitMap.values()).reduce((s, n) => s + n, 0);
+
   if (!data || data.length === 0) {
     return <><PanelHeader title="Rooms" /><EmptyState message="No room types defined." /></>;
   }
 
   return (
     <>
-      <PanelHeader title="Rooms" subtitle={`${data.length} room types · setup catalog (bookable inventory in pms.rooms)`} />
+      <PanelHeader title="Rooms" subtitle={`${data.length} room types${totalUnits > 0 ? ` · ${totalUnits} total units` : ''} · setup catalog (live inventory from PMS silver)`} />
       <div className="p-6 space-y-4">
         {data.map((r) => (
           <div
@@ -32,6 +39,12 @@ export default function RoomsPanel({ data }: { data: any[] }) {
                   <h3 className="font-serif" style={{ fontSize: 'var(--t-xl)', color: 'var(--ink)' }}>
                     {r.display_name}
                   </h3>
+                  {(() => {
+                    const n = unitMap.get(r.display_name);
+                    return typeof n === 'number' && n > 0 ? (
+                      <Chip tone="default">×{n}</Chip>
+                    ) : null;
+                  })()}
                   {r.positioning_tier && <Chip tone={tierColors[r.positioning_tier] || 'default'}>{r.positioning_tier}</Chip>}
                 </div>
                 {r.short_pitch && (
