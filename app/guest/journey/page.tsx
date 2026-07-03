@@ -2,7 +2,7 @@
 // Guest · Journey — lifecycle funnel. Sources: reservations + guest.journey_events.
 // Every count wired. No invented data.
 
-import Page from '@/components/page/Page';
+import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
 import { GUEST_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
@@ -102,11 +102,7 @@ export default async function JourneyPage({ searchParams }: Props) {
   const cancelRate = isReservation ? (canceled / isReservation) * 100 : 0;
 
   return (
-    <Page
-      eyebrow="Guest · Journey"
-      title={<>From <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>inquiry</em> to repeat — every touchpoint, every drop.</>}
-      subPages={GUEST_SUBPAGES}
-    >
+    <DashboardPage title="Guest · Journey" subtitle="From inquiry to repeat — every touchpoint, every drop." tabs={GUEST_SUBPAGES.map(s => ({ key: s.href, label: s.label, href: s.href, active: s.href === "/guest/journey" }))}>
 
       <GuestStatusHeader
         top={
@@ -210,7 +206,7 @@ export default async function JourneyPage({ searchParams }: Props) {
           </div>
         )}
       </div>
-    </Page>
+    </DashboardPage>
   );
 }
 
