@@ -1,7 +1,7 @@
 // app/api/google/oauth/callback/route.ts
-// PBS 2026-07-03: receives Google OAuth code, exchanges via google-sync edge fn.
-// google-sync v2 returns 200 even on error, with {ok, step, reason, google_body}.
-// This route reads .ok to decide connected vs error redirect.
+// PBS 2026-07-03 v3:
+// - Reads {ok, step, reason} from google-sync v2 exchange response
+// - On success: fire-and-forget pull-reviews + pull-performance so data lands ASAP
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -27,22 +27,32 @@ export async function GET(req: NextRequest) {
 
   try {
     const sb = getSupabaseAdmin();
+    const propertyID = Number(state);
+
     const { data, error } = await sb.functions.invoke('google-sync', {
       body: {
         action: 'exchange-code',
-        propertyID: Number(state),
+        propertyID,
         code,
         connectedBy: 'pbsbase@gmail.com',
       },
     });
     if (error) throw error;
     const d = data as any;
+
     if (d && d.ok === false) {
       base.searchParams.set('google', 'error');
       base.searchParams.set('step',   d.step ?? 'unknown');
       base.searchParams.set('reason', d.reason ?? 'unknown');
       return NextResponse.redirect(base, 302);
     }
+
+    // Fire-and-forget follow-up pulls. Don't await — user redirects immediately.
+    if (d?.location_id) {
+      sb.functions.invoke('google-sync', { body: { action: 'pull-reviews',     propertyID } }).catch(() => {});
+      sb.functions.invoke('google-sync', { body: { action: 'pull-performance', propertyID, daysBack: 365 } }).catch(() => {});
+    }
+
     base.searchParams.set('google', 'connected');
     if (d?.location_name) base.searchParams.set('location', String(d.location_name));
     return NextResponse.redirect(base, 302);
