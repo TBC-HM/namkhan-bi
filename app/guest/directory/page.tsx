@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { supabase as anonClient, PROPERTY_ID } from '@/lib/supabase';
 import { DirectoryShell } from './_components/DirectoryShell';
-import Page from '@/components/page/Page';
+import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
 import { GUEST_SUBPAGES } from '../_subpages';
 
 export const dynamic = 'force-dynamic';
@@ -32,26 +32,22 @@ export default async function GuestDirectoryPage() {
   const noContactCount = messyR.count ?? 0;
 
   return (
-    <Page
-      eyebrow="Guest · Directory"
-      title={<>Guest <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>directory</em></>}
-      subPages={GUEST_SUBPAGES}
-    >
+    <DashboardPage title="Guest · Directory" subtitle="Search + facets · profile drawer" tabs={GUEST_SUBPAGES.map(s => ({ key: s.href, label: s.label, href: s.href, active: s.href === "/guest/directory" }))}>
       {noContactCount > 0 && (
         <div style={{
           marginTop: 14, padding: '10px 14px',
-          background: '#1f0e0c', border: '1px solid #5a2825', borderLeft: '3px solid #c0584c',
+          background: '#FBE8E4', border: '1px solid #E8B7AB', borderLeft: '3px solid #B03826',
           borderRadius: 6,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
         }}>
-          <div style={{ fontSize: 13, color: 'var(--st-bad-bd)' }}>
-            <strong style={{ color: '#fff' }}>{noContactCount.toLocaleString()}</strong>{' '}
+          <div style={{ fontSize: 13, color: '#8A2419' }}>
+            <strong style={{ color: '#1B1B1B' }}>{noContactCount.toLocaleString()}</strong>{' '}
             guest profile{noContactCount === 1 ? ' is' : 's are'} <em>unreachable</em> — no email + no phone.
           </div>
           <Link href="/guest/messy-data" style={{
             padding: '4px 10px', fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 10,
             letterSpacing: '0.16em', textTransform: 'uppercase', fontWeight: 600,
-            background: '#c0584c', color: '#fff',
+            background: '#B03826', color: '#FFFFFF',
             border: '1px solid #c0584c', borderRadius: 4, textDecoration: 'none',
           }}>
             OPEN MESSY DATA →
@@ -65,6 +61,6 @@ export default async function GuestDirectoryPage() {
       <div className="gst-dir-dark" style={{ marginTop: 14, color: 'var(--ink)' }}>
         <DirectoryShell facets={(facets as Parameters<typeof DirectoryShell>[0]['facets']) ?? []} headline={headline} />
       </div>
-    </Page>
+    </DashboardPage>
   );
 }
