@@ -54,19 +54,26 @@ export interface DirectoryRow {
 export default async function GuestDirectoryPage() {
   const sb = getSupabaseAdmin();
 
-  const [{ data: rows }] = await Promise.all([
-    sb.schema('guest')
+  // Supabase PostgREST caps a single call at max_rows=1000. Chunk-paginate to
+  // pull the whole ~3345-row non-orphan Namkhan base. Column projection matches
+  // guest.v_directory_full 1:1.
+  const CHUNK = 1000;
+  const MAX   = 10000;
+  const projection = 'guest_id, full_name, country, email, phone, city, language, bookings_count, stays_count, cancellations_count, last_stay_date, upcoming_stay_date, arrival_bucket, top_source, top_segment, is_repeat, marketing_readiness_score, last_room_type, last_rate_plan, last_segment, last_source, last_adults, last_children, last_nights, last_adr, party_type';
+  const profiles: DirectoryRow[] = [];
+  for (let offset = 0; offset < MAX; offset += CHUNK) {
+    const { data } = await sb.schema('guest')
       .from('v_directory_full')
-      .select('guest_id, full_name, country, email, phone, city, language, bookings_count, stays_count, cancellations_count, last_stay_date, upcoming_stay_date, arrival_bucket, top_source, top_segment, is_repeat, marketing_readiness_score, last_room_type, last_rate_plan, last_segment, last_source, last_adults, last_children, last_nights, last_adr, party_type')
+      .select(projection)
       .eq('property_id', PROPERTY_ID)
-      // PBS rule: every guest must have a last stay OR future arrival OR both.
       .or('last_stay_date.not.is.null,upcoming_stay_date.not.is.null')
-      .order('upcoming_stay_date', { ascending: true })
-      .order('last_stay_date',    { ascending: false })
-      .range(0, 9999),
-  ]);
-
-  const profiles = (rows ?? []) as DirectoryRow[];
+      .order('upcoming_stay_date', { ascending: true,  nullsFirst: false })
+      .order('last_stay_date',     { ascending: false, nullsFirst: false })
+      .range(offset, offset + CHUNK - 1);
+    if (!data || data.length === 0) break;
+    profiles.push(...(data as DirectoryRow[]));
+    if (data.length < CHUNK) break;
+  }
 
   // Facets derived client-side so counts always match what's loaded.
   const facetMap = new Map<string, number>();
