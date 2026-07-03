@@ -26,13 +26,29 @@ export default function DirectoryClient({
   initialRows, facets,
 }: { initialRows: DirectoryRow[]; facets: FacetRow[] }) {
   const [q, setQ] = useState('');
-  const [country, setCountry] = useState<string | null>(null);
+  const [country, setCountry]   = useState('');
+  const [source, setSource]     = useState('');
+  const [segment, setSegment]   = useState('');
+  const [room, setRoom]         = useState('');
+  const [ratePlan, setRatePlan] = useState('');
+  const [party, setParty]       = useState('');
+  const [language, setLanguage] = useState('');
   const [arrival, setArrival] = useState<ArrivalWindow>('any');
   const [repeatOnly, setRepeatOnly] = useState(false);
   const [contactableOnly, setContactableOnly] = useState(false);
   const [selected, setSelected] = useState<DirectoryRow | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>('upcoming_stay_date');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+
+  function clearAll() {
+    setQ(''); setCountry(''); setSource(''); setSegment('');
+    setRoom(''); setRatePlan(''); setParty(''); setLanguage('');
+    setArrival('any'); setRepeatOnly(false); setContactableOnly(false);
+  }
+  const activeFilterCount =
+    (q.length >= 2 ? 1 : 0) + (country ? 1 : 0) + (source ? 1 : 0) + (segment ? 1 : 0) +
+    (room ? 1 : 0) + (ratePlan ? 1 : 0) + (party ? 1 : 0) + (language ? 1 : 0) +
+    (arrival !== 'any' ? 1 : 0) + (repeatOnly ? 1 : 0) + (contactableOnly ? 1 : 0);
 
   function toggleSort(k: SortKey) {
     if (sortKey === k) {
@@ -44,6 +60,41 @@ export default function DirectoryClient({
     }
   }
 
+  // Facet options — computed once per initialRows change so dropdowns list
+  // exactly what's available in the loaded set (no dead options).
+  const options = useMemo(() => {
+    const bump = (m: Map<string, number>, k: string | null | undefined) => {
+      const key = (k ?? '').trim();
+      if (!key) return;
+      m.set(key, (m.get(key) ?? 0) + 1);
+    };
+    const oC = new Map<string, number>(), oS = new Map<string, number>();
+    const oSeg = new Map<string, number>(), oRoom = new Map<string, number>();
+    const oRP = new Map<string, number>(), oP = new Map<string, number>();
+    const oLang = new Map<string, number>();
+    for (const r of initialRows) {
+      bump(oC,    r.country);
+      bump(oS,    r.last_source ?? r.top_source);
+      bump(oSeg,  r.last_segment ?? r.top_segment);
+      bump(oRoom, r.last_room_type);
+      bump(oRP,   r.last_rate_plan);
+      bump(oP,    r.party_type);
+      bump(oLang, r.language);
+    }
+    const toSorted = (m: Map<string, number>) => Array.from(m.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([v, n]) => ({ v, n }));
+    return {
+      countries: toSorted(oC),
+      sources:   toSorted(oS),
+      segments:  toSorted(oSeg),
+      rooms:     toSorted(oRoom),
+      ratePlans: toSorted(oRP),
+      parties:   toSorted(oP),
+      languages: toSorted(oLang),
+    };
+  }, [initialRows]);
+
   const filtered = useMemo(() => {
     const qL = q.trim().toLowerCase();
     const rows = initialRows.filter((r) => {
@@ -52,7 +103,13 @@ export default function DirectoryClient({
           .filter(Boolean).join(' ').toLowerCase();
         if (!hay.includes(qL)) return false;
       }
-      if (country && r.country !== country) return false;
+      if (country  && r.country !== country) return false;
+      if (source   && (r.last_source ?? r.top_source) !== source) return false;
+      if (segment  && (r.last_segment ?? r.top_segment) !== segment) return false;
+      if (room     && r.last_room_type !== room) return false;
+      if (ratePlan && r.last_rate_plan !== ratePlan) return false;
+      if (party    && r.party_type !== party) return false;
+      if (language && r.language !== language) return false;
       if (repeatOnly && !r.is_repeat) return false;
       if (contactableOnly && !r.email && !r.phone) return false;
       if (arrival !== 'any') {
@@ -76,38 +133,50 @@ export default function DirectoryClient({
       return String(av).localeCompare(String(bv)) * dir;
     });
     return rows;
-  }, [initialRows, q, country, arrival, repeatOnly, contactableOnly, sortKey, sortDir]);
-
-  const topCountries = facets.slice(0, 20);
+  }, [initialRows, q, country, source, segment, room, ratePlan, party, language, arrival, repeatOnly, contactableOnly, sortKey, sortDir]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
-      {/* Search + filter */}
-      <Container title="Search" subtitle="name · email · phone · country · source · segment · room · rate plan" density="compact">
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-          <input
-            type="search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Type to search…"
-            style={{
-              flex: '1 1 260px',
-              padding: '9px 14px',
-              border: '1px solid #E6DFCC', borderRadius: 4,
-              background: '#FFFFFF', color: '#1B1B1B',
-              fontSize: 14, fontFamily: 'inherit',
-            }}
-          />
-          <div style={{ display: 'inline-flex', gap: 4 }}>
-            <span style={filterLabelStyle}>Arrival</span>
-            {(['any','next_7','next_30','next_90'] as ArrivalWindow[]).map((k) => (
-              <button
-                key={k} type="button"
-                onClick={() => setArrival(k)}
-                style={pillStyle(arrival === k)}
-              >{k === 'any' ? 'Any' : k === 'next_7' ? '7d' : k === 'next_30' ? '30d' : '90d'}</button>
-            ))}
-          </div>
+      {/* Search + horizontal dropdown filter row */}
+      <Container title={activeFilterCount > 0 ? `Filters · ${activeFilterCount} active` : 'Filters'}
+        subtitle="drill down on multiple dimensions at once · dropdowns show counts per option in the loaded set"
+        density="compact"
+        action={activeFilterCount > 0 ? (
+          <button type="button" onClick={clearAll} style={{
+            padding: '5px 10px', fontSize: 11, background: '#FFFFFF', color: '#B03826',
+            border: '1px solid #E8B7AB', borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit',
+          }}>Clear all</button>
+        ) : undefined}>
+        {/* Search — full width */}
+        <input
+          type="search"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search name · email · phone · country · source · segment · room · rate plan…"
+          style={{
+            width: '100%',
+            padding: '10px 14px',
+            border: '1px solid #E6DFCC', borderRadius: 4,
+            background: '#FFFFFF', color: '#1B1B1B',
+            fontSize: 14, fontFamily: 'inherit',
+            marginBottom: 10,
+          }}
+        />
+
+        {/* Dropdown row — 8 side-by-side dimension filters */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 6 }}>
+          <Dropdown label="Country"    value={country}  onChange={setCountry}  options={options.countries} />
+          <Dropdown label="Source"     value={source}   onChange={setSource}   options={options.sources} />
+          <Dropdown label="Segment"    value={segment}  onChange={setSegment}  options={options.segments} />
+          <Dropdown label="Room type"  value={room}     onChange={setRoom}     options={options.rooms} />
+          <Dropdown label="Rate plan"  value={ratePlan} onChange={setRatePlan} options={options.ratePlans} />
+          <Dropdown label="Party"      value={party}    onChange={setParty}    options={options.parties} />
+          <Dropdown label="Language"   value={language} onChange={setLanguage} options={options.languages} />
+          <DropdownArrival             value={arrival}  onChange={setArrival} />
+        </div>
+
+        {/* Checkboxes */}
+        <div style={{ display: 'flex', gap: 16, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <label style={checkboxStyle}>
             <input type="checkbox" checked={repeatOnly} onChange={(e) => setRepeatOnly(e.target.checked)} />
             Repeat only
@@ -116,29 +185,10 @@ export default function DirectoryClient({
             <input type="checkbox" checked={contactableOnly} onChange={(e) => setContactableOnly(e.target.checked)} />
             Contactable only
           </label>
-        </div>
-
-        {/* Country chip row */}
-        {topCountries.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 10, alignItems: 'center' }}>
-            <span style={filterLabelStyle}>Country</span>
-            <button
-              type="button"
-              onClick={() => setCountry(null)}
-              style={pillStyle(country === null)}
-            >All <span style={{ opacity: 0.6, marginLeft: 3 }}>{initialRows.length}</span></button>
-            {topCountries.map((f) => (
-              <button
-                key={f.country}
-                type="button"
-                onClick={() => setCountry(country === f.country ? null : f.country)}
-                style={pillStyle(country === f.country)}
-              >
-                {f.country || '—'} <span style={{ opacity: 0.6, marginLeft: 3 }}>{f.guest_count}</span>
-              </button>
-            ))}
+          <div style={{ marginLeft: 'auto', fontSize: 11, color: '#5A5A5A' }}>
+            {filtered.length.toLocaleString()} / {initialRows.length.toLocaleString()} guests match
           </div>
-        )}
+        </div>
       </Container>
 
       {/* Results table */}
@@ -209,6 +259,57 @@ export default function DirectoryClient({
 
       {/* Drawer */}
       {selected && <ProfileDrawer row={selected} onClose={() => setSelected(null)} />}
+    </div>
+  );
+}
+
+function Dropdown({ label, value, onChange, options }: {
+  label: string; value: string; onChange: (v: string) => void;
+  options: { v: string; n: number }[];
+}) {
+  return (
+    <div>
+      <div style={dropdownLabelStyle}>{label}</div>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          ...selectStyle,
+          borderColor: value ? '#1F3A2E' : '#E6DFCC',
+          fontWeight: value ? 600 : 400,
+          color: value ? '#1F3A2E' : '#1B1B1B',
+        }}
+      >
+        <option value="">All ({options.reduce((s, o) => s + o.n, 0)})</option>
+        {options.map((o) => (
+          <option key={o.v} value={o.v}>{o.v} ({o.n})</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function DropdownArrival({ value, onChange }: {
+  value: ArrivalWindow; onChange: (v: ArrivalWindow) => void;
+}) {
+  return (
+    <div>
+      <div style={dropdownLabelStyle}>Arrival</div>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as ArrivalWindow)}
+        style={{
+          ...selectStyle,
+          borderColor: value !== 'any' ? '#1F3A2E' : '#E6DFCC',
+          fontWeight: value !== 'any' ? 600 : 400,
+          color: value !== 'any' ? '#1F3A2E' : '#1B1B1B',
+        }}
+      >
+        <option value="any">Any</option>
+        <option value="next_7">Next 7d</option>
+        <option value="next_30">Next 30d</option>
+        <option value="next_90">Next 90d</option>
+      </select>
     </div>
   );
 }
@@ -344,6 +445,20 @@ const tdL: React.CSSProperties = {
 const tdR: React.CSSProperties = {
   padding: '7px 10px', fontSize: 12, textAlign: 'right',
   fontVariantNumeric: 'tabular-nums', color: '#1B1B1B',
+};
+const selectStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '7px 10px',
+  border: '1px solid #E6DFCC',
+  borderRadius: 4,
+  background: '#FFFFFF',
+  fontSize: 12,
+  fontFamily: 'inherit',
+  cursor: 'pointer',
+};
+const dropdownLabelStyle: React.CSSProperties = {
+  fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase',
+  color: '#5A5A5A', fontWeight: 600, marginBottom: 3,
 };
 const tdContact: React.CSSProperties = {
   padding: '4px 10px', fontSize: 11, color: '#1B1B1B',
