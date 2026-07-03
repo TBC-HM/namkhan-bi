@@ -366,6 +366,7 @@ const MARKETING_CFG: DeptCfg = {
     // PBS 2026-05-16: Web hub consolidates 3 tabs — Web · Funnels · SEO.
     // First-tab destination = /marketing/web. SEO moved here from top-level.
     { label: 'Web',         href: '/marketing/web'         },
+    { label: 'Docs',        href: '/marketing/docs'       },
     // PBS 2026-05-16: Reports always sits flush-right (SubPagesStrip detects label).
     { label: 'Reports',     href: '/h/260955/reports?dept=marketing' },
   ],
@@ -432,6 +433,7 @@ const OPERATIONS_CFG: DeptCfg = {
     { label: 'Retail',           href: '/operations/retail'          },
     { label: 'Transport',        href: '/operations/transport'       },
     { label: 'Other',            href: '/operations/other'           },
+    { label: 'SOPs',             href: '/operations/sops'           },
     // PBS 2026-05-16: Reports always sits flush-right (SubPagesStrip detects label).
     { label: 'Reports',          href: '/h/260955/reports?dept=operations' },
   ],
