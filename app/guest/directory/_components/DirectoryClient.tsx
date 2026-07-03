@@ -1,7 +1,7 @@
 // app/guest/directory/_components/DirectoryClient.tsx
-// PBS 2026-07-03: searchable guest directory · client-side · paper-white.
-// Debounced text search + country facet + repeat/contactable/arrival filters.
-// Currency intentionally not shown.
+// PBS 2026-07-03 v2: single-column layout · country chip row · full-width table.
+// No sidebar (that pushed content into a narrow right column inside the
+// DashboardPage `auto-fit minmax(360px)` grid).
 
 'use client';
 
@@ -70,53 +70,28 @@ export default function DirectoryClient({
     });
   }, [initialRows, q, country, arrival, repeatOnly, contactableOnly]);
 
-  const topCountries = facets.slice(0, 12);
+  const topCountries = facets.slice(0, 15);
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: 12, alignItems: 'start' }}>
-      {/* Left: country facets */}
-      <Container title={`Countries · ${facets.length}`} subtitle={country ? `filtered by ${country}` : 'top 12 by guest count'} density="compact">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <button
-            type="button"
-            onClick={() => setCountry(null)}
-            style={facetBtnStyle(country === null)}
-          >
-            <span>All countries</span>
-            <span style={countStyle(country === null)}>{facets.reduce((s, f) => s + f.guest_count, 0)}</span>
-          </button>
-          {topCountries.map((f) => (
-            <button
-              key={f.country}
-              type="button"
-              onClick={() => setCountry(country === f.country ? null : f.country)}
-              style={facetBtnStyle(country === f.country)}
-            >
-              <span>{f.country || '—'}</span>
-              <span style={countStyle(country === f.country)}>{f.guest_count}</span>
-            </button>
-          ))}
-        </div>
-      </Container>
-
-      {/* Right: search + filters + table */}
-      <Container title={`Guest profiles · ${filtered.length}`} subtitle={`of ${initialRows.length} loaded · sorted by soonest arrival`} density="compact">
-        {/* Search + filter row */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10, alignItems: 'center' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
+      {/* Search + filter row (full width) */}
+      <Container title="Search" subtitle="name · email · country · source · segment" density="compact">
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
           <input
             type="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search by name, email, country, source…"
+            placeholder="Type to search…"
             style={{
-              flex: 1, minWidth: 220,
-              padding: '8px 12px',
+              flex: '1 1 260px',
+              padding: '9px 14px',
               border: '1px solid #E6DFCC', borderRadius: 4,
               background: '#FFFFFF', color: '#1B1B1B',
-              fontSize: 13, fontFamily: 'inherit',
+              fontSize: 14, fontFamily: 'inherit',
             }}
           />
           <div style={{ display: 'inline-flex', gap: 4 }}>
+            <span style={filterLabelStyle}>Arrival</span>
             {(['any','next_7','next_30','next_90'] as ArrivalWindow[]).map((k) => (
               <button
                 key={k}
@@ -136,7 +111,31 @@ export default function DirectoryClient({
           </label>
         </div>
 
-        {/* Results table */}
+        {/* Country chip row */}
+        {topCountries.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 10, alignItems: 'center' }}>
+            <span style={filterLabelStyle}>Country</span>
+            <button
+              type="button"
+              onClick={() => setCountry(null)}
+              style={pillStyle(country === null)}
+            >All</button>
+            {topCountries.map((f) => (
+              <button
+                key={f.country}
+                type="button"
+                onClick={() => setCountry(country === f.country ? null : f.country)}
+                style={pillStyle(country === f.country)}
+              >
+                {f.country || '—'} <span style={{ opacity: 0.6, marginLeft: 3 }}>{f.guest_count}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </Container>
+
+      {/* Results table (full width) */}
+      <Container title={`Guest profiles · ${filtered.length}`} subtitle={`of ${initialRows.length} loaded · click a row for the profile drawer`} density="compact">
         {filtered.length === 0 ? (
           <div style={{ padding: '24px 12px', textAlign: 'center', fontSize: 12, color: '#5A5A5A', fontStyle: 'italic' }}>
             No guests match the current filters.
@@ -209,7 +208,7 @@ function ProfileDrawer({ row, onClose }: { row: ProfileRow; onClose: () => void 
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: 420, maxWidth: '100vw', height: '100%',
+          width: 440, maxWidth: '100vw', height: '100%',
           background: '#FFFFFF', borderLeft: '1px solid #E6DFCC',
           padding: 20, overflowY: 'auto', boxShadow: '-8px 0 24px rgba(0,0,0,0.08)',
         }}
@@ -223,7 +222,7 @@ function ProfileDrawer({ row, onClose }: { row: ProfileRow; onClose: () => void 
             </div>
           </div>
           <button onClick={onClose} style={{
-            background: 'transparent', border: 'none', fontSize: 20, color: '#5A5A5A', cursor: 'pointer', padding: '0 4px',
+            background: 'transparent', border: 'none', fontSize: 22, color: '#5A5A5A', cursor: 'pointer', padding: '0 4px',
           }}>×</button>
         </div>
 
@@ -253,26 +252,6 @@ function Fact({ label, value, span = 1 }: { label: string; value: string; span?:
 }
 
 // ---- styles ------------------------------------------------------------
-function facetBtnStyle(active: boolean): React.CSSProperties {
-  return {
-    display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8,
-    padding: '6px 10px',
-    background: active ? '#1F3A2E' : '#FFFFFF',
-    color: active ? '#FFFFFF' : '#1B1B1B',
-    border: `1px solid ${active ? '#1F3A2E' : '#E6DFCC'}`,
-    borderRadius: 4,
-    fontSize: 12,
-    cursor: 'pointer',
-    fontFamily: 'inherit',
-    textAlign: 'left',
-  };
-}
-function countStyle(active: boolean): React.CSSProperties {
-  return {
-    fontSize: 10, fontVariantNumeric: 'tabular-nums',
-    color: active ? 'rgba(255,255,255,0.7)' : '#5A5A5A',
-  };
-}
 function pillStyle(active: boolean): React.CSSProperties {
   return {
     padding: '5px 10px', borderRadius: 99, fontSize: 11,
@@ -282,25 +261,31 @@ function pillStyle(active: boolean): React.CSSProperties {
     cursor: 'pointer',
     fontFamily: 'inherit',
     fontWeight: active ? 600 : 500,
+    whiteSpace: 'nowrap',
   };
 }
+const filterLabelStyle: React.CSSProperties = {
+  fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase',
+  color: '#5A5A5A', fontWeight: 600, marginRight: 4,
+};
 const checkboxStyle: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 5,
   fontSize: 12, color: '#1B1B1B', cursor: 'pointer',
+  whiteSpace: 'nowrap',
 };
 function contactDotStyle(color: string): React.CSSProperties {
-  return { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 18, height: 18, borderRadius: 99, background: '#F5F0E1', color, fontSize: 11, marginRight: 3 };
+  return { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 99, background: '#F5F0E1', color, fontSize: 12, marginRight: 3 };
 }
 const th: React.CSSProperties = {
-  padding: '7px 10px', fontSize: 10, fontWeight: 600,
+  padding: '8px 10px', fontSize: 10, fontWeight: 600,
   letterSpacing: '0.06em', textTransform: 'uppercase',
-  color: '#000', textAlign: 'left',
+  color: '#1B1B1B', textAlign: 'left',
 };
 const tdL: React.CSSProperties = {
-  padding: '6px 10px', fontSize: 12, color: '#1B1B1B',
+  padding: '7px 10px', fontSize: 12, color: '#1B1B1B',
   whiteSpace: 'nowrap',
 };
 const tdR: React.CSSProperties = {
-  padding: '6px 10px', fontSize: 12, textAlign: 'right',
+  padding: '7px 10px', fontSize: 12, textAlign: 'right',
   fontVariantNumeric: 'tabular-nums', color: '#1B1B1B',
 };
