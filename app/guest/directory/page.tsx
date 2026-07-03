@@ -66,7 +66,7 @@ export default async function GuestDirectoryPage() {
       .select('guest_id, full_name, country, email, phone, stays_count, bookings_count, cancellations_count, last_stay_date, upcoming_stay_date, arrival_bucket, top_source, top_segment, is_repeat, marketing_readiness_score')
       .eq('property_id', PROPERTY_ID)
       .order('last_stay_date', { ascending: false })
-      .limit(300),
+      .limit(5000),
   ]);
 
   const h = (headlineRows as HeadlineRow[])?.[0] ?? {
