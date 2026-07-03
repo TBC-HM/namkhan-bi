@@ -493,6 +493,7 @@ const GUEST_CFG: DeptCfg = {
     // PBS 2026-07-03: Snapshot → HoD rename (aligned with other depts).
     { label: 'HoD',         href: '/guest'             },
     { label: 'Directory',   href: '/guest/directory'   },
+    { label: 'Newsletters', href: '/guest/newsletters' },
     { label: 'Reputation',  href: '/guest/reputation'  },
     { label: 'Journey',     href: '/guest/journey'     },
     { label: 'Loyalty',     href: '/guest/loyalty'     },
