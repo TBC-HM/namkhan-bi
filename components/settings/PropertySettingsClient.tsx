@@ -44,7 +44,40 @@ export default function PropertySettingsClient({ data, propertyId }: { data: any
   const [active, setActive] = useState<Tab>('identity');
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 16, alignItems: 'start' }}>
+    <div className="settings-paper-scope" style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 16, alignItems: 'start' }}>
+      {/* PBS 2026-07-03: token override for the whole settings subtree so every
+          nested panel (which still reads var(--card), var(--brass), var(--ink)
+          etc.) resolves to paper-white values instead of the :root dark defaults. */}
+      <style>{`
+        .settings-paper-scope,
+        .settings-paper-scope * {
+          --card:       #FFFFFF;
+          --border:     #E6DFCC;
+          --paper-deep: #F5F0E1;
+          --paper-warm: #FFFFFF;
+          --ink:        #1B1B1B;
+          --ink-soft:   #3A3A3A;
+          --ink-mute:   #5A5A5A;
+          --ink-faint:  #8A8A8A;
+          --brass:      #1F3A2E;
+          --st-good:    #1F5C2C;
+        }
+        .settings-paper-scope button,
+        .settings-paper-scope input,
+        .settings-paper-scope select,
+        .settings-paper-scope textarea {
+          color: #1B1B1B;
+        }
+        .settings-paper-scope input[type="text"],
+        .settings-paper-scope input[type="number"],
+        .settings-paper-scope input[type="email"],
+        .settings-paper-scope input[type="url"],
+        .settings-paper-scope select,
+        .settings-paper-scope textarea {
+          background: #FFFFFF;
+          border: 1px solid #E6DFCC;
+        }
+      `}</style>
       <aside>
         <nav style={{ display: 'flex', flexDirection: 'column', gap: 4, position: 'sticky', top: 12 }}>
           {TABS.map((tab) => {
