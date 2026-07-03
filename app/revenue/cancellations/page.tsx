@@ -331,6 +331,56 @@ export default async function CancellationsPage({
     })
     .filter((r) => r.received > 0);
 
+  // PBS 2026-07-03: source × booking-window cross-tab.
+  // Row = source; column = lead-time bucket; cell = cancel rate for that combo.
+  // Cell is null-coloured when the cell has fewer than 3 bookings (noise).
+  const xtabMap = new Map<string, Map<Bwin, { received: number; cancels: number }>>();
+  const srcTotals = new Map<string, { received: number; cancels: number }>();
+  for (const r of bookedRows) {
+    if (!r.booking_date || !r.check_in_date) continue;
+    const ci = new Date(String(r.check_in_date));
+    const bd = new Date(String(r.booking_date));
+    const lead = Math.round((ci.getTime() - bd.getTime()) / 86_400_000);
+    if (!Number.isFinite(lead) || lead < 0) continue;
+    const bwin = bwinBucket(lead);
+    const source = r.source_name ?? 'Unknown';
+    if (!xtabMap.has(source)) xtabMap.set(source, new Map());
+    const inner = xtabMap.get(source)!;
+    const cell = inner.get(bwin) ?? { received: 0, cancels: 0 };
+    cell.received += 1;
+    if (r.is_cancelled) cell.cancels += 1;
+    inner.set(bwin, cell);
+    const tot = srcTotals.get(source) ?? { received: 0, cancels: 0 };
+    tot.received += 1;
+    if (r.is_cancelled) tot.cancels += 1;
+    srcTotals.set(source, tot);
+  }
+  const MIN_CELL_BOOKINGS = 3;
+  const xtabRows = Array.from(xtabMap.entries())
+    .map(([source, inner]) => {
+      const total = srcTotals.get(source) ?? { received: 0, cancels: 0 };
+      return {
+        source,
+        total,
+        cells: BWIN_ORDER.map((b) => inner.get(b) ?? { received: 0, cancels: 0 }),
+      };
+    })
+    .filter((r) => r.total.received >= 5)
+    .sort((a, b) => b.total.received - a.total.received)
+    .slice(0, 10);
+  const xtabColTotals = BWIN_ORDER.map((b) => {
+    let received = 0, cancels = 0;
+    for (const src of xtabRows) {
+      const inner = xtabMap.get(src.source);
+      if (!inner) continue;
+      const c = inner.get(b);
+      if (!c) continue;
+      received += c.received;
+      cancels += c.cancels;
+    }
+    return { received, cancels };
+  });
+
   const tabs: DashboardTab[] = REVENUE_SUBPAGES.map((s) => ({
     key: s.href, label: s.label, href: s.href,
     active: s.href.endsWith('/cancellations'),
@@ -517,6 +567,71 @@ export default async function CancellationsPage({
                       </tr>
                     );
                   })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Container>
+      </div>
+
+      {/* Source × booking-window cross-tab (cancel rate per cell) */}
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Container title="Cancel rate · source × booking window" subtitle={`cell = cancels / bookings received · low-count cells (<${MIN_CELL_BOOKINGS}) muted grey · rows: top ${xtabRows.length} sources by volume · red = worse than overall (${overallRate.toFixed(1)}%), green = better`} density="compact">
+          {xtabRows.length === 0 ? (
+            <div style={{ padding: '10px 12px', fontSize: 12, color: '#5A5A5A', fontStyle: 'italic' }}>No bookings in window.</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #E6DFCC' }}>
+                    <th style={th}>Source</th>
+                    {BWIN_ORDER.map((b) => (
+                      <th key={b} style={{ ...th, textAlign: 'right' }}>{b}</th>
+                    ))}
+                    <th style={{ ...th, textAlign: 'right', background: '#FAF8F1' }}>Overall</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {xtabRows.map((row) => {
+                    const overall = row.total.received > 0 ? (row.total.cancels / row.total.received) * 100 : 0;
+                    return (
+                      <tr key={row.source} style={{ borderTop: '1px solid #E6DFCC' }}>
+                        <td style={tdL}>{row.source}</td>
+                        {row.cells.map((c, i) => {
+                          const key = BWIN_ORDER[i];
+                          if (c.received === 0) return <td key={key} style={{ ...tdR, color: '#C8C0A6' }}>—</td>;
+                          if (c.received < MIN_CELL_BOOKINGS) return <td key={key} style={{ ...tdR, color: '#8A8A8A' }} title={`${c.cancels}/${c.received}`}>·</td>;
+                          const rate = (c.cancels / c.received) * 100;
+                          const dPP = rate - overallRate;
+                          const bg = dPP > 8  ? '#F5D9D5'
+                                   : dPP > 3  ? '#FBEDD8'
+                                   : dPP < -8 ? '#D8E9DA'
+                                   : dPP < -3 ? '#E8F0DE'
+                                              : 'transparent';
+                          const color = dPP > 3 ? '#8A2419' : dPP < -3 ? '#1F5C2C' : '#1B1B1B';
+                          return (
+                            <td key={key} style={{ ...tdR, background: bg, color, fontWeight: dPP > 8 || dPP < -8 ? 600 : 500 }} title={`${c.cancels}/${c.received} bookings`}>
+                              {rate.toFixed(0)}%
+                            </td>
+                          );
+                        })}
+                        <td style={{ ...tdR, background: '#FAF8F1', fontWeight: 600 }} title={`${row.total.cancels}/${row.total.received}`}>{overall.toFixed(0)}%</td>
+                      </tr>
+                    );
+                  })}
+                  <tr style={{ borderTop: '2px solid #BDBDBD', background: '#FAFAF7', fontWeight: 700 }}>
+                    <td style={tdL}>Column total</td>
+                    {xtabColTotals.map((c, i) => {
+                      const key = BWIN_ORDER[i];
+                      const rate = c.received > 0 ? (c.cancels / c.received) * 100 : 0;
+                      return (
+                        <td key={key} style={{ ...tdR, fontWeight: 700 }} title={`${c.cancels}/${c.received}`}>
+                          {c.received > 0 ? `${rate.toFixed(0)}%` : '—'}
+                        </td>
+                      );
+                    })}
+                    <td style={{ ...tdR, background: '#FAF8F1', fontWeight: 700 }}>{overallRate.toFixed(0)}%</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
