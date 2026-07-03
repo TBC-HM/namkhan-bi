@@ -1,32 +1,38 @@
 // components/settings/panels/_shared.tsx
-// PBS 2026-05-13 rev3: tenant-theme refactor. All hardcoded Donna-only
-// fallbacks (#1F3A2E green, #B8A878 sand, #B8542A terracotta) replaced
-// with brand-aware tokens that swap per tenant: --ink / --ink-mute /
-// --ink-soft / --brass / --paper-deep / --border / --card. These tokens
-// have Namkhan-dark defaults in styles/globals.css :root and are remapped
-// for Donna in ThemeInjector.lightLegacyVars.
+// PBS 2026-07-03: hardcoded paper-white + ink + hairline tokens.
+// Old file used var(--ink) / var(--brass) / var(--paper-deep) / var(--border)
+// which resolve to DARK on Namkhan (:root --paper-warm = #15110c). Every
+// panel that imports these primitives now renders on the same paper-white
+// surface as the rest of the cockpit.
+
 import { ReactNode } from 'react';
 
 export function PanelHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
   return (
     <div
-      className="px-6 py-5 flex items-start justify-between"
-      style={{ borderBottom: '1px solid var(--border)' }}
+      style={{
+        padding: '16px 20px',
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: 12,
+        borderBottom: '1px solid #E6DFCC',
+      }}
     >
       <div>
         <h2
-          className="font-serif"
-          style={{ fontSize: 'var(--t-xl)', color: 'var(--ink)' }}
+          style={{
+            fontFamily: 'var(--serif, ui-serif, Georgia, serif)',
+            fontSize: 20,
+            fontWeight: 500,
+            color: '#1B1B1B',
+            margin: 0,
+          }}
         >
           {title}
         </h2>
         {subtitle && (
-          <p
-            className="mt-1"
-            style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-mute)' }}
-          >
-            {subtitle}
-          </p>
+          <p style={{ fontSize: 12, color: '#5A5A5A', margin: '4px 0 0' }}>{subtitle}</p>
         )}
       </div>
       {action}
@@ -36,20 +42,26 @@ export function PanelHeader({ title, subtitle, action }: { title: string; subtit
 
 export function Field({ label, value, span = 1 }: { label: string; value: ReactNode; span?: 1 | 2 | 3 }) {
   const empty = value === null || value === undefined || value === '';
-  const spanCls = { 1: 'col-span-1', 2: 'col-span-2', 3: 'col-span-3' }[span];
   return (
-    <div className={spanCls}>
+    <div style={{ gridColumn: `span ${span}` }}>
       <dt
-        className="uppercase tracking-wider font-medium mb-1.5"
-        style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}
+        style={{
+          fontSize: 10,
+          fontWeight: 600,
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+          color: '#5A5A5A',
+          marginBottom: 4,
+        }}
       >
         {label}
       </dt>
       <dd
         style={{
-          fontSize: 'var(--t-sm)',
-          color: empty ? 'var(--ink-faint)' : 'var(--ink)',
+          fontSize: 13,
+          color: empty ? '#8A8A8A' : '#1B1B1B',
           fontStyle: empty ? 'italic' : 'normal',
+          margin: 0,
         }}
       >
         {empty ? '—' : value}
@@ -61,31 +73,48 @@ export function Field({ label, value, span = 1 }: { label: string; value: ReactN
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section
-      className="px-6 py-5 last:border-b-0"
-      style={{ borderBottom: '1px solid var(--border)' }}
+      style={{
+        padding: '16px 20px',
+        borderBottom: '1px solid #E6DFCC',
+      }}
     >
       <h3
-        className="uppercase font-semibold mb-4"
-        style={{ fontSize: 'var(--t-xs)', letterSpacing: '0.15em', color: 'var(--brass)' }}
+        style={{
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: '0.12em',
+          textTransform: 'uppercase',
+          color: '#1F3A2E',
+          margin: '0 0 12px',
+        }}
       >
         {title}
       </h3>
-      <dl className="grid grid-cols-3 gap-x-6 gap-y-5">{children}</dl>
+      <dl style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '20px 24px', margin: 0 }}>
+        {children}
+      </dl>
     </section>
   );
 }
 
 export function Chip({ children, tone = 'default' }: { children: ReactNode; tone?: 'default' | 'green' | 'warn' | 'muted' }) {
   const styles: Record<string, React.CSSProperties> = {
-    default: { background: 'var(--paper-deep)', color: 'var(--ink-soft)' },
-    green:   { background: 'rgba(107, 147, 121, 0.15)', color: 'var(--st-good)' },
-    warn:    { background: 'rgba(212, 168, 102, 0.15)', color: 'var(--brass)' },
-    muted:   { background: 'var(--paper-deep)', color: 'var(--ink-mute)' },
+    default: { background: '#F5F0E1', color: '#1B1B1B', border: '1px solid #E6DFCC' },
+    green:   { background: '#E4F0E1', color: '#1F5C2C', border: '1px solid #C8DFC8' },
+    warn:    { background: '#FBEDD8', color: '#8B5A1C', border: '1px solid #E6D2A5' },
+    muted:   { background: '#FFFFFF', color: '#8A8A8A', border: '1px solid #E6DFCC' },
   };
   return (
     <span
-      className="inline-flex items-center px-2 py-0.5 rounded font-medium"
-      style={{ fontSize: 'var(--t-xs)', ...styles[tone] }}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        padding: '2px 8px',
+        borderRadius: 4,
+        fontSize: 11,
+        fontWeight: 500,
+        ...styles[tone],
+      }}
     >
       {children}
     </span>
@@ -95,15 +124,10 @@ export function Chip({ children, tone = 'default' }: { children: ReactNode; tone
 export function ChipList({ items }: { items: string[] | null | undefined }) {
   if (!items || items.length === 0)
     return (
-      <span
-        className="italic"
-        style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-faint)' }}
-      >
-        —
-      </span>
+      <span style={{ fontSize: 13, color: '#8A8A8A', fontStyle: 'italic' }}>—</span>
     );
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
       {items.map((item, i) => (
         <Chip key={i}>{item}</Chip>
       ))}
@@ -118,9 +142,9 @@ export function StatusBadge({ active }: { active: boolean | null | undefined }) 
 
 export function EmptyState({ message, action }: { message: string; action?: ReactNode }) {
   return (
-    <div className="px-6 py-16 text-center">
-      <p style={{ color: 'var(--ink-mute)', fontSize: 'var(--t-sm)' }}>{message}</p>
-      {action && <div className="mt-4">{action}</div>}
+    <div style={{ padding: '48px 20px', textAlign: 'center' }}>
+      <p style={{ color: '#5A5A5A', fontSize: 13, margin: 0 }}>{message}</p>
+      {action && <div style={{ marginTop: 12 }}>{action}</div>}
     </div>
   );
 }
