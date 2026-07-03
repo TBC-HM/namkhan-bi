@@ -37,6 +37,8 @@ interface FacetRow {
 }
 
 type ArrivalWindow = 'any' | 'next_7' | 'next_30' | 'next_90';
+type SortKey = 'full_name' | 'country' | 'stays_count' | 'bookings_count' | 'last_stay_date' | 'upcoming_stay_date' | 'top_source';
+type SortDir = 'asc' | 'desc';
 
 export default function DirectoryClient({
   initialRows, facets,
@@ -47,10 +49,21 @@ export default function DirectoryClient({
   const [repeatOnly, setRepeatOnly] = useState(false);
   const [contactableOnly, setContactableOnly] = useState(false);
   const [selected, setSelected] = useState<ProfileRow | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>('last_stay_date');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+
+  function toggleSort(k: SortKey) {
+    if (sortKey === k) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(k);
+      setSortDir(k === 'stays_count' || k === 'bookings_count' || k === 'last_stay_date' || k === 'upcoming_stay_date' ? 'desc' : 'asc');
+    }
+  }
 
   const filtered = useMemo(() => {
     const qL = q.trim().toLowerCase();
-    return initialRows.filter((r) => {
+    const rows = initialRows.filter((r) => {
       if (qL.length >= 2) {
         const hay = [r.full_name, r.email, r.country, r.top_source, r.top_segment]
           .filter(Boolean).join(' ').toLowerCase();
@@ -68,7 +81,19 @@ export default function DirectoryClient({
       }
       return true;
     });
-  }, [initialRows, q, country, arrival, repeatOnly, contactableOnly]);
+    // Sort
+    const dir = sortDir === 'asc' ? 1 : -1;
+    rows.sort((a, b) => {
+      const av = a[sortKey] as unknown;
+      const bv = b[sortKey] as unknown;
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;   // nulls always last
+      if (bv == null) return -1;
+      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+      return String(av).localeCompare(String(bv)) * dir;
+    });
+    return rows;
+  }, [initialRows, q, country, arrival, repeatOnly, contactableOnly, sortKey, sortDir]);
 
   const topCountries = facets.slice(0, 15);
 
@@ -145,18 +170,18 @@ export default function DirectoryClient({
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #E6DFCC' }}>
-                  <th style={th}>Name</th>
-                  <th style={th}>Country</th>
+                  <SortableTh label="Name"         k="full_name"          currentKey={sortKey} currentDir={sortDir} onClick={toggleSort} />
+                  <SortableTh label="Country"      k="country"            currentKey={sortKey} currentDir={sortDir} onClick={toggleSort} />
                   <th style={th}>Contact</th>
-                  <th style={{ ...th, textAlign: 'right' }}>Stays</th>
-                  <th style={{ ...th, textAlign: 'right' }}>Bookings</th>
-                  <th style={th}>Last stay</th>
-                  <th style={th}>Next arrival</th>
-                  <th style={th}>Source</th>
+                  <SortableTh label="Stays"        k="stays_count"        currentKey={sortKey} currentDir={sortDir} onClick={toggleSort} align="right" />
+                  <SortableTh label="Bookings"     k="bookings_count"     currentKey={sortKey} currentDir={sortDir} onClick={toggleSort} align="right" />
+                  <SortableTh label="Last stay"    k="last_stay_date"     currentKey={sortKey} currentDir={sortDir} onClick={toggleSort} />
+                  <SortableTh label="Next arrival" k="upcoming_stay_date" currentKey={sortKey} currentDir={sortDir} onClick={toggleSort} />
+                  <SortableTh label="Source"       k="top_source"         currentKey={sortKey} currentDir={sortDir} onClick={toggleSort} />
                 </tr>
               </thead>
               <tbody>
-                {filtered.slice(0, 100).map((r) => (
+                {filtered.slice(0, 500).map((r) => (
                   <tr
                     key={r.guest_id}
                     onClick={() => setSelected(r)}
@@ -181,9 +206,9 @@ export default function DirectoryClient({
                 ))}
               </tbody>
             </table>
-            {filtered.length > 100 && (
+            {filtered.length > 500 && (
               <div style={{ padding: '10px 12px', fontSize: 11, color: '#5A5A5A', fontStyle: 'italic', textAlign: 'center' }}>
-                Showing 100 of {filtered.length} matches — narrow the filter to see more.
+                Showing 500 of {filtered.length} matches — search or filter to narrow.
               </div>
             )}
           </div>
@@ -248,6 +273,29 @@ function Fact({ label, value, span = 1 }: { label: string; value: string; span?:
       <div style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#5A5A5A', fontWeight: 600, marginBottom: 3 }}>{label}</div>
       <div style={{ fontSize: 13, color: '#1B1B1B', wordBreak: 'break-word' }}>{value}</div>
     </div>
+  );
+}
+
+function SortableTh({ label, k, currentKey, currentDir, onClick, align }: {
+  label: string; k: SortKey; currentKey: SortKey; currentDir: SortDir;
+  onClick: (k: SortKey) => void; align?: 'left' | 'right';
+}) {
+  const active = currentKey === k;
+  const arrow = !active ? '' : currentDir === 'asc' ? ' ↑' : ' ↓';
+  return (
+    <th
+      onClick={() => onClick(k)}
+      style={{
+        ...th,
+        textAlign: align === 'right' ? 'right' : 'left',
+        cursor: 'pointer',
+        userSelect: 'none',
+        color: active ? '#1F3A2E' : '#1B1B1B',
+      }}
+      title={`Sort by ${label}`}
+    >
+      {label}<span style={{ opacity: active ? 0.85 : 0.25, fontSize: 10, marginLeft: 3 }}>{active ? arrow : ' ↕'}</span>
+    </th>
   );
 }
 
