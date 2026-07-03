@@ -2,7 +2,7 @@
 // Replaces /guest/reviews + /marketing/reviews (both redirect here).
 // compset-pattern: PageHeader + status header + 3 wired graphs + canonical KpiBox + review feed.
 
-import Page from '@/components/page/Page';
+import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
 import { GUEST_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
@@ -72,11 +72,7 @@ export default async function ReputationPage() {
     .sort((a, b) => a.week.localeCompare(b.week));
 
   return (
-    <Page
-      eyebrow="Guest · Reputation"
-      title={<>What guests <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>say</em> — every channel, every reply.</>}
-      subPages={GUEST_SUBPAGES}
-    >
+    <DashboardPage title="Guest · Reputation" subtitle="What guests say — every channel, every reply." tabs={GUEST_SUBPAGES.map(s => ({ key: s.href, label: s.label, href: s.href, active: s.href === "/guest/reputation" }))}>
 
       <GuestStatusHeader
         top={
@@ -244,7 +240,7 @@ export default async function ReputationPage() {
           No reviews yet. Forward review notification emails to your Supabase webhook to populate <code>marketing.reviews</code>.
         </div>
       )}
-    </Page>
+    </DashboardPage>
   );
 }
 
