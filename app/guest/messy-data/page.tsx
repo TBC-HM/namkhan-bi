@@ -4,7 +4,7 @@
 // cleanup. Every flag wired off real columns. No invented errors.
 
 import Link from 'next/link';
-import Page from '@/components/page/Page';
+import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
 import { GUEST_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
@@ -134,11 +134,7 @@ export default async function MessyDataPage() {
   const dupEmailCount = issueCounts.get('duplicate_email') ?? 0;
 
   return (
-    <Page
-      eyebrow="Guest · Messy data"
-      title={<>Fix it <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>in the PMS</em> — the materialised view follows.</>}
-      subPages={GUEST_SUBPAGES}
-    >
+    <DashboardPage title="Guest · Messy data" subtitle="Fix it in the PMS — the materialised view follows." tabs={GUEST_SUBPAGES.map(s => ({ key: s.href, label: s.label, href: s.href, active: s.href === "/guest/messy-data" }))}>
 
       <GuestStatusHeader
         top={
@@ -301,7 +297,7 @@ export default async function MessyDataPage() {
         Open the guest in PMS · merge duplicates via the guest profile screen · add missing email / phone / country.
         The materialised view <code style={{ fontFamily: 'var(--mono)' }}>guest.mv_guest_profile</code> refreshes via cron, so changes appear here on the next tick.
       </div>
-    </Page>
+    </DashboardPage>
   );
 }
 
