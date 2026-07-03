@@ -91,7 +91,7 @@ export default async function NewslettersPage() {
                       <td style={tdL}>{r.created_by ?? '—'}</td>
                       <td style={tdL}>{fmtDateTime(r.updated_at)}</td>
                       <td style={{ ...tdR, textAlign:'right' }}>
-                        <Link href={`/guest/newsletters/${r.campaign_id}`} style={actionBtnGreen}>Open</Link>
+                        <Link href={`/guest/newsletters/${r.campaign_id}`} style={actionBtnGreen}>Edit</Link>
                         <Link href={`/guest/newsletters/${r.campaign_id}/preview`} style={actionBtnLight}>Preview</Link>
                       </td>
                     </tr>
@@ -128,7 +128,7 @@ export default async function NewslettersPage() {
                       <td style={tdL}>{r.created_by ?? '—'}</td>
                       <td style={tdL}>{fmtDateTime(r.updated_at)}</td>
                       <td style={{ ...tdR, textAlign:'right' }}>
-                        <Link href={`/guest/newsletters/${r.campaign_id}`} style={actionBtnGreen}>Open</Link>
+                        <Link href={`/guest/newsletters/${r.campaign_id}`} style={actionBtnGreen}>Edit</Link>
                         <Link href={`/guest/newsletters/${r.campaign_id}/preview`} style={actionBtnLight}>Preview</Link>
                       </td>
                     </tr>
@@ -171,7 +171,7 @@ export default async function NewslettersPage() {
                       <td style={tdR}>{r.unsub_count}</td>
                       <td style={{ ...tdL, fontFamily:'ui-monospace, SFMono-Regular, monospace', fontSize:11 }}>{r.booking_code ?? '—'}</td>
                       <td style={{ ...tdR, textAlign:'right' }}>
-                        <Link href={`/guest/newsletters/${r.campaign_id}`} style={actionBtnGreen}>Open</Link>
+                        <Link href={`/guest/newsletters/${r.campaign_id}`} style={actionBtnGreen}>Edit</Link>
                         <Link href={`/guest/newsletters/${r.campaign_id}/preview`} style={actionBtnLight}>Preview</Link>
                       </td>
                     </tr>
