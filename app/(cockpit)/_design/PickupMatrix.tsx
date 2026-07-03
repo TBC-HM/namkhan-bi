@@ -125,7 +125,7 @@ export default function PickupMatrix({ data }: Props) {
             <th style={S.headerTh}>2024</th>
             <th style={S.headerTh}>2025</th>
             <th style={S.headerTh}>Budget 2026</th>
-            <th style={S.headerTh}>2026 RO</th>
+            <th style={S.headerTh}>2026</th>
             <th style={S.headerTh}>Monthly<div style={S.headerSub}>{data.monthlySnapshotLabel}</div></th>
             <th style={S.headerTh}>Monday<div style={S.headerSub}>{data.mondaySnapshotLabel}</div></th>
             <th style={S.headerTh}>Yesterday<div style={S.headerSub}>{data.yesterdaySnapshotLabel}</div></th>
