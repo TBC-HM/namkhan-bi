@@ -490,8 +490,8 @@ const GUEST_CFG: DeptCfg = {
   chatPlaceholder: 'e.g. who is checking in this evening?',
   storageKeyPrefix: 'gst',
   subPages: [
-    // PBS 2026-05-09 (repair-list 11): Agents only reachable via /cockpit.
-    { label: 'Snapshot',    href: '/guest'             },
+    // PBS 2026-07-03: Snapshot → HoD rename (aligned with other depts).
+    { label: 'HoD',         href: '/guest'             },
     { label: 'Directory',   href: '/guest/directory'   },
     { label: 'Reputation',  href: '/guest/reputation'  },
     { label: 'Journey',     href: '/guest/journey'     },
@@ -502,7 +502,6 @@ const GUEST_CFG: DeptCfg = {
     { label: 'Reports',     href: '/h/260955/reports?dept=guest' },
   ],
   quickChips: [
-    { label: 'Snapshot',   href: '/guest'            },
     { label: 'Directory',  href: '/guest/directory'  },
     { label: 'Reputation', href: '/guest/reputation' },
     { label: 'Journey',    href: '/guest/journey'    },
