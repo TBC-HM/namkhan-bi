@@ -9,7 +9,6 @@ import { GUEST_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
-import { fmtMoney } from '@/lib/format';
 import {
   GuestStatusHeader, StatusCell, SectionHead,
   metaSm, metaStrong, metaDim, cardWrap, cardTitle, cardSub,
@@ -219,8 +218,8 @@ export default async function LoyaltyPage() {
         <KpiBox value={totalGuests}        unit="count" label="Total guests"        tooltip="Distinct guest profiles. Source: guest.mv_guest_profile." />
         <KpiBox value={repeatGuests}       unit="count" label="Repeat guests"       tooltip="Guests with ≥ 2 stays — drives loyalty programs." />
         <KpiBox value={repeatPct}          unit="pct"   label="Repeat rate"         tooltip="Repeat guests ÷ total guests × 100. Industry healthy ≥ 25%." />
-        <KpiBox value={avgLtv}             unit="usd"   label="Avg LTV"             tooltip="Mean lifetime revenue across all guest profiles." />
-        <KpiBox value={avgLtvRepeat}       unit="usd"   label="Avg LTV · repeat"    tooltip="Mean lifetime revenue restricted to repeat guests." />
+        
+        
         <KpiBox value={winback.length}     unit="count" label="Win-back candidates" tooltip="Guests with last_stay_date 12-24 months ago — prime win-back targets." />
       </div>
 
@@ -324,7 +323,7 @@ function LtvCohortChart({ rows }: { rows: { label: string; n: number; sum: numbe
               </text>
               <rect x={labelW} y={y + 4} width={barMaxW} height={18} fill="var(--paper-deep)" />
               <rect x={labelW} y={y + 4} width={barW} height={18} fill={fill}>
-                <title>{`LTV ${r.label} · ${r.n.toLocaleString()} guests · ${pct.toFixed(1)}% · sum ${fmtMoney(r.sum, 'USD')} · guest.mv_guest_profile`}</title>
+                <title>{`LTV ${r.label} · ${r.n.toLocaleString()} guests · ${pct.toFixed(1)}% · sum ${'—'} · guest.mv_guest_profile`}</title>
               </rect>
               <text x={labelW + barMaxW + 4} y={y + 16} style={{ fontFamily: 'var(--mono)', fontSize: 10, fill: 'var(--ink-soft)' }}>
                 {r.n} · {pct.toFixed(0)}%
@@ -429,7 +428,7 @@ function GuestTable({ rows, todayIso }: { rows: ProfileRow[]; todayIso: string }
                 <td style={{ ...td, color: 'var(--ink-mute)' }}>{r.top_source || '—'}</td>
                 <td style={{ ...td, textAlign: 'right' }}>{r.stays_count}</td>
                 <td style={{ ...td, textAlign: 'right' }}>{r.total_nights}</td>
-                <td style={{ ...td, textAlign: 'right' }}>{fmtMoney(Number(r.lifetime_revenue || 0), 'USD')}</td>
+                <td style={{ ...td, textAlign: 'right' }}>{'—', 'USD')}</td>
                 <td style={{ ...td, textAlign: 'right', color: 'var(--ink-mute)' }}>
                   {r.avg_adr != null ? `$${Math.round(Number(r.avg_adr))}` : '—'}
                 </td>
