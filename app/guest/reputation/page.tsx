@@ -7,6 +7,7 @@ import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/
 import { GUEST_SUBPAGES } from '../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { PROPERTY_ID } from '@/lib/supabase';
+import SourceBadge from '@/components/marketing/SourceBadge';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -147,7 +148,7 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
           <div style={{ gridColumn:'1 / -1', background:WHITE, border:'1px solid '+HAIR, borderRadius:6, padding:'14px 16px' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', flexWrap:'wrap', gap:8, marginBottom:12 }}>
               <div>
-                <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, marginBottom:4 }}>Google Business Profile</div>
+                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}><SourceBadge source="google" size="md" /><span style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M }}>Google Business Profile</span></div>
                 <div style={{ fontSize:16, fontWeight:600, color:INK }}>{oauth.location_name ?? 'Location auto-detection pending — click Pull to fetch'}</div>
                 <div style={{ fontSize:11, color:INK_M, marginTop:2 }}>
                   Connected {fmtDate(oauth.connected_at)}
@@ -207,7 +208,7 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
               { key:'google',      label:'Google Business Profile', state: oauth ? 'connected' : 'not-connected',
                 detail: oauth ? `${oauth.location_name ?? '(auto-detect pending)'} · ${googleReviews.length} reviews here`
                               : 'Reviews + Maps insights (impressions · directions · calls · website clicks) + reply-by-API.',
-                cta: oauth ? { label:'Pull latest', href:'/api/google/pull-now?property=260955' }
+                cta: oauth ? { label:'Force refresh', href:'/api/google/pull-now?property=260955' }
                            : { label:'Connect Google →', href:'/api/google/oauth/connect?property=260955' } },
               { key:'tripadvisor', label:'TripAdvisor', state:'not-connected',
                 detail:'Free Content API — last 5 reviews + location details. Read-only (reply via extranet).',
@@ -223,7 +224,7 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
             ].map((ig: any) => (
               <div key={ig.key} style={{ padding:'12px 14px', borderRadius:6, background:WHITE, border:'1px solid '+HAIR, display:'flex', flexDirection:'column', gap:8 }}>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', gap:8 }}>
-                  <span style={{ fontWeight:600, fontSize:13, color:INK }}>{ig.label}</span>
+                  <span style={{ display:'inline-flex', alignItems:'center', gap:8, fontWeight:600, fontSize:13, color:INK }}><SourceBadge source={ig.key} />{ig.label}</span>
                   <span style={{
                     fontSize:10, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase',
                     padding:'2px 8px', borderRadius:10,
@@ -262,7 +263,7 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
                 <tbody>
                   {sourceRows.map(sr => (
                     <tr key={sr.source} style={{ borderBottom:'1px solid #F5F0E1' }}>
-                      <td style={{ padding:'8px 12px', color:INK, fontWeight:500 }}>{SOURCE_LABEL[sr.source] ?? sr.source}</td>
+                      <td style={{ padding:'8px 12px', color:INK, fontWeight:500 }}><span style={{ display:'inline-flex', alignItems:'center', gap:8 }}><SourceBadge source={sr.source} /> {SOURCE_LABEL[sr.source] ?? sr.source}</span></td>
                       <td style={{ padding:'8px 12px', textAlign:'right' }}>{sr.count}</td>
                       <td style={{ padding:'8px 12px', textAlign:'right' }}>{sr.avg != null ? sr.avg.toFixed(2) : '—'}</td>
                       <td style={{ padding:'8px 12px', textAlign:'right', color:INK_M }}>{total > 0 ? Math.round(sr.count/total*100) : 0}%</td>
@@ -286,9 +287,7 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
               {reviews.map(r => (
                 <div key={r.id} style={{ padding:'12px 14px', background:WHITE, border:'1px solid '+HAIR, borderRadius:6 }}>
                   <div style={{ display:'flex', gap:10, alignItems:'baseline', flexWrap:'wrap', marginBottom:4 }}>
-                    <span style={{ fontSize:10, fontWeight:700, letterSpacing:'0.06em', textTransform:'uppercase', color:GREEN }}>
-                      {SOURCE_LABEL[r.source] ?? r.source}
-                    </span>
+                    <SourceBadge source={r.source} />
                     <span style={{ fontWeight:600 }}>
                       {r.rating_norm != null ? Number(r.rating_norm).toFixed(1) : '—'} / 5
                     </span>
