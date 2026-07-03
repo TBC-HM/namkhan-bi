@@ -10,6 +10,7 @@
 import { useMemo, useState } from 'react';
 import { Container } from '@/app/(cockpit)/_design';
 import type { DirectoryRow } from '../page';
+import { supabase } from '@/lib/supabase';
 
 interface FacetRow { country: string; guest_count: number }
 type ArrivalWindow = 'any' | 'next_7' | 'next_30' | 'next_90';
@@ -42,6 +43,7 @@ export default function DirectoryClient({
   const [selected, setSelected] = useState<DirectoryRow | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>('upcoming_stay_date');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [newsletterOpen, setNewsletterOpen] = useState(false);
 
   function clearAll() {
     setQ(''); setCountry(''); setSource(''); setSegment('');
@@ -154,18 +156,28 @@ export default function DirectoryClient({
     return rows;
   }, [initialRows, q, country, source, segment, room, ratePlan, party, language, arrival, pastStay, spendFilter, repeatOnly, contactableOnly, sortKey, sortDir]);
 
+  const filteredEmailable = filtered.filter((r) => r.email && r.email.includes('@')).length;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
       {/* Search + horizontal dropdown filter row */}
       <Container title={activeFilterCount > 0 ? `Filters · ${activeFilterCount} active` : 'Filters'}
         subtitle="drill down on multiple dimensions at once · dropdowns show counts per option in the loaded set"
         density="compact"
-        action={activeFilterCount > 0 ? (
-          <button type="button" onClick={clearAll} style={{
-            padding: '5px 10px', fontSize: 11, background: '#FFFFFF', color: '#B03826',
-            border: '1px solid #E8B7AB', borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit',
-          }}>Clear all</button>
-        ) : undefined}>
+        action={
+          <div style={{ display: 'inline-flex', gap: 6 }}>
+            {activeFilterCount > 0 && (
+              <button type="button" onClick={clearAll} style={{
+                padding: '5px 10px', fontSize: 11, background: '#FFFFFF', color: '#B03826',
+                border: '1px solid #E8B7AB', borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit',
+              }}>Clear all</button>
+            )}
+            <button type="button" onClick={() => setNewsletterOpen(true)} style={{
+              padding: '5px 12px', fontSize: 11, fontWeight: 600, background: '#1F3A2E', color: '#FFFFFF',
+              border: 'none', borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit',
+            }}>✉ Newsletter ({filteredEmailable})</button>
+          </div>
+        }>
         {/* Search — full width */}
         <input
           type="search"
@@ -294,6 +306,18 @@ export default function DirectoryClient({
 
       {/* Drawer */}
       {selected && <ProfileDrawer row={selected} onClose={() => setSelected(null)} />}
+
+      {/* Newsletter modal */}
+      {newsletterOpen && (
+        <NewsletterModal
+          filtered={filtered}
+          filterSummary={{
+            country, source, segment, room, ratePlan, party, language,
+            arrival, pastStay, spendFilter, repeatOnly, contactableOnly,
+          }}
+          onClose={() => setNewsletterOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -473,6 +497,182 @@ function Fact({ label, value, span = 1 }: { label: string; value: string; span?:
     </div>
   );
 }
+
+// ---- Newsletter modal --------------------------------------------------
+interface FilterSummary {
+  country: string; source: string; segment: string; room: string; ratePlan: string;
+  party: string; language: string;
+  arrival: ArrivalWindow; pastStay: PastWindow; spendFilter: SpendKey;
+  repeatOnly: boolean; contactableOnly: boolean;
+}
+
+function NewsletterModal({ filtered, filterSummary, onClose }: {
+  filtered: DirectoryRow[]; filterSummary: FilterSummary; onClose: () => void;
+}) {
+  const emailable = filtered.filter((r) => r.email && r.email.includes('@'));
+  const [name, setName] = useState('');
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
+  const [schedKind, setSchedKind] = useState<'once' | 'daily' | 'weekly' | 'monthly'>('once');
+  const [schedAt, setSchedAt] = useState<string>('');   // yyyy-mm-ddThh:mm
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+
+  function aiPropose() {
+    const bits: string[] = [];
+    if (filterSummary.country)  bits.push(`guests from ${filterSummary.country}`);
+    if (filterSummary.segment)  bits.push(`${filterSummary.segment} segment`);
+    if (filterSummary.party)    bits.push(`${filterSummary.party} travellers`);
+    if (filterSummary.room)     bits.push(`who stayed in ${filterSummary.room}`);
+    if (filterSummary.ratePlan) bits.push(`on the ${filterSummary.ratePlan} rate`);
+    if (filterSummary.source)   bits.push(`booked via ${filterSummary.source}`);
+    if (filterSummary.repeatOnly) bits.push('repeat guests');
+    if (filterSummary.arrival !== 'any') bits.push(`arriving in the ${filterSummary.arrival.replace('_', ' ')}`);
+    if (filterSummary.pastStay !== 'any') bits.push(`with last stay in the ${filterSummary.pastStay.replace('_', ' ')}`);
+    if (filterSummary.spendFilter !== 'any') bits.push(`who spent on ${filterSummary.spendFilter}`);
+    const audience = bits.length > 0 ? bits.join(' · ') : `all ${emailable.length} contactable guests`;
+    setName(`Newsletter · ${audience.slice(0, 60)}`);
+    setSubject('A note from The Namkhan');
+    setBody([
+      `Dear {{first_name}},`,
+      ``,
+      `Thank you for choosing The Namkhan.`,
+      ``,
+      `We are writing to ${emailable.length} guest${emailable.length === 1 ? '' : 's'} in this segment:`,
+      audience + '.',
+      ``,
+      `[EDIT ME]`,
+      ``,
+      `Warm regards,`,
+      `The Namkhan team`,
+    ].join('\n'));
+  }
+
+  async function save() {
+    setSaving(true); setSaveMsg(null);
+    const guestIds = emailable.map((r) => r.guest_id);
+    const scheduledAt = schedKind === 'once' && schedAt ? new Date(schedAt).toISOString()
+                     : null;
+    const { data, error } = await supabase.rpc('fn_create_campaign', {
+      p_property_id:   260955,
+      p_name:          name || subject || 'Untitled campaign',
+      p_subject:       subject,
+      p_body_md:       body,
+      p_filter_json:   filterSummary as unknown as Record<string, unknown>,
+      p_schedule_kind: schedKind,
+      p_scheduled_at:  scheduledAt,
+      p_guest_ids:     guestIds,
+      p_ai_prompt:     null,
+      p_ai_model:      null,
+      p_created_by:    'pbsbase@gmail.com',
+    });
+    setSaving(false);
+    if (error) { setSaveMsg('Error: ' + error.message); return; }
+    setSaveMsg(scheduledAt ? `Campaign scheduled · id ${String(data).slice(0,8)}…` : 'Campaign saved as draft. Add a schedule to send.');
+  }
+
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.28)',
+      display: 'flex', justifyContent: 'center', alignItems: 'flex-start',
+      zIndex: 200, padding: 40, overflowY: 'auto',
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        width: 640, maxWidth: '100%',
+        background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 6,
+        padding: 22, boxShadow: '0 20px 40px rgba(0,0,0,0.15)',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <div>
+            <div style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#5A5A5A' }}>Newsletter</div>
+            <div style={{ fontSize: 20, fontWeight: 600, color: '#1B1B1B', marginTop: 3 }}>
+              Compose to {emailable.length} guest{emailable.length === 1 ? '' : 's'}
+            </div>
+            <div style={{ fontSize: 12, color: '#5A5A5A', marginTop: 2 }}>
+              {filtered.length - emailable.length > 0 && `${filtered.length - emailable.length} filtered rows have no email and are skipped`}
+              {filtered.length - emailable.length === 0 && 'all filtered rows have an email'}
+            </div>
+          </div>
+          <button onClick={onClose} style={{
+            background: 'transparent', border: 'none', fontSize: 22, color: '#5A5A5A', cursor: 'pointer', padding: '0 4px',
+          }}>×</button>
+        </div>
+
+        <div style={{ marginTop: 18, display: 'grid', gap: 10 }}>
+          <button type="button" onClick={aiPropose} style={{
+            padding: '9px 14px', fontSize: 13, fontWeight: 600, background: '#F5F0E1',
+            border: '1px solid #E6DFCC', borderRadius: 4, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+          }}>✨ Get AI proposal (uses filter context)</button>
+
+          <div>
+            <div style={fieldLabelStyle}>Campaign name (internal)</div>
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Q3 repeat-guest re-engagement" style={modalInput} />
+          </div>
+
+          <div>
+            <div style={fieldLabelStyle}>Subject</div>
+            <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="The subject line guests see in their inbox" style={modalInput} />
+          </div>
+
+          <div>
+            <div style={fieldLabelStyle}>Body (Markdown · {'{{first_name}}'} placeholder is replaced per-recipient)</div>
+            <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={12} style={{ ...modalInput, fontFamily: 'ui-monospace, SFMono-Regular, monospace', fontSize: 12, resize: 'vertical' }} />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <div style={fieldLabelStyle}>Schedule</div>
+              <select value={schedKind} onChange={(e) => setSchedKind(e.target.value as 'once'|'daily'|'weekly'|'monthly')} style={modalInput}>
+                <option value="once">Once (pick a date/time)</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+            </div>
+            <div>
+              <div style={fieldLabelStyle}>{schedKind === 'once' ? 'Send at' : 'First run at'}</div>
+              <input type="datetime-local" value={schedAt} onChange={(e) => setSchedAt(e.target.value)} style={modalInput} />
+            </div>
+          </div>
+
+          {saveMsg && (
+            <div style={{
+              padding: 10, fontSize: 12,
+              background: saveMsg.startsWith('Error') ? '#FBE8E4' : '#E4F0E1',
+              color: saveMsg.startsWith('Error') ? '#8A2419' : '#1F5C2C',
+              border: `1px solid ${saveMsg.startsWith('Error') ? '#E8B7AB' : '#C8DFC8'}`,
+              borderRadius: 4,
+            }}>{saveMsg}</div>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 6 }}>
+            <button type="button" onClick={onClose} style={{
+              padding: '8px 14px', fontSize: 12, background: '#FFFFFF', color: '#1B1B1B',
+              border: '1px solid #E6DFCC', borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit',
+            }}>Cancel</button>
+            <button type="button" onClick={save} disabled={saving || !subject || !body || emailable.length === 0} style={{
+              padding: '8px 18px', fontSize: 12, fontWeight: 600, background: '#1F3A2E', color: '#FFFFFF',
+              border: 'none', borderRadius: 4, cursor: saving ? 'wait' : 'pointer',
+              opacity: (saving || !subject || !body || emailable.length === 0) ? 0.5 : 1, fontFamily: 'inherit',
+            }}>{saving ? 'Saving…' : (schedKind === 'once' && schedAt ? 'Schedule send' : 'Save draft')}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const fieldLabelStyle: React.CSSProperties = {
+  fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase',
+  color: '#5A5A5A', fontWeight: 600, marginBottom: 4,
+};
+const modalInput: React.CSSProperties = {
+  width: '100%',
+  padding: '9px 12px',
+  border: '1px solid #E6DFCC', borderRadius: 4,
+  background: '#FFFFFF', color: '#1B1B1B',
+  fontSize: 13, fontFamily: 'inherit',
+};
 
 // ---- styles ------------------------------------------------------------
 function pillStyle(active: boolean): React.CSSProperties {
