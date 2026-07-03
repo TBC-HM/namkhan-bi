@@ -30,6 +30,25 @@ export default function GuestLayout({ children }: { children: React.ReactNode })
           --st-good:    #1F5C2C;
           --st-warn:    #8B5A1C;
           --st-bad:     #B03826;
+          /* legacy Page shell + dept-entry tokens (all Namkhan dark by default) */
+          --surf:       #FFFFFF;
+          --surf-1:     #FFFFFF;
+          --surf-2:     #FAFAF7;
+          --surf-3:     #F5F0E1;
+          --border-2:   #E6DFCC;
+          --border-3:   #C8C0A6;
+          --text-0:     #1B1B1B;
+          --text-1:     #1B1B1B;
+          --text-2:     #3A3A3A;
+          --text-3:     #5A5A5A;
+          --text-dim:   #5A5A5A;
+          --text-place: #8A8A8A;
+          --accent:     #1F3A2E;
+          --accent-2:   #C79A6B;
+          --bg:         #FFFFFF;
+          --bg-1:       #FFFFFF;
+          --bg-2:       #FAFAF7;
+          --line-soft:  #5A5A5A;
         }
         .guest-paper-scope button,
         .guest-paper-scope input,
