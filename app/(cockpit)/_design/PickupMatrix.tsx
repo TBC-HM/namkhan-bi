@@ -13,7 +13,7 @@
 
 import type { CSSProperties } from 'react';
 
-export type PickupMetric = 'RN' | 'OCC' | 'REV' | 'ADR' | 'RevPAR';
+export type PickupMetric = 'RN' | 'OCC' | 'REV' | 'REV rooms' | 'REV total' | 'ADR' | 'RevPAR';
 
 export interface PickupDelta {
   abs: number | null;
@@ -121,9 +121,9 @@ export default function PickupMatrix({ data }: Props) {
           </tr>
           <tr>
             <th style={{ ...S.headerTh, ...S.frozen, ...S.frozenHead, textAlign: 'left' }}>Period</th>
-            <th style={S.headerTh}>2023 RO</th>
-            <th style={S.headerTh}>2024 RO</th>
-            <th style={S.headerTh}>2025 RO</th>
+            <th style={S.headerTh}>2023</th>
+            <th style={S.headerTh}>2024</th>
+            <th style={S.headerTh}>2025</th>
             <th style={S.headerTh}>Budget 2026</th>
             <th style={S.headerTh}>2026 RO</th>
             <th style={S.headerTh}>Monthly<div style={S.headerSub}>{data.monthlySnapshotLabel}</div></th>
