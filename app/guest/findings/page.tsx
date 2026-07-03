@@ -3,7 +3,7 @@
 // pillar (review themes, sentiment shifts, segment anomalies, recovery cases).
 // No invented findings — page is honestly empty until agents start writing rows.
 
-import Page from '@/components/page/Page';
+import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
 import { GUEST_SUBPAGES } from '../_subpages';
 import StatusPill from '@/components/ui/StatusPill';
 import { supabase } from '@/lib/supabase';
@@ -35,11 +35,7 @@ export default async function FindingsPage() {
   const totalRows = themesCount + casesCount + npsCount;
 
   return (
-    <Page
-      eyebrow="Guest · Findings"
-      title={<>What the data <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>told us</em> this week.</>}
-      subPages={GUEST_SUBPAGES}
-    >
+    <DashboardPage title="Guest · Findings" subtitle="What the data told us this week." tabs={GUEST_SUBPAGES.map(s => ({ key: s.href, label: s.label, href: s.href, active: s.href === "/guest/findings" }))}>
 
       <GuestStatusHeader
         top={
@@ -130,7 +126,7 @@ export default async function FindingsPage() {
           </div>
         </div>
       )}
-    </Page>
+    </DashboardPage>
   );
 }
 
