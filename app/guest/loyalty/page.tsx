@@ -4,7 +4,7 @@
 // Every value wired. No invented cohorts.
 
 import Link from 'next/link';
-import Page from '@/components/page/Page';
+import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
 import { GUEST_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
@@ -137,11 +137,7 @@ export default async function LoyaltyPage() {
     : 0;
 
   return (
-    <Page
-      eyebrow="Guest · Loyalty"
-      title={<>Who comes <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>back</em> — and who's about to slip.</>}
-      subPages={GUEST_SUBPAGES}
-    >
+    <DashboardPage title="Guest · Loyalty" subtitle="Who comes back — and who is about to slip." tabs={GUEST_SUBPAGES.map(s => ({ key: s.href, label: s.label, href: s.href, active: s.href === "/guest/loyalty" }))}>
 
       <GuestStatusHeader
         top={
@@ -257,7 +253,7 @@ export default async function LoyaltyPage() {
           <GuestTable rows={vips} todayIso={todayIso} />
         )}
       </div>
-    </Page>
+    </DashboardPage>
   );
 }
 
