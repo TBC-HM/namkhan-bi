@@ -7,7 +7,6 @@ import { GUEST_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
 import StatusPill from '@/components/ui/StatusPill';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
-import { fmtMoney } from '@/lib/format';
 import {
   GuestStatusHeader, StatusCell, SectionHead,
   metaSm, metaStrong, metaDim, cardWrap, cardTitle, cardSub,
