@@ -13,6 +13,7 @@ import type { DirectoryRow } from '../page';
 
 interface FacetRow { country: string; guest_count: number }
 type ArrivalWindow = 'any' | 'next_7' | 'next_30' | 'next_90';
+type PastWindow = 'any' | 'last_30' | 'last_90' | 'last_365' | 'older';
 type SortKey =
   | 'full_name' | 'country' | 'stays_count' | 'bookings_count'
   | 'last_stay_date' | 'upcoming_stay_date' | 'top_source'
@@ -34,6 +35,8 @@ export default function DirectoryClient({
   const [party, setParty]       = useState('');
   const [language, setLanguage] = useState('');
   const [arrival, setArrival] = useState<ArrivalWindow>('any');
+  const [pastStay, setPastStay] = useState<PastWindow>('any');
+  const [spendFilter, setSpendFilter] = useState<'any' | 'restaurant' | 'spa' | 'activities' | 'retail'>('any');
   const [repeatOnly, setRepeatOnly] = useState(false);
   const [contactableOnly, setContactableOnly] = useState(false);
   const [selected, setSelected] = useState<DirectoryRow | null>(null);
@@ -43,12 +46,14 @@ export default function DirectoryClient({
   function clearAll() {
     setQ(''); setCountry(''); setSource(''); setSegment('');
     setRoom(''); setRatePlan(''); setParty(''); setLanguage('');
-    setArrival('any'); setRepeatOnly(false); setContactableOnly(false);
+    setArrival('any'); setPastStay('any'); setSpendFilter('any');
+    setRepeatOnly(false); setContactableOnly(false);
   }
   const activeFilterCount =
     (q.length >= 2 ? 1 : 0) + (country ? 1 : 0) + (source ? 1 : 0) + (segment ? 1 : 0) +
     (room ? 1 : 0) + (ratePlan ? 1 : 0) + (party ? 1 : 0) + (language ? 1 : 0) +
-    (arrival !== 'any' ? 1 : 0) + (repeatOnly ? 1 : 0) + (contactableOnly ? 1 : 0);
+    (arrival !== 'any' ? 1 : 0) + (pastStay !== 'any' ? 1 : 0) + (spendFilter !== 'any' ? 1 : 0) +
+    (repeatOnly ? 1 : 0) + (contactableOnly ? 1 : 0);
 
   function toggleSort(k: SortKey) {
     if (sortKey === k) {
@@ -119,6 +124,20 @@ export default function DirectoryClient({
                  : true;
         if (!ok) return false;
       }
+      if (pastStay !== 'any') {
+        if (!r.last_stay_date) return false;
+        const days = Math.floor((Date.now() - new Date(r.last_stay_date).getTime()) / 86_400_000);
+        if (pastStay === 'last_30'  && days > 30) return false;
+        if (pastStay === 'last_90'  && days > 90) return false;
+        if (pastStay === 'last_365' && days > 365) return false;
+        if (pastStay === 'older'    && days <= 365) return false;
+      }
+      if (spendFilter !== 'any') {
+        if (spendFilter === 'restaurant' && !r.spent_restaurant) return false;
+        if (spendFilter === 'spa'        && !r.spent_spa)        return false;
+        if (spendFilter === 'activities' && !r.spent_activities) return false;
+        if (spendFilter === 'retail'     && !r.spent_retail)     return false;
+      }
       return true;
     });
 
@@ -133,7 +152,7 @@ export default function DirectoryClient({
       return String(av).localeCompare(String(bv)) * dir;
     });
     return rows;
-  }, [initialRows, q, country, source, segment, room, ratePlan, party, language, arrival, repeatOnly, contactableOnly, sortKey, sortDir]);
+  }, [initialRows, q, country, source, segment, room, ratePlan, party, language, arrival, pastStay, spendFilter, repeatOnly, contactableOnly, sortKey, sortDir]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
@@ -173,6 +192,14 @@ export default function DirectoryClient({
           <Dropdown label="Party"      value={party}    onChange={setParty}    options={options.parties} />
           <Dropdown label="Language"   value={language} onChange={setLanguage} options={options.languages} />
           <DropdownArrival             value={arrival}  onChange={setArrival} />
+          <DropdownPastStay            value={pastStay} onChange={setPastStay} />
+          <DropdownSpend               value={spendFilter} onChange={setSpendFilter}
+            counts={{
+              restaurant: initialRows.filter(r => r.spent_restaurant).length,
+              spa:        initialRows.filter(r => r.spent_spa).length,
+              activities: initialRows.filter(r => r.spent_activities).length,
+              retail:     initialRows.filter(r => r.spent_retail).length,
+            }} />
         </div>
 
         {/* Checkboxes */}
@@ -214,6 +241,7 @@ export default function DirectoryClient({
                   <SortableTh label="Segment"     k="last_segment"       currentKey={sortKey} currentDir={sortDir} onClick={toggleSort} />
                   <SortableTh label="Party"       k="party_type"         currentKey={sortKey} currentDir={sortDir} onClick={toggleSort} />
                   <SortableTh label="ADR"         k="last_adr"           currentKey={sortKey} currentDir={sortDir} onClick={toggleSort} align="right" />
+                  <th style={th} title="Spend flags · R=Restaurant · S=Spa · A=Activities · T=reTail">Spend</th>
                   <SortableTh label="Source"      k="top_source"         currentKey={sortKey} currentDir={sortDir} onClick={toggleSort} />
                 </tr>
               </thead>
@@ -243,6 +271,13 @@ export default function DirectoryClient({
                     <td style={tdL}>{r.last_segment ?? r.top_segment ?? '—'}</td>
                     <td style={tdL}>{r.party_type ?? '—'}</td>
                     <td style={tdR}>{r.last_adr != null ? Math.round(r.last_adr).toLocaleString('en-US') : '—'}</td>
+                    <td style={tdSpend}>
+                      {r.spent_restaurant && <span title="Restaurant"    style={spendBadge('#E4F0E1','#1F5C2C')}>R</span>}
+                      {r.spent_spa        && <span title="Spa"           style={spendBadge('#F5EAF7','#7A2C86')}>S</span>}
+                      {r.spent_activities && <span title="Activities"    style={spendBadge('#E4EBF5','#1F3A6F')}>A</span>}
+                      {r.spent_retail     && <span title="Retail"        style={spendBadge('#FBEDD8','#8B5A1C')}>T</span>}
+                      {!r.spent_restaurant && !r.spent_spa && !r.spent_activities && !r.spent_retail && <span style={{ color: '#8A8A8A', fontSize: 10 }}>—</span>}
+                    </td>
                     <td style={tdL}>{r.last_source ?? r.top_source ?? '—'}</td>
                   </tr>
                 ))}
@@ -292,23 +327,57 @@ function Dropdown({ label, value, onChange, options }: {
 function DropdownArrival({ value, onChange }: {
   value: ArrivalWindow; onChange: (v: ArrivalWindow) => void;
 }) {
+  const active = value !== 'any';
   return (
     <div>
-      <div style={dropdownLabelStyle}>Arrival</div>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as ArrivalWindow)}
-        style={{
-          ...selectStyle,
-          borderColor: value !== 'any' ? '#1F3A2E' : '#E6DFCC',
-          fontWeight: value !== 'any' ? 600 : 400,
-          color: value !== 'any' ? '#1F3A2E' : '#1B1B1B',
-        }}
-      >
+      <div style={dropdownLabelStyle}>Arrival (future)</div>
+      <select value={value} onChange={(e) => onChange(e.target.value as ArrivalWindow)}
+        style={{ ...selectStyle, borderColor: active ? '#1F3A2E' : '#E6DFCC', fontWeight: active ? 600 : 400, color: active ? '#1F3A2E' : '#1B1B1B' }}>
         <option value="any">Any</option>
         <option value="next_7">Next 7d</option>
         <option value="next_30">Next 30d</option>
         <option value="next_90">Next 90d</option>
+      </select>
+    </div>
+  );
+}
+
+function DropdownPastStay({ value, onChange }: {
+  value: PastWindow; onChange: (v: PastWindow) => void;
+}) {
+  const active = value !== 'any';
+  return (
+    <div>
+      <div style={dropdownLabelStyle}>Last stay (past)</div>
+      <select value={value} onChange={(e) => onChange(e.target.value as PastWindow)}
+        style={{ ...selectStyle, borderColor: active ? '#1F3A2E' : '#E6DFCC', fontWeight: active ? 600 : 400, color: active ? '#1F3A2E' : '#1B1B1B' }}>
+        <option value="any">Any</option>
+        <option value="last_30">Last 30d</option>
+        <option value="last_90">Last 90d</option>
+        <option value="last_365">Last 12m</option>
+        <option value="older">More than 12m ago</option>
+      </select>
+    </div>
+  );
+}
+
+type SpendKey = 'any' | 'restaurant' | 'spa' | 'activities' | 'retail';
+function DropdownSpend({ value, onChange, counts }: {
+  value: SpendKey;
+  onChange: (v: SpendKey) => void;
+  counts: { restaurant: number; spa: number; activities: number; retail: number };
+}) {
+  const active = value !== 'any';
+  return (
+    <div>
+      <div style={dropdownLabelStyle}>Spend on</div>
+      <select value={value} onChange={(e) => onChange(e.target.value as SpendKey)}
+        style={{ ...selectStyle, borderColor: active ? '#1F3A2E' : '#E6DFCC', fontWeight: active ? 600 : 400, color: active ? '#1F3A2E' : '#1B1B1B' }}>
+        <option value="any">Any</option>
+        <option value="restaurant">Restaurant ({counts.restaurant})</option>
+        <option value="spa">Spa ({counts.spa})</option>
+        <option value="activities">Activities ({counts.activities})</option>
+        <option value="retail">Retail ({counts.retail})</option>
       </select>
     </div>
   );
@@ -460,6 +529,18 @@ const dropdownLabelStyle: React.CSSProperties = {
   fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase',
   color: '#5A5A5A', fontWeight: 600, marginBottom: 3,
 };
+const tdSpend: React.CSSProperties = {
+  padding: '5px 8px', fontSize: 12,
+  display: 'flex', flexDirection: 'row', gap: 3,
+  alignItems: 'center', whiteSpace: 'nowrap',
+};
+function spendBadge(bg: string, color: string): React.CSSProperties {
+  return {
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    width: 18, height: 18, borderRadius: 4,
+    background: bg, color, fontSize: 10, fontWeight: 700,
+  };
+}
 const tdContact: React.CSSProperties = {
   padding: '4px 10px', fontSize: 11, color: '#1B1B1B',
   maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis',
