@@ -56,6 +56,8 @@ export default function GuestLayout({ children }: { children: React.ReactNode })
         .guest-paper-scope textarea {
           color: #1B1B1B;
         }
+        /* PBS 2026-07-03: kill currency pills in the header on the Guest area */
+        .guest-paper-scope [title^="USD → "] { display: none !important; }
         .guest-paper-scope input[type="text"],
         .guest-paper-scope input[type="search"],
         .guest-paper-scope input[type="number"],
