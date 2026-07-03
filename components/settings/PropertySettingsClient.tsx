@@ -1,5 +1,9 @@
 // components/settings/PropertySettingsClient.tsx
-// v2: Adds Team tab (12th) showing GM + HODs from tenancy.property_users
+// PBS 2026-07-03: paper-white + hairline redesign. Old wrapper used
+// var(--card) / var(--brass) / var(--paper-deep) which resolve to DARK on
+// Namkhan (:root --paper-warm = #15110c). Rewritten with hardcoded #FFFFFF
+// backgrounds + #E6DFCC hairlines + #1B1B1B ink text per token-ladder memo.
+
 'use client';
 
 import { useState } from 'react';
@@ -17,112 +21,106 @@ import SocialPanel from './panels/SocialPanel';
 import TeamPanel from './panels/TeamPanel';
 
 type Tab =
-  | 'identity'
-  | 'location'
-  | 'brand'
-  | 'policies'
-  | 'rooms'
-  | 'facilities'
-  | 'activities'
-  | 'seasons'
-  | 'certifications'
-  | 'contacts'
-  | 'social'
-  | 'team';
+  | 'identity' | 'location' | 'brand' | 'policies'
+  | 'rooms' | 'facilities' | 'activities' | 'seasons'
+  | 'certifications' | 'contacts' | 'social' | 'team';
 
 const TABS: { key: Tab; label: string; subtitle: string; count: (d: any) => number | null }[] = [
-  { key: 'identity', label: 'Identity', subtitle: 'Legal & licensing', count: () => null },
-  { key: 'location', label: 'Location', subtitle: 'Address, GPS, climate', count: () => null },
-  { key: 'brand', label: 'Brand', subtitle: 'Logo, palette, copy', count: () => null },
-  { key: 'policies', label: 'Policies', subtitle: 'Bookings & terms', count: () => null },
-  { key: 'rooms', label: 'Rooms', subtitle: 'Room type catalog', count: (d) => d.rooms.length },
-  { key: 'facilities', label: 'Facilities', subtitle: 'Pool, spa, dining', count: (d) => d.facilities.length },
-  { key: 'activities', label: 'Activities', subtitle: 'Wellness, culture, adventure', count: (d) => d.activities.length },
-  { key: 'seasons', label: 'Seasons', subtitle: 'High / low calendar', count: (d) => d.seasons.length },
-  { key: 'certifications', label: 'Certifications', subtitle: 'SLH, ASEAN Green, etc', count: (d) => d.certifications.length },
-  { key: 'contacts', label: 'Contacts', subtitle: 'Reservations, GM, owner', count: (d) => d.contacts.length },
-  { key: 'social', label: 'Social', subtitle: 'IG, FB, TripAdvisor, etc', count: (d) => d.social.length },
-  { key: 'team', label: 'Team', subtitle: 'GM & department heads', count: (d) => d.team?.length ?? 0 },
+  { key: 'identity',       label: 'Identity',       subtitle: 'Legal & licensing',            count: () => null },
+  { key: 'location',       label: 'Location',       subtitle: 'Address · GPS · climate',      count: () => null },
+  { key: 'brand',          label: 'Brand',          subtitle: 'Logo · palette · copy',        count: () => null },
+  { key: 'policies',       label: 'Policies',       subtitle: 'Bookings & terms',             count: () => null },
+  { key: 'rooms',          label: 'Rooms',          subtitle: 'Room type catalog',            count: (d) => d.rooms.length },
+  { key: 'facilities',     label: 'Facilities',     subtitle: 'Pool · spa · dining',          count: (d) => d.facilities.length },
+  { key: 'activities',     label: 'Activities',     subtitle: 'Wellness · culture · adventure', count: (d) => d.activities.length },
+  { key: 'seasons',        label: 'Seasons',        subtitle: 'High / low calendar',          count: (d) => d.seasons.length },
+  { key: 'certifications', label: 'Certifications', subtitle: 'SLH · ASEAN Green · etc',      count: (d) => d.certifications.length },
+  { key: 'contacts',       label: 'Contacts',       subtitle: 'Reservations · GM · owner',    count: (d) => d.contacts.length },
+  { key: 'social',         label: 'Social',         subtitle: 'IG · FB · TripAdvisor',        count: (d) => d.social.length },
+  { key: 'team',           label: 'Team',           subtitle: 'GM & department heads',        count: (d) => d.team?.length ?? 0 },
 ];
 
 export default function PropertySettingsClient({ data, propertyId }: { data: any; propertyId: number }) {
   const [active, setActive] = useState<Tab>('identity');
 
-  // PBS 2026-05-13 rev3: replaced Donna-only Tailwind utilities + hardcoded
-  // hex fallbacks (#1F3A2E green, #F4EFE2 cream, #B8A878 sand) with brand-
-  // aware tokens. Namkhan picks up :root dark defaults, Donna picks up the
-  // lightLegacyVars override emitted by ThemeInjector — same component
-  // renders correctly in either tenant theme.
   return (
-    <div className="grid grid-cols-12 gap-6">
-      <aside className="col-span-3">
-        <nav className="space-y-1 sticky top-6">
+    <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 16, alignItems: 'start' }}>
+      <aside>
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: 4, position: 'sticky', top: 12 }}>
           {TABS.map((tab) => {
             const isActive = active === tab.key;
             const count = tab.count(data);
             return (
               <button
                 key={tab.key}
+                type="button"
                 onClick={() => setActive(tab.key)}
-                className="w-full text-left px-4 py-3 rounded-lg transition-all"
                 style={{
-                  background: isActive ? 'var(--brass)' : 'var(--card)',
-                  color: isActive ? 'var(--paper-deep)' : 'var(--ink)',
-                  border: '1px solid',
-                  borderColor: isActive ? 'var(--brass)' : 'var(--border)',
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '10px 12px',
+                  border: `1px solid ${isActive ? '#1F3A2E' : '#E6DFCC'}`,
+                  background: isActive ? '#1F3A2E' : '#FFFFFF',
+                  color: isActive ? '#FFFFFF' : '#1B1B1B',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  transition: 'background 120ms',
                 }}
               >
-                <div className="flex items-center justify-between">
-                  <span className="font-medium" style={{ fontSize: 'var(--t-md)' }}>{tab.label}</span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600 }}>{tab.label}</span>
                   {count !== null && (
                     <span
-                      className="px-2 py-0.5 rounded-full"
                       style={{
-                        fontSize: 'var(--t-xs)',
-                        background: isActive ? 'rgba(0,0,0,0.18)' : 'var(--paper-deep)',
-                        color: isActive ? 'var(--paper-deep)' : 'var(--ink-mute)',
+                        fontSize: 11,
+                        padding: '1px 8px',
+                        borderRadius: 99,
+                        background: isActive ? 'rgba(255,255,255,0.2)' : '#F5F0E1',
+                        color: isActive ? '#FFFFFF' : '#5A5A5A',
+                        fontVariantNumeric: 'tabular-nums',
                       }}
                     >
                       {count}
                     </span>
                   )}
                 </div>
-                <p
-                  className="mt-0.5"
+                <div
                   style={{
-                    fontSize: 'var(--t-xs)',
-                    color: isActive ? 'var(--paper-deep)' : 'var(--ink-mute)',
-                    opacity: isActive ? 0.85 : 1,
+                    fontSize: 11,
+                    color: isActive ? 'rgba(255,255,255,0.75)' : '#5A5A5A',
+                    marginTop: 2,
                   }}
                 >
                   {tab.subtitle}
-                </p>
+                </div>
               </button>
             );
           })}
         </nav>
       </aside>
 
-      <main className="col-span-9">
+      <main>
         <div
-          className="rounded-xl backdrop-blur-sm"
           style={{
-            background: 'var(--card)',
-            border: '1px solid var(--border)',
+            background: '#FFFFFF',
+            border: '1px solid #E6DFCC',
+            borderRadius: 6,
+            minHeight: 400,
           }}
         >
-          {active === 'identity' && <IdentityPanel data={data.identity} propertyId={propertyId} />}
-          {active === 'location' && <LocationPanel data={data.location} />}
-          {active === 'brand' && <BrandPanel data={data.brand} />}
-          {active === 'policies' && <PoliciesPanel data={data.policies} />}
-          {active === 'rooms' && <RoomsPanel data={data.rooms} />}
-          {active === 'facilities' && <FacilitiesPanel data={data.facilities} />}
-          {active === 'activities' && <ActivitiesPanel data={data.activities} />}
-          {active === 'seasons' && <SeasonsPanel data={data.seasons} />}
+          {active === 'identity'       && <IdentityPanel       data={data.identity}       propertyId={propertyId} />}
+          {active === 'location'       && <LocationPanel       data={data.location} />}
+          {active === 'brand'          && <BrandPanel          data={data.brand} />}
+          {active === 'policies'       && <PoliciesPanel       data={data.policies} />}
+          {active === 'rooms'          && <RoomsPanel          data={data.rooms} />}
+          {active === 'facilities'     && <FacilitiesPanel     data={data.facilities} />}
+          {active === 'activities'     && <ActivitiesPanel     data={data.activities} />}
+          {active === 'seasons'        && <SeasonsPanel        data={data.seasons} />}
           {active === 'certifications' && <CertificationsPanel data={data.certifications} />}
-          {active === 'contacts' && <ContactsPanel data={data.contacts} />}
-          {active === 'social' && <SocialPanel data={data.social} />}
-          {active === 'team' && <TeamPanel data={data.team ?? []} />}
+          {active === 'contacts'       && <ContactsPanel       data={data.contacts} />}
+          {active === 'social'         && <SocialPanel         data={data.social} />}
+          {active === 'team'           && <TeamPanel           data={data.team ?? []} />}
         </div>
       </main>
     </div>
