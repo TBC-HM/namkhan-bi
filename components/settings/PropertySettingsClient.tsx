@@ -146,16 +146,16 @@ export default function PropertySettingsClient({ data, propertyId }: { data: any
         >
           {active === 'identity'       && <IdentityPanel       data={data.identity}       propertyId={propertyId} />}
           {active === 'owner'          && <OwnerPanel          data={data.owner}          propertyId={propertyId} />}
-          {active === 'location'       && <LocationPanel       data={data.location} />}
-          {active === 'brand'          && <BrandPanel          data={data.brand} />}
-          {active === 'policies'       && <PoliciesPanel       data={data.policies} />}
-          {active === 'rooms'          && <RoomsPanel          data={data.rooms}          roomUnits={data.roomUnits ?? []} />}
-          {active === 'facilities'     && <FacilitiesPanel     data={data.facilities} />}
-          {active === 'activities'     && <ActivitiesPanel     data={data.activities} />}
-          {active === 'seasons'        && <SeasonsPanel        data={data.seasons} />}
+          {active === 'location'       && <LocationPanel       data={data.location}       propertyId={propertyId} />}
+          {active === 'brand'          && <BrandPanel          data={data.brand}          propertyId={propertyId} />}
+          {active === 'policies'       && <PoliciesPanel       data={data.policies}       propertyId={propertyId} />}
+          {active === 'rooms'          && <RoomsPanel          data={data.rooms}          roomUnits={data.roomUnits ?? []} propertyId={propertyId} />}
+          {active === 'facilities'     && <FacilitiesPanel     data={data.facilities}     propertyId={propertyId} />}
+          {active === 'activities'     && <ActivitiesPanel     data={data.activities}     propertyId={propertyId} />}
+          {active === 'seasons'        && <SeasonsPanel        data={data.seasons}        propertyId={propertyId} />}
           {active === 'certifications' && <CertificationsPanel data={data.certifications} propertyId={propertyId} />}
           {active === 'contacts'       && <ContactsPanel       data={data.contacts}       propertyId={propertyId} />}
-          {active === 'social'         && <SocialPanel         data={data.social} />}
+          {active === 'social'         && <SocialPanel         data={data.social}         propertyId={propertyId} />}
           {active === 'team'           && <TeamPanel           data={data.team ?? []} />}
         </div>
       </main>
