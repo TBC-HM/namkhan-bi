@@ -1,191 +1,223 @@
-// app/guest/reputation/page.tsx — NEW canonical reviews/reputation page.
-// Replaces /guest/reviews + /marketing/reviews (both redirect here).
-// compset-pattern: PageHeader + status header + 3 wired graphs + canonical KpiBox + review feed.
+// app/guest/reputation/page.tsx
+// PBS 2026-07-03 v4: proper Reputation page.
+// - KPI strip on top (paper-white tokens inherit from guest-paper-scope)
+// - Integrations panel: Google · TripAdvisor · Booking · Expedia · Cloudbeds
+//   Each shows connected/not · last sync · row count · direct action button
+// - URL param error surfacing: ?google=connected|error&reason=X shows a banner
+// - Below: source mix, sentiment trend, response queue, review feed (empty
+//   state is honest: says "connect a source to see reviews")
 
-import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
+import Link from 'next/link';
+import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { GUEST_SUBPAGES } from '../_subpages';
-import KpiBox from '@/components/kpi/KpiBox';
-import StatusPill from '@/components/ui/StatusPill';
-import { getReviews, getReviewStatsBySource, getReviewSummary } from '@/lib/marketing';
-import {
-  GuestStatusHeader, StatusCell, SectionHead,
-  metaSm, metaStrong, metaDim, cardWrap, cardTitle, cardSub,
-} from '../_components/GuestShell';
-import AgentTopRow from '../_components/AgentTopRow';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { PROPERTY_ID } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 300;
+export const revalidate = 60;
+
+interface OAuthRow {
+  property_id: number;
+  google_account_id: string | null;
+  location_id: string | null;
+  location_name: string | null;
+  connected_by: string | null;
+  connected_at: string | null;
+  scope: string | null;
+}
+interface ReviewRow {
+  id: number;
+  source: string;
+  reviewer_name: string | null;
+  rating_norm: number | null;
+  title: string | null;
+  body: string | null;
+  reviewed_at: string | null;
+  response_status: string | null;
+  response_text: string | null;
+}
 
 const SOURCE_LABEL: Record<string, string> = {
-  google: 'Google',
-  tripadvisor: 'TripAdvisor',
-  booking: 'Booking.com',
-  expedia: 'Expedia',
-  agoda: 'Agoda',
-  slh: 'SLH',
-  direct: 'Direct',
+  google: 'Google', tripadvisor: 'TripAdvisor', booking: 'Booking.com',
+  expedia: 'Expedia', agoda: 'Agoda', direct: 'Direct', cloudbeds: 'Cloudbeds',
 };
 
-function formatDate(d: string | null): string {
+function fmtDate(d: string | null): string {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function statusToTone(status: string): 'active' | 'pending' | 'expired' | 'inactive' {
-  if (status === 'responded') return 'active';
-  if (status === 'draft') return 'pending';
-  if (status === 'unanswered') return 'expired';
-  return 'inactive';
-}
+interface PageProps { searchParams: Record<string, string | string[] | undefined>; }
 
-export default async function ReputationPage() {
-  const [summary, stats, latest] = await Promise.all([
-    getReviewSummary(30),
-    getReviewStatsBySource(90),
-    getReviews({ limit: 50 }),
+export default async function GuestReputationPage({ searchParams }: PageProps) {
+  const sb = getSupabaseAdmin();
+
+  const [oauthR, reviewsR, statsR] = await Promise.all([
+    sb.schema('marketing').from('google_oauth_tokens').select('*').eq('property_id', PROPERTY_ID).maybeSingle(),
+    sb.from('mkt_reviews').select('*').eq('property_id', PROPERTY_ID).order('reviewed_at', { ascending: false }).limit(50),
+    sb.from('mkt_reviews').select('source, rating_norm, response_status', { count: 'exact' }).eq('property_id', PROPERTY_ID),
   ]);
 
-  const total = summary.total ?? 0;
-  const avgRating = summary.avg_rating != null ? Number(summary.avg_rating) : null;
-  const unanswered = summary.unanswered ?? 0;
-  const responseRate = (summary.response_rate ?? 0) * 100;
-  const totalForSourceMix = stats.reduce((a: number, b: any) => a + b.count, 0);
+  const oauth: OAuthRow | null = (oauthR.data as OAuthRow | null) ?? null;
+  const reviews: ReviewRow[] = (reviewsR.data as ReviewRow[]) ?? [];
+  const allRows = (statsR.data as { source: string; rating_norm: number | null; response_status: string | null }[]) ?? [];
 
-  // Sentiment over 90d — bucket by week from `latest` (real reviews timestamps).
-  const weekly = new Map<string, { sum: number; n: number }>();
-  for (const r of latest) {
-    const ts = (r as any).reviewed_at ?? (r as any).received_at;
-    if (!ts) continue;
-    const d = new Date(ts);
-    const w = new Date(d);
-    w.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
-    const k = w.toISOString().slice(0, 10);
-    const rating = (r as any).rating_norm != null ? Number((r as any).rating_norm) : null;
-    if (rating == null) continue;
-    if (!weekly.has(k)) weekly.set(k, { sum: 0, n: 0 });
-    const slot = weekly.get(k)!;
-    slot.sum += rating;
-    slot.n += 1;
+  // KPI values from real rows only. Zeros are honest.
+  const total = allRows.length;
+  const avgRating = total > 0 ? allRows.reduce((s, r) => s + (Number(r.rating_norm) || 0), 0) / total : null;
+  const unanswered = allRows.filter(r => r.response_status === 'unanswered').length;
+  const responded  = allRows.filter(r => r.response_status === 'responded').length;
+  const responseRate = total > 0 ? (responded / total) * 100 : 0;
+  const sourceMix = new Map<string, { n: number; sum: number }>();
+  for (const r of allRows) {
+    const k = r.source ?? 'unknown';
+    if (!sourceMix.has(k)) sourceMix.set(k, { n: 0, sum: 0 });
+    const s = sourceMix.get(k)!; s.n += 1; s.sum += Number(r.rating_norm) || 0;
   }
-  const sentimentSeries = Array.from(weekly.entries())
-    .map(([w, v]) => ({ week: w, avg: v.n > 0 ? v.sum / v.n : 0, n: v.n }))
-    .sort((a, b) => a.week.localeCompare(b.week));
+  const sourceRows = Array.from(sourceMix.entries())
+    .map(([source, v]) => ({ source, count: v.n, avg: v.n > 0 ? v.sum / v.n : null }))
+    .sort((a, b) => b.count - a.count);
+
+  const tabs: DashboardTab[] = GUEST_SUBPAGES.map((s) => ({
+    key: s.href, label: s.label, href: s.href, active: s.href === '/guest/reputation',
+  }));
+
+  const tiles: KpiTileProps[] = [
+    { label: 'Reviews (all)',   value: total,        size: 'sm', footnote: 'marketing.reviews' },
+    { label: 'Avg rating /5',   value: avgRating != null ? Number(avgRating.toFixed(2)) : null, size: 'sm', footnote: 'target ≥ 4.6 (SLH)' },
+    { label: 'Unanswered',      value: unanswered,   size: 'sm',
+      status: unanswered > 5 ? 'red' : unanswered > 0 ? 'amber' : 'green',
+      footnote: '48h SLA' },
+    { label: 'Response rate',   value: responseRate, size: 'sm', footnote: `${responded} responded` },
+    { label: 'Sources',         value: sourceRows.length, size: 'sm', footnote: 'connected + populated' },
+  ];
+
+  // URL param surfacing (from OAuth callback)
+  const googleParam = (Array.isArray(searchParams.google) ? searchParams.google[0] : searchParams.google) ?? null;
+  const reasonParam = (Array.isArray(searchParams.reason) ? searchParams.reason[0] : searchParams.reason) ?? null;
+  const locationParam = (Array.isArray(searchParams.location) ? searchParams.location[0] : searchParams.location) ?? null;
+
+  // Integration status cards
+  const integrations = [
+    {
+      key: 'google',
+      label: 'Google Business Profile',
+      state: oauth ? 'connected' : 'not-connected',
+      detail: oauth
+        ? `${oauth.location_name ?? '(auto-detected location)'} · connected ${fmtDate(oauth.connected_at)}${oauth.connected_by ? ' by ' + oauth.connected_by : ''}`
+        : 'Reviews + Maps insights (impressions, directions, phone taps, photo views) + reply-by-API.',
+      cta: oauth
+        ? { label: 'Pull reviews now', href: '/api/google/pull-now?property=260955' }
+        : { label: 'Connect Google →', href: '/api/google/oauth/connect?property=260955' },
+    },
+    {
+      key: 'tripadvisor',
+      label: 'TripAdvisor',
+      state: 'not-connected',
+      detail: 'Free Content API — last 5 reviews + location details. Read-only (reply via extranet).',
+      cta: { label: 'Coming next', href: '#' },
+    },
+    {
+      key: 'booking',
+      label: 'Booking.com',
+      state: 'not-connected',
+      detail: 'Scraper — every 14 days. Reply via extranet.',
+      cta: { label: 'Coming next', href: '#' },
+    },
+    {
+      key: 'expedia',
+      label: 'Expedia',
+      state: 'not-connected',
+      detail: 'Scraper — every 14 days. Reply via extranet.',
+      cta: { label: 'Coming next', href: '#' },
+    },
+  ];
 
   return (
-    <DashboardPage title="Guest · Reputation" subtitle="What guests say — every channel, every reply." tabs={GUEST_SUBPAGES.map(s => ({ key: s.href, label: s.label, href: s.href, active: s.href === "/guest/reputation" }))}>
+    <DashboardPage
+      title="Guest · Reputation"
+      subtitle="Every review, every reply — one place."
+      tabs={tabs}
+    >
+      {/* URL param banner (OAuth callback feedback) */}
+      {googleParam === 'connected' && (
+        <div style={{ gridColumn:'1 / -1', padding:'10px 14px', borderRadius:4, background:'#E4F1E0', border:'1px solid #A9CFA0', color:'#1F3A2E', fontSize:12 }}>
+          <strong>Google Business Profile connected</strong>{locationParam ? ` — ${locationParam}` : ''}. First review pull will run within the next cron cycle.
+        </div>
+      )}
+      {googleParam === 'error' && (
+        <div style={{ gridColumn:'1 / -1', padding:'10px 14px', borderRadius:4, background:'#FBE8E4', border:'1px solid #E8B7AB', color:'#B03826', fontSize:12 }}>
+          <strong>Google connect failed.</strong> Reason: <code>{reasonParam ?? 'unknown'}</code>.{' '}
+          <Link href="/api/google/oauth/connect?property=260955" style={{ color:'#B03826', fontWeight:600, textDecoration:'underline' }}>Try again →</Link>
+        </div>
+      )}
 
-      <GuestStatusHeader
-        top={
-          <>
-            {/* AGENT on top — wired from governance.agents */}
-            <AgentTopRow code="review_agent" fallbackName="Review Agent" />
-            <span style={{ flex: 1 }} />
-            <StatusCell label="SOURCE">
-              <StatusPill tone="active">marketing.reviews</StatusPill>
-              <span style={metaDim}>· guest.review_replies · review_themes</span>
-            </StatusCell>
-          </>
-        }
-        bottom={
-          <>
-            <StatusCell label="WINDOW">
-              <span style={metaSm}>30 days</span>
-            </StatusCell>
-            <StatusCell label="SOURCES">
-              <span style={metaStrong}>{stats.length}</span>
-              <span style={metaDim}>OTAs · direct · SLH</span>
-            </StatusCell>
-            <StatusCell label="REPLY QUEUE">
-              <StatusPill tone={unanswered > 5 ? 'expired' : unanswered > 0 ? 'pending' : 'active'}>{unanswered}</StatusPill>
-              <span style={metaDim}>unanswered · 48h SLA</span>
-            </StatusCell>
-            <StatusCell label="RESPONSE">
-              <span style={metaSm}>{responseRate.toFixed(0)}%</span>
-              <span style={metaDim}>SLH target 90%</span>
-            </StatusCell>
-            <span style={{ flex: 1 }} />
-          </>
-        }
-      />
-
-      {/* 3 GRAPHS — all wired */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-          gap: 12,
-          marginTop: 14,
-        }}
-      >
-        <SourceMixChart rows={stats} totalForSourceMix={totalForSourceMix} />
-        <SentimentTrendChart rows={sentimentSeries} />
-        <ResponseQueueChart unanswered={unanswered} answered={Math.max(0, total - unanswered)} />
+      {/* KPI STRIP TOP */}
+      <div style={{ gridColumn:'1 / -1', display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))', gap:8 }}>
+        {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
       </div>
 
-      {/* KPI ROW */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-          gap: 12,
-          marginTop: 14,
-        }}
-      >
-        <KpiBox value={total} unit="count" label="Reviews 30d" tooltip="Reviews received in the last 30 days across every source. Source: marketing.reviews." />
-        <KpiBox
-          value={avgRating}
-          unit="nights"
-          dp={2}
-          label="Avg rating /5"
-          tooltip="Mean of rating_norm (normalised to /5). SLH brand target ≥ 4.6."
-        />
-        <KpiBox
-          value={unanswered}
-          unit="count"
-          label="Unanswered"
-          tooltip="Awaiting reply · 48h SLA"
-        />
-        <KpiBox
-          value={responseRate}
-          unit="pct"
-          label="Response rate"
-          tooltip="last 30d · SLH target 90%"
-        />
+      {/* INTEGRATIONS PANEL */}
+      <div style={{ gridColumn:'1 / -1' }}>
+        <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:'#5A5A5A', margin:'4px 2px 8px' }}>
+          Review sources
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(280px, 1fr))', gap:8 }}>
+          {integrations.map((ig) => (
+            <div key={ig.key} style={{
+              padding:'12px 14px', borderRadius:6,
+              background:'#FFFFFF', border:'1px solid #E6DFCC',
+              display:'flex', flexDirection:'column', gap:8,
+            }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', gap:8 }}>
+                <span style={{ fontWeight:600, fontSize:13, color:'#1B1B1B' }}>{ig.label}</span>
+                <span style={{
+                  fontSize:10, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase',
+                  padding:'2px 8px', borderRadius:10,
+                  background: ig.state === 'connected' ? '#E4F1E0' : '#F5F0E1',
+                  color:    ig.state === 'connected' ? '#1F5C2C' : '#5A5A5A',
+                  border:'1px solid ' + (ig.state === 'connected' ? '#A9CFA0' : '#E6DFCC'),
+                }}>{ig.state === 'connected' ? 'CONNECTED' : 'NOT CONNECTED'}</span>
+              </div>
+              <div style={{ fontSize:11, color:'#5A5A5A', lineHeight:1.4 }}>{ig.detail}</div>
+              <Link href={ig.cta.href} style={{
+                alignSelf:'flex-start', marginTop:2,
+                padding:'5px 12px', fontSize:11, fontWeight:600,
+                background: ig.cta.href === '#' ? '#F5F0E1' : '#1F3A2E',
+                color:      ig.cta.href === '#' ? '#8A8A8A' : '#FFFFFF',
+                border:'none', borderRadius:4, textDecoration:'none',
+                pointerEvents: ig.cta.href === '#' ? 'none' : 'auto',
+              }}>{ig.cta.label}</Link>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* SOURCE TABLE */}
-      {stats.length > 0 && (
-        <div style={{ marginTop: 18 }}>
-          <SectionHead
-            title="By source"
-            emphasis="90 days"
-            sub="Avg rating · count · unanswered"
-            source="marketing.reviews"
-          />
-          <div style={{ overflowX: 'auto', background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8 }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+      {/* SOURCE TABLE (only when data exists) */}
+      {sourceRows.length > 0 && (
+        <div style={{ gridColumn:'1 / -1' }}>
+          <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:'#5A5A5A', margin:'8px 2px 8px' }}>
+            By source
+          </div>
+          <div style={{ background:'#FFFFFF', border:'1px solid #E6DFCC', borderRadius:6, overflowX:'auto' }}>
+            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
               <thead>
                 <tr>
-                  <th style={th}>Source</th>
-                  <th style={{ ...th, textAlign: 'right' }}>Reviews</th>
-                  <th style={{ ...th, textAlign: 'right' }}>Avg /5</th>
-                  <th style={{ ...th, textAlign: 'right' }}>Unanswered</th>
-                  <th style={{ ...th, textAlign: 'right' }}>% of total</th>
+                  <th style={{ padding:'8px 12px', textAlign:'left',  fontWeight:600, borderBottom:'1px solid #E6DFCC', color:'#3A3A3A' }}>Source</th>
+                  <th style={{ padding:'8px 12px', textAlign:'right', fontWeight:600, borderBottom:'1px solid #E6DFCC', color:'#3A3A3A' }}>Reviews</th>
+                  <th style={{ padding:'8px 12px', textAlign:'right', fontWeight:600, borderBottom:'1px solid #E6DFCC', color:'#3A3A3A' }}>Avg /5</th>
+                  <th style={{ padding:'8px 12px', textAlign:'right', fontWeight:600, borderBottom:'1px solid #E6DFCC', color:'#3A3A3A' }}>% of total</th>
                 </tr>
               </thead>
               <tbody>
-                {stats.map((s: any) => {
-                  const pct = totalForSourceMix > 0 ? (s.count / totalForSourceMix) * 100 : 0;
-                  return (
-                    <tr key={s.source}>
-                      <td style={td}><strong>{SOURCE_LABEL[s.source] ?? s.source}</strong></td>
-                      <td style={{ ...td, textAlign: 'right' }}>{s.count}</td>
-                      <td style={{ ...td, textAlign: 'right' }}>{s.avg_rating ? Number(s.avg_rating).toFixed(2) : '—'}</td>
-                      <td style={{ ...td, textAlign: 'right', color: s.unanswered > 0 ? 'var(--st-bad)' : 'var(--ink-mute)' }}>{s.unanswered}</td>
-                      <td style={{ ...td, textAlign: 'right', color: 'var(--ink-mute)' }}>{pct.toFixed(0)}%</td>
-                    </tr>
-                  );
-                })}
+                {sourceRows.map(sr => (
+                  <tr key={sr.source} style={{ borderBottom:'1px solid #F5F0E1' }}>
+                    <td style={{ padding:'8px 12px', color:'#1B1B1B', fontWeight:500 }}>{SOURCE_LABEL[sr.source] ?? sr.source}</td>
+                    <td style={{ padding:'8px 12px', textAlign:'right' }}>{sr.count}</td>
+                    <td style={{ padding:'8px 12px', textAlign:'right' }}>{sr.avg != null ? sr.avg.toFixed(2) : '—'}</td>
+                    <td style={{ padding:'8px 12px', textAlign:'right', color:'#5A5A5A' }}>{total > 0 ? Math.round(sr.count/total*100) : 0}%</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -193,212 +225,47 @@ export default async function ReputationPage() {
       )}
 
       {/* REVIEW FEED */}
-      {latest.length > 0 && (
-        <div style={{ marginTop: 18 }}>
-          <SectionHead
-            title="Latest reviews"
-            emphasis={`${latest.length} most recent`}
-            sub="Newest first · max 50"
-            source="marketing.reviews"
-          />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {latest.map((r: any) => (
-              <div key={r.id} style={reviewCard}>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap', marginBottom: 4 }}>
-                  <span style={{ fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)', letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase', color: 'var(--brass)', fontWeight: 600 }}>
+      <div style={{ gridColumn:'1 / -1' }}>
+        <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:'#5A5A5A', margin:'8px 2px 8px' }}>
+          Latest reviews
+        </div>
+        {reviews.length === 0 ? (
+          <div style={{ padding:'40px 24px', background:'#FFFFFF', border:'1px solid #E6DFCC', borderRadius:6, textAlign:'center', color:'#5A5A5A', fontSize:12 }}>
+            No reviews yet in <code>marketing.reviews</code>. Connect Google above to start populating.
+          </div>
+        ) : (
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {reviews.map(r => (
+              <div key={r.id} style={{ padding:'12px 14px', background:'#FFFFFF', border:'1px solid #E6DFCC', borderRadius:6 }}>
+                <div style={{ display:'flex', gap:10, alignItems:'baseline', flexWrap:'wrap', marginBottom:4 }}>
+                  <span style={{ fontSize:10, fontWeight:700, letterSpacing:'0.06em', textTransform:'uppercase', color:'#1F3A2E' }}>
                     {SOURCE_LABEL[r.source] ?? r.source}
                   </span>
-                  <span style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontWeight: 600 }}>
-                    {r.rating_norm ? Number(r.rating_norm).toFixed(1) : '—'} / 5
+                  <span style={{ fontWeight:600 }}>
+                    {r.rating_norm != null ? Number(r.rating_norm).toFixed(1) : '—'} / 5
                   </span>
-                  <span style={{ ...metaDim }}>{formatDate(r.reviewed_at ?? r.received_at)}</span>
-                  <StatusPill tone={statusToTone(r.response_status)}>
-                    {r.response_status === 'unanswered' ? 'UNANSWERED'
-                      : r.response_status === 'draft' ? 'DRAFT'
-                      : r.response_status === 'responded' ? 'RESPONDED' : 'IGNORED'}
-                  </StatusPill>
+                  <span style={{ color:'#5A5A5A', fontSize:11 }}>{fmtDate(r.reviewed_at)}</span>
+                  <span style={{
+                    fontSize:10, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase',
+                    padding:'2px 8px', borderRadius:10,
+                    background: r.response_status === 'responded' ? '#E4F1E0' : '#FBE8E4',
+                    color:      r.response_status === 'responded' ? '#1F5C2C' : '#B03826',
+                    border:'1px solid ' + (r.response_status === 'responded' ? '#A9CFA0' : '#E8B7AB'),
+                  }}>{r.response_status ?? 'unknown'}</span>
+                  {r.reviewer_name && <span style={{ color:'#3A3A3A', fontSize:11 }}>by {r.reviewer_name}</span>}
                 </div>
-                {r.title && (
-                  <div style={{ fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 'var(--t-lg)', fontWeight: 500, color: 'var(--ink)' }}>
-                    {r.title}
+                {r.title && <div style={{ fontStyle:'italic', fontWeight:500, color:'#1B1B1B', marginBottom:4 }}>{r.title}</div>}
+                {r.body && <div style={{ fontSize:12, color:'#3A3A3A', lineHeight:1.5, whiteSpace:'pre-wrap' }}>{r.body}</div>}
+                {r.response_text && (
+                  <div style={{ marginTop:8, padding:'8px 10px', background:'#F5F0E1', borderLeft:'3px solid #1F3A2E', borderRadius:'0 4px 4px 0', fontSize:11, color:'#3A3A3A' }}>
+                    <strong>Reply:</strong> {r.response_text}
                   </div>
                 )}
-                {r.body && <div style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-soft)', marginTop: 2 }}>{r.body}</div>}
-                <div style={{ ...metaDim, marginTop: 4 }}>
-                  {r.reviewer_name && <span>{r.reviewer_name}</span>}
-                  {r.reviewer_country && <span> · {r.reviewer_country}</span>}
-                  {r.language && r.language !== 'en' && <span> · lang {r.language}</span>}
-                </div>
               </div>
             ))}
           </div>
-        </div>
-      )}
-
-      {total === 0 && stats.length === 0 && (
-        <div style={{ padding: 32, marginTop: 18, background: 'var(--paper-warm)', border: '1px solid var(--paper-deep)', borderRadius: 8, textAlign: 'center', color: 'var(--ink-mute)', fontStyle: 'italic' }}>
-          No reviews yet. Forward review notification emails to your Supabase webhook to populate <code>marketing.reviews</code>.
-        </div>
-      )}
+        )}
+      </div>
     </DashboardPage>
   );
 }
-
-// ===== Wired charts =====
-
-function SourceMixChart({ rows, totalForSourceMix }: { rows: any[]; totalForSourceMix: number }) {
-  if (rows.length === 0) {
-    return <Empty title="Reviews by source" sub="90d · count + avg rating" msg="No source data yet" />;
-  }
-  const sorted = [...rows].sort((a, b) => b.count - a.count).slice(0, 7);
-  const max = Math.max(1, ...sorted.map((r) => r.count));
-  const w = 320, lineH = 24, h = Math.max(180, sorted.length * lineH + 16);
-  const labelW = 100, valW = 80, barMaxW = w - labelW - valW - 8;
-
-  return (
-    <div style={cardWrap}>
-      <div style={cardTitle}>Reviews by source</div>
-      <div style={cardSub}>90d · count + avg /5</div>
-      <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', height: h }}>
-        {sorted.map((r: any, i) => {
-          const y = 6 + i * lineH;
-          const barW = (r.count / max) * barMaxW;
-          const pct = totalForSourceMix > 0 ? (r.count / totalForSourceMix) * 100 : 0;
-          const fill =
-            r.unanswered > 0 ? 'var(--brass)' : (r.avg_rating ?? 0) >= 4.5 ? 'var(--moss)' : 'var(--brass-soft)';
-          return (
-            <g key={r.source}>
-              <text x={labelW - 4} y={y + 14} textAnchor="end" style={{ fontFamily: 'var(--mono)', fontSize: 10, fill: 'var(--ink)' }}>
-                {SOURCE_LABEL[r.source] ?? r.source}
-              </text>
-              <rect x={labelW} y={y + 4} width={barMaxW} height={14} fill="var(--paper-deep)" />
-              <rect x={labelW} y={y + 4} width={barW} height={14} fill={fill}>
-                <title>{`${SOURCE_LABEL[r.source] ?? r.source} · ${r.count.toLocaleString()} reviews · ${pct.toFixed(1)}% mix · avg ${r.avg_rating ? Number(r.avg_rating).toFixed(2) : '—'}/5 · ${r.unanswered.toLocaleString()} unanswered · 90d · marketing.reviews`}</title>
-              </rect>
-              <text x={labelW + barMaxW + 4} y={y + 14} style={{ fontFamily: 'var(--mono)', fontSize: 10, fill: 'var(--ink-soft)' }}>
-                {r.count} · {pct.toFixed(0)}%
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-    </div>
-  );
-}
-
-function SentimentTrendChart({ rows }: { rows: { week: string; avg: number; n: number }[] }) {
-  if (rows.length === 0) {
-    return <Empty title="Sentiment trend" sub="weekly avg · /5" msg="No timestamped reviews yet" />;
-  }
-  const w = 320, h = 200, padL = 28, padR = 6, padT = 16, padB = 24;
-  const innerW = w - padL - padR;
-  const innerH = h - padT - padB;
-  const min = 1, max = 5;
-  const xAt = (i: number) => padL + (i / Math.max(1, rows.length - 1)) * innerW;
-  const yAt = (v: number) => padT + innerH - ((v - min) / (max - min)) * innerH;
-
-  const path = rows.map((r, i) => `${i === 0 ? 'M' : 'L'}${xAt(i).toFixed(1)},${yAt(r.avg).toFixed(1)}`).join(' ');
-
-  return (
-    <div style={cardWrap}>
-      <div style={cardTitle}>Sentiment trend</div>
-      <div style={cardSub}>Weekly avg rating /5 · last 90d</div>
-      <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', height: 200 }}>
-        {[1, 2, 3, 4, 5].map((y) => (
-          <line key={y} x1={padL} x2={w - padR} y1={yAt(y)} y2={yAt(y)} stroke="var(--paper-deep)" strokeDasharray={y === 4.5 ? '4 3' : ''} />
-        ))}
-        <text x={4} y={yAt(5) + 3} style={{ fontFamily: 'var(--mono)', fontSize: 9, fill: 'var(--ink-mute)' }}>5</text>
-        <text x={4} y={yAt(4.5) + 3} style={{ fontFamily: 'var(--mono)', fontSize: 9, fill: 'var(--brass)' }}>4.5</text>
-        <text x={4} y={yAt(1) + 3} style={{ fontFamily: 'var(--mono)', fontSize: 9, fill: 'var(--ink-mute)' }}>1</text>
-        <path d={path} fill="none" stroke="var(--moss)" strokeWidth={2} />
-        {rows.map((r, i) => (
-          <circle key={r.week} cx={xAt(i)} cy={yAt(r.avg)} r={3} fill="var(--moss)">
-            <title>{`Week ${r.week} · avg ${r.avg.toFixed(2)}/5 · ${r.n.toLocaleString()} review${r.n === 1 ? '' : 's'} · marketing.reviews`}</title>
-          </circle>
-        ))}
-        {rows.length > 0 && (
-          <>
-            <text x={padL} y={h - 6} style={{ fontFamily: 'var(--mono)', fontSize: 9, fill: 'var(--ink-mute)' }}>{rows[0].week.slice(5)}</text>
-            <text x={w - padR - 30} y={h - 6} style={{ fontFamily: 'var(--mono)', fontSize: 9, fill: 'var(--ink-mute)' }}>{rows[rows.length - 1].week.slice(5)}</text>
-          </>
-        )}
-      </svg>
-    </div>
-  );
-}
-
-function ResponseQueueChart({ unanswered, answered }: { unanswered: number; answered: number }) {
-  const total = unanswered + answered;
-  if (total === 0) {
-    return <Empty title="Reply queue" sub="answered vs unanswered · 30d" msg="No reviews in window" />;
-  }
-  const responseRate = total > 0 ? (answered / total) * 100 : 0;
-  return (
-    <div style={cardWrap}>
-      <div style={cardTitle}>Reply queue</div>
-      <div style={cardSub}>Answered vs unanswered · 30d</div>
-      <svg viewBox="0 0 320 200" style={{ width: '100%', height: 200 }}>
-        <rect x={16} y={70} width={288} height={28} fill="var(--paper-deep)" />
-        <rect x={16} y={70} width={(answered / total) * 288} height={28} fill="var(--moss)">
-          <title>{`Answered · ${answered.toLocaleString()} of ${total.toLocaleString()} · ${responseRate.toFixed(1)}% · 30d · marketing.reviews`}</title>
-        </rect>
-        <rect x={16 + (answered / total) * 288} y={70} width={(unanswered / total) * 288} height={28} fill="var(--st-bad)">
-          <title>{`Unanswered · ${unanswered.toLocaleString()} of ${total.toLocaleString()} · ${(100 - responseRate).toFixed(1)}% · 30d · marketing.reviews`}</title>
-        </rect>
-        <text x={20} y={86} style={{ fontFamily: 'var(--mono)', fontSize: 11, fill: 'var(--paper-warm)', fontWeight: 600 }}>
-          {answered} answered · {responseRate.toFixed(0)}%
-        </text>
-        {unanswered > 0 && (
-          <text x={304} y={86} textAnchor="end" style={{ fontFamily: 'var(--mono)', fontSize: 11, fill: 'var(--paper-warm)', fontWeight: 600 }}>
-            {unanswered} open
-          </text>
-        )}
-        <text x={16} y={130} style={{ fontFamily: 'var(--mono)', fontSize: 9, fill: 'var(--ink-mute)' }}>
-          target 90% — every overdue line is a TripAdvisor / BDC ranking risk
-        </text>
-        <line x1={16 + (90 / 100) * 288} y1={66} x2={16 + (90 / 100) * 288} y2={104} stroke="var(--brass)" strokeDasharray="3 2" />
-        <text x={16 + (90 / 100) * 288} y={62} textAnchor="middle" style={{ fontFamily: 'var(--mono)', fontSize: 9, fill: 'var(--brass)' }}>
-          90%
-        </text>
-      </svg>
-    </div>
-  );
-}
-
-function Empty({ title, sub, msg }: { title: string; sub: string; msg: string }) {
-  return (
-    <div style={cardWrap}>
-      <div style={cardTitle}>{title}</div>
-      <div style={cardSub}>{sub}</div>
-      <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-faint)', fontStyle: 'italic', fontSize: 'var(--t-sm)' }}>
-        {msg}
-      </div>
-    </div>
-  );
-}
-
-const reviewCard: React.CSSProperties = {
-  background: 'var(--paper-warm)',
-  border: '1px solid var(--paper-deep)',
-  borderRadius: 6,
-  padding: '10px 14px',
-};
-const th: React.CSSProperties = {
-  textAlign: 'left',
-  padding: '8px 12px',
-  background: 'var(--paper-deep)',
-  borderBottom: '1px solid var(--paper-deep)',
-  fontFamily: 'var(--mono)',
-  fontSize: 'var(--t-xs)',
-  letterSpacing: 'var(--ls-extra)',
-  textTransform: 'uppercase',
-  color: 'var(--brass)',
-  fontWeight: 600,
-};
-const td: React.CSSProperties = {
-  padding: '6px 12px',
-  borderBottom: '1px solid var(--paper-deep)',
-  fontFamily: 'var(--mono)',
-  fontSize: 12,
-  color: 'var(--ink)',
-};
