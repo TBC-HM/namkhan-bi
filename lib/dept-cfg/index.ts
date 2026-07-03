@@ -497,7 +497,6 @@ const GUEST_CFG: DeptCfg = {
     { label: 'Reputation',  href: '/guest/reputation'  },
     { label: 'Journey',     href: '/guest/journey'     },
     { label: 'Loyalty',     href: '/guest/loyalty'     },
-    { label: 'Messy data',  href: '/guest/messy-data'  },
     { label: 'Findings',    href: '/guest/findings'    },
     // PBS 2026-05-16: Reports always sits flush-right (SubPagesStrip detects label).
     { label: 'Reports',     href: '/h/260955/reports?dept=guest' },
