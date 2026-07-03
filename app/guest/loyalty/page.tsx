@@ -428,7 +428,7 @@ function GuestTable({ rows, todayIso }: { rows: ProfileRow[]; todayIso: string }
                 <td style={{ ...td, color: 'var(--ink-mute)' }}>{r.top_source || '—'}</td>
                 <td style={{ ...td, textAlign: 'right' }}>{r.stays_count}</td>
                 <td style={{ ...td, textAlign: 'right' }}>{r.total_nights}</td>
-                <td style={{ ...td, textAlign: 'right' }}>{'—', 'USD')}</td>
+                <td style={{ ...td, textAlign: 'right' }}>{'—'}</td>
                 <td style={{ ...td, textAlign: 'right', color: 'var(--ink-mute)' }}>
                   {r.avg_adr != null ? `$${Math.round(Number(r.avg_adr))}` : '—'}
                 </td>
