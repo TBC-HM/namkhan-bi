@@ -49,6 +49,10 @@ export interface DirectoryRow {
   last_nights: number | null;
   last_adr: number | null;
   party_type: string | null;
+  spent_restaurant: boolean;
+  spent_spa: boolean;
+  spent_activities: boolean;
+  spent_retail: boolean;
 }
 
 export default async function GuestDirectoryPage() {
@@ -59,7 +63,7 @@ export default async function GuestDirectoryPage() {
   // guest.v_directory_full 1:1.
   const CHUNK = 1000;
   const MAX   = 10000;
-  const projection = 'guest_id, full_name, country, email, phone, city, language, bookings_count, stays_count, cancellations_count, last_stay_date, upcoming_stay_date, arrival_bucket, top_source, top_segment, is_repeat, marketing_readiness_score, last_room_type, last_rate_plan, last_segment, last_source, last_adults, last_children, last_nights, last_adr, party_type';
+  const projection = 'guest_id, full_name, country, email, phone, city, language, bookings_count, stays_count, cancellations_count, last_stay_date, upcoming_stay_date, arrival_bucket, top_source, top_segment, is_repeat, marketing_readiness_score, last_room_type, last_rate_plan, last_segment, last_source, last_adults, last_children, last_nights, last_adr, party_type, spent_restaurant, spent_spa, spent_activities, spent_retail';
   const profiles: DirectoryRow[] = [];
   for (let offset = 0; offset < MAX; offset += CHUNK) {
     const { data } = await sb.schema('guest')
