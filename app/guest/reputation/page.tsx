@@ -207,7 +207,7 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
               { key:'google',      label:'Google Business Profile', state: oauth ? 'connected' : 'not-connected',
                 detail: oauth ? `${oauth.location_name ?? '(auto-detect pending)'} · ${googleReviews.length} reviews here`
                               : 'Reviews + Maps insights (impressions · directions · calls · website clicks) + reply-by-API.',
-                cta: oauth ? { label:'Force refresh', href:'/api/google/pull-now?property=260955' }
+                cta: oauth ? { label:'Pull latest', href:'/api/google/pull-now?property=260955' }
                            : { label:'Connect Google →', href:'/api/google/oauth/connect?property=260955' } },
               { key:'tripadvisor', label:'TripAdvisor', state:'not-connected',
                 detail:'Free Content API — last 5 reviews + location details. Read-only (reply via extranet).',
