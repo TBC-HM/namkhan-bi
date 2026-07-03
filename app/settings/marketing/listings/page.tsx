@@ -1,5 +1,6 @@
 // app/settings/marketing/listings/page.tsx
-// PBS 2026-07-03: master table for every external listing / URL / handle.
+// PBS 2026-07-03: master table for REPUTATION-category external listings only.
+// Social channels (IG/FB/TikTok/YouTube) will live in a future marketing area.
 
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -13,7 +14,10 @@ export const revalidate = 0;
 export default async function ListingsPage() {
   const sb = getSupabaseAdmin();
   const { data } = await sb.from('v_external_listings')
-    .select('*').eq('property_id', PROPERTY_ID).order('channel');
+    .select('*')
+    .eq('property_id', PROPERTY_ID)
+    .in('category', ['reputation','pms','website'])
+    .order('category').order('channel');
   const rows = (data as any[]) ?? [];
 
   const tabs: DashboardTab[] = SETTINGS_SUBPAGES.map((s) => ({
@@ -24,7 +28,7 @@ export default async function ListingsPage() {
     <div style={{ background:'#FFFFFF', minHeight:'100vh' }}>
       <DashboardPage
         title="External listings"
-        subtitle="One place to store every listing URL, admin URL, external ID and social handle. Auto-syncs to review scraper + Google integration + newsletter footer."
+        subtitle="Reputation channels + PMS + website. Auto-syncs to review scraper and Google integration. Social channels (Instagram, Facebook, TikTok, YouTube) will move to a Marketing area later."
         tabs={tabs}
       >
         <div style={{ gridColumn:'1 / -1' }}>
