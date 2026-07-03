@@ -14,7 +14,7 @@ async function getPropertyData(propertyId: number) {
   const [
     identity, location, brand, policies,
     rooms, facilities, activities, seasons, certifications, contacts, social,
-    team,
+    team, owner, roomUnits,
   ] = await Promise.all([
     supabase.schema('property').from('identity').select('*').eq('property_id', propertyId).maybeSingle(),
     supabase.schema('property').from('location').select('*').eq('property_id', propertyId).maybeSingle(),
@@ -33,6 +33,10 @@ async function getPropertyData(propertyId: number) {
       .eq('status', 'active')
       .order('role', { ascending: true })
       .order('department', { ascending: true }),
+    // PBS 2026-07-03: owner entity (Namkhan Group Ltd etc.)
+    supabase.schema('property').from('owner_entity').select('*').eq('property_id', propertyId).maybeSingle(),
+    // PBS 2026-07-03: unit counts for the Rooms tab — public view over PMS silver.
+    supabase.from('v_room_type_units').select('room_type_name, units').eq('property_id', propertyId),
   ]);
 
   return {
@@ -48,6 +52,8 @@ async function getPropertyData(propertyId: number) {
     contacts: contacts.data ?? [],
     social: social.data ?? [],
     team: team.data ?? [],
+    owner: owner.data,
+    roomUnits: (roomUnits.data ?? []) as Array<{ room_type_name: string; units: number }>,
   };
 }
 
