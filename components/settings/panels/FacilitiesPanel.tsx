@@ -1,71 +1,94 @@
 // components/settings/panels/FacilitiesPanel.tsx
-// PBS 2026-05-13 rev3: brand-aware tokens.
-import { PanelHeader, Chip, StatusBadge, EmptyState } from './_shared';
+// PBS 2026-07-03: full CRUD.
+'use client';
 
-export default function FacilitiesPanel({ data }: { data: any[] }) {
-  if (!data || data.length === 0) {
-    return <><PanelHeader title="Facilities" /><EmptyState message="No facilities defined." /></>;
+import { useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { PanelHeader, EmptyState } from './_shared';
+import { supabase } from '@/lib/supabase';
+import { btnPrimary, btnGhost, rowStyle, ErrorBanner, LabeledInput, LabeledCheckbox, LabeledTextarea, FormShell, DeleteConfirm, pill } from './_settings_ui';
+
+type Row = { facility_id: number; property_id: number; category: string; name: string; description: string | null; hours: string | null; is_complimentary: boolean | null; is_active: boolean | null; notes: string | null };
+interface Draft { facility_id: number | null; category: string; name: string; description: string; hours: string; is_complimentary: boolean; is_active: boolean; notes: string; }
+const EMPTY: Draft = { facility_id: null, category: '', name: '', description: '', hours: '', is_complimentary: false, is_active: true, notes: '' };
+const toDraft = (r: Row): Draft => ({ facility_id: r.facility_id, category: r.category ?? '', name: r.name ?? '', description: r.description ?? '', hours: r.hours ?? '', is_complimentary: !!r.is_complimentary, is_active: r.is_active !== false, notes: r.notes ?? '' });
+
+export default function FacilitiesPanel({ data, propertyId }: { data: Row[]; propertyId: number }) {
+  const router = useRouter();
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [busy, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [confirmDel, setConfirmDel] = useState<number | null>(null);
+
+  function save() {
+    if (!draft) return;
+    if (!draft.name.trim()) { setError('Name is required'); return; }
+    setError(null);
+    startTransition(async () => {
+      const { error: e } = await supabase.rpc('fn_upsert_property_facility', {
+        p_facility_id: draft.facility_id, p_property_id: propertyId,
+        p_category: draft.category.trim() || 'general',
+        p_name: draft.name.trim(),
+        p_description: draft.description.trim() || null,
+        p_hours: draft.hours.trim() || null,
+        p_is_complimentary: draft.is_complimentary,
+        p_is_active: draft.is_active,
+        p_notes: draft.notes.trim() || null,
+      });
+      if (e) { setError(e.message); return; }
+      setDraft(null); router.refresh();
+    });
+  }
+  function del(id: number) {
+    startTransition(async () => {
+      const { error: e } = await supabase.rpc('fn_delete_property_facility', { p_facility_id: id, p_property_id: propertyId });
+      if (e) { setError(e.message); return; }
+      setConfirmDel(null); router.refresh();
+    });
   }
 
-  const byCategory: Record<string, any[]> = {};
-  data.forEach((f) => {
-    const cat = f.category || 'uncategorized';
-    if (!byCategory[cat]) byCategory[cat] = [];
-    byCategory[cat].push(f);
-  });
-
   return (
-    <>
-      <PanelHeader title="Facilities" subtitle={`${data.length} facilities across ${Object.keys(byCategory).length} categories`} />
-      <div className="p-6 space-y-6">
-        {Object.entries(byCategory).map(([cat, items]) => (
-          <div key={cat}>
-            <h3
-              className="uppercase font-semibold mb-3"
-              style={{ fontSize: 'var(--t-xs)', letterSpacing: '0.15em', color: 'var(--brass)' }}
-            >
-              {cat} <span className="normal-case font-normal" style={{ color: 'var(--ink-mute)' }}>({items.length})</span>
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {items.map((f) => (
-                <div
-                  key={f.facility_id}
-                  className="rounded-lg p-4 transition-colors"
-                  style={{ background: 'var(--paper-deep)', border: '1px solid var(--border)' }}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <h4 className="font-medium" style={{ color: 'var(--ink)' }}>{f.name}</h4>
-                      {f.description && (
-                        <p
-                          className="mt-1 leading-relaxed"
-                          style={{ fontSize: 'var(--t-sm)', color: 'var(--ink-soft)' }}
-                        >
-                          {f.description}
-                        </p>
-                      )}
-                      {f.hours && (
-                        <p className="mt-2" style={{ fontSize: 'var(--t-xs)', color: 'var(--brass)' }}>
-                          Hours: {f.hours}
-                        </p>
-                      )}
-                      {f.notes && (
-                        <p className="mt-1 italic" style={{ fontSize: 'var(--t-xs)', color: 'var(--ink-mute)' }}>
-                          {f.notes}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex flex-col gap-1 items-end flex-shrink-0">
-                      <StatusBadge active={f.is_active} />
-                      {f.is_complimentary ? <Chip tone="green">Free</Chip> : <Chip tone="warn">Paid</Chip>}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+    <div>
+      <PanelHeader title="Facilities" subtitle={`${data.length} facilit${data.length === 1 ? 'y' : 'ies'} · pool · spa · dining`}
+        action={<button type="button" onClick={() => setDraft({ ...EMPTY })} style={btnPrimary}>+ Add</button>} />
+      <ErrorBanner error={error} />
+      {draft && (
+        <FormShell title={draft.facility_id ? 'Edit facility' : 'New facility'} onSave={save} onCancel={() => { setDraft(null); setError(null); }} busy={busy}>
+          <LabeledInput label="Category" value={draft.category} onChange={(v) => setDraft({ ...draft, category: v })} placeholder="e.g. Wellness / Dining" />
+          <LabeledInput label="Name *" value={draft.name} onChange={(v) => setDraft({ ...draft, name: v })} span={2} />
+          <LabeledInput label="Hours" value={draft.hours} onChange={(v) => setDraft({ ...draft, hours: v })} placeholder="e.g. 07:00-22:00" />
+          <LabeledTextarea label="Description" value={draft.description} onChange={(v) => setDraft({ ...draft, description: v })} span={2} />
+          <LabeledTextarea label="Notes" value={draft.notes} onChange={(v) => setDraft({ ...draft, notes: v })} span={3} />
+          <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 16 }}>
+            <LabeledCheckbox label="Complimentary" checked={draft.is_complimentary} onChange={(v) => setDraft({ ...draft, is_complimentary: v })} />
+            <LabeledCheckbox label="Active" checked={draft.is_active} onChange={(v) => setDraft({ ...draft, is_active: v })} />
           </div>
-        ))}
-      </div>
-    </>
+        </FormShell>
+      )}
+      {data.length === 0 && !draft ? <EmptyState message="No facilities yet." /> : (
+        <div style={{ padding: '12px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {data.map((r) => (
+            <div key={r.facility_id} style={rowStyle}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 14, fontWeight: 600 }}>{r.name}</span>
+                  {r.category && <span style={pill('#F5F0E1', '#5A5A5A')}>{r.category}</span>}
+                  {r.is_complimentary && <span style={pill('#E4F0E1', '#1F5C2C')}>complimentary</span>}
+                  {r.is_active === false && <span style={pill('#F5F0E1', '#8A8A8A')}>inactive</span>}
+                </div>
+                {r.hours && <div style={{ fontSize: 11, color: '#5A5A5A', marginTop: 2 }}>Hours: {r.hours}</div>}
+                {r.description && <div style={{ fontSize: 12, color: '#1B1B1B', marginTop: 4 }}>{r.description}</div>}
+                {r.notes && <div style={{ fontSize: 11, color: '#5A5A5A', marginTop: 3, fontStyle: 'italic' }}>{r.notes}</div>}
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button type="button" onClick={() => setDraft(toDraft(r))} style={btnGhost}>Edit</button>
+                {confirmDel === r.facility_id ? <DeleteConfirm show busy={busy} onConfirm={() => del(r.facility_id)} onCancel={() => setConfirmDel(null)} /> :
+                  <button type="button" onClick={() => setConfirmDel(r.facility_id)} style={btnGhost}>Delete</button>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
