@@ -19,14 +19,16 @@ import CertificationsPanel from './panels/CertificationsPanel';
 import ContactsPanel from './panels/ContactsPanel';
 import SocialPanel from './panels/SocialPanel';
 import TeamPanel from './panels/TeamPanel';
+import OwnerPanel from './panels/OwnerPanel';
 
 type Tab =
-  | 'identity' | 'location' | 'brand' | 'policies'
+  | 'identity' | 'owner' | 'location' | 'brand' | 'policies'
   | 'rooms' | 'facilities' | 'activities' | 'seasons'
   | 'certifications' | 'contacts' | 'social' | 'team';
 
 const TABS: { key: Tab; label: string; subtitle: string; count: (d: any) => number | null }[] = [
   { key: 'identity',       label: 'Identity',       subtitle: 'Legal & licensing',            count: () => null },
+  { key: 'owner',          label: 'Owner',          subtitle: 'Company · registration · bank', count: () => null },
   { key: 'location',       label: 'Location',       subtitle: 'Address · GPS · climate',      count: () => null },
   { key: 'brand',          label: 'Brand',          subtitle: 'Logo · palette · copy',        count: () => null },
   { key: 'policies',       label: 'Policies',       subtitle: 'Bookings & terms',             count: () => null },
@@ -143,14 +145,15 @@ export default function PropertySettingsClient({ data, propertyId }: { data: any
           }}
         >
           {active === 'identity'       && <IdentityPanel       data={data.identity}       propertyId={propertyId} />}
+          {active === 'owner'          && <OwnerPanel          data={data.owner}          propertyId={propertyId} />}
           {active === 'location'       && <LocationPanel       data={data.location} />}
           {active === 'brand'          && <BrandPanel          data={data.brand} />}
           {active === 'policies'       && <PoliciesPanel       data={data.policies} />}
-          {active === 'rooms'          && <RoomsPanel          data={data.rooms} />}
+          {active === 'rooms'          && <RoomsPanel          data={data.rooms}          roomUnits={data.roomUnits ?? []} />}
           {active === 'facilities'     && <FacilitiesPanel     data={data.facilities} />}
           {active === 'activities'     && <ActivitiesPanel     data={data.activities} />}
           {active === 'seasons'        && <SeasonsPanel        data={data.seasons} />}
-          {active === 'certifications' && <CertificationsPanel data={data.certifications} />}
+          {active === 'certifications' && <CertificationsPanel data={data.certifications} propertyId={propertyId} />}
           {active === 'contacts'       && <ContactsPanel       data={data.contacts}       propertyId={propertyId} />}
           {active === 'social'         && <SocialPanel         data={data.social} />}
           {active === 'team'           && <TeamPanel           data={data.team ?? []} />}
