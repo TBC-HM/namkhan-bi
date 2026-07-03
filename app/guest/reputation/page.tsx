@@ -213,24 +213,21 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
               const isGoogle = key === 'google';
               const hasUrl = !!li.url;
               const scrape = scrapeStatus[key];
-              const stateConnected = isGoogle ? !!oauth : (hasUrl && scrape && scrape.last_scraped_at);
-              const detail = isGoogle
-                ? (oauth ? (oauth.location_name ?? '(auto-detect pending)') + ' · ' + googleReviews.length + ' reviews here'
-                         : 'Reviews + Maps insights (impressions · directions · calls · website clicks) + reply-by-API.')
-                : hasUrl
-                  ? li.url!.replace(/^https?:\/\//,'').slice(0,50) + (li.url!.length > 50 ? '…' : '') + (scrape?.last_scraped_at ? ' · last synced ' + fmtDate(scrape.last_scraped_at) : '')
-                  : 'No URL set. Add it in Settings → Listings to enable scraping.';
-              const cta = isGoogle
-                ? (oauth ? { label:'Pull latest', href:'/api/google/pull-now?property=260955' }
-                         : { label:'Connect Google →', href:'/api/google/oauth/connect?property=260955' })
-                : hasUrl
-                  ? { label:'Edit URL', href:'/settings/marketing/listings' }
-                  : { label:'Add URL →', href:'/settings/marketing/listings' };
+              const perSource = sourceRows.find(sr => sr.source === key);
+              const reviewsN = isGoogle ? googleReviews.length : (perSource?.count ?? 0);
+              const avg = isGoogle ? googleAvg : (perSource?.avg ?? null);
+              const stateConnected = isGoogle ? !!oauth : (hasUrl && !!scrape?.last_scraped_at);
+              const lastSync = scrape?.last_scraped_at;
+              const nextDue = scrape?.next_due_at;
               return (
-                <div key={key} style={{ padding:'12px 14px', borderRadius:6, background:WHITE, border:'1px solid '+HAIR, display:'flex', flexDirection:'column', gap:8 }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', gap:8 }}>
+                <div key={key} style={{ padding:'12px 14px', borderRadius:6, background:WHITE, border:'1px solid '+HAIR, display:'flex', flexDirection:'column', gap:10 }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
                     <span style={{ display:'inline-flex', alignItems:'center', gap:8, fontWeight:600, fontSize:13, color:INK }}>
                       <SourceBadge source={key} />{label}
+                      {hasUrl && (
+                        <a href={li.url!} target="_blank" rel="noopener noreferrer" title={"Open " + label + " listing"}
+                          style={{ fontSize:14, color:INK_M, textDecoration:'none', marginLeft:2 }}>↗</a>
+                      )}
                     </span>
                     <span style={{
                       fontSize:10, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase',
@@ -240,11 +237,26 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
                       border:'1px solid ' + (stateConnected ? '#A9CFA0' : HAIR),
                     }}>{stateConnected ? 'CONNECTED' : 'NOT CONNECTED'}</span>
                   </div>
-                  <div style={{ fontSize:11, color:INK_M, lineHeight:1.4 }}>{detail}</div>
-                  <Link href={cta.href} style={{
-                    alignSelf:'flex-start', marginTop:2, padding:'5px 12px', fontSize:11, fontWeight:600,
-                    background: GREEN, color: WHITE, border:'none', borderRadius:4, textDecoration:'none',
-                  }}>{cta.label}</Link>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                    <div style={{ background:'#FAFAF7', border:'1px solid '+HAIR, borderRadius:4, padding:'6px 10px' }}>
+                      <div style={{ fontSize:9, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, fontWeight:600 }}>Reviews</div>
+                      <div style={{ fontSize:18, fontWeight:600, color:INK, marginTop:2 }}>{reviewsN}</div>
+                    </div>
+                    <div style={{ background:'#FAFAF7', border:'1px solid '+HAIR, borderRadius:4, padding:'6px 10px' }}>
+                      <div style={{ fontSize:9, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, fontWeight:600 }}>Avg /5</div>
+                      <div style={{ fontSize:18, fontWeight:600, color:INK, marginTop:2 }}>{avg != null ? avg.toFixed(2) : '—'}</div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize:10, color:INK_M, display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
+                    <span>Last synced: <strong style={{ color:INK_S }}>{lastSync ? fmtDate(lastSync) : '—'}</strong></span>
+                    <span>Next: <strong style={{ color:INK_S }}>{nextDue ? fmtDate(nextDue) : '—'}</strong></span>
+                  </div>
+                  {isGoogle && (
+                    <Link href={oauth ? '/api/google/pull-now?property=260955' : '/api/google/oauth/connect?property=260955'}
+                      style={{ alignSelf:'flex-start', padding:'5px 12px', fontSize:11, fontWeight:600, background:GREEN, color:WHITE, border:'none', borderRadius:4, textDecoration:'none' }}>
+                      {oauth ? 'Pull latest' : 'Connect Google →'}
+                    </Link>
+                  )}
                 </div>
               );
             })}
