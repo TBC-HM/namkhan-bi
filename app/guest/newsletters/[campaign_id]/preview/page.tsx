@@ -1,11 +1,13 @@
 // app/guest/newsletters/[campaign_id]/preview/page.tsx
-// PBS 2026-07-04 v5: black SLH logo (bigger, linked) · real IG/FB/TikTok icons ·
-// Unsub on own line · no booking code shown in footer.
+// PBS 2026-07-04 v6: Send-test card at top · real IG/FB/TikTok handles from
+// property.social · black SLH logo (bigger, linked) · unsub on own line ·
+// no booking code shown in footer.
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { PROPERTY_ID } from '@/lib/supabase';
+import SendTestCard from './_components/SendTestCard';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -21,16 +23,16 @@ function extractHero(md: string): { hero: string | null; rest: string } {
 }
 
 function renderMarkdown(md: string): string {
-  let html = md
+  const html = md
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/^### (.+)$/gm,'<h3 style="font-family:Georgia,serif;font-size:15px;color:#1B1B1B;margin:22px 0 8px">$1</h3>')
     .replace(/^## (.+)$/gm,'<h2 style="font-family:Georgia,serif;font-size:22px;color:#084838;margin:28px 0 10px;letter-spacing:0.01em">$1</h2>')
     .replace(/^# (.+)$/gm,'<h1 style="font-family:Georgia,serif;font-size:32px;color:#084838;margin:8px 0 18px;letter-spacing:0.02em;line-height:1.15;font-style:italic">$1</h1>')
     .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
     .replace(/\*([^*]+)\*/g,'<em>$1</em>')
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g,'<img src="$2" alt="$1" style="max-width:100%;height:auto;display:block;margin:14px 0 4px;border-radius:2px" />')
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" style="display:inline-block;color:#FFFFFF;background:#084838;padding:8px 18px;border-radius:2px;text-decoration:none;font-weight:600;font-size:13px;letter-spacing:0.04em;margin:6px 0">$1</a>')
-    .replace(/^---$/gm,'<hr style="border:none;border-top:1px solid #C79A6B;width:60px;margin:32px auto" />')
-    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g,'<img src="$2" alt="$1" style="max-width:100%;height:auto;display:block;margin:14px 0 4px;border-radius:2px" />');
+    .replace(/^---$/gm,'<hr style="border:none;border-top:1px solid #C79A6B;width:60px;margin:32px auto" />');
   const paragraphs = html.split(/\n\n+/).map((p) => {
     if (p.startsWith('<h1') || p.startsWith('<h2') || p.startsWith('<h3') || p.startsWith('<hr') || p.startsWith('<img')) return p;
     return '<p style="margin:14px 0">' + p + '</p>';
@@ -61,7 +63,7 @@ export default async function CampaignPreviewPage({ params }: Props) {
   const { data } = await sb.schema('guest').from('campaigns')
     .select('*').eq('campaign_id', params.campaign_id).maybeSingle();
   if (!data) notFound();
-  const c = data as any;
+  const c = data as { property_id: number; campaign_id: string; status: string; body_md: string | null };
   if (c.property_id !== PROPERTY_ID) notFound();
 
   const { hero, rest } = extractHero(c.body_md ?? '');
@@ -82,6 +84,9 @@ export default async function CampaignPreviewPage({ params }: Props) {
             <Link href={`/guest/newsletters/${c.campaign_id}`} style={{ color:NK_GREEN, fontWeight:600, textDecoration:'none' }}>Edit →</Link>
           </div>
         </div>
+
+        {/* Send-test card */}
+        <SendTestCard campaign_id={c.campaign_id} />
 
         <div style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:4, overflow:'hidden', boxShadow:'0 2px 10px rgba(0,0,0,0.06)' }}>
 
@@ -108,38 +113,34 @@ export default async function CampaignPreviewPage({ params }: Props) {
           <div style={{ padding:'8px 32px 32px', color:INK, fontSize:15, lineHeight:1.75, fontFamily:'Georgia, "Times New Roman", serif' }}
             dangerouslySetInnerHTML={{ __html: renderMarkdown(rest) }} />
 
-          {/* FOOTER — SLH bigger + black + linked, real social icons, unsubscribe own line */}
+          {/* FOOTER — SLH bigger + black + linked, REAL social handles from property.social */}
           <div style={{ background:CREAM, borderTop:'2px solid '+BRASS, padding:'20px 24px', fontSize:11, color:INK_M, lineHeight:1.6 }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:16, flexWrap:'wrap' }}>
-              {/* SLH bigger black logo bottom-left · linked */}
               <a href="https://www.slh.com/experiences/considerate-collection" target="_blank" rel="noopener noreferrer"
                 style={{ flex:'0 0 auto', display:'inline-block', textDecoration:'none' }} title="Small Luxury Hotels of the World · Considerate Collection">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={SLH_BLACK} alt="SLH · Considerate Collection" style={{ height:44, width:'auto' }} />
               </a>
 
-              {/* Address centre */}
               <div style={{ flex:'1 1 auto', textAlign:'center', minWidth:180 }}>
                 <div style={{ fontWeight:600, color:NK_GREEN, letterSpacing:'0.14em', fontSize:12, fontFamily:'Georgia, serif' }}>THE NAMKHAN</div>
                 <div style={{ marginTop:3 }}>Ban Xieng Lom · Luang Prabang · Laos</div>
                 <div>hello@thenamkhan.com</div>
               </div>
 
-              {/* Social icons right · linked */}
               <div style={{ flex:'0 0 auto', display:'flex', gap:12, alignItems:'center' }}>
-                <a href="https://www.instagram.com/namkhanretreat/" target="_blank" rel="noopener noreferrer" title="Instagram" style={{ opacity:0.85 }}>
+                <a href="https://www.instagram.com/the_namkhan_resort/" target="_blank" rel="noopener noreferrer" title="Instagram" style={{ opacity:0.85 }}>
                   <InstagramIcon />
                 </a>
-                <a href="https://www.facebook.com/thenamkhan" target="_blank" rel="noopener noreferrer" title="Facebook" style={{ opacity:0.85 }}>
+                <a href="https://www.facebook.com/Namkhanecolodge/" target="_blank" rel="noopener noreferrer" title="Facebook" style={{ opacity:0.85 }}>
                   <FacebookIcon />
                 </a>
-                <a href="https://www.tiktok.com/@thenamkhan" target="_blank" rel="noopener noreferrer" title="TikTok" style={{ opacity:0.85 }}>
+                <a href="https://www.tiktok.com/@the.namkhan" target="_blank" rel="noopener noreferrer" title="TikTok" style={{ opacity:0.85 }}>
                   <TikTokIcon />
                 </a>
               </div>
             </div>
 
-            {/* Unsubscribe on its own line below */}
             <div style={{ marginTop:14, textAlign:'center', fontSize:10, color:INK_M }}>
               <a href="#" style={{ color:INK_M, textDecoration:'underline', textUnderlineOffset:2 }}>Unsubscribe</a>
               <span style={{ margin:'0 8px', opacity:0.4 }}>·</span>
