@@ -93,11 +93,12 @@ export default async function CampaignPreviewPage({ params }: Props) {
           {/* FOOTER — trimmer + SLH logo bottom-left */}
           <div style={{ background:CREAM, borderTop:'2px solid '+BRASS, padding:'16px 22px', fontSize:10, color:INK_M, lineHeight:1.6 }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:16, flexWrap:'wrap' }}>
-              {/* SLH logo bottom-left */}
-              <div style={{ flex:'0 0 auto' }}>
+              {/* SLH logo bottom-left · clickable */}
+              <a href="https://www.slh.com/experiences/considerate-collection" target="_blank" rel="noopener noreferrer"
+                style={{ flex:'0 0 auto', display:'inline-block', textDecoration:'none' }} title="Small Luxury Hotels · Considerate Collection">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={SLH_SAGE} alt="SLH Considerate Collection" style={{ height:34, width:'auto', opacity:0.9 }} />
-              </div>
+              </a>
 
               {/* Address centre */}
               <div style={{ flex:'1 1 auto', textAlign:'center', minWidth:180 }}>
