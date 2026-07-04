@@ -4,7 +4,7 @@
 //   → switched to getSupabaseAdmin() so we can load the full 4165-row base.
 // - Filters out orphans (no last_stay AND no upcoming_stay) at source.
 // - Pulls last-reservation room / rate plan / market segment / ADR / party via
-//   guest.v_directory_full (new view that LATERALs to guest.v_guest_reservations).
+//   guest.v_directory_full_consolidated (new view that LATERALs to guest.v_guest_reservations).
 // - KPI tiles compute from the loaded Namkhan-only rows so filter counts match.
 
 import Link from 'next/link';
@@ -60,14 +60,14 @@ export default async function GuestDirectoryPage() {
 
   // Supabase PostgREST caps a single call at max_rows=1000. Chunk-paginate to
   // pull the whole ~3345-row non-orphan Namkhan base. Column projection matches
-  // guest.v_directory_full 1:1.
+  // guest.v_directory_full_consolidated 1:1.
   const CHUNK = 1000;
   const MAX   = 10000;
   const projection = 'guest_id, full_name, country, email, phone, city, language, bookings_count, stays_count, cancellations_count, last_stay_date, upcoming_stay_date, arrival_bucket, top_source, top_segment, is_repeat, marketing_readiness_score, last_room_type, last_rate_plan, last_segment, last_source, last_adults, last_children, last_nights, last_adr, party_type, spent_restaurant, spent_spa, spent_activities, spent_retail';
   const profiles: DirectoryRow[] = [];
   for (let offset = 0; offset < MAX; offset += CHUNK) {
     const { data } = await sb.schema('guest')
-      .from('v_directory_full')
+      .from('v_directory_full_consolidated')
       .select(projection)
       .eq('property_id', PROPERTY_ID)
       .or('last_stay_date.not.is.null,upcoming_stay_date.not.is.null')
