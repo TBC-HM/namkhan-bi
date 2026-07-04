@@ -121,7 +121,7 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
 
   const tiles: KpiTileProps[] = [
     { label: 'Total reviews',   value: totalPlatformReviews, size: 'sm', footnote: 'across 5 platforms' },
-    { label: 'Weighted avg /5', value: weightedAvg != null ? Number(weightedAvg.toFixed(2)) : null, size: 'sm', footnote: weightedAvg != null ? '= ' + (weightedAvg*2).toFixed(2) + '/10 · reviews-weighted' : 'reviews-weighted' },
+    { label: 'Weighted avg /5', value: weightedAvg != null ? Number(weightedAvg.toFixed(2)) : null, size: 'sm', footnote: 'reviews-weighted' },
     { label: 'Sources live',    value: summaryArr.filter(s => s.score_overall != null).length, size: 'sm' },
     { label: 'Unanswered (local)', value: unanswered, size: 'sm', status: unanswered > 5 ? 'red' : unanswered > 0 ? 'amber' : 'green' },
     { label: 'Response rate',   value: responseRate, size: 'sm' },
@@ -160,17 +160,33 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
           {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
         </div>
 
-        {mapsRows.length > 0 && (
+        <div style={{ gridColumn:'1 / -1', padding:'8px 12px', background:'#FBEBB4', border:'1px solid #E8C89B', color:'#8B5A1C', borderRadius:4, fontSize:11, lineHeight:1.5 }}>
+          <strong>Data source:</strong> platform totals (rating · reviews · ranking) are <em>manually seeded</em> per source — Nimble scraper is blocked on Booking (JS-hydrated), Trip.com (signin), Expedia (proxy rate limit). Google reviews wait on API case 7-9719000041096 (7-10 business days).
+          Only <strong>TripAdvisor individual reviews (10)</strong> are auto-scraped — visible in "Local sample · Latest reviews" below.
+          Aggregate reflects real numbers you pasted this session.
+        </div>
+
+        {oauth && oauth.location_id && (
           <div style={{ gridColumn:'1 / -1', background:WHITE, border:'1px solid '+HAIR, borderRadius:6, padding:'14px 16px' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', flexWrap:'wrap', gap:8, marginBottom:12 }}>
               <div>
-                <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M }}>Google Maps insights</div>
+                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+                  <SourceBadge source="google" size="md" />
+                  <span style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M }}>Google Business Profile</span>
+                </div>
+                <div style={{ fontSize:16, fontWeight:600, color:INK }}>{oauth.location_name ?? 'Location auto-detection pending'}</div>
+                <div style={{ fontSize:11, color:INK_M, marginTop:2 }}>Connected {fmtDate(oauth.connected_at)}</div>
               </div>
               <Link href="/api/google/pull-now?property=260955" style={{ padding:'5px 12px', fontSize:11, fontWeight:600, background:GREEN, color:WHITE, border:'none', borderRadius:4, textDecoration:'none' }}>Pull latest</Link>
             </div>
             <div style={{ fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, fontWeight:600, marginBottom:6 }}>Maps insights</div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:8 }}>
-              {mapsWindows.map(w => (
+            {mapsRows.length === 0 ? (
+              <div style={{ padding:'20px 12px', background:'#FAFAF7', border:'1px dashed '+HAIR, borderRadius:4, textAlign:'center', color:INK_M, fontSize:11 }}>
+                No Maps insights yet. First pull happens within the minute after Google API access is approved.
+              </div>
+            ) : (
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:8 }}>
+                {mapsWindows.map(w => (
                   <div key={w.days} style={{ padding:'10px 12px', border:'1px solid '+HAIR, borderRadius:4 }}>
                     <div style={{ fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, fontWeight:600, marginBottom:4 }}>Last {w.days}d</div>
                     <div style={{ display:'grid', gridTemplateColumns:'1fr auto', gap:'2px 8px', fontSize:11 }}>
@@ -180,8 +196,9 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
                       <span style={{ color:INK_M }}>Website clicks</span> <span style={{ color:INK, textAlign:'right', fontWeight:500 }}>{fmtNum(w.website)}</span>
                     </div>
                   </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
