@@ -195,7 +195,7 @@ export default function DirectoryClient({
         />
 
         {/* PBS 2026-07-04 · dropdowns in one wrapping row instead of grid */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'nowrap', overflowX: 'auto', alignItems: 'center', paddingBottom: 4 }}>
           <Dropdown label="Country"    value={country}  onChange={setCountry}  options={options.countries} />
           <Dropdown label="Source"     value={source}   onChange={setSource}   options={options.sources} />
           <Dropdown label="Segment"    value={segment}  onChange={setSegment}  options={options.segments} />
