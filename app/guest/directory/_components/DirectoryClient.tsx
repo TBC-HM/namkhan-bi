@@ -305,21 +305,30 @@ export default function DirectoryClient({
       </Container>
 
       {/* Drawer */}
-      {selected && (() => {
-        const idx = filtered.findIndex((r) => r.guest_id === selected.guest_id);
-        const canPrev = idx > 0;
-        const canNext = idx >= 0 && idx < filtered.length - 1;
-        return (
-          <>
-            <ProfileDrawer row={selected} onClose={() => setSelected(null)} />
-            <div style={{ position: 'fixed', top: 14, right: 68, zIndex: 200, background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 4, padding: '6px 12px', display: 'flex', gap: 10, alignItems: 'center', fontSize: 11, color: '#5A5A5A', boxShadow: '0 2px 8px rgba(0,0,0,0.12)' }}>
-              <button onClick={() => canPrev && setSelected(filtered[idx - 1])} disabled={!canPrev} style={{ background: 'none', border: '1px solid #E6DFCC', borderRadius: 3, padding: '3px 10px', fontSize: 11, cursor: canPrev ? 'pointer' : 'default', color: '#1B1B1B', opacity: canPrev ? 1 : 0.4, fontFamily: 'inherit' }}>{`← Prev`}</button>
-              <span style={{ fontSize: 11, fontWeight: 600, color: '#1B1B1B' }}>{`${idx + 1} of ${filtered.length.toLocaleString()}`}</span>
-              <button onClick={() => canNext && setSelected(filtered[idx + 1])} disabled={!canNext} style={{ background: 'none', border: '1px solid #E6DFCC', borderRadius: 3, padding: '3px 10px', fontSize: 11, cursor: canNext ? 'pointer' : 'default', color: '#1B1B1B', opacity: canNext ? 1 : 0.4, fontFamily: 'inherit' }}>{`Next →`}</button>
-            </div>
-          </>
-        );
-      })()}
+      {selected ? (
+        <>
+          <ProfileDrawer row={selected} onClose={() => setSelected(null)} />
+          <div style={{ position: 'fixed', top: 14, right: 68, zIndex: 200, background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 4, padding: '6px 12px', display: 'flex', gap: 10, alignItems: 'center', fontSize: 11, color: '#5A5A5A', boxShadow: '0 2px 8px rgba(0,0,0,0.12)' }}>
+            <button
+              onClick={() => {
+                const idx = filtered.findIndex((r) => r.guest_id === selected.guest_id);
+                if (idx > 0) setSelected(filtered[idx - 1]);
+              }}
+              style={{ background: 'none', border: '1px solid #E6DFCC', borderRadius: 3, padding: '3px 10px', fontSize: 11, cursor: 'pointer', color: '#1B1B1B', fontFamily: 'inherit' }}
+            >← Prev</button>
+            <span style={{ fontSize: 11, fontWeight: 600, color: '#1B1B1B' }}>
+              {filtered.findIndex((r) => r.guest_id === selected.guest_id) + 1} of {filtered.length.toLocaleString()}
+            </span>
+            <button
+              onClick={() => {
+                const idx = filtered.findIndex((r) => r.guest_id === selected.guest_id);
+                if (idx >= 0 && idx < filtered.length - 1) setSelected(filtered[idx + 1]);
+              }}
+              style={{ background: 'none', border: '1px solid #E6DFCC', borderRadius: 3, padding: '3px 10px', fontSize: 11, cursor: 'pointer', color: '#1B1B1B', fontFamily: 'inherit' }}
+            >Next →</button>
+          </div>
+        </>
+      ) : null}
 
       {/* Newsletter modal */}
       {newsletterOpen && (
