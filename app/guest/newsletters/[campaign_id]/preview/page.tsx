@@ -125,7 +125,7 @@ export default async function CampaignPreviewPage({ params }: Props) {
               <div style={{ flex:'1 1 auto', textAlign:'center', minWidth:180 }}>
                 <div style={{ fontWeight:600, color:NK_GREEN, letterSpacing:'0.14em', fontSize:12, fontFamily:'Georgia, serif' }}>THE NAMKHAN</div>
                 <div style={{ marginTop:3 }}>Ban Xieng Lom · Luang Prabang · Laos</div>
-                <div>hello@thenamkhan.com</div>
+                <div>book@thenamkhan.com</div>
               </div>
 
               <div style={{ flex:'0 0 auto', display:'flex', gap:12, alignItems:'center' }}>
