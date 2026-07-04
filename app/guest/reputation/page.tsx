@@ -121,7 +121,7 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
 
   const tiles: KpiTileProps[] = [
     { label: 'Total reviews',   value: totalPlatformReviews, size: 'sm', footnote: 'across 5 platforms' },
-    { label: 'Weighted avg /5', value: weightedAvg != null ? Number(weightedAvg.toFixed(2)) : null, size: 'sm', footnote: 'reviews-weighted' },
+    { label: 'Weighted avg /5', value: weightedAvg != null ? weightedAvg.toFixed(2) : '—', size: 'sm', footnote: weightedAvg != null ? '= ' + (weightedAvg*2).toFixed(2) + '/10 · weighted by review count' : 'weighted by review count' },
     { label: 'Sources live',    value: summaryArr.filter(s => s.score_overall != null).length, size: 'sm' },
     { label: 'Unanswered (local)', value: unanswered, size: 'sm', status: unanswered > 5 ? 'red' : unanswered > 0 ? 'amber' : 'green' },
     { label: 'Response rate',   value: responseRate, size: 'sm' },
