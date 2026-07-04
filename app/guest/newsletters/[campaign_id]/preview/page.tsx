@@ -1,5 +1,6 @@
 // app/guest/newsletters/[campaign_id]/preview/page.tsx
-// PBS 2026-07-04 v4: trimmer footer + SLH logo bottom-left · greeting stays formal · hero pulled from first ![]() in body
+// PBS 2026-07-04 v5: black SLH logo (bigger, linked) · real IG/FB/TikTok icons ·
+// Unsub on own line · no booking code shown in footer.
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -11,7 +12,7 @@ export const revalidate = 0;
 
 interface Props { params: { campaign_id: string }; }
 
-const SLH_SAGE = 'https://kpenyneooigsyuuomgct.supabase.co/storage/v1/object/public/documents-public/marketing/2026/marketing/slh-considerate-sage-brand-asset-moqc2kgi.svg';
+const SLH_BLACK = 'https://kpenyneooigsyuuomgct.supabase.co/storage/v1/object/public/branding/slh_black.png';
 
 function extractHero(md: string): { hero: string | null; rest: string } {
   const m = md.match(/^!\[[^\]]*\]\(([^)]+)\)\s*\n+/);
@@ -37,6 +38,24 @@ function renderMarkdown(md: string): string {
   return paragraphs.join('\n');
 }
 
+const InstagramIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display:'block' }}>
+    <rect x="3" y="3" width="18" height="18" rx="5" stroke="#1B1B1B" strokeWidth="1.5" />
+    <circle cx="12" cy="12" r="4" stroke="#1B1B1B" strokeWidth="1.5" />
+    <circle cx="17.5" cy="6.5" r="1.1" fill="#1B1B1B" />
+  </svg>
+);
+const FacebookIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display:'block' }}>
+    <path d="M22 12a10 10 0 1 0-11.56 9.87v-6.99h-2.54V12h2.54V9.79c0-2.51 1.5-3.9 3.79-3.9 1.1 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.77-1.63 1.56V12h2.77l-.44 2.88h-2.33v6.99A10 10 0 0 0 22 12Z" fill="#1B1B1B" />
+  </svg>
+);
+const TikTokIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display:'block' }}>
+    <path d="M16.9 6.13c-.9-.53-1.68-1.24-2.28-2.08a4.9 4.9 0 0 1-.9-2.05h-3.05v10.98c0 1.14-.98 2.06-2.18 2.06s-2.18-.92-2.18-2.06.98-2.06 2.18-2.06c.24 0 .48.04.71.12v-3.08a5.3 5.3 0 0 0-.7-.05C5.85 7.91 3.5 10.15 3.5 12.98 3.5 15.8 5.85 18 8.5 18s5.24-2.2 5.24-5.02V8.1a7.87 7.87 0 0 0 4.51 1.42V6.6a4.9 4.9 0 0 1-1.35-.47Z" fill="#1B1B1B" />
+  </svg>
+);
+
 export default async function CampaignPreviewPage({ params }: Props) {
   const sb = getSupabaseAdmin();
   const { data } = await sb.schema('guest').from('campaigns')
@@ -55,7 +74,6 @@ export default async function CampaignPreviewPage({ params }: Props) {
     <div style={{ background:'#FAF7EE', minHeight:'100vh', padding:'32px 24px' }}>
       <div style={{ maxWidth: 680, margin:'0 auto' }}>
 
-        {/* Meta bar (not part of email — for you) */}
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16, fontSize:11, color:INK_M }}>
           <Link href="/guest/newsletters" style={{ color:INK_M, textDecoration:'none' }}>← Back to overview</Link>
           <div>
@@ -67,7 +85,7 @@ export default async function CampaignPreviewPage({ params }: Props) {
 
         <div style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:4, overflow:'hidden', boxShadow:'0 2px 10px rgba(0,0,0,0.06)' }}>
 
-          {/* HEADER — Namkhan wordmark (text placeholder · Forest Green) + SLH badge */}
+          {/* HEADER */}
           <div style={{ padding:'28px 24px 18px', textAlign:'center', background:CREAM, borderBottom:'2px solid '+BRASS }}>
             <div style={{ fontSize:26, fontWeight:400, letterSpacing:'0.34em', color:NK_GREEN, fontFamily:'Georgia, "Times New Roman", serif', marginBottom:6 }}>
               THE NAMKHAN
@@ -90,35 +108,43 @@ export default async function CampaignPreviewPage({ params }: Props) {
           <div style={{ padding:'8px 32px 32px', color:INK, fontSize:15, lineHeight:1.75, fontFamily:'Georgia, "Times New Roman", serif' }}
             dangerouslySetInnerHTML={{ __html: renderMarkdown(rest) }} />
 
-          {/* FOOTER — trimmer + SLH logo bottom-left */}
-          <div style={{ background:CREAM, borderTop:'2px solid '+BRASS, padding:'16px 22px', fontSize:10, color:INK_M, lineHeight:1.6 }}>
+          {/* FOOTER — SLH bigger + black + linked, real social icons, unsubscribe own line */}
+          <div style={{ background:CREAM, borderTop:'2px solid '+BRASS, padding:'20px 24px', fontSize:11, color:INK_M, lineHeight:1.6 }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:16, flexWrap:'wrap' }}>
-              {/* SLH logo bottom-left · clickable */}
+              {/* SLH bigger black logo bottom-left · linked */}
               <a href="https://www.slh.com/experiences/considerate-collection" target="_blank" rel="noopener noreferrer"
-                style={{ flex:'0 0 auto', display:'inline-block', textDecoration:'none' }} title="Small Luxury Hotels · Considerate Collection">
+                style={{ flex:'0 0 auto', display:'inline-block', textDecoration:'none' }} title="Small Luxury Hotels of the World · Considerate Collection">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={SLH_SAGE} alt="SLH Considerate Collection" style={{ height:34, width:'auto', opacity:0.9 }} />
+                <img src={SLH_BLACK} alt="SLH · Considerate Collection" style={{ height:44, width:'auto' }} />
               </a>
 
               {/* Address centre */}
               <div style={{ flex:'1 1 auto', textAlign:'center', minWidth:180 }}>
-                <div style={{ fontWeight:600, color:NK_GREEN, letterSpacing:'0.14em', fontSize:11, fontFamily:'Georgia, serif' }}>THE NAMKHAN</div>
-                <div style={{ marginTop:2 }}>Ban Xieng Lom · Luang Prabang · Laos</div>
+                <div style={{ fontWeight:600, color:NK_GREEN, letterSpacing:'0.14em', fontSize:12, fontFamily:'Georgia, serif' }}>THE NAMKHAN</div>
+                <div style={{ marginTop:3 }}>Ban Xieng Lom · Luang Prabang · Laos</div>
                 <div>hello@thenamkhan.com</div>
               </div>
 
-              {/* Social right */}
-              <div style={{ flex:'0 0 auto', textAlign:'right', fontSize:10 }}>
-                <a href="https://www.instagram.com/namkhanretreat/" style={{ color:INK, textDecoration:'none', margin:'0 4px', fontWeight:500 }}>IG</a>·
-                <a href="https://thenamkhan.com" style={{ color:INK, textDecoration:'none', margin:'0 4px', fontWeight:500 }}>Web</a>·
-                <a href="#" style={{ color:INK, textDecoration:'none', margin:'0 4px', fontWeight:500 }}>Unsub.</a>
+              {/* Social icons right · linked */}
+              <div style={{ flex:'0 0 auto', display:'flex', gap:12, alignItems:'center' }}>
+                <a href="https://www.instagram.com/namkhanretreat/" target="_blank" rel="noopener noreferrer" title="Instagram" style={{ opacity:0.85 }}>
+                  <InstagramIcon />
+                </a>
+                <a href="https://www.facebook.com/thenamkhan" target="_blank" rel="noopener noreferrer" title="Facebook" style={{ opacity:0.85 }}>
+                  <FacebookIcon />
+                </a>
+                <a href="https://www.tiktok.com/@thenamkhan" target="_blank" rel="noopener noreferrer" title="TikTok" style={{ opacity:0.85 }}>
+                  <TikTokIcon />
+                </a>
               </div>
             </div>
-            {c.booking_code && (
-              <div style={{ marginTop:8, fontSize:8, color:INK_M, fontFamily:'ui-monospace, SFMono-Regular, monospace', textAlign:'center', opacity:0.6 }}>
-                {c.booking_code}
-              </div>
-            )}
+
+            {/* Unsubscribe on its own line below */}
+            <div style={{ marginTop:14, textAlign:'center', fontSize:10, color:INK_M }}>
+              <a href="#" style={{ color:INK_M, textDecoration:'underline', textUnderlineOffset:2 }}>Unsubscribe</a>
+              <span style={{ margin:'0 8px', opacity:0.4 }}>·</span>
+              <a href="https://thenamkhan.com" style={{ color:INK_M, textDecoration:'underline', textUnderlineOffset:2 }}>thenamkhan.com</a>
+            </div>
           </div>
         </div>
       </div>
