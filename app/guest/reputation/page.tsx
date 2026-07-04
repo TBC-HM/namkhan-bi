@@ -216,7 +216,8 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
               const perSource = sourceRows.find(sr => sr.source === key);
               const reviewsN = isGoogle ? googleReviews.length : (perSource?.count ?? 0);
               const avg = isGoogle ? googleAvg : (perSource?.avg ?? null);
-              const stateConnected = isGoogle ? !!oauth : (hasUrl && !!scrape?.last_scraped_at);
+              const stateConnected = isGoogle ? (!!oauth && !!oauth.location_id) : reviewsN > 0;
+              const scrapedEmpty = !isGoogle && hasUrl && !!scrape?.last_scraped_at && reviewsN === 0;
               const lastSync = scrape?.last_scraped_at;
               const nextDue = scrape?.next_due_at;
               return (
@@ -232,10 +233,10 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
                     <span style={{
                       fontSize:10, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase',
                       padding:'2px 8px', borderRadius:10,
-                      background: stateConnected ? '#E4F1E0' : '#F5F0E1',
-                      color:    stateConnected ? '#1F5C2C' : INK_M,
-                      border:'1px solid ' + (stateConnected ? '#A9CFA0' : HAIR),
-                    }}>{stateConnected ? 'CONNECTED' : 'NOT CONNECTED'}</span>
+                      background: stateConnected ? '#E4F1E0' : (scrapedEmpty ? '#FBEBB4' : '#F5F0E1'),
+                      color:    stateConnected ? '#1F5C2C' : (scrapedEmpty ? '#8B5A1C' : INK_M),
+                      border:'1px solid ' + (stateConnected ? '#A9CFA0' : (scrapedEmpty ? '#E8C89B' : HAIR)),
+                    }}>{stateConnected ? 'LIVE' : (scrapedEmpty ? 'NO DATA YET' : 'NOT CONNECTED')}</span>
                   </div>
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
                     <div style={{ background:'#FAFAF7', border:'1px solid '+HAIR, borderRadius:4, padding:'6px 10px' }}>
