@@ -66,12 +66,13 @@ const RED   = '#B03826';
 export default async function GuestReputationPage({ searchParams }: PageProps) {
   const sb = getSupabaseAdmin();
 
-  const [oauthR, reviewsR, mapsR, listingsR, scrapeR] = await Promise.all([
+  const [oauthR, reviewsR, mapsR, listingsR, scrapeR, summaryR] = await Promise.all([
     sb.schema('marketing').from('google_oauth_tokens').select('*').eq('property_id', PROPERTY_ID).maybeSingle(),
     sb.from('mkt_reviews').select('*').eq('property_id', PROPERTY_ID).order('reviewed_at', { ascending: false }).limit(50),
     sb.schema('kpi').from('google_maps_daily').select('date, impressions_search, impressions_maps, direction_requests, phone_taps, website_clicks').eq('property_id', PROPERTY_ID).order('date', { ascending: false }).limit(400),
     sb.from('v_external_listings').select('*').eq('property_id', PROPERTY_ID).eq('category','reputation').order('channel'),
     sb.schema('marketing').from('review_scrape_targets').select('source, last_scraped_at, next_due_at, is_active').eq('property_id', PROPERTY_ID),
+    sb.from('v_review_source_summary').select('*').eq('property_id', PROPERTY_ID),
   ]);
 
   const oauth: OAuthRow | null = (oauthR.data as OAuthRow | null) ?? null;
@@ -80,6 +81,8 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
   const listings: ListingRow[] = (listingsR.data as ListingRow[]) ?? [];
   const scrapeArr: ScrapeStatusRow[] = (scrapeR.data as ScrapeStatusRow[]) ?? [];
   const scrapeStatus: Record<string, ScrapeStatusRow> = Object.fromEntries(scrapeArr.map(s => [s.source, s]));
+  const summaryArr: any[] = (summaryR.data as any[]) ?? [];
+  const summaryMap: Record<string, any> = Object.fromEntries(summaryArr.map(s => [s.source, s]));
 
   const googleReviews = reviews.filter(r => r.source === 'google');
   const googleAvg = googleReviews.length > 0
@@ -212,12 +215,14 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
               const label = SOURCE_LABEL[key] ?? key;
               const isGoogle = key === 'google';
               const hasUrl = !!li.url;
-              const scrape = scrapeStatus[key];
-              const perSource = sourceRows.find(sr => sr.source === key);
-              const reviewsN = isGoogle ? googleReviews.length : (perSource?.count ?? 0);
-              const avg = isGoogle ? googleAvg : (perSource?.avg ?? null);
-              const stateConnected = isGoogle ? (!!oauth && !!oauth.location_id) : reviewsN > 0;
-              const scrapedEmpty = !isGoogle && hasUrl && !!scrape?.last_scraped_at && reviewsN === 0;
+              const summary = summaryMap[key];
+              const platformReviews = summary?.total_reviews_on_platform ?? null;
+              const platformRating = summary?.score_overall ? Number(summary.score_overall) : null;
+              const rankPos = summary?.ranking_position ?? null;
+              const rankTot = summary?.ranking_total ?? null;
+              const rankCtx = summary?.ranking_context ?? null;
+              const stateConnected = platformRating != null;
+              const scrapedEmpty = false;
               const lastSync = scrape?.last_scraped_at;
               const nextDue = scrape?.next_due_at;
               return (
@@ -240,18 +245,22 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
                   </div>
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
                     <div style={{ background:'#FAFAF7', border:'1px solid '+HAIR, borderRadius:4, padding:'6px 10px' }}>
-                      <div style={{ fontSize:9, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, fontWeight:600 }}>Reviews</div>
-                      <div style={{ fontSize:18, fontWeight:600, color:INK, marginTop:2 }}>{reviewsN}</div>
+                      <div style={{ fontSize:9, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, fontWeight:600 }}>Rating /5</div>
+                      <div style={{ fontSize:20, fontWeight:600, color:INK, marginTop:2 }}>{platformRating != null ? platformRating.toFixed(1) : '—'}</div>
                     </div>
                     <div style={{ background:'#FAFAF7', border:'1px solid '+HAIR, borderRadius:4, padding:'6px 10px' }}>
-                      <div style={{ fontSize:9, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, fontWeight:600 }}>Avg /5</div>
-                      <div style={{ fontSize:18, fontWeight:600, color:INK, marginTop:2 }}>{avg != null ? avg.toFixed(2) : '—'}</div>
+                      <div style={{ fontSize:9, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, fontWeight:600 }}>Reviews on platform</div>
+                      <div style={{ fontSize:20, fontWeight:600, color:INK, marginTop:2 }}>{platformReviews != null ? platformReviews : '—'}</div>
                     </div>
                   </div>
-                  <div style={{ fontSize:10, color:INK_M, display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
-                    <span>Last synced: <strong style={{ color:INK_S }}>{lastSync ? fmtDate(lastSync) : '—'}</strong></span>
-                    <span>Next: <strong style={{ color:INK_S }}>{nextDue ? fmtDate(nextDue) : '—'}</strong></span>
-                  </div>
+                  {(rankPos && rankTot) && (
+                    <div style={{ fontSize:11, color:INK_S, background:'#E4F1E0', border:'1px solid #A9CFA0', borderRadius:4, padding:'6px 10px', fontWeight:500 }}>
+                      Ranked <strong>#{rankPos}</strong> of {rankTot} · {rankCtx ?? ''}
+                    </div>
+                  )}
+                  {!rankPos && rankCtx && (
+                    <div style={{ fontSize:10, color:INK_M, fontStyle:'italic' }}>{rankCtx}</div>
+                  )}
                   {isGoogle && (
                     <Link href={oauth ? '/api/google/pull-now?property=260955' : '/api/google/oauth/connect?property=260955'}
                       style={{ alignSelf:'flex-start', padding:'5px 12px', fontSize:11, fontWeight:600, background:GREEN, color:WHITE, border:'none', borderRadius:4, textDecoration:'none' }}>
