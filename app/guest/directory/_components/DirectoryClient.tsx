@@ -194,8 +194,8 @@ export default function DirectoryClient({
           }}
         />
 
-        {/* Dropdown row — 8 side-by-side dimension filters */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 6 }}>
+        {/* PBS 2026-07-04 · dropdowns in one wrapping row instead of grid */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
           <Dropdown label="Country"    value={country}  onChange={setCountry}  options={options.countries} />
           <Dropdown label="Source"     value={source}   onChange={setSource}   options={options.sources} />
           <Dropdown label="Segment"    value={segment}  onChange={setSegment}  options={options.segments} />
@@ -305,7 +305,21 @@ export default function DirectoryClient({
       </Container>
 
       {/* Drawer */}
-      {selected && <ProfileDrawer row={selected} onClose={() => setSelected(null)} />}
+      {selected && (() => {
+        const idx = filtered.findIndex((r) => r.guest_id === selected.guest_id);
+        const canPrev = idx > 0;
+        const canNext = idx >= 0 && idx < filtered.length - 1;
+        return (
+          <>
+            <ProfileDrawer row={selected} onClose={() => setSelected(null)} />
+            <div style={{ position: 'fixed', top: 14, right: 68, zIndex: 200, background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 4, padding: '6px 12px', display: 'flex', gap: 10, alignItems: 'center', fontSize: 11, color: '#5A5A5A', boxShadow: '0 2px 8px rgba(0,0,0,0.12)' }}>
+              <button onClick={() => canPrev && setSelected(filtered[idx - 1])} disabled={!canPrev} style={{ background: 'none', border: '1px solid #E6DFCC', borderRadius: 3, padding: '3px 10px', fontSize: 11, cursor: canPrev ? 'pointer' : 'default', color: '#1B1B1B', opacity: canPrev ? 1 : 0.4, fontFamily: 'inherit' }}>{`← Prev`}</button>
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#1B1B1B' }}>{`${idx + 1} of ${filtered.length.toLocaleString()}`}</span>
+              <button onClick={() => canNext && setSelected(filtered[idx + 1])} disabled={!canNext} style={{ background: 'none', border: '1px solid #E6DFCC', borderRadius: 3, padding: '3px 10px', fontSize: 11, cursor: canNext ? 'pointer' : 'default', color: '#1B1B1B', opacity: canNext ? 1 : 0.4, fontFamily: 'inherit' }}>{`Next →`}</button>
+            </div>
+          </>
+        );
+      })()}
 
       {/* Newsletter modal */}
       {newsletterOpen && (
