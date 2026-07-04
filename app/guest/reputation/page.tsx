@@ -1,7 +1,8 @@
 // app/guest/reputation/page.tsx
-// PBS 2026-07-03 v6: clean rewrite. Pure-white · KPI strip · Google dashboard
-// (when connected) · data-driven integrations from v_external_listings · source
-// table · review feed. SourceBadge on every source-related card/row.
+// PBS 2026-07-04 v7 clean rewrite: source cards driven by
+// marketing.review_source_summary (real rating + reviews-on-platform + ranking).
+// Sorted by importance: Google · TripAdvisor · Booking · Expedia · Trip.com.
+// 5 cards in one row on desktop (minmax 200px).
 
 import Link from 'next/link';
 import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
@@ -15,12 +16,8 @@ export const revalidate = 60;
 
 interface OAuthRow {
   property_id: number;
-  google_account_id: string | null;
-  location_id: string | null;
-  location_name: string | null;
-  connected_by: string | null;
-  connected_at: string | null;
-  scope: string | null;
+  google_account_id: string | null; location_id: string | null; location_name: string | null;
+  connected_by: string | null; connected_at: string | null; scope: string | null;
 }
 interface ReviewRow {
   id: number; source: string; reviewer_name: string | null;
@@ -35,11 +32,22 @@ interface ListingRow {
   channel: string; url: string | null; admin_url: string | null;
   external_id: string | null; is_active: boolean; category: string;
 }
-interface ScrapeStatusRow { source: string; last_scraped_at: string | null; next_due_at: string | null; is_active: boolean; }
+interface SummaryRow {
+  source: string;
+  total_reviews_on_platform: number | null;
+  ranking_position: number | null;
+  ranking_total: number | null;
+  ranking_context: string | null;
+  score_overall: number | null;
+}
 
 const SOURCE_LABEL: Record<string,string> = {
   google:'Google', tripadvisor:'TripAdvisor', booking:'Booking.com', expedia:'Expedia',
   agoda:'Agoda', direct:'Direct', cloudbeds:'Cloudbeds', ctrip:'Trip.com',
+};
+
+const SOURCE_PRIORITY: Record<string, number> = {
+  google: 1, tripadvisor: 2, booking: 3, expedia: 4, ctrip: 5,
 };
 
 function fmtDate(d: string | null): string {
@@ -66,31 +74,35 @@ const RED   = '#B03826';
 export default async function GuestReputationPage({ searchParams }: PageProps) {
   const sb = getSupabaseAdmin();
 
-  const [oauthR, reviewsR, mapsR, listingsR, scrapeR] = await Promise.all([
+  const [oauthR, reviewsR, mapsR, listingsR, summaryR] = await Promise.all([
     sb.schema('marketing').from('google_oauth_tokens').select('*').eq('property_id', PROPERTY_ID).maybeSingle(),
     sb.from('mkt_reviews').select('*').eq('property_id', PROPERTY_ID).order('reviewed_at', { ascending: false }).limit(50),
     sb.schema('kpi').from('google_maps_daily').select('date, impressions_search, impressions_maps, direction_requests, phone_taps, website_clicks').eq('property_id', PROPERTY_ID).order('date', { ascending: false }).limit(400),
-    sb.from('v_external_listings').select('*').eq('property_id', PROPERTY_ID).eq('category','reputation').order('channel'),
-    sb.schema('marketing').from('review_scrape_targets').select('source, last_scraped_at, next_due_at, is_active').eq('property_id', PROPERTY_ID),
+    sb.from('v_external_listings').select('*').eq('property_id', PROPERTY_ID).eq('category','reputation'),
+    sb.from('v_review_source_summary').select('*').eq('property_id', PROPERTY_ID),
   ]);
 
   const oauth: OAuthRow | null = (oauthR.data as OAuthRow | null) ?? null;
   const reviews: ReviewRow[] = (reviewsR.data as ReviewRow[]) ?? [];
   const mapsRows: MapsRow[] = (mapsR.data as MapsRow[]) ?? [];
-  const SOURCE_PRIORITY: Record<string, number> = { google: 1, tripadvisor: 2, booking: 3, expedia: 4, ctrip: 5 };
   const listings: ListingRow[] = ((listingsR.data as ListingRow[]) ?? [])
     .slice().sort((a, b) => (SOURCE_PRIORITY[a.channel] ?? 99) - (SOURCE_PRIORITY[b.channel] ?? 99));
-  const scrapeArr: ScrapeStatusRow[] = (scrapeR.data as ScrapeStatusRow[]) ?? [];
-  const scrapeStatus: Record<string, ScrapeStatusRow> = Object.fromEntries(scrapeArr.map(s => [s.source, s]));
+  const summaryArr: SummaryRow[] = (summaryR.data as SummaryRow[]) ?? [];
+  const summaryMap: Record<string, SummaryRow> = Object.fromEntries(summaryArr.map(s => [s.source, s]));
+
+  // Aggregate KPI (platform totals, not scraped sample)
+  const totalPlatformReviews = summaryArr.reduce((s, r) => s + (r.total_reviews_on_platform ?? 0), 0);
+  const weightedAvg = totalPlatformReviews > 0
+    ? summaryArr.reduce((s, r) => s + ((r.total_reviews_on_platform ?? 0) * (Number(r.score_overall) || 0)), 0) / totalPlatformReviews
+    : null;
 
   const googleReviews = reviews.filter(r => r.source === 'google');
   const googleAvg = googleReviews.length > 0
     ? googleReviews.reduce((s,r) => s + (Number(r.rating_norm) || 0), 0) / googleReviews.length : null;
 
   const total = reviews.length;
-  const avgRating = total > 0 ? reviews.reduce((s,r) => s + (Number(r.rating_norm) || 0), 0) / total : null;
-  const unanswered = reviews.filter(r => r.response_status === 'unanswered').length;
   const responded  = reviews.filter(r => r.response_status === 'responded').length;
+  const unanswered = reviews.filter(r => r.response_status === 'unanswered').length;
   const responseRate = total > 0 ? (responded / total) * 100 : 0;
 
   const sourceMix = new Map<string, { n: number; sum: number }>();
@@ -108,11 +120,11 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
   }));
 
   const tiles: KpiTileProps[] = [
-    { label: 'Reviews (all)', value: total, size: 'sm' },
-    { label: 'Avg rating /5', value: avgRating != null ? Number(avgRating.toFixed(2)) : null, size: 'sm', footnote: 'target ≥ 4.6' },
-    { label: 'Unanswered',    value: unanswered, size: 'sm', status: unanswered > 5 ? 'red' : unanswered > 0 ? 'amber' : 'green' },
-    { label: 'Response rate', value: responseRate, size: 'sm' },
-    { label: 'Sources',       value: sourceRows.length, size: 'sm', footnote: 'populated' },
+    { label: 'Total reviews',   value: totalPlatformReviews, size: 'sm', footnote: 'across 5 platforms' },
+    { label: 'Weighted avg /5', value: weightedAvg != null ? Number(weightedAvg.toFixed(2)) : null, size: 'sm', footnote: 'reviews-weighted' },
+    { label: 'Sources live',    value: summaryArr.filter(s => s.score_overall != null).length, size: 'sm' },
+    { label: 'Unanswered (local)', value: unanswered, size: 'sm', status: unanswered > 5 ? 'red' : unanswered > 0 ? 'amber' : 'green' },
+    { label: 'Response rate',   value: responseRate, size: 'sm' },
   ];
 
   const googleParam = (Array.isArray(searchParams.google) ? searchParams.google[0] : searchParams.google) ?? null;
@@ -130,11 +142,8 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
 
   return (
     <div style={{ background: WHITE, minHeight: '100vh' }}>
-      <DashboardPage
-        title="Guest · Reputation"
-        subtitle="Every review, every reply — one place."
-        tabs={tabs}
-      >
+      <DashboardPage title="Guest · Reputation" subtitle="Every review, every reply — one place." tabs={tabs}>
+
         {googleParam === 'connected' && (
           <div style={{ gridColumn:'1 / -1', padding:'10px 14px', borderRadius:4, background:'#E4F1E0', border:'1px solid #A9CFA0', color:GREEN, fontSize:12 }}>
             <strong>Google Business Profile connected</strong>{locationParam ? ' — ' + locationParam : ''}. First review + Maps pull will run automatically within a minute.
@@ -151,7 +160,7 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
           {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
         </div>
 
-        {oauth && (
+        {oauth && oauth.location_id && (
           <div style={{ gridColumn:'1 / -1', background:WHITE, border:'1px solid '+HAIR, borderRadius:6, padding:'14px 16px' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', flexWrap:'wrap', gap:8, marginBottom:12 }}>
               <div>
@@ -159,34 +168,15 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
                   <SourceBadge source="google" size="md" />
                   <span style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M }}>Google Business Profile</span>
                 </div>
-                <div style={{ fontSize:16, fontWeight:600, color:INK }}>{oauth.location_name ?? 'Location auto-detection pending — click Pull to fetch'}</div>
-                <div style={{ fontSize:11, color:INK_M, marginTop:2 }}>
-                  Connected {fmtDate(oauth.connected_at)}
-                  {oauth.google_account_id ? ' · account ' + oauth.google_account_id.split('/').pop() : ''}
-                </div>
+                <div style={{ fontSize:16, fontWeight:600, color:INK }}>{oauth.location_name ?? 'Location auto-detection pending'}</div>
+                <div style={{ fontSize:11, color:INK_M, marginTop:2 }}>Connected {fmtDate(oauth.connected_at)}</div>
               </div>
-              <Link href="/api/google/oauth/connect?property=260955" style={{ padding:'5px 12px', fontSize:11, fontWeight:600, background:'#F5F0E1', color:INK_S, border:'1px solid '+HAIR, borderRadius:4, textDecoration:'none' }}>Reconnect</Link>
+              <Link href="/api/google/pull-now?property=260955" style={{ padding:'5px 12px', fontSize:11, fontWeight:600, background:GREEN, color:WHITE, border:'none', borderRadius:4, textDecoration:'none' }}>Pull latest</Link>
             </div>
-
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:8, marginBottom:12 }}>
-              <div style={{ padding:'10px 12px', border:'1px solid '+HAIR, borderRadius:4 }}>
-                <div style={{ fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, fontWeight:600 }}>Avg rating</div>
-                <div style={{ fontSize:20, fontWeight:600, color:INK, marginTop:2 }}>{googleAvg != null ? googleAvg.toFixed(2) : '—'} <span style={{ fontSize:11, color:INK_M, fontWeight:400 }}>/5</span></div>
-              </div>
-              <div style={{ padding:'10px 12px', border:'1px solid '+HAIR, borderRadius:4 }}>
-                <div style={{ fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, fontWeight:600 }}>Reviews (Google)</div>
-                <div style={{ fontSize:20, fontWeight:600, color:INK, marginTop:2 }}>{googleReviews.length}</div>
-              </div>
-              <div style={{ padding:'10px 12px', border:'1px solid '+HAIR, borderRadius:4 }}>
-                <div style={{ fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, fontWeight:600 }}>Days of insights</div>
-                <div style={{ fontSize:20, fontWeight:600, color:INK, marginTop:2 }}>{mapsRows.length}</div>
-              </div>
-            </div>
-
             <div style={{ fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, fontWeight:600, marginBottom:6 }}>Maps insights</div>
             {mapsRows.length === 0 ? (
               <div style={{ padding:'20px 12px', background:'#FAFAF7', border:'1px dashed '+HAIR, borderRadius:4, textAlign:'center', color:INK_M, fontSize:11 }}>
-                No Maps insights yet. First pull happens within the minute after connect.
+                No Maps insights yet. First pull happens within the minute after Google API access is approved.
               </div>
             ) : (
               <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:8 }}>
@@ -206,6 +196,7 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
           </div>
         )}
 
+        {/* Source cards — sorted Google · TA · Booking · Expedia · Trip.com */}
         <div style={{ gridColumn:'1 / -1' }}>
           <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, margin:'4px 2px 8px' }}>Review sources</div>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))', gap:6 }}>
@@ -214,51 +205,49 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
               const label = SOURCE_LABEL[key] ?? key;
               const isGoogle = key === 'google';
               const hasUrl = !!li.url;
-              const scrape = scrapeStatus[key];
-              const perSource = sourceRows.find(sr => sr.source === key);
-              const reviewsN = isGoogle ? googleReviews.length : (perSource?.count ?? 0);
-              const avg = isGoogle ? googleAvg : (perSource?.avg ?? null);
-              const stateConnected = isGoogle ? (!!oauth && !!oauth.location_id) : reviewsN > 0;
-              const scrapedEmpty = !isGoogle && hasUrl && !!scrape?.last_scraped_at && reviewsN === 0;
-              const lastSync = scrape?.last_scraped_at;
-              const nextDue = scrape?.next_due_at;
+              const summary = summaryMap[key];
+              const platformReviews = summary?.total_reviews_on_platform ?? null;
+              const platformRating = summary?.score_overall != null ? Number(summary.score_overall) : null;
+              const rankPos = summary?.ranking_position ?? null;
+              const rankTot = summary?.ranking_total ?? null;
+              const rankCtx = summary?.ranking_context ?? null;
+              const stateLive = platformRating != null;
+              const stateGoogleNC = isGoogle && !oauth?.location_id && !stateLive;
               return (
-                <div key={key} style={{ padding:'12px 14px', borderRadius:6, background:WHITE, border:'1px solid '+HAIR, display:'flex', flexDirection:'column', gap:10 }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
-                    <span style={{ display:'inline-flex', alignItems:'center', gap:8, fontWeight:600, fontSize:13, color:INK }}>
+                <div key={key} style={{ padding:'10px 12px', borderRadius:6, background:WHITE, border:'1px solid '+HAIR, display:'flex', flexDirection:'column', gap:8 }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:6 }}>
+                    <span style={{ display:'inline-flex', alignItems:'center', gap:6, fontWeight:600, fontSize:12, color:INK }}>
                       <SourceBadge source={key} />{label}
                       {hasUrl && (
-                        <a href={li.url!} target="_blank" rel="noopener noreferrer" title={"Open " + label + " listing"}
-                          style={{ fontSize:14, color:INK_M, textDecoration:'none', marginLeft:2 }}>↗</a>
+                        <a href={li.url!} target="_blank" rel="noopener noreferrer" title={'Open ' + label + ' listing'}
+                          style={{ fontSize:13, color:INK_M, textDecoration:'none' }}>↗</a>
                       )}
                     </span>
                     <span style={{
-                      fontSize:10, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase',
-                      padding:'2px 8px', borderRadius:10,
-                      background: stateConnected ? '#E4F1E0' : (scrapedEmpty ? '#FBEBB4' : '#F5F0E1'),
-                      color:    stateConnected ? '#1F5C2C' : (scrapedEmpty ? '#8B5A1C' : INK_M),
-                      border:'1px solid ' + (stateConnected ? '#A9CFA0' : (scrapedEmpty ? '#E8C89B' : HAIR)),
-                    }}>{stateConnected ? 'LIVE' : (scrapedEmpty ? 'NO DATA YET' : 'NOT CONNECTED')}</span>
+                      fontSize:9, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase',
+                      padding:'2px 6px', borderRadius:10,
+                      background: stateLive ? '#E4F1E0' : '#F5F0E1',
+                      color:    stateLive ? '#1F5C2C' : INK_M,
+                      border:'1px solid ' + (stateLive ? '#A9CFA0' : HAIR),
+                    }}>{stateLive ? 'LIVE' : (stateGoogleNC ? 'NOT CONNECTED' : 'NO DATA')}</span>
                   </div>
-                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-                    <div style={{ background:'#FAFAF7', border:'1px solid '+HAIR, borderRadius:4, padding:'6px 10px' }}>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
+                    <div style={{ background:'#FAFAF7', border:'1px solid '+HAIR, borderRadius:4, padding:'6px 8px' }}>
+                      <div style={{ fontSize:9, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, fontWeight:600 }}>Rating /5</div>
+                      <div style={{ fontSize:20, fontWeight:600, color:INK, marginTop:2 }}>{platformRating != null ? platformRating.toFixed(1) : '—'}</div>
+                    </div>
+                    <div style={{ background:'#FAFAF7', border:'1px solid '+HAIR, borderRadius:4, padding:'6px 8px' }}>
                       <div style={{ fontSize:9, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, fontWeight:600 }}>Reviews</div>
-                      <div style={{ fontSize:18, fontWeight:600, color:INK, marginTop:2 }}>{reviewsN}</div>
-                    </div>
-                    <div style={{ background:'#FAFAF7', border:'1px solid '+HAIR, borderRadius:4, padding:'6px 10px' }}>
-                      <div style={{ fontSize:9, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, fontWeight:600 }}>Avg /5</div>
-                      <div style={{ fontSize:18, fontWeight:600, color:INK, marginTop:2 }}>{avg != null ? avg.toFixed(2) : '—'}</div>
+                      <div style={{ fontSize:20, fontWeight:600, color:INK, marginTop:2 }}>{platformReviews != null ? platformReviews : '—'}</div>
                     </div>
                   </div>
-                  <div style={{ fontSize:10, color:INK_M, display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
-                    <span>Last synced: <strong style={{ color:INK_S }}>{lastSync ? fmtDate(lastSync) : '—'}</strong></span>
-                    <span>Next: <strong style={{ color:INK_S }}>{nextDue ? fmtDate(nextDue) : '—'}</strong></span>
-                  </div>
-                  {isGoogle && (
-                    <Link href={oauth ? '/api/google/pull-now?property=260955' : '/api/google/oauth/connect?property=260955'}
-                      style={{ alignSelf:'flex-start', padding:'5px 12px', fontSize:11, fontWeight:600, background:GREEN, color:WHITE, border:'none', borderRadius:4, textDecoration:'none' }}>
-                      {oauth ? 'Pull latest' : 'Connect Google →'}
-                    </Link>
+                  {(rankPos && rankTot) && (
+                    <div style={{ fontSize:11, color:INK_S, background:'#E4F1E0', border:'1px solid #A9CFA0', borderRadius:4, padding:'5px 8px', fontWeight:500 }}>
+                      Ranked <strong>#{rankPos}</strong> of {rankTot}
+                    </div>
+                  )}
+                  {!rankPos && rankCtx && (
+                    <div style={{ fontSize:10, color:INK_M, fontStyle:'italic', lineHeight:1.3 }}>{rankCtx}</div>
                   )}
                 </div>
               );
@@ -268,15 +257,14 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
 
         {sourceRows.length > 0 && (
           <div style={{ gridColumn:'1 / -1' }}>
-            <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, margin:'8px 2px 8px' }}>By source</div>
+            <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, margin:'8px 2px 8px' }}>Local sample · by source</div>
             <div style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:6, overflowX:'auto' }}>
               <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
                 <thead>
                   <tr>
                     <th style={{ padding:'8px 12px', textAlign:'left',  fontWeight:600, borderBottom:'1px solid '+HAIR, color:INK_S }}>Source</th>
-                    <th style={{ padding:'8px 12px', textAlign:'right', fontWeight:600, borderBottom:'1px solid '+HAIR, color:INK_S }}>Reviews</th>
+                    <th style={{ padding:'8px 12px', textAlign:'right', fontWeight:600, borderBottom:'1px solid '+HAIR, color:INK_S }}>Sample reviews</th>
                     <th style={{ padding:'8px 12px', textAlign:'right', fontWeight:600, borderBottom:'1px solid '+HAIR, color:INK_S }}>Avg /5</th>
-                    <th style={{ padding:'8px 12px', textAlign:'right', fontWeight:600, borderBottom:'1px solid '+HAIR, color:INK_S }}>% of total</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -289,7 +277,6 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
                       </td>
                       <td style={{ padding:'8px 12px', textAlign:'right' }}>{sr.count}</td>
                       <td style={{ padding:'8px 12px', textAlign:'right' }}>{sr.avg != null ? sr.avg.toFixed(2) : '—'}</td>
-                      <td style={{ padding:'8px 12px', textAlign:'right', color:INK_M }}>{total > 0 ? Math.round(sr.count/total*100) : 0}%</td>
                     </tr>
                   ))}
                 </tbody>
@@ -299,10 +286,10 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
         )}
 
         <div style={{ gridColumn:'1 / -1' }}>
-          <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, margin:'8px 2px 8px' }}>Latest reviews</div>
+          <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, margin:'8px 2px 8px' }}>Latest reviews (local sample)</div>
           {reviews.length === 0 ? (
             <div style={{ padding:'40px 24px', background:WHITE, border:'1px solid '+HAIR, borderRadius:6, textAlign:'center', color:INK_M, fontSize:12 }}>
-              No reviews yet in <code>marketing.reviews</code>. Connect a source above → first pull runs within a minute.
+              No reviews scraped yet. Platform totals above show the full picture.
             </div>
           ) : (
             <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
@@ -310,9 +297,7 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
                 <div key={r.id} style={{ padding:'12px 14px', background:WHITE, border:'1px solid '+HAIR, borderRadius:6 }}>
                   <div style={{ display:'flex', gap:10, alignItems:'baseline', flexWrap:'wrap', marginBottom:4 }}>
                     <SourceBadge source={r.source} />
-                    <span style={{ fontWeight:600 }}>
-                      {r.rating_norm != null ? Number(r.rating_norm).toFixed(1) : '—'} / 5
-                    </span>
+                    <span style={{ fontWeight:600 }}>{r.rating_norm != null ? Number(r.rating_norm).toFixed(1) : '—'} / 5</span>
                     <span style={{ color:INK_M, fontSize:11 }}>{fmtDate(r.reviewed_at)}</span>
                     <span style={{
                       fontSize:10, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase',
@@ -325,11 +310,6 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
                   </div>
                   {r.title && <div style={{ fontStyle:'italic', fontWeight:500, color:INK, marginBottom:4 }}>{r.title}</div>}
                   {r.body && <div style={{ fontSize:12, color:INK_S, lineHeight:1.5, whiteSpace:'pre-wrap' }}>{r.body}</div>}
-                  {r.response_text && (
-                    <div style={{ marginTop:8, padding:'8px 10px', background:'#F5F0E1', borderLeft:'3px solid '+GREEN, borderRadius:'0 4px 4px 0', fontSize:11, color:INK_S }}>
-                      <strong>Reply:</strong> {r.response_text}
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
