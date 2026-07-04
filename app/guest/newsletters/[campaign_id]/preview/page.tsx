@@ -8,6 +8,7 @@ import { notFound } from 'next/navigation';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { PROPERTY_ID } from '@/lib/supabase';
 import SendTestCard from './_components/SendTestCard';
+import AdHocDispatchDrawer from './_components/AdHocDispatchDrawer';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -63,7 +64,7 @@ export default async function CampaignPreviewPage({ params }: Props) {
   const { data } = await sb.schema('guest').from('campaigns')
     .select('*').eq('campaign_id', params.campaign_id).maybeSingle();
   if (!data) notFound();
-  const c = data as { property_id: number; campaign_id: string; status: string; body_md: string | null };
+  const c = data as { property_id: number; campaign_id: string; status: string; body_md: string | null; name: string | null };
   if (c.property_id !== PROPERTY_ID) notFound();
 
   const { hero, rest } = extractHero(c.body_md ?? '');
@@ -85,8 +86,13 @@ export default async function CampaignPreviewPage({ params }: Props) {
           </div>
         </div>
 
-        {/* Send-test card */}
-        <SendTestCard campaign_id={c.campaign_id} />
+        {/* Send-test card + ad-hoc dispatch drawer trigger */}
+        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 16 }}>
+          <div style={{ flex: 1 }}>
+            <SendTestCard campaign_id={c.campaign_id} />
+          </div>
+          <AdHocDispatchDrawer campaign_id={c.campaign_id} campaign_name={c.name || 'Newsletter'} />
+        </div>
 
         <div style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:4, overflow:'hidden', boxShadow:'0 2px 10px rgba(0,0,0,0.06)' }}>
 
