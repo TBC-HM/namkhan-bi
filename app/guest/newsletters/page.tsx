@@ -1,13 +1,13 @@
 // app/guest/newsletters/page.tsx
-// PBS 2026-07-03 v3: match other guest pages — DashboardPage + GUEST_SUBPAGES tabs.
-// Per-section columns: Drafts (author/last edit only), Scheduled (schedule+recipients),
-// Sent (delivery counters). Actions column with Open + Preview.
+// PBS 2026-07-04 v4: Planned date column · Schedule button on drafts · Halt button on scheduled.
 
 import type { CSSProperties } from 'react';
 import Link from 'next/link';
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { GUEST_SUBPAGES } from '../_subpages';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
+import ScheduleDrawer from './_components/ScheduleDrawer';
+import HaltButton from './_components/HaltButton';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -20,6 +20,7 @@ type CampaignRow = {
   send_count: number; opens_count: number; clicks_count: number; unsub_count: number; booking_count: number;
   recipients_count: number; pending_count: number; queued_count: number; failed_count: number;
   created_by: string | null; created_at: string; updated_at: string; archived_at: string | null;
+  planned_date: string | null;
 };
 
 function fmtDateTime(iso: string | null): string {
@@ -35,6 +36,7 @@ function fmtDate(iso: string | null): string {
 function fmtRelSchedule(row: CampaignRow): string {
   if (row.relative_kind === 'before_checkin' && row.relative_days != null) return `${row.relative_days}d before check-in · ${String(row.relative_hour ?? 10).padStart(2,'0')}:00`;
   if (row.relative_kind === 'after_checkout' && row.relative_days != null) return `${row.relative_days}d after check-out · ${String(row.relative_hour ?? 10).padStart(2,'0')}:00`;
+  if (row.planned_date) return fmtDate(row.planned_date) + ' · 10:00';
   if (row.schedule_kind && row.schedule_kind !== 'once') return `Repeats ${row.schedule_kind}`;
   if (row.scheduled_at) return fmtDateTime(row.scheduled_at);
   return '—';
@@ -43,7 +45,9 @@ function pctOr(n: number, d: number): string { if (!d) return '—'; return `${(
 
 export default async function NewslettersPage() {
   const { data, error } = await supabase.from('v_guest_campaigns').select('*')
-    .eq('property_id', PROPERTY_ID).order('updated_at', { ascending: false });
+    .eq('property_id', PROPERTY_ID).is('archived_at', null)
+    .order('planned_date', { ascending: true, nullsFirst: false })
+    .order('updated_at', { ascending: false });
   const rows: CampaignRow[] = (data as CampaignRow[]) ?? [];
   const drafts   = rows.filter(r => r.status === 'draft');
   const upcoming = rows.filter(r => r.status === 'scheduled' || r.status === 'sending');
@@ -55,11 +59,8 @@ export default async function NewslettersPage() {
 
   return (
     <div style={{ background:'#FFFFFF', minHeight:'100vh' }}>
-      <DashboardPage
-        title="Guest · Newsletters"
-        subtitle={`${rows.length} campaign${rows.length === 1 ? '' : 's'} — Drafts, Scheduled and Sent.`}
-        tabs={tabs}
-      >
+      <DashboardPage title="Guest · Newsletters"
+        subtitle={`${rows.length} campaign${rows.length === 1 ? '' : 's'} — Drafts, Scheduled and Sent.`} tabs={tabs}>
         <div style={{ gridColumn:'1 / -1', display:'flex', justifyContent:'flex-end', gap:8 }}>
           <Link href="/guest/newsletters/templates" style={secondaryButton}>Manage templates</Link>
           <Link href="/guest/directory" style={ctaButton}>+ Compose from Directory</Link>
@@ -74,25 +75,25 @@ export default async function NewslettersPage() {
             <div style={tableWrap}>
               <table style={{ width:'100%', borderCollapse:'collapse' }}>
                 <thead><tr style={{ background:'#FAFAF7', borderBottom:'1px solid #E6DFCC' }}>
-                  <th style={th}>Campaign</th>
-                  <th style={th}>Template</th>
-                  <th style={th}>Author</th>
-                  <th style={th}>Last edit</th>
-                  <th style={{ ...th, textAlign:'right', width:200 }}>Actions</th>
+                  <th style={th}>Campaign</th><th style={th}>Template</th><th style={th}>Planned date</th>
+                  <th style={th}>Author</th><th style={th}>Last edit</th>
+                  <th style={{ ...th, textAlign:'right', width:290 }}>Actions</th>
                 </tr></thead>
                 <tbody>
                   {drafts.map((r) => (
                     <tr key={r.campaign_id} style={{ borderBottom:'1px solid #E6DFCC', background:'#FFFFFF' }}>
-                      <td style={{ ...tdL, maxWidth:340 }}>
+                      <td style={{ ...tdL, maxWidth:280 }}>
                         <div style={{ fontWeight:600 }}>{r.name}</div>
                         <div style={{ fontSize:11, color:'#5A5A5A', marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.subject}</div>
                       </td>
                       <td style={tdL}>{r.template_key ?? '—'}</td>
+                      <td style={{ ...tdL, fontWeight: r.planned_date ? 600 : 400, color: r.planned_date ? '#084838' : '#5A5A5A' }}>{fmtDate(r.planned_date)}</td>
                       <td style={tdL}>{r.created_by ?? '—'}</td>
                       <td style={tdL}>{fmtDateTime(r.updated_at)}</td>
                       <td style={{ ...tdR, textAlign:'right' }}>
-                        <Link href={`/guest/newsletters/${r.campaign_id}`} style={actionBtnGreen}>Edit</Link>
+                        <Link href={`/guest/newsletters/${r.campaign_id}`} style={actionBtnLight}>Edit</Link>
                         <Link href={`/guest/newsletters/${r.campaign_id}/preview`} style={actionBtnLight}>Preview</Link>
+                        <ScheduleDrawer campaign_id={r.campaign_id} campaign_name={r.name} planned_date={r.planned_date} />
                       </td>
                     </tr>
                   ))}
@@ -109,27 +110,26 @@ export default async function NewslettersPage() {
             <div style={tableWrap}>
               <table style={{ width:'100%', borderCollapse:'collapse' }}>
                 <thead><tr style={{ background:'#FAFAF7', borderBottom:'1px solid #E6DFCC' }}>
-                  <th style={th}>Campaign</th>
-                  <th style={th}>Schedule</th>
+                  <th style={th}>Campaign</th><th style={th}>Send schedule</th>
                   <th style={{ ...th, textAlign:'right' }}>Recipients</th>
-                  <th style={th}>Author</th>
+                  <th style={{ ...th, textAlign:'right' }}>Pending</th>
                   <th style={th}>Last edit</th>
-                  <th style={{ ...th, textAlign:'right', width:200 }}>Actions</th>
+                  <th style={{ ...th, textAlign:'right', width:250 }}>Actions</th>
                 </tr></thead>
                 <tbody>
                   {upcoming.map((r) => (
                     <tr key={r.campaign_id} style={{ borderBottom:'1px solid #E6DFCC', background:'#FFFFFF' }}>
-                      <td style={{ ...tdL, maxWidth:280 }}>
+                      <td style={{ ...tdL, maxWidth:260 }}>
                         <div style={{ fontWeight:600 }}>{r.name}</div>
                         <div style={{ fontSize:11, color:'#5A5A5A', marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.subject}</div>
                       </td>
                       <td style={tdL}>{fmtRelSchedule(r)}</td>
                       <td style={tdR}>{r.recipients_count}</td>
-                      <td style={tdL}>{r.created_by ?? '—'}</td>
+                      <td style={tdR}>{r.pending_count}</td>
                       <td style={tdL}>{fmtDateTime(r.updated_at)}</td>
                       <td style={{ ...tdR, textAlign:'right' }}>
-                        <Link href={`/guest/newsletters/${r.campaign_id}`} style={actionBtnGreen}>Edit</Link>
                         <Link href={`/guest/newsletters/${r.campaign_id}/preview`} style={actionBtnLight}>Preview</Link>
+                        <HaltButton campaign_id={r.campaign_id} campaign_name={r.name} pending_count={r.pending_count} />
                       </td>
                     </tr>
                   ))}
@@ -146,8 +146,7 @@ export default async function NewslettersPage() {
             <div style={tableWrap}>
               <table style={{ width:'100%', borderCollapse:'collapse' }}>
                 <thead><tr style={{ background:'#FAFAF7', borderBottom:'1px solid #E6DFCC' }}>
-                  <th style={th}>Campaign</th>
-                  <th style={th}>Sent at</th>
+                  <th style={th}>Campaign</th><th style={th}>Sent at</th>
                   <th style={{ ...th, textAlign:'right' }}>Sent</th>
                   <th style={{ ...th, textAlign:'right' }}>Opens</th>
                   <th style={{ ...th, textAlign:'right' }}>Clicks</th>
@@ -163,7 +162,7 @@ export default async function NewslettersPage() {
                         <div style={{ fontWeight:600 }}>{r.name}</div>
                         <div style={{ fontSize:11, color:'#5A5A5A', marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.subject}</div>
                       </td>
-                      <td style={tdL}>{fmtDate(r.last_run_at ?? r.scheduled_at)}</td>
+                      <td style={tdL}>{fmtDate(r.last_run_at ?? r.scheduled_at ?? r.planned_date)}</td>
                       <td style={tdR}>{r.send_count}</td>
                       <td style={tdR}>{r.opens_count} <span style={pctSub}>({pctOr(r.opens_count, r.send_count)})</span></td>
                       <td style={tdR}>{r.clicks_count} <span style={pctSub}>({pctOr(r.clicks_count, r.send_count)})</span></td>
