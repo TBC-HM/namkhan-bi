@@ -1,15 +1,13 @@
 // app/guest/newsletters/[campaign_id]/preview/_components/AdHocDispatchDrawer.tsx
-// PBS 2026-07-04: hand-pick a list of guests and dispatch a draft to them.
-// Loads pickable guests once on open, client-side filter for speed.
+// PBS 2026-07-04: hand-pick a guest list and dispatch a draft to them.
+// Fetches server-side via /api/newsletter/pickable-guests to keep secrets off the client.
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { getSupabaseBrowser } from '@/lib/supabaseBrowser';
 
 interface Props {
   campaign_id: string;
   campaign_name: string;
-  property_id: number;
 }
 
 interface Guest {
@@ -23,7 +21,7 @@ interface Guest {
   last_stay_date: string | null;
 }
 
-export default function AdHocDispatchDrawer({ campaign_id, campaign_name, property_id }: Props) {
+export default function AdHocDispatchDrawer({ campaign_id, campaign_name }: Props) {
   const [open, setOpen]         = useState(false);
   const [loading, setLoading]   = useState(false);
   const [guests, setGuests]     = useState<Guest[]>([]);
@@ -37,18 +35,18 @@ export default function AdHocDispatchDrawer({ campaign_id, campaign_name, proper
   useEffect(() => {
     if (!open || guests.length > 0) return;
     setLoading(true);
-    const sb = getSupabaseBrowser();
-    sb.from('v_newsletter_pickable_guests')
-      .select('guest_id, full_name, email, country, gender, total_stays, is_repeat, last_stay_date')
-      .eq('property_id', property_id)
-      .order('last_stay_date', { ascending: false, nullsFirst: false })
-      .limit(5000)
-      .then(({ data, error }) => {
+    fetch('/api/newsletter/pickable-guests')
+      .then((r) => r.json())
+      .then((j) => {
         setLoading(false);
-        if (error) { setMsg({ kind: 'err', text: error.message }); return; }
-        setGuests((data as Guest[]) || []);
+        if (!j?.ok) { setMsg({ kind: 'err', text: j?.error || 'Load failed' }); return; }
+        setGuests((j.guests as Guest[]) || []);
+      })
+      .catch((e) => {
+        setLoading(false);
+        setMsg({ kind: 'err', text: e instanceof Error ? e.message : 'Network error' });
       });
-  }, [open, guests.length, property_id]);
+  }, [open, guests.length]);
 
   const countries = useMemo(() => {
     const s = new Set<string>();
@@ -96,12 +94,11 @@ export default function AdHocDispatchDrawer({ campaign_id, campaign_name, proper
         setMsg({ kind: 'err', text: j?.error || 'Dispatch failed' });
       }
     } catch (e) {
-      const em = e instanceof Error ? e.message : 'Network error';
-      setMsg({ kind: 'err', text: em });
+      setMsg({ kind: 'err', text: e instanceof Error ? e.message : 'Network error' });
     } finally { setSending(false); }
   };
 
-  const HAIR='#E6DFCC'; const INK='#1B1B1B'; const INK_M='#5A5A5A'; 
+  const HAIR='#E6DFCC'; const INK='#1B1B1B'; const INK_M='#5A5A5A';
   const NK_GREEN='#084838'; const CREAM='#F7F0E1';
 
   if (!open) {
