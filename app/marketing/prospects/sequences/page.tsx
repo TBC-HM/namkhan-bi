@@ -90,7 +90,7 @@ function Section({ title, rows, kind }: { title: string; rows: Row[]; kind: 'dra
                 <th style={{ ...th, textAlign:'right' }}>Enrolled</th>
                 <th style={{ ...th, textAlign:'right' }}>Sends</th>
                 <th style={th}>Last edit</th>
-                <th style={{ ...th, textAlign:'right', width:260 }}>Actions</th>
+                <th style={{ ...th, textAlign:'right', width:320 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -112,6 +112,7 @@ function Section({ title, rows, kind }: { title: string; rows: Row[]; kind: 'dra
                   <td style={tdR}>{r.send_count.toLocaleString()}</td>
                   <td style={tdL}>{fmtDate(r.updated_at)}</td>
                   <td style={{ ...tdL, textAlign:'right' }}>
+                    <Link href={`/marketing/prospects/sequences/${r.funnel_id}/preview`} style={btnA}>Preview</Link>
                     <Link href={`/marketing/prospects/sequences/${r.funnel_id}`} style={btnA}>Edit</Link>
                     {kind === 'draft' && <Link href={`/marketing/prospects/sequences/${r.funnel_id}/schedule`} style={btnGreen2}>Schedule</Link>}
                     {kind === 'live'  && <Link href={`/marketing/prospects/sequences/${r.funnel_id}/halt`}   style={btnA}>Halt</Link>}
