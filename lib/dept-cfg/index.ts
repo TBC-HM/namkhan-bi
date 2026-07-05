@@ -360,6 +360,10 @@ const MARKETING_CFG: DeptCfg = {
     { label: 'Info',        href: '/marketing/library'     },
     { label: 'Media',       href: '/marketing/gallery'       },
     { label: 'Campaigns',   href: '/marketing/campaigns'   },
+    // PBS 2026-07-05: Prospects marketing engine — lead nurture funnels for
+    // people who NEVER stayed (vs /guest/newsletters = already stayed).
+    { label: 'Prospects',   href: '/marketing/prospects'   },
+    { label: 'Funnels',     href: '/marketing/funnels'     },
     { label: 'Compiler',    href: '/marketing/compiler'    },
     // PBS 2026-05-16: Social hub absorbs Influencers as a 2nd tab.
     // First-tab destination = /marketing/social.
@@ -376,6 +380,8 @@ const MARKETING_CFG: DeptCfg = {
     { label: 'Library',   href: '/marketing/library'     },
     { label: 'Media',     href: '/marketing/gallery'       },
     { label: 'Campaigns', href: '/marketing/campaigns'   },
+    { label: 'Prospects', href: '/marketing/prospects'   },
+    { label: 'Funnels',   href: '/marketing/funnels'     },
     { label: 'Social',    href: '/marketing/social'      },
     { label: 'Reviews',   href: '/marketing/reviews'     },
     { label: 'Audiences', href: '/marketing/audiences'   },
