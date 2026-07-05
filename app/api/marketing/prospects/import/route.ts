@@ -23,7 +23,7 @@ export async function POST(req: Request) {
   const tags = Array.isArray(body.tags) && body.tags.length > 0 ? body.tags : ['imported'];
 
   const sb = getSupabaseAdmin();
-  const { data, error } = await sb.schema('prospects').rpc('fn_import_batch', {
+  const { data, error } = await sb.rpc('fn_import_prospects', {
     p_rows: rows,
     p_tags: tags,
     p_filename: body.filename ?? null,
