@@ -1,30 +1,29 @@
 // app/marketing/social/page.tsx
+// PBS 2026-07-05: Migrated to new paper-white design (DashboardPage + KpiTile
+// + MARKETING_SUBPAGES tabs). Live data: marketing.social_accounts via
+// getSocialAccounts(). Everything else (proposed posts, concept flow, boost
+// candidates, channel meta, ICPs, agents) is HARDCODED Phase 1 data —
+// Phase 2 wires social_ai.posts + calendar + approvals + assets + boosts.
 //
-// PBS 2026-05-16 (v2): AI Social Cockpit — *agency workflow*. The first
-// version was a brochure. This one is the machine. Five inner sections
-// switched via ?view=:
-//
-//   calendar  · the planning room — 30/60/90 toggle + channel dropdown
-//   flow      · concept → publish pipeline (Idea → Brief → Generate →
-//               Reality → Approve → Schedule → Publish)
-//   channels  · per-channel inventory · growth · best post · autonomy
-//               phase · guardrails (LIVE marketing.social_accounts data)
-//   boost     · AI-proposed paid-boost candidates with budget + projected
-//               reach + cost-per-engagement
-//   inbox     · approval queue + reality flags
-//
-// Default = calendar so PBS lands in the planning view.
+// Five inner sections switched via ?view=:
+//   calendar · flow · channels · boost · inbox
 
-import type { ReactNode } from 'react';
-import Page from '@/components/page/Page';
-import Panel from '@/components/page/Panel';
-import KpiBox from '@/components/kpi/KpiBox';
+import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { getSocialAccounts } from '@/lib/marketing';
 import { MARKETING_SUBPAGES } from '../_subpages';
-import TabStrip, { SOCIAL_TABS } from '@/app/finance/_components/TabStrip';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 300;
+export const revalidate = 30;
+
+const WHITE = '#FFFFFF';
+const HAIR  = '#E6DFCC';
+const INK   = '#1B1B1B';
+const INK_M = '#5A5A5A';
+const INK_S = '#3A3A3A';
+const FOREST = '#084838';
+const RED    = '#B03826';
+const CREAM  = '#F5F0E1';
+const AMBER  = '#C28F2C';
 
 // ─── Platforms ────────────────────────────────────────────────────────────
 
@@ -53,7 +52,7 @@ const ICPS: Icp[] = [
   { name: 'Yoga Teachers · B2B',  market: 'EU · US',           emoji: '✿', pillars: ['Host your retreat', 'Group rates'],          activePosts: 5  },
 ];
 
-// ─── Proposed posts (90 days · realistic spread) ─────────────────────────
+// ─── Proposed posts (90 days) ─────────────────────────────────────────────
 
 type PostStatus = 'Draft' | 'Awaiting Approval' | 'Approved' | 'Scheduled' | 'Reality Flag' | 'Published';
 type Format = 'Reel' | 'YT Short' | 'YT Long' | 'Photo' | 'Carousel' | 'Story';
@@ -66,7 +65,7 @@ interface ProposedPost {
   brief: string;
   hook: string;
   status: PostStatus;
-  reach?: number; // for Published
+  reach?: number;
   saves?: number;
   engagement?: string;
 }
@@ -77,13 +76,9 @@ function addDaysIso(baseIso: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-// Compact list — Phase 2 reads from social_ai.posts.
 function buildProposedPosts(): ProposedPost[] {
   const todayIso = new Date().toISOString().slice(0, 10);
-  // Posts spanning -10 (Published, has metrics) → +85 days. Roughly 2/day spread,
-  // tilted toward IG + Pinterest as core channels.
   const seeds: Array<Omit<ProposedPost, 'iso'> & { offset: number }> = [
-    // ─ PAST 10 DAYS (Published with metrics)
     { offset: -10, platform: 'instagram', format: 'Reel',     icp: 'EU Wellness Women',   brief: '4am river silence',           hook: 'Why monks sweep at 4am',         status: 'Published', reach: 38_200, saves: 1240, engagement: '8.4%' },
     { offset:  -9, platform: 'pinterest', format: 'Photo',    icp: 'EU Wellness Women',   brief: 'Spa massage · brass + linen', hook: 'A ritual older than Europe',     status: 'Published', reach: 22_400, saves:  890, engagement: '6.1%' },
     { offset:  -7, platform: 'tiktok',    format: 'Reel',     icp: 'Luxury Couples',      brief: 'Candle dinner on the deck',   hook: 'Found the only river restaurant', status: 'Published', reach: 91_300, saves: 2780, engagement: '11.2%' },
@@ -92,8 +87,6 @@ function buildProposedPosts(): ProposedPost[] {
     { offset:  -3, platform: 'pinterest', format: 'Photo',    icp: 'Mystique Explorers',  brief: 'Saffron robes · golden hour', hook: 'Quiet wonder',                   status: 'Published', reach: 19_200, saves:  720, engagement: '5.8%' },
     { offset:  -2, platform: 'youtube',   format: 'YT Long',  icp: 'Conscious Food',      brief: '8-min farm-to-table docu',    hook: 'Where dinner walks before dawn', status: 'Published', reach: 42_100, saves: 1850, engagement: '12.4%' },
     { offset:  -1, platform: 'instagram', format: 'Reel',     icp: 'Digital Detox EU',    brief: 'Phone in a drawer 3 days',    hook: 'Your brain on no Wi-Fi',         status: 'Published', reach: 31_700, saves:  990, engagement: '7.9%' },
-
-    // ─ NEXT 30 DAYS (mix of statuses)
     { offset:  1, platform: 'instagram', format: 'Reel',     icp: 'EU Wellness Women',  brief: 'Spa morning prep · BTS',          hook: 'Spa morning prep',                              status: 'Awaiting Approval' },
     { offset:  1, platform: 'pinterest', format: 'Photo',    icp: 'EU Wellness Women',  brief: 'Brass coffee service still',      hook: 'Slow mornings still exist',                     status: 'Scheduled' },
     { offset:  2, platform: 'tiktok',    format: 'Reel',     icp: 'Luxury Couples',     brief: 'Sunset boat ride · slow-mo',      hook: 'One boat, one couple, one river',               status: 'Approved' },
@@ -119,22 +112,18 @@ function buildProposedPosts(): ProposedPost[] {
     { offset: 22, platform: 'pinterest', format: 'Photo',    icp: 'EU Wellness Women',  brief: 'Yoga deck overlooking the river',  hook: 'A studio without walls',                        status: 'Scheduled' },
     { offset: 24, platform: 'instagram', format: 'Reel',     icp: 'Digital Detox EU',   brief: '24h off-grid guest log',           hook: 'What I did without a phone',                    status: 'Approved' },
     { offset: 27, platform: 'instagram', format: 'Reel',     icp: 'EU Wellness Women',  brief: 'Spa product · brass + linen',      hook: "Ingredients we don't hide",                     status: 'Awaiting Approval' },
-
-    // ─ DAYS 30-60
     { offset: 32, platform: 'instagram', format: 'Reel',     icp: 'Luxury Couples',     brief: 'Private river dinner',            hook: 'One table, one river, one night',               status: 'Draft' },
-    { offset: 35, platform: 'pinterest', format: 'Photo',    icp: 'Conscious Food',     brief: 'Garden harvest still-life',        hook: 'Today\'s dinner walked at sunrise',             status: 'Draft' },
+    { offset: 35, platform: 'pinterest', format: 'Photo',    icp: 'Conscious Food',     brief: 'Garden harvest still-life',        hook: "Today's dinner walked at sunrise",             status: 'Draft' },
     { offset: 38, platform: 'tiktok',    format: 'Reel',     icp: 'Mystique Explorers', brief: 'Monk almsgiving extended cut',      hook: 'The 4am gold extended',                         status: 'Draft' },
     { offset: 41, platform: 'youtube',   format: 'YT Long',  icp: 'EU Wellness Women',  brief: '15-min retreat-day documentary',    hook: 'A day at the Namkhan',                          status: 'Draft' },
     { offset: 45, platform: 'instagram', format: 'Carousel', icp: 'Asia Source Markets',brief: 'Lao-script hospitality cards · TH', hook: 'Hospitality in Lao',                            status: 'Draft' },
     { offset: 49, platform: 'instagram', format: 'Reel',     icp: 'Digital Detox EU',   brief: 'Sunrise without alarms',           hook: 'The body still knows',                          status: 'Draft' },
     { offset: 52, platform: 'linkedin',  format: 'Photo',    icp: 'Yoga Teachers · B2B',brief: 'Retreat layout · floorplan',        hook: 'How 14 retreats ran here last year',            status: 'Draft' },
     { offset: 56, platform: 'pinterest', format: 'Photo',    icp: 'Luxury Couples',     brief: 'Candle-lit suite at dusk',          hook: 'A room that knows the river',                   status: 'Draft' },
-
-    // ─ DAYS 60-90
     { offset: 62, platform: 'instagram', format: 'Reel',     icp: 'EU Wellness Women',  brief: 'Spa ritual chain · slow',          hook: 'Six rituals in one morning',                    status: 'Draft' },
     { offset: 66, platform: 'youtube',   format: 'YT Short', icp: 'Mystique Explorers', brief: 'Sunset boat on the Nam Khan',       hook: 'Where the river turns gold',                    status: 'Draft' },
     { offset: 70, platform: 'pinterest', format: 'Photo',    icp: 'Conscious Food',     brief: 'Wild-honey breakfast still',        hook: 'Honey from the temple beekeeper',                status: 'Draft' },
-    { offset: 75, platform: 'instagram', format: 'Carousel', icp: 'Luxury Couples',     brief: 'Anniversary package · refined',     hook: "An anniversary worth telling",                  status: 'Draft' },
+    { offset: 75, platform: 'instagram', format: 'Carousel', icp: 'Luxury Couples',     brief: 'Anniversary package · refined',     hook: 'An anniversary worth telling',                  status: 'Draft' },
     { offset: 80, platform: 'facebook',  format: 'Carousel', icp: 'Asia Source Markets',brief: 'Wellness in Lao · TH-narrated',     hook: 'การพักผ่อนแบบลาว',                              status: 'Draft' },
   ];
   return seeds.map((s) => ({ iso: addDaysIso(todayIso, s.offset), ...s }));
@@ -142,7 +131,7 @@ function buildProposedPosts(): ProposedPost[] {
 
 const ALL_POSTS = buildProposedPosts();
 
-// ─── Channel inventory metadata (per-channel growth + best post + autonomy) ──
+// ─── Channel meta ─────────────────────────────────────────────────────────
 
 interface ChannelMeta {
   platform: Platform;
@@ -167,7 +156,7 @@ const CHANNEL_META: Record<Platform, ChannelMeta> = {
   x:         { platform: 'x',         followers:    310, growth30d: '+1.2%',  engagementRate: '0.9%',  postsMtd: 0, bestPost: { hook: '—', reach: 0, engagement: '—' }, autonomyPhase: 'A', frequencyCap: 'paused',         bannedTopics: ['all · channel paused'] },
 };
 
-// ─── Boost & promote candidates ───────────────────────────────────────────
+// ─── Boost candidates ─────────────────────────────────────────────────────
 
 interface BoostCandidate {
   hook: string;
@@ -183,15 +172,15 @@ interface BoostCandidate {
 }
 
 const BOOST_CANDIDATES: BoostCandidate[] = [
-  { hook: 'Found the only river restaurant',       platform: 'tiktok',    organicReach: 91_300, organicEngagement: '11.2%', signal: 'Top 1% organic · viral coefficient 1.4 · 312 shares', proposedBudget: '$240 · 7 days',  projectedReach: '480k–720k',  projectedCpe: '$0.04', icp: 'Luxury Couples',    verdict: 'Strong Boost' },
-  { hook: 'Where dinner walks before dawn',        platform: 'youtube',   organicReach: 42_100, organicEngagement: '12.4%', signal: 'Top 5% YT · long retention (74%) · saves up',           proposedBudget: '$180 · TrueView', projectedReach: '95k–140k',   projectedCpe: '$0.18', icp: 'Conscious Food',    verdict: 'Strong Boost' },
-  { hook: 'Why monks sweep at 4am',                platform: 'instagram', organicReach: 38_200, organicEngagement: '8.4%',  signal: 'Saves climbing · DM intent · 4 booking clicks',         proposedBudget: '$120 · 5 days',  projectedReach: '180k–260k',  projectedCpe: '$0.07', icp: 'EU Wellness Women', verdict: 'Strong Boost' },
-  { hook: 'Galangal harvest at dawn',              platform: 'instagram', organicReach: 28_900, organicEngagement: '9.7%',  signal: 'Strong saves · weak DMs · needs CTA tweak',             proposedBudget: '$80 · A/B test',  projectedReach: '90k–130k',   projectedCpe: '$0.09', icp: 'Conscious Food',    verdict: 'Moderate Boost' },
-  { hook: 'Your brain on no Wi-Fi',                platform: 'instagram', organicReach: 31_700, organicEngagement: '7.9%',  signal: 'High reach · low booking-page clicks',                  proposedBudget: '—',               projectedReach: '—',           projectedCpe: '—',     icp: 'Digital Detox EU',  verdict: 'Test First' },
-  { hook: 'A ritual older than Europe',            platform: 'pinterest', organicReach: 22_400, organicEngagement: '6.1%',  signal: 'Steady saves · evergreen — boost as Idea Pin',          proposedBudget: '$60 · evergreen', projectedReach: '120k–180k',  projectedCpe: '$0.05', icp: 'EU Wellness Women', verdict: 'Moderate Boost' },
+  { hook: 'Found the only river restaurant', platform: 'tiktok',    organicReach: 91_300, organicEngagement: '11.2%', signal: 'Top 1% organic · viral coefficient 1.4 · 312 shares', proposedBudget: '$240 · 7 days',  projectedReach: '480k–720k',  projectedCpe: '$0.04', icp: 'Luxury Couples',    verdict: 'Strong Boost' },
+  { hook: 'Where dinner walks before dawn',  platform: 'youtube',   organicReach: 42_100, organicEngagement: '12.4%', signal: 'Top 5% YT · long retention (74%) · saves up',       proposedBudget: '$180 · TrueView', projectedReach: '95k–140k',   projectedCpe: '$0.18', icp: 'Conscious Food',    verdict: 'Strong Boost' },
+  { hook: 'Why monks sweep at 4am',          platform: 'instagram', organicReach: 38_200, organicEngagement: '8.4%',  signal: 'Saves climbing · DM intent · 4 booking clicks',     proposedBudget: '$120 · 5 days',   projectedReach: '180k–260k',  projectedCpe: '$0.07', icp: 'EU Wellness Women', verdict: 'Strong Boost' },
+  { hook: 'Galangal harvest at dawn',        platform: 'instagram', organicReach: 28_900, organicEngagement: '9.7%',  signal: 'Strong saves · weak DMs · needs CTA tweak',         proposedBudget: '$80 · A/B test',  projectedReach: '90k–130k',   projectedCpe: '$0.09', icp: 'Conscious Food',    verdict: 'Moderate Boost' },
+  { hook: 'Your brain on no Wi-Fi',          platform: 'instagram', organicReach: 31_700, organicEngagement: '7.9%',  signal: 'High reach · low booking-page clicks',              proposedBudget: '—',               projectedReach: '—',           projectedCpe: '—',     icp: 'Digital Detox EU',  verdict: 'Test First' },
+  { hook: 'A ritual older than Europe',      platform: 'pinterest', organicReach: 22_400, organicEngagement: '6.1%',  signal: 'Steady saves · evergreen — boost as Idea Pin',      proposedBudget: '$60 · evergreen', projectedReach: '120k–180k',  projectedCpe: '$0.05', icp: 'EU Wellness Women', verdict: 'Moderate Boost' },
 ];
 
-// ─── Concept flow pipeline (Kanban-style columns) ─────────────────────────
+// ─── Concept flow ─────────────────────────────────────────────────────────
 
 interface ConceptCard { hook: string; platform: Platform; format: Format; icp: string; column: ConceptColumn }
 type ConceptColumn = 'Idea' | 'Briefed' | 'Generated' | 'Reality-checked' | 'Approved' | 'Scheduled';
@@ -213,17 +202,17 @@ const CONCEPT_CARDS: ConceptCard[] = [
 ];
 const CONCEPT_COLUMNS: ConceptColumn[] = ['Idea', 'Briefed', 'Generated', 'Reality-checked', 'Approved', 'Scheduled'];
 
-// ─── Workflow + Agents ────────────────────────────────────────────────────
+// ─── Loop + Agents ────────────────────────────────────────────────────────
 
 const LOOP: { step: string; title: string; desc: string }[] = [
   { step: '01', title: 'ICP Signal',    desc: 'Map ICP needs · season · markets. What audience needs what story?' },
-  { step: '02', title: 'Trend Watch',   desc: 'Scan Pinterest · IG · TikTok · YT trends + Google Trends + ours.'    },
-  { step: '03', title: 'Brief',         desc: 'Pillar + hook + CTA + format + language + posting time + ICP.'       },
-  { step: '04', title: 'Generate',      desc: 'Copy + visual + reel + YT short/long · multilingual variants.'       },
-  { step: '05', title: 'Reality Check', desc: 'Brand-fit + factual + visual fidelity. Flag for human review.'        },
+  { step: '02', title: 'Trend Watch',   desc: 'Scan Pinterest · IG · TikTok · YT trends + Google Trends + ours.' },
+  { step: '03', title: 'Brief',         desc: 'Pillar + hook + CTA + format + language + posting time + ICP.' },
+  { step: '04', title: 'Generate',      desc: 'Copy + visual + reel + YT short/long · multilingual variants.' },
+  { step: '05', title: 'Reality Check', desc: 'Brand-fit + factual + visual fidelity. Flag for human review.' },
   { step: '06', title: 'Approve',       desc: 'Human signs off · approve · revise · reject. Autonomy threshold rules.' },
-  { step: '07', title: 'Schedule',      desc: 'Calendar + platform · auto-publish at intent-time per ICP timezone.'  },
-  { step: '08', title: 'Analyze',       desc: 'Reach · saves · DMs · clicks · bookings → refines next-batch brief.'  },
+  { step: '07', title: 'Schedule',      desc: 'Calendar + platform · auto-publish at intent-time per ICP timezone.' },
+  { step: '08', title: 'Analyze',       desc: 'Reach · saves · DMs · clicks · bookings → refines next-batch brief.' },
 ];
 
 interface SocialAgent { name: string; desc: string; signal: string }
@@ -243,30 +232,24 @@ const AGENTS: SocialAgent[] = [
   { name: 'Analytics',          desc: 'Reach · saves · DMs · clicks · bookings · refines next brief.',                      signal: '17 dashes' },
 ];
 
-// ─── Section sub-navigation ───────────────────────────────────────────────
+// ─── View params ──────────────────────────────────────────────────────────
 
 type View = 'calendar' | 'flow' | 'channels' | 'boost' | 'inbox';
-const VIEW_LABEL: Record<View, string> = {
-  calendar: '📅 Calendar',
-  flow:     '⚡ Concept Flow',
-  channels: '🌐 Channels',
-  boost:    '🚀 Boost & Promote',
-  inbox:    '✓ Approval Inbox',
-};
 const VIEWS: View[] = ['calendar', 'flow', 'channels', 'boost', 'inbox'];
+const VIEW_LABEL: Record<View, string> = {
+  calendar: 'Calendar', flow: 'Concept flow', channels: 'Channels', boost: 'Boost', inbox: 'Approval inbox',
+};
 
 function parseView(v: string | string[] | undefined): View {
   const s = typeof v === 'string' ? v : 'calendar';
   return (VIEWS as string[]).includes(s) ? (s as View) : 'calendar';
 }
-
 function parseChannelFilter(v: string | string[] | undefined): Platform | 'all' {
   const s = typeof v === 'string' ? v : 'all';
   return (PLATFORMS as readonly string[]).includes(s) ? (s as Platform) : 'all';
 }
-
-type Window = 30 | 60 | 90;
-function parseWindow(v: string | string[] | undefined): Window {
+type Win = 30 | 60 | 90;
+function parseWindow(v: string | string[] | undefined): Win {
   const n = Number(typeof v === 'string' ? v : 30);
   return (n === 60 || n === 90) ? n : 30;
 }
@@ -278,150 +261,162 @@ interface Props { searchParams?: { view?: string; ch?: string; w?: string } }
 export default async function SocialPage({ searchParams }: Props) {
   const view = parseView(searchParams?.view);
   const channelFilter = parseChannelFilter(searchParams?.ch);
-  const windowDays: Window = parseWindow(searchParams?.w);
+  const windowDays: Win = parseWindow(searchParams?.w);
 
-  // Live channel rows from marketing.social_accounts
   const allAccounts = await getSocialAccounts();
   const dbByPlatform = new Map<string, any>();
   for (const a of allAccounts) dbByPlatform.set(String(a.platform).toLowerCase(), a);
 
   const todayIso = new Date().toISOString().slice(0, 10);
 
-  // KPI math
   const awaiting    = ALL_POSTS.filter((p) => p.status === 'Awaiting Approval').length;
   const scheduled   = ALL_POSTS.filter((p) => p.status === 'Scheduled' || p.status === 'Approved').length;
   const publishedLast30 = ALL_POSTS.filter((p) => p.status === 'Published').length;
   const reach30d    = ALL_POSTS.filter((p) => p.status === 'Published').reduce((s, p) => s + (p.reach ?? 0), 0);
-  const engAvg      = 8.3;
+  const engAvg      = '8.3%';
   const realityFlags = ALL_POSTS.filter((p) => p.status === 'Reality Flag').length;
 
+  const tabs: DashboardTab[] = MARKETING_SUBPAGES.map((s: any) => ({
+    key: s.href, label: s.label, href: s.href,
+    active: s.href === '/marketing/social',
+  }));
+
+  const tiles: KpiTileProps[] = [
+    { label: 'Awaiting approval', value: awaiting,          size: 'sm', footnote: 'human sign-off queue' },
+    { label: 'Scheduled · 90d',    value: scheduled,        size: 'sm', footnote: 'scheduled + approved' },
+    { label: 'Published · 30d',    value: publishedLast30,  size: 'sm' },
+    { label: 'Reach · 30d',        value: reach30d.toLocaleString(), size: 'sm', footnote: 'sum published reach' },
+    { label: 'Engagement · avg',   value: engAvg,           size: 'sm' },
+    { label: 'Reality flags',      value: realityFlags,     size: 'sm', footnote: realityFlags > 0 ? 'action needed' : 'clear' },
+  ];
+
   return (
-    <Page
-      eyebrow="Marketing · Social"
-      title={<>AI Social <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>cockpit</em></>}
-      subPages={MARKETING_SUBPAGES}
-    >
-      <TabStrip tabs={SOCIAL_TABS} activeKey="social" />
+    <div style={{ background: WHITE, minHeight: '100vh' }}>
+      <DashboardPage
+        title="Marketing · Social"
+        subtitle="AI social cockpit — calendar · flow · channels · boost · inbox"
+        tabs={tabs}
+      >
+        <Banner text="HARDCODED DATA — Phase 1 posts + concept flow + boost candidates + channel meta are static. Only marketing.social_accounts (follower counts + handles) is live. Phase 2 wires social_ai.posts + calendar + approvals + assets + boosts." />
 
-      {/* ─── KPI band (always visible) ─── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 16 }}>
-        <KpiBox value={awaiting}          unit="count" label="Awaiting Approval" />
-        <KpiBox value={scheduled}         unit="count" label="Scheduled · 90d"    />
-        <KpiBox value={publishedLast30}   unit="count" label="Published · 30d"    />
-        <KpiBox value={reach30d}          unit="count" label="Reach · 30d"        />
-        <KpiBox value={engAvg}            unit="pct"   label="Engagement · avg"   />
-        <KpiBox value={realityFlags}      unit="count" label="Reality Flags"  state={realityFlags > 0 ? 'live' : 'live'} />
-      </div>
+        {/* KPI band */}
+        <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
+          {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
+        </div>
 
-      {/* ─── Inner section nav ─── */}
-      <SectionStrip active={view} />
+        {/* Sub-strip */}
+        <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 6, flexWrap: 'wrap', paddingBottom: 8, borderBottom: `1px solid ${HAIR}` }}>
+          {VIEWS.map((v) => (
+            <a key={v} href={`?view=${v}`}
+               style={{ ...subLinkSt, ...(v === view ? subLinkActiveSt : {}) }}>
+              {VIEW_LABEL[v]}
+            </a>
+          ))}
+        </div>
 
-      {/* ─── SECTION: Calendar ─── */}
-      {view === 'calendar' && (
-        <CalendarView
-          posts={ALL_POSTS}
-          todayIso={todayIso}
-          windowDays={windowDays}
-          channelFilter={channelFilter}
-        />
-      )}
+        {view === 'calendar' && (
+          <CalendarView posts={ALL_POSTS} todayIso={todayIso} windowDays={windowDays} channelFilter={channelFilter} />
+        )}
+        {view === 'flow' && <ConceptFlowView />}
+        {view === 'channels' && <ChannelsView dbByPlatform={dbByPlatform} />}
+        {view === 'boost' && <BoostView />}
+        {view === 'inbox' && <InboxView posts={ALL_POSTS} />}
 
-      {/* ─── SECTION: Concept Flow ─── */}
-      {view === 'flow' && <ConceptFlowView />}
-
-      {/* ─── SECTION: Channels ─── */}
-      {view === 'channels' && <ChannelsView dbByPlatform={dbByPlatform} />}
-
-      {/* ─── SECTION: Boost & Promote ─── */}
-      {view === 'boost' && <BoostView />}
-
-      {/* ─── SECTION: Approval Inbox ─── */}
-      {view === 'inbox' && <InboxView posts={ALL_POSTS} />}
-
-      {/* ─── Two-column: loop + agents ─── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 340px)', gap: 14, marginTop: 14, alignItems: 'start' }}>
-        <Panel title="AI production loop" eyebrow="ICP signal → analyze">
-          <div style={{ padding: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
-            {LOOP.map((s) => (
-              <div key={s.step} style={S.loopCell}>
-                <div style={S.loopStep}>{s.step}</div>
-                <div style={S.loopTitle}>{s.title}</div>
-                <div style={S.loopDesc}>{s.desc}</div>
-              </div>
-            ))}
-          </div>
-        </Panel>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <Panel title="ICPs being targeted" eyebrow={`${ICPS.length} segments`}>
-            <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {ICPS.map((icp) => (
-                <div key={icp.name} style={S.icpRow}>
-                  <span style={S.icpEmoji}>{icp.emoji}</span>
-                  <div style={{ flex: 1 }}>
-                    <div style={S.icpName}>{icp.name}</div>
-                    <div style={S.icpMarket}>{icp.market}</div>
-                  </div>
-                  <span style={S.icpCount}>{icp.activePosts}</span>
+        {/* Two-col: loop + ICP list + guardrails */}
+        <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 340px)', gap: 12, alignItems: 'start' }}>
+          <Section title="AI production loop" note="ICP signal → analyze">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
+              {LOOP.map((s) => (
+                <div key={s.step} style={workflowCellSt}>
+                  <div style={workflowStepSt}>{s.step}</div>
+                  <div style={workflowTitleSt}>{s.title}</div>
+                  <div style={workflowDescSt}>{s.desc}</div>
                 </div>
               ))}
             </div>
-          </Panel>
+          </Section>
 
-          <Panel title="Guardrails" eyebrow="non-negotiable">
-            <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <Callout tone="brass">Reality Agent gates every post. Visuals must match the actual resort.</Callout>
-              <Callout tone="warn">Auto-publish only after Reality Check passes. <strong>Never skip</strong>.</Callout>
-              <Callout tone="soft">Every post tied to ICP + pillar + CTA. No random brand noise.</Callout>
-              <Callout tone="soft">Per-channel frequency caps + banned-topic lists enforced in Channels tab.</Callout>
-            </div>
-          </Panel>
-        </div>
-      </div>
-
-      <Panel title="Agent fleet" eyebrow={`${AGENTS.length} social specialists · queue-only`}>
-        <div style={{ padding: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10 }}>
-          {AGENTS.map((a) => (
-            <div key={a.name} style={S.agentCard}>
-              <div style={S.agentHead}>
-                <span style={S.agentName}>{a.name}</span>
-                <span style={S.signalPill}>{a.signal}</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <Section title="ICPs being targeted" note={`${ICPS.length} segments`}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {ICPS.map((icp) => (
+                  <div key={icp.name} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 6px' }}>
+                    <span style={{ fontSize: 16, color: FOREST }}>{icp.emoji}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 12, color: INK, fontWeight: 600 }}>{icp.name}</div>
+                      <div style={{ fontSize: 10, color: INK_M }}>{icp.market}</div>
+                    </div>
+                    <span style={pillSt(FOREST)}>{icp.activePosts}</span>
+                  </div>
+                ))}
               </div>
-              <div style={S.agentDesc}>{a.desc}</div>
-            </div>
-          ))}
+            </Section>
+
+            <Section title="Guardrails" note="non-negotiable">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <Callout tone="brass">Reality Agent gates every post. Visuals must match the actual resort.</Callout>
+                <Callout tone="warn">Auto-publish only after Reality Check passes. <strong>Never skip</strong>.</Callout>
+                <Callout tone="soft">Every post tied to ICP + pillar + CTA. No random brand noise.</Callout>
+                <Callout tone="soft">Per-channel frequency caps + banned-topic lists enforced in Channels tab.</Callout>
+              </div>
+            </Section>
+          </div>
         </div>
-      </Panel>
 
-      <div style={S.footerNote}>
-        Phase 1 cockpit · 5 sections via <code>?view=</code>. Phase 2 wires <code>social_ai.posts · calendar · approvals · assets · boosts</code> + 13 agents via <code>cap_skills</code>. Auto-publish flips per channel after the Approval queue clears below 5 backlog and Reality flags stay below 2% for 14 days.
-      </div>
-    </Page>
-  );
-}
+        {/* Agent fleet */}
+        <Section title="Agent fleet" note={`${AGENTS.length} social specialists · queue-only`}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8 }}>
+            {AGENTS.map((a) => (
+              <div key={a.name} style={agentCardSt}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: INK }}>{a.name}</span>
+                  <span style={signalPillSt}>{a.signal}</span>
+                </div>
+                <div style={{ fontSize: 11, color: INK_M, lineHeight: 1.5, marginTop: 4 }}>{a.desc}</div>
+              </div>
+            ))}
+          </div>
+        </Section>
 
-// ─── SECTION COMPONENTS ───────────────────────────────────────────────────
-
-function SectionStrip({ active }: { active: View }) {
-  return (
-    <div style={S.subStrip}>
-      {VIEWS.map((v) => {
-        const isActive = v === active;
-        return (
-          <a key={v} href={`?view=${v}`}
-             style={{ ...S.subStripLink, ...(isActive ? S.subStripLinkActive : {}) }}>
-            {VIEW_LABEL[v]}
-          </a>
-        );
-      })}
+        <div style={{ gridColumn: '1 / -1', padding: '10px 12px', fontSize: 11, color: INK_M, fontStyle: 'italic', borderTop: `1px solid ${HAIR}` }}>
+          Phase 1 cockpit · 5 sections via <code>?view=</code>. Phase 2 wires <code>social_ai.posts · calendar · approvals · assets · boosts</code> + 13 agents via <code>cap_skills</code>.
+        </div>
+      </DashboardPage>
     </div>
   );
 }
 
+// ─── Section wrappers ──────────────────────────────────────────────────────
+
+function Banner({ text }: { text: string }) {
+  return (
+    <div style={{
+      gridColumn: '1 / -1',
+      padding: '8px 12px', background: '#FFF4D6', border: `1px solid ${AMBER}`, borderRadius: 4,
+      fontSize: 12, fontWeight: 600, color: INK,
+    }}>
+      {text}
+    </div>
+  );
+}
+
+function Section({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
+  return (
+    <div style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, padding: '14px 16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: INK }}>{title}</div>
+        {note && <div style={{ fontSize: 10, color: INK_M, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{note}</div>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ─── Calendar view ─────────────────────────────────────────────────────────
+
 function CalendarView({ posts, todayIso, windowDays, channelFilter }: {
-  posts: ProposedPost[]; todayIso: string; windowDays: Window; channelFilter: Platform | 'all';
+  posts: ProposedPost[]; todayIso: string; windowDays: Win; channelFilter: Platform | 'all';
 }) {
-  // Filter to window + channel + future (>= today)
   const cutoff = addDaysIso(todayIso, windowDays);
   const filtered = posts.filter((p) => p.iso >= todayIso && p.iso < cutoff && (channelFilter === 'all' || p.platform === channelFilter));
   const postsByDate = new Map<string, ProposedPost[]>();
@@ -431,70 +426,55 @@ function CalendarView({ posts, todayIso, windowDays, channelFilter }: {
     postsByDate.set(p.iso, arr);
   }
   const days: string[] = Array.from({ length: windowDays }, (_, i) => addDaysIso(todayIso, i));
-
-  const cw = `?view=calendar&w=${windowDays}`;
-  const cwCh = (p: Platform | 'all') => `${cw}&ch=${p}`;
-  const cwW = (w: Window) => `?view=calendar&w=${w}&ch=${channelFilter}`;
+  const cwW = (w: Win) => `?view=calendar&w=${w}&ch=${channelFilter}`;
+  const cwCh = (p: Platform | 'all') => `?view=calendar&w=${windowDays}&ch=${p}`;
 
   return (
-    <Panel
-      title="Proposed calendar"
-      eyebrow={`${filtered.length} posts · ${windowDays}-day window${channelFilter === 'all' ? '' : ` · ${PLATFORM_LABEL[channelFilter]}`}`}
-    >
-      <div style={{ padding: 14 }}>
-        {/* Controls row */}
-        <div style={S.controlsRow}>
-          <div style={S.controlGroup}>
-            <span style={S.controlLabel}>Window</span>
-            {([30, 60, 90] as Window[]).map((w) => (
-              <a key={w} href={cwW(w)}
-                 style={{ ...S.chip, ...(w === windowDays ? S.chipActive : {}) }}>{w}d</a>
+    <div style={{ gridColumn: '1 / -1' }}>
+      <Section title="Proposed calendar" note={`${filtered.length} posts · ${windowDays}-day window${channelFilter === 'all' ? '' : ` · ${PLATFORM_LABEL[channelFilter]}`}`}>
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span style={filterLabelSt}>Window</span>
+            {([30, 60, 90] as Win[]).map((w) => (
+              <a key={w} href={cwW(w)} style={{ ...chipSt, ...(w === windowDays ? chipActiveSt : {}) }}>{w}d</a>
             ))}
           </div>
-          <div style={S.controlGroup}>
-            <span style={S.controlLabel}>Channel</span>
-            <a href={cwCh('all')}
-               style={{ ...S.chip, ...(channelFilter === 'all' ? S.chipActive : {}) }}>All</a>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span style={filterLabelSt}>Channel</span>
+            <a href={cwCh('all')} style={{ ...chipSt, ...(channelFilter === 'all' ? chipActiveSt : {}) }}>All</a>
             {PLATFORMS.map((p) => (
-              <a key={p} href={cwCh(p)}
-                 style={{ ...S.chip, ...(channelFilter === p ? S.chipActive : {}) }}>
+              <a key={p} href={cwCh(p)} style={{ ...chipSt, ...(channelFilter === p ? chipActiveSt : {}) }}>
                 {PLATFORM_GLYPH[p]} {PLATFORM_LABEL[p]}
               </a>
             ))}
           </div>
         </div>
 
-        {/* Legend */}
-        <div style={S.legendRow}>
-          <LegendChip color="var(--brass, #a8854a)"      label="Scheduled" />
-          <LegendChip color="var(--st-warn, #C28F2C)"    label="Awaiting Approval" />
-          <LegendChip color="var(--text-2, #d8cca8)"     label="Approved" />
-          <LegendChip color="var(--text-mute, #9b907a)"  label="Draft" />
-          <LegendChip color="#c97b6a"                     label="Reality Flag" />
-        </div>
-
-        {/* Calendar grid */}
-        <div style={S.calGrid}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 6 }}>
           {days.map((iso) => {
             const p = postsByDate.get(iso) ?? [];
             const d = new Date(iso + 'T00:00:00Z');
             const isToday = iso === todayIso;
             return (
-              <div key={iso} style={{ ...S.calCell, ...(isToday ? S.calCellToday : {}) }}>
-                <div style={S.calCellHead}>
-                  <span style={S.calCellDate}>{d.toLocaleDateString('en-GB', { day: '2-digit' })}</span>
-                  <span style={S.calCellMeta}>{d.toLocaleDateString('en-GB', { month: 'short' })} · {d.toLocaleDateString('en-GB', { weekday: 'short' })}</span>
+              <div key={iso} style={{
+                background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 4, padding: '6px 8px',
+                minHeight: 68, display: 'flex', flexDirection: 'column', gap: 4,
+                borderColor: isToday ? FOREST : HAIR,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: INK }}>{d.toLocaleDateString('en-GB', { day: '2-digit' })}</span>
+                  <span style={{ fontSize: 9, color: INK_M }}>{d.toLocaleDateString('en-GB', { month: 'short' })} · {d.toLocaleDateString('en-GB', { weekday: 'short' })}</span>
                 </div>
                 {p.length === 0 ? (
-                  <div style={S.calCellEmpty}>—</div>
+                  <div style={{ color: INK_M, fontSize: 10 }}>—</div>
                 ) : (
-                  <div style={S.calCellPosts}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     {p.map((post, i) => (
                       <span key={`${iso}-${i}`}
                             title={`${PLATFORM_LABEL[post.platform]} · ${post.format} · ${post.icp}\n${post.hook}`}
-                            style={{ ...S.calPostChip, ...statusChipStyle(post.status) }}>
-                        <span style={S.calPostGlyph}>{PLATFORM_GLYPH[post.platform]}</span>
-                        <span style={S.calPostFormat}>{post.format}</span>
+                            style={{ ...postChipSt, ...statusChipStyle(post.status) }}>
+                        <span style={{ fontSize: 9, fontWeight: 700 }}>{PLATFORM_GLYPH[post.platform]}</span>
+                        <span style={{ fontSize: 9 }}>{post.format}</span>
                       </span>
                     ))}
                   </div>
@@ -503,51 +483,54 @@ function CalendarView({ posts, todayIso, windowDays, channelFilter }: {
             );
           })}
         </div>
-      </div>
-    </Panel>
+      </Section>
+    </div>
   );
 }
 
 function ConceptFlowView() {
   const byCol = new Map<ConceptColumn, ConceptCard[]>();
-  for (const c of CONCEPT_CARDS) (byCol.get(c.column) ?? byCol.set(c.column, []).get(c.column)!).push(c);
+  for (const c of CONCEPT_CARDS) {
+    if (!byCol.has(c.column)) byCol.set(c.column, []);
+    byCol.get(c.column)!.push(c);
+  }
 
   return (
-    <Panel title="Concept flow · pipeline" eyebrow="idea → scheduled · Kanban">
-      <div style={{ padding: 14, display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 8 }}>
-        {CONCEPT_COLUMNS.map((col) => {
-          const cards = byCol.get(col) ?? [];
-          return (
-            <div key={col} style={S.kanbanCol}>
-              <div style={S.kanbanColHead}>
-                <span>{col}</span>
-                <span style={S.kanbanColCount}>{cards.length}</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {cards.map((c, i) => (
-                  <div key={`${col}-${i}`} style={S.kanbanCard}>
-                    <div style={S.kanbanCardChan}>
-                      {PLATFORM_GLYPH[c.platform]} · {c.format}
+    <div style={{ gridColumn: '1 / -1' }}>
+      <Section title="Concept flow · pipeline" note="idea → scheduled · Kanban">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 6 }}>
+          {CONCEPT_COLUMNS.map((col) => {
+            const cards = byCol.get(col) ?? [];
+            return (
+              <div key={col} style={{ background: CREAM, border: `1px solid ${HAIR}`, borderRadius: 4, padding: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: FOREST, fontWeight: 700, marginBottom: 6 }}>
+                  <span>{col}</span>
+                  <span style={{ color: INK_M }}>{cards.length}</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {cards.map((c, i) => (
+                    <div key={`${col}-${i}`} style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 3, padding: '6px 8px' }}>
+                      <div style={{ fontSize: 9, color: INK_M, marginBottom: 2 }}>{PLATFORM_GLYPH[c.platform]} · {c.format}</div>
+                      <div style={{ fontSize: 11, color: INK, lineHeight: 1.4 }}>{c.hook}</div>
+                      <div style={{ fontSize: 9, color: INK_M, marginTop: 2 }}>{c.icp}</div>
                     </div>
-                    <div style={S.kanbanCardHook}>{c.hook}</div>
-                    <div style={S.kanbanCardIcp}>{c.icp}</div>
-                  </div>
-                ))}
-                {cards.length === 0 && <div style={S.kanbanEmpty}>—</div>}
+                  ))}
+                  {cards.length === 0 && <div style={{ fontSize: 10, color: INK_M, fontStyle: 'italic', textAlign: 'center' }}>—</div>}
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
-    </Panel>
+            );
+          })}
+        </div>
+      </Section>
+    </div>
   );
 }
 
 function ChannelsView({ dbByPlatform }: { dbByPlatform: Map<string, any> }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <Panel title="Channels · live inventory" eyebrow={`${PLATFORMS.length} platforms · marketing.social_accounts`}>
-        <div style={{ padding: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12 }}>
+    <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <Section title="Channels · live inventory" note={`${PLATFORMS.length} platforms · marketing.social_accounts`}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
           {PLATFORMS.map((p) => {
             const meta = CHANNEL_META[p];
             const dbRow = dbByPlatform.get(p);
@@ -555,445 +538,210 @@ function ChannelsView({ dbByPlatform }: { dbByPlatform: Map<string, any> }) {
             const liveHandle = dbRow?.handle as string | undefined;
             const liveUrl = dbRow?.url as string | undefined;
             return (
-              <div key={p} style={S.channelCard}>
-                <div style={S.channelHead}>
-                  <span style={S.channelName}>{PLATFORM_LABEL[p]}</span>
-                  <span style={autonomyPill(meta.autonomyPhase)}>Phase {meta.autonomyPhase}</span>
+              <div key={p} style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 4, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: INK }}>{PLATFORM_LABEL[p]}</span>
+                  <span style={autonomyPillSt(meta.autonomyPhase)}>Phase {meta.autonomyPhase}</span>
                 </div>
-                <div style={S.channelHandle}>
-                  {liveUrl ? <a href={liveUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--brass)' }}>{liveHandle ?? 'open ↗'} ↗</a>
-                  : liveHandle ? <span>{liveHandle}</span>
-                  : <span style={{ color: 'var(--text-place, #5a5448)', fontStyle: 'italic' }}>handle not set</span>}
+                <div style={{ fontSize: 11, color: INK_M }}>
+                  {liveUrl ? <a href={liveUrl} target="_blank" rel="noopener noreferrer" style={{ color: FOREST }}>{liveHandle ?? 'open ↗'} ↗</a>
+                    : liveHandle ? <span>{liveHandle}</span>
+                    : <span style={{ fontStyle: 'italic' }}>handle not set</span>}
                 </div>
-                <div style={S.channelStatRow}>
-                  <Stat label="Followers"  value={liveFollowers.toLocaleString('en-US')} />
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <Stat label="Followers" value={liveFollowers.toLocaleString('en-US')} />
                   <Stat label="Growth 30d" value={meta.growth30d} />
-                  <Stat label="Eng. rate"  value={meta.engagementRate} />
-                  <Stat label="Posts MTD"  value={String(meta.postsMtd)} />
+                  <Stat label="Eng rate" value={meta.engagementRate} />
+                  <Stat label="Posts MTD" value={String(meta.postsMtd)} />
                 </div>
-                <div style={S.bestPostBox}>
-                  <div style={S.bestPostLabel}>Best post · last 30d</div>
-                  <div style={S.bestPostHook}>"{meta.bestPost.hook}"</div>
-                  <div style={S.bestPostMeta}>{meta.bestPost.reach.toLocaleString('en-US')} reach · {meta.bestPost.engagement} engagement</div>
+                <div style={{ background: CREAM, borderLeft: `2px solid ${FOREST}`, padding: '6px 8px', marginTop: 2 }}>
+                  <div style={{ fontSize: 9, color: INK_M, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Best post · last 30d</div>
+                  <div style={{ fontSize: 11, color: INK, fontStyle: 'italic' }}>&quot;{meta.bestPost.hook}&quot;</div>
+                  <div style={{ fontSize: 10, color: INK_M }}>{meta.bestPost.reach.toLocaleString('en-US')} reach · {meta.bestPost.engagement} eng</div>
                 </div>
-                <div style={S.guardrailBox}>
-                  <div style={S.guardrailLabel}>Guardrails</div>
-                  <div style={S.guardrailRow}>Frequency: <strong>{meta.frequencyCap}</strong></div>
-                  <div style={S.guardrailRow}>Banned: <span style={{ color: 'var(--text-mute, #9b907a)' }}>{meta.bannedTopics.join(' · ')}</span></div>
+                <div style={{ fontSize: 10, color: INK_M }}>
+                  <div>Freq: <strong>{meta.frequencyCap}</strong></div>
+                  <div>Banned: <span>{meta.bannedTopics.join(' · ')}</span></div>
                 </div>
               </div>
             );
           })}
         </div>
-      </Panel>
+      </Section>
 
-      <Panel title="Autonomy ladder · per-channel" eyebrow="trust-threshold model">
-        <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <AutonomyRung phase="A" title="Human approves every post"        desc="Default. Every Reel / Photo / Carousel / Video clears the Approval queue. Reality Agent flags caught before publish." />
+      <Section title="Autonomy ladder · per-channel" note="trust-threshold model">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <AutonomyRung phase="A" title="Human approves every post" desc="Default. Every Reel / Photo / Carousel / Video clears the Approval queue. Reality Agent flags caught before publish." />
           <AutonomyRung phase="B" title="Human approves only Reality-flagged" desc="Pinterest + Facebook running here today. Brand-safe posts auto-publish per schedule; flagged content escalates." />
-          <AutonomyRung phase="C" title="Full-auto within guardrails"        desc="Threads only. High-cadence, lower-stakes channel. Reality-flag still escalates. Frequency cap enforced." />
+          <AutonomyRung phase="C" title="Full-auto within guardrails" desc="Threads only. High-cadence, lower-stakes channel. Reality-flag still escalates. Frequency cap enforced." />
         </div>
-      </Panel>
+      </Section>
     </div>
   );
 }
 
 function BoostView() {
   return (
-    <Panel title="Boost & promote candidates" eyebrow={`${BOOST_CANDIDATES.length} organic winners · AI proposes paid spend`}>
-      <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {BOOST_CANDIDATES.map((b, i) => (
-          <div key={i} style={S.boostCard}>
-            <div style={S.boostHead}>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={S.boostHook}>"{b.hook}"</span>
-                <span style={S.boostMeta}>{PLATFORM_LABEL[b.platform]} · {b.icp}</span>
+    <div style={{ gridColumn: '1 / -1' }}>
+      <Section title="Boost & promote candidates" note={`${BOOST_CANDIDATES.length} organic winners · AI proposes paid spend`}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {BOOST_CANDIDATES.map((b, i) => (
+            <div key={i} style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 4, padding: '10px 12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, gap: 8 }}>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <span style={{ fontSize: 13, color: INK, fontWeight: 600, fontStyle: 'italic' }}>&quot;{b.hook}&quot;</span>
+                  <span style={{ fontSize: 10, color: INK_M }}>{PLATFORM_LABEL[b.platform]} · {b.icp}</span>
+                </div>
+                <span style={verdictPillSt(b.verdict)}>{b.verdict}</span>
               </div>
-              <span style={verdictPill(b.verdict)}>{b.verdict}</span>
+              <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 6 }}>
+                <Stat label="Organic reach" value={b.organicReach.toLocaleString('en-US')} />
+                <Stat label="Organic eng" value={b.organicEngagement} />
+                <Stat label="Budget" value={b.proposedBudget} />
+                <Stat label="Proj reach" value={b.projectedReach} />
+                <Stat label="Proj CPE" value={b.projectedCpe} />
+              </div>
+              <div style={{ fontSize: 11, color: INK_S, marginBottom: 6 }}>
+                <span style={{ fontSize: 9, color: INK_M, letterSpacing: '0.08em', textTransform: 'uppercase', marginRight: 6 }}>Signal</span>
+                <span>{b.signal}</span>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button type="button" style={btnPrimary}>✓ Approve &amp; Boost</button>
+                <button type="button" style={btnSecondary}>Adjust Budget</button>
+                <button type="button" style={btnSecondary}>Skip</button>
+              </div>
             </div>
-            <div style={S.boostStats}>
-              <Stat label="Organic Reach"    value={b.organicReach.toLocaleString('en-US')} />
-              <Stat label="Organic Eng."     value={b.organicEngagement} />
-              <Stat label="Proposed Budget" value={b.proposedBudget} />
-              <Stat label="Projected Reach" value={b.projectedReach} />
-              <Stat label="Projected CPE"   value={b.projectedCpe} />
-            </div>
-            <div style={S.boostSignal}>
-              <span style={S.boostSignalLabel}>Signal</span>
-              <span>{b.signal}</span>
-            </div>
-            <div style={S.boostActions}>
-              <button type="button" style={S.btnPrimary}>✓ Approve &amp; Boost</button>
-              <button type="button" style={S.btnSecondary}>✎ Adjust Budget</button>
-              <button type="button" style={S.btnSecondary}>⟶ Skip</button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </Panel>
+          ))}
+        </div>
+      </Section>
+    </div>
   );
 }
 
 function InboxView({ posts }: { posts: ProposedPost[] }) {
   const queue = posts.filter((p) => p.status === 'Awaiting Approval' || p.status === 'Reality Flag').sort((a, b) => a.iso.localeCompare(b.iso));
   return (
-    <Panel
-      title="Approval inbox"
-      eyebrow={`${queue.length} posts awaiting human sign-off`}
-      actions={<span style={S.approvalBadge}>✦ Action needed</span>}
-    >
-      <div style={{ padding: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 10 }}>
-        {queue.map((p, i) => {
-          const d = new Date(p.iso + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' });
-          return (
-            <div key={i} style={S.inboxCard}>
-              <div style={S.inboxHead}>
-                <span style={S.inboxChan}>{PLATFORM_GLYPH[p.platform]} · {PLATFORM_LABEL[p.platform]}</span>
-                <span style={statusPill(p.status)}>{p.status}</span>
+    <div style={{ gridColumn: '1 / -1' }}>
+      <Section title="Approval inbox" note={`${queue.length} posts awaiting human sign-off`}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 8 }}>
+          {queue.map((p, i) => {
+            const d = new Date(p.iso + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' });
+            return (
+              <div key={i} style={{ background: CREAM, border: `1px solid ${HAIR}`, borderRadius: 4, padding: '10px 12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <span style={{ fontSize: 10, color: INK_M, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{PLATFORM_GLYPH[p.platform]} · {PLATFORM_LABEL[p.platform]}</span>
+                  <span style={statusPillSt(p.status)}>{p.status}</span>
+                </div>
+                <div style={{ fontSize: 12, color: INK, fontWeight: 600, fontStyle: 'italic', marginBottom: 4 }}>&quot;{p.hook}&quot;</div>
+                <div style={{ fontSize: 10, color: INK_M, marginBottom: 4 }}>{p.format} · {p.icp} · {d}</div>
+                <div style={{ fontSize: 11, color: INK_S, marginBottom: 6 }}>{p.brief}</div>
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                  <button type="button" style={btnPrimary}>✓ Approve</button>
+                  <button type="button" style={btnSecondary}>Edit</button>
+                  <button type="button" style={btnSecondary}>Defer</button>
+                </div>
               </div>
-              <div style={S.inboxHook}>"{p.hook}"</div>
-              <div style={S.inboxMeta}>{p.format} · {p.icp} · {d}</div>
-              <div style={S.inboxBrief}>{p.brief}</div>
-              <div style={S.inboxActions}>
-                <button type="button" style={S.btnPrimary}>✓ Approve &amp; Schedule</button>
-                <button type="button" style={S.btnSecondary}>✎ Edit</button>
-                <button type="button" style={S.btnSecondary}>⟶ Defer</button>
-                <button type="button" style={S.btnWarn}>★ Mark hot</button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </Panel>
-  );
-}
-
-// ─── Atoms ────────────────────────────────────────────────────────────────
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <span style={S.statLabel}>{label}</span>
-      <span style={S.statValue}>{value}</span>
+            );
+          })}
+        </div>
+      </Section>
     </div>
   );
 }
 
-function LegendChip({ color, label }: { color: string; label: string }) {
+// ─── Atoms ─────────────────────────────────────────────────────────────────
+
+function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-      <span style={{ width: 10, height: 10, borderRadius: 2, background: color, border: '1px solid var(--border-1, #1f1c15)' }} />
-      <span style={S.legendLabel}>{label}</span>
-    </span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+      <span style={{ fontSize: 9, color: INK_M, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{label}</span>
+      <span style={{ fontSize: 11, color: INK, fontWeight: 600 }}>{value}</span>
+    </div>
   );
 }
 
 function AutonomyRung({ phase, title, desc }: { phase: 'A' | 'B' | 'C'; title: string; desc: string }) {
   return (
-    <div style={S.rung}>
-      <span style={autonomyPill(phase)}>Phase {phase}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: CREAM, border: `1px solid ${HAIR}`, borderRadius: 4 }}>
+      <span style={autonomyPillSt(phase)}>Phase {phase}</span>
       <div style={{ flex: 1 }}>
-        <div style={S.rungTitle}>{title}</div>
-        <div style={S.rungDesc}>{desc}</div>
+        <div style={{ fontSize: 12, color: INK, fontWeight: 600 }}>{title}</div>
+        <div style={{ fontSize: 11, color: INK_M, lineHeight: 1.5 }}>{desc}</div>
       </div>
     </div>
   );
 }
 
-function Callout({ tone, children }: { tone: 'brass' | 'soft' | 'warn'; children: ReactNode }) {
-  const border =
-    tone === 'brass' ? 'var(--brass, #a8854a)' :
-    tone === 'warn'  ? 'var(--st-warn, #C28F2C)' :
-                       'var(--border-1, #1f1c15)';
+function Callout({ tone, children }: { tone: 'brass' | 'soft' | 'warn'; children: React.ReactNode }) {
+  const border = tone === 'brass' ? FOREST : tone === 'warn' ? AMBER : HAIR;
   return (
-    <div style={{
-      padding: '8px 10px',
-      borderLeft: `2px solid ${border}`,
-      background: 'var(--surf-1, #0f0d0a)',
-      fontSize: 'var(--t-sm)',
-      lineHeight: 1.5,
-      color: 'var(--text-1, #d8cca8)',
-    }}>
+    <div style={{ padding: '6px 8px', borderLeft: `2px solid ${border}`, background: CREAM, fontSize: 11, lineHeight: 1.5, color: INK_S }}>
       {children}
     </div>
   );
 }
 
-// ─── Pill helpers ─────────────────────────────────────────────────────────
-
-function statusPill(status: PostStatus): React.CSSProperties {
-  const color =
-    status === 'Scheduled'         ? 'var(--brass, #a8854a)' :
-    status === 'Awaiting Approval' ? 'var(--st-warn, #C28F2C)' :
-    status === 'Approved'          ? 'var(--text-2, #d8cca8)' :
-    status === 'Reality Flag'      ? '#c97b6a' :
-    status === 'Published'         ? 'var(--st-good, #82ad8c)' :
-                                     'var(--text-mute, #9b907a)';
-  return basePill(color);
-}
+// ─── Pills / chips ─────────────────────────────────────────────────────────
 
 function statusChipStyle(status: PostStatus): React.CSSProperties {
   const color =
-    status === 'Scheduled'         ? 'var(--brass, #a8854a)' :
-    status === 'Awaiting Approval' ? 'var(--st-warn, #C28F2C)' :
-    status === 'Approved'          ? 'var(--text-2, #d8cca8)' :
-    status === 'Reality Flag'      ? '#c97b6a' :
-    status === 'Published'         ? 'var(--st-good, #82ad8c)' :
-                                     'var(--text-mute, #9b907a)';
+    status === 'Scheduled'         ? FOREST :
+    status === 'Awaiting Approval' ? AMBER :
+    status === 'Approved'          ? '#3E8DBE' :
+    status === 'Reality Flag'      ? RED :
+    status === 'Published'         ? '#5DA46B' :
+                                     INK_M;
   return { borderColor: color, color };
 }
 
-function autonomyPill(phase: 'A' | 'B' | 'C'): React.CSSProperties {
-  const color = phase === 'A' ? 'var(--text-mute, #9b907a)' : phase === 'B' ? 'var(--text-2, #d8cca8)' : 'var(--brass, #a8854a)';
-  return basePill(color);
-}
-
-function verdictPill(verdict: BoostCandidate['verdict']): React.CSSProperties {
+function statusPillSt(status: PostStatus): React.CSSProperties {
   const color =
-    verdict === 'Strong Boost'   ? 'var(--brass, #a8854a)' :
-    verdict === 'Moderate Boost' ? 'var(--text-2, #d8cca8)' :
-    verdict === 'Test First'     ? 'var(--st-warn, #C28F2C)' :
-                                   'var(--text-mute, #9b907a)';
-  return basePill(color);
+    status === 'Scheduled'         ? FOREST :
+    status === 'Awaiting Approval' ? AMBER :
+    status === 'Approved'          ? '#3E8DBE' :
+    status === 'Reality Flag'      ? RED :
+    status === 'Published'         ? '#5DA46B' :
+                                     INK_M;
+  return pillSt(color);
 }
 
-function basePill(color: string): React.CSSProperties {
+function autonomyPillSt(phase: 'A' | 'B' | 'C'): React.CSSProperties {
+  const color = phase === 'A' ? INK_M : phase === 'B' ? AMBER : FOREST;
+  return pillSt(color);
+}
+
+function verdictPillSt(v: BoostCandidate['verdict']): React.CSSProperties {
+  const color = v === 'Strong Boost' ? FOREST : v === 'Moderate Boost' ? '#3E8DBE' : v === 'Test First' ? AMBER : INK_M;
+  return pillSt(color);
+}
+
+function pillSt(color: string): React.CSSProperties {
   return {
-    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-    fontSize: 'var(--t-xs)',
-    letterSpacing: '0.14em',
-    textTransform: 'uppercase',
-    color,
-    border: `1px solid ${color}`,
-    padding: '2px 6px',
-    borderRadius: 3,
-    whiteSpace: 'nowrap',
+    fontSize: 9, letterSpacing: '0.10em', textTransform: 'uppercase',
+    color, border: `1px solid ${color}`, padding: '1px 5px', borderRadius: 2, whiteSpace: 'nowrap', fontWeight: 600,
   };
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────
+// ─── Styles ────────────────────────────────────────────────────────────────
 
-const S: Record<string, React.CSSProperties> = {
-  // Inner sub-strip
-  subStrip: {
-    display: 'flex',
-    gap: 6,
-    flexWrap: 'wrap',
-    marginBottom: 14,
-    paddingBottom: 8,
-    borderBottom: '1px solid var(--border-1, #1f1c15)',
-  },
-  subStripLink: {
-    padding: '6px 12px',
-    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-    fontSize: 'var(--t-xs)',
-    letterSpacing: '0.14em',
-    textTransform: 'uppercase',
-    color: 'var(--text-mute, #9b907a)',
-    border: '1px solid var(--border-1, #1f1c15)',
-    borderRadius: 3,
-    textDecoration: 'none',
-    background: 'var(--surf-1, #0f0d0a)',
-  },
-  subStripLinkActive: {
-    color: 'var(--surf-0, #0a0a0a)',
-    background: 'var(--brass, #a8854a)',
-    borderColor: 'var(--brass, #a8854a)',
-    fontWeight: 700,
-  },
-
-  // Calendar controls
-  controlsRow: { display: 'flex', gap: 18, flexWrap: 'wrap', marginBottom: 12 },
-  controlGroup: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-  controlLabel: {
-    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-    fontSize: 'var(--t-xs)',
-    letterSpacing: '0.18em',
-    textTransform: 'uppercase',
-    color: 'var(--brass, #a8854a)',
-  },
-  chip: {
-    padding: '3px 9px',
-    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-    fontSize: 11,
-    letterSpacing: '0.10em',
-    color: 'var(--text-1, #d8cca8)',
-    background: 'transparent',
-    border: '1px solid var(--border-1, #1f1c15)',
-    borderRadius: 999,
-    textDecoration: 'none',
-  },
-  chipActive: {
-    color: 'var(--surf-0, #0a0a0a)',
-    background: 'var(--brass, #a8854a)',
-    borderColor: 'var(--brass, #a8854a)',
-    fontWeight: 700,
-  },
-
-  // Calendar
-  legendRow: { display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 10 },
-  legendLabel: {
-    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-    fontSize: 'var(--t-xs)',
-    letterSpacing: '0.16em',
-    textTransform: 'uppercase',
-    color: 'var(--text-mute, #9b907a)',
-  },
-  calGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 6 },
-  calCell: {
-    background: 'var(--surf-1, #0f0d0a)',
-    border: '1px solid var(--border-1, #1f1c15)',
-    borderRadius: 4,
-    padding: '8px 8px 6px',
-    minHeight: 86,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 4,
-  },
-  calCellToday: { borderColor: 'var(--brass, #a8854a)', borderLeftWidth: 3 },
-  calCellHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' },
-  calCellDate: { fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic', fontSize: 'var(--t-md)', color: 'var(--text-0, #e9e1ce)' },
-  calCellMeta: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-place, #5a5448)' },
-  calCellEmpty: { fontSize: 'var(--t-xs)', color: 'var(--text-place, #5a5448)', fontStyle: 'italic', paddingTop: 8 },
-  calCellPosts: { display: 'flex', flexDirection: 'column', gap: 2 },
-  calPostChip: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 4,
-    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-    fontSize: 9,
-    letterSpacing: '0.10em',
-    padding: '1px 4px',
-    border: '1px solid',
-    borderRadius: 2,
-    whiteSpace: 'nowrap',
-  },
-  calPostGlyph: { fontWeight: 700 },
-  calPostFormat: { letterSpacing: '0.06em', textTransform: 'uppercase' },
-
-  // Concept Flow (Kanban)
-  kanbanCol: {
-    background: 'var(--surf-1, #0f0d0a)',
-    border: '1px solid var(--border-1, #1f1c15)',
-    borderRadius: 6,
-    padding: '8px 8px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 8,
-    minHeight: 200,
-  },
-  kanbanColHead: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-    fontSize: 'var(--t-xs)',
-    letterSpacing: '0.16em',
-    textTransform: 'uppercase',
-    color: 'var(--brass, #a8854a)',
-    paddingBottom: 6,
-    borderBottom: '1px solid var(--border-1, #1f1c15)',
-  },
-  kanbanColCount: { color: 'var(--text-mute, #9b907a)', fontVariantNumeric: 'tabular-nums' },
-  kanbanCard: {
-    background: 'var(--surf-0, #0a0a0a)',
-    border: '1px solid var(--border-1, #1f1c15)',
-    borderLeft: '2px solid var(--brass, #a8854a)',
-    borderRadius: 3,
-    padding: '8px 8px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 4,
-  },
-  kanbanCardChan: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.12em', color: 'var(--brass, #a8854a)' },
-  kanbanCardHook: { fontSize: 'var(--t-sm)', color: 'var(--text-0, #e9e1ce)', lineHeight: 1.3 },
-  kanbanCardIcp: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', color: 'var(--text-mute, #9b907a)' },
-  kanbanEmpty: { fontSize: 'var(--t-xs)', color: 'var(--text-place, #5a5448)', fontStyle: 'italic', textAlign: 'center' },
-
-  // Channels
-  channelCard: {
-    background: 'var(--surf-1, #0f0d0a)',
-    border: '1px solid var(--border-1, #1f1c15)',
-    borderLeft: '3px solid var(--brass, #a8854a)',
-    borderRadius: 6,
-    padding: '12px 14px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 10,
-  },
-  channelHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  channelName: { fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic', fontSize: 'var(--t-md)', color: 'var(--text-0, #e9e1ce)', fontWeight: 500 },
-  channelHandle: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.12em', color: 'var(--text-mute, #9b907a)' },
-  channelStatRow: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, borderTop: '1px solid var(--border-1, #1f1c15)', paddingTop: 8 },
-  bestPostBox: { padding: '6px 8px', background: 'var(--surf-0, #0a0a0a)', border: '1px solid var(--border-1, #1f1c15)', borderRadius: 3, display: 'flex', flexDirection: 'column', gap: 2 },
-  bestPostLabel: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--st-good, #82ad8c)' },
-  bestPostHook: { fontSize: 'var(--t-sm)', fontStyle: 'italic', color: 'var(--text-0, #e9e1ce)' },
-  bestPostMeta: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', color: 'var(--text-mute, #9b907a)' },
-  guardrailBox: { padding: '6px 8px', background: 'var(--surf-0, #0a0a0a)', border: '1px dashed var(--st-warn, #C28F2C)', borderRadius: 3, display: 'flex', flexDirection: 'column', gap: 3 },
-  guardrailLabel: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--st-warn, #C28F2C)' },
-  guardrailRow: { fontSize: 'var(--t-xs)', color: 'var(--text-1, #d8cca8)' },
-
-  // Autonomy rungs
-  rung: { padding: '10px 12px', background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-1, #1f1c15)', borderRadius: 4, display: 'flex', alignItems: 'flex-start', gap: 10 },
-  rungTitle: { fontSize: 'var(--t-sm)', color: 'var(--text-0, #e9e1ce)', fontWeight: 500 },
-  rungDesc: { fontSize: 'var(--t-xs)', lineHeight: 1.5, color: 'var(--text-mute, #9b907a)' },
-
-  // Boost cards
-  boostCard: {
-    background: 'var(--surf-1, #0f0d0a)',
-    border: '1px solid var(--border-1, #1f1c15)',
-    borderLeft: '3px solid var(--brass, #a8854a)',
-    borderRadius: 6,
-    padding: '12px 14px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 8,
-  },
-  boostHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  boostHook: { fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic', fontSize: 'var(--t-md)', color: 'var(--text-0, #e9e1ce)' },
-  boostMeta: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.12em', color: 'var(--text-mute, #9b907a)' },
-  boostStats: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 8, borderTop: '1px solid var(--border-1, #1f1c15)', paddingTop: 8 },
-  boostSignal: { display: 'grid', gridTemplateColumns: '70px 1fr', gap: 6, fontSize: 'var(--t-xs)' },
-  boostSignalLabel: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--text-place, #5a5448)' },
-  boostActions: { display: 'flex', gap: 6, flexWrap: 'wrap' },
-
-  // Inbox cards
-  approvalBadge: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--st-warn, #C28F2C)', border: '1px solid var(--st-warn, #C28F2C)', padding: '2px 8px', borderRadius: 3 },
-  inboxCard: { background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-1, #1f1c15)', borderLeft: '3px solid var(--st-warn, #C28F2C)', borderRadius: 6, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6 },
-  inboxHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  inboxChan: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--brass, #a8854a)' },
-  inboxHook: { fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic', fontSize: 'var(--t-md)', color: 'var(--text-0, #e9e1ce)' },
-  inboxMeta: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.10em', color: 'var(--text-mute, #9b907a)' },
-  inboxBrief: { fontSize: 'var(--t-sm)', lineHeight: 1.5, color: 'var(--text-1, #d8cca8)' },
-  inboxActions: { display: 'flex', gap: 6, flexWrap: 'wrap' },
-
-  // Buttons
-  btnPrimary: { background: 'var(--brass, #a8854a)', color: 'var(--surf-0, #0a0a0a)', border: '1px solid var(--brass, #a8854a)', padding: '4px 10px', borderRadius: 3, cursor: 'pointer', fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 600 },
-  btnSecondary: { background: 'transparent', color: 'var(--text-1, #d8cca8)', border: '1px solid var(--border-1, #1f1c15)', padding: '4px 10px', borderRadius: 3, cursor: 'pointer', fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.12em', textTransform: 'uppercase' },
-  btnWarn: { background: 'transparent', color: 'var(--brass, #a8854a)', border: '1px solid var(--brass, #a8854a)', padding: '4px 10px', borderRadius: 3, cursor: 'pointer', fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 600 },
-
-  // Loop + agents
-  loopCell: { background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-1, #1f1c15)', borderRadius: 6, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 4 },
-  loopStep: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.18em', color: 'var(--brass, #a8854a)' },
-  loopTitle: { fontSize: 'var(--t-md)', fontWeight: 600, color: 'var(--text-0, #e9e1ce)' },
-  loopDesc: { fontSize: 'var(--t-xs)', lineHeight: 1.5, color: 'var(--text-mute, #9b907a)' },
-
-  agentCard: { background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-1, #1f1c15)', borderRadius: 6, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 },
-  agentHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  agentName: { fontSize: 'var(--t-sm)', fontWeight: 600, color: 'var(--text-0, #e9e1ce)' },
-  agentDesc: { fontSize: 'var(--t-xs)', lineHeight: 1.5, color: 'var(--text-mute, #9b907a)', minHeight: 54 },
-  signalPill: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--brass, #a8854a)', border: '1px solid var(--brass, #a8854a)', padding: '1px 5px', borderRadius: 3 },
-
-  // ICP roster
-  icpRow: { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-1, #1f1c15)', borderRadius: 4 },
-  icpEmoji: { fontSize: 'var(--t-lg)', color: 'var(--brass, #a8854a)' },
-  icpName: { fontSize: 'var(--t-sm)', color: 'var(--text-0, #e9e1ce)', fontWeight: 500 },
-  icpMarket: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.12em', color: 'var(--text-mute, #9b907a)' },
-  icpCount: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-sm)', fontWeight: 700, color: 'var(--brass, #a8854a)' },
-
-  // Stat blocks
-  statLabel: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--text-place, #5a5448)' },
-  statValue: { fontSize: 'var(--t-sm)', fontWeight: 600, color: 'var(--text-0, #e9e1ce)', fontVariantNumeric: 'tabular-nums' },
-
-  footerNote: { marginTop: 18, padding: '10px 12px', fontSize: 'var(--t-xs)', color: 'var(--text-mute, #9b907a)', fontStyle: 'italic', borderTop: '1px solid var(--border-1, #1f1c15)' },
+const subLinkSt: React.CSSProperties = {
+  padding: '6px 12px', fontSize: 11, letterSpacing: '0.10em', textTransform: 'uppercase',
+  color: INK_M, border: `1px solid ${HAIR}`, borderRadius: 3, textDecoration: 'none', background: WHITE, fontWeight: 600,
 };
+const subLinkActiveSt: React.CSSProperties = { color: WHITE, background: FOREST, borderColor: FOREST };
+const filterLabelSt: React.CSSProperties = { fontSize: 10, letterSpacing: '0.10em', textTransform: 'uppercase', color: FOREST, fontWeight: 700 };
+const chipSt: React.CSSProperties = { padding: '3px 9px', fontSize: 11, letterSpacing: '0.06em', color: INK, background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 999, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' };
+const chipActiveSt: React.CSSProperties = { color: WHITE, background: FOREST, borderColor: FOREST, fontWeight: 700 };
+const postChipSt: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: 3,
+  padding: '2px 5px', border: '1px solid', borderRadius: 2, whiteSpace: 'nowrap',
+  background: WHITE,
+};
+const workflowCellSt: React.CSSProperties = { background: CREAM, border: `1px solid ${HAIR}`, borderRadius: 4, padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 4 };
+const workflowStepSt: React.CSSProperties = { fontSize: 10, color: FOREST, fontWeight: 700, letterSpacing: '0.10em' };
+const workflowTitleSt: React.CSSProperties = { fontSize: 12, color: INK, fontWeight: 600 };
+const workflowDescSt: React.CSSProperties = { fontSize: 10, color: INK_M, lineHeight: 1.4 };
+const agentCardSt: React.CSSProperties = { background: CREAM, border: `1px solid ${HAIR}`, borderRadius: 4, padding: '8px 10px' };
+const signalPillSt: React.CSSProperties = { fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: FOREST, border: `1px solid ${FOREST}`, padding: '1px 5px', borderRadius: 2 };
+const btnPrimary: React.CSSProperties = { padding: '4px 10px', fontSize: 11, fontWeight: 600, background: FOREST, color: WHITE, border: 'none', borderRadius: 3, cursor: 'pointer' };
+const btnSecondary: React.CSSProperties = { padding: '4px 10px', fontSize: 11, fontWeight: 500, background: WHITE, color: INK_S, border: `1px solid ${HAIR}`, borderRadius: 3, cursor: 'pointer' };
