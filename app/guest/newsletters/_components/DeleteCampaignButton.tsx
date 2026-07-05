@@ -1,5 +1,7 @@
 // app/guest/newsletters/_components/DeleteCampaignButton.tsx
-// PBS 2026-07-05: fully delete a scheduled newsletter (recipients + campaign).
+// PBS 2026-07-05: cancel a scheduled newsletter. Always reverts the campaign
+// row to Draft so you never lose your working "template" copy — you can
+// re-schedule or edit again. Sent history is always preserved.
 'use client';
 
 import { useState } from 'react';
@@ -13,7 +15,7 @@ export default function DeleteCampaignButton({ campaign_id, campaign_name, pendi
   const [msg, setMsg] = useState<string | null>(null);
 
   const del = async () => {
-    if (!confirm(`Delete campaign "${campaign_name}"?\n\n• Removes ${pending_count} pending recipient${pending_count===1?'':'s'} + the campaign row\n• The TEMPLATE is preserved — you can reuse it to make a new campaign\n• Sent history stays (campaign reverts to Draft if any were already sent)`)) return;
+    if (!confirm(`Cancel scheduled send of "${campaign_name}"?\n\n• Cancels ${pending_count} pending recipient${pending_count===1?'':'s'}\n• Campaign returns to your DRAFTS (fully editable + re-schedulable)\n• Sent history is preserved\n• The reusable template stays untouched`)) return;
     setWorking(true); setMsg(null);
     try {
       const res = await fetch('/api/newsletter/delete-campaign', {
@@ -22,10 +24,10 @@ export default function DeleteCampaignButton({ campaign_id, campaign_name, pendi
       });
       const j = await res.json();
       if (j?.ok) {
-        setMsg(j.campaign_deleted ? 'Deleted' : 'Reset to draft (sent history kept)');
+        setMsg('Returned to Drafts');
         setTimeout(() => router.refresh(), 700);
       } else {
-        setMsg('Delete failed: ' + (j?.error || 'unknown'));
+        setMsg('Cancel failed: ' + (j?.error || 'unknown'));
       }
     } catch (e) {
       setMsg('Network error: ' + (e instanceof Error ? e.message : String(e)));
@@ -38,7 +40,7 @@ export default function DeleteCampaignButton({ campaign_id, campaign_name, pendi
         display:'inline-block', padding:'4px 10px', marginLeft:6, fontSize:11, fontWeight:600,
         background:'#FFFFFF', color:'#B03826', border:'1px solid #B03826',
         borderRadius:4, cursor: working ? 'default' : 'pointer',
-      }}>{working ? 'Deleting…' : 'Delete ×'}</button>
+      }}>{working ? 'Cancelling…' : 'Cancel schedule ↺'}</button>
       {msg && <span style={{ marginLeft:6, fontSize:10, color:'#5A5A5A' }}>{msg}</span>}
     </>
   );
