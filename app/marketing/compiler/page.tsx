@@ -1,9 +1,20 @@
 // app/marketing/compiler/page.tsx
-// Marketing · Compiler — compset-density home (v1.3, no vanity KPIs).
+// PBS 2026-07-05: Compiler hub — new paper-white design.
+// Migrated from legacy <Page> shell to DashboardPage + KpiTile.
+// Preserves the CompilerCockpit (Ongoing offers · Fixed retreats · Lock &
+// Distribute wizard), InlinePromptBar, action tiles, and Recent runs table.
 //
-// Layout: prompt → action row (Settings · Pricelist · Live retreats) → recent runs.
+// Data sources (all LIVE):
+//   • v_compiler_runs           → recent generation runs (id, prompt, status, cost, ts)
+//   • pricing.pricelist         → active SKU count
+//   • v_retreats                → published retreat count
 
-import Page from '@/components/page/Page';
+import type { CSSProperties } from 'react';
+import Link from 'next/link';
+import {
+  DashboardPage, KpiTile,
+  type DashboardTab, type KpiTileProps,
+} from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import InlinePromptBar from './_components/InlinePromptBar';
@@ -11,14 +22,22 @@ import CompilerActionRow from './_components/CompilerActionRow';
 import RecentRunsTable, { type RunRow } from './_components/RecentRunsTable';
 import CompilerCockpit from './_components/CompilerCockpit';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 30;
+
+const WHITE = '#FFFFFF';
+const HAIR  = '#E6DFCC';
+const INK   = '#1B1B1B';
+const INK_M = '#5A5A5A';
+const CREAM = '#F7F0E1';
+const FOREST= '#084838';
+const RED   = '#B03826';
+
 type CompilerView = 'ongoing' | 'fixed' | 'lock';
 function parseCompilerView(v: string | string[] | undefined): CompilerView {
   const s = typeof v === 'string' ? v : 'ongoing';
   return (['ongoing', 'fixed', 'lock'] as string[]).includes(s) ? (s as CompilerView) : 'ongoing';
 }
-
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
 
 const TEMPLATES = [
   '5 day mindfulness retreat — 4 pax — full moon',
@@ -54,61 +73,93 @@ export default async function CompilerHomePage({ searchParams }: Props) {
   const view = parseCompilerView(searchParams?.view);
   const selectedOfferId = typeof searchParams?.offer === 'string' ? searchParams.offer : undefined;
 
+  const recent = data?.recent ?? [];
+  // Status buckets aligned to RecentRunsTable's STATUS_TONE mapping:
+  //   deployed → active/ok · halted → bad · draft/compiling/rendering → in progress
+  const okRuns      = recent.filter(r => r.status === 'deployed' || r.status === 'ready').length;
+  const inProgress  = recent.filter(r => r.status === 'compiling' || r.status === 'rendering' || r.status === 'draft').length;
+  const failRuns    = recent.filter(r => r.status === 'halted' || r.status === 'error' || r.status === 'failed').length;
+  const totalCost   = recent.reduce((s, r) => s + (Number(r.cost_eur) || 0), 0);
+
+  const tabs: DashboardTab[] = MARKETING_SUBPAGES.map((s: any) => ({
+    key: s.href, label: s.label, href: s.href,
+    active: s.href === '/marketing/compiler',
+  }));
+
+  const tiles: KpiTileProps[] = [
+    { label: 'Recent runs',     value: recent.length,         size: 'sm', footnote: 'last 20 shown' },
+    { label: 'Deployed',        value: okRuns,                size: 'sm', footnote: 'ready / deployed' },
+    { label: 'In progress',     value: inProgress,            size: 'sm', footnote: 'draft / compiling' },
+    { label: 'Halted',          value: failRuns,              size: 'sm', footnote: 'error / halted' },
+    { label: 'Cost · recent',   value: `€${totalCost.toFixed(2)}`, size: 'sm', footnote: 'sum · last 20' },
+    { label: 'Pricelist SKUs',  value: data?.pricelistCount ?? 0, size: 'sm', footnote: 'active' },
+    { label: 'Live retreats',   value: data?.retreatsCount ?? 0,  size: 'sm', footnote: 'published' },
+  ];
+
   return (
-    <Page eyebrow="Marketing · Compiler" title={<>Retreat <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>compiler</em></>} subPages={MARKETING_SUBPAGES}>
-
-      {/* PBS 2026-05-16: 2-tab cockpit on top — Ongoing Offers · Fixed Retreats. Lock & Distribute wizard via ?view=lock&offer=<id>. */}
-      <CompilerCockpit view={view} selectedOfferId={selectedOfferId} />
-
-      <div style={{ height: 18 }} />
-
-      <InlinePromptBar presets={TEMPLATES} />
-
-      {dbErr && (
-        <div style={{
-          marginTop: 14, padding: '8px 12px',
-          border: '1px solid var(--st-bad, #b65f4a)',
-          borderRadius: 4, fontSize: 'var(--t-xs)', fontFamily: 'var(--mono)',
-          color: 'var(--st-bad, #b65f4a)', background: 'var(--paper-deep, #f5efdf)',
-        }}>
-          DB ERROR · {dbErr}
+    <div style={{ background: WHITE, minHeight: '100vh' }}>
+      <DashboardPage
+        title="Marketing · Compiler"
+        subtitle={`Retreat compiler · v1.3 · NRF rates · stub Stripe / Klaviyo / PDF · ${recent.length} recent run${recent.length === 1 ? '' : 's'}`}
+        tabs={tabs}
+      >
+        {/* KPI strip */}
+        <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
+          {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
         </div>
-      )}
 
-      <CompilerActionRow
-        actions={[
-          {
-            href: '/marketing/compiler/settings',
-            label: 'Settings',
-            meta: 'rate plan defaults · margin floors · property',
-          },
-          {
-            href: '/marketing/compiler/pricelist',
-            label: 'Pricelist',
-            meta: `${data?.pricelistCount ?? 0} SKUs · sheet sync pending`,
-          },
-          {
-            href: '/marketing/compiler/retreats',
-            label: 'Live retreats',
-            meta: `${data?.retreatsCount ?? 0} published`,
-          },
-        ]}
-      />
-
-      <div style={{
-        marginTop: 22, marginBottom: 8,
-        display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
-      }}>
-        <div className="t-eyebrow">Recent runs</div>
-        <div style={{
-          fontSize: 'var(--t-xs)', fontFamily: 'var(--mono)',
-          color: 'var(--ink-mute)', letterSpacing: 'var(--ls-loose)',
-        }}>
-          v1.3 · NRF rates · stub Stripe / Klaviyo / PDF
+        {/* 2-tab cockpit: Ongoing offers · Fixed retreats. Lock wizard via ?view=lock&offer=<id> */}
+        <div style={fullRow}>
+          <CompilerCockpit view={view} selectedOfferId={selectedOfferId} />
         </div>
-      </div>
 
-      <RecentRunsTable rows={data?.recent ?? []} />
-    </Page>
+        {/* Prompt bar */}
+        <div style={fullRow}>
+          <InlinePromptBar presets={TEMPLATES} />
+        </div>
+
+        {dbErr && (
+          <div style={{ ...fullRow, ...errBox }}>
+            <span style={{ fontWeight: 700, marginRight: 8 }}>DB ERROR</span>{dbErr}
+          </div>
+        )}
+
+        {/* Action tiles: Settings · Pricelist · Live retreats */}
+        <div style={fullRow}>
+          <CompilerActionRow
+            actions={[
+              { href: '/marketing/compiler/settings', label: 'Settings',
+                meta: 'rate plan defaults · margin floors · property' },
+              { href: '/marketing/compiler/pricelist', label: 'Pricelist',
+                meta: `${data?.pricelistCount ?? 0} SKUs · sheet sync pending` },
+              { href: '/marketing/compiler/retreats', label: 'Live retreats',
+                meta: `${data?.retreatsCount ?? 0} published` },
+            ]}
+          />
+        </div>
+
+        {/* Recent runs */}
+        <div style={fullRow}>
+          <div style={{ ...sectionHeader, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+            <span>Recent runs · {recent.length}</span>
+            <span style={{ fontSize: 10, fontFamily: 'ui-monospace, SFMono-Regular, monospace', color: INK_M, letterSpacing: '0.06em' }}>
+              v1.3 · NRF rates · stub Stripe / Klaviyo / PDF
+            </span>
+          </div>
+          <RecentRunsTable rows={recent} />
+        </div>
+      </DashboardPage>
+    </div>
   );
 }
+
+const fullRow: CSSProperties = { gridColumn: '1 / -1' };
+const sectionHeader: CSSProperties = {
+  fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase',
+  color: INK_M, fontWeight: 600, margin: '8px 2px 8px',
+};
+const errBox: CSSProperties = {
+  padding: '8px 12px', background: '#FBE8E4', color: '#8A2419',
+  border: '1px solid #E8B7AB', borderLeft: '3px solid ' + RED,
+  borderRadius: 6, fontSize: 12, fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+};
