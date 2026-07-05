@@ -1,30 +1,26 @@
 // app/marketing/events/page.tsx
-//
-// PBS 2026-05-16: Events Cockpit · calendar-first like /finance/hr/holidays.
-// Replaces the prior "list grouped by month" with the cockpit-family anatomy:
-//   1. KPI band
-//   2. Inner sub-strip · ?view=calendar|list|impact
-//   3. Hero: 12-month calendar grid (events dotted on day cells, color by
-//      primary department impact)
-//   4. Agent fleet
-//   5. Right rail (department impact tally, source markets, guardrails)
-//
-// Live data: marketing.calendar_events (preserved · same fields as before).
+// PBS 2026-07-05: Migrated to new paper-white design (DashboardPage + KpiTile
+// + MARKETING_SUBPAGES tabs). Same data source: marketing.calendar_events.
+// Preserves 3-view sub-strip: Calendar · List · Impact.
 
 import Link from 'next/link';
-import Page from '@/components/page/Page';
-import Panel from '@/components/page/Panel';
-import KpiBox from '@/components/kpi/KpiBox';
-import ArtifactActions from '@/components/page/ArtifactActions';
+import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { fmtIsoDate } from '@/lib/format';
 import { MARKETING_SUBPAGES } from '../_subpages';
-import TabStrip, { INFO_TABS } from '@/app/finance/_components/TabStrip';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 60;
+export const revalidate = 30;
 
-// ─── Data ─────────────────────────────────────────────────────────────────
+const WHITE = '#FFFFFF';
+const HAIR  = '#E6DFCC';
+const INK   = '#1B1B1B';
+const INK_M = '#5A5A5A';
+const INK_S = '#3A3A3A';
+const FOREST = '#084838';
+const RED    = '#B03826';
+const CREAM  = '#F5F0E1';
+const AMBER  = '#C28F2C';
 
 interface EventRow {
   event_id: string;
@@ -57,14 +53,11 @@ async function getEvents(): Promise<EventRow[]> {
   return (data ?? []) as EventRow[];
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────
-
 type View = 'calendar' | 'list' | 'impact';
 function parseView(v: string | string[] | undefined): View {
   const s = typeof v === 'string' ? v : 'calendar';
   return (['calendar', 'list', 'impact'] as string[]).includes(s) ? (s as View) : 'calendar';
 }
-
 function parseYear(v: string | string[] | undefined): number {
   const n = Number(typeof v === 'string' ? v : NaN);
   return Number.isFinite(n) && n >= 2024 && n <= 2030 ? n : new Date().getUTCFullYear();
@@ -84,7 +77,6 @@ function weekday(iso: string): string {
   return new Date(iso).toLocaleString('en-GB', { weekday: 'short' });
 }
 
-// Primary department per event (for calendar dot color)
 type Dept = 'rate' | 'marketing' | 'content' | 'fnb' | 'retreat' | 'unset';
 function primaryDept(e: EventRow): Dept {
   if (e.applies_to_retreat)   return 'retreat';
@@ -95,19 +87,18 @@ function primaryDept(e: EventRow): Dept {
   return 'unset';
 }
 const DEPT_COLOR: Record<Dept, string> = {
-  rate:      'var(--brass, #a8854a)',
-  marketing: 'var(--st-good, #82ad8c)',
-  content:   '#5dade2',
-  fnb:       '#c97b6a',
-  retreat:   'var(--text-2, #d8cca8)',
-  unset:     'var(--text-place, #5a5448)',
+  rate:      FOREST,
+  marketing: '#5DA46B',
+  content:   '#3E8DBE',
+  fnb:       RED,
+  retreat:   AMBER,
+  unset:     INK_M,
 };
 const DEPT_LABEL: Record<Dept, string> = {
   rate: 'Rate-shop', marketing: 'Marketing', content: 'Content',
   fnb: 'F&B', retreat: 'Retreat', unset: 'Unset',
 };
 
-// Expand each event to all ISO dates it covers (multi-day events fill multiple cells)
 function eventsByDate(events: EventRow[]): Map<string, EventRow[]> {
   const out = new Map<string, EventRow[]>();
   for (const e of events) {
@@ -123,21 +114,17 @@ function eventsByDate(events: EventRow[]): Map<string, EventRow[]> {
   return out;
 }
 
-// ─── Agents (cockpit family) ──────────────────────────────────────────────
-
 interface EventAgent { name: string; desc: string; signal: string }
 const AGENTS: EventAgent[] = [
-  { name: 'Event Scout',          desc: 'Surfaces upcoming local festivals, congresses, fairs and ICP-relevant cultural events.',                 signal: '7 candidates' },
-  { name: 'Demand Modeler',       desc: 'Estimates the demand-score override based on prior years, source-market signals and seasonality.',         signal: '12 modeled'   },
-  { name: 'Rate-shop Trigger',    desc: 'When an event is high-demand, flags Revenue to lift rates + pull min-LOS.',                                 signal: '4 lifts'      },
-  { name: 'Marketing Brief',      desc: 'Drafts the marketing brief: hook + pillar + ICP + hashtags + post timing.',                                 signal: '11 briefs'    },
-  { name: 'Content Architect',    desc: 'Builds blog posts + IG carousels + reels tied to the event narrative.',                                     signal: '8 outlines'   },
-  { name: 'F&B Planner',          desc: 'Special menus + drink pairings + sourcing for event days.',                                                 signal: '5 menus'      },
-  { name: 'Retreat Planner',      desc: 'Aligns retreat schedules with major events (Songkran / Tết / Full Moon).',                                  signal: '3 retreats'   },
-  { name: 'Reality & Brand',      desc: 'Ensures event narrative + visuals match the actual resort + Lao cultural reality.',                        signal: '0 flags'      },
+  { name: 'Event Scout',       desc: 'Surfaces upcoming local festivals, congresses, fairs and ICP-relevant cultural events.',           signal: '7 candidates' },
+  { name: 'Demand Modeler',    desc: 'Estimates the demand-score override based on prior years, source-market signals and seasonality.', signal: '12 modeled' },
+  { name: 'Rate-shop Trigger', desc: 'When an event is high-demand, flags Revenue to lift rates + pull min-LOS.',                         signal: '4 lifts' },
+  { name: 'Marketing Brief',   desc: 'Drafts the marketing brief: hook + pillar + ICP + hashtags + post timing.',                         signal: '11 briefs' },
+  { name: 'Content Architect', desc: 'Builds blog posts + IG carousels + reels tied to the event narrative.',                             signal: '8 outlines' },
+  { name: 'F&B Planner',       desc: 'Special menus + drink pairings + sourcing for event days.',                                         signal: '5 menus' },
+  { name: 'Retreat Planner',   desc: 'Aligns retreat schedules with major events (Songkran / Tết / Full Moon).',                          signal: '3 retreats' },
+  { name: 'Reality & Brand',   desc: 'Ensures event narrative + visuals match the actual resort + Lao cultural reality.',                signal: '0 flags' },
 ];
-
-// ─── Page ─────────────────────────────────────────────────────────────────
 
 interface Props { searchParams?: { view?: string; y?: string; dept?: string } }
 
@@ -147,7 +134,6 @@ export default async function EventsCockpitPage({ searchParams }: Props) {
   const year = parseYear(searchParams?.y);
   const deptFilter = (typeof searchParams?.dept === 'string' ? searchParams.dept : 'all') as Dept | 'all';
 
-  // KPI math
   const today = new Date();
   const todayIso = today.toISOString().slice(0, 10);
   const upcoming = events.filter((e) => new Date(e.date_start) >= today);
@@ -155,16 +141,12 @@ export default async function EventsCockpitPage({ searchParams }: Props) {
   const next30 = upcoming.filter((e) => new Date(e.date_start).getTime() <= today.getTime() + 30 * 86_400_000).length;
   const next90 = upcoming.filter((e) => new Date(e.date_start).getTime() <= today.getTime() + 90 * 86_400_000).length;
   const confirmed = events.filter((e) => e.is_confirmed).length;
-  const high      = events.filter((e) => (e.demand_score_override ?? 0) >= 80).length;
+  const high = events.filter((e) => (e.demand_score_override ?? 0) >= 80).length;
 
-  // Year-scoped + dept-filtered
   const yearEvents = events.filter((e) => e.date_start.startsWith(`${year}-`));
-  const filtered = deptFilter === 'all'
-    ? yearEvents
-    : yearEvents.filter((e) => primaryDept(e) === deptFilter);
+  const filtered = deptFilter === 'all' ? yearEvents : yearEvents.filter((e) => primaryDept(e) === deptFilter);
   const byDate = eventsByDate(filtered);
 
-  // Department impact tally (for right rail)
   const deptCounts: Record<Dept, number> = { rate: 0, marketing: 0, content: 0, fnb: 0, retreat: 0, unset: 0 };
   for (const e of yearEvents) {
     if (e.applies_to_rate_shop) deptCounts.rate++;
@@ -173,70 +155,70 @@ export default async function EventsCockpitPage({ searchParams }: Props) {
     if (e.applies_to_fnb)       deptCounts.fnb++;
     if (e.applies_to_retreat)   deptCounts.retreat++;
   }
-  // Top source markets across year
   const marketCounts = new Map<string, number>();
   for (const e of yearEvents) {
     for (const m of (e.source_markets ?? [])) marketCounts.set(m, (marketCounts.get(m) ?? 0) + 1);
   }
   const topMarkets = Array.from(marketCounts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8);
-
-  // Years present in data
   const yearsAvailable = Array.from(new Set(events.map((e) => Number(e.date_start.slice(0, 4))))).sort();
 
-  const qs = (view: View, y: number, dept: Dept | 'all') =>
-    `?view=${view}&y=${y}${dept === 'all' ? '' : `&dept=${dept}`}`;
+  const qs = (v: View, y: number, dept: Dept | 'all') =>
+    `?view=${v}&y=${y}${dept === 'all' ? '' : `&dept=${dept}`}`;
+
+  const tabs: DashboardTab[] = MARKETING_SUBPAGES.map((s: any) => ({
+    key: s.href, label: s.label, href: s.href,
+    active: s.href === '/marketing/library', // Info hub owns events
+  }));
+
+  const tiles: KpiTileProps[] = [
+    { label: 'Total events',   value: events.length,   size: 'sm', footnote: 'marketing.calendar_events' },
+    { label: 'Upcoming',       value: upcoming.length, size: 'sm', footnote: 'date_start ≥ today' },
+    { label: 'Next 7 days',    value: next7,           size: 'sm' },
+    { label: 'Next 30 days',   value: next30,          size: 'sm', footnote: 'briefing window' },
+    { label: 'Next 90 days',   value: next90,          size: 'sm', footnote: 'retreat planning' },
+    { label: 'Confirmed',      value: confirmed,       size: 'sm', footnote: 'is_confirmed=true' },
+    { label: 'High demand',    value: high,            size: 'sm', footnote: 'score ≥ 80' },
+  ];
 
   return (
-    <Page
-      eyebrow="Marketing · Events"
-      title={<>Events <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>cockpit</em></>}
-      subPages={MARKETING_SUBPAGES}
-    >
-      <TabStrip tabs={INFO_TABS} activeKey="events" />
+    <div style={{ background: WHITE, minHeight: '100vh' }}>
+      <DashboardPage
+        title="Marketing · Events"
+        subtitle={`${events.length} events · ${upcoming.length} upcoming · calendar-first cockpit`}
+        tabs={tabs}
+      >
+        {/* KPI band */}
+        <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
+          {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
+        </div>
 
-      {/* KPI band */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 16 }}>
-        <KpiBox value={events.length}   unit="count" label="Total events"     tooltip="All events in marketing.calendar_events." />
-        <KpiBox value={upcoming.length} unit="count" label="Upcoming"         tooltip="Events with date_start ≥ today" />
-        <KpiBox value={next7}           unit="count" label="Next 7 days"      tooltip="Within 7 days of today" />
-        <KpiBox value={next30}          unit="count" label="Next 30 days"     tooltip="Within 30 days of today · drives marketing brief planning" />
-        <KpiBox value={next90}          unit="count" label="Next 90 days"     tooltip="Within 90 days · retreat planning window" />
-        <KpiBox value={confirmed}       unit="count" label="Confirmed"        tooltip="is_confirmed=true · forecast otherwise" />
-        <KpiBox value={high}            unit="count" label="High demand (≥80)" tooltip="demand_score_override ≥ 80 · drives rate-shop + content priority" />
-      </div>
+        {/* Sub-strip */}
+        <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 6, flexWrap: 'wrap', paddingBottom: 8, borderBottom: `1px solid ${HAIR}` }}>
+          {(['calendar', 'list', 'impact'] as View[]).map((v) => (
+            <a key={v} href={qs(v, year, deptFilter)}
+               style={{ ...subLinkSt, ...(v === view ? subLinkActiveSt : {}) }}>
+              {v === 'calendar' ? 'Calendar' : v === 'list' ? 'List' : 'Impact'}
+            </a>
+          ))}
+        </div>
 
-      {/* Sub-strip */}
-      <div style={S.subStrip}>
-        {(['calendar', 'list', 'impact'] as View[]).map((v) => (
-          <a key={v} href={qs(v, year, deptFilter)}
-             style={{ ...S.subStripLink, ...(v === view ? S.subStripLinkActive : {}) }}>
-            {v === 'calendar' ? '📅 Calendar' : v === 'list' ? '📋 List' : '⚡ Impact'}
-          </a>
-        ))}
-      </div>
-
-      {/* SECTION: Calendar */}
-      {view === 'calendar' && (
-        <Panel
-          title={`${year} · calendar`}
-          eyebrow={`${filtered.length} events${deptFilter === 'all' ? '' : ` · ${DEPT_LABEL[deptFilter as Dept]}`} · click any day to drilldown (Phase 2)`}
-        >
-          <div style={{ padding: 14 }}>
+        {view === 'calendar' && (
+          <Section title={`${year} · calendar`} note={`${filtered.length} events${deptFilter === 'all' ? '' : ` · ${DEPT_LABEL[deptFilter as Dept]}`}`}>
             {/* Year + dept filter row */}
-            <div style={S.controlsRow}>
-              <div style={S.controlGroup}>
-                <span style={S.controlLabel}>Year</span>
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span style={filterLabelSt}>Year</span>
                 {yearsAvailable.map((y) => (
                   <a key={y} href={qs(view, y, deptFilter)}
-                     style={{ ...S.chip, ...(y === year ? S.chipActive : {}) }}>{y}</a>
+                     style={{ ...chipSt, ...(y === year ? chipActiveSt : {}) }}>{y}</a>
                 ))}
               </div>
-              <div style={S.controlGroup}>
-                <span style={S.controlLabel}>Drives</span>
-                <a href={qs(view, year, 'all')} style={{ ...S.chip, ...(deptFilter === 'all' ? S.chipActive : {}) }}>All</a>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span style={filterLabelSt}>Drives</span>
+                <a href={qs(view, year, 'all')} style={{ ...chipSt, ...(deptFilter === 'all' ? chipActiveSt : {}) }}>All</a>
                 {(['rate', 'marketing', 'content', 'fnb', 'retreat'] as Dept[]).map((d) => (
                   <a key={d} href={qs(view, year, d)}
-                     style={{ ...S.chip, ...(deptFilter === d ? S.chipActive : {}) }}>
+                     style={{ ...chipSt, ...(deptFilter === d ? chipActiveSt : {}) }}>
                     <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: DEPT_COLOR[d], marginRight: 4 }} />
                     {DEPT_LABEL[d]}
                   </a>
@@ -245,72 +227,70 @@ export default async function EventsCockpitPage({ searchParams }: Props) {
             </div>
 
             {/* 12-month grid */}
-            <div style={S.monthGrid}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
               {Array.from({ length: 12 }, (_, m) => (
-                <MonthCard
-                  key={m}
-                  year={year}
-                  monthIndex0={m}
-                  byDate={byDate}
-                  todayIso={todayIso}
-                />
+                <MonthCard key={m} year={year} monthIndex0={m} byDate={byDate} todayIso={todayIso} />
               ))}
             </div>
 
             {/* Legend */}
-            <div style={S.legendRow}>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 14 }}>
               {(['rate', 'marketing', 'content', 'fnb', 'retreat'] as Dept[]).map((d) => (
                 <span key={d} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ width: 10, height: 10, borderRadius: '50%', background: DEPT_COLOR[d] }} />
-                  <span style={S.legendLabel}>{DEPT_LABEL[d]}</span>
+                  <span style={legendLabelSt}>{DEPT_LABEL[d]}</span>
                 </span>
               ))}
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 2, background: 'transparent', border: '1px dashed var(--brass, #a8854a)' }} />
-                <span style={S.legendLabel}>Tentative</span>
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: 'transparent', border: `1px dashed ${FOREST}` }} />
+                <span style={legendLabelSt}>Tentative</span>
               </span>
             </div>
-          </div>
-        </Panel>
-      )}
+          </Section>
+        )}
 
-      {/* SECTION: List */}
-      {view === 'list' && (
-        <ListView events={upcoming} />
-      )}
+        {view === 'list' && <ListView events={upcoming} />}
 
-      {/* SECTION: Impact */}
-      {view === 'impact' && (
-        <ImpactView events={yearEvents} deptCounts={deptCounts} topMarkets={topMarkets} year={year} />
-      )}
+        {view === 'impact' && (
+          <ImpactView events={yearEvents} deptCounts={deptCounts} topMarkets={topMarkets} year={year} />
+        )}
 
-      {/* Agent fleet */}
-      <div style={{ marginTop: 14 }}>
-        <Panel title="Agent fleet" eyebrow={`${AGENTS.length} event specialists`}>
-          <div style={{ padding: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10 }}>
+        {/* Agent fleet */}
+        <Section title="Agent fleet" note={`${AGENTS.length} event specialists`}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 8 }}>
             {AGENTS.map((a) => (
-              <div key={a.name} style={S.agentCard}>
-                <div style={S.agentHead}>
-                  <span style={S.agentName}>{a.name}</span>
-                  <span style={S.signalPill}>{a.signal}</span>
+              <div key={a.name} style={agentCardSt}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: INK }}>{a.name}</span>
+                  <span style={signalPillSt}>{a.signal}</span>
                 </div>
-                <div style={S.agentDesc}>{a.desc}</div>
+                <div style={{ fontSize: 11, color: INK_M, lineHeight: 1.5, marginTop: 4 }}>{a.desc}</div>
               </div>
             ))}
           </div>
-        </Panel>
-      </div>
+        </Section>
 
-      <div style={S.footerNote}>
-        Source: <code>marketing.calendar_events</code>. Calendar dots are colored by the event&apos;s primary department impact. Multi-day events fill every day cell.{' '}
-        <Link href="/marketing/library" style={{ color: 'var(--brass)' }}>media library</Link> ·{' '}
-        <Link href="/marketing/campaigns" style={{ color: 'var(--brass)' }}>campaigns</Link>
-      </div>
-    </Page>
+        <div style={{ gridColumn: '1 / -1', padding: '10px 12px', fontSize: 11, color: INK_M, fontStyle: 'italic', borderTop: `1px solid ${HAIR}` }}>
+          Source: <code>marketing.calendar_events</code>. Calendar dots are colored by the event&apos;s primary department impact.{' '}
+          <Link href="/marketing/library" style={{ color: FOREST }}>media library</Link> ·{' '}
+          <Link href="/marketing/campaigns" style={{ color: FOREST }}>campaigns</Link>
+        </div>
+      </DashboardPage>
+    </div>
   );
 }
 
-// ─── Month card (calendar hero) ───────────────────────────────────────────
+function Section({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
+  return (
+    <div style={{ gridColumn: '1 / -1', background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, padding: '14px 16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: INK }}>{title}</div>
+        {note && <div style={{ fontSize: 10, color: INK_M, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{note}</div>}
+      </div>
+      {children}
+    </div>
+  );
+}
 
 function MonthCard({ year, monthIndex0, byDate, todayIso }: { year: number; monthIndex0: number; byDate: Map<string, EventRow[]>; todayIso: string }) {
   const days = daysInMonth(year, monthIndex0);
@@ -327,23 +307,22 @@ function MonthCard({ year, monthIndex0, byDate, todayIso }: { year: number; mont
   const monthEvents = Array.from(byDate.values()).flat().filter((e) =>
     e.date_start.startsWith(`${year}-${String(monthIndex0 + 1).padStart(2, '0')}-`)
   );
-  // Unique by event_id (multi-day events show once in the month list)
   const seen = new Set<string>();
   const uniqueMonthEvents: EventRow[] = [];
   for (const e of monthEvents) { if (!seen.has(e.event_id)) { seen.add(e.event_id); uniqueMonthEvents.push(e); } }
 
   return (
-    <div style={S.monthCard}>
-      <div style={S.monthHead}>
+    <div style={{ background: CREAM, border: `1px solid ${HAIR}`, borderRadius: 6, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 11, letterSpacing: '0.10em', textTransform: 'uppercase', color: FOREST, fontWeight: 700 }}>
         <span>{MONTH_NAMES[monthIndex0]} {year}</span>
-        <span style={S.monthCount}>{uniqueMonthEvents.length || '—'}</span>
+        <span style={{ color: INK_M, fontSize: 9 }}>{uniqueMonthEvents.length || '—'}</span>
       </div>
 
-      <div style={S.dowRow}>
-        {DOW_LABELS.map((d, i) => <div key={i} style={S.dowCell}>{d}</div>)}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1 }}>
+        {DOW_LABELS.map((d, i) => <div key={i} style={{ textAlign: 'center', fontSize: 9, color: INK_M, padding: '2px 0' }}>{d}</div>)}
       </div>
 
-      <div style={S.daysGrid}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1 }}>
         {cells.map((c, i) => {
           if (!c.day) return <div key={i} style={{ height: 26 }} />;
           const dayEvents = c.iso ? byDate.get(c.iso) ?? [] : [];
@@ -353,17 +332,15 @@ function MonthCard({ year, monthIndex0, byDate, todayIso }: { year: number; mont
           const tip = dayEvents.length > 0 ? dayEvents.map((e) => e.display_name).join('\n') : undefined;
 
           return (
-            <div
-              key={i}
-              title={tip}
-              style={{
-                ...S.dayCell,
-                background: dot ? DEPT_COLOR[dot] : 'transparent',
-                color: dot ? '#fff' : 'var(--text-1, #d8cca8)',
-                fontWeight: (dayEvents.length > 0 || isToday) ? 600 : 400,
-                border: isToday ? '1px solid var(--text-0, #e9e1ce)' : tentative ? '1px dashed var(--brass, #a8854a)' : '1px solid transparent',
-              }}
-            >
+            <div key={i} title={tip} style={{
+              height: 26,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 11, borderRadius: 3,
+              background: dot ? DEPT_COLOR[dot] : 'transparent',
+              color: dot ? '#fff' : INK,
+              fontWeight: (dayEvents.length > 0 || isToday) ? 600 : 400,
+              border: isToday ? `1px solid ${INK}` : tentative ? `1px dashed ${FOREST}` : '1px solid transparent',
+            }}>
               {c.day}
             </div>
           );
@@ -371,25 +348,23 @@ function MonthCard({ year, monthIndex0, byDate, todayIso }: { year: number; mont
       </div>
 
       {uniqueMonthEvents.length > 0 && (
-        <ul style={S.eventList}>
+        <ul style={{ margin: '4px 0 0', paddingLeft: 0, listStyle: 'none', borderTop: `1px solid ${HAIR}`, paddingTop: 6, display: 'flex', flexDirection: 'column', gap: 3 }}>
           {uniqueMonthEvents.slice(0, 6).map((e) => (
-            <li key={e.event_id} style={S.eventLi}>
-              <span style={{ ...S.eventDot, background: DEPT_COLOR[primaryDept(e)] }} />
-              <span style={S.eventDay}>{e.date_start.slice(8, 10)}</span>
-              <span style={S.eventName}>{e.display_name}</span>
-              {(e.demand_score_override ?? 0) >= 80 && <span style={S.highBadge}>HIGH</span>}
+            <li key={e.event_id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, lineHeight: 1.4 }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: DEPT_COLOR[primaryDept(e)] }} />
+              <span style={{ fontSize: 10, color: INK_M, minWidth: 18 }}>{e.date_start.slice(8, 10)}</span>
+              <span style={{ color: INK, flex: 1 }}>{e.display_name}</span>
+              {(e.demand_score_override ?? 0) >= 80 && <span style={{ fontSize: 8, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 700, color: FOREST, border: `1px solid ${FOREST}`, padding: '0 3px', borderRadius: 2 }}>HIGH</span>}
             </li>
           ))}
           {uniqueMonthEvents.length > 6 && (
-            <li style={S.eventMore}>+{uniqueMonthEvents.length - 6} more</li>
+            <li style={{ fontSize: 10, color: INK_M, textAlign: 'right' }}>+{uniqueMonthEvents.length - 6} more</li>
           )}
         </ul>
       )}
     </div>
   );
 }
-
-// ─── List view ────────────────────────────────────────────────────────────
 
 function ListView({ events }: { events: EventRow[] }) {
   const byMonth = new Map<string, EventRow[]>();
@@ -399,228 +374,159 @@ function ListView({ events }: { events: EventRow[] }) {
   }
   if (byMonth.size === 0) {
     return (
-      <Panel title="No upcoming events" eyebrow="—">
-        <div style={{ padding: 24, color: 'var(--text-mute, #9b907a)', fontStyle: 'italic', textAlign: 'center' }}>
+      <Section title="No upcoming events">
+        <div style={{ padding: 24, color: INK_M, fontStyle: 'italic', textAlign: 'center' }}>
           Nothing scheduled. Add events to <code>marketing.calendar_events</code>.
         </div>
-      </Panel>
+      </Section>
     );
   }
   return (
     <>
       {Array.from(byMonth.entries()).map(([month, rows]) => (
-        <div key={month} style={{ marginBottom: 12 }}>
-          <Panel
-            title={month}
-            eyebrow={`${rows.length} event${rows.length === 1 ? '' : 's'}`}
-            actions={<ArtifactActions context={{ kind: 'panel', title: `Events · ${month}`, dept: 'marketing' }} />}
-          >
-            <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {rows.map((e) => (
-                <div key={e.event_id} style={S.listRow}>
-                  <div style={S.listDayCol}>
-                    <div style={S.listDayPill}>{weekday(e.date_start)} {new Date(e.date_start).toLocaleString('en-GB', { day: '2-digit', month: 'short' })}</div>
-                    {e.date_end && e.date_end !== e.date_start && (
-                      <div style={S.listThrough}>→ {fmtIsoDate(e.date_end)}</div>
-                    )}
+        <Section key={month} title={month} note={`${rows.length} event${rows.length === 1 ? '' : 's'}`}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {rows.map((e) => (
+              <div key={e.event_id} style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: 14, padding: '10px 12px', background: CREAM, border: `1px solid ${HAIR}`, borderRadius: 4 }}>
+                <div>
+                  <div style={{ fontSize: 11, letterSpacing: '0.10em', textTransform: 'uppercase', color: FOREST, fontWeight: 700 }}>
+                    {weekday(e.date_start)} {new Date(e.date_start).toLocaleString('en-GB', { day: '2-digit', month: 'short' })}
                   </div>
-                  <div style={S.listBodyCol}>
-                    <div style={S.listHead}>
-                      <strong style={{ color: 'var(--text-0, #e9e1ce)' }}>{e.display_name}</strong>
-                      {e.type_code && <span style={S.typeChip}>{e.type_code}</span>}
-                      {e.is_confirmed === false && <span style={S.tentativeChip}>tentative</span>}
-                      {(e.demand_score_override ?? 0) >= 80 && <span style={S.highChip}>high demand</span>}
-                    </div>
-                    {e.marketing_brief && <div style={S.listBrief}>{e.marketing_brief}</div>}
-                    <div style={S.deptRow}>
-                      {e.applies_to_rate_shop  && <span style={deptChip('rate')}>Rate</span>}
-                      {e.applies_to_marketing  && <span style={deptChip('marketing')}>Marketing</span>}
-                      {e.applies_to_content    && <span style={deptChip('content')}>Content</span>}
-                      {e.applies_to_fnb        && <span style={deptChip('fnb')}>F&amp;B</span>}
-                      {e.applies_to_retreat    && <span style={deptChip('retreat')}>Retreat</span>}
-                    </div>
-                    {e.source_markets && e.source_markets.length > 0 && (
-                      <div style={S.sourceRow}>Source: {e.source_markets.join(' · ')}</div>
-                    )}
-                  </div>
+                  {e.date_end && e.date_end !== e.date_start && (
+                    <div style={{ fontSize: 10, color: INK_M, marginTop: 2 }}>→ {fmtIsoDate(e.date_end)}</div>
+                  )}
                 </div>
-              ))}
-            </div>
-          </Panel>
-        </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <strong style={{ color: INK }}>{e.display_name}</strong>
+                    {e.type_code && <span style={typeChipSt}>{e.type_code}</span>}
+                    {e.is_confirmed === false && <span style={tentativeChipSt}>tentative</span>}
+                    {(e.demand_score_override ?? 0) >= 80 && <span style={highChipSt}>high demand</span>}
+                  </div>
+                  {e.marketing_brief && <div style={{ fontSize: 12, color: INK_S, lineHeight: 1.5 }}>{e.marketing_brief}</div>}
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {e.applies_to_rate_shop  && <span style={deptChipSt('rate')}>Rate</span>}
+                    {e.applies_to_marketing  && <span style={deptChipSt('marketing')}>Marketing</span>}
+                    {e.applies_to_content    && <span style={deptChipSt('content')}>Content</span>}
+                    {e.applies_to_fnb        && <span style={deptChipSt('fnb')}>F&amp;B</span>}
+                    {e.applies_to_retreat    && <span style={deptChipSt('retreat')}>Retreat</span>}
+                  </div>
+                  {e.source_markets && e.source_markets.length > 0 && (
+                    <div style={{ fontSize: 11, color: INK_M, letterSpacing: '0.08em' }}>Source: {e.source_markets.join(' · ')}</div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Section>
       ))}
     </>
   );
 }
 
-// ─── Impact view ──────────────────────────────────────────────────────────
-
 function ImpactView({ events, deptCounts, topMarkets, year }: { events: EventRow[]; deptCounts: Record<Dept, number>; topMarkets: Array<[string, number]>; year: number }) {
   const highDemand = events.filter((e) => (e.demand_score_override ?? 0) >= 80);
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 340px)', gap: 14, alignItems: 'start' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <Panel title={`Department impact · ${year}`} eyebrow="which dept each event drives">
-          <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 340px)', gap: 12, alignItems: 'start' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, padding: '14px 16px' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: INK, marginBottom: 10 }}>Department impact · {year}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {(['rate', 'marketing', 'content', 'fnb', 'retreat'] as Dept[]).map((d) => {
               const max = Math.max(...Object.values(deptCounts), 1);
               const pct = Math.round((deptCounts[d] / max) * 100);
               return (
-                <div key={d} style={S.impactRow}>
-                  <span style={{ ...S.impactDot, background: DEPT_COLOR[d] }} />
-                  <span style={S.impactLabel}>{DEPT_LABEL[d]}</span>
-                  <div style={S.impactBarOuter}>
-                    <div style={{ ...S.impactBarInner, width: `${pct}%`, background: DEPT_COLOR[d] }} />
+                <div key={d} style={{ display: 'grid', gridTemplateColumns: '12px 110px 1fr 40px', gap: 8, alignItems: 'center' }}>
+                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: DEPT_COLOR[d] }} />
+                  <span style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK }}>{DEPT_LABEL[d]}</span>
+                  <div style={{ height: 8, background: CREAM, border: `1px solid ${HAIR}`, borderRadius: 4, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${pct}%`, background: DEPT_COLOR[d] }} />
                   </div>
-                  <strong style={S.impactCount}>{deptCounts[d]}</strong>
+                  <strong style={{ fontSize: 12, color: INK, textAlign: 'right' }}>{deptCounts[d]}</strong>
                 </div>
               );
             })}
           </div>
-        </Panel>
+        </div>
 
-        <Panel title="High-demand events" eyebrow={`${highDemand.length} events · score ≥ 80`}>
-          <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, padding: '14px 16px' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: INK, marginBottom: 10 }}>High-demand events</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {highDemand.map((e) => (
-              <div key={e.event_id} style={S.highRow}>
-                <div style={S.highHead}>
-                  <span style={S.highName}>{e.display_name}</span>
-                  <span style={S.highScore}>{e.demand_score_override}</span>
+              <div key={e.event_id} style={{ background: CREAM, border: `1px solid ${HAIR}`, borderLeft: `3px solid ${FOREST}`, borderRadius: 6, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                  <span style={{ fontSize: 14, color: INK, fontWeight: 600 }}>{e.display_name}</span>
+                  <span style={{ fontSize: 14, color: FOREST, fontWeight: 700 }}>{e.demand_score_override}</span>
                 </div>
-                <div style={S.highMeta}>{e.date_start}{e.date_end && e.date_end !== e.date_start ? ` → ${e.date_end}` : ''} · {DEPT_LABEL[primaryDept(e)]}</div>
-                {e.marketing_brief && <div style={S.highBrief}>{e.marketing_brief}</div>}
+                <div style={{ fontSize: 11, letterSpacing: '0.08em', color: INK_M }}>
+                  {e.date_start}{e.date_end && e.date_end !== e.date_start ? ` → ${e.date_end}` : ''} · {DEPT_LABEL[primaryDept(e)]}
+                </div>
+                {e.marketing_brief && <div style={{ fontSize: 12, color: INK_S, lineHeight: 1.5 }}>{e.marketing_brief}</div>}
               </div>
             ))}
-            {highDemand.length === 0 && <div style={{ color: 'var(--text-mute, #9b907a)', fontStyle: 'italic' }}>No high-demand events scored ≥ 80 in {year}.</div>}
+            {highDemand.length === 0 && <div style={{ color: INK_M, fontStyle: 'italic' }}>No high-demand events scored ≥ 80 in {year}.</div>}
           </div>
-        </Panel>
+        </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <Panel title="Top source markets" eyebrow={`${topMarkets.length} tagged on events`}>
-          <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, padding: '14px 16px' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: INK, marginBottom: 10 }}>Top source markets</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             {topMarkets.map(([m, c]) => (
-              <div key={m} style={S.marketRow}>
-                <span style={S.marketName}>{m}</span>
-                <strong style={S.marketCount}>{c}</strong>
+              <div key={m} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 6px', borderBottom: `1px solid ${HAIR}` }}>
+                <span style={{ fontSize: 11, letterSpacing: '0.08em', color: INK }}>{m}</span>
+                <strong style={{ fontSize: 12, color: FOREST }}>{c}</strong>
               </div>
             ))}
-            {topMarkets.length === 0 && <div style={{ color: 'var(--text-mute, #9b907a)', fontStyle: 'italic' }}>No source markets tagged.</div>}
+            {topMarkets.length === 0 && <div style={{ color: INK_M, fontStyle: 'italic' }}>No source markets tagged.</div>}
           </div>
-        </Panel>
+        </div>
 
-        <Panel title="Guardrails" eyebrow="how events flow through the cockpits">
-          <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 6, padding: '14px 16px' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: INK, marginBottom: 10 }}>Guardrails</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <Callout tone="brass">High-demand events (≥80) auto-flag Revenue to lift rates + raise min-LOS.</Callout>
             <Callout tone="soft">Marketing-applicable events generate post calendar entries 30 days ahead in Social cockpit.</Callout>
             <Callout tone="soft">Retreat-applicable events propose retreat scheduling in Compiler.</Callout>
             <Callout tone="warn">Tentative events (is_confirmed=false) are forecast only. Don&apos;t broadcast until confirmed.</Callout>
           </div>
-        </Panel>
+        </div>
       </div>
     </div>
   );
 }
 
-// ─── Atoms ────────────────────────────────────────────────────────────────
-
-function deptChip(d: Dept): React.CSSProperties {
-  return {
-    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-    fontSize: 10, letterSpacing: '0.10em', textTransform: 'uppercase',
-    fontWeight: 600,
-    padding: '1px 6px', borderRadius: 3,
-    border: `1px solid ${DEPT_COLOR[d]}`,
-    color: DEPT_COLOR[d],
-  };
-}
-
 function Callout({ tone, children }: { tone: 'brass' | 'soft' | 'warn'; children: React.ReactNode }) {
-  const border = tone === 'brass' ? 'var(--brass, #a8854a)' : tone === 'warn' ? 'var(--st-warn, #C28F2C)' : 'var(--border-1, #1f1c15)';
+  const border = tone === 'brass' ? FOREST : tone === 'warn' ? AMBER : HAIR;
   return (
-    <div style={{ padding: '8px 10px', borderLeft: `2px solid ${border}`, background: 'var(--surf-1, #0f0d0a)', fontSize: 'var(--t-sm)', lineHeight: 1.5, color: 'var(--text-1, #d8cca8)' }}>
+    <div style={{ padding: '6px 8px', borderLeft: `2px solid ${border}`, background: CREAM, fontSize: 11, lineHeight: 1.5, color: INK_S }}>
       {children}
     </div>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────
+function deptChipSt(d: Dept): React.CSSProperties {
+  return {
+    fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600,
+    padding: '1px 6px', borderRadius: 3,
+    border: `1px solid ${DEPT_COLOR[d]}`, color: DEPT_COLOR[d],
+  };
+}
 
-const S: Record<string, React.CSSProperties> = {
-  // Sub-strip
-  subStrip: { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14, paddingBottom: 8, borderBottom: '1px solid var(--border-1, #1f1c15)' },
-  subStripLink: { padding: '6px 12px', fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-mute, #9b907a)', border: '1px solid var(--border-1, #1f1c15)', borderRadius: 3, textDecoration: 'none', background: 'var(--surf-1, #0f0d0a)' },
-  subStripLinkActive: { color: 'var(--surf-0, #0a0a0a)', background: 'var(--brass, #a8854a)', borderColor: 'var(--brass, #a8854a)', fontWeight: 700 },
-
-  // Controls
-  controlsRow: { display: 'flex', gap: 18, flexWrap: 'wrap', marginBottom: 12 },
-  controlGroup: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-  controlLabel: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--brass, #a8854a)' },
-  chip: { padding: '3px 9px', fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 11, letterSpacing: '0.10em', color: 'var(--text-1, #d8cca8)', background: 'transparent', border: '1px solid var(--border-1, #1f1c15)', borderRadius: 999, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' },
-  chipActive: { color: 'var(--surf-0, #0a0a0a)', background: 'var(--brass, #a8854a)', borderColor: 'var(--brass, #a8854a)', fontWeight: 700 },
-
-  // Calendar grid
-  monthGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 },
-  monthCard: { background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-1, #1f1c15)', borderRadius: 6, padding: '10px 12px 12px', display: 'flex', flexDirection: 'column', gap: 8 },
-  monthHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--brass, #a8854a)' },
-  monthCount: { color: 'var(--text-mute, #9b907a)', fontVariantNumeric: 'tabular-nums', fontSize: 9 },
-  dowRow: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1 },
-  dowCell: { textAlign: 'center', fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 9, color: 'var(--text-place, #5a5448)', padding: '2px 0' },
-  daysGrid: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1 },
-  dayCell: { height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 11, borderRadius: 3 },
-  eventList: { marginTop: 6, paddingLeft: 0, listStyle: 'none', borderTop: '1px solid var(--border-1, #1f1c15)', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 3 },
-  eventLi: { display: 'flex', alignItems: 'baseline', gap: 6, fontSize: 11, lineHeight: 1.4 },
-  eventDot: { width: 6, height: 6, borderRadius: '50%', flexShrink: 0, alignSelf: 'center' },
-  eventDay: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 10, color: 'var(--text-mute, #9b907a)', minWidth: 18 },
-  eventName: { color: 'var(--text-1, #d8cca8)', flex: 1 },
-  eventMore: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 10, color: 'var(--text-place, #5a5448)', textAlign: 'right' },
-  highBadge: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 8, letterSpacing: '0.10em', textTransform: 'uppercase', fontWeight: 700, color: 'var(--brass, #a8854a)', border: '1px solid var(--brass, #a8854a)', padding: '0 3px', borderRadius: 2 },
-
-  // Legend
-  legendRow: { display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 16 },
-  legendLabel: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-mute, #9b907a)' },
-
-  // List view
-  listRow: { display: 'grid', gridTemplateColumns: '170px 1fr', gap: 14, padding: '10px 12px', background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-1, #1f1c15)', borderRadius: 4 },
-  listDayCol: { paddingTop: 2 },
-  listDayPill: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 11, letterSpacing: '0.10em', textTransform: 'uppercase', color: 'var(--brass, #a8854a)', fontWeight: 700 },
-  listThrough: { fontSize: 10, color: 'var(--text-mute, #9b907a)', marginTop: 2 },
-  listBodyCol: { display: 'flex', flexDirection: 'column', gap: 6 },
-  listHead: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  typeChip: { background: 'var(--surf-0, #0a0a0a)', color: 'var(--text-mute, #9b907a)', padding: '1px 6px', borderRadius: 3, fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase' },
-  tentativeChip: { background: 'var(--paper-deep, #2a261d)', color: 'var(--brass-soft, #c4a06b)', padding: '1px 6px', borderRadius: 3, fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 700 },
-  highChip: { background: 'rgba(168,133,74,0.15)', color: 'var(--brass, #a8854a)', padding: '1px 6px', borderRadius: 3, fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 700, border: '1px solid var(--brass, #a8854a)' },
-  listBrief: { fontSize: 12, color: 'var(--text-1, #d8cca8)', lineHeight: 1.5 },
-  deptRow: { display: 'flex', gap: 6, flexWrap: 'wrap' },
-  sourceRow: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 11, color: 'var(--text-mute, #9b907a)', letterSpacing: '0.10em' },
-
-  // Impact
-  impactRow: { display: 'grid', gridTemplateColumns: '12px 110px 1fr 40px', gap: 8, alignItems: 'center' },
-  impactDot: { width: 10, height: 10, borderRadius: '50%' },
-  impactLabel: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-1, #d8cca8)' },
-  impactBarOuter: { height: 8, background: 'var(--surf-0, #0a0a0a)', border: '1px solid var(--border-1, #1f1c15)', borderRadius: 4, overflow: 'hidden' },
-  impactBarInner: { height: '100%' },
-  impactCount: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-sm)', color: 'var(--brass, #a8854a)', textAlign: 'right' },
-
-  // High-demand cards
-  highRow: { background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-1, #1f1c15)', borderLeft: '3px solid var(--brass, #a8854a)', borderRadius: 6, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 4 },
-  highHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 },
-  highName: { fontFamily: "'Fraunces', Georgia, serif", fontStyle: 'italic', fontSize: 'var(--t-md)', color: 'var(--text-0, #e9e1ce)' },
-  highScore: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-lg)', color: 'var(--brass, #a8854a)', fontWeight: 700 },
-  highMeta: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.12em', color: 'var(--text-mute, #9b907a)' },
-  highBrief: { fontSize: 'var(--t-sm)', lineHeight: 1.5, color: 'var(--text-1, #d8cca8)' },
-
-  // Market rows
-  marketRow: { display: 'flex', justifyContent: 'space-between', padding: '4px 6px', borderBottom: '1px solid var(--border-1, #1f1c15)' },
-  marketName: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.10em', color: 'var(--text-1, #d8cca8)' },
-  marketCount: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-sm)', color: 'var(--brass, #a8854a)' },
-
-  // Agents
-  agentCard: { background: 'var(--surf-1, #0f0d0a)', border: '1px solid var(--border-1, #1f1c15)', borderRadius: 6, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 },
-  agentHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  agentName: { fontSize: 'var(--t-sm)', fontWeight: 600, color: 'var(--text-0, #e9e1ce)' },
-  agentDesc: { fontSize: 'var(--t-xs)', lineHeight: 1.5, color: 'var(--text-mute, #9b907a)', minHeight: 54 },
-  signalPill: { fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: 'var(--t-xs)', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--brass, #a8854a)', border: '1px solid var(--brass, #a8854a)', padding: '1px 5px', borderRadius: 3 },
-
-  footerNote: { marginTop: 18, padding: '10px 12px', fontSize: 'var(--t-xs)', color: 'var(--text-mute, #9b907a)', fontStyle: 'italic', borderTop: '1px solid var(--border-1, #1f1c15)' },
+const subLinkSt: React.CSSProperties = {
+  padding: '6px 12px', fontSize: 11, letterSpacing: '0.10em', textTransform: 'uppercase',
+  color: INK_M, border: `1px solid ${HAIR}`, borderRadius: 3, textDecoration: 'none', background: WHITE, fontWeight: 600,
 };
+const subLinkActiveSt: React.CSSProperties = {
+  color: WHITE, background: FOREST, borderColor: FOREST,
+};
+const filterLabelSt: React.CSSProperties = { fontSize: 10, letterSpacing: '0.10em', textTransform: 'uppercase', color: FOREST, fontWeight: 700 };
+const chipSt: React.CSSProperties = { padding: '3px 9px', fontSize: 11, letterSpacing: '0.06em', color: INK, background: WHITE, border: `1px solid ${HAIR}`, borderRadius: 999, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' };
+const chipActiveSt: React.CSSProperties = { color: WHITE, background: FOREST, borderColor: FOREST, fontWeight: 700 };
+const legendLabelSt: React.CSSProperties = { fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: INK_M };
+const agentCardSt: React.CSSProperties = { background: CREAM, border: `1px solid ${HAIR}`, borderRadius: 4, padding: '8px 10px' };
+const signalPillSt: React.CSSProperties = { fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: FOREST, border: `1px solid ${FOREST}`, padding: '1px 5px', borderRadius: 2 };
+const typeChipSt: React.CSSProperties = { background: WHITE, color: INK_M, padding: '1px 6px', borderRadius: 3, fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', border: `1px solid ${HAIR}` };
+const tentativeChipSt: React.CSSProperties = { background: CREAM, color: AMBER, padding: '1px 6px', borderRadius: 3, fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 700, border: `1px solid ${AMBER}` };
+const highChipSt: React.CSSProperties = { background: WHITE, color: FOREST, padding: '1px 6px', borderRadius: 3, fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 700, border: `1px solid ${FOREST}` };
