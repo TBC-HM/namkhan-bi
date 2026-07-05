@@ -255,6 +255,7 @@ export default function DirectoryClient({
                   <SortableTh label="ADR"         k="last_adr"           currentKey={sortKey} currentDir={sortDir} onClick={toggleSort} align="right" />
                   <th style={th} title="Spend flags · R=Restaurant · S=Spa · A=Activities · T=reTail">Spend</th>
                   <SortableTh label="Source"      k="top_source"         currentKey={sortKey} currentDir={sortDir} onClick={toggleSort} />
+                  <th style={th} title="Newsletters received · orange dot = currently queued in a scheduled campaign">✉</th>
                 </tr>
               </thead>
               <tbody>
@@ -291,6 +292,9 @@ export default function DirectoryClient({
                       {!r.spent_restaurant && !r.spent_spa && !r.spent_activities && !r.spent_retail && <span style={{ color: '#8A8A8A', fontSize: 10 }}>—</span>}
                     </td>
                     <td style={tdL}>{r.last_source ?? r.top_source ?? '—'}</td>
+                    <td style={tdL}>
+                      <NewsletterCell sent={r.newsletters_sent ?? 0} pending={r.newsletters_pending ?? 0} lastAt={r.last_sent_at ?? null} />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -453,6 +457,25 @@ function SortableTh({ label, k, currentKey, currentDir, onClick, align }: {
         {active ? (currentDir === 'asc' ? '↑' : '↓') : '↕'}
       </span>
     </th>
+  );
+}
+
+function NewsletterCell({ sent, pending, lastAt }: { sent: number; pending: number; lastAt: string | null }) {
+  if (sent === 0 && pending === 0) return <span style={{ color: '#C8C0A6', fontSize: 10 }}>—</span>;
+  const days = lastAt ? Math.floor((Date.now() - new Date(lastAt).getTime()) / 86400000) : null;
+  const daysLabel = days != null ? (days === 0 ? 'today' : days === 1 ? '1d ago' : `${days}d ago`) : '';
+  const tip = [
+    sent > 0 ? `${sent} newsletter${sent === 1 ? '' : 's'} received${daysLabel ? ' · last ' + daysLabel : ''}` : null,
+    pending > 0 ? `${pending} currently queued in a scheduled campaign` : null,
+  ].filter(Boolean).join(' · ');
+  return (
+    <span title={tip} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#3A3A3A' }}>
+      {sent > 0 && <span style={{ fontVariantNumeric: 'tabular-nums' }}>{sent}</span>}
+      {pending > 0 && <span style={{
+        display: 'inline-block', width: 8, height: 8, borderRadius: 4,
+        background: '#C79A6B', boxShadow: '0 0 0 1px #8B5A1C',
+      }} />}
+    </span>
   );
 }
 
