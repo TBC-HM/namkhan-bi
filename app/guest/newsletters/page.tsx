@@ -9,6 +9,7 @@ import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import ScheduleDrawer from './_components/ScheduleDrawer';
 import HaltButton from './_components/HaltButton';
 import RecipientsButton from './_components/RecipientsButton';
+import DeleteCampaignButton from './_components/DeleteCampaignButton';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -131,6 +132,7 @@ export default async function NewslettersPage() {
                       <td style={{ ...tdR, textAlign:'right' }}>
                         <Link href={`/guest/newsletters/${r.campaign_id}/preview`} style={actionBtnLight}>Preview</Link>
                         <HaltButton campaign_id={r.campaign_id} campaign_name={r.name} pending_count={r.pending_count} />
+                        <DeleteCampaignButton campaign_id={r.campaign_id} campaign_name={r.name} pending_count={r.pending_count} />
                       </td>
                     </tr>
                   ))}
