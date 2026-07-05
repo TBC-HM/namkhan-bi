@@ -360,8 +360,9 @@ const MARKETING_CFG: DeptCfg = {
     { label: 'Info',        href: '/marketing/library'     },
     { label: 'Media',       href: '/marketing/gallery'       },
     { label: 'Campaigns',   href: '/marketing/campaigns'   },
-    // PBS 2026-07-05: Prospects marketing engine — lead nurture funnels for
-    // people who NEVER stayed (vs /guest/newsletters = already stayed).
+    // PBS 2026-07-05: Prospects = lead list + email sequences (nested).
+    // Funnels = growth cockpit / CRO dashboard (Phase 1 hardcoded).
+    // Distinct products; do NOT merge them.
     { label: 'Prospects',   href: '/marketing/prospects'   },
     { label: 'Funnels',     href: '/marketing/funnels'     },
     { label: 'Compiler',    href: '/marketing/compiler'    },
