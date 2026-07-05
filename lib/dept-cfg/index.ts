@@ -358,7 +358,7 @@ const MARKETING_CFG: DeptCfg = {
     // Taxonomy under a single submenu button (4-tab strip rendered on each
     // page). First-tab destination = Library — matches Acc-hub pattern.
     { label: 'Info',        href: '/marketing/library'     },
-    { label: 'Media',       href: '/marketing/media'       },
+    { label: 'Media',       href: '/marketing/gallery'       },
     { label: 'Campaigns',   href: '/marketing/campaigns'   },
     { label: 'Compiler',    href: '/marketing/compiler'    },
     // PBS 2026-05-16: Social hub absorbs Influencers as a 2nd tab.
@@ -374,7 +374,7 @@ const MARKETING_CFG: DeptCfg = {
   quickChips: [
     { label: 'HoD',       href: '/marketing'             },
     { label: 'Library',   href: '/marketing/library'     },
-    { label: 'Media',     href: '/marketing/media'       },
+    { label: 'Media',     href: '/marketing/gallery'       },
     { label: 'Campaigns', href: '/marketing/campaigns'   },
     { label: 'Social',    href: '/marketing/social'      },
     { label: 'Reviews',   href: '/marketing/reviews'     },
