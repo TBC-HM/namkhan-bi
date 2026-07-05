@@ -1,25 +1,27 @@
 'use client';
 // app/guest/newsletters/[campaign_id]/_components/CampaignEditor.tsx
-// PBS 2026-07-03: view + edit a campaign with live preview + Save + Delete.
+// PBS 2026-07-05 v2: planned_date input · inline image preview · MediaPicker button.
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import MediaPicker from './MediaPicker';
 
-interface Props { initial: any; }
+interface Props { initial: Record<string, unknown>; }
 
-const WHITE='#FFFFFF'; const HAIR='#E6DFCC'; const INK='#1B1B1B'; const INK_S='#3A3A3A';
+const WHITE='#FFFFFF'; const HAIR='#E6DFCC'; const INK='#1B1B1B';
 const INK_M='#5A5A5A'; const GREEN='#1F3A2E'; const RED='#B03826';
 
 function renderMarkdownLite(md: string): string {
-  let html = md
+  const html = md
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/^### (.+)$/gm,'<h3>$1</h3>')
     .replace(/^## (.+)$/gm,'<h2>$1</h2>')
     .replace(/^# (.+)$/gm,'<h1>$1</h1>')
     .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
     .replace(/\*([^*]+)\*/g,'<em>$1</em>')
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g,'<img src="$2" alt="$1" style="max-width:100%;height:auto;display:block;margin:12px 0;border-radius:3px;" />')
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2">$1</a>')
     .replace(/^---$/gm,'<hr />')
     .replace(/\n\n/g,'</p><p>');
@@ -28,23 +30,31 @@ function renderMarkdownLite(md: string): string {
 
 export default function CampaignEditor({ initial }: Props) {
   const router = useRouter();
-  const [name,     setName]     = useState<string>(initial.name ?? '');
-  const [subject,  setSubject]  = useState<string>(initial.subject ?? '');
-  const [bodyMd,   setBodyMd]   = useState<string>(initial.body_md ?? '');
-  const [fromName, setFromName] = useState<string>(initial.from_name ?? 'Felix at The Namkhan');
-  const [fromEmail,setFromEmail]= useState<string>(initial.from_email ?? 'hello@thenamkhan.com');
-  const [replyTo,  setReplyTo]  = useState<string>(initial.reply_to ?? 'hello@thenamkhan.com');
-  const [bookCode, setBookCode] = useState<string>(initial.booking_code ?? '');
-  const [bookUrl,  setBookUrl]  = useState<string>(initial.booking_url ?? '');
-  const [status,   setStatus]   = useState<string>(initial.status ?? 'draft');
+  const init = initial as {
+    campaign_id: string; name?: string; subject?: string; body_md?: string; from_name?: string;
+    from_email?: string; reply_to?: string; booking_code?: string; booking_url?: string;
+    status?: string; template_key?: string | null; created_at: string; planned_date?: string | null;
+  };
+  const [name,     setName]     = useState<string>(init.name ?? '');
+  const [subject,  setSubject]  = useState<string>(init.subject ?? '');
+  const [bodyMd,   setBodyMd]   = useState<string>(init.body_md ?? '');
+  const [fromName, setFromName] = useState<string>(init.from_name ?? 'The Namkhan');
+  const [fromEmail,setFromEmail]= useState<string>(init.from_email ?? 'info@thenamkhan.com');
+  const [replyTo,  setReplyTo]  = useState<string>(init.reply_to ?? 'info@thenamkhan.com');
+  const [bookCode, setBookCode] = useState<string>(init.booking_code ?? '');
+  const [bookUrl,  setBookUrl]  = useState<string>(init.booking_url ?? '');
+  const [status,   setStatus]   = useState<string>(init.status ?? 'draft');
+  const [plannedDate, setPlannedDate] = useState<string>(init.planned_date ?? '');
   const [saving,   setSaving]   = useState(false);
   const [msg,      setMsg]      = useState<string | null>(null);
+  const [pickerMode, setPickerMode] = useState<null | 'insert' | 'replace-hero'>(null);
+  const bodyRef = useRef<HTMLTextAreaElement | null>(null);
 
   async function save() {
     setSaving(true); setMsg(null);
     try {
       const { error } = await supabase.rpc('fn_update_campaign', {
-        p_campaign_id: initial.campaign_id,
+        p_campaign_id: init.campaign_id,
         p_name: name, p_subject: subject, p_body_md: bodyMd,
         p_from_name: fromName, p_from_email: fromEmail, p_reply_to: replyTo,
         p_booking_code: bookCode, p_booking_url: bookUrl,
@@ -52,9 +62,18 @@ export default function CampaignEditor({ initial }: Props) {
         p_relative_kind: null, p_relative_days: null, p_relative_hour: null,
       });
       if (error) throw error;
+
+      // planned_date via separate RPC
+      const { error: err2 } = await supabase.rpc('fn_set_campaign_planned_date', {
+        p_campaign_id: init.campaign_id,
+        p_planned_date: plannedDate ? plannedDate : null,
+      });
+      if (err2) throw err2;
+
       setMsg('Saved.'); router.refresh();
-    } catch (e: any) {
-      setMsg('Error: ' + (e?.message ?? e));
+    } catch (e) {
+      const em = e instanceof Error ? e.message : String(e);
+      setMsg('Error: ' + em);
     } finally { setSaving(false); }
   }
 
@@ -62,13 +81,28 @@ export default function CampaignEditor({ initial }: Props) {
     if (!confirm('Delete this campaign? This removes it and all its recipients.')) return;
     setSaving(true); setMsg(null);
     try {
-      const { error } = await supabase.rpc('fn_delete_campaign', { p_campaign_id: initial.campaign_id });
+      const { error } = await supabase.rpc('fn_delete_campaign', { p_campaign_id: init.campaign_id });
       if (error) throw error;
       router.push('/guest/newsletters');
-    } catch (e: any) {
-      setMsg('Error: ' + (e?.message ?? e));
-      setSaving(false);
+    } catch (e) {
+      const em = e instanceof Error ? e.message : String(e);
+      setMsg('Error: ' + em); setSaving(false);
     }
+  }
+
+  function insertImage(url: string) {
+    const ta = bodyRef.current;
+    const markdown = `![](${url})`;
+    if (!ta) { setBodyMd(bodyMd + '\n\n' + markdown + '\n'); return; }
+    const start = ta.selectionStart; const end = ta.selectionEnd;
+    setBodyMd(bodyMd.slice(0, start) + markdown + bodyMd.slice(end));
+    setTimeout(() => { ta.focus(); ta.setSelectionRange(start + markdown.length, start + markdown.length); }, 0);
+  }
+  function replaceHero(url: string) {
+    // find first ![](...) and replace or prepend
+    const heroRe = /^!\[[^\]]*\]\([^)]*\)/m;
+    if (heroRe.test(bodyMd)) setBodyMd(bodyMd.replace(heroRe, `![](${url})`));
+    else setBodyMd(`![](${url})\n\n` + bodyMd);
   }
 
   return (
@@ -76,9 +110,9 @@ export default function CampaignEditor({ initial }: Props) {
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-end', flexWrap:'wrap', gap:12, marginBottom:16 }}>
         <div>
           <div style={{ fontSize:10, letterSpacing:'0.08em', textTransform:'uppercase', color:INK_M }}>Guest · Newsletter</div>
-          <h1 style={{ fontSize:22, fontWeight:600, margin:'4px 0 0 0', color:INK }}>{initial.name}</h1>
+          <h1 style={{ fontSize:22, fontWeight:600, margin:'4px 0 0 0', color:INK }}>{init.name}</h1>
           <div style={{ fontSize:12, color:INK_M, marginTop:4 }}>
-            Status: <strong style={{ color:INK }}>{status}</strong> · Template: {initial.template_key ?? '—'} · Created {new Date(initial.created_at).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })}
+            Status: <strong style={{ color:INK }}>{status}</strong> · Template: {init.template_key ?? '—'} · Created {new Date(init.created_at).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })}
           </div>
         </div>
         <Link href="/guest/newsletters" style={{ padding:'6px 14px', fontSize:12, color:INK_M, textDecoration:'none' }}>← Back to overview</Link>
@@ -89,6 +123,15 @@ export default function CampaignEditor({ initial }: Props) {
           {field('Campaign name', <input type="text" value={name} onChange={(e) => setName(e.target.value)} style={ip} />)}
           {field('Subject', <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} style={ip} />)}
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+            {field('Planned send date', <input type="date" value={plannedDate ?? ''} onChange={(e) => setPlannedDate(e.target.value)} style={ip} />)}
+            {field('Status',
+              <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ ...ip, background:WHITE }}>
+                <option value="draft">draft</option>
+                <option value="scheduled">scheduled</option>
+                <option value="archived">archived</option>
+              </select>)}
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
             {field('From name', <input type="text" value={fromName} onChange={(e) => setFromName(e.target.value)} style={ip} />)}
             {field('From email', <input type="text" value={fromEmail} onChange={(e) => setFromEmail(e.target.value)} style={ip} />)}
           </div>
@@ -97,15 +140,15 @@ export default function CampaignEditor({ initial }: Props) {
             {field('Booking code', <input type="text" value={bookCode} onChange={(e) => setBookCode(e.target.value)} style={ip} />)}
             {field('Booking URL', <input type="text" value={bookUrl} onChange={(e) => setBookUrl(e.target.value)} style={ip} />)}
           </div>
-          {field('Body (Markdown)',
-            <textarea rows={18} value={bodyMd} onChange={(e) => setBodyMd(e.target.value)}
-              style={{ ...ip, fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize:12, resize:'vertical' }} />)}
-          {field('Status',
-            <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ ...ip, background:WHITE }}>
-              <option value="draft">draft</option>
-              <option value="scheduled">scheduled</option>
-              <option value="archived">archived</option>
-            </select>)}
+
+          <div style={{ display:'flex', gap:8, marginBottom:8, alignItems:'center' }}>
+            <label style={{ fontSize:10, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, flex:1 }}>Body (Markdown)</label>
+            <button type="button" onClick={() => setPickerMode('replace-hero')} style={smallBtn}>Change hero photo</button>
+            <button type="button" onClick={() => setPickerMode('insert')} style={smallBtn}>Insert photo</button>
+          </div>
+          <textarea ref={bodyRef} rows={18} value={bodyMd} onChange={(e) => setBodyMd(e.target.value)}
+            style={{ ...ip, fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize:12, resize:'vertical', marginBottom:12 }} />
+
           <div style={{ display:'flex', gap:8, alignItems:'center', marginTop:12 }}>
             <button type="button" onClick={save} disabled={saving} style={{
               padding:'8px 16px', fontSize:13, fontWeight:600,
@@ -134,24 +177,32 @@ export default function CampaignEditor({ initial }: Props) {
             <div style={{ padding:'18px 24px', background:'#F5F0E1', borderTop:'1px solid '+HAIR, textAlign:'center', fontSize:11, color:INK_M, lineHeight:1.6 }}>
               <div style={{ fontWeight:600, color:INK, letterSpacing:'0.08em' }}>THE NAMKHAN</div>
               <div>Ban Xieng Lom, Luang Prabang, Laos</div>
-              <div>hello@thenamkhan.com</div>
+              <div>info@thenamkhan.com</div>
               <div style={{ margin:'10px 0' }}>[ IG ] [ FB ] [ TikTok ] [ Website ]</div>
               <div>Unsubscribe · Update preferences</div>
             </div>
           </div>
         </div>
       </div>
+
+      {pickerMode && (
+        <MediaPicker
+          onPick={(url) => { if (pickerMode === 'replace-hero') replaceHero(url); else insertImage(url); setPickerMode(null); }}
+          onClose={() => setPickerMode(null)}
+        />
+      )}
     </div>
   );
 }
 
-function field(label: string, child: any) {
+function field(label: string, child: React.ReactNode) {
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:4, marginBottom:12 }}>
-      <label style={{ fontSize:10, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M }}>{label}</label>
+      <label style={{ fontSize:10, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:'#5A5A5A' }}>{label}</label>
       {child}
     </div>
   );
 }
 
 const ip: React.CSSProperties = { padding:'6px 10px', border:'1px solid '+HAIR, borderRadius:4, fontSize:13, color:INK, boxSizing:'border-box', width:'100%' };
+const smallBtn: React.CSSProperties = { padding:'4px 10px', fontSize:10, fontWeight:600, background:WHITE, color:GREEN, border:'1px solid '+HAIR, borderRadius:3, cursor:'pointer' };
