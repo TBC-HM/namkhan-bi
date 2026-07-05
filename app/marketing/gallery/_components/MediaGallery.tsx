@@ -18,7 +18,7 @@ interface MediaRow {
 }
 interface Props { rows: MediaRow[]; }
 
-const TIERS = ['hero','signature','feature','support','archive'];
+const TIERS = ['tier_logos','tier_website_hero','tier_ota_profile','tier_social_pool','tier_internal','tier_archive'];
 
 export default function MediaGallery({ rows }: Props) {
   const router = useRouter();
