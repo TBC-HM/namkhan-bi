@@ -8,6 +8,7 @@ import { GUEST_SUBPAGES } from '../_subpages';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import ScheduleDrawer from './_components/ScheduleDrawer';
 import HaltButton from './_components/HaltButton';
+import RecipientsButton from './_components/RecipientsButton';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -124,7 +125,7 @@ export default async function NewslettersPage() {
                         <div style={{ fontSize:11, color:'#5A5A5A', marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.subject}</div>
                       </td>
                       <td style={tdL}>{fmtRelSchedule(r)}</td>
-                      <td style={tdR}>{r.recipients_count}</td>
+                      <td style={tdR}><RecipientsButton campaign_id={r.campaign_id} campaign_name={r.name} count={r.recipients_count} /></td>
                       <td style={tdR}>{r.pending_count}</td>
                       <td style={tdL}>{fmtDateTime(r.updated_at)}</td>
                       <td style={{ ...tdR, textAlign:'right' }}>
