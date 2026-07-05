@@ -1,6 +1,6 @@
 // app/marketing/media/page.tsx
-// PBS 2026-07-05: Media Library — DashboardPage + KPI strip + gallery grid.
-// Follows the guest-area pattern (paper-white, dropdown row, KpiTile).
+// PBS 2026-07-05 v2: Media Library — new-design shell (DashboardPage + KPI + gallery).
+// Force-rebuild marker: MEDIA_V2_20260705_1200
 
 import Link from 'next/link';
 import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
@@ -9,7 +9,7 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import MediaGallery from './_components/MediaGallery';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 60;
+export const revalidate = 0;
 
 interface MediaRow {
   asset_id: string;
@@ -27,7 +27,7 @@ interface MediaRow {
 
 export default async function MarketingMediaPage() {
   const sb = getSupabaseAdmin();
-  const { data } = await sb.from('v_marketing_media_page').select('*').limit(500);
+  const { data, error } = await sb.from('v_marketing_media_page').select('*').limit(500);
   const rows: MediaRow[] = (data as MediaRow[]) ?? [];
 
   const photos = rows.filter(r => r.asset_type === 'photo');
@@ -53,25 +53,27 @@ export default async function MarketingMediaPage() {
   }));
 
   return (
-    <DashboardPage
-      title="Marketing · Media Library"
-      subtitle={`${rows.length.toLocaleString()} asset${rows.length===1?'':'s'} · click any photo to copy its URL or insert into a draft`}
-      tabs={tabs}
-    >
-      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
-        {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
-      </div>
+    <div style={{ background:'#FFFFFF', minHeight:'100vh' }} data-page="MEDIA_V2_20260705">
+      <DashboardPage
+        title="Marketing · Media Library (new)"
+        subtitle={`${rows.length.toLocaleString()} asset${rows.length===1?'':'s'} · ${error ? 'ERROR: ' + error.message : 'click any photo to copy its URL for a newsletter'}`}
+        tabs={tabs}
+      >
+        <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
+          {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
+        </div>
 
-      <div style={{ gridColumn: '1 / -1', display:'flex', justifyContent:'flex-end', gap: 8 }}>
-        <Link href="/marketing/upload" style={{
-          padding:'6px 14px', fontSize:12, fontWeight:600, background:'#084838', color:'#FFFFFF',
-          border:'none', borderRadius:4, textDecoration:'none',
-        }}>+ Upload new</Link>
-      </div>
+        <div style={{ gridColumn: '1 / -1', display:'flex', justifyContent:'flex-end', gap: 8 }}>
+          <Link href="/marketing/upload" style={{
+            padding:'6px 14px', fontSize:12, fontWeight:600, background:'#084838', color:'#FFFFFF',
+            border:'none', borderRadius:4, textDecoration:'none',
+          }}>+ Upload new</Link>
+        </div>
 
-      <div style={{ gridColumn: '1 / -1' }}>
-        <MediaGallery rows={rows} />
-      </div>
-    </DashboardPage>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <MediaGallery rows={rows} />
+        </div>
+      </DashboardPage>
+    </div>
   );
 }
