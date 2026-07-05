@@ -1,19 +1,34 @@
 // app/marketing/library/page.tsx
-// Brand & Marketing · Library — main media browser.
-// 3-column layout: filter rail · asset grid · (right drawer mounted globally in layout).
-// Uses URL search params for filter state (server-component-friendly).
+// PBS 2026-07-05: Info hub · Library tab — new paper-white design.
+// Migrated from legacy <Page>+<KpiBox>+<Card> shell to DashboardPage+KpiTile.
+// 4-tab Info strip (Library · Events · Audiences · Taxonomy) rendered above KPIs.
+//
+// Data sources (all LIVE, from marketing.v_media_ready + siblings):
+//   • getMediaReady       → mkt_v_media_ready
+//   • getMediaTierCounts  → tier totals for the 5 tiers + logos
+//   • getTaxonomy         → mkt_taxonomy tags for filter rail
+//   • getCuratorPicks     → top qc + brand-fit picks
+//   • getRoomTypeBuckets  → room-type coverage buckets
+//   • getOtaPack          → 50-photo OTA carousel template
+//
+// Preserves all functional logic (URL-driven filters, tier + tag filter rail,
+// AI search, drop zone, curator carousel, OTA pack, room buckets, main grid).
 
+import type { CSSProperties } from 'react';
 import Link from 'next/link';
-import Page from '@/components/page/Page';
-import Card from '@/components/sections/Card';
-import KpiBox from '@/components/kpi/KpiBox';
+import {
+  DashboardPage, KpiTile,
+  type DashboardTab, type KpiTileProps,
+} from '@/app/(cockpit)/_design';
 import AssetGrid from '@/components/marketing/AssetGrid';
 import LibraryAiSearch from '@/components/marketing/LibraryAiSearch';
 import LibraryDropZone from '@/components/marketing/LibraryDropZone';
 import LibraryCockpit from './_components/LibraryCockpit';
-import { getMediaReady, getMediaTierCounts, getTaxonomy, getCuratorPicks, getRoomTypeBuckets, getOtaPack, TIER_LABEL } from '@/lib/marketing';
+import {
+  getMediaReady, getMediaTierCounts, getTaxonomy, getCuratorPicks,
+  getRoomTypeBuckets, getOtaPack, TIER_LABEL,
+} from '@/lib/marketing';
 import { MARKETING_SUBPAGES } from '../_subpages';
-import TabStrip, { INFO_TABS } from '@/app/finance/_components/TabStrip';
 
 type CockpitView = 'studio' | 'coverage' | 'briefs' | 'pipeline';
 function parseCockpitView(v: string | string[] | undefined): CockpitView {
@@ -22,7 +37,23 @@ function parseCockpitView(v: string | string[] | undefined): CockpitView {
 }
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 60;
+export const revalidate = 30;
+
+const WHITE = '#FFFFFF';
+const HAIR  = '#E6DFCC';
+const INK   = '#1B1B1B';
+const INK_S = '#3A3A3A';
+const INK_M = '#5A5A5A';
+const CREAM = '#F7F0E1';
+const FOREST= '#084838';
+const RED   = '#B03826';
+
+const INFO_TABS: Array<{ key: string; label: string; href: string }> = [
+  { key: 'library',   label: 'Library',    href: '/marketing/library'   },
+  { key: 'events',    label: 'Events',     href: '/marketing/events'    },
+  { key: 'audiences', label: 'Audiences',  href: '/marketing/audiences' },
+  { key: 'taxonomy',  label: 'Taxonomy',   href: '/marketing/taxonomy'  },
+];
 
 const TIERS = [
   { key: '',                  label: 'All' },
@@ -49,20 +80,18 @@ export default async function LibraryPage({ searchParams }: SP) {
     getOtaPack(),
   ]);
 
-  const otaTotalFound = otaPack.reduce((s, sl) => s + sl.found, 0);
+  const otaTotalFound  = otaPack.reduce((s, sl) => s + sl.found, 0);
   const otaTotalTarget = otaPack.reduce((s, sl) => s + sl.min_count, 0);
-  const otaTotalGap = otaPack.reduce((s, sl) => s + sl.gap, 0);
+  const otaTotalGap    = otaPack.reduce((s, sl) => s + sl.gap,   0);
   const roomsUnderTarget = roomBuckets.filter(b => b.under_target).length;
 
-  // Total ready EXCLUDES tier_archive (logos / decommissioned) so the visible
-  // KPI matches the visible grid by default.
   const archiveCount = Number(tierRows.find(r => r.primary_tier === 'tier_archive')?.total ?? 0);
   const totalReady   = tierRows.reduce((s, r) => s + Number(r.total ?? 0), 0) - archiveCount;
-  const otaCount     = tierRows.find(r => r.primary_tier === 'tier_ota_profile')?.total  ?? 0;
-  const heroCount    = tierRows.find(r => r.primary_tier === 'tier_website_hero')?.total ?? 0;
-  const socialCount  = tierRows.find(r => r.primary_tier === 'tier_social_pool')?.total  ?? 0;
+  const otaCount     = Number(tierRows.find(r => r.primary_tier === 'tier_ota_profile')?.total  ?? 0);
+  const heroCount    = Number(tierRows.find(r => r.primary_tier === 'tier_website_hero')?.total ?? 0);
+  const socialCount  = Number(tierRows.find(r => r.primary_tier === 'tier_social_pool')?.total  ?? 0);
+  const internalCount = Number(tierRows.find(r => r.primary_tier === 'tier_internal')?.total ?? 0);
 
-  // Filter to text-search match on the server (since we don't have a full-text index yet)
   const filtered = q
     ? assets.filter(a =>
         (a.caption ?? '').toLowerCase().includes(q.toLowerCase()) ||
@@ -71,7 +100,6 @@ export default async function LibraryPage({ searchParams }: SP) {
       )
     : assets;
 
-  // Group taxonomy by category for the filter rail
   const tagsByCategory = new Map<string, Array<{ label: string; count?: number }>>();
   for (const t of taxonomy) {
     const arr = tagsByCategory.get(t.category) ?? [];
@@ -79,342 +107,322 @@ export default async function LibraryPage({ searchParams }: SP) {
     tagsByCategory.set(t.category, arr);
   }
 
+  const tabs: DashboardTab[] = MARKETING_SUBPAGES.map((s: any) => ({
+    key: s.href, label: s.label, href: s.href,
+    active: s.href === '/marketing/library',
+  }));
+
+  const tiles: KpiTileProps[] = [
+    { label: 'Total ready',   value: totalReady,     size: 'sm', footnote: 'ex. logos' },
+    { label: 'OTA',           value: otaCount,       size: 'sm', footnote: 'tier_ota_profile' },
+    { label: 'Website',       value: heroCount,      size: 'sm', footnote: 'tier_website_hero' },
+    { label: 'Social',        value: socialCount,    size: 'sm', footnote: 'tier_social_pool' },
+    { label: 'Internal',      value: internalCount,  size: 'sm', footnote: 'tier_internal' },
+    { label: 'OTA pack',      value: `${otaTotalFound}/${otaTotalTarget}`, size: 'sm', footnote: otaTotalGap > 0 ? `${otaTotalGap} short` : 'ready' },
+    { label: 'Rooms short',   value: roomsUnderTarget, size: 'sm', footnote: `of ${roomBuckets.length}` },
+  ];
+
   return (
-    <Page
-      eyebrow="Marketing · Library"
-      title={<>Media <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>library</em>.</>}
-      subPages={MARKETING_SUBPAGES}
-    >
-      <TabStrip tabs={INFO_TABS} activeKey="library" />
-
-      {/* PBS 2026-05-16: AI Creation Cockpit on top — Studio · Coverage · Briefs · Pipeline.
-          DropZone now uses signed-URL flow (handles up to 500 MB / file). */}
-      <LibraryCockpit
-        view={parseCockpitView(searchParams?.view)}
-        liveCounts={{
-          totalReady,
-          ota: Number(otaCount),
-          hero: Number(heroCount),
-          social: Number(socialCount),
-          archive: archiveCount,
-        }}
-      />
-
-      <div style={{ height: 14 }} />
-
-      {/* AI search + Drop zone */}
-      <LibraryAiSearch />
-      <LibraryDropZone />
-
-      {/* Curator: Fresh & ready — top 12 by qc + brand-fit */}
-      {curatorPicks.length > 0 && !tier && !tag && !q && (
-        <Card
-          title="Fresh"
-          emphasis="& ready"
-          sub={`${curatorPicks.length} picks · highest qc + brand-fit · pull these for OTAs, hero, social`}
-          source="auto-tagger · vision · tier-classifier"
-        >
-          <AssetGrid assets={curatorPicks} minColPx={180} />
-        </Card>
-      )}
-
-      {/* OTA Pack: 50-photo carousel template */}
-      {!tier && !tag && !q && (
-        <Card
-          title="OTA"
-          emphasis="pack"
-          sub={`${otaTotalFound} of ${otaTotalTarget} slots filled${otaTotalGap > 0 ? ` · ${otaTotalGap} photos still needed` : ' · ready to publish'}`}
-          source="canonical Booking.com / Expedia / SLH carousel"
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            {otaPack.map(slot => (
-              <div key={slot.slot}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 6 }}>
-                  <h4 style={{
-                    fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
-                    letterSpacing: 'var(--ls-extra)', textTransform: 'uppercase',
-                    color: 'var(--ink)', margin: 0, fontWeight: 700,
-                  }}>{slot.label}</h4>
-                  <span style={{
-                    fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
-                    color: slot.gap > 0 ? 'var(--st-bad)' : 'var(--moss-glow)',
-                  }}>
-                    {slot.found}/{slot.min_count}{slot.gap > 0 ? ` · ${slot.gap} short` : ' · ✓'}
-                  </span>
-                </div>
-                {slot.samples.length > 0 ? (
-                  <AssetGrid assets={slot.samples} minColPx={150} />
-                ) : (
-                  <div style={{
-                    padding: '12px 14px', background: 'var(--st-bad-bg)',
-                    border: '1px dashed var(--st-bad-bd)', borderRadius: 4,
-                    fontSize: 'var(--t-sm)', color: 'var(--st-bad)',
-                  }}>
-                    No qualifying photos for {slot.label.toLowerCase()}. Need {slot.min_count} with qc≥70 + brand-fit≥0.7.
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* By-Room: 10 room types, 5+ photos each, gap warnings */}
-      {!tier && !tag && !q && (
-        <Card
-          title="By"
-          emphasis="room"
-          sub={`${roomBuckets.length} room types · ${roomsUnderTarget > 0 ? `${roomsUnderTarget} below 5-photo target` : 'all rooms covered'}`}
-          source="marketing.media_taxonomy.room_type"
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {roomBuckets.map(b => (
-              <div key={b.slug}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 6 }}>
-                  <h4 style={{
-                    fontFamily: 'var(--serif)', fontSize: 'var(--t-md)',
-                    color: 'var(--ink)', margin: 0,
-                  }}>{b.label}</h4>
-                  <Link
-                    href={`/marketing/library?tag=${encodeURIComponent(b.slug)}`}
-                    style={{
-                      fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)',
-                      color: b.under_target ? 'var(--st-bad)' : 'var(--moss-glow)',
-                      textDecoration: 'none',
-                    }}
-                  >
-                    {b.count} photo{b.count === 1 ? '' : 's'}{b.under_target ? ` · need ${5 - b.count} more` : ' · ✓'} →
-                  </Link>
-                </div>
-                {b.samples.length > 0 ? (
-                  <AssetGrid assets={b.samples} minColPx={150} />
-                ) : (
-                  <div style={{
-                    padding: '12px 14px', background: 'var(--st-bad-bg)',
-                    border: '1px dashed var(--st-bad-bd)', borderRadius: 4,
-                    fontSize: 'var(--t-sm)', color: 'var(--st-bad)',
-                  }}>
-                    No photos tagged <code>{b.slug}</code>. Either no shots taken yet, or photos exist but the auto-tagger missed the room link — open one and add the tag manually.
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* Tier-toggle pills + actions */}
-      <Card
-        title="Browse"
-        emphasis="library"
-        sub={`${filtered.length} asset${filtered.length === 1 ? '' : 's'}${tier ? ` · ${TIER_LABEL[tier as keyof typeof TIER_LABEL] ?? tier}` : ''}${q ? ` · matching "${q}"` : ''}`}
-        source="marketing.v_media_ready"
-        actions={
-          <form method="GET" action="/marketing/library" style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-            {tag && <input type="hidden" name="tag" value={tag} />}
-            <label
-              style={{
-                fontFamily: 'var(--mono)',
-                fontSize: 'var(--t-xs)',
-                letterSpacing: 'var(--ls-extra)',
-                textTransform: 'uppercase',
-                color: 'var(--ink-mute)',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-              }}
-            >
-              Tier
-              <select
-                name="tier"
-                aria-label="Filter library by tier"
-                defaultValue={tier}
-                style={{
-                  fontFamily: 'var(--mono)',
-                  fontSize: 'var(--t-xs)',
-                  letterSpacing: 'var(--ls-extra)',
-                  textTransform: 'uppercase',
-                  color: 'var(--ink)',
-                  background: 'var(--paper-warm)',
-                  border: '1px solid var(--line)',
-                  padding: '6px 8px',
-                  height: 32,
-                }}
-              >
-                {TIERS.map((t) => {
-                  const internalCount = Number(tierRows.find(r => r.primary_tier === 'tier_internal')?.total ?? 0);
-                  const cnt =
-                    t.key === ''                    ? totalReady :
-                    t.key === 'tier_ota_profile'    ? Number(otaCount) :
-                    t.key === 'tier_website_hero'   ? Number(heroCount) :
-                    t.key === 'tier_social_pool'    ? Number(socialCount) :
-                    t.key === 'tier_internal'       ? internalCount :
-                    t.key === 'tier_archive'        ? archiveCount :
-                    0;
-                  return (
-                    <option key={t.key || 'all'} value={t.key}>
-                      {t.label} · {cnt}
-                    </option>
-                  );
-                })}
-              </select>
-            </label>
-            <input
-              type="search"
-              name="q"
-              defaultValue={q}
-              aria-label="Search media library"
-              placeholder="Search caption, alt-text, filename…"
-              style={{
-                fontFamily: 'var(--sans)',
-                fontSize: 'var(--t-sm)',
-                color: 'var(--ink)',
-                background: 'var(--paper-warm)',
-                border: '1px solid var(--line)',
-                padding: '6px 10px',
-                height: 32,
-                minWidth: 220,
-              }}
-            />
-            <button
-              type="submit"
-              className="btn"
-              style={{ fontSize: 'var(--t-xs)', height: 32 }}
-            >
-              Search
-            </button>
-            {(tier || q || tag) && (
-              <Link
-                href="/marketing/library"
-                className="btn"
-                style={{ fontSize: 'var(--t-xs)', height: 32, textDecoration: 'none' }}
-              >
-                Clear
-              </Link>
-            )}
-            <Link href="/marketing/upload" className="btn" style={{ fontSize: "var(--t-sm)", textDecoration: 'none', background: 'var(--brass)', color: 'var(--paper-warm)', borderColor: 'var(--brass)' }}>upload ↗</Link>
-            <Link href="/marketing/campaigns/new" className="btn" style={{ fontSize: "var(--t-sm)", textDecoration: 'none', background: 'var(--moss)', color: 'var(--paper-warm)', borderColor: 'var(--moss)' }}>+ new campaign</Link>
-          </form>
-        }
+    <div style={{ background: WHITE, minHeight: '100vh' }}>
+      <DashboardPage
+        title="Marketing · Library"
+        subtitle={`${totalReady} ready assets · ${curatorPicks.length} curator picks · ${otaTotalGap > 0 ? otaTotalGap + ' OTA slots still short' : 'OTA pack complete'}`}
+        tabs={tabs}
       >
-        {/* Tier pills */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
-          {TIERS.map(t => {
-            const internalCount = Number(tierRows.find(r => r.primary_tier === 'tier_internal')?.total ?? 0);
-            const count =
-              t.key === ''                    ? totalReady :
-              t.key === 'tier_ota_profile'    ? Number(otaCount) :
-              t.key === 'tier_website_hero'   ? Number(heroCount) :
-              t.key === 'tier_social_pool'    ? Number(socialCount) :
-              t.key === 'tier_internal'       ? internalCount :
-              t.key === 'tier_archive'        ? archiveCount :
-              0;
-            const active = tier === t.key;
+        {/* 4-tab Info hub strip */}
+        <div style={{ ...fullRow, ...infoTabsBar }}>
+          {INFO_TABS.map(t => {
+            const active = t.key === 'library';
             return (
-              <Link
-                key={t.key || 'all'}
-                href={t.key ? `/marketing/library?tier=${t.key}` : '/marketing/library'}
-                className="btn"
-                style={{
-                  fontSize: "var(--t-sm)",
-                  textDecoration: 'none',
-                  background: active ? 'var(--moss)' : 'var(--paper-warm)',
-                  color: active ? 'var(--paper-warm)' : 'var(--ink)',
-                  borderColor: active ? 'var(--moss)' : 'var(--line)',
-                }}
-              >{t.label} <span style={{ fontFamily: 'var(--mono)', opacity: 0.7, marginLeft: 4 }}>{count}</span></Link>
+              <Link key={t.key} href={t.href} style={{
+                ...infoTab,
+                color: active ? FOREST : INK_M,
+                borderBottom: active ? `2px solid ${FOREST}` : '2px solid transparent',
+                fontWeight: active ? 700 : 500,
+              }}>{t.label}</Link>
             );
           })}
         </div>
 
-        {/* Tag chip filter (single-tag for now). Search + tier dropdown are
-            now in the Card header actions slot above. */}
-        {tag && (
-          <div style={{ marginBottom: 12, fontSize: "var(--t-sm)", color: 'var(--ink-soft)' }}>
-            tag filter: <strong>{tag}</strong>
-            <Link href={`/marketing/library${tier ? `?tier=${tier}` : ''}`} style={{ marginLeft: 6, color: 'var(--moss)' }}>×</Link>
+        {/* KPI strip */}
+        <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
+          {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
+        </div>
+
+        {/* Existing AI-creation cockpit + drop zone + search */}
+        <div style={fullRow}>
+          <LibraryCockpit
+            view={parseCockpitView(searchParams?.view)}
+            liveCounts={{
+              totalReady, ota: otaCount, hero: heroCount, social: socialCount, archive: archiveCount,
+            }}
+          />
+        </div>
+
+        <div style={fullRow}>
+          <LibraryAiSearch />
+          <LibraryDropZone />
+        </div>
+
+        {/* Fresh & ready — curator picks */}
+        {curatorPicks.length > 0 && !tier && !tag && !q && (
+          <div style={fullRow}>
+            <div style={sectionHeader}>Fresh &amp; ready · {curatorPicks.length} picks · highest qc + brand-fit</div>
+            <div style={panel}>
+              <AssetGrid assets={curatorPicks} minColPx={180} />
+            </div>
           </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 18 }}>
-          {/* Filter rail */}
-          <aside style={{ fontSize: "var(--t-base)" }}>
-            <FilterCategory title={`Tags (${taxonomy.length})`}>
-              {Array.from(tagsByCategory.entries())
-                .sort((a, b) => a[0].localeCompare(b[0]))
-                .slice(0, 6)
-                .map(([cat, items]) => (
-                  <div key={cat} style={{ marginTop: 12 }}>
-                    <div style={{ fontSize: "var(--t-xs)", textTransform: 'uppercase', letterSpacing: 1, color: 'var(--ink-mute)', marginBottom: 4, fontFamily: 'var(--mono)' }}>
-                      {cat} · {items.length}
+        {/* OTA Pack */}
+        {!tier && !tag && !q && (
+          <div style={fullRow}>
+            <div style={sectionHeader}>OTA pack · {otaTotalFound} of {otaTotalTarget} slots filled{otaTotalGap > 0 ? ` · ${otaTotalGap} still needed` : ' · ready to publish'}</div>
+            <div style={panel}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                {otaPack.map(slot => (
+                  <div key={slot.slot}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 6 }}>
+                      <h4 style={otaSlotLabel}>{slot.label}</h4>
+                      <span style={{ fontSize: 11, color: slot.gap > 0 ? RED : FOREST, fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>
+                        {slot.found}/{slot.min_count}{slot.gap > 0 ? ` · ${slot.gap} short` : ' · ready'}
+                      </span>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      {items.slice(0, 8).map(t => (
-                        <Link
-                          key={t.label}
-                          href={`/marketing/library?tag=${encodeURIComponent(t.label)}${tier ? `&tier=${tier}` : ''}`}
-                          style={{
-                            fontSize: "var(--t-sm)",
-                            color: tag === t.label ? 'var(--moss)' : 'var(--ink-soft)',
-                            textDecoration: 'none',
-                            fontWeight: tag === t.label ? 600 : 400,
-                          }}
-                        >{tag === t.label ? '☑' : '☐'} {t.label}</Link>
-                      ))}
-                      {items.length > 8 && <span style={{ fontSize: "var(--t-xs)", color: 'var(--ink-mute)' }}>+{items.length - 8} more</span>}
-                    </div>
+                    {slot.samples.length > 0 ? (
+                      <AssetGrid assets={slot.samples} minColPx={150} />
+                    ) : (
+                      <div style={emptyRow}>
+                        No qualifying photos for {slot.label.toLowerCase()}. Need {slot.min_count} with qc≥70 + brand-fit≥0.7.
+                      </div>
+                    )}
                   </div>
                 ))}
-            </FilterCategory>
+              </div>
+            </div>
+          </div>
+        )}
 
-            <FilterCategory title="Type">
-              <Label>☐ Photo</Label>
-              <Label>☐ Video</Label>
-              <Label>☐ Reel</Label>
-              <Label>☐ 360</Label>
-            </FilterCategory>
+        {/* By room */}
+        {!tier && !tag && !q && (
+          <div style={fullRow}>
+            <div style={sectionHeader}>By room · {roomBuckets.length} room types · {roomsUnderTarget > 0 ? `${roomsUnderTarget} below 5-photo target` : 'all rooms covered'}</div>
+            <div style={panel}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {roomBuckets.map(b => (
+                  <div key={b.slug}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 6 }}>
+                      <h4 style={roomLabel}>{b.label}</h4>
+                      <Link href={`/marketing/library?tag=${encodeURIComponent(b.slug)}`}
+                        style={{ fontSize: 11, textDecoration: 'none',
+                          color: b.under_target ? RED : FOREST,
+                          fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+                        }}>
+                        {b.count} photo{b.count === 1 ? '' : 's'}{b.under_target ? ` · need ${5 - b.count} more` : ' · ok'} →
+                      </Link>
+                    </div>
+                    {b.samples.length > 0 ? (
+                      <AssetGrid assets={b.samples} minColPx={150} />
+                    ) : (
+                      <div style={emptyRow}>
+                        No photos tagged <code style={code}>{b.slug}</code>. Either no shots taken yet, or auto-tagger missed the room link.
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
-            <FilterCategory title="Freshness">
-              <Label>◉ Any</Label>
-              <Label>○ Used last 30d</Label>
-              <Label>○ Unused 90d+</Label>
-              <Label>○ Never used</Label>
-            </FilterCategory>
+        {/* Browse library — filter form + tier pills + grid */}
+        <div style={fullRow}>
+          <div style={{ ...sectionHeader, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+            <span>Browse library · {filtered.length} asset{filtered.length === 1 ? '' : 's'}{tier ? ` · ${TIER_LABEL[tier as keyof typeof TIER_LABEL] ?? tier}` : ''}{q ? ` · matching "${q}"` : ''}</span>
+            <form method="GET" action="/marketing/library" style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              {tag && <input type="hidden" name="tag" value={tag} />}
+              <select name="tier" aria-label="Filter library by tier" defaultValue={tier} style={select}>
+                {TIERS.map(t => {
+                  const cnt =
+                    t.key === ''                    ? totalReady :
+                    t.key === 'tier_ota_profile'    ? otaCount :
+                    t.key === 'tier_website_hero'   ? heroCount :
+                    t.key === 'tier_social_pool'    ? socialCount :
+                    t.key === 'tier_internal'       ? internalCount :
+                    t.key === 'tier_archive'        ? archiveCount : 0;
+                  return <option key={t.key || 'all'} value={t.key}>{t.label} · {cnt}</option>;
+                })}
+              </select>
+              <input type="search" name="q" defaultValue={q} placeholder="Search caption, alt-text, filename…"
+                aria-label="Search media library" style={inputSearch} />
+              <button type="submit" style={btnPrimary}>Search</button>
+              {(tier || q || tag) && (
+                <Link href="/marketing/library" style={btnGhost}>Clear</Link>
+              )}
+              <Link href="/marketing/upload" style={btnPrimary}>Upload ↗</Link>
+              <Link href="/marketing/campaigns/new" style={btnPrimary}>+ Campaign</Link>
+            </form>
+          </div>
 
-            <FilterCategory title="License">
-              <Label>☐ Owned only</Label>
-              <Label>☐ Paid ads OK</Label>
-              <Label>☐ Print OK</Label>
-            </FilterCategory>
-          </aside>
+          {/* Tier pills */}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '8px 0 12px' }}>
+            {TIERS.map(t => {
+              const count =
+                t.key === ''                    ? totalReady :
+                t.key === 'tier_ota_profile'    ? otaCount :
+                t.key === 'tier_website_hero'   ? heroCount :
+                t.key === 'tier_social_pool'    ? socialCount :
+                t.key === 'tier_internal'       ? internalCount :
+                t.key === 'tier_archive'        ? archiveCount : 0;
+              const active = tier === t.key;
+              return (
+                <Link key={t.key || 'all'}
+                  href={t.key ? `/marketing/library?tier=${t.key}` : '/marketing/library'}
+                  style={{ ...pill,
+                    background: active ? FOREST : WHITE,
+                    color: active ? WHITE : INK,
+                    borderColor: active ? FOREST : HAIR,
+                  }}>
+                  {t.label} <span style={{ opacity: 0.7, marginLeft: 4, fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>{count}</span>
+                </Link>
+              );
+            })}
+          </div>
 
-          {/* Grid */}
-          <div>
-            <AssetGrid
-              assets={filtered}
-              emptyText={totalReady === 0 ? 'Library empty' : 'No assets match these filters'}
-              emptyAction={
-                totalReady === 0
-                  ? <p>Drop your first photos at <Link href="/marketing/upload" style={{ color: 'var(--brass)' }}>upload</Link>, or sync via Google Drive (Phase 1 ingest pipeline).</p>
-                  : <p style={{ fontSize: "var(--t-base)", color: 'var(--ink-mute)' }}>Try removing a filter or <Link href="/marketing/library" style={{ color: 'var(--moss)' }}>clear all</Link>.</p>
-              }
-            />
+          {tag && (
+            <div style={{ marginBottom: 12, fontSize: 12, color: INK_S }}>
+              tag filter: <strong>{tag}</strong>
+              <Link href={`/marketing/library${tier ? `?tier=${tier}` : ''}`} style={{ marginLeft: 6, color: FOREST, textDecoration: 'none' }}>×</Link>
+            </div>
+          )}
+
+          {/* Sidebar + grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 18 }}>
+            <aside style={{ fontSize: 12 }}>
+              <FilterCategory title={`Tags (${taxonomy.length})`}>
+                {Array.from(tagsByCategory.entries())
+                  .sort((a, b) => a[0].localeCompare(b[0]))
+                  .slice(0, 6)
+                  .map(([cat, items]) => (
+                    <div key={cat} style={{ marginTop: 10 }}>
+                      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: INK_M, marginBottom: 4, fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>
+                        {cat} · {items.length}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {items.slice(0, 8).map(t => (
+                          <Link key={t.label}
+                            href={`/marketing/library?tag=${encodeURIComponent(t.label)}${tier ? `&tier=${tier}` : ''}`}
+                            style={{
+                              fontSize: 12,
+                              color: tag === t.label ? FOREST : INK_S,
+                              textDecoration: 'none',
+                              fontWeight: tag === t.label ? 600 : 400,
+                            }}>{tag === t.label ? '☑' : '☐'} {t.label}</Link>
+                        ))}
+                        {items.length > 8 && <span style={{ fontSize: 10, color: INK_M }}>+{items.length - 8} more</span>}
+                      </div>
+                    </div>
+                  ))}
+              </FilterCategory>
+
+              <FilterCategory title="Type">
+                <FilterItem>☐ Photo</FilterItem>
+                <FilterItem>☐ Video</FilterItem>
+                <FilterItem>☐ Reel</FilterItem>
+                <FilterItem>☐ 360</FilterItem>
+              </FilterCategory>
+
+              <FilterCategory title="Freshness">
+                <FilterItem>◉ Any</FilterItem>
+                <FilterItem>○ Used last 30d</FilterItem>
+                <FilterItem>○ Unused 90d+</FilterItem>
+                <FilterItem>○ Never used</FilterItem>
+              </FilterCategory>
+
+              <FilterCategory title="License">
+                <FilterItem>☐ Owned only</FilterItem>
+                <FilterItem>☐ Paid ads OK</FilterItem>
+                <FilterItem>☐ Print OK</FilterItem>
+              </FilterCategory>
+            </aside>
+
+            <div>
+              <AssetGrid
+                assets={filtered}
+                emptyText={totalReady === 0 ? 'Library empty' : 'No assets match these filters'}
+                emptyAction={
+                  totalReady === 0
+                    ? <p>Drop your first photos at <Link href="/marketing/upload" style={{ color: FOREST }}>upload</Link>, or sync via Google Drive.</p>
+                    : <p style={{ fontSize: 12, color: INK_M }}>Try removing a filter or <Link href="/marketing/library" style={{ color: FOREST }}>clear all</Link>.</p>
+                }
+              />
+            </div>
           </div>
         </div>
-      </Card>
-    </Page>
+      </DashboardPage>
+    </div>
   );
 }
 
 function FilterCategory({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div style={{ marginBottom: 18, paddingBottom: 14, borderBottom: '1px solid var(--line-soft)' }}>
-      <div style={{ fontSize: "var(--t-xs)", fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--ink)', fontWeight: 600, marginBottom: 8 }}>{title}</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>{children}</div>
+    <div style={{ marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid ' + HAIR }}>
+      <div style={{ fontSize: 10, fontFamily: 'ui-monospace, SFMono-Regular, monospace', textTransform: 'uppercase', letterSpacing: '0.06em', color: INK, fontWeight: 700, marginBottom: 8 }}>{title}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>{children}</div>
     </div>
   );
 }
-
-function Label({ children }: { children: React.ReactNode }) {
-  return <span style={{ fontSize: "var(--t-sm)", color: 'var(--ink-soft)', cursor: 'default' }}>{children}</span>;
+function FilterItem({ children }: { children: React.ReactNode }) {
+  return <span style={{ fontSize: 12, color: INK_S, cursor: 'default' }}>{children}</span>;
 }
+
+const fullRow: CSSProperties = { gridColumn: '1 / -1' };
+const infoTabsBar: CSSProperties = {
+  display: 'flex', gap: 4, borderBottom: '1px solid ' + HAIR, marginBottom: 4,
+};
+const infoTab: CSSProperties = {
+  padding: '8px 16px', fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase',
+  textDecoration: 'none', marginBottom: -1,
+};
+const sectionHeader: CSSProperties = {
+  fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase',
+  color: INK_M, fontWeight: 600, margin: '8px 2px 8px',
+};
+const panel: CSSProperties = {
+  background: WHITE, border: '1px solid ' + HAIR, borderRadius: 6, padding: 14,
+};
+const otaSlotLabel: CSSProperties = {
+  fontFamily: 'ui-monospace, SFMono-Regular, monospace', fontSize: 11,
+  letterSpacing: '0.06em', textTransform: 'uppercase', color: INK, margin: 0, fontWeight: 700,
+};
+const roomLabel: CSSProperties = { fontSize: 13, color: INK, margin: 0, fontWeight: 600 };
+const emptyRow: CSSProperties = {
+  padding: '10px 12px', background: CREAM, border: '1px dashed ' + HAIR, borderRadius: 4,
+  fontSize: 11, color: INK_M,
+};
+const code: CSSProperties = {
+  fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+  background: WHITE, color: INK_M, border: '1px solid ' + HAIR,
+  padding: '1px 5px', borderRadius: 3, fontSize: 10,
+};
+const select: CSSProperties = {
+  fontSize: 11, color: INK, background: WHITE, border: '1px solid ' + HAIR,
+  padding: '6px 8px', height: 30, borderRadius: 4,
+};
+const inputSearch: CSSProperties = {
+  fontSize: 12, color: INK, background: WHITE, border: '1px solid ' + HAIR,
+  padding: '6px 10px', height: 30, minWidth: 200, borderRadius: 4,
+};
+const btnPrimary: CSSProperties = {
+  padding: '6px 12px', fontSize: 11, fontWeight: 600, height: 30,
+  background: FOREST, color: WHITE, border: 'none', borderRadius: 4,
+  textDecoration: 'none', display: 'inline-flex', alignItems: 'center',
+};
+const btnGhost: CSSProperties = {
+  padding: '6px 12px', fontSize: 11, fontWeight: 600, height: 30,
+  background: WHITE, color: INK, border: '1px solid ' + HAIR, borderRadius: 4,
+  textDecoration: 'none', display: 'inline-flex', alignItems: 'center',
+};
+const pill: CSSProperties = {
+  padding: '4px 10px', fontSize: 11, fontWeight: 600, borderRadius: 4,
+  textDecoration: 'none', border: '1px solid transparent',
+};
