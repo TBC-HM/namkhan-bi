@@ -29,12 +29,14 @@ export type ProspectRow = {
   last_email_click_at: string | null;
   is_pinned: boolean;
   created_at: string | null;
+  mx_valid: boolean | null;
+  mx_checked_at: string | null;
 };
 
 export default async function ProspectsPage() {
   const sb = getSupabaseAdmin();
   const CHUNK = 1000;
-  const projection = 'subscriber_id, full_name, email, country, company, website, enrichment, interest_series, tags, enrolled_funnels, funnel_sends, funnel_pending, lifecycle_stage, booking_count, last_email_open_at, last_email_click_at, is_pinned, created_at';
+  const projection = 'subscriber_id, full_name, email, country, company, website, enrichment, interest_series, tags, enrolled_funnels, funnel_sends, funnel_pending, lifecycle_stage, booking_count, last_email_open_at, last_email_click_at, is_pinned, created_at, mx_valid, mx_checked_at';
   const rows: ProspectRow[] = [];
   for (let offset = 0; offset < 5000; offset += CHUNK) {
     const { data } = await sb
@@ -63,13 +65,19 @@ export default async function ProspectsPage() {
   for (const r of rows) for (const t of (r.tags ?? [])) tagMap.set(t, (tagMap.get(t) ?? 0) + 1);
   const tagFacets = Array.from(tagMap.entries()).sort((a, b) => b[1] - a[1]);
 
+  const mxValid   = rows.filter(r => r.mx_valid === true).length;
+  const mxInvalid = rows.filter(r => r.mx_valid === false).length;
+  const mxUnchecked = rows.filter(r => r.mx_valid === null || r.mx_valid === undefined).length;
+
   const tiles: KpiTileProps[] = [
     { label: 'Prospects', value: total, size: 'sm', footnote: 'never-stayed leads' },
     { label: 'Pinned',    value: pinned, size: 'sm', status: pinned > 0 ? 'green' : undefined },
-    { label: 'With company', value: withCompany, size: 'sm', footnote: total > 0 ? `${Math.round(withCompany/total*100)}%` : '—' },
-    { label: 'Guessed emails', value: guessed, size: 'sm', footnote: 'info@<domain> · may bounce' },
-    { label: 'Real emails',    value: supplied, size: 'sm', status: 'green' },
-    { label: 'In a sequence',  value: enrolled, size: 'sm' },
+    { label: 'Real emails', value: supplied, size: 'sm', status: 'green', footnote: 'supplied in CSV' },
+    { label: 'Guessed',    value: guessed, size: 'sm', footnote: 'info@<domain>' },
+    { label: 'MX verified', value: mxValid,   size: 'sm', status: mxValid > 0 ? 'green' : undefined },
+    { label: 'MX invalid',  value: mxInvalid, size: 'sm', status: mxInvalid > 0 ? 'red' : undefined, footnote: 'safe to bulk-delete' },
+    { label: 'Unchecked',   value: mxUnchecked, size: 'sm', footnote: 'run "Verify next 500"' },
+    { label: 'In a sequence', value: enrolled, size: 'sm' },
     { label: 'Engaged',    value: engaged, size: 'sm', footnote: 'opened or clicked' },
     { label: 'Converted',  value: converted, size: 'sm', status: converted > 0 ? 'green' : undefined, footnote: 'became bookings' },
   ];
