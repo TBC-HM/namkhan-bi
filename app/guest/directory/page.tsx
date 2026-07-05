@@ -53,6 +53,9 @@ export interface DirectoryRow {
   spent_spa: boolean;
   spent_activities: boolean;
   spent_retail: boolean;
+  newsletters_sent: number;
+  newsletters_pending: number;
+  last_sent_at: string | null;
 }
 
 export default async function GuestDirectoryPage() {
@@ -63,11 +66,11 @@ export default async function GuestDirectoryPage() {
   // guest.v_directory_full_consolidated 1:1.
   const CHUNK = 1000;
   const MAX   = 10000;
-  const projection = 'guest_id, full_name, country, email, phone, city, language, bookings_count, stays_count, cancellations_count, last_stay_date, upcoming_stay_date, arrival_bucket, top_source, top_segment, is_repeat, marketing_readiness_score, last_room_type, last_rate_plan, last_segment, last_source, last_adults, last_children, last_nights, last_adr, party_type, spent_restaurant, spent_spa, spent_activities, spent_retail';
+  const projection = 'guest_id, full_name, country, email, phone, city, language, bookings_count, stays_count, cancellations_count, last_stay_date, upcoming_stay_date, arrival_bucket, top_source, top_segment, is_repeat, marketing_readiness_score, last_room_type, last_rate_plan, last_segment, last_source, last_adults, last_children, last_nights, last_adr, party_type, spent_restaurant, spent_spa, spent_activities, spent_retail, newsletters_sent, newsletters_pending, last_sent_at';
   const profiles: DirectoryRow[] = [];
   for (let offset = 0; offset < MAX; offset += CHUNK) {
-    const { data } = await sb.schema('guest')
-      .from('v_directory_full_consolidated')
+    const { data } = await sb
+      .from('v_guest_directory_with_newsletters')
       .select(projection)
       .eq('property_id', PROPERTY_ID)
       .or('last_stay_date.not.is.null,upcoming_stay_date.not.is.null')
