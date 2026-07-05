@@ -13,7 +13,7 @@ export default function DeleteCampaignButton({ campaign_id, campaign_name, pendi
   const [msg, setMsg] = useState<string | null>(null);
 
   const del = async () => {
-    if (!confirm(`Permanently delete "${campaign_name}"? This removes ${pending_count} pending recipient${pending_count===1?'':'s'} + the campaign row. Sent history is preserved (campaign reverts to draft in that case).`)) return;
+    if (!confirm(`Delete campaign "${campaign_name}"?\n\n• Removes ${pending_count} pending recipient${pending_count===1?'':'s'} + the campaign row\n• The TEMPLATE is preserved — you can reuse it to make a new campaign\n• Sent history stays (campaign reverts to Draft if any were already sent)`)) return;
     setWorking(true); setMsg(null);
     try {
       const res = await fetch('/api/newsletter/delete-campaign', {
