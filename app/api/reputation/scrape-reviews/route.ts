@@ -40,16 +40,27 @@ function mapBookingReview(it: Record<string, unknown>): Record<string, unknown> 
   const liked   = (it.likedText   as string) || '';
   const disliked= (it.dislikedText as string) || '';
   const body = [liked && `+ ${liked}`, disliked && `- ${disliked}`].filter(Boolean).join('\n\n') || null;
+  // Parse userLocation ("New York, USA") → country segment (last comma-separated piece).
+  const userLoc = (it.userLocation as string) || (it.userCountry as string) || '';
+  const country = userLoc.includes(',')
+    ? userLoc.split(',').pop()?.trim().slice(0, 2).toUpperCase() || null
+    : userLoc.slice(0, 2).toUpperCase() || null;
+  // Detect property reply → mark responded.
+  const propertyResponse = (it.propertyResponse as string) || null;
+  const hasResponse = typeof propertyResponse === 'string' && propertyResponse.length > 5;
   return {
     source_review_id: rid,
     reviewer_name:  (it.userName    as string) || null,
-    reviewer_country: (it.userCountry as string) || null,
+    reviewer_country: country,
     rating_raw:     (it.rating      as number) ?? null,
     rating_scale:   10,
     title:          (it.reviewTitle as string) || null,
     body,
-    language:       (it.language    as string) || null,
+    language:       (it.reviewLanguage as string) || (it.language as string) || null,
     reviewed_at:    (it.reviewedAt  as string) || (it.reviewDate as string) || null,
+    response_status: hasResponse ? 'responded' : 'unanswered',
+    response_text:   hasResponse ? propertyResponse : null,
+    responded_by:    hasResponse ? 'the_namkhan' : null,
     raw:            it,
   };
 }
