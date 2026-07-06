@@ -57,6 +57,8 @@ const NON_MARKETING_MATCHERS = [
   // Land / real estate / construction
   { titleMatch: /land ownership|land sale|meeting proposal|pll land|hatsady|construction|approval request document|topographical|reimbursement/i },
   // HR (belongs under People/HR)
+  { type: 'hr_doc' },
+  { subtype: 'payslip' },
   { subtype: 'hr_contract_autonomo' },
   { subtype: 'hr_contract_eventual' },
   { subtype: 'hr_contract_fijo_discontinuo' },
@@ -68,14 +70,19 @@ const NON_MARKETING_MATCHERS = [
   { subtype: 'hr_warning_grave' },
   { subtype: 'hr_warning_leve' },
   { subtype: 'hr_warning_muy_grave' },
+  // Vendor / supplier catalogs — belong under Operations, not marketing
+  { type: 'vendor_doc' },
+  { subtype: 'product_catalog' },
 ];
 
 function isNonMarketing(d: DocRow): boolean {
   const sub = (d.doc_subtype ?? '').toLowerCase();
+  const type = (d.doc_type ?? '').toLowerCase();
   const t = (d.title ?? '').toLowerCase();
   for (const m of NON_MARKETING_MATCHERS) {
-    if ('subtype' in m && sub === m.subtype) return true;
-    if ('titleMatch' in m && m.titleMatch!.test(t)) return true;
+    if ('subtype' in m && m.subtype && sub === m.subtype) return true;
+    if ('type' in m && m.type && type === m.type) return true;
+    if ('titleMatch' in m && m.titleMatch && m.titleMatch.test(t)) return true;
   }
   return false;
 }
@@ -159,20 +166,42 @@ export default async function MarketingDocsPage({ searchParams }: SP) {
     docs: (goldMap.get(g.key) ?? []).map(d => ({ ...d, _url: fileUrl(d.storage_bucket, d.storage_path) })),
   }));
 
+  const SUPABASE_STORAGE_URL = 'https://supabase.com/dashboard/project/kpenyneooigsyuuomgct/storage/buckets/dms-documents';
+
   return (
-    <div style={{ background:'#FFFFFF', minHeight:'100vh' }}>
+    <div className="guest-paper-scope" style={{ background:'#FFFFFF', minHeight:'100vh' }}>
+      <style>{`
+        .guest-paper-scope, .guest-paper-scope * {
+          --card:#FFFFFF; --border:#E6DFCC; --paper:#FFFFFF; --paper-warm:#FFFFFF;
+          --paper-deep:#F5F0E1; --hairline:#E6DFCC; --ink:#1B1B1B; --ink-soft:#3A3A3A;
+          --ink-mute:#5A5A5A; --ink-faint:#8A8A8A; --brass:#1F3A2E; --primary:#1F3A2E;
+          --surf:#FFFFFF; --surf-1:#FFFFFF; --surf-2:#FAFAF7; --surf-3:#F5F0E1;
+          --border-2:#E6DFCC; --border-3:#C8C0A6; --text-0:#1B1B1B; --text-1:#1B1B1B;
+          --text-2:#3A3A3A; --text-3:#5A5A5A; --text-dim:#5A5A5A; --text-place:#8A8A8A;
+          --accent:#1F3A2E; --accent-2:#C79A6B; --bg:#FFFFFF; --bg-1:#FFFFFF; --bg-2:#FAFAF7;
+        }
+      `}</style>
       <DashboardPage
         title="Marketing · Documents"
         subtitle={`${totalVisible} docs sorted like a marketing manager thinks · media library at /marketing/gallery`}
         tabs={tabs}
       >
+        {/* Upload + Storage row */}
+        <div style={{ gridColumn:'1 / -1', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+          <div style={{ fontSize:11, color:INK_M }}>Drop new docs directly into Supabase Storage OR use the guided upload.</div>
+          <div style={{ display:'flex', gap:8 }}>
+            <Link href="/marketing/docs/upload" style={{ padding:'6px 14px', fontSize:12, fontWeight:600, background:GREEN, color:'#FFFFFF', border:'1px solid '+GREEN, borderRadius:4, textDecoration:'none' }}>+ Upload doc</Link>
+            <a href={SUPABASE_STORAGE_URL} target="_blank" rel="noreferrer" style={{ padding:'6px 14px', fontSize:12, fontWeight:600, background:'#FFFFFF', color:GREEN, border:'1px solid '+HAIR, borderRadius:4, textDecoration:'none' }}>Open Supabase Storage ↗</a>
+          </div>
+        </div>
+
         {/* Dynamic behaviour banner */}
         <div style={{ gridColumn:'1 / -1', padding:'10px 14px', background:'#FFF4D6', border:'1px solid '+AMBER, borderRadius:4, fontSize:12, color:INK, lineHeight:1.6 }}>
-          <strong>Dynamic.</strong> Every doc is classified at page-load time from its <code>doc_type</code> + <code>doc_subtype</code> in <code>dms.documents</code>. Change those in the doc registry and it moves to the matching Gold container automatically — nothing is deleted. Hidden here (not marketing): {hiddenNonMkt.length} tech/land/HR docs. Hidden as media: {hiddenMedia.length} images/logos (see <Link href="/marketing/gallery" style={{ color:GREEN }}>Media library</Link>).
+          <strong>Dynamic.</strong> Every doc is classified at page-load time from its <code>doc_type</code> + <code>doc_subtype</code> in <code>dms.documents</code>. Change those in the doc registry and it moves to the matching Gold container automatically — nothing is deleted. Hidden here (not marketing): {hiddenNonMkt.length} tech/land/HR/vendor docs. Hidden as media: {hiddenMedia.length} images/logos (see <Link href="/marketing/gallery" style={{ color:GREEN }}>Media library</Link>).
         </div>
 
         {/* Media redirect callout */}
-        <div style={{ gridColumn:'1 / -1', padding:'10px 14px', background:CREAM, border:'1px solid '+HAIR, borderLeft:'3px solid '+GREEN, borderRadius:6, fontSize:12, color:INK, display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:10 }}>
+        <div style={{ gridColumn:'1 / -1', padding:'10px 14px', background:'#FFFFFF', border:'1px solid '+HAIR, borderLeft:'3px solid '+GREEN, borderRadius:6, fontSize:12, color:INK, display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:10 }}>
           <div>
             <strong>Photos · logos · videos?</strong> They live in the media library, not here.
           </div>
