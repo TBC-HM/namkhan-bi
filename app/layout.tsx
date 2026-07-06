@@ -1,5 +1,11 @@
 // app/layout.tsx
-// 2026-05-08 redesign — green frame REMOVED per PBS directive.
+// PBS 2026-07-06: sitewide paper-white scope. Every page now inherits pure
+// white body + white token palette regardless of the property theme. The
+// top dept strip stays outside the scope and colors itself per property
+// (Namkhan=black · Donna=beige · Beyond=white) — that's now the only
+// visual differentiator between properties.
+//
+// Original comment (2026-05-08): green frame REMOVED per PBS directive.
 // Old: LeftRail + main column with green PILLAR header + horizontal tabs.
 // New: edge-to-edge content; navigation handled by floating <NDropdown />
 // (top-left brass N badge, click → dept menu) on every page.
@@ -25,10 +31,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        {/* PBS 2026-05-15 — set <html data-property> BEFORE first paint so
-            :root[data-property='...'] palette wins on frame 1. Eliminates
-            FOUC where /h/[id] briefly painted in BC peach. Watcher below
-            re-syncs on SPA navigations. Static literal, no user input. */}
         <Script id="property-theme-attr" strategy="beforeInteractive">
           {`
 (function(){try{var p=location.pathname;var v='namkhan';
@@ -40,14 +42,35 @@ else if(p.indexOf('/h/0')===0)v='holding';
 document.documentElement.setAttribute('data-property',v);}catch(e){}})();
           `}
         </Script>
+        {/* PBS 2026-07-06: sitewide paper-white palette. Overrides every
+            legacy dark token AFTER the top strip renders so the strip
+            keeps its property color (Namkhan=black · Donna=beige ·
+            Beyond=white). Anything outside .site-paper-scope keeps its
+            own coloring (used by TopDeptStrip). */}
+        <style>{`
+          body { background: #FFFFFF !important; }
+          .site-paper-scope, .site-paper-scope * {
+            --card:#FFFFFF; --border:#E6DFCC; --paper:#FFFFFF; --paper-warm:#FFFFFF;
+            --paper-deep:#F5F0E1; --hairline:#E6DFCC; --ink:#1B1B1B; --ink-soft:#3A3A3A;
+            --ink-mute:#5A5A5A; --ink-faint:#8A8A8A; --brass:#1F3A2E; --primary:#1F3A2E;
+            --surf:#FFFFFF; --surf-0:#FFFFFF; --surf-1:#FFFFFF; --surf-2:#FAFAF7; --surf-3:#F5F0E1;
+            --border-1:#E6DFCC; --border-2:#E6DFCC; --border-3:#C8C0A6;
+            --text-0:#1B1B1B; --text-1:#1B1B1B; --text-2:#3A3A3A; --text-3:#5A5A5A;
+            --text-dim:#5A5A5A; --text-place:#8A8A8A; --text-mute:#5A5A5A;
+            --accent:#1F3A2E; --accent-2:#C79A6B;
+            --bg:#FFFFFF; --bg-1:#FFFFFF; --bg-2:#FAFAF7;
+            --line:rgba(27,27,27,0.14); --line-soft:rgba(27,27,27,0.08);
+            --moss:#2D6A4F; --sage:#5A7A62; --brass-soft:#C79A6B; --brass-pale:#E6D4B0;
+          }
+          .site-paper-scope { background: #FFFFFF; }
+        `}</style>
         <PropertyThemeWatcher />
         <CapacityResetOnPillarChange />
         <NDropdown />
-        {/* PBS 2026-05-14 — canonical top dept menu, persistent on EVERY
-            route except holding/tbc/login. Mounted at root so it survives
-            legacy redirects out of /h/[id]/ (Namkhan dept pages). */}
         <TopDeptStrip />
-        {children}
+        <div className="site-paper-scope">
+          {children}
+        </div>
         <AgentEditModal />
         <BugWidget />
         <SpeedInsights />
