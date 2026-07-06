@@ -408,7 +408,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
           action={<Link href="/sales/b2b" style={perfActionStyle}>B2B / DMC →</Link>}
         >
           <SourceLinkTable
-            rows={dmcPerfTop.map((r) => ({ ...r, source: (r as Record<string, unknown>).partner_short_name }))}
+            rows={dmcPerfTop.map((r) => ({ ...r, source: (r as Record<string, unknown>).partner_short_name })) as unknown as Array<Record<string, string | number | null | undefined>>}
             sourceKey="source"
             columns={[
               { key: 'source',            label: 'Partner' },
@@ -426,7 +426,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
           subtitle="12 months · top 8 by gross · date basis: booking_date"
         >
           <SourceLinkTable
-            rows={otaPerfTop.map((r) => ({ ...r, source: (r as Record<string, unknown>).source_name }))}
+            rows={otaPerfTop.map((r) => ({ ...r, source: (r as Record<string, unknown>).source_name })) as unknown as Array<Record<string, string | number | null | undefined>>}
             sourceKey="source"
             columns={[
               { key: 'source',            label: 'Source' },
@@ -444,7 +444,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
           subtitle="12 months · top 8 by gross · date basis: booking_date"
         >
           <SourceLinkTable
-            rows={directPerfTop.map((r) => ({ ...r, source: (r as Record<string, unknown>).source_name }))}
+            rows={directPerfTop.map((r) => ({ ...r, source: (r as Record<string, unknown>).source_name })) as unknown as Array<Record<string, string | number | null | undefined>>}
             sourceKey="source"
             columns={[
               { key: 'source',            label: 'Source' },
