@@ -175,11 +175,6 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
           {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
         </div>
 
-        <div style={{ gridColumn:'1 / -1', padding:'8px 12px', background:'#FBEBB4', border:'1px solid #E8C89B', color:'#8B5A1C', borderRadius:4, fontSize:11, lineHeight:1.5 }}>
-          <strong>Data source:</strong> platform totals (rating · reviews · ranking) are <em>manually seeded</em> per source — Nimble scraper is blocked on Booking (JS-hydrated), Trip.com (signin), Expedia (proxy rate limit). Google reviews wait on API case 7-9719000041096 (7-10 business days).
-          Only <strong>TripAdvisor individual reviews (10)</strong> are auto-scraped — visible in "Local sample · Latest reviews" below.
-          Aggregate reflects real numbers you pasted this session.
-        </div>
 
         {oauth && oauth.location_id && (
           <div style={{ gridColumn:'1 / -1', background:WHITE, border:'1px solid '+HAIR, borderRadius:6, padding:'14px 16px' }}>
