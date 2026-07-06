@@ -504,13 +504,13 @@ const GUEST_CFG: DeptCfg = {
   storageKeyPrefix: 'gst',
   subPages: [
     // PBS 2026-07-03: Snapshot → HoD rename (aligned with other depts).
+    // PBS 2026-07-06 pm: Findings dropped (all its content lives on HoD conclusions now).
+    // Newsletters moved to just before Reports.
     { label: 'HoD',         href: '/guest'             },
     { label: 'Directory',   href: '/guest/directory'   },
-    { label: 'Newsletters', href: '/guest/newsletters' },
     { label: 'Reputation',  href: '/guest/reputation'  },
-    // PBS 2026-07-06: Journey + Loyalty merged into Behaviour (retention cockpit).
     { label: 'Behaviour',   href: '/guest/behaviour'   },
-    { label: 'Findings',    href: '/guest/findings'    },
+    { label: 'Newsletters', href: '/guest/newsletters' },
     // PBS 2026-05-16: Reports always sits flush-right (SubPagesStrip detects label).
     { label: 'Reports',     href: '/h/260955/reports?dept=guest' },
   ],
@@ -518,7 +518,7 @@ const GUEST_CFG: DeptCfg = {
     { label: 'Directory',  href: '/guest/directory'  },
     { label: 'Reputation', href: '/guest/reputation' },
     { label: 'Behaviour',  href: '/guest/behaviour'  },
-    { label: 'Findings',   href: '/guest/findings'   },
+    { label: 'Newsletters',href: '/guest/newsletters'},
   ],
   defaultAttn: [
     { id: 'l1', label: 'Negative review on TripAdvisor — needs reply', severity: 'high',   kind: 'leakage'     },
