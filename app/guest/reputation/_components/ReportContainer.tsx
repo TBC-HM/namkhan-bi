@@ -119,7 +119,29 @@ export default function ReportContainer({ reviews }: { reviews: Review[] }) {
   const [msg, setMsg] = useState<{ kind:'ok'|'err'; text:string } | null>(null);
 
   const { headline, bullets } = generateBullets(reviews);
-  const asText = [headline, '', ...bullets.map(b => '• ' + b)].join('\n');
+  // Low-scoring reviews with full text — attached to the email as a distinct card list.
+  const lowScoringReviews = reviews
+    .filter(r => Number(r.rating_norm) < 4.5)
+    .sort((a, b) => (Number(a.rating_norm) || 0) - (Number(b.rating_norm) || 0))
+    .slice(0, 8)
+    .map(r => ({
+      reviewer: r.reviewer_name ?? 'anonymous',
+      rating: Number(r.rating_norm) || 0,
+      source: SOURCE_LABEL[r.source] ?? r.source,
+      title: r.title ?? '',
+      body: (r.body ?? '').slice(0, 900),
+      reviewed_at: (r.reviewed_at ?? '').slice(0, 10),
+      response_status: r.response_status ?? 'unknown',
+    }));
+  const asText = [
+    headline, '',
+    ...bullets.map(b => '• ' + b),
+    '',
+    lowScoringReviews.length > 0 ? '── Low-scoring reviews (full text) ──' : '',
+    ...lowScoringReviews.map(r =>
+      `${r.reviewer} · ${r.rating.toFixed(1)}/5 · ${r.source} · ${r.reviewed_at} · ${r.response_status}\n${r.title ? r.title + '\n' : ''}${r.body}`
+    ),
+  ].filter(Boolean).join('\n\n');
 
   const send = async () => {
     if (!emailTo.trim()) { setMsg({ kind:'err', text:'Enter an email address first.' }); return; }
@@ -127,7 +149,13 @@ export default function ReportContainer({ reviews }: { reviews: Review[] }) {
     try {
       const res = await fetch('/api/reputation/email-report', {
         method:'POST', headers:{ 'Content-Type':'application/json' },
-        body: JSON.stringify({ to: emailTo.trim(), subject: `Namkhan · Reputation weekly · ${new Date().toISOString().slice(0,10)}`, text: asText, html_bullets: [headline, ...bullets] }),
+        body: JSON.stringify({
+          to: emailTo.trim(),
+          subject: `Namkhan · Reputation weekly · ${new Date().toISOString().slice(0,10)}`,
+          text: asText,
+          html_bullets: [headline, ...bullets],
+          low_reviews: lowScoringReviews,
+        }),
       });
       const j = await res.json();
       if (j?.ok) setMsg({ kind:'ok', text:'Report sent.' });
