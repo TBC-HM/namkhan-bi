@@ -106,8 +106,8 @@ export async function computeSdlyDelta(input: SdlyInput): Promise<SdlyResult> {
   const select = 'rooms_available,rooms_sold,rooms_revenue,total_revenue,arrivals';
 
   const [nowRes, sdlyRes] = await Promise.all([
-    supabase.from(view).select(select).gte('metric_date', input.fromDate).lte('metric_date', input.toDate).eq('is_actual', true).then(r => (r.data ?? []) as KpiRow[]).catch(() => [] as KpiRow[]),
-    supabase.from(view).select(select).gte('metric_date', sdlyFrom).lte('metric_date', sdlyTo).eq('is_actual', true).then(r => (r.data ?? []) as KpiRow[]).catch(() => [] as KpiRow[]),
+    Promise.resolve(supabase.from(view).select(select).gte('metric_date', input.fromDate).lte('metric_date', input.toDate).eq('is_actual', true)).then(r => (r.data ?? []) as KpiRow[]).catch(() => [] as KpiRow[]),
+    Promise.resolve(supabase.from(view).select(select).gte('metric_date', sdlyFrom).lte('metric_date', sdlyTo).eq('is_actual', true)).then(r => (r.data ?? []) as KpiRow[]).catch(() => [] as KpiRow[]),
   ]);
 
   const now  = reduce(nowRes,  input.metric);
@@ -143,8 +143,8 @@ export async function computeSdlyDeltaBatch(
   const select = 'rooms_available,rooms_sold,rooms_revenue,total_revenue,arrivals';
 
   const [nowRes, sdlyRes] = await Promise.all([
-    supabase.from(view).select(select).gte('metric_date', base.fromDate).lte('metric_date', base.toDate).eq('is_actual', true).then(r => (r.data ?? []) as KpiRow[]).catch(() => [] as KpiRow[]),
-    supabase.from(view).select(select).gte('metric_date', sdlyFrom).lte('metric_date', sdlyTo).eq('is_actual', true).then(r => (r.data ?? []) as KpiRow[]).catch(() => [] as KpiRow[]),
+    Promise.resolve(supabase.from(view).select(select).gte('metric_date', base.fromDate).lte('metric_date', base.toDate).eq('is_actual', true)).then(r => (r.data ?? []) as KpiRow[]).catch(() => [] as KpiRow[]),
+    Promise.resolve(supabase.from(view).select(select).gte('metric_date', sdlyFrom).lte('metric_date', sdlyTo).eq('is_actual', true)).then(r => (r.data ?? []) as KpiRow[]).catch(() => [] as KpiRow[]),
   ]);
 
   const out: Record<string, SdlyResult> = {};
