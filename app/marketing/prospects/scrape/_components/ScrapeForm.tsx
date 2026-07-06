@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-type ActorId = 'gmaps_contacts' | 'google_search' | 'booking' | 'email_social' | 'leads_finder';
+type ActorId = 'gmaps_contacts' | 'google_search' | 'booking' | 'email_social' | 'leads_finder' | 'email_verifier';
 
 const ACTORS: Record<ActorId, { label: string; hint: string; costHint: string }> = {
   gmaps_contacts: { label: 'Google Maps + Emails',        hint: 'Venue-level scrape (compass/google-maps-extractor). Best for finding local businesses.', costHint: '~$5 per 1,000 places' },
@@ -11,6 +11,7 @@ const ACTORS: Record<ActorId, { label: string; hint: string; costHint: string }>
   booking:        { label: 'Booking.com Hotels',          hint: 'Compset discovery — no emails.',                                          costHint: '~$2 per 100 hotels' },
   email_social:   { label: 'Website Email Extractor',     hint: 'Feed a list of URLs → returns emails + socials per site.',                costHint: '~$0.5 per 100 URLs' },
   leads_finder:   { label: 'B2B Leads Finder (Apollo alt)', hint: 'Best-value B2B lead source. Returns decision-makers by name + role + email at target companies. Ideal for tour operators/DMCs/luxury travel agents.', costHint: '~$1.50 per 1,000 leads · pay per event' },
+  email_verifier: { label: 'Email Verifier (paid, deep)', hint: 'Mailbox-level verify. Updates email_verify_status on matching rows. Only run AFTER MX check trimmed obvious dead ones — save money.',                             costHint: '~$100 per 1,000 verified · $0.10 each' },
 };
 
 type Result = {
@@ -57,6 +58,9 @@ export default function ScrapeForm() {
   const [lCountry, setLCountry]         = useState('');
   const [lMax, setLMax]                 = useState(50);
 
+  // Email Verifier inputs — paste emails to verify (or leave with a marker to verify DB unverified rows later)
+  const [vEmails, setVEmails]           = useState('');
+
   const buildInput = (): Record<string, unknown> => {
     switch (actor) {
       case 'gmaps_contacts':
@@ -90,6 +94,8 @@ export default function ScrapeForm() {
           maxLeads:         lMax,
           verifiedEmailsOnly: true,
         };
+      case 'email_verifier':
+        return { emails: vEmails.split('\n').map(x => x.trim()).filter(Boolean) };
     }
   };
 
@@ -186,6 +192,17 @@ export default function ScrapeForm() {
         </>
       )}
 
+      {actor === 'email_verifier' && (
+        <>
+          <div style={row}><label style={label}>Emails (one per line)</label>
+            <textarea value={vEmails} onChange={e => setVEmails(e.target.value)} disabled={running}
+              rows={8} placeholder="rick@ricksteves.com&#10;travel@kampatour.com&#10;info@kingfisherecolodge.com" style={{ ...input, fontFamily:'inherit' }} /></div>
+          <div style={{ fontSize:11, color:'#5A5A5A', marginTop:-6, marginBottom:10 }}>
+            Result updates <code>email_verify_status</code> on matching rows (valid / invalid / catch_all / disposable / role / unknown). Rows not in DB are silently ignored.
+          </div>
+        </>
+      )}
+
       {actor === 'leads_finder' && (
         <>
           <div style={row}><label style={label}>Job titles (one per line)</label>
@@ -217,7 +234,11 @@ export default function ScrapeForm() {
             <>
               <div><strong>✓ Done</strong> in {((result.duration_ms ?? 0)/1000).toFixed(1)}s</div>
               <div>Items returned by actor: <strong>{result.items_returned}</strong></div>
-              <div>Inserted: <strong style={{ color:'#084838' }}>{result.inserted}</strong> · Skipped (dupes): {result.skipped}</div>
+              {typeof (result as unknown as { updated?: number }).updated === 'number' ? (
+                <div>Updated in DB: <strong style={{ color:'#084838' }}>{(result as unknown as { updated: number }).updated}</strong></div>
+              ) : (
+                <div>Inserted: <strong style={{ color:'#084838' }}>{result.inserted}</strong> · Skipped (dupes): {result.skipped}</div>
+              )}
             </>
           ) : (
             <>
