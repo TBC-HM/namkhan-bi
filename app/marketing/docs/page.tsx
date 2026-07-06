@@ -49,14 +49,12 @@ const GOLD: GoldContainer[] = [
   { key: 'templates',        label: 'Templates',                desc: 'Reusable email + form templates (non-HR, non-SLH)' },
 ];
 
-const NON_MARKETING_MATCHERS = [
-  // Tech/architecture — belongs in engineering docs, not marketing
+type NonMarketingMatcher = { subtype?: string; type?: string; titleMatch?: RegExp };
+const NON_MARKETING_MATCHERS: NonMarketingMatcher[] = [
   { subtype: 'architecture' },
   { subtype: 'technical_integration_guide' },
   { titleMatch: /supabase|whistle|synxis|sabre|integration guide|architecture/i },
-  // Land / real estate / construction
   { titleMatch: /land ownership|land sale|meeting proposal|pll land|hatsady|construction|approval request document|topographical|reimbursement/i },
-  // HR (belongs under People/HR)
   { type: 'hr_doc' },
   { subtype: 'payslip' },
   { subtype: 'hr_contract_autonomo' },
@@ -70,7 +68,6 @@ const NON_MARKETING_MATCHERS = [
   { subtype: 'hr_warning_grave' },
   { subtype: 'hr_warning_leve' },
   { subtype: 'hr_warning_muy_grave' },
-  // Vendor / supplier catalogs — belong under Operations, not marketing
   { type: 'vendor_doc' },
   { subtype: 'product_catalog' },
 ];
@@ -80,9 +77,9 @@ function isNonMarketing(d: DocRow): boolean {
   const type = (d.doc_type ?? '').toLowerCase();
   const t = (d.title ?? '').toLowerCase();
   for (const m of NON_MARKETING_MATCHERS) {
-    if ('subtype' in m && m.subtype && sub === m.subtype) return true;
-    if ('type' in m && m.type && type === m.type) return true;
-    if ('titleMatch' in m && m.titleMatch && m.titleMatch.test(t)) return true;
+    if (m.subtype && sub === m.subtype) return true;
+    if (m.type && type === m.type) return true;
+    if (m.titleMatch && m.titleMatch.test(t)) return true;
   }
   return false;
 }
