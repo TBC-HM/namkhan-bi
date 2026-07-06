@@ -563,49 +563,35 @@ const FINANCE_CFG: DeptCfg = {
   chatPlaceholder: 'e.g. how is GOP tracking vs budget?',
   storageKeyPrefix: 'fin',
   subPages: [
-    // PBS 2026-05-15: top line stripped to canonical hubs. Each hub now
-    // surfaces its sub-pages via the shared finance TabStrip.
-    //   Transactions hub  → Folio audit + POS
-    //   P&L hub           → P&L + Budget
-    //   Messy-data hub    → Overview + Account mapping + Supplier mapping
-    //   Banks             → CFO command centre for BCEL · BFL · JDB × USD/LAK
-    //   HR                → moved from Operations (PBS 2026-05-15 #2);
-    //                       the underlying page still lives at /operations/staff
-    //                       so all existing deep links keep working.
-    // PBS 2026-05-15: "Snapshot" renamed to "HoD" across Finance / Operations
-    //                 / Marketing menus so it reads as the HoD entry point.
-    { label: 'HoD',     href: '/finance'                                },
-    { label: 'P&L',     href: '/finance/pnl'                            },
-    { label: 'Ledger',  href: '/finance/ledger'                         },
-    // PBS 2026-05-15: Acc consolidates Transactions + Banks + POS under one
-    // top-line button. /finance/acc → 307 → /finance/transactions (the 3 are
-    // wired to share ACC_TABS so the user always sees the 3-tab strip).
-    { label: 'Acc',     href: '/finance/acc'                            },
-    { label: 'HR',      href: '/finance/hr'                             },
-    // PBS 2026-05-16: Legal = chief-legal-officer view (contracts, liabilities,
-    // calendar of dates + deadlines, licenses, lawyer-mail inbox, running cases).
-    // PBS 2026-06-29: Docs removed from main strip (was here as ADR-145).
-    // Now reachable as a sublink from the Legal landing page itself, plus
-    // back-links on the read-only register pages.
-    { label: 'Legal',   href: '/finance/legal'                          },
-    // PBS 2026-07-06: Docs registry moved out of Legal to its own top-level
-    // Administration button. Reuses /settings/documents implementation.
-    { label: 'Docs',    href: '/finance/docs'                           },
-    // Messy data lifted out of submenu — now lives as the orange button
-    // under the HoD chat input (see extraChatButtons below).
-    // PBS 2026-06-09 #194 — Inventory + Suppliers moved from Operations to Finance.
-    // PBS 2026-06-29: Inventory dropped from the strip — no data yet, will be
-    // re-added when the inventory layer ships.
-    { label: 'Suppliers', href: '/finance/suppliers'                      },
-    { label: 'Reports', href: '/h/260955/reports?dept=finance'          },
+    // PBS 2026-07-07: consolidation. Top strip now = HoD + Overview + HR +
+    // 3 parent groups (Finance / Transactions / Working capital) + Budget +
+    // Reports. Sub-tabs render on each parent landing via NAV_SUBGROUPS.
+    //   Finance          → P&L / Ledger / Account mapping
+    //   Transactions     → Transactions / POS · PMS / POS · Poster
+    //   Working capital  → Cashflow / Variance / AP / AR
+    //   Overview (NEW landing) — dept summary with links to major groups
+    //   HR              → moved from Operations 2026-05-15;
+    //                     underlying page still lives at /operations/staff.
+    // Legacy tabs Legal / Docs / Suppliers still work by URL (pages preserved)
+    // but drop off the top strip in this consolidation pass.
+    { label: 'HoD',             href: '/finance'                          },
+    { label: 'Overview',        href: '/finance/overview'                 },
+    { label: 'HR',              href: '/finance/hr'                       },
+    { label: 'Finance',         href: '/finance/pnl'                      },
+    { label: 'Transactions',    href: '/finance/transactions'             },
+    { label: 'Budget',          href: '/finance/budget'                   },
+    { label: 'Working capital', href: '/finance/cashflow'                 },
+    { label: 'Reports',         href: '/h/260955/reports?dept=finance'    },
   ],
   quickChips: [
-    { label: 'HoD',     href: '/finance'              },
-    { label: 'P&L',     href: '/finance/pnl'          },
-    { label: 'Ledger',  href: '/finance/ledger'       },
-    { label: 'Acc',     href: '/finance/acc'          },
-    { label: 'HR',         href: '/finance/hr'           },
-    { label: 'Suppliers',  href: '/finance/suppliers'    },
+    { label: 'HoD',            href: '/finance'             },
+    { label: 'Overview',       href: '/finance/overview'    },
+    { label: 'P&L',            href: '/finance/pnl'         },
+    { label: 'Ledger',         href: '/finance/ledger'      },
+    { label: 'Transactions',   href: '/finance/transactions' },
+    { label: 'HR',             href: '/finance/hr'          },
+    { label: 'Budget',         href: '/finance/budget'      },
+    { label: 'Cashflow',       href: '/finance/cashflow'    },
   ],
   // PBS 2026-05-15: Messy data pulled out of submenu, surfaced as an
   // orange accent button under the HoD chat input on /finance.
