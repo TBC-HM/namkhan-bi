@@ -1,7 +1,8 @@
 'use client';
 // app/marketing/prospects/scrape/_components/ScrapeForm.tsx
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import type { ScrapeLogRow } from '../page';
 
 type ActorId = 'gmaps_contacts' | 'google_search' | 'booking' | 'email_social' | 'leads_finder' | 'email_verifier' | 'linkedin_email';
 
@@ -64,7 +65,7 @@ type Result = {
   apify_status?: number;
 };
 
-export default function ScrapeForm() {
+export default function ScrapeForm({ recentHistory = [] }: { recentHistory?: ScrapeLogRow[] }) {
   const router = useRouter();
   const [actor, setActor] = useState<ActorId>('gmaps_contacts');
   const [running, setRunning] = useState(false);
@@ -145,7 +146,35 @@ export default function ScrapeForm() {
     }
   };
 
+  // Match this actor's search summary against recent history to warn before double-scraping.
+  const currentSummary = useMemo(() => {
+    switch (actor) {
+      case 'gmaps_contacts':  return `${gKeyword} · ${gLocation}`.toLowerCase();
+      case 'google_search':   return sQueries.split('\n').map(x => x.trim()).filter(Boolean).slice(0, 3).join(', ').toLowerCase();
+      case 'booking':         return bDest.toLowerCase();
+      case 'email_social':    return eUrls.split('\n').map(x => x.trim()).filter(Boolean).slice(0, 3).join(', ').toLowerCase();
+      case 'leads_finder':    return `${lRoles.split('\n')[0]} · ${lKeywords.split('\n')[0]} · ${lCountry}`.toLowerCase();
+      case 'email_verifier':  return vEmails.split('\n').filter(Boolean).length + ' emails';
+      case 'linkedin_email':  return liUrls.split('\n').filter(Boolean).length + ' urls';
+      default: return '';
+    }
+  }, [actor, gKeyword, gLocation, sQueries, bDest, eUrls, lRoles, lKeywords, lCountry, vEmails, liUrls]);
+
+  const duplicate = useMemo(() => {
+    if (!currentSummary || !recentHistory.length) return null;
+    return recentHistory.find(h =>
+      h.actor === actor &&
+      (h.input_summary ?? '').toLowerCase().includes(currentSummary.split(' · ')[0]) &&
+      Date.now() - new Date(h.created_at).getTime() < 24 * 3600 * 1000
+    ) ?? null;
+  }, [actor, currentSummary, recentHistory]);
+
   const run = async () => {
+    if (duplicate) {
+      const confirm_msg = `Same actor + similar query was already run ${new Date(duplicate.created_at).toLocaleString()}.\nReturned ${duplicate.items_returned} items, inserted ${duplicate.inserted}.\n\nRun again anyway?`;
+      const ok = await new Promise<boolean>(resolve => setTimeout(() => resolve(confirm(confirm_msg)), 0));
+      if (!ok) return;
+    }
     setRunning(true); setResult(null);
     try {
       const res = await fetch('/api/marketing/prospects/scrape', {
@@ -159,7 +188,7 @@ export default function ScrapeForm() {
       });
       const j: Result = await res.json();
       setResult(j);
-      if (j.ok && (j.inserted ?? 0) > 0) router.refresh();
+      if (j.ok) router.refresh();  // always refresh so history table updates
     } catch (e) {
       setResult({ ok: false, error: e instanceof Error ? e.message : String(e) });
     } finally {
@@ -283,6 +312,11 @@ export default function ScrapeForm() {
         </>
       )}
 
+      {duplicate && (
+        <div style={{ marginTop:8, padding:8, background:'#FFF9E6', border:'1px solid #E6C86B', borderRadius:4, fontSize:11, color:'#5A4A32' }}>
+          <strong>⚠ Already scraped</strong> · same actor + similar query ran {new Date(duplicate.created_at).toLocaleString()} → {duplicate.items_returned} items, {duplicate.inserted} inserted. Confirm before running again.
+        </div>
+      )}
       <div style={{ display:'flex', gap:8, alignItems:'center', marginTop:10 }}>
         <button onClick={run} disabled={running} style={btnRun}>
           {running ? 'Running… (up to 4 min)' : 'Run & Import'}
