@@ -55,18 +55,25 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/sales/pipeline',   label: 'Pipeline',  coming: true },
   ],
 
-  // ===== 03 Marketing (restored 2026-04-30) =====
-  // Marketing pillar owns reviews/social/influencers/media (existing /marketing/* routes).
+  // ===== 03 Marketing (PBS 2026-07-06 evening — canonical strip) =====
+  // Order: Overview · Info · Acquisition · Campaigns · Funnels · Prospects · Products & Offers
+  //        · Compiler · Content · Media · Social · Digital · Web · Library · Docs
   marketing: [
-    { href: '/marketing',              label: 'Snapshot' },
-    { href: '/marketing/audiences',    label: 'Audiences',  isNew: true },
-    { href: '/marketing/library',      label: 'Library' },
+    { href: '/marketing',              label: 'Overview' },
+    { href: '/marketing/library',      label: 'Info' },
+    { href: '/marketing/acquisition',  label: 'Acquisition',       isNew: true },
     { href: '/marketing/campaigns',    label: 'Campaigns' },
-    { href: '/marketing/compiler',     label: 'Compiler',   isNew: true },
+    { href: '/marketing/funnels',      label: 'Funnels' },
+    { href: '/marketing/prospects',    label: 'Prospects' },
+    { href: '/marketing/offers',       label: 'Products & Offers', isNew: true },
+    { href: '/marketing/compiler',     label: 'Compiler' },
+    { href: '/marketing/content',      label: 'Content',           isNew: true },
+    { href: '/marketing/gallery',      label: 'Media' },
     { href: '/marketing/social',       label: 'Social' },
-    { href: '/marketing/influencers',  label: 'Influencers' },
-    { href: '/marketing/taxonomy',     label: 'Taxonomy' },
-    // PBS 2026-05-09: agents only reachable via /cockpit.
+    { href: '/marketing/digital',      label: 'Digital',           isNew: true },
+    { href: '/marketing/web',          label: 'Web' },
+    { href: '/marketing/library',      label: 'Library' },
+    { href: '/marketing/docs',         label: 'Docs' },
   ],
 
   // ===== 04 Operations =====
@@ -101,17 +108,17 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/front-office/roster',     label: 'Roster',        coming: true },
   ],
 
-  // ===== 05 Guest =====
-  // Reviews/Social/Influencers/Media moved to Marketing pillar.
+  // ===== 05 Contacts (formerly Guest — PBS 2026-07-06 evening) =====
+  // slug stays 'guest' + URL stays /guest to keep every existing deep link alive.
+  // Sub-tabs: Overview · Guests · Prospects · Reputation · Behaviour · Newsletters.
+  // Findings dropped (surface merged into HoD conclusions). Journey + Loyalty merged into Behaviour.
   guest: [
-    { href: '/guest',                  label: 'Snapshot' },
-    { href: '/guest/directory',        label: 'Directory' },
-    { href: '/guest/reputation',       label: 'Reputation',  isNew: true },
-    { href: '/guest/journey',          label: 'Journey',     isNew: true },
-    { href: '/guest/loyalty',          label: 'Loyalty',     isNew: true },
-    { href: '/guest/messy-data',       label: 'Messy data',  isNew: true },
-    { href: '/guest/findings',         label: 'Findings',    isNew: true },
-    // PBS 2026-05-09: agents only reachable via /cockpit.
+    { href: '/guest',                  label: 'Overview' },
+    { href: '/guest/directory',        label: 'Guests' },
+    { href: '/guest/prospects',        label: 'Prospects',   isNew: true },
+    { href: '/guest/reputation',       label: 'Reputation' },
+    { href: '/guest/behaviour',        label: 'Behaviour',   isNew: true },
+    { href: '/guest/newsletters',      label: 'Newsletters' },
   ],
 
   // ===== 04 Finance =====
@@ -149,8 +156,9 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
   // map and the cockpit status page move to /cockpit (still reachable via
   // direct URL until cockpit shell is updated to surface them).
   settings: [
-    { href: '/settings',          label: 'Snapshot' },
-    { href: '/settings/property', label: 'Property' },
+    { href: '/settings',            label: 'Snapshot' },
+    { href: '/settings/property',   label: 'Property' },
+    { href: '/settings/guardrails', label: 'Guardrails', isNew: true },
   ],
 };
 
@@ -165,7 +173,7 @@ export const PILLAR_HEADER: Record<
   marketing:   { eyebrow: 'Pillar 03 · Marketing',      title: 'Brand',        emphasis: 'reach',           sub: 'Library · campaigns · reviews · social · influencers' },
   operations:  { eyebrow: 'Pillar 04 · Operations',     title: 'Operations',   emphasis: 'live',            sub: 'Today · F&B · spa · activities · property' },
   frontOffice: { eyebrow: 'Pillar 04b · Front Office',  title: 'Arrivals',     emphasis: 'cockpit',         sub: 'Arrivals · in-house · departures · VIP · groups · roster' },
-  guest:       { eyebrow: 'Pillar 05 · Guest',          title: 'Guest',        emphasis: 'voice',           sub: 'Reputation · journey · loyalty' },
+  guest:       { eyebrow: 'Pillar 05 · Contacts',       title: 'Contacts',     emphasis: 'directory',       sub: 'Guests · prospects · reputation · behaviour · newsletters' },
   finance:     { eyebrow: 'Pillar 06 · Finance',        title: 'USALI',        emphasis: 'ledger',          sub: 'HR · P&L · ledger · budget · variance' },
   knowledge:   { eyebrow: 'Knowledge',                  title: 'Repos',        emphasis: '& agents',        sub: 'SOPs · brand · automation' },
   settings:    { eyebrow: 'Settings',                   title: 'Property',     emphasis: 'configuration',   sub: 'Preferences · users · API keys' },
