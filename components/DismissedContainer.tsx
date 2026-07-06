@@ -31,8 +31,6 @@ const REASON_COLOR: Record<string, string> = {
 
 export default async function DismissedContainer() {
   const sb = getSupabaseAdmin();
-  // Reads through public bridge (SECURITY DEFINER RPC would be cleaner; for now
-  // we hit the schema directly through the service-role client).
   const { data } = await sb.schema('guest').from('guardrail_dismissals')
     .select('insight_key, reason, note, ts')
     .order('ts', { ascending: false })
@@ -40,6 +38,14 @@ export default async function DismissedContainer() {
 
   const rows: Row[] = (data as Row[]) ?? [];
   const total = rows.length;
+
+  // PBS 2026-07-07 evening: pending conclusions count is the total number of
+  // active guardrail rules (across all depts + all domains) — a rough proxy for
+  // "what conclusions could fire". Dismissed rate = total dismissed / (pending + total).
+  const { data: guardrailsData } = await sb.from('guardrails')
+    .select('id, active').eq('active', true).limit(2000);
+  const pending = (guardrailsData as { id: number; active: boolean }[] ?? []).length;
+  const dismissRate = pending + total > 0 ? Math.round((total / (pending + total)) * 100) : 0;
 
   const byReason = new Map<string, number>();
   for (const r of rows) {
@@ -63,8 +69,22 @@ export default async function DismissedContainer() {
   return (
     <div style={boxOuter}>
       <div style={boxHeader}>
-        <span style={boxTitle}>Dismissed conclusions · {total}</span>
-        <span style={boxSubtitle}>Operators dismiss guardrail signals for a reason — patterns tell you where to tune</span>
+        <span style={boxTitle}>Conclusions ledger · {pending} pending · {total} dismissed</span>
+        <span style={boxSubtitle}>Dismiss rate {dismissRate}% · patterns below tell you where to tune the guardrails</span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8, marginBottom: 8 }}>
+        <div style={statCell}>
+          <div style={statValue}>{pending}</div>
+          <div style={statLabel}>Pending rules</div>
+        </div>
+        <div style={statCell}>
+          <div style={{ ...statValue, color: '#B04A2F' }}>{total}</div>
+          <div style={statLabel}>Dismissed all-time</div>
+        </div>
+        <div style={statCell}>
+          <div style={{ ...statValue, color: dismissRate > 20 ? '#B04A2F' : dismissRate > 10 ? '#8B5A1C' : '#1F5C2C' }}>{dismissRate}%</div>
+          <div style={statLabel}>Dismiss rate</div>
+        </div>
       </div>
       {total === 0 ? (
         <div style={{ fontSize: 12, color: '#5A5A5A', fontStyle: 'italic', padding: '10px 4px' }}>
@@ -119,6 +139,9 @@ export default async function DismissedContainer() {
 }
 
 const boxOuter: React.CSSProperties = { border: '1px solid #E6DFCC', borderRadius: 6, background: '#FFFFFF', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 };
+const statCell: React.CSSProperties = { padding: '8px 10px', background: '#FAFAF7', border: '1px solid #E6DFCC', borderRadius: 4 };
+const statValue: React.CSSProperties = { fontSize: 20, fontWeight: 700, color: '#1B1B1B', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' };
+const statLabel: React.CSSProperties = { fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#5A5A5A', marginTop: 2 };
 const boxHeader: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 2, paddingBottom: 6, borderBottom: '1px solid #F0EBD9' };
 const boxTitle: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: '#1B1B1B' };
 const boxSubtitle: React.CSSProperties = { fontSize: 11, color: '#5A5A5A' };
