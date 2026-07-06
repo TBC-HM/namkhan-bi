@@ -14,6 +14,7 @@ import { GUEST_SUBPAGES } from './_subpages';
 import { DEPT_CFG } from '@/lib/dept-cfg';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { PROPERTY_ID } from '@/lib/supabase';
+import ReportBuilder from '@/app/revenue/_components/ReportBuilder';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -73,6 +74,7 @@ export default async function GuestHodPage() {
 async function renderHodBody() {
   const sb = getSupabaseAdmin();
   const cfg = DEPT_CFG.guest;
+  const reportTypes = cfg.reportTypes ?? [];
   const windowDays = 180;
   const todayMs = Date.now();
   const sinceIso = new Date(todayMs - windowDays * 86_400_000).toISOString().slice(0, 10);
@@ -354,6 +356,15 @@ async function renderHodBody() {
           maxRender={12}
         />
       </div>
+
+      {/* PBS 2026-07-07 night: Build-a-report primitive (parity with every other HoD). */}
+      {reportTypes.length > 0 && (
+        <div style={{ gridColumn: '1 / -1' }}>
+          <Container title="Build a report" subtitle="pick a type · narrow with chips · open print-ready render" density="compact">
+            <ReportBuilder reportTypes={reportTypes} hrefPrefix="" />
+          </Container>
+        </div>
+      )}
 
       <div style={{ gridColumn: '1 / -1' }}>
         <div style={{ padding: '10px 14px', background: '#FAFAF7', border: '1px dashed #E6DFCC', borderRadius: 4, fontSize: 11, color: '#5A5A5A', lineHeight: 1.55 }}>
