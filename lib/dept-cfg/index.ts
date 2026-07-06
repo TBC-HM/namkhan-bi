@@ -425,12 +425,13 @@ const OPERATIONS_CFG: DeptCfg = {
   // (with sub-tabs for Rooms/F&B/Spa/Activities/Retail/Transport/Other) + QA/Docs/Suppliers.
   // Sub-tabs render inline on each parent's landing via nav-subgroups.
   subPages: [
-    // PBS 2026-07-07 late evening: QA + Docs dropped from top strip (still reachable
-    // by URL). Departments hub keeps its 7 sub-tabs; Suppliers stays as a top-level tab.
+    // PBS 2026-07-07 night: QA back as top-level tab. Docs moved to a sub-tab
+    // of Overview (renders below the top strip when on Overview).
     { label: 'HoD',              href: '/operations'                 },
     { label: 'Overview',         href: '/operations/overview'        },
     { label: 'Departments',      href: '/operations/rooms'           },
     { label: 'Suppliers',        href: '/operations/suppliers'       },
+    { label: 'QA',               href: '/operations/sops'            },
     { label: 'Reports',          href: '/h/260955/reports?dept=operations' },
   ],
   quickChips: [
@@ -560,13 +561,14 @@ const FINANCE_CFG: DeptCfg = {
   chatPlaceholder: 'e.g. how is GOP tracking vs budget?',
   storageKeyPrefix: 'fin',
   subPages: [
-    // PBS 2026-07-07 late evening: only ONE parent group "Finance" with sub-tabs
-    // P&L / Ledger / Transactions / Budget. "Working capital" was an invention —
-    // removed. Cashflow / Variance / AP·AR pages preserved by URL.
+    // PBS 2026-07-07 night: Legal restored as a top-level tab (helpers stripped it
+    // by mistake). Ledger stays a sub-tab of Finance (visible when on any Finance
+    // child page — see nav-subgroups /finance/pnl group).
     { label: 'HoD',             href: '/finance'                          },
     { label: 'Overview',        href: '/finance/overview'                 },
     { label: 'HR',              href: '/finance/hr'                       },
     { label: 'Finance',         href: '/finance/pnl'                      },
+    { label: 'Legal',           href: '/finance/legal'                    },
     { label: 'Reports',         href: '/h/260955/reports?dept=finance'    },
   ],
   quickChips: [
