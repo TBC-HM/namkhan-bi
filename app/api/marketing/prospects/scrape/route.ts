@@ -21,7 +21,8 @@ type ActorId =
   | 'google_search'       // Google SERP results (URLs only)
   | 'booking'             // Booking.com hotel listings (compset)
   | 'email_social'        // Enrich URLs → emails + socials
-  | 'leads_finder';       // code_crafter/leads-finder — Apollo alternative, B2B decision-makers
+  | 'leads_finder'        // code_crafter/leads-finder — Apollo alternative, B2B decision-makers
+  | 'email_verifier';     // michael.g/email-verifier-validator — verify list of emails (paid, deep)
 
 interface ScrapeInput {
   actor: ActorId;
@@ -40,6 +41,7 @@ const ACTORS: Record<ActorId, { slug: string; label: string }> = {
   booking:        { slug: 'voyager~booking-scraper',                         label: 'Booking.com Hotels' },
   email_social:   { slug: 'poidata~email-and-social-scraper',                label: 'Website Email Extractor' },
   leads_finder:   { slug: 'code_crafter~leads-finder',                       label: 'B2B Leads Finder (Apollo alternative)' },
+  email_verifier: { slug: 'michael.g~email-verifier-validator',              label: 'Email Verifier (paid, deep)' },
 };
 
 // -----------------------------------------------------------------------------
@@ -177,6 +179,7 @@ function mapItem(actor: ActorId, item: Record<string, unknown>): PendingRow[] {
     case 'booking':        return mapBooking(item);
     case 'email_social':   return mapEmailSocial(item);
     case 'leads_finder':   return mapLeadsFinder(item);
+    case 'email_verifier': return []; // verifier writes updates, not new rows — see post-run block
   }
 }
 
@@ -258,6 +261,33 @@ export async function POST(req: Request) {
     lifecycle_stage: 'new',
     email_verify_status: r.email ? 'unverified' : null,
   }));
+
+  // Email Verifier is a special case — it UPDATES existing rows, doesn't INSERT new ones.
+  // Actor output shape: [{ email, status, ... }] where status in valid | invalid | catch_all | disposable | role | unknown.
+  if (actor === 'email_verifier') {
+    // Normalize each verifier item into { email, status }
+    const verify_rows = items.map((it) => ({
+      email: (it.email as string) || (it.recipient as string) || null,
+      status: ((it.status as string) || (it.result as string) || (it.deliverable as string) || 'unknown').toLowerCase(),
+    })).filter((r) => r.email);
+    const { data: vData, error: vErr } = await sb.rpc('fn_apify_apply_verify', {
+      p_rows: verify_rows as unknown as object,
+    });
+    if (vErr) {
+      return NextResponse.json({
+        ok: false, actor, items_returned: items.length,
+        error: 'apply_verify_failed', detail: vErr.message,
+      }, { status: 500 });
+    }
+    const vs = (vData ?? {}) as { updated?: number };
+    return NextResponse.json({
+      ok: true, actor,
+      items_returned: items.length,
+      updated: vs.updated ?? 0,
+      duration_ms: Date.now() - started,
+      apify_status: apifyStatus,
+    });
+  }
 
   // Bulk-insert via SECURITY DEFINER RPC (bypasses PostgREST's public-schema-only restriction)
   const { data: ingestData, error: ingestErr } = await sb.rpc('fn_apify_ingest_prospects', {
