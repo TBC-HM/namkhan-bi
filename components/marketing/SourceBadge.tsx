@@ -9,6 +9,7 @@ export type SourceKey =
   | 'tripadvisor'
   | 'booking'
   | 'expedia'
+  | 'ctrip'
   | 'agoda'
   | 'cloudbeds'
   | 'direct'
@@ -24,6 +25,7 @@ const META: Record<SourceKey, SourceMeta> = {
   tripadvisor: { label: 'TripAdvisor',  bg:'#00A680', fg:'#FFFFFF', brd:'#00875C', glyph:'TA' },
   booking:     { label: 'Booking.com',  bg:'#003580', fg:'#FFFFFF', brd:'#002466', glyph:'B' },
   expedia:     { label: 'Expedia',      bg:'#FFC72C', fg:'#1B1B1B', brd:'#E5B325', glyph:'E' },
+  ctrip:       { label: 'Trip.com',     bg:'#2681FF', fg:'#FFFFFF', brd:'#1B6ADF', glyph:'T' },
   agoda:       { label: 'Agoda',        bg:'#5392F9', fg:'#FFFFFF', brd:'#3B7BE0', glyph:'A' },
   cloudbeds:   { label: 'Cloudbeds',    bg:'#1F3A2E', fg:'#FFFFFF', brd:'#173025', glyph:'CB' },
   direct:      { label: 'Direct',       bg:'#F5F0E1', fg:'#1F3A2E', brd:'#E6DFCC', glyph:'NK' },
