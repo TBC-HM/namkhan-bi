@@ -11,6 +11,8 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { PROPERTY_ID } from '@/lib/supabase';
 import SourceBadge from '@/components/marketing/SourceBadge';
 import ReputationReviewsTabs from './_components/ReputationReviewsTabs';
+import SentimentContainer from './_components/SentimentContainer';
+import ReportContainer from './_components/ReportContainer';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -305,6 +307,14 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
             </div>
           </div>
         )}
+
+        {/* PBS 2026-07-06: sentiment + management-report containers side-by-side, expandable,
+            under source table + above reviews list. Both feed from live reviews array so any
+            new scrape auto-refreshes them. */}
+        <div style={{ gridColumn:'1 / -1', display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(400px, 1fr))', gap:12 }}>
+          <SentimentContainer reviews={reviews} />
+          <ReportContainer reviews={reviews} />
+        </div>
 
         <div style={{ gridColumn:'1 / -1' }}>
           <ReputationReviewsTabs reviews={reviews} />
