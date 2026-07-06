@@ -66,16 +66,20 @@ export default function DashboardPage(props: DashboardPageProps) {
   );
 }
 
-// PBS 2026-07-07: renders a second sticky sub-tab row when a subgroup matches
-// the current pathname. See lib/nav-subgroups.ts for the config.
+// PBS 2026-07-07 night: renders a second sticky sub-tab row when a subgroup matches
+// the current pathname. Siblings only — if the current page IS one of the sub-tabs,
+// that tab is hidden so the strip never shows a "double" of where you already are.
 function SubTabStrip({ pathname, tabs }: { pathname: string; tabs: { label: string; href: string }[] }) {
+  const siblings = tabs.filter(t => {
+    const cleanHref = t.href.split('?')[0];
+    return pathname !== t.href && pathname !== cleanHref;
+  });
+  if (siblings.length === 0) return null;
   return (
     <nav style={S.subTabStrip} role="tablist" aria-label="Sub-section">
-      {tabs.map((t) => {
-        const active = pathname === t.href || pathname === t.href.split('?')[0];
-        const style: CSSProperties = { ...S.subTab, ...(active ? S.subTabActive : null) };
-        return <a key={t.href} href={t.href} role="tab" aria-selected={active} style={style}>{t.label}</a>;
-      })}
+      {siblings.map((t) => (
+        <a key={t.href} href={t.href} role="tab" style={S.subTab}>{t.label}</a>
+      ))}
     </nav>
   );
 }
