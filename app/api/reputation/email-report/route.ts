@@ -19,6 +19,8 @@ interface Req {
     body: string; reviewed_at: string; response_status: string;
     received_at?: string;
   }>;
+  positive_words?: Array<{ word: string; count: number }>;
+  negative_words?: Array<{ word: string; count: number }>;
 }
 
 export async function POST(req: Request) {
@@ -91,6 +93,8 @@ export async function POST(req: Request) {
       text: body.text,
       html_bullets: enrichedBullets,
       low_reviews: low,
+      positive_words: body.positive_words ?? [],
+      negative_words: body.negative_words ?? [],
     }),
   });
 
