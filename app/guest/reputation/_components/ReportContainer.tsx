@@ -15,6 +15,37 @@ const SOURCE_LABEL: Record<string, string> = {
   google: 'Google', tripadvisor: 'TripAdvisor', booking: 'Booking.com', expedia: 'Expedia', ctrip: 'Trip.com',
 };
 
+// Same theme dictionaries as SentimentContainer so praise/complaint themes stay aligned.
+const POSITIVE_THEMES: Record<string, string[]> = {
+  Staff: ['staff','service','host','team','welcome','friendly','helpful','attentive','kind'],
+  Location: ['location','view','riverside','river','peaceful','serene','tranquil','quiet'],
+  Food: ['food','breakfast','meal','restaurant','dinner','delicious','cuisine'],
+  Pool: ['pool','swimming','infinity'],
+  Cleanliness: ['clean','tidy','pristine','spotless'],
+  Rooms: ['room','villa','suite','bed','spacious','comfortable','beautiful'],
+  Nature: ['nature','garden','green','birds','frogs','trees','jungle','forest'],
+  Wellness: ['spa','yoga','massage','wellness'],
+};
+const NEGATIVE_THEMES: Record<string, string[]> = {
+  WiFi: ['wifi','internet','connection','signal'],
+  Aircon: ['aircon','air conditioning','ac ','hot','warm','stuffy'],
+  Noise: ['noise','loud','snor','construction'],
+  Bathroom: ['shower','tap','sink','toilet','water pressure'],
+  Bugs: ['mosquito','insect','bug','ant','snake','spider'],
+  Access: ['access','transfer','far','remote','far from town','shuttle late','pickup'],
+  Price: ['overpriced','expensive','pricey'],
+};
+function themesFrom(reviews: Review[], themeMap: Record<string, string[]>): Array<[string, number]> {
+  const counts = new Map<string, number>();
+  for (const r of reviews) {
+    const hay = ((r.title ?? '') + ' ' + (r.body ?? '')).toLowerCase();
+    for (const [theme, needles] of Object.entries(themeMap)) {
+      if (needles.some(n => hay.includes(n))) counts.set(theme, (counts.get(theme) ?? 0) + 1);
+    }
+  }
+  return Array.from(counts.entries()).filter(([,n]) => n > 0).sort((a,b) => b[1] - a[1]);
+}
+
 function generateBullets(reviews: Review[]): { headline: string; bullets: string[] } {
   const total = reviews.length;
   if (total === 0) return { headline: 'No reviews scraped yet.', bullets: [] };
@@ -35,6 +66,21 @@ function generateBullets(reviews: Review[]): { headline: string; bullets: string
     .sort((a,b) => b[1].n - a[1].n)
     .map(([s, v]) => `${SOURCE_LABEL[s] ?? s}: ${v.n} reviews · avg ${(v.sum / v.n).toFixed(1)}/5`);
 
+  // Sentiment split (positive/neutral/negative) — the traffic-light data as text.
+  let pos = 0, neu = 0, neg = 0;
+  for (const r of reviews) {
+    const n = Number(r.rating_norm);
+    if (!Number.isFinite(n)) continue;
+    if (n >= 4) pos++; else if (n >= 3) neu++; else neg++;
+  }
+  const pctPos = total ? Math.round((pos/total)*100) : 0;
+  const pctNeu = total ? Math.round((neu/total)*100) : 0;
+  const pctNeg = total ? Math.round((neg/total)*100) : 0;
+
+  // Praise + complaint themes.
+  const praise    = themesFrom(reviews.filter(r => Number(r.rating_norm) >= 4), POSITIVE_THEMES).slice(0, 4);
+  const complaint = themesFrom(reviews.filter(r => Number(r.rating_norm) < 3),  NEGATIVE_THEMES).slice(0, 4);
+
   const lows = reviews.filter(r => Number(r.rating_norm) < 3).slice(0, 3);
   const recent = reviews.slice()
     .sort((a,b) => (b.reviewed_at ?? '').localeCompare(a.reviewed_at ?? ''))
@@ -43,6 +89,9 @@ function generateBullets(reviews: Review[]): { headline: string; bullets: string
   const bullets: string[] = [
     `📊 Total reviews (local sample): ${total} · weighted avg ${avg.toFixed(2)}/5`,
     `🎯 Response rate: ${responseRate}% (${responded} responded / ${unanswered} pending)`,
+    `🚦 Sentiment: ${pos} positive (${pctPos}%) · ${neu} neutral (${pctNeu}%) · ${neg} negative (${pctNeg}%)`,
+    `🟢 What guests praise: ${praise.length ? praise.map(([t,c]) => `${t} (${c})`).join(' · ') : '— no clear themes yet'}`,
+    `🔴 What guests complain: ${complaint.length ? complaint.map(([t,c]) => `${t} (${c})`).join(' · ') : '— no complaints in the local sample'}`,
     `📚 Per source: ${perSourceList.join(' · ')}`,
   ];
   if (lows.length > 0) {
