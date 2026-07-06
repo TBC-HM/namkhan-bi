@@ -3,13 +3,14 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-type ActorId = 'gmaps_contacts' | 'google_search' | 'booking' | 'email_social';
+type ActorId = 'gmaps_contacts' | 'google_search' | 'booking' | 'email_social' | 'leads_finder';
 
 const ACTORS: Record<ActorId, { label: string; hint: string; costHint: string }> = {
-  gmaps_contacts: { label: 'Google Maps + Emails',        hint: 'Highest email hit-rate (~30-40%). Real businesses with contact pages.', costHint: '~$1 per 100 places' },
+  gmaps_contacts: { label: 'Google Maps + Emails',        hint: 'Venue-level scrape (compass/google-maps-extractor). Best for finding local businesses.', costHint: '~$5 per 1,000 places' },
   google_search:  { label: 'Google Search (SERP)',        hint: 'URLs only — no emails. Feed into Email Extractor next.',                 costHint: '~$0.5 per 100 hits' },
   booking:        { label: 'Booking.com Hotels',          hint: 'Compset discovery — no emails.',                                          costHint: '~$2 per 100 hotels' },
   email_social:   { label: 'Website Email Extractor',     hint: 'Feed a list of URLs → returns emails + socials per site.',                costHint: '~$0.5 per 100 URLs' },
+  leads_finder:   { label: 'B2B Leads Finder (Apollo alt)', hint: 'Best-value B2B lead source. Returns decision-makers by name + role + email at target companies. Ideal for tour operators/DMCs/luxury travel agents.', costHint: '~$1.50 per 1,000 leads · pay per event' },
 };
 
 type Result = {
@@ -50,6 +51,12 @@ export default function ScrapeForm() {
   const [eUrls, setEUrls]               = useState('https://example-hotel.com\nhttps://tour-operator.com');
   const [eDepth, setEDepth]             = useState(2);
 
+  // Leads Finder (B2B) inputs
+  const [lRoles, setLRoles]             = useState('Marketing Director\nCEO\nCommercial Director\nHead of Sales');
+  const [lKeywords, setLKeywords]       = useState('luxury travel\ntour operator\nDMC southeast asia');
+  const [lCountry, setLCountry]         = useState('');
+  const [lMax, setLMax]                 = useState(50);
+
   const buildInput = (): Record<string, unknown> => {
     switch (actor) {
       case 'gmaps_contacts':
@@ -75,6 +82,14 @@ export default function ScrapeForm() {
         const urls = eUrls.split('\n').map(u => u.trim()).filter(Boolean).map(u => ({ url: u }));
         return { startUrls: urls, maxDepth: eDepth };
       }
+      case 'leads_finder':
+        return {
+          jobTitles:        lRoles.split('\n').map(x => x.trim()).filter(Boolean),
+          searchKeywords:   lKeywords.split('\n').map(x => x.trim()).filter(Boolean),
+          country:          lCountry.trim() || undefined,
+          maxLeads:         lMax,
+          verifiedEmailsOnly: true,
+        };
     }
   };
 
@@ -168,6 +183,22 @@ export default function ScrapeForm() {
               rows={5} style={{ ...input, fontFamily:'inherit' }} /></div>
           <div style={row}><label style={label}>Max depth</label>
             <input type="number" min={1} max={4} value={eDepth} onChange={e => setEDepth(+e.target.value)} disabled={running} style={{ ...input, width:80 }} /></div>
+        </>
+      )}
+
+      {actor === 'leads_finder' && (
+        <>
+          <div style={row}><label style={label}>Job titles (one per line)</label>
+            <textarea value={lRoles} onChange={e => setLRoles(e.target.value)} disabled={running}
+              rows={4} placeholder="Marketing Director&#10;CEO&#10;Head of Sales" style={{ ...input, fontFamily:'inherit' }} /></div>
+          <div style={row}><label style={label}>Company keywords (one per line)</label>
+            <textarea value={lKeywords} onChange={e => setLKeywords(e.target.value)} disabled={running}
+              rows={4} placeholder="luxury travel&#10;tour operator&#10;DMC southeast asia" style={{ ...input, fontFamily:'inherit' }} /></div>
+          <div style={row}><label style={label}>Country (optional, 2-letter code)</label>
+            <input value={lCountry} onChange={e => setLCountry(e.target.value)} disabled={running}
+              placeholder="US, GB, DE, TH…" style={{ ...input, width:120 }} /></div>
+          <div style={row}><label style={label}>Max leads</label>
+            <input type="number" min={1} max={2000} value={lMax} onChange={e => setLMax(+e.target.value)} disabled={running} style={{ ...input, width:100 }} /></div>
         </>
       )}
 
