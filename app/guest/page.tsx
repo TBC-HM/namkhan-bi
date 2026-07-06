@@ -1,19 +1,17 @@
 // app/guest/page.tsx
-// PBS 2026-07-06 v2: Guest HoD is now the SINGLE home for department conclusions.
-// - Runs all four rule sets (retention, reputation, newsletter, observations)
-// - Renders SIGNALS + OBSERVATIONS in two side-by-side ConclusionBlocks
-// - Findings page removed from the strip (route still accessible for bookmarks)
-// - Newsletters is now the last tab before Reports
-// - No decorative "Attention · Docs · Where to next" clutter — the conclusions
-//   are the operator's day-planner.
+// PBS 2026-07-06 v3: dept renamed Contacts. Old chip/attn/docs content restored
+// at the top. Conclusion boxes (SIGNALS + OBSERVATIONS) moved BELOW.
+// All 4 rule sets (retention · reputation · newsletter · observations) still fire.
 
-import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
+import Link from 'next/link';
+import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
 import ConclusionBlock, { type Insight } from '@/app/_components/ConclusionBlock';
 import { evaluateRetentionRules, type RetentionContext } from '@/lib/rules/retention';
 import { evaluateObservations, type ObservationContext } from '@/lib/rules/observations';
 import { evaluateReputationRules, type ReputationContext } from '@/lib/rules/reputation';
 import { evaluateNewsletterRules, type NewsletterContext } from '@/lib/rules/newsletter';
 import { GUEST_SUBPAGES } from './_subpages';
+import { DEPT_CFG } from '@/lib/dept-cfg';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { PROPERTY_ID } from '@/lib/supabase';
 
@@ -57,17 +55,15 @@ export default async function GuestHodPage() {
   try {
     return await renderHodBody();
   } catch (e) {
-    // Any throw in the body renders the shell with an error banner instead of crashing to __next_error__.
-    const tabs: DashboardTab[] = GUEST_SUBPAGES.map((s) => ({
+    const cfg = DEPT_CFG.guest;
+    const tabs: DashboardTab[] = cfg.subPages.map((s) => ({
       key: s.href, label: s.label, href: s.href, active: s.href === '/guest',
     }));
     const msg = e instanceof Error ? e.message : String(e);
     return (
-      <DashboardPage title="Guest · HoD" subtitle="Rules failed to load — details below." tabs={tabs}>
+      <DashboardPage title="Contacts · HoD" subtitle="Rules failed to load — details below." tabs={tabs}>
         <div style={{ gridColumn: '1 / -1' }}>
-          <div style={{ padding: '14px 16px', background: '#FFF3F1', border: '1px solid #E6C9BF', borderRadius: 6, fontSize: 12, color: '#B04A2F', fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
-            {msg}
-          </div>
+          <div style={{ padding: '14px 16px', background: '#FFF3F1', border: '1px solid #E6C9BF', borderRadius: 6, fontSize: 12, color: '#B04A2F', fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>{msg}</div>
         </div>
       </DashboardPage>
     );
@@ -76,6 +72,7 @@ export default async function GuestHodPage() {
 
 async function renderHodBody() {
   const sb = getSupabaseAdmin();
+  const cfg = DEPT_CFG.guest;
   const windowDays = 180;
   const todayMs = Date.now();
   const sinceIso = new Date(todayMs - windowDays * 86_400_000).toISOString().slice(0, 10);
@@ -83,7 +80,6 @@ async function renderHodBody() {
   const since30dIso = new Date(todayMs - 30 * 86_400_000).toISOString();
   const since90dIso = new Date(todayMs - 90 * 86_400_000).toISOString().slice(0, 10);
 
-  // Defensive: use allSettled — one broken query mustn't take down the whole HoD.
   const results = await Promise.allSettled([
     sb.schema('guest').from('mv_guest_profile')
       .select('email, country, stays_count, lifetime_revenue, last_stay_date')
@@ -100,7 +96,6 @@ async function renderHodBody() {
       .select('sent_at, opened_at, unsubscribed_at')
       .gte('sent_at', since30dIso)
       .limit(50000),
-    // Use the public bridge view (mkt_reviews) not schema('marketing') — PostgREST is public-only.
     sb.from('mkt_reviews')
       .select('rating_norm, response_status, body, received_at')
       .eq('property_id', PROPERTY_ID)
@@ -116,12 +111,12 @@ async function renderHodBody() {
     const val = r.value as { data?: unknown[] | null } | null;
     return (val?.data ?? []) as unknown[];
   }
-  const profiles: ProfileRow[]   = pick(0) as ProfileRow[];
-  const res:      ResRow[]       = pick(1) as ResRow[];
-  const dir:      DirRow[]       = pick(2) as DirRow[];
-  const recips:   RecipientRow[] = pick(3) as RecipientRow[];
-  const reviews:  ReviewRow[]    = pick(4) as ReviewRow[];
-  const camps:    CampaignRow[]  = pick(5) as CampaignRow[];
+  const profiles = pick(0) as ProfileRow[];
+  const res      = pick(1) as ResRow[];
+  const dir      = pick(2) as DirRow[];
+  const recips   = pick(3) as RecipientRow[];
+  const reviews  = pick(4) as ReviewRow[];
+  const camps    = pick(5) as CampaignRow[];
 
   // ─── RETENTION context ───
   const totalGuests = profiles.length;
@@ -272,34 +267,80 @@ async function renderHodBody() {
   const contactableGuests = profiles.filter(p => p.email && String(p.email).includes('@')).length;
 
   const newsletterCtx: NewsletterContext = {
-    scheduledCount, draftsCount,
-    daysSinceLastSend,
+    scheduledCount, draftsCount, daysSinceLastSend,
     sends30d: 0, sent30d: sent30, unsub30d: unsub30, opens30d: opens30, openRate30d,
     unsubRate30d, contactableGuests, totalGuests,
-    failedSends24h: 0, // wire when guest.campaign_recipients has failure timestamp
+    failedSends24h: 0,
   };
 
-  // ─── Consolidate all signals + observations ───
   const signals: Insight[] = [
     ...evaluateRetentionRules(retentionCtx),
     ...evaluateReputationRules(reputationCtx),
     ...evaluateNewsletterRules(newsletterCtx),
   ];
-  // Newsletter contactable and observations we bucket into observations.
   const observations: Insight[] = evaluateObservations(observationCtx);
 
-  const tabs: DashboardTab[] = GUEST_SUBPAGES.map((s) => ({
-    key: s.href, label: s.label, href: s.href,
-    active: s.href === '/guest',
+  const tabs: DashboardTab[] = cfg.subPages.map((s) => ({
+    key: s.href, label: s.label, href: s.href, active: s.href === '/guest',
   }));
+
+  const attn = cfg.defaultAttn ?? [];
+  const docs = cfg.defaultDocs ?? [];
+  const chips = cfg.quickChips ?? [];
+  const severityTone: Record<string, string> = { high: '#B03826', medium: '#8B5A1C', low: '#1F5C2C' };
 
   return (
     <DashboardPage
-      title="Guest · HoD"
-      subtitle="Your day starts here. Every card below is something to send, approve, edit, or investigate."
+      title="Contacts · HoD"
+      subtitle={cfg.hodTagline}
       tabs={tabs}
     >
-      {/* CONCLUSIONS · SIGNALS + OBSERVATIONS side-by-side */}
+      {/* OLD CONTENT RESTORED: quick chips */}
+      <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {chips.map((c) => (
+          <Link key={c.href} href={c.href} style={chipStyle}>{c.label}</Link>
+        ))}
+      </div>
+
+      {/* OLD CONTENT: Attention · Docs · Where-to-next 3-col grid */}
+      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+        <Container title={`Attention · ${attn.length}`} subtitle="reputation · behaviour · newsletter flags" density="compact">
+          {attn.length === 0 ? <div style={emptyStyle}>Nothing flagged.</div> : (
+            <ul style={ulReset}>
+              {attn.map((a) => (
+                <li key={a.id} style={rowStyle}>
+                  <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: severityTone[a.severity] ?? '#8A8A8A', marginRight: 8, marginTop: 5 }} />
+                  <span style={{ color: '#1B1B1B', fontSize: 12 }}>{a.label}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Container>
+
+        <Container title={`My docs · ${docs.length}`} subtitle="playbooks · templates · maps" density="compact">
+          {docs.length === 0 ? <div style={emptyStyle}>No docs pinned.</div> : (
+            <ul style={ulReset}>
+              {docs.map((d) => (
+                <li key={d.id} style={rowStyle}>
+                  <a href={d.href} style={{ color: '#1B1B1B', textDecoration: 'underline', textDecorationColor: '#C79A6B', fontSize: 12 }}>{d.label}</a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Container>
+
+        <Container title="Where to next" subtitle="jump into a live tool" density="compact">
+          <ul style={ulReset}>
+            <li style={rowStyle}><a href="/guest/directory"  style={linkStyle}>Guests directory</a> — search + open profile</li>
+            <li style={rowStyle}><a href="/guest/reputation" style={linkStyle}>Reputation</a> — reviews + reply queue</li>
+            <li style={rowStyle}><a href="/guest/behaviour"  style={linkStyle}>Behaviour</a> — retention + spending</li>
+            <li style={rowStyle}><a href="/guest/newsletters" style={linkStyle}>Newsletters</a> — campaigns + schedule</li>
+            <li style={rowStyle}><a href="/marketing/prospects" style={linkStyle}>Prospects</a> — lead list + sequences</li>
+          </ul>
+        </Container>
+      </div>
+
+      {/* CONCLUSIONS BELOW old content — PBS 2026-07-06 evening */}
       <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 8 }}>
         <ConclusionBlock
           insights={signals}
@@ -319,15 +360,31 @@ async function renderHodBody() {
         />
       </div>
 
-      {/* Small footnote — no more chip cluster, no more docs, no more where-to-next */}
       <div style={{ gridColumn: '1 / -1' }}>
         <div style={{ padding: '10px 14px', background: '#FAFAF7', border: '1px dashed #E6DFCC', borderRadius: 4, fontSize: 11, color: '#5A5A5A', lineHeight: 1.55 }}>
-          <strong>Guardrails:</strong> Signals tagged <code>DYNAMIC</code> use rolling baselines (LY repeat rate, 12-month cancel rate, all-time review avg).
-          Signals without the tag use fixed operator targets (25% repeat, 80% response rate, ≤ 0.5% unsub).
-          Dismissed signals reappear when the underlying condition re-fires.
-          For KPIs and detail panels, dive into the sub-pages above.
+          <strong>Guardrails:</strong> Signals tagged <code>DYNAMIC</code> use rolling baselines (LY repeat, 12-month cancel, all-time rating).
+          Fixed targets currently: repeat ≥ 25% · cancel ≤ 15% · pre-stay reach ≥ 80% · response rate ≥ 80% · unsub ≤ 0.5%.
+          Dismiss with a reason (helps fine-tune the thresholds). No AI, no LLM — just data + operator judgement.
         </div>
       </div>
     </DashboardPage>
   );
 }
+
+const chipStyle: React.CSSProperties = {
+  padding: '5px 12px', background: '#FFFFFF', color: '#1B1B1B', border: '1px solid #E6DFCC',
+  borderRadius: 99, fontSize: 11, textDecoration: 'none', whiteSpace: 'nowrap',
+};
+const rowStyle: React.CSSProperties = {
+  display: 'flex', alignItems: 'flex-start', gap: 6, padding: '4px 0',
+  fontSize: 12, color: '#1B1B1B', lineHeight: 1.5,
+};
+const linkStyle: React.CSSProperties = {
+  color: '#1F3A2E', textDecoration: 'underline', textDecorationColor: '#C79A6B', marginRight: 4,
+};
+const emptyStyle: React.CSSProperties = {
+  padding: '10px 8px', fontSize: 12, color: '#5A5A5A', fontStyle: 'italic',
+};
+const ulReset: React.CSSProperties = {
+  margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4,
+};
