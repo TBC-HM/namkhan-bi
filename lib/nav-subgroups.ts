@@ -52,6 +52,43 @@ export const NAV_SUBGROUPS: SubGroup[] = [
     ],
   },
 
+  // ─── Operations ───────────────────────────────────────────
+  // PBS 2026-07-07 evening: hierarchical Operations nav. /operations = HoD chat.
+  // /operations/overview = dept landing whose sub-strip surfaces the 4 non-HoD
+  // groups (Departments/QA/Docs/Suppliers). Departments hub parent lands on
+  // Rooms and carries the 7-dept sub-tab strip on each child page.
+  {
+    parentHref: '/operations/overview',
+    members: ['/operations/overview'],
+    tabs: [
+      { label: 'Departments', href: '/operations/rooms'     },
+      { label: 'QA',          href: '/operations/sops'      },
+      { label: 'Docs',        href: '/operations/docs'      },
+      { label: 'Suppliers',   href: '/operations/suppliers' },
+    ],
+  },
+  {
+    parentHref: '/operations/rooms',
+    members: [
+      '/operations/rooms',
+      '/operations/restaurant',
+      '/operations/spa',
+      '/operations/activities',
+      '/operations/retail',
+      '/operations/transport',
+      '/operations/other',
+    ],
+    tabs: [
+      { label: 'Rooms',      href: '/operations/rooms'      },
+      { label: 'F&B',        href: '/operations/restaurant' },
+      { label: 'Spa',        href: '/operations/spa'        },
+      { label: 'Activities', href: '/operations/activities' },
+      { label: 'Retail',     href: '/operations/retail'     },
+      { label: 'Transport',  href: '/operations/transport'  },
+      { label: 'Other',      href: '/operations/other'      },
+    ],
+  },
+
   // ─── Marketing ────────────────────────────────────────────
   // PBS 2026-07-07 evening: Overview parent moved to /marketing/overview (was /marketing).
   // /marketing is now the HoD chat cockpit.
@@ -99,47 +136,6 @@ export const NAV_SUBGROUPS: SubGroup[] = [
     members: ['/marketing/library', '/marketing/docs'],
     tabs: [
       { label: 'Docs', href: '/marketing/docs' },
-    ],
-  },
-
-  // ─── Finance (PBS 2026-07-07 consolidation) ───────────────
-  // Overview parent stands alone (no children yet, but included so future
-  // sub-tabs can be added without another wiring pass).
-  {
-    parentHref: '/finance/overview',
-    members: ['/finance/overview'],
-    tabs: [
-      { label: 'Overview', href: '/finance/overview' },
-    ],
-  },
-  // Finance parent → P&L / Ledger / Account mapping
-  {
-    parentHref: '/finance/pnl',
-    members: ['/finance/pnl', '/finance/ledger', '/finance/mapping'],
-    tabs: [
-      { label: 'P&L',             href: '/finance/pnl'     },
-      { label: 'Ledger',          href: '/finance/ledger'  },
-      { label: 'Account mapping', href: '/finance/mapping' },
-    ],
-  },
-  // Transactions parent → Transactions / POS · PMS / POS · Poster
-  {
-    parentHref: '/finance/transactions',
-    members: ['/finance/transactions', '/finance/pos-transactions', '/finance/poster'],
-    tabs: [
-      { label: 'Transactions', href: '/finance/transactions'     },
-      { label: 'POS · PMS',    href: '/finance/pos-transactions' },
-      { label: 'POS · Poster', href: '/finance/poster'           },
-    ],
-  },
-  // Working capital parent → Cashflow / Variance / AP / AR
-  {
-    parentHref: '/finance/cashflow',
-    members: ['/finance/cashflow', '/finance/variance', '/finance/apar'],
-    tabs: [
-      { label: 'Cashflow', href: '/finance/cashflow' },
-      { label: 'Variance', href: '/finance/variance' },
-      { label: 'AP / AR',  href: '/finance/apar'     },
     ],
   },
 ];
