@@ -1,3 +1,5 @@
+'use client';
+
 // app/_components/DocPreviewModal.tsx
 // PBS 2026-07-06: reusable inline doc preview (PDF iframe · image tag · text iframe
 // · fallback download button for other mimes). Used everywhere docs are shown.
