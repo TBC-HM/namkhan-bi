@@ -190,7 +190,7 @@ export default async function SupplierDetailView({ supplierName, subPages, activ
     { label: 'Net amount · all-time',  value: fmtMoney(netUsd, 'USD'),   footnote: 'Debits − credits' },
     { label: 'Spend · last 90d',       value: fmtMoney(spend90, 'USD'),  footnote: `${txns90.length} txns in last 90 days` },
     { label: 'Ledger lines',           value: lineCount, unit: 'count',  footnote: 'Distinct GL entry rows' },
-    { label: 'Open AP · debt',         value: fmtMoney(openUsd, 'USD'),  footnote: `${openUnpaid.length} unreconciled · ₭${openLak.toLocaleString('en-US')}`, status: openUsd > 0 ? 'warning' : 'neutral' },
+    { label: 'Open AP · debt',         value: fmtMoney(openUsd, 'USD'),  footnote: `${openUnpaid.length} unreconciled · ₭${openLak.toLocaleString('en-US')}`, status: openUsd > 0 ? 'amber' : 'grey' },
     { label: 'Days since last txn',    value: daysSinceLast ?? '—', unit: daysSinceLast != null ? 'days' : undefined, footnote: `Last QB activity: ${overview.last_txn_date ?? '—'}` },
   ];
 
