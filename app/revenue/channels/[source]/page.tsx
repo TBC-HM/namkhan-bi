@@ -127,8 +127,8 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
           .then((r) => ({ data: r.data as ChannelAccountRow | null }))
           .catch(() => ({ data: null })),
       ]);
-  const sourceBookings: SourceBookingRow[] = bookingsRes?.data ?? [];
-  const qbTransactions: QbTxnRow[] = qbRes?.data ?? [];
+  const sourceBookings: SourceBookingRow[] = (bookingsRes?.data ?? []) as SourceBookingRow[];
+  const qbTransactions: QbTxnRow[] = (qbRes?.data ?? []) as QbTxnRow[];
   const channelContact: ChannelAccountRow | null = accountRes?.data ?? null;
   // PBS 2026-06-30: surface the most recent booking date in the Bookings tile.
   // sourceBookings is already sorted DESC by booking_date in the SQL, so [0] is
