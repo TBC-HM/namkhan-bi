@@ -79,7 +79,7 @@ export default async function CeoEntry({
   const kpiView = cfg.propertyId === NAMKHAN_ID ? 'v_kpi_daily' : null;
   const kpiSelect = 'metric_date,rooms_available,rooms_sold,rooms_revenue,total_revenue,is_actual';
   const pull = (from: string, to: string = today) => kpiView
-    ? supabase.from(kpiView).select(kpiSelect).gte('metric_date', from).lte('metric_date', to).eq('is_actual', true).then(r => (r.data ?? []) as KpiRow[]).catch(() => [] as KpiRow[])
+    ? Promise.resolve(supabase.from(kpiView).select(kpiSelect).gte('metric_date', from).lte('metric_date', to).eq('is_actual', true)).then(r => (r.data ?? []) as KpiRow[]).catch(() => [] as KpiRow[])
     : Promise.resolve([] as KpiRow[]);
 
   const [kpi30, kpi90, kpi365, kpiYtd, kpiSdlyYtd, bugsRes] = await Promise.all([
@@ -88,7 +88,7 @@ export default async function CeoEntry({
     pull(d365),
     pull(dYtd),
     pull(dSdlyStart, dSdlyEnd),
-    supabase.from('cockpit_bugs').select('id,body,status,created_at,fix_link,fix_label').neq('status', 'archived').order('created_at', { ascending: false }).limit(10).then(r => (r.data ?? []) as BugRow[]).catch(() => [] as BugRow[]),
+    Promise.resolve(supabase.from('cockpit_bugs').select('id,body,status,created_at,fix_link,fix_label').neq('status', 'archived').order('created_at', { ascending: false }).limit(10)).then(r => (r.data ?? []) as BugRow[]).catch(() => [] as BugRow[]),
   ]);
   // Attention / Docs surfaces not yet installed — render empty state.
   // Tasks now use the shared HodTasksList primitive (client component with add/due/repeat/delete).
