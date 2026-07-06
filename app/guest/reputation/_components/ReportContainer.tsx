@@ -97,37 +97,37 @@ export default function ReportContainer({ reviews }: { reviews: Review[] }) {
 
       {expanded && (
         <div style={{ padding:14 }}>
+          {/* Send + Schedule controls at TOP (freed up space below for the report) */}
+          <div style={{
+            display:'flex', gap:6, alignItems:'center', flexWrap:'wrap',
+            padding:'8px 10px', background:'#F0EBD9', borderRadius:6, marginBottom:14,
+          }}>
+            <input type="email" value={emailTo} onChange={e => setEmailTo(e.target.value)} disabled={sending}
+              placeholder="pbsbase@gmail.com" style={inp} />
+            <button onClick={send} disabled={sending || !emailTo.trim()} style={btnSend}>
+              {sending ? 'Sending…' : '📧 Send now'}
+            </button>
+            <button onClick={() => alert('Schedule already active: Sunday 20:00 Laos time (cron reviews-scrape-weekly-sunday). Ping me to add another recipient.')} disabled={sending}
+              style={btnLight}>
+              🗓 Schedule
+            </button>
+          </div>
+          {msg && (
+            <div style={{
+              marginBottom:12, padding:6, fontSize:11,
+              background: msg.kind==='ok' ? '#F0F7F2' : '#FFF3F1',
+              border: '1px solid ' + (msg.kind==='ok' ? '#0848380F' : '#B04A2F33'),
+              color:    msg.kind==='ok' ? '#084838' : '#B04A2F',
+              borderRadius:4,
+            }}>{msg.text}</div>
+          )}
+
           <div style={{ fontSize:13, fontWeight:600, color:'#1B1B1B', marginBottom:10 }}>{headline}</div>
-          <ul style={{ paddingLeft:18, margin:'0 0 12px 0' }}>
+          <ul style={{ paddingLeft:18, margin:0 }}>
             {bullets.map((b, i) => (
               <li key={i} style={{ fontSize:12, color:'#3A3A3A', lineHeight:1.55, marginBottom:5 }}>{b}</li>
             ))}
           </ul>
-
-          <div style={{ borderTop:'1px solid #E6DFCC', paddingTop:10, marginTop:8 }}>
-            <div style={{ fontSize:11, fontWeight:600, color:'#5A5A5A', letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:6 }}>
-              Send now · scheduled Sunday 20:00 Laos time
-            </div>
-            <div style={{ display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' }}>
-              <input type="email" value={emailTo} onChange={e => setEmailTo(e.target.value)} disabled={sending}
-                placeholder="pbsbase@gmail.com" style={inp} />
-              <button onClick={send} disabled={sending || !emailTo.trim()} style={btnSend}>
-                {sending ? 'Sending…' : 'Send this report'}
-              </button>
-            </div>
-            {msg && (
-              <div style={{
-                marginTop:8, padding:6, fontSize:11,
-                background: msg.kind==='ok' ? '#F0F7F2' : '#FFF3F1',
-                border: '1px solid ' + (msg.kind==='ok' ? '#0848380F' : '#B04A2F33'),
-                color:    msg.kind==='ok' ? '#084838' : '#B04A2F',
-                borderRadius:4,
-              }}>{msg.text}</div>
-            )}
-            <div style={{ fontSize:10, color:'#5A5A5A', marginTop:6 }}>
-              The Sunday cron already runs the scrape at 20:00 Laos. The report auto-sends to the address you register in <code>reputation_report_recipients</code> — ping me to add yours.
-            </div>
-          </div>
         </div>
       )}
     </div>
@@ -138,3 +138,4 @@ const box: React.CSSProperties = { border:'1px solid #E6DFCC', borderRadius:6, b
 const header: React.CSSProperties = { display:'flex', alignItems:'center', gap:10, width:'100%', padding:'10px 14px', background:'#FAFAF7', border:'none', borderBottom:'1px solid #E6DFCC', fontSize:12, fontWeight:600, color:'#1B1B1B', cursor:'pointer', fontFamily:'inherit', textAlign:'left' };
 const inp: React.CSSProperties = { flex:1, minWidth:200, padding:'5px 8px', fontSize:12, border:'1px solid #E6DFCC', borderRadius:4, background:'#FFFFFF', color:'#1B1B1B' };
 const btnSend: React.CSSProperties = { padding:'6px 14px', fontSize:12, fontWeight:600, background:'#084838', color:'#FFFFFF', border:'1px solid #084838', borderRadius:4, cursor:'pointer' };
+const btnLight: React.CSSProperties = { padding:'6px 14px', fontSize:12, fontWeight:600, background:'#FFFFFF', color:'#084838', border:'1px solid #084838', borderRadius:4, cursor:'pointer' };
