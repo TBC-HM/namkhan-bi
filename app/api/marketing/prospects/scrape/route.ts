@@ -54,21 +54,44 @@ type PendingRow = {
   import_source_file: string;
 };
 
-// Google Maps returns: { title, url (website), phone, emails[], address, city, countryCode, categoryName, totalScore, reviewsCount, location{lat,lng} }
+// Google Maps + Contact Details returns:
+//   { title, url (Google Maps URL), website (real business URL), phone, phoneUnformatted,
+//     emails[] OR email OR contactDetails{emails[]}, address, city, countryCode,
+//     categoryName, totalScore, reviewsCount }
+// Actor variations put emails under different keys — check all of them.
+function pickEmails(item: Record<string, unknown>): string[] {
+  const cands: string[] = [];
+  if (Array.isArray(item.emails)) cands.push(...(item.emails as string[]));
+  if (typeof item.email === 'string') cands.push(item.email as string);
+  if (Array.isArray(item.email)) cands.push(...(item.email as string[]));
+  const cd = item.contactDetails as Record<string, unknown> | undefined;
+  if (cd && Array.isArray(cd.emails)) cands.push(...(cd.emails as string[]));
+  if (cd && typeof cd.email === 'string') cands.push(cd.email as string);
+  const contacts = item.contacts as Record<string, unknown> | undefined;
+  if (contacts && Array.isArray(contacts.emails)) cands.push(...(contacts.emails as string[]));
+  return Array.from(new Set(cands.filter((e) => typeof e === 'string' && /@/.test(e)).map((e) => e.toLowerCase())));
+}
 function mapGmaps(item: Record<string, unknown>): PendingRow[] {
-  const emails = Array.isArray(item.emails) ? (item.emails as string[]) : [];
+  const emails = pickEmails(item);
+  const realWebsite = (item.website as string) || (item.websiteUrl as string) || null;
+  const gmapsUrl    = (item.url as string) || null;
   const base = {
-    company: (item.title as string) || null,
-    website: (item.url as string) || (item.website as string) || null,
-    phone:   (item.phone as string) || null,
+    company: (item.title as string) || (item.name as string) || null,
+    // Prefer the real business website; fall back to Google Maps URL as reference
+    website: realWebsite || gmapsUrl,
+    phone:   (item.phoneUnformatted as string) || (item.phone as string) || null,
     country: ((item.countryCode as string) || '').toUpperCase() || null,
-    notes: [item.categoryName, item.address, item.totalScore ? `★${item.totalScore}` : null]
-      .filter(Boolean).join(' · '),
+    notes: [
+      item.categoryName,
+      item.address,
+      item.totalScore ? `★${item.totalScore}` : null,
+      !realWebsite && gmapsUrl ? 'no website scraped' : null,
+    ].filter(Boolean).join(' · '),
     prospect_kind: 'contact_with_email',
     import_source_file: 'apify_gmaps_contacts',
   };
   if (emails.length === 0) return [{ ...base, email: null, prospect_kind: 'company_pending_email' }];
-  return emails.map((e) => ({ ...base, email: e.toLowerCase() }));
+  return emails.map((e) => ({ ...base, email: e }));
 }
 
 // Google Search returns: { title, url, displayedUrl, description, position, type }
@@ -220,6 +243,11 @@ export async function POST(req: Request) {
   }
 
   const stats = (ingestData ?? {}) as { inserted?: number; skipped?: number };
+  // Debug: expose the top-level keys of the first item so we can see what fields the actor returned.
+  // Useful when emails come back 0 — helps identify a nested key name.
+  const sample_keys = items.length > 0 ? Object.keys(items[0]).sort() : [];
+  const sample_first_email = items.length > 0 ? (pickEmails(items[0])[0] ?? null) : null;
+
   return NextResponse.json({
     ok: true,
     actor,
@@ -228,5 +256,6 @@ export async function POST(req: Request) {
     skipped: stats.skipped ?? 0,
     duration_ms: Date.now() - started,
     apify_status: apifyStatus,
+    debug: { sample_keys, sample_first_email, mapped_rows: rows.length },
   });
 }
