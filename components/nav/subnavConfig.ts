@@ -74,14 +74,14 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/marketing/library',      label: 'Library' },
   ],
 
-  // ===== 04 Operations (PBS 2026-07-07 evening — hierarchical) =====
-  // PBS 2026-07-07 late evening: QA + Docs dropped from top strip (still reachable
-  // by URL). Top strip = HoD / Overview / Departments / Suppliers.
+  // ===== 04 Operations =====
+  // PBS 2026-07-07 night: QA restored as top-level tab. Docs = sub-tab of Overview.
   operations: [
     { href: '/operations',              label: 'HoD' },
     { href: '/operations/overview',     label: 'Overview' },
     { href: '/operations/rooms',        label: 'Departments' },
     { href: '/operations/suppliers',    label: 'Suppliers',  isNew: true },
+    { href: '/operations/sops',         label: 'QA' },
   ],
 
   // ===== 04b Front Office (added 2026-05-01) =====
@@ -116,13 +116,13 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
   // Working capital), 4 flat leaves stay top-level (HoD / Overview / HR / Budget).
   // Parent tabs link to the first child; sub-tabs render on child pages via
   // lib/nav-subgroups.ts NAV_SUBGROUPS.
-  // PBS 2026-07-07 late evening: single "Finance" parent (sub-tabs P&L / Ledger /
-  // Transactions / Budget). Working capital was an invention — removed.
+  // PBS 2026-07-07 night: Legal restored as top-level tab (helpers stripped it).
   finance: [
     { href: '/finance',              label: 'HoD' },
     { href: '/finance/overview',     label: 'Overview',        isNew: true },
     { href: '/finance/hr',           label: 'HR' },
     { href: '/finance/pnl',          label: 'Finance' },
+    { href: '/finance/legal',        label: 'Legal' },
   ],
 
   // ===== Knowledge (utility) =====
