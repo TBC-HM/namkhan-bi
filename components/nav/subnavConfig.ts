@@ -119,24 +119,22 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/guest/newsletters',      label: 'Newsletters' },
   ],
 
-  // ===== 04 Finance =====
-  // PBS 2026-06-29: HR added (was hanging under /operations/staff). Staff
-  // landing now lives at /finance/hr — single source of truth.
+  // ===== 04 Finance (PBS 2026-07-07 — hierarchical) =====
+  // Consolidation: 3 parent groups own the sub-tabs (Finance / Transactions /
+  // Working capital), 4 flat leaves stay top-level (HoD / Overview / HR / Budget).
+  // Parent tabs link to the first child; sub-tabs render on child pages via
+  // lib/nav-subgroups.ts NAV_SUBGROUPS.
+  //   Finance          → P&L / Ledger / Account mapping
+  //   Transactions     → Transactions / POS · PMS / POS · Poster
+  //   Working capital  → Cashflow / Variance / AP / AR
   finance: [
-    { href: '/finance',                  label: 'Snapshot' },
-    { href: '/finance/hr',               label: 'HR' },
-    { href: '/finance/pnl',              label: 'P&L' },
-    { href: '/finance/ledger',           label: 'Ledger' },
-    { href: '/finance/transactions',     label: 'Transactions' },
-    { href: '/finance/pos-transactions', label: 'POS · PMS' },
-    { href: '/finance/poster',           label: 'POS · Poster',    isNew: true },
-    { href: '/finance/mapping',          label: 'Account mapping' },
-    { href: '/finance/supplier-mapping', label: 'Supplier mapping' },
-    { href: '/finance/budget',           label: 'Budget' },
-    { href: '/finance/cashflow',         label: 'Cashflow',        coming: true },
-    { href: '/finance/variance',         label: 'Variance',        coming: true },
-    { href: '/finance/apar',             label: 'AP / AR',         coming: true },
-    // PBS 2026-05-09: agents only reachable via /cockpit.
+    { href: '/finance',              label: 'HoD' },
+    { href: '/finance/overview',     label: 'Overview',        isNew: true },
+    { href: '/finance/hr',           label: 'HR' },
+    { href: '/finance/pnl',          label: 'Finance' },
+    { href: '/finance/transactions', label: 'Transactions' },
+    { href: '/finance/budget',       label: 'Budget' },
+    { href: '/finance/cashflow',     label: 'Working capital', isNew: true },
   ],
 
   // ===== Knowledge (utility) =====
