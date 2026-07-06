@@ -116,6 +116,7 @@ export default function ReportContainer({ reviews }: { reviews: Review[] }) {
   const [expanded, setExpanded] = useState(true);
   const [emailTo, setEmailTo] = useState('');
   const [sending, setSending] = useState(false);
+  const [newOnly, setNewOnly] = useState(true); // send only reviews received since last send
   const [msg, setMsg] = useState<{ kind:'ok'|'err'; text:string } | null>(null);
 
   const { headline, bullets } = generateBullets(reviews);
@@ -151,10 +152,11 @@ export default function ReportContainer({ reviews }: { reviews: Review[] }) {
         method:'POST', headers:{ 'Content-Type':'application/json' },
         body: JSON.stringify({
           to: emailTo.trim(),
-          subject: `Namkhan · Reputation weekly · ${new Date().toISOString().slice(0,10)}`,
+          subject: `Namkhan · Reputation ${newOnly ? 'delta' : 'weekly'} · ${new Date().toISOString().slice(0,10)}`,
           text: asText,
           html_bullets: [headline, ...bullets],
           low_reviews: lowScoringReviews,
+          new_only: newOnly, // server-side: filter to reviews received after last send
         }),
       });
       const j = await res.json();
@@ -177,17 +179,26 @@ export default function ReportContainer({ reviews }: { reviews: Review[] }) {
           {/* Send + Schedule controls at TOP (freed up space below for the report) */}
           <div style={{
             display:'flex', gap:6, alignItems:'center', flexWrap:'wrap',
-            padding:'8px 10px', background:'#F0EBD9', borderRadius:6, marginBottom:14,
+            padding:'8px 10px', background:'#F0EBD9', borderRadius:6, marginBottom:8,
           }}>
             <input type="email" value={emailTo} onChange={e => setEmailTo(e.target.value)} disabled={sending}
               placeholder="pbsbase@gmail.com" style={inp} />
             <button onClick={send} disabled={sending || !emailTo.trim()} style={btnSend}>
               {sending ? 'Sending…' : '📧 Send now'}
             </button>
-            <button onClick={() => alert('Schedule already active: Sunday 20:00 Laos time (cron reviews-scrape-weekly-sunday). Ping me to add another recipient.')} disabled={sending}
-              style={btnLight}>
+            <button
+              onClick={() => setTimeout(() => alert('Weekly cron reviews-scrape-weekly-sunday · Sunday 20:00 Laos.\nUses your "new only since last send" toggle.\nRecipient list: contact me to add.'), 0)}
+              disabled={sending} style={btnLight}
+            >
               🗓 Schedule
             </button>
+          </div>
+          <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:14, paddingLeft:2 }}>
+            <input type="checkbox" checked={newOnly} onChange={e => setNewOnly(e.target.checked)} disabled={sending}
+              id="new_only_chk" style={{ margin:0 }} />
+            <label htmlFor="new_only_chk" style={{ fontSize:11, color:'#5A5A5A', cursor:'pointer' }}>
+              Only reviews received since last send to this address (avoids re-sending the same reviews weekly)
+            </label>
           </div>
           {msg && (
             <div style={{
