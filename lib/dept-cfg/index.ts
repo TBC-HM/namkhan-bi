@@ -425,14 +425,12 @@ const OPERATIONS_CFG: DeptCfg = {
   // (with sub-tabs for Rooms/F&B/Spa/Activities/Retail/Transport/Other) + QA/Docs/Suppliers.
   // Sub-tabs render inline on each parent's landing via nav-subgroups.
   subPages: [
+    // PBS 2026-07-07 late evening: QA + Docs dropped from top strip (still reachable
+    // by URL). Departments hub keeps its 7 sub-tabs; Suppliers stays as a top-level tab.
     { label: 'HoD',              href: '/operations'                 },
     { label: 'Overview',         href: '/operations/overview'        },
-    // Departments parent lands on Rooms so a click always opens something useful.
     { label: 'Departments',      href: '/operations/rooms'           },
-    { label: 'QA',               href: '/operations/sops'            },
-    { label: 'Docs',             href: '/operations/docs'            },
     { label: 'Suppliers',        href: '/operations/suppliers'       },
-    // PBS 2026-05-16: Reports always sits flush-right (SubPagesStrip detects label).
     { label: 'Reports',          href: '/h/260955/reports?dept=operations' },
   ],
   quickChips: [
@@ -562,24 +560,13 @@ const FINANCE_CFG: DeptCfg = {
   chatPlaceholder: 'e.g. how is GOP tracking vs budget?',
   storageKeyPrefix: 'fin',
   subPages: [
-    // PBS 2026-07-07: consolidation. Top strip now = HoD + Overview + HR +
-    // 3 parent groups (Finance / Transactions / Working capital) + Budget +
-    // Reports. Sub-tabs render on each parent landing via NAV_SUBGROUPS.
-    //   Finance          → P&L / Ledger / Account mapping
-    //   Transactions     → Transactions / POS · PMS / POS · Poster
-    //   Working capital  → Cashflow / Variance / AP / AR
-    //   Overview (NEW landing) — dept summary with links to major groups
-    //   HR              → moved from Operations 2026-05-15;
-    //                     underlying page still lives at /operations/staff.
-    // Legacy tabs Legal / Docs / Suppliers still work by URL (pages preserved)
-    // but drop off the top strip in this consolidation pass.
+    // PBS 2026-07-07 late evening: only ONE parent group "Finance" with sub-tabs
+    // P&L / Ledger / Transactions / Budget. "Working capital" was an invention —
+    // removed. Cashflow / Variance / AP·AR pages preserved by URL.
     { label: 'HoD',             href: '/finance'                          },
     { label: 'Overview',        href: '/finance/overview'                 },
     { label: 'HR',              href: '/finance/hr'                       },
     { label: 'Finance',         href: '/finance/pnl'                      },
-    { label: 'Transactions',    href: '/finance/transactions'             },
-    { label: 'Budget',          href: '/finance/budget'                   },
-    { label: 'Working capital', href: '/finance/cashflow'                 },
     { label: 'Reports',         href: '/h/260955/reports?dept=finance'    },
   ],
   quickChips: [
