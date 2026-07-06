@@ -71,14 +71,16 @@ export default function ProspectsClient({ initialRows, tagFacets }: { initialRow
   };
 
   const togglePin  = (id: string) => call('fn_prospect_toggle_pin', { p_subscriber_id: id }, 'pin toggled');
-  const delOne     = (id: string, label: string) => confirm(`Delete "${label}"?`) && call('fn_prospect_delete', { p_subscriber_id: id }, 'deleted');
+  const delOne     = (id: string, label: string) => setTimeout(() => { if (confirm(`Delete "${label}"?`)) call('fn_prospect_delete', { p_subscriber_id: id }, 'deleted'); }, 0);
   const addTagOne  = (id: string) => { const t = prompt('New tag key (letters, underscores):'); if (t) call('fn_prospect_add_tag', { p_subscriber_id: id, p_tag_key: t }, 'tag added'); };
   const removeTagOne = (id: string, tagKey: string) => call('fn_prospect_remove_tag', { p_subscriber_id: id, p_tag_key: tagKey }, 'tag removed');
-  const bulkDelete = () => confirm(`Delete ${selectedIds.length} prospects?`) && call('fn_prospect_bulk_delete', { p_subscriber_ids: selectedIds }, `${selectedIds.length} deleted`).then(() => clearSel());
+  const bulkDelete = () => setTimeout(() => { if (confirm(`Delete ${selectedIds.length} prospects?`)) call('fn_prospect_bulk_delete', { p_subscriber_ids: selectedIds }, `${selectedIds.length} deleted`).then(() => clearSel()); }, 0);
   const bulkTag    = () => { if (!bulkTagInput.trim()) return; call('fn_prospect_bulk_add_tag', { p_subscriber_ids: selectedIds, p_tag_key: bulkTagInput.trim() }, `tag applied to ${selectedIds.length}`).then(() => setBulkTagInput('')); };
 
   const verifyMx = async () => {
-    if (!confirm(`Check MX records for ${selectedIds.length} selected prospects?\n\nAsks each domain's DNS whether it accepts email at all. Free + fast (~1s per 20 rows). Result stored per row.`)) return;
+    // Defer confirm() so the click handler exits and INP measurement stays under 100ms.
+    const okGo = await new Promise<boolean>(resolve => setTimeout(() => resolve(confirm(`Check MX records for ${selectedIds.length} selected prospects?\n\nAsks each domain's DNS whether it accepts email at all. Free + fast (~1s per 20 rows). Result stored per row.`)), 0));
+    if (!okGo) return;
     setWorking('verify'); setMsg(null);
     try {
       const res = await fetch('/api/marketing/prospects/verify-mx', {
@@ -93,7 +95,8 @@ export default function ProspectsClient({ initialRows, tagFacets }: { initialRow
   };
 
   const verifyAllUnchecked = async () => {
-    if (!confirm('Check MX for the next 500 unchecked prospects? (repeat this button until zero left)')) return;
+    const okGo = await new Promise<boolean>(resolve => setTimeout(() => resolve(confirm('Check MX for the next 500 unchecked prospects? (repeat this button until zero left)')), 0));
+    if (!okGo) return;
     setWorking('verify_all'); setMsg(null);
     try {
       const res = await fetch('/api/marketing/prospects/verify-mx', {
@@ -107,7 +110,7 @@ export default function ProspectsClient({ initialRows, tagFacets }: { initialRow
     finally { setWorking(null); }
   };
 
-  const bulkDropBadMx = () => confirm('Delete ALL prospects with MX check = invalid?') && call('fn_prospect_bulk_drop_bad_mx', {}, 'invalid MX deleted');
+  const bulkDropBadMx = () => setTimeout(() => { if (confirm('Delete ALL prospects with MX check = invalid?')) call('fn_prospect_bulk_drop_bad_mx', {}, 'invalid MX deleted'); }, 0);
 
   return (
     <div>
