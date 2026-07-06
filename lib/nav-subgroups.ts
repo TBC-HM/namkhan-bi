@@ -12,9 +12,11 @@ export interface SubGroup {
 
 export const NAV_SUBGROUPS: SubGroup[] = [
   // ─── Revenue ──────────────────────────────────────────────
+  // PBS 2026-07-07 evening: Overview parent moved to /revenue/overview (was /revenue).
+  // /revenue is now the HoD chat cockpit and does not carry Overview sub-tabs.
   {
-    parentHref: '/revenue',
-    members: ['/revenue', '/revenue/pulse', '/revenue/pricing'],
+    parentHref: '/revenue/overview',
+    members: ['/revenue/overview', '/revenue/pulse', '/revenue/pricing'],
     tabs: [
       { label: 'Pulse',    href: '/revenue/pulse'   },
       { label: 'Calendar', href: '/revenue/pricing' },
@@ -51,9 +53,11 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   },
 
   // ─── Marketing ────────────────────────────────────────────
+  // PBS 2026-07-07 evening: Overview parent moved to /marketing/overview (was /marketing).
+  // /marketing is now the HoD chat cockpit.
   {
-    parentHref: '/marketing',
-    members: ['/marketing', '/marketing/info'],
+    parentHref: '/marketing/overview',
+    members: ['/marketing/overview'],
     tabs: [
       { label: 'Info',    href: '/marketing/library' },
       { label: 'Reports', href: '/h/260955/reports?dept=marketing' },
