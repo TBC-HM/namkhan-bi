@@ -157,7 +157,7 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
 
   return (
     <div style={{ background: WHITE, minHeight: '100vh' }}>
-      <DashboardPage title="Guest · Reputation" subtitle="Every review, every reply — one place." tabs={tabs}>
+      <DashboardPage title="Contacts · Reputation" subtitle="Every review, every reply — one place." tabs={tabs}>
 
         {googleParam === 'connected' && (
           <div style={{ gridColumn:'1 / -1', padding:'10px 14px', borderRadius:4, background:'#E4F1E0', border:'1px solid #A9CFA0', color:GREEN, fontSize:12 }}>
