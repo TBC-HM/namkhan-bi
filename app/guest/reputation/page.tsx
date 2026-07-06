@@ -10,6 +10,7 @@ import { GUEST_SUBPAGES } from '../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { PROPERTY_ID } from '@/lib/supabase';
 import SourceBadge from '@/components/marketing/SourceBadge';
+import ReputationReviewsTabs from './_components/ReputationReviewsTabs';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -105,7 +106,11 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
   const unanswered = reviews.filter(r => r.response_status === 'unanswered').length;
   const responseRate = total > 0 ? (responded / total) * 100 : 0;
 
+  // 4 canonical review sources — always shown in the table + tabs even when empty.
+  const CANONICAL_SOURCES = ['tripadvisor', 'booking', 'expedia', 'ctrip'] as const;
+
   const sourceMix = new Map<string, { n: number; sum: number }>();
+  for (const s of CANONICAL_SOURCES) sourceMix.set(s, { n: 0, sum: 0 });   // seed zeros
   for (const r of reviews) {
     const k = r.source ?? 'unknown';
     if (!sourceMix.has(k)) sourceMix.set(k, { n: 0, sum: 0 });
@@ -113,7 +118,15 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
   }
   const sourceRows = Array.from(sourceMix.entries())
     .map(([source, v]) => ({ source, count: v.n, avg: v.n > 0 ? v.sum / v.n : null }))
-    .sort((a, b) => b.count - a.count);
+    // Canonical sources first (in fixed order), then everything else by count desc
+    .sort((a, b) => {
+      const ai = (CANONICAL_SOURCES as readonly string[]).indexOf(a.source);
+      const bi = (CANONICAL_SOURCES as readonly string[]).indexOf(b.source);
+      if (ai !== -1 && bi !== -1) return ai - bi;
+      if (ai !== -1) return -1;
+      if (bi !== -1) return 1;
+      return b.count - a.count;
+    });
 
   const tabs: DashboardTab[] = GUEST_SUBPAGES.map(s => ({
     key: s.href, label: s.label, href: s.href, active: s.href === '/guest/reputation',
@@ -263,7 +276,7 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
 
         {sourceRows.length > 0 && (
           <div style={{ gridColumn:'1 / -1' }}>
-            <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, margin:'8px 2px 8px' }}>Local sample · by source</div>
+            <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, margin:'8px 2px 8px' }}>Local sample · by source (all platforms always shown)</div>
             <div style={{ background:WHITE, border:'1px solid '+HAIR, borderRadius:6, overflowX:'auto' }}>
               <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
                 <thead>
@@ -292,34 +305,7 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
         )}
 
         <div style={{ gridColumn:'1 / -1' }}>
-          <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, margin:'8px 2px 8px' }}>Latest reviews (local sample)</div>
-          {reviews.length === 0 ? (
-            <div style={{ padding:'40px 24px', background:WHITE, border:'1px solid '+HAIR, borderRadius:6, textAlign:'center', color:INK_M, fontSize:12 }}>
-              No reviews scraped yet. Platform totals above show the full picture.
-            </div>
-          ) : (
-            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-              {reviews.map(r => (
-                <div key={r.id} style={{ padding:'12px 14px', background:WHITE, border:'1px solid '+HAIR, borderRadius:6 }}>
-                  <div style={{ display:'flex', gap:10, alignItems:'baseline', flexWrap:'wrap', marginBottom:4 }}>
-                    <SourceBadge source={r.source} />
-                    <span style={{ fontWeight:600 }}>{r.rating_norm != null ? Number(r.rating_norm).toFixed(1) : '—'} / 5</span>
-                    <span style={{ color:INK_M, fontSize:11 }}>{fmtDate(r.reviewed_at)}</span>
-                    <span style={{
-                      fontSize:10, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase',
-                      padding:'2px 8px', borderRadius:10,
-                      background: r.response_status === 'responded' ? '#E4F1E0' : '#FBE8E4',
-                      color:      r.response_status === 'responded' ? '#1F5C2C' : RED,
-                      border:'1px solid ' + (r.response_status === 'responded' ? '#A9CFA0' : '#E8B7AB'),
-                    }}>{r.response_status ?? 'unknown'}</span>
-                    {r.reviewer_name && <span style={{ color:INK_S, fontSize:11 }}>by {r.reviewer_name}</span>}
-                  </div>
-                  {r.title && <div style={{ fontStyle:'italic', fontWeight:500, color:INK, marginBottom:4 }}>{r.title}</div>}
-                  {r.body && <div style={{ fontSize:12, color:INK_S, lineHeight:1.5, whiteSpace:'pre-wrap' }}>{r.body}</div>}
-                </div>
-              ))}
-            </div>
-          )}
+          <ReputationReviewsTabs reviews={reviews} />
         </div>
       </DashboardPage>
     </div>
