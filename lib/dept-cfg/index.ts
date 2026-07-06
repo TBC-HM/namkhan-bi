@@ -222,8 +222,8 @@ const REVENUE_CFG: DeptCfg = {
     // PBS 2026-05-15: Pricing renamed to Calendar; the page now hosts
     // two tabs: Pricing (rate grid) + Density (country-holidays overlay).
     { label: 'Calendar',   href: '/revenue/pricing'   },
-    // PBS 2026-07-06: Inbound flights → LPQ demand signal (Google Flights via Apify).
-    { label: 'Flights',    href: '/revenue/flights'   },
+    // PBS 2026-07-06 pm: Flights moved from top-nav to a sub-tab of Calendar → link on /revenue/pricing.
+    // Direct URL still works: /revenue/flights.
     { label: 'Comp Set',   href: '/revenue/compset'   },
     // PBS 2026-05-19: registry-driven drill pages (leakage + channel mix).
     { label: 'Leakage',    href: '/revenue/leakage'   },
