@@ -286,7 +286,6 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
   return (
     <DashboardPage
       title="Revenue · Demand"
-      subtitle={`Find the gap before the calendar gets soft · ${period.label} · ${rows.length} month${rows.length === 1 ? '' : 's'} on the books`}
       tabs={tabs}
     >
       <div style={fullRow}>
