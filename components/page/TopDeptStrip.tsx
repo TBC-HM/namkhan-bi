@@ -40,7 +40,7 @@ const SLUG_SET = new Set(CANONICAL_DEPTS.map((d) => d.slug));
 const HOLDING_DEPTS: DeptLink[] = [
   { label: 'Legal',        slug: 'legal',     href: '/holding/legal'     },
   { label: 'Legal · Lao',  slug: 'legal-lao', href: '/holding/legal-lao', openInNewWindow: true, color: '#8B4513' },
-  { label: 'Strategy',     slug: 'strategy',  href: '/holding/strategy', openInNewWindow: true, color: 'var(--brass)' },
+  { label: 'Strategy',     slug: 'strategy',  href: '/holding/strategy', openInNewWindow: true, color: '#8B4513' },
   { label: 'IT',           slug: 'it',        href: '/holding/it'        },
 ];
 const HOLDING_SLUG_SET = new Set(HOLDING_DEPTS.map((d) => d.slug));
@@ -83,6 +83,22 @@ function resolvePropertyAndDept(pathname: string): { propertyId: number; activeS
   return { propertyId: readActivePropertyFromCookie(), activeSlug: slug };
 }
 
+
+// PBS 2026-07-06: property-aware strip colors — the ONE visual differentiator
+// between properties now the rest of the site is pure white.
+function stripStyleFor(propertyId: number, holdingMode: boolean): { bg: string; textIdle: string; textActive: string; border: string; brass: string } {
+  if (holdingMode) {
+    // Beyond Circle = white strip with dark ink text
+    return { bg: '#FFFFFF', textIdle: '#5A5A5A', textActive: '#1B1B1B', border: '#E6DFCC', brass: '#8B4513' };
+  }
+  if (propertyId === 1000001) {
+    // Donna = beige strip
+    return { bg: '#F5EAD9', textIdle: '#5A4A32', textActive: '#1B1B1B', border: '#E6D4B0', brass: '#8B5A1C' };
+  }
+  // Namkhan (or any other property) = black strip
+  return { bg: '#0F0D0A', textIdle: '#B8A574', textActive: '#F0E5CB', border: 'rgba(212,168,102,0.28)', brass: '#D4A866' };
+}
+
 export default function TopDeptStrip() {
   const pathname = usePathname() ?? '';
   if (isHiddenPath(pathname)) return null;
@@ -95,6 +111,7 @@ export default function TopDeptStrip() {
     const activeHoldingSlug =
       pathname === '/holding' ? null :
       pathname.match(/^\/holding\/([^/]+)/)?.[1] ?? null;
+    const s = stripStyleFor(HOLDING_PROPERTY_ID, true);
     return (
       <nav
         aria-label="Holding department menu"
@@ -106,8 +123,8 @@ export default function TopDeptStrip() {
           padding: '14px 24px 8px',
           paddingLeft: 70,
           paddingRight: 24,
-          borderBottom: '1px solid var(--line-soft, rgba(168,133,74,0.18))',
-          background: 'var(--paper, var(--page-bg, transparent))',
+          borderBottom: '1px solid ' + s.border,
+          background: s.bg,
           position: 'relative',
           zIndex: 60,
         }}
@@ -122,7 +139,7 @@ export default function TopDeptStrip() {
               target={d.openInNewWindow ? '_blank' : undefined}
               rel={d.openInNewWindow ? 'noopener noreferrer' : undefined}
               style={{
-                color: active ? 'var(--brass)' : (d.color ?? 'var(--ink-mute, var(--text-1, #f0e5cb))'),
+                color: active ? s.brass : (d.color ?? s.textIdle),
                 textDecoration: 'none',
                 fontFamily: "'JetBrains Mono', ui-monospace, monospace",
                 fontSize: 11,
@@ -130,7 +147,7 @@ export default function TopDeptStrip() {
                 textTransform: 'uppercase',
                 fontWeight: active ? 700 : 500,
                 padding: '6px 0',
-                borderBottom: active ? '2px solid var(--brass)' : '2px solid transparent',
+                borderBottom: active ? '2px solid ' + s.brass : '2px solid transparent',
                 whiteSpace: 'nowrap',
                 flexShrink: 0,
                 transition: 'color 100ms ease, border-color 100ms ease',
@@ -150,6 +167,7 @@ export default function TopDeptStrip() {
   const { propertyId, activeSlug } = resolvePropertyAndDept(pathname);
   const base = `/h/${propertyId}`;
 
+  const s = stripStyleFor(propertyId, false);
   return (
     <nav
       aria-label="Department menu"
@@ -159,15 +177,10 @@ export default function TopDeptStrip() {
         gap: 18,
         overflowX: 'auto',
         padding: '14px 24px 8px',
-        // Clear the fixed BC brass mark on the left + leave space for the
-        // header pills on the right. The strip is the FIRST element in body
-        // so it always sits visually at the top of the viewport.
         paddingLeft: 70,
         paddingRight: 24,
-        borderBottom: '1px solid var(--line-soft, rgba(168,133,74,0.18))',
-        background: 'var(--paper, var(--page-bg, transparent))',
-        // Lift above any underlying sticky page header (Page topBar uses
-        // its own stacking context inside the body).
+        borderBottom: '1px solid ' + s.border,
+        background: s.bg,
         position: 'relative',
         zIndex: 60,
       }}
@@ -184,7 +197,7 @@ export default function TopDeptStrip() {
             href={href}
             aria-current={active ? 'page' : undefined}
             style={{
-              color: active ? 'var(--brass)' : 'var(--ink-mute, var(--text-1, #f0e5cb))',
+              color: active ? s.brass : s.textIdle,
               textDecoration: 'none',
               fontFamily: "'JetBrains Mono', ui-monospace, monospace",
               fontSize: 11,
@@ -192,9 +205,7 @@ export default function TopDeptStrip() {
               textTransform: 'uppercase',
               fontWeight: active ? 700 : 500,
               padding: '6px 0',
-              borderBottom: active
-                ? '2px solid var(--brass)'
-                : '2px solid transparent',
+              borderBottom: active ? '2px solid ' + s.brass : '2px solid transparent',
               whiteSpace: 'nowrap',
               flexShrink: 0,
               transition: 'color 100ms ease, border-color 100ms ease',
@@ -212,7 +223,7 @@ export default function TopDeptStrip() {
         aria-label="Property settings"
         aria-current={activeSlug === 'settings' ? 'page' : undefined}
         style={{
-          color: activeSlug === 'settings' ? 'var(--brass)' : 'var(--ink-mute, var(--text-1, #f0e5cb))',
+          color: activeSlug === 'settings' ? s.brass : s.textIdle,
           textDecoration: 'none',
           fontSize: 22,
           lineHeight: 1,
