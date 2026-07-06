@@ -88,28 +88,20 @@ export default function SentimentContainer({ reviews }: { reviews: Review[] }) {
 
       {expanded && (
         <div style={{ padding:16 }}>
-          {/* NEGATIVE label */}
-          <div style={{ display:'flex', justifyContent:'center', marginBottom:10 }}>
-            <span style={panelLabel('negative')}>negative</span>
-          </div>
-
-          {/* Word cloud — negative first (top), positive last (bottom), flow-centered */}
+          {/* POSITIVE words — top, green */}
           <div style={{
-            minHeight: 220,
+            minHeight: 100,
             display:'flex', flexWrap:'wrap', alignItems:'center', justifyContent:'center',
             gap:'6px 10px',
             padding:'16px 8px',
             lineHeight:1.15,
           }}>
-            {cloud.neg.length === 0 && cloud.pos.length === 0 && (
+            {cloud.pos.length === 0 && cloud.neg.length === 0 && (
               <div style={{ fontSize:12, color:'#8A8A8A' }}>No words yet — scrape reviews to populate the cloud.</div>
             )}
-            {cloud.neg.map(([w, size], i) => (
-              <span key={'neg-'+i} style={{
-                fontSize: size, color: '#B04A2F', fontWeight: size > 24 ? 700 : 500,
-                fontFamily:'Georgia, "Times New Roman", serif',
-              }}>{w}</span>
-            ))}
+            {cloud.pos.length === 0 && cloud.neg.length > 0 && (
+              <div style={{ fontSize:11, color:'#8A8A8A' }}>No positive-review vocabulary yet.</div>
+            )}
             {cloud.pos.map(([w, size], i) => (
               <span key={'pos-'+i} style={{
                 fontSize: size, color: '#2D6A4F', fontWeight: size > 24 ? 700 : 500,
@@ -118,9 +110,26 @@ export default function SentimentContainer({ reviews }: { reviews: Review[] }) {
             ))}
           </div>
 
-          {/* POSITIVE label */}
-          <div style={{ display:'flex', justifyContent:'center', marginTop:10 }}>
-            <span style={panelLabel('positive')}>positive</span>
+          {/* Divider */}
+          <div style={{ borderTop:'1px dashed #E6DFCC', margin:'8px 0' }} />
+
+          {/* NEGATIVE words — bottom, red */}
+          <div style={{
+            minHeight: 100,
+            display:'flex', flexWrap:'wrap', alignItems:'center', justifyContent:'center',
+            gap:'6px 10px',
+            padding:'16px 8px',
+            lineHeight:1.15,
+          }}>
+            {cloud.neg.length === 0 && (
+              <div style={{ fontSize:11, color:'#8A8A8A', fontStyle:'italic' }}>No negative-review vocabulary — all reviews are 4★+.</div>
+            )}
+            {cloud.neg.map(([w, size], i) => (
+              <span key={'neg-'+i} style={{
+                fontSize: size, color: '#B04A2F', fontWeight: size > 24 ? 700 : 500,
+                fontFamily:'Georgia, "Times New Roman", serif',
+              }}>{w}</span>
+            ))}
           </div>
 
           {/* Sub-footer */}
@@ -129,19 +138,13 @@ export default function SentimentContainer({ reviews }: { reviews: Review[] }) {
             display:'flex', justifyContent:'space-between', fontSize:10, color:'#8A8A8A',
           }}>
             <span>Word size = frequency across {reviews.length} reviews.</span>
-            <span>Positive (green) from ★4+ · Negative (red) from ★{'<'}3 reviews.</span>
+            <span>Green = ★4+ reviews · Red = ★{'<'}3 reviews.</span>
           </div>
         </div>
       )}
     </div>
   );
 }
-
-const panelLabel = (kind: 'positive' | 'negative'): React.CSSProperties => ({
-  display:'inline-block', padding:'6px 24px', fontSize:22, fontWeight:400,
-  fontFamily:'Georgia, "Times New Roman", serif',
-  color:'#1B1B1B', background:'#F0EBD9', border:'1px solid #E6DFCC',
-});
 
 const box: React.CSSProperties = { border:'1px solid #E6DFCC', borderRadius:6, background:'#FFFFFF', overflow:'hidden' };
 const header: React.CSSProperties = { display:'flex', alignItems:'center', gap:10, width:'100%', padding:'10px 14px', background:'#FAFAF7', border:'none', borderBottom:'1px solid #E6DFCC', cursor:'pointer', fontFamily:'inherit', textAlign:'left' };
