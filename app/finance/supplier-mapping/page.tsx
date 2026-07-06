@@ -84,6 +84,12 @@ export default async function SupplierMappingPage() {
 
   return (
     <DashboardPage title="Supplier mapping" subtitle={subtitle} tabs={tabs}>
+      {/* PBS 2026-07-07: page is being moved to /operations/suppliers. */}
+      <div style={fullRow}>
+        <div style={{ padding:'8px 12px', background:'#FFF3F1', border:'1px solid #E6C9BF', borderRadius:4, fontSize:12, color:'#B04A2F', marginBottom:12 }}>
+          This page has moved to <a href="/operations/suppliers" style={{color:'#1F3A2E'}}>/operations/suppliers</a>. This page continues to work but new work should happen there.
+        </div>
+      </div>
       <div style={fullRow}>
         <Container title="Headline" subtitle="vendor × USALI dept · trailing 180d" density="compact">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
