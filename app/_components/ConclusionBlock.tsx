@@ -70,24 +70,29 @@ export default function ConclusionBlock({
 
   // Track which insight has the dismiss-reason picker open + selected reason
   const [pickerFor, setPickerFor] = useState<string | null>(null);
+  const [otherFor, setOtherFor]   = useState<string | null>(null);
+  const [otherText, setOtherText] = useState('');
 
+  // PBS 2026-07-07: max 5 reasons, one is "Other…" with a free-text note.
+  // Every dismiss MUST pick a reason — cancel closes the picker but does NOT dismiss.
   const DISMISS_REASONS = [
-    { key: 'handled',      label: 'Already handled'    },
-    { key: 'not_relevant', label: 'Not relevant here'  },
-    { key: 'threshold',    label: 'Threshold too tight'},
-    { key: 'false_signal', label: 'Wrong signal'       },
+    { key: 'handled',      label: 'Already handled'     },
+    { key: 'not_relevant', label: 'Not relevant here'   },
+    { key: 'threshold',    label: 'Threshold too tight' },
+    { key: 'false_signal', label: 'Wrong signal'        },
+    { key: 'other',        label: 'Other…'              },
   ];
 
-  const dismissWithReason = async (sig: string, reasonKey: string, insightKey?: string) => {
+  const dismissWithReason = async (sig: string, reasonKey: string, insightKey?: string, note?: string) => {
     const next = new Set(dismissed); next.add(sig); persist(next);
     setPickerFor(null);
-    // Fire-and-forget to record why. Table + RPC come next turn — for now the endpoint
-    // may 404 harmlessly; the UI does the right thing regardless.
+    setOtherFor(null);
+    setOtherText('');
     try {
       await fetch('/api/guardrail/dismiss', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ insight_key: insightKey ?? sig, reason: reasonKey }),
+        body: JSON.stringify({ insight_key: insightKey ?? sig, reason: reasonKey, note: note ?? null }),
         keepalive: true,
       });
     } catch { /* ignore */ }
@@ -170,18 +175,45 @@ export default function ConclusionBlock({
               {pickerFor === sig && (
                 <div style={pickerBox}>
                   <div style={{ fontSize: 10, color: '#5A5A5A', letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>
-                    Why are you dismissing this?
+                    Why are you dismissing this? (required)
                   </div>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    {DISMISS_REASONS.map(r => (
+                  {otherFor === sig ? (
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <input
+                        type="text"
+                        autoFocus
+                        value={otherText}
+                        onChange={e => setOtherText(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && otherText.trim()) {
+                            dismissWithReason(sig, 'other', ins.key, otherText.trim());
+                          }
+                        }}
+                        placeholder="Say why…"
+                        style={{ ...reasonChip, minWidth: 220, background: '#FFFFFF' }}
+                      />
                       <button
-                        key={r.key}
-                        onClick={() => dismissWithReason(sig, r.key, ins.key)}
-                        style={reasonChip}
-                      >{r.label}</button>
-                    ))}
-                    <button onClick={() => setPickerFor(null)} style={{ ...reasonChip, background: 'transparent', border: 'none', color: '#5A5A5A' }}>cancel</button>
-                  </div>
+                        onClick={() => otherText.trim() && dismissWithReason(sig, 'other', ins.key, otherText.trim())}
+                        disabled={!otherText.trim()}
+                        style={{ ...reasonChip, background: otherText.trim() ? '#084838' : '#EEE', color: otherText.trim() ? '#FFFFFF' : '#8A8A8A', border: 'none' }}
+                      >Dismiss</button>
+                      <button onClick={() => { setOtherFor(null); setOtherText(''); }} style={{ ...reasonChip, background: 'transparent', border: 'none', color: '#5A5A5A' }}>back</button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {DISMISS_REASONS.map(r => (
+                        <button
+                          key={r.key}
+                          onClick={() => {
+                            if (r.key === 'other') setOtherFor(sig);
+                            else dismissWithReason(sig, r.key, ins.key);
+                          }}
+                          style={reasonChip}
+                        >{r.label}</button>
+                      ))}
+                      <button onClick={() => setPickerFor(null)} style={{ ...reasonChip, background: 'transparent', border: 'none', color: '#5A5A5A' }}>cancel</button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
