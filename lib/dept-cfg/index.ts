@@ -352,31 +352,26 @@ const MARKETING_CFG: DeptCfg = {
   chatPlaceholder: 'e.g. which channel grew most this month?',
   storageKeyPrefix: 'mkt',
   subPages: [
-    // PBS 2026-05-09 (repair-list 11): Agents only reachable via /cockpit.
-    // PBS 2026-05-09 (new): Events schedule joins the strip — drives demand,
-    // marketing brief, content + retreat planning.
-    { label: 'HoD',         href: '/marketing'             },
-    // PBS 2026-05-16: Info hub consolidates Library + Events + Audiences +
-    // Taxonomy under a single submenu button (4-tab strip rendered on each
-    // page). First-tab destination = Library — matches Acc-hub pattern.
-    { label: 'Info',        href: '/marketing/library'     },
-    { label: 'Media',       href: '/marketing/gallery'       },
-    { label: 'Campaigns',   href: '/marketing/campaigns'   },
-    // PBS 2026-07-05: Prospects = lead list + email sequences (nested).
-    // Funnels = growth cockpit / CRO dashboard (Phase 1 hardcoded).
-    // Distinct products; do NOT merge them.
-    { label: 'Prospects',   href: '/marketing/prospects'   },
-    { label: 'Funnels',     href: '/marketing/funnels'     },
-    { label: 'Compiler',    href: '/marketing/compiler'    },
-    // PBS 2026-05-16: Social hub absorbs Influencers as a 2nd tab.
-    // First-tab destination = /marketing/social.
-    { label: 'Social',      href: '/marketing/social'      },
-    // PBS 2026-05-16: Web hub consolidates 3 tabs — Web · Funnels · SEO.
-    // First-tab destination = /marketing/web. SEO moved here from top-level.
-    { label: 'Web',         href: '/marketing/web'         },
-    { label: 'Docs',        href: '/marketing/docs'       },
-    // PBS 2026-05-16: Reports always sits flush-right (SubPagesStrip detects label).
-    { label: 'Reports',     href: '/h/260955/reports?dept=marketing' },
+    // PBS 2026-07-06 evening: canonical Marketing strip.
+    // Order: Overview · Info · Acquisition · Campaigns · Funnels · Prospects · Products & Offers
+    //        · Compiler · Content · Media · Social · Digital · Web · Library · Docs · Reports
+    // Reports always sits flush-right (SubPagesStrip detects label).
+    { label: 'Overview',          href: '/marketing'                 },
+    { label: 'Info',              href: '/marketing/library'         },
+    { label: 'Acquisition',       href: '/marketing/acquisition'     }, // stub — needs build
+    { label: 'Campaigns',         href: '/marketing/campaigns'       },
+    { label: 'Funnels',           href: '/marketing/funnels'         },
+    { label: 'Prospects',         href: '/marketing/prospects'       },
+    { label: 'Products & Offers', href: '/marketing/offers'          }, // stub — needs build
+    { label: 'Compiler',          href: '/marketing/compiler'        },
+    { label: 'Content',           href: '/marketing/content'         }, // stub — needs build
+    { label: 'Media',             href: '/marketing/gallery'         },
+    { label: 'Social',            href: '/marketing/social'          },
+    { label: 'Digital',           href: '/marketing/digital'         }, // stub — needs build
+    { label: 'Web',               href: '/marketing/web'             },
+    { label: 'Library',           href: '/marketing/library'         },
+    { label: 'Docs',              href: '/marketing/docs'            },
+    { label: 'Reports',           href: '/h/260955/reports?dept=marketing' },
   ],
   quickChips: [
     { label: 'HoD',       href: '/marketing'             },
