@@ -151,9 +151,9 @@ export default async function SuppliersView({ subPages, activeHrefSuffix, surfac
     { label: 'Total suppliers',     value: total,                                   unit: 'count',   footnote: 'Distinct vendors in gl.v_supplier_overview' },
     { label: 'Active · 90d',         value: active90,                                unit: 'count',   footnote: 'At least one QB transaction in last 90 days' },
     { label: 'Total spend · all-time', value: fmtMoney(totalSpendShown, 'USD'),       footnote: 'Sum of gross_spend_usd across all suppliers' },
-    { label: 'Open AP · supplier debt', value: fmtMoney(totalOpenUsd, 'USD'),         footnote: `₭${totalOpenLak.toLocaleString('en-US')} · FX ${FX_LAK_PER_USD.toLocaleString('en-US')}`, status: totalOpenUsd > 0 ? 'warning' : 'neutral' },
+    { label: 'Open AP · supplier debt', value: fmtMoney(totalOpenUsd, 'USD'),         footnote: `₭${totalOpenLak.toLocaleString('en-US')} · FX ${FX_LAK_PER_USD.toLocaleString('en-US')}`, status: totalOpenUsd > 0 ? 'amber' : 'grey' },
     { label: 'Top spend · 90d',      value: top90 ? fmtMoney(top90.grossUsd, 'USD') : '—', footnote: top90 ? `${top90.name} · ${top90.lineCount} lines` : 'No 90-day activity' },
-    { label: 'Suppliers with debt',  value: unpaidMap.size,                          unit: 'count',   footnote: 'Distinct suppliers with at least one unreconciled bill', status: unpaidMap.size > 0 ? 'warning' : 'neutral' },
+    { label: 'Suppliers with debt',  value: unpaidMap.size,                          unit: 'count',   footnote: 'Distinct suppliers with at least one unreconciled bill', status: unpaidMap.size > 0 ? 'amber' : 'grey' },
   ];
 
   return (
