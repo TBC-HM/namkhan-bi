@@ -122,13 +122,13 @@ export default async function CancellationsPage({
       .gte('cancellation_date', sdlyFrom)
       .lte('cancellation_date', sdlyTo)
       .limit(2000))
-      .then(r => (r.data ?? []) as Array<{ lost_revenue: number; lost_room_nights: number; nights: number; days_to_arrival: number | null }>).catch(() => []),
+      .then(r => (r.data ?? []) as Array<{ lost_revenue: number; lost_room_nights: number; nights: number; days_to_arrival: number | null }>).catch(() => [] as Array<{ lost_revenue: number; lost_room_nights: number; nights: number; days_to_arrival: number | null }>),
     Promise.resolve(supabase.from('v_cancellation_impact_monthly')
       .select('cancel_year_month, cancellations, lost_room_nights, lost_revenue, avg_days_to_arrival')
       .eq('property_id', pid)
       .gte('cancel_year_month', '2025-01')
       .order('cancel_year_month'))
-      .then(r => (r.data ?? []) as MonthImpactRow[]).catch(() => []),
+      .then(r => (r.data ?? []) as MonthImpactRow[]).catch(() => [] as MonthImpactRow[]),
     Promise.resolve(supabase.from('v_cancellation_rate')
       .select('cancelled_30d, total_30d, cancel_rate_30d, cancelled_90d, total_90d, cancel_rate_90d')
       .eq('property_id', pid)
