@@ -75,15 +75,12 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
   ],
 
   // ===== 04 Operations (PBS 2026-07-07 evening — hierarchical) =====
-  // Mirrors Revenue/Marketing: HoD chat + Overview landing + Departments hub
-  // (parent lands on Rooms; sub-tabs render on child pages via nav-subgroups)
-  // + QA (SOPs) + Docs stub + Suppliers page.
+  // PBS 2026-07-07 late evening: QA + Docs dropped from top strip (still reachable
+  // by URL). Top strip = HoD / Overview / Departments / Suppliers.
   operations: [
     { href: '/operations',              label: 'HoD' },
     { href: '/operations/overview',     label: 'Overview' },
     { href: '/operations/rooms',        label: 'Departments' },
-    { href: '/operations/sops',         label: 'QA' },
-    { href: '/operations/docs',         label: 'Docs' },
     { href: '/operations/suppliers',    label: 'Suppliers',  isNew: true },
   ],
 
@@ -119,17 +116,13 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
   // Working capital), 4 flat leaves stay top-level (HoD / Overview / HR / Budget).
   // Parent tabs link to the first child; sub-tabs render on child pages via
   // lib/nav-subgroups.ts NAV_SUBGROUPS.
-  //   Finance          → P&L / Ledger / Account mapping
-  //   Transactions     → Transactions / POS · PMS / POS · Poster
-  //   Working capital  → Cashflow / Variance / AP / AR
+  // PBS 2026-07-07 late evening: single "Finance" parent (sub-tabs P&L / Ledger /
+  // Transactions / Budget). Working capital was an invention — removed.
   finance: [
     { href: '/finance',              label: 'HoD' },
     { href: '/finance/overview',     label: 'Overview',        isNew: true },
     { href: '/finance/hr',           label: 'HR' },
     { href: '/finance/pnl',          label: 'Finance' },
-    { href: '/finance/transactions', label: 'Transactions' },
-    { href: '/finance/budget',       label: 'Budget' },
-    { href: '/finance/cashflow',     label: 'Working capital', isNew: true },
   ],
 
   // ===== Knowledge (utility) =====
