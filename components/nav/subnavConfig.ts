@@ -25,25 +25,18 @@ export interface SubNavTab {
 }
 
 export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
-  // ===== 01 Revenue (PBS 2026-07-06 late evening — canonical strip) =====
-  // Order matches Marketing so operators see one consistent nav pattern.
-  // Existing revenue-management pages (Pulse/Pace/Channels/etc.) still exist at their URLs.
+  // ===== 01 Revenue (PBS 2026-07-06 late evening — hierarchical) =====
+  // Six top-level groups. Three are hubs with sub-tabs (rendered on the child page):
+  //   Demand & Pace     → Demand / Pace / Pickup / Cancellations
+  //   Performance       → Rooms / Channels / Rate Plans / Markets
+  //   Market & Control  → Comp Set / Leakage / Parity
   revenue: [
     { href: '/revenue',              label: 'Overview' },
-    { href: '/revenue/info',         label: 'Info' },
-    { href: '/revenue/acquisition',  label: 'Acquisition',       isNew: true },
-    { href: '/revenue/campaigns',    label: 'Campaigns',         isNew: true },
-    { href: '/revenue/funnels',      label: 'Funnels',           isNew: true },
-    { href: '/revenue/prospects',    label: 'Prospects',         isNew: true },
-    { href: '/revenue/offers',       label: 'Products & Offers', isNew: true },
-    { href: '/revenue/compiler',     label: 'Compiler',          isNew: true },
-    { href: '/revenue/content',      label: 'Content',           isNew: true },
-    { href: '/revenue/media',        label: 'Media',             isNew: true },
-    { href: '/revenue/social',       label: 'Social',            isNew: true },
-    { href: '/revenue/digital',      label: 'Digital',           isNew: true },
-    { href: '/revenue/web',          label: 'Web',               isNew: true },
-    { href: '/revenue/library',      label: 'Library',           isNew: true },
-    { href: '/revenue/docs',         label: 'Docs',              isNew: true },
+    { href: '/revenue/pulse',        label: 'Pulse' },
+    { href: '/revenue/pricing',      label: 'Calendar' },
+    { href: '/revenue/demand',       label: 'Demand & Pace' },
+    { href: '/revenue/rooms',        label: 'Performance' },
+    { href: '/revenue/compset',      label: 'Market & Control' },
   ],
 
   // ===== 02 Sales (added 2026-04-30) =====
