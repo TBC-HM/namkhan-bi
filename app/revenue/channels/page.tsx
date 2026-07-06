@@ -666,7 +666,6 @@ function CategoryCompareGrid({
 // for Direct, OTA, and DMC simultaneously (stacked), regardless of active tab.
 // PBS 2026-07-01 rev2: superseded by CategoryCompareGrid above (too much space).
 // Left in the file in case a future ask wants the full-tile version back.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function CategoryKpiStrip({
   category, rows, cmpRows, moneyCurrency, totalRev, period,
 }: {
