@@ -26,9 +26,12 @@ interface Props {
   /** PBS 2026-06-09 #138 — override the static cfg.kpiTiles with live values
    * (e.g. operations HoD fetches today's occupancy + check-in/out counts). */
   liveTiles?: KpiTileProps[];
+  /** PBS 2026-07-06 — extra containers to render below Build-a-Report. Useful for
+   * dept-specific gold-tier widgets (e.g. Operations flights today+tomorrow). */
+  extraContainers?: React.ReactNode;
 }
 
-export default async function HodLanding({ slug, propertyId, liveTiles }: Props) {
+export default async function HodLanding({ slug, propertyId, liveTiles, extraContainers }: Props) {
   const pid = propertyId ?? PROPERTY_ID;
   const cfg = pid === PROPERTY_ID ? DEPT_CFG[slug] : getDeptCfg(slug, pid);
 
@@ -116,6 +119,9 @@ export default async function HodLanding({ slug, propertyId, liveTiles }: Props)
           </Container>
         </div>
       )}
+
+      {/* 4 · Dept-specific extra containers (PBS 2026-07-06) */}
+      {extraContainers}
     </DashboardPage>
   );
 }
