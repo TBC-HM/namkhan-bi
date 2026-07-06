@@ -8,9 +8,10 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-interface Req { insight_key: string; reason: string; }
+// PBS 2026-07-07: 'other' reason accepted with an optional free-text note.
+interface Req { insight_key: string; reason: string; note?: string | null; }
 
-const VALID_REASONS = new Set(['handled', 'not_relevant', 'threshold', 'false_signal']);
+const VALID_REASONS = new Set(['handled', 'not_relevant', 'threshold', 'false_signal', 'other']);
 
 export async function POST(req: Request) {
   let body: Req;
@@ -25,6 +26,7 @@ export async function POST(req: Request) {
   const { error } = await sb.rpc('fn_guardrail_log_dismiss', {
     p_insight_key: body.insight_key,
     p_reason: body.reason,
+    p_note: body.note ?? null,
   });
 
   if (error) {
