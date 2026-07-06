@@ -1,81 +1,100 @@
 // app/operations/overview/page.tsx
-// PBS 2026-07-07 evening: dedicated Operations Overview landing. The HoD chat
-// cockpit stays at /operations; Overview is the dept-wide summary with
-// Departments / QA / Docs / Suppliers sub-tabs rendered by DashboardPage.
-// Mirrors the /revenue/overview shape (same 6-card grid pattern).
-import Link from 'next/link';
-import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
+// PBS 2026-07-07 late evening: Operations Overview is a REAL dept summary — not
+// a link farm. Departments and Suppliers are top-level tabs, not sub-cards here.
+// Shows live headline KPIs (in-house · arrivals · covers · capture rate) and 4
+// domain summary cards (F&B / Spa / Activities / Retail) pulled from gold views.
+
+import { DashboardPage, Container, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { DEPT_CFG } from '@/lib/dept-cfg';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { PROPERTY_ID } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 60;
 
-export default function OperationsOverviewPage() {
+interface LiveRow {
+  in_house: number | null;
+  arriving_today: number | null;
+  departing_today: number | null;
+  otb_next_90d: number | null;
+}
+interface FnbRow { covers_last_30d: number | null; capture_rate_pct: number | null; }
+interface SpaRow { tickets_last_30d: number | null; capture_rate_pct: number | null; }
+interface ActRow { tickets_last_30d: number | null; capture_rate_pct: number | null; }
+
+export default async function OperationsOverviewPage() {
   const cfg = DEPT_CFG.operations;
   const tabs: DashboardTab[] = cfg.subPages.map(s => ({
     key: s.href, label: s.label, href: s.href,
     active: s.href === '/operations/overview',
   }));
 
+  const sb = getSupabaseAdmin();
+  const results = await Promise.allSettled([
+    sb.from('v_overview_live').select('in_house, arriving_today, departing_today, otb_next_90d').eq('property_id', PROPERTY_ID).maybeSingle(),
+    sb.from('v_fnb_snapshot').select('covers_last_30d, capture_rate_pct').eq('property_id', PROPERTY_ID).maybeSingle(),
+    sb.from('v_spa_snapshot').select('tickets_last_30d, capture_rate_pct').eq('property_id', PROPERTY_ID).maybeSingle(),
+    sb.from('v_activities_snapshot').select('tickets_last_30d, capture_rate_pct').eq('property_id', PROPERTY_ID).maybeSingle(),
+  ]);
+
+  function pick<T>(idx: number): T | null {
+    const r = results[idx];
+    if (r.status !== 'fulfilled') return null;
+    const v = r.value as { data?: T | null } | null;
+    return (v?.data ?? null) as T | null;
+  }
+  const live = pick<LiveRow>(0);
+  const fnb  = pick<FnbRow>(1);
+  const spa  = pick<SpaRow>(2);
+  const act  = pick<ActRow>(3);
+
+  const tiles: KpiTileProps[] = [
+    { label: 'In-house',        value: Number(live?.in_house ?? 0),         size: 'sm' },
+    { label: 'Arriving today',  value: Number(live?.arriving_today ?? 0),   size: 'sm' },
+    { label: 'Departing today', value: Number(live?.departing_today ?? 0),  size: 'sm' },
+    { label: 'OTB · next 90d',  value: Number(live?.otb_next_90d ?? 0),     size: 'sm', footnote: 'room-nights' },
+  ];
+
   return (
     <DashboardPage title="Operations · Overview" tabs={tabs}>
-      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 10 }}>
-        <Container title="Departments" subtitle="7 revenue-producing depts" density="compact">
-          <div style={desc}>
-            Rooms · F&B · Spa · Activities · Retail · Transport · Other — daily covers, occupancy, avg ticket.
-            <div style={{ marginTop: 8 }}>
-              <Link href="/operations/rooms" style={btn}>Open Departments →</Link>
-            </div>
-          </div>
+      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
+        {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
+      </div>
+
+      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
+        <Container title="F&B" density="compact">
+          <div style={row}><span style={lbl}>Covers · last 30d</span><span style={val}>{fmtNum(fnb?.covers_last_30d)}</span></div>
+          <div style={row}><span style={lbl}>Capture rate</span><span style={val}>{fmtPct(fnb?.capture_rate_pct)}</span></div>
         </Container>
 
-        <Container title="QA" subtitle="SOPs + quality audits" density="compact">
-          <div style={desc}>
-            Standard operating procedures, audit trails, compliance checklists.
-            <div style={{ marginTop: 8 }}>
-              <Link href="/operations/sops" style={btn}>Open QA →</Link>
-            </div>
-          </div>
+        <Container title="Spa" density="compact">
+          <div style={row}><span style={lbl}>Tickets · last 30d</span><span style={val}>{fmtNum(spa?.tickets_last_30d)}</span></div>
+          <div style={row}><span style={lbl}>Capture rate</span><span style={val}>{fmtPct(spa?.capture_rate_pct)}</span></div>
         </Container>
 
-        <Container title="Docs" subtitle="ops library" density="compact">
-          <div style={desc}>
-            Menus · PAR levels · vendor sheets · training decks — one shelf for the whole ops team.
-            <div style={{ marginTop: 8 }}>
-              <Link href="/operations/docs" style={btn}>Open Docs →</Link>
-            </div>
-          </div>
+        <Container title="Activities" density="compact">
+          <div style={row}><span style={lbl}>Tickets · last 30d</span><span style={val}>{fmtNum(act?.tickets_last_30d)}</span></div>
+          <div style={row}><span style={lbl}>Capture rate</span><span style={val}>{fmtPct(act?.capture_rate_pct)}</span></div>
         </Container>
 
-        <Container title="Suppliers" subtitle="vendor master" density="compact">
-          <div style={desc}>
-            Active suppliers · spend · category · payment terms — pulled from gl.vendors + finance overview.
-            <div style={{ marginTop: 8 }}>
-              <Link href="/operations/suppliers" style={btn}>Open Suppliers →</Link>
-            </div>
-          </div>
-        </Container>
-
-        <Container title="Rooms today" subtitle="live occupancy anchor" density="compact">
-          <div style={desc}>
-            Direct shortcut to the Rooms dept view — the anchor for daily ops.
-            <div style={{ marginTop: 8 }}>
-              <Link href="/operations/rooms" style={btn}>Open Rooms →</Link>
-            </div>
-          </div>
-        </Container>
-
-        <Container title="Reports" subtitle="printable exports" density="compact">
-          <div style={desc}>
-            Cross-dept ops reports — covers, revenue, capture rate, waste.
-            <div style={{ marginTop: 8 }}>
-              <Link href="/h/260955/reports?dept=operations" style={btn}>Open Reports →</Link>
-            </div>
-          </div>
+        <Container title="Rooms" density="compact">
+          <div style={row}><span style={lbl}>In-house now</span><span style={val}>{fmtNum(live?.in_house)}</span></div>
+          <div style={row}><span style={lbl}>OTB · next 90d</span><span style={val}>{fmtNum(live?.otb_next_90d)}</span></div>
         </Container>
       </div>
     </DashboardPage>
   );
 }
 
-const desc: React.CSSProperties = { fontSize: 12, color: '#3A3A3A', lineHeight: 1.55, padding: '4px 2px' };
-const btn: React.CSSProperties = { display: 'inline-block', padding: '4px 10px', fontSize: 11, fontWeight: 600, background: '#FFFFFF', color: '#1F3A2E', border: '1px solid #1F3A2E', borderRadius: 3, textDecoration: 'none' };
+function fmtNum(v: number | null | undefined): string {
+  if (v == null) return '—';
+  return Math.round(Number(v)).toLocaleString('en-US');
+}
+function fmtPct(v: number | null | undefined): string {
+  if (v == null) return '—';
+  return Number(v).toFixed(0) + '%';
+}
+
+const row: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 12 };
+const lbl: React.CSSProperties = { color: '#5A5A5A' };
+const val: React.CSSProperties = { color: '#1B1B1B', fontWeight: 600, fontVariantNumeric: 'tabular-nums' };
