@@ -122,7 +122,7 @@ export default async function GuestDirectoryPage() {
 
   return (
     <DashboardPage
-      title="Guest · Directory"
+      title="Contacts · Directory"
       subtitle={`${total.toLocaleString()} guests · every one has a stay history or an upcoming arrival`}
       tabs={tabs}
     >
