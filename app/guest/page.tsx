@@ -54,6 +54,27 @@ function daysBetween(iso: string | null, ms: number): number | null {
 function pct(n: number, d: number): number { return d > 0 ? (n / d) * 100 : 0; }
 
 export default async function GuestHodPage() {
+  try {
+    return await renderHodBody();
+  } catch (e) {
+    // Any throw in the body renders the shell with an error banner instead of crashing to __next_error__.
+    const tabs: DashboardTab[] = GUEST_SUBPAGES.map((s) => ({
+      key: s.href, label: s.label, href: s.href, active: s.href === '/guest',
+    }));
+    const msg = e instanceof Error ? e.message : String(e);
+    return (
+      <DashboardPage title="Guest · HoD" subtitle="Rules failed to load — details below." tabs={tabs}>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <div style={{ padding: '14px 16px', background: '#FFF3F1', border: '1px solid #E6C9BF', borderRadius: 6, fontSize: 12, color: '#B04A2F', fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+            {msg}
+          </div>
+        </div>
+      </DashboardPage>
+    );
+  }
+}
+
+async function renderHodBody() {
   const sb = getSupabaseAdmin();
   const windowDays = 180;
   const todayMs = Date.now();
