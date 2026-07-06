@@ -216,8 +216,11 @@ const REVENUE_CFG: DeptCfg = {
   subPages: [
     // PBS 2026-07-07 evening: HoD + Overview split. /revenue = HoD chat cockpit.
     // /revenue/overview = new dept-wide summary landing with Pulse + Calendar sub-tabs.
+    // PBS 2026-07-07 night: Overview tab lands on /revenue/pulse (dept summary
+    // page is no longer used). Sub-strip on Pulse shows Calendar (sibling filter
+    // hides Pulse itself).
     { label: 'HoD',             href: '/revenue'          },
-    { label: 'Overview',        href: '/revenue/overview' },
+    { label: 'Overview',        href: '/revenue/pulse'    },
     { label: 'Demand & Pace',   href: '/revenue/demand'   },
     { label: 'Performance',     href: '/revenue/rooms'    },
     { label: 'Market & Control',href: '/revenue/compset'  },
@@ -355,15 +358,17 @@ const MARKETING_CFG: DeptCfg = {
   //   Library           → Docs
   // Parent tab links to the first child so clicking always lands somewhere useful.
   subPages: [
-    // PBS 2026-07-07 evening: HoD + Overview split. /marketing = HoD chat cockpit.
-    // /marketing/overview = new dept summary landing with Info + Reports sub-tabs.
+    // PBS 2026-07-07 night:
+    // - Overview lands on /marketing/library (Library becomes Overview's home).
+    // - Info removed as sub-tab; Library + Docs now sit directly under Overview.
+    // - Library top-level tab removed (merged into Overview).
+    // - Content lands on /marketing/gallery (Media page, not the empty stub).
     { label: 'HoD',               href: '/marketing'                 },
-    { label: 'Overview',          href: '/marketing/overview'        },
+    { label: 'Overview',          href: '/marketing/library'         },
     { label: 'Acquisition',       href: '/marketing/acquisition'     },
     { label: 'Products & Offers', href: '/marketing/offers'          },
-    { label: 'Content',           href: '/marketing/content'         },
+    { label: 'Content',           href: '/marketing/gallery'         },
     { label: 'Digital',           href: '/marketing/digital'         },
-    { label: 'Library',           href: '/marketing/library'         },
     { label: 'Reports',           href: '/h/260955/reports?dept=marketing' },
   ],
   quickChips: [
