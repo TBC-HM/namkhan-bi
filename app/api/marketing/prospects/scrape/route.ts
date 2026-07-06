@@ -17,10 +17,11 @@ export const maxDuration = 300; // Vercel Pro; on Hobby caps to 60s (still works
 // Actor catalog — add new actors here. Each entry defines input shape + mapper.
 // -----------------------------------------------------------------------------
 type ActorId =
-  | 'gmaps_contacts'      // compass/google-maps-with-contact-details-scraper — emails + Maps
-  | 'google_search'       // apify/google-search-scraper — SERP results
-  | 'booking'             // voyager/booking-scraper — hotel listings
-  | 'email_social';       // poidata/email-and-social-scraper — enrich URLs → emails
+  | 'gmaps_contacts'      // Google Maps + Emails (venue-level)
+  | 'google_search'       // Google SERP results (URLs only)
+  | 'booking'             // Booking.com hotel listings (compset)
+  | 'email_social'        // Enrich URLs → emails + socials
+  | 'leads_finder';       // code_crafter/leads-finder — Apollo alternative, B2B decision-makers
 
 interface ScrapeInput {
   actor: ActorId;
@@ -34,10 +35,11 @@ interface ScrapeInput {
 }
 
 const ACTORS: Record<ActorId, { slug: string; label: string }> = {
-  gmaps_contacts: { slug: 'compass~google-maps-with-contact-details-scraper', label: 'Google Maps + Emails' },
+  gmaps_contacts: { slug: 'compass~google-maps-extractor',                   label: 'Google Maps + Emails' },
   google_search:  { slug: 'apify~google-search-scraper',                     label: 'Google Search SERP' },
   booking:        { slug: 'voyager~booking-scraper',                         label: 'Booking.com Hotels' },
   email_social:   { slug: 'poidata~email-and-social-scraper',                label: 'Website Email Extractor' },
+  leads_finder:   { slug: 'code_crafter~leads-finder',                       label: 'B2B Leads Finder (Apollo alternative)' },
 };
 
 // -----------------------------------------------------------------------------
@@ -141,12 +143,40 @@ function mapEmailSocial(item: Record<string, unknown>): PendingRow[] {
   return emails.map((e) => ({ ...base, email: (e as string).toLowerCase() }));
 }
 
+// Leads Finder (Apollo alternative) returns per-person rows:
+//   { firstName, lastName, fullName, email, title, headline, linkedInUrl,
+//     companyName, companyDomain, companyWebsite, phone, location, city, country, industry }
+function mapLeadsFinder(item: Record<string, unknown>): PendingRow[] {
+  const emails = pickEmails(item);
+  const first = (item.firstName as string) || (item.first_name as string) || '';
+  const last  = (item.lastName  as string) || (item.last_name  as string) || '';
+  const fullName = (item.fullName as string) || `${first} ${last}`.trim() || null;
+  const title = (item.title as string) || (item.headline as string) || null;
+  const company = (item.companyName as string) || (item.company as string) || null;
+  const website = (item.companyWebsite as string) || (item.companyDomain as string)
+    ? ((item.companyWebsite as string) || `https://${item.companyDomain as string}`)
+    : null;
+  const country = ((item.country as string) || (item.countryCode as string) || '').slice(0, 2).toUpperCase() || null;
+  const base = {
+    company: fullName ? `${fullName} · ${company ?? '?'}${title ? ' · ' + title : ''}` : company,
+    website,
+    phone: (item.phone as string) || null,
+    country,
+    notes: [title, item.industry, item.location, item.linkedInUrl].filter(Boolean).join(' · '),
+    prospect_kind: 'contact_with_email',
+    import_source_file: 'apify_leads_finder',
+  };
+  if (emails.length === 0) return [{ ...base, email: null, prospect_kind: 'company_pending_email' }];
+  return emails.map((e) => ({ ...base, email: e }));
+}
+
 function mapItem(actor: ActorId, item: Record<string, unknown>): PendingRow[] {
   switch (actor) {
     case 'gmaps_contacts': return mapGmaps(item);
     case 'google_search':  return mapSerp(item);
     case 'booking':        return mapBooking(item);
     case 'email_social':   return mapEmailSocial(item);
+    case 'leads_finder':   return mapLeadsFinder(item);
   }
 }
 
