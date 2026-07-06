@@ -344,26 +344,22 @@ const MARKETING_CFG: DeptCfg = {
   hodTagline: 'Ask Lumen anything about brand reach.',
   chatPlaceholder: 'e.g. which channel grew most this month?',
   storageKeyPrefix: 'mkt',
+  // PBS 2026-07-06 late evening: sharper hierarchical Marketing nav — 6 top-level parents
+  // (plus Reports). Sub-tabs render on each parent's landing page:
+  //   Overview          → Info / Reports
+  //   Acquisition       → Campaigns / Funnels / Prospects
+  //   Products & Offers → Compiler
+  //   Content           → Media / Social
+  //   Digital           → Web
+  //   Library           → Docs
+  // Parent tab links to the first child so clicking always lands somewhere useful.
   subPages: [
-    // PBS 2026-07-06 evening: canonical Marketing strip.
-    // Order: Overview · Info · Acquisition · Campaigns · Funnels · Prospects · Products & Offers
-    //        · Compiler · Content · Media · Social · Digital · Web · Library · Docs · Reports
-    // Reports always sits flush-right (SubPagesStrip detects label).
     { label: 'Overview',          href: '/marketing'                 },
-    { label: 'Info',              href: '/marketing/library'         },
-    { label: 'Acquisition',       href: '/marketing/acquisition'     }, // stub — needs build
-    { label: 'Campaigns',         href: '/marketing/campaigns'       },
-    { label: 'Funnels',           href: '/marketing/funnels'         },
-    { label: 'Prospects',         href: '/marketing/prospects'       },
-    { label: 'Products & Offers', href: '/marketing/offers'          }, // stub — needs build
-    { label: 'Compiler',          href: '/marketing/compiler'        },
-    { label: 'Content',           href: '/marketing/content'         }, // stub — needs build
-    { label: 'Media',             href: '/marketing/gallery'         },
-    { label: 'Social',            href: '/marketing/social'          },
-    { label: 'Digital',           href: '/marketing/digital'         }, // stub — needs build
-    { label: 'Web',               href: '/marketing/web'             },
+    { label: 'Acquisition',       href: '/marketing/acquisition'     },
+    { label: 'Products & Offers', href: '/marketing/offers'          },
+    { label: 'Content',           href: '/marketing/content'         },
+    { label: 'Digital',           href: '/marketing/digital'         },
     { label: 'Library',           href: '/marketing/library'         },
-    { label: 'Docs',              href: '/marketing/docs'            },
     { label: 'Reports',           href: '/h/260955/reports?dept=marketing' },
   ],
   quickChips: [
