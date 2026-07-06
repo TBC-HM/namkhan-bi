@@ -182,8 +182,8 @@ export default async function MarketingDocsPage({ searchParams }: SP) {
         }
       `}</style>
       <DashboardPage
-        title="Marketing · Documents"
-        subtitle={`${totalVisible} docs sorted like a marketing manager thinks · media library at /marketing/gallery`}
+        title="Marketing · All docs"
+        subtitle={`${totalVisible} docs sorted the way a marketing manager thinks · full cross-dept registry at /finance/docs · media library at /marketing/gallery`}
         tabs={tabs}
       >
         {/* Upload + Storage row */}
