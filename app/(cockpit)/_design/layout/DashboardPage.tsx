@@ -29,9 +29,22 @@ import { findSubGroup } from '@/lib/nav-subgroups';
 import '../internal/tokens.css';
 
 export default function DashboardPage(props: DashboardPageProps) {
-  const { title, subtitle, tabs, action, children, kpiTiles, hideWeather } = props;
+  // PBS 2026-07-07: page subtitle intentionally NOT rendered — the noise sentences under
+  // every page title were unread. Prop still accepted so callers don't break.
+  const { title, tabs, action, children, kpiTiles, hideWeather } = props;
   const pathname = usePathname() ?? '';
   const subGroup = findSubGroup(pathname);
+
+  // PBS 2026-07-07: smart active. A tab is active if pathname matches its href, OR the
+  // pathname sits in a subgroup whose parentHref matches this tab. Keeps the parent tab
+  // highlighted while an operator drills into any child.
+  const smartTabs = tabs?.map(t => {
+    if (t.active) return t;
+    const isExact = t.href && (pathname === t.href || pathname === t.href.split('?')[0]);
+    const isSubgroupParent = subGroup && t.href === subGroup.parentHref;
+    return isExact || isSubgroupParent ? { ...t, active: true } : t;
+  });
+
   return (
     <div className="cockpit-design" style={S.shell}>
       <div style={S.stickyTop}>
@@ -42,11 +55,10 @@ export default function DashboardPage(props: DashboardPageProps) {
         <header style={S.topBar}>
           <div style={S.titleStack}>
             <h1 style={S.title}>{title}</h1>
-            {subtitle && <p style={S.subtitle}>{subtitle}</p>}
           </div>
           {action && <div style={S.action}>{action}</div>}
         </header>
-        {tabs && tabs.length > 0 && <TabStrip tabs={tabs} />}
+        {smartTabs && smartTabs.length > 0 && <TabStrip tabs={smartTabs} />}
         {subGroup && <SubTabStrip pathname={pathname} tabs={subGroup.tabs} />}
       </div>
       <main style={S.body}>{children}</main>
@@ -175,30 +187,28 @@ const S: Record<string, CSSProperties> = {
   tabActive: { color: 'var(--ink, #1B1B1B)', borderBottomColor: 'var(--primary, #1F3A2E)', fontWeight: 600 },
   tabInner: { display: 'inline-flex', alignItems: 'center', gap: 6 },
   tabCount: { fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', background: 'var(--bg, #F4EFE2)', borderRadius: 99, padding: '0 6px', fontWeight: 500 },
-  // PBS 2026-07-07: second sticky sub-strip. Slightly muted so main strip stays primary.
+  // PBS 2026-07-07 evening: industry-standard tab row — no box, no border-radius.
+  // Same underline treatment as the main strip so the two rows feel consistent.
   subTabStrip: {
     display: 'flex',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
     flexWrap: 'wrap',
-    background: 'var(--surf-2, #FAFAF7)',
-    padding: '4px 8px',
-    borderRadius: 4,
     marginTop: 2,
   },
   subTab: {
     background: 'transparent',
     border: 'none',
-    padding: '4px 10px',
+    padding: '4px 8px',
     fontSize: 12,
     fontWeight: 500,
     color: 'var(--ink-soft, #5A5A5A)',
     cursor: 'pointer',
-    borderRadius: 3,
+    borderBottom: '2px solid transparent',
     textDecoration: 'none',
     fontFamily: 'inherit',
   },
-  subTabActive: { color: 'var(--ink, #1B1B1B)', background: 'var(--paper, #FFFFFF)', border: '1px solid var(--hairline, #E6DFCC)', fontWeight: 600 },
+  subTabActive: { color: 'var(--ink, #1B1B1B)', borderBottomColor: 'var(--primary, #1F3A2E)', fontWeight: 600 },
   body: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
