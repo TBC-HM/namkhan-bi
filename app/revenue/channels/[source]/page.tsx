@@ -98,32 +98,32 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
         getChannelRoomMixForRange(sourceName, period.from, period.to).catch(() => []),
         getChannelPickupForSource(sourceName, 28).catch(() => []),
         getDmcContracts().catch(() => [] as DmcContract[]),
-        getSupabaseAdmin()
+        Promise.resolve(getSupabaseAdmin()
           .from('v_source_bookings')
           .select('reservation_id, booking_id, booking_date, check_in_date, check_out_date, room_type_name, guest_name, los, adr, total_amount, currency, status, is_cancelled')
           .eq('source_name', sourceName)
           .order('booking_date', { ascending: false })
-          .limit(500)
+          .limit(500))
           .then((r) => ({ data: (r.data ?? []) as SourceBookingRow[] }))
           .catch(() => ({ data: [] as SourceBookingRow[] })),
         // QB transactions (gl.transactions, filtered to party_name).
         // Fuzzy match: try the PMS source name AND the matched DMC partner name.
-        getSupabaseAdmin()
+        Promise.resolve(getSupabaseAdmin()
           .from('v_source_qb_transactions')
           .select('txn_id, txn_date, txn_type, txn_number, party_name, section_account, line_account, class, description, amount_native, currency_native, amount_usd')
           .ilike('party_name', `%${sourceName}%`)
           .order('txn_date', { ascending: false })
-          .limit(500)
+          .limit(500))
           .then((r) => ({ data: (r.data ?? []) as QbTxnRow[] }))
           .catch(() => ({ data: [] as QbTxnRow[] })),
         // PBS 2026-07-01: channel-account row for the SourceAccountEditPanel
         // (OTA/Wholesale/Other landing pages get the same top panel as DMC).
-        getSupabaseAdmin()
+        Promise.resolve(getSupabaseAdmin()
           .from('v_channel_contacts')
           .select('*')
           .eq('property_id', PROPERTY_ID_NAMKHAN)
           .eq('source_name', sourceName)
-          .maybeSingle()
+          .maybeSingle())
           .then((r) => ({ data: r.data as ChannelAccountRow | null }))
           .catch(() => ({ data: null })),
       ]);
