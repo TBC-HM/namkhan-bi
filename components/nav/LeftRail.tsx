@@ -53,9 +53,9 @@ const PILLARS: RailItem[] = [
   },
   {
     href: '/guest',
-    glyph: 'G',
-    label: 'Guest',
-    matches: ['/guest'],
+    glyph: 'C',
+    label: 'Contacts',
+    matches: ['/guest', '/contacts'],
   },
   {
     href: '/finance',
