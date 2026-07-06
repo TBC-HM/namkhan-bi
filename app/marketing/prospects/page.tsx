@@ -100,6 +100,7 @@ export default async function ProspectsPage() {
         <div style={{ gridColumn:'1 / -1', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, flexWrap:'wrap' }}>
           <div style={{ display:'flex', gap:8 }}>
             <Link href="/marketing/prospects/sequences" style={btnGreen}>Sequences →</Link>
+            <Link href="/marketing/prospects/scrape"    style={btnLight}>+ Scrape (Apify)</Link>
             <Link href="/marketing/prospects/import"    style={btnLight}>+ Import CSV</Link>
           </div>
           <div style={{ fontSize:11, color:'#5A5A5A' }}>
