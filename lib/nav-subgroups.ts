@@ -101,6 +101,47 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       { label: 'Docs', href: '/marketing/docs' },
     ],
   },
+
+  // ─── Finance (PBS 2026-07-07 consolidation) ───────────────
+  // Overview parent stands alone (no children yet, but included so future
+  // sub-tabs can be added without another wiring pass).
+  {
+    parentHref: '/finance/overview',
+    members: ['/finance/overview'],
+    tabs: [
+      { label: 'Overview', href: '/finance/overview' },
+    ],
+  },
+  // Finance parent → P&L / Ledger / Account mapping
+  {
+    parentHref: '/finance/pnl',
+    members: ['/finance/pnl', '/finance/ledger', '/finance/mapping'],
+    tabs: [
+      { label: 'P&L',             href: '/finance/pnl'     },
+      { label: 'Ledger',          href: '/finance/ledger'  },
+      { label: 'Account mapping', href: '/finance/mapping' },
+    ],
+  },
+  // Transactions parent → Transactions / POS · PMS / POS · Poster
+  {
+    parentHref: '/finance/transactions',
+    members: ['/finance/transactions', '/finance/pos-transactions', '/finance/poster'],
+    tabs: [
+      { label: 'Transactions', href: '/finance/transactions'     },
+      { label: 'POS · PMS',    href: '/finance/pos-transactions' },
+      { label: 'POS · Poster', href: '/finance/poster'           },
+    ],
+  },
+  // Working capital parent → Cashflow / Variance / AP / AR
+  {
+    parentHref: '/finance/cashflow',
+    members: ['/finance/cashflow', '/finance/variance', '/finance/apar'],
+    tabs: [
+      { label: 'Cashflow', href: '/finance/cashflow' },
+      { label: 'Variance', href: '/finance/variance' },
+      { label: 'AP / AR',  href: '/finance/apar'     },
+    ],
+  },
 ];
 
 export function findSubGroup(pathname: string): SubGroup | null {
