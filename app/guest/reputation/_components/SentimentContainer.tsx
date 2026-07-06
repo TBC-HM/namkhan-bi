@@ -45,18 +45,25 @@ export default function SentimentContainer({ reviews }: { reviews: Review[] }) {
       else if (n < 3)  for (const w of words) negCounts.set(w, (negCounts.get(w) ?? 0) + 1);
       // neutral reviews don't contribute to either cloud
     }
-    // For each bucket: pick top-N words, scale font size independently
-    const takeTop = (m: Map<string, number>, limit: number): Array<[string, number]> => {
+    // For each bucket: pick top-N words, scale font size independently.
+    // Negative bucket uses a smaller range (12-26 vs 14-42) so red words don't
+    // shout as loud as the greens — PBS 2026-07-06.
+    const takeTop = (
+      m: Map<string, number>, limit: number, minSize: number, maxSize: number, loneSize: number,
+    ): Array<[string, number]> => {
       const rows = Array.from(m.entries()).sort((a, b) => b[1] - a[1]).slice(0, limit);
       if (rows.length === 0) return [];
       const maxC = rows[0][1];
+      const range = maxSize - minSize;
       return rows.map(([w, c]) => {
-        // 14-42px scaled by frequency within THIS bucket. Even a lone word gets 22px.
-        const size = maxC === 1 ? 22 : 14 + Math.round((c / maxC) * 26);
+        const size = maxC === 1 ? loneSize : minSize + Math.round((c / maxC) * range);
         return [w, size] as [string, number];
       });
     };
-    return { pos: takeTop(posCounts, 40), neg: takeTop(negCounts, 25) };
+    return {
+      pos: takeTop(posCounts, 40, 14, 42, 22),
+      neg: takeTop(negCounts, 25, 12, 26, 16),
+    };
   }, [reviews]);
 
   const totalPos = reviews.filter(r => Number(r.rating_norm) >= 4).length;
@@ -114,7 +121,7 @@ export default function SentimentContainer({ reviews }: { reviews: Review[] }) {
             )}
             {cloud.neg.map(([w, size], i) => (
               <span key={'neg-'+i} style={{
-                fontSize: size, color: '#B04A2F', fontWeight: size > 24 ? 700 : 500,
+                fontSize: size, color: '#B04A2F', fontWeight: size > 20 ? 600 : 400,
                 fontFamily:'Georgia, "Times New Roman", serif',
               }}>{w}</span>
             ))}
