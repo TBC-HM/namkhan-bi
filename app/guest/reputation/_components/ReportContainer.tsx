@@ -46,6 +46,39 @@ function themesFrom(reviews: Review[], themeMap: Record<string, string[]>): Arra
   return Array.from(counts.entries()).filter(([,n]) => n > 0).sort((a,b) => b[1] - a[1]);
 }
 
+// Mirror of SentimentContainer's tokenizer so the email report shows the same word cloud.
+const STOP = new Set([
+  'the','a','an','and','or','but','if','then','of','to','in','for','on','at','by','with','from',
+  'we','us','our','ours','you','your','yours','they','them','their','it','its','this','that','these','those',
+  'is','are','was','were','be','been','being','am','has','have','had','do','does','did','done',
+  'not','no','yes','so','as','also','just','than','too','very','more','most','some','any','all',
+  'i','me','my','mine','he','she','him','her','his','hers','one','two','three',
+  'up','down','out','over','under','again','further','once','here','there','when','where','why','how',
+  'what','which','who','whom','can','will','would','should','could','may','might','shall','must',
+  'about','into','onto','through','during','before','after','above','below','between','including',
+  '+','-','namkhan','the-namkhan',
+]);
+function tokenize(s: string): string[] {
+  return s.toLowerCase()
+    .replace(/[\d]/g, ' ')
+    .replace(/[^a-z\s'-]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 2 && w.length < 20 && !STOP.has(w));
+}
+function topWords(reviews: Review[], predicate: (n: number) => boolean, limit: number): Array<{ word: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const r of reviews) {
+    const n = Number(r.rating_norm);
+    if (!predicate(n)) continue;
+    const words = tokenize((r.title ?? '') + ' ' + (r.body ?? ''));
+    for (const w of words) counts.set(w, (counts.get(w) ?? 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([word, count]) => ({ word, count }));
+}
+
 function generateBullets(reviews: Review[]): { headline: string; bullets: string[] } {
   const total = reviews.length;
   if (total === 0) return { headline: 'No reviews scraped yet.', bullets: [] };
@@ -120,6 +153,11 @@ export default function ReportContainer({ reviews }: { reviews: Review[] }) {
   const [msg, setMsg] = useState<{ kind:'ok'|'err'; text:string } | null>(null);
 
   const { headline, bullets } = generateBullets(reviews);
+
+  // Sentiment word cloud data — same tokenizer as SentimentContainer.
+  const positiveWords = topWords(reviews, n => n >= 4, 25);
+  const negativeWords = topWords(reviews, n => n < 3, 15);
+
   // Low-scoring reviews with full text — attached to the email as a distinct card list.
   const lowScoringReviews = reviews
     .filter(r => Number(r.rating_norm) < 4.5)
@@ -156,6 +194,8 @@ export default function ReportContainer({ reviews }: { reviews: Review[] }) {
           text: asText,
           html_bullets: [headline, ...bullets],
           low_reviews: lowScoringReviews,
+          positive_words: positiveWords,
+          negative_words: negativeWords,
           new_only: newOnly, // server-side: filter to reviews received after last send
         }),
       });
