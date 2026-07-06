@@ -37,7 +37,8 @@ interface ScrapeInput {
 }
 
 const ACTORS: Record<ActorId, { slug: string; label: string }> = {
-  gmaps_contacts: { slug: 'compass~google-maps-extractor',                   label: 'Google Maps + Emails' },
+  // 2026-07-06: apify's own actor is most reliable + supports contact extraction natively.
+  gmaps_contacts: { slug: 'apify~google-maps-scraper',                       label: 'Google Maps + Emails' },
   google_search:  { slug: 'apify~google-search-scraper',                     label: 'Google Search SERP' },
   booking:        { slug: 'voyager~booking-scraper',                         label: 'Booking.com Hotels' },
   email_social:   { slug: 'poidata~email-and-social-scraper',                label: 'Website Email Extractor' },
@@ -317,9 +318,32 @@ export async function POST(req: Request) {
     });
   }
 
+  // Derive tag keys from the actor input: search terms + location → snake_case tags.
+  // e.g. searchStringsArray=['restaurant'] + locationQuery='Luang Prabang, Laos'
+  //      → tags = ['restaurant','luang_prabang','laos']
+  const toKey = (s: string) =>
+    s.toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/).filter(Boolean).slice(0, 2).join('_') // 2-word max per token
+      .replace(/^_+|_+$/g, '');
+  const rawTerms: string[] = [];
+  const inp = body.input || {};
+  const arr = (v: unknown): string[] => Array.isArray(v) ? v.filter(x => typeof x === 'string') as string[] : [];
+  rawTerms.push(...arr(inp.searchStringsArray));
+  rawTerms.push(...arr(inp.queries));
+  rawTerms.push(...arr(inp.searchKeywords));
+  rawTerms.push(...arr(inp.jobTitles));
+  if (typeof inp.locationQuery === 'string') rawTerms.push(...inp.locationQuery.split(','));
+  if (typeof inp.search === 'string')        rawTerms.push(inp.search);
+  if (typeof inp.country === 'string')       rawTerms.push(inp.country);
+  const tag_hints = Array.from(new Set(
+    rawTerms.map(toKey).filter(k => k && k.length > 1 && k.length <= 40)
+  ));
+
   // Bulk-insert via SECURITY DEFINER RPC (bypasses PostgREST's public-schema-only restriction)
   const { data: ingestData, error: ingestErr } = await sb.rpc('fn_apify_ingest_prospects', {
     p_rows: inserts as unknown as object,
+    p_tags: tag_hints,
   });
 
   if (ingestErr) {
@@ -342,6 +366,8 @@ export async function POST(req: Request) {
     items_returned: items.length,
     inserted: stats.inserted ?? 0,
     skipped: stats.skipped ?? 0,
+    tags_applied: (stats as { tags_applied?: number }).tags_applied ?? 0,
+    tag_hints,
     duration_ms: Date.now() - started,
     apify_status: apifyStatus,
     debug: { sample_keys, sample_first_email, mapped_rows: rows.length },
