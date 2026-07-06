@@ -30,10 +30,10 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
   //   Demand & Pace     → Demand / Pace / Pickup / Cancellations
   //   Performance       → Rooms / Channels / Rate Plans / Markets
   //   Market & Control  → Comp Set / Leakage / Parity
-  // PBS 2026-07-07 evening: HoD + Overview split. Pulse & Calendar are sub-tabs of Overview.
+  // PBS 2026-07-07 night: Overview lands on /revenue/pulse directly.
   revenue: [
     { href: '/revenue',              label: 'HoD' },
-    { href: '/revenue/overview',     label: 'Overview' },
+    { href: '/revenue/pulse',        label: 'Overview' },
     { href: '/revenue/demand',       label: 'Demand & Pace' },
     { href: '/revenue/rooms',        label: 'Performance' },
     { href: '/revenue/compset',      label: 'Market & Control' },
@@ -64,14 +64,14 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
   //   Digital           → Web
   //   Library           → Docs
   marketing: [
-    // PBS 2026-07-07 evening: HoD + Overview split.
+    // PBS 2026-07-07 night: Overview lands on Library. Content lands on Media (gallery).
+    // Library top-level tab removed (its content lives under Overview now).
     { href: '/marketing',              label: 'HoD' },
-    { href: '/marketing/overview',     label: 'Overview' },
+    { href: '/marketing/library',      label: 'Overview' },
     { href: '/marketing/acquisition',  label: 'Acquisition' },
     { href: '/marketing/offers',       label: 'Products & Offers' },
-    { href: '/marketing/content',      label: 'Content' },
+    { href: '/marketing/gallery',      label: 'Content' },
     { href: '/marketing/digital',      label: 'Digital' },
-    { href: '/marketing/library',      label: 'Library' },
   ],
 
   // ===== 04 Operations =====
