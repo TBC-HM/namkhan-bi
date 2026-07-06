@@ -90,17 +90,21 @@ function resolvePropertyAndDept(pathname: string): { propertyId: number; activeS
 
 // PBS 2026-07-06: property-aware strip colors — the ONE visual differentiator
 // between properties now the rest of the site is pure white.
+// PBS 2026-07-06 (evening): strip typography now matches page (Inter Tight,
+// no uppercase, no mono tracking) — see the label style block below. Colours
+// simplified to a single ink per property: white on Namkhan black, black on
+// Donna beige, dark on Beyond white. Idle = dim ink, active = full ink.
 function stripStyleFor(propertyId: number, holdingMode: boolean): { bg: string; textIdle: string; textActive: string; border: string; brass: string } {
   if (holdingMode) {
     // Beyond Circle = white strip with dark ink text
-    return { bg: '#FFFFFF', textIdle: '#5A5A5A', textActive: '#1B1B1B', border: '#E6DFCC', brass: '#8B4513' };
+    return { bg: '#FFFFFF', textIdle: 'rgba(27,27,27,0.55)', textActive: '#1B1B1B', border: '#E6DFCC', brass: '#8B4513' };
   }
   if (propertyId === 1000001) {
-    // Donna = beige strip
-    return { bg: '#F5EAD9', textIdle: '#5A4A32', textActive: '#1B1B1B', border: '#E6D4B0', brass: '#8B5A1C' };
+    // Donna = beige strip · ink is BLACK (PBS 2026-07-06)
+    return { bg: '#F5EAD9', textIdle: 'rgba(27,27,27,0.55)', textActive: '#1B1B1B', border: '#E6D4B0', brass: '#8B5A1C' };
   }
-  // Namkhan (or any other property) = black strip
-  return { bg: '#0F0D0A', textIdle: '#B8A574', textActive: '#F0E5CB', border: 'rgba(212,168,102,0.28)', brass: '#D4A866' };
+  // Namkhan (or any other property) = black strip · ink is WHITE (PBS 2026-07-06)
+  return { bg: '#0F0D0A', textIdle: 'rgba(255,255,255,0.65)', textActive: '#FFFFFF', border: 'rgba(255,255,255,0.14)', brass: '#D4A866' };
 }
 
 export default function TopDeptStrip() {
@@ -143,13 +147,12 @@ export default function TopDeptStrip() {
               target={d.openInNewWindow ? '_blank' : undefined}
               rel={d.openInNewWindow ? 'noopener noreferrer' : undefined}
               style={{
-                color: active ? s.brass : (d.color ?? s.textIdle),
+                color: active ? s.textActive : (d.color ?? s.textIdle),
                 textDecoration: 'none',
-                fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-                fontSize: 11,
-                letterSpacing: '0.18em',
-                textTransform: 'uppercase',
-                fontWeight: active ? 700 : 500,
+                fontFamily: "'Inter Tight', system-ui, sans-serif",
+                fontSize: 13,
+                letterSpacing: '0.01em',
+                fontWeight: active ? 600 : 500,
                 padding: '6px 0',
                 borderBottom: active ? '2px solid ' + s.brass : '2px solid transparent',
                 whiteSpace: 'nowrap',
@@ -201,13 +204,12 @@ export default function TopDeptStrip() {
             href={href}
             aria-current={active ? 'page' : undefined}
             style={{
-              color: active ? s.brass : s.textIdle,
+              color: active ? s.textActive : s.textIdle,
               textDecoration: 'none',
-              fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-              fontSize: 11,
-              letterSpacing: '0.18em',
-              textTransform: 'uppercase',
-              fontWeight: active ? 700 : 500,
+              fontFamily: "'Inter Tight', system-ui, sans-serif",
+              fontSize: 13,
+              letterSpacing: '0.01em',
+              fontWeight: active ? 600 : 500,
               padding: '6px 0',
               borderBottom: active ? '2px solid ' + s.brass : '2px solid transparent',
               whiteSpace: 'nowrap',
@@ -227,7 +229,7 @@ export default function TopDeptStrip() {
         aria-label="Property settings"
         aria-current={activeSlug === 'settings' ? 'page' : undefined}
         style={{
-          color: activeSlug === 'settings' ? s.brass : s.textIdle,
+          color: activeSlug === 'settings' ? s.textActive : s.textIdle,
           textDecoration: 'none',
           fontSize: 22,
           lineHeight: 1,
@@ -241,5 +243,4 @@ export default function TopDeptStrip() {
     </nav>
   );
 }
-// force rebuild 2026-07-06 12:20
-
+// force rebuild 2026-07-06 evening — strip typography aligned to page
