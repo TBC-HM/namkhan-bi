@@ -206,27 +206,21 @@ const REVENUE_CFG: DeptCfg = {
   hodTagline: 'Ask Vector anything about revenue.',
   chatPlaceholder: 'e.g. how are we pacing for next weekend?',
   storageKeyPrefix: 'rev',
+  // PBS 2026-07-06 late evening: canonical Revenue nav — 6 top-level groups.
+  // Three of them are HUBS with sub-tabs (rendered on their landing pages as an
+  // inline strip below the main tab bar):
+  //   Demand & Pace  → Demand / Pace / Pickup / Cancellations
+  //   Performance    → Rooms / Channels / Rate Plans / Markets
+  //   Market & Control → Comp Set / Leakage / Parity
+  // The parent tab links to the first child so clicking it always lands somewhere useful.
   subPages: [
-    // PBS 2026-07-06 late evening: canonical Revenue strip per PBS list.
-    // Order matches Marketing so operators see one consistent nav pattern.
-    // Existing revenue-management pages (Pulse/Pace/Channels/Rate Plans/etc.)
-    // still exist at their URLs — reachable via the HoD landing.
-    { label: 'Overview',          href: '/revenue'                 },
-    { label: 'Info',              href: '/revenue/info'            },
-    { label: 'Acquisition',       href: '/revenue/acquisition'     },
-    { label: 'Campaigns',         href: '/revenue/campaigns'       },
-    { label: 'Funnels',           href: '/revenue/funnels'         },
-    { label: 'Prospects',         href: '/revenue/prospects'       },
-    { label: 'Products & Offers', href: '/revenue/offers'          },
-    { label: 'Compiler',          href: '/revenue/compiler'        },
-    { label: 'Content',           href: '/revenue/content'         },
-    { label: 'Media',             href: '/revenue/media'           },
-    { label: 'Social',            href: '/revenue/social'          },
-    { label: 'Digital',           href: '/revenue/digital'         },
-    { label: 'Web',               href: '/revenue/web'             },
-    { label: 'Library',           href: '/revenue/library'         },
-    { label: 'Docs',              href: '/revenue/docs'            },
-    { label: 'Reports',           href: '/h/260955/reports?dept=revenue' },
+    { label: 'Overview',        href: '/revenue'          },
+    { label: 'Pulse',           href: '/revenue/pulse'    },
+    { label: 'Calendar',        href: '/revenue/pricing'  },
+    { label: 'Demand & Pace',   href: '/revenue/demand'   },
+    { label: 'Performance',     href: '/revenue/rooms'    },
+    { label: 'Market & Control',href: '/revenue/compset'  },
+    { label: 'Reports',         href: '/h/260955/reports?dept=revenue' },
   ],
   quickChips: [
     { label: 'Pulse',    href: '/revenue/pulse'    },
