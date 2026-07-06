@@ -45,7 +45,7 @@ interface DirRow {
 }
 interface RecipientRow { sent_at: string | null; opened_at: string | null; unsubscribed_at: string | null; }
 interface ReviewRow { rating_norm: number | string | null; response_status: string | null; body: string | null; received_at: string | null; }
-interface CampaignRow { status: string | null; planned_date: string | null; sent_at: string | null; }
+interface CampaignRow { status: string | null; planned_date: string | null; last_run_at: string | null; }
 
 function daysBetween(iso: string | null, ms: number): number | null {
   if (!iso) return null;
@@ -62,7 +62,8 @@ export default async function GuestHodPage() {
   const since30dIso = new Date(todayMs - 30 * 86_400_000).toISOString();
   const since90dIso = new Date(todayMs - 90 * 86_400_000).toISOString().slice(0, 10);
 
-  const [profilesR, resR, dirR, recipR, reviewsR, campR] = await Promise.all([
+  // Defensive: use allSettled — one broken query mustn't take down the whole HoD.
+  const results = await Promise.allSettled([
     sb.schema('guest').from('mv_guest_profile')
       .select('email, country, stays_count, lifetime_revenue, last_stay_date')
       .eq('property_id', PROPERTY_ID)
@@ -83,16 +84,22 @@ export default async function GuestHodPage() {
       .eq('property_id', PROPERTY_ID)
       .limit(5000),
     sb.schema('guest').from('campaigns')
-      .select('status, planned_date, sent_at')
+      .select('status, planned_date, last_run_at')
       .limit(500),
   ]);
 
-  const profiles: ProfileRow[] = (profilesR.data as ProfileRow[]) ?? [];
-  const res:      ResRow[]     = (resR.data as ResRow[]) ?? [];
-  const dir:      DirRow[]     = (dirR.data as DirRow[]) ?? [];
-  const recips:   RecipientRow[] = (recipR.data as RecipientRow[]) ?? [];
-  const reviews:  ReviewRow[]  = (reviewsR.data as ReviewRow[]) ?? [];
-  const camps:    CampaignRow[] = (campR.data as CampaignRow[]) ?? [];
+  const pick = <T,>(idx: number): T[] => {
+    const r = results[idx];
+    if (r.status !== 'fulfilled') return [];
+    // @ts-expect-error supabase result shape
+    return (r.value.data ?? []) as T[];
+  };
+  const profiles: ProfileRow[]   = pick<ProfileRow>(0);
+  const res:      ResRow[]       = pick<ResRow>(1);
+  const dir:      DirRow[]       = pick<DirRow>(2);
+  const recips:   RecipientRow[] = pick<RecipientRow>(3);
+  const reviews:  ReviewRow[]    = pick<ReviewRow>(4);
+  const camps:    CampaignRow[]  = pick<CampaignRow>(5);
 
   // ─── RETENTION context ───
   const totalGuests = profiles.length;
@@ -237,7 +244,7 @@ export default async function GuestHodPage() {
   const scheduledCount = camps.filter(c => c.status === 'scheduled' &&
     c.planned_date && String(c.planned_date) >= new Date().toISOString().slice(0, 10)).length;
   const draftsCount = camps.filter(c => c.status === 'draft').length;
-  const sentDates = camps.map(c => c.sent_at).filter(Boolean).sort() as string[];
+  const sentDates = camps.map(c => c.last_run_at).filter(Boolean).sort() as string[];
   const lastSent = sentDates.length > 0 ? sentDates[sentDates.length - 1] : null;
   const daysSinceLastSend = daysBetween(lastSent, todayMs);
   const contactableGuests = profiles.filter(p => p.email && String(p.email).includes('@')).length;
