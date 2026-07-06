@@ -106,8 +106,8 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
   const unanswered = reviews.filter(r => r.response_status === 'unanswered').length;
   const responseRate = total > 0 ? (responded / total) * 100 : 0;
 
-  // 4 canonical review sources — always shown in the table + tabs even when empty.
-  const CANONICAL_SOURCES = ['tripadvisor', 'booking', 'expedia', 'ctrip'] as const;
+  // 5 canonical review sources — always shown in the table + tabs even when empty.
+  const CANONICAL_SOURCES = ['google', 'tripadvisor', 'booking', 'expedia', 'ctrip'] as const;
 
   const sourceMix = new Map<string, { n: number; sum: number }>();
   for (const s of CANONICAL_SOURCES) sourceMix.set(s, { n: 0, sum: 0 });   // seed zeros
@@ -223,7 +223,9 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
               const key = li.channel;
               const label = SOURCE_LABEL[key] ?? key;
               const isGoogle = key === 'google';
-              const hasUrl = !!li.url;
+              // PBS 2026-07-06: fall back to a Google-search link for the hotel when no explicit listing URL exists.
+              const linkUrl = li.url || (isGoogle ? 'https://www.google.com/search?q=the+namkhan' : null);
+              const hasUrl = !!linkUrl;
               const summary = summaryMap[key];
               const platformReviews = summary?.total_reviews_on_platform ?? null;
               const platformRating = summary?.score_overall != null ? Number(summary.score_overall) : null;
@@ -238,7 +240,7 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
                     <span style={{ display:'inline-flex', alignItems:'center', gap:6, fontWeight:600, fontSize:12, color:INK }}>
                       <SourceBadge source={key} />{label}
                       {hasUrl && (
-                        <a href={li.url!} target="_blank" rel="noopener noreferrer" title={'Open ' + label + ' listing'}
+                        <a href={linkUrl!} target="_blank" rel="noopener noreferrer" title={'Open ' + label + ' listing'}
                           style={{ fontSize:13, color:INK_M, textDecoration:'none' }}>↗</a>
                       )}
                     </span>
