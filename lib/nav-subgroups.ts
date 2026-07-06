@@ -53,20 +53,9 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   },
 
   // ─── Operations ───────────────────────────────────────────
-  // PBS 2026-07-07 evening: hierarchical Operations nav. /operations = HoD chat.
-  // /operations/overview = dept landing whose sub-strip surfaces the 4 non-HoD
-  // groups (Departments/QA/Docs/Suppliers). Departments hub parent lands on
-  // Rooms and carries the 7-dept sub-tab strip on each child page.
-  {
-    parentHref: '/operations/overview',
-    members: ['/operations/overview'],
-    tabs: [
-      { label: 'Departments', href: '/operations/rooms'     },
-      { label: 'QA',          href: '/operations/sops'      },
-      { label: 'Docs',        href: '/operations/docs'      },
-      { label: 'Suppliers',   href: '/operations/suppliers' },
-    ],
-  },
+  // PBS 2026-07-07 late evening: Overview no longer shows Departments/Suppliers as
+  // sub-tabs — those are top-level. Overview stays a dept summary with no sub-strip.
+  // Departments hub still carries the 7-dept sub-tab strip on each child page.
   {
     parentHref: '/operations/rooms',
     members: [
@@ -136,6 +125,21 @@ export const NAV_SUBGROUPS: SubGroup[] = [
     members: ['/marketing/library', '/marketing/docs'],
     tabs: [
       { label: 'Docs', href: '/marketing/docs' },
+    ],
+  },
+
+  // ─── Administration (Finance) ─────────────────────────────
+  // PBS 2026-07-07 late evening: single "Finance" parent group with 4 sub-tabs.
+  // "Working capital" was an invention — removed. Cashflow/Variance/AP·AR pages
+  // remain reachable by URL but aren't surfaced in the strip.
+  {
+    parentHref: '/finance/pnl',
+    members: ['/finance/pnl', '/finance/ledger', '/finance/transactions', '/finance/budget'],
+    tabs: [
+      { label: 'P&L',          href: '/finance/pnl'          },
+      { label: 'Ledger',       href: '/finance/ledger'       },
+      { label: 'Transactions', href: '/finance/transactions' },
+      { label: 'Budget',       href: '/finance/budget'       },
     ],
   },
 ];
