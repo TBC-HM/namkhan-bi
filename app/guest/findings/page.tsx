@@ -35,7 +35,7 @@ export default async function FindingsPage() {
   const totalRows = themesCount + casesCount + npsCount;
 
   return (
-    <DashboardPage title="Guest · Findings" subtitle="What the data told us this week." tabs={GUEST_SUBPAGES.map(s => ({ key: s.href, label: s.label, href: s.href, active: s.href === "/guest/findings" }))}>
+    <DashboardPage title="Contacts · Findings" subtitle="What the data told us this week." tabs={GUEST_SUBPAGES.map(s => ({ key: s.href, label: s.label, href: s.href, active: s.href === "/guest/findings" }))}>
 
       <GuestStatusHeader
         top={
