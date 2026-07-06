@@ -3,15 +3,53 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-type ActorId = 'gmaps_contacts' | 'google_search' | 'booking' | 'email_social' | 'leads_finder' | 'email_verifier';
+type ActorId = 'gmaps_contacts' | 'google_search' | 'booking' | 'email_social' | 'leads_finder' | 'email_verifier' | 'linkedin_email';
 
-const ACTORS: Record<ActorId, { label: string; hint: string; costHint: string }> = {
-  gmaps_contacts: { label: 'Google Maps + Emails',        hint: 'Venue-level scrape (compass/google-maps-extractor). Best for finding local businesses.', costHint: '~$5 per 1,000 places' },
-  google_search:  { label: 'Google Search (SERP)',        hint: 'URLs only — no emails. Feed into Email Extractor next.',                 costHint: '~$0.5 per 100 hits' },
-  booking:        { label: 'Booking.com Hotels',          hint: 'Compset discovery — no emails.',                                          costHint: '~$2 per 100 hotels' },
-  email_social:   { label: 'Website Email Extractor',     hint: 'Feed a list of URLs → returns emails + socials per site.',                costHint: '~$0.5 per 100 URLs' },
-  leads_finder:   { label: 'B2B Leads Finder (Apollo alt)', hint: 'Best-value B2B lead source. Returns decision-makers by name + role + email at target companies. Ideal for tour operators/DMCs/luxury travel agents.', costHint: '~$1.50 per 1,000 leads · pay per event' },
-  email_verifier: { label: 'Email Verifier (paid, deep)', hint: 'Mailbox-level verify. Updates email_verify_status on matching rows. Only run AFTER MX check trimmed obvious dead ones — save money.',                             costHint: '~$100 per 1,000 verified · $0.10 each' },
+// User-friendly labels — PBS should never need to go to Apify to read slug names.
+// The technical slug is shown as a subtitle line under each actor so the mapping is visible.
+const ACTORS: Record<ActorId, { label: string; slug: string; hint: string; costHint: string }> = {
+  gmaps_contacts: {
+    label:    '1 · Find businesses on Google Maps (with emails)',
+    slug:     'compass~google-maps-extractor',
+    hint:     'Search a keyword + city → get real businesses with website, phone, address, category, and (when available) email. Best first step for local B2B discovery.',
+    costHint: '~$5 per 1,000 places',
+  },
+  google_search: {
+    label:    '2 · Google Search (URLs only, no emails)',
+    slug:     'apify~google-search-scraper',
+    hint:     'Feed keywords → get SERP result URLs. Use as a URL list to feed into "Extract emails from URLs" next.',
+    costHint: '~$0.50 per 100 hits',
+  },
+  booking: {
+    label:    '3 · Find hotels on Booking.com (compset only, no emails)',
+    slug:     'voyager~booking-scraper',
+    hint:     'Destination → list of hotels with prices, ratings, URLs. Used earlier to build the 218-hotel compset. No emails.',
+    costHint: '~$5 per 1,000 hotels',
+  },
+  email_social: {
+    label:    '4 · Extract emails from a list of website URLs',
+    slug:     'poidata~email-and-social-scraper',
+    hint:     'You give it a list of company websites → it crawls contact/about pages → returns emails + social handles per site.',
+    costHint: '~$0.50 per 100 URLs',
+  },
+  leads_finder: {
+    label:    '5 · Find B2B decision-makers by role (Apollo alternative)',
+    slug:     'code_crafter~leads-finder',
+    hint:     'Best-value action. Search by role (Marketing Director, CEO, etc.) + industry keyword → returns real named people with company + email + phone. Ideal for tour operators / DMCs / luxury travel agents.',
+    costHint: '~$1.50 per 1,000 leads · pay-per-event',
+  },
+  linkedin_email: {
+    label:    '6 · Scrape LinkedIn profiles → emails',
+    slug:     'dev_fusion~Linkedin-Profile-Scraper',
+    hint:     'Feed LinkedIn profile URLs or LinkedIn search URLs → returns person + email + role + company. Unlocks contacts where you only have a company website: search LinkedIn for "manager at <hotel>" and paste the search URL.',
+    costHint: '~$10 per 1,000 profiles',
+  },
+  email_verifier: {
+    label:    '7 · Verify email addresses (paid, deep mailbox check)',
+    slug:     'michael.g~email-verifier-validator',
+    hint:     'Paste emails to check whether each mailbox actually accepts mail. Updates email_verify_status on matching rows (valid / invalid / catch_all / role / disposable). Only run AFTER free MX check has trimmed dead domains.',
+    costHint: '~$100 per 1,000 · $0.10 each',
+  },
 };
 
 type Result = {
@@ -61,6 +99,10 @@ export default function ScrapeForm() {
   // Email Verifier inputs — paste emails to verify (or leave with a marker to verify DB unverified rows later)
   const [vEmails, setVEmails]           = useState('');
 
+  // LinkedIn scraper inputs — either profile URLs or search URLs
+  const [liUrls, setLiUrls]             = useState('https://www.linkedin.com/in/example\nhttps://www.linkedin.com/search/results/people/?keywords=manager%20Villa%20Maly');
+  const [liMax, setLiMax]               = useState(20);
+
   const buildInput = (): Record<string, unknown> => {
     switch (actor) {
       case 'gmaps_contacts':
@@ -96,6 +138,10 @@ export default function ScrapeForm() {
         };
       case 'email_verifier':
         return { emails: vEmails.split('\n').map(x => x.trim()).filter(Boolean) };
+      case 'linkedin_email': {
+        const urls = liUrls.split('\n').map(x => x.trim()).filter(Boolean);
+        return { profileUrls: urls, searchUrls: urls, maxItems: liMax, scrapeEmails: true };
+      }
     }
   };
 
@@ -133,18 +179,23 @@ export default function ScrapeForm() {
           ))}
         </select>
       </div>
-      <div style={{ fontSize:11, color:'#5A5A5A', marginTop:-6, marginBottom:10 }}>
-        {cfg.hint} · <span style={{ color:'#8B5A1C' }}>{cfg.costHint}</span>
+      <div style={{ fontSize:11, color:'#5A5A5A', marginTop:-6, marginBottom:6, lineHeight:1.5 }}>
+        {cfg.hint}
+      </div>
+      <div style={{ fontSize:10, color:'#8B5A1C', marginBottom:12 }}>
+        Cost: {cfg.costHint} · Apify actor: <code style={{ fontFamily:'monospace', background:'#F5EEDF', padding:'1px 5px', borderRadius:3 }}>{cfg.slug}</code>
       </div>
 
-      <div style={row}>
-        <label style={label}>Actor slug (optional)</label>
-        <input value={slugOverride} onChange={e => setSlugOverride(e.target.value)} disabled={running}
-          placeholder="e.g. lukaskrivka~google-maps-with-contact-details" style={input} />
-      </div>
-      <div style={{ fontSize:11, color:'#5A5A5A', marginTop:-6, marginBottom:10 }}>
-        Copy from Apify Console URL: <code>https://console.apify.com/actors/<b>&lt;owner&gt;~&lt;name&gt;</b></code>. Leave blank to use the default guess (may not exist).
-      </div>
+      <details style={{ marginBottom:12, fontSize:11 }}>
+        <summary style={{ cursor:'pointer', color:'#5A5A5A' }}>Advanced: override actor slug</summary>
+        <div style={{ marginTop:8 }}>
+          <input value={slugOverride} onChange={e => setSlugOverride(e.target.value)} disabled={running}
+            placeholder="e.g. lukaskrivka~google-maps-with-contact-details" style={{ ...input, width:'100%' }} />
+          <div style={{ fontSize:10, color:'#5A5A5A', marginTop:4 }}>
+            Leave blank to use the actor above. Fill only if you want to try a different Apify actor for this slot.
+          </div>
+        </div>
+      </details>
 
       {actor === 'gmaps_contacts' && (
         <>
@@ -189,6 +240,19 @@ export default function ScrapeForm() {
               rows={5} style={{ ...input, fontFamily:'inherit' }} /></div>
           <div style={row}><label style={label}>Max depth</label>
             <input type="number" min={1} max={4} value={eDepth} onChange={e => setEDepth(+e.target.value)} disabled={running} style={{ ...input, width:80 }} /></div>
+        </>
+      )}
+
+      {actor === 'linkedin_email' && (
+        <>
+          <div style={row}><label style={label}>LinkedIn URLs (one per line)</label>
+            <textarea value={liUrls} onChange={e => setLiUrls(e.target.value)} disabled={running}
+              rows={6} placeholder="https://www.linkedin.com/in/somename&#10;https://www.linkedin.com/search/results/people/?keywords=manager%20Villa%20Maly" style={{ ...input, fontFamily:'inherit' }} /></div>
+          <div style={row}><label style={label}>Max results per URL</label>
+            <input type="number" min={1} max={200} value={liMax} onChange={e => setLiMax(+e.target.value)} disabled={running} style={{ ...input, width:100 }} /></div>
+          <div style={{ fontSize:11, color:'#5A5A5A', marginTop:-6, marginBottom:10 }}>
+            Two input modes: paste direct profile URLs (fastest), or paste LinkedIn search-result URLs (broader — will scrape all profiles on that search page).
+          </div>
         </>
       )}
 
