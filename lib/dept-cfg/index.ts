@@ -556,7 +556,9 @@ const GUEST_CFG: DeptCfg = {
 // ─── Finance — Intel ─────────────────────────────────────────────────────
 const FINANCE_CFG: DeptCfg = {
   slug: 'finance',
-  pillTitle: 'Finance',
+  // PBS 2026-07-06: label renamed Finance → Administration. URL stays /finance
+  // to keep every existing deep link + bookmark alive.
+  pillTitle: 'Administration',
   hodName: 'Intel',
   hodEmoji: '$',
   ownerRole: 'finance_hod',
@@ -589,6 +591,9 @@ const FINANCE_CFG: DeptCfg = {
     // Now reachable as a sublink from the Legal landing page itself, plus
     // back-links on the read-only register pages.
     { label: 'Legal',   href: '/finance/legal'                          },
+    // PBS 2026-07-06: Docs registry moved out of Legal to its own top-level
+    // Administration button. Reuses /settings/documents implementation.
+    { label: 'Docs',    href: '/finance/docs'                           },
     // Messy data lifted out of submenu — now lives as the orange button
     // under the HoD chat input (see extraChatButtons below).
     // PBS 2026-06-09 #194 — Inventory + Suppliers moved from Operations to Finance.
@@ -718,7 +723,7 @@ const ARCHITECT_CFG: DeptCfg = {
     { label: 'Sales',      href: '/sales'      },
     { label: 'Marketing',  href: '/marketing'  },
     { label: 'Operations', href: '/operations' },
-    { label: 'Finance',    href: '/finance'    },
+    { label: 'Administration', href: '/finance' },
     { label: 'Guest',      href: '/guest'      },
     { label: 'IT',         href: '/it'         },
   ],
@@ -727,7 +732,7 @@ const ARCHITECT_CFG: DeptCfg = {
     { label: 'Sales',      href: '/sales'      },
     { label: 'Marketing',  href: '/marketing'  },
     { label: 'Operations', href: '/operations' },
-    { label: 'Finance',    href: '/finance'    },
+    { label: 'Administration', href: '/finance' },
     { label: 'Guest',      href: '/guest'      },
     { label: 'IT',         href: '/it'         },
   ],
