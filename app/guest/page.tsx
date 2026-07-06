@@ -79,7 +79,8 @@ export default async function GuestHodPage() {
       .select('sent_at, opened_at, unsubscribed_at')
       .gte('sent_at', since30dIso)
       .limit(50000),
-    sb.schema('marketing').from('reviews')
+    // Use the public bridge view (mkt_reviews) not schema('marketing') — PostgREST is public-only.
+    sb.from('mkt_reviews')
       .select('rating_norm, response_status, body, received_at')
       .eq('property_id', PROPERTY_ID)
       .limit(5000),
