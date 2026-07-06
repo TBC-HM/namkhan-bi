@@ -22,12 +22,16 @@
 'use client';
 
 import type { CSSProperties, ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
 import type { DashboardPageProps, DashboardTab } from '../types';
 import HeaderPills from '@/components/page/HeaderPills';
+import { findSubGroup } from '@/lib/nav-subgroups';
 import '../internal/tokens.css';
 
 export default function DashboardPage(props: DashboardPageProps) {
   const { title, subtitle, tabs, action, children, kpiTiles, hideWeather } = props;
+  const pathname = usePathname() ?? '';
+  const subGroup = findSubGroup(pathname);
   return (
     <div className="cockpit-design" style={S.shell}>
       <div style={S.stickyTop}>
@@ -43,9 +47,24 @@ export default function DashboardPage(props: DashboardPageProps) {
           {action && <div style={S.action}>{action}</div>}
         </header>
         {tabs && tabs.length > 0 && <TabStrip tabs={tabs} />}
+        {subGroup && <SubTabStrip pathname={pathname} tabs={subGroup.tabs} />}
       </div>
       <main style={S.body}>{children}</main>
     </div>
+  );
+}
+
+// PBS 2026-07-07: renders a second sticky sub-tab row when a subgroup matches
+// the current pathname. See lib/nav-subgroups.ts for the config.
+function SubTabStrip({ pathname, tabs }: { pathname: string; tabs: { label: string; href: string }[] }) {
+  return (
+    <nav style={S.subTabStrip} role="tablist" aria-label="Sub-section">
+      {tabs.map((t) => {
+        const active = pathname === t.href || pathname === t.href.split('?')[0];
+        const style: CSSProperties = { ...S.subTab, ...(active ? S.subTabActive : null) };
+        return <a key={t.href} href={t.href} role="tab" aria-selected={active} style={style}>{t.label}</a>;
+      })}
+    </nav>
   );
 }
 
@@ -91,14 +110,15 @@ function TabButton({ tab }: { tab: DashboardTab }) {
 }
 
 const S: Record<string, CSSProperties> = {
+  // PBS 2026-07-07: tightened top spacing — was 24/32/64 padding + gap 24.
   shell: {
     minHeight: '100vh',
-    padding: '24px 32px 64px',
+    padding: '12px 24px 48px',
     maxWidth: 1440,
     margin: '0 auto',
     display: 'flex',
     flexDirection: 'column',
-    gap: 24,
+    gap: 10,
     fontFamily: 'var(--sans, "Inter Tight", system-ui, sans-serif)',
   },
   stickyTop: {
@@ -106,11 +126,11 @@ const S: Record<string, CSSProperties> = {
     top: 0,
     zIndex: 20,
     background: 'var(--paper, #FFFFFF)',
-    paddingTop: 12,
-    paddingBottom: 8,
+    paddingTop: 6,
+    paddingBottom: 2,
     display: 'flex',
     flexDirection: 'column',
-    gap: 12,
+    gap: 6,
     borderBottom: '1px solid var(--hairline, #E6DFCC)',
   },
   pillsRow: {
@@ -118,20 +138,20 @@ const S: Record<string, CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'flex-end',
     gap: 8,
-    minHeight: 28,
+    minHeight: 24,
   },
-  topBar: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' },
-  titleStack: { display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 },
-  title: { margin: 0, fontSize: 28, fontWeight: 700, color: 'var(--ink, #1B1B1B)' },
-  subtitle: { margin: 0, fontSize: 13, color: 'var(--ink-soft, #5A5A5A)' },
+  topBar: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' },
+  titleStack: { display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 },
+  title: { margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--ink, #1B1B1B)' },
+  subtitle: { margin: 0, fontSize: 12, color: 'var(--ink-soft, #5A5A5A)' },
   action: { display: 'flex', alignItems: 'center', gap: 8 },
-  tabStrip: { display: 'flex', alignItems: 'center', gap: 12, borderBottom: '1px solid var(--hairline, #E6DFCC)', flexWrap: 'wrap' },
+  tabStrip: { display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid var(--hairline, #E6DFCC)', flexWrap: 'wrap' },
   parentGroup: { display: 'flex', gap: 4, paddingRight: 12, borderRight: '1px solid var(--hairline, #E6DFCC)' },
   tabGroup: { display: 'flex', gap: 4, flexWrap: 'wrap', flex: 1 },
   parentLink: {
     background: 'transparent',
     border: 'none',
-    padding: '8px 0',
+    padding: '6px 0',
     fontSize: 12,
     fontWeight: 500,
     color: 'var(--ink-soft, #5A5A5A)',
@@ -143,7 +163,7 @@ const S: Record<string, CSSProperties> = {
   tab: {
     background: 'transparent',
     border: 'none',
-    padding: '8px 14px',
+    padding: '6px 12px',
     fontSize: 13,
     fontWeight: 500,
     color: 'var(--ink-soft, #5A5A5A)',
@@ -155,10 +175,35 @@ const S: Record<string, CSSProperties> = {
   tabActive: { color: 'var(--ink, #1B1B1B)', borderBottomColor: 'var(--primary, #1F3A2E)', fontWeight: 600 },
   tabInner: { display: 'inline-flex', alignItems: 'center', gap: 6 },
   tabCount: { fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', background: 'var(--bg, #F4EFE2)', borderRadius: 99, padding: '0 6px', fontWeight: 500 },
+  // PBS 2026-07-07: second sticky sub-strip. Slightly muted so main strip stays primary.
+  subTabStrip: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+    background: 'var(--surf-2, #FAFAF7)',
+    padding: '4px 8px',
+    borderRadius: 4,
+    marginTop: 2,
+  },
+  subTab: {
+    background: 'transparent',
+    border: 'none',
+    padding: '4px 10px',
+    fontSize: 12,
+    fontWeight: 500,
+    color: 'var(--ink-soft, #5A5A5A)',
+    cursor: 'pointer',
+    borderRadius: 3,
+    textDecoration: 'none',
+    fontFamily: 'inherit',
+  },
+  subTabActive: { color: 'var(--ink, #1B1B1B)', background: 'var(--paper, #FFFFFF)', border: '1px solid var(--hairline, #E6DFCC)', fontWeight: 600 },
   body: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
-    gap: 16,
+    gap: 10,
     alignItems: 'start',
+    marginTop: 4,
   },
 };
