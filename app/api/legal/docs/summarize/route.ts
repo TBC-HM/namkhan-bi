@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { extractText } from '@/lib/docs/extract';
-import { callAnthropic } from '@/lib/legal-memo';
+import { callAnthropic, isLlmOk } from '@/lib/legal-memo';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
 
   const userPrompt = `Document title: ${title}\nDocument filename: ${row.file_name ?? '—'}\nMIME: ${row.mime ?? '—'}\n\n--- Document text follows ---\n${clipped}`;
   const r = await callAnthropic({ systemPrompt: SYSTEM, userPrompt, maxTokens: 600 });
-  if (!r.ok) return NextResponse.json({ ok: false, error: r.error }, { status: 502 });
+  if (!isLlmOk(r)) return NextResponse.json({ ok: false, error: r.error }, { status: 502 });
 
   const summary = r.text.trim();
 
