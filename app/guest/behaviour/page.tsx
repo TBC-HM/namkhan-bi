@@ -285,13 +285,6 @@ export default async function GuestBehaviourPage({ searchParams }: Props) {
         subtitle="Retention cockpit — who's staying, who's slipping, who to save. Second dimension: on-site spending."
         tabs={tabs}
       >
-        {/* Note about conclusions moving to HoD */}
-        <div style={{ gridColumn: '1 / -1' }}>
-          <div style={{ padding: '8px 12px', background: '#FAFAF7', border: '1px dashed #E6DFCC', borderRadius: 4, fontSize: 11, color: '#5A5A5A' }}>
-            <strong>Where did the conclusions go?</strong> Consolidated to the <a href="/guest" style={{ color: '#1F3A2E', textDecoration: 'underline', textDecorationColor: '#C79A6B' }}>HoD page</a> — one department view, all signals in one place.
-          </div>
-        </div>
-
         {/* KPI STRIP */}
         <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
           {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
