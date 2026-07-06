@@ -40,14 +40,17 @@ type ScopeShape = {
 
 // PBS 2026-05-09: /agents stripped — agents are only reachable via /cockpit.
 // Pages still exist for direct URL access.
+// PBS 2026-07-06 evening: order is Overview · Today · Actions · Revenue · Marketing · Contacts · Operations · Finance.
+// Contacts is the renamed Guest area — inserted between Marketing and Operations.
 const ITEMS: TopNavItem[] = [
   { href: '/overview',    title: 'Overview',          sub: 'Owner' },
   { href: '/today',       title: "Today's Snapshot",  sub: 'Operations',         deptKeys: ['front_office','housekeeping','kitchen','spa','maintenance','grounds','boat','activities','roots_service','security'] },
   { href: '/actions',     title: 'Action Plans',      sub: 'Recommendations' },
   { href: '/revenue',     title: 'Revenue',           sub: 'Management',         deptKeys: ['revenue','sales_marketing'] },
-  { href: '/departments', title: 'Departments',       sub: 'F&B · Spa · Activities', deptKeys: ['front_office','housekeeping','kitchen','spa','maintenance','grounds','boat','activities','roots_service','security'] },
-  { href: '/finance',     title: 'Finance',           sub: 'P&L · Budget · Ledger', deptKeys: ['finance'] },
   { href: '/marketing',   title: 'Marketing',         sub: 'Channels · Reviews', deptKeys: ['marketing','sales_marketing'] },
+  { href: '/guest',       title: 'Contacts',          sub: 'Guests · Prospects', deptKeys: ['sales_marketing','marketing','guest'] },
+  { href: '/departments', title: 'Operations',        sub: 'F&B · Spa · Activities', deptKeys: ['front_office','housekeeping','kitchen','spa','maintenance','grounds','boat','activities','roots_service','security'] },
+  { href: '/finance',     title: 'Finance',           sub: 'P&L · Budget · Ledger', deptKeys: ['finance'] },
 ];
 
 export default function TopNav() {
