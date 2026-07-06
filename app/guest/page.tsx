@@ -274,7 +274,7 @@ async function renderHodBody() {
   const newsletterCtx: NewsletterContext = {
     scheduledCount, draftsCount,
     daysSinceLastSend,
-    sends30d: 0, sent30d: sent30, unsub30d, opens30d: opens30, openRate30d,
+    sends30d: 0, sent30d: sent30, unsub30d: unsub30, opens30d: opens30, openRate30d,
     unsubRate30d, contactableGuests, totalGuests,
     failedSends24h: 0, // wire when guest.campaign_recipients has failure timestamp
   };
