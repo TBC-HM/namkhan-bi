@@ -207,27 +207,26 @@ const REVENUE_CFG: DeptCfg = {
   chatPlaceholder: 'e.g. how are we pacing for next weekend?',
   storageKeyPrefix: 'rev',
   subPages: [
-    // PBS 2026-05-15: HoD entry first — pressing it opens Vector's chat
-    // (the Revenue HoD landing page already renders the HoD chat shell).
-    { label: 'HoD',        href: '/revenue'           },
-    { label: 'Pulse',      href: '/revenue/pulse'     },
-    { label: 'Demand',     href: '/revenue/demand'    },
-    { label: 'Pace',       href: '/revenue/pace'      },
-    { label: 'Pickup',     href: '/revenue/pickup'    },
-    { label: 'Rooms',      href: '/revenue/rooms'     },
-    { label: 'Channels',      href: '/revenue/channels'      },
-    { label: 'Cancellations', href: '/revenue/cancellations' },
-    { label: 'Rate Plans',    href: '/revenue/rateplans'     },
-    { label: 'Markets',    href: '/revenue/markets'   },
-    // PBS 2026-05-15: Pricing renamed to Calendar; the page now hosts
-    // two tabs: Pricing (rate grid) + Density (country-holidays overlay).
-    { label: 'Calendar',   href: '/revenue/pricing'   },
-    // PBS 2026-07-06 pm: Flights moved from top-nav to a sub-tab of Calendar → link on /revenue/pricing.
-    // Direct URL still works: /revenue/flights.
-    { label: 'Comp Set',   href: '/revenue/compset'   },
-    // PBS 2026-05-19: registry-driven drill pages (leakage + channel mix).
-    { label: 'Leakage',    href: '/revenue/leakage'   },
-    { label: 'Parity',     href: '/revenue/parity'    },
+    // PBS 2026-07-06 late evening: canonical Revenue strip per PBS list.
+    // Order matches Marketing so operators see one consistent nav pattern.
+    // Existing revenue-management pages (Pulse/Pace/Channels/Rate Plans/etc.)
+    // still exist at their URLs — reachable via the HoD landing.
+    { label: 'Overview',          href: '/revenue'                 },
+    { label: 'Info',              href: '/revenue/info'            },
+    { label: 'Acquisition',       href: '/revenue/acquisition'     },
+    { label: 'Campaigns',         href: '/revenue/campaigns'       },
+    { label: 'Funnels',           href: '/revenue/funnels'         },
+    { label: 'Prospects',         href: '/revenue/prospects'       },
+    { label: 'Products & Offers', href: '/revenue/offers'          },
+    { label: 'Compiler',          href: '/revenue/compiler'        },
+    { label: 'Content',           href: '/revenue/content'         },
+    { label: 'Media',             href: '/revenue/media'           },
+    { label: 'Social',            href: '/revenue/social'          },
+    { label: 'Digital',           href: '/revenue/digital'         },
+    { label: 'Web',               href: '/revenue/web'             },
+    { label: 'Library',           href: '/revenue/library'         },
+    { label: 'Docs',              href: '/revenue/docs'            },
+    { label: 'Reports',           href: '/h/260955/reports?dept=revenue' },
   ],
   quickChips: [
     { label: 'Pulse',    href: '/revenue/pulse'    },
