@@ -68,7 +68,30 @@ export default function ConclusionBlock({
     catch { /* ignore */ }
   };
 
-  const dismiss = (sig: string) => { const next = new Set(dismissed); next.add(sig); persist(next); };
+  // Track which insight has the dismiss-reason picker open + selected reason
+  const [pickerFor, setPickerFor] = useState<string | null>(null);
+
+  const DISMISS_REASONS = [
+    { key: 'handled',      label: 'Already handled'    },
+    { key: 'not_relevant', label: 'Not relevant here'  },
+    { key: 'threshold',    label: 'Threshold too tight'},
+    { key: 'false_signal', label: 'Wrong signal'       },
+  ];
+
+  const dismissWithReason = async (sig: string, reasonKey: string, insightKey?: string) => {
+    const next = new Set(dismissed); next.add(sig); persist(next);
+    setPickerFor(null);
+    // Fire-and-forget to record why. Table + RPC come next turn — for now the endpoint
+    // may 404 harmlessly; the UI does the right thing regardless.
+    try {
+      await fetch('/api/guardrail/dismiss', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ insight_key: insightKey ?? sig, reason: reasonKey }),
+        keepalive: true,
+      });
+    } catch { /* ignore */ }
+  };
   const restoreAll = () => persist(new Set());
 
   const sorted = useMemo(
@@ -137,12 +160,30 @@ export default function ConclusionBlock({
                   )}
                 </div>
                 <button
-                  onClick={() => dismiss(sig)}
+                  onClick={() => setPickerFor(pickerFor === sig ? null : sig)}
                   aria-label="Dismiss"
-                  title="Dismiss this signal — comes back when the condition re-fires"
+                  title="Dismiss with a reason — helps fine-tune the guardrail thresholds"
                   style={dismissBtn}
                 >×</button>
               </div>
+
+              {pickerFor === sig && (
+                <div style={pickerBox}>
+                  <div style={{ fontSize: 10, color: '#5A5A5A', letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 6 }}>
+                    Why are you dismissing this?
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {DISMISS_REASONS.map(r => (
+                      <button
+                        key={r.key}
+                        onClick={() => dismissWithReason(sig, r.key, ins.key)}
+                        style={reasonChip}
+                      >{r.label}</button>
+                    ))}
+                    <button onClick={() => setPickerFor(null)} style={{ ...reasonChip, background: 'transparent', border: 'none', color: '#5A5A5A' }}>cancel</button>
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}
@@ -163,6 +204,8 @@ const pill: React.CSSProperties = { display: 'inline-block', padding: '3px 8px',
 const row: React.CSSProperties = { padding: '8px 10px', borderBottom: '1px solid #F5F0E1' };
 const restoreBtn: React.CSSProperties = { fontSize: 9, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', border: '1px solid #E6DFCC', background: '#FFFFFF', color: '#5A5A5A', padding: '2px 6px', borderRadius: 3, cursor: 'pointer' };
 const dismissBtn: React.CSSProperties = { flexShrink: 0, width: 18, height: 18, border: '1px solid transparent', background: 'transparent', color: '#8A8A8A', fontSize: 14, cursor: 'pointer', borderRadius: 3, lineHeight: 1, padding: 0 };
+const pickerBox: React.CSSProperties = { marginTop: 6, marginLeft: 16, padding: '8px 10px', background: '#FAFAF7', border: '1px solid #E6DFCC', borderRadius: 4 };
+const reasonChip: React.CSSProperties = { fontSize: 10, fontWeight: 500, padding: '4px 8px', background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 3, cursor: 'pointer', color: '#1B1B1B' };
 const linkBtn = (color: string): React.CSSProperties => ({
   display: 'inline-block', padding: '2px 8px',
   border: '1px solid ' + color, color: color, background: '#FFFFFF',
