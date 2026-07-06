@@ -23,10 +23,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: 'invalid_email' }, { status: 400 });
   }
 
-  const sb = getSupabaseAdmin();
-  const { data: keyData, error: keyErr } = await sb.rpc('fn_read_vault_secret', { p_name: 'resend_api_key' });
-  if (keyErr || !keyData) return NextResponse.json({ ok: false, error: 'resend_key_missing', detail: keyErr?.message }, { status: 500 });
-  const resendKey = String(keyData);
+  // Resend key: Vercel env first (that's where the newsletter engine reads it), Vault as fallback.
+  let resendKey = process.env.RESEND_API_KEY ?? process.env.RESEND_TOKEN ?? '';
+  if (!resendKey) {
+    const sb = getSupabaseAdmin();
+    const { data: keyData } = await sb.rpc('fn_read_vault_secret', { p_name: 'resend_api_key' });
+    resendKey = keyData ? String(keyData) : '';
+  }
+  if (!resendKey) return NextResponse.json({ ok: false, error: 'resend_key_missing', detail: 'RESEND_API_KEY not set in Vercel env or Vault' }, { status: 500 });
 
   const html = `<!doctype html><html><body style="font-family: -apple-system, system-ui, sans-serif; color:#1B1B1B; background:#FFFFFF; padding:24px;">
   <h2 style="color:#084838; margin:0 0 12px; font-size:18px;">${escapeHtml(body.html_bullets[0] ?? 'Reputation summary')}</h2>
