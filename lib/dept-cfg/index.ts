@@ -420,20 +420,18 @@ const OPERATIONS_CFG: DeptCfg = {
   hodTagline: 'Ask Forge anything about live ops.',
   chatPlaceholder: 'e.g. is the spa fully booked this week?',
   storageKeyPrefix: 'ops',
+  // PBS 2026-07-07 evening: canonical Operations nav — mirrors Revenue/Marketing
+  // hierarchical pattern. HoD chat cockpit + Overview landing + Departments hub
+  // (with sub-tabs for Rooms/F&B/Spa/Activities/Retail/Transport/Other) + QA/Docs/Suppliers.
+  // Sub-tabs render inline on each parent's landing via nav-subgroups.
   subPages: [
-    // PBS 2026-05-15: Staff moved to Finance · HR (people-cost is a finance
-    // concern, not an operations one). Snapshot renamed HoD.
     { label: 'HoD',              href: '/operations'                 },
-    // PBS 2026-06-11 #211 — Rooms ops view (similar anatomy to F&B page).
-    { label: 'Rooms',            href: '/operations/rooms'           },
-    { label: 'F&B',              href: '/operations/restaurant'      },
-    { label: 'Spa',              href: '/operations/spa'             },
-    { label: 'Activities',       href: '/operations/activities'      },
-    { label: 'Retail',           href: '/operations/retail'          },
-    { label: 'Transport',        href: '/operations/transport'       },
-    { label: 'Other',            href: '/operations/other'           },
-    // PBS 2026-07-06 evening: SOPs → QA (broader scope: SOPs + quality audits).
-    { label: 'QA',               href: '/operations/sops'           },
+    { label: 'Overview',         href: '/operations/overview'        },
+    // Departments parent lands on Rooms so a click always opens something useful.
+    { label: 'Departments',      href: '/operations/rooms'           },
+    { label: 'QA',               href: '/operations/sops'            },
+    { label: 'Docs',             href: '/operations/docs'            },
+    { label: 'Suppliers',        href: '/operations/suppliers'       },
     // PBS 2026-05-16: Reports always sits flush-right (SubPagesStrip detects label).
     { label: 'Reports',          href: '/h/260955/reports?dept=operations' },
   ],
@@ -446,6 +444,7 @@ const OPERATIONS_CFG: DeptCfg = {
     { label: 'Retail',     href: '/operations/retail'      },
     { label: 'Transport',  href: '/operations/transport'   },
     { label: 'Other',      href: '/operations/other'       },
+    { label: 'Suppliers',  href: '/operations/suppliers'   },
   ],
   defaultAttn: [
     { id: 'l1', label: 'F&B waste +18% vs last week',         severity: 'medium', kind: 'leakage'     },
