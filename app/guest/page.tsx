@@ -88,18 +88,18 @@ export default async function GuestHodPage() {
       .limit(500),
   ]);
 
-  const pick = <T,>(idx: number): T[] => {
+  function pick(idx: number): unknown[] {
     const r = results[idx];
     if (r.status !== 'fulfilled') return [];
-    // @ts-expect-error supabase result shape
-    return (r.value.data ?? []) as T[];
-  };
-  const profiles: ProfileRow[]   = pick<ProfileRow>(0);
-  const res:      ResRow[]       = pick<ResRow>(1);
-  const dir:      DirRow[]       = pick<DirRow>(2);
-  const recips:   RecipientRow[] = pick<RecipientRow>(3);
-  const reviews:  ReviewRow[]    = pick<ReviewRow>(4);
-  const camps:    CampaignRow[]  = pick<CampaignRow>(5);
+    const val = r.value as { data?: unknown[] | null } | null;
+    return (val?.data ?? []) as unknown[];
+  }
+  const profiles: ProfileRow[]   = pick(0) as ProfileRow[];
+  const res:      ResRow[]       = pick(1) as ResRow[];
+  const dir:      DirRow[]       = pick(2) as DirRow[];
+  const recips:   RecipientRow[] = pick(3) as RecipientRow[];
+  const reviews:  ReviewRow[]    = pick(4) as ReviewRow[];
+  const camps:    CampaignRow[]  = pick(5) as CampaignRow[];
 
   // ─── RETENTION context ───
   const totalGuests = profiles.length;
