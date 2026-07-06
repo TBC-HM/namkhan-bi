@@ -36,40 +36,29 @@ export default function SentimentContainer({ reviews }: { reviews: Review[] }) {
   const [expanded, setExpanded] = useState(true);
 
   const cloud = useMemo(() => {
-    // Global counts + counts within positive/negative buckets, so we can tell which side each word leans.
+    // Count independently per bucket so low-count negative words aren't drowned by huge positive frequencies.
     const posCounts = new Map<string, number>();
     const negCounts = new Map<string, number>();
     for (const r of reviews) {
       const n = Number(r.rating_norm);
       const text = (r.title ?? '') + ' ' + (r.body ?? '');
       const words = tokenize(text);
-      const target = n >= 4 ? posCounts : (n < 3 ? negCounts : null);
-      if (!target) continue;   // neutral reviews don't contribute
-      for (const w of words) target.set(w, (target.get(w) ?? 0) + 1);
+      if (n >= 4)      for (const w of words) posCounts.set(w, (posCounts.get(w) ?? 0) + 1);
+      else if (n < 3)  for (const w of words) negCounts.set(w, (negCounts.get(w) ?? 0) + 1);
+      // neutral reviews don't contribute to either cloud
     }
-    // Merge: each word gets total count + bias (positive share) → determines colour
-    const merged = new Map<string, { total: number; posShare: number }>();
-    for (const [w, c] of posCounts) merged.set(w, { total: c, posShare: 1 });
-    for (const [w, c] of negCounts) {
-      const cur = merged.get(w);
-      if (cur) merged.set(w, { total: cur.total + c, posShare: cur.total / (cur.total + c) });
-      else     merged.set(w, { total: c, posShare: 0 });
-    }
-    // Filter noise + sort by frequency desc
-    const rows = Array.from(merged.entries())
-      .filter(([,v]) => v.total >= 1)
-      .sort((a, b) => b[1].total - a[1].total)
-      .slice(0, 60);
-    if (rows.length === 0) return { pos: [] as Array<[string, number]>, neg: [] as Array<[string, number]> };
-    const maxCount = Math.max(...rows.map(([, v]) => v.total));
-    const pos: Array<[string, number]> = [];
-    const neg: Array<[string, number]> = [];
-    for (const [w, v] of rows) {
-      const size = 12 + Math.round((v.total / maxCount) * 30); // 12-42px font
-      if (v.posShare >= 0.5) pos.push([w, size]);
-      else                    neg.push([w, size]);
-    }
-    return { pos, neg };
+    // For each bucket: pick top-N words, scale font size independently
+    const takeTop = (m: Map<string, number>, limit: number): Array<[string, number]> => {
+      const rows = Array.from(m.entries()).sort((a, b) => b[1] - a[1]).slice(0, limit);
+      if (rows.length === 0) return [];
+      const maxC = rows[0][1];
+      return rows.map(([w, c]) => {
+        // 14-42px scaled by frequency within THIS bucket. Even a lone word gets 22px.
+        const size = maxC === 1 ? 22 : 14 + Math.round((c / maxC) * 26);
+        return [w, size] as [string, number];
+      });
+    };
+    return { pos: takeTop(posCounts, 40), neg: takeTop(negCounts, 25) };
   }, [reviews]);
 
   const totalPos = reviews.filter(r => Number(r.rating_norm) >= 4).length;
@@ -121,8 +110,11 @@ export default function SentimentContainer({ reviews }: { reviews: Review[] }) {
             padding:'16px 8px',
             lineHeight:1.15,
           }}>
-            {cloud.neg.length === 0 && (
+            {cloud.neg.length === 0 && totalNeg === 0 && (
               <div style={{ fontSize:11, color:'#8A8A8A', fontStyle:'italic' }}>No negative-review vocabulary — all reviews are 4★+.</div>
+            )}
+            {cloud.neg.length === 0 && totalNeg > 0 && (
+              <div style={{ fontSize:11, color:'#8A8A8A', fontStyle:'italic' }}>{totalNeg} ★{'<'}3 reviews found but no meaningful vocabulary yet — reviewer names + bodies may be empty.</div>
             )}
             {cloud.neg.map(([w, size], i) => (
               <span key={'neg-'+i} style={{
