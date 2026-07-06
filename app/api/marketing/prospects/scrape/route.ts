@@ -22,7 +22,8 @@ type ActorId =
   | 'booking'             // Booking.com hotel listings (compset)
   | 'email_social'        // Enrich URLs → emails + socials
   | 'leads_finder'        // code_crafter/leads-finder — Apollo alternative, B2B decision-makers
-  | 'email_verifier';     // michael.g/email-verifier-validator — verify list of emails (paid, deep)
+  | 'email_verifier'      // michael.g/email-verifier-validator — verify list of emails (paid, deep)
+  | 'linkedin_email';     // dev_fusion/Linkedin-Profile-Scraper — LinkedIn profile → email extraction (no cookies)
 
 interface ScrapeInput {
   actor: ActorId;
@@ -42,6 +43,7 @@ const ACTORS: Record<ActorId, { slug: string; label: string }> = {
   email_social:   { slug: 'poidata~email-and-social-scraper',                label: 'Website Email Extractor' },
   leads_finder:   { slug: 'code_crafter~leads-finder',                       label: 'B2B Leads Finder (Apollo alternative)' },
   email_verifier: { slug: 'michael.g~email-verifier-validator',              label: 'Email Verifier (paid, deep)' },
+  linkedin_email: { slug: 'dev_fusion~Linkedin-Profile-Scraper',             label: 'LinkedIn Profile → Emails (no cookies)' },
 };
 
 // -----------------------------------------------------------------------------
@@ -172,6 +174,31 @@ function mapLeadsFinder(item: Record<string, unknown>): PendingRow[] {
   return emails.map((e) => ({ ...base, email: e }));
 }
 
+// LinkedIn profile scraper (dev_fusion/Linkedin-Profile-Scraper) returns per-person rows:
+//   { firstName, lastName, fullName, headline, profileUrl, currentJob{title, company, companyUrl},
+//     emails[], emailsPersonal[], phone, location, country, industry }
+function mapLinkedinEmail(item: Record<string, unknown>): PendingRow[] {
+  const emails = pickEmails(item);
+  const first = (item.firstName as string) || '';
+  const last  = (item.lastName as string) || '';
+  const fullName = (item.fullName as string) || `${first} ${last}`.trim() || null;
+  const cj = item.currentJob as Record<string, unknown> | undefined;
+  const title = (item.headline as string) || (cj?.title as string) || null;
+  const company = (cj?.company as string) || (item.currentCompany as string) || null;
+  const website = (cj?.companyUrl as string) || (item.companyWebsite as string) || null;
+  const base = {
+    company: fullName ? `${fullName} · ${company ?? '?'}${title ? ' · ' + title : ''}` : company,
+    website,
+    phone: (item.phone as string) || null,
+    country: ((item.country as string) || '').slice(0, 2).toUpperCase() || null,
+    notes: [title, item.industry, item.location, item.profileUrl].filter(Boolean).join(' · '),
+    prospect_kind: 'contact_with_email',
+    import_source_file: 'apify_linkedin_email',
+  };
+  if (emails.length === 0) return [{ ...base, email: null, prospect_kind: 'company_pending_email' }];
+  return emails.map((e) => ({ ...base, email: e }));
+}
+
 function mapItem(actor: ActorId, item: Record<string, unknown>): PendingRow[] {
   switch (actor) {
     case 'gmaps_contacts': return mapGmaps(item);
@@ -179,6 +206,7 @@ function mapItem(actor: ActorId, item: Record<string, unknown>): PendingRow[] {
     case 'booking':        return mapBooking(item);
     case 'email_social':   return mapEmailSocial(item);
     case 'leads_finder':   return mapLeadsFinder(item);
+    case 'linkedin_email': return mapLinkedinEmail(item);
     case 'email_verifier': return []; // verifier writes updates, not new rows — see post-run block
   }
 }
