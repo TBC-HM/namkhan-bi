@@ -17,6 +17,7 @@ import Card from '@/components/sections/Card';
 import Insight from '@/components/sections/Insight';
 import KpiCard from '@/components/kpi/KpiCard';
 import { DailyRevenueChart } from '@/components/charts/DailyRevenueChart';
+import DismissedContainer from '@/components/DismissedContainer';
 import { PILLAR_HEADER } from '@/components/nav/subnavConfig';
 import {
   getOverviewLive, getOverviewKpis, getOverviewDqSummary,
@@ -211,6 +212,12 @@ export default async function OverviewPage({ searchParams }: Props) {
             Cancellation {Number(live?.cancellation_pct ?? 0).toFixed(1)}% — within tolerance.
           </Insight>
         )}
+
+        {/* PBS 2026-07-07: guardrail dismissal ledger — CEO can see WHICH rules
+            operators silence + WHY, so guardrails get tuned. */}
+        <div style={{ marginTop: 16 }}>
+          <DismissedContainer />
+        </div>
       </div>
     </>
   );
