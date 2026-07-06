@@ -30,9 +30,10 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
   //   Demand & Pace     → Demand / Pace / Pickup / Cancellations
   //   Performance       → Rooms / Channels / Rate Plans / Markets
   //   Market & Control  → Comp Set / Leakage / Parity
-  // PBS 2026-07-07: 4 parents. Pulse & Calendar are sub-tabs of Overview (see nav-subgroups.ts).
+  // PBS 2026-07-07 evening: HoD + Overview split. Pulse & Calendar are sub-tabs of Overview.
   revenue: [
-    { href: '/revenue',              label: 'Overview' },
+    { href: '/revenue',              label: 'HoD' },
+    { href: '/revenue/overview',     label: 'Overview' },
     { href: '/revenue/demand',       label: 'Demand & Pace' },
     { href: '/revenue/rooms',        label: 'Performance' },
     { href: '/revenue/compset',      label: 'Market & Control' },
@@ -63,7 +64,9 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
   //   Digital           → Web
   //   Library           → Docs
   marketing: [
-    { href: '/marketing',              label: 'Overview' },
+    // PBS 2026-07-07 evening: HoD + Overview split.
+    { href: '/marketing',              label: 'HoD' },
+    { href: '/marketing/overview',     label: 'Overview' },
     { href: '/marketing/acquisition',  label: 'Acquisition' },
     { href: '/marketing/offers',       label: 'Products & Offers' },
     { href: '/marketing/content',      label: 'Content' },
