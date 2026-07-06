@@ -25,18 +25,25 @@ export interface SubNavTab {
 }
 
 export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
-  // ===== 01 Revenue =====
-  // Redesign v2 (Federico, 30 Apr 2026): 7 tabs — Pulse, Pace, Channels, Rate Plans, Pricing, Comp Set, Agents.
-  // Old routes (Snapshot, Demand, Rates, Inventory, Promotions) kept reachable during migration; cleanup deploy will remove.
+  // ===== 01 Revenue (PBS 2026-07-06 late evening — canonical strip) =====
+  // Order matches Marketing so operators see one consistent nav pattern.
+  // Existing revenue-management pages (Pulse/Pace/Channels/etc.) still exist at their URLs.
   revenue: [
-    { href: '/revenue/pulse',       label: 'Pulse' },
-    { href: '/revenue/pace',        label: 'Pace' },
-    { href: '/revenue/channels',    label: 'Channels' },
-    { href: '/revenue/rateplans',   label: 'Rate Plans' },
-    { href: '/revenue/pricing',     label: 'Pricing' },
-    { href: '/revenue/compset',     label: 'Comp Set' },
-    { href: '/revenue/parity',      label: 'Parity',     isNew: true },
-    // PBS 2026-05-09: agents only reachable via /cockpit.
+    { href: '/revenue',              label: 'Overview' },
+    { href: '/revenue/info',         label: 'Info' },
+    { href: '/revenue/acquisition',  label: 'Acquisition',       isNew: true },
+    { href: '/revenue/campaigns',    label: 'Campaigns',         isNew: true },
+    { href: '/revenue/funnels',      label: 'Funnels',           isNew: true },
+    { href: '/revenue/prospects',    label: 'Prospects',         isNew: true },
+    { href: '/revenue/offers',       label: 'Products & Offers', isNew: true },
+    { href: '/revenue/compiler',     label: 'Compiler',          isNew: true },
+    { href: '/revenue/content',      label: 'Content',           isNew: true },
+    { href: '/revenue/media',        label: 'Media',             isNew: true },
+    { href: '/revenue/social',       label: 'Social',            isNew: true },
+    { href: '/revenue/digital',      label: 'Digital',           isNew: true },
+    { href: '/revenue/web',          label: 'Web',               isNew: true },
+    { href: '/revenue/library',      label: 'Library',           isNew: true },
+    { href: '/revenue/docs',         label: 'Docs',              isNew: true },
   ],
 
   // ===== 02 Sales (added 2026-04-30) =====
