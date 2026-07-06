@@ -508,8 +508,8 @@ const GUEST_CFG: DeptCfg = {
     { label: 'Directory',   href: '/guest/directory'   },
     { label: 'Newsletters', href: '/guest/newsletters' },
     { label: 'Reputation',  href: '/guest/reputation'  },
-    { label: 'Journey',     href: '/guest/journey'     },
-    { label: 'Loyalty',     href: '/guest/loyalty'     },
+    // PBS 2026-07-06: Journey + Loyalty merged into Behaviour (retention cockpit).
+    { label: 'Behaviour',   href: '/guest/behaviour'   },
     { label: 'Findings',    href: '/guest/findings'    },
     // PBS 2026-05-16: Reports always sits flush-right (SubPagesStrip detects label).
     { label: 'Reports',     href: '/h/260955/reports?dept=guest' },
@@ -517,8 +517,7 @@ const GUEST_CFG: DeptCfg = {
   quickChips: [
     { label: 'Directory',  href: '/guest/directory'  },
     { label: 'Reputation', href: '/guest/reputation' },
-    { label: 'Journey',    href: '/guest/journey'    },
-    { label: 'Loyalty',    href: '/guest/loyalty'    },
+    { label: 'Behaviour',  href: '/guest/behaviour'  },
     { label: 'Findings',   href: '/guest/findings'   },
   ],
   defaultAttn: [
@@ -528,9 +527,9 @@ const GUEST_CFG: DeptCfg = {
     { id: 'o2', label: 'Loyalty member 3rd stay — upgrade window',     severity: 'low',    kind: 'opportunity' },
   ],
   defaultDocs: [
-    { id: 'd1', label: 'Guest Journey Map 2026', href: '/guest/journey'    },
-    { id: 'd2', label: 'Loyalty tier playbook',  href: '/guest/loyalty'    },
-    { id: 'd3', label: 'Pre-arrival template',   href: '/guest/directory'  },
+    { id: 'd1', label: 'Retention cockpit',     href: '/guest/behaviour'   },
+    { id: 'd2', label: 'Guest directory',       href: '/guest/directory'   },
+    { id: 'd3', label: 'Reputation',            href: '/guest/reputation'  },
   ],
   defaultTasks: [
     { id: 't1', label: 'Reply to TripAdvisor review',         done: false, created: TODAY },
@@ -540,10 +539,12 @@ const GUEST_CFG: DeptCfg = {
   attentionRoutes: [
     { matcher: 'review',     href: '/guest/reputation' },
     { matcher: 'reputation', href: '/guest/reputation' },
-    { matcher: 'no-show',    href: '/guest/findings'   },
+    { matcher: 'no-show',    href: '/guest/behaviour'  },
     { matcher: 'directory',  href: '/guest/directory'  },
-    { matcher: 'journey',    href: '/guest/journey'    },
-    { matcher: 'loyalty',    href: '/guest/loyalty'    },
+    { matcher: 'journey',    href: '/guest/behaviour'  },
+    { matcher: 'loyalty',    href: '/guest/behaviour'  },
+    { matcher: 'behaviour',  href: '/guest/behaviour'  },
+    { matcher: 'retention',  href: '/guest/behaviour'  },
     { matcher: 'vip',        href: '/guest/directory'  },
   ],
   defaultDrilldown: '/guest',
