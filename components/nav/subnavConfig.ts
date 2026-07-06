@@ -74,22 +74,17 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/marketing/library',      label: 'Library' },
   ],
 
-  // ===== 04 Operations =====
-  // Note: Front Office unfolded to its own top-level pillar 2026-05-01 (sibling of Sales/Marketing/Ops).
-  // Old /operations/frontoffice placeholder removed; redirect set in next.config.js.
-  // PBS 2026-06-29: Staff moved out of Operations into Finance · HR. /operations/staff
-  // still 307-redirects to /finance/hr (operations/staff/page.tsx).
+  // ===== 04 Operations (PBS 2026-07-07 evening — hierarchical) =====
+  // Mirrors Revenue/Marketing: HoD chat + Overview landing + Departments hub
+  // (parent lands on Rooms; sub-tabs render on child pages via nav-subgroups)
+  // + QA (SOPs) + Docs stub + Suppliers page.
   operations: [
-    { href: '/operations',                  label: 'Snapshot' },
-    // Today merged into /operations 2026-05-04 — /operations/today now 307-redirects.
-    { href: '/operations/restaurant',       label: 'F&B' },
-    { href: '/operations/spa',              label: 'Spa' },
-    { href: '/operations/activities',       label: 'Activities' },
-    { href: '/operations/events',           label: 'Events',     isNew: true },
-    // Housekeeping + Maintenance hidden — stub-only, hide until real content lands.
-    { href: '/operations/inventory',        label: 'Inventory' },
-    { href: '/operations/suppliers',        label: 'Suppliers',  isNew: true },
-    { href: '/operations/catalog-cleanup',  label: 'Catalog cleanup' },
+    { href: '/operations',              label: 'HoD' },
+    { href: '/operations/overview',     label: 'Overview' },
+    { href: '/operations/rooms',        label: 'Departments' },
+    { href: '/operations/sops',         label: 'QA' },
+    { href: '/operations/docs',         label: 'Docs' },
+    { href: '/operations/suppliers',    label: 'Suppliers',  isNew: true },
   ],
 
   // ===== 04b Front Office (added 2026-05-01) =====
