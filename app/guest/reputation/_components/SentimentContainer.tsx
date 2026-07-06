@@ -1,8 +1,7 @@
 'use client';
 // app/guest/reputation/_components/SentimentContainer.tsx
-// PBS 2026-07-06 v3: word-cloud style — negative words (red) at top, positive (green) at bottom.
-// Font size scales with word frequency. Fully dynamic — recomputed on every page load from live reviews.
-import { useMemo, useState } from 'react';
+// PBS 2026-07-06 v4: word cloud always expanded (no toggle) — positive top, negative bottom.
+import { useMemo } from 'react';
 
 type Review = {
   id: number; source: string; rating_norm: number | string | null;
@@ -33,7 +32,6 @@ function tokenize(s: string): string[] {
 }
 
 export default function SentimentContainer({ reviews }: { reviews: Review[] }) {
-  const [expanded, setExpanded] = useState(true);
 
   const cloud = useMemo(() => {
     // Count independently per bucket so low-count negative words aren't drowned by huge positive frequencies.
@@ -67,16 +65,14 @@ export default function SentimentContainer({ reviews }: { reviews: Review[] }) {
 
   return (
     <div style={box}>
-      <button onClick={() => setExpanded(!expanded)} style={header}>
+      <div style={header}>
         <span style={badgePill}>SENTIMENT · WORD CLOUD</span>
         <span style={{ marginLeft:'auto', fontSize:11, color:'#5A5A5A', fontWeight:400 }}>
           + {totalPos} pos · {totalNeu} neu · {totalNeg} neg
         </span>
-        <span style={{ fontSize:14 }}>{expanded ? '▾' : '▸'}</span>
-      </button>
+      </div>
 
-      {expanded && (
-        <div style={{ padding:16 }}>
+      <div style={{ padding:16 }}>
           {/* POSITIVE words — top, green */}
           <div style={{
             minHeight: 100,
@@ -132,12 +128,11 @@ export default function SentimentContainer({ reviews }: { reviews: Review[] }) {
             <span>Word size = frequency across {reviews.length} reviews.</span>
             <span>Green = ★4+ reviews · Red = ★{'<'}3 reviews.</span>
           </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 }
 
 const box: React.CSSProperties = { border:'1px solid #E6DFCC', borderRadius:6, background:'#FFFFFF', overflow:'hidden' };
-const header: React.CSSProperties = { display:'flex', alignItems:'center', gap:10, width:'100%', padding:'10px 14px', background:'#FAFAF7', border:'none', borderBottom:'1px solid #E6DFCC', cursor:'pointer', fontFamily:'inherit', textAlign:'left' };
+const header: React.CSSProperties = { display:'flex', alignItems:'center', gap:10, width:'100%', padding:'10px 14px', background:'#FAFAF7', borderBottom:'1px solid #E6DFCC' };
 const badgePill: React.CSSProperties = { display:'inline-block', padding:'4px 10px', fontSize:10, fontWeight:700, letterSpacing:'0.14em', color:'#FFFFFF', background:'#1B1B1B', borderRadius:99 };
