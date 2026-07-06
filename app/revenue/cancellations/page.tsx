@@ -108,58 +108,58 @@ export default async function CancellationsPage({
   const sdlyTo   = shiftYearIso(to,   -1);
 
   const [rows, sdlyRows, monthImpact, rateOverall, chanMonthly, bookedRows, rebookRows] = await Promise.all([
-    supabase.from('v_cancellations_detail')
+    Promise.resolve(supabase.from('v_cancellations_detail')
       .select('reservation_id, cancellation_date, check_in_date, days_to_arrival, nights, source_name, guest_country, room_type_name, market_segment, rate_plan, lost_revenue, lost_room_nights, dta_bucket, los_bucket')
       .eq('property_id', pid)
       .gte('cancellation_date', from)
       .lte('cancellation_date', to)
       .order('cancellation_date', { ascending: false })
-      .limit(2000)
+      .limit(2000))
       .then(r => (r.data ?? []) as CxlRow[]).catch(() => [] as CxlRow[]),
-    supabase.from('v_cancellations_detail')
+    Promise.resolve(supabase.from('v_cancellations_detail')
       .select('reservation_id, lost_revenue, lost_room_nights, nights, days_to_arrival')
       .eq('property_id', pid)
       .gte('cancellation_date', sdlyFrom)
       .lte('cancellation_date', sdlyTo)
-      .limit(2000)
+      .limit(2000))
       .then(r => (r.data ?? []) as Array<{ lost_revenue: number; lost_room_nights: number; nights: number; days_to_arrival: number | null }>).catch(() => []),
-    supabase.from('v_cancellation_impact_monthly')
+    Promise.resolve(supabase.from('v_cancellation_impact_monthly')
       .select('cancel_year_month, cancellations, lost_room_nights, lost_revenue, avg_days_to_arrival')
       .eq('property_id', pid)
       .gte('cancel_year_month', '2025-01')
-      .order('cancel_year_month')
+      .order('cancel_year_month'))
       .then(r => (r.data ?? []) as MonthImpactRow[]).catch(() => []),
-    supabase.from('v_cancellation_rate')
+    Promise.resolve(supabase.from('v_cancellation_rate')
       .select('cancelled_30d, total_30d, cancel_rate_30d, cancelled_90d, total_90d, cancel_rate_90d')
       .eq('property_id', pid)
-      .maybeSingle()
+      .maybeSingle())
       .then(r => r.data as { cancelled_30d: number; total_30d: number; cancel_rate_30d: number; cancelled_90d: number; total_90d: number; cancel_rate_90d: number } | null).catch(() => null),
     // PBS 2026-07-03: bookings received vs cancellations by channel · monthly.
     // Aggregated in the page for the "bookings vs cancels" trend + per-channel rate table.
-    supabase.from('v_cancel_rate_by_channel_monthly')
+    Promise.resolve(supabase.from('v_cancel_rate_by_channel_monthly')
       .select('month, channel_group, total_reservations, cancellations, cancel_rate_pct')
       .eq('property_id', pid)
-      .gte('month', '2025-01-01')
+      .gte('month', '2025-01-01'))
       .then(r => (r.data ?? []) as ChanMonthRow[]).catch(() => [] as ChanMonthRow[]),
     // PBS 2026-07-03: raw bookings received in the CHOSEN window for cancel
     // rate by booking-window (check_in − booking_date lead time). Filter is on
     // booking_date so we capture EVERY booking received in the window, cancel
     // or not, exactly like the monthly view but for arbitrary date ranges.
-    supabase.from('v_reservations_unified')
+    Promise.resolve(supabase.from('v_reservations_unified')
       .select('source_name, is_cancelled, booking_date, check_in_date')
       .eq('property_id', pid)
       .gte('booking_date', from)
       .lte('booking_date', to)
-      .limit(10000)
+      .limit(10000))
       .then(r => (r.data ?? []) as BookedRow[]).catch(() => [] as BookedRow[]),
     // PBS 2026-07-03: rebook analysis — did cancelled guests come back?
     // Matched on email or lowercased guest_name in v_cancellations_rebook.
-    supabase.from('v_cancellations_rebook')
+    Promise.resolve(supabase.from('v_cancellations_rebook')
       .select('cxl_source, rebook_source, gap_days, ci_shift_days')
       .eq('property_id', pid)
       .gte('cxl_date', from)
       .lte('cxl_date', to)
-      .limit(5000)
+      .limit(5000))
       .then(r => (r.data ?? []) as RebookRow[]).catch(() => [] as RebookRow[]),
   ]);
 
