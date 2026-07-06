@@ -360,6 +360,32 @@ export async function POST(req: Request) {
   const sample_keys = items.length > 0 ? Object.keys(items[0]).sort() : [];
   const sample_first_email = items.length > 0 ? (pickEmails(items[0])[0] ?? null) : null;
 
+  // Human-readable summary for the log UI
+  const summary =
+    typeof inp.search === 'string' ? `${inp.search}` :
+    Array.isArray(inp.searchStringsArray) ? (inp.searchStringsArray as string[]).slice(0, 3).join(', ') :
+    Array.isArray(inp.queries) ? (inp.queries as string[]).slice(0, 3).join(', ') :
+    typeof inp.locationQuery === 'string' ? String(inp.locationQuery) :
+    '';
+  const inputSummary = [summary, typeof inp.locationQuery === 'string' ? String(inp.locationQuery) : null]
+    .filter(Boolean).join(' · ');
+
+  await sb.rpc('fn_apify_log_scrape', {
+    p_row: {
+      actor, slug,
+      input: body.input,
+      tag_hints,
+      items_returned: items.length,
+      inserted: stats.inserted ?? 0,
+      skipped: stats.skipped ?? 0,
+      tags_applied: (stats as { tags_applied?: number }).tags_applied ?? 0,
+      duration_ms: Date.now() - started,
+      apify_status: apifyStatus,
+      ok: true,
+      input_summary: inputSummary,
+    } as unknown as object,
+  });
+
   return NextResponse.json({
     ok: true,
     actor,
