@@ -13,6 +13,10 @@ interface Req {
   subject: string;
   text: string;
   html_bullets: string[];
+  low_reviews?: Array<{
+    reviewer: string; rating: number; source: string; title: string;
+    body: string; reviewed_at: string; response_status: string;
+  }>;
 }
 
 export async function POST(req: Request) {
@@ -43,6 +47,7 @@ export async function POST(req: Request) {
       subject: body.subject,
       text: body.text,
       html_bullets: body.html_bullets,
+      low_reviews: body.low_reviews ?? [],
     }),
   });
 
