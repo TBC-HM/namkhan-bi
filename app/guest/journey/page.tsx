@@ -221,7 +221,7 @@ export default async function GuestJourneyPage({ searchParams }: Props) {
   return (
     <div style={{ background: WHITE, minHeight: '100vh' }}>
       <DashboardPage
-        title="Guest · Journey"
+        title="Contacts · Journey"
         subtitle="From inquiry to repeat - every touchpoint, every drop."
         tabs={tabs}
       >
