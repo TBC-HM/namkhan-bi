@@ -505,9 +505,10 @@ const GUEST_CFG: DeptCfg = {
     // - Prospects tab added (data still lives at /marketing/prospects until physical move)
     // - Findings dropped (all its content lives on HoD conclusions now)
     // - Newsletters moved to just before Reports
+    // PBS 2026-07-06 late evening: Prospects URL moved from /marketing/prospects → /guest/prospects.
     { label: 'HoD',         href: '/guest'             },
     { label: 'Guests',      href: '/guest/directory'   },
-    { label: 'Prospects',   href: '/marketing/prospects' },
+    { label: 'Prospects',   href: '/guest/prospects'   },
     { label: 'Reputation',  href: '/guest/reputation'  },
     { label: 'Behaviour',   href: '/guest/behaviour'   },
     { label: 'Newsletters', href: '/guest/newsletters' },
@@ -515,7 +516,7 @@ const GUEST_CFG: DeptCfg = {
   ],
   quickChips: [
     { label: 'Guests',     href: '/guest/directory'  },
-    { label: 'Prospects',  href: '/marketing/prospects' },
+    { label: 'Prospects',  href: '/guest/prospects'  },
     { label: 'Reputation', href: '/guest/reputation' },
     { label: 'Behaviour',  href: '/guest/behaviour'  },
     { label: 'Newsletters',href: '/guest/newsletters'},
