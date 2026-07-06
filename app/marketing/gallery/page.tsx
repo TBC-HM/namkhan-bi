@@ -61,7 +61,8 @@ export default async function GalleryPage() {
           }}>+ Upload new</Link>
         </div>
         <div style={{ gridColumn: '1 / -1' }}>
-          <MediaGallery rows={rows} />
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          <MediaGallery rows={rows as any} />
         </div>
       </DashboardPage>
     </div>
