@@ -295,12 +295,7 @@ async function renderHodBody() {
       subtitle={cfg.hodTagline}
       tabs={tabs}
     >
-      {/* OLD CONTENT RESTORED: quick chips */}
-      <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        {chips.map((c) => (
-          <Link key={c.href} href={c.href} style={chipStyle}>{c.label}</Link>
-        ))}
-      </div>
+      {/* PBS 2026-07-07: chip cluster removed (duplicated the top strip). */}
 
       {/* OLD CONTENT: Attention · Docs · Where-to-next 3-col grid */}
       <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
