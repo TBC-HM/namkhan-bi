@@ -29,6 +29,8 @@ export default function ScrapeForm() {
   const [actor, setActor] = useState<ActorId>('gmaps_contacts');
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
+  // Actor slug override — paste from Apify Console when the default guess is wrong.
+  const [slugOverride, setSlugOverride] = useState('');
 
   // Google Maps + Emails inputs
   const [gKeyword, setGKeyword]         = useState('eco resort');
@@ -82,7 +84,11 @@ export default function ScrapeForm() {
       const res = await fetch('/api/marketing/prospects/scrape', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ actor, input: buildInput() }),
+        body: JSON.stringify({
+          actor,
+          input: buildInput(),
+          ...(slugOverride.trim() ? { slug_override: slugOverride.trim() } : {}),
+        }),
       });
       const j: Result = await res.json();
       setResult(j);
@@ -108,6 +114,15 @@ export default function ScrapeForm() {
       </div>
       <div style={{ fontSize:11, color:'#5A5A5A', marginTop:-6, marginBottom:10 }}>
         {cfg.hint} · <span style={{ color:'#8B5A1C' }}>{cfg.costHint}</span>
+      </div>
+
+      <div style={row}>
+        <label style={label}>Actor slug (optional)</label>
+        <input value={slugOverride} onChange={e => setSlugOverride(e.target.value)} disabled={running}
+          placeholder="e.g. lukaskrivka~google-maps-with-contact-details" style={input} />
+      </div>
+      <div style={{ fontSize:11, color:'#5A5A5A', marginTop:-6, marginBottom:10 }}>
+        Copy from Apify Console URL: <code>https://console.apify.com/actors/<b>&lt;owner&gt;~&lt;name&gt;</b></code>. Leave blank to use the default guess (may not exist).
       </div>
 
       {actor === 'gmaps_contacts' && (
