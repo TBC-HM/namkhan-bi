@@ -17,9 +17,9 @@ type Review = {
   response_status: string | null;
 };
 
-const TABS = ['tripadvisor', 'booking', 'expedia', 'ctrip'] as const;
+const TABS = ['google', 'tripadvisor', 'booking', 'expedia', 'ctrip'] as const;
 const LABEL: Record<string, string> = {
-  tripadvisor: 'TripAdvisor', booking: 'Booking.com', expedia: 'Expedia', ctrip: 'Trip.com',
+  google: 'Google', tripadvisor: 'TripAdvisor', booking: 'Booking.com', expedia: 'Expedia', ctrip: 'Trip.com',
 };
 
 function fmtDate(iso: string | null): string {
