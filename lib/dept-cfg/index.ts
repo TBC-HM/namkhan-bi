@@ -444,7 +444,8 @@ const OPERATIONS_CFG: DeptCfg = {
     { label: 'Retail',           href: '/operations/retail'          },
     { label: 'Transport',        href: '/operations/transport'       },
     { label: 'Other',            href: '/operations/other'           },
-    { label: 'SOPs',             href: '/operations/sops'           },
+    // PBS 2026-07-06 evening: SOPs → QA (broader scope: SOPs + quality audits).
+    { label: 'QA',               href: '/operations/sops'           },
     // PBS 2026-05-16: Reports always sits flush-right (SubPagesStrip detects label).
     { label: 'Reports',          href: '/h/260955/reports?dept=operations' },
   ],
@@ -495,7 +496,8 @@ const OPERATIONS_CFG: DeptCfg = {
 // ─── Guest — Felix (no formal HoD; PBS uses Felix here) ──────────────────
 const GUEST_CFG: DeptCfg = {
   slug: 'guest',
-  pillTitle: 'Guest',
+  // PBS 2026-07-06 evening: pillTitle renamed Guest → Contacts. slug stays 'guest' + URL /guest to keep every existing deep link alive.
+  pillTitle: 'Contacts',
   hodName: 'Felix',
   hodEmoji: '★',
   ownerRole: 'lead',
@@ -503,19 +505,22 @@ const GUEST_CFG: DeptCfg = {
   chatPlaceholder: 'e.g. who is checking in this evening?',
   storageKeyPrefix: 'gst',
   subPages: [
-    // PBS 2026-07-03: Snapshot → HoD rename (aligned with other depts).
-    // PBS 2026-07-06 pm: Findings dropped (all its content lives on HoD conclusions now).
-    // Newsletters moved to just before Reports.
+    // PBS 2026-07-06 evening: dept renamed Guest → Contacts.
+    // - Directory tab renamed "Guests"
+    // - Prospects tab added (data still lives at /marketing/prospects until physical move)
+    // - Findings dropped (all its content lives on HoD conclusions now)
+    // - Newsletters moved to just before Reports
     { label: 'HoD',         href: '/guest'             },
-    { label: 'Directory',   href: '/guest/directory'   },
+    { label: 'Guests',      href: '/guest/directory'   },
+    { label: 'Prospects',   href: '/marketing/prospects' },
     { label: 'Reputation',  href: '/guest/reputation'  },
     { label: 'Behaviour',   href: '/guest/behaviour'   },
     { label: 'Newsletters', href: '/guest/newsletters' },
-    // PBS 2026-05-16: Reports always sits flush-right (SubPagesStrip detects label).
     { label: 'Reports',     href: '/h/260955/reports?dept=guest' },
   ],
   quickChips: [
-    { label: 'Directory',  href: '/guest/directory'  },
+    { label: 'Guests',     href: '/guest/directory'  },
+    { label: 'Prospects',  href: '/marketing/prospects' },
     { label: 'Reputation', href: '/guest/reputation' },
     { label: 'Behaviour',  href: '/guest/behaviour'  },
     { label: 'Newsletters',href: '/guest/newsletters'},
