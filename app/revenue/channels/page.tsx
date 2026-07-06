@@ -164,13 +164,13 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
     // PBS 2026-06-29: fetch DMC contracts so ChannelDrillDrawer can surface contract metadata + PDF preview when a source matches a partner.
     getDmcContracts().catch(() => []),
     // PBS 2026-07-01: top-8 performance tables under the KPI strip — DMC + OTA + Direct.
-    supabase.from('v_dmc_performance').select('partner_short_name, country, production_status, res_12mo, rn_12mo, gross_12mo').eq('property_id', pid).order('gross_12mo', { ascending: false }).limit(8).then((r) => ({ data: (r.data ?? []) as Array<Record<string, unknown>> })).catch(() => ({ data: [] as Array<Record<string, unknown>> })),
-    supabase.from('v_ota_performance').select('source_name, production_status, res_12mo, rn_12mo, gross_12mo, last_booking').eq('property_id', pid).order('gross_12mo', { ascending: false }).limit(8).then((r) => ({ data: (r.data ?? []) as Array<Record<string, unknown>> })).catch(() => ({ data: [] as Array<Record<string, unknown>> })),
-    supabase.from('v_direct_performance').select('source_name, production_status, res_12mo, rn_12mo, gross_12mo, last_booking').eq('property_id', pid).order('gross_12mo', { ascending: false }).limit(8).then((r) => ({ data: (r.data ?? []) as Array<Record<string, unknown>> })).catch(() => ({ data: [] as Array<Record<string, unknown>> })),
+    Promise.resolve(supabase.from('v_dmc_performance').select('partner_short_name, country, production_status, res_12mo, rn_12mo, gross_12mo').eq('property_id', pid).order('gross_12mo', { ascending: false }).limit(8)).then((r) => ({ data: (r.data ?? []) as Array<Record<string, unknown>> })).catch(() => ({ data: [] as Array<Record<string, unknown>> })),
+    Promise.resolve(supabase.from('v_ota_performance').select('source_name, production_status, res_12mo, rn_12mo, gross_12mo, last_booking').eq('property_id', pid).order('gross_12mo', { ascending: false }).limit(8)).then((r) => ({ data: (r.data ?? []) as Array<Record<string, unknown>> })).catch(() => ({ data: [] as Array<Record<string, unknown>> })),
+    Promise.resolve(supabase.from('v_direct_performance').select('source_name, production_status, res_12mo, rn_12mo, gross_12mo, last_booking').eq('property_id', pid).order('gross_12mo', { ascending: false }).limit(8)).then((r) => ({ data: (r.data ?? []) as Array<Record<string, unknown>> })).catch(() => ({ data: [] as Array<Record<string, unknown>> })),
     // PBS 2026-07-01: forward-looking Top 10 sources (next 90 arrivals) vs SDLY.
-    supabase.from('v_source_top10_otb_vs_sdly').select('source_name, bkg_otb, rn_otb, rev_otb, bkg_sdly, rn_sdly, rev_sdly, rev_delta_pct, adr_otb').eq('property_id', pid).order('rev_otb', { ascending: false }).limit(10).then((r) => ({ data: (r.data ?? []) as OtbSdlyRow[] })).catch(() => ({ data: [] as OtbSdlyRow[] })),
+    Promise.resolve(supabase.from('v_source_top10_otb_vs_sdly').select('source_name, bkg_otb, rn_otb, rev_otb, bkg_sdly, rn_sdly, rev_sdly, rev_delta_pct, adr_otb').eq('property_id', pid).order('rev_otb', { ascending: false }).limit(10)).then((r) => ({ data: (r.data ?? []) as OtbSdlyRow[] })).catch(() => ({ data: [] as OtbSdlyRow[] })),
     // PBS 2026-07-01: groups since 2024 for the page-bottom "Groups revenue by month" chart.
-    supabase.from('v_groups_since_2024').select('month_label, total_amount, group_signal').eq('property_id', pid).then((r) => ({ data: (r.data ?? []) as Array<{ month_label: string; total_amount: number; group_signal: string }> })).catch(() => ({ data: [] as Array<{ month_label: string; total_amount: number; group_signal: string }> })),
+    Promise.resolve(supabase.from('v_groups_since_2024').select('month_label, total_amount, group_signal').eq('property_id', pid)).then((r) => ({ data: (r.data ?? []) as Array<{ month_label: string; total_amount: number; group_signal: string }> })).catch(() => ({ data: [] as Array<{ month_label: string; total_amount: number; group_signal: string }> })),
   ]);
   const dmcPerfTop = dmcPerfRes.data;
   const otaPerfTop = otaPerfRes.data;
@@ -1039,7 +1039,7 @@ async function CategoryBlock({
         <Container title="Top 10 sources" subtitle="last 30 days · by gross revenue · date basis: booking_date">
           <div style={{ minHeight: 300, display: 'flex', flexDirection: 'column', flex: 1 }}>
             <SourceLinkTable
-              rows={top10Last30d as Array<Record<string, unknown>>}
+              rows={top10Last30d as unknown as Array<Record<string, string | number | null | undefined>>}
               sourceKey="source"
               columns={[
                 { key: 'source',        label: 'Source' },
@@ -1074,7 +1074,7 @@ async function CategoryBlock({
                 .slice(0, 10);
               return (
                 <SourceLinkTable
-                  rows={originatorRows as Array<Record<string, unknown>>}
+                  rows={originatorRows as unknown as Array<Record<string, string | number | null | undefined>>}
                   sourceKey="source"
                   columns={[
                     { key: 'source',   label: 'Source' },
