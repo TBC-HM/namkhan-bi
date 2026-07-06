@@ -84,12 +84,26 @@ export default async function SupplierMappingPage() {
 
   return (
     <DashboardPage title="Supplier mapping" subtitle={subtitle} tabs={tabs}>
-      {/* PBS 2026-07-07: page is being moved to /operations/suppliers. */}
+      {/* PBS 2026-07-07 evening: pointer to the new Operations · Suppliers page.
+          This mapping cockpit stays live; the ops-facing vendor list moved. */}
       <div style={fullRow}>
-        <div style={{ padding:'8px 12px', background:'#FFF3F1', border:'1px solid #E6C9BF', borderRadius:4, fontSize:12, color:'#B04A2F', marginBottom:12 }}>
-          This page has moved to <a href="/operations/suppliers" style={{color:'#1F3A2E'}}>/operations/suppliers</a>. This page continues to work but new work should happen there.
+        <div style={{
+          padding: '8px 12px',
+          background: '#FFFFFF',
+          border: '1px solid #E6DFCC',
+          borderLeft: '3px solid #1F3A2E',
+          fontSize: 12,
+          color: '#3A3A3A',
+          lineHeight: 1.5,
+        }}>
+          <strong style={{ color: '#1B1B1B' }}>Heads up:</strong> the ops-facing supplier list is moving to{' '}
+          <a href="/operations/suppliers" style={{ color: '#1F3A2E', textDecoration: 'underline', fontWeight: 600 }}>
+            /operations/suppliers
+          </a>
+          . This page continues to work for USALI-dept mapping, but new supplier work should happen there.
         </div>
       </div>
+
       <div style={fullRow}>
         <Container title="Headline" subtitle="vendor × USALI dept · trailing 180d" density="compact">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
