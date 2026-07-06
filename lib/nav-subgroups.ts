@@ -53,9 +53,15 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   },
 
   // ─── Operations ───────────────────────────────────────────
-  // PBS 2026-07-07 late evening: Overview no longer shows Departments/Suppliers as
-  // sub-tabs — those are top-level. Overview stays a dept summary with no sub-strip.
-  // Departments hub still carries the 7-dept sub-tab strip on each child page.
+  // PBS 2026-07-07 night: Overview parent gets Docs as a sub-tab (Docs was
+  // dropped from the top strip earlier and PBS wants it accessible from Overview).
+  {
+    parentHref: '/operations/overview',
+    members: ['/operations/overview', '/operations/docs'],
+    tabs: [
+      { label: 'Docs', href: '/operations/docs' },
+    ],
+  },
   {
     parentHref: '/operations/rooms',
     members: [
@@ -129,12 +135,11 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   },
 
   // ─── Administration (Finance) ─────────────────────────────
-  // PBS 2026-07-07 late evening: single "Finance" parent group with 4 sub-tabs.
-  // "Working capital" was an invention — removed. Cashflow/Variance/AP·AR pages
-  // remain reachable by URL but aren't surfaced in the strip.
+  // PBS 2026-07-07 night: sub-tabs also show on /finance HoD + /finance/overview
+  // so P&L/Ledger/Transactions/Budget are visible even before you click Finance.
   {
     parentHref: '/finance/pnl',
-    members: ['/finance/pnl', '/finance/ledger', '/finance/transactions', '/finance/budget'],
+    members: ['/finance', '/finance/overview', '/finance/pnl', '/finance/ledger', '/finance/transactions', '/finance/budget'],
     tabs: [
       { label: 'P&L',          href: '/finance/pnl'          },
       { label: 'Ledger',       href: '/finance/ledger'       },
