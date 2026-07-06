@@ -129,13 +129,14 @@ const ruleSlippingRepeats: Rule = (ctx) => {
 };
 
 // Rule 4 — cancel rate vs baseline
+// PBS 2026-07-06 evening: target raised from 10% → 15% (more realistic for hospitality mix).
 const ruleCancelRateHigh: Rule = (ctx) => {
   if (ctx.reservations < 20) return null;
-  if (ctx.cancelRate < 10) return null;
+  if (ctx.cancelRate < 15) return null;
 
   const baseline = ctx.cancelRateBaseline;
   const usingDynamic = baseline != null && ctx.cancelRate > baseline + 3;
-  const pri: Insight['priority'] = ctx.cancelRate > 25 ? 'critical' : ctx.cancelRate > 15 ? 'warning' : 'info';
+  const pri: Insight['priority'] = ctx.cancelRate > 30 ? 'critical' : ctx.cancelRate > 20 ? 'warning' : 'info';
 
   return {
     key: 'cancel_rate_high',
@@ -143,7 +144,7 @@ const ruleCancelRateHigh: Rule = (ctx) => {
     guardrail: usingDynamic ? 'dynamic' : 'fixed',
     title: usingDynamic
       ? `Cancel rate ${ctx.cancelRate.toFixed(1)}% vs rolling baseline ${baseline!.toFixed(1)}%`
-      : `Cancel rate ${ctx.cancelRate.toFixed(1)}% (target ≤ 10%)`,
+      : `Cancel rate ${ctx.cancelRate.toFixed(1)}% (target ≤ 15%)`,
     body: 'High cancels signal aggressive OTA pricing that guests re-shop, or the lag between booking and stay letting doubts creep in.',
     evidence: `${ctx.reservations} reservations in last ${ctx.windowDays}d`,
     action: 'Investigate cancellations →',
@@ -152,16 +153,18 @@ const ruleCancelRateHigh: Rule = (ctx) => {
 };
 
 // Rule 5 — no-shows
+// PBS 2026-07-06 evening: add reminder to verify each no-show was billed
+// (revenue recovery hygiene — many properties skip charging the card).
 const ruleNoShows: Rule = (ctx) => {
   if (ctx.noShows === 0) return null;
   return {
     key: 'no_shows',
     priority: ctx.noShows > 5 ? 'critical' : 'warning',
     guardrail: 'fixed',
-    title: `${ctx.noShows} no-shows in last ${ctx.windowDays} days`,
-    body: 'Each no-show is a room-night lost and a guest cost avoided somewhere else. Confirm-day text messaging catches ~40%.',
-    evidence: 'Compare confirm + arrive rate above',
-    action: 'Review reservations →',
+    title: `${ctx.noShows} no-show${ctx.noShows === 1 ? '' : 's'} in last ${ctx.windowDays} days — check each was BILLED`,
+    body: 'Each no-show is a room-night lost. Confirm-day text catches ~40%, and every one still on the books should have been charged per T&Cs.',
+    evidence: 'For each no-show: confirm folio was charged before writing off',
+    action: 'Review + confirm billing →',
     href: '/revenue/cancellations',
   };
 };
