@@ -12,11 +12,11 @@ export interface SubGroup {
 
 export const NAV_SUBGROUPS: SubGroup[] = [
   // ─── Revenue ──────────────────────────────────────────────
-  // PBS 2026-07-07 evening: Overview parent moved to /revenue/overview (was /revenue).
-  // /revenue is now the HoD chat cockpit and does not carry Overview sub-tabs.
+  // PBS 2026-07-07 night: Overview tab lands on /revenue/pulse. Sub-strip surfaces
+  // Calendar (Pulse itself hidden by sibling filter in DashboardPage).
   {
-    parentHref: '/revenue/overview',
-    members: ['/revenue/overview', '/revenue/pulse', '/revenue/pricing'],
+    parentHref: '/revenue/pulse',
+    members: ['/revenue/pulse', '/revenue/pricing'],
     tabs: [
       { label: 'Pulse',    href: '/revenue/pulse'   },
       { label: 'Calendar', href: '/revenue/pricing' },
@@ -85,13 +85,14 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   },
 
   // ─── Marketing ────────────────────────────────────────────
-  // PBS 2026-07-07 evening: Overview parent moved to /marketing/overview (was /marketing).
-  // /marketing is now the HoD chat cockpit.
+  // PBS 2026-07-07 night: Overview lands on /marketing/library. Info sub-tab
+  // removed; Library + Docs sit directly under Overview alongside Reports.
   {
-    parentHref: '/marketing/overview',
-    members: ['/marketing/overview'],
+    parentHref: '/marketing/library',
+    members: ['/marketing/library', '/marketing/docs'],
     tabs: [
-      { label: 'Info',    href: '/marketing/library' },
+      { label: 'Library', href: '/marketing/library' },
+      { label: 'Docs',    href: '/marketing/docs'    },
       { label: 'Reports', href: '/h/260955/reports?dept=marketing' },
     ],
   },
@@ -111,9 +112,11 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       { label: 'Compiler', href: '/marketing/compiler' },
     ],
   },
+  // PBS 2026-07-07 night: Content lands on /marketing/gallery (Media) directly,
+  // not the empty stub. Sub-strip shows Social (Media hidden by sibling filter).
   {
-    parentHref: '/marketing/content',
-    members: ['/marketing/content', '/marketing/gallery', '/marketing/social'],
+    parentHref: '/marketing/gallery',
+    members: ['/marketing/gallery', '/marketing/social'],
     tabs: [
       { label: 'Media',  href: '/marketing/gallery' },
       { label: 'Social', href: '/marketing/social'  },
@@ -126,13 +129,8 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       { label: 'Web', href: '/marketing/web' },
     ],
   },
-  {
-    parentHref: '/marketing/library',
-    members: ['/marketing/library', '/marketing/docs'],
-    tabs: [
-      { label: 'Docs', href: '/marketing/docs' },
-    ],
-  },
+  // (The old /marketing/library standalone subgroup is now merged into Overview
+  //  above — Library + Docs live directly under Overview.)
 
   // ─── Administration (Finance) ─────────────────────────────
   // PBS 2026-07-07 night: sub-tabs also show on /finance HoD + /finance/overview
