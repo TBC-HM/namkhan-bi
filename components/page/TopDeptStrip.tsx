@@ -129,7 +129,7 @@ export default function TopDeptStrip() {
           paddingRight: 24,
           borderBottom: '1px solid ' + s.border,
           background: s.bg,
-          position: 'relative',
+          position: 'sticky', top: 0,
           zIndex: 60,
         }}
       >
@@ -185,7 +185,7 @@ export default function TopDeptStrip() {
         paddingRight: 24,
         borderBottom: '1px solid ' + s.border,
         background: s.bg,
-        position: 'relative',
+        position: 'sticky', top: 0,
         zIndex: 60,
       }}
     >
