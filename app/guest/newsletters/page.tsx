@@ -61,7 +61,7 @@ export default async function NewslettersPage() {
 
   return (
     <div style={{ background:'#FFFFFF', minHeight:'100vh' }}>
-      <DashboardPage title="Guest · Newsletters"
+      <DashboardPage title="Contacts · Newsletters"
         subtitle={`${rows.length} campaign${rows.length === 1 ? '' : 's'} — Drafts, Scheduled and Sent.`} tabs={tabs}>
         <div style={{ gridColumn:'1 / -1', display:'flex', justifyContent:'flex-end', gap:8 }}>
           <Link href="/guest/newsletters/templates" style={secondaryButton}>Manage templates</Link>
