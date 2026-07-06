@@ -24,13 +24,13 @@ type ActorId =
 
 interface ScrapeInput {
   actor: ActorId;
-  // gmaps: { searchStringsArray, locationQuery, maxCrawledPlaces }
-  // google_search: { queries, languageCode, maxPagesPerQuery }
-  // booking: { search, checkIn, checkOut, maxItems }
-  // email_social: { startUrls: string[], maxDepth, maxPagesPerCrawl }
   input: Record<string, unknown>;
   property_id?: number;
-  tag_hint?: string; // optional tag to apply to all imported rows (e.g. 'tour_operator')
+  tag_hint?: string;
+  // Override the actor slug — copy this from Apify Console URL, e.g.
+  // https://console.apify.com/actors/lukaskrivka~google-maps-with-contact-details → 'lukaskrivka~google-maps-with-contact-details'.
+  // Format: <owner>~<actor-name>. When set, ignores the default `slug` from ACTORS map.
+  slug_override?: string;
 }
 
 const ACTORS: Record<ActorId, { slug: string; label: string }> = {
@@ -151,7 +151,10 @@ export async function POST(req: Request) {
   const token = String(tokenData);
 
   // 2. Call Apify sync-get-dataset-items — waits up to 4min, returns items array
-  const slug = ACTORS[actor].slug;
+  //    slug_override lets caller paste the exact actor slug from Apify Console.
+  const slug = (body.slug_override && /^[a-zA-Z0-9_~-]+$/.test(body.slug_override))
+    ? body.slug_override
+    : ACTORS[actor].slug;
   const apifyUrl = `https://api.apify.com/v2/acts/${slug}/run-sync-get-dataset-items?token=${encodeURIComponent(token)}&timeout=240&format=json&clean=1`;
   let items: Array<Record<string, unknown>> = [];
   let apifyStatus = 0;
