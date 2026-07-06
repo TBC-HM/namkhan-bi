@@ -122,10 +122,13 @@ export default function ReportContainer({ reviews }: { reviews: Review[] }) {
             }}>{msg.text}</div>
           )}
 
-          <div style={{ fontSize:13, fontWeight:600, color:'#1B1B1B', marginBottom:10 }}>{headline}</div>
-          <ul style={{ paddingLeft:18, margin:0 }}>
+          {/* Traffic-light breakdown — positive/neutral/negative overall + per source */}
+          <TrafficLight reviews={reviews} />
+
+          <div style={{ fontSize:12, fontWeight:600, color:'#1B1B1B', margin:'12px 0 6px' }}>{headline}</div>
+          <ul style={{ paddingLeft:16, margin:0 }}>
             {bullets.map((b, i) => (
-              <li key={i} style={{ fontSize:12, color:'#3A3A3A', lineHeight:1.55, marginBottom:5 }}>{b}</li>
+              <li key={i} style={{ fontSize:11, color:'#3A3A3A', lineHeight:1.5, marginBottom:4 }}>{b}</li>
             ))}
           </ul>
         </div>
@@ -133,6 +136,59 @@ export default function ReportContainer({ reviews }: { reviews: Review[] }) {
     </div>
   );
 }
+
+function TrafficLight({ reviews }: { reviews: Review[] }) {
+  let pos = 0, neu = 0, neg = 0;
+  const bySource = new Map<string, { pos:number; neu:number; neg:number }>();
+  for (const r of reviews) {
+    const n = Number(r.rating_norm);
+    if (!Number.isFinite(n)) continue;
+    const src = r.source ?? 'unknown';
+    const c = bySource.get(src) ?? { pos:0, neu:0, neg:0 };
+    if (n >= 4)      { pos++; c.pos++; }
+    else if (n >= 3) { neu++; c.neu++; }
+    else             { neg++; c.neg++; }
+    bySource.set(src, c);
+  }
+  const total = pos + neu + neg;
+  if (total === 0) return null;
+  const pct = (v: number) => (v / total) * 100;
+  const seg = (p: number) => `${p}%`;
+
+  return (
+    <div style={{ padding:'8px 10px', background:'#FAFAF7', border:'1px solid #E6DFCC', borderRadius:6, marginBottom:8 }}>
+      <div style={{
+        fontSize:9, fontWeight:600, letterSpacing:'0.1em', textTransform:'uppercase',
+        color:'#5A5A5A', marginBottom:5,
+      }}>
+        Sentiment · {total} reviews
+      </div>
+      <div style={{ display:'flex', height:8, borderRadius:99, overflow:'hidden', background:'#EEE', marginBottom:6 }}>
+        <div style={{ width: seg(pct(pos)), background:'#4A8A5F' }} title={`Positive: ${pos}`} />
+        <div style={{ width: seg(pct(neu)), background:'#D4A866' }} title={`Neutral: ${neu}`} />
+        <div style={{ width: seg(pct(neg)), background:'#B04A2F' }} title={`Negative: ${neg}`} />
+      </div>
+      <div style={{ display:'flex', gap:10, fontSize:10, color:'#3A3A3A', flexWrap:'wrap' }}>
+        <span><span style={dotStyle('#4A8A5F')} /> Positive {pos} · {Math.round(pct(pos))}%</span>
+        <span><span style={dotStyle('#D4A866')} /> Neutral {neu} · {Math.round(pct(neu))}%</span>
+        <span><span style={dotStyle('#B04A2F')} /> Negative {neg} · {Math.round(pct(neg))}%</span>
+      </div>
+      {bySource.size > 1 && (
+        <div style={{ marginTop:6, paddingTop:6, borderTop:'1px solid #F0EBD9', fontSize:10, color:'#5A5A5A' }}>
+          {Array.from(bySource.entries()).map(([src, c]) => (
+            <span key={src} style={{ marginRight:12 }}>
+              <strong style={{ color:'#1B1B1B' }}>{src}</strong> · +{c.pos} ={c.neu} −{c.neg}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const dotStyle = (color: string): React.CSSProperties => ({
+  display:'inline-block', width:8, height:8, borderRadius:99, background:color, marginRight:4, verticalAlign:'middle',
+});
 
 const box: React.CSSProperties = { border:'1px solid #E6DFCC', borderRadius:6, background:'#FFFFFF', overflow:'hidden' };
 const header: React.CSSProperties = { display:'flex', alignItems:'center', gap:10, width:'100%', padding:'10px 14px', background:'#FAFAF7', border:'none', borderBottom:'1px solid #E6DFCC', fontSize:12, fontWeight:600, color:'#1B1B1B', cursor:'pointer', fontFamily:'inherit', textAlign:'left' };
