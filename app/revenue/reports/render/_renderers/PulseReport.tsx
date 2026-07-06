@@ -76,19 +76,19 @@ export default async function PulseReport({ period, propertyId }: Props) {
     arrivalsTodayCount, departuresTodayCount, inHouseCount,
     channelsPeriod, alerts,
   ] = await Promise.all([
-    supabase.from('v_kpi_daily').select(kpiSelect).gte('metric_date', period.from).lte('metric_date', period.to).eq('is_actual', true).then(r => (r.data ?? []) as KpiRow[]).catch(() => [] as KpiRow[]),
-    supabase.from('v_kpi_daily').select(kpiSelect).gte('metric_date', sdlyFrom).lte('metric_date', sdlyTo).eq('is_actual', true).then(r => (r.data ?? []) as KpiRow[]).catch(() => [] as KpiRow[]),
-    supabase.from('v_kpi_daily').select(kpiSelect).eq('metric_date', today).then(r => (r.data ?? []) as KpiRow[]).catch(() => [] as KpiRow[]),
-    supabase.from('v_otb_pace').select('night_date,confirmed_rooms,confirmed_revenue').eq('property_id', pid).gte('night_date', today).lte('night_date', in30).order('night_date').then(r => (r.data ?? []) as OtbRow[]).catch(() => [] as OtbRow[]),
-    supabase.from('v_reservations_unified').select('reservation_id,source_name,room_type_name,rate_plan,nights,total_amount,booking_date,check_in_date,cancellation_date').eq('property_id', pid).eq('is_cancelled', false).gte('booking_date', yst).order('booking_date', { ascending: false }).limit(15).then(r => (r.data ?? []) as ResRow[]).catch(() => [] as ResRow[]),
-    supabase.from('v_reservations_unified').select('reservation_id,source_name,room_type_name,rate_plan,nights,total_amount,booking_date,cancellation_date,check_in_date').eq('property_id', pid).eq('is_cancelled', true).gte('cancellation_date', yst).order('cancellation_date', { ascending: false }).limit(15).then(r => (r.data ?? []) as ResRow[]).catch(() => [] as ResRow[]),
-    supabase.from('v_reservations_unified').select('reservation_id', { count: 'exact', head: true }).eq('property_id', pid).eq('is_cancelled', false).eq('check_in_date', today).then(r => r.count ?? 0).catch(() => 0),
-    supabase.from('v_reservations_unified').select('reservation_id', { count: 'exact', head: true }).eq('property_id', pid).eq('is_cancelled', false).eq('check_out_date', today).then(r => r.count ?? 0).catch(() => 0),
-    supabase.from('v_reservations_unified').select('reservation_id', { count: 'exact', head: true }).eq('property_id', pid).eq('is_cancelled', false).lte('check_in_date', today).gt('check_out_date', today).then(r => r.count ?? 0).catch(() => 0),
+    Promise.resolve(supabase.from('v_kpi_daily').select(kpiSelect).gte('metric_date', period.from).lte('metric_date', period.to).eq('is_actual', true)).then(r => (r.data ?? []) as KpiRow[]).catch(() => [] as KpiRow[]),
+    Promise.resolve(supabase.from('v_kpi_daily').select(kpiSelect).gte('metric_date', sdlyFrom).lte('metric_date', sdlyTo).eq('is_actual', true)).then(r => (r.data ?? []) as KpiRow[]).catch(() => [] as KpiRow[]),
+    Promise.resolve(supabase.from('v_kpi_daily').select(kpiSelect).eq('metric_date', today)).then(r => (r.data ?? []) as KpiRow[]).catch(() => [] as KpiRow[]),
+    Promise.resolve(supabase.from('v_otb_pace').select('night_date,confirmed_rooms,confirmed_revenue').eq('property_id', pid).gte('night_date', today).lte('night_date', in30).order('night_date')).then(r => (r.data ?? []) as OtbRow[]).catch(() => [] as OtbRow[]),
+    Promise.resolve(supabase.from('v_reservations_unified').select('reservation_id,source_name,room_type_name,rate_plan,nights,total_amount,booking_date,check_in_date,cancellation_date').eq('property_id', pid).eq('is_cancelled', false).gte('booking_date', yst).order('booking_date', { ascending: false }).limit(15)).then(r => (r.data ?? []) as ResRow[]).catch(() => [] as ResRow[]),
+    Promise.resolve(supabase.from('v_reservations_unified').select('reservation_id,source_name,room_type_name,rate_plan,nights,total_amount,booking_date,cancellation_date,check_in_date').eq('property_id', pid).eq('is_cancelled', true).gte('cancellation_date', yst).order('cancellation_date', { ascending: false }).limit(15)).then(r => (r.data ?? []) as ResRow[]).catch(() => [] as ResRow[]),
+    Promise.resolve(supabase.from('v_reservations_unified').select('reservation_id', { count: 'exact', head: true }).eq('property_id', pid).eq('is_cancelled', false).eq('check_in_date', today)).then(r => r.count ?? 0).catch(() => 0),
+    Promise.resolve(supabase.from('v_reservations_unified').select('reservation_id', { count: 'exact', head: true }).eq('property_id', pid).eq('is_cancelled', false).eq('check_out_date', today)).then(r => r.count ?? 0).catch(() => 0),
+    Promise.resolve(supabase.from('v_reservations_unified').select('reservation_id', { count: 'exact', head: true }).eq('property_id', pid).eq('is_cancelled', false).lte('check_in_date', today).gt('check_out_date', today)).then(r => r.count ?? 0).catch(() => 0),
     // PBS 2026-07-03: switched from check_in_date × total_amount (mis-attributed
     // multi-night stays to their check-in week) to v_channel_nights_daily —
     // per-night per-source rooms revenue. Matches v_kpi_daily numerator.
-    supabase.from('v_channel_nights_daily').select('source_name,room_nights,rooms_revenue').eq('property_id', pid).gte('night_date', period.from).lte('night_date', period.to).then(r => (r.data ?? []) as ChanRow[]).catch(() => [] as ChanRow[]),
+    Promise.resolve(supabase.from('v_channel_nights_daily').select('source_name,room_nights,rooms_revenue').eq('property_id', pid).gte('night_date', period.from).lte('night_date', period.to)).then(r => (r.data ?? []) as ChanRow[]).catch(() => [] as ChanRow[]),
     getTacticalAlertsTop().catch(() => [] as Array<Record<string, unknown>>),
   ]);
 
