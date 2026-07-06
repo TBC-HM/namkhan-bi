@@ -193,7 +193,7 @@ export default async function GuestLoyaltyPage() {
   return (
     <div style={{ background: WHITE, minHeight: '100vh' }}>
       <DashboardPage
-        title="Guest · Loyalty"
+        title="Contacts · Loyalty"
         subtitle="Who comes back — and who is about to slip."
         tabs={tabs}
       >
