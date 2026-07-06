@@ -57,7 +57,7 @@ export default async function PreviewPage({ params }: { params: { funnel_id: str
             <div style={{ padding:'8px 14px', background:CREAM, borderBottom:'1px solid '+HAIR, display:'flex', justifyContent:'space-between', fontSize:11, color:INK_M }}>
               <span>Step {s.step_no} · +{s.delay_days ?? 0} days · Subject: <strong style={{ color:INK }}>{s.subject}</strong></span>
             </div>
-            <div style={{ maxWidth:600, margin:'0 auto', background:'#FFFFFF', border:'1px solid '+HAIR, borderRadius:4, margin:'12px auto', overflow:'hidden' }}>
+            <div style={{ maxWidth:600, background:'#FFFFFF', border:'1px solid '+HAIR, borderRadius:4, margin:'12px auto', overflow:'hidden' }}>
               <div style={{ padding:'20px 24px 14px', background:'#F7F0E1', borderBottom:'2px solid #C79A6B', textAlign:'center' }}>
                 <div style={{ fontSize:22, letterSpacing:'0.34em', color:'#084838', fontFamily:'Georgia, serif' }}>THE NAMKHAN</div>
                 <div style={{ fontSize:9, letterSpacing:'0.22em', color:INK_M, marginTop:4 }}>LUANG PRABANG · LAOS</div>
