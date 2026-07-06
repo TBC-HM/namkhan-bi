@@ -55,25 +55,21 @@ export const RAIL_SUBNAV: Record<string, SubNavTab[]> = {
     { href: '/sales/pipeline',   label: 'Pipeline',  coming: true },
   ],
 
-  // ===== 03 Marketing (PBS 2026-07-06 evening — canonical strip) =====
-  // Order: Overview · Info · Acquisition · Campaigns · Funnels · Prospects · Products & Offers
-  //        · Compiler · Content · Media · Social · Digital · Web · Library · Docs
+  // ===== 03 Marketing (PBS 2026-07-06 late evening — hierarchical) =====
+  // Six top-level parents. Sub-tabs render on each parent's landing page:
+  //   Overview          → Info / Reports
+  //   Acquisition       → Campaigns / Funnels / Prospects
+  //   Products & Offers → Compiler
+  //   Content           → Media / Social
+  //   Digital           → Web
+  //   Library           → Docs
   marketing: [
     { href: '/marketing',              label: 'Overview' },
-    { href: '/marketing/library',      label: 'Info' },
-    { href: '/marketing/acquisition',  label: 'Acquisition',       isNew: true },
-    { href: '/marketing/campaigns',    label: 'Campaigns' },
-    { href: '/marketing/funnels',      label: 'Funnels' },
-    { href: '/marketing/prospects',    label: 'Prospects' },
-    { href: '/marketing/offers',       label: 'Products & Offers', isNew: true },
-    { href: '/marketing/compiler',     label: 'Compiler' },
-    { href: '/marketing/content',      label: 'Content',           isNew: true },
-    { href: '/marketing/gallery',      label: 'Media' },
-    { href: '/marketing/social',       label: 'Social' },
-    { href: '/marketing/digital',      label: 'Digital',           isNew: true },
-    { href: '/marketing/web',          label: 'Web' },
+    { href: '/marketing/acquisition',  label: 'Acquisition' },
+    { href: '/marketing/offers',       label: 'Products & Offers' },
+    { href: '/marketing/content',      label: 'Content' },
+    { href: '/marketing/digital',      label: 'Digital' },
     { href: '/marketing/library',      label: 'Library' },
-    { href: '/marketing/docs',         label: 'Docs' },
   ],
 
   // ===== 04 Operations =====
