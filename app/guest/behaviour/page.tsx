@@ -281,7 +281,7 @@ export default async function GuestBehaviourPage({ searchParams }: Props) {
   return (
     <div style={{ background: WHITE, minHeight: '100vh' }}>
       <DashboardPage
-        title="Guest · Behaviour"
+        title="Contacts · Behaviour"
         subtitle="Retention cockpit — who's staying, who's slipping, who to save. Second dimension: on-site spending."
         tabs={tabs}
       >
