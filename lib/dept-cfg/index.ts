@@ -214,9 +214,10 @@ const REVENUE_CFG: DeptCfg = {
   //   Market & Control → Comp Set / Leakage / Parity
   // The parent tab links to the first child so clicking it always lands somewhere useful.
   subPages: [
-    { label: 'Overview',        href: '/revenue'          },
-    { label: 'Pulse',           href: '/revenue/pulse'    },
-    { label: 'Calendar',        href: '/revenue/pricing'  },
+    // PBS 2026-07-07 evening: HoD + Overview split. /revenue = HoD chat cockpit.
+    // /revenue/overview = new dept-wide summary landing with Pulse + Calendar sub-tabs.
+    { label: 'HoD',             href: '/revenue'          },
+    { label: 'Overview',        href: '/revenue/overview' },
     { label: 'Demand & Pace',   href: '/revenue/demand'   },
     { label: 'Performance',     href: '/revenue/rooms'    },
     { label: 'Market & Control',href: '/revenue/compset'  },
@@ -354,7 +355,10 @@ const MARKETING_CFG: DeptCfg = {
   //   Library           → Docs
   // Parent tab links to the first child so clicking always lands somewhere useful.
   subPages: [
-    { label: 'Overview',          href: '/marketing'                 },
+    // PBS 2026-07-07 evening: HoD + Overview split. /marketing = HoD chat cockpit.
+    // /marketing/overview = new dept summary landing with Info + Reports sub-tabs.
+    { label: 'HoD',               href: '/marketing'                 },
+    { label: 'Overview',          href: '/marketing/overview'        },
     { label: 'Acquisition',       href: '/marketing/acquisition'     },
     { label: 'Products & Offers', href: '/marketing/offers'          },
     { label: 'Content',           href: '/marketing/content'         },
