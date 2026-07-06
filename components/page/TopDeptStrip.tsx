@@ -23,11 +23,12 @@ const CANONICAL_DEPTS: DeptLink[] = [
   // PBS 2026-07-06: Guest moved to right after Sales (guest lifecycle is a
   // commercial function, sits between Sales and Marketing operationally).
   // Finance renamed → Administration (URL stays /finance for bookmark safety).
+  // PBS 2026-07-06 evening: Guest → Contacts. Order: Marketing → Contacts → Operations.
   { label: 'CEO',            slug: ''           },
   { label: 'Revenue',        slug: 'revenue'    },
   { label: 'Sales',          slug: 'sales'      },
-  { label: 'Guest',          slug: 'guest'      },
   { label: 'Marketing',      slug: 'marketing'  },
+  { label: 'Contacts',       slug: 'guest'      },
   { label: 'Operations',     slug: 'operations' },
   { label: 'Administration', slug: 'finance'    },
   // PBS #158/#159 (2026-05-24): IT removed from property menu — only in holding strip.
