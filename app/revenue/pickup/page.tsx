@@ -2,7 +2,6 @@
 // PBS 2026-06-01 #89 — Pickup dashboard with KPI strip + 4 graphs above the matrix.
 // 9 parallel reads (no DISTINCT ON, no FULL JOIN — all auto-update on reservation sync).
 
-import Link from 'next/link';
 import {
   DashboardPage, Container, Chart, KpiTile,
   type DashboardTab, type KpiTileProps,
@@ -173,20 +172,8 @@ export default async function PickupPage({ propertyId }: Props = {}) {
       subtitle={`12-month forward pickup grid · ${matrix?.property ?? 'Property ' + pid} · capacity ${matrix?.capacity ?? '—'} rooms`}
       tabs={tabs}
       action={
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <Link
-            href="/revenue/pickup-day"
-            style={{
-              fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600,
-              padding: '6px 14px', borderRadius: 4,
-              background: '#FFFFFF', color: '#084838',
-              border: '1px solid #084838', textDecoration: 'none',
-            }}
-          >
-            Day report →
-          </Link>
-          {matrix ? <PickupActions property={matrix.property} asOfDate={matrix.asOfDate} data={matrix} /> : null}
-        </div>
+        // Day report → link removed 2026-07-07: superseded by Month/Day sub-strip in nav-subgroups.
+        matrix ? <PickupActions property={matrix.property} asOfDate={matrix.asOfDate} data={matrix} /> : null
       }
     >
       <style>{`
