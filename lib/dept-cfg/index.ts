@@ -974,7 +974,11 @@ const HOLDING_LEGAL_CFG: DeptCfg = {
   hodTagline: 'Holding legal generalist · The Beyond Circle. Contract review and 5th-Avenue-style memos. Escalates Spanish/Balearic labour-law questions to Vera (Donna · Finance).',
   chatPlaceholder: 'e.g. summarize this contract for finance — focus on payments and renewals',
   storageKeyPrefix: 'hold-legal',
-  subPages: [],
+  // PBS 2026-07-07: Contracts sub-tab surfaces the Beyond Circle revenue-contract flow.
+  subPages: [
+    { label: 'HoD',       href: '/holding/legal'           },
+    { label: 'Contracts', href: '/holding/legal/contracts' },
+  ],
   quickChips: [],
   defaultAttn: [
     { id: 'l1', label: 'DCO 1/2025 · 4 months elapsed · settle within 30d (€150-200k target)', severity: 'high',   kind: 'leakage'     },
