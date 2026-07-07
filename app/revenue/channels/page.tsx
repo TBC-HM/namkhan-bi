@@ -957,15 +957,17 @@ async function CategoryBlock({
     share_pct: tierGrossTotal > 0 ? Math.round((r.gross_revenue / tierGrossTotal) * 1000) / 10 : 0,
   }));
   const top10Last30dRaw = top10Res.data;
-  // PBS 2026-07-07: fn_source_top10_period now returns cancellations + total columns.
+  // PBS 2026-07-07: fn_source_top10_period now returns cancellations + total +
+  // cancelled_nights + cancelled_revenue (estimate — Cloudbeds zeros total_amount on cancel).
   const top10Last30d = ((top10Last30dRaw ?? []) as Array<Record<string, unknown>>).map((r) => ({
     source: String(r.source ?? '—'),
     tier: String(r.tier ?? '—'),
-    reservations:  Number(r.reservations  ?? 0),
-    cancellations: Number(r.cancellations ?? 0),
-    total:         Number(r.total         ?? 0),
-    gross_revenue: Number(r.gross_revenue ?? 0),
-    adr:           Number(r.adr           ?? 0),
+    reservations:      Number(r.reservations      ?? 0),
+    cancellations:     Number(r.cancellations     ?? 0),
+    total:             Number(r.total             ?? 0),
+    gross_revenue:     Number(r.gross_revenue     ?? 0),
+    cancelled_revenue: Number(r.cancelled_revenue ?? 0),
+    adr:               Number(r.adr               ?? 0),
   }));
   // PBS 2026-05-29 v2 — tier share %% comparison (reservations vs revenue) + monthly stacked perf
   const totalResAcross = tierData.reduce((s, r) => s + r.reservations, 0);
@@ -1038,18 +1040,19 @@ async function CategoryBlock({
           renders in the group IIFE below — this row hosts just Top 10 for now
           so it sits directly above Group Performance on desktop. */}
       <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gridAutoRows: '1fr', gap: 12, alignItems: 'stretch' }}>
-        <Container title="Top 10 sources" subtitle="last 30 days · by gross revenue · date basis: booking_date">
+        <Container title="Top 10 sources" subtitle="last 30 days · by gross revenue · date basis: booking_date · Cxl Rev = cancelled nights × source ADR (Cloudbeds zeros the raw amount on cancel)">
           <div style={{ minHeight: 300, display: 'flex', flexDirection: 'column', flex: 1 }}>
             <SourceLinkTable
               rows={top10Last30d as unknown as Array<Record<string, string | number | null | undefined>>}
               sourceKey="source"
               columns={[
-                { key: 'source',        label: 'Source' },
-                { key: 'reservations',  label: 'Bkg',    format: 'int' },
-                { key: 'cancellations', label: 'Cxl',    format: 'int' },
-                { key: 'total',         label: 'Total',  format: 'int' },
-                { key: 'gross_revenue', label: 'Rev',    format: 'money' },
-                { key: 'adr',           label: 'ADR',    format: 'money' },
+                { key: 'source',            label: 'Source' },
+                { key: 'reservations',      label: 'Bkg',      format: 'int' },
+                { key: 'cancellations',     label: 'Cxl',      format: 'int' },
+                { key: 'total',             label: 'Total',    format: 'int' },
+                { key: 'gross_revenue',     label: 'Rev',      format: 'money' },
+                { key: 'cancelled_revenue', label: 'Cxl Rev',  format: 'money' },
+                { key: 'adr',               label: 'ADR',      format: 'money' },
               ]}
               emptyText="No bookings in last 30 days"
             />
