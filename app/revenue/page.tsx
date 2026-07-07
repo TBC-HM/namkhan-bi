@@ -2,11 +2,12 @@
 // Revenue HoD landing — TIGHT, full-width, above-the-fold first read.
 // Order: Headline tiles → Attention/Docs/Tasks → Conclusions → Report builder → BookingActivity.
 // Every block spans gridColumn 1/-1 so nothing sits in a 360px column with blank right.
-// cockpit ticket #198 (SEQ 6/6) · 2026-05-21.
 //
-// 2026-07-07 (PBS): Revenue Conclusions container added — same engine as the
-// Guest HoD SIGNALS block. 12 rules in /lib/rules/revenue.ts evaluate today's
-// OCC / ADR / RevPAR / pickup / cancels and surface priority-tagged insights.
+// 2026-07-07 (PBS): Revenue Conclusions container wired to public.guardrails
+// (domain='revenue'). Rules read occupancy_target / adr_target / revpar_target /
+// pickup_min_daily directly from DB — edit in Settings → Guardrails, effect is
+// live on next refresh. See lib/rules/wiring.ts for the full manifest of which
+// DB rule_keys are wired vs still dangling (surfaced via status dots).
 
 import Link from 'next/link';
 import {
@@ -26,11 +27,9 @@ import BugsList from './_components/BugsList';
 import HodTasksList from './_components/HodTasksList';
 import AttentionList from './_components/AttentionList';
 import { getPulseTodayPickup, getPulseTodayCancellations } from '@/lib/data-pulse';
-// Task #89: re-wire BookingActivity primitive into the Revenue HoD landing
 import BookingActivity from '@/app/(cockpit)/_design/BookingActivity';
-// 2026-07-07: Conclusions container — rule-based signals.
 import ConclusionBlock from '@/app/_components/ConclusionBlock';
-import { evaluateRevenueRules, type RevenueContext } from '@/lib/rules/revenue';
+import { evaluateRevenueRules, type RevenueContext, type RevenueTargets } from '@/lib/rules/revenue';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -40,7 +39,6 @@ interface Props {
   searchParams?: Record<string, string | string[] | undefined>;
 }
 
-// Short hint per section — shown in the Sections navigator card.
 const SECTION_HINT: Record<string, string> = {
   Pulse:        '30-day rolling KPIs',
   Demand:       'Forward OTB pace · 12 months',
@@ -61,21 +59,16 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   const cfg: DeptCfg = pid === PROPERTY_ID ? DEPT_CFG.revenue : getDeptCfg('revenue', pid);
 
   const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
-  // PBS #181: keep HoD in the tab strip so user can click back to landing.
   const sections = subPages;
 
-  // PBS note#2: append today's Pickup + Cancellations as 5th + 6th KPI tiles.
-  // PBS note#6: bring back Bug box — read cockpit_bugs (open only).
   const todayIso = new Date().toISOString().slice(0, 10);
   const [pickupToday, cancellationsToday, bugsRes, dueTasksRes] = await Promise.all([
     getPulseTodayPickup(pid, todayIso).catch(() => [] as Array<unknown>),
     getPulseTodayCancellations(pid, todayIso).catch(() => [] as Array<unknown>),
     supabase.from('cockpit_bugs').select('id, body, status, created_at, page_url').not('status','in','(closed,resolved,wontfix,done)').order('created_at', { ascending: false }).limit(5),
-    // PBS #164: badge count of tasks whose remind-or-due date has arrived (from v_hod_tasks_due)
     supabase.from('v_hod_tasks_due').select('id', { count: 'exact', head: true }).eq('dept_slug', 'revenue').eq('property_id', pid).eq('is_due', true),
   ]);
 
-  // #228: today's real OCC / ADR / RevPAR via SECURITY DEFINER RPC (replaces hardcoded DEPT_CFG.kpiTiles 78%/$182/$142 placeholders)
   const todayKpiRes = await supabase.rpc('fn_revenue_hod_today_kpi', { p_property_id: pid });
   const todayKpi = ((todayKpiRes.data ?? [])[0] ?? null) as { rn_tonight: number; capacity: number; occ_pct: number; adr_today: number; revpar_today: number } | null;
   const moneyCurrencyToday = pid === 1000001 ? 'EUR' : 'USD';
@@ -85,13 +78,11 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   const pickupCount = pickupToday.length;
   const cancelCount = cancellationsToday.length;
 
-  // 2026-07-07: sum pickup + cancel value for the conclusion rules.
-  // Both pulse fns return `{ value: number }` per booking; cancels have `.value` estimated.
   const pickupValue = (pickupToday as Array<{ value?: number | null }>).reduce((s, r) => s + (Number(r.value) || 0), 0);
   const cancelValue = (cancellationsToday as Array<{ value?: number | null }>).reduce((s, r) => s + (Number(r.value) || 0), 0);
 
-  // 2026-07-07: pull operator-editable thresholds from public.guardrails (domain='revenue').
-  // Falls back to hardcoded defaults inside /lib/rules/revenue.ts when a row is absent.
+  // 2026-07-07: pull operator-editable targets from public.guardrails (domain='revenue').
+  // Rules in /lib/rules/revenue.ts consume these by DB rule_key directly.
   const sbAdmin = getSupabaseAdmin();
   const guardrailsRes = await sbAdmin
     .from('guardrails')
@@ -99,14 +90,17 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     .eq('property_id', pid)
     .eq('domain', 'revenue')
     .eq('active', true);
-  const thresholds: Record<string, number> = {};
+  const targets: RevenueTargets = {};
   for (const g of (guardrailsRes.data ?? []) as Array<{ rule_key: string; threshold_val: number | string }>) {
     const n = typeof g.threshold_val === 'string' ? Number(g.threshold_val) : g.threshold_val;
-    if (Number.isFinite(n)) thresholds[g.rule_key] = n as number;
+    if (!Number.isFinite(n)) continue;
+    if (g.rule_key === 'occupancy_target') targets.occupancy_target = n;
+    else if (g.rule_key === 'adr_target') targets.adr_target = n;
+    else if (g.rule_key === 'revpar_target') targets.revpar_target = n;
+    else if (g.rule_key === 'pickup_min_daily') targets.pickup_min_daily = n;
   }
 
   const baseTiles: KpiTileProps[] = (cfg.kpiTiles ?? []).map((k) => {
-    // #228: override placeholders for the revenue HoD with today's live OCC/ADR/RevPAR
     if (todayKpi) {
       if (k.k === 'OCC')    return { label: 'OCC',    value: `${todayKpi.occ_pct ?? 0}%`,           size: 'sm', footnote: `${todayKpi.rn_tonight ?? 0} of ${todayKpi.capacity ?? 0} rooms tonight` } as KpiTileProps;
       if (k.k === 'ADR')    return { label: 'ADR',    value: `${symToday}${Math.round(Number(todayKpi.adr_today ?? 0)).toLocaleString('en-US')}`,    size: 'sm', footnote: 'today, in-house only' } as KpiTileProps;
@@ -124,7 +118,6 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
       status: cancelCount === 0 ? 'green' : 'amber' },
   ];
 
-  // 2026-07-07: assemble revenue conclusion context + evaluate rules.
   const revenueCtx: RevenueContext = {
     rnTonight:      Number(todayKpi?.rn_tonight ?? 0),
     capacity:       Number(todayKpi?.capacity ?? 0),
@@ -135,29 +128,25 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     pickupValue,
     cancelCount,
     cancelValue,
-    occBaselinePct: null,   // wire when v_pulse LY comparison is threaded through
-    adrBaseline:    null,
     currencySymbol: symToday,
-    thresholds,
+    targets,
   };
   const revenueInsights = evaluateRevenueRules(revenueCtx);
 
+  // Subtitle telemetry — show which DB targets are actually in play right now.
+  const activeTargets = Object.entries(targets)
+    .map(([k, v]) => `${k}=${v}`).join(' · ') || 'no DB targets · using fallback defaults';
+
   const attn = cfg.defaultAttn ?? [];
   const docs = cfg.defaultDocs ?? [];
-  const tasks = cfg.defaultTasks ?? [];
   const reportTypes = cfg.reportTypes ?? [];
 
-  // task #68 · route the "Ask <HoD>" CTA to the canonical persona-aware
-  // chat surface. Donna HoD is Mira (role revenue_hod_donna) so we pass
-  // the explicit role/name/emoji/label overrides that /cockpit/chat consumes.
   const DONNA_PROPERTY_ID = 1000001;
   const chatHref =
     pid === DONNA_PROPERTY_ID
       ? `/cockpit/chat?dept=revenue&role=revenue_hod_donna&name=Mira&emoji=${encodeURIComponent('📈')}&label=Revenue`
       : `/cockpit/chat?dept=revenue`;
 
-  // PBS note#1: surface sections as the TOP tab strip on the HoD landing.
-  // PBS #181: when on bare /revenue the active tab is HoD (the landing); on /h/[pid]/revenue same.
   const hodHrefs = ['/revenue', `/h/${pid}/revenue`];
   const hodTabs = sections.map((s) => ({
     key: s.href, label: s.label, href: s.href,
@@ -172,7 +161,6 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
         <Link href={chatHref} style={primaryBtnStyle}>{`Ask ${cfg.hodName} →`}</Link>
       }
     >
-      {/* 1. Headline tiles — full-width row, dense */}
       {tiles.length > 0 && (
         <div style={fullRow}>
           <Container title="Headline" subtitle="snapshot · last refresh" density="compact">
@@ -183,7 +171,6 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
         </div>
       )}
 
-      {/* 2. Attention / Reports / Tasks / Bugs — four-up full-width row (Bug box restored per #6) */}
       <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
         <Container title="Attention" subtitle={`${attn.length} item${attn.length === 1 ? '' : 's'} · dismiss with ×`} density="compact">
           <AttentionList items={attn} storageKey={`attn:revenue:${pid}`} />
@@ -202,19 +189,18 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
         </Container>
       </div>
 
-      {/* 3. Revenue Conclusions — rule-based signals from /lib/rules/revenue.ts */}
+      {/* Revenue Conclusions — DB-driven thresholds from public.guardrails (domain='revenue') */}
       <div style={fullRow}>
         <ConclusionBlock
           insights={revenueInsights}
           title="CONCLUSIONS · occupancy · pricing · pickup · cancels"
-          subtitle={`Rule-based on today's OCC ${(todayKpi?.occ_pct ?? 0)}% · ADR ${symToday}${Math.round(Number(todayKpi?.adr_today ?? 0)).toLocaleString('en-US')} · ${pickupCount} pickup · ${cancelCount} cancels · thresholds editable in Settings → Guardrails (revenue)`}
+          subtitle={`Live: OCC ${(todayKpi?.occ_pct ?? 0)}% · ADR ${symToday}${Math.round(Number(todayKpi?.adr_today ?? 0)).toLocaleString('en-US')} · ${pickupCount} pickup · ${cancelCount} cancels · DB targets in play: ${activeTargets}`}
           emptyText="Everything nominal. No rate-side alarms firing."
           storageKey={`revenue_hod_signals:${pid}`}
           maxRender={12}
         />
       </div>
 
-      {/* 4. Build a report — full-width */}
       {reportTypes.length > 0 && (
         <div style={fullRow}>
           <Container
@@ -227,7 +213,6 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
         </div>
       )}
 
-      {/* Task #89: BookingActivity — today's bookings + cancellations + day-window selector */}
       <div style={fullRow}>
         <BookingActivity propertyId={pid} searchParams={searchParams} />
       </div>
@@ -236,42 +221,9 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   );
 }
 
-// Each immediate child of DashboardPage body sits in a 360px auto-fit grid cell.
-// Spanning gridColumn 1/-1 makes the block use the full row instead of leaving
-// blank space to the right.
 const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
 
-const SEV_DOT: Record<string, string> = { high: '#C0584C', medium: '#C4A06B', low: '#9B907A' };
-const listStyle: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 4 };
-const rowStyle: React.CSSProperties = {
-  display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 4,
-  background: 'var(--paper, #FFFFFF)', border: '1px solid var(--hairline, #E6DFCC)', fontSize: 12,
-};
-const dotStyle: React.CSSProperties = { width: 7, height: 7, borderRadius: '50%', flexShrink: 0 };
-const labelStyle: React.CSSProperties = { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
-const tagStyle: React.CSSProperties = {
-  fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-soft, #5A5A5A)',
-  padding: '2px 6px', borderRadius: 99, background: 'var(--hairline, #E6DFCC)', flexShrink: 0,
-};
-const emptyStyle: React.CSSProperties = { fontSize: 11, color: 'var(--ink-soft, #5A5A5A)', fontStyle: 'italic', padding: '6px 4px' };
 const primaryBtnStyle: React.CSSProperties = {
   fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600,
   padding: '6px 14px', borderRadius: 4, background: 'var(--primary, #1F3A2E)', color: '#FFFFFF', textDecoration: 'none',
-};
-const secondaryBtnStyle: React.CSSProperties = {
-  display: 'inline-block', padding: '8px 14px',
-  background: 'var(--paper, #FFFFFF)', border: '1px solid var(--hairline, #E6DFCC)', borderRadius: 4,
-  color: 'var(--ink, #1B1B1B)', textDecoration: 'none', fontSize: 12, fontWeight: 500,
-};
-const sectionCardStyle: React.CSSProperties = {
-  display: 'flex', flexDirection: 'column', gap: 2,
-  padding: '8px 10px', borderRadius: 4,
-  background: 'var(--paper, #FFFFFF)', border: '1px solid var(--hairline, #E6DFCC)',
-  color: 'inherit', textDecoration: 'none',
-};
-const sectionLabelStyle: React.CSSProperties = {
-  fontSize: 13, fontWeight: 600, color: 'var(--ink, #1B1B1B)',
-};
-const sectionHintStyle: React.CSSProperties = {
-  fontSize: 10, color: 'var(--ink-soft, #5A5A5A)', lineHeight: 1.3,
 };
