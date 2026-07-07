@@ -957,12 +957,15 @@ async function CategoryBlock({
     share_pct: tierGrossTotal > 0 ? Math.round((r.gross_revenue / tierGrossTotal) * 1000) / 10 : 0,
   }));
   const top10Last30dRaw = top10Res.data;
+  // PBS 2026-07-07: fn_source_top10_period now returns cancellations + total columns.
   const top10Last30d = ((top10Last30dRaw ?? []) as Array<Record<string, unknown>>).map((r) => ({
     source: String(r.source ?? '—'),
     tier: String(r.tier ?? '—'),
-    reservations: Number(r.reservations ?? 0),
+    reservations:  Number(r.reservations  ?? 0),
+    cancellations: Number(r.cancellations ?? 0),
+    total:         Number(r.total         ?? 0),
     gross_revenue: Number(r.gross_revenue ?? 0),
-    adr: Number(r.adr ?? 0),
+    adr:           Number(r.adr           ?? 0),
   }));
   // PBS 2026-05-29 v2 — tier share %% comparison (reservations vs revenue) + monthly stacked perf
   const totalResAcross = tierData.reduce((s, r) => s + r.reservations, 0);
@@ -1042,9 +1045,11 @@ async function CategoryBlock({
               sourceKey="source"
               columns={[
                 { key: 'source',        label: 'Source' },
-                { key: 'reservations',  label: 'Bkg',  format: 'int' },
-                { key: 'gross_revenue', label: 'Rev',  format: 'money' },
-                { key: 'adr',           label: 'ADR',  format: 'money' },
+                { key: 'reservations',  label: 'Bkg',    format: 'int' },
+                { key: 'cancellations', label: 'Cxl',    format: 'int' },
+                { key: 'total',         label: 'Total',  format: 'int' },
+                { key: 'gross_revenue', label: 'Rev',    format: 'money' },
+                { key: 'adr',           label: 'ADR',    format: 'money' },
               ]}
               emptyText="No bookings in last 30 days"
             />
