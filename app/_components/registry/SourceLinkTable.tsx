@@ -5,6 +5,10 @@
 // Used across /revenue/channels containers so every source name jumps
 // straight to /revenue/channels/[source]. PBS 2026-07-01.
 //
+// PBS 2026-07-07: added optional `currency` prop so Donna (EUR) stops
+// rendering '$' in the Category/Source drill tables. Default stays USD
+// for backward-compat with the Namkhan call-sites.
+//
 // Style: hover underlines + brass accent + right-arrow chevron so PBS
 // can see at a glance that names are clickable.
 
@@ -21,17 +25,25 @@ interface Row {
   [key: string]: string | number | null | undefined;
 }
 
+type MoneyCcy = 'USD' | 'EUR' | 'LAK';
+
 interface Props {
   rows: Row[];
   columns: SourceColumn[];
   /** Which column holds the source name (used both as label and drill key). */
   sourceKey?: string;
   emptyText?: string;
+  /** Property display currency for 'money' columns. Defaults to USD. */
+  currency?: MoneyCcy;
 }
 
-function fmt(v: unknown, f?: SourceColumn['format']): string {
+function symbolFor(ccy: MoneyCcy): string {
+  return ccy === 'EUR' ? '€' : ccy === 'LAK' ? '₭' : '$';
+}
+
+function fmt(v: unknown, f: SourceColumn['format'] | undefined, symbol: string): string {
   if (v == null || v === '') return '—';
-  if (f === 'money')  return `$${Math.round(Number(v)).toLocaleString('en-US')}`;
+  if (f === 'money')  return `${symbol}${Math.round(Number(v)).toLocaleString('en-US')}`;
   if (f === 'pct')    return `${Number(v).toFixed(1)}%`;
   if (f === 'int')    return Number(v).toLocaleString('en-US');
   return String(v);
@@ -39,6 +51,7 @@ function fmt(v: unknown, f?: SourceColumn['format']): string {
 
 export default function SourceLinkTable({
   rows, columns, sourceKey = 'source', emptyText = 'No data.',
+  currency = 'USD',
 }: Props) {
   if (rows.length === 0) {
     return (
@@ -55,6 +68,8 @@ export default function SourceLinkTable({
       </div>
     );
   }
+
+  const symbol = symbolFor(currency);
 
   const th: React.CSSProperties = {
     padding: '8px 10px', textAlign: 'right',
@@ -115,7 +130,7 @@ export default function SourceLinkTable({
                   }
                   return (
                     <td key={c.key} style={{ ...td, textAlign: c.align ?? 'right' }}>
-                      {fmt(val, c.format)}
+                      {fmt(val, c.format, symbol)}
                     </td>
                   );
                 })}
