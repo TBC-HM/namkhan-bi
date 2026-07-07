@@ -25,7 +25,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import type { DashboardPageProps, DashboardTab } from '../types';
 import HeaderPills from '@/components/page/HeaderPills';
-import { findSubGroup } from '@/lib/nav-subgroups';
+import { findSubGroup, prefixTabHref } from '@/lib/nav-subgroups';
 import '../internal/tokens.css';
 
 export default function DashboardPage(props: DashboardPageProps) {
@@ -74,11 +74,15 @@ function SubTabStrip({ pathname, tabs }: { pathname: string; tabs: { label: stri
   return (
     <nav style={S.subTabStrip} role="tablist" aria-label="Sub-section">
       {tabs.map((t) => {
-        const cleanHref = t.href.split('?')[0];
-        const active = pathname === t.href || pathname === cleanHref;
+        // PBS 2026-07-07 pm: rewrite unprefixed hrefs to the current tenant
+        // (e.g. /revenue/pickup → /h/1000001/revenue/pickup on Donna URLs) so
+        // the sub-strip works on both Namkhan legacy and tenant URLs.
+        const effectiveHref = prefixTabHref(pathname, t.href);
+        const cleanHref = effectiveHref.split('?')[0];
+        const active = pathname === effectiveHref || pathname === cleanHref;
         const style: CSSProperties = { ...S.subTab, ...(active ? S.subTabActive : null) };
         return (
-          <a key={t.href} href={t.href} role="tab" aria-selected={active} style={style}>
+          <a key={t.href} href={effectiveHref} role="tab" aria-selected={active} style={style}>
             {t.label}
           </a>
         );
