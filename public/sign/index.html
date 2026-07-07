@@ -1,0 +1,39 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign — Revenue Management Agreement</title>
+<style>body{font-family:Georgia,serif;max-width:640px;margin:24px auto;padding:0 16px;color:#1a1a1a}
+h1{font-size:20px}label{display:block;margin:10px 0 4px}input{width:100%;padding:8px;border:1px solid #999}
+canvas{border:1px solid #999;width:100%;height:160px;touch-action:none}
+button{margin-top:16px;padding:10px 18px;border:0;background:#1a1a1a;color:#fff;cursor:pointer}
+.muted{color:#666;font-size:13px}</style></head><body>
+<h1>Revenue Management Services Agreement</h1>
+<p class="muted">Review the document, complete your details, sign, and submit. Your IP and timestamp are recorded for audit.</p>
+<p><a id="doc" href="#" target="_blank">Open the agreement PDF &rsaquo;</a></p>
+<label>Full name</label><input id="name">
+<label>Title</label><input id="title">
+<label>Signature (draw below)</label><canvas id="pad"></canvas>
+<div><button type="button" onclick="clearPad()">Clear</button></div>
+<label><input type="checkbox" id="consent" style="width:auto"> I agree to sign this agreement electronically and that this constitutes my legally binding signature.</label>
+<button id="submit">Sign &amp; Submit</button>
+<p id="msg" class="muted"></p>
+<script>
+const token=location.pathname.split("/").pop();
+const FN=(window.SIGN_FN_URL||"/functions/v1/sign-revenue-contract");
+const c=document.getElementById("pad"),ctx=c.getContext("2d");
+function fit(){c.width=c.clientWidth;c.height=160;ctx.lineWidth=2;ctx.lineCap="round";}fit();addEventListener("resize",fit);
+let drawing=false,drawn=false;
+function pos(e){const r=c.getBoundingClientRect();const t=e.touches?e.touches[0]:e;return[t.clientX-r.left,t.clientY-r.top];}
+c.addEventListener("pointerdown",e=>{drawing=true;const[x,y]=pos(e);ctx.beginPath();ctx.moveTo(x,y);});
+c.addEventListener("pointermove",e=>{if(!drawing)return;const[x,y]=pos(e);ctx.lineTo(x,y);ctx.stroke();drawn=true;});
+addEventListener("pointerup",()=>drawing=false);
+function clearPad(){ctx.clearRect(0,0,c.width,c.height);drawn=false;}
+const name0=document.getElementById("name"),title0=document.getElementById("title"),consent0=document.getElementById("consent"),msg=document.getElementById("msg");
+document.getElementById("submit").onclick=async()=>{
+  if(!name0.value||!consent0.checked){msg.textContent="Name and consent are required.";return;}
+  const png=drawn?c.toDataURL("image/png").split(",")[1]:null;
+  msg.textContent="Submitting...";
+  const r=await fetch(FN,{method:"POST",headers:{"content-type":"application/json"},
+    body:JSON.stringify({token,signer_name:name0.value,signer_title:title0.value,signature_method:drawn?"drawn":"typed",signature_data:png,consent:true})});
+  const j=await r.json();
+  msg.textContent=r.ok?(j.executed?"Signed. The agreement is now fully executed.":"Signed. Sent for countersignature."):("Error: "+(j.error||r.status));
+};
+</script></body></html>
