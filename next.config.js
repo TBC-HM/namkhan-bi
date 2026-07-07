@@ -23,6 +23,14 @@ const nextConfig = {
       },
     ];
   },
+  // PBS 2026-07-07: Beyond Circle signing page — /sign/:token serves the
+  // static public/sign/index.html; the inline JS reads the token from
+  // location.pathname and POSTs to sign-revenue-contract.
+  async rewrites() {
+    return [
+      { source: '/sign/:token', destination: '/sign/index.html' },
+    ];
+  },
   async redirects() {
     return [
       { source: '/today',                       destination: '/operations/today',        permanent: false },
