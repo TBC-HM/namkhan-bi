@@ -57,6 +57,9 @@ export default async function PricingPage({ searchParams, propertyId }: { search
   const isNamkhan = pid === NAMKHAN_PROPERTY_ID;
   const capacity = isNamkhan ? 30 : 64;
   const propertyLabel = isNamkhan ? 'Namkhan' : pid === 1000001 ? 'Donna' : `Property ${pid}`;
+  // PBS 2026-07-07: property-scoped display currency for Donna (EUR) — was hardcoded 'USD'.
+  const moneyCurrency: 'USD' | 'EUR' = pid === 1000001 ? 'EUR' : 'USD';
+  const currencySym: '€' | '$' = moneyCurrency === 'EUR' ? '€' : '$';
   const basePath = isNamkhan ? '/revenue/pricing' : `/h/${pid}/revenue/pricing`;
   const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
   const tabs: DashboardTab[] = subPages.map((s) => ({ key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/pricing') }));
@@ -287,10 +290,10 @@ export default async function PricingPage({ searchParams, propertyId }: { search
   });
 
   const actionableTiles: KpiTileProps[] = [
-    { label: 'Current BAR', value: k.barToday != null ? Math.round(k.barToday) : 0, currency: 'USD', size: 'sm',
-      footnote: k.barToday != null ? "today's lowest sellable" : 'rate_inventory · today · rate ≥ $10',
+    { label: 'Current BAR', value: k.barToday != null ? Math.round(k.barToday) : 0, currency: moneyCurrency, size: 'sm',
+      footnote: k.barToday != null ? "today's lowest sellable" : `rate_inventory · today · rate ≥ ${currencySym}10`,
       status: k.barToday != null ? 'green' : 'grey' },
-    { label: 'Comp gap', value: compGap != null ? Math.round(compGap) : 0, currency: 'USD', size: 'sm',
+    { label: 'Comp gap', value: compGap != null ? Math.round(compGap) : 0, currency: moneyCurrency, size: 'sm',
       footnote: `BAR − median comp · ${k.compRows ?? 0} comps`,
       status: compGap == null ? 'grey' : compGap >= 0 ? 'green' : 'amber' },
     { label: 'Occupancy fence', value: k.occPctToday != null ? `${k.occPctToday.toFixed(0)}%` : '—', size: 'sm',
@@ -302,9 +305,9 @@ export default async function PricingPage({ searchParams, propertyId }: { search
   ];
 
   const windowTiles: KpiTileProps[] = [
-    { label: 'Avg rate', value: Math.round(avgRate), currency: 'USD', size: 'sm', footnote: 'mean · window', status: avgRate > 0 ? 'green' : 'grey' },
-    { label: 'BAR floor', value: Math.round(minRate), currency: 'USD', size: 'sm', footnote: 'lowest sellable · window', status: minRate > 0 ? 'green' : 'grey' },
-    { label: 'Ceiling', value: Math.round(maxRate), currency: 'USD', size: 'sm', footnote: 'highest rate · window', status: maxRate > 0 ? 'green' : 'grey' },
+    { label: 'Avg rate', value: Math.round(avgRate), currency: moneyCurrency, size: 'sm', footnote: 'mean · window', status: avgRate > 0 ? 'green' : 'grey' },
+    { label: 'BAR floor', value: Math.round(minRate), currency: moneyCurrency, size: 'sm', footnote: 'lowest sellable · window', status: minRate > 0 ? 'green' : 'grey' },
+    { label: 'Ceiling', value: Math.round(maxRate), currency: moneyCurrency, size: 'sm', footnote: 'highest rate · window', status: maxRate > 0 ? 'green' : 'grey' },
     { label: 'Stop-sell cells', value: stopSells, size: 'sm', footnote: 'room × day combos blocked for sale · in window', status: stopSells > 0 ? 'amber' : 'green' },
     { label: 'MinLOS cells', value: minStayRows, size: 'sm', footnote: 'room × day combos with min-stay > 1 night · in window', status: minStayRows > 0 ? 'amber' : 'green' },
   ];
@@ -325,7 +328,9 @@ export default async function PricingPage({ searchParams, propertyId }: { search
     .order('day');
   const calByDay = new Map<string, Record<string, unknown>>();
   for (const r of (pricingCal ?? []) as Array<Record<string, unknown>>) calByDay.set(String(r.day).slice(0, 10), r);
-  const sym = pid === 1000001 ? '€' : '$';
+  // Local calendar sym alias — mirrors moneyCurrency but kept as literal char so
+  // it composes cleanly into calendar cell labels below.
+  const sym = currencySym;
   const pricingCalendarDays: CalendarDay[] = (() => {
     const out: CalendarDay[] = [];
     for (let i = 0; i < 30; i++) {
@@ -439,9 +444,9 @@ export default async function PricingPage({ searchParams, propertyId }: { search
       </div>
 
       <div style={fullRow}>
-        <Container title="Two-week glance · cheapest sellable rate" subtitle="date × room type · USD per night · next 14d">
+        <Container title="Two-week glance · cheapest sellable rate" subtitle={`date × room type · ${moneyCurrency} per night · next 14d`}>
           <Chart variant="heatmap" data={heatmapData} xKey="date" yKey="room"
-            series={[{ key: 'rate', label: 'Rate (USD)' }]}
+            series={[{ key: 'rate', label: `Rate (${moneyCurrency})` }]}
             height={Math.max(220, Math.min(560, new Set(heatmapData.map((d) => d.room)).size * 40))}
             empty={{ title: 'No sellable rates in next 14 days' }}
           />
@@ -467,7 +472,7 @@ export default async function PricingPage({ searchParams, propertyId }: { search
       <div style={fullRow}>
         <Container title="Lead-time rate pattern · price by booking window" subtitle="avg sellable rate by lead-time bucket — flags pricing drift between near-in and far-out windows">
           <Chart variant="bar" data={leadData} xKey="bucket"
-            series={[{ key: 'rate', label: 'Avg rate (USD)' }]}
+            series={[{ key: 'rate', label: `Avg rate (${moneyCurrency})` }]}
             height={260}
             empty={{ title: 'No lead-time data yet' }}
           />
@@ -478,7 +483,7 @@ export default async function PricingPage({ searchParams, propertyId }: { search
         <Container title="OCC × BAR · next 30 days" subtitle="bar: base sellable rate · line: forward OCC % per day — spot pricing gaps where high OCC meets low BAR (or vice-versa)">
           <Chart variant="combo" data={occRateRows} xKey="day"
             series={[
-              { key: 'rate', label: 'BAR (USD)', type: 'bar' },
+              { key: 'rate', label: `BAR (${moneyCurrency})`, type: 'bar' },
               { key: 'occ',  label: 'OCC %',     type: 'line' },
             ]}
             height={280}
