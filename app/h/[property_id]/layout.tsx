@@ -1,6 +1,10 @@
 // app/h/[property_id]/layout.tsx
+// v3: PBS 2026-07-07 — property-aware <title> + meta description.
+// generateMetadata resolves core.properties.name so `/h/1000001/*` renders
+// "Donna Portals · BI" instead of the root layout's hardcoded "The Namkhan · BI".
 // v2: Adds parallel fetch for property.brand + wraps children in <ThemeInjector>.
 
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { PropertyProvider, type ModuleStatus } from '@/lib/property-context';
@@ -14,6 +18,39 @@ const KNOWN_PROPERTIES = [
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+
+// PBS 2026-07-07 — resolve property.name so <title> matches the tenant.
+// Falls back to KNOWN_PROPERTIES if the row is missing so we never render
+// "undefined · BI". Next.js merges parent + child metadata: the root layout
+// still supplies default OG/Twitter/etc. — we only override title + description.
+export async function generateMetadata({
+  params,
+}: {
+  params: { property_id: string };
+}): Promise<Metadata> {
+  const propertyId = Number(params.property_id);
+  const fallback = KNOWN_PROPERTIES.find((p) => p.property_id === propertyId)?.display_name
+    ?? `Property ${params.property_id}`;
+
+  let name = fallback;
+  try {
+    const supabase = createClient();
+    const { data } = await supabase
+      .schema('core')
+      .from('properties')
+      .select('name')
+      .eq('property_id', propertyId)
+      .maybeSingle();
+    if (data?.name) name = data.name;
+  } catch {
+    /* keep fallback */
+  }
+
+  return {
+    title: `${name} · BI`,
+    description: `Operator intelligence dashboard for ${name}.`,
+  };
+}
 
 export default async function PropertyLayout({
   children,
