@@ -3,7 +3,7 @@
 // Design tokens: paper white + hairlines (#E6DFCC) per feedback_paper_white_default_for_tables.
 // Green = better price (lower own, higher demand), red = worse.
 
-import type { OverviewRow, RatesRow, DeltaRow, SnapshotMeta } from './data';
+import type { OverviewRow, RatesRow, DeltaRow, HotelMeta } from './data';
 
 // ── shared cell styles ────────────────────────────────────────
 const th: React.CSSProperties = {
@@ -97,7 +97,7 @@ export function OverviewTable({ rows }: { rows: OverviewRow[] }) {
 // ─────────────────────────────────────────────────────────────
 export function RatesTable({ rows, hotels }: {
   rows: RatesRow[];
-  hotels: SnapshotMeta['hotels'];
+  hotels: HotelMeta[];
 }) {
   if (rows.length === 0) return <div style={emptyBox}>No data for this snapshot.</div>;
   return (
@@ -146,7 +146,7 @@ export function RatesTable({ rows, hotels }: {
 // ─────────────────────────────────────────────────────────────
 export function DeltaTable({ rows, hotels, earlierSnapshot }: {
   rows: DeltaRow[];
-  hotels: SnapshotMeta['hotels'];
+  hotels: HotelMeta[];
   earlierSnapshot: string | null;
 }) {
   if (rows.length === 0) return <div style={emptyBox}>No data for this snapshot.</div>;
