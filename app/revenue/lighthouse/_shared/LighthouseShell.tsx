@@ -1,7 +1,7 @@
 // app/revenue/lighthouse/_shared/LighthouseShell.tsx
-// PBS 2026-07-07: Structure for the 5-view Lighthouse compset dashboard.
-// No data wired yet — the "awaiting ingestion" placeholder tells the operator
-// what will land here once the Supabase-side digest is built (step 2).
+// PBS 2026-07-07: 5-view Lighthouse compset dashboard shell.
+// Data lives in public.compset_lighthouse_{context,daily,hotels} — see ./data.ts.
+// Currently seeded with a Donna Portals sample snapshot (snapshot_date=2026-07-06).
 
 import Link from 'next/link';
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
@@ -32,24 +32,31 @@ export function LighthouseNav({ active }: { active: LighthouseView }) {
   );
 }
 
-export function LighthouseEmpty({ view, columns }: { view: string; columns: string[] }) {
+export function LighthouseEmpty({ view }: { view: string }) {
   return (
     <div style={{ padding: 32, textAlign: 'center', border: '1px solid #E6DFCC', borderRadius: 6, background: '#FAFAF7' }}>
       <div style={{ fontSize: 32, marginBottom: 12 }}>💡</div>
       <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6, color: '#1B1B1B' }}>Awaiting Lighthouse email ingestion</div>
       <div style={{ fontSize: 12, color: '#5A5A5A', marginBottom: 16 }}>
-        The <strong>{view}</strong> view will populate once the daily xlsx from Lighthouse is parsed into <code>public.compset_lighthouse_daily</code>.
-      </div>
-      <div style={{ fontSize: 11, color: '#5A5A5A' }}>
-        Columns this view will render: <code>{columns.join(' · ')}</code>
+        The <strong>{view}</strong> view needs at least one snapshot in <code>public.compset_lighthouse_daily</code>.
       </div>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// Shared column specs (documenting what each view carries).
-// ─────────────────────────────────────────────────────────────
+export function SampleBanner({ snapshotDate }: { snapshotDate: string | null }) {
+  return (
+    <div style={{
+      padding: '6px 12px', background: '#FDF6D8', border: '1px solid #E9D66C',
+      borderRadius: 4, fontSize: 11, color: '#5A4A00', marginBottom: 10,
+      display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap',
+    }}>
+      <span style={{ fontWeight: 700 }}>Sample data — Donna Portals demo</span>
+      <span>Snapshot loaded: <code>{snapshotDate ?? '—'}</code></span>
+      <span>· Daily Lighthouse xlsx ingestion is not yet wired</span>
+    </div>
+  );
+}
 
 export const OVERVIEW_COLUMNS = [
   'Day', 'Date',
@@ -57,30 +64,21 @@ export const OVERVIEW_COLUMNS = [
   'My OTB %', 'Market demand %',
   'Booking.com ranking', 'Holidays', 'Events',
 ];
-
 export const RATES_COLUMNS = [
   'Day', 'Date', 'My OTB %', 'Market demand %',
-  'Own rate',
-  '+ one column per competitor hotel (rate value or LOS/No flex/Sold out)',
+  'Own rate', '+ one column per competitor hotel (rate value or LOS/No flex/Sold out)',
 ];
-
 export const DELTA_COLUMNS = [
   'Day', 'Date', 'My OTB %', '(Δ OTB)', 'Market demand %', '(Δ demand)',
-  'Own rate', '(Δ own)',
-  '+ per competitor: rate + Δ vs comparison window',
+  'Own rate', '(Δ own)', '+ per competitor: rate + Δ vs comparison window',
 ];
 
-// ─────────────────────────────────────────────────────────────
-// Wrapper — every Lighthouse page uses this.
-// ─────────────────────────────────────────────────────────────
-
 export function LighthouseShell({
-  view, title, subtitle, columns, children,
+  view, title, subtitle, children,
 }: {
   view: LighthouseView;
   title: string;
   subtitle: string;
-  columns: string[];
   children?: React.ReactNode;
 }) {
   return (
@@ -94,8 +92,8 @@ export function LighthouseShell({
           <LighthouseNav active={view} />
         </div>
         <div style={{ gridColumn: '1 / -1' }}>
-          <Container title={title} subtitle="Lighthouse feed · updates every 24h from a scheduled email → xlsx parser (pending build)">
-            {children ?? <LighthouseEmpty view={title} columns={columns} />}
+          <Container title={title} subtitle="Lighthouse feed · updates every 24h from a scheduled email → xlsx parser (currently sample data)">
+            {children ?? <LighthouseEmpty view={title} />}
           </Container>
         </div>
       </DashboardPage>
