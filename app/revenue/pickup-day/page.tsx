@@ -25,50 +25,40 @@ interface PaceRow {
   otb_revpar: number;
 }
 
-interface Snap {
-  target_stay_date: string;
-  otb_rooms_sold: number;
-  otb_revenue: number;
-}
-
 interface PickupDelta { rn: number; rev: number; adr: number }
 
 async function fetchData(propertyId: number) {
   const sb = getSupabaseAdmin();
   const todayIso = new Date().toISOString().slice(0, 10);
   const in120 = new Date(Date.now() + 120 * 86400_000).toISOString().slice(0, 10);
-  const d1Iso = new Date(Date.now() - 1 * 86400_000).toISOString().slice(0, 10);
-  const d7Iso = new Date(Date.now() - 7 * 86400_000).toISOString().slice(0, 10);
 
-  const [pace, snap1, snap7] = await Promise.all([
+  const [pace, pickup30] = await Promise.all([
     sb.schema('kpi').from('v_pace_otb_daily')
       .select('stay_date, year, month, iso_dow, rooms_available, otb_rooms_sold, otb_revenue, otb_occupancy_pct, otb_adr, otb_revpar')
       .eq('property_id', propertyId)
       .gte('stay_date', todayIso).lte('stay_date', in120)
       .order('stay_date'),
-    sb.schema('kpi').from('historical_pace_snapshots')
-      .select('target_stay_date, otb_rooms_sold, otb_revenue')
-      .eq('property_id', propertyId)
-      .eq('snapshot_date', d1Iso),
-    sb.schema('kpi').from('historical_pace_snapshots')
-      .select('target_stay_date, otb_rooms_sold, otb_revenue')
-      .eq('property_id', propertyId)
-      .eq('snapshot_date', d7Iso),
+    // v_pickup_30d gives us otb_rooms vs otb_rooms_7d_ago per stay_date (real -7d room-nights delta).
+    // Revenue delta is estimated as RN_delta × current_ADR (per-date snapshots with revenue don't exist yet).
+    sb.from('v_pickup_30d')
+      .select('stay_date, otb_rooms, otb_rooms_7d_ago')
+      .eq('property_id', propertyId),
   ]);
 
   return {
     pace: (pace.data ?? []) as PaceRow[],
-    snap1: (snap1.data ?? []) as Snap[],
-    snap7: (snap7.data ?? []) as Snap[],
+    p7Map: new Map(((pickup30.data ?? []) as Array<{ stay_date: string; otb_rooms: number; otb_rooms_7d_ago: number }>)
+      .map(r => [r.stay_date, r.otb_rooms - r.otb_rooms_7d_ago])),
   };
 }
 
-function delta(cur: PaceRow, prev: Snap | undefined): PickupDelta {
-  if (!prev) return { rn: 0, rev: 0, adr: 0 };
-  const rn = Number(cur.otb_rooms_sold ?? 0) - Number(prev.otb_rooms_sold ?? 0);
-  const rev = Number(cur.otb_revenue ?? 0) - Number(prev.otb_revenue ?? 0);
-  const adr = rn !== 0 ? rev / rn : 0;
-  return { rn, rev, adr };
+function pickup7(cur: PaceRow, rnDelta: number | undefined): PickupDelta {
+  if (rnDelta == null) return { rn: 0, rev: 0, adr: 0 };
+  // Rev estimate: RN delta × current OTB ADR (imperfect but the only estimate available until
+  // per-date revenue snapshots exist).
+  const rev = rnDelta * Number(cur.otb_adr ?? 0);
+  const adr = rnDelta !== 0 ? Number(cur.otb_adr ?? 0) : 0;
+  return { rn: rnDelta, rev, adr };
 }
 
 const DOW = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
@@ -88,10 +78,7 @@ function fmtPct(n: number | null | undefined) {
 
 export default async function PickupDayReport() {
   const pid = PROPERTY_ID;
-  const { pace, snap1, snap7 } = await fetchData(pid);
-
-  const snap1Map = new Map(snap1.map(s => [s.target_stay_date, s]));
-  const snap7Map = new Map(snap7.map(s => [s.target_stay_date, s]));
+  const { pace, p7Map } = await fetchData(pid);
 
   // Group rows by year+month for monthly totals
   const byMonth = new Map<string, PaceRow[]>();
@@ -181,16 +168,13 @@ export default async function PickupDayReport() {
                     const capSum = rows.reduce((s, r) => s + Number(r.rooms_available), 0);
                     const avgOtbPct = capSum > 0 ? (totOcc / capSum) * 100 : 0;
                     const avgAdr = totOcc > 0 ? totRev / totOcc : 0;
-                    const p1sum = rows.reduce((s, r) => s + delta(r, snap1Map.get(r.stay_date)).rn, 0);
-                    const p1rev = rows.reduce((s, r) => s + delta(r, snap1Map.get(r.stay_date)).rev, 0);
-                    const p7sum = rows.reduce((s, r) => s + delta(r, snap7Map.get(r.stay_date)).rn, 0);
-                    const p7rev = rows.reduce((s, r) => s + delta(r, snap7Map.get(r.stay_date)).rev, 0);
+                    const p7sum = rows.reduce((s, r) => s + pickup7(r, p7Map.get(r.stay_date)).rn, 0);
+                    const p7rev = rows.reduce((s, r) => s + pickup7(r, p7Map.get(r.stay_date)).rev, 0);
                     const [y,m] = monthKey.split('-');
                     const monthLabel = new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
                     return [
                       ...rows.map((r) => {
-                        const p1 = delta(r, snap1Map.get(r.stay_date));
-                        const p7 = delta(r, snap7Map.get(r.stay_date));
+                        const p7 = pickup7(r, p7Map.get(r.stay_date));
                         const dow = DOW[(r.iso_dow - 1 + 7) % 7];
                         const isWeekend = r.iso_dow === 6 || r.iso_dow === 7;
                         const zebra = isWeekend ? '#FBF6E8' : '#FFFFFF';
@@ -226,9 +210,9 @@ export default async function PickupDayReport() {
                             <td style={{ ...td, ...tdMuted }}>—</td>
                             <td style={td}>{fmtMoney(r.otb_adr)}</td>
                             <td style={td}>{fmtMoney(r.otb_revenue)}</td>
-                            <td style={{ ...td, ...(p1.rn === 0 ? tdMuted : {}) }}>{p1.rn === 0 ? '0' : fmtInt(p1.rn)}</td>
-                            <td style={{ ...td, ...(p1.rev === 0 ? tdMuted : {}) }}>{p1.rev === 0 ? '0 €' : fmtMoney(p1.rev)}</td>
-                            <td style={{ ...td, ...(p1.rn === 0 ? tdMuted : {}) }}>{p1.rn === 0 ? '0,0 €' : fmtMoney(p1.adr)}</td>
+                            <td style={{ ...td, ...tdMuted }}>—</td>
+                            <td style={{ ...td, ...tdMuted }}>—</td>
+                            <td style={{ ...td, ...tdMuted }}>—</td>
                             <td style={{ ...td, ...(p7.rn === 0 ? tdMuted : {}) }}>{p7.rn === 0 ? '0' : fmtInt(p7.rn)}</td>
                             <td style={{ ...td, ...(p7.rev === 0 ? tdMuted : {}) }}>{p7.rev === 0 ? '0 €' : fmtMoney(p7.rev)}</td>
                             <td style={{ ...td, ...(p7.rn === 0 ? tdMuted : {}) }}>{p7.rn === 0 ? '0,0 €' : fmtMoney(p7.adr)}</td>
@@ -247,12 +231,12 @@ export default async function PickupDayReport() {
                         <td style={td} colSpan={20}></td>
                         <td style={td}>{fmtMoney(avgAdr)}</td>
                         <td style={td}>{fmtMoney(totRev)}</td>
-                        <td style={td}>{fmtInt(p1sum)}</td>
-                        <td style={td}>{fmtMoney(p1rev)}</td>
-                        <td style={{ ...td, ...tdMuted }}></td>
+                        <td style={{ ...td, ...tdMuted }}>—</td>
+                        <td style={{ ...td, ...tdMuted }}>—</td>
+                        <td style={{ ...td, ...tdMuted }}>—</td>
                         <td style={td}>{fmtInt(p7sum)}</td>
                         <td style={td}>{fmtMoney(p7rev)}</td>
-                        <td style={{ ...td, ...tdMuted }}></td>
+                        <td style={{ ...td, ...tdMuted }}>est</td>
                       </tr>,
                     ];
                   })}
@@ -268,11 +252,17 @@ export default async function PickupDayReport() {
               <p style={{ margin: '0 0 8px', fontWeight: 600 }}>🟢 Wired now (real data):</p>
               <ul style={{ margin: '0 0 12px 20px' }}>
                 <li>Date · DoW · OTB % · OCC (rooms sold) · Available · ADR · Room Rev — <code>kpi.v_pace_otb_daily</code></li>
-                <li>Pickup −1d / −7d (RN + Rev + ADR) — computed from <code>kpi.historical_pace_snapshots</code> (only fires if snapshots exist for those dates)</li>
-                <li>Monthly totals (weighted OTB %, sum OCC, avg ADR, sum Rev, sum pickup)</li>
+                <li><strong>Pickup −7d · RN</strong> = <code>public.v_pickup_30d.otb_rooms − otb_rooms_7d_ago</code> per stay date (real)</li>
+                <li><strong>Pickup −7d · Rev + ADR</strong> = <em>estimated</em> as <code>RN_delta × current_ADR</code>. Marked with "est" in totals. True revenue delta needs per-date revenue snapshots.</li>
+                <li>Monthly totals (weighted OTB %, sum OCC, avg ADR, sum Rev, sum −7d pickup)</li>
+              </ul>
+              <p style={{ margin: '0 0 8px', fontWeight: 600 }}>🟠 Half-wired:</p>
+              <ul style={{ margin: '0 0 12px 20px' }}>
+                <li><strong>Pickup −7d Rev/ADR</strong> — estimated, not real. Will become real once a nightly snapshot job captures <code>{`(property_id, stay_date, otb_rooms, otb_revenue, taken_at)`}</code>.</li>
               </ul>
               <p style={{ margin: '0 0 8px', fontWeight: 600 }}>🔴 Placeholder (—) until data lands:</p>
               <ul style={{ margin: '0 0 12px 20px' }}>
+                <li><strong>Pickup −1d (all 3 columns)</strong> — no source. <code>kpi.historical_pace_snapshots</code> has just 1 snapshot ever (2026-05-19); a nightly snapshot capture would fix this in ~1 day of coverage.</li>
                 <li><strong>City %</strong> · external comp-set benchmark — need STR / Amadeus / manual entry</li>
                 <li><strong>House uses · OOO</strong> — Cloudbeds getReservations with is_house_use / status=OOO filter (not currently in sync)</li>
                 <li><strong>Min stay (WEB · OTA)</strong> and <strong>Stop sales (WEB · OTA · B2B · FIT)</strong> — Cloudbeds <code>getRateAvailability</code> endpoint (not synced yet — this is the LOS conversation we just had)</li>
