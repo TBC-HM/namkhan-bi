@@ -28,13 +28,17 @@ export interface RuleWiring {
 
 export const WIRING: Record<string, Record<string, RuleWiring>> = {
   revenue: {
-    occupancy_target:  { status: 'live', consumedBy: 'ruleOccupancy@revenue.ts',   requiresData: ['fn_revenue_hod_today_kpi'] },
-    adr_target:        { status: 'live', consumedBy: 'ruleAdr@revenue.ts',         requiresData: ['fn_revenue_hod_today_kpi'] },
-    revpar_target:     { status: 'live', consumedBy: 'ruleRevpar@revenue.ts',      requiresData: ['fn_revenue_hod_today_kpi'] },
-    pickup_min_daily:  { status: 'live', consumedBy: 'rulePickupMinDaily@revenue.ts', requiresData: ['getPulseTodayPickup'] },
-    cancellation_rate: { status: 'not_wired', notWiredReason: 'no 30d cancel-rate calc wired to /revenue HoD context yet — only today\'s count' },
-    pace_gap_pp:       { status: 'not_wired', notWiredReason: 'requires pace vs SDLY view (not threaded into /revenue HoD)' },
-    lead_time_min_days:{ status: 'not_wired', notWiredReason: 'requires avg lead-time calc from pms.v_reservations (not threaded)' },
+    // Consumed by forward-outlook rules — occupancy_target drives the 14/30/60-90d window thresholds.
+    occupancy_target:  { status: 'live', consumedBy: 'ruleShortWindowCritical/ShortMid/LongClosing@revenue.ts', requiresData: ['v_otb_pace'] },
+    // NEW: pace_gap_pp now consumed by rulePaceVsSdly (v_otb_pace vs mv_kpi_daily SDLY).
+    pace_gap_pp:       { status: 'live', consumedBy: 'rulePaceVsSdly@revenue.ts', requiresData: ['v_otb_pace', 'mv_kpi_daily'] },
+    // Moved to "not_wired" by 2026-07-07 v3 rewrite — today-only rules were removed
+    // per PBS ("all for today does not help"). Will re-wire against L14 rolling averages.
+    adr_target:        { status: 'not_wired', notWiredReason: 'today-only ADR rule removed; needs re-wiring against L14 avg ADR' },
+    revpar_target:     { status: 'not_wired', notWiredReason: 'today-only RevPAR rule removed; needs re-wiring against L14 avg RevPAR' },
+    pickup_min_daily:  { status: 'not_wired', notWiredReason: 'today-only pickup rule removed; needs re-wiring against L7 avg pickup' },
+    cancellation_rate: { status: 'not_wired', notWiredReason: 'no 30d cancel-rate calc wired to /revenue HoD context yet' },
+    lead_time_min_days:{ status: 'not_wired', notWiredReason: 'requires avg lead-time calc from v_reservations_unified (not threaded)' },
     leakage_ota_share: { status: 'not_wired', notWiredReason: 'requires OTA channel share calc (not threaded)' },
     parity_breach_usd: { status: 'not_wired', notWiredReason: 'requires parity scan data (not threaded)' },
     compset_stale_days:{ status: 'not_wired', notWiredReason: 'requires comp-set last-scrape date (not threaded)' },
