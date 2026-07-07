@@ -36,6 +36,8 @@ interface PickupRow {
   cancellations_2d_rn: number;
 }
 
+interface Props { propertyId?: number }
+
 async function fetchData(propertyId: number) {
   const sb = getSupabaseAdmin();
   const todayIso = new Date().toISOString().slice(0, 10);
@@ -85,16 +87,38 @@ function fmtDate(iso: string) {
 function fmtInt(n: number | null | undefined) {
   return n == null ? '' : Math.round(n).toLocaleString('en-US');
 }
-function fmtMoney(n: number | null | undefined) {
-  return n == null ? '' : `${Math.round(n).toLocaleString('en-US')} €`;
+function fmtMoney(n: number | null | undefined, sym: string) {
+  return n == null ? '' : `${Math.round(n).toLocaleString('en-US')} ${sym}`;
 }
 function fmtPct(n: number | null | undefined) {
   return n == null ? '' : `${Math.round(n)}%`;
 }
 
-export default async function PickupDayReport() {
-  const pid = PROPERTY_ID;
+// Row-level colour law (PBS 2026-07-07 evening).
+// Both new + cxl → visual split (left green / right red) — implemented per-cell by column index.
+// Only new → all cells green. Only cxl → all cells red. Neither → zebra.
+// SPLIT_PIVOT is the column index at which the row visually switches from green to red.
+// Row has 37 leaf columns (see thead row 2); midpoint chosen at column 18 (Genius) to fall in the visibility block.
+const SPLIT_PIVOT = 18;
+
+// GREEN / RED / ZEBRA cell backgrounds. Row-level signals (newBk/cxl > 0) win over
+// per-cell visCell backgrounds so the row reads as a coloured band end-to-end.
+const ROW_GREEN = '#DFF0DE';
+const ROW_RED   = '#F5D5CE';
+
+/** Returns the cell background for the given column index given the row state. */
+function rowCellBg(colIdx: number, newBk: number, cxl: number, weekendZebra: string): string | undefined {
+  if (newBk > 0 && cxl > 0) return colIdx < SPLIT_PIVOT ? ROW_GREEN : ROW_RED;
+  if (newBk > 0)            return ROW_GREEN;
+  if (cxl   > 0)            return ROW_RED;
+  return weekendZebra;
+}
+
+export default async function PickupDayReport({ propertyId }: Props = {}) {
+  const pid = propertyId ?? PROPERTY_ID;
   const { pace, pickupMap, promoMap } = await fetchData(pid);
+  // Currency symbol per property (Namkhan=USD, Donna=EUR).
+  const sym = pid === 1000001 ? '€' : '$';
 
   // Visibility columns → promo lookup keys, in table order.
   const VIS = [
@@ -104,10 +128,16 @@ export default async function PickupDayReport() {
     { key: 'booking.com::mobile_rate',  label: 'Mobile' },
     { key: 'expedia::p_plus_bar',       label: 'P+ BAR' },
   ] as const;
-  const visCell = (i: number): React.CSSProperties => {
+
+  /** Vis cell rendering — respects row-level signal (row bg wins). */
+  const visCellStyle = (i: number, rowBg: string | undefined): React.CSSProperties => {
     const p = promoMap.get(VIS[i].key);
-    if (!p) return { ...td, ...tdMuted };
-    return { ...td, background: p.active ? '#DFF0DE' : '#F5D5CE', color: p.active ? '#1F5C2C' : '#B04A2F', textAlign: 'center', fontWeight: 700 };
+    // If row signals pickup or cxl activity, row bg wins.
+    if (rowBg === ROW_GREEN || rowBg === ROW_RED) {
+      return { ...td, background: rowBg, textAlign: 'center', fontWeight: 700, color: '#1B1B1B' };
+    }
+    if (!p) return { ...td, ...tdMuted, background: rowBg };
+    return { ...td, background: p.active ? ROW_GREEN : ROW_RED, color: p.active ? '#1F5C2C' : '#B04A2F', textAlign: 'center', fontWeight: 700 };
   };
   const visText = (i: number): string => {
     const p = promoMap.get(VIS[i].key);
@@ -125,15 +155,16 @@ export default async function PickupDayReport() {
   }
 
   const todayIso = new Date().toISOString().slice(0, 10);
+  const pidLabel = pid === 1000001 ? 'Donna Portals' : 'Namkhan';
 
   return (
     <div style={{ background: '#FFFFFF', minHeight: '100vh' }}>
       <DashboardPage
         title="Pickup · Day report"
-        subtitle="One row per night (room nights) · real −1d and −7d pickup from booking_date · monthly totals"
+        subtitle="One row per night · real −1d and −7d pickup from booking_date · monthly totals integrated"
         action={
           <div style={{ display: 'flex', gap: 8 }}>
-            <a href="/api/pickup-day/csv" title="Download CSV" aria-label="Download CSV" style={iconBtn}>
+            <a href={`/api/pickup-day/csv?property_id=${pid}`} title="Download CSV" aria-label="Download CSV" style={iconBtn}>
               <span aria-hidden style={{ fontSize: 16, lineHeight: 1 }}>⬇</span>
             </a>
             <Link href="/revenue/pickup-day/email" title="Email / schedule report" aria-label="Email report" style={iconBtn}>
@@ -144,11 +175,11 @@ export default async function PickupDayReport() {
       >
         <div style={{ gridColumn: '1 / -1' }}>
           <Container
-            title={`Day report · ${new Date(todayIso).toLocaleDateString('en-GB')} · Namkhan property ${pid}`}
-            subtitle={`${pace.length} forward nights · placeholders (—) for columns still to be wired (visibility flags · min-stay/stop-sales per channel · rate ladder · city occ · house uses)`}
+            title={`Day report · ${new Date(todayIso).toLocaleDateString('en-GB')} · ${pidLabel} (property ${pid})`}
+            subtitle={`${pace.length} forward nights · monthly TOTAL rows inline (bold) · placeholders (—) for columns still to be wired`}
           >
             <div style={{ overflowX: 'auto', border: '1px solid #E6DFCC', borderRadius: 6 }}>
-              <table style={{ borderCollapse: 'collapse', fontSize: 10, whiteSpace: 'nowrap' }}>
+              <table style={{ borderCollapse: 'collapse', fontSize: 10, whiteSpace: 'nowrap', width: '100%' }}>
                 <thead>
                   {/* Header row 1: group labels */}
                   <tr style={{ background: '#0B3B2E', color: '#FFFFFF' }}>
@@ -229,78 +260,83 @@ export default async function PickupDayReport() {
                         const cxl = Number(pu?.cancellations_2d_rn ?? 0);
                         const dow = DOW[(r.iso_dow - 1 + 7) % 7];
                         const isWeekend = r.iso_dow === 6 || r.iso_dow === 7;
-                        const zebra = isWeekend ? '#FBF6E8' : '#FFFFFF';
-                        // PBS 2026-07-07 evening: colour whole row based on today+yesterday activity.
-                        // Both bookings AND cancels → half green (left) half red (right).
-                        // Only bookings → all green. Only cancels → all red. Nothing → normal zebra.
-                        let rowBg: string = zebra;
-                        if (newBk > 0 && cxl > 0)      rowBg = 'linear-gradient(90deg, #DFF0DE 0%, #DFF0DE 50%, #F5D5CE 50%, #F5D5CE 100%)';
-                        else if (newBk > 0)            rowBg = '#DFF0DE';
-                        else if (cxl > 0)              rowBg = '#F5D5CE';
+                        const weekendZebra = isWeekend ? '#FBF6E8' : '#FFFFFF';
+                        const hasSignal = newBk > 0 || cxl > 0;
+                        // Per-cell bg helper — bakes row colour into every td so it wins over
+                        // per-cell defaults (visCells, tdMuted). Split case = green LEFT, red RIGHT.
+                        const cellBg = (i: number) => rowCellBg(i, newBk, cxl, weekendZebra);
+                        const cellStyle = (i: number, extra?: React.CSSProperties): React.CSSProperties => ({
+                          ...td, background: cellBg(i), ...(extra ?? {}),
+                        });
+                        const mutedStyle = (i: number): React.CSSProperties => ({
+                          ...td, ...tdMuted, background: cellBg(i),
+                        });
                         return (
-                          <tr key={r.stay_date} style={{ background: rowBg }}>
-                            <td style={{ ...td, fontWeight: 700, textAlign: 'center', color: (newBk > 0 || cxl > 0) ? '#1B1B1B' : undefined }}>
+                          <tr key={r.stay_date}>
+                            <td style={cellStyle(0, { fontWeight: 700, textAlign: 'center', color: hasSignal ? '#1B1B1B' : undefined })}>
                               {dow}
                               {newBk > 0 && <span title={`${newBk} room-nights picked up today/yesterday`} style={{ marginLeft: 4, color: '#1F5C2C', fontWeight: 800 }}>+{newBk}</span>}
                               {cxl > 0 && <span title={`${cxl} room-nights cancelled today/yesterday`} style={{ marginLeft: 4, color: '#B04A2F', fontWeight: 800 }}>−{cxl}</span>}
                             </td>
-                            <td style={td}>{fmtDate(r.stay_date)}</td>
-                            <td style={td}></td>
-                            <td style={{ ...td, ...tdMuted }}>—</td>
-                            <td style={{ ...td, fontWeight: 600 }}>{fmtPct(r.otb_occupancy_pct)}</td>
-                            <td style={td}>{fmtInt(r.otb_rooms_sold)}</td>
-                            <td style={td}>0</td>
-                            <td style={{ ...td, ...tdMuted }}>—</td>
-                            <td style={td}>{fmtInt(Math.max(0, r.rooms_available - r.otb_rooms_sold))}</td>
-                            <td style={{ ...td, ...tdMuted }}>—</td>
-                            <td style={{ ...td, ...tdMuted }}>—</td>
-                            <td style={{ ...td, ...tdMuted }}>—</td>
-                            <td style={{ ...td, ...tdMuted }}>—</td>
-                            <td style={{ ...td, ...tdMuted }}>—</td>
-                            <td style={{ ...td, ...tdMuted }}>—</td>
-                            <td style={visCell(0)}>{visText(0)}</td>
-                            <td style={visCell(1)}>{visText(1)}</td>
-                            <td style={visCell(2)}>{visText(2)}</td>
-                            <td style={visCell(3)}>{visText(3)}</td>
-                            <td style={visCell(4)}>{visText(4)}</td>
-                            <td style={{ ...td, ...tdMuted }}>—</td>
-                            <td style={{ ...td, ...tdMuted }}>—</td>
-                            <td style={{ ...td, ...tdMuted }}>—</td>
-                            <td style={{ ...td, ...tdMuted }}>—</td>
-                            <td style={{ ...td, ...tdMuted }}>—</td>
-                            <td style={{ ...td, ...tdMuted }}>—</td>
-                            <td style={{ ...td, ...tdMuted }}>—</td>
-                            <td style={{ ...td, ...tdMuted }}>—</td>
-                            <td style={{ ...td, ...tdMuted }}>—</td>
-                            <td style={td}>{fmtMoney(r.otb_adr)}</td>
-                            <td style={td}>{fmtMoney(r.otb_revenue)}</td>
-                            <td style={{ ...td, ...(p1.rn === 0 ? tdMuted : {}) }}>{p1.rn === 0 ? '0' : fmtInt(p1.rn)}</td>
-                            <td style={{ ...td, ...(p1.rev === 0 ? tdMuted : {}) }}>{p1.rev === 0 ? '0 €' : fmtMoney(p1.rev)}</td>
-                            <td style={{ ...td, ...(p1.rn === 0 ? tdMuted : {}) }}>{p1.rn === 0 ? '0,0 €' : fmtMoney(p1.adr)}</td>
-                            <td style={{ ...td, ...(p7.rn === 0 ? tdMuted : {}) }}>{p7.rn === 0 ? '0' : fmtInt(p7.rn)}</td>
-                            <td style={{ ...td, ...(p7.rev === 0 ? tdMuted : {}) }}>{p7.rev === 0 ? '0 €' : fmtMoney(p7.rev)}</td>
-                            <td style={{ ...td, ...(p7.rn === 0 ? tdMuted : {}) }}>{p7.rn === 0 ? '0,0 €' : fmtMoney(p7.adr)}</td>
+                            <td style={cellStyle(1)}>{fmtDate(r.stay_date)}</td>
+                            <td style={cellStyle(2)}></td>
+                            <td style={mutedStyle(3)}>—</td>
+                            <td style={cellStyle(4, { fontWeight: 600 })}>{fmtPct(r.otb_occupancy_pct)}</td>
+                            <td style={cellStyle(5)}>{fmtInt(r.otb_rooms_sold)}</td>
+                            <td style={cellStyle(6)}>0</td>
+                            <td style={mutedStyle(7)}>—</td>
+                            <td style={cellStyle(8)}>{fmtInt(Math.max(0, r.rooms_available - r.otb_rooms_sold))}</td>
+                            <td style={mutedStyle(9)}>—</td>
+                            <td style={mutedStyle(10)}>—</td>
+                            <td style={mutedStyle(11)}>—</td>
+                            <td style={mutedStyle(12)}>—</td>
+                            <td style={mutedStyle(13)}>—</td>
+                            <td style={mutedStyle(14)}>—</td>
+                            <td style={visCellStyle(0, cellBg(15))}>{visText(0)}</td>
+                            <td style={visCellStyle(1, cellBg(16))}>{visText(1)}</td>
+                            <td style={visCellStyle(2, cellBg(17))}>{visText(2)}</td>
+                            <td style={visCellStyle(3, cellBg(18))}>{visText(3)}</td>
+                            <td style={visCellStyle(4, cellBg(19))}>{visText(4)}</td>
+                            <td style={mutedStyle(20)}>—</td>
+                            <td style={mutedStyle(21)}>—</td>
+                            <td style={mutedStyle(22)}>—</td>
+                            <td style={mutedStyle(23)}>—</td>
+                            <td style={mutedStyle(24)}>—</td>
+                            <td style={mutedStyle(25)}>—</td>
+                            <td style={mutedStyle(26)}>—</td>
+                            <td style={mutedStyle(27)}>—</td>
+                            <td style={mutedStyle(28)}>—</td>
+                            <td style={cellStyle(29)}>{fmtMoney(r.otb_adr, sym)}</td>
+                            <td style={cellStyle(30)}>{fmtMoney(r.otb_revenue, sym)}</td>
+                            <td style={cellStyle(31, p1.rn === 0 ? tdMuted : undefined)}>{p1.rn === 0 ? '0' : fmtInt(p1.rn)}</td>
+                            <td style={cellStyle(32, p1.rev === 0 ? tdMuted : undefined)}>{p1.rev === 0 ? `0 ${sym}` : fmtMoney(p1.rev, sym)}</td>
+                            <td style={cellStyle(33, p1.rn === 0 ? tdMuted : undefined)}>{p1.rn === 0 ? `0 ${sym}` : fmtMoney(p1.adr, sym)}</td>
+                            <td style={cellStyle(34, p7.rn === 0 ? tdMuted : undefined)}>{p7.rn === 0 ? '0' : fmtInt(p7.rn)}</td>
+                            <td style={cellStyle(35, p7.rev === 0 ? tdMuted : undefined)}>{p7.rev === 0 ? `0 ${sym}` : fmtMoney(p7.rev, sym)}</td>
+                            <td style={cellStyle(36, p7.rn === 0 ? tdMuted : undefined)}>{p7.rn === 0 ? `0 ${sym}` : fmtMoney(p7.adr, sym)}</td>
                           </tr>
                         );
                       }),
-                      <tr key={`total-${monthKey}`} style={{ background: '#D4CDA6', fontWeight: 900, fontSize: 11, borderTop: '2px solid #0B3B2E', borderBottom: '2px solid #0B3B2E' }}>
-                        <td style={td} colSpan={2}>{monthLabel} TOTAL</td>
-                        <td style={td}></td>
-                        <td style={{ ...td, ...tdMuted }}>—</td>
-                        <td style={td}>{fmtPct(avgOtbPct)}</td>
-                        <td style={td}>{fmtInt(totOcc)}</td>
-                        <td style={td}>0</td>
-                        <td style={{ ...td, ...tdMuted }}>—</td>
-                        <td style={td}>{fmtInt(totAvail)}</td>
-                        <td style={td} colSpan={21}></td>
-                        <td style={td}>{fmtMoney(avgAdr)}</td>
-                        <td style={td}>{fmtMoney(totRev)}</td>
-                        <td style={td}>{fmtInt(p1sum)}</td>
-                        <td style={td}>{fmtMoney(p1rev)}</td>
-                        <td style={td}>{fmtMoney(p1sum > 0 ? p1rev / p1sum : 0)}</td>
-                        <td style={td}>{fmtInt(p7sum)}</td>
-                        <td style={td}>{fmtMoney(p7rev)}</td>
-                        <td style={td}>{fmtMoney(p7sum > 0 ? p7rev / p7sum : 0)}</td>
+                      // Monthly TOTAL row — inline in the SAME table (not a separate table below).
+                      // Bold, borderTop 2px, fontSize 11 per PBS spec 2026-07-07.
+                      <tr key={`total-${monthKey}`} style={{ background: '#D4CDA6' }}>
+                        <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }} colSpan={2}>{monthLabel} TOTAL</td>
+                        <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }}></td>
+                        <td style={{ ...totalTd, ...tdMuted, borderTop: '2px solid #0B3B2E' }}>—</td>
+                        <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }}>{fmtPct(avgOtbPct)}</td>
+                        <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }}>{fmtInt(totOcc)}</td>
+                        <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }}>0</td>
+                        <td style={{ ...totalTd, ...tdMuted, borderTop: '2px solid #0B3B2E' }}>—</td>
+                        <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }}>{fmtInt(totAvail)}</td>
+                        <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }} colSpan={21}></td>
+                        <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }}>{fmtMoney(avgAdr, sym)}</td>
+                        <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }}>{fmtMoney(totRev, sym)}</td>
+                        <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }}>{fmtInt(p1sum)}</td>
+                        <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }}>{fmtMoney(p1rev, sym)}</td>
+                        <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }}>{fmtMoney(p1sum > 0 ? p1rev / p1sum : 0, sym)}</td>
+                        <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }}>{fmtInt(p7sum)}</td>
+                        <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }}>{fmtMoney(p7rev, sym)}</td>
+                        <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }}>{fmtMoney(p7sum > 0 ? p7rev / p7sum : 0, sym)}</td>
                       </tr>,
                     ];
                   })}
@@ -313,26 +349,24 @@ export default async function PickupDayReport() {
         <div style={{ gridColumn: '1 / -1' }}>
           <Container title="What's wired · what's placeholder" subtitle="Honest data-source map for this report">
             <div style={{ padding: 14, fontSize: 12, lineHeight: 1.5, color: '#3A3A3A' }}>
-              <p style={{ margin: '0 0 8px', fontWeight: 600 }}>🟢 Wired now (real data):</p>
+              <p style={{ margin: '0 0 8px', fontWeight: 600 }}>Wired now (real data):</p>
               <ul style={{ margin: '0 0 12px 20px' }}>
                 <li>Date · DoW · OTB % · OCC (rooms sold) · Available · ADR · Room Rev — <code>kpi.v_pace_otb_daily</code></li>
-                <li><strong>Pickup −1d and −7d · RN + Rev + ADR</strong> — <em>real</em>, derived from <code>public.v_pickup_day_report</code> (new gold view; groups reservations by <code>booking_date</code> checkpoints).</li>
-                <li>Monthly totals (weighted OTB %, sum OCC, avg ADR, sum Rev, sum -1d/-7d pickup)</li>
+                <li><strong>Pickup −1d and −7d · RN + Rev + ADR</strong> — real, derived from <code>public.v_pickup_day_report</code> (new gold view; groups reservations by <code>booking_date</code> checkpoints).</li>
+                <li>Monthly totals (weighted OTB %, sum OCC, avg ADR, sum Rev, sum -1d/-7d pickup) — inline in the same table as bold rows.</li>
+                <li>Row colouring — green for pickup, red for cancellations, split (green left / red right) when both occurred today or yesterday.</li>
                 <li>Download CSV (top-right)</li>
               </ul>
-              <p style={{ margin: '0 0 8px', fontWeight: 600 }}>🔴 Placeholder (—) until data lands:</p>
+              <p style={{ margin: '0 0 8px', fontWeight: 600 }}>Placeholder (—) until data lands:</p>
               <ul style={{ margin: '0 0 12px 20px' }}>
                 <li><strong>City %</strong> · external comp-set benchmark — need STR / Amadeus / manual entry</li>
                 <li><strong>House uses · OOO</strong> — Cloudbeds getReservations with is_house_use / status=OOO filter (not currently in sync)</li>
-                <li><strong>Min stay (WEB · OTA)</strong> and <strong>Stop sales (WEB · OTA · B2B · FIT)</strong> — Cloudbeds <code>getRateAvailability</code> endpoint (not synced yet — this is the LOS conversation we just had)</li>
-                <li><strong>Visibility flags (Mob B&E · EXP Accel · Genius · Mobile · P+ BAR)</strong> — awaiting Booking.com / Expedia activation landing pages (Phase 2 build). Genius + Mobile now split into 2 columns per spec.</li>
+                <li><strong>Min stay (WEB · OTA)</strong> and <strong>Stop sales (WEB · OTA · B2B · FIT)</strong> — Cloudbeds <code>getRateAvailability</code> endpoint</li>
+                <li><strong>Visibility flags (Mob B&E · EXP Accel · Genius · Mobile · P+ BAR)</strong> — awaiting Booking.com / Expedia activation landing pages</li>
                 <li><strong>Rate ladder (BAR · Net rate · NRF · EB 30d · LOS3 · LOS4)</strong> — same Cloudbeds availability sync (per rate plan per date)</li>
                 <li><strong>Discount tiers (15% · 20% · 25%)</strong> — derived once rate ladder is wired</li>
                 <li><strong>Events</strong> — free-text column, would need an events table (e.g. <code>calendar.events</code>) with property_id + date</li>
               </ul>
-              <p style={{ margin: 0, fontSize: 11, color: '#5A5A5A' }}>
-                Header names + column groups match PBS's Excel day report. Rename each header directly in <code>app/revenue/pickup-day/page.tsx</code> — one line each.
-              </p>
             </div>
           </Container>
         </div>
@@ -343,6 +377,7 @@ export default async function PickupDayReport() {
 
 const th: React.CSSProperties = { padding: '6px 6px', textAlign: 'center', fontSize: 10, fontWeight: 600, borderRight: '1px solid rgba(255,255,255,0.2)' };
 const td: React.CSSProperties = { padding: '4px 6px', textAlign: 'right', fontSize: 10, color: '#1B1B1B', borderRight: '1px solid #F5F0E1', borderBottom: '1px solid #F5F0E1' };
+const totalTd: React.CSSProperties = { padding: '5px 6px', textAlign: 'right', fontSize: 11, fontWeight: 900, color: '#1B1B1B', borderRight: '1px solid #B8A878', borderBottom: '2px solid #0B3B2E' };
 const tdMuted: React.CSSProperties = { color: '#B5AF9A', textAlign: 'center' };
 const iconBtn: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
