@@ -197,6 +197,166 @@ const REVENUE_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
+// ─── Sales report catalogue ─────────────────────────────────────────────
+// PBS 2026-07-08: light per-dept report catalogues so the Build-a-report
+// container renders on every HoD. All non-revenue hrefBase paths point at
+// the shared reports app (/h/<pid>/reports?dept=<slug>&type=<key>) — the
+// dept-scoped render routes can be built later without breaking these keys.
+const SALES_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
+  { value: 'inquiries', label: 'Inquiries', hrefBase: '/h/260955/reports?dept=sales&type=inquiries', dimGroups: [
+    { key: 'win', label: 'Window', options: [
+      { value: 'today', label: 'Today' }, { value: '7d', label: 'Last 7d' },
+      { value: '30d', label: 'Last 30d' }, { value: 'mtd', label: 'MTD' },
+    ]},
+    { key: 'status', label: 'Status', options: [
+      { value: 'all', label: 'All' }, { value: 'open', label: 'Open' },
+      { value: 'qualified', label: 'Qualified' }, { value: 'won', label: 'Won' }, { value: 'lost', label: 'Lost' },
+    ]},
+  ]},
+  { value: 'conversion', label: 'Conversion', hrefBase: '/h/260955/reports?dept=sales&type=conversion', dimGroups: [
+    { key: 'win', label: 'Window', options: [
+      { value: '7d', label: 'Last 7d' }, { value: '30d', label: 'Last 30d' }, { value: '90d', label: 'Last 90d' },
+    ]},
+    { key: 'source', label: 'Source', options: [
+      { value: 'all', label: 'All' }, { value: 'direct', label: 'Direct' },
+      { value: 'agent', label: 'Agent' }, { value: 'dmc', label: 'DMC' },
+    ]},
+  ]},
+  { value: 'pipeline', label: 'Pipeline', hrefBase: '/h/260955/reports?dept=sales&type=pipeline', dimGroups: [
+    { key: 'stage', label: 'Stage', options: [
+      { value: 'all', label: 'All' }, { value: 'qualified', label: 'Qualified' },
+      { value: 'proposal', label: 'Proposal' }, { value: 'won', label: 'Won' },
+    ]},
+    { key: 'value', label: 'Deal size', options: [
+      { value: 'all', label: 'All' }, { value: 'small', label: 'Small' }, { value: 'large', label: 'Large' },
+    ]},
+  ]},
+];
+
+// ─── Marketing report catalogue ──────────────────────────────────────────
+const MARKETING_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
+  { value: 'campaigns', label: 'Campaigns', hrefBase: '/h/260955/reports?dept=marketing&type=campaigns', dimGroups: [
+    { key: 'win', label: 'Window', options: [
+      { value: '7d', label: 'Last 7d' }, { value: '30d', label: 'Last 30d' }, { value: '90d', label: 'Last 90d' },
+    ]},
+    { key: 'channel', label: 'Channel', options: [
+      { value: 'all', label: 'All' }, { value: 'email', label: 'Email' },
+      { value: 'social', label: 'Social' }, { value: 'paid', label: 'Paid' },
+    ]},
+  ]},
+  { value: 'prospects', label: 'Prospects', hrefBase: '/h/260955/reports?dept=marketing&type=prospects', dimGroups: [
+    { key: 'status', label: 'Status', options: [
+      { value: 'all', label: 'All' }, { value: 'new', label: 'New' },
+      { value: 'mx_verified', label: 'MX verified' }, { value: 'engaged', label: 'Engaged' },
+    ]},
+    { key: 'source', label: 'Source', options: [
+      { value: 'all', label: 'All' }, { value: 'apify', label: 'Apify' },
+      { value: 'csv', label: 'CSV import' }, { value: 'manual', label: 'Manual' },
+    ]},
+  ]},
+  { value: 'funnels', label: 'Funnels', hrefBase: '/h/260955/reports?dept=marketing&type=funnels', dimGroups: [
+    { key: 'win', label: 'Window', options: [
+      { value: '30d', label: 'Last 30d' }, { value: '90d', label: 'Last 90d' }, { value: 'ytd', label: 'YTD' },
+    ]},
+    { key: 'stage', label: 'Stage', options: [
+      { value: 'all', label: 'All' }, { value: 'top', label: 'Top-of-funnel' },
+      { value: 'mid', label: 'Mid' }, { value: 'bottom', label: 'Bottom' },
+    ]},
+  ]},
+];
+
+// ─── Contacts (Guest) report catalogue ───────────────────────────────────
+const CONTACTS_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
+  { value: 'reputation', label: 'Reputation', hrefBase: '/h/260955/reports?dept=guest&type=reputation', dimGroups: [
+    { key: 'win', label: 'Window', options: [
+      { value: '30d', label: 'Last 30d' }, { value: '90d', label: 'Last 90d' }, { value: 'all', label: 'All-time' },
+    ]},
+    { key: 'source', label: 'Source', options: [
+      { value: 'all', label: 'All' }, { value: 'booking', label: 'Booking.com' },
+      { value: 'tripadvisor', label: 'TripAdvisor' }, { value: 'expedia', label: 'Expedia' }, { value: 'ctrip', label: 'Trip.com' },
+    ]},
+  ]},
+  { value: 'newsletter', label: 'Newsletter', hrefBase: '/h/260955/reports?dept=guest&type=newsletter', dimGroups: [
+    { key: 'win', label: 'Window', options: [
+      { value: '30d', label: 'Last 30d' }, { value: '90d', label: 'Last 90d' },
+    ]},
+    { key: 'campaign', label: 'Campaign', options: [
+      { value: 'all', label: 'All' }, { value: 'anticipation', label: 'Anticipation' },
+      { value: 'gratitude', label: 'Gratitude' }, { value: 'monthly', label: 'Monthly' },
+    ]},
+  ]},
+  { value: 'retention', label: 'Retention', hrefBase: '/h/260955/reports?dept=guest&type=retention', dimGroups: [
+    { key: 'win', label: 'Window', options: [
+      { value: '90d', label: 'Last 90d' }, { value: 'ytd', label: 'YTD' }, { value: 'all', label: 'All-time' },
+    ]},
+    { key: 'cohort', label: 'Cohort', options: [
+      { value: 'all', label: 'All' }, { value: 'repeat', label: 'Repeat' },
+      { value: 'vip', label: 'VIP' }, { value: 'winback', label: 'Win-back' },
+    ]},
+  ]},
+];
+
+// ─── Operations report catalogue ─────────────────────────────────────────
+const OPS_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
+  { value: 'covers', label: 'Covers', hrefBase: '/h/260955/reports?dept=operations&type=covers', dimGroups: [
+    { key: 'win', label: 'Window', options: [
+      { value: 'today', label: 'Today' }, { value: '7d', label: 'Last 7d' }, { value: '30d', label: 'Last 30d' },
+    ]},
+    { key: 'dept', label: 'Department', options: [
+      { value: 'all', label: 'All' }, { value: 'rooms', label: 'Rooms' },
+      { value: 'fnb', label: 'F&B' }, { value: 'spa', label: 'Spa' }, { value: 'activities', label: 'Activities' },
+    ]},
+  ]},
+  { value: 'capture_rate', label: 'Capture rate', hrefBase: '/h/260955/reports?dept=operations&type=capture_rate', dimGroups: [
+    { key: 'win', label: 'Window', options: [
+      { value: '30d', label: 'Last 30d' }, { value: '90d', label: 'Last 90d' }, { value: 'ytd', label: 'YTD' },
+    ]},
+    { key: 'outlet', label: 'Outlet', options: [
+      { value: 'all', label: 'All' }, { value: 'fnb', label: 'F&B' },
+      { value: 'spa', label: 'Spa' }, { value: 'activities', label: 'Activities' }, { value: 'retail', label: 'Retail' },
+    ]},
+  ]},
+  { value: 'suppliers', label: 'Suppliers', hrefBase: '/h/260955/reports?dept=operations&type=suppliers', dimGroups: [
+    { key: 'status', label: 'Status', options: [
+      { value: 'all', label: 'All' }, { value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' },
+    ]},
+    { key: 'category', label: 'Category', options: [
+      { value: 'all', label: 'All' }, { value: 'food', label: 'Food' },
+      { value: 'beverage', label: 'Beverage' }, { value: 'consumables', label: 'Consumables' },
+    ]},
+  ]},
+];
+
+// ─── Administration (Finance) report catalogue ───────────────────────────
+const FIN_REPORT_TYPES: NonNullable<DeptCfg['reportTypes']> = [
+  { value: 'pnl', label: 'P&L', hrefBase: '/h/260955/reports?dept=finance&type=pnl', dimGroups: [
+    { key: 'win', label: 'Window', options: [
+      { value: 'mtd', label: 'MTD' }, { value: 'qtd', label: 'QTD' }, { value: 'ytd', label: 'YTD' },
+      { value: 'last_month', label: 'Last month' },
+    ]},
+    { key: 'cmp', label: 'Compare', options: [
+      { value: 'budget', label: 'vs Budget' }, { value: 'ly', label: 'vs LY' }, { value: 'both', label: 'Both' },
+    ]},
+  ]},
+  { value: 'ledger', label: 'Ledger', hrefBase: '/h/260955/reports?dept=finance&type=ledger', dimGroups: [
+    { key: 'win', label: 'Window', options: [
+      { value: 'mtd', label: 'MTD' }, { value: 'last_month', label: 'Last month' }, { value: 'ytd', label: 'YTD' },
+    ]},
+    { key: 'account', label: 'Account', options: [
+      { value: 'all', label: 'All' }, { value: 'revenue', label: 'Revenue' },
+      { value: 'cost', label: 'Cost' }, { value: 'payroll', label: 'Payroll' },
+    ]},
+  ]},
+  { value: 'variance', label: 'Variance', hrefBase: '/h/260955/reports?dept=finance&type=variance', dimGroups: [
+    { key: 'win', label: 'Window', options: [
+      { value: 'mtd', label: 'MTD' }, { value: 'ytd', label: 'YTD' }, { value: 'last_month', label: 'Last month' },
+    ]},
+    { key: 'cmp', label: 'Compare', options: [
+      { value: 'budget', label: 'vs Budget' }, { value: 'ly', label: 'vs LY' }, { value: 'both', label: 'Both' },
+    ]},
+  ]},
+];
+
 const REVENUE_CFG: DeptCfg = {
   slug: 'revenue',
   pillTitle: 'Revenue',
@@ -336,6 +496,7 @@ const SALES_CFG: DeptCfg = {
     { k: 'LEAD T',  v: '2.4d', d: 'avg → quote'     },
     { k: 'B2B',     v: '7',   d: 'active contracts' },
   ],
+  reportTypes: SALES_REPORT_TYPES,
 };
 
 // ─── Marketing — Lumen ───────────────────────────────────────────────────
@@ -413,6 +574,7 @@ const MARKETING_CFG: DeptCfg = {
     { k: 'CAMPAIGNS', v: '3',   d: 'live'               },
     { k: 'UGC',       v: '24',  d: 'unused assets'      },
   ],
+  reportTypes: MARKETING_REPORT_TYPES,
 };
 
 // ─── Operations — Forge ──────────────────────────────────────────────────
@@ -482,6 +644,7 @@ const OPERATIONS_CFG: DeptCfg = {
     { k: 'SPA',        v: '6/8',   d: 'slots used today'    },
     { k: 'INV ALERTS', v: '3',     d: 'below par'           },
   ],
+  reportTypes: OPS_REPORT_TYPES,
 };
 
 // ─── Guest — Felix (no formal HoD; PBS uses Felix here) ──────────────────
@@ -551,6 +714,7 @@ const GUEST_CFG: DeptCfg = {
     { k: 'LOYALTY', v: '18%', d: 'repeat share'     },
     { k: 'NO-SHOW', v: '2.1%', d: '+0.6pp vs LM'    },
   ],
+  reportTypes: CONTACTS_REPORT_TYPES,
 };
 
 // ─── Finance — Intel ─────────────────────────────────────────────────────
@@ -625,6 +789,7 @@ const FINANCE_CFG: DeptCfg = {
     { k: 'AR>60',  v: '$4.2k', d: '5 invoices'     },
     { k: 'CASH',   v: '$112k', d: 'on hand'        },
   ],
+  reportTypes: FIN_REPORT_TYPES,
 };
 
 // ─── IT — Captain Kit ────────────────────────────────────────────────────
