@@ -39,7 +39,7 @@ async function fetchData(propertyId: number) {
   const todayIso = new Date().toISOString().slice(0, 10);
   const in365 = new Date(Date.now() + 365 * 86400_000).toISOString().slice(0, 10);
 
-  const [pace, pickup] = await Promise.all([
+  const [pace, pickup, promos] = await Promise.all([
     sb.schema('kpi').from('v_pace_otb_daily')
       .select('stay_date, year, month, iso_dow, rooms_available, otb_rooms_sold, otb_revenue, otb_occupancy_pct, otb_adr, otb_revpar')
       .eq('property_id', propertyId)
@@ -49,11 +49,21 @@ async function fetchData(propertyId: number) {
     sb.from('v_pickup_day_report')
       .select('stay_date, otb_rooms_now, otb_rooms_1d_ago, otb_rooms_7d_ago, otb_revenue_now, otb_revenue_1d_ago, otb_revenue_7d_ago')
       .eq('property_id', propertyId),
+    // Channel promotion activation state — powers the 5 visibility columns (green if active, red if not).
+    sb.from('channel_promotions')
+      .select('channel, promo_key, is_active, cost_pct')
+      .eq('property_id', propertyId),
   ]);
+
+  const promoMap = new Map<string, { active: boolean; costPct: number | null }>();
+  for (const p of ((promos.data ?? []) as Array<{ channel: string; promo_key: string; is_active: boolean; cost_pct: number | null }>)) {
+    promoMap.set(`${p.channel}::${p.promo_key}`, { active: p.is_active, costPct: p.cost_pct });
+  }
 
   return {
     pace: (pace.data ?? []) as PaceRow[],
     pickupMap: new Map(((pickup.data ?? []) as PickupRow[]).map(r => [r.stay_date, r])),
+    promoMap,
   };
 }
 
@@ -82,7 +92,26 @@ function fmtPct(n: number | null | undefined) {
 
 export default async function PickupDayReport() {
   const pid = PROPERTY_ID;
-  const { pace, pickupMap } = await fetchData(pid);
+  const { pace, pickupMap, promoMap } = await fetchData(pid);
+
+  // Visibility columns → promo lookup keys, in table order.
+  const VIS = [
+    { key: 'expedia::mob_book_expedia', label: 'Mob B&E' },
+    { key: 'expedia::exp_accel',        label: 'EXP Accel' },
+    { key: 'booking.com::genius',       label: 'Genius' },
+    { key: 'booking.com::mobile_rate',  label: 'Mobile' },
+    { key: 'expedia::p_plus_bar',       label: 'P+ BAR' },
+  ] as const;
+  const visCell = (i: number): React.CSSProperties => {
+    const p = promoMap.get(VIS[i].key);
+    if (!p) return { ...td, ...tdMuted };
+    return { ...td, background: p.active ? '#DFF0DE' : '#F5D5CE', color: p.active ? '#1F5C2C' : '#B04A2F', textAlign: 'center', fontWeight: 700 };
+  };
+  const visText = (i: number): string => {
+    const p = promoMap.get(VIS[i].key);
+    if (!p) return '—';
+    return p.active ? (p.costPct != null ? `${p.costPct}%` : '✓') : '×';
+  };
 
   // Group rows by year+month for monthly totals
   const byMonth = new Map<string, PaceRow[]>();
@@ -216,11 +245,11 @@ export default async function PickupDayReport() {
                             <td style={{ ...td, ...tdMuted }}>—</td>
                             <td style={{ ...td, ...tdMuted }}>—</td>
                             <td style={{ ...td, ...tdMuted }}>—</td>
-                            <td style={{ ...td, ...tdMuted }}>—</td>
-                            <td style={{ ...td, ...tdMuted }}>—</td>
-                            <td style={{ ...td, ...tdMuted }}>—</td>
-                            <td style={{ ...td, ...tdMuted }}>—</td>
-                            <td style={{ ...td, ...tdMuted }}>—</td>
+                            <td style={visCell(0)}>{visText(0)}</td>
+                            <td style={visCell(1)}>{visText(1)}</td>
+                            <td style={visCell(2)}>{visText(2)}</td>
+                            <td style={visCell(3)}>{visText(3)}</td>
+                            <td style={visCell(4)}>{visText(4)}</td>
                             <td style={{ ...td, ...tdMuted }}>—</td>
                             <td style={{ ...td, ...tdMuted }}>—</td>
                             <td style={{ ...td, ...tdMuted }}>—</td>
