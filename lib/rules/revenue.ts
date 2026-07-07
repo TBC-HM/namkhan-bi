@@ -1,252 +1,271 @@
-// lib/rules/revenue.ts v2
-// PBS 2026-07-07: Revenue HoD conclusion rules.
-// Rewired to consume operator-editable thresholds from public.guardrails
-// (domain='revenue'). Each rule_key on the DB row maps to one of the
-// targets in RevenueContext.targets — edit the row, the rule threshold
-// changes on next request.
+// lib/rules/revenue.ts v3
+// PBS 2026-07-07: Revenue HoD "rev-manager morning brief" — forward-looking.
+// The rev manager needs to know WHERE to intervene THIS WEEK to close
+// a booking window that's about to shut, not what tonight's OCC is.
 //
-// GUARDRAIL nature:
-//   - `dynamic` = threshold is data-driven (rolling baseline)
-//   - `fixed`   = threshold is an operator target (public.guardrails value)
+// Windows we evaluate:
+//   0-14d   inside — critical rate action (day-of / short-notice moves)
+//   15-30d  short  — promo / package trigger window
+//   31-60d  mid    — nurture + campaign window
+//   61-90d  long   — country promo / demand generation window
 //
-// Adding a rule = adding a function to RULES + a wiring entry in
-// lib/rules/wiring.ts so the status dot in Settings → Guardrails reflects it.
+// Rules read operator-editable targets from public.guardrails (domain='revenue').
 
 import type { Insight } from '@/app/_components/ConclusionBlock';
 
 export interface RevenueTargets {
-  // Sourced from public.guardrails (domain='revenue', active=true) — see wiring.ts
-  occupancy_target?: number;    // gte %          e.g. 50
-  adr_target?: number;          // gte currency   e.g. 180
-  revpar_target?: number;       // gte currency   e.g. 85
-  pickup_min_daily?: number;    // gte bookings   e.g. 3
-  // Aspirational — currently NOT wired to data on the HoD (see wiring.ts):
-  //   cancellation_rate · pace_gap_pp · lead_time_min_days · leakage_ota_share
-  //   parity_breach_usd · compset_stale_days
+  occupancy_target?: number;    // gte %
+  adr_target?: number;
+  revpar_target?: number;
+  pickup_min_daily?: number;
+  pace_gap_pp?: number;         // lte pp — max acceptable pace-vs-SDLY gap
+}
+
+export interface PaceNight {
+  night_date: string;      // YYYY-MM-DD
+  daysOut: number;         // 0..90
+  confirmedRooms: number;
+  capacity: number;
+  occPct: number;          // 0-100
+  stlyRooms: number | null; // rooms sold same night LY
+}
+
+export interface CountryPickup {
+  country: string;         // ISO2 or full name
+  pickupL14: number;       // bookings in last 14 days
+  pickupLyL14: number | null; // same window LY
 }
 
 export interface RevenueContext {
-  // Live data (tonight in-house)
+  currencySymbol: string;
+
+  // Live tonight
   rnTonight: number;
   capacity: number;
-  occPct: number;              // 0-100
-  adrToday: number;            // property currency
+  occPct: number;
+  adrToday: number;
   revparToday: number;
 
-  // Live data (today's activity, last 24h)
+  // Today's activity
   pickupCount: number;
   pickupValue: number;
   cancelCount: number;
   cancelValue: number;
 
-  // Presentation
-  currencySymbol: string;      // '$' | '€'
+  // FORWARD OUTLOOK (main brain of the rev-manager brief)
+  paceNext90: PaceNight[];      // one row per night, next 90 days
+  topCountriesL14: CountryPickup[]; // top 5 source markets, last 14 days pickup
+  ratePlanSleepingCount: number | null; // # of rate plans with zero L14 pickup
+  ratePlanTopSharePct: number | null;   // top rate plan % of L14 pickup
 
-  // Operator-editable targets
+  // Avg LOS (from next-30-day arrivals)
+  avgLosNext30: number | null;
+  avgLosBaseline: number | null; // L365 baseline
+
   targets: RevenueTargets;
 }
 
 type Rule = (ctx: RevenueContext) => Insight | Insight[] | null;
 
-// Fallback targets when a public.guardrails row is missing.
-const FALLBACK: Required<RevenueTargets> = {
+const FB: Required<RevenueTargets> = {
   occupancy_target: 50,
-  adr_target:       180,
-  revpar_target:    85,
+  adr_target: 180,
+  revpar_target: 85,
   pickup_min_daily: 3,
+  pace_gap_pp: 5,
 };
-
-function T(ctx: RevenueContext, key: keyof RevenueTargets): number {
-  return ctx.targets[key] ?? FALLBACK[key];
-}
+const T = (ctx: RevenueContext, k: keyof RevenueTargets) => ctx.targets[k] ?? FB[k];
 
 function money(ctx: RevenueContext, n: number): string {
   return `${ctx.currencySymbol}${Math.round(n).toLocaleString('en-US')}`;
 }
 
+function slice(paceNext90: PaceNight[], fromDay: number, toDay: number): PaceNight[] {
+  return paceNext90.filter(n => n.daysOut >= fromDay && n.daysOut <= toDay);
+}
+
 // ─────────────────────────────────────────────────────────────
-// Rules — every one consumes the DB target where possible.
+// Forward-looking rules — the rev-manager morning brief
 // ─────────────────────────────────────────────────────────────
 
-// occupancy_target — critical if OCC ≥ 20pp below target
-const ruleOccupancyCritical: Rule = (ctx) => {
-  if (ctx.capacity === 0) return null;
+// Rule 1 — 0-14d critical rate action
+// Fires when there are ≥ 3 nights inside 14 days with OCC < occupancy_target - 20.
+const ruleShortWindowCritical: Rule = (ctx) => {
   const target = T(ctx, 'occupancy_target');
-  const gap = target - ctx.occPct;
-  if (gap < 20) return null;
-  const empty = ctx.capacity - ctx.rnTonight;
+  const inside = slice(ctx.paceNext90, 0, 14);
+  const soft = inside.filter(n => n.occPct < target - 20);
+  if (soft.length < 3) return null;
+  const gapAvg = soft.reduce((s, n) => s + (target - n.occPct), 0) / soft.length;
   return {
-    key: 'occ_critical_gap',
+    key: 'fwd_window_0_14d_critical',
     priority: 'critical',
     guardrail: 'fixed',
-    title: `OCC ${ctx.occPct.toFixed(0)}% tonight — ${gap.toFixed(0)}pp below ${target}% target · ${empty} rooms empty`,
-    body: 'Well below your own floor. Trigger last-minute channels, flash a direct rate, or push spa/F&B to lift TRevPAR on booked guests.',
-    evidence: `${ctx.rnTonight} of ${ctx.capacity} sold · target ≥ ${target}%`,
-    action: 'Pull last-minute pace →',
-    href: '/revenue/pace',
-  };
-};
-
-// occupancy_target — warning when OCC 5-20pp below target
-const ruleOccupancyWarn: Rule = (ctx) => {
-  if (ctx.capacity === 0) return null;
-  const target = T(ctx, 'occupancy_target');
-  const gap = target - ctx.occPct;
-  if (gap < 5 || gap >= 20) return null;
-  return {
-    key: 'occ_warn_gap',
-    priority: 'warning',
-    guardrail: 'fixed',
-    title: `OCC ${ctx.occPct.toFixed(0)}% tonight — ${gap.toFixed(0)}pp below ${target}% target`,
-    body: 'Middle-band softness. Look at pace + comp-set to check whether it\'s market-wide or Namkhan-specific.',
-    evidence: `${ctx.rnTonight} of ${ctx.capacity} · target ≥ ${target}%`,
-    action: 'Check pace →',
-    href: '/revenue/pace',
-  };
-};
-
-// occupancy_target — positive when OCC well above target
-const ruleOccupancyStrong: Rule = (ctx) => {
-  if (ctx.capacity === 0) return null;
-  const target = T(ctx, 'occupancy_target');
-  if (ctx.occPct < target + 25) return null;
-  const soldOut = ctx.rnTonight >= ctx.capacity;
-  return {
-    key: soldOut ? 'occ_sold_out' : 'occ_strong',
-    priority: 'positive',
-    guardrail: 'fixed',
-    title: soldOut
-      ? `Sold out tonight · ${ctx.rnTonight}/${ctx.capacity}`
-      : `OCC ${ctx.occPct.toFixed(0)}% tonight — ${(ctx.occPct - target).toFixed(0)}pp above ${target}% target`,
-    body: soldOut
-      ? 'Full house — lean into upsell (transfer, spa, F&B) and sanity-check tomorrow\'s rate isn\'t underpriced.'
-      : 'Strong pace. Check whether the next 7 arrival dates are underpriced given the demand signal.',
-    evidence: `${ctx.rnTonight} of ${ctx.capacity} rooms`,
-    action: 'Review calendar pricing →',
+    title: `${soft.length} soft nights inside 14 days — avg ${gapAvg.toFixed(0)}pp below target`,
+    body: `Short-notice window still open. Rate action + last-minute channel push most effective NOW; every day the arrival gets closer the lever gets weaker.`,
+    evidence: soft.slice(0, 3).map(n => `${n.night_date} · ${n.occPct.toFixed(0)}%`).join(' · '),
+    action: 'Open calendar →',
     href: '/revenue/pricing',
   };
 };
 
-// adr_target — warning when ADR below target
-const ruleAdrLow: Rule = (ctx) => {
-  if (ctx.adrToday <= 0) return null;
-  const target = T(ctx, 'adr_target');
-  if (ctx.adrToday >= target) return null;
-  const gap = target - ctx.adrToday;
-  const critical = gap >= target * 0.25;   // 25% below target
+// Rule 2 — 15-30d promo/package window
+const ruleShortMidWindow: Rule = (ctx) => {
+  const target = T(ctx, 'occupancy_target');
+  const window = slice(ctx.paceNext90, 15, 30);
+  const soft = window.filter(n => n.occPct < target - 10);
+  if (soft.length < 4) return null;
   return {
-    key: critical ? 'adr_critical_low' : 'adr_below_target',
-    priority: critical ? 'critical' : 'warning',
-    guardrail: 'fixed',
-    title: `ADR ${money(ctx, ctx.adrToday)} tonight — below ${money(ctx, target)} target`,
-    body: 'Aggressive pricing or a heavy discount-channel mix. Check whether promos are stacking, and whether the ARI closed enough date-rate combos.',
-    evidence: `Gap ${money(ctx, gap)} below target`,
-    action: 'Investigate channels →',
-    href: '/revenue/channels',
-  };
-};
-
-// adr_target — positive when ADR well above target
-const ruleAdrStrong: Rule = (ctx) => {
-  if (ctx.adrToday <= 0) return null;
-  const target = T(ctx, 'adr_target');
-  if (ctx.adrToday < target * 1.1) return null;   // 10% above target
-  return {
-    key: 'adr_strong',
-    priority: 'positive',
-    guardrail: 'fixed',
-    title: `ADR ${money(ctx, ctx.adrToday)} tonight — above ${money(ctx, target)} target`,
-    body: 'Rate discipline paying off. Watch pickup over the next 7 days — if pace dips too hard, you\'ve pushed past willingness-to-pay.',
-    evidence: `Target ≥ ${money(ctx, target)}`,
-  };
-};
-
-// revpar_target — warning when RevPAR below target
-const ruleRevparLow: Rule = (ctx) => {
-  if (ctx.revparToday <= 0) return null;
-  const target = T(ctx, 'revpar_target');
-  if (ctx.revparToday >= target) return null;
-  const gap = target - ctx.revparToday;
-  return {
-    key: 'revpar_below_target',
-    priority: gap >= target * 0.4 ? 'critical' : 'warning',
-    guardrail: 'fixed',
-    title: `RevPAR ${money(ctx, ctx.revparToday)} tonight — below ${money(ctx, target)} target`,
-    body: 'The combined pricing × occupancy signal is under target. Usually one of the two levers is broken — check whether ADR or OCC is the culprit.',
-    evidence: `Gap ${money(ctx, gap)} · OCC ${ctx.occPct.toFixed(0)}% · ADR ${money(ctx, ctx.adrToday)}`,
-    action: 'See pulse →',
-    href: '/revenue/pulse',
-  };
-};
-
-// revpar_target — positive when RevPAR strong
-const ruleRevparStrong: Rule = (ctx) => {
-  if (ctx.revparToday <= 0) return null;
-  const target = T(ctx, 'revpar_target');
-  if (ctx.revparToday < target * 1.2) return null;
-  return {
-    key: 'revpar_strong',
-    priority: 'positive',
-    guardrail: 'fixed',
-    title: `RevPAR ${money(ctx, ctx.revparToday)} tonight — ${money(ctx, ctx.revparToday - target)} above ${money(ctx, target)} target`,
-    body: 'Both levers working. Good moment to look 7 days out and pre-empt weak arrival dates.',
-    evidence: `OCC ${ctx.occPct.toFixed(0)}% · ADR ${money(ctx, ctx.adrToday)}`,
-  };
-};
-
-// pickup_min_daily — warning when below floor
-const rulePickupMinDaily: Rule = (ctx) => {
-  const min = T(ctx, 'pickup_min_daily');
-  if (ctx.pickupCount >= min) return null;
-  if (ctx.pickupCount === 0) return {
-    key: 'pickup_zero',
+    key: 'fwd_window_15_30d_soft',
     priority: 'warning',
     guardrail: 'fixed',
-    title: `Zero new bookings today (target ≥ ${min}/day)`,
-    body: 'One quiet day is noise; three in a row is a signal. Check whether the funnel is dry (marketing) or the rate is scaring pace off (revenue).',
-    evidence: `Target ≥ ${min} bookings/day`,
-    action: 'See pickup matrix →',
-    href: '/revenue/pickup',
-  };
-  return {
-    key: 'pickup_below_target',
-    priority: 'info',
-    guardrail: 'fixed',
-    title: `Pickup ${ctx.pickupCount} today — below ${min} floor`,
-    body: 'Pace running lighter than target. Fine on isolated days; two in a row = check whether the pricing ladder is too tight.',
-    evidence: `Target ≥ ${min}/day`,
-    action: 'See pickup matrix →',
-    href: '/revenue/pickup',
-  };
-};
-
-// pickup_min_daily — positive when above 2× floor
-const rulePickupStrong: Rule = (ctx) => {
-  const min = T(ctx, 'pickup_min_daily');
-  if (ctx.pickupCount < min * 2) return null;
-  return {
-    key: 'pickup_strong',
-    priority: 'positive',
-    guardrail: 'fixed',
-    title: `Strong pickup — ${ctx.pickupCount} new bookings today · ${money(ctx, ctx.pickupValue)}`,
-    body: 'Demand pushing. Consider tightening the ARI ladder — if pace holds, you can lift rate on softest arrival dates without losing volume.',
-    evidence: `≥ 2× ${min}/day floor`,
+    title: `${soft.length} soft nights in 15-30d — promo/package window`,
+    body: `Enough runway to trigger a rate-drop promo or add a package (breakfast, transfer, spa credit) to lift bookings without discounting the base rate.`,
+    evidence: `Threshold: OCC < ${target - 10}% · softest ${soft.slice(0, 3).map(n => n.night_date).join(', ')}`,
     action: 'See pace →',
     href: '/revenue/pace',
   };
 };
 
-// Net revenue negative day (cancel value > pickup value) — no DB threshold needed
+// Rule 3 — 61-90d long window (PBS: "USA 90 days out window closing")
+const ruleLongWindowClosing: Rule = (ctx) => {
+  const target = T(ctx, 'occupancy_target');
+  const window = slice(ctx.paceNext90, 61, 90);
+  if (window.length === 0) return null;
+  const avgOcc = window.reduce((s, n) => s + n.occPct, 0) / window.length;
+  if (avgOcc >= target - 15) return null;
+  const soft = window.filter(n => n.occPct < 40);
+  return {
+    key: 'fwd_window_61_90d_closing',
+    priority: 'warning',
+    guardrail: 'fixed',
+    title: `61-90d avg OCC ${avgOcc.toFixed(0)}% — window closing on long-lead markets`,
+    body: `USA / EU / AU book 60-90 days out. This is the window to run a source-market promo before the demand curve moves past your leverage point.`,
+    evidence: `${soft.length} sub-40% nights · target ≥ ${target}%`,
+    action: 'See markets →',
+    href: '/revenue/markets',
+  };
+};
+
+// Rule 4 — pace_gap_pp — pace running below SDLY (uses DB threshold)
+const rulePaceVsSdly: Rule = (ctx) => {
+  const rows = ctx.paceNext90.filter(n => n.stlyRooms != null && n.daysOut <= 60);
+  if (rows.length < 14) return null;
+  const totalOtb = rows.reduce((s, n) => s + n.confirmedRooms, 0);
+  const totalStly = rows.reduce((s, n) => s + (n.stlyRooms ?? 0), 0);
+  if (totalStly === 0) return null;
+  const gapPct = ((totalOtb - totalStly) / totalStly) * 100; // negative = behind LY
+  const maxGap = T(ctx, 'pace_gap_pp');
+  if (gapPct >= -maxGap) return null;
+  return {
+    key: 'fwd_pace_vs_sdly',
+    priority: gapPct < -maxGap * 2 ? 'critical' : 'warning',
+    guardrail: 'dynamic',
+    title: `Next-60d pace ${gapPct.toFixed(1)}% behind SDLY — over ${maxGap}pp tolerance`,
+    body: `Running behind last year on OTB. If ADR is holding, it's a volume-side issue (marketing, distribution). If ADR is up, might be intentional yield play — verify with rate integrity.`,
+    evidence: `OTB ${totalOtb} rn · SDLY ${totalStly} rn over ${rows.length} nights`,
+    action: 'See pace →',
+    href: '/revenue/pace',
+  };
+};
+
+// Rule 5 — country pace slowing (PBS: "need to do promo in USA")
+const ruleCountryPaceSlowing: Rule = (ctx) => {
+  if (ctx.topCountriesL14.length === 0) return null;
+  const slowing = ctx.topCountriesL14
+    .filter(c => c.pickupLyL14 != null && c.pickupLyL14 > 0)
+    .map(c => ({ ...c, gapPct: ((c.pickupL14 - (c.pickupLyL14 ?? 0)) / (c.pickupLyL14 ?? 1)) * 100 }))
+    .filter(c => c.gapPct < -30)
+    .sort((a, b) => a.gapPct - b.gapPct);
+  if (slowing.length === 0) return null;
+  const worst = slowing[0];
+  return {
+    key: 'country_pace_slowing',
+    priority: 'warning',
+    guardrail: 'dynamic',
+    title: `${worst.country} pickup ${worst.gapPct.toFixed(0)}% behind LY (last 14d)`,
+    body: `Source-market softness. Trigger a targeted promo / re-engagement campaign — this is exactly the window the demand-generation lever still works.`,
+    evidence: `${worst.pickupL14} bookings L14 vs ${worst.pickupLyL14} LY${slowing.length > 1 ? ` · also slowing: ${slowing.slice(1, 3).map(c => c.country).join(', ')}` : ''}`,
+    action: 'See markets →',
+    href: '/revenue/markets',
+  };
+};
+
+// Rule 6 — rate plan concentration
+const ruleRatePlanConcentration: Rule = (ctx) => {
+  if (ctx.ratePlanTopSharePct == null) return null;
+  if (ctx.ratePlanTopSharePct < 40) return null;
+  return {
+    key: 'rate_plan_concentration',
+    priority: ctx.ratePlanTopSharePct > 60 ? 'warning' : 'info',
+    guardrail: 'fixed',
+    title: `Top rate plan = ${ctx.ratePlanTopSharePct.toFixed(0)}% of L14 pickup`,
+    body: `High plan concentration = parity risk + single-lever exposure. If your top plan is a non-refundable discount, the yield ceiling is capped.`,
+    evidence: `Threshold: > 40% share`,
+    action: 'See rate plans →',
+    href: '/revenue/rateplans',
+  };
+};
+
+// Rule 7 — rate plans sleeping
+const ruleRatePlansSleeping: Rule = (ctx) => {
+  if (ctx.ratePlanSleepingCount == null) return null;
+  if (ctx.ratePlanSleepingCount < 2) return null;
+  return {
+    key: 'rate_plans_sleeping',
+    priority: 'info',
+    guardrail: 'fixed',
+    title: `${ctx.ratePlanSleepingCount} rate plans with zero pickup in L14`,
+    body: `Dead plans clutter the ARI and confuse the guest. Either prune, or re-position with a new hook (early-bird, member-rate, LOS-tier).`,
+    evidence: 'Trigger ≥ 2 plans idle',
+    action: 'See rate plans →',
+    href: '/revenue/rateplans',
+  };
+};
+
+// Rule 8 — LOS shortening trend
+const ruleLosShortening: Rule = (ctx) => {
+  if (ctx.avgLosNext30 == null || ctx.avgLosBaseline == null) return null;
+  const gap = ctx.avgLosBaseline - ctx.avgLosNext30;
+  if (gap < 0.5) return null;
+  return {
+    key: 'los_shortening',
+    priority: 'info',
+    guardrail: 'dynamic',
+    title: `Avg LOS next 30d = ${ctx.avgLosNext30.toFixed(1)}n vs ${ctx.avgLosBaseline.toFixed(1)}n baseline`,
+    body: `Stays getting shorter = falling revenue-per-guest even at same ADR. Check whether shorter LOS is coming from a rate plan or a source market.`,
+    evidence: `Gap ${gap.toFixed(1)} nights`,
+    action: 'See rate plans →',
+    href: '/revenue/rateplans',
+  };
+};
+
+// Rule 9 — sold-out night ahead (positive)
+const ruleSoldOutAhead: Rule = (ctx) => {
+  const soldOut = ctx.paceNext90.filter(n => n.daysOut <= 30 && n.capacity > 0 && n.confirmedRooms >= n.capacity);
+  if (soldOut.length === 0) return null;
+  return {
+    key: 'sold_out_ahead',
+    priority: 'positive',
+    guardrail: 'fixed',
+    title: `${soldOut.length} sold-out nights in next 30 days`,
+    body: `Peak demand identified. Check whether tomorrow's rate on adjacent dates is priced high enough to catch the overflow.`,
+    evidence: `Next: ${soldOut.slice(0, 3).map(n => n.night_date).join(', ')}`,
+    action: 'See calendar →',
+    href: '/revenue/pricing',
+  };
+};
+
+// Rule 10 — Net negative day (real-time — kept from v2)
 const ruleNetNegativeDay: Rule = (ctx) => {
   if (ctx.pickupValue === 0 && ctx.cancelValue === 0) return null;
   if (ctx.cancelValue <= ctx.pickupValue) return null;
   const net = ctx.pickupValue - ctx.cancelValue;
   return {
     key: 'net_revenue_negative',
-    priority: 'critical',
+    priority: 'warning',
     guardrail: 'dynamic',
     title: `Net booking revenue NEGATIVE today · ${money(ctx, net)}`,
-    body: 'You lost more revenue in cancels than you won in new bookings. Two days in a row = escalate; usually a rate-parity break or a source-specific problem.',
+    body: `Real-time triage: cancels outpacing pickup. Check parity + source-specific patterns before end of day.`,
     evidence: `+${money(ctx, ctx.pickupValue)} pickup · −${money(ctx, ctx.cancelValue)} cancels`,
     action: 'Check parity →',
     href: '/revenue/parity',
@@ -254,15 +273,15 @@ const ruleNetNegativeDay: Rule = (ctx) => {
 };
 
 const RULES: Rule[] = [
-  ruleOccupancyCritical,
-  ruleOccupancyWarn,
-  ruleOccupancyStrong,
-  ruleAdrLow,
-  ruleAdrStrong,
-  ruleRevparLow,
-  ruleRevparStrong,
-  rulePickupMinDaily,
-  rulePickupStrong,
+  ruleShortWindowCritical,
+  ruleShortMidWindow,
+  ruleLongWindowClosing,
+  rulePaceVsSdly,
+  ruleCountryPaceSlowing,
+  ruleRatePlanConcentration,
+  ruleRatePlansSleeping,
+  ruleLosShortening,
+  ruleSoldOutAhead,
   ruleNetNegativeDay,
 ];
 
@@ -274,7 +293,7 @@ export function evaluateRevenueRules(ctx: RevenueContext): Insight[] {
       if (!r) continue;
       if (Array.isArray(r)) out.push(...r);
       else out.push(r);
-    } catch { /* one rule shouldn't nuke the block */ }
+    } catch { /* silently skip */ }
   }
   return out;
 }
