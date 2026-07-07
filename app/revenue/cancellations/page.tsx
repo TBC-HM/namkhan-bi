@@ -10,6 +10,7 @@
 import Link from 'next/link';
 import { DashboardPage, Container, KpiTile, Chart, type ChartSeries, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
+import { fmtMoney, type Currency } from '@/lib/format';
 import { REVENUE_SUBPAGES } from '../_subpages';
 
 export const dynamic = 'force-dynamic';
@@ -75,7 +76,10 @@ function shiftYearIso(iso: string, dy: number): string {
   d.setUTCFullYear(d.getUTCFullYear() + dy);
   return d.toISOString().slice(0, 10);
 }
-function fmt$(n: number): string { return `$${Math.round(n).toLocaleString('en-US')}`; }
+// PBS 2026-07-07: fmt$ was hardcoded USD. Cancellations now runs for Donna (EUR)
+// too, so we take a currency arg. Kept the same short name so existing tables
+// (and eventual snapshot diffs) read cleanly.
+function fmt$(n: number, ccy: Currency = 'USD'): string { return fmtMoney(n, ccy); }
 function isoBack(days: number): string { return new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10); }
 
 function resolveWin(raw: string | string[] | undefined): { win: Win; from: string; to: string } {
@@ -103,6 +107,10 @@ export default async function CancellationsPage({
   propertyId?: number;
 }) {
   const pid = propertyId ?? PROPERTY_ID;
+  // PBS 2026-07-07: property-scoped display currency. Namkhan=USD, Donna=EUR.
+  // Source of truth is core.properties.base_currency; this hard-map mirrors
+  // the identical rule in app/revenue/channels/page.tsx (moneyCurrency).
+  const moneyCurrency: Currency = pid === 1000001 ? 'EUR' : 'USD';
   const { win, from, to } = resolveWin(searchParams.win);
   const sdlyFrom = shiftYearIso(from, -1);
   const sdlyTo   = shiftYearIso(to,   -1);
@@ -396,9 +404,9 @@ export default async function CancellationsPage({
       footnote: sdlyCount > 0 ? `SDLY ${sdlyCount}` : undefined },
     { label: `Cancel rate · ${cxlRateWinLabel}`, value: `${cxlRateHeadline.toFixed(1)}%`, size: 'sm',
       footnote: `${cxlRate30.toFixed(1)}% 30d · ${cxlRate90.toFixed(1)}% 90d` },
-    { label: 'Lost revenue', value: Math.round(lostRev), currency: 'USD', size: 'sm',
+    { label: 'Lost revenue', value: Math.round(lostRev), currency: moneyCurrency, size: 'sm',
       delta: sdlyLostRev > 0 ? { value: dLostRev.value, period: 'vs SDLY', direction: dLostRev.direction, isGoodWhenUp: false } : undefined,
-      footnote: sdlyLostRev > 0 ? `SDLY ${fmt$(sdlyLostRev)}` : undefined },
+      footnote: sdlyLostRev > 0 ? `SDLY ${fmt$(sdlyLostRev, moneyCurrency)}` : undefined },
     { label: 'Lost room nights', value: lostRn, size: 'sm',
       delta: sdlyLostRn > 0 ? { value: dLostRn.value, period: 'vs SDLY', direction: dLostRn.direction, isGoodWhenUp: false } : undefined,
       footnote: sdlyLostRn > 0 ? `SDLY ${sdlyLostRn}` : undefined },
@@ -432,7 +440,7 @@ export default async function CancellationsPage({
           <Chart variant="combo" data={chartBySource} xKey="source"
             series={[
               { key: 'cancels',      label: 'Cancellations', color: '#B03826', yAxisId: 'left',  type: 'bar' },
-              { key: 'lost_usd',     label: 'Lost $',        color: '#B8542A', yAxisId: 'left',  type: 'bar' },
+              { key: 'lost_usd',     label: `Lost ${moneyCurrency === 'EUR' ? '€' : '$'}`, color: '#B8542A', yAxisId: 'left',  type: 'bar' },
               { key: 'pct_of_total', label: '% of total',    color: '#B8A878', yAxisId: 'right', type: 'line' },
             ]}
             height={220}
@@ -443,7 +451,7 @@ export default async function CancellationsPage({
           <Chart variant="combo" data={chartByDta} xKey="bucket"
             series={[
               { key: 'cancels',      label: 'Cancellations', color: '#1F3A2E', yAxisId: 'left',  type: 'bar' },
-              { key: 'lost_usd',     label: 'Lost $',        color: '#B8542A', yAxisId: 'left',  type: 'bar' },
+              { key: 'lost_usd',     label: `Lost ${moneyCurrency === 'EUR' ? '€' : '$'}`, color: '#B8542A', yAxisId: 'left',  type: 'bar' },
               { key: 'pct_of_total', label: '% of total',    color: '#B8A878', yAxisId: 'right', type: 'line' },
             ]}
             height={220}
@@ -641,14 +649,14 @@ export default async function CancellationsPage({
 
       {/* Two-column tables · country + room */}
       <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
-        <BreakdownTable title="By country" rows={byCountry.slice(0, 12)} totalCount={cxlCount} />
-        <BreakdownTable title="By room type" rows={byRoom} totalCount={cxlCount} />
+        <BreakdownTable title="By country" rows={byCountry.slice(0, 12)} totalCount={cxlCount} currency={moneyCurrency} />
+        <BreakdownTable title="By room type" rows={byRoom} totalCount={cxlCount} currency={moneyCurrency} />
       </div>
 
       {/* Two-column tables · LOS + segment */}
       <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
-        <BreakdownTable title="By length of stay" rows={byLos} totalCount={cxlCount} />
-        <BreakdownTable title="By market segment" rows={bySegment} totalCount={cxlCount} />
+        <BreakdownTable title="By length of stay" rows={byLos} totalCount={cxlCount} currency={moneyCurrency} />
+        <BreakdownTable title="By market segment" rows={bySegment} totalCount={cxlCount} currency={moneyCurrency} />
       </div>
 
       {/* Recent cancellations list */}
@@ -668,7 +676,7 @@ export default async function CancellationsPage({
                     <th style={th}>Country</th>
                     <th style={th}>Room</th>
                     <th style={{ ...th, textAlign: 'right' }}>LOS</th>
-                    <th style={{ ...th, textAlign: 'right' }}>Lost $</th>
+                    <th style={{ ...th, textAlign: 'right' }}>Lost {moneyCurrency === 'EUR' ? '€' : '$'}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -681,7 +689,7 @@ export default async function CancellationsPage({
                       <td style={tdL}>{r.guest_country ?? '—'}</td>
                       <td style={tdL}>{r.room_type_name}</td>
                       <td style={tdR}>{r.nights}</td>
-                      <td style={tdR}>{r.lost_revenue > 0 ? fmt$(r.lost_revenue) : '—'}</td>
+                      <td style={tdR}>{r.lost_revenue > 0 ? fmt$(r.lost_revenue, moneyCurrency) : '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -694,9 +702,10 @@ export default async function CancellationsPage({
   );
 }
 
-function BreakdownTable({ title, rows, totalCount }: { title: string; rows: Array<[string, { count: number; lostRev: number; lostRn: number }]>; totalCount: number }) {
+function BreakdownTable({ title, rows, totalCount, currency = 'USD' }: { title: string; rows: Array<[string, { count: number; lostRev: number; lostRn: number }]>; totalCount: number; currency?: Currency }) {
+  const sym = currency === 'EUR' ? '€' : currency === 'LAK' ? '₭' : '$';
   return (
-    <Container title={`${title} · ${rows.length}`} subtitle={`cancels · lost $ · lost RN · share`} density="compact">
+    <Container title={`${title} · ${rows.length}`} subtitle={`cancels · lost ${sym} · lost RN · share`} density="compact">
       {rows.length === 0 ? (
         <div style={{ padding: '10px 12px', fontSize: 12, color: '#5A5A5A', fontStyle: 'italic' }}>No data.</div>
       ) : (
@@ -706,7 +715,7 @@ function BreakdownTable({ title, rows, totalCount }: { title: string; rows: Arra
               <tr style={{ borderBottom: '1px solid #E6DFCC' }}>
                 <th style={th}>Bucket</th>
                 <th style={{ ...th, textAlign: 'right' }}>Cancels</th>
-                <th style={{ ...th, textAlign: 'right' }}>Lost $</th>
+                <th style={{ ...th, textAlign: 'right' }}>Lost {sym}</th>
                 <th style={{ ...th, textAlign: 'right' }}>Lost RN</th>
                 <th style={{ ...th, textAlign: 'right' }}>Share</th>
               </tr>
@@ -716,7 +725,7 @@ function BreakdownTable({ title, rows, totalCount }: { title: string; rows: Arra
                 <tr key={k} style={{ borderTop: '1px solid #E6DFCC' }}>
                   <td style={tdL}>{k}</td>
                   <td style={tdR}>{v.count}</td>
-                  <td style={tdR}>{v.lostRev > 0 ? `$${Math.round(v.lostRev).toLocaleString('en-US')}` : '—'}</td>
+                  <td style={tdR}>{v.lostRev > 0 ? fmtMoney(v.lostRev, currency) : '—'}</td>
                   <td style={tdR}>{v.lostRn}</td>
                   <td style={tdR}>{totalCount > 0 ? `${((v.count / totalCount) * 100).toFixed(1)}%` : '—'}</td>
                 </tr>
