@@ -164,9 +164,34 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   },
 ];
 
+// PBS 2026-07-07 pm: sub-strip matching must survive the tenant `/h/{id}` prefix.
+// Members are declared as unprefixed paths (e.g. `/revenue/pickup`), so on Donna
+// URLs like `/h/1000001/revenue/pickup` we need to strip the prefix before matching
+// AND re-apply it when rendering tab hrefs.
+function stripTenantPrefix(p: string): { normalized: string; tenantPrefix: string } {
+  const m = p.match(/^\/h\/(\d+)/);
+  return m
+    ? { normalized: p.slice(m[0].length) || '/', tenantPrefix: m[0] }
+    : { normalized: p, tenantPrefix: '' };
+}
+
 export function findSubGroup(pathname: string): SubGroup | null {
+  const { normalized } = stripTenantPrefix(pathname);
   for (const g of NAV_SUBGROUPS) {
-    if (g.members.includes(pathname)) return g;
+    if (g.members.includes(normalized)) return g;
   }
   return null;
+}
+
+/**
+ * Rewrite an unprefixed subgroup tab href to include the current tenant prefix.
+ * Returns href unchanged when there's no tenant prefix in the current pathname,
+ * or the href is already tenant-prefixed / non-root.
+ */
+export function prefixTabHref(pathname: string, href: string): string {
+  const { tenantPrefix } = stripTenantPrefix(pathname);
+  if (!tenantPrefix) return href;
+  if (href.startsWith('/h/')) return href; // already prefixed
+  if (href.startsWith('/'))  return tenantPrefix + href;
+  return href;
 }
