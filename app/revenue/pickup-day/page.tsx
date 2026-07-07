@@ -319,8 +319,17 @@ export default async function PickupDayReport({ propertyId }: Props = {}) {
                       }),
                       // Monthly TOTAL row — inline in the SAME table (not a separate table below).
                       // Bold, borderTop 2px, fontSize 11 per PBS spec 2026-07-07.
+                      // Row must emit EXACTLY 37 effective columns (matches thead leaf-row).
+                      // Layout audit 2026-07-07:
+                      //   col0..1 (colSpan=2): DoW+Date  → "{monthLabel} TOTAL"
+                      //   col2 Events (blank) · col3 City% (—) · col4 OTB% · col5 OCC · col6 OOO (0)
+                      //   col7 House uses (—) · col8 Available
+                      //   col9..28 (colSpan=20): Min stay + Stop sales + Visibility + Rate ladder + Fenced + Discounts (no sums)
+                      //   col29 OTB ADR · col30 Room rev · col31 P1 RN · col32 P1 Rev · col33 P1 ADR
+                      //   col34 P7 RN · col35 P7 Rev · col36 P7 ADR
+                      //   Totals: 2+1+1+1+1+1+1+1+1 + 20 + 2 + 3 + 3 = 37 ✓
                       <tr key={`total-${monthKey}`} style={{ background: '#D4CDA6' }}>
-                        <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }} colSpan={2}>{monthLabel} TOTAL</td>
+                        <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E', textAlign: 'left' }} colSpan={2}>{monthLabel} TOTAL</td>
                         <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }}></td>
                         <td style={{ ...totalTd, ...tdMuted, borderTop: '2px solid #0B3B2E' }}>—</td>
                         <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }}>{fmtPct(avgOtbPct)}</td>
@@ -328,7 +337,7 @@ export default async function PickupDayReport({ propertyId }: Props = {}) {
                         <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }}>0</td>
                         <td style={{ ...totalTd, ...tdMuted, borderTop: '2px solid #0B3B2E' }}>—</td>
                         <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }}>{fmtInt(totAvail)}</td>
-                        <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }} colSpan={21}></td>
+                        <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }} colSpan={20}></td>
                         <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }}>{fmtMoney(avgAdr, sym)}</td>
                         <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }}>{fmtMoney(totRev, sym)}</td>
                         <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }}>{fmtInt(p1sum)}</td>
