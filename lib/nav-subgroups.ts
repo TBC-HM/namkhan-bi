@@ -22,9 +22,20 @@ export const NAV_SUBGROUPS: SubGroup[] = [
       { label: 'Calendar', href: '/revenue/pricing' },
     ],
   },
+  // PBS 2026-07-07 pm: Pickup gets its own Month/Day sub-strip. Must come BEFORE
+  // the Demand & Pace group (findSubGroup returns first match); /revenue/pickup
+  // therefore removed from that group's members list below.
+  {
+    parentHref: '/revenue/pickup',
+    members: ['/revenue/pickup', '/revenue/pickup-day'],
+    tabs: [
+      { label: 'Month', href: '/revenue/pickup'     },
+      { label: 'Day',   href: '/revenue/pickup-day' },
+    ],
+  },
   {
     parentHref: '/revenue/demand',
-    members: ['/revenue/demand', '/revenue/pace', '/revenue/pickup', '/revenue/cancellations'],
+    members: ['/revenue/demand', '/revenue/pace', '/revenue/cancellations'],
     tabs: [
       { label: 'Demand',        href: '/revenue/demand'        },
       { label: 'Pace',          href: '/revenue/pace'          },
