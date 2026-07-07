@@ -78,12 +78,41 @@ export const WIRING: Record<string, Record<string, RuleWiring>> = {
     review_no_body_share: { status: 'live', consumedBy: 'ruleReviewsNoBody@observations.ts',requiresData: ['mkt_reviews'] },
   },
 
-  // Domains without any rules file yet — every DB rule_key resolves to `not_wired`
-  sales:      {},
-  marketing:  {},
-  contacts:   {},
-  operations: {},
-  finance:    {},
+  sales: {
+    inquiry_response_hours: { status: 'live', consumedBy: 'ruleInquiryResponseSlow@sales.ts', requiresData: ['sales_inquiries'] },
+    conversion_rate:        { status: 'not_wired', notWiredReason: 'inquiry→booking conversion calc not threaded yet' },
+    cost_per_lead_max:      { status: 'not_wired', notWiredReason: 'lead-source cost calc not threaded (needs ad-spend feed)' },
+    group_lead_time_days:   { status: 'not_wired', notWiredReason: 'group-booking lead-time calc not threaded' },
+  },
+
+  marketing: {
+    campaign_cadence_days_min: { status: 'live', consumedBy: 'ruleCampaignGap@marketing.ts',   requiresData: ['campaigns'] },
+    cost_per_lead_max:         { status: 'not_wired', notWiredReason: 'ad-spend CPL calc not threaded' },
+    prospect_enrichment_min:   { status: 'not_wired', notWiredReason: 'prospect enrichment % calc not threaded (web_analytics.subscribers)' },
+    mx_verified_share_min:     { status: 'not_wired', notWiredReason: 'MX-verified share calc not threaded' },
+  },
+
+  operations: {
+    fnb_capture_target:   { status: 'live', consumedBy: 'ruleFnbCapture@operations.ts',        requiresData: ['v_ancillary_capture_daily'] },
+    spa_capture_target:   { status: 'live', consumedBy: 'ruleSpaCapture@operations.ts',        requiresData: ['v_ancillary_capture_daily'] },
+    activities_capture:   { status: 'live', consumedBy: 'ruleActivitiesCapture@operations.ts', requiresData: ['v_ancillary_capture_daily'] },
+    housekeeping_lag_min: { status: 'not_wired', notWiredReason: 'housekeeping lag calc not threaded' },
+    inventory_low_par:    { status: 'not_wired', notWiredReason: 'inventory par-level calc not threaded' },
+    supplier_late_days:   { status: 'not_wired', notWiredReason: 'supplier-delivery lateness calc not threaded' },
+  },
+
+  finance: {
+    ap_late_days:       { status: 'not_wired', notWiredReason: 'AP aging RPC not wired to /finance HoD' },
+    ar_days_max:        { status: 'not_wired', notWiredReason: 'AR aging RPC not wired to /finance HoD' },
+    cash_days_min:      { status: 'not_wired', notWiredReason: 'cash runway calc not wired to /finance HoD' },
+    payroll_pct_target: { status: 'not_wired', notWiredReason: 'payroll % of revenue calc not wired' },
+    gop_margin_target:  { status: 'not_wired', notWiredReason: 'GOP margin MTD calc not wired' },
+    variance_pl_pp:     { status: 'not_wired', notWiredReason: 'budget variance calc not wired' },
+    food_cost_pct_max:  { status: 'not_wired', notWiredReason: 'F&B COGS % calc not wired' },
+    beverage_cost_pct_max: { status: 'not_wired', notWiredReason: 'beverage COGS % calc not wired' },
+  },
+
+  contacts: {},
 };
 
 export function getWiring(domain: string, rule_key: string): RuleWiring {
