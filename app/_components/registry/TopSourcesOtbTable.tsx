@@ -4,9 +4,12 @@
 // Forward-looking Top-N table: OTB (on-the-books) for next 90 days per source,
 // compared to Same Day Last Year (SDLY). Same column shape as Top 10 sources.
 // PBS 2026-07-01.
+//
+// PBS 2026-07-07: currency prop threaded so Donna renders € not $. Default
+// stays USD for backward-compat with the existing Namkhan call-site.
 
 import Link from 'next/link';
-import { fmtTableUsd } from '@/lib/format';
+import { fmtMoney, type Currency } from '@/lib/format';
 
 export interface OtbSdlyRow {
   source_name: string;
@@ -20,7 +23,13 @@ export interface OtbSdlyRow {
   adr_otb: number | null;
 }
 
-export default function TopSourcesOtbTable({ rows }: { rows: OtbSdlyRow[] }) {
+interface Props {
+  rows: OtbSdlyRow[];
+  /** Property display currency for money columns. Defaults to USD. */
+  currency?: Currency;
+}
+
+export default function TopSourcesOtbTable({ rows, currency = 'USD' }: Props) {
   if (rows.length === 0) {
     return (
       <div style={{
@@ -95,9 +104,9 @@ export default function TopSourcesOtbTable({ rows }: { rows: OtbSdlyRow[] }) {
                 </Link>
               </td>
               <td style={td}>{r.bkg_otb.toLocaleString('en-US')}</td>
-              <td style={td}>{fmtTableUsd(r.rev_otb)}</td>
-              <td style={td}>{r.adr_otb != null ? fmtTableUsd(r.adr_otb) : '—'}</td>
-              <td style={td}>{r.rev_sdly > 0 ? fmtTableUsd(r.rev_sdly) : '—'}</td>
+              <td style={td}>{fmtMoney(r.rev_otb, currency)}</td>
+              <td style={td}>{r.adr_otb != null ? fmtMoney(r.adr_otb, currency) : '—'}</td>
+              <td style={td}>{r.rev_sdly > 0 ? fmtMoney(r.rev_sdly, currency) : '—'}</td>
               <td style={{ ...td, color: deltaColor(r.rev_delta_pct), fontWeight: 600 }}>{deltaText(r.rev_delta_pct)}</td>
             </tr>
           ))}
