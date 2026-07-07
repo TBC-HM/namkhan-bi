@@ -3,6 +3,10 @@
 // /revenue HoD: 6 KPI tiles + 4-up Attention/Reports/Tasks/Bugs row +
 // Build-a-report container. Used by finance, sales, marketing, operations
 // (Namkhan + Donna). Each dept passes its slug; cfg comes from DEPT_CFG.
+//
+// PBS 2026-07-07: `conclusions` slot renders a <ConclusionBlock> between
+// the 4-up row and Build-a-report. Each HoD page evaluates its own rules
+// server-side and passes the resulting Insight[] via the prop.
 
 import Link from 'next/link';
 import {
@@ -19,19 +23,23 @@ import ReportsList   from '@/app/revenue/_components/ReportsList';
 import BugsList      from '@/app/revenue/_components/BugsList';
 import HodTasksList  from '@/app/revenue/_components/HodTasksList';
 import AttentionList from '@/app/revenue/_components/AttentionList';
+import ConclusionBlock, { type Insight } from '@/app/_components/ConclusionBlock';
 
 interface Props {
-  slug: DeptSlug;            // 'finance' | 'sales' | 'marketing' | 'operations'
+  slug: DeptSlug;
   propertyId?: number;
-  /** PBS 2026-06-09 #138 — override the static cfg.kpiTiles with live values
-   * (e.g. operations HoD fetches today's occupancy + check-in/out counts). */
   liveTiles?: KpiTileProps[];
-  /** PBS 2026-07-06 — extra containers to render below Build-a-Report. Useful for
-   * dept-specific gold-tier widgets (e.g. Operations flights today+tomorrow). */
   extraContainers?: React.ReactNode;
+  /** PBS 2026-07-07 — conclusion insights evaluated server-side by the HoD page. */
+  conclusions?: {
+    insights: Insight[];
+    title?: string;
+    subtitle?: string;
+    emptyText?: string;
+  };
 }
 
-export default async function HodLanding({ slug, propertyId, liveTiles, extraContainers }: Props) {
+export default async function HodLanding({ slug, propertyId, liveTiles, extraContainers, conclusions }: Props) {
   const pid = propertyId ?? PROPERTY_ID;
   const cfg = pid === PROPERTY_ID ? DEPT_CFG[slug] : getDeptCfg(slug, pid);
 
@@ -58,9 +66,6 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
   }>;
   const dueTasksCount = dueTasksRes.count ?? 0;
 
-  // PBS #138: liveTiles take precedence over the static cfg.kpiTiles when a HoD
-  // page wants to surface real-time values (operations HoD does this for today's
-  // occupancy + check-ins + check-outs).
   const tiles: KpiTileProps[] = liveTiles ?? (cfg.kpiTiles ?? []).map((k) => ({
     label: k.k, value: k.v, size: 'sm', footnote: k.d,
   }));
@@ -69,7 +74,6 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
   const docs       = cfg.defaultDocs ?? [];
   const reportTypes = cfg.reportTypes ?? [];
 
-  // HoD-as-parent: keep HoD in tab strip; active when on /<slug> or /h/<pid>/<slug>
   const hodTabs = subPages.map((s) => ({
     key: s.href, label: s.label, href: s.href,
     active: s.label === 'HoD',
@@ -84,7 +88,6 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
       tabs={hodTabs}
       action={<Link href={chatHref} style={primaryBtnStyle}>{`Ask ${cfg.hodName} →`}</Link>}
     >
-      {/* 1 · Headline KPI tiles */}
       {tiles.length > 0 && (
         <div style={fullRow}>
           <Container title="Headline" subtitle="snapshot · last refresh" density="compact">
@@ -95,7 +98,6 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
         </div>
       )}
 
-      {/* 2 · Attention / My Reports / My Tasks / Bugs */}
       <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
         <Container title="Attention" subtitle={`${attn.length} item${attn.length === 1 ? '' : 's'} · dismiss with ×`} density="compact">
           <AttentionList items={attn} storageKey={`attn:${slug}:${pid}`} />
@@ -111,7 +113,20 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
         </Container>
       </div>
 
-      {/* 3 · Build-a-Report */}
+      {/* PBS 2026-07-07: Conclusions container — rule-based signals from lib/rules/{slug}.ts */}
+      {conclusions && (
+        <div style={fullRow}>
+          <ConclusionBlock
+            insights={conclusions.insights}
+            title={conclusions.title ?? `CONCLUSIONS · ${slug}`}
+            subtitle={conclusions.subtitle}
+            emptyText={conclusions.emptyText ?? 'Everything nominal. No alarms firing.'}
+            storageKey={`${slug}_hod_signals:${pid}`}
+            maxRender={12}
+          />
+        </div>
+      )}
+
       {reportTypes.length > 0 && (
         <div style={fullRow}>
           <Container title="Build a report" subtitle="pick a type · narrow with chips · open print-ready render" density="compact">
@@ -120,7 +135,6 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
         </div>
       )}
 
-      {/* 4 · Dept-specific extra containers (PBS 2026-07-06) */}
       {extraContainers}
     </DashboardPage>
   );
