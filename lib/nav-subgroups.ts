@@ -44,11 +44,17 @@ export const NAV_SUBGROUPS: SubGroup[] = [
   },
   {
     parentHref: '/revenue/compset',
-    members: ['/revenue/compset', '/revenue/leakage', '/revenue/parity'],
+    members: [
+      '/revenue/compset', '/revenue/leakage', '/revenue/parity',
+      '/revenue/lighthouse',
+      '/revenue/lighthouse/overview', '/revenue/lighthouse/rates',
+      '/revenue/lighthouse/vs-yesterday', '/revenue/lighthouse/vs-3d', '/revenue/lighthouse/vs-7d',
+    ],
     tabs: [
-      { label: 'Comp Set', href: '/revenue/compset' },
-      { label: 'Leakage',  href: '/revenue/leakage' },
-      { label: 'Parity',   href: '/revenue/parity'  },
+      { label: 'Comp Set',   href: '/revenue/compset'              },
+      { label: 'Leakage',    href: '/revenue/leakage'              },
+      { label: 'Parity',     href: '/revenue/parity'               },
+      { label: 'Lighthouse', href: '/revenue/lighthouse/overview'  },
     ],
   },
 
