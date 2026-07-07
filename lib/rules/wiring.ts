@@ -160,11 +160,13 @@ export function computeRuleStatus(
       reason: w.notWiredReason ?? `no rule function evaluates ${domain}.${rule_key}`,
     };
   }
-  // Wired — check all required data sources
+  // Wired — check all required data sources.
+  // OPTIMISTIC-ON-UNKNOWN: if a probe wasn't run for a source (no entry in probeResults),
+  // treat as live rather than false-red. Only flag missing when a probe returned ok=false.
   const missing: string[] = [];
   for (const src of w.requiresData ?? []) {
     const pr = probeResults[src];
-    if (!pr || !pr.ok) missing.push(src + (pr?.reason ? ` (${pr.reason})` : ''));
+    if (pr && !pr.ok) missing.push(src + (pr.reason ? ` (${pr.reason})` : ''));
   }
   if (missing.length > 0) {
     return {
