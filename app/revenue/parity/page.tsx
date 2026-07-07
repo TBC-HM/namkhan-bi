@@ -18,6 +18,7 @@ import {
 import { REVENUE_SUBPAGES } from '../_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
+import { NAMKHAN_PROPERTY_ID } from '@/lib/dept-cfg/by-property';
 import { fmtTableUsd, fmtIsoDate, EMPTY } from '@/lib/format';
 
 export const revalidate = 60;
@@ -63,17 +64,34 @@ interface BreachRow {
   raw_room_type: string | null;
 }
 
-async function loadAll(): Promise<{
+// PBS 2026-07-07: property-scoped loader.
+// Namkhan continues to read the original v_parity_summary + v_parity_matrix
+// (they carry namkhan_shop_date + the "last shop" tile depends on it), plus the
+// non-scoped v_parity_grid + v_parity_open_breaches.
+// For any OTHER property we route to the _pb variants that carry property_id,
+// and short-circuit grid/breaches to empty arrays so we don't leak Namkhan
+// comp-shop data cross-tenant. When a per-property comp-shop feed exists later
+// we'll swap in v_parity_grid_pb + v_parity_open_breaches_pb here.
+async function loadAll(pid: number): Promise<{
   summary: SummaryRow | null;
   matrix: MatrixRow[];
   grid: GridRow[];
   breaches: BreachRow[];
 }> {
+  const isNamkhan = pid === NAMKHAN_PROPERTY_ID;
   const [summaryR, matrixR, gridR, breachesR] = await Promise.all([
-    supabase.from('v_parity_summary').select('*'),
-    supabase.from('v_parity_matrix').select('*').order('stay_date'),
-    supabase.from('v_parity_grid').select('*').order('stay_date'),
-    supabase.from('v_parity_open_breaches').select('*').limit(50),
+    isNamkhan
+      ? supabase.from('v_parity_summary').select('*')
+      : supabase.from('v_parity_summary_pb').select('*').eq('property_id', pid),
+    isNamkhan
+      ? supabase.from('v_parity_matrix').select('*').order('stay_date')
+      : supabase.from('v_parity_matrix_pb').select('*').eq('property_id', pid).order('stay_date'),
+    isNamkhan
+      ? supabase.from('v_parity_grid').select('*').order('stay_date')
+      : Promise.resolve({ data: [] as GridRow[] } as { data: GridRow[] }),
+    isNamkhan
+      ? supabase.from('v_parity_open_breaches').select('*').limit(50)
+      : Promise.resolve({ data: [] as BreachRow[] } as { data: BreachRow[] }),
   ]);
   return {
     summary:  ((summaryR.data ?? []) as SummaryRow[])[0] ?? null,
@@ -109,7 +127,7 @@ export default async function ParityPage({ propertyId }: Props) {
   const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
   const tabs: DashboardTab[] = subPages.map((s) => ({ key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/parity') }));
 
-  const data = await loadAll();
+  const data = await loadAll(pid);
   const summary = data.summary;
   const matrix = data.matrix;
   const grid = data.grid;
