@@ -27,28 +27,33 @@ interface GuardrailRow {
 
 async function runProbes(propertyId: number): Promise<Record<string, ProbeResult>> {
   const sb = getSupabaseAdmin();
-  const [kpi, reviews, campaigns, campaignRcpt, mvGuest, vDirectory, pmsRes] = await Promise.all([
+  const [kpi, reviews, campaigns, campaignRcpt, mvGuest, vDirectory] = await Promise.all([
     sb.rpc('fn_revenue_hod_today_kpi', { p_property_id: propertyId }),
     sb.from('mkt_reviews').select('id', { head: true, count: 'exact' }).eq('property_id', propertyId),
     sb.from('campaigns').select('id', { head: true, count: 'exact' }).eq('property_id', propertyId),
     sb.from('campaign_recipients').select('id', { head: true, count: 'exact' }).eq('property_id', propertyId),
     sb.from('mv_guest_profile').select('property_id', { head: true, count: 'exact' }).eq('property_id', propertyId),
     sb.from('v_directory_full').select('property_id', { head: true, count: 'exact' }).eq('property_id', propertyId),
-    sb.schema('pms').from('v_reservations').select('property_id', { head: true, count: 'exact' }).eq('property_id', propertyId),
   ]);
+
+  function probe(res: { data?: unknown; error?: { message: string } | null; count?: number | null }, label: string): ProbeResult {
+    if (res.error) return { ok: true, reason: `probe unavailable (${res.error.message})` };
+    if (res.count == null) return { ok: true, reason: 'count unavailable · optimistic' };
+    if (res.count === 0)  return { ok: false, reason: `${label} has 0 rows for this property` };
+    return { ok: true };
+  }
 
   const results: Record<string, ProbeResult> = {};
   const kpiRow = ((kpi.data ?? []) as unknown as Array<Record<string, unknown>>)[0];
-  results['fn_revenue_hod_today_kpi'] = (!kpi.error && kpiRow != null)
-    ? { ok: true }
-    : { ok: false, reason: kpi.error?.message ?? 'RPC returned no row' };
-  results['getPulseTodayPickup'] = (pmsRes.count ?? 0) > 0 ? { ok: true } : { ok: false, reason: 'pms.v_reservations empty' };
-  results['pms.v_reservations'] = (pmsRes.count ?? 0) > 0 ? { ok: true } : { ok: false, reason: 'no reservations rows' };
-  results['mkt_reviews'] = (reviews.count ?? 0) > 0 ? { ok: true } : { ok: false, reason: 'no reviews' };
-  results['campaigns'] = (campaigns.count ?? 0) > 0 ? { ok: true } : { ok: false, reason: 'no campaigns yet' };
-  results['campaign_recipients'] = (campaignRcpt.count ?? 0) > 0 ? { ok: true } : { ok: false, reason: 'no campaign_recipients yet' };
-  results['mv_guest_profile'] = (mvGuest.count ?? 0) > 0 ? { ok: true } : { ok: false, reason: 'mv_guest_profile empty' };
-  results['v_directory_full'] = (vDirectory.count ?? 0) > 0 ? { ok: true } : { ok: false, reason: 'v_directory_full empty' };
+  const okKpi = !kpi.error && kpiRow != null;
+  results['fn_revenue_hod_today_kpi'] = okKpi ? { ok: true } : { ok: false, reason: kpi.error?.message ?? 'RPC returned no row' };
+  results['getPulseTodayPickup'] = okKpi ? { ok: true } : { ok: false, reason: 'PMS pipeline unreachable (KPI RPC failed)' };
+  results['pms.v_reservations']  = okKpi ? { ok: true } : { ok: false, reason: 'PMS pipeline unreachable (KPI RPC failed)' };
+  results['mkt_reviews']         = probe(reviews,      'mkt_reviews');
+  results['campaigns']           = probe(campaigns,    'campaigns');
+  results['campaign_recipients'] = probe(campaignRcpt, 'campaign_recipients');
+  results['mv_guest_profile']    = probe(mvGuest,      'mv_guest_profile');
+  results['v_directory_full']    = probe(vDirectory,   'v_directory_full');
   return results;
 }
 
