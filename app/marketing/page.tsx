@@ -20,11 +20,14 @@ import {
 } from '@/app/(cockpit)/_design';
 import { DEPT_CFG } from '@/lib/dept-cfg';
 import { PROPERTY_ID, supabase } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import ReportBuilder from '@/app/revenue/_components/ReportBuilder';
 import ReportsList   from '@/app/revenue/_components/ReportsList';
 import BugsList      from '@/app/revenue/_components/BugsList';
 import HodTasksList  from '@/app/revenue/_components/HodTasksList';
 import AttentionList from '@/app/revenue/_components/AttentionList';
+import ConclusionBlock from '@/app/_components/ConclusionBlock';
+import { evaluateMarketingRules, type MarketingContext, type MarketingTargets } from '@/lib/rules/marketing';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 30;
@@ -52,6 +55,52 @@ export default async function MarketingHodPage() {
     created_at: string | null; page_url: string | null;
   }>;
   const dueTasksCount = dueTasksRes.count ?? 0;
+
+  // PBS 2026-07-07: build marketing conclusion context.
+  const sbAdmin = getSupabaseAdmin();
+  const targets: MarketingTargets = {};
+  try {
+    const { data } = await sbAdmin
+      .from('guardrails')
+      .select('rule_key, threshold_val')
+      .eq('property_id', pid).eq('domain', 'marketing').eq('active', true);
+    for (const g of (data ?? []) as Array<{ rule_key: string; threshold_val: number | string }>) {
+      const n = typeof g.threshold_val === 'string' ? Number(g.threshold_val) : g.threshold_val;
+      if (!Number.isFinite(n)) continue;
+      if (g.rule_key === 'campaign_cadence_days_min') targets.campaign_cadence_days_min = n;
+      else if (g.rule_key === 'cost_per_lead_max') targets.cost_per_lead_max = n;
+      else if (g.rule_key === 'prospect_enrichment_min') targets.prospect_enrichment_min = n;
+      else if (g.rule_key === 'mx_verified_share_min') targets.mx_verified_share_min = n;
+    }
+  } catch { /* ignore */ }
+
+  let daysSinceLastCampaignSend: number | null = null;
+  let scheduledCampaigns = 0;
+  let activeCampaigns = 0;
+  try {
+    const [{ data: lastSent }, { count: scheduled }, { count: active }] = await Promise.all([
+      sbAdmin.from('campaigns').select('sent_at').eq('property_id', pid).not('sent_at', 'is', null).order('sent_at', { ascending: false }).limit(1),
+      sbAdmin.from('campaigns').select('id', { head: true, count: 'exact' }).eq('property_id', pid).eq('status', 'scheduled'),
+      sbAdmin.from('campaigns').select('id', { head: true, count: 'exact' }).eq('property_id', pid).in('status', ['draft', 'scheduled', 'sending']),
+    ]);
+    const iso = (lastSent?.[0] as { sent_at?: string } | undefined)?.sent_at;
+    if (iso) daysSinceLastCampaignSend = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+    scheduledCampaigns = scheduled ?? 0;
+    activeCampaigns = active ?? 0;
+  } catch { /* ignore */ }
+
+  const mktCtx: MarketingContext = {
+    currencySymbol: pid === 1000001 ? '€' : '$',
+    daysSinceLastCampaignSend,
+    costPerLead: null,
+    prospectEnrichmentPct: null,
+    mxVerifiedSharePct: null,
+    activeCampaigns,
+    scheduledCampaigns,
+    targets,
+  };
+  const insights = evaluateMarketingRules(mktCtx);
+  const activeTargetsLabel = Object.entries(targets).map(([k, v]) => `${k}=${v}`).join(' · ') || 'no DB targets';
 
   const tiles: KpiTileProps[] = (cfg.kpiTiles ?? []).map((k) => ({
     label: k.k, value: k.v, size: 'sm', footnote: k.d,
@@ -112,7 +161,19 @@ export default async function MarketingHodPage() {
           </Container>
         </div>
 
-        {/* 3 · Build-a-Report */}
+        {/* 3 · Conclusions container — rule-based signals from lib/rules/marketing.ts */}
+        <div style={fullRow}>
+          <ConclusionBlock
+            insights={insights}
+            title="CONCLUSIONS · campaigns · funnels · deliverability"
+            subtitle={`Live: ${activeCampaigns} active · ${scheduledCampaigns} scheduled · DB targets: ${activeTargetsLabel}`}
+            emptyText="Everything nominal. No marketing alarms firing."
+            storageKey={`marketing_hod_signals:${pid}`}
+            maxRender={12}
+          />
+        </div>
+
+        {/* 4 · Build-a-Report */}
         {reportTypes.length > 0 && (
           <div style={fullRow}>
             <Container title="Build a report" subtitle="pick a type · narrow with chips · open print-ready render" density="compact">
