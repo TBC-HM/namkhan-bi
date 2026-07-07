@@ -1,31 +1,28 @@
 // app/h/[property_id]/revenue/parity/page.tsx
-// Donna canonical Revenue · Parity — full canonical layout, empty-state data
-// until Donna PMS/booking feed is wired. Namkhan redirects to legacy.
+// PBS 2026-07-07: property-scoped mount of the parity deep-dive.
+// Delegates to the shared Namkhan renderer (which now reads v_parity_summary_pb
+// + v_parity_matrix_pb filtered by property_id) instead of the DonnaRevenueCanonical
+// empty-state scaffold. Removes the 26x "Donna PMS feed pending" placeholder spam
+// — Donna renders real zero-state tiles + empty tables until parity shopping runs
+// on that property. Namkhan short-circuits back to /revenue/parity.
 
-import { redirect } from 'next/navigation';
+import { redirect, notFound } from 'next/navigation';
 import { NAMKHAN_PROPERTY_ID } from '@/lib/dept-cfg/by-property';
-import DonnaRevenueCanonical from '../_DonnaRevenueCanonical';
-import { REVENUE_SURFACES } from '../_surfaces';
+import ParityPage from '@/app/revenue/parity/page';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+export const revalidate = 60;
 
-export default function DonnaRevenueParityPage({
+export default function PropertyParityPage({
   params,
   searchParams,
 }: {
   params: { property_id: string };
-  searchParams?: { win?: string; cmp?: string };
+  searchParams?: Record<string, string | string[] | undefined>;
 }) {
   const propertyId = Number(params.property_id);
+  if (!Number.isFinite(propertyId)) notFound();
   if (propertyId === NAMKHAN_PROPERTY_ID) redirect('/revenue/parity');
 
-  return (
-    <DonnaRevenueCanonical
-      propertyId={propertyId}
-      win={searchParams?.win}
-      cmp={searchParams?.cmp}
-      cfg={REVENUE_SURFACES.parity}
-    />
-  );
+  return <ParityPage propertyId={propertyId} searchParams={searchParams ?? {}} />;
 }
