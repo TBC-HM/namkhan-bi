@@ -197,31 +197,38 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   );
   // Total room nights booked TODAY across all new reservations (pickup array from getPulseTodayPickup).
   const pickupNightsSum = (pickupToday as Array<{ nights?: number | null }>).reduce((s, r) => s + (Number(r.nights) || 0), 0);
+  const cancelNightsSum = (cancellationsToday as Array<{ nights?: number | null }>).reduce((s, r) => s + (Number(r.nights) || 0), 0);
+
+  // PBS 2026-07-07 evening: strip 10% VAT + 10% service (compound 21%) so KPI tiles show NET values matching Cloudbeds + USALI.
+  const TAX_SERVICE = 1.21;
+  const netAdr    = Math.round(Number(todayKpi?.adr_today ?? 0)    / TAX_SERVICE);
+  const netRevpar = Math.round(Number(todayKpi?.revpar_today ?? 0) / TAX_SERVICE);
+  const netRevenueTonight = Math.round(Number(todayKpi?.rn_tonight ?? 0) * netAdr);
 
   // KPI tiles (same as before + one forward-looking tile)
   const baseTiles: KpiTileProps[] = (cfg.kpiTiles ?? []).map((k) => {
     if (todayKpi) {
       if (k.k === 'OCC')    return { label: 'OCC',    value: `${todayKpi.occ_pct ?? 0}%`, size: 'sm', footnote: `${todayKpi.rn_tonight ?? 0} of ${todayKpi.capacity ?? 0} rooms tonight` } as KpiTileProps;
-      if (k.k === 'ADR')    return { label: 'ADR',    value: `${symToday}${Math.round(Number(todayKpi.adr_today ?? 0)).toLocaleString('en-US')}`, size: 'sm', footnote: 'today · in-house · incl. 10% VAT + 10% service' } as KpiTileProps;
-      if (k.k === 'RevPAR') return { label: 'RevPAR', value: `${symToday}${Math.round(Number(todayKpi.revpar_today ?? 0)).toLocaleString('en-US')}`, size: 'sm', footnote: 'today · vs capacity · incl. 10% VAT + 10% service' } as KpiTileProps;
+      if (k.k === 'ADR')    return { label: 'ADR',    value: `${symToday}${netAdr.toLocaleString('en-US')}`,    size: 'sm', footnote: 'today · in-house · net' } as KpiTileProps;
+      if (k.k === 'RevPAR') return { label: 'RevPAR', value: `${symToday}${netRevpar.toLocaleString('en-US')}`, size: 'sm', footnote: 'today · vs capacity · net' } as KpiTileProps;
     }
     return { label: k.k, value: k.v, size: 'sm', footnote: k.d } as KpiTileProps;
   });
-  // Revenue tonight = in-house rooms × ADR (gross, incl. VAT + service).
-  const revenueTonight = Math.round(Number(todayKpi?.rn_tonight ?? 0) * Number(todayKpi?.adr_today ?? 0));
-
   const tiles: KpiTileProps[] = [
     ...baseTiles,
-    { label: 'Revenue tonight', value: `${symToday}${revenueTonight.toLocaleString('en-US')}`, size: 'sm',
-      footnote: `${todayKpi?.rn_tonight ?? 0} rooms × ADR · incl. 10% VAT + 10% service`,
-      status: revenueTonight > 0 ? 'green' : 'grey' },
-    { label: 'Pickup today', value: pickupCount, size: 'sm',
+    { label: 'Revenue tonight', value: `${symToday}${netRevenueTonight.toLocaleString('en-US')}`, size: 'sm',
+      footnote: `${todayKpi?.rn_tonight ?? 0} rooms × ADR · net`,
+      status: netRevenueTonight > 0 ? 'green' : 'grey' },
+    // PBS 2026-07-07 evening: room-nights headline, bookings count in small print.
+    { label: 'Pickup today · room nights', value: pickupNightsSum, size: 'sm',
       footnote: pickupCount === 0
         ? 'no new bookings'
-        : `${pickupCount === 1 ? 'booking' : 'bookings'} · ${pickupNightsSum} room nights`,
-      status: pickupCount > 0 ? 'green' : 'grey' },
-    { label: 'Cancellations today', value: cancelCount, size: 'sm',
-      footnote: cancelCount === 1 ? 'booking lost' : 'bookings lost',
+        : `${pickupCount} ${pickupCount === 1 ? 'booking' : 'bookings'} · created today`,
+      status: pickupNightsSum > 0 ? 'green' : 'grey' },
+    { label: 'Cancellations today · room nights', value: cancelNightsSum, size: 'sm',
+      footnote: cancelCount === 0
+        ? 'no cancellations'
+        : `${cancelCount} ${cancelCount === 1 ? 'booking' : 'bookings'} lost today`,
       status: cancelCount === 0 ? 'green' : 'amber' },
     { label: 'Soft nights (next 30d)', value: softNightsNext30, size: 'sm',
       footnote: '< 50% OCC · window still open',
@@ -252,7 +259,7 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     >
       {tiles.length > 0 && (
         <div style={fullRow}>
-          <Container title="Headline" subtitle="snapshot · last refresh" density="compact">
+          <Container title="Headline" subtitle="snapshot · last refresh · money tiles NET (excl. 10% VAT + 10% service charge)" density="compact">
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
               {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
             </div>
