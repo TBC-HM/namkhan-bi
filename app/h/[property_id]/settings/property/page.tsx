@@ -1,6 +1,9 @@
 // app/h/[property_id]/settings/property/page.tsx
 // PBS #160 (2026-05-24): paper-white DashboardPage chrome to match the rest
 // of the cockpit. Tab content still rendered by PropertySettingsClient.
+//
+// 2026-07-07 (PBS): sticky-strip tabs added so operators can flip between
+// Property and Guardrails inside the property-scoped settings shell.
 
 import { createClient } from '@/lib/supabase/server';
 import PropertySettingsClient from '@/components/settings/PropertySettingsClient';
@@ -78,6 +81,10 @@ export default async function PropertySettingsPage({
     <DashboardPage
       title={`Settings · ${data.identity?.trading_name ?? 'Property'}`}
       subtitle={subtitleParts}
+      tabs={[
+        { key: 'property',   label: 'Property',   href: `/h/${propertyId}/settings/property`   },
+        { key: 'guardrails', label: 'Guardrails', href: `/h/${propertyId}/settings/guardrails` },
+      ]}
     >
       <div style={fullRow}>
         <Container title="Property" subtitle="identity · brand · rooms · facilities · activities · seasons · team">
