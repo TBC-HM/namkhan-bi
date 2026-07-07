@@ -1,10 +1,14 @@
 // app/finance/page.tsx
 // PBS #204 — Finance HoD landing on shared primitive (matches /revenue).
-// USALI task #17 — Add "Create report" section: 7 preset finance reports
-// each routing to the page that already renders that data, pre-configured.
+// USALI task #17 — "Create report" section: 7 preset finance reports.
+// PBS 2026-07-07 — Conclusions container from lib/rules/finance.ts.
+
 import HodLanding from '@/app/_components/HodLanding';
 import { Container } from '@/app/(cockpit)/_design';
 import Link from 'next/link';
+import { PROPERTY_ID } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { evaluateFinanceRules, type FinanceContext, type FinanceTargets } from '@/lib/rules/finance';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,10 +22,57 @@ const REPORT_PRESETS: { code: string; label: string; desc: string; href: string 
   { code: 'transactions', label: 'Transactions explorer', desc: 'GL entry search + categorisation',           href: '/h/260955/finance/transactions' },
 ];
 
-export default function FinancePage() {
+async function buildFinanceContext(propertyId: number): Promise<FinanceContext> {
+  const sb = getSupabaseAdmin();
+  const currency = propertyId === 1000001 ? '€' : '$';
+
+  const targets: FinanceTargets = {};
+  try {
+    const { data } = await sb
+      .from('guardrails')
+      .select('rule_key, threshold_val')
+      .eq('property_id', propertyId).eq('domain', 'finance').eq('active', true);
+    for (const g of (data ?? []) as Array<{ rule_key: string; threshold_val: number | string }>) {
+      const n = typeof g.threshold_val === 'string' ? Number(g.threshold_val) : g.threshold_val;
+      if (!Number.isFinite(n)) continue;
+      if (g.rule_key === 'ap_late_days') targets.ap_late_days = n;
+      else if (g.rule_key === 'ar_days_max') targets.ar_days_max = n;
+      else if (g.rule_key === 'cash_days_min') targets.cash_days_min = n;
+      else if (g.rule_key === 'payroll_pct_target') targets.payroll_pct_target = n;
+      else if (g.rule_key === 'gop_margin_target') targets.gop_margin_target = n;
+      else if (g.rule_key === 'variance_pl_pp') targets.variance_pl_pp = n;
+    }
+  } catch { /* ignore */ }
+
+  // Best-effort data pulls — leave null on any miss, rules skip cleanly.
+  return {
+    currencySymbol: currency,
+    cashDaysRunway: null,
+    arOverdueDays: null,
+    apOverdueDays: null,
+    payrollPctRevenue: null,
+    gopMarginPctMtd: null,
+    variancePlPp: null,
+    targets,
+  };
+}
+
+export default async function FinancePage() {
+  const pid = PROPERTY_ID;
+  const ctx = await buildFinanceContext(pid);
+  const insights = evaluateFinanceRules(ctx);
+  const activeTargets = Object.entries(ctx.targets).map(([k, v]) => `${k}=${v}`).join(' · ') || 'no DB targets';
+
   return (
     <>
-      <HodLanding slug="finance" />
+      <HodLanding
+        slug="finance"
+        conclusions={{
+          insights,
+          title: 'CONCLUSIONS · cash · AR · AP · payroll · margin · variance',
+          subtitle: `DB targets: ${activeTargets} — most rules await data-source wiring (cash/AR/AP RPCs)`,
+        }}
+      />
       <div style={{ marginTop: 14, gridColumn: '1 / -1' }}>
         <Container title="Create report" subtitle="Pre-configured finance reports · click to open with the matching dataset loaded">
           <div style={{ padding: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
