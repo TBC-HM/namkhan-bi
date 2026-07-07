@@ -6,12 +6,11 @@ import { getLatestSnapshotDate, getDeltaRows } from '../_shared/data';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-const PROPERTY_ID = 260955;
-
-export default async function LighthouseVsYesterdayPage() {
-  const snapshot = await getLatestSnapshotDate(PROPERTY_ID);
+export default async function LighthouseVsYesterdayPage({ propertyId }: { propertyId?: number } = {}) {
+  const pid = propertyId ?? 260955;
+  const snapshot = await getLatestSnapshotDate(pid);
   const { rows, hotels, earlierSnapshot } = snapshot
-    ? await getDeltaRows(PROPERTY_ID, snapshot, 1)
+    ? await getDeltaRows(pid, snapshot, 1)
     : { rows: [], hotels: [], earlierSnapshot: null };
   return (
     <LighthouseShell
@@ -19,7 +18,7 @@ export default async function LighthouseVsYesterdayPage() {
       title="Lighthouse · vs Yesterday"
       subtitle="Same grid + 1-day delta — spot same-day movements across the compset"
     >
-      <SampleBanner snapshotDate={snapshot} />
+      {snapshot && <SampleBanner snapshotDate={snapshot} />}
       {rows.length === 0
         ? <LighthouseEmpty view="vs Yesterday" />
         : <DeltaTable rows={rows} hotels={hotels} earlierSnapshot={earlierSnapshot} />}
