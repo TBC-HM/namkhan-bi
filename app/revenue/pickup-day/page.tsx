@@ -32,6 +32,8 @@ interface PickupRow {
   stay_date: string;
   otb_rooms_now: number; otb_rooms_1d_ago: number; otb_rooms_7d_ago: number;
   otb_revenue_now: number; otb_revenue_1d_ago: number; otb_revenue_7d_ago: number;
+  new_bookings_2d_rn: number;
+  cancellations_2d_rn: number;
 }
 
 async function fetchData(propertyId: number) {
@@ -47,7 +49,7 @@ async function fetchData(propertyId: number) {
       .order('stay_date'),
     // Real -1d and -7d pickup from v_pickup_day_report (derived from reservation booking_date).
     sb.from('v_pickup_day_report')
-      .select('stay_date, otb_rooms_now, otb_rooms_1d_ago, otb_rooms_7d_ago, otb_revenue_now, otb_revenue_1d_ago, otb_revenue_7d_ago')
+      .select('stay_date, otb_rooms_now, otb_rooms_1d_ago, otb_rooms_7d_ago, otb_revenue_now, otb_revenue_1d_ago, otb_revenue_7d_ago, new_bookings_2d_rn, cancellations_2d_rn')
       .eq('property_id', propertyId),
     // Channel promotion activation state — powers the 5 visibility columns (green if active, red if not).
     sb.from('channel_promotions')
@@ -130,17 +132,14 @@ export default async function PickupDayReport() {
         title="Pickup · Day report"
         subtitle="One row per night (room nights) · real −1d and −7d pickup from booking_date · monthly totals"
         action={
-          <a
-            href="/api/pickup-day/csv"
-            style={{
-              fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600,
-              padding: '6px 14px', borderRadius: 4,
-              background: '#084838', color: '#FFFFFF',
-              border: '1px solid #084838', textDecoration: 'none',
-            }}
-          >
-            Download CSV ↓
-          </a>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <a href="/api/pickup-day/csv" title="Download CSV" aria-label="Download CSV" style={iconBtn}>
+              <span aria-hidden style={{ fontSize: 16, lineHeight: 1 }}>⬇</span>
+            </a>
+            <Link href="/revenue/pickup-day/email" title="Email / schedule report" aria-label="Email report" style={iconBtn}>
+              <span aria-hidden style={{ fontSize: 16, lineHeight: 1 }}>✉</span>
+            </Link>
+          </div>
         }
       >
         <div style={{ gridColumn: '1 / -1' }}>
@@ -225,12 +224,26 @@ export default async function PickupDayReport() {
                       ...rows.map((r) => {
                         const p1 = pickup(r, pickupMap.get(r.stay_date), '1d');
                         const p7 = pickup(r, pickupMap.get(r.stay_date), '7d');
+                        const pu = pickupMap.get(r.stay_date);
+                        const newBk = Number(pu?.new_bookings_2d_rn ?? 0);
+                        const cxl = Number(pu?.cancellations_2d_rn ?? 0);
                         const dow = DOW[(r.iso_dow - 1 + 7) % 7];
                         const isWeekend = r.iso_dow === 6 || r.iso_dow === 7;
                         const zebra = isWeekend ? '#FBF6E8' : '#FFFFFF';
+                        // PBS 2026-07-07 evening: colour whole row based on today+yesterday activity.
+                        // Both bookings AND cancels → half green (left) half red (right).
+                        // Only bookings → all green. Only cancels → all red. Nothing → normal zebra.
+                        let rowBg: string = zebra;
+                        if (newBk > 0 && cxl > 0)      rowBg = 'linear-gradient(90deg, #DFF0DE 0%, #DFF0DE 50%, #F5D5CE 50%, #F5D5CE 100%)';
+                        else if (newBk > 0)            rowBg = '#DFF0DE';
+                        else if (cxl > 0)              rowBg = '#F5D5CE';
                         return (
-                          <tr key={r.stay_date} style={{ background: zebra }}>
-                            <td style={{ ...td, fontWeight: 600 }}>{dow}</td>
+                          <tr key={r.stay_date} style={{ background: rowBg }}>
+                            <td style={{ ...td, fontWeight: 700, textAlign: 'center', color: (newBk > 0 || cxl > 0) ? '#1B1B1B' : undefined }}>
+                              {dow}
+                              {newBk > 0 && <span title={`${newBk} room-nights picked up today/yesterday`} style={{ marginLeft: 4, color: '#1F5C2C', fontWeight: 800 }}>+{newBk}</span>}
+                              {cxl > 0 && <span title={`${cxl} room-nights cancelled today/yesterday`} style={{ marginLeft: 4, color: '#B04A2F', fontWeight: 800 }}>−{cxl}</span>}
+                            </td>
                             <td style={td}>{fmtDate(r.stay_date)}</td>
                             <td style={td}></td>
                             <td style={{ ...td, ...tdMuted }}>—</td>
@@ -270,7 +283,7 @@ export default async function PickupDayReport() {
                           </tr>
                         );
                       }),
-                      <tr key={`total-${monthKey}`} style={{ background: '#EDEBDD', fontWeight: 700 }}>
+                      <tr key={`total-${monthKey}`} style={{ background: '#D4CDA6', fontWeight: 900, fontSize: 11, borderTop: '2px solid #0B3B2E', borderBottom: '2px solid #0B3B2E' }}>
                         <td style={td} colSpan={2}>{monthLabel} TOTAL</td>
                         <td style={td}></td>
                         <td style={{ ...td, ...tdMuted }}>—</td>
@@ -331,3 +344,9 @@ export default async function PickupDayReport() {
 const th: React.CSSProperties = { padding: '6px 6px', textAlign: 'center', fontSize: 10, fontWeight: 600, borderRight: '1px solid rgba(255,255,255,0.2)' };
 const td: React.CSSProperties = { padding: '4px 6px', textAlign: 'right', fontSize: 10, color: '#1B1B1B', borderRight: '1px solid #F5F0E1', borderBottom: '1px solid #F5F0E1' };
 const tdMuted: React.CSSProperties = { color: '#B5AF9A', textAlign: 'center' };
+const iconBtn: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+  width: 34, height: 30, borderRadius: 4,
+  background: '#084838', color: '#FFFFFF',
+  border: '1px solid #084838', textDecoration: 'none',
+};
