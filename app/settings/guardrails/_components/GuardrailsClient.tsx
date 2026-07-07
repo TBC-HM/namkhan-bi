@@ -9,6 +9,7 @@
 //   · Top summary strip (total · active · last updated · biggest domain)
 
 import { useState } from 'react';
+import type { RuleStatus } from '@/lib/rules/wiring';
 
 interface Row {
   id: number;
@@ -26,6 +27,8 @@ interface Row {
 interface Stats {
   total: number;
   activeCount: number;
+  liveCount: number;
+  missingCount: number;
   lastUpdatedLabel: string;
   lastUpdatedRuleLabel: string;
   biggestDomain: string;
@@ -49,7 +52,15 @@ const DOMAINS: Array<{ key: string; label: string; pillBg: string; pillFg: strin
 
 const KIND_LABEL: Record<string, string> = { gte: '≥', lte: '≤', eq: '=' };
 
-export default function GuardrailsClient({ rows: initial, stats }: { rows: Row[]; stats: Stats }) {
+export default function GuardrailsClient({
+  rows: initial,
+  stats,
+  statusById = {},
+}: {
+  rows: Row[];
+  stats: Stats;
+  statusById?: Record<number, RuleStatus>;
+}) {
   const [rows, setRows] = useState<Row[]>(initial);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -199,8 +210,12 @@ export default function GuardrailsClient({ rows: initial, stats }: { rows: Row[]
       <div style={topStrip}>
         <StatBlock label="Total rules" value={String(stats.total)} />
         <StatBlock label="Active" value={`${stats.activeCount} / ${stats.total}`} />
+        <StatBlock
+          label="Live / Missing"
+          value={`${stats.liveCount} / ${stats.missingCount}`}
+          sub="green = wired · red = not-wired or data missing"
+        />
         <StatBlock label="Last updated" value={stats.lastUpdatedLabel} sub={stats.lastUpdatedRuleLabel} />
-        <StatBlock label="Biggest domain" value={String(stats.biggestCount)} sub={labelForDomain(stats.biggestDomain)} />
       </div>
 
       {msg && (
@@ -307,9 +322,30 @@ export default function GuardrailsClient({ rows: initial, stats }: { rows: Row[]
                     {list.map(r => {
                       const isDyn = r.is_dynamic || /dynamic|rolling/i.test(r.notes ?? '');
                       const dimmed = !r.active;
+                      const st = statusById[r.id];
+                      const dotBg =
+                        st?.status === 'live' ? '#1F8A4C' :
+                        st?.status === 'data_missing' ? '#B04A2F' :
+                        st?.status === 'not_wired' ? '#C4A06B' :
+                        '#5A5A5A';
+                      const dotTitle = st
+                        ? `${st.status.toUpperCase()} · ${st.reason ?? ''}`
+                        : 'Status not computed';
                       return (
                         <tr key={r.id} style={{ borderBottom: '1px solid #F5F0E1', opacity: dimmed ? 0.5 : 1 }}>
                           <td style={{ ...td, fontFamily: 'monospace', color: '#3A3A3A' }}>
+                            <span
+                              title={dotTitle}
+                              style={{
+                                display: 'inline-block',
+                                width: 9, height: 9,
+                                borderRadius: '50%',
+                                background: dotBg,
+                                marginRight: 8,
+                                verticalAlign: 'middle',
+                                cursor: 'help',
+                              }}
+                            />
                             {isDyn && (
                               <span
                                 title="Dynamic threshold — controlled by rolling baseline logic, edits ignored"
