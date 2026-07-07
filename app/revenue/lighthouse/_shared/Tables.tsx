@@ -1,53 +1,54 @@
 // app/revenue/lighthouse/_shared/Tables.tsx
 // PBS 2026-07-07: Presentational tables for the 5 Lighthouse views.
-// Design tokens: paper white + hairlines (#E6DFCC) per feedback_paper_white_default_for_tables.
-// Green = better price (lower own, higher demand), red = worse.
+// Palette matches source Lighthouse xlsx exactly:
+//   - default text #5C5F61 (dark grey)
+//   - zebra rows #FFFFFF / #F2F2F2 (alternating, not weekend-based)
+//   - green rate text #02A245 (competitor > own → own well-positioned)
+//   - red   rate text #CE1C33 (competitor < own → competitor undercutting)
+//   - restriction text #D8D8D8 (LOS2/LOS3/No flex/Sold out — muted)
+//   - delta values plain grey with +/- prefix (no colour, per source)
 
 import type { OverviewRow, RatesRow, DeltaRow, HotelMeta } from './data';
 
-// ── shared cell styles ────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+//  Lighthouse palette (source xlsx cell colours, byte-exact)
+// ─────────────────────────────────────────────────────────────
+const INK          = '#5C5F61';   // default text
+const ZEBRA_LIGHT  = '#FFFFFF';
+const ZEBRA_DARK   = '#F2F2F2';
+const RATE_GREEN   = '#02A245';   // competitor rate above own
+const RATE_RED     = '#CE1C33';   // competitor rate below own
+const RESTRICTION  = '#D8D8D8';   // LOS/Sold-out grey
+const HAIRLINE     = '#E6DFCC';
+
 const th: React.CSSProperties = {
   fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
-  letterSpacing: 0.4, color: '#5A5A5A', padding: '8px 10px',
-  borderBottom: '1px solid #E6DFCC', textAlign: 'left', background: '#FFFFFF',
+  letterSpacing: 0.4, color: INK, padding: '8px 10px',
+  borderBottom: `1px solid ${HAIRLINE}`, textAlign: 'left', background: '#FFFFFF',
   position: 'sticky', top: 0, whiteSpace: 'nowrap',
 };
 const td: React.CSSProperties = {
-  fontSize: 12, color: '#1B1B1B', padding: '6px 10px',
-  borderBottom: '1px solid #F0EBD8', whiteSpace: 'nowrap',
+  fontSize: 12, color: INK, padding: '6px 10px',
+  whiteSpace: 'nowrap',
 };
-const tdMuted: React.CSSProperties = { ...td, color: '#9A9A9A' };
 const tdNum: React.CSSProperties = { ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' };
-const tdWeekend: React.CSSProperties = { background: '#FBF7EA' };
 
-// ── formatters ────────────────────────────────────────────────
 const pct = (v: number | null) => (v === null || v === undefined) ? '—' : `${Math.round(v * 100)}%`;
-const rate = (v: number | null) => (v === null || v === undefined) ? null : Math.round(v).toLocaleString('en-US');
-const restrictionCell = (r: string | null) =>
-  !r ? '—' : <span style={{ fontSize: 11, color: '#5A5A5A', fontStyle: 'italic' }}>{r}</span>;
+const money = (v: number | null) => (v === null || v === undefined) ? null : Math.round(v).toLocaleString('en-US');
 
-function isWeekend(day: string): boolean {
-  return day === 'Sat' || day === 'Sun';
+function zebra(idx: number): React.CSSProperties {
+  return { background: idx % 2 === 0 ? ZEBRA_LIGHT : ZEBRA_DARK };
 }
 
-function DeltaChip({ v, unit = 'money' }: { v: number | null; unit?: 'money' | 'pct' }) {
-  if (v === null || v === undefined || v === 0) return <span style={{ color: '#9A9A9A' }}> </span>;
-  const positive = v > 0;
-  const color = positive ? '#7A1F1A' : '#0B3B2E';
-  const bg = positive ? '#F5D5CE' : '#DFF0DE';
-  const label = unit === 'pct'
-    ? `${positive ? '+' : ''}${Math.round(v * 100)}pp`
-    : `${positive ? '+' : ''}${Math.round(v).toLocaleString('en-US')}`;
-  return (
-    <span style={{
-      display: 'inline-block', padding: '1px 5px', fontSize: 10, fontWeight: 600,
-      color, background: bg, borderRadius: 3, marginLeft: 4,
-    }}>{label}</span>
-  );
+function cmpColour(cellRate: number | null, ownRate: number | null): string {
+  if (cellRate === null || ownRate === null) return INK;
+  if (cellRate > ownRate) return RATE_GREEN;
+  if (cellRate < ownRate) return RATE_RED;
+  return INK;
 }
 
 // ─────────────────────────────────────────────────────────────
-//  Overview table  (per-date summary)
+//  Overview table  (per-date summary — no colour comparisons)
 // ─────────────────────────────────────────────────────────────
 export function OverviewTable({ rows }: { rows: OverviewRow[] }) {
   if (rows.length === 0) return <div style={emptyBox}>No data for this snapshot.</div>;
@@ -69,20 +70,20 @@ export function OverviewTable({ rows }: { rows: OverviewRow[] }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => {
-            const w = isWeekend(r.day_name) ? tdWeekend : null;
+          {rows.map((r, i) => {
+            const z = zebra(i);
             return (
               <tr key={r.stay_date}>
-                <td style={{ ...td, ...w, fontWeight: 600 }}>{r.day_name}</td>
-                <td style={{ ...td, ...w }}>{r.stay_date}</td>
-                <td style={{ ...td, ...w }}>{r.flex_own ?? '—'}</td>
-                <td style={{ ...tdNum, ...w }}>{r.median_compset === null ? '—' : rate(r.median_compset)}</td>
-                <td style={{ ...td, ...w }}>{r.compset_rank ?? '—'}</td>
-                <td style={{ ...tdNum, ...w }}>{pct(r.my_otb_pct)}</td>
-                <td style={{ ...tdNum, ...w }}>{pct(r.market_demand_pct)}</td>
-                <td style={{ ...td, ...w }}>{r.bookingcom_ranking ?? '—'}</td>
-                <td style={{ ...td, ...w, color: r.holidays ? '#1B1B1B' : '#9A9A9A' }}>{r.holidays ?? '—'}</td>
-                <td style={{ ...td, ...w, color: r.events ? '#1B1B1B' : '#9A9A9A' }}>{r.events ?? '—'}</td>
+                <td style={{ ...td, ...z, fontWeight: 600 }}>{r.day_name}</td>
+                <td style={{ ...td, ...z }}>{r.stay_date}</td>
+                <td style={{ ...td, ...z }}>{r.flex_own ?? '—'}</td>
+                <td style={{ ...tdNum, ...z }}>{r.median_compset === null ? '—' : money(r.median_compset)}</td>
+                <td style={{ ...td, ...z }}>{r.compset_rank ?? '—'}</td>
+                <td style={{ ...tdNum, ...z }}>{pct(r.my_otb_pct)}</td>
+                <td style={{ ...tdNum, ...z }}>{pct(r.market_demand_pct)}</td>
+                <td style={{ ...td, ...z }}>{r.bookingcom_ranking ?? '—'}</td>
+                <td style={{ ...td, ...z, color: r.holidays ? INK : '#B0B0B0' }}>{r.holidays ?? '—'}</td>
+                <td style={{ ...td, ...z, color: r.events ? INK : '#B0B0B0' }}>{r.events ?? '—'}</td>
               </tr>
             );
           })}
@@ -93,12 +94,9 @@ export function OverviewTable({ rows }: { rows: OverviewRow[] }) {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  Rates table  (per-date × per-hotel grid)
+//  Rates table  — green/red text on competitor rates
 // ─────────────────────────────────────────────────────────────
-export function RatesTable({ rows, hotels }: {
-  rows: RatesRow[];
-  hotels: HotelMeta[];
-}) {
+export function RatesTable({ rows, hotels }: { rows: RatesRow[]; hotels: HotelMeta[] }) {
   if (rows.length === 0) return <div style={emptyBox}>No data for this snapshot.</div>;
   return (
     <div style={scroller}>
@@ -110,28 +108,24 @@ export function RatesTable({ rows, hotels }: {
             <th style={{ ...th, textAlign: 'right' }}>My OTB %</th>
             <th style={{ ...th, textAlign: 'right' }}>Market demand %</th>
             {hotels.map((h) => (
-              <th key={h.hotel_name} style={{ ...th, textAlign: 'right', background: h.is_own ? '#F0E9CE' : '#FFFFFF' }}>
+              <th key={h.hotel_name} style={{ ...th, textAlign: 'right' }}>
                 {h.display_short ?? shortName(h.hotel_name)}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => {
-            const w = isWeekend(r.day_name) ? tdWeekend : null;
+          {rows.map((r, i) => {
+            const z = zebra(i);
+            const ownCell = r.cells.find((c) => c.is_own);
+            const ownRate = ownCell?.rate_value ?? null;
             return (
               <tr key={r.stay_date}>
-                <td style={{ ...td, ...w, fontWeight: 600 }}>{r.day_name}</td>
-                <td style={{ ...td, ...w }}>{r.stay_date}</td>
-                <td style={{ ...tdNum, ...w }}>{pct(r.my_otb_pct)}</td>
-                <td style={{ ...tdNum, ...w }}>{pct(r.market_demand_pct)}</td>
-                {r.cells.map((c, i) => {
-                  const bg = c.is_own ? { background: '#FBF6DC' } : w;
-                  const shown = c.rate_value !== null ? rate(c.rate_value) : restrictionCell(c.restriction);
-                  return (
-                    <td key={i} style={{ ...tdNum, ...bg, fontWeight: c.is_own ? 700 : 400 }}>{shown ?? '—'}</td>
-                  );
-                })}
+                <td style={{ ...td, ...z, fontWeight: 600 }}>{r.day_name}</td>
+                <td style={{ ...td, ...z }}>{r.stay_date}</td>
+                <td style={{ ...tdNum, ...z }}>{pct(r.my_otb_pct)}</td>
+                <td style={{ ...tdNum, ...z }}>{pct(r.market_demand_pct)}</td>
+                {r.cells.map((c, ci) => renderRateCell(c, ownRate, z, ci))}
               </tr>
             );
           })}
@@ -141,8 +135,27 @@ export function RatesTable({ rows, hotels }: {
   );
 }
 
+function renderRateCell(c: RatesRow['cells'][number], ownRate: number | null, z: React.CSSProperties, key: React.Key) {
+  const isRate = c.rate_value !== null;
+  if (isRate) {
+    const colour = c.is_own ? INK : cmpColour(c.rate_value, ownRate);
+    return (
+      <td key={key} style={{ ...tdNum, ...z, color: colour, fontWeight: c.is_own ? 700 : 500 }}>
+        {money(c.rate_value)}
+      </td>
+    );
+  }
+  // restriction — muted grey
+  return (
+    <td key={key} style={{ ...tdNum, ...z, color: RESTRICTION }}>
+      {c.restriction ?? '—'}
+    </td>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────
-//  Delta table  (same grid + delta chip after each rate)
+//  Delta table  — rate cells + plain +/- delta between each
+//  (Lighthouse does NOT colour deltas; +/- text in default grey)
 // ─────────────────────────────────────────────────────────────
 export function DeltaTable({ rows, hotels, earlierSnapshot }: {
   rows: DeltaRow[];
@@ -170,30 +183,32 @@ export function DeltaTable({ rows, hotels, earlierSnapshot }: {
               <th style={{ ...th, textAlign: 'right' }}>My OTB %</th>
               <th style={{ ...th, textAlign: 'right' }}>Market demand %</th>
               {hotels.map((h) => (
-                <th key={h.hotel_name} style={{ ...th, textAlign: 'right', background: h.is_own ? '#F0E9CE' : '#FFFFFF' }}>
-                  {h.display_short ?? shortName(h.hotel_name)}
-                </th>
+                <React.Fragment key={h.hotel_name}>
+                  <th style={{ ...th, textAlign: 'right' }}>{h.display_short ?? shortName(h.hotel_name)}</th>
+                  <th style={{ ...th, textAlign: 'right', color: '#B0B0B0', fontSize: 9 }}>Δ</th>
+                </React.Fragment>
               ))}
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => {
-              const w = isWeekend(r.day_name) ? tdWeekend : null;
+            {rows.map((r, i) => {
+              const z = zebra(i);
+              const ownCell = r.cells.find((c) => c.is_own);
+              const ownRate = ownCell?.rate_value ?? null;
               return (
                 <tr key={r.stay_date}>
-                  <td style={{ ...td, ...w, fontWeight: 600 }}>{r.day_name}</td>
-                  <td style={{ ...td, ...w }}>{r.stay_date}</td>
-                  <td style={{ ...tdNum, ...w }}>{pct(r.my_otb_pct)}<DeltaChip v={r.delta_otb} unit="pct" /></td>
-                  <td style={{ ...tdNum, ...w }}>{pct(r.market_demand_pct)}<DeltaChip v={r.delta_demand} unit="pct" /></td>
-                  {r.cells.map((c, i) => {
-                    const bg = c.is_own ? { background: '#FBF6DC' } : w;
-                    const shown = c.rate_value !== null ? rate(c.rate_value) : restrictionCell(c.restriction);
-                    return (
-                      <td key={i} style={{ ...tdNum, ...bg, fontWeight: c.is_own ? 700 : 400 }}>
-                        {shown ?? '—'}<DeltaChip v={c.delta_rate} />
+                  <td style={{ ...td, ...z, fontWeight: 600 }}>{r.day_name}</td>
+                  <td style={{ ...td, ...z }}>{r.stay_date}</td>
+                  <td style={{ ...tdNum, ...z }}>{pct(r.my_otb_pct)}</td>
+                  <td style={{ ...tdNum, ...z }}>{pct(r.market_demand_pct)}</td>
+                  {r.cells.map((c, ci) => (
+                    <React.Fragment key={ci}>
+                      {renderRateCell(c, ownRate, z, `${ci}-r`)}
+                      <td style={{ ...tdNum, ...z, color: INK, fontSize: 11 }}>
+                        {formatDelta(c.delta_rate)}
                       </td>
-                    );
-                  })}
+                    </React.Fragment>
+                  ))}
                 </tr>
               );
             })}
@@ -204,10 +219,19 @@ export function DeltaTable({ rows, hotels, earlierSnapshot }: {
   );
 }
 
+function formatDelta(v: number | null): string {
+  if (v === null || v === undefined || v === 0) return '';
+  const sign = v > 0 ? '+' : '−';
+  return `${sign}${Math.abs(Math.round(v))}`;
+}
+
+// Small React import shim (no useState/useEffect used but Fragment needs it)
+import * as React from 'react';
+
 // ── helpers ───────────────────────────────────────────────────
-const scroller: React.CSSProperties = { overflowX: 'auto', border: '1px solid #E6DFCC', borderRadius: 4, background: '#FFFFFF' };
+const scroller: React.CSSProperties = { overflowX: 'auto', border: `1px solid ${HAIRLINE}`, borderRadius: 4, background: '#FFFFFF' };
 const tbl: React.CSSProperties = { width: '100%', borderCollapse: 'collapse' as const };
-const emptyBox: React.CSSProperties = { padding: 24, textAlign: 'center', fontSize: 13, color: '#5A5A5A', background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 4 };
+const emptyBox: React.CSSProperties = { padding: 24, textAlign: 'center', fontSize: 13, color: INK, background: '#FFFFFF', border: `1px solid ${HAIRLINE}`, borderRadius: 4 };
 
 function shortName(full: string): string {
   const parts = full.split(/[·,]/)[0].trim();
