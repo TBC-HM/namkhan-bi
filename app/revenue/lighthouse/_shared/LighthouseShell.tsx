@@ -1,44 +1,23 @@
 // app/revenue/lighthouse/_shared/LighthouseShell.tsx
 // PBS 2026-07-07: 5-view Lighthouse compset dashboard shell.
-// Data lives in public.compset_lighthouse_{context,daily,hotels} — see ./data.ts.
-// Currently seeded with a Donna Portals sample snapshot (snapshot_date=2026-07-06).
+// Canonical data source: revenue.lighthouse_rateshop (via public bridge views).
+// Currently: Donna Portals sample seed (snapshot_date=2026-07-06); Namkhan empty
+// until email→xlsx ingestion is wired.
 
-import Link from 'next/link';
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
+import { LighthouseNav, type LighthouseView, LIGHTHOUSE_VIEWS } from './LighthouseNav';
 
-export type LighthouseView = 'overview' | 'rates' | 'yesterday' | 'three_days' | 'seven_days';
-
-export const LIGHTHOUSE_VIEWS: Array<{ key: LighthouseView; href: string; label: string }> = [
-  { key: 'overview',    href: '/revenue/lighthouse/overview',      label: 'Overview'      },
-  { key: 'rates',       href: '/revenue/lighthouse/rates',         label: 'Rates'         },
-  { key: 'yesterday',   href: '/revenue/lighthouse/vs-yesterday',  label: 'vs Yesterday'  },
-  { key: 'three_days',  href: '/revenue/lighthouse/vs-3d',         label: 'vs 3 days ago' },
-  { key: 'seven_days',  href: '/revenue/lighthouse/vs-7d',         label: 'vs 7 days ago' },
-];
-
-export function LighthouseNav({ active }: { active: LighthouseView }) {
-  return (
-    <nav style={strip} role="tablist" aria-label="Lighthouse views">
-      {LIGHTHOUSE_VIEWS.map((v) => {
-        const isActive = v.key === active;
-        return (
-          <Link key={v.key} href={v.href} role="tab" aria-selected={isActive}
-            style={{ ...tab, ...(isActive ? tabActive : null) }}>
-            {v.label}
-          </Link>
-        );
-      })}
-    </nav>
-  );
-}
+export type { LighthouseView };
+export { LIGHTHOUSE_VIEWS };
 
 export function LighthouseEmpty({ view }: { view: string }) {
   return (
     <div style={{ padding: 32, textAlign: 'center', border: '1px solid #E6DFCC', borderRadius: 6, background: '#FAFAF7' }}>
       <div style={{ fontSize: 32, marginBottom: 12 }}>💡</div>
       <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6, color: '#1B1B1B' }}>Awaiting Lighthouse email ingestion</div>
-      <div style={{ fontSize: 12, color: '#5A5A5A', marginBottom: 16 }}>
-        The <strong>{view}</strong> view needs at least one snapshot in <code>public.compset_lighthouse_daily</code>.
+      <div style={{ fontSize: 12, color: '#5A5A5A', marginBottom: 16, maxWidth: 640, margin: '0 auto 16px' }}>
+        The <strong>{view}</strong> view needs at least one snapshot in <code>revenue.lighthouse_rateshop</code> for this property.
+        Donna sample data lives at <code>/h/1000001/revenue/lighthouse/*</code>.
       </div>
     </div>
   );
@@ -94,15 +73,3 @@ export function LighthouseShell({
     </DashboardPage>
   );
 }
-
-const strip: React.CSSProperties = {
-  display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap',
-  padding: '6px 0', borderBottom: '1px solid #E6DFCC',
-};
-const tab: React.CSSProperties = {
-  padding: '6px 10px', fontSize: 12, fontWeight: 500,
-  color: '#5A5A5A', textDecoration: 'none', borderBottom: '2px solid transparent',
-};
-const tabActive: React.CSSProperties = {
-  color: '#1B1B1B', fontWeight: 700, borderBottomColor: '#084838',
-};
