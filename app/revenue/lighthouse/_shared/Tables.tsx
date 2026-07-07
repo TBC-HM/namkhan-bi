@@ -154,8 +154,10 @@ function renderRateCell(c: RatesRow['cells'][number], ownRate: number | null, z:
 }
 
 // ─────────────────────────────────────────────────────────────
-//  Delta table  — rate cells + plain +/- delta between each
-//  (Lighthouse does NOT colour deltas; +/- text in default grey)
+//  Delta table — matches Lighthouse conditional formatting rules exactly:
+//    delta > 0 → green #02A245 (rate went up)
+//    delta < 0 → red   #CE1C33 (rate went down)
+//    bracketed [LOS2] → grey #A5A6A5
 // ─────────────────────────────────────────────────────────────
 export function DeltaTable({ rows, hotels, earlierSnapshot }: {
   rows: DeltaRow[];
@@ -199,16 +201,25 @@ export function DeltaTable({ rows, hotels, earlierSnapshot }: {
                 <tr key={r.stay_date}>
                   <td style={{ ...td, ...z, fontWeight: 600 }}>{r.day_name}</td>
                   <td style={{ ...td, ...z }}>{r.stay_date}</td>
-                  <td style={{ ...tdNum, ...z }}>{pct(r.my_otb_pct)}</td>
-                  <td style={{ ...tdNum, ...z }}>{pct(r.market_demand_pct)}</td>
-                  {r.cells.map((c, ci) => (
-                    <React.Fragment key={ci}>
-                      {renderRateCell(c, ownRate, z, `${ci}-r`)}
-                      <td style={{ ...tdNum, ...z, color: INK, fontSize: 11 }}>
-                        {formatDelta(c.delta_rate)}
-                      </td>
-                    </React.Fragment>
-                  ))}
+                  <td style={{ ...tdNum, ...z }}>
+                    {pct(r.my_otb_pct)}
+                    {(() => { const d = formatPctDelta(r.delta_otb); return d.text ? <span style={{ marginLeft: 4, color: d.colour, fontSize: 11, fontWeight: 600 }}>{d.text}</span> : null; })()}
+                  </td>
+                  <td style={{ ...tdNum, ...z }}>
+                    {pct(r.market_demand_pct)}
+                    {(() => { const d = formatPctDelta(r.delta_demand); return d.text ? <span style={{ marginLeft: 4, color: d.colour, fontSize: 11, fontWeight: 600 }}>{d.text}</span> : null; })()}
+                  </td>
+                  {r.cells.map((c, ci) => {
+                    const d = formatDelta(c.delta_rate);
+                    return (
+                      <React.Fragment key={ci}>
+                        {renderRateCell(c, ownRate, z, `${ci}-r`)}
+                        <td style={{ ...tdNum, ...z, color: d.colour, fontSize: 11, fontWeight: 600 }}>
+                          {d.text}
+                        </td>
+                      </React.Fragment>
+                    );
+                  })}
                 </tr>
               );
             })}
@@ -219,10 +230,19 @@ export function DeltaTable({ rows, hotels, earlierSnapshot }: {
   );
 }
 
-function formatDelta(v: number | null): string {
-  if (v === null || v === undefined || v === 0) return '';
+function formatDelta(v: number | null): { text: string; colour: string } {
+  if (v === null || v === undefined || v === 0) return { text: '', colour: INK };
   const sign = v > 0 ? '+' : '−';
-  return `${sign}${Math.abs(Math.round(v))}`;
+  const colour = v > 0 ? RATE_GREEN : RATE_RED;
+  return { text: `${sign}${Math.abs(Math.round(v))}`, colour };
+}
+// pp = percentage-point delta for OTB / demand columns
+function formatPctDelta(v: number | null): { text: string; colour: string } {
+  if (v === null || v === undefined || v === 0) return { text: '', colour: INK };
+  const sign = v > 0 ? '+' : '−';
+  const colour = v > 0 ? RATE_GREEN : RATE_RED;
+  const abs = Math.abs(Math.round(v * 100));
+  return { text: `${sign}${abs}pp`, colour };
 }
 
 // Small React import shim (no useState/useEffect used but Fragment needs it)
