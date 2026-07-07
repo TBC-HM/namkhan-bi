@@ -1,8 +1,12 @@
 // app/revenue/page.tsx
 // Revenue HoD landing — TIGHT, full-width, above-the-fold first read.
-// Order: Headline tiles → Attention/Docs/Tasks → Sections navigator → Report builder → Chat.
+// Order: Headline tiles → Attention/Docs/Tasks → Conclusions → Report builder → BookingActivity.
 // Every block spans gridColumn 1/-1 so nothing sits in a 360px column with blank right.
-// cockpit ticket #198 (SEQ 6/6) · 2026-05-21 (tightened after PBS feedback re scroll+blank space).
+// cockpit ticket #198 (SEQ 6/6) · 2026-05-21.
+//
+// 2026-07-07 (PBS): Revenue Conclusions container added — same engine as the
+// Guest HoD SIGNALS block. 12 rules in /lib/rules/revenue.ts evaluate today's
+// OCC / ADR / RevPAR / pickup / cancels and surface priority-tagged insights.
 
 import Link from 'next/link';
 import {
@@ -15,6 +19,7 @@ import { REVENUE_SUBPAGES } from './_subpages';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { getDeptCfg } from '@/lib/dept-cfg/by-property';
 import { PROPERTY_ID, supabase } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import ReportBuilder from './_components/ReportBuilder';
 import ReportsList from './_components/ReportsList';
 import BugsList from './_components/BugsList';
@@ -23,6 +28,9 @@ import AttentionList from './_components/AttentionList';
 import { getPulseTodayPickup, getPulseTodayCancellations } from '@/lib/data-pulse';
 // Task #89: re-wire BookingActivity primitive into the Revenue HoD landing
 import BookingActivity from '@/app/(cockpit)/_design/BookingActivity';
+// 2026-07-07: Conclusions container — rule-based signals.
+import ConclusionBlock from '@/app/_components/ConclusionBlock';
+import { evaluateRevenueRules, type RevenueContext } from '@/lib/rules/revenue';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -77,6 +85,26 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   const pickupCount = pickupToday.length;
   const cancelCount = cancellationsToday.length;
 
+  // 2026-07-07: sum pickup + cancel value for the conclusion rules.
+  // Both pulse fns return `{ value: number }` per booking; cancels have `.value` estimated.
+  const pickupValue = (pickupToday as Array<{ value?: number | null }>).reduce((s, r) => s + (Number(r.value) || 0), 0);
+  const cancelValue = (cancellationsToday as Array<{ value?: number | null }>).reduce((s, r) => s + (Number(r.value) || 0), 0);
+
+  // 2026-07-07: pull operator-editable thresholds from public.guardrails (domain='revenue').
+  // Falls back to hardcoded defaults inside /lib/rules/revenue.ts when a row is absent.
+  const sbAdmin = getSupabaseAdmin();
+  const guardrailsRes = await sbAdmin
+    .from('guardrails')
+    .select('rule_key, threshold_val, active')
+    .eq('property_id', pid)
+    .eq('domain', 'revenue')
+    .eq('active', true);
+  const thresholds: Record<string, number> = {};
+  for (const g of (guardrailsRes.data ?? []) as Array<{ rule_key: string; threshold_val: number | string }>) {
+    const n = typeof g.threshold_val === 'string' ? Number(g.threshold_val) : g.threshold_val;
+    if (Number.isFinite(n)) thresholds[g.rule_key] = n as number;
+  }
+
   const baseTiles: KpiTileProps[] = (cfg.kpiTiles ?? []).map((k) => {
     // #228: override placeholders for the revenue HoD with today's live OCC/ADR/RevPAR
     if (todayKpi) {
@@ -95,6 +123,24 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
       footnote: cancelCount === 1 ? 'booking lost' : 'bookings lost',
       status: cancelCount === 0 ? 'green' : 'amber' },
   ];
+
+  // 2026-07-07: assemble revenue conclusion context + evaluate rules.
+  const revenueCtx: RevenueContext = {
+    rnTonight:      Number(todayKpi?.rn_tonight ?? 0),
+    capacity:       Number(todayKpi?.capacity ?? 0),
+    occPct:         Number(todayKpi?.occ_pct ?? 0),
+    adrToday:       Number(todayKpi?.adr_today ?? 0),
+    revparToday:    Number(todayKpi?.revpar_today ?? 0),
+    pickupCount,
+    pickupValue,
+    cancelCount,
+    cancelValue,
+    occBaselinePct: null,   // wire when v_pulse LY comparison is threaded through
+    adrBaseline:    null,
+    currencySymbol: symToday,
+    thresholds,
+  };
+  const revenueInsights = evaluateRevenueRules(revenueCtx);
 
   const attn = cfg.defaultAttn ?? [];
   const docs = cfg.defaultDocs ?? [];
@@ -154,6 +200,18 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
         <Container title="Bugs" subtitle={`${bugs.length} open · + to add · /cockpit/bugs for full inbox`} density="compact">
           <BugsList deptSlug="revenue" propertyId={pid} initial={bugs as unknown as { id: number; body: string | null; status: string | null; created_at: string | null; page_url: string | null }[]} />
         </Container>
+      </div>
+
+      {/* 3. Revenue Conclusions — rule-based signals from /lib/rules/revenue.ts */}
+      <div style={fullRow}>
+        <ConclusionBlock
+          insights={revenueInsights}
+          title="CONCLUSIONS · occupancy · pricing · pickup · cancels"
+          subtitle={`Rule-based on today's OCC ${(todayKpi?.occ_pct ?? 0)}% · ADR ${symToday}${Math.round(Number(todayKpi?.adr_today ?? 0)).toLocaleString('en-US')} · ${pickupCount} pickup · ${cancelCount} cancels · thresholds editable in Settings → Guardrails (revenue)`}
+          emptyText="Everything nominal. No rate-side alarms firing."
+          storageKey={`revenue_hod_signals:${pid}`}
+          maxRender={12}
+        />
       </div>
 
       {/* 4. Build a report — full-width */}
