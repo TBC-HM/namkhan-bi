@@ -201,8 +201,14 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     }
     return { label: k.k, value: k.v, size: 'sm', footnote: k.d } as KpiTileProps;
   });
+  // Revenue tonight = in-house rooms × ADR (gross, incl. VAT + service).
+  const revenueTonight = Math.round(Number(todayKpi?.rn_tonight ?? 0) * Number(todayKpi?.adr_today ?? 0));
+
   const tiles: KpiTileProps[] = [
     ...baseTiles,
+    { label: 'Revenue tonight', value: `${symToday}${revenueTonight.toLocaleString('en-US')}`, size: 'sm',
+      footnote: `${todayKpi?.rn_tonight ?? 0} rooms × ADR · incl. 10% VAT + 10% service`,
+      status: revenueTonight > 0 ? 'green' : 'grey' },
     { label: 'Pickup today', value: pickupCount, size: 'sm',
       footnote: pickupCount === 1 ? 'new booking' : 'new bookings',
       status: pickupCount > 0 ? 'green' : 'grey' },
