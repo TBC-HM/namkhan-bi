@@ -419,6 +419,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
               { key: 'gross_12mo',        label: 'Gross',  format: 'money' },
             ]}
             emptyText="No DMC contracts on file"
+            currency={moneyCurrency}
           />
         </Container>
         <Container
@@ -437,6 +438,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
               { key: 'last_booking',      label: 'Last bkg', align: 'left' },
             ]}
             emptyText="No OTA bookings in the last 12 months"
+            currency={moneyCurrency}
           />
         </Container>
         <Container
@@ -455,6 +457,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
               { key: 'last_booking',      label: 'Last bkg', align: 'left' },
             ]}
             emptyText="No Direct bookings in the last 12 months"
+            currency={moneyCurrency}
           />
         </Container>
       </div>
@@ -466,7 +469,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
           title="Top 10 sources · on the books (next 90d) vs SDLY"
           subtitle="forward-looking · date basis: check_in_date · SDLY = same booking-cutoff last year"
         >
-          <TopSourcesOtbTable rows={otbSdlyTop} />
+          <TopSourcesOtbTable rows={otbSdlyTop} currency={moneyCurrency} />
         </Container>
       </div>
 
@@ -1055,6 +1058,7 @@ async function CategoryBlock({
                 { key: 'adr',               label: 'ADR',      format: 'money' },
               ]}
               emptyText="No bookings in last 30 days"
+              currency={moneyCurrency}
             />
           </div>
         </Container>
@@ -1092,6 +1096,7 @@ async function CategoryBlock({
                     { key: 'adr',      label: 'ADR',     format: 'money' },
                   ]}
                   emptyText="No group originators"
+                  currency={moneyCurrency}
                 />
               );
             })()}
