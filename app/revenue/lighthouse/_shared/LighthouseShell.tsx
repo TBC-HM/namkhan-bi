@@ -82,22 +82,16 @@ export function LighthouseShell({
   children?: React.ReactNode;
 }) {
   return (
-    <div style={{ background: '#FFFFFF', minHeight: '100vh' }}>
-      <DashboardPage
-        title={title}
-        subtitle={subtitle}
-        action={<Link href="/revenue/compset" style={{ fontSize: 11, color: '#5A5A5A', textDecoration: 'none' }}>← Comp set</Link>}
-      >
-        <div style={{ gridColumn: '1 / -1' }}>
-          <LighthouseNav active={view} />
-        </div>
-        <div style={{ gridColumn: '1 / -1' }}>
-          <Container title={title} subtitle="Lighthouse feed · updates every 24h from a scheduled email → xlsx parser (currently sample data)">
-            {children ?? <LighthouseEmpty view={title} />}
-          </Container>
-        </div>
-      </DashboardPage>
-    </div>
+    <DashboardPage title={title} subtitle={subtitle}>
+      <div style={{ gridColumn: '1 / -1' }}>
+        <LighthouseNav active={view} />
+      </div>
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Container title={title} subtitle="Lighthouse feed · updates every 24h from a scheduled email → xlsx parser (currently sample data)">
+          {children ?? <LighthouseEmpty view={title} />}
+        </Container>
+      </div>
+    </DashboardPage>
   );
 }
 
