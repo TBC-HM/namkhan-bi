@@ -190,7 +190,13 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   const revenueInsights = evaluateRevenueRules(revenueCtx);
 
   const activeTargets = Object.entries(targets).map(([k, v]) => `${k}=${v}`).join(' · ') || 'fallback defaults';
-  const softNightsNext30 = paceNext90.filter(n => n.daysOut <= 30 && n.occPct < 50).length;
+  // Next 30 nights = tomorrow through 30 days out (excludes today so it's a clean 30-night window).
+  const softNightsNext30 = Math.min(
+    30,
+    paceNext90.filter(n => n.daysOut >= 1 && n.daysOut <= 30 && n.occPct < 50).length,
+  );
+  // Total room nights booked TODAY across all new reservations (pickup array from getPulseTodayPickup).
+  const pickupNightsSum = (pickupToday as Array<{ nights?: number | null }>).reduce((s, r) => s + (Number(r.nights) || 0), 0);
 
   // KPI tiles (same as before + one forward-looking tile)
   const baseTiles: KpiTileProps[] = (cfg.kpiTiles ?? []).map((k) => {
@@ -210,7 +216,9 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
       footnote: `${todayKpi?.rn_tonight ?? 0} rooms × ADR · incl. 10% VAT + 10% service`,
       status: revenueTonight > 0 ? 'green' : 'grey' },
     { label: 'Pickup today', value: pickupCount, size: 'sm',
-      footnote: pickupCount === 1 ? 'new booking' : 'new bookings',
+      footnote: pickupCount === 0
+        ? 'no new bookings'
+        : `${pickupCount === 1 ? 'booking' : 'bookings'} · ${pickupNightsSum} room nights`,
       status: pickupCount > 0 ? 'green' : 'grey' },
     { label: 'Cancellations today', value: cancelCount, size: 'sm',
       footnote: cancelCount === 1 ? 'booking lost' : 'bookings lost',
