@@ -1,11 +1,17 @@
 // app/settings/guardrails/page.tsx
 // PBS 2026-07-06 v2: full cockpit — 10 domain sections (always visible), top summary strip,
-// add-rule + delete-rule per section, dynamic-threshold lock. No subtitle (hidden globally).
+// add-rule + delete-rule per section, dynamic-threshold lock.
+//
+// 2026-07-07 v3 (PBS): live/data-missing/not-wired status dot per rule.
+// Server-side probes run for every unique data source declared in
+// lib/rules/wiring.ts, and each row gets a status computed via
+// computeRuleStatus(). Client renders green/red dot + reason on hover.
 
 import { DashboardPage } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { PROPERTY_ID } from '@/lib/supabase';
 import GuardrailsClient from './_components/GuardrailsClient';
+import { WIRING, computeRuleStatus, type ProbeResult, type RuleStatus } from '@/lib/rules/wiring';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 30;
@@ -24,6 +30,61 @@ interface GuardrailRow {
   updated_by: string | null;
 }
 
+// Probe registry — maps a source string in wiring.ts to a lightweight
+// COUNT probe that reports whether that source has rows for the property.
+// Keep additions small — every probe adds one Supabase round-trip.
+async function runProbes(propertyId: number): Promise<Record<string, ProbeResult>> {
+  const sb = getSupabaseAdmin();
+  const results: Record<string, ProbeResult> = {};
+
+  const [kpi, reviews, campaigns, campaignRcpt, mvGuest, vDirectory, pmsRes] = await Promise.all([
+    sb.rpc('fn_revenue_hod_today_kpi', { p_property_id: propertyId }),
+    sb.from('mkt_reviews').select('id', { head: true, count: 'exact' }).eq('property_id', propertyId),
+    sb.from('campaigns').select('id', { head: true, count: 'exact' }).eq('property_id', propertyId),
+    sb.from('campaign_recipients').select('id', { head: true, count: 'exact' }).eq('property_id', propertyId),
+    sb.from('mv_guest_profile').select('property_id', { head: true, count: 'exact' }).eq('property_id', propertyId),
+    sb.from('v_directory_full').select('property_id', { head: true, count: 'exact' }).eq('property_id', propertyId),
+    sb.schema('pms').from('v_reservations').select('property_id', { head: true, count: 'exact' }).eq('property_id', propertyId),
+  ]);
+
+  const kpiRow = ((kpi.data ?? []) as unknown as Array<Record<string, unknown>>)[0];
+  const okKpi = !kpi.error && kpiRow != null;
+  results['fn_revenue_hod_today_kpi'] = okKpi
+    ? { ok: true }
+    : { ok: false, reason: kpi.error?.message ?? 'RPC returned no row' };
+
+  // getPulseTodayPickup reads pms.v_reservations under the hood — probe the same table.
+  results['getPulseTodayPickup'] = (pmsRes.count ?? 0) > 0
+    ? { ok: true }
+    : { ok: false, reason: 'pms.v_reservations empty for property' };
+
+  results['pms.v_reservations'] = (pmsRes.count ?? 0) > 0
+    ? { ok: true }
+    : { ok: false, reason: 'no reservations rows' };
+
+  results['mkt_reviews'] = (reviews.count ?? 0) > 0
+    ? { ok: true }
+    : { ok: false, reason: 'no reviews in mkt_reviews' };
+
+  results['campaigns'] = (campaigns.count ?? 0) > 0
+    ? { ok: true }
+    : { ok: false, reason: 'no campaigns yet' };
+
+  results['campaign_recipients'] = (campaignRcpt.count ?? 0) > 0
+    ? { ok: true }
+    : { ok: false, reason: 'no campaign_recipients yet' };
+
+  results['mv_guest_profile'] = (mvGuest.count ?? 0) > 0
+    ? { ok: true }
+    : { ok: false, reason: 'mv_guest_profile has no rows for property' };
+
+  results['v_directory_full'] = (vDirectory.count ?? 0) > 0
+    ? { ok: true }
+    : { ok: false, reason: 'v_directory_full empty for property' };
+
+  return results;
+}
+
 export default async function GuardrailsSettingsPage() {
   const sb = getSupabaseAdmin();
   const { data } = await sb
@@ -35,9 +96,23 @@ export default async function GuardrailsSettingsPage() {
 
   const rows: GuardrailRow[] = (data as GuardrailRow[]) ?? [];
 
-  // Compute summary strip stats server-side (no function props across RSC boundary)
+  // Run probes once for the property.
+  const probeResults = await runProbes(PROPERTY_ID).catch(() => ({} as Record<string, ProbeResult>));
+
+  // Compute per-row status keyed by row id — client renders the dot.
+  const statusById: Record<number, RuleStatus> = {};
+  for (const r of rows) {
+    statusById[r.id] = computeRuleStatus(r.domain, r.rule_key, r.active, probeResults);
+  }
+
+  // Summary strip — same shape as before + live/missing counters.
   const total = rows.length;
   const activeCount = rows.filter(r => r.active).length;
+  const liveCount = rows.filter(r => statusById[r.id]?.status === 'live').length;
+  const missingCount = rows.filter(r => {
+    const s = statusById[r.id]?.status;
+    return r.active && (s === 'data_missing' || s === 'not_wired');
+  }).length;
   const lastUpdatedRow = rows.reduce<GuardrailRow | null>((acc, r) => {
     if (!r.updated_at) return acc;
     if (!acc || !acc.updated_at) return r;
@@ -64,9 +139,12 @@ export default async function GuardrailsSettingsPage() {
         <div style={{ gridColumn: '1 / -1' }}>
           <GuardrailsClient
             rows={rows}
+            statusById={statusById}
             stats={{
               total,
               activeCount,
+              liveCount,
+              missingCount,
               lastUpdatedLabel,
               lastUpdatedRuleLabel,
               biggestDomain,
