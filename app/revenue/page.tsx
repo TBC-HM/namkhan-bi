@@ -196,8 +196,8 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
   const baseTiles: KpiTileProps[] = (cfg.kpiTiles ?? []).map((k) => {
     if (todayKpi) {
       if (k.k === 'OCC')    return { label: 'OCC',    value: `${todayKpi.occ_pct ?? 0}%`, size: 'sm', footnote: `${todayKpi.rn_tonight ?? 0} of ${todayKpi.capacity ?? 0} rooms tonight` } as KpiTileProps;
-      if (k.k === 'ADR')    return { label: 'ADR',    value: `${symToday}${Math.round(Number(todayKpi.adr_today ?? 0)).toLocaleString('en-US')}`, size: 'sm', footnote: 'today, in-house only' } as KpiTileProps;
-      if (k.k === 'RevPAR') return { label: 'RevPAR', value: `${symToday}${Math.round(Number(todayKpi.revpar_today ?? 0)).toLocaleString('en-US')}`, size: 'sm', footnote: 'today, vs capacity' } as KpiTileProps;
+      if (k.k === 'ADR')    return { label: 'ADR',    value: `${symToday}${Math.round(Number(todayKpi.adr_today ?? 0)).toLocaleString('en-US')}`, size: 'sm', footnote: 'today · in-house · incl. 10% VAT + 10% service' } as KpiTileProps;
+      if (k.k === 'RevPAR') return { label: 'RevPAR', value: `${symToday}${Math.round(Number(todayKpi.revpar_today ?? 0)).toLocaleString('en-US')}`, size: 'sm', footnote: 'today · vs capacity · incl. 10% VAT + 10% service' } as KpiTileProps;
     }
     return { label: k.k, value: k.v, size: 'sm', footnote: k.d } as KpiTileProps;
   });
