@@ -65,13 +65,18 @@ interface BreachRow {
 }
 
 // PBS 2026-07-07: property-scoped loader.
-// Namkhan continues to read the original v_parity_summary + v_parity_matrix
-// (they carry namkhan_shop_date + the "last shop" tile depends on it), plus the
-// non-scoped v_parity_grid + v_parity_open_breaches.
-// For any OTHER property we route to the _pb variants that carry property_id,
-// and short-circuit grid/breaches to empty arrays so we don't leak Namkhan
-// comp-shop data cross-tenant. When a per-property comp-shop feed exists later
-// we'll swap in v_parity_grid_pb + v_parity_open_breaches_pb here.
+// v_parity_summary_pb + v_parity_matrix_pb carry a property_id column added
+// by the parallel Mews-ingest helper. Both are filterable per tenant.
+// The original v_parity_summary was ALSO widened at the same time (dropped
+// its `is_self = true` filter), so reading it un-filtered now returns Donna
+// row-0 for Namkhan too — that's why we point every property, Namkhan
+// included, at the _pb variants.
+// v_parity_grid + v_parity_open_breaches are still Namkhan-only shapes so we
+// gate them behind pid === NAMKHAN_PROPERTY_ID → other properties see empty
+// tables (no cross-tenant leakage of Namkhan comp-shop data). Namkhan keeps
+// its rich last-shop tile via `namkhan_shop_date` on the matrix path — but
+// matrix_pb doesn't carry that column, so we compute lastShop from grid on
+// Namkhan and skip it on other properties.
 async function loadAll(pid: number): Promise<{
   summary: SummaryRow | null;
   matrix: MatrixRow[];
@@ -80,12 +85,8 @@ async function loadAll(pid: number): Promise<{
 }> {
   const isNamkhan = pid === NAMKHAN_PROPERTY_ID;
   const [summaryR, matrixR, gridR, breachesR] = await Promise.all([
-    isNamkhan
-      ? supabase.from('v_parity_summary').select('*')
-      : supabase.from('v_parity_summary_pb').select('*').eq('property_id', pid),
-    isNamkhan
-      ? supabase.from('v_parity_matrix').select('*').order('stay_date')
-      : supabase.from('v_parity_matrix_pb').select('*').eq('property_id', pid).order('stay_date'),
+    supabase.from('v_parity_summary_pb').select('*').eq('property_id', pid),
+    supabase.from('v_parity_matrix_pb').select('*').eq('property_id', pid).order('stay_date'),
     isNamkhan
       ? supabase.from('v_parity_grid').select('*').order('stay_date')
       : Promise.resolve({ data: [] as GridRow[] } as { data: GridRow[] }),
