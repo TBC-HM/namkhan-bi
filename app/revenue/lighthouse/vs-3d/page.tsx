@@ -6,12 +6,11 @@ import { getLatestSnapshotDate, getDeltaRows } from '../_shared/data';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-const PROPERTY_ID = 260955;
-
-export default async function LighthouseVs3dPage() {
-  const snapshot = await getLatestSnapshotDate(PROPERTY_ID);
+export default async function LighthouseVs3dPage({ propertyId }: { propertyId?: number } = {}) {
+  const pid = propertyId ?? 260955;
+  const snapshot = await getLatestSnapshotDate(pid);
   const { rows, hotels, earlierSnapshot } = snapshot
-    ? await getDeltaRows(PROPERTY_ID, snapshot, 3)
+    ? await getDeltaRows(pid, snapshot, 3)
     : { rows: [], hotels: [], earlierSnapshot: null };
   return (
     <LighthouseShell
@@ -19,7 +18,7 @@ export default async function LighthouseVs3dPage() {
       title="Lighthouse · vs 3 days ago"
       subtitle="Same grid + 3-day delta — catch mid-week pricing repositioning"
     >
-      <SampleBanner snapshotDate={snapshot} />
+      {snapshot && <SampleBanner snapshotDate={snapshot} />}
       {rows.length === 0
         ? <LighthouseEmpty view="vs 3 days ago" />
         : <DeltaTable rows={rows} hotels={hotels} earlierSnapshot={earlierSnapshot} />}
