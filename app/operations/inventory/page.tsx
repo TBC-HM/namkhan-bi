@@ -9,7 +9,7 @@
 //   4. Suppliers strip (top 5 by reliability)
 //   5. Quick-link grid to sub-routes
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import Page from '@/components/page/Page';
 import { OPERATIONS_SUBPAGES } from '../_subpages';
 import KpiBox from '@/components/kpi/KpiBox';
@@ -153,7 +153,7 @@ export default async function InventoryOverviewPage() {
             justifyContent: 'space-between',
           }}>
             <span>Open POs · {pos.filter(p => p.status !== 'received' && p.status !== 'closed').length}</span>
-            <Link href="/operations/inventory/orders" style={{ color: 'var(--brass)', textDecoration: 'none' }}>open →</Link>
+            <TenantLink href="/operations/inventory/orders" style={{ color: 'var(--brass)', textDecoration: 'none' }}>open →</TenantLink>
           </div>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--t-sm)' }}>
             <tbody>
@@ -187,7 +187,7 @@ export default async function InventoryOverviewPage() {
             justifyContent: 'space-between',
           }}>
             <span>Requests · {prs.filter(r => !['approved','closed','rejected','converted_to_po'].includes(r.status)).length}</span>
-            <Link href="/operations/inventory/requests" style={{ color: 'var(--brass)', textDecoration: 'none' }}>queue →</Link>
+            <TenantLink href="/operations/inventory/requests" style={{ color: 'var(--brass)', textDecoration: 'none' }}>queue →</TenantLink>
           </div>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--t-sm)' }}>
             <tbody>
@@ -226,7 +226,7 @@ export default async function InventoryOverviewPage() {
             justifyContent: 'space-between',
           }}>
             <span>CapEx pipeline · {capex.length}</span>
-            <Link href="/operations/inventory/capex" style={{ color: 'var(--brass)', textDecoration: 'none' }}>open →</Link>
+            <TenantLink href="/operations/inventory/capex" style={{ color: 'var(--brass)', textDecoration: 'none' }}>open →</TenantLink>
           </div>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--t-sm)' }}>
             <tbody>
@@ -290,7 +290,7 @@ export default async function InventoryOverviewPage() {
             </>
           );
           return q.status === 'live' ? (
-            <Link key={q.href} href={q.href} style={cardStyle}>{inner}</Link>
+            <TenantLink key={q.href} href={q.href} style={cardStyle}>{inner}</TenantLink>
           ) : (
             <div key={q.href} style={cardStyle} aria-disabled="true">{inner}</div>
           );
