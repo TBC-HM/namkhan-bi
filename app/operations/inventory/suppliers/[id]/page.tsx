@@ -5,7 +5,7 @@
 // Source: gl.v_supplier_overview + gl.vendors + gl.v_supplier_transactions
 //         + gl.v_supplier_vendor_account + gl.v_supplier_account_anomalies.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { notFound } from 'next/navigation';
 import Page from '@/components/page/Page';
 import { OPERATIONS_SUBPAGES } from '../../../_subpages';
@@ -76,7 +76,7 @@ export default async function VendorDetailPage({ params }: { params: { id: strin
       title={<em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>{ov.vendor_name}</em>}
       subPages={OPERATIONS_SUBPAGES}
       topRight={
-        <Link
+        <TenantLink
           href="/operations/inventory/suppliers"
           style={{
             fontFamily: 'var(--mono)',
@@ -88,7 +88,7 @@ export default async function VendorDetailPage({ params }: { params: { id: strin
             padding: '4px 10px',
             border: '1px solid var(--brass-soft, #c4a06b)',
           }}
-        >← Back to vendors</Link>
+        >← Back to vendors</TenantLink>
       }
     >
 
