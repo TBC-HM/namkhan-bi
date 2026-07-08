@@ -2,7 +2,7 @@
 // PBS 2026-07-06: guided doc upload landing. Presents drag-drop into the
 // dms-documents bucket + doc_type/doc_subtype metadata form so the file
 // lands cleanly categorized.
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { DEPT_CFG } from '@/lib/dept-cfg';
 import DocsUploadForm from './_components/DocsUploadForm';
@@ -33,7 +33,7 @@ export default function DocsUploadPage() {
       `}</style>
       <DashboardPage title="Marketing · Documents · Upload" subtitle="Drop a doc + pick container so it lands cleanly categorized" tabs={tabs}>
         <div style={{ gridColumn:'1 / -1' }}>
-          <Link href="/marketing/docs" style={{ fontSize:12, color:GREEN, textDecoration:'none', fontWeight:600 }}>← Back to docs</Link>
+          <TenantLink href="/marketing/docs" style={{ fontSize:12, color:GREEN, textDecoration:'none', fontWeight:600 }}>← Back to docs</TenantLink>
         </div>
         <div style={{ gridColumn:'1 / -1', padding:'12px 16px', background:CREAM, border:'1px solid '+HAIR, borderLeft:'3px solid '+GREEN, borderRadius:6, fontSize:12, color:INK, lineHeight:1.6 }}>
           <strong>Two ways to upload:</strong>{' '}
