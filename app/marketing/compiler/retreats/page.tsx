@@ -1,7 +1,7 @@
 // app/marketing/compiler/retreats/page.tsx
 // All retreats published from the compiler. Status / spots / link.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import Page from '@/components/page/Page';
 import { MARKETING_SUBPAGES } from '../../_subpages';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
@@ -71,10 +71,10 @@ export default async function RetreatsListPage() {
             {rows.map(r => (
               <tr key={r.id} style={{ borderBottom: '1px solid var(--paper-warm)' }}>
                 <td style={{ padding: '6px 12px' }}>
-                  <Link href={`/r/${r.slug}`} target="_blank" style={{ color: 'var(--ink)', textDecoration: 'none' }}>
+                  <TenantLink href={`/r/${r.slug}`} target="_blank" style={{ color: 'var(--ink)', textDecoration: 'none' }}>
                     <strong>{r.name}</strong>
                     <div style={{ fontSize: 'var(--t-xs)', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>/r/{r.slug} ↗</div>
-                  </Link>
+                  </TenantLink>
                 </td>
                 <td style={{ padding: '6px 12px' }}>{r.series_slug ?? '—'}</td>
                 <td style={{ padding: '6px 12px' }}>{fmtIsoDate(r.arrival_window_from)} → {fmtIsoDate(r.arrival_window_to)}</td>
@@ -89,7 +89,7 @@ export default async function RetreatsListPage() {
       )}
 
       <div style={{ marginTop: 18, fontSize: 'var(--t-xs)', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>
-        <Link href="/marketing/compiler" style={{ color: 'var(--brass)' }}>← BACK TO COMPILER</Link>
+        <TenantLink href="/marketing/compiler" style={{ color: 'var(--brass)' }}>← BACK TO COMPILER</TenantLink>
       </div>
     </Page>
   );
