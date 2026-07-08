@@ -3,7 +3,7 @@
 // Client renderer for /sales/b2b/performance partner scorecard.
 // Owns column definitions (functions can't cross the RSC boundary).
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import { fmtTableUsd, EMPTY } from '@/lib/format';
 
@@ -41,9 +41,9 @@ export default function B2bPerformanceTable({ rows }: Props) {
       sortValue: (r) => r.matched_partner ?? '',
       render: (r) =>
         r.matched_contract_id ? (
-          <Link href={`/sales/b2b/partner/${r.matched_contract_id}`} style={{ color: 'var(--moss-glow)', textDecoration: 'none', fontWeight: 500 }}>
+          <TenantLink href={`/sales/b2b/partner/${r.matched_contract_id}`} style={{ color: 'var(--moss-glow)', textDecoration: 'none', fontWeight: 500 }}>
             ✓ {r.matched_partner}
-          </Link>
+          </TenantLink>
         ) : (
           <span style={{ color: 'var(--st-bad)', fontStyle: 'italic' }}>no contract on file</span>
         ),
