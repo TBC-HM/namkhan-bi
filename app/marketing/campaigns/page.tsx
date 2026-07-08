@@ -14,7 +14,7 @@
 // CTA into /marketing/campaigns/new.
 
 import type { CSSProperties } from 'react';
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import {
   DashboardPage, KpiTile,
   type DashboardTab, type KpiTileProps,
@@ -91,7 +91,7 @@ export default async function CampaignsPage({ searchParams }: SP) {
             Sources <code style={code}>mkt_v_campaign_calendar</code> — the marketing
             campaigns table is not yet seeded with a live send/schedule feed on Namkhan.
             KPIs and rows shown are literal DB counts (likely 0). The AI-campaign builder
-            at <Link href="/marketing/campaigns/new" style={{ color: FOREST, textDecoration: 'none', fontWeight: 600 }}>+ new</Link> writes into
+            at <TenantLink href="/marketing/campaigns/new" style={{ color: FOREST, textDecoration: 'none', fontWeight: 600 }}>+ new</TenantLink> writes into
             this same table, so seeded rows will appear here once shipped.
           </span>
         </div>
@@ -103,7 +103,7 @@ export default async function CampaignsPage({ searchParams }: SP) {
 
         {/* Actions row */}
         <div style={{ ...fullRow, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <Link href="/marketing/campaigns/new" style={btnPrimary}>+ New campaign</Link>
+          <TenantLink href="/marketing/campaigns/new" style={btnPrimary}>+ New campaign</TenantLink>
         </div>
 
         {/* Status filter tabs */}
@@ -112,13 +112,13 @@ export default async function CampaignsPage({ searchParams }: SP) {
             {STATUS_TABS.map(t => {
               const active = status === t.key;
               return (
-                <Link key={t.key || 'all'}
+                <TenantLink key={t.key || 'all'}
                   href={t.key ? `/marketing/campaigns?status=${t.key}` : '/marketing/campaigns'}
                   style={{ ...pill,
                     background: active ? FOREST : WHITE,
                     color: active ? WHITE : INK,
                     borderColor: active ? FOREST : HAIR,
-                  }}>{t.label}</Link>
+                  }}>{t.label}</TenantLink>
               );
             })}
           </div>
@@ -134,7 +134,7 @@ export default async function CampaignsPage({ searchParams }: SP) {
                 Build your first campaign in ~4 minutes — pick a channel, one-sentence brief,
                 AI proposes assets, you approve and download.
               </div>
-              <Link href="/marketing/campaigns/new" style={btnPrimary}>Start a campaign →</Link>
+              <TenantLink href="/marketing/campaigns/new" style={btnPrimary}>Start a campaign →</TenantLink>
             </div>
           ) : (
             <div style={tableWrap}>
@@ -155,10 +155,10 @@ export default async function CampaignsPage({ searchParams }: SP) {
                     return (
                       <tr key={c.campaign_id} style={{ borderBottom: '1px solid ' + HAIR, background: WHITE }}>
                         <td style={{ ...tdL, maxWidth: 320 }}>
-                          <Link href={`/marketing/campaigns/${c.campaign_id}`}
+                          <TenantLink href={`/marketing/campaigns/${c.campaign_id}`}
                             style={{ color: INK, textDecoration: 'none', fontWeight: 600 }}>
                             {c.name}
-                          </Link>
+                          </TenantLink>
                           {c.brief_text && (
                             <div style={{ fontSize: 11, color: INK_M, marginTop: 2, fontStyle: 'italic' }}>
                               {c.brief_text.slice(0, 90)}{c.brief_text.length > 90 ? '…' : ''}
@@ -174,10 +174,10 @@ export default async function CampaignsPage({ searchParams }: SP) {
                           {c.calendar_at ? new Date(c.calendar_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                         </td>
                         <td style={{ ...tdR, textAlign: 'right' }}>
-                          <Link href={`/marketing/campaigns/${c.campaign_id}`}
+                          <TenantLink href={`/marketing/campaigns/${c.campaign_id}`}
                             style={{ fontSize: 11, color: FOREST, textDecoration: 'none', fontWeight: 600 }}>
                             open ↗
-                          </Link>
+                          </TenantLink>
                         </td>
                       </tr>
                     );
