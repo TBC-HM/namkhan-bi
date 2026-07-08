@@ -3,7 +3,7 @@
 // from /guest/directory, pre-populates an audience preview from
 // guest.mv_guest_profile (same query as directory).
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../../_subpages';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
@@ -145,9 +145,9 @@ export default async function NewAudienceFromGuestFilter({ searchParams }: Props
           flexWrap: 'wrap',
         }}>
           <div><strong>Filter spec received from /guest/directory.</strong> {filterSummary}</div>
-          <Link href="/guest/directory" style={{ ...linkSt, fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          <TenantLink href="/guest/directory" style={{ ...linkSt, fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
             ← back to directory
-          </Link>
+          </TenantLink>
         </div>
 
         {/* KPI tiles */}
@@ -160,10 +160,10 @@ export default async function NewAudienceFromGuestFilter({ searchParams }: Props
           <div style={{ fontSize: 15, fontWeight: 600, color: INK }}>
             Preview · top {Math.min(rows.length, 100)} of {total.toLocaleString()}
           </div>
-          <Link href={`/marketing/campaigns/new${spec?.country ? `?country=${encodeURIComponent(spec.country)}` : ''}`}
+          <TenantLink href={`/marketing/campaigns/new${spec?.country ? `?country=${encodeURIComponent(spec.country)}` : ''}`}
                 style={btnPrimary}>
             + Build campaign from this audience
-          </Link>
+          </TenantLink>
         </div>
 
         {error && (
