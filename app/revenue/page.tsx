@@ -17,7 +17,7 @@ import { PROPERTY_ID, supabase } from '@/lib/supabase';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { ScheduledReportsTable, SendLogTable, type ScheduledRow, type SendLogRow } from './_components/RevenueReportsTables';
 import ShortcutsPanel, { type Shortcut } from './_components/ShortcutsPanel';
-import BugsList from './_components/BugsList';
+import ExternalLinksPanel, { type ExternalLink } from './_components/ExternalLinksPanel';
 import HodTasksList from './_components/HodTasksList';
 import AttentionList from './_components/AttentionList';
 import { getPulseTodayPickup, getPulseTodayCancellations } from '@/lib/data-pulse';
@@ -93,12 +93,14 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     supabase.from('v_revenue_report_recipients').select('id, property_id, template_key, cadence, email, name, next_fire_at, created_at').eq('property_id', pid).order('next_fire_at', { ascending: true }).limit(500),
     supabase.from('v_revenue_report_sends').select('id, property_id, template_key, sent_at, recipient_email, created_by, report_name, status').eq('property_id', pid).limit(200),
     supabase.from('v_revenue_report_sends').select('id, property_id, template_key, sent_at, recipient_email, created_by, report_name, status').eq('property_id', pid).eq('recipient_email', 'pbsbase@gmail.com').order('sent_at', { ascending: false }).limit(20),
-    supabase.from('v_hod_shortcuts').select('id, label, href').eq('property_id', pid).eq('dept_slug', 'revenue').eq('user_email', 'pbsbase@gmail.com').order('sort_order').limit(50),
+    supabase.from('v_hod_shortcuts').select('id, label, href, kind').eq('property_id', pid).eq('dept_slug', 'revenue').eq('user_email', 'pbsbase@gmail.com').order('sort_order').limit(100),
   ]);
   const scheduledRows = (scheduledRes.data ?? []) as ScheduledRow[];
   const sendLogRows   = (sendsRes.data ?? []) as SendLogRow[];
   const myReportRows  = (myReportsRes.data ?? []) as SendLogRow[];
-  const shortcuts     = (shortcutsRes.data ?? []) as Shortcut[];
+  const allShortcuts  = (shortcutsRes.data ?? []) as Array<Shortcut & { kind?: string }>;
+  const shortcuts     = allShortcuts.filter((s) => (s.kind ?? 'internal') === 'internal');
+  const externalLinks = allShortcuts.filter((s) => s.kind === 'external') as ExternalLink[];
 
   const todayKpi = ((todayKpiRes.data ?? [])[0] ?? null) as { rn_tonight: number; capacity: number; occ_pct: number; adr_today: number; revpar_today: number } | null;
   const bugs = (bugsRes.data ?? []) as Array<{ id: number; body: string | null; status: string | null; created_at: string | null; page_url: string | null }>;
@@ -329,8 +331,8 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
         <Container title="My Tasks" subtitle={dueTasksCount > 0 ? `🔴 ${dueTasksCount} due · add / due-date / repeat / delete` : 'add / due-date / repeat / delete · per property'} density="compact">
           <HodTasksList deptSlug="revenue" propertyId={pid} />
         </Container>
-        <Container title="Bugs" subtitle={`${bugs.length} open · + to add · /cockpit/bugs for full inbox`} density="compact">
-          <BugsList deptSlug="revenue" propertyId={pid} initial={bugs as unknown as { id: number; body: string | null; status: string | null; created_at: string | null; page_url: string | null }[]} />
+        <Container title="External links" subtitle="Extranet · Cloudbeds · SLH login · anywhere outside the cockpit" density="compact">
+          <ExternalLinksPanel initial={externalLinks} propertyId={pid} deptSlug="revenue" userEmail="pbsbase@gmail.com" />
         </Container>
       </div>
 
