@@ -13,12 +13,14 @@ export async function POST(req: Request) {
     const user_email  = String(body.user_email ?? 'pbsbase@gmail.com').toLowerCase();
     const label       = String(body.label ?? '').trim();
     const href        = String(body.href ?? '').trim();
+    const kind        = ['internal','external'].includes(String(body.kind ?? '').toLowerCase())
+                          ? String(body.kind).toLowerCase() : 'internal';
     if (!Number.isFinite(property_id) || property_id <= 0) return NextResponse.json({ error: 'property_id required' }, { status: 400 });
     if (!label || !href) return NextResponse.json({ error: 'label + href required' }, { status: 400 });
     const sb = getSupabaseAdmin();
     const { data, error } = await sb.rpc('fn_shortcut_add', {
       p_property_id: property_id, p_dept_slug: dept_slug, p_user_email: user_email,
-      p_label: label, p_href: href,
+      p_label: label, p_href: href, p_kind: kind,
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true, id: Number(data) });
