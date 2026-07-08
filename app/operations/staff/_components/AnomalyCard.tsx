@@ -2,8 +2,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-
+import TenantLink from '@/components/nav/TenantLink';
 type Person = { staff_id: string; full_name: string; dept_name: string };
 
 export function AnomalyCard({
@@ -55,12 +54,12 @@ export function AnomalyCard({
         <ul className="mt-3 space-y-1 border-t border-stone-200 pt-3 text-xs">
           {people.slice(0, 200).map((p) => (
             <li key={p.staff_id} className="flex justify-between gap-3">
-              <Link
+              <TenantLink
                 href={`/operations/staff/${encodeURIComponent(p.staff_id)}`}
                 className="truncate font-medium uppercase tracking-wider text-stone-800 hover:underline"
               >
                 {p.full_name}
-              </Link>
+              </TenantLink>
               <span className="shrink-0 text-stone-500">· {p.dept_name}</span>
             </li>
           ))}
