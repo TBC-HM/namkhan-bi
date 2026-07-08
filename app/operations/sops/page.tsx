@@ -1,8 +1,8 @@
 // app/operations/sops/page.tsx
-// PBS 2026-07-03 · 2026-07-08 · 2026-07-07-Generate:
-//   SOP catalog. Now property-scoped via `v_sop_catalog.property_id`
+// PBS 2026-07-03 · 2026-07-08 · 2026-07-07-Generate · 2026-07-08 Proposals:
+//   SOP catalog. Property-scoped via `v_sop_catalog.property_id`
 //   (NULL = shared, else per-tenant). Shows shared ∪ own for the caller.
-//   Search + dept filter live client-side. Sub-page: Generate SOP.
+//   Search + dept filter live client-side. Sub-pages: Generate SOP, Propose SOPs.
 
 import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
@@ -25,7 +25,8 @@ export default async function OperationsSopsPage({ propertyId }: Props = {}) {
     .or(`property_id.is.null,property_id.eq.${pid}`)
     .order('sop_code');
   const sops: SopRow[] = (data as SopRow[]) ?? [];
-  const generateHref = pid === PROPERTY_ID ? '/operations/qa/generate' : `/h/${pid}/operations/qa/generate`;
+  const generateHref  = pid === PROPERTY_ID ? '/operations/qa/generate'  : `/h/${pid}/operations/qa/generate`;
+  const proposalsHref = pid === PROPERTY_ID ? '/operations/qa/proposals' : `/h/${pid}/operations/qa/proposals`;
 
   // KPI strip counts
   const distinctDepts = new Set(sops.map((s) => s.dept_code)).size;
@@ -55,7 +56,7 @@ export default async function OperationsSopsPage({ propertyId }: Props = {}) {
         </div>
 
         <div style={{ gridColumn: '1 / -1' }}>
-          <SopBrowser sops={sops} generateHref={generateHref} />
+          <SopBrowser sops={sops} generateHref={generateHref} proposalsHref={proposalsHref} />
         </div>
       </DashboardPage>
     </div>
