@@ -7,7 +7,7 @@
 // lost_revenue recovered from pms.v_reservation_rooms.rate (Cloudbeds zeros
 // total_amount on cancel, but per-night rates persist).
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, Container, KpiTile, Chart, type ChartSeries, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import { fmtMoney, type Currency } from '@/lib/format';
@@ -425,7 +425,7 @@ export default async function CancellationsPage({
       <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
         <span style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#5A5A5A', marginRight: 4 }}>Window:</span>
         {winOptions.map(w => (
-          <Link key={w} href={hrefFor(w)} style={pillStyle(w === win)}>{w === 'ytd' ? 'YTD' : w === 'all' ? 'All' : `Last ${w}`}</Link>
+          <TenantLink key={w} href={hrefFor(w)} style={pillStyle(w === win)}>{w === 'ytd' ? 'YTD' : w === 'all' ? 'All' : `Last ${w}`}</TenantLink>
         ))}
       </div>
 
