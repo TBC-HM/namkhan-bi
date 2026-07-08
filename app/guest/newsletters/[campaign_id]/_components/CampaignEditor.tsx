@@ -4,7 +4,7 @@
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { supabase } from '@/lib/supabase';
 import MediaPicker from './MediaPicker';
 
@@ -115,7 +115,7 @@ export default function CampaignEditor({ initial }: Props) {
             Status: <strong style={{ color:INK }}>{status}</strong> · Template: {init.template_key ?? '—'} · Created {new Date(init.created_at).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })}
           </div>
         </div>
-        <Link href="/guest/newsletters" style={{ padding:'6px 14px', fontSize:12, color:INK_M, textDecoration:'none' }}>← Back to overview</Link>
+        <TenantLink href="/guest/newsletters" style={{ padding:'6px 14px', fontSize:12, color:INK_M, textDecoration:'none' }}>← Back to overview</TenantLink>
       </div>
 
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
