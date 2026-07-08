@@ -14,7 +14,7 @@
 //   8. ACTIONS    — mark repeat · contact · full profile
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { fetchStaffDetail, type StaffDetail } from '../_actions/fetchStaffDetail';
 import { SkillsEditor } from './SkillsEditor';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
@@ -311,9 +311,9 @@ export function StaffDrawer({ staffId, onClose }: Props) {
               )}
 
               <div style={{ paddingTop: 4 }}>
-                <Link href={`/operations/staff/${encodeURIComponent(staffId)}`} style={S.fullLink}>
+                <TenantLink href={`/operations/staff/${encodeURIComponent(staffId)}`} style={S.fullLink}>
                   Open full profile · payroll history · attendance · availability →
-                </Link>
+                </TenantLink>
               </div>
             </div>
           </>
