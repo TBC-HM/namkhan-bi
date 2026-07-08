@@ -4,7 +4,7 @@
 // Preserves IcpCockpit + 8 pre-built segments logic. 2026-05-09 email-null
 // honesty banner retained.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../_subpages';
 import IcpCockpit from './_components/IcpCockpit';
@@ -233,12 +233,12 @@ export default async function AudiencesPage({ searchParams }: Props) {
                         {selectedSegment.description} · top 50 by LTV · uses {selectedSegment.source}
                       </div>
                     </div>
-                    <Link
+                    <TenantLink
                       href={`/marketing/campaigns/new?seg=${encodeURIComponent(selectedSegment.id)}`}
                       style={{ padding: '6px 14px', fontSize: 12, fontWeight: 600, background: FOREST, color: WHITE, border: 'none', borderRadius: 4, textDecoration: 'none' }}
                     >
                       + Build audience from segment
-                    </Link>
+                    </TenantLink>
                   </div>
 
                   {matched.length === 0 ? (
@@ -303,9 +303,9 @@ function EmptyShell({ err }: { err?: string }) {
       <div style={{ fontSize: 13, color: INK_M, maxWidth: 540, margin: '0 auto 18px' }}>
         Read failed against <code>guest.mv_guest_profile</code>{err ? ` — ${err}` : ''}. Audiences appear here as soon as the materialized view is reachable from this Vercel project.
       </div>
-      <Link href="/marketing/campaigns/new" style={{ display: 'inline-block', padding: '8px 18px', fontSize: 12, fontWeight: 600, background: FOREST, color: WHITE, border: 'none', borderRadius: 4, textDecoration: 'none' }}>
+      <TenantLink href="/marketing/campaigns/new" style={{ display: 'inline-block', padding: '8px 18px', fontSize: 12, fontWeight: 600, background: FOREST, color: WHITE, border: 'none', borderRadius: 4, textDecoration: 'none' }}>
         + Build first audience
-      </Link>
+      </TenantLink>
     </div>
   );
 }
@@ -320,7 +320,7 @@ function SegmentPickerChart({ segments, selectedId }: { segments: (Segment & { n
         {segments.map((s) => {
           const active = s.id === selectedId;
           return (
-            <Link key={s.id} href={`/marketing/audiences?view=contacts&seg=${s.id}`}
+            <TenantLink key={s.id} href={`/marketing/audiences?view=contacts&seg=${s.id}`}
               style={{
                 display: 'flex', alignItems: 'center', gap: 8,
                 padding: '6px 8px', marginBottom: 2, borderRadius: 4,
@@ -334,7 +334,7 @@ function SegmentPickerChart({ segments, selectedId }: { segments: (Segment & { n
                 <span style={{ display: 'block', width: `${Math.max(2, (s.n / max) * 100)}%`, height: '100%', background: active ? FOREST : AMBER }} />
               </span>
               <span style={{ width: 50, textAlign: 'right', fontSize: 11, color: INK_S, fontWeight: 600 }}>{s.n}</span>
-            </Link>
+            </TenantLink>
           );
         })}
       </div>
