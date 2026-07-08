@@ -27,10 +27,11 @@ export default function PrintControls({ reportType }: Props) {
       <button onClick={onShare} style={btnStyle()} title="Copy URL to clipboard">⎘ Copy link</button>
       <a
         href={`mailto:?subject=${subject}&body=${body}`}
-        style={{ ...btnStyle(), textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
-        title="Send via email"
+        style={{ ...btnStyle(), textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+        title="Email report"
+        aria-label="Email report"
       >
-        ✉ Email
+        <span aria-hidden style={{ fontSize: 16, lineHeight: 1 }}>✉</span>
       </a>
     </div>
   );
