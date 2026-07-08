@@ -64,7 +64,7 @@ function sumWindow(rows: MapsRow[], days: number, field: keyof MapsRow) {
 }
 function fmtNum(n: number): string { return n.toLocaleString('en-US'); }
 
-interface PageProps { searchParams: Record<string, string | string[] | undefined>; }
+interface PageProps { searchParams: Record<string, string | string[] | undefined>; propertyId?: number }
 
 const WHITE = '#FFFFFF';
 const HAIR  = '#E6DFCC';
@@ -74,15 +74,16 @@ const INK_M = '#5A5A5A';
 const GREEN = '#1F3A2E';
 const RED   = '#B03826';
 
-export default async function GuestReputationPage({ searchParams }: PageProps) {
+export default async function GuestReputationPage({ searchParams, propertyId }: PageProps) {
+  const pid = propertyId ?? PROPERTY_ID;
   const sb = getSupabaseAdmin();
 
   const [oauthR, reviewsR, mapsR, listingsR, summaryR] = await Promise.all([
-    sb.schema('marketing').from('google_oauth_tokens').select('*').eq('property_id', PROPERTY_ID).maybeSingle(),
-    sb.from('mkt_reviews').select('*').eq('property_id', PROPERTY_ID).order('reviewed_at', { ascending: false }).limit(50),
-    sb.schema('kpi').from('google_maps_daily').select('date, impressions_search, impressions_maps, direction_requests, phone_taps, website_clicks').eq('property_id', PROPERTY_ID).order('date', { ascending: false }).limit(400),
-    sb.from('v_external_listings').select('*').eq('property_id', PROPERTY_ID).eq('category','reputation'),
-    sb.from('v_review_source_summary').select('*').eq('property_id', PROPERTY_ID),
+    sb.schema('marketing').from('google_oauth_tokens').select('*').eq('property_id', pid).maybeSingle(),
+    sb.from('mkt_reviews').select('*').eq('property_id', pid).order('reviewed_at', { ascending: false }).limit(50),
+    sb.schema('kpi').from('google_maps_daily').select('date, impressions_search, impressions_maps, direction_requests, phone_taps, website_clicks').eq('property_id', pid).order('date', { ascending: false }).limit(400),
+    sb.from('v_external_listings').select('*').eq('property_id', pid).eq('category','reputation'),
+    sb.from('v_review_source_summary').select('*').eq('property_id', pid),
   ]);
 
   const oauth: OAuthRow | null = (oauthR.data as OAuthRow | null) ?? null;
@@ -167,7 +168,7 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
         {googleParam === 'error' && (
           <div style={{ gridColumn:'1 / -1', padding:'10px 14px', borderRadius:4, background:'#FBE8E4', border:'1px solid #E8B7AB', color:RED, fontSize:12 }}>
             <strong>Google connect failed</strong>{stepParam ? ' at ' + stepParam : ''}. Reason: <code>{reasonParam ?? 'unknown'}</code>.{' '}
-            <TenantLink href="/api/google/oauth/connect?property=260955" style={{ color:RED, fontWeight:600, textDecoration:'underline' }}>Try again →</TenantLink>
+            <TenantLink href={`/api/google/oauth/connect?property=${pid}`} style={{ color:RED, fontWeight:600, textDecoration:'underline' }}>Try again →</TenantLink>
           </div>
         )}
 
@@ -187,7 +188,7 @@ export default async function GuestReputationPage({ searchParams }: PageProps) {
                 <div style={{ fontSize:16, fontWeight:600, color:INK }}>{oauth.location_name ?? 'Location auto-detection pending'}</div>
                 <div style={{ fontSize:11, color:INK_M, marginTop:2 }}>Connected {fmtDate(oauth.connected_at)}</div>
               </div>
-              <TenantLink href="/api/google/pull-now?property=260955" style={{ padding:'5px 12px', fontSize:11, fontWeight:600, background:GREEN, color:WHITE, border:'none', borderRadius:4, textDecoration:'none' }}>Pull latest</TenantLink>
+              <TenantLink href={`/api/google/pull-now?property=${pid}`} style={{ padding:'5px 12px', fontSize:11, fontWeight:600, background:GREEN, color:WHITE, border:'none', borderRadius:4, textDecoration:'none' }}>Pull latest</TenantLink>
             </div>
             <div style={{ fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, fontWeight:600, marginBottom:6 }}>Maps insights</div>
             {mapsRows.length === 0 ? (
