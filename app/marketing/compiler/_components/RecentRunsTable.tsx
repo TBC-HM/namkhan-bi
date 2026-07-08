@@ -3,7 +3,7 @@
 // app/marketing/compiler/_components/RecentRunsTable.tsx
 // Recent runs as a tight DataTable. Replaces the big card grid.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import DataTable from '@/components/ui/DataTable';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import { fmtIsoDate, fmtKpi, EMPTY } from '@/lib/format';
@@ -43,14 +43,14 @@ export default function RecentRunsTable({ rows }: { rows: RunRow[] }) {
           header: 'Prompt',
           align: 'left',
           render: r => (
-            <Link href={`/marketing/compiler/${r.id}`} style={{ color: 'var(--ink)', textDecoration: 'none' }}>
+            <TenantLink href={`/marketing/compiler/${r.id}`} style={{ color: 'var(--ink)', textDecoration: 'none' }}>
               <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 480 }}>
                 {r.prompt}
               </div>
               <div style={{ fontSize: 'var(--t-xs)', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>
                 {r.id.slice(0, 8)}
               </div>
-            </Link>
+            </TenantLink>
           ),
           sortValue: r => r.prompt.toLowerCase(),
         },
