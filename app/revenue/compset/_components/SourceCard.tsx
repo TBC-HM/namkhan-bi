@@ -1,8 +1,7 @@
 // app/revenue/compset/_components/SourceCard.tsx
 "use client";
 
-import Link from "next/link";
-
+import TenantLink from '@/components/nav/TenantLink';
 type Props = {
   setId: string;
   label: string;
@@ -97,12 +96,12 @@ export function SourceCard({
 
       <div className="mt-4 flex items-center gap-3">
         {setType === "manual" ? (
-          <Link
+          <TenantLink
             href="/revenue/compset/manual"
             className="text-[11px] uppercase tracking-[0.14em] text-emerald-900 hover:underline"
           >
             Manage →
-          </Link>
+          </TenantLink>
         ) : setType === "bdc_rate_insights" ? (
           <span className="text-[11px] uppercase tracking-[0.14em] text-stone-400">
             Awaiting BDC import
