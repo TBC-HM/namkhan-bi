@@ -37,7 +37,7 @@ export function fmtUSD(n: number | null | undefined): string {
   return fmtMoney(n, 'USD');
 }
 
-export function fmtPct(n: number | null | undefined, dp = 1): string {
+export function fmtPct(n: number | null | undefined, dp = 0): string {
   if (n == null || isNaN(n as number)) return '—';
   return `${n.toFixed(dp)}%`;
 }
@@ -91,7 +91,7 @@ export type KpiUnit =
   | 'text';
 
 /** Format a number for a KPI value (locked rules). */
-export function fmtKpi(n: number | null | undefined, unit: KpiUnit, dp = 1): string {
+export function fmtKpi(n: number | null | undefined, unit: KpiUnit, dp = 0): string {
   if (n == null || (typeof n === 'number' && isNaN(n))) return '—';
   if (unit === 'text') return String(n);
 
