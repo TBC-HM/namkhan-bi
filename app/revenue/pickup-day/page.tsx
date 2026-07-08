@@ -6,9 +6,11 @@
 // availability API, city occ %, house uses).
 
 import Link from 'next/link';
-import { DashboardPage, Container } from '@/app/(cockpit)/_design';
+import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
 import { PROPERTY_ID } from '@/lib/supabase';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { REVENUE_SUBPAGES } from '../_subpages';
+import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -157,11 +159,22 @@ export default async function PickupDayReport({ propertyId }: Props = {}) {
   const todayIso = new Date().toISOString().slice(0, 10);
   const pidLabel = pid === 1000001 ? 'Donna Portals' : 'Namkhan';
 
+  // Revenue sub-strip tabs (Overview | Demand & Pace | Performance | Market & Control | Reports)
+  // The Pickup Month/Day sub-strip renders below via findSubGroup(pathname) in DashboardPage.
+  const subPages = rewriteSubPagesForProperty(REVENUE_SUBPAGES, pid);
+  const tabs: DashboardTab[] = subPages.map((s) => ({
+    key: s.href,
+    label: s.label,
+    href: s.href,
+    active: s.href.endsWith('/pickup') || s.href.endsWith('/demand'),
+  }));
+
   return (
     <div style={{ background: '#FFFFFF', minHeight: '100vh' }}>
       <DashboardPage
         title="Pickup · Day report"
         subtitle="One row per night · real −1d and −7d pickup from booking_date · monthly totals integrated"
+        tabs={tabs}
         action={
           <div style={{ display: 'flex', gap: 8 }}>
             <a href={`/api/pickup-day/csv?property_id=${pid}`} title="Download CSV" aria-label="Download CSV" style={iconBtn}>
