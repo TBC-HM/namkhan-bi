@@ -7,7 +7,7 @@
 
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import StaffTabStrip from './StaffTabStrip';
 import OnboardingTabContent from './OnboardingTabContent';
 import OffboardingWizardTab from './OffboardingWizardTab';
@@ -97,12 +97,12 @@ export default async function LifecycleTabContent({ propertyId, propertyLabel, s
           subtitle={`${bundle.rows.length} active · sorted by seniority desc`}
         >
           <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 14px 0' }}>
-            <Link href={`${base}?view=${view}`} style={{
+            <TenantLink href={`${base}?view=${view}`} style={{
               padding: '4px 10px', fontFamily: 'var(--mono)', fontSize: 11,
               letterSpacing: '0.14em', textTransform: 'uppercase',
               color: 'var(--ink-mute)', border: '1px solid var(--paper-deep)',
               borderRadius: 4, textDecoration: 'none',
-            }}>Close ✕</Link>
+            }}>Close ✕</TenantLink>
           </div>
           <SeniorityDrilldownTable rows={bundle.rows} isDonna={isDonna} />
         </Container>
@@ -116,7 +116,7 @@ export default async function LifecycleTabContent({ propertyId, propertyLabel, s
           const active = slug === view;
           const label = slug === 'onboarding' ? 'Onboarding' : slug === 'offboarding' ? 'Offboarding' : 'Warnings';
           return (
-            <Link key={slug} href={`${base}?view=${slug}`} style={{
+            <TenantLink key={slug} href={`${base}?view=${slug}`} style={{
               padding: '8px 16px',
               fontFamily: 'var(--mono)', fontSize: 11,
               letterSpacing: '0.14em', textTransform: 'uppercase',
@@ -128,7 +128,7 @@ export default async function LifecycleTabContent({ propertyId, propertyLabel, s
               borderBottom: active ? '1px solid var(--paper-warm)' : 'none',
               marginBottom: -1, borderRadius: '4px 4px 0 0',
               textDecoration: 'none', fontWeight: active ? 600 : 400,
-            }}>{label}</Link>
+            }}>{label}</TenantLink>
           );
         })}
       </nav>
@@ -182,7 +182,7 @@ function KpiTile({
       }}>{value}</div>
     </div>
   );
-  return href ? <Link href={href} style={{ textDecoration: 'none', color: 'inherit' }}>{inner}</Link> : inner;
+  return href ? <TenantLink href={href} style={{ textDecoration: 'none', color: 'inherit' }}>{inner}</TenantLink> : inner;
 }
 
 function ChartPanel({ title, subtitle, svgMarkup }: { title: string; subtitle: string; svgMarkup: string }) {
