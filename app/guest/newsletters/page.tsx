@@ -45,9 +45,12 @@ function fmtRelSchedule(row: CampaignRow): string {
 }
 function pctOr(n: number, d: number): string { if (!d) return '—'; return `${((n / d) * 100).toFixed(0)}%`; }
 
-export default async function NewslettersPage() {
+interface PageProps { propertyId?: number }
+
+export default async function NewslettersPage({ propertyId }: PageProps = {}) {
+  const pid = propertyId ?? PROPERTY_ID;
   const { data, error } = await supabase.from('v_guest_campaigns').select('*')
-    .eq('property_id', PROPERTY_ID).is('archived_at', null)
+    .eq('property_id', pid).is('archived_at', null)
     .order('planned_date', { ascending: true, nullsFirst: false })
     .order('updated_at', { ascending: false });
   const rows: CampaignRow[] = (data as CampaignRow[]) ?? [];
