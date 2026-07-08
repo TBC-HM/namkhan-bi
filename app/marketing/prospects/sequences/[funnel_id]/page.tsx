@@ -1,6 +1,6 @@
 // app/marketing/prospects/sequences/[funnel_id]/page.tsx
 // PBS 2026-07-05: read-only step viewer for a single email sequence.
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { notFound } from 'next/navigation';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
@@ -49,10 +49,10 @@ export default async function SeqDetailPage({ params }: { params: { funnel_id: s
         tabs={tabs}
       >
         <div style={{ gridColumn:'1 / -1', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-          <Link href="/marketing/prospects/sequences" style={{ fontSize:12, color:'#084838', textDecoration:'none', fontWeight:600 }}>← Back to sequences</Link>
+          <TenantLink href="/marketing/prospects/sequences" style={{ fontSize:12, color:'#084838', textDecoration:'none', fontWeight:600 }}>← Back to sequences</TenantLink>
           <div style={{ display:'flex', gap:8 }}>
-            <Link href={`/marketing/prospects/sequences/${head.funnel_id}/preview`} style={btnLight}>Preview</Link>
-            <Link href={`/marketing/prospects/sequences/${head.funnel_id}/enroll`}  style={btnGreen}>Enroll subscribers</Link>
+            <TenantLink href={`/marketing/prospects/sequences/${head.funnel_id}/preview`} style={btnLight}>Preview</TenantLink>
+            <TenantLink href={`/marketing/prospects/sequences/${head.funnel_id}/enroll`}  style={btnGreen}>Enroll subscribers</TenantLink>
           </div>
         </div>
 
@@ -75,7 +75,7 @@ export default async function SeqDetailPage({ params }: { params: { funnel_id: s
           <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:INK_M, margin:'12px 2px 6px' }}>Steps ({steps.length})</div>
           {steps.length === 0 ? (
             <div style={{ padding:'20px 24px', fontSize:12, color:INK_M, background:'#FFFFFF', border:'1px solid '+HAIR, borderRadius:6, textAlign:'center' }}>
-              No steps yet. Use <Link href="/marketing/prospects/sequences/ai-propose" style={{ color:'#084838' }}>AI propose sequence</Link> to generate them.
+              No steps yet. Use <TenantLink href="/marketing/prospects/sequences/ai-propose" style={{ color:'#084838' }}>AI propose sequence</TenantLink> to generate them.
             </div>
           ) : (
             <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
