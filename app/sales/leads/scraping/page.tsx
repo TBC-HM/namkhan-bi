@@ -8,7 +8,7 @@
 // can see what's wired and what's still TODO. Upload CTA points at the existing
 // /api/sales/prospects/import endpoint.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import Page from '@/components/page/Page';
 import Panel from '@/components/page/Panel';
 import KpiBox from '@/components/kpi/KpiBox';
@@ -167,10 +167,10 @@ export default async function LeadScrapingPage() {
 
       <Panel title="Quick actions" eyebrow="upload + manage">
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          <Link href="/sales/leads" style={S.cta}>← Back to Leads</Link>
-          <Link href="/sales/leads?import=1" style={S.ctaPrimary}>↑ Import CSV</Link>
-          <Link href="/sales/btb" style={S.cta}>BTB partners</Link>
-          <Link href="/messy-data" style={S.cta}>Data-quality gaps</Link>
+          <TenantLink href="/sales/leads" style={S.cta}>← Back to Leads</TenantLink>
+          <TenantLink href="/sales/leads?import=1" style={S.ctaPrimary}>↑ Import CSV</TenantLink>
+          <TenantLink href="/sales/btb" style={S.cta}>BTB partners</TenantLink>
+          <TenantLink href="/messy-data" style={S.cta}>Data-quality gaps</TenantLink>
         </div>
       </Panel>
 
