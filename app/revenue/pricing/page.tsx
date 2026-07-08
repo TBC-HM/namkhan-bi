@@ -333,8 +333,10 @@ export default async function PricingPage({ searchParams, propertyId }: { search
         ? `${k.roomsSold ?? 0} sold ÷ ${capacity} sellable units · ${propertyLabel}`
         : `no rooms_sold row for today · v_kpi_daily`,
       status: k.occPctToday != null ? 'green' : 'grey' },
+    // PBS 2026-07-08: dedupe to (date × room-type). Old count was inflated ~9× by
+    // rate-plan multiplication (3,878 raw cells → 140 real room-days for Namkhan).
     { label: 'Sellable 14d', value: k.sellable14d ?? 0, size: 'sm',
-      footnote: `open (date × room × rate-plan) cells · next 14d · stop_sell=false · rate ≥ ${currencySym}10`,
+      footnote: `open (date × room-type) combos · next 14d · ≥ 1 sellable rate`,
       status: (k.sellable14d ?? 0) > 0 ? 'green' : 'grey' },
   ];
 
