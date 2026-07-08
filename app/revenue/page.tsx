@@ -15,7 +15,8 @@ import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { getDeptCfg } from '@/lib/dept-cfg/by-property';
 import { PROPERTY_ID, supabase } from '@/lib/supabase';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { ScheduledReportsTable, type ScheduledRow, type SendLogRow } from './_components/RevenueReportsTables';
+import { ScheduledReportsTable, SendLogTable, type ScheduledRow, type SendLogRow } from './_components/RevenueReportsTables';
+import ShortcutsPanel, { type Shortcut } from './_components/ShortcutsPanel';
 import BugsList from './_components/BugsList';
 import HodTasksList from './_components/HodTasksList';
 import AttentionList from './_components/AttentionList';
@@ -71,6 +72,7 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     next30ArrivalsRes,
     attnRes,
     scheduledRes,
+    shortcutsRes,
     sendsRes,
     myReportsRes,
   ] = await Promise.all([
@@ -88,13 +90,15 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     // PBS 2026-07-08 #204/attention — attention flags come from cockpit.attention_flags via SECURITY DEFINER RPC.
     supabase.rpc('fn_attention_list', { p_property_id: pid, p_dept: 'revenue', p_user_email: 'pbsbase@gmail.com' }),
     // PBS 2026-07-08 (final Reports UX): scheduled recipients + full send log + "sent to me" list for My Reports box
-    supabase.from('v_revenue_report_recipients').select('id, property_id, template_key, email, name, next_fire_at, created_at').eq('property_id', pid).order('next_fire_at', { ascending: true }).limit(500),
+    supabase.from('v_revenue_report_recipients').select('id, property_id, template_key, cadence, email, name, next_fire_at, created_at').eq('property_id', pid).order('next_fire_at', { ascending: true }).limit(500),
     supabase.from('v_revenue_report_sends').select('id, property_id, template_key, sent_at, recipient_email, created_by, report_name, status').eq('property_id', pid).limit(200),
     supabase.from('v_revenue_report_sends').select('id, property_id, template_key, sent_at, recipient_email, created_by, report_name, status').eq('property_id', pid).eq('recipient_email', 'pbsbase@gmail.com').order('sent_at', { ascending: false }).limit(20),
+    supabase.from('v_hod_shortcuts').select('id, label, href').eq('property_id', pid).eq('dept_slug', 'revenue').eq('user_email', 'pbsbase@gmail.com').order('sort_order').limit(50),
   ]);
   const scheduledRows = (scheduledRes.data ?? []) as ScheduledRow[];
   const sendLogRows   = (sendsRes.data ?? []) as SendLogRow[];
   const myReportRows  = (myReportsRes.data ?? []) as SendLogRow[];
+  const shortcuts     = (shortcutsRes.data ?? []) as Shortcut[];
 
   const todayKpi = ((todayKpiRes.data ?? [])[0] ?? null) as { rn_tonight: number; capacity: number; occ_pct: number; adr_today: number; revpar_today: number } | null;
   const bugs = (bugsRes.data ?? []) as Array<{ id: number; body: string | null; status: string | null; created_at: string | null; page_url: string | null }>;
@@ -303,8 +307,8 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
       {/* PBS 2026-07-08 (final): grid tightened to 4 tiles — Attention · My Reports (self-sends) · My Tasks · Bugs.
           Scheduled + Send log get their own full-width containers below. */}
       <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
-        <Container title="Attention" subtitle={attnSubtitle} density="compact">
-          <AttentionList items={attn} storageKey={`attn:revenue:${pid}`} userEmail="pbsbase@gmail.com" />
+        <Container title="Shortcuts" subtitle="Pin any page for one-click access · × to remove" density="compact">
+          <ShortcutsPanel initial={shortcuts} propertyId={pid} deptSlug="revenue" userEmail="pbsbase@gmail.com" />
         </Container>
         <Container title="My Reports" subtitle={`${myReportRows.length} report${myReportRows.length === 1 ? '' : 's'} sent to you · from send log`} density="compact">
           {myReportRows.length === 0 ? (
@@ -333,9 +337,41 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
       {/* PBS 2026-07-08 (final): scheduled reports table.
           Report options now include the 3 built-in scheduled reports (Daily/Weekly/Monthly)
           + every report type from the department config. Build a report container removed. */}
+      {/* Daily Briefing — rev-manager forward brief.
+          PBS 2026-07-08 (final): renamed from "Conclusions" and made expandable
+          via <details>. Default open. ConclusionBlock stays in `bare` mode. */}
+      <div style={fullRow}>
+        <details open style={{ background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 6 }}>
+          <summary style={{
+            cursor: 'pointer', padding: '10px 14px', borderBottom: '1px solid #E6DFCC',
+            display: 'flex', flexDirection: 'column', gap: 2, background: '#FAFAF7',
+          }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#1B1B1B' }}>Daily Briefing</span>
+            <span style={{ fontSize: 11, color: '#5A5A5A' }}>
+              14/30/60/90d windows · countries · rate plans · LOS · {paceNext90.length} nights forward · {totalPickupL14} bookings L14 · {topCountriesL14.length} source markets · targets: {activeTargets}
+            </span>
+          </summary>
+          <div style={{ padding: 12 }}>
+            <ConclusionBlock
+              bare
+              insights={revenueInsights}
+              emptyText="Everything nominal. No forward-window alarms firing."
+              storageKey={`revenue_hod_signals:${pid}`}
+              maxRender={12}
+            />
+          </div>
+        </details>
+      </div>
+
+      <div style={fullRow}>
+        <BookingActivity propertyId={pid} searchParams={searchParams} />
+      </div>
+
+      {/* PBS 2026-07-08: Scheduled reports + Send log moved to the BOTTOM of the
+          HoD landing so they don't push the daily brief below the fold. */}
       <div style={fullRow}>
         <Container title="Scheduled reports"
-                   subtitle="Pick any report · pick a cadence · fires at 08:00 UTC · sort any column · check rows and dismiss to cancel"
+                   subtitle="Pick any report · pick a cadence · fires at 08:00 UTC · sort any column · Preview to open · check rows and dismiss to cancel"
                    density="compact">
           <ScheduledReportsTable
             rows={scheduledRows}
@@ -345,37 +381,12 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
         </Container>
       </div>
 
-      {/* PBS 2026-07-08: Send log container removed. Only "Scheduled reports"
-          stays — the goal is that PBS knows to whom he scheduled what. A full
-          send log becomes noise on the HoD. Sends still persist in
-          documentation.revenue_report_sends for audit if ever needed. */}
-
-      {/* Conclusions — rev-manager forward brief.
-          PBS 2026-07-08 (final): wrapped in a canonical Container so the title
-          uses the same style as every other container (Headline / Build a report
-          / etc.). ConclusionBlock renders in `bare` mode so its internal green
-          pill title is skipped. */}
       <div style={fullRow}>
-        <Container
-          title="Conclusions · rev-manager morning brief"
-          subtitle={`14/30/60/90d windows · countries · rate plans · LOS · ${paceNext90.length} nights forward · ${totalPickupL14} bookings L14 · ${topCountriesL14.length} source markets · targets: ${activeTargets}`}
-          density="compact"
-        >
-          <ConclusionBlock
-            bare
-            insights={revenueInsights}
-            emptyText="Everything nominal. No forward-window alarms firing."
-            storageKey={`revenue_hod_signals:${pid}`}
-            maxRender={12}
-          />
+        <Container title="Reports · send log"
+                   subtitle="Every report ever sent · sort any column · bulk-delete with checkboxes"
+                   density="compact">
+          <SendLogTable rows={sendLogRows} />
         </Container>
-      </div>
-
-      {/* PBS 2026-07-08: "Build a report" container removed. Every report can be
-          scheduled from the Scheduled reports box above. */}
-
-      <div style={fullRow}>
-        <BookingActivity propertyId={pid} searchParams={searchParams} />
       </div>
 
     </DashboardPage>
