@@ -8,7 +8,7 @@
 // JS hydration cost. Search box uses native form submit → URL ?q=… (same
 // pattern as /finance/transactions).
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import type { BankView, BankSummaryRow } from '@/lib/data-bank';
 import { fmtMoney } from '@/lib/format';
 
@@ -164,9 +164,9 @@ export default function BankSection({ view, account, q, basePath }: Props) {
             Apply
           </button>
           {(q || account !== 'all') && (
-            <Link href="/finance/ledger?tab=bank" style={{ color: 'var(--ink-mute)', fontSize: 'var(--t-xs)', textDecoration: 'underline', alignSelf: 'center' }}>
+            <TenantLink href="/finance/ledger?tab=bank" style={{ color: 'var(--ink-mute)', fontSize: 'var(--t-xs)', textDecoration: 'underline', alignSelf: 'center' }}>
               clear
-            </Link>
+            </TenantLink>
           )}
         </form>
       </div>
