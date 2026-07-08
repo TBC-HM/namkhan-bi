@@ -5,7 +5,7 @@
 // keeps the A4-ready ink-on-paper output. Inner renderers (PulseReport, etc.)
 // still use the existing Panel block, which already prints cleanly.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { resolvePeriod } from '@/lib/period';
 import { supabase } from '@/lib/supabase';
@@ -207,7 +207,7 @@ function ComingLater({ title, body, cta }: { title: string; body: string; cta?: 
       <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{title}</div>
       <div style={{ color: '#5A5A5A', marginBottom: cta ? 10 : 0 }}>{body}</div>
       {cta && (
-        <Link href={cta.href} style={{
+        <TenantLink href={cta.href} style={{
           display: 'inline-block',
           padding: '7px 14px',
           background: '#1F3A2E',
@@ -218,7 +218,7 @@ function ComingLater({ title, body, cta }: { title: string; body: string; cta?: 
           fontWeight: 600,
           letterSpacing: '0.06em',
           textTransform: 'uppercase',
-        }}>{cta.label} →</Link>
+        }}>{cta.label} →</TenantLink>
       )}
     </div>
   );
