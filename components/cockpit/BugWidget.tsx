@@ -1,21 +1,28 @@
 'use client';
 
 // components/cockpit/BugWidget.tsx
-// Global × bug-report widget (PBS ask 22, 2026-05-13).
-// Tiny 20px square pinned bottom-right of every page. Click → 1-line popover,
-// submit POSTs /api/cockpit/bugs with URL / viewport / user-agent / property_id
-// captured invisibly. Mounted from app/layout.tsx so it appears everywhere.
+// PBS 2026-07-08 rewrite: bottom-LEFT · new design tokens (paper + hairline +
+// primary green). Bigger, higher contrast so it's actually noticed. Submit path
+// unchanged — still POSTs /api/cockpit/bugs with page URL / viewport / user
+// agent captured invisibly.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
+
+const PRIMARY = '#084838';
+const HAIRLINE = '#E6DFCC';
+const INK = '#1B1B1B';
+const INK_SOFT = '#5A5A5A';
+const PAPER = '#FFFFFF';
+const PAPER_SOFT = '#FAFAF7';
+const TERRACOTTA = '#B8542A';
 
 export default function BugWidget() {
   const [open, setOpen]   = useState(false);
   const [text, setText]   = useState('');
   const [busy, setBusy]   = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
-  // Autofocus the single text input whenever the popover opens.
   useEffect(() => {
     if (open) {
       const t = setTimeout(() => inputRef.current?.focus(), 30);
@@ -23,7 +30,6 @@ export default function BugWidget() {
     }
   }, [open]);
 
-  // Auto-dismiss toast after 2.4s.
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 2400);
@@ -32,7 +38,6 @@ export default function BugWidget() {
 
   function pullPropertyId(): string | undefined {
     if (typeof window === 'undefined') return undefined;
-    // /h/[property_id]/... tenant-scoped route.
     const m = window.location.pathname.match(/^\/h\/([^/]+)/);
     return m ? m[1] : undefined;
   }
@@ -44,27 +49,22 @@ export default function BugWidget() {
     try {
       const payload = {
         message,
-        page_url:   typeof window !== 'undefined' ? window.location.href : null,
-        viewport:   typeof window !== 'undefined'
-          ? `${window.innerWidth}x${window.innerHeight}`
-          : null,
+        page_url: typeof window !== 'undefined' ? window.location.href : null,
+        viewport: typeof window !== 'undefined' ? `${window.innerWidth}x${window.innerHeight}` : null,
         user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
-        property_id: pullPropertyId() ?? null,
+        property_id: pullPropertyId(),
       };
-      const res = await fetch('/api/cockpit/bugs', {
-        method:  'POST',
+      const r = await fetch('/api/cockpit/bugs', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(payload),
+        body: JSON.stringify(payload),
       });
-      if (res.ok) {
-        setText('');
-        setOpen(false);
-        setToast('Reported — thanks');
-      } else {
-        setToast('Failed to send');
-      }
-    } catch {
-      setToast('Failed to send');
+      if (!r.ok) throw new Error(`bug submit failed (${r.status})`);
+      setText('');
+      setOpen(false);
+      setToast('✓ Bug reported — thanks');
+    } catch (e) {
+      setToast(`✗ ${(e as Error).message}`);
     } finally {
       setBusy(false);
     }
@@ -72,165 +72,151 @@ export default function BugWidget() {
 
   return (
     <>
-      {/* Floating × affordance — 20px, bottom-right, every page. */}
+      {/* Bottom-LEFT floating button. Bigger + higher contrast so it's noticed. */}
       <button
         aria-label="Report a bug"
         title="Report a bug on this page"
         onClick={() => setOpen(true)}
-        style={{
-          position:      'fixed',
-          right:         12,
-          bottom:        12,
-          width:         20,
-          height:        20,
-          borderRadius:  4,
-          background:    'var(--surf-2, #15110b)',
-          color:         'var(--text-mute, #9b907a)',
-          border:        '1px solid var(--border-2, #2a261d)',
-          cursor:        'pointer',
-          padding:       0,
-          fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
-          fontSize:      12,
-          lineHeight:    1,
-          display:       'flex',
-          alignItems:    'center',
-          justifyContent:'center',
-          zIndex:        9999,
-          opacity:       0.55,
-          transition:    'opacity 120ms ease',
-        }}
-        onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
-        onMouseLeave={e => (e.currentTarget.style.opacity = '0.55')}
+        style={fabStyle}
+        onMouseEnter={(e) => { e.currentTarget.style.background = PRIMARY; e.currentTarget.style.color = PAPER; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = PAPER; e.currentTarget.style.color = PRIMARY; }}
       >
-        ×
+        <span aria-hidden style={{ fontSize: 16, lineHeight: 1 }}>🐞</span>
+        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em' }}>Bug</span>
       </button>
 
-      {/* Popover — keyboard-friendly, esc to close, enter to submit. */}
       {open && (
-        <div
-          onClick={() => setOpen(false)}
-          style={{
-            position:       'fixed',
-            inset:          0,
-            background:     'rgba(0,0,0,0.45)',
-            zIndex:         10000,
-            display:        'flex',
-            alignItems:     'flex-end',
-            justifyContent: 'flex-end',
-            padding:        16,
-          }}
-        >
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              background:   'var(--surf-1, #0f0d0a)',
-              border:       '1px solid var(--border-3, #3a3327)',
-              borderRadius: 10,
-              padding:      14,
-              width:        360,
-              maxWidth:     '90vw',
-              boxShadow:    '0 12px 32px rgba(0,0,0,0.55)',
-              fontFamily:   "'Inter Tight', system-ui, sans-serif",
-            }}
-          >
-            <div style={{
-              fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
-              fontSize:      10,
-              letterSpacing: '0.22em',
-              textTransform: 'uppercase',
-              color:         'var(--accent, #a8854a)',
-              marginBottom:  10,
-            }}>
-              Report a bug
+        <div onClick={() => setOpen(false)} style={overlay}>
+          <div onClick={(e) => e.stopPropagation()} style={dialog}>
+            <div style={dialogTitle}>Report a bug on this page</div>
+            <div style={{ fontSize: 11, color: INK_SOFT, marginBottom: 10 }}>
+              We capture the URL, viewport size and user-agent automatically.
             </div>
-            <input
+            <textarea
               ref={inputRef}
               value={text}
-              onChange={e => setText(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter')  { e.preventDefault(); void submit(); }
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void submit(); }
                 if (e.key === 'Escape') { setOpen(false); }
               }}
-              placeholder="what's broken?"
-              maxLength={460}
-              style={{
-                width:        '100%',
-                boxSizing:    'border-box',
-                background:   'var(--surf-2, #15110b)',
-                border:       '1px solid var(--border-2, #2a261d)',
-                borderRadius: 8,
-                color:        'var(--text-4, #efe6d3)',
-                padding:      '9px 12px',
-                fontSize:     13,
-                fontFamily:   'inherit',
-                outline:      'none',
-                colorScheme:  'dark',
-              }}
+              placeholder="what's broken? (press ⌘/Ctrl+Enter to send)"
+              maxLength={2000}
+              rows={4}
+              style={inputStyle}
             />
-            <div style={{
-              display:        'flex',
-              justifyContent: 'flex-end',
-              gap:            8,
-              marginTop:      10,
-            }}>
-              <button
-                onClick={() => setOpen(false)}
-                style={{
-                  background:    'transparent',
-                  border:        '1px solid var(--border-2, #2a261d)',
-                  borderRadius:  8,
-                  color:         'var(--text-mute, #9b907a)',
-                  padding:       '7px 12px',
-                  fontSize:      11,
-                  cursor:        'pointer',
-                  fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
-                  letterSpacing: '0.12em',
-                  textTransform: 'uppercase',
-                }}
-              >Cancel</button>
-              <button
-                onClick={submit}
-                disabled={!text.trim() || busy}
-                style={{
-                  background:    text.trim() && !busy ? 'var(--accent, #a8854a)' : 'var(--surf-3, #1c160d)',
-                  color:         text.trim() && !busy ? 'var(--surf-0, #0a0a0a)' : 'var(--text-place, #5a5448)',
-                  border:        '1px solid var(--border-2, #2a261d)',
-                  borderRadius:  8,
-                  padding:       '7px 14px',
-                  fontSize:      11,
-                  cursor:        text.trim() && !busy ? 'pointer' : 'not-allowed',
-                  fontFamily:    "'JetBrains Mono', ui-monospace, monospace",
-                  letterSpacing: '0.12em',
-                  textTransform: 'uppercase',
-                }}
-              >{busy ? 'Sending…' : 'Send'}</button>
+            <div style={btnRow}>
+              <button onClick={() => setOpen(false)} style={cancelBtn}>Cancel</button>
+              <button onClick={submit} disabled={!text.trim() || busy} style={submitBtn(!!text.trim() && !busy)}>
+                {busy ? 'Sending…' : 'Send report'}
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Toast confirmation */}
       {toast && (
-        <div
-          role="status"
-          style={{
-            position:       'fixed',
-            right:          14,
-            bottom:         42,
-            zIndex:         10001,
-            background:     'var(--surf-1, #0f0d0a)',
-            border:         '1px solid var(--border-3, #3a3327)',
-            borderRadius:   8,
-            padding:        '8px 12px',
-            fontSize:       12,
-            color:          'var(--text-2, #d8cca8)',
-            fontFamily:     "'Inter Tight', system-ui, sans-serif",
-            boxShadow:      '0 8px 24px rgba(0,0,0,0.5)',
-          }}
-        >
+        <div role="status" style={toastStyle}>
           {toast}
         </div>
       )}
     </>
   );
 }
+
+// ─── Styles ───────────────────────────────────────────────────────
+
+const fabStyle: CSSProperties = {
+  position: 'fixed',
+  left: 14,
+  bottom: 14,
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  padding: '8px 14px',
+  borderRadius: 999,
+  background: PAPER,
+  color: PRIMARY,
+  border: `1px solid ${HAIRLINE}`,
+  boxShadow: '0 4px 12px rgba(0,0,0,0.10)',
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+  zIndex: 9999,
+  transition: 'background 120ms ease, color 120ms ease',
+};
+
+const overlay: CSSProperties = {
+  position: 'fixed', inset: 0,
+  background: 'rgba(0,0,0,0.35)',
+  zIndex: 10000,
+  display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+};
+
+const dialog: CSSProperties = {
+  background: PAPER,
+  border: `1px solid ${HAIRLINE}`,
+  borderRadius: 8,
+  padding: 18,
+  width: 420,
+  maxWidth: '92vw',
+  boxShadow: '0 24px 60px rgba(0,0,0,0.25)',
+  fontFamily: 'inherit',
+};
+
+const dialogTitle: CSSProperties = {
+  fontSize: 14, fontWeight: 700, color: INK,
+  marginBottom: 4,
+};
+
+const inputStyle: CSSProperties = {
+  width: '100%', boxSizing: 'border-box',
+  background: PAPER_SOFT,
+  border: `1px solid ${HAIRLINE}`,
+  borderRadius: 4,
+  color: INK,
+  padding: '8px 10px',
+  fontSize: 12,
+  fontFamily: 'inherit',
+  resize: 'vertical',
+  outline: 'none',
+};
+
+const btnRow: CSSProperties = { display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 10 };
+
+const cancelBtn: CSSProperties = {
+  background: 'transparent',
+  border: `1px solid ${HAIRLINE}`,
+  color: INK_SOFT,
+  padding: '6px 12px',
+  borderRadius: 4,
+  fontSize: 12,
+  fontWeight: 500,
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+};
+
+const submitBtn = (active: boolean): CSSProperties => ({
+  background: active ? PRIMARY : '#CFCFCF',
+  color: PAPER,
+  border: `1px solid ${active ? PRIMARY : '#CFCFCF'}`,
+  padding: '6px 14px',
+  borderRadius: 4,
+  fontSize: 12,
+  fontWeight: 600,
+  cursor: active ? 'pointer' : 'not-allowed',
+  fontFamily: 'inherit',
+});
+
+const toastStyle: CSSProperties = {
+  position: 'fixed', left: 14, bottom: 60,
+  zIndex: 10001,
+  background: PAPER,
+  border: `1px solid ${HAIRLINE}`,
+  borderLeft: `3px solid ${PRIMARY}`,
+  borderRadius: 4,
+  padding: '8px 14px',
+  fontSize: 12,
+  color: INK,
+  boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+  fontFamily: 'inherit',
+};
