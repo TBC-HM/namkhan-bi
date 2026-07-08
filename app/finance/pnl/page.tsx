@@ -37,6 +37,8 @@ export const dynamic = 'force-dynamic';
 
 interface Props {
   searchParams: Record<string, string | string[] | undefined>;
+  /** PBS 2026-07-08: tenant delegate at /h/[property_id]/finance/pnl passes propertyId. */
+  propertyId?: number;
 }
 
 function fmtK(n: number | null | undefined, dp = 1): string {
