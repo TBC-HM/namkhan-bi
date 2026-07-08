@@ -13,8 +13,18 @@ import { evaluateNewsletterRules, type NewsletterContext } from '@/lib/rules/new
 import { GUEST_SUBPAGES } from './_subpages';
 import { DEPT_CFG } from '@/lib/dept-cfg';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { PROPERTY_ID } from '@/lib/supabase';
+import { PROPERTY_ID, supabase } from '@/lib/supabase';
 import ReportBuilder from '@/app/revenue/_components/ReportBuilder';
+// PBS 2026-07-08: mirror Revenue HoD blocks onto /guest
+import HodTasksList from '@/app/revenue/_components/HodTasksList';
+import ShortcutsPanel, { type Shortcut } from '@/app/revenue/_components/ShortcutsPanel';
+import ExternalLinksPanel, { type ExternalLink } from '@/app/revenue/_components/ExternalLinksPanel';
+import {
+  ScheduledReportsTable, SendLogTable,
+  type ScheduledRow, type SendLogRow,
+} from '@/app/revenue/_components/RevenueReportsTables';
+
+const GUEST_USER_EMAIL = 'pbsbase@gmail.com';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 60;
@@ -81,6 +91,40 @@ async function renderHodBody() {
   const since30dDate = new Date(todayMs - 30 * 86_400_000).toISOString().slice(0, 10);
   const since30dIso = new Date(todayMs - 30 * 86_400_000).toISOString();
   const since90dIso = new Date(todayMs - 90 * 86_400_000).toISOString().slice(0, 10);
+
+  // PBS 2026-07-08 mirror: fetch scheduled + sends + shortcuts alongside the
+  // existing guest signals so we can render the same top row + bottom tables
+  // as Revenue HoD without duplicating a shared component in this file.
+  const [dueTasksRes, scheduledRes, sendsRes, myReportsRes, shortcutsRes] = await Promise.all([
+    supabase.from('v_hod_tasks_due').select('id', { count: 'exact', head: true })
+      .eq('dept_slug', 'guest').eq('property_id', PROPERTY_ID).eq('is_due', true),
+    supabase.from('v_revenue_report_recipients')
+      .select('id, property_id, template_key, cadence, email, name, next_fire_at, created_at')
+      .eq('property_id', PROPERTY_ID).order('next_fire_at', { ascending: true }).limit(500),
+    supabase.from('v_revenue_report_sends')
+      .select('id, property_id, template_key, sent_at, recipient_email, created_by, report_name, status')
+      .eq('property_id', PROPERTY_ID).limit(200),
+    supabase.from('v_revenue_report_sends')
+      .select('id, property_id, template_key, sent_at, recipient_email, created_by, report_name, status')
+      .eq('property_id', PROPERTY_ID).eq('recipient_email', GUEST_USER_EMAIL)
+      .order('sent_at', { ascending: false }).limit(20),
+    supabase.from('v_hod_shortcuts').select('id, label, href, kind')
+      .eq('property_id', PROPERTY_ID).eq('dept_slug', 'guest').eq('user_email', GUEST_USER_EMAIL)
+      .order('sort_order').limit(100),
+  ]);
+  const dueTasksCount = dueTasksRes.count ?? 0;
+  const scheduledRows = (scheduledRes.data ?? []) as ScheduledRow[];
+  const sendLogRows   = (sendsRes.data   ?? []) as SendLogRow[];
+  const myReportRows  = (myReportsRes.data ?? []) as SendLogRow[];
+  const allShortcuts  = (shortcutsRes.data ?? []) as Array<Shortcut & { kind?: string }>;
+  const shortcuts     = allShortcuts.filter((s) => (s.kind ?? 'internal') === 'internal');
+  const externalLinks = allShortcuts.filter((s) => s.kind === 'external') as ExternalLink[];
+  const reportOptions = [
+    { value: 'daily',   label: 'Daily report' },
+    { value: 'weekly',  label: 'Weekly report' },
+    { value: 'monthly', label: 'Monthly report' },
+    ...(DEPT_CFG.guest.reportTypes ?? []).map((rt) => ({ value: rt.value, label: rt.label })),
+  ];
 
   const results = await Promise.allSettled([
     sb.schema('guest').from('mv_guest_profile')
@@ -299,41 +343,32 @@ async function renderHodBody() {
     >
       {/* PBS 2026-07-07: chip cluster removed (duplicated the top strip). */}
 
-      {/* OLD CONTENT: Attention · Docs · Where-to-next 3-col grid */}
-      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
-        <Container title={`Attention · ${attn.length}`} subtitle="reputation · behaviour · newsletter flags" density="compact">
-          {attn.length === 0 ? <div style={emptyStyle}>Nothing flagged.</div> : (
-            <ul style={ulReset}>
-              {attn.map((a) => (
-                <li key={a.id} style={rowStyle}>
-                  <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: severityTone[a.severity] ?? '#8A8A8A', marginRight: 8, marginTop: 5 }} />
-                  <span style={{ color: '#1B1B1B', fontSize: 12 }}>{a.label}</span>
+      {/* PBS 2026-07-08 mirror: same 4-container row as /revenue HoD. */}
+      <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
+        <Container title="Shortcuts" subtitle="Pin any Contacts page · × to remove" density="compact">
+          <ShortcutsPanel initial={shortcuts} propertyId={PROPERTY_ID} deptSlug="guest" userEmail={GUEST_USER_EMAIL} />
+        </Container>
+        <Container title="My Reports" subtitle={`${myReportRows.length} report${myReportRows.length === 1 ? '' : 's'} sent to you · from send log`} density="compact">
+          {myReportRows.length === 0 ? (
+            <div style={{ fontSize: 11, color: '#5A5A5A', fontStyle: 'italic', padding: '8px 4px' }}>
+              No reports have been sent to you yet. Add yourself as a recipient below.
+            </div>
+          ) : (
+            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {myReportRows.map((r) => (
+                <li key={r.id} style={{ fontSize: 11, color: '#1B1B1B', display: 'flex', gap: 6, alignItems: 'baseline' }}>
+                  <span style={{ fontWeight: 600 }}>{r.report_name}</span>
+                  <span style={{ color: '#5A5A5A' }}>· {new Date(r.sent_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                 </li>
               ))}
             </ul>
           )}
         </Container>
-
-        <Container title={`My docs · ${docs.length}`} subtitle="playbooks · templates · maps" density="compact">
-          {docs.length === 0 ? <div style={emptyStyle}>No docs pinned.</div> : (
-            <ul style={ulReset}>
-              {docs.map((d) => (
-                <li key={d.id} style={rowStyle}>
-                  <a href={d.href} style={{ color: '#1B1B1B', textDecoration: 'underline', textDecorationColor: '#C79A6B', fontSize: 12 }}>{d.label}</a>
-                </li>
-              ))}
-            </ul>
-          )}
+        <Container title="My Tasks" subtitle={dueTasksCount > 0 ? `🔴 ${dueTasksCount} due · add / due-date / repeat / delete` : 'add / due-date / repeat / delete · per property'} density="compact">
+          <HodTasksList deptSlug="guest" propertyId={PROPERTY_ID} />
         </Container>
-
-        <Container title="Where to next" subtitle="jump into a live tool" density="compact">
-          <ul style={ulReset}>
-            <li style={rowStyle}><a href="/guest/directory"  style={linkStyle}>Guests directory</a> — search + open profile</li>
-            <li style={rowStyle}><a href="/guest/reputation" style={linkStyle}>Reputation</a> — reviews + reply queue</li>
-            <li style={rowStyle}><a href="/guest/behaviour"  style={linkStyle}>Behaviour</a> — retention + spending</li>
-            <li style={rowStyle}><a href="/guest/newsletters" style={linkStyle}>Newsletters</a> — campaigns + schedule</li>
-            <li style={rowStyle}><a href="/marketing/prospects" style={linkStyle}>Prospects</a> — lead list + sequences</li>
-          </ul>
+        <Container title="External links" subtitle="Cloudbeds guest inbox · Google Business · anywhere outside" density="compact">
+          <ExternalLinksPanel initial={externalLinks} propertyId={PROPERTY_ID} deptSlug="guest" userEmail={GUEST_USER_EMAIL} />
         </Container>
       </div>
 
@@ -372,6 +407,27 @@ async function renderHodBody() {
           Fixed targets currently: repeat ≥ 25% · cancel ≤ 15% · pre-stay reach ≥ 80% · response rate ≥ 80% · unsub ≤ 0.5%.
           Dismiss with a reason (helps fine-tune the thresholds). No AI, no LLM — just data + operator judgement.
         </div>
+      </div>
+
+      {/* PBS 2026-07-08 mirror: Scheduled reports + Send log at the bottom */}
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Container title="Scheduled reports"
+                   subtitle="Pick any report · pick a cadence · fires at 08:00 UTC · Preview per row · check + Dismiss to cancel"
+                   density="compact">
+          <ScheduledReportsTable
+            rows={scheduledRows}
+            propertyId={PROPERTY_ID}
+            reportOptions={reportOptions}
+          />
+        </Container>
+      </div>
+
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Container title="Reports · send log"
+                   subtitle="Every report ever sent · sort any column · bulk-delete with checkboxes"
+                   density="compact">
+          <SendLogTable rows={sendLogRows} />
+        </Container>
       </div>
     </DashboardPage>
   );
