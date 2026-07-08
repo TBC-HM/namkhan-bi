@@ -1,6 +1,6 @@
 // app/marketing/prospects/sequences/[funnel_id]/preview/page.tsx
 // PBS 2026-07-05: preview render of each step in the sequence.
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { notFound } from 'next/navigation';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
@@ -49,7 +49,7 @@ export default async function PreviewPage({ params }: { params: { funnel_id: str
     <div style={{ background:'#FFFFFF', minHeight:'100vh' }}>
       <DashboardPage title={`Sequence · Preview · ${head.name}`} subtitle="How every step will render in a real email" tabs={tabs}>
         <div style={{ gridColumn:'1 / -1' }}>
-          <Link href={`/marketing/prospects/sequences/${head.funnel_id}`} style={{ fontSize:12, color:'#084838', textDecoration:'none', fontWeight:600 }}>← Back to sequence</Link>
+          <TenantLink href={`/marketing/prospects/sequences/${head.funnel_id}`} style={{ fontSize:12, color:'#084838', textDecoration:'none', fontWeight:600 }}>← Back to sequence</TenantLink>
         </div>
 
         {steps.map(s => (
