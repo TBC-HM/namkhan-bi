@@ -65,11 +65,11 @@ export default async function PricingPage({ searchParams, propertyId }: { search
   const tabs: DashboardTab[] = subPages.map((s) => ({ key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/pricing') }));
   const win = parseWin(searchParams.win);
 
+  // PBS 2026-07-08: sub-sub-menu re-skinned to the Lighthouse underline pattern
+  // — no Container wrap, no card. Bare hairline-bottom nav for a lighter chrome.
   const stripBlock = (
     <div style={fullRow}>
-      <Container title="Calendar" subtitle="pricing & rate · holidays · OTB density · restrictions · (parity → /revenue/parity)" density="compact">
-        <CalendarTabStrip active={tab} basePath={basePath} />
-      </Container>
+      <CalendarTabStrip active={tab} basePath={basePath} />
     </div>
   );
 
@@ -414,19 +414,17 @@ export default async function PricingPage({ searchParams, propertyId }: { search
     <DashboardPage title="Revenue · Calendar" subtitle={`pricing · ${period.label}`} tabs={tabs}>
       {stripBlock}
 
-      {/* PBS 2026-06-08 #124 — both KPI rows stacked at the top, then calendar, heatmap, graphs */}
+      {/* PBS 2026-07-08: both KPI rows (actionable now + window aggregates) merged
+          into a single Headline container using the HoD tile grid (minmax(160px,
+          1fr) · gap 8 · compact density) so this page reads the same as /revenue. */}
       <div style={fullRow}>
-        <Container title="Pricing snapshot" subtitle="actionable now" density="compact">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-            {actionableTiles.map((t, i) => <KpiTile key={i} {...t} />)}
-          </div>
-        </Container>
-      </div>
-
-      <div style={fullRow}>
-        <Container title="Window aggregates" subtitle={period.label} density="compact">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
-            {windowTiles.map((t, i) => <KpiTile key={i} {...t} />)}
+        <Container
+          title="Headline"
+          subtitle={`snapshot · actionable now · window ${period.label}`}
+          density="compact"
+        >
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
+            {[...actionableTiles, ...windowTiles].map((t, i) => <KpiTile key={i} {...t} />)}
           </div>
         </Container>
       </div>
@@ -496,23 +494,39 @@ export default async function PricingPage({ searchParams, propertyId }: { search
 }
 
 function CalendarTabStrip({ active, basePath = '/revenue/pricing' }: { active: CalendarTab; basePath?: string }) {
+  // PBS 2026-07-08: mirror the LighthouseNav underline pattern — flat text tabs
+  // with a hairline row border and a dark-green underline for the active view.
   return (
-    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+    <nav
+      role="tablist"
+      aria-label="Calendar views"
+      style={{
+        display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap',
+        padding: '6px 0', borderBottom: '1px solid #E6DFCC',
+      }}
+    >
       {VALID_TABS.map((key) => {
         const isActive = key === active;
         const href = key === 'pricing' ? basePath : `${basePath}?tab=${key}`;
         return (
-          <a key={key} href={href} style={{
-            fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600,
-            padding: '6px 12px', borderRadius: 4,
-            border: `1px solid ${isActive ? 'var(--primary, #1F3A2E)' : 'var(--hairline, #E6DFCC)'}`,
-            background: isActive ? 'var(--primary, #1F3A2E)' : 'var(--paper, #FFFFFF)',
-            color: isActive ? '#FFFFFF' : 'var(--ink-soft, #5A5A5A)',
-            textDecoration: 'none',
-          }}>{TAB_LABELS[key]}</a>
+          <a
+            key={key}
+            href={href}
+            role="tab"
+            aria-selected={isActive}
+            style={{
+              padding: '6px 10px', fontSize: 12,
+              fontWeight: isActive ? 700 : 500,
+              color: isActive ? '#1B1B1B' : '#5A5A5A',
+              textDecoration: 'none',
+              borderBottom: `2px solid ${isActive ? '#084838' : 'transparent'}`,
+            }}
+          >
+            {TAB_LABELS[key]}
+          </a>
         );
       })}
-    </div>
+    </nav>
   );
 }
 
