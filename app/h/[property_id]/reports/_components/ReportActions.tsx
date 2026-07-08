@@ -5,7 +5,7 @@
 // Send: POST /api/cockpit/reports/send. Delete: rpc fn_soft_delete_report_run.
 
 import { useState, useTransition } from 'react';
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { createClient } from '@/lib/supabase/client';
 
 interface Props {
@@ -55,9 +55,9 @@ export default function ReportActions({ runId, reopenHref, reportType, reportUrl
 
   return (
     <div style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'flex-end' }}>
-      <Link href={reopenHref} target="_blank" rel="noopener noreferrer" style={linkStyle}>
+      <TenantLink href={reopenHref} target="_blank" rel="noopener noreferrer" style={linkStyle}>
         Reopen ↗
-      </Link>
+      </TenantLink>
       <button type="button" onClick={send} disabled={sending} title="Email report" aria-label="Email report" style={sendBtnStyle}>
         {sending ? '…' : <span aria-hidden style={{ fontSize: 16, lineHeight: 1 }}>✉</span>}
       </button>
