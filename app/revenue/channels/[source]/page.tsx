@@ -50,6 +50,7 @@ export const revalidate = 0;
 interface Props {
   params: { source: string };
   searchParams: Record<string, string | string[] | undefined>;
+  propertyId?: number;
 }
 
 const OTA_RX = /booking\.com|expedia|agoda|airbnb|ctrip|trip\.com|hotels\.com|traveloka|synxis/i;
@@ -73,7 +74,8 @@ function isoBack(days: number): string {
   return new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
 }
 
-export default async function ChannelDetailPage({ params, searchParams }: Props) {
+export default async function ChannelDetailPage({ params, searchParams, propertyId }: Props) {
+  const pid = propertyId ?? PROPERTY_ID_NAMKHAN;
   const sourceName = decodeURIComponent(params.source);
   const isBookingCom = /Booking\.com/i.test(sourceName);
   const isExpedia = /expedia/i.test(sourceName);
@@ -94,13 +96,13 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
   const [econ30, econ90, econ365, econAll, dailyRows, mixRows, pickupRows, dmcContracts, bookingsRes, qbRes, accountRes] = isBookingCom
     ? [[], [], [], [], [], [], [], [] as DmcContract[], { data: [] }, { data: [] }, { data: null }] as const
     : await Promise.all([
-        getChannelEconomicsForRange(d30,  today).catch(() => []),
-        getChannelEconomicsForRange(d90,  today).catch(() => []),
-        getChannelEconomicsForRange(d365, today).catch(() => []),
+        getChannelEconomicsForRange(d30,  today, pid).catch(() => []),
+        getChannelEconomicsForRange(d90,  today, pid).catch(() => []),
+        getChannelEconomicsForRange(d365, today, pid).catch(() => []),
         // PBS 2026-06-30: "all-time" totals so partners with bookings older than
         // L365 (e.g. Nakarath's history goes back to 2023) still show meaningful
         // numbers in the KPI tiles.
-        getChannelEconomicsForRange('2020-01-01', today).catch(() => []),
+        getChannelEconomicsForRange('2020-01-01', today, pid).catch(() => []),
         getChannelDailyForRange(sourceName, period.from, period.to).catch(() => []),
         getChannelRoomMixForRange(sourceName, period.from, period.to).catch(() => []),
         getChannelPickupForSource(sourceName, 28).catch(() => []),
@@ -128,7 +130,7 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
         Promise.resolve(getSupabaseAdmin()
           .from('v_channel_contacts')
           .select('*')
-          .eq('property_id', PROPERTY_ID_NAMKHAN)
+          .eq('property_id', pid)
           .eq('source_name', sourceName)
           .maybeSingle())
           .then((r) => ({ data: r.data as ChannelAccountRow | null }))
@@ -330,7 +332,7 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
           <SourceAccountEditPanel
             contact={channelContact ?? {
               source_name: sourceName,
-              property_id: PROPERTY_ID_NAMKHAN,
+              property_id: pid,
               partner_type: cat,
               partner_legal_name: null, country: null, country_flag: null,
               vat_number: null, address: null,
@@ -349,7 +351,7 @@ export default async function ChannelDetailPage({ params, searchParams }: Props)
               computed_status: 'draft', days_to_expiry: null,
             }}
             sourceName={sourceName}
-            propertyId={PROPERTY_ID_NAMKHAN}
+            propertyId={pid}
             cat={cat}
           />
         </div>
