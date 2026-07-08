@@ -4,7 +4,7 @@
 // Modern layout — no colored card backgrounds, just a priority pill + hairline border.
 // Dismissed insights are hidden client-side and persisted in localStorage.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { useEffect, useMemo, useState } from 'react';
 
 export type InsightPriority = 'critical' | 'warning' | 'info' | 'positive' | 'observation';
@@ -157,7 +157,7 @@ export default function ConclusionBlock({
                   {(actionLabel || href) && (
                     <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                       {href ? (
-                        <Link href={href} style={linkBtn(p.dot)}>{actionLabel ?? 'See guests →'}</Link>
+                        <TenantLink href={href} style={linkBtn(p.dot)}>{actionLabel ?? 'See guests →'}</TenantLink>
                       ) : actionLabel ? (
                         <span style={{ fontSize: 10, fontWeight: 600, color: p.dot }}>→ {actionLabel}</span>
                       ) : null}
