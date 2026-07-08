@@ -16,7 +16,7 @@
 //     attribute already set by the root layout.
 
 import { redirect, notFound } from 'next/navigation';
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import Page from '@/components/page/Page';
 import Panel from '@/components/page/Panel';
 import { getDeptCfg, NAMKHAN_PROPERTY_ID } from '@/lib/dept-cfg/by-property';
@@ -119,16 +119,16 @@ export default function CatchAllPropertyPage({ params }: Props) {
           </p>
           <p style={{ color: 'var(--ink-mute)' }}>
             <strong>HoD:</strong> {deptHod} — chat from{' '}
-            <Link href={`/h/${propertyId}/${deptSlug}`} style={{ color: 'var(--brass)' }}>
+            <TenantLink href={`/h/${propertyId}/${deptSlug}`} style={{ color: 'var(--brass)' }}>
               /h/{propertyId}/{deptSlug}
-            </Link>
+            </TenantLink>
             .
           </p>
           <p style={{ color: 'var(--ink-mute)', fontSize: 'var(--t-xs)', marginBottom: 0 }}>
             Wiring this page = the same pattern as{' '}
-            <Link href={`/h/${propertyId}/finance/pnl`} style={{ color: 'var(--brass)' }}>
+            <TenantLink href={`/h/${propertyId}/finance/pnl`} style={{ color: 'var(--brass)' }}>
               /h/{propertyId}/finance/pnl
-            </Link>{' '}
+            </TenantLink>{' '}
             (the reference per-property implementation).
           </p>
         </div>
