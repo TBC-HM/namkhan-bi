@@ -3,7 +3,7 @@
 // + MARKETING_SUBPAGES tabs). Same data source: marketing.calendar_events.
 // Preserves 3-view sub-strip: Calendar · List · Impact.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { fmtIsoDate } from '@/lib/format';
@@ -272,8 +272,8 @@ export default async function EventsCockpitPage({ searchParams }: Props) {
 
         <div style={{ gridColumn: '1 / -1', padding: '10px 12px', fontSize: 11, color: INK_M, fontStyle: 'italic', borderTop: `1px solid ${HAIR}` }}>
           Source: <code>marketing.calendar_events</code>. Calendar dots are colored by the event&apos;s primary department impact.{' '}
-          <Link href="/marketing/library" style={{ color: FOREST }}>media library</Link> ·{' '}
-          <Link href="/marketing/campaigns" style={{ color: FOREST }}>campaigns</Link>
+          <TenantLink href="/marketing/library" style={{ color: FOREST }}>media library</TenantLink> ·{' '}
+          <TenantLink href="/marketing/campaigns" style={{ color: FOREST }}>campaigns</TenantLink>
         </div>
       </DashboardPage>
     </div>
