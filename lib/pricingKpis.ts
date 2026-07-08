@@ -119,25 +119,19 @@ async function occToday(date: string, propertyId: number): Promise<{ roomsSold: 
 }
 
 async function sellableCount(fromIso: string, toIso: string, propertyId: number): Promise<number | null> {
-  // PBS 2026-07-08: was `count: 'exact'` on raw rate_inventory rows — inflated
-  // ~9× because rate_inventory has one row per (date × room_type × rate_plan).
-  // The useful metric is distinct (date, room_type) combos with ≥ 1 sellable
-  // rate. For Namkhan (10 room types × 14 days) the ceiling is 140 room-days.
-  const { data, error } = await supabase
-    .from('rate_inventory')
-    .select('inventory_date, room_type_id')
-    .eq('property_id', propertyId)
-    .gte('inventory_date', fromIso)
-    .lt('inventory_date', toIso)
-    .gte('rate', RATE_MIN)
-    .or('stop_sell.is.null,stop_sell.eq.false')
-    .limit(50000);
-  if (error || !data) return null;
-  const uniq = new Set<string>();
-  for (const r of data as Array<{ inventory_date: string; room_type_id: unknown }>) {
-    uniq.add(`${r.inventory_date}|${String(r.room_type_id)}`);
+  // PBS 2026-07-08: distinct (inventory_date, room_type_id) combos with ≥1
+  // sellable rate. Server-side RPC because PostgREST would cap us at 1000 rows
+  // and deduping in JS would silently under-count (~39 vs true 140 on Namkhan).
+  const { data, error } = await supabase.rpc('fn_sellable_room_days', {
+    p_property_id: propertyId,
+    p_from_date:   fromIso,
+    p_to_date:     toIso,
+  });
+  if (error) {
+    console.error('[pricingKpis/sellableCount] rpc error', error);
+    return null;
   }
-  return uniq.size;
+  return typeof data === 'number' ? data : Number(data ?? 0);
 }
 
 export async function getPricingKpis(propertyId: number = PROPERTY_ID): Promise<PricingKpis> {
