@@ -4,8 +4,7 @@
 // from the sales submenu during the 4-page collapse but kept reachable until
 // PBS confirms deletion. Provides a CTA to the new unified destination.
 
-import Link from 'next/link';
-
+import TenantLink from '@/components/nav/TenantLink';
 interface Props {
   /** Old page name (e.g. "Inquiries"). */
   oldName: string;
@@ -38,7 +37,7 @@ export default function ParkedPageBanner({ oldName, goToHref, goToLabel }: Props
           <strong>{oldName}</strong> was removed from the sales submenu — the canonical workflow is now the unified Pipeline + Accounts. This page is kept live for review until PBS confirms deletion.
         </div>
       </div>
-      <Link
+      <TenantLink
         href={goToHref}
         style={{
           background: 'var(--brass, #a8854a)',
@@ -53,7 +52,7 @@ export default function ParkedPageBanner({ oldName, goToHref, goToLabel }: Props
           textDecoration: 'none',
           whiteSpace: 'nowrap',
         }}
-      >→ {goToLabel}</Link>
+      >→ {goToLabel}</TenantLink>
     </div>
   );
 }
