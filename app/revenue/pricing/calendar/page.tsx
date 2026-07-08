@@ -11,7 +11,7 @@
 //   - v_compset_competitor_rate_matrix        → comp forward rates per (comp_id, day, channel)
 //   - v_compset_properties                    → property names + summary stats
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import Page from '@/components/page/Page';
 import Panel from '@/components/page/Panel';
 import KpiBox from '@/components/kpi/KpiBox';
@@ -256,23 +256,23 @@ export default async function PricingCalendarPage({ searchParams }: Props) {
         <span style={{ fontSize: 11, color: '#7d7565', textTransform: 'uppercase', letterSpacing: '0.10em' }}>Window:</span>
         <div style={{ display: 'flex', gap: 6 }}>
           {[14, 30, 60].map((d) => (
-            <Link key={d} href={buildHref({ days: d })} prefetch={false} style={FILTER_BTN(d === days)}>{d}d</Link>
+            <TenantLink key={d} href={buildHref({ days: d })} prefetch={false} style={FILTER_BTN(d === days)}>{d}d</TenantLink>
           ))}
         </div>
 
         <span style={{ fontSize: 11, color: '#7d7565', textTransform: 'uppercase', letterSpacing: '0.10em', marginLeft: 16 }}>Channel:</span>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <Link href={buildHref({ channel: 'all' })} prefetch={false} style={FILTER_BTN(channel === 'all')}>All</Link>
+          <TenantLink href={buildHref({ channel: 'all' })} prefetch={false} style={FILTER_BTN(channel === 'all')}>All</TenantLink>
           {channels.slice(0, 6).map((c) => (
-            <Link key={c} href={buildHref({ channel: c })} prefetch={false} style={FILTER_BTN(channel === c)}>{c}</Link>
+            <TenantLink key={c} href={buildHref({ channel: c })} prefetch={false} style={FILTER_BTN(channel === c)}>{c}</TenantLink>
           ))}
         </div>
 
         <span style={{ fontSize: 11, color: '#7d7565', textTransform: 'uppercase', letterSpacing: '0.10em', marginLeft: 16 }}>Refundable:</span>
         <div style={{ display: 'flex', gap: 6 }}>
-          <Link href={buildHref({ refundable: 'all' })}            prefetch={false} style={FILTER_BTN(refundable === 'all')}>Any</Link>
-          <Link href={buildHref({ refundable: 'refundable' })}     prefetch={false} style={FILTER_BTN(refundable === 'refundable')}>Refundable</Link>
-          <Link href={buildHref({ refundable: 'non_refundable' })} prefetch={false} style={FILTER_BTN(refundable === 'non_refundable')}>Non-refundable</Link>
+          <TenantLink href={buildHref({ refundable: 'all' })}            prefetch={false} style={FILTER_BTN(refundable === 'all')}>Any</TenantLink>
+          <TenantLink href={buildHref({ refundable: 'refundable' })}     prefetch={false} style={FILTER_BTN(refundable === 'refundable')}>Refundable</TenantLink>
+          <TenantLink href={buildHref({ refundable: 'non_refundable' })} prefetch={false} style={FILTER_BTN(refundable === 'non_refundable')}>Non-refundable</TenantLink>
         </div>
       </div>
 
