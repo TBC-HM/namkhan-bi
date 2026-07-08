@@ -9,7 +9,7 @@
 //
 // ?dept= param picks the right subPages strip so the entry tab stays lit.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import ReportActions from './_components/ReportActions';
 import { notFound } from 'next/navigation';
 import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
