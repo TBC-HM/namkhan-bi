@@ -2,7 +2,7 @@
 // PBS 2026-07-04 v4: Planned date column · Schedule button on drafts · Halt button on scheduled.
 
 import type { CSSProperties } from 'react';
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { GUEST_SUBPAGES } from '../_subpages';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
@@ -64,8 +64,8 @@ export default async function NewslettersPage() {
       <DashboardPage title="Contacts · Newsletters"
         subtitle={`${rows.length} campaign${rows.length === 1 ? '' : 's'} — Drafts, Scheduled and Sent.`} tabs={tabs}>
         <div style={{ gridColumn:'1 / -1', display:'flex', justifyContent:'flex-end', gap:8 }}>
-          <Link href="/guest/newsletters/templates" style={secondaryButton}>Manage templates</Link>
-          <Link href="/guest/directory" style={ctaButton}>+ Compose from Directory</Link>
+          <TenantLink href="/guest/newsletters/templates" style={secondaryButton}>Manage templates</TenantLink>
+          <TenantLink href="/guest/directory" style={ctaButton}>+ Compose from Directory</TenantLink>
         </div>
 
         {error && <div style={{ ...errorBox, gridColumn:'1 / -1' }}>Could not load campaigns: {error.message}</div>}
@@ -93,8 +93,8 @@ export default async function NewslettersPage() {
                       <td style={tdL}>{r.created_by ?? '—'}</td>
                       <td style={tdL}>{fmtDateTime(r.updated_at)}</td>
                       <td style={{ ...tdR, textAlign:'right' }}>
-                        <Link href={`/guest/newsletters/${r.campaign_id}`} style={actionBtnLight}>Edit</Link>
-                        <Link href={`/guest/newsletters/${r.campaign_id}/preview`} style={actionBtnLight}>Preview</Link>
+                        <TenantLink href={`/guest/newsletters/${r.campaign_id}`} style={actionBtnLight}>Edit</TenantLink>
+                        <TenantLink href={`/guest/newsletters/${r.campaign_id}/preview`} style={actionBtnLight}>Preview</TenantLink>
                         <ScheduleDrawer campaign_id={r.campaign_id} campaign_name={r.name} planned_date={r.planned_date} />
                       </td>
                     </tr>
@@ -130,7 +130,7 @@ export default async function NewslettersPage() {
                       <td style={tdR}>{r.pending_count}</td>
                       <td style={tdL}>{fmtDateTime(r.updated_at)}</td>
                       <td style={{ ...tdR, textAlign:'right' }}>
-                        <Link href={`/guest/newsletters/${r.campaign_id}/preview`} style={actionBtnLight}>Preview</Link>
+                        <TenantLink href={`/guest/newsletters/${r.campaign_id}/preview`} style={actionBtnLight}>Preview</TenantLink>
                         <HaltButton campaign_id={r.campaign_id} campaign_name={r.name} pending_count={r.pending_count} />
                         <DeleteCampaignButton campaign_id={r.campaign_id} campaign_name={r.name} pending_count={r.pending_count} />
                       </td>
@@ -173,8 +173,8 @@ export default async function NewslettersPage() {
                       <td style={tdR}>{r.unsub_count}</td>
                       <td style={{ ...tdL, fontFamily:'ui-monospace, SFMono-Regular, monospace', fontSize:11 }}>{r.booking_code ?? '—'}</td>
                       <td style={{ ...tdR, textAlign:'right' }}>
-                        <Link href={`/guest/newsletters/${r.campaign_id}`} style={actionBtnGreen}>Edit</Link>
-                        <Link href={`/guest/newsletters/${r.campaign_id}/preview`} style={actionBtnLight}>Preview</Link>
+                        <TenantLink href={`/guest/newsletters/${r.campaign_id}`} style={actionBtnGreen}>Edit</TenantLink>
+                        <TenantLink href={`/guest/newsletters/${r.campaign_id}/preview`} style={actionBtnLight}>Preview</TenantLink>
                       </td>
                     </tr>
                   ))}
