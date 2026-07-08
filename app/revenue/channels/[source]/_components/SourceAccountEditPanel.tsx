@@ -7,7 +7,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { Container } from '@/app/(cockpit)/_design';
 
 export interface ChannelAccountRow {
@@ -167,7 +167,7 @@ export default function SourceAccountEditPanel({ contact: c, sourceName, propert
           {c.property_url && (
             <a href={c.property_url} target="_blank" rel="noopener noreferrer" style={pdfBtnStyle}>🔗 Extranet</a>
           )}
-          <Link href={editHref} style={pdfBtnStyle}>⚙ Settings</Link>
+          <TenantLink href={editHref} style={pdfBtnStyle}>⚙ Settings</TenantLink>
           {!editing ? (
             <button type="button" onClick={() => setEditing(true)} style={editBtnStyle}>✎ Edit</button>
           ) : (
