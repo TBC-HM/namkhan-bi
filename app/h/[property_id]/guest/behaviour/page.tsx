@@ -1,18 +1,19 @@
 // app/h/[property_id]/guest/behaviour/page.tsx
-// PBS 2026-07-08 — Donna guest/behaviour delegate.
-import DeptSubpageStub from '@/app/h/[property_id]/_shared/DeptSubpageStub';
+// PBS 2026-07-08: Tenant delegate — mounts Namkhan Behaviour body with propertyId scoping.
+
+import { notFound } from 'next/navigation';
+import GuestBehaviourBody from '@/app/guest/behaviour/page';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export default function DonnaGuestBehaviour({ params }: { params: { property_id: string } }) {
-  return (
-    <DeptSubpageStub
-      propertyId={Number(params.property_id)}
-      deptLabel="Contacts"
-      routeLabel="Behaviour"
-      namkhanPath="/guest/behaviour"
-      hint="Will surface Donna guest behaviour · spend patterns once ancillary attribution is Donna-scoped."
-    />
-  );
+export default function TenantGuestBehaviourPage({
+  params, searchParams,
+}: {
+  params: { property_id: string };
+  searchParams: Record<string, string | string[] | undefined>;
+}) {
+  const pid = Number(params.property_id);
+  if (!Number.isFinite(pid)) notFound();
+  return <GuestBehaviourBody searchParams={searchParams} propertyId={pid} />;
 }
