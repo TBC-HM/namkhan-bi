@@ -2,7 +2,7 @@
 // PBS 2026-07-07 evening: dedicated Revenue Overview landing. The HoD chat
 // cockpit stays at /revenue; Overview is the dept-wide summary with
 // Pulse + Calendar sub-tabs rendered by DashboardPage.
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
 import { DEPT_CFG } from '@/lib/dept-cfg';
 
@@ -22,7 +22,7 @@ export default function RevenueOverviewPage() {
           <div style={desc}>
             Live occupancy · ADR · RevPAR · pickup vs LY · yield alerts.
             <div style={{ marginTop: 8 }}>
-              <Link href="/revenue/pulse" style={btn}>Open Pulse →</Link>
+              <TenantLink href="/revenue/pulse" style={btn}>Open Pulse →</TenantLink>
             </div>
           </div>
         </Container>
@@ -31,7 +31,7 @@ export default function RevenueOverviewPage() {
           <div style={desc}>
             BAR ladder · density overlay · country holidays · rate + inventory levers.
             <div style={{ marginTop: 8 }}>
-              <Link href="/revenue/pricing" style={btn}>Open Calendar →</Link>
+              <TenantLink href="/revenue/pricing" style={btn}>Open Calendar →</TenantLink>
             </div>
           </div>
         </Container>
@@ -40,7 +40,7 @@ export default function RevenueOverviewPage() {
           <div style={desc}>
             OTB vs STLY · lead time · cancellations · pace by check-in month.
             <div style={{ marginTop: 8 }}>
-              <Link href="/revenue/demand" style={btn}>Open Demand & Pace →</Link>
+              <TenantLink href="/revenue/demand" style={btn}>Open Demand & Pace →</TenantLink>
             </div>
           </div>
         </Container>
@@ -49,7 +49,7 @@ export default function RevenueOverviewPage() {
           <div style={desc}>
             Rooms · channels · rate plans · markets — where the revenue actually comes from.
             <div style={{ marginTop: 8 }}>
-              <Link href="/revenue/rooms" style={btn}>Open Performance →</Link>
+              <TenantLink href="/revenue/rooms" style={btn}>Open Performance →</TenantLink>
             </div>
           </div>
         </Container>
@@ -58,7 +58,7 @@ export default function RevenueOverviewPage() {
           <div style={desc}>
             Comp set · leakage · parity — what the competition is doing and where OTAs are draining margin.
             <div style={{ marginTop: 8 }}>
-              <Link href="/revenue/compset" style={btn}>Open Market & Control →</Link>
+              <TenantLink href="/revenue/compset" style={btn}>Open Market & Control →</TenantLink>
             </div>
           </div>
         </Container>
