@@ -4,7 +4,7 @@
 // Client wrapper around <DataTable> for the gl-driven vendors register.
 // Routing key is encodeURIComponent(vendor_name).
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import DataTable, { Column } from '@/components/ui/DataTable';
 import StatusPill from '@/components/ui/StatusPill';
 import { fmtTableUsd, fmtIsoDate, EMPTY } from '@/lib/format';
@@ -17,10 +17,10 @@ export default function GlVendorsTableClient({ rows }: { rows: GlVendorOverviewR
     {
       key: 'vendor_name', header: 'Vendor (QB Name)',
       render: (r) => (
-        <Link
+        <TenantLink
           href={`/operations/inventory/suppliers/${encodeURIComponent(r.vendor_name)}`}
           style={{ color: 'var(--ink)', textDecoration: 'none' }}
-        >{r.vendor_name}</Link>
+        >{r.vendor_name}</TenantLink>
       ),
       sortValue: (r) => r.vendor_name,
     },
