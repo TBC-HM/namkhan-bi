@@ -13,7 +13,7 @@ import { resolvePeriod } from '@/lib/period';
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
 
-interface Props { searchParams: Record<string, string | string[] | undefined>; }
+interface Props { searchParams: Record<string, string | string[] | undefined>; propertyId?: number; }
 
 const fmtUsd = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('en-US')}`;
 
@@ -22,7 +22,8 @@ interface OtherRow {
   tx_count: number; revenue: number | string;
 }
 
-export default async function OtherPage({ searchParams }: Props) {
+export default async function OtherPage({ searchParams, propertyId }: Props) {
+  const pid = propertyId ?? 260955;
   const opPeriodRaw = typeof searchParams.op === 'string' ? searchParams.op : '30d';
   const opPeriod = (['yesterday','7d','30d','ytd'].includes(opPeriodRaw) ? opPeriodRaw : '30d') as 'yesterday'|'7d'|'30d'|'ytd';
   const opToday = new Date(); opToday.setUTCHours(0,0,0,0);
@@ -39,10 +40,10 @@ export default async function OtherPage({ searchParams }: Props) {
 
   const [monthlyResp, rawTxnsResp, servicesResp] = await Promise.all([
     supabase.from('v_other_dept_monthly').select('period_yyyymm, bucket, tx_count, revenue')
-      .eq('property_id', 260955).order('period_yyyymm', { ascending: true }).then((r) => r),
+      .eq('property_id', pid).order('period_yyyymm', { ascending: true }).then((r) => r),
     supabase.from('v_fnb_raw_txn_enriched')
       .select('transaction_id, reservation_id, transaction_date, local_laos_str, description, amount, currency, category, item_category_name, user_name, usali_dept, usali_subdept, guest_name, room_name, source_name')
-      .eq('property_id', 260955)
+      .eq('property_id', pid)
       // PBS 2026-06-11 #210 — exclude payment-method rows (Bank Transfer / CC / Cash)
       .neq('category', 'payment')
       .or('usali_dept.in.(Fee,Tax,Adjustment),and(usali_dept.eq.Other Operated,usali_subdept.in.(Addon,Front Office)),usali_dept.is.null')
