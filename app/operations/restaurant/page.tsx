@@ -25,12 +25,13 @@ interface GlLineRow { usali_line_label: string; amount_usd: number | string | nu
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
 
-interface Props { searchParams: Record<string, string | string[] | undefined>; }
+interface Props { searchParams: Record<string, string | string[] | undefined>; propertyId?: number; }
 
 const fmtUsd = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('en-US')}`;
 const fmtPct = (n: number) => `${(Number(n) || 0).toFixed(1)}%`;
 
-export default async function FnbPage({ searchParams }: Props) {
+export default async function FnbPage({ searchParams, propertyId }: Props) {
+  const pid = propertyId ?? 260955;
   // PBS 2026-06-09 #143 — independent period drilldown for the Row 1 PMS strip.
   const OP_PERIODS = ['yesterday','7d','30d','ytd'] as const;
   type OpPeriod = typeof OP_PERIODS[number];
@@ -85,7 +86,7 @@ export default async function FnbPage({ searchParams }: Props) {
       .then((r) => r),
     supabase.from('v_breakfast_allocation_q1_2026')
       .select('room_nights, adult_nights, child_nights, alloc_usd')
-      .eq('property_id', 260955)
+      .eq('property_id', pid)
       .then((r) => r),
     // PBS #143 — op-scoped capture + covers for the Row 1 drilldown
     getFnbCaptureForPeriod(opFromIso, opEndIso).catch(() => null),
@@ -93,11 +94,11 @@ export default async function FnbPage({ searchParams }: Props) {
     // PBS #145 — Cloudbeds folio source for live F&B revenue. POS is for reconciliation only.
     supabase.from('v_fb_outlet_daily')
       .select('service_date, revenue, reservations')
-      .eq('property_id', 260955)
+      .eq('property_id', pid)
       .gte('service_date', opFromIso).lte('service_date', opEndIso)
       .then((r) => r),
     supabase.from('v_fb_outlet_daily')
-      .select('service_date').eq('property_id', 260955)
+      .select('service_date').eq('property_id', pid)
       .order('service_date', { ascending: false }).limit(1).maybeSingle()
       .then((r) => r),
     // PBS 2026-06-09 #150/#156 — monthly breakfast alloc for trailing 12 HISTORICAL months.
@@ -105,7 +106,7 @@ export default async function FnbPage({ searchParams }: Props) {
     // months and the breakfast map ends up with zero overlap on the chart's rows array.
     supabase.from('v_breakfast_allocation_monthly')
       .select('period_yyyymm, alloc_usd')
-      .eq('property_id', 260955)
+      .eq('property_id', pid)
       .lte('period_yyyymm', opToIso.slice(0, 7))
       .order('period_yyyymm', { ascending: false }).limit(12)
       .then((r) => r),
