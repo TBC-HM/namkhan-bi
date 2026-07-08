@@ -1,55 +1,34 @@
 // app/revenue/_components/ShortcutsPanel.tsx
-// PBS 2026-07-08: replaces the Attention container on Revenue HoD.
-// Curated dropdown of Revenue subpages · pin any of them to the HoD landing.
+// PBS 2026-07-08 v2: replaces Attention on every HoD landing.
+// Curated dropdown of that dept's subpages · pin any of them to the HoD landing.
+// Accepts a `subpages` prop so the SAME panel works on Revenue / Guest / Finance / Sales / Marketing / Ops.
 
 'use client';
 
 import { useState, useTransition, type CSSProperties } from 'react';
+import { SUBPAGES_BY_DEPT, type SubpageOption } from '@/app/_components/hod_subpages_catalog';
 
 export interface Shortcut { id: number; label: string; href: string }
 
-const REVENUE_SUBPAGES: Array<{ href: string; label: string }> = [
-  { href: '/revenue',                         label: 'Revenue HoD (Vector)' },
-  { href: '/revenue/pulse',                   label: 'Pulse' },
-  { href: '/revenue/pricing',                 label: 'Calendar · Pricing' },
-  { href: '/revenue/pricing?tab=holidays',    label: 'Calendar · Holidays' },
-  { href: '/revenue/pricing?tab=otb_density', label: 'Calendar · OTB Density' },
-  { href: '/revenue/pricing?tab=restrictions',label: 'Calendar · Restrictions' },
-  { href: '/revenue/rateplans',               label: 'Rate Plans' },
-  { href: '/revenue/demand',                  label: 'Demand' },
-  { href: '/revenue/pace',                    label: 'Pace' },
-  { href: '/revenue/pickup',                  label: 'Pickup · Monthly' },
-  { href: '/revenue/pickup-day',              label: 'Pickup · Daily' },
-  { href: '/revenue/cancellations',           label: 'Cancellations' },
-  { href: '/revenue/compset',                 label: 'Comp Set' },
-  { href: '/revenue/leakage',                 label: 'Leakage' },
-  { href: '/revenue/parity',                  label: 'Parity' },
-  { href: '/revenue/lighthouse/overview',     label: 'Lighthouse · Overview' },
-  { href: '/revenue/lighthouse/rates',        label: 'Lighthouse · Rates' },
-  { href: '/revenue/lighthouse/vs-yesterday', label: 'Lighthouse · vs Yesterday' },
-  { href: '/revenue/lighthouse/vs-3d',        label: 'Lighthouse · vs 3d ago' },
-  { href: '/revenue/lighthouse/vs-7d',        label: 'Lighthouse · vs 7d ago' },
-  { href: '/revenue/channels',                label: 'Channels' },
-  { href: '/revenue/rooms',                   label: 'Rooms' },
-  { href: '/revenue/markets',                 label: 'Markets' },
-  { href: '/revenue/reports/scheduled/daily/preview',   label: 'Daily report preview' },
-  { href: '/revenue/reports/scheduled/weekly/preview',  label: 'Weekly report preview' },
-  { href: '/revenue/reports/scheduled/monthly/preview', label: 'Monthly report preview' },
-];
-
-export default function ShortcutsPanel({ initial, propertyId, deptSlug = 'revenue', userEmail = 'pbsbase@gmail.com' }: {
+export default function ShortcutsPanel({
+  initial, propertyId, deptSlug = 'revenue', userEmail = 'pbsbase@gmail.com',
+  subpages,
+}: {
   initial: Shortcut[];
   propertyId: number;
   deptSlug?: string;
   userEmail?: string;
+  /** Override the default catalog for this dept. Falls back to SUBPAGES_BY_DEPT[deptSlug]. */
+  subpages?: SubpageOption[];
 }) {
+  const catalog: SubpageOption[] = subpages ?? SUBPAGES_BY_DEPT[deptSlug] ?? SUBPAGES_BY_DEPT.revenue;
   const [items, setItems] = useState<Shortcut[]>(initial);
-  const [picked, setPicked] = useState<string>(REVENUE_SUBPAGES[0]?.href ?? '');
+  const [picked, setPicked] = useState<string>(catalog[0]?.href ?? '');
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
 
   const submit = () => {
-    const opt = REVENUE_SUBPAGES.find((o) => o.href === picked);
+    const opt = catalog.find((o) => o.href === picked);
     if (!opt) return;
     const label = opt.label;
     const href  = opt.href;
@@ -83,7 +62,7 @@ export default function ShortcutsPanel({ initial, propertyId, deptSlug = 'revenu
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {items.length === 0 && (
         <div style={{ fontSize: 11, color: '#5A5A5A', fontStyle: 'italic', padding: '4px 0' }}>
-          No shortcuts yet. Pick any Revenue subpage below and Pin.
+          No shortcuts yet. Pick any {deptSlug} subpage below and Pin.
         </div>
       )}
       {items.length > 0 && (
@@ -100,7 +79,7 @@ export default function ShortcutsPanel({ initial, propertyId, deptSlug = 'revenu
       )}
       <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
         <select value={picked} onChange={(e) => setPicked(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
-          {REVENUE_SUBPAGES.map((o) => (
+          {catalog.map((o) => (
             <option key={o.href} value={o.href}>{o.label}</option>
           ))}
         </select>
