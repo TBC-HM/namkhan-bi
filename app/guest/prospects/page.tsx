@@ -3,7 +3,7 @@
 // Reuses the ProspectsClient component from marketing to avoid drift.
 // /marketing/prospects still works — deprecated, kept alive to not break external links.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { PROPERTY_ID } from '@/lib/supabase';
 import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
@@ -100,9 +100,9 @@ export default async function ContactsProspectsPage() {
 
         <div style={{ gridColumn:'1 / -1', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, flexWrap:'wrap' }}>
           <div style={{ display:'flex', gap:8 }}>
-            <Link href="/marketing/prospects/sequences" style={btnGreen}>Sequences →</Link>
-            <Link href="/marketing/prospects/scrape"    style={btnLight}>+ Scrape (Apify)</Link>
-            <Link href="/marketing/prospects/import"    style={btnLight}>+ Import CSV</Link>
+            <TenantLink href="/marketing/prospects/sequences" style={btnGreen}>Sequences →</TenantLink>
+            <TenantLink href="/marketing/prospects/scrape"    style={btnLight}>+ Scrape (Apify)</TenantLink>
+            <TenantLink href="/marketing/prospects/import"    style={btnLight}>+ Import CSV</TenantLink>
           </div>
           <div style={{ fontSize:11, color:'#5A5A5A' }}>
             Tags in use: {tagFacets.map(([t, n]) => `${t} (${n})`).join(' · ') || 'none'}
