@@ -3,7 +3,7 @@
 // Addon, Front Office, Unclassified. Live from pms.transactions_cb via
 // public.v_other_dept_monthly (per-bucket monthly aggregate).
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, Container, KpiTile, type KpiTileProps, type DashboardTab } from '@/app/(cockpit)/_design';
 import { OPERATIONS_SUBPAGES } from '../_subpages';
 import { FbCategoryChart, FbAvgTicketChart } from '@/components/pl/FbMiniCharts';
@@ -89,7 +89,7 @@ export default async function OtherPage({ searchParams }: Props) {
   const opPills = (
     <div style={{ display: 'flex', alignItems: 'stretch', borderRadius: 4, border: '1px solid #E0E0E0', overflow: 'hidden' }}>
       {(['yesterday', '7d', '30d', 'ytd'] as const).map((p) => (
-        <Link key={p} href={`?op=${p}`} style={opPillStyle(opPeriod === p)}>{p === 'yesterday' ? 'Yesterday' : p === '7d' ? '7d' : p === '30d' ? '30d' : 'YTD'}</Link>
+        <TenantLink key={p} href={`?op=${p}`} style={opPillStyle(opPeriod === p)}>{p === 'yesterday' ? 'Yesterday' : p === '7d' ? '7d' : p === '30d' ? '30d' : 'YTD'}</TenantLink>
       ))}
     </div>
   );
