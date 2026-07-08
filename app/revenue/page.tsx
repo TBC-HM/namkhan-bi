@@ -3,7 +3,7 @@
 // 2026-07-07 v4: Conclusions container reframed for FORWARD outlook (14/30/60/90d
 // windows + country pace + rate plan mix + LOS trend) rather than tonight only.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import {
   DashboardPage, Container, KpiTile,
   type KpiTileProps,
@@ -255,7 +255,7 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
       title={`Revenue · ${cfg.hodName}`}
       subtitle={new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
       tabs={hodTabs}
-      action={<Link href={chatHref} style={primaryBtnStyle}>{`Ask ${cfg.hodName} →`}</Link>}
+      action={<TenantLink href={chatHref} style={primaryBtnStyle}>{`Ask ${cfg.hodName} →`}</TenantLink>}
     >
       {tiles.length > 0 && (
         <div style={fullRow}>
