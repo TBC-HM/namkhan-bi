@@ -8,7 +8,7 @@
 // PBS 2026-05-15: split agent-deliveries out of the sales inbox; new home
 // is /h/[property_id]/reports surfaced via the Finance sub-menu "Reports".
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import {
   deliveryRelativeTime,
   type AgentDelivery,
@@ -47,7 +47,7 @@ function ReplyToAgentLink({ delivery }: { delivery: AgentDelivery }) {
   const href = `/cockpit/chat?${qs.toString()}`;
   return (
     <div style={{ marginTop: 10 }}>
-      <Link
+      <TenantLink
         href={href}
         style={{
           display: 'inline-block',
@@ -64,7 +64,7 @@ function ReplyToAgentLink({ delivery }: { delivery: AgentDelivery }) {
         }}
       >
         💬 Reply / new request → {persona.name}
-      </Link>
+      </TenantLink>
     </div>
   );
 }
@@ -134,7 +134,7 @@ export default function AgentDeliveriesPanel({
               const href = `${base}?delivery=${d.id}`;
               return (
                 <li key={d.id} style={{ borderBottom: '1px solid var(--line-soft)' }}>
-                  <Link href={href} style={{
+                  <TenantLink href={href} style={{
                     display: 'block', padding: '10px 12px',
                     textDecoration: 'none', color: 'var(--ink)',
                     background: isActive ? 'var(--paper-deep)' : 'transparent',
@@ -173,7 +173,7 @@ export default function AgentDeliveriesPanel({
                         {d.status}
                       </span>
                     </div>
-                  </Link>
+                  </TenantLink>
                 </li>
               );
             })}
