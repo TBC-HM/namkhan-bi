@@ -58,8 +58,8 @@ export default function ReportActions({ runId, reopenHref, reportType, reportUrl
       <Link href={reopenHref} target="_blank" rel="noopener noreferrer" style={linkStyle}>
         Reopen ↗
       </Link>
-      <button type="button" onClick={send} disabled={sending} style={sendBtnStyle}>
-        {sending ? '…' : 'Send'}
+      <button type="button" onClick={send} disabled={sending} title="Email report" aria-label="Email report" style={sendBtnStyle}>
+        {sending ? '…' : <span aria-hidden style={{ fontSize: 16, lineHeight: 1 }}>✉</span>}
       </button>
       <button type="button" onClick={del} disabled={deleting} aria-label="Delete" style={delBtnStyle}>
         {deleting ? '…' : 'Delete'}
