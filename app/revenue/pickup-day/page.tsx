@@ -230,9 +230,8 @@ export default async function PickupDayReport({ propertyId }: Props = {}) {
                     <th style={th} colSpan={2}>Min stay</th>
                     <th style={th} colSpan={4}>Stop sales</th>
                     <th style={th} colSpan={5}>Visibility</th>
-                    <th style={th} colSpan={2}>Rate ladder (BAR + NET)</th>
-                    <th style={th} colSpan={4}>Fenced rates</th>
-                    <th style={th} colSpan={3}>Discounts</th>
+                    <th style={th} colSpan={4}>Rateplans</th>
+                    <th style={th} colSpan={6}>Promotions</th>
                     <th style={th} colSpan={2}>OTB</th>
                     <th style={th} colSpan={3}>Pickup −1d</th>
                     <th style={th} colSpan={3}>Pickup −7d</th>
@@ -263,6 +262,7 @@ export default async function PickupDayReport({ propertyId }: Props = {}) {
                     <th style={th}>Net rate</th>
                     <th style={th}>NRF</th>
                     <th style={th}>EB 30d</th>
+                    <th style={th}>LOS2</th>
                     <th style={th}>LOS3</th>
                     <th style={th}>LOS4</th>
                     <th style={th}>15%</th>
@@ -347,11 +347,12 @@ export default async function PickupDayReport({ propertyId }: Props = {}) {
                             <td style={mutedStyle(21)}>—</td>
                             <td style={mutedStyle(22)}>—</td>
                             <td style={mutedStyle(23)}>—</td>
-                            <td style={mutedStyle(24)}>—</td>
+                            <td style={mutedStyle(24)}>—</td>{/* LOS2 (new PBS 2026-07-08) */}
                             <td style={mutedStyle(25)}>—</td>
                             <td style={mutedStyle(26)}>—</td>
                             <td style={mutedStyle(27)}>—</td>
                             <td style={mutedStyle(28)}>—</td>
+                            <td style={mutedStyle(29)}>—</td>
                             <td style={cellStyle(29)}>{fmtMoney(r.otb_adr, sym)}</td>
                             <td style={cellStyle(30)}>{fmtMoney(r.otb_revenue, sym)}</td>
                             <td style={cellStyle(31, p1.rn === 0 ? tdMuted : undefined)}>{p1.rn === 0 ? '0' : fmtInt(p1.rn)}</td>
@@ -383,7 +384,7 @@ export default async function PickupDayReport({ propertyId }: Props = {}) {
                         <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }}>0</td>
                         <td style={{ ...totalTd, ...tdMuted, borderTop: '2px solid #0B3B2E' }}>—</td>
                         <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }}>{fmtInt(totAvail)}</td>
-                        <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }} colSpan={20}></td>
+                        <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }} colSpan={21}></td>{/* +1 col for LOS2 (PBS 2026-07-08) */}
                         <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }}>{fmtMoney(avgAdr, sym)}</td>
                         <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }}>{fmtMoney(totRev, sym)}</td>
                         <td style={{ ...totalTd, borderTop: '2px solid #0B3B2E' }}>{fmtInt(p1sum)}</td>
@@ -418,8 +419,8 @@ export default async function PickupDayReport({ propertyId }: Props = {}) {
                 <li><strong>House uses · OOO</strong> — Cloudbeds getReservations with is_house_use / status=OOO filter (not currently in sync)</li>
                 <li><strong>Min stay (WEB · OTA)</strong> and <strong>Stop sales (WEB · OTA · B2B · FIT)</strong> — Cloudbeds <code>getRateAvailability</code> endpoint</li>
                 <li><strong>Visibility flags (Mob B&E · EXP Accel · Genius · Mobile · P+ BAR)</strong> — awaiting Booking.com / Expedia activation landing pages</li>
-                <li><strong>Rate ladder (BAR · Net rate · NRF · EB 30d · LOS3 · LOS4)</strong> — same Cloudbeds availability sync (per rate plan per date)</li>
-                <li><strong>Discount tiers (15% · 20% · 25%)</strong> — derived once rate ladder is wired</li>
+                <li><strong>Rateplans (BAR · Net rate · NRF · EB 30d)</strong> — Cloudbeds <code>getRateAvailability</code> per rate plan per date</li>
+                <li><strong>Promotions (LOS2 · LOS3 · LOS4 · 15% · 20% · 25%)</strong> — length-of-stay restrictions + tiered discounts, derived from Cloudbeds rate ladder + Booking.com/Expedia landing pages</li>
                 <li><strong>Events</strong> — free-text column, would need an events table (e.g. <code>calendar.events</code>) with property_id + date</li>
               </ul>
             </div>
