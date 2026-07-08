@@ -6,14 +6,15 @@
 // Namkhan for the naked /operations path; tenant delegate at
 // /h/[property_id]/operations/qa/generate.
 //
+// 2026-07-08 (later): tabs strip switched from the top-level operations
+// subPages to the QA-cluster tabs (Overview / Registry / Generate / Proposals)
+// per PBS's QA sub-menu spec.
+//
 // 2026-07-08: Accepts optional URL params dept, purpose, proposal_id from the
 // /operations/qa/proposals page for one-click drafting.
 
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { PROPERTY_ID } from '@/lib/supabase';
-import { DEPT_CFG } from '@/lib/dept-cfg';
-import { getDeptCfg } from '@/lib/dept-cfg/by-property';
-import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import GenerateSopForm from './_components/GenerateSopForm';
 
 export const dynamic = 'force-dynamic';
@@ -24,14 +25,20 @@ interface Props {
   searchParams?: { dept?: string; purpose?: string; proposal_id?: string };
 }
 
+function qaTabs(pid: number, active: 'overview' | 'registry' | 'generate' | 'proposals'): DashboardTab[] {
+  const base = pid === PROPERTY_ID ? '' : `/h/${pid}`;
+  return [
+    { key: `${base}/operations/qa`,           label: 'Overview',  href: `${base}/operations/qa`,           active: active === 'overview'  },
+    { key: `${base}/operations/qa/registry`,  label: 'Registry',  href: `${base}/operations/qa/registry`,  active: active === 'registry'  },
+    { key: `${base}/operations/qa/generate`,  label: 'Generate',  href: `${base}/operations/qa/generate`,  active: active === 'generate'  },
+    { key: `${base}/operations/qa/proposals`, label: 'Proposals', href: `${base}/operations/qa/proposals`, active: active === 'proposals' },
+  ];
+}
+
 export default async function GenerateSopPage({ propertyId, searchParams }: Props = {}) {
   const pid = propertyId ?? PROPERTY_ID;
 
-  const cfg = pid === PROPERTY_ID ? DEPT_CFG.operations : getDeptCfg('operations', pid);
-  const subPages = rewriteSubPagesForProperty(cfg.subPages ?? [], pid);
-  const tabs: DashboardTab[] = subPages.map((s) => ({
-    key: s.href, label: s.label, href: s.href, active: false,
-  }));
+  const tabs = qaTabs(pid, 'generate');
 
   const deptPrefill    = searchParams?.dept?.trim() || undefined;
   const purposePrefill = searchParams?.purpose?.trim() || undefined;
