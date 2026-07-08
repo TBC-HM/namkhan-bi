@@ -81,8 +81,8 @@ export default function PrintControls({ reportType }: Props) {
       <button onClick={onCopy} style={btnStyle()} title="Copy report URL to clipboard">
         Copy link
       </button>
-      <button onClick={onEmail} disabled={busy} style={btnStyle(busy)} title="Send this report by email">
-        {busy ? 'Sending…' : 'Email'}
+      <button onClick={onEmail} disabled={busy} style={btnStyle(busy)} title="Email report" aria-label="Email report">
+        {busy ? '…' : <span aria-hidden style={{ fontSize: 16, lineHeight: 1 }}>✉</span>}
       </button>
     </div>
   );
