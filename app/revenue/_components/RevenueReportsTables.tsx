@@ -174,10 +174,15 @@ export function AddRecipientForm({ propertyId }: { propertyId: number }) {
   };
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
+      {/* PBS 2026-07-08: explicit "which report" dropdown. The cadence is baked
+          into each option's name so the operator picks the report, not a frequency. */}
+      <label style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#5A5A5A', marginRight: 4 }}>
+        Report
+      </label>
       <select value={template} onChange={(e) => setTemplate(e.target.value as 'daily' | 'weekly' | 'monthly')} style={inputStyle}>
-        <option value="daily">Daily</option>
-        <option value="weekly">Weekly</option>
-        <option value="monthly">Monthly</option>
+        <option value="daily">Daily revenue report — every day 08:00</option>
+        <option value="weekly">Weekly revenue report — every Monday 08:00</option>
+        <option value="monthly">Monthly revenue report — 1st of month 08:00</option>
       </select>
       <input placeholder="email"  value={email} onChange={(e) => setEmail(e.target.value)} style={{ ...inputStyle, minWidth: 200 }} />
       <input placeholder="name (optional)" value={name} onChange={(e) => setName(e.target.value)} style={{ ...inputStyle, minWidth: 150 }} />
