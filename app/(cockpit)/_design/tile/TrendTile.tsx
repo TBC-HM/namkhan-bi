@@ -100,15 +100,17 @@ export default function TrendTile({
             style={{
               ...tooltipStyle,
               // Clamp inside the container: nudge to the left when close to the right edge.
-              left: Math.min(Math.max(0, hover.x - 60), 200 - 120),
-              top: Math.max(-4, hover.y - 40),
+              left: Math.min(Math.max(0, hover.x - 70), 200 - 140),
+              top: Math.max(-4, hover.y - 52),
             }}
           >
             <div style={{ fontWeight: 700 }}>{series[hover.i].date}</div>
-            <div style={{ marginTop: 2 }}>
-              {values[hover.i].toLocaleString('en-US')} sold
-              <span style={{ color: '#B8542A', marginLeft: 8 }}>·</span>
-              <span style={{ color: '#5A5A5A', marginLeft: 4 }}>avg {avg.toFixed(1)}</span>
+            <div style={{ marginTop: 3, color: '#F5F5F5' }}>
+              <span style={{ fontWeight: 600 }}>{values[hover.i].toLocaleString('en-US')}</span>
+              <span style={{ marginLeft: 4, opacity: 0.75 }}>that day</span>
+            </div>
+            <div style={{ marginTop: 2, fontSize: 10, color: '#A8A8A8' }}>
+              tile shows 30-day avg = {avg.toFixed(1)}
             </div>
           </div>
         )}
