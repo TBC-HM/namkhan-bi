@@ -1,17 +1,15 @@
 // app/_components/HodLanding.tsx
-// PBS #204 (2026-05-25) — shared HoD landing primitive. Same layout as
-// /revenue HoD: 6 KPI tiles + 4-up Attention/Reports/Tasks/Bugs row +
-// Build-a-report container. Used by finance, sales, marketing, operations
-// (Namkhan + Donna). Each dept passes its slug; cfg comes from DEPT_CFG.
+// Shared HoD landing primitive — powers /finance, /sales, /marketing, /operations.
 //
-// PBS 2026-07-07: `conclusions` slot renders a <ConclusionBlock> between
-// the 4-up row and Build-a-report. Each HoD page evaluates its own rules
-// server-side and passes the resulting Insight[] via the prop.
+// PBS 2026-07-08 v2 mirror: matches the new /revenue HoD layout.
+//   Top row of 4: Shortcuts · My Reports · My Tasks · External Links
+//   Conclusions (dept-specific insights)
+//   Build a report (dept-cfg reportTypes)
+//   Scheduled reports (bottom)
+//   Reports · send log (bottom)
 //
-// PBS 2026-07-08: Attention items now come from cockpit.attention_flags
-// via public.fn_attention_list (property + dept + user scoped). The static
-// cfg.defaultAttn seed is kept as a DEV-ONLY fallback so demo screens
-// still light up when the table is empty. In prod, empty table = empty box.
+// Attention + Bugs were replaced (per Revenue HoD refactor). External + Shortcut
+// state lives in public.v_hod_shortcuts (dept-scoped, kind='internal'|'external').
 
 import TenantLink from '@/components/nav/TenantLink';
 import {
@@ -24,14 +22,15 @@ import { getDeptCfg } from '@/lib/dept-cfg/by-property';
 import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import { PROPERTY_ID, supabase } from '@/lib/supabase';
 import ReportBuilder from '@/app/revenue/_components/ReportBuilder';
-import ReportsList   from '@/app/revenue/_components/ReportsList';
-import BugsList      from '@/app/revenue/_components/BugsList';
 import HodTasksList  from '@/app/revenue/_components/HodTasksList';
-import AttentionList from '@/app/revenue/_components/AttentionList';
+import ShortcutsPanel, { type Shortcut } from '@/app/revenue/_components/ShortcutsPanel';
+import ExternalLinksPanel, { type ExternalLink } from '@/app/revenue/_components/ExternalLinksPanel';
+import {
+  ScheduledReportsTable, SendLogTable,
+  type ScheduledRow, type SendLogRow,
+} from '@/app/revenue/_components/RevenueReportsTables';
 import ConclusionBlock, { type Insight } from '@/app/_components/ConclusionBlock';
 
-// PBS 2026-07-08: single-user cockpit for now. When ADR-112 auth front door
-// lands, swap this for the session email read server-side.
 const DEFAULT_USER_EMAIL = 'pbsbase@gmail.com';
 
 interface Props {
@@ -39,7 +38,6 @@ interface Props {
   propertyId?: number;
   liveTiles?: KpiTileProps[];
   extraContainers?: React.ReactNode;
-  /** PBS 2026-07-07 — conclusion insights evaluated server-side by the HoD page. */
   conclusions?: {
     insights: Insight[];
     title?: string;
@@ -54,69 +52,48 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
 
   const subPages = rewriteSubPagesForProperty(cfg.subPages ?? [], pid);
 
-  const [bugsRes, dueTasksRes, attnRes] = await Promise.all([
-    supabase
-      .from('cockpit_bugs')
-      .select('id, body, status, created_at, page_url')
-      .not('status', 'in', '(closed,resolved,wontfix,done)')
-      .order('created_at', { ascending: false })
-      .limit(5),
+  const [dueTasksRes, scheduledRes, sendsRes, myReportsRes, shortcutsRes] = await Promise.all([
     supabase
       .from('v_hod_tasks_due')
       .select('id', { count: 'exact', head: true })
       .eq('dept_slug', slug)
       .eq('property_id', pid)
       .eq('is_due', true),
-    // PBS 2026-07-08: attention flags come from cockpit.attention_flags
-    // via SECURITY DEFINER RPC. Property-scoped + dept-scoped + user-scoped
-    // (dismissals per user). See cockpit.attention_flags / fn_attention_list.
-    supabase.rpc('fn_attention_list', {
-      p_property_id: pid,
-      p_dept:        slug,
-      p_user_email:  DEFAULT_USER_EMAIL,
-    }),
+    supabase.from('v_revenue_report_recipients')
+      .select('id, property_id, template_key, cadence, email, name, next_fire_at, created_at')
+      .eq('property_id', pid).order('next_fire_at', { ascending: true }).limit(500),
+    supabase.from('v_revenue_report_sends')
+      .select('id, property_id, template_key, sent_at, recipient_email, created_by, report_name, status')
+      .eq('property_id', pid).limit(200),
+    supabase.from('v_revenue_report_sends')
+      .select('id, property_id, template_key, sent_at, recipient_email, created_by, report_name, status')
+      .eq('property_id', pid).eq('recipient_email', DEFAULT_USER_EMAIL)
+      .order('sent_at', { ascending: false }).limit(20),
+    supabase.from('v_hod_shortcuts')
+      .select('id, label, href, kind')
+      .eq('property_id', pid).eq('dept_slug', slug).eq('user_email', DEFAULT_USER_EMAIL)
+      .order('sort_order').limit(100),
   ]);
 
-  const bugs = (bugsRes.data ?? []) as Array<{
-    id: number; body: string | null; status: string | null;
-    created_at: string | null; page_url: string | null;
-  }>;
   const dueTasksCount = dueTasksRes.count ?? 0;
+  const scheduledRows = (scheduledRes.data ?? []) as ScheduledRow[];
+  const sendLogRows   = (sendsRes.data   ?? []) as SendLogRow[];
+  const myReportRows  = (myReportsRes.data ?? []) as SendLogRow[];
+  const allShortcuts  = (shortcutsRes.data ?? []) as Array<Shortcut & { kind?: string }>;
+  const shortcuts     = allShortcuts.filter((s) => (s.kind ?? 'internal') === 'internal');
+  const externalLinks = allShortcuts.filter((s) => s.kind === 'external') as ExternalLink[];
 
   const tiles: KpiTileProps[] = liveTiles ?? (cfg.kpiTiles ?? []).map((k) => ({
     label: k.k, value: k.v, size: 'sm', footnote: k.d,
   }));
 
-  // Map RPC rows -> AttentionList's AttnItem shape. Numeric id becomes string
-  // (AttnItem.id is string) so React keys + dismiss payloads stay stable.
-  type AttnRow = {
-    id: number; kind: string | null; label: string;
-    body: string | null; severity: string;
-    source: string | null; link_href: string | null;
-    created_at: string | null;
-  };
-  const attnRows = (attnRes.data ?? []) as AttnRow[];
-  const attnFromDb = attnRows.map((r) => ({
-    id:       String(r.id),
-    label:    r.label,
-    kind:     r.kind ?? undefined,
-    severity: r.severity,
-    href:     r.link_href ?? undefined,
-    body:     r.body ?? undefined,
-    source:   'db' as const,
-  }));
-
-  // Dev-only fallback: if the DB has 0 rows AND we're not in prod, show the
-  // legacy static seeds so demos aren't blank. Flagged with source='seed'.
-  const attnSeed = (cfg.defaultAttn ?? []).map((a) => ({
-    id: a.id, label: a.label, kind: a.kind, severity: a.severity,
-    source: 'seed' as const,
-  }));
-  const useSeed = attnFromDb.length === 0 && process.env.NODE_ENV !== 'production';
-  const attn = useSeed ? attnSeed : attnFromDb;
-
-  const docs        = cfg.defaultDocs ?? [];
   const reportTypes = cfg.reportTypes ?? [];
+  const reportOptions = [
+    { value: 'daily',   label: 'Daily report' },
+    { value: 'weekly',  label: 'Weekly report' },
+    { value: 'monthly', label: 'Monthly report' },
+    ...reportTypes.map((rt) => ({ value: rt.value, label: rt.label })),
+  ];
 
   const hodTabs = subPages.map((s) => ({
     key: s.href, label: s.label, href: s.href,
@@ -124,10 +101,6 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
   }));
 
   const chatHref = `/cockpit/chat?dept=${slug}`;
-
-  const attnSubtitle = useSeed
-    ? `${attn.length} item${attn.length === 1 ? '' : 's'} · dev seed · dismiss with ×`
-    : `${attn.length} item${attn.length === 1 ? '' : 's'} · live · dismiss with ×`;
 
   return (
     <DashboardPage
@@ -146,26 +119,35 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
         </div>
       )}
 
+      {/* Top row of 4 · Shortcuts / My Reports / My Tasks / External Links */}
       <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
-        <Container title="Attention" subtitle={attnSubtitle} density="compact">
-          <AttentionList
-            items={attn}
-            storageKey={`attn:${slug}:${pid}`}
-            userEmail={DEFAULT_USER_EMAIL}
-          />
+        <Container title="Shortcuts" subtitle="Pin any page for one-click access · × to remove" density="compact">
+          <ShortcutsPanel initial={shortcuts} propertyId={pid} deptSlug={slug} userEmail={DEFAULT_USER_EMAIL} />
         </Container>
-        <Container title="My Reports" subtitle={`${docs.length} item${docs.length === 1 ? '' : 's'} · red = unseen · dismiss with ×`} density="compact">
-          <ReportsList items={docs} storageKey={`reports:${slug}:${pid}`} />
+        <Container title="My Reports" subtitle={`${myReportRows.length} report${myReportRows.length === 1 ? '' : 's'} sent to you · from send log`} density="compact">
+          {myReportRows.length === 0 ? (
+            <div style={{ fontSize: 11, color: '#5A5A5A', fontStyle: 'italic', padding: '8px 4px' }}>
+              No reports have been sent to you yet. Add yourself as a recipient below.
+            </div>
+          ) : (
+            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {myReportRows.map((r) => (
+                <li key={r.id} style={{ fontSize: 11, color: '#1B1B1B', display: 'flex', gap: 6, alignItems: 'baseline' }}>
+                  <span style={{ fontWeight: 600 }}>{r.report_name}</span>
+                  <span style={{ color: '#5A5A5A' }}>· {new Date(r.sent_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </Container>
         <Container title="My Tasks" subtitle={dueTasksCount > 0 ? `🔴 ${dueTasksCount} due · add / due-date / repeat / delete` : 'add / due-date / repeat / delete · per property'} density="compact">
           <HodTasksList deptSlug={slug} propertyId={pid} />
         </Container>
-        <Container title="Bugs" subtitle={`${bugs.length} open · + to add · /cockpit/bugs for full inbox`} density="compact">
-          <BugsList deptSlug={slug} propertyId={pid} initial={bugs} />
+        <Container title="External links" subtitle="Extranet · Cloudbeds · SLH login · anywhere outside the cockpit" density="compact">
+          <ExternalLinksPanel initial={externalLinks} propertyId={pid} deptSlug={slug} userEmail={DEFAULT_USER_EMAIL} />
         </Container>
       </div>
 
-      {/* PBS 2026-07-07: Conclusions container — rule-based signals from lib/rules/{slug}.ts */}
       {conclusions && (
         <div style={fullRow}>
           <ConclusionBlock
@@ -188,6 +170,27 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
       )}
 
       {extraContainers}
+
+      {/* Scheduled reports + Send log — bottom of every HoD landing */}
+      <div style={fullRow}>
+        <Container title="Scheduled reports"
+                   subtitle="Pick any report · pick a cadence · fires at 08:00 UTC · Preview per row · check + Dismiss to cancel"
+                   density="compact">
+          <ScheduledReportsTable
+            rows={scheduledRows}
+            propertyId={pid}
+            reportOptions={reportOptions}
+          />
+        </Container>
+      </div>
+
+      <div style={fullRow}>
+        <Container title="Reports · send log"
+                   subtitle="Every report ever sent · sort any column · bulk-delete with checkboxes"
+                   density="compact">
+          <SendLogTable rows={sendLogRows} />
+        </Container>
+      </div>
     </DashboardPage>
   );
 }
