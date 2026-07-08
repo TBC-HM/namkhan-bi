@@ -1,8 +1,9 @@
 // app/revenue/pulse/page.tsx
-// 2026-05-23 (#103) — layout redesign per PBS spec:
-//   Row 1 (full):  Headline · yesterday  (4 KPI tiles)
-//   Row 2 (3-up):  Pickup + Cancellations  |  Performance vs STLY  |  Performance graph
-//   Row 3 (3-up):  Top 10 sources  |  Upcoming events calendar  |  Occupancy calendar
+// PBS 2026-07-08 layout:
+//   Row 1 (full):    Headline · yesterday  (4 KPI tiles)
+//   Rows 2+3 (3×2):  R2 = Pickup+Cancellations | Perf vs STLY | Top 10 sources
+//                    R3 = Performance graph    | Events cal.  | Occupancy cal.
+//   All 6 cells forced to identical dimensions via one grid with fixed row heights.
 // Server→client function-prop trap: no functions pass through primitives —
 // every table cell is pre-formatted as a string in the data array.
 
@@ -42,13 +43,18 @@ interface Props {
 }
 
 const fullRow: React.CSSProperties = { gridColumn: '1 / -1' };
-const threeUp: React.CSSProperties = {
+// PBS 2026-07-08: all six body containers must render at EXACTLY the same size.
+// One 3×2 grid with explicit row heights + stretch guarantees identical rectangles;
+// per-row `threeUp` grids only equalise within a row and let heights drift row-to-row.
+const sixCell: React.CSSProperties = {
   gridColumn: '1 / -1',
   display: 'grid',
   gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+  gridTemplateRows: 'repeat(2, minmax(380px, 1fr))',
   gap: 10,
   alignItems: 'stretch',
 };
+const cellFill: React.CSSProperties = { display: 'flex', flexDirection: 'column', minHeight: 0 };
 
 function todayIso(): string { return new Date().toISOString().slice(0, 10); }
 function shiftDate(iso: string, days: number): string {
@@ -68,7 +74,7 @@ function fmtMoney(n: number | null | undefined, sym: string = '$'): string {
   if (n == null || !Number.isFinite(Number(n))) return '—';
   return sym + Math.round(Number(n)).toLocaleString('en-US');
 }
-function fmtPct(n: number | null | undefined, decimals = 1): string {
+function fmtPct(n: number | null | undefined, decimals = 0): string {
   if (n == null || !Number.isFinite(Number(n))) return '—';
   return `${Number(n).toFixed(decimals)}%`;
 }
@@ -80,7 +86,7 @@ function fmtSignedPct(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(Number(n))) return '—';
   const v = Number(n);
   const sign = v > 0 ? '+' : v < 0 ? '−' : '';
-  return `${sign}${Math.abs(v).toFixed(1)}%`;
+  return `${sign}${Math.round(Math.abs(v))}%`;
 }
 
 export default async function PulsePage({ searchParams, propertyId }: Props) {
@@ -125,7 +131,7 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
   const adrΔ    = pctChange(headline.adr,          headline.stlyAdr);
 
   const headlineTiles: KpiTileProps[] = [
-    { label: 'Occ · yesterday', value: occScoped ? `${occScoped.occ_yesterday.toFixed(1)}%` : '—', size: 'sm',
+    { label: 'Occ · yesterday', value: occScoped ? `${Math.round(occScoped.occ_yesterday)}%` : '—', size: 'sm',
       delta: occΔ != null ? { value: occΔ, period: 'STLY', direction: occΔ >= 0 ? 'up' : 'down' } : undefined,
       status: occΔ != null && occΔ >= 0 ? 'green' : occΔ != null ? 'red' : 'grey' },
     { label: 'RevPAR', value: Math.round(headline.revpar ?? 0), currency: moneyCurrency, size: 'sm',
@@ -144,7 +150,7 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
     const label = field === 'occupancyPct' ? 'Occupancy' : field === 'revpar' ? 'RevPAR' : 'ADR';
     const unit  = field === 'occupancyPct' ? 'pct' : 'usd';
     const fmt   = (v: number | null | undefined) =>
-      v == null ? '—' : unit === 'pct' ? fmtPct(v, 2) : fmtMoney(v, sym);
+      v == null ? '—' : unit === 'pct' ? fmtPct(v, 0) : fmtMoney(v, sym);
     const stlyField = field === 'occupancyPct' ? 'stlyOccupancyPct' : field === 'revpar' ? 'stlyRevpar' : 'stlyAdr';
     const cell = (snap: PulseKpiSnapshot) => {
       const now = Number(snap[field] ?? 0);
@@ -291,81 +297,97 @@ export default async function PulsePage({ searchParams, propertyId }: Props) {
         </Container>
       </div>
 
-      {/* Row 2 · Pickup + Cancellations | Performance vs STLY | Performance graph */}
-      <div style={threeUp}>
-        <Container title={`${pickupLabel} · pickup + cancellations`} subtitle={`activity on ${fmtLongDate(pickupDate)}`}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 12 }}>
-            <PillLink href={pickupHref(pickupOffset - 1)} active={false} disabled={pickupOffset <= -8}>←</PillLink>
-            {/* #230: label shows the date being viewed (active highlight). The "↺ today" shortcut only appears when you are not on today. */}
-            <PillLink href={pickupHref(pickupOffset)} active={true}>{pickupLabel}</PillLink>
-            {pickupOffset !== 0 && <PillLink href={pickupHref(0)} active={false}>↺ today</PillLink>}
-            <PillLink href={pickupHref(pickupOffset + 1)} active={false} disabled={pickupOffset >= 0}>→</PillLink>
-          </div>
-          <PickupTabs pickup={pickupTabRows} cancellations={cancelTabRows} />
-        </Container>
+      {/* Rows 2+3 · 3×2 grid — all six cells identical size.
+          Row 2: Pickup+Cancellations | Performance vs STLY | Top 10 sources
+          Row 3: Performance · graph  | Events calendar     | Occupancy calendar */}
+      <div style={sixCell}>
+        {/* R2C1 */}
+        <div style={cellFill}>
+          <Container title={`${pickupLabel} · pickup + cancellations`} subtitle={`activity on ${fmtLongDate(pickupDate)}`}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 12 }}>
+              <PillLink href={pickupHref(pickupOffset - 1)} active={false} disabled={pickupOffset <= -8}>←</PillLink>
+              <PillLink href={pickupHref(pickupOffset)} active={true}>{pickupLabel}</PillLink>
+              {pickupOffset !== 0 && <PillLink href={pickupHref(0)} active={false}>↺ today</PillLink>}
+              <PillLink href={pickupHref(pickupOffset + 1)} active={false} disabled={pickupOffset >= 0}>→</PillLink>
+            </div>
+            <PickupTabs pickup={pickupTabRows} cancellations={cancelTabRows} />
+          </Container>
+        </div>
 
-        <Container title="Performance · vs STLY" subtitle="Yesterday · MTD · YTD">
-          <Chart
-            variant="table"
-            data={perfTable}
-            xKey="metric"
-            series={[
-              { key: 'yesterday', label: 'Yesterday' },
-              { key: 'mtd',       label: 'MTD' },
-              { key: 'ytd',       label: 'YTD' },
-            ]}
-          />
-        </Container>
+        {/* R2C2 */}
+        <div style={cellFill}>
+          <Container title="Performance · vs STLY" subtitle="Yesterday · MTD · YTD">
+            <Chart
+              variant="table"
+              data={perfTable}
+              xKey="metric"
+              series={[
+                { key: 'yesterday', label: 'Yesterday' },
+                { key: 'mtd',       label: 'MTD' },
+                { key: 'ytd',       label: 'YTD' },
+              ]}
+            />
+          </Container>
+        </div>
 
-        <Container
-          title={`Performance · ${winDays}d`}
-          subtitle={`${fmtLongDate(heroFrom)} → ${fmtLongDate(heroTo)}${offset !== 0 ? ` · ${offset > 0 ? '+' : ''}${offset}d` : ''}`}
-        >
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 12 }}>
-            <PillRow>
-              <PillLink href={scrubHref(offset - 7)} active={false}>← 7d</PillLink>
-              {offset !== 0 && <PillLink href={scrubHref(0)} active={false}>today</PillLink>}
-              <PillLink href={scrubHref(offset + 7)} active={false}>7d →</PillLink>
-            </PillRow>
-            <PillRow>
-              {(['7d','14d','30d','60d'] as const).map((w) => (
-                <PillLink key={w} href={winHref(w)} active={w === winParam}>{w}</PillLink>
-              ))}
-            </PillRow>
-          </div>
-          <Chart
-            variant="line"
-            data={heroData}
-            xKey="night_date"
-            series={heroSeries}
-            height={220}
-            empty={{ title: 'No data in window' }}
-          />
-        </Container>
-      </div>
+        {/* R2C3 — moved up from row 3 per PBS 2026-07-08 */}
+        <div style={cellFill}>
+          <Container title="Top 10 sources" subtitle="last 30 days · bookings + revenue">
+            <Chart
+              variant="table"
+              data={topSourceRows}
+              xKey="channel"
+              series={[
+                { key: 'bookings', label: 'Bookings' },
+                { key: 'revenue',  label: 'Revenue' },
+              ]}
+              empty={{ title: 'No source data in window' }}
+            />
+          </Container>
+        </div>
 
-      {/* Row 3 · Top 10 sources | Events calendar | Occupancy calendar */}
-      <div style={threeUp}>
-        <Container title="Top 10 sources" subtitle="last 30 days · bookings + revenue">
-          <Chart
-            variant="table"
-            data={topSourceRows}
-            xKey="channel"
-            series={[
-              { key: 'bookings', label: 'Bookings' },
-              { key: 'revenue',  label: 'Revenue' },
-            ]}
-            empty={{ title: 'No source data in window' }}
-          />
-        </Container>
+        {/* R3C1 — moved down from row 2 per PBS 2026-07-08 */}
+        <div style={cellFill}>
+          <Container
+            title={`Performance · ${winDays}d`}
+            subtitle={`${fmtLongDate(heroFrom)} → ${fmtLongDate(heroTo)}${offset !== 0 ? ` · ${offset > 0 ? '+' : ''}${offset}d` : ''}`}
+          >
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 12 }}>
+              <PillRow>
+                <PillLink href={scrubHref(offset - 7)} active={false}>← 7d</PillLink>
+                {offset !== 0 && <PillLink href={scrubHref(0)} active={false}>today</PillLink>}
+                <PillLink href={scrubHref(offset + 7)} active={false}>7d →</PillLink>
+              </PillRow>
+              <PillRow>
+                {(['7d','14d','30d','60d'] as const).map((w) => (
+                  <PillLink key={w} href={winHref(w)} active={w === winParam}>{w}</PillLink>
+                ))}
+              </PillRow>
+            </div>
+            <Chart
+              variant="line"
+              data={heroData}
+              xKey="night_date"
+              series={heroSeries}
+              height={220}
+              empty={{ title: 'No data in window' }}
+            />
+          </Container>
+        </div>
 
-        <Container title="Upcoming events · next 30 days" subtitle="hover any day to see events">
-          <MonthCalendar days={eventCalendar} variant="events" />
-        </Container>
+        {/* R3C2 */}
+        <div style={cellFill}>
+          <Container title="Upcoming events · next 30 days" subtitle="hover any day to see events">
+            <MonthCalendar days={eventCalendar} variant="events" />
+          </Container>
+        </div>
 
-        <Container title="Occupancy · next 30 days" subtitle="hover any day for the OCC %">
-          <MonthCalendar days={occCalendar} variant="occ" />
-        </Container>
+        {/* R3C3 */}
+        <div style={cellFill}>
+          <Container title="Occupancy · next 30 days" subtitle="hover any day for the OCC %">
+            <MonthCalendar days={occCalendar} variant="occ" />
+          </Container>
+        </div>
       </div>
     </DashboardPage>
   );
