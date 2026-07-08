@@ -1,7 +1,7 @@
 // app/marketing/compiler/[run_id]/preview/page.tsx
 // PDF + funnel preview tabs (stubbed in v1 — points to the public /r/[slug]).
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { notFound } from 'next/navigation';
 import Page from '@/components/page/Page';
 import { MARKETING_SUBPAGES } from '../../../_subpages';
@@ -50,9 +50,9 @@ export default async function PreviewPage({ params }: { params: { run_id: string
               {p.label}
             </div>
             {p.path ? (
-              <Link href={p.path} target="_blank" style={{ color: 'var(--ink)', fontSize: 'var(--t-sm)' }}>
+              <TenantLink href={p.path} target="_blank" style={{ color: 'var(--ink)', fontSize: 'var(--t-sm)' }}>
                 Open ↗ <span style={{ color: 'var(--ink-mute)', fontFamily: 'var(--mono)' }}>{p.path}</span>
-              </Link>
+              </TenantLink>
             ) : (
               <span style={{ color: 'var(--ink-mute)', fontStyle: 'italic', fontSize: 'var(--t-sm)' }}>
                 Deploy first to enable preview
@@ -70,9 +70,9 @@ export default async function PreviewPage({ params }: { params: { run_id: string
       </div>
 
       <div style={{ marginTop: 24 }}>
-        <Link href={`/marketing/compiler/${params.run_id}`} style={{ color: 'var(--brass)', fontSize: 'var(--t-sm)' }}>
+        <TenantLink href={`/marketing/compiler/${params.run_id}`} style={{ color: 'var(--brass)', fontSize: 'var(--t-sm)' }}>
           ← Back to variants
-        </Link>
+        </TenantLink>
       </div>
     </Page>
   );
