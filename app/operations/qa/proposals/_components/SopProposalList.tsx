@@ -6,6 +6,13 @@
 // which pre-fills the form. On accept, save handler flips status via fn_sop_proposal_mark.
 //
 // Paper-white + hairlines. No var(--paper-warm). No function props from server.
+//
+// 2026-07-08 (bug-1): seed operation now loops 6× client-side hitting
+// /api/sop/proposals/seed-batch with { batch_index, batch_size: 50 } so the
+// user gets 300 proposals total in visible increments and the LLM never has
+// to squeeze 300 items into one JSON response (previous root cause of "nothing
+// happens" — max_tokens was truncating the JSON and the catch swallowed a
+// parse error). Progress is shown inline as "Seeding batch N/6 (X / 300)".
 
 import { useMemo, useState } from 'react';
 
@@ -20,6 +27,10 @@ const INK_L = '#8A8A8A';
 const ACCENT = '#0F5B4A';
 const AMBER = '#B8860B';
 const SLATE = '#3A5568';
+const RED   = '#B00020';
+
+const TOTAL_BATCHES = 6;
+const BATCH_SIZE    = 50;
 
 export interface ProposalRow {
   id: number;
@@ -37,7 +48,7 @@ export interface ProposalRow {
 interface Props {
   proposals: ProposalRow[];
   generateBaseHref: string;   // '/operations/qa/generate' or '/h/1000001/operations/qa/generate'
-  seedHref: string;           // '/api/sop/proposals/seed'
+  seedBatchHref: string;      // '/api/sop/proposals/seed-batch'
   propertyId: number;
 }
 
@@ -89,8 +100,8 @@ function priorityBadge(p: number): React.CSSProperties {
     padding: '1px 6px', borderRadius: 3, fontSize: 9, fontWeight: 700,
     letterSpacing: '0.04em', border: '1px solid ' + HAIR, background: WHITE,
   };
-  if (p === 1) return { ...base, color: '#B00020', borderColor: '#B00020' };
-  if (p === 2) return { ...base, color: AMBER,     borderColor: AMBER };
+  if (p === 1) return { ...base, color: RED,   borderColor: RED };
+  if (p === 2) return { ...base, color: AMBER, borderColor: AMBER };
   return { ...base, color: INK_L, borderColor: HAIR };
 }
 
@@ -116,12 +127,22 @@ const td: React.CSSProperties = {
   verticalAlign: 'top',
 };
 
-export default function SopProposalList({ proposals, generateBaseHref, seedHref, propertyId }: Props) {
+interface BatchResult {
+  batch_index: number;
+  inserted:    number;
+  skipped:     number;
+  generated:   number;
+  error?:      string;
+}
+
+export default function SopProposalList({ proposals, generateBaseHref, seedBatchHref, propertyId }: Props) {
   const [query, setQuery]         = useState('');
   const [deptFilter, setDeptFilter]   = useState('all');
   const [statusFilter, setStatusFilter] = useState<'all' | ProposalRow['status']>('all');
   const [seeding, setSeeding]     = useState(false);
   const [seedMsg, setSeedMsg]     = useState<string | null>(null);
+  const [seedErr, setSeedErr]     = useState<string | null>(null);
+  const [seedBatches, setSeedBatches] = useState<BatchResult[]>([]);
   const [busyRow, setBusyRow]     = useState<number | null>(null);
 
   const filtered = useMemo(() => {
@@ -164,24 +185,66 @@ export default function SopProposalList({ proposals, generateBaseHref, seedHref,
     skipped:   proposals.filter((p) => p.status === 'skipped').length,
   }), [proposals]);
 
+  const seededTotalInserted = seedBatches.reduce((s, b) => s + b.inserted, 0);
+  const seededTotalSkipped  = seedBatches.reduce((s, b) => s + b.skipped, 0);
+
   async function onSeed() {
     if (seeding) return;
-    if (!confirm('Ask Claude to propose ~300 SOPs for this property? This calls the Anthropic API and inserts into knowledge.sop_proposals. Duplicates by (dept, title) are skipped.')) return;
-    setSeeding(true); setSeedMsg('Calling Claude — this can take 30-60s…');
-    try {
-      const res = await fetch(seedHref, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ property_id: propertyId }),
-      });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
-      setSeedMsg(`Seeded ${j.inserted ?? 0} proposals (${j.skipped ?? 0} duplicates skipped). Reloading…`);
-      setTimeout(() => { window.location.reload(); }, 900);
-    } catch (err) {
-      setSeedMsg(`Seed failed: ${err instanceof Error ? err.message : String(err)}`);
-      setSeeding(false);
+    if (!confirm(`Ask Claude to propose ${TOTAL_BATCHES * BATCH_SIZE} SOPs for this property in ${TOTAL_BATCHES} batches of ${BATCH_SIZE}? Duplicates by (dept, title) are skipped.`)) return;
+
+    setSeeding(true);
+    setSeedErr(null);
+    setSeedBatches([]);
+    setSeedMsg(`Seeding batch 1 / ${TOTAL_BATCHES} (0 / ${TOTAL_BATCHES * BATCH_SIZE})…`);
+
+    for (let i = 0; i < TOTAL_BATCHES; i++) {
+      setSeedMsg(`Seeding batch ${i + 1} / ${TOTAL_BATCHES} (${seedBatches.reduce((s, b) => s + b.inserted, 0)} inserted so far)…`);
+      try {
+        const res = await fetch(seedBatchHref, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            property_id: propertyId,
+            batch_index: i,
+            batch_size:  BATCH_SIZE,
+          }),
+        });
+        const j = await res.json();
+        if (!res.ok) {
+          const errMsg = j.error ?? `HTTP ${res.status}`;
+          const failed: BatchResult = {
+            batch_index: i, inserted: 0, skipped: 0, generated: 0, error: errMsg,
+          };
+          setSeedBatches((prev) => [...prev, failed]);
+          setSeedErr(`Failed at batch ${i + 1} / ${TOTAL_BATCHES}: ${errMsg}`);
+          setSeedMsg(`Stopped after batch ${i + 1} of ${TOTAL_BATCHES}. See error above.`);
+          setSeeding(false);
+          return;
+        }
+        const done: BatchResult = {
+          batch_index: i,
+          inserted:  j.inserted  ?? 0,
+          skipped:   j.skipped   ?? 0,
+          generated: j.generated ?? 0,
+        };
+        setSeedBatches((prev) => [...prev, done]);
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        const failed: BatchResult = {
+          batch_index: i, inserted: 0, skipped: 0, generated: 0, error: errMsg,
+        };
+        setSeedBatches((prev) => [...prev, failed]);
+        setSeedErr(`Failed at batch ${i + 1} / ${TOTAL_BATCHES}: ${errMsg}`);
+        setSeedMsg(`Stopped after batch ${i + 1} of ${TOTAL_BATCHES}. See error above.`);
+        setSeeding(false);
+        return;
+      }
     }
+
+    // Compute final totals from state (setState is async, so read from a
+    // fresh sum after the loop).
+    setSeedMsg(`Done · ${TOTAL_BATCHES} batches complete. Reloading…`);
+    setTimeout(() => { window.location.reload(); }, 900);
   }
 
   async function onMark(id: number, status: ProposalRow['status']) {
@@ -287,10 +350,75 @@ export default function SopProposalList({ proposals, generateBaseHref, seedHref,
             cursor: seeding ? 'not-allowed' : 'pointer', letterSpacing: '0.02em',
           }}
         >
-          {seeding ? 'Seeding…' : (proposals.length === 0 ? '+ Seed 300 proposals (Claude)' : '+ Seed more (Claude)')}
+          {seeding
+            ? `Seeding ${seedBatches.length} / ${TOTAL_BATCHES}…`
+            : (proposals.length === 0
+                ? `+ Seed ${TOTAL_BATCHES * BATCH_SIZE} proposals (${TOTAL_BATCHES}×${BATCH_SIZE})`
+                : `+ Seed more (${TOTAL_BATCHES}×${BATCH_SIZE})`)}
         </button>
       </div>
-      {seedMsg && <div style={{ fontSize: 11, color: INK_M, marginBottom: 12 }}>{seedMsg}</div>}
+
+      {/* Live progress panel */}
+      {(seeding || seedBatches.length > 0 || seedErr || seedMsg) && (
+        <div style={{
+          background: WHITE,
+          border: '1px solid ' + (seedErr ? RED : HAIR),
+          borderLeft: '3px solid ' + (seedErr ? RED : (seeding ? AMBER : ACCENT)),
+          borderRadius: 6,
+          padding: 12,
+          marginBottom: 12,
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: INK_S, marginBottom: 6 }}>
+            Seed status
+          </div>
+          {seedMsg && (
+            <div style={{ fontSize: 12, color: INK, marginBottom: 6 }}>
+              {seedMsg}
+            </div>
+          )}
+          {seedErr && (
+            <div style={{ fontSize: 12, color: RED, marginBottom: 6, fontWeight: 600 }}>
+              {seedErr}
+            </div>
+          )}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: `repeat(${TOTAL_BATCHES}, 1fr)`,
+            gap: 6,
+            marginTop: 6,
+          }}>
+            {Array.from({ length: TOTAL_BATCHES }, (_, i) => {
+              const b = seedBatches.find((x) => x.batch_index === i);
+              const isCurrent = seeding && !b && seedBatches.length === i;
+              const bg = b?.error ? '#FDECEC' : b ? '#EAF3EE' : isCurrent ? '#FFF7E5' : WHITE;
+              const border = b?.error ? RED : b ? ACCENT : isCurrent ? AMBER : HAIR;
+              const col = b?.error ? RED : b ? ACCENT : INK_M;
+              return (
+                <div key={i} style={{
+                  padding: '6px 8px', background: bg, border: '1px solid ' + border,
+                  borderRadius: 4, textAlign: 'center', fontSize: 11, color: col,
+                  fontVariantNumeric: 'tabular-nums',
+                }}>
+                  <div style={{ fontWeight: 700, fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Batch {i + 1}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, marginTop: 2 }}>
+                    {b?.error ? '×' : b ? `+${b.inserted}` : isCurrent ? '…' : '·'}
+                  </div>
+                  {b && !b.error && (
+                    <div style={{ fontSize: 9, color: INK_L, marginTop: 2 }}>
+                      {b.skipped > 0 ? `${b.skipped} dup` : ''}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {(seededTotalInserted > 0 || seededTotalSkipped > 0) && (
+            <div style={{ fontSize: 11, color: INK_M, marginTop: 8 }}>
+              Total: <b style={{ color: ACCENT }}>{seededTotalInserted}</b> inserted · <b style={{ color: INK_L }}>{seededTotalSkipped}</b> duplicates skipped.
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Empty state */}
       {proposals.length === 0 && !seeding && (
@@ -300,8 +428,8 @@ export default function SopProposalList({ proposals, generateBaseHref, seedHref,
         }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: INK, marginBottom: 6 }}>No SOP proposals yet</div>
           <div style={{ fontSize: 12, marginBottom: 12 }}>
-            Click the button above and Claude will draft ~300 SOP titles across every department this property operates.
-            Each row will be a title + one-line purpose. You click Generate → review the full SOP → accept.
+            Click the button above and Claude will draft ~{TOTAL_BATCHES * BATCH_SIZE} SOP titles across every department this property operates,
+            in {TOTAL_BATCHES} batches of {BATCH_SIZE}. Each row will be a title + one-line purpose. Click Generate → review the full SOP → accept.
           </div>
         </div>
       )}
