@@ -3,7 +3,7 @@
 // change from Finance). Full dms.documents view with inline container
 // reassignment. Same code path as /settings/documents — this URL is the
 // canonical Administration entry.
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import DocsUploadButtons from '@/app/_components/DocsUploadButtons';
@@ -58,7 +58,7 @@ export default async function AdminDocsPage() {
         <div style={{ gridColumn:'1 / -1', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, flexWrap:'wrap' }}>
           <div style={{ fontSize:11, color:INK_M }}>
             Change a doc&apos;s <code>doc_type</code>/<code>doc_subtype</code> here and it moves to the matching container on next reload.
-            {' '}Old finance legal register still lives at <Link href="/finance/legal" style={{ color:GREEN }}>Finance · Legal</Link>.
+            {' '}Old finance legal register still lives at <TenantLink href="/finance/legal" style={{ color:GREEN }}>Finance · Legal</TenantLink>.
           </div>
           <DocsUploadButtons />
         </div>
