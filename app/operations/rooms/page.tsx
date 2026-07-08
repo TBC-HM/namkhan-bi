@@ -15,7 +15,7 @@
 //  · Raw txns             → public.v_fnb_raw_txn_enriched (filter usali_dept='Rooms')
 
 import React from 'react';
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, Container, KpiTile, type KpiTileProps, type DashboardTab } from '@/app/(cockpit)/_design';
 import { OPERATIONS_SUBPAGES } from '../_subpages';
 import DeptTrendChart from '@/components/pl/DeptTrendChart';
@@ -164,9 +164,9 @@ export default async function RoomsPage({ searchParams }: Props) {
   const opPills = (
     <div style={{ display: 'flex', alignItems: 'stretch', borderRadius: 4, border: '1px solid #E0E0E0', overflow: 'hidden' }}>
       {(['yesterday', '7d', '30d', 'ytd'] as const).map((p) => (
-        <Link key={p} href={`?op=${p}`} style={opPillStyle(opPeriod === p)}>
+        <TenantLink key={p} href={`?op=${p}`} style={opPillStyle(opPeriod === p)}>
           {p === 'yesterday' ? 'Yesterday' : p === '7d' ? '7d' : p === '30d' ? '30d' : 'YTD'}
-        </Link>
+        </TenantLink>
       ))}
     </div>
   );
