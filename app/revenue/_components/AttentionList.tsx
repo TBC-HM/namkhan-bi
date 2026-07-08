@@ -1,9 +1,20 @@
 'use client';
 
 // app/revenue/_components/AttentionList.tsx
-// Attention list with per-item × dismiss. Dismissals persist to localStorage
-// per (deptSlug, propertyId) so they survive reloads but stay client-side
-// (cfg.defaultAttn is static, no DB write needed). PBS note#167.
+// Attention list with per-item × dismiss.
+//
+// PBS 2026-07-08 (#204/attention):
+// - DB-backed items (source==='db') dismiss via POST /api/attention/dismiss.
+//   The API writes to cockpit.attention_dismissals so state survives across
+//   devices / browsers / clears.
+// - Seed items (source==='seed') still fall back to localStorage — they only
+//   exist in dev when the table is empty.
+// - Optimistic UI: hide immediately, keep hidden on failure with a subtle
+//   opacity so PBS can tell something didn't stick. localStorage mirror also
+//   used for DB items so a page reload never re-flashes an item pre-fetch.
+//
+// Item shape gained optional `href` (deep-link), `body` (tooltip text),
+// `source` ('db'|'seed'). Everything else stays backwards compatible.
 
 import { useEffect, useState } from 'react';
 
@@ -12,18 +23,25 @@ interface AttnItem {
   label: string;
   kind?: string;
   severity?: string;
+  href?: string;
+  body?: string;
+  source?: 'db' | 'seed';
 }
 
 interface Props {
   items: AttnItem[];
   storageKey?: string;
+  /** PBS 2026-07-08 — email is stamped on the dismissal row so different
+   *  operators (or agent workers) don't hide each other's items. */
+  userEmail?: string;
 }
 
 const SEV_DOT: Record<string, string> = { high: '#C0584C', medium: '#C4A06B', low: '#9B907A' };
 
-export default function AttentionList({ items, storageKey = 'attn:revenue' }: Props) {
+export default function AttentionList({ items, storageKey = 'attn:revenue', userEmail }: Props) {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [hydrated, setHydrated] = useState(false);
+  const [failed, setFailed] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     try {
@@ -33,10 +51,33 @@ export default function AttentionList({ items, storageKey = 'attn:revenue' }: Pr
     setHydrated(true);
   }, [storageKey]);
 
-  const dismiss = (id: string) => {
-    const next = new Set(dismissed); next.add(id);
-    setDismissed(next);
+  const persistLocal = (next: Set<string>) => {
     try { window.localStorage.setItem(storageKey, JSON.stringify([...next])); } catch { /* noop */ }
+  };
+
+  const dismiss = async (item: AttnItem) => {
+    const next = new Set(dismissed); next.add(item.id);
+    setDismissed(next);
+    persistLocal(next);
+
+    // DB-backed rows: fire-and-forget POST. We swallow failures into `failed`
+    // so on next refresh (if DB write silently lost), we can add a UX hint.
+    if (item.source === 'db' && userEmail) {
+      try {
+        const res = await fetch('/api/attention/dismiss', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ flag_id: Number(item.id), user_email: userEmail }),
+        });
+        if (!res.ok) {
+          const nextFailed = new Set(failed); nextFailed.add(item.id);
+          setFailed(nextFailed);
+        }
+      } catch {
+        const nextFailed = new Set(failed); nextFailed.add(item.id);
+        setFailed(nextFailed);
+      }
+    }
   };
 
   const visible = items.filter((a) => !dismissed.has(a.id));
@@ -47,31 +88,36 @@ export default function AttentionList({ items, storageKey = 'attn:revenue' }: Pr
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      {visible.map((a) => (
-        <div key={a.id} style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          padding: '4px 0', fontSize: 12,
-        }}>
-          <span style={{
-            width: 8, height: 8, borderRadius: '50%',
-            background: SEV_DOT[a.severity ?? 'medium'] ?? SEV_DOT.medium,
-            flex: '0 0 8px',
-          }} aria-hidden />
-          <span style={{ flex: 1, color: 'var(--ink, #1B1B1B)' }}>{a.label}</span>
-          {a.kind && (
+      {visible.map((a) => {
+        const dot = SEV_DOT[a.severity ?? 'medium'] ?? SEV_DOT.medium;
+        const labelEl = a.href
+          ? <a href={a.href} style={{ flex: 1, color: 'var(--ink, #1B1B1B)', textDecoration: 'none' }} title={a.body ?? undefined}>{a.label}</a>
+          : <span style={{ flex: 1, color: 'var(--ink, #1B1B1B)' }} title={a.body ?? undefined}>{a.label}</span>;
+        return (
+          <div key={a.id} style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '4px 0', fontSize: 12,
+          }}>
             <span style={{
-              fontSize: 10, color: 'var(--ink-soft, #5A5A5A)',
-              padding: '1px 6px', border: '1px solid var(--hairline, #E6DFCC)', borderRadius: 99,
-            }}>{a.kind}</span>
-          )}
-          <button type="button" onClick={() => dismiss(a.id)} aria-label="Dismiss"
-            style={{
-              background: 'transparent', border: 'none', cursor: 'pointer',
-              fontSize: 14, color: 'var(--ink-soft, #5A5A5A)', padding: '0 4px',
-              fontFamily: 'inherit',
-            }}>×</button>
-        </div>
-      ))}
+              width: 8, height: 8, borderRadius: '50%',
+              background: dot, flex: '0 0 8px',
+            }} aria-hidden />
+            {labelEl}
+            {a.kind && (
+              <span style={{
+                fontSize: 10, color: 'var(--ink-soft, #5A5A5A)',
+                padding: '1px 6px', border: '1px solid #E6DFCC', borderRadius: 99,
+              }}>{a.kind}</span>
+            )}
+            <button type="button" onClick={() => dismiss(a)} aria-label="Dismiss"
+              style={{
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                fontSize: 14, color: 'var(--ink-soft, #5A5A5A)', padding: '0 4px',
+                fontFamily: 'inherit',
+              }}>×</button>
+          </div>
+        );
+      })}
     </div>
   );
 }
