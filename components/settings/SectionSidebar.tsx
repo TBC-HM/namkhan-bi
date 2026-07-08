@@ -1,7 +1,7 @@
 // components/settings/SectionSidebar.tsx
 // Server component — left rail for /settings/property/[section].
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import type { SectionRow } from '@/lib/settings';
 
 function relTime(iso: string | null): string {
@@ -27,7 +27,7 @@ export default function SectionSidebar({ sections, active }: Props) {
       {sections.map((s) => {
         const isActive = s.section_code === active;
         return (
-          <Link
+          <TenantLink
             key={s.section_code}
             href={`/settings/property/${s.section_code}`}
             className={`settings-sidebar-item${isActive ? ' active' : ''}`}
@@ -36,13 +36,13 @@ export default function SectionSidebar({ sections, active }: Props) {
             <div className="settings-sidebar-meta text-mono">
               {s.row_count} {s.row_count === 1 ? 'item' : 'items'} · {relTime(s.last_edited)}
             </div>
-          </Link>
+          </TenantLink>
         );
       })}
-      <Link href="/settings/property/brief" className="settings-sidebar-item brief">
+      <TenantLink href="/settings/property/brief" className="settings-sidebar-item brief">
         <div className="settings-sidebar-name">AI agent brief</div>
         <div className="settings-sidebar-meta text-mono">markdown · derived</div>
-      </Link>
+      </TenantLink>
     </nav>
   );
 }
