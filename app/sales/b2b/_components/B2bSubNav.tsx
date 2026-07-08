@@ -3,7 +3,7 @@
 // Drill-down (/sales/b2b/partner/[id]) opens via row click, not nav.
 'use client';
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { usePathname } from 'next/navigation';
 
 const TABS = [
@@ -26,7 +26,7 @@ export default function B2bSubNav() {
       {TABS.map((t) => {
         const active = path === t.href || (t.href === '/sales/b2b' && path === '/sales/b2b/contracts');
         return (
-          <Link
+          <TenantLink
             key={t.href}
             href={t.href}
             style={{
@@ -58,7 +58,7 @@ export default function B2bSubNav() {
                 {t.badge}
               </span>
             ) : null}
-          </Link>
+          </TenantLink>
         );
       })}
     </div>
