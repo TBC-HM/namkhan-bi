@@ -4,7 +4,7 @@
 
 'use client';
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { useState } from 'react';
 
 export default function EmailDayReportPage() {
@@ -33,7 +33,7 @@ export default function EmailDayReportPage() {
 
   return (
     <div style={{ background: '#FFFFFF', minHeight: '100vh', padding: '32px', maxWidth: 640, margin: '0 auto' }}>
-      <Link href="/revenue/pickup-day" style={{ fontSize: 12, color: '#5A5A5A', textDecoration: 'none' }}>← Day report</Link>
+      <TenantLink href="/revenue/pickup-day" style={{ fontSize: 12, color: '#5A5A5A', textDecoration: 'none' }}>← Day report</TenantLink>
       <h1 style={{ margin: '8px 0 4px', fontSize: 22, fontWeight: 700 }}>Email day report</h1>
       <p style={{ margin: '0 0 20px', fontSize: 12, color: '#5A5A5A' }}>Sends an HTML summary of the next 90 forward nights (OTB · OCC · ADR · Room Rev · −1d & −7d pickup RN).</p>
 
