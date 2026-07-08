@@ -9,7 +9,7 @@
 //
 // Pattern: brass-letterspaced mono pills. Active = paper-warm pill, others = paper bg.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { usePathname } from 'next/navigation';
 
 const TABS: Array<{ href: string; label: string }> = [
@@ -42,7 +42,7 @@ export default function InventorySubnav() {
             ? pathname === '/operations/inventory'
             : pathname === t.href || pathname.startsWith(t.href + '/');
         return (
-          <Link
+          <TenantLink
             key={t.href}
             href={t.href}
             style={{
@@ -61,7 +61,7 @@ export default function InventorySubnav() {
             }}
           >
             {t.label}
-          </Link>
+          </TenantLink>
         );
       })}
     </nav>
