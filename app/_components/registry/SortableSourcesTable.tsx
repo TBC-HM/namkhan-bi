@@ -3,7 +3,7 @@
 // Server passes raw numeric values; this component formats currency + sorts client-side.
 // Sources count (Donna 50 · Namkhan 60) reflects all distinct source_name values present
 // in v_reservations_unified for the window; the table is not capped beyond the underlying data.
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { useState } from 'react';
 
 export interface SortableRow {
@@ -142,7 +142,7 @@ export default function SortableSourcesTable({ rows, moneyCurrency, initialSort 
         <tbody>
           {sorted.map((r, i) => (
             <tr key={`${r.source}-${i}`} style={{ borderTop: '1px solid #E6DFCC' }}>
-              <td style={tdLabelStyle}><Link href={r.drillHref} style={sourceLinkStyle}>{r.source}</Link></td>
+              <td style={tdLabelStyle}><TenantLink href={r.drillHref} style={sourceLinkStyle}>{r.source}</TenantLink></td>
               <td style={tdLabelStyle}>{r.category}</td>
               <td style={tdNumStyle}>{r.res_24}</td>
               <td style={tdNumStyle}>{r.res_25}</td>
