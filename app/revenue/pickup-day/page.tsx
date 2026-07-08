@@ -214,6 +214,12 @@ export default async function PickupDayReport({ propertyId }: Props = {}) {
           </div>
         }
       >
+        {/* PBS 2026-07-08: Month ↔ Day inline switch — moved out of nav-subgroups
+            so the Demand & Pace outer sub-strip stays intact on pickup-day. */}
+        <div style={{ gridColumn: '1 / -1', marginBottom: 12 }}>
+          <PickupViewSwitch propertyId={pid} active="day" />
+        </div>
+
         <div style={{ gridColumn: '1 / -1' }}>
           <Container
             title="Forward outlook by night"
@@ -459,3 +465,37 @@ const iconBtn: React.CSSProperties = {
   background: '#084838', color: '#FFFFFF',
   border: '1px solid #084838', textDecoration: 'none',
 };
+
+// PBS 2026-07-08 — inline Month/Day switch (mirrors /revenue/pickup).
+function PickupViewSwitch({ propertyId, active }: { propertyId: number; active: 'month' | 'day' }) {
+  const tenantPrefix = propertyId !== PROPERTY_ID ? `/h/${propertyId}` : '';
+  const items: Array<{ key: 'month' | 'day'; href: string; label: string }> = [
+    { key: 'month', href: `${tenantPrefix}/revenue/pickup`,     label: 'Month' },
+    { key: 'day',   href: `${tenantPrefix}/revenue/pickup-day`, label: 'Day'   },
+  ];
+  return (
+    <nav role="tablist" aria-label="Pickup view" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '6px 0', borderBottom: '1px solid #E6DFCC' }}>
+      <span style={{ fontSize: 11, fontWeight: 600, color: '#5A5A5A', letterSpacing: '0.04em', textTransform: 'uppercase', marginRight: 4 }}>View</span>
+      {items.map((i) => {
+        const isActive = i.key === active;
+        return (
+          <a
+            key={i.key}
+            href={i.href}
+            role="tab"
+            aria-selected={isActive}
+            style={{
+              padding: '6px 10px', fontSize: 12,
+              fontWeight: isActive ? 700 : 500,
+              color: isActive ? '#1B1B1B' : '#5A5A5A',
+              textDecoration: 'none',
+              borderBottom: `2px solid ${isActive ? '#084838' : 'transparent'}`,
+            }}
+          >
+            {i.label}
+          </a>
+        );
+      })}
+    </nav>
+  );
+}
