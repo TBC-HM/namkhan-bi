@@ -1,49 +1,36 @@
 'use client';
 
 // app/revenue/_components/ReportBuilder.tsx
-// Primitives-styled report builder. Ports the legacy DeptEntry modal flow
-// (type chooser + dim chips + schedule + email recipients + open report) to
-// the new design. Same URL contract as before: opens
-// /revenue/reports/render?type=...&<dim>=<value>&... in a new tab.
+// PBS 2026-07-08 full rewrite: compact single-row primitive.
+// Keeps: type chooser · Schedule · Email delivery · Open report.
+// Drops: Dimensions chip block (defaults apply via search params anyway).
+// Header shows Window=— · Compare=— placeholder so a manager knows the report
+// will apply the default window.
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import type { ReportTypeDef } from '@/lib/dept-cfg/types';
 
 type Schedule = 'once' | 'daily' | 'weekly' | 'monthly';
 
 const SCHEDULES: Array<{ value: Schedule; label: string }> = [
-  { value: 'once', label: 'Once' },
-  { value: 'daily', label: 'Daily' },
-  { value: 'weekly', label: 'Weekly' },
+  { value: 'once',    label: 'Once' },
+  { value: 'daily',   label: 'Daily' },
+  { value: 'weekly',  label: 'Weekly' },
   { value: 'monthly', label: 'Monthly' },
 ];
 
 interface Props {
   reportTypes: ReportTypeDef[];
-  /** Optional override for the open href base (Donna prefix etc.) */
   hrefPrefix?: string;
 }
 
 export default function ReportBuilder({ reportTypes, hrefPrefix = '' }: Props) {
-  const [reportType, setReportType] = useState<string>('');
-  const [dims, setDims] = useState<Record<string, string>>({});
+  const [reportType, setReportType] = useState<string>(reportTypes[0]?.value ?? '');
   const [schedule, setSchedule] = useState<Schedule>('once');
   const [emails, setEmails] = useState<string[]>([]);
   const [emailDraft, setEmailDraft] = useState('');
 
   const def = useMemo(() => reportTypes.find((rt) => rt.value === reportType), [reportType, reportTypes]);
-
-  const allType = reportTypes.find((rt) => rt.value === 'all');
-  const stdTypes = reportTypes.filter((rt) => rt.value !== 'all');
-
-  function pickDim(key: string, val: string) {
-    setDims((d) => {
-      const next = { ...d };
-      if (next[key] === val) delete next[key];
-      else next[key] = val;
-      return next;
-    });
-  }
 
   function addEmail(raw: string) {
     const e = raw.trim().toLowerCase();
@@ -51,224 +38,128 @@ export default function ReportBuilder({ reportTypes, hrefPrefix = '' }: Props) {
     setEmails((arr) => (arr.includes(e) ? arr : [...arr, e]));
     setEmailDraft('');
   }
+  function removeEmail(email: string) { setEmails((arr) => arr.filter((x) => x !== email)); }
 
   function reportHref(): string | null {
     if (!def) return null;
     const qs = new URLSearchParams();
-    for (const [k, v] of Object.entries(dims)) if (v) qs.set(k, v);
-    if (schedule !== 'once') qs.set('schedule', schedule);
-    if (emails.length) qs.set('email', emails.join(','));
+    if (schedule !== 'once')    qs.set('schedule', schedule);
+    if (emails.length)          qs.set('email', emails.join(','));
     const baseHref = hrefPrefix
-      ? def.hrefBase.replace(/^\/revenue\//, hrefPrefix.replace(/\/$/, '') + '/revenue/').replace(/^\/h\/\d+\/revenue\//, hrefPrefix.replace(/\/$/, '') + '/revenue/')
+      ? def.hrefBase.replace(/^\/revenue\//, hrefPrefix.replace(/\/$/, '') + '/revenue/')
+                    .replace(/^\/h\/\d+\/revenue\//, hrefPrefix.replace(/\/$/, '') + '/revenue/')
       : def.hrefBase;
     const sep = baseHref.includes('?') ? '&' : '?';
-    const query = qs.toString();
-    return query ? `${baseHref}${sep}${query}` : baseHref;
+    const q   = qs.toString();
+    return q ? `${baseHref}${sep}${q}` : baseHref;
   }
-
   const href = reportHref();
-  const dimSummary = def
-    ? def.dimGroups.map((g) => `${g.label}=${dims[g.key] ?? '—'}`).join(' · ')
-    : '';
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, minmax(0, 1fr))', gap: 12, alignItems: 'start' }}>
-      {/* Report type chooser — full row */}
-      <div style={{ gridColumn: '1 / -1' }}>
-        <div style={labelStyle}>Report type</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 6 }}>
-          {stdTypes.map((rt) => (
-            <button
-              key={rt.value}
-              type="button"
-              onClick={() => { setReportType(rt.value); setDims({}); }}
-              style={chipStyle(reportType === rt.value)}
-            >
-              {rt.label}
+    <div style={rootStyle}>
+      <div style={rowStyle}>
+        <label style={labelInlineStyle}>Report</label>
+        <select value={reportType} onChange={(e) => setReportType(e.target.value)} style={selectStyle}>
+          {reportTypes.map((rt) => (
+            <option key={rt.value} value={rt.value}>{rt.label}</option>
+          ))}
+        </select>
+
+        <span style={dividerStyle} />
+
+        <label style={labelInlineStyle}>Schedule</label>
+        <div style={chipRowStyle}>
+          {SCHEDULES.map((s) => (
+            <button key={s.value} type="button" onClick={() => setSchedule(s.value)}
+                    style={chipStyle(schedule === s.value)}>
+              {s.label}
             </button>
           ))}
         </div>
-        {allType && (
-          <button
-            type="button"
-            onClick={() => { setReportType(allType.value); setDims({}); }}
-            style={{ ...chipStyle(reportType === allType.value), width: '100%', marginTop: 6 }}
-          >
-            {allType.label} — full revenue snapshot
-          </button>
+
+        <span style={dividerStyle} />
+
+        <label style={labelInlineStyle}>Email</label>
+        <div style={emailWrapStyle}>
+          {emails.map((e) => (
+            <span key={e} style={emailChipStyle}>
+              {e}<button type="button" onClick={() => removeEmail(e)} style={xBtnStyle} aria-label={`remove ${e}`}>×</button>
+            </span>
+          ))}
+          <input
+            type="email" value={emailDraft} onChange={(e) => setEmailDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addEmail(emailDraft); } }}
+            placeholder="name@hotel.com — Enter or , to add"
+            style={inputStyle} aria-label="email address"
+          />
+          <button type="button" onClick={() => addEmail(emailDraft)} disabled={!emailDraft.trim()} style={secondaryBtnStyle}>Add</button>
+        </div>
+
+        <span style={dividerStyle} />
+
+        {href ? (
+          <a href={href} target="_blank" rel="noopener noreferrer" style={primaryBtnStyle}>Open report →</a>
+        ) : (
+          <span style={{ ...primaryBtnStyle, opacity: 0.4, cursor: 'not-allowed' }}>Open report →</span>
         )}
       </div>
 
-      {def && (
-        <>
-          {/* Dimensions — left 7 cols on wide, full on narrow */}
-          <div style={{ gridColumn: 'span 12', borderTop: '1px solid var(--hairline, #E6DFCC)', paddingTop: 10 }}>
-            <div style={hintStyle}>
-              Narrow down — these are the dimensions <strong>{def.label}</strong> accepts.
-              Click a chip to set, click again to clear (defaults apply).
-            </div>
-            {def.dimGroups.map((g) => (
-              <div key={g.key} style={{ marginTop: 8 }}>
-                <div style={labelStyle}>{g.label}</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {g.options.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => pickDim(g.key, opt.value)}
-                      style={chipStyle(dims[g.key] === opt.value)}
-                    >{opt.label}</button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Schedule — 6 cols on wide, full on narrow */}
-          <div style={{ gridColumn: 'span 6', borderTop: '1px solid var(--hairline, #E6DFCC)', paddingTop: 10 }}>
-            <div style={labelStyle}>Schedule</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {SCHEDULES.map((s) => (
-                <button
-                  key={s.value}
-                  type="button"
-                  onClick={() => setSchedule(s.value)}
-                  style={chipStyle(schedule === s.value)}
-                >{s.label}</button>
-              ))}
-            </div>
-            {schedule !== 'once' && (
-              <div style={{ ...hintStyle, marginTop: 6 }}>
-                Recurring delivery will land in My Docs · server-side persistence is owed by pair-Claude.
-              </div>
-            )}
-          </div>
-
-          {/* Email recipients — 6 cols on wide, full on narrow */}
-          <div style={{ gridColumn: 'span 6', borderTop: '1px solid var(--hairline, #E6DFCC)', paddingTop: 10 }}>
-            <div style={labelStyle}>Email delivery <span style={{ fontWeight: 400, color: 'var(--ink-soft, #5A5A5A)' }}>(optional)</span></div>
-            {emails.length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
-                {emails.map((e) => (
-                  <span key={e} style={emailChipStyle}>
-                    ✉ {e}
-                    <button
-                      type="button"
-                      aria-label={`Remove ${e}`}
-                      onClick={() => setEmails((arr) => arr.filter((x) => x !== e))}
-                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--ink-soft, #5A5A5A)', padding: 0, fontSize: 12 }}
-                    >×</button>
-                  </span>
-                ))}
-              </div>
-            )}
-            <div style={{ display: 'flex', gap: 6 }}>
-              <input
-                type="email"
-                value={emailDraft}
-                onChange={(e) => setEmailDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ',') {
-                    e.preventDefault();
-                    addEmail(emailDraft);
-                  }
-                  if (e.key === 'Backspace' && !emailDraft && emails.length > 0) {
-                    setEmails((arr) => arr.slice(0, -1));
-                  }
-                }}
-                placeholder="name@hotel.com — Enter / comma to add"
-                style={inputStyle}
-              />
-              <button type="button" onClick={() => addEmail(emailDraft)} style={addBtnStyle}>Add</button>
-            </div>
-          </div>
-
-          {/* Open button — full row */}
-          <div style={{ gridColumn: '1 / -1', borderTop: '1px solid var(--hairline, #E6DFCC)', paddingTop: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            {href ? (
-              <a href={href} target="_blank" rel="noopener noreferrer" style={openBtnStyle}>
-                Open report →
-              </a>
-            ) : (
-              <button type="button" disabled style={{ ...openBtnStyle, opacity: 0.4, cursor: 'not-allowed' }}>
-                Pick a type
-              </button>
-            )}
-            {def && <span style={{ fontSize: 11, color: 'var(--ink-soft, #5A5A5A)' }}>{dimSummary}</span>}
-          </div>
-        </>
-      )}
+      <div style={hintStyle}>
+        Window=— · Compare=— · defaults apply from URL
+      </div>
     </div>
   );
 }
 
-const labelStyle: React.CSSProperties = {
-  fontSize: 11,
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase',
-  fontWeight: 600,
-  color: 'var(--ink-soft, #5A5A5A)',
-  marginBottom: 6,
+// ─── Styles: compact single-row primitive ─────────────────────────
+
+const rootStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 6 };
+const rowStyle: CSSProperties = {
+  display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap',
+  padding: '8px 10px', background: '#FFFFFF', border: '1px solid #E6DFCC', borderRadius: 6,
 };
-const hintStyle: React.CSSProperties = {
-  fontSize: 11,
-  color: 'var(--ink-soft, #5A5A5A)',
-  fontStyle: 'italic',
+const labelInlineStyle: CSSProperties = {
+  fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+  color: '#5A5A5A',
 };
-function chipStyle(active: boolean): React.CSSProperties {
+const selectStyle: CSSProperties = {
+  padding: '4px 8px', border: '1px solid #E6DFCC', borderRadius: 4,
+  fontSize: 12, background: '#FFFFFF', color: '#1B1B1B', fontFamily: 'inherit', minWidth: 140,
+};
+const chipRowStyle: CSSProperties = { display: 'flex', gap: 4 };
+function chipStyle(active: boolean): CSSProperties {
   return {
-    padding: '6px 12px',
-    borderRadius: 99,
-    border: `1px solid ${active ? 'var(--primary, #1F3A2E)' : 'var(--hairline, #E6DFCC)'}`,
-    background: active ? 'var(--primary, #1F3A2E)' : 'var(--paper, #FFFFFF)',
-    color: active ? '#FFFFFF' : 'var(--ink, #1B1B1B)',
-    fontSize: 12,
-    fontWeight: active ? 600 : 500,
-    cursor: 'pointer',
+    padding: '4px 10px', border: `1px solid ${active ? '#084838' : '#E6DFCC'}`,
+    background: active ? '#084838' : '#FFFFFF', color: active ? '#FFFFFF' : '#5A5A5A',
+    borderRadius: 4, fontSize: 11, fontWeight: active ? 700 : 500, cursor: 'pointer',
     fontFamily: 'inherit',
   };
 }
-const emailChipStyle: React.CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 6,
-  background: 'var(--paper, #FFFFFF)',
-  border: '1px solid var(--hairline, #E6DFCC)',
-  borderRadius: 99,
-  padding: '3px 10px',
-  fontSize: 11,
+const emailWrapStyle: CSSProperties = { display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' };
+const emailChipStyle: CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: 4,
+  padding: '2px 4px 2px 8px', background: '#FAFAF7', border: '1px solid #E6DFCC',
+  borderRadius: 12, fontSize: 11, color: '#1B1B1B',
 };
-const inputStyle: React.CSSProperties = {
-  flex: 1,
-  padding: '7px 10px',
-  border: '1px solid var(--hairline, #E6DFCC)',
-  borderRadius: 4,
-  fontSize: 12,
-  background: 'var(--paper, #FFFFFF)',
-  color: 'var(--ink, #1B1B1B)',
-  fontFamily: 'inherit',
+const xBtnStyle: CSSProperties = {
+  padding: '0 4px', border: 'none', background: 'transparent',
+  color: '#5A5A5A', cursor: 'pointer', fontSize: 14, lineHeight: 1,
 };
-const addBtnStyle: React.CSSProperties = {
-  padding: '7px 14px',
-  border: '1px solid var(--hairline, #E6DFCC)',
-  borderRadius: 4,
-  background: 'var(--paper, #FFFFFF)',
-  color: 'var(--ink, #1B1B1B)',
-  fontSize: 12,
-  cursor: 'pointer',
-  fontFamily: 'inherit',
+const inputStyle: CSSProperties = {
+  padding: '4px 8px', border: '1px solid #E6DFCC', borderRadius: 4,
+  fontSize: 12, background: '#FFFFFF', color: '#1B1B1B', minWidth: 220, fontFamily: 'inherit',
 };
-const openBtnStyle: React.CSSProperties = {
-  display: 'inline-block',
-  padding: '10px 18px',
-  background: 'var(--primary, #1F3A2E)',
-  color: '#FFFFFF',
-  border: 'none',
-  borderRadius: 4,
-  fontSize: 12,
-  fontWeight: 600,
-  letterSpacing: '0.06em',
-  textTransform: 'uppercase',
-  textDecoration: 'none',
-  cursor: 'pointer',
+const secondaryBtnStyle: CSSProperties = {
+  padding: '4px 10px', border: '1px solid #E6DFCC', background: '#FFFFFF', color: '#1B1B1B',
+  borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+};
+const primaryBtnStyle: CSSProperties = {
+  padding: '6px 14px', border: '1px solid #084838', background: '#084838', color: '#FFFFFF',
+  borderRadius: 4, fontSize: 12, fontWeight: 700, textDecoration: 'none',
+  fontFamily: 'inherit', letterSpacing: '0.04em',
+};
+const dividerStyle: CSSProperties = { width: 1, height: 20, background: '#E6DFCC' };
+const hintStyle: CSSProperties = {
+  fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase',
+  color: '#5A5A5A', paddingLeft: 10,
 };
