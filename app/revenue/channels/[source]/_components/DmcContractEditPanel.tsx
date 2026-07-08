@@ -14,7 +14,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { Container } from '@/app/(cockpit)/_design';
 import type { DmcContract } from '@/lib/dmc';
 
@@ -144,7 +144,7 @@ export default function DmcContractEditPanel({ contract: c }: Props) {
           ) : (
             <span style={{ ...pdfBtnStyle, opacity: 0.5, cursor: 'not-allowed' }}>📄 No PDF on file</span>
           )}
-          <Link href="/sales/b2b" style={pdfBtnStyle}>🏢 B2B</Link>
+          <TenantLink href="/sales/b2b" style={pdfBtnStyle}>🏢 B2B</TenantLink>
           {!editing ? (
             <button type="button" onClick={() => setEditing(true)} style={editBtnStyle}>✎ Edit</button>
           ) : (
@@ -378,7 +378,7 @@ export default function DmcContractEditPanel({ contract: c }: Props) {
           </Field>
 
           <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
-            Saved fields write to <code>governance.dmc_contracts</code>. PDF / signed-document fields are managed via <Link href="/legal/docs" style={{ color: 'var(--brass)' }}>Legal · Documents</Link>.
+            Saved fields write to <code>governance.dmc_contracts</code>. PDF / signed-document fields are managed via <TenantLink href="/legal/docs" style={{ color: 'var(--brass)' }}>Legal · Documents</TenantLink>.
           </div>
         </div>
       )}
