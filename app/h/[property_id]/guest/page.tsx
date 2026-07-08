@@ -4,7 +4,7 @@
 // the Contacts sub-strip renders identically to Namkhan.
 
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 import { NAMKHAN_PROPERTY_ID } from '@/lib/dept-cfg/by-property';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -36,11 +36,11 @@ export default async function DonnaContactsHod({
             <KpiTile label="Reservations recorded" value={resCount ?? '—'} />
           </div>
           <p style={{ marginTop: 16, fontSize: 12, color: '#5A5A5A' }}>
-            Use the sub-tabs above to open <Link href={`/h/${propertyId}/guest/directory`} style={{ color: '#0B3B2E' }}>Guests</Link>,{' '}
-            <Link href={`/h/${propertyId}/guest/prospects`} style={{ color: '#0B3B2E' }}>Prospects</Link>,{' '}
-            <Link href={`/h/${propertyId}/guest/reputation`} style={{ color: '#0B3B2E' }}>Reputation</Link>,{' '}
-            <Link href={`/h/${propertyId}/guest/behaviour`} style={{ color: '#0B3B2E' }}>Behaviour</Link>, or{' '}
-            <Link href={`/h/${propertyId}/guest/newsletters`} style={{ color: '#0B3B2E' }}>Newsletters</Link>.
+            Use the sub-tabs above to open <TenantLink href={`/h/${propertyId}/guest/directory`} style={{ color: '#0B3B2E' }}>Guests</TenantLink>,{' '}
+            <TenantLink href={`/h/${propertyId}/guest/prospects`} style={{ color: '#0B3B2E' }}>Prospects</TenantLink>,{' '}
+            <TenantLink href={`/h/${propertyId}/guest/reputation`} style={{ color: '#0B3B2E' }}>Reputation</TenantLink>,{' '}
+            <TenantLink href={`/h/${propertyId}/guest/behaviour`} style={{ color: '#0B3B2E' }}>Behaviour</TenantLink>, or{' '}
+            <TenantLink href={`/h/${propertyId}/guest/newsletters`} style={{ color: '#0B3B2E' }}>Newsletters</TenantLink>.
           </p>
         </Container>
       </div>
