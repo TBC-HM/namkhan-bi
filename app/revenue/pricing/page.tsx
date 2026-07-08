@@ -256,13 +256,34 @@ export default async function PricingPage({ searchParams, propertyId }: { search
     return { date, room, rate: Math.round(rate) };
   });
 
-  const allRates = inventory.map((r) => Number(r.rate) || 0).filter((x) => x >= RATE_MIN);
-  const avgRate = allRates.length > 0 ? allRates.reduce((a, b) => a + b, 0) / allRates.length : 0;
-  const minRate = allRates.length > 0 ? Math.min(...allRates) : 0;
-  const maxRate = allRates.length > 0 ? Math.max(...allRates) : 0;
+  // PBS 2026-07-08 audit: filter stop_sell=false BEFORE aggregating (single stray
+  // dev rate under a closed cell used to leak into Ceiling / BAR floor). Also,
+  // stop-sell + MinLOS counts must be de-duplicated to the (date, room) level so
+  // the numbers match what a manager sees on the calendar heatmap — the raw
+  // rate_inventory table has one row per (date, room, rate_plan), so counting
+  // rows over-inflates by ~10x (there are ~10 rate plans per room).
+  const sellableRates = inventory
+    .filter((r) => !r.stop_sell)
+    .map((r) => Number(r.rate) || 0)
+    .filter((x) => x >= RATE_MIN);
+  const avgRate = sellableRates.length > 0 ? sellableRates.reduce((a, b) => a + b, 0) / sellableRates.length : 0;
+  const minRate = sellableRates.length > 0 ? Math.min(...sellableRates) : 0;
+  const maxRate = sellableRates.length > 0 ? Math.max(...sellableRates) : 0;
   const totalInv = inventory.length;
-  const stopSells = inventory.filter((r) => r.stop_sell).length;
-  const minStayRows = inventory.filter((r) => (Number(r.minimum_stay) || 0) > 1).length;
+  const stopSellDays = new Set<string>();
+  const minLosDays = new Set<string>();
+  for (const r of inventory) {
+    const dateKey = String((r as unknown as Record<string, unknown>).inventory_date ?? '').slice(0, 10);
+    const key = `${dateKey}|${r.room_type_id}`;
+    if (r.stop_sell) stopSellDays.add(key);
+    if ((Number(r.minimum_stay) || 0) > 1) minLosDays.add(key);
+  }
+  const stopSells = stopSellDays.size;
+  const minStayRows = minLosDays.size;
+  // window span (days) so footnotes state the actual horizon
+  const winDays = Math.max(1, Math.round(
+    (new Date(period.to).getTime() - new Date(period.from).getTime()) / 86400000
+  ));
 
   const k = todayKpis;
   const compGap = (k.barToday != null && k.compMedian != null) ? k.barToday - k.compMedian : null;
@@ -289,27 +310,51 @@ export default async function PricingPage({ searchParams, propertyId }: { search
     return { date, room, rate: Math.round(rate) };
   });
 
+  // PBS 2026-07-08 audit — every label & footnote rewritten so a revenue manager
+  // sees (a) what the number IS and (b) where it comes from. Comp gap now shows
+  // "—" when compset has no rows for today (was silently rendering 0 = "we're
+  // even with the comp set", which is the wrong story). Stop-sell / MinLOS
+  // counts are room-days (matches heatmap), not raw rate_inventory rows.
   const actionableTiles: KpiTileProps[] = [
-    { label: 'Current BAR', value: k.barToday != null ? Math.round(k.barToday) : 0, currency: moneyCurrency, size: 'sm',
-      footnote: k.barToday != null ? "today's lowest sellable" : `rate_inventory · today · rate ≥ ${currencySym}10`,
+    { label: 'BAR today', value: k.barToday != null ? Math.round(k.barToday) : '—', currency: moneyCurrency, size: 'sm',
+      footnote: k.barToday != null
+        ? `lowest sellable rate today · rate_inventory (${currencySym}${Math.round(k.barToday)})`
+        : `no sellable rate posted today (rate_inventory · rate ≥ ${currencySym}10 · stop_sell=false)`,
       status: k.barToday != null ? 'green' : 'grey' },
-    { label: 'Comp gap', value: compGap != null ? Math.round(compGap) : 0, currency: moneyCurrency, size: 'sm',
-      footnote: `BAR − median comp · ${k.compRows ?? 0} comps`,
+    { label: 'Comp gap',
+      value: compGap != null ? Math.round(compGap) : '—',
+      currency: moneyCurrency, size: 'sm',
+      footnote: compGap != null
+        ? `BAR ${currencySym}${Math.round(k.barToday!)} − comp median ${currencySym}${Math.round(k.compMedian!)} · ${k.compRows} comp rows today`
+        : `no comp rows scraped for today · v_compset_competitor_rate_matrix`,
       status: compGap == null ? 'grey' : compGap >= 0 ? 'green' : 'amber' },
-    { label: 'Occupancy fence', value: k.occPctToday != null ? `${k.occPctToday.toFixed(0)}%` : '—', size: 'sm',
-      footnote: `${k.roomsSold ?? 0} / ${capacity} sold`,
+    { label: 'OCC today', value: k.occPctToday != null ? `${Math.round(k.occPctToday)}%` : '—', size: 'sm',
+      footnote: k.occPctToday != null
+        ? `${k.roomsSold ?? 0} sold ÷ ${capacity} sellable units · ${propertyLabel}`
+        : `no rooms_sold row for today · v_kpi_daily`,
       status: k.occPctToday != null ? 'green' : 'grey' },
-    { label: 'Sellable · 14d', value: k.sellable14d ?? 0, size: 'sm',
-      footnote: 'next 14d · stop_sell=false',
+    { label: 'Sellable 14d', value: k.sellable14d ?? 0, size: 'sm',
+      footnote: `open (date × room × rate-plan) cells · next 14d · stop_sell=false · rate ≥ ${currencySym}10`,
       status: (k.sellable14d ?? 0) > 0 ? 'green' : 'grey' },
   ];
 
+  const windowLabel = `+${winDays}d`;
   const windowTiles: KpiTileProps[] = [
-    { label: 'Avg rate', value: Math.round(avgRate), currency: moneyCurrency, size: 'sm', footnote: 'mean · window', status: avgRate > 0 ? 'green' : 'grey' },
-    { label: 'BAR floor', value: Math.round(minRate), currency: moneyCurrency, size: 'sm', footnote: 'lowest sellable · window', status: minRate > 0 ? 'green' : 'grey' },
-    { label: 'Ceiling', value: Math.round(maxRate), currency: moneyCurrency, size: 'sm', footnote: 'highest rate · window', status: maxRate > 0 ? 'green' : 'grey' },
-    { label: 'Stop-sell cells', value: stopSells, size: 'sm', footnote: 'room × day combos blocked for sale · in window', status: stopSells > 0 ? 'amber' : 'green' },
-    { label: 'MinLOS cells', value: minStayRows, size: 'sm', footnote: 'room × day combos with min-stay > 1 night · in window', status: minStayRows > 0 ? 'amber' : 'green' },
+    { label: 'Avg posted', value: Math.round(avgRate), currency: moneyCurrency, size: 'sm',
+      footnote: `mean of every open rate cell · ${windowLabel} · sellable only`,
+      status: avgRate > 0 ? 'green' : 'grey' },
+    { label: 'BAR floor', value: Math.round(minRate), currency: moneyCurrency, size: 'sm',
+      footnote: `cheapest open rate in ${windowLabel} (${currencySym}${Math.round(minRate)}) · sellable only`,
+      status: minRate > 0 ? 'green' : 'grey' },
+    { label: 'BAR ceiling', value: Math.round(maxRate), currency: moneyCurrency, size: 'sm',
+      footnote: `dearest open rate in ${windowLabel} (${currencySym}${Math.round(maxRate)}) · sellable only`,
+      status: maxRate > 0 ? 'green' : 'grey' },
+    { label: 'Stop-sell days', value: stopSells, size: 'sm',
+      footnote: `room × day combos closed to sale · ${windowLabel} · rate_inventory.stop_sell=true`,
+      status: stopSells > 0 ? 'amber' : 'green' },
+    { label: 'MinLOS days', value: minStayRows, size: 'sm',
+      footnote: `room × day combos with min-stay > 1 · ${windowLabel} · rate_inventory.minimum_stay`,
+      status: minStayRows > 0 ? 'amber' : 'green' },
   ];
 
   // ── #138: 30-day calendar with arrow nav (URL ?off=0/30/60/90) ──────────
@@ -428,22 +473,6 @@ export default async function PricingPage({ searchParams, propertyId }: { search
           </div>
         </Container>
       </div>
-
-      {/* PBS 2026-07-08: OCC × BAR combo moved up here from the bottom — it's the
-          "at-a-glance" pricing-vs-demand read that belongs near the KPI tiles. */}
-      <div style={fullRow}>
-        <Container title="OCC × BAR · next 30 days" subtitle="bar: base sellable rate · line: forward OCC % per day — spot pricing gaps where high OCC meets low BAR (or vice-versa)">
-          <Chart variant="combo" data={occRateRows} xKey="day"
-            series={[
-              { key: 'rate', label: `BAR (${moneyCurrency})`, type: 'bar' },
-              { key: 'occ',  label: 'OCC %',     type: 'line' },
-            ]}
-            height={280}
-            empty={{ title: 'No 30d rate data' }}
-          />
-        </Container>
-      </div>
-
       <WindowPills win={win} basePath={basePath} />
 
       <div style={fullRow}>
@@ -493,6 +522,18 @@ export default async function PricingPage({ searchParams, propertyId }: { search
         </Container>
       </div>
 
+      <div style={fullRow}>
+        <Container title="OCC × BAR · next 30 days" subtitle="bar: base sellable rate · line: forward OCC % per day — spot pricing gaps where high OCC meets low BAR (or vice-versa)">
+          <Chart variant="combo" data={occRateRows} xKey="day"
+            series={[
+              { key: 'rate', label: `BAR (${moneyCurrency})`, type: 'bar' },
+              { key: 'occ',  label: 'OCC %',     type: 'line' },
+            ]}
+            height={280}
+            empty={{ title: 'No 30d rate data' }}
+          />
+        </Container>
+      </div>
     </DashboardPage>
   );
 }
