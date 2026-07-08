@@ -12,7 +12,7 @@
 //   POST /api/compset/scoring/draft     -> compset_create_scoring_config_draft
 //   POST /api/compset/scoring/activate  -> compset_activate_scoring_config
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import Page from '@/components/page/Page';
 import { REVENUE_SUBPAGES } from '../../_subpages';
 import StatusPill from '@/components/ui/StatusPill';
@@ -112,7 +112,7 @@ export default async function ScoringSettingsPage() {
       eyebrow="Revenue · Comp Set · Scoring"
       title={<>Tune the <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>weights</em>, change what the agent shops.</>}
       subPages={REVENUE_SUBPAGES}
-      topRight={<Link href="/revenue/compset" style={backLinkStyle}>← BACK TO COMP SET</Link>}
+      topRight={<TenantLink href="/revenue/compset" style={backLinkStyle}>← BACK TO COMP SET</TenantLink>}
     >
 
       {/* STATUS ROW */}
