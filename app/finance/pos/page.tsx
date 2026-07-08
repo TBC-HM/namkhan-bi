@@ -18,7 +18,7 @@
 // Data: every aggregation is a Postgres RPC (poster_*). The page reads
 // only what it renders; no client-side aggregation of receipt lines.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, Container } from '@/app/(cockpit)/_design';
 
 import KpiBox from '@/components/kpi/KpiBox';
@@ -255,9 +255,9 @@ export default async function PosControllerPage({ searchParams }: Props) {
 
       <div style={{ marginTop: 16, fontSize: 'var(--t-xs)', color: 'var(--ink-mute)', textAlign: 'right' }}>
         Legacy tabs deprecated:{' '}
-        <Link href="/finance/pos?win=last30d" style={{ color: 'var(--brass)' }}>POS · PMS</Link>{' '}
+        <TenantLink href="/finance/pos?win=last30d" style={{ color: 'var(--brass)' }}>POS · PMS</TenantLink>{' '}
         +{' '}
-        <Link href="/finance/pos?win=last30d" style={{ color: 'var(--brass)' }}>POS · Poster</Link>{' '}
+        <TenantLink href="/finance/pos?win=last30d" style={{ color: 'var(--brass)' }}>POS · Poster</TenantLink>{' '}
         merged into this page (PBS 2026-05-15).
       </div>
       </div>
