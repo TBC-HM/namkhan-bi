@@ -428,6 +428,22 @@ export default async function PricingPage({ searchParams, propertyId }: { search
           </div>
         </Container>
       </div>
+
+      {/* PBS 2026-07-08: OCC × BAR combo moved up here from the bottom — it's the
+          "at-a-glance" pricing-vs-demand read that belongs near the KPI tiles. */}
+      <div style={fullRow}>
+        <Container title="OCC × BAR · next 30 days" subtitle="bar: base sellable rate · line: forward OCC % per day — spot pricing gaps where high OCC meets low BAR (or vice-versa)">
+          <Chart variant="combo" data={occRateRows} xKey="day"
+            series={[
+              { key: 'rate', label: `BAR (${moneyCurrency})`, type: 'bar' },
+              { key: 'occ',  label: 'OCC %',     type: 'line' },
+            ]}
+            height={280}
+            empty={{ title: 'No 30d rate data' }}
+          />
+        </Container>
+      </div>
+
       <WindowPills win={win} basePath={basePath} />
 
       <div style={fullRow}>
@@ -477,18 +493,6 @@ export default async function PricingPage({ searchParams, propertyId }: { search
         </Container>
       </div>
 
-      <div style={fullRow}>
-        <Container title="OCC × BAR · next 30 days" subtitle="bar: base sellable rate · line: forward OCC % per day — spot pricing gaps where high OCC meets low BAR (or vice-versa)">
-          <Chart variant="combo" data={occRateRows} xKey="day"
-            series={[
-              { key: 'rate', label: `BAR (${moneyCurrency})`, type: 'bar' },
-              { key: 'occ',  label: 'OCC %',     type: 'line' },
-            ]}
-            height={280}
-            empty={{ title: 'No 30d rate data' }}
-          />
-        </Container>
-      </div>
     </DashboardPage>
   );
 }
