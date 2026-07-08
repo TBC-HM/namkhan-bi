@@ -1,4 +1,13 @@
 // app/revenue/demand/page.tsx
+// 2026-07-08 — header re-alignment to canonical revenue pattern
+//   (Pulse / Pace / Cancellations parity):
+//   · DashboardPage now carries a subtitle (was empty)
+//   · forward-window pill row lifted OUT of the OTB headline Container
+//     into a bare row (mirrors /revenue/cancellations pattern)
+//   · pill styling hardcoded #FFF/#E6DFCC/#1F3A2E per token-ladder feedback
+//     (was var(--primary)/var(--paper)/var(--hairline) → Namkhan dark bug)
+//   · KPI tile grids normalized to minmax(160px, 1fr) gap 8 (was 180/12)
+//   · body containers and data queries unchanged
 // 2026-06-07 (#103) — full audit pass per PBS:
 //   · property-aware currency (Donna EUR / Namkhan USD) — was hardcoded USD/$ in 7 spots
 //   · country normalization via silver guest_country_iso2 + ISO2 → display label map
@@ -286,26 +295,36 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
   return (
     <DashboardPage
       title="Revenue · Demand"
+      subtitle={`Forward pace vs STLY · ${period.label}`}
       tabs={tabs}
     >
+      {/* PBS 2026-07-08: header aligned to Pulse / Pace / Cancellations canonical pattern.
+          Row A = forward-window pill row (hardcoded #FFF/#E6DFCC/#1F3A2E per token-ladder rule).
+          Row B = OTB headline strip (Container, density='compact', 160px min / 8px gap).
+          Row C = Pace-signals strip (same tile geometry, same Container density). */}
+      <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#5A5A5A', marginRight: 4 }}>Forward window:</span>
+        {winOptions.map((o) => {
+          const active = o.k === period.win;
+          return (
+            <a key={o.k} href={hrefFor(o.k)} style={{
+              fontFamily: 'inherit',
+              fontSize: 11,
+              padding: '4px 10px',
+              borderRadius: 99,
+              border: `1px solid ${active ? '#1F3A2E' : '#E6DFCC'}`,
+              background: active ? '#1F3A2E' : '#FFFFFF',
+              color: active ? '#FFFFFF' : '#5A5A5A',
+              fontWeight: active ? 600 : 500,
+              textDecoration: 'none',
+            }}>{o.label}</a>
+          );
+        })}
+      </div>
+
       <div style={fullRow}>
         <Container title="OTB headline" subtitle={`forward window · ${period.label}`} density="compact">
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}>
-            {winOptions.map((o) => {
-              const active = o.k === period.win;
-              return (
-                <a key={o.k} href={hrefFor(o.k)} style={{
-                  fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase',
-                  padding: '4px 10px', borderRadius: 99,
-                  border: `1px solid ${active ? 'var(--primary, #1F3A2E)' : 'var(--hairline, #E6DFCC)'}`,
-                  background: active ? 'var(--primary, #1F3A2E)' : 'var(--paper, #FFFFFF)',
-                  color: active ? '#FFFFFF' : 'var(--ink-soft, #5A5A5A)',
-                  fontWeight: active ? 600 : 500, textDecoration: 'none',
-                }}>{o.label}</a>
-              );
-            })}
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
             {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
           </div>
         </Container>
@@ -313,7 +332,7 @@ export default async function DemandPage({ searchParams, propertyId }: Props = {
 
       <div style={fullRow}>
         <Container title="Pace signals" subtitle="where the year is ahead vs behind STLY" density="compact">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
             {signals.map((t, i) => <KpiTile key={i} {...t} />)}
           </div>
         </Container>
