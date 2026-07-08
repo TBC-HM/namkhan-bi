@@ -1,36 +1,249 @@
 // app/h/[property_id]/operations/spa/page.tsx
-// PBS 2026-07-08: swapped from legacy <Page> to DashboardPage so both the
-// operations top strip AND the department sub-strip render from NAV_SUBGROUPS.
-// Namkhan (260955) redirects to its rich /operations/spa page.
+// PBS 2026-07-08 (Helper I) — Donna Spa ops. Reads Other Operated/Spa slice
+// of gold views scoped to property_id=1000001. EUR currency. Namkhan redirects.
 
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
+import { DashboardPage, Container, KpiTile, type KpiTileProps, type DashboardTab } from '@/app/(cockpit)/_design';
 import { OPERATIONS_SUBPAGES } from '@/app/operations/_subpages';
 import { NAMKHAN_PROPERTY_ID } from '@/lib/dept-cfg/by-property';
+import { supabase } from '@/lib/supabase';
 
+export const revalidate = 60;
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
 
-export default function DonnaSpaPage({ params }: { params: { property_id: string } }) {
+interface Props {
+  params: { property_id: string };
+  searchParams: Record<string, string | string[] | undefined>;
+}
+
+const fmtEurStr = (n: number) => `€${Math.round(Number(n) || 0).toLocaleString('en-GB')}`;
+const fmtInt = (n: number) => `${Math.round(Number(n) || 0).toLocaleString('en-GB')}`;
+const fmtPct = (n: number) => `${(Number(n) || 0).toFixed(1)}%`;
+
+const monthLabel = (yyyymm: string): string => {
+  const [y, m] = yyyymm.split('-').map(Number);
+  if (!y || !m) return yyyymm;
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
+};
+
+function MonthlyBars({ rows, colorRev = '#a8854a' }: { rows: Array<{ period: string; value: number }>; colorRev?: string }) {
+  if (rows.length === 0) return <div style={{ padding: 20, fontSize: 13, color: '#5A5A5A' }}>No monthly data.</div>;
+  const maxRev = Math.max(...rows.map(r => r.value), 1);
+  const barW = 40, gap = 24, chartH = 180, padT = 20, padB = 30;
+  const width = rows.length * (barW + gap) + gap;
+  return (
+    <div style={{ overflowX: 'auto', paddingTop: 8, paddingBottom: 8 }}>
+      <svg width={width} height={chartH + padT + padB} style={{ display: 'block' }}>
+        {rows.map((r, i) => {
+          const x = gap + i * (barW + gap);
+          const h = (r.value / maxRev) * chartH;
+          const y = padT + chartH - h;
+          return (
+            <g key={r.period}>
+              <rect x={x} y={y} width={barW} height={h} fill={colorRev} />
+              <text x={x + barW / 2} y={padT + chartH + 14} textAnchor="middle" fontSize="10" fill="#5A5A5A">
+                {monthLabel(r.period)}
+              </text>
+              <text x={x + barW / 2} y={y - 4} textAnchor="middle" fontSize="10" fill="#000" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace">
+                {fmtEurStr(r.value)}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+interface TopSellerRow { description: string; subdept: string | null; revStr: string; units: number; lastSold: string | null; }
+function TopSellerTable({ rows }: { rows: TopSellerRow[] }) {
+  if (rows.length === 0) return <div style={{ padding: 20, fontSize: 13, color: '#5A5A5A' }}>No sellers found.</div>;
+  const th: React.CSSProperties = { textAlign: 'left', padding: '8px 10px', borderBottom: '1px solid #000', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#5A5A5A' };
+  const thR: React.CSSProperties = { ...th, textAlign: 'right' };
+  const td: React.CSSProperties = { padding: '8px 10px', borderBottom: '1px solid #F0F0F0', fontSize: 13, color: '#000' };
+  const tdR: React.CSSProperties = { ...td, textAlign: 'right', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' };
+  return (
+    <div style={{ overflowX: 'auto', border: '1px solid #E0E0E0', borderRadius: 6 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', background: '#FFFFFF' }}>
+        <thead>
+          <tr>
+            <th style={th}>#</th>
+            <th style={th}>Description</th>
+            <th style={thR}>Revenue (€)</th>
+            <th style={thR}>Units</th>
+            <th style={thR}>Last sold</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={r.description + i}>
+              <td style={td}>{i + 1}</td>
+              <td style={td}>{r.description}</td>
+              <td style={tdR}>{r.revStr}</td>
+              <td style={tdR}>{fmtInt(r.units)}</td>
+              <td style={tdR}>{r.lastSold ?? '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export default async function DonnaSpaPage({ params, searchParams }: Props) {
   const propertyId = Number(params.property_id);
   if (propertyId === NAMKHAN_PROPERTY_ID) redirect('/operations/spa');
 
+  const opPeriodRaw = typeof searchParams.op === 'string' ? searchParams.op : '30d';
+  const opPeriod = (['yesterday', '7d', '30d', 'ytd'].includes(opPeriodRaw) ? opPeriodRaw : '30d') as 'yesterday' | '7d' | '30d' | 'ytd';
+  const opToday = new Date(); opToday.setUTCHours(0, 0, 0, 0);
+  const opToIso = opToday.toISOString().slice(0, 10);
+  const opFromIso = (() => {
+    const d = new Date(opToday);
+    if (opPeriod === 'yesterday') { d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); }
+    if (opPeriod === '7d') { d.setUTCDate(d.getUTCDate() - 6); return d.toISOString().slice(0, 10); }
+    if (opPeriod === '30d') { d.setUTCDate(d.getUTCDate() - 29); return d.toISOString().slice(0, 10); }
+    return `${opToday.getUTCFullYear()}-01-01`;
+  })();
+  const opEndIso = opPeriod === 'yesterday'
+    ? (() => { const d = new Date(opToday); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); })()
+    : opToIso;
+  const opLabel = opPeriod === 'yesterday' ? 'Yesterday' : opPeriod === '7d' ? 'Last 7 days' : opPeriod === '30d' ? 'Last 30 days' : 'YTD';
+
+  const [monthlyResp, sellersResp, catResp, occResp] = await Promise.all([
+    supabase.from('v_dept_revenue_monthly')
+      .select('period_yyyymm, folio_revenue, tx_count')
+      .eq('property_id', propertyId).eq('usali_dept', 'Other Operated').eq('usali_subdept', 'Spa')
+      .order('period_yyyymm', { ascending: true }).then(r => r),
+    supabase.from('v_dept_top_seller_trend')
+      .select('description, usali_subdept, total_revenue_usd, total_units, last_sold, active_months')
+      .eq('property_id', propertyId).eq('usali_dept', 'Other Operated').eq('usali_subdept', 'Spa')
+      .order('total_revenue_usd', { ascending: false }).limit(200).then(r => r),
+    supabase.from('v_dept_revenue_by_category_daily')
+      .select('category, revenue_usd, tx_count, service_date')
+      .eq('property_id', propertyId).eq('usali_dept', 'Other Operated').eq('usali_subdept', 'Spa')
+      .gte('service_date', opFromIso).lte('service_date', opEndIso).then(r => r),
+    supabase.from('v_ancillary_capture_daily')
+      .select('night_date, occupied_rooms')
+      .eq('property_id', propertyId)
+      .gte('night_date', opFromIso).lte('night_date', opEndIso).then(r => r),
+  ]);
+
+  type MonthRow = { period_yyyymm: string; folio_revenue: number | string; tx_count: number };
+  type SellerRow = { description: string; usali_subdept: string | null; total_revenue_usd: number | string; total_units: number; last_sold: string | null; active_months: number };
+  type CatRow = { category: string; revenue_usd: number | string; tx_count: number; service_date: string };
+  type OccRow = { night_date: string; occupied_rooms: number };
+
+  const monthRows = ((monthlyResp.data ?? []) as MonthRow[]).map(r => ({
+    period: String(r.period_yyyymm), value: Number(r.folio_revenue ?? 0), tx: Number(r.tx_count ?? 0),
+  }));
+  const totalRev = monthRows.reduce((s, r) => s + r.value, 0);
+  const totalTx = monthRows.reduce((s, r) => s + r.tx, 0);
+  const avgTicketAll = totalTx > 0 ? totalRev / totalTx : 0;
+
+  const catRows = (catResp.data ?? []) as CatRow[];
+  const periodRev = catRows.reduce((s, r) => s + Number(r.revenue_usd ?? 0), 0);
+  const periodTx = catRows.reduce((s, r) => s + Number(r.tx_count ?? 0), 0);
+  const catMap: Record<string, { revenue: number; tx: number }> = {};
+  for (const r of catRows) {
+    const c = String(r.category ?? '—');
+    if (!catMap[c]) catMap[c] = { revenue: 0, tx: 0 };
+    catMap[c].revenue += Number(r.revenue_usd ?? 0);
+    catMap[c].tx += Number(r.tx_count ?? 0);
+  }
+  const catTiles = Object.entries(catMap)
+    .map(([category, v]) => ({ category, revenue: v.revenue, tx: v.tx, sharePct: periodRev > 0 ? (v.revenue / periodRev) * 100 : 0 }))
+    .sort((a, b) => b.revenue - a.revenue).slice(0, 10);
+
+  const occRows = (occResp.data ?? []) as OccRow[];
+  const occRn = occRows.reduce((s, r) => s + Number(r.occupied_rooms ?? 0), 0);
+  const spendPerOcc = occRn > 0 ? periodRev / occRn : 0;
+  const avgTicketPeriod = periodTx > 0 ? periodRev / periodTx : 0;
+
+  const sellers = ((sellersResp.data ?? []) as SellerRow[]).map(r => ({
+    description: String(r.description ?? '—'),
+    subdept: r.usali_subdept ?? null,
+    revStr: fmtEurStr(Number(r.total_revenue_usd ?? 0)),
+    units: Number(r.total_units ?? 0),
+    lastSold: r.last_sold ?? null,
+  }));
+  const top10 = sellers.slice(0, 10);
+
+  const row1: KpiTileProps[] = [
+    { label: 'Spa revenue', value: periodRev, currency: 'EUR', footnote: `Cloudbeds folio · ${opLabel}`, status: periodRev > 0 ? 'green' : 'grey', size: 'sm' },
+    { label: 'Treatments', value: fmtInt(periodTx), footnote: `POS lines · ${opLabel}`, status: periodTx > 0 ? 'green' : 'grey', size: 'sm' },
+    { label: 'Avg ticket', value: avgTicketPeriod, currency: 'EUR', footnote: `rev ÷ tx · ${opLabel}`, status: 'grey', size: 'sm' },
+    { label: 'Spa / Occ Rn', value: spendPerOcc, currency: 'EUR', footnote: `spend per occupied room · ${opLabel}`, status: 'grey', size: 'sm' },
+    { label: 'Occ room nights', value: fmtInt(occRn), footnote: `${opLabel}`, status: 'grey', size: 'sm' },
+  ];
+
+  const opPillStyle = (active: boolean): React.CSSProperties => ({
+    padding: '6px 12px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+    fontSize: 11, letterSpacing: '0.04em', textTransform: 'uppercase',
+    color: active ? '#FFFFFF' : '#000', background: active ? '#000' : 'transparent',
+    border: 'none', cursor: 'pointer', fontWeight: active ? 600 : 500, textDecoration: 'none',
+  });
+  const opPills = (
+    <div style={{ display: 'flex', alignItems: 'stretch', borderRadius: 4, border: '1px solid #E0E0E0', overflow: 'hidden' }}>
+      {(['yesterday', '7d', '30d', 'ytd'] as const).map((p) => (
+        <Link key={p} href={`?op=${p}`} style={opPillStyle(opPeriod === p)}>
+          {p === 'yesterday' ? 'Yesterday' : p === '7d' ? '7d' : p === '30d' ? '30d' : 'YTD'}
+        </Link>
+      ))}
+    </div>
+  );
+
   const tabs: DashboardTab[] = OPERATIONS_SUBPAGES.map((s) => ({
-    key: s.href, label: s.label, href: s.href,
-    active: s.label === 'Departments',
+    key: s.href, label: s.label, href: s.href, active: s.href.endsWith('/spa'),
   }));
 
+  const summaryStyle: React.CSSProperties = {
+    cursor: 'pointer', padding: '10px 14px', fontSize: 12, fontWeight: 600,
+    color: '#000', background: '#FFFFFF', border: '1px solid #E0E0E0', borderRadius: 6, letterSpacing: '0.04em',
+  };
+
   return (
-    <DashboardPage title="Operations · Spa" tabs={tabs}>
-      <div style={{ gridColumn: '1 / -1' }}>
-        <Container title="Spa · awaiting Donna feed" subtitle={`property_id=${propertyId} · Namkhan reference: /operations/spa`}>
-          <div style={{ padding: 20, color: '#5A5A5A', fontSize: 13, maxWidth: 720 }}>
-            Spa operations surface for Donna Portals is queued. When the
-            booking data feed is wired (treatment-mix, occupancy, ADR,
-            therapist utilisation), this page will render the canonical
-            layout matching Namkhan&apos;s /operations/spa.
+    <DashboardPage title="Wellness treatments" subtitle={`Operations · Spa · Cloudbeds folio · Donna Portals · property_id=${propertyId}`} tabs={tabs}>
+      <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <Container title="Operating snapshot" subtitle={`Cloudbeds folio · revenue + capture · ${opLabel}`} density="compact" action={opPills}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+            {row1.map((t, i) => <KpiTile key={i} {...t} />)}
           </div>
+          {catTiles.length > 0 && (
+            <>
+              <div style={{ marginTop: 14, fontSize: 11, color: '#5A5A5A', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                Revenue by category · {opLabel}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginTop: 6 }}>
+                {catTiles.map((c) => (
+                  <KpiTile key={c.category} label={c.category} value={c.revenue} currency="EUR"
+                    footnote={`${fmtPct(c.sharePct)} of spa · ${fmtInt(c.tx)} tx`} status="grey" size="sm" />
+                ))}
+              </div>
+            </>
+          )}
         </Container>
+
+        <Container title="Monthly revenue" subtitle={`live from Cloudbeds folio · all-time total ${fmtEurStr(totalRev)} · ${fmtInt(totalTx)} treatments · avg ticket ${fmtEurStr(avgTicketAll)}`} density="compact">
+          <MonthlyBars rows={monthRows} colorRev="#5a7da3" />
+        </Container>
+
+        <details open>
+          <summary style={summaryStyle}>Top 10 treatments (all-time)</summary>
+          <div style={{ marginTop: 10 }}>
+            <TopSellerTable rows={top10} />
+          </div>
+        </details>
+
+        {sellers.length > 10 && (
+          <details>
+            <summary style={summaryStyle}>All {sellers.length} treatments</summary>
+            <div style={{ marginTop: 10 }}>
+              <TopSellerTable rows={sellers} />
+            </div>
+          </details>
+        )}
       </div>
     </DashboardPage>
   );
