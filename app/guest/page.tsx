@@ -3,7 +3,7 @@
 // at the top. Conclusion boxes (SIGNALS + OBSERVATIONS) moved BELOW.
 // All 4 rule sets (retention · reputation · newsletter · observations) still fire.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
 import ConclusionBlock, { type Insight } from '@/app/_components/ConclusionBlock';
 import { evaluateRetentionRules, type RetentionContext } from '@/lib/rules/retention';
