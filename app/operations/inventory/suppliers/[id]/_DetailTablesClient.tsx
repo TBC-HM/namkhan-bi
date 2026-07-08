@@ -3,7 +3,7 @@
 // app/operations/inventory/suppliers/[id]/_DetailTablesClient.tsx
 // Client wrappers around <DataTable> for the four supplier-detail tables.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import DataTable, { Column } from '@/components/ui/DataTable';
 import StatusPill from '@/components/ui/StatusPill';
 import { fmtTableUsd, fmtIsoDate, EMPTY } from '@/lib/format';
@@ -90,18 +90,18 @@ export function AlternatesTable({ rows }: { rows: SupplierAlternateRow[] }) {
       render: (r) => <span style={mono}>{r.preference_rank}</span>, sortValue: (r) => r.preference_rank },
     { key: 'code', header: 'Code', width: '110px',
       render: (r) => (
-        <Link href={`/operations/inventory/suppliers/${r.alternate_supplier_id}`}
+        <TenantLink href={`/operations/inventory/suppliers/${r.alternate_supplier_id}`}
           style={{ color: 'var(--brass)', textDecoration: 'none', ...mono }}>
           {r.alternate_code}
-        </Link>
+        </TenantLink>
       ),
       sortValue: (r) => r.alternate_code },
     { key: 'name', header: 'Alternate supplier',
       render: (r) => (
-        <Link href={`/operations/inventory/suppliers/${r.alternate_supplier_id}`}
+        <TenantLink href={`/operations/inventory/suppliers/${r.alternate_supplier_id}`}
           style={{ color: 'var(--ink)', textDecoration: 'none' }}>
           {r.alternate_name}
-        </Link>
+        </TenantLink>
       ),
       sortValue: (r) => r.alternate_name },
     { key: 'notes', header: 'Notes',
