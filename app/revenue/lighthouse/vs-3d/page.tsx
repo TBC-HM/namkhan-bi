@@ -14,6 +14,7 @@ export default async function LighthouseVs3dPage({ propertyId }: { propertyId?: 
     : { rows: [], hotels: [], earlierSnapshot: null };
   return (
     <LighthouseShell
+      propertyId={pid}
       view="three_days"
       title="Lighthouse · vs 3 days ago"
       subtitle="Same grid + 3-day delta — catch mid-week pricing repositioning"
