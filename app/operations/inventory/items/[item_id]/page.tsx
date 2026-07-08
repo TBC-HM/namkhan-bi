@@ -1,7 +1,7 @@
 // app/operations/inventory/items/[item_id]/page.tsx
 // Page 2 — Item Detail. Operator-first product view.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import Card from '@/components/sections/Card';
 import { getItemDetail, getInvLocations } from '@/lib/inv-data';
 import { fmtMoney, fmtNumber } from '@/lib/format';
@@ -25,7 +25,7 @@ export default async function ItemDetailPage({ params }: Props) {
     return (
       <Card title="Item" emphasis="not found">
         <p>SKU {params.item_id} not found, or you don't have permission to read it.</p>
-        <p><Link href="/operations/inventory">← Back to inventory</Link></p>
+        <p><TenantLink href="/operations/inventory">← Back to inventory</TenantLink></p>
       </Card>
     );
   }
@@ -48,7 +48,7 @@ export default async function ItemDetailPage({ params }: Props) {
   return (
     <>
       <div className="breadcrumb">
-        <Link href="/operations/inventory">Inventory</Link>
+        <TenantLink href="/operations/inventory">Inventory</TenantLink>
         {' · '}
         <span>{item.categories?.name ?? '—'}</span>
         {' · '}
@@ -82,7 +82,7 @@ export default async function ItemDetailPage({ params }: Props) {
               currentLocationId={item.default_location_id ?? null}
               locations={locations as any[]}
             />
-            <Link href={`/operations/inventory/shop?prefill=${item.sku}`} className="btn-primary">Schedule reorder</Link>
+            <TenantLink href={`/operations/inventory/shop?prefill=${item.sku}`} className="btn-primary">Schedule reorder</TenantLink>
           </div>
         </div>
       </Card>
