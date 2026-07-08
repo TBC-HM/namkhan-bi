@@ -3,7 +3,7 @@
 // + MARKETING_SUBPAGES tabs). Same data source: marketing.social_accounts via
 // getSocialAccounts(). 8-platform allow-list preserved.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { notFound } from 'next/navigation';
 import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { getSocialAccounts } from '@/lib/marketing';
@@ -99,9 +99,9 @@ export default async function SocialPlatformPage({ params }: Props) {
               Set handle →
             </a>
           )}
-          <Link href="/marketing/social" style={{ ...btnGhost, textDecoration: 'none' }}>
+          <TenantLink href="/marketing/social" style={{ ...btnGhost, textDecoration: 'none' }}>
             ← all channels
-          </Link>
+          </TenantLink>
         </div>
 
         {/* KPI band */}
@@ -171,19 +171,19 @@ export default async function SocialPlatformPage({ params }: Props) {
         <Section title="Content actions" note="quick links">
           <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: INK_S, lineHeight: 1.7 }}>
             <li>
-              <Link href={`/marketing/library?tag=${encodeURIComponent(account.platform)}`} style={linkSt}>
+              <TenantLink href={`/marketing/library?tag=${encodeURIComponent(account.platform)}`} style={linkSt}>
                 Browse media library tagged for {label} →
-              </Link>
+              </TenantLink>
             </li>
             <li>
-              <Link href={`/marketing/campaigns?channel=${encodeURIComponent(account.platform)}`} style={linkSt}>
+              <TenantLink href={`/marketing/campaigns?channel=${encodeURIComponent(account.platform)}`} style={linkSt}>
                 Open {label} campaigns →
-              </Link>
+              </TenantLink>
             </li>
             <li>
-              <Link href="/marketing/social" style={linkSt}>
+              <TenantLink href="/marketing/social" style={linkSt}>
                 Back to all social channels →
-              </Link>
+              </TenantLink>
             </li>
           </ul>
         </Section>
