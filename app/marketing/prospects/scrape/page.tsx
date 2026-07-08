@@ -1,6 +1,6 @@
 // app/marketing/prospects/scrape/page.tsx
 // PBS 2026-07-06: Scrape page — actor picker + prior-run history (avoids duplicate scrapes).
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -47,9 +47,9 @@ export default async function ScrapePage() {
         tabs={tabs}
       >
         <div style={{ gridColumn:'1 / -1' }}>
-          <Link href="/marketing/prospects" style={{ fontSize:12, color:'#084838', textDecoration:'none', fontWeight:600 }}>
+          <TenantLink href="/marketing/prospects" style={{ fontSize:12, color:'#084838', textDecoration:'none', fontWeight:600 }}>
             ← Back to prospects
-          </Link>
+          </TenantLink>
         </div>
 
         <div style={{ gridColumn:'1 / -1' }}>
