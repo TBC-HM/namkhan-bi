@@ -1,13 +1,16 @@
 // app/revenue/pickup-day/email/page.tsx
-// PBS 2026-07-07: Simple send-day-report page — recipient + optional note + Send.
-// Uses the same send-report-email edge fn as /api/reputation/email-report.
+// PBS 2026-07-07 · 07-08: Simple send-day-report page — recipient + note + Send.
+// Property-aware: accepts `propertyId` prop (Donna delegate passes it) and forwards
+// to /api/pickup-day/email so the correct property's report is sent.
 
 'use client';
 
 import TenantLink from '@/components/nav/TenantLink';
 import { useState } from 'react';
 
-export default function EmailDayReportPage() {
+interface Props { propertyId?: number }
+
+export default function EmailDayReportPage({ propertyId }: Props = {}) {
   const [to, setTo] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -19,11 +22,11 @@ export default function EmailDayReportPage() {
       const r = await fetch('/api/pickup-day/email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to, note }),
+        body: JSON.stringify({ to, note, property_id: propertyId }),
       });
       const j = await r.json();
       if (!r.ok || j.error) setMsg({ kind: 'err', text: j.error ?? `HTTP ${r.status}` });
-      else setMsg({ kind: 'ok', text: `Sent to ${j.sent_to}` });
+      else setMsg({ kind: 'ok', text: `Sent to ${j.sent_to}${j.attached ? ` · attached ${j.attached}` : ''}` });
     } catch (err) {
       setMsg({ kind: 'err', text: err instanceof Error ? err.message : String(err) });
     } finally {
@@ -35,14 +38,14 @@ export default function EmailDayReportPage() {
     <div style={{ background: '#FFFFFF', minHeight: '100vh', padding: '32px', maxWidth: 640, margin: '0 auto' }}>
       <TenantLink href="/revenue/pickup-day" style={{ fontSize: 12, color: '#5A5A5A', textDecoration: 'none' }}>← Day report</TenantLink>
       <h1 style={{ margin: '8px 0 4px', fontSize: 22, fontWeight: 700 }}>Email day report</h1>
-      <p style={{ margin: '0 0 20px', fontSize: 12, color: '#5A5A5A' }}>Sends an HTML summary of the next 90 forward nights (OTB · OCC · ADR · Room Rev · −1d & −7d pickup RN).</p>
+      <p style={{ margin: '0 0 20px', fontSize: 12, color: '#5A5A5A' }}>Sends a short summary (next 14 nights KPIs) with the full 365-night CSV attached.</p>
 
       <label style={{ display: 'block', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#5A5A5A' }}>Recipient email</label>
       <input value={to} onChange={e => setTo(e.target.value)} type="email" placeholder="you@thenamkhan.com"
         style={{ display: 'block', width: '100%', padding: '10px 12px', marginTop: 4, marginBottom: 16, border: '1px solid #E6DFCC', borderRadius: 4, fontSize: 13 }} />
 
       <label style={{ display: 'block', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#5A5A5A' }}>Note (optional)</label>
-      <textarea value={note} onChange={e => setNote(e.target.value)} rows={3} placeholder="Anything you want on top of the table"
+      <textarea value={note} onChange={e => setNote(e.target.value)} rows={3} placeholder="Anything you want on top of the summary"
         style={{ display: 'block', width: '100%', padding: '10px 12px', marginTop: 4, marginBottom: 20, border: '1px solid #E6DFCC', borderRadius: 4, fontSize: 13 }} />
 
       {msg && (
