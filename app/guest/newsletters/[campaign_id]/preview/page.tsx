@@ -3,7 +3,7 @@
 // property.social · black SLH logo (bigger, linked) · unsub on own line ·
 // no booking code shown in footer.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { notFound } from 'next/navigation';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { PROPERTY_ID } from '@/lib/supabase';
@@ -78,11 +78,11 @@ export default async function CampaignPreviewPage({ params }: Props) {
       <div style={{ maxWidth: 680, margin:'0 auto' }}>
 
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16, fontSize:11, color:INK_M }}>
-          <Link href="/guest/newsletters" style={{ color:INK_M, textDecoration:'none' }}>← Back to overview</Link>
+          <TenantLink href="/guest/newsletters" style={{ color:INK_M, textDecoration:'none' }}>← Back to overview</TenantLink>
           <div>
             <span>Status: <strong style={{ color:INK }}>{c.status}</strong></span>
             <span style={{ margin:'0 8px' }}>·</span>
-            <Link href={`/guest/newsletters/${c.campaign_id}`} style={{ color:NK_GREEN, fontWeight:600, textDecoration:'none' }}>Edit →</Link>
+            <TenantLink href={`/guest/newsletters/${c.campaign_id}`} style={{ color:NK_GREEN, fontWeight:600, textDecoration:'none' }}>Edit →</TenantLink>
           </div>
         </div>
 
