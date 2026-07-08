@@ -17,6 +17,7 @@ import { PROPERTY_ID, supabase } from '@/lib/supabase';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import ReportBuilder from './_components/ReportBuilder';
 import ReportsList from './_components/ReportsList';
+import ScheduledReportsPanel from './_components/ScheduledReportsPanel';
 import BugsList from './_components/BugsList';
 import HodTasksList from './_components/HodTasksList';
 import AttentionList from './_components/AttentionList';
@@ -289,6 +290,9 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
         </Container>
         <Container title="My Reports" subtitle={`${docs.length} item${docs.length === 1 ? '' : 's'} · red = unseen · dismiss with ×`} density="compact">
           <ReportsList items={docs} storageKey={`reports:revenue:${pid}`} />
+        </Container>
+        <Container title="Reports · scheduled to third parties" subtitle="Daily · Weekly · Monthly · fires at 08:00 UTC · add / remove / send now" density="compact">
+          <ScheduledReportsPanel propertyId={pid} />
         </Container>
         <Container title="My Tasks" subtitle={dueTasksCount > 0 ? `🔴 ${dueTasksCount} due · add / due-date / repeat / delete` : 'add / due-date / repeat / delete · per property'} density="compact">
           <HodTasksList deptSlug="revenue" propertyId={pid} />
