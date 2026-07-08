@@ -1,5 +1,5 @@
 // Shared server component for schedule/halt/resume/delete pages — each just wraps a confirm button.
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { notFound } from 'next/navigation';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
@@ -32,7 +32,7 @@ export async function renderSequenceActionPage(params: { funnel_id: string }, ki
     <div style={{ background:'#FFFFFF', minHeight:'100vh' }}>
       <DashboardPage title={`Sequences · ${cfg.title}`} subtitle={funnel.name} tabs={tabs}>
         <div style={{ gridColumn:'1 / -1' }}>
-          <Link href={`/marketing/prospects/sequences/${funnel.funnel_id}`} style={{ fontSize:12, color:'#084838', textDecoration:'none', fontWeight:600 }}>← Back to sequence</Link>
+          <TenantLink href={`/marketing/prospects/sequences/${funnel.funnel_id}`} style={{ fontSize:12, color:'#084838', textDecoration:'none', fontWeight:600 }}>← Back to sequence</TenantLink>
         </div>
 
         <div style={{ gridColumn:'1 / -1', border:'1px solid '+HAIR, background:CREAM, borderRadius:6, padding:20, display:'flex', flexDirection:'column', gap:14 }}>
