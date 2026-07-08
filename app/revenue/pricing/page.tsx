@@ -230,13 +230,22 @@ export default async function PricingPage({ searchParams, propertyId }: { search
 
   // ─── Default: Pricing tab (the original, kept intact) ────────────────
   const period = resolvePeriod({ win });
-  const [roomTypes, ratePlans, inventory, todayKpis] = await Promise.all([
+  const [roomTypes, ratePlans, inventory, todayKpis, barPromoResp] = await Promise.all([
     getRoomTypes(pid),
     getRatePlans(pid),
     getRateInventory(period.from, period.to, { propertyId: pid }),
     getPricingKpis(pid),
+    // PBS 2026-07-08: split BAR (base rate plan) vs Lowest promo (cheapest derived/standalone).
+    supabase.from('v_bar_and_promo_today')
+      .select('bar_rate, bar_plan, bar_room, bar_min_stay, promo_rate, promo_plan, promo_room, promo_min_stay')
+      .eq('property_id', pid)
+      .maybeSingle(),
   ]);
   void ratePlans;
+  const barPromo = (barPromoResp.data ?? null) as {
+    bar_rate: number | null; bar_plan: string | null; bar_room: string | null; bar_min_stay: number | null;
+    promo_rate: number | null; promo_plan: string | null; promo_room: string | null; promo_min_stay: number | null;
+  } | null;
 
   // PBS 2026-06-08 — also build the rate heatmap (was on the dropped Rate tab)
   const _rateCellMap = new Map<string, number>();
@@ -315,19 +324,33 @@ export default async function PricingPage({ searchParams, propertyId }: { search
   // "—" when compset has no rows for today (was silently rendering 0 = "we're
   // even with the comp set", which is the wrong story). Stop-sell / MinLOS
   // counts are room-days (matches heatmap), not raw rate_inventory rows.
+  // PBS 2026-07-08: two separate tiles.
+  //   BAR         = lowest rate_type='base' rate  → true walk-in Best Available Rate
+  //   Lowest promo = lowest across ALL derived/standalone plans (includes packages)
+  // Both show the source rate_plan name in the footnote so an RM can trace the number.
+  const barRate     = barPromo?.bar_rate     != null ? Number(barPromo.bar_rate)     : null;
+  const promoRate   = barPromo?.promo_rate   != null ? Number(barPromo.promo_rate)   : null;
+  // Comp gap is now BAR (base plan) − comp median, so it compares apples to apples.
+  const compGapBar  = barRate != null && k.compMedian != null ? barRate - k.compMedian : null;
+
   const actionableTiles: KpiTileProps[] = [
-    { label: 'BAR today', value: k.barToday != null ? Math.round(k.barToday) : '—', currency: moneyCurrency, size: 'sm',
-      footnote: k.barToday != null
-        ? `lowest sellable rate today · rate_inventory (${currencySym}${Math.round(k.barToday)})`
-        : `no sellable rate posted today (rate_inventory · rate ≥ ${currencySym}10 · stop_sell=false)`,
-      status: k.barToday != null ? 'green' : 'grey' },
+    { label: 'BAR today', value: barRate != null ? Math.round(barRate) : '—', currency: moneyCurrency, size: 'sm',
+      footnote: barRate != null && barPromo?.bar_plan
+        ? `${barPromo.bar_plan} · ${barPromo.bar_min_stay ?? 1}n min · base rate plan`
+        : `no base rate plan posted today`,
+      status: barRate != null ? 'green' : 'grey' },
+    { label: 'Lowest promo', value: promoRate != null ? Math.round(promoRate) : '—', currency: moneyCurrency, size: 'sm',
+      footnote: promoRate != null && barPromo?.promo_plan
+        ? `${barPromo.promo_plan} · ${barPromo.promo_min_stay ?? 1}n min`
+        : `no promo rate posted today`,
+      status: promoRate != null ? 'green' : 'grey' },
     { label: 'Comp gap',
-      value: compGap != null ? Math.round(compGap) : '—',
+      value: compGapBar != null ? Math.round(compGapBar) : '—',
       currency: moneyCurrency, size: 'sm',
-      footnote: compGap != null
-        ? `BAR ${currencySym}${Math.round(k.barToday!)} − comp median ${currencySym}${Math.round(k.compMedian!)} · ${k.compRows} comp rows today`
+      footnote: compGapBar != null
+        ? `BAR ${currencySym}${Math.round(barRate!)} − comp median ${currencySym}${Math.round(k.compMedian!)} · ${k.compRows} comp rows today`
         : `no comp rows scraped for today · v_compset_competitor_rate_matrix`,
-      status: compGap == null ? 'grey' : compGap >= 0 ? 'green' : 'amber' },
+      status: compGapBar == null ? 'grey' : compGapBar >= 0 ? 'green' : 'amber' },
     { label: 'OCC today', value: k.occPctToday != null ? `${Math.round(k.occPctToday)}%` : '—', size: 'sm',
       footnote: k.occPctToday != null
         ? `${k.roomsSold ?? 0} sold ÷ ${capacity} sellable units · ${propertyLabel}`
