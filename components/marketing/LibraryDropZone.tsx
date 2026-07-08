@@ -12,8 +12,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-
+import TenantLink from '@/components/nav/TenantLink';
 interface QueueItem {
   id: string;
   name: string;
@@ -200,7 +199,7 @@ export default function LibraryDropZone() {
         >
           Choose files
         </button>
-        <Link
+        <TenantLink
           href="/marketing/upload"
           style={{
             padding: '8px 14px',
@@ -217,7 +216,7 @@ export default function LibraryDropZone() {
           }}
         >
           Full upload ↗
-        </Link>
+        </TenantLink>
       </div>
       {totalQueued > 0 && (
         <div style={{ width: '100%', borderTop: '1px solid var(--line-soft)', paddingTop: 10, marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
