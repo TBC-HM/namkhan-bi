@@ -1,7 +1,7 @@
 // app/operations/inventory/orders/[po_id]/page.tsx
 // PO detail — header, line items with per-line ReceiptModal, receipt log.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import Card from '@/components/sections/Card';
 import { supabase } from '@/lib/supabase';
 import { fmtMoney } from '@/lib/format';
@@ -34,13 +34,13 @@ export default async function PoDetailPage({ params }: Props) {
   ]);
 
   if (!po) {
-    return <Card title="PO" emphasis="not found"><p><Link href="/operations/inventory/orders">← Back</Link></p></Card>;
+    return <Card title="PO" emphasis="not found"><p><TenantLink href="/operations/inventory/orders">← Back</TenantLink></p></Card>;
   }
 
   return (
     <>
       <div className="breadcrumb">
-        <Link href="/operations/inventory/orders">Orders</Link>{' · '}
+        <TenantLink href="/operations/inventory/orders">Orders</TenantLink>{' · '}
         <strong>{po.po_number ?? po.po_id.slice(0, 8) + '…'}</strong>
       </div>
 
@@ -58,7 +58,7 @@ export default async function PoDetailPage({ params }: Props) {
           <dd>{fmtMoney(Number(po.total_usd ?? 0))}</dd>
           {po.source_pr_id && (<>
             <dt>Source PR</dt>
-            <dd><Link href={`/operations/inventory/requests/${po.source_pr_id}`}>{po.source_pr_id.slice(0, 8)}…</Link></dd>
+            <dd><TenantLink href={`/operations/inventory/requests/${po.source_pr_id}`}>{po.source_pr_id.slice(0, 8)}…</TenantLink></dd>
           </>)}
         </dl>
       </Card>
