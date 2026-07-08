@@ -4,7 +4,7 @@
 // (Action buttons are server-rendered shells; wire to a client component
 // for the actual user.role check + RPC call.)
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import Card from '@/components/sections/Card';
 import { getRequestDetail } from '@/lib/inv-data';
 import { fmtMoney } from '@/lib/format';
@@ -22,7 +22,7 @@ export default async function RequestDetailPage({ params }: Props) {
     return (
       <Card title="PR" emphasis="not found">
         <p>This PR does not exist or you don't have read permission.</p>
-        <p><Link href="/operations/inventory/requests">← Back to requests</Link></p>
+        <p><TenantLink href="/operations/inventory/requests">← Back to requests</TenantLink></p>
       </Card>
     );
   }
