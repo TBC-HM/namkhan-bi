@@ -5,7 +5,7 @@
 // supplier detail page. Logo: brass initials in a circle (no logo_url
 // column on gl.v_supplier_overview / gl.vendors, so initials it is).
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { useMemo, useState } from 'react';
 import { fmtMoney, fmtIsoDate, EMPTY } from '@/lib/format';
 
@@ -123,7 +123,7 @@ export default function SuppliersTable({ rows, linkBase = '/operations/suppliers
             return (
               <tr key={r.name}>
                 <td className="lbl">
-                  <Link
+                  <TenantLink
                     href={`${linkBase}/${encodeURIComponent(r.name)}`}
                     style={{ color: 'var(--brass)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 8 }}
                   >
@@ -141,7 +141,7 @@ export default function SuppliersTable({ rows, linkBase = '/operations/suppliers
                       {inits}
                     </span>
                     <strong>{r.name}</strong>
-                  </Link>
+                  </TenantLink>
                   {r.email && <div style={{ marginTop: 2, marginLeft: 30, color: 'var(--ink-mute)', fontFamily: 'var(--mono)', fontSize: 'var(--t-xs)' }}>{r.email}</div>}
                 </td>
                 <td className="lbl text-mute">{r.category ?? EMPTY}</td>
