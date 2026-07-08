@@ -3,12 +3,13 @@
 // public.v_sop_proposals filtered by property_scope for the current tenant.
 // Renders inside DashboardPage chrome; delegates interactivity to
 // _components/SopProposalList (client).
+//
+// 2026-07-08 (later): tabs strip switched from the top-level operations
+// subPages to the QA-cluster tabs (Overview / Registry / Generate / Proposals)
+// per PBS's QA sub-menu spec.
 
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
-import { DEPT_CFG } from '@/lib/dept-cfg';
-import { getDeptCfg } from '@/lib/dept-cfg/by-property';
-import { rewriteSubPagesForProperty } from '@/lib/dept-cfg/rewrite-subpages';
 import SopProposalList, { type ProposalRow } from './_components/SopProposalList';
 
 export const dynamic = 'force-dynamic';
@@ -20,6 +21,16 @@ const SCOPE_FOR: Record<number, string> = {
   260955:  'namkhan',
   1000001: 'donna',
 };
+
+function qaTabs(pid: number, active: 'overview' | 'registry' | 'generate' | 'proposals'): DashboardTab[] {
+  const base = pid === PROPERTY_ID ? '' : `/h/${pid}`;
+  return [
+    { key: `${base}/operations/qa`,           label: 'Overview',  href: `${base}/operations/qa`,           active: active === 'overview'  },
+    { key: `${base}/operations/qa/registry`,  label: 'Registry',  href: `${base}/operations/qa/registry`,  active: active === 'registry'  },
+    { key: `${base}/operations/qa/generate`,  label: 'Generate',  href: `${base}/operations/qa/generate`,  active: active === 'generate'  },
+    { key: `${base}/operations/qa/proposals`, label: 'Proposals', href: `${base}/operations/qa/proposals`, active: active === 'proposals' },
+  ];
+}
 
 export default async function SopProposalsPage({ propertyId }: Props = {}) {
   const pid = propertyId ?? PROPERTY_ID;
@@ -36,12 +47,7 @@ export default async function SopProposalsPage({ propertyId }: Props = {}) {
 
   const proposals: ProposalRow[] = (data as ProposalRow[]) ?? [];
 
-  const cfg = pid === PROPERTY_ID ? DEPT_CFG.operations : getDeptCfg('operations', pid);
-  const subPages = rewriteSubPagesForProperty(cfg.subPages ?? [], pid);
-  const tabs: DashboardTab[] = subPages.map((s) => ({
-    key: s.href, label: s.label, href: s.href,
-    active: s.href.endsWith('/operations/qa/proposals'),
-  }));
+  const tabs = qaTabs(pid, 'proposals');
 
   const generateBaseHref = pid === PROPERTY_ID
     ? '/operations/qa/generate'
@@ -51,7 +57,7 @@ export default async function SopProposalsPage({ propertyId }: Props = {}) {
     <div style={{ background: '#FFFFFF', minHeight: '100vh' }}>
       <DashboardPage
         title="Operations · QA · SOP Proposals"
-        subtitle={`AI-drafted list of SOPs this property needs. Review, generate, edit, accept — accepted SOPs enter the register at /operations/sops. (${proposals.length} proposals)`}
+        subtitle={`AI-drafted list of SOPs this property needs. Review, generate, edit, accept — accepted SOPs enter the register at /operations/qa/registry. (${proposals.length} proposals)`}
         tabs={tabs}
       >
         <div style={{ gridColumn: '1 / -1' }}>
