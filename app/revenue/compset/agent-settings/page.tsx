@@ -7,7 +7,7 @@
 // API route used by editor:
 //   POST /api/compset/agent-runtime  -> compset_update_agent_runtime
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import Page from '@/components/page/Page';
 import { REVENUE_SUBPAGES } from '../../_subpages';
 import StatusPill from '@/components/ui/StatusPill';
@@ -98,7 +98,7 @@ export default async function AgentSettingsPage({ searchParams }: PageProps) {
       eyebrow="Revenue · Comp Set · Agents"
       title={<>Tune the <em style={{ color: 'var(--brass)', fontStyle: 'italic' }}>knobs</em>, respect the mandate.</>}
       subPages={REVENUE_SUBPAGES}
-      topRight={<Link href="/revenue/compset" style={backLinkStyle}>← BACK TO COMP SET</Link>}
+      topRight={<TenantLink href="/revenue/compset" style={backLinkStyle}>← BACK TO COMP SET</TenantLink>}
     >
 
       {agents.length === 0 ? (
