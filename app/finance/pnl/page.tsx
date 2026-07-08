@@ -55,7 +55,8 @@ function fmtPctV(n: number | null | undefined, dp = 1): string {
   return `${n.toFixed(dp)}%`;
 }
 
-export default async function PnLPage({ searchParams }: Props) {
+export default async function PnLPage({ searchParams, propertyId }: Props) {
+  const pid = propertyId ?? 260955;
   const period = resolvePeriod(searchParams);
 
   // Window selector (TODAY/7D/30D/90D/YTD) → period_yyyymm filter on gl.* tables.
@@ -266,7 +267,7 @@ export default async function PnLPage({ searchParams }: Props) {
   const roomRows = await supabaseGl
     .from('v_room_metrics_monthly')
     .select('period_yyyymm, rooms_sold, rooms_available, rooms_revenue')
-    .eq('property_id', 260955)
+    .eq('property_id', pid)
     .in('period_yyyymm', curMonths)
     .then(r => r.data ?? [] as any[]);
   const curRoomsSold     = roomRows.reduce((s: number, r: any) => s + Number(r.rooms_sold     || 0), 0);
@@ -285,7 +286,7 @@ export default async function PnLPage({ searchParams }: Props) {
   const lyRoomRows = await supabaseGl
     .from('v_room_metrics_monthly')
     .select('rooms_sold, rooms_available, rooms_revenue')
-    .eq('property_id', 260955)
+    .eq('property_id', pid)
     .in('period_yyyymm', lyMonths)
     .then(r => r.data ?? [] as any[]);
   const lyRoomsSold    = lyRoomRows.reduce((s: number, r: any) => s + Number(r.rooms_sold     || 0), 0);
