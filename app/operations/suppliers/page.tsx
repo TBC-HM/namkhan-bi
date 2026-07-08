@@ -5,7 +5,7 @@
 //
 // This is the ops-facing supplier list ("who do we buy from"). It complements
 // /finance/supplier-mapping (which is the USALI-dept mapping cockpit).
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, Container, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { DEPT_CFG } from '@/lib/dept-cfg';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -152,11 +152,11 @@ export default async function OperationsSuppliersPage() {
         <Container title="Related" density="compact">
           <div style={{ fontSize: 12, color: '#3A3A3A', lineHeight: 1.7 }}>
             <p style={{ margin: '0 0 6px' }}>
-              <strong>Classify vendor spend</strong> → <Link href="/finance/supplier-mapping" style={lnk}>Finance · Supplier mapping</Link>
+              <strong>Classify vendor spend</strong> → <TenantLink href="/finance/supplier-mapping" style={lnk}>Finance · Supplier mapping</TenantLink>
               (vendor × USALI dept · no-class + unmapped-account leakage detection).
             </p>
             <p style={{ margin: '0 0 6px' }}>
-              <strong>Map GL accounts</strong> → <Link href="/finance/mapping" style={lnk}>Finance · Account mapping</Link>
+              <strong>Map GL accounts</strong> → <TenantLink href="/finance/mapping" style={lnk}>Finance · Account mapping</TenantLink>
               (set USALI subcategory / line label on GL accounts).
             </p>
             <p style={{ margin: 0 }}>
