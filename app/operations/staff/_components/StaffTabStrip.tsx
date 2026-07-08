@@ -9,7 +9,7 @@
 
 'use client';
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { usePathname } from 'next/navigation';
 
 interface Tab {
@@ -48,7 +48,7 @@ export default function StaffTabStrip({ propertyId }: { propertyId: number }) {
         const href = t.slug === '' ? base : `${base}/${t.slug}`;
         const active = t.slug === activeSlug;
         return (
-          <Link key={t.slug || 'register'} href={href} style={{
+          <TenantLink key={t.slug || 'register'} href={href} style={{
             padding: '8px 16px',
             fontFamily: 'var(--mono)', fontSize: 11,
             letterSpacing: '0.14em', textTransform: 'uppercase',
@@ -62,7 +62,7 @@ export default function StaffTabStrip({ propertyId }: { propertyId: number }) {
             textDecoration: 'none', fontWeight: active ? 600 : 400,
           }}>
             {t.label}
-          </Link>
+          </TenantLink>
         );
       })}
     </nav>
