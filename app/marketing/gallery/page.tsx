@@ -1,7 +1,7 @@
 // app/marketing/gallery/page.tsx
 // PBS 2026-07-05: Media Library at a fresh URL (edge cache free).
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../_subpages';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -55,10 +55,10 @@ export default async function GalleryPage() {
           {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
         </div>
         <div style={{ gridColumn: '1 / -1', display:'flex', justifyContent:'flex-end', gap: 8 }}>
-          <Link href="/marketing/upload" style={{
+          <TenantLink href="/marketing/upload" style={{
             padding:'6px 14px', fontSize:12, fontWeight:600, background:'#084838', color:'#FFFFFF',
             border:'none', borderRadius:4, textDecoration:'none',
-          }}>+ Upload new</Link>
+          }}>+ Upload new</TenantLink>
         </div>
         <div style={{ gridColumn: '1 / -1' }}>
           <MediaGallery rows={rows as unknown as Parameters<typeof MediaGallery>[0]['rows']} />
