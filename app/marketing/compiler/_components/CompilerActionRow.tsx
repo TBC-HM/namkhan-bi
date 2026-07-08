@@ -2,8 +2,7 @@
 // Compset-pattern action button row. Three settings/data destinations
 // instead of vanity KPI tiles.
 
-import Link from 'next/link';
-
+import TenantLink from '@/components/nav/TenantLink';
 interface Action {
   href: string;
   label: string;
@@ -23,7 +22,7 @@ export default function CompilerActionRow({ actions }: { actions: Action[] }) {
       flexWrap: 'wrap',
     }}>
       {actions.map(a => (
-        <Link key={a.href} href={a.href} style={{
+        <TenantLink key={a.href} href={a.href} style={{
           flex: '1 1 0',
           minWidth: 160,
           padding: '10px 14px',
@@ -54,7 +53,7 @@ export default function CompilerActionRow({ actions }: { actions: Action[] }) {
               {a.meta}
             </div>
           )}
-        </Link>
+        </TenantLink>
       ))}
     </div>
   );
