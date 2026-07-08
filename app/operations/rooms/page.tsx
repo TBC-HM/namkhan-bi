@@ -29,14 +29,15 @@ import { resolvePeriod } from '@/lib/period';
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
 
-interface Props { searchParams: Record<string, string | string[] | undefined>; }
+interface Props { searchParams: Record<string, string | string[] | undefined>; propertyId?: number; }
 
 const fmtUsd = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('en-US')}`;
 const fmtInt = (n: number) => `${Math.round(Number(n) || 0).toLocaleString('en-US')}`;
 const fmtPct = (n: number) => `${(Number(n) || 0).toFixed(1)}%`;
 const fmt1   = (n: number) => `${(Number(n) || 0).toFixed(1)}`;
 
-export default async function RoomsPage({ searchParams }: Props) {
+export default async function RoomsPage({ searchParams, propertyId }: Props) {
+  const pid = propertyId ?? 260955;
   const opPeriodRaw = typeof searchParams.op === 'string' ? searchParams.op : '30d';
   const opPeriod = (['yesterday','7d','30d','ytd'].includes(opPeriodRaw) ? opPeriodRaw : '30d') as 'yesterday'|'7d'|'30d'|'ytd';
   const opToday = new Date(); opToday.setUTCHours(0,0,0,0);
@@ -66,14 +67,14 @@ export default async function RoomsPage({ searchParams }: Props) {
     // YTD top room types from canonical perf view
     supabase.from('v_room_type_performance_monthly')
       .select('canonical_room_type_code, room_type_name, room_nights, room_revenue, adr, bookings, avg_los')
-      .eq('property_id', 260955)
+      .eq('property_id', pid)
       .gte('period_yyyymm', '2026-01')
       .lte('period_yyyymm', opToIso.slice(0,7))
       .then((r) => r),
     // Monthly (for the trend section + room type mix)
     supabase.from('v_room_type_performance_monthly')
       .select('period_yyyymm, room_type_name, room_nights, room_revenue')
-      .eq('property_id', 260955)
+      .eq('property_id', pid)
       .gte('period_yyyymm', '2025-06')
       .lte('period_yyyymm', opToIso.slice(0,7))
       .order('period_yyyymm', { ascending: true })
@@ -91,21 +92,21 @@ export default async function RoomsPage({ searchParams }: Props) {
       .then((r) => r),
     supabase.from('v_fnb_raw_txn_enriched')
       .select('transaction_id, reservation_id, transaction_date, local_laos_str, description, amount, currency, category, item_category_name, user_name, usali_dept, usali_subdept, guest_name, room_name, source_name')
-      .eq('property_id', 260955)
+      .eq('property_id', pid)
       .eq('usali_dept', 'Rooms')
       .order('transaction_date', { ascending: false }).limit(2000)
       .then((r) => r),
     // Op-scoped folio rooms rev (for reconciliation top tile)
     supabase.from('v_dept_revenue_monthly')
       .select('period_yyyymm, folio_revenue, tx_count')
-      .eq('property_id', 260955).eq('usali_dept', 'Rooms')
+      .eq('property_id', pid).eq('usali_dept', 'Rooms')
       .gte('period_yyyymm', '2025-06').lte('period_yyyymm', opToIso.slice(0,7))
       .order('period_yyyymm', { ascending: true })
       .then((r) => r),
     // Folio ↔ GL monthly reconciliation rows
     supabase.from('v_dept_revenue_monthly')
       .select('period_yyyymm, folio_revenue')
-      .eq('property_id', 260955).eq('usali_dept', 'Rooms')
+      .eq('property_id', pid).eq('usali_dept', 'Rooms')
       .gte('period_yyyymm', '2025-06').order('period_yyyymm', { ascending: true })
       .then((r) => r),
   ]);
