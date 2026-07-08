@@ -8,7 +8,7 @@
 // of the revenue report types. Currently supports `pace`; other types render
 // a coming-soon panel that still prints clean.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import Page from '@/components/page/Page';
 import Panel from '@/components/page/Panel';
 import KpiBox from '@/components/kpi/KpiBox';
@@ -195,9 +195,9 @@ export default async function RevenueReport({ params, searchParams }: Props) {
       </Panel>
 
       <div className="no-print" style={{ marginTop: 24, fontSize: 11, color: '#7d7565' }}>
-        <Link href="/revenue/pulse" style={{ color: '#a8854a', marginRight: 12 }}>↗ Open live Pulse</Link>
-        <Link href="/revenue/pace" style={{ color: '#a8854a', marginRight: 12 }}>↗ Open live Pace</Link>
-        <Link href="/revenue" style={{ color: '#a8854a' }}>↗ Revenue index</Link>
+        <TenantLink href="/revenue/pulse" style={{ color: '#a8854a', marginRight: 12 }}>↗ Open live Pulse</TenantLink>
+        <TenantLink href="/revenue/pace" style={{ color: '#a8854a', marginRight: 12 }}>↗ Open live Pace</TenantLink>
+        <TenantLink href="/revenue" style={{ color: '#a8854a' }}>↗ Revenue index</TenantLink>
       </div>
     </Page>
   );
