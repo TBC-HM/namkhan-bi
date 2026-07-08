@@ -7,8 +7,7 @@
 
 'use client';
 
-import Link from 'next/link';
-
+import TenantLink from '@/components/nav/TenantLink';
 const BC_PEACH = '#F7AC67';
 const BC_DEEP  = '#002428';
 
@@ -29,14 +28,14 @@ export default function HoldingExtras() {
   return (
     <div style={S.wrap}>
       <section style={S.cockpitRow}>
-        <Link href="/cockpit-v2" style={S.cockpitButton}>
+        <TenantLink href="/cockpit-v2" style={S.cockpitButton}>
           → Cockpit · operations command
-        </Link>
+        </TenantLink>
       </section>
 
       <section style={S.propGrid}>
         {PROPERTIES.map((p) => (
-          <Link key={p.property_id} href={`/h/${p.property_id}`} style={S.propTile}>
+          <TenantLink key={p.property_id} href={`/h/${p.property_id}`} style={S.propTile}>
             <div style={S.propEyebrow}>
               {p.country.toUpperCase()} · {p.status}
             </div>
@@ -47,7 +46,7 @@ export default function HoldingExtras() {
               <span>{p.code}</span>
             </div>
             <div style={S.propCta}>Open property →</div>
-          </Link>
+          </TenantLink>
         ))}
       </section>
     </div>
