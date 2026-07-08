@@ -10,7 +10,7 @@
 // history, availability, documents, skills editor.
 
 import { notFound } from 'next/navigation';
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { fetchStaffDetail } from '../_actions/fetchStaffDetail';
 import { AttendanceCalendar } from './AttendanceCalendar';
 import { PayrollHistory } from './PayrollHistory';
@@ -76,9 +76,9 @@ export default async function StaffDetailContent({
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 11, letterSpacing: '0.14em',
         textTransform: 'uppercase', color: '#5A5A5A', marginBottom: 12,
       }}>
-        <Link href={backHref} style={{ color: '#000', textDecoration: 'underline' }}>
+        <TenantLink href={backHref} style={{ color: '#000', textDecoration: 'underline' }}>
           ← HR · Staff register
-        </Link>
+        </TenantLink>
         <span style={{ margin: '0 8px', color: '#9A9A9A' }}>/</span>
         <span style={{ color: '#000' }}>{d.emp_id}</span>
         <span style={{ margin: '0 8px', color: '#9A9A9A' }}>·</span>
