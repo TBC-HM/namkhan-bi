@@ -12,6 +12,7 @@ export default async function LighthouseOverviewPage({ propertyId }: { propertyI
   const rows = snapshot ? await getOverviewRows(pid, snapshot) : [];
   return (
     <LighthouseShell
+      propertyId={pid}
       view="overview"
       title="Lighthouse · Overview"
       subtitle="Per-date summary — own flex rate · median compset · rank · market demand · booking.com ranking · holidays · events"
