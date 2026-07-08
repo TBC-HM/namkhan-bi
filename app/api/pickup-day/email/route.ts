@@ -83,7 +83,7 @@ export async function POST(req: Request) {
     <p style="margin:0 0 12px;color:#5a5a5a">Generated ${todayIso} · next 90 nights · Demand column: Lighthouse snapshot ${snapshotDate ?? 'pending'}</p>
     ${body.note ? `<p style="background:#fafaf7;padding:10px;border-left:3px solid #084838">${body.note}</p>` : ''}
     <table style="border-collapse:collapse;font-size:12px" cellpadding="4" cellspacing="0">
-      <thead style="background:#0B3B2E;color:#fff"><tr><th>DoW</th><th>Date</th><th>Demand</th><th>OTB %</th><th>OCC</th><th>Avail</th><th>ADR</th><th>Room Rev</th><th>−1d RN</th><th>−7d RN</th></tr></thead>
+      <thead style="background:#0B3B2E;color:#fff"><tr><th>DoW</th><th>Date</th><th>Demand</th><th>OCC %</th><th>OTB</th><th>Avail</th><th>ADR</th><th>Room Rev</th><th>−1d RN</th><th>−7d RN</th></tr></thead>
       <tbody>${rowsHtml}</tbody>
     </table>
     <p style="font-size:11px;color:#8A8A8A;margin-top:12px">Row shading — green = nights with OTB bookings. Full grid + placeholders in the on-page dashboard.</p>
