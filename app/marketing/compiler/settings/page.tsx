@@ -3,7 +3,7 @@
 // v1: source-of-truth is hardcoded in lib/compiler/* and env vars. v1.1 will
 // move these to a `compiler.settings` jsonb row so they're editable.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import Page from '@/components/page/Page';
 import { MARKETING_SUBPAGES } from '../../_subpages';
 import StatusPill from '@/components/ui/StatusPill';
@@ -83,7 +83,7 @@ export default async function CompilerSettingsPage() {
       </table>
 
       <div style={{ marginTop: 18, fontSize: 'var(--t-xs)', fontFamily: 'var(--mono)', color: 'var(--ink-mute)' }}>
-        <Link href="/marketing/compiler" style={{ color: 'var(--brass)' }}>← BACK TO COMPILER</Link>
+        <TenantLink href="/marketing/compiler" style={{ color: 'var(--brass)' }}>← BACK TO COMPILER</TenantLink>
       </div>
     </Page>
   );
