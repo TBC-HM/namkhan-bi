@@ -1,22 +1,20 @@
 // components/nav/BackButton.tsx
 //
-// Lightweight back-nav for pages launched as drill-ins. router.back() keeps
-// the user's prior URL state (drawer drill, filters, scroll) when available,
-// and falls back to a hard-coded href on cold loads / direct URL entry.
-
-'use client';
+// PBS 2026-07-08: switched from history-based `router.back()` to always-Link
+// so the button reliably goes to the declared fallback (e.g. "← Channels"
+// always lands on /revenue/channels, regardless of history stack).
+// The old history heuristic broke because window.history.length is almost
+// always > 1 on Next.js hydration, so the fallback never fired.
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 
 interface Props {
-  fallback: string;          // where to go when there is no history
+  fallback: string;          // where the button navigates
   label?: string;            // default '← Back'
   style?: React.CSSProperties;
 }
 
 export default function BackButton({ fallback, label = '← Back', style }: Props) {
-  const router = useRouter();
   const baseStyle: React.CSSProperties = {
     display: 'inline-flex', alignItems: 'center', gap: 4,
     padding: '5px 12px', fontSize: 11, letterSpacing: '0.08em',
@@ -26,22 +24,9 @@ export default function BackButton({ fallback, label = '← Back', style }: Prop
     borderRadius: 4, textDecoration: 'none', cursor: 'pointer',
     ...style,
   };
-
-  const handleClick = () => {
-    // Prefer history when there is a non-empty history stack (history.length > 1).
-    // Otherwise fall back to the explicit href.
-    try {
-      if (typeof window !== 'undefined' && window.history.length > 1) {
-        router.back();
-        return;
-      }
-    } catch { /* noop */ }
-    router.push(fallback);
-  };
-
   return (
-    <button type="button" onClick={handleClick} style={baseStyle} aria-label={label}>
+    <Link href={fallback} aria-label={label} style={baseStyle}>
       {label}
-    </button>
+    </Link>
   );
 }
