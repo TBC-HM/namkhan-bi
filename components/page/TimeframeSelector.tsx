@@ -5,8 +5,7 @@
 // current path. Drop into any /revenue/* (or other) page that uses
 // resolvePeriod() from lib/period.ts.
 
-import Link from 'next/link';
-
+import TenantLink from '@/components/nav/TenantLink';
 interface Option {
   win: string;
   label: string;
@@ -68,7 +67,7 @@ export default function TimeframeSelector({
         params.set('win', o.win);
         const isActive = active === o.win;
         return (
-          <Link
+          <TenantLink
             key={o.win}
             href={`${basePath}?${params.toString()}`}
             prefetch={false}
@@ -82,7 +81,7 @@ export default function TimeframeSelector({
             }}
           >
             {o.label}
-          </Link>
+          </TenantLink>
         );
       })}
     </div>
