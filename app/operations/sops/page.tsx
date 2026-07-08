@@ -1,8 +1,8 @@
 // app/operations/sops/page.tsx
-// PBS 2026-07-03 · 2026-07-08: SOP catalog — 56 real SOPs from public.v_sop_catalog.
-// SOPs are NOT property-scoped (shared corp-level docs) but the page accepts
-// `propertyId` for URL tenant-consistency and creates a Donna delegate at
-// /h/[property_id]/operations/sops. Search + dept filter live client-side.
+// PBS 2026-07-03 · 2026-07-08 · 2026-07-07-Generate:
+//   SOP catalog. Now property-scoped via `v_sop_catalog.property_id`
+//   (NULL = shared, else per-tenant). Shows shared ∪ own for the caller.
+//   Search + dept filter live client-side. Sub-page: Generate SOP.
 
 import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
@@ -18,8 +18,14 @@ interface Props { propertyId?: number }
 
 export default async function OperationsSopsPage({ propertyId }: Props = {}) {
   const pid = propertyId ?? PROPERTY_ID;
-  const { data } = await supabase.from('v_sop_catalog').select('*').order('sop_code');
+  // Property scope: shared (property_id IS NULL) ∪ this tenant's rows.
+  const { data } = await supabase
+    .from('v_sop_catalog')
+    .select('*')
+    .or(`property_id.is.null,property_id.eq.${pid}`)
+    .order('sop_code');
   const sops: SopRow[] = (data as SopRow[]) ?? [];
+  const generateHref = pid === PROPERTY_ID ? '/operations/qa/generate' : `/h/${pid}/operations/qa/generate`;
 
   // KPI strip counts
   const distinctDepts = new Set(sops.map((s) => s.dept_code)).size;
@@ -49,7 +55,7 @@ export default async function OperationsSopsPage({ propertyId }: Props = {}) {
         </div>
 
         <div style={{ gridColumn: '1 / -1' }}>
-          <SopBrowser sops={sops} />
+          <SopBrowser sops={sops} generateHref={generateHref} />
         </div>
       </DashboardPage>
     </div>
