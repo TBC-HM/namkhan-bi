@@ -3,7 +3,7 @@
 // 3 tabs (Receivables · Deposits · House accounts) preserved via ?tab=.
 // Old <Page>/<Panel>/<KpiBox> chrome dropped.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import {
   DashboardPage, Container, KpiTile, type KpiTileProps,
 } from '@/app/(cockpit)/_design';
@@ -263,7 +263,7 @@ function EmailCoverageBanner({ missing, total, cohort }: { missing: number; tota
 
 function TabLink({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
   return (
-    <Link href={href} style={{
+    <TenantLink href={href} style={{
       padding: '10px 16px',
       fontSize: 11,
       letterSpacing: '0.06em',
@@ -275,6 +275,6 @@ function TabLink({ href, active, children }: { href: string; active: boolean; ch
       marginBottom: -1,
     }}>
       {children}
-    </Link>
+    </TenantLink>
   );
 }
