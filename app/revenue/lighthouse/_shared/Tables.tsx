@@ -167,15 +167,6 @@ export function DeltaTable({ rows, hotels, earlierSnapshot }: {
   if (rows.length === 0) return <div style={emptyBox}>No data for this snapshot.</div>;
   return (
     <>
-      {!earlierSnapshot && (
-        <div style={{
-          padding: '8px 12px', background: '#FDF6D8', border: '1px solid #E9D66C',
-          borderRadius: 4, fontSize: 12, color: '#5A4A00', marginBottom: 10,
-        }}>
-          Only one Lighthouse snapshot exists — deltas will populate once a second daily snapshot lands.
-          Grid below shows the current rates only.
-        </div>
-      )}
       <div style={scroller}>
         <table style={tbl}>
           <thead>
