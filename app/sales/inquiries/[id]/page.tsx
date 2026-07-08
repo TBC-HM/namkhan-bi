@@ -1,7 +1,7 @@
 // Inquiry detail — staff view of a single inquiry with "Open in Composer" CTA.
 // Uses canonical PageHeader + .panel + StatusPill.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { notFound, redirect } from 'next/navigation';
 import Page from '@/components/page/Page';
 import { SALES_SUBPAGES } from '../../_subpages';
@@ -86,7 +86,7 @@ export default async function InquiryDetail({ params }: { params: { id: string }
       </div>
 
       <div style={{ marginTop: 18 }}>
-        <Link href="/sales/inquiries" className="t-eyebrow" style={{ color: 'var(--ink-mute)' }}>← back to inquiries</Link>
+        <TenantLink href="/sales/inquiries" className="t-eyebrow" style={{ color: 'var(--ink-mute)' }}>← back to inquiries</TenantLink>
       </div>
     </Page>
   );
