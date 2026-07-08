@@ -70,6 +70,7 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     paceRes, stlyRes,
     l14PickupRes, l14LyPickupRes,
     next30ArrivalsRes,
+    attnRes,
   ] = await Promise.all([
     getPulseTodayPickup(pid, todayIso).catch(() => [] as Array<unknown>),
     getPulseTodayCancellations(pid, todayIso).catch(() => [] as Array<unknown>),
@@ -82,6 +83,8 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     supabase.from('v_reservations_unified').select('reservation_id, booking_date, check_in_date, check_out_date, guest_country_iso2, rate_plan_name').eq('property_id', pid).eq('is_cancelled', false).gte('booking_date', l14FromIso).lte('booking_date', todayIso),
     supabase.from('v_reservations_unified').select('reservation_id, guest_country_iso2').eq('property_id', pid).eq('is_cancelled', false).gte('booking_date', l14FromLyIso).lte('booking_date', l14ToLyIso),
     supabase.from('v_reservations_unified').select('reservation_id, check_in_date, check_out_date').eq('property_id', pid).eq('is_cancelled', false).gte('check_in_date', todayIso).lte('check_in_date', in30Iso),
+    // PBS 2026-07-08 #204/attention — attention flags come from cockpit.attention_flags via SECURITY DEFINER RPC.
+    supabase.rpc('fn_attention_list', { p_property_id: pid, p_dept: 'revenue', p_user_email: 'pbsbase@gmail.com' }),
   ]);
 
   const todayKpi = ((todayKpiRes.data ?? [])[0] ?? null) as { rn_tonight: number; capacity: number; occ_pct: number; adr_today: number; revpar_today: number } | null;
@@ -235,7 +238,16 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
       status: softNightsNext30 === 0 ? 'green' : softNightsNext30 > 8 ? 'amber' : 'grey' },
   ];
 
-  const attn = cfg.defaultAttn ?? [];
+  // PBS 2026-07-08 #204/attention — DB rows first, seed fallback for dev only.
+  type AttnRow = { id: number; kind: string | null; label: string; body: string | null; severity: string; source: string | null; link_href: string | null; created_at: string | null };
+  const attnRows = ((attnRes.data ?? []) as AttnRow[]);
+  const attnFromDb = attnRows.map(r => ({ id: String(r.id), label: r.label, kind: r.kind ?? undefined, severity: r.severity, href: r.link_href ?? undefined, body: r.body ?? undefined, source: 'db' as const }));
+  const attnSeed = (cfg.defaultAttn ?? []).map(a => ({ id: a.id, label: a.label, kind: a.kind, severity: a.severity, source: 'seed' as const }));
+  const useSeed = attnFromDb.length === 0 && process.env.NODE_ENV !== 'production';
+  const attn = useSeed ? attnSeed : attnFromDb;
+  const attnSubtitle = useSeed
+    ? `${attn.length} item${attn.length === 1 ? '' : 's'} · dev seed · dismiss with ×`
+    : `${attn.length} item${attn.length === 1 ? '' : 's'} · live · dismiss with ×`;
   const docs = cfg.defaultDocs ?? [];
   const reportTypes = cfg.reportTypes ?? [];
 
@@ -268,8 +280,8 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
       )}
 
       <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
-        <Container title="Attention" subtitle={`${attn.length} item${attn.length === 1 ? '' : 's'} · dismiss with ×`} density="compact">
-          <AttentionList items={attn} storageKey={`attn:revenue:${pid}`} />
+        <Container title="Attention" subtitle={attnSubtitle} density="compact">
+          <AttentionList items={attn} storageKey={`attn:revenue:${pid}`} userEmail="pbsbase@gmail.com" />
         </Container>
         <Container title="My Reports" subtitle={`${docs.length} item${docs.length === 1 ? '' : 's'} · red = unseen · dismiss with ×`} density="compact">
           <ReportsList items={docs} storageKey={`reports:revenue:${pid}`} />
