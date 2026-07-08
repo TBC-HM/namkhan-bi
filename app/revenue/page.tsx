@@ -198,9 +198,12 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     30,
     paceNext90.filter(n => n.daysOut >= 1 && n.daysOut <= 30 && n.occPct < 50).length,
   );
-  // Total room nights booked TODAY across all new reservations (pickup array from getPulseTodayPickup).
+  // Total room nights + revenue booked TODAY across all new reservations.
+  // PBS 2026-07-08: revenue added alongside nights so the tile shows the value delta.
   const pickupNightsSum = (pickupToday as Array<{ nights?: number | null }>).reduce((s, r) => s + (Number(r.nights) || 0), 0);
+  const pickupRevenueSum = (pickupToday as Array<{ value?: number | null }>).reduce((s, r) => s + (Number(r.value) || 0), 0);
   const cancelNightsSum = (cancellationsToday as Array<{ nights?: number | null }>).reduce((s, r) => s + (Number(r.nights) || 0), 0);
+  const cancelRevenueSum = (cancellationsToday as Array<{ value?: number | null }>).reduce((s, r) => s + (Number(r.value) || 0), 0);
 
   // PBS 2026-07-07 evening: strip 10% VAT + 10% service (compound 21%) so KPI tiles show NET values matching Cloudbeds + USALI.
   const TAX_SERVICE = 1.21;
@@ -223,15 +226,16 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
       footnote: `${todayKpi?.rn_tonight ?? 0} rooms × ADR · net`,
       status: netRevenueTonight > 0 ? 'green' : 'grey' },
     // PBS 2026-07-07 evening: room-nights headline, bookings count in small print.
+    // PBS 2026-07-08: revenue added to footnote so the tile shows the value picked up / lost.
     { label: 'Pickup today · room nights', value: pickupNightsSum, size: 'sm',
       footnote: pickupCount === 0
         ? 'no new bookings'
-        : `${pickupCount} ${pickupCount === 1 ? 'booking' : 'bookings'} · created today`,
+        : `${pickupCount} ${pickupCount === 1 ? 'booking' : 'bookings'} · ${symToday}${Math.round(pickupRevenueSum).toLocaleString('en-US')} · created today`,
       status: pickupNightsSum > 0 ? 'green' : 'grey' },
     { label: 'Cancellations today · room nights', value: cancelNightsSum, size: 'sm',
       footnote: cancelCount === 0
         ? 'no cancellations'
-        : `${cancelCount} ${cancelCount === 1 ? 'booking' : 'bookings'} lost today`,
+        : `${cancelCount} ${cancelCount === 1 ? 'booking' : 'bookings'} · ${symToday}${Math.round(cancelRevenueSum).toLocaleString('en-US')} · lost today`,
       status: cancelCount === 0 ? 'green' : 'amber' },
     { label: 'Soft nights (next 30d)', value: softNightsNext30, size: 'sm',
       footnote: '< 50% OCC · window still open',
