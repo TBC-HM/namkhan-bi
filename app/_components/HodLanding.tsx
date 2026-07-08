@@ -7,6 +7,11 @@
 // PBS 2026-07-07: `conclusions` slot renders a <ConclusionBlock> between
 // the 4-up row and Build-a-report. Each HoD page evaluates its own rules
 // server-side and passes the resulting Insight[] via the prop.
+//
+// PBS 2026-07-08: Attention items now come from cockpit.attention_flags
+// via public.fn_attention_list (property + dept + user scoped). The static
+// cfg.defaultAttn seed is kept as a DEV-ONLY fallback so demo screens
+// still light up when the table is empty. In prod, empty table = empty box.
 
 import TenantLink from '@/components/nav/TenantLink';
 import {
@@ -24,6 +29,10 @@ import BugsList      from '@/app/revenue/_components/BugsList';
 import HodTasksList  from '@/app/revenue/_components/HodTasksList';
 import AttentionList from '@/app/revenue/_components/AttentionList';
 import ConclusionBlock, { type Insight } from '@/app/_components/ConclusionBlock';
+
+// PBS 2026-07-08: single-user cockpit for now. When ADR-112 auth front door
+// lands, swap this for the session email read server-side.
+const DEFAULT_USER_EMAIL = 'pbsbase@gmail.com';
 
 interface Props {
   slug: DeptSlug;
@@ -45,7 +54,7 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
 
   const subPages = rewriteSubPagesForProperty(cfg.subPages ?? [], pid);
 
-  const [bugsRes, dueTasksRes] = await Promise.all([
+  const [bugsRes, dueTasksRes, attnRes] = await Promise.all([
     supabase
       .from('cockpit_bugs')
       .select('id, body, status, created_at, page_url')
@@ -58,6 +67,14 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
       .eq('dept_slug', slug)
       .eq('property_id', pid)
       .eq('is_due', true),
+    // PBS 2026-07-08: attention flags come from cockpit.attention_flags
+    // via SECURITY DEFINER RPC. Property-scoped + dept-scoped + user-scoped
+    // (dismissals per user). See cockpit.attention_flags / fn_attention_list.
+    supabase.rpc('fn_attention_list', {
+      p_property_id: pid,
+      p_dept:        slug,
+      p_user_email:  DEFAULT_USER_EMAIL,
+    }),
   ]);
 
   const bugs = (bugsRes.data ?? []) as Array<{
@@ -70,8 +87,35 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
     label: k.k, value: k.v, size: 'sm', footnote: k.d,
   }));
 
-  const attn       = cfg.defaultAttn ?? [];
-  const docs       = cfg.defaultDocs ?? [];
+  // Map RPC rows -> AttentionList's AttnItem shape. Numeric id becomes string
+  // (AttnItem.id is string) so React keys + dismiss payloads stay stable.
+  type AttnRow = {
+    id: number; kind: string | null; label: string;
+    body: string | null; severity: string;
+    source: string | null; link_href: string | null;
+    created_at: string | null;
+  };
+  const attnRows = (attnRes.data ?? []) as AttnRow[];
+  const attnFromDb = attnRows.map((r) => ({
+    id:       String(r.id),
+    label:    r.label,
+    kind:     r.kind ?? undefined,
+    severity: r.severity,
+    href:     r.link_href ?? undefined,
+    body:     r.body ?? undefined,
+    source:   'db' as const,
+  }));
+
+  // Dev-only fallback: if the DB has 0 rows AND we're not in prod, show the
+  // legacy static seeds so demos aren't blank. Flagged with source='seed'.
+  const attnSeed = (cfg.defaultAttn ?? []).map((a) => ({
+    id: a.id, label: a.label, kind: a.kind, severity: a.severity,
+    source: 'seed' as const,
+  }));
+  const useSeed = attnFromDb.length === 0 && process.env.NODE_ENV !== 'production';
+  const attn = useSeed ? attnSeed : attnFromDb;
+
+  const docs        = cfg.defaultDocs ?? [];
   const reportTypes = cfg.reportTypes ?? [];
 
   const hodTabs = subPages.map((s) => ({
@@ -80,6 +124,10 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
   }));
 
   const chatHref = `/cockpit/chat?dept=${slug}`;
+
+  const attnSubtitle = useSeed
+    ? `${attn.length} item${attn.length === 1 ? '' : 's'} · dev seed · dismiss with ×`
+    : `${attn.length} item${attn.length === 1 ? '' : 's'} · live · dismiss with ×`;
 
   return (
     <DashboardPage
@@ -99,8 +147,12 @@ export default async function HodLanding({ slug, propertyId, liveTiles, extraCon
       )}
 
       <div style={{ ...fullRow, display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
-        <Container title="Attention" subtitle={`${attn.length} item${attn.length === 1 ? '' : 's'} · dismiss with ×`} density="compact">
-          <AttentionList items={attn} storageKey={`attn:${slug}:${pid}`} />
+        <Container title="Attention" subtitle={attnSubtitle} density="compact">
+          <AttentionList
+            items={attn}
+            storageKey={`attn:${slug}:${pid}`}
+            userEmail={DEFAULT_USER_EMAIL}
+          />
         </Container>
         <Container title="My Reports" subtitle={`${docs.length} item${docs.length === 1 ? '' : 's'} · red = unseen · dismiss with ×`} density="compact">
           <ReportsList items={docs} storageKey={`reports:${slug}:${pid}`} />
