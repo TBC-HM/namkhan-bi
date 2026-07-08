@@ -5,11 +5,10 @@
 // Until the active property comes from session context, this badge
 // hardcodes Namkhan (260955) — matches the existing cockpit context.
 
-import Link from 'next/link';
-
+import TenantLink from '@/components/nav/TenantLink';
 export default function InboxBadge({ unread }: { unread: number }) {
   return (
-    <Link
+    <TenantLink
       href="/h/260955/inbox"
       title={unread > 0 ? `Inbox · ${unread} unread` : 'Inbox'}
       style={{
@@ -58,6 +57,6 @@ export default function InboxBadge({ unread }: { unread: number }) {
           {unread > 99 ? '99+' : unread}
         </span>
       )}
-    </Link>
+    </TenantLink>
   );
 }
