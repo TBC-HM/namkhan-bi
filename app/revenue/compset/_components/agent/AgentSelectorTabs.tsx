@@ -3,7 +3,7 @@
 
 'use client';
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import type { AgentSettingsRow } from '../scoring/types';
 
 interface Props {
@@ -24,7 +24,7 @@ export default function AgentSelectorTabs({ agents, selectedCode }: Props) {
       {agents.map((a) => {
         const active = a.code === selectedCode;
         return (
-          <Link
+          <TenantLink
             key={a.code}
             href={`/revenue/compset/agent-settings?agent=${encodeURIComponent(a.code)}`}
             style={{
@@ -42,7 +42,7 @@ export default function AgentSelectorTabs({ agents, selectedCode }: Props) {
             }}
           >
             {a.code}
-          </Link>
+          </TenantLink>
         );
       })}
     </div>
