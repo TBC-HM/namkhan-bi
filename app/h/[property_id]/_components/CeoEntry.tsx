@@ -18,7 +18,7 @@
 //   - all internal Links now use TenantLink so /h/{property_id} sticks on nav.
 
 import TenantLink from '@/components/nav/TenantLink';
-import { DashboardPage, Container, KpiTile, type DashboardTab, type KpiTileProps, type KpiComparison } from '@/app/(cockpit)/_design';
+import { DashboardPage, Container, KpiTile, type DashboardTab, type KpiTileProps, type KpiComparison, type Currency } from '@/app/(cockpit)/_design';
 import BookingActivity from '@/app/(cockpit)/_design/BookingActivity';
 import HodTasksList from '@/app/revenue/_components/HodTasksList';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -31,7 +31,7 @@ export interface CeoConfig {
   ceoAvatar: string;
   ceoTagline: string;
   humanPartner: string;
-  baseCurrency?: string; // PBS 2026-07-08: 'USD' | 'EUR' | ... -- falls back to view row value
+  baseCurrency?: Currency; // PBS 2026-07-08: 'USD' | 'EUR' | 'LAK'
 }
 
 const NAMKHAN_ID = 260955;
@@ -67,18 +67,24 @@ function isoBack(days: number): string {
 }
 
 // PBS 2026-07-08: hardcoded fallback so Donna doesn't show $ if the view is
-// missing base_currency for some reason.
-function fallbackCurrency(pid: number): string {
+// missing base_currency for some reason. Currency union kept in sync with
+// _design/types.ts (Currency = 'EUR' | 'USD' | 'LAK').
+function fallbackCurrency(pid: number): Currency {
   if (pid === NAMKHAN_ID) return 'USD';
   if (pid === DONNA_ID)   return 'EUR';
   return 'USD';
 }
 
-function currencySymbol(code: string): string {
+function normalizeCurrency(v: string | undefined | null): Currency | null {
+  if (v === 'EUR' || v === 'USD' || v === 'LAK') return v;
+  return null;
+}
+
+function currencySymbol(code: Currency): string {
   switch (code) {
     case 'EUR': return '€';
-    case 'GBP': return '£';
     case 'LAK': return '₭';
+    case 'USD':
     default:    return '$';
   }
 }
@@ -95,15 +101,12 @@ export default async function CeoEntry({
   const d30      = isoBack(30);
   const d90      = isoBack(90);
   const d365     = isoBack(365);
-  // PBS 2026-07-02: main tile value is YTD (Jan 1 of current year -> today).
   const dYtd     = `${new Date().getFullYear()}-01-01`;
   const yearNow  = new Date().getFullYear();
-  // PBS 2026-07-02: SDLY YTD -- Jan 1 of prior year through same month/day of prior year.
   const dSdlyStart = `${yearNow - 1}-01-01`;
   const dSdlyEnd   = new Date(new Date().setFullYear(yearNow - 1)).toISOString().slice(0, 10);
 
   // PBS 2026-07-08 v3: multi-tenant view + property_id filter.
-  // Old code hardcoded to Namkhan-only `public.v_kpi_daily`; Donna returned zero rows.
   const kpiSelect = 'night_date,base_currency,rooms_available,rooms_sold,rooms_revenue,total_revenue';
   const pull = async (from: string, to: string = today): Promise<KpiRow[]> => {
     try {
@@ -127,8 +130,6 @@ export default async function CeoEntry({
     pull(dSdlyStart, dSdlyEnd),
     Promise.resolve(supabase.from('cockpit_bugs').select('id,body,status,created_at,fix_link,fix_label').neq('status', 'archived').order('created_at', { ascending: false }).limit(10)).then(r => (r.data ?? []) as BugRow[]).catch(() => [] as BugRow[]),
   ]);
-  // Attention / Docs surfaces not yet installed -- render empty state.
-  // Tasks now use the shared HodTasksList primitive (client component with add/due/repeat/delete).
   const attnRes: Array<{ id: string; label: string; severity: 'high'|'medium'|'low'; href: string | null }> = [];
   const docsRes: Array<{ id: string; label: string; href: string | null; uploaded_at: string }> = [];
 
@@ -138,14 +139,13 @@ export default async function CeoEntry({
   const AYtd      = agg(kpiYtd);
   const ASdlyYtd  = agg(kpiSdlyYtd);
 
-  // PBS 2026-07-08: currency comes from cfg > first row.base_currency > property fallback.
-  const currencyCode: string = cfg.baseCurrency
-    ?? (kpiYtd[0]?.base_currency)
-    ?? (kpi365[0]?.base_currency)
+  // PBS 2026-07-08: currency = cfg > view row > property fallback.
+  const currencyCode: Currency = cfg.baseCurrency
+    ?? normalizeCurrency(kpiYtd[0]?.base_currency)
+    ?? normalizeCurrency(kpi365[0]?.base_currency)
     ?? fallbackCurrency(cfg.propertyId);
   const cSym = currencySymbol(currencyCode);
 
-  // Delta helper: % change vs SDLY YTD. Positive = better (revenue/RevPAR/ADR/occ).
   const pctDelta = (now: number, prior: number): { value: number; direction: 'up' | 'down' | 'flat' } => {
     if (prior <= 0) return { value: 0, direction: 'flat' };
     const pct = ((now - prior) / prior) * 100;
@@ -165,8 +165,6 @@ export default async function CeoEntry({
     { label: 'L365d', value: v365, format, direction: 'flat' },
   ];
 
-  // PBS 2026-07-02: main = YTD (Jan 1 -> today). delta = SDLY YTD %. compare[] = trailing L30/L90/L365.
-  // PBS 2026-07-08: currency prop = currencyCode (was hardcoded 'USD').
   const tiles: KpiTileProps[] = [
     { label: 'Occupancy',     value: `${AYtd.occ.toFixed(1)}%`,        size: 'md',
       footnote: `rooms sold / rooms available · YTD ${yearNow} · SDLY ${(ASdlyYtd.occ).toFixed(1)}%`,
@@ -186,7 +184,7 @@ export default async function CeoEntry({
       compare: cmp(Math.round(A30.rev), Math.round(A90.rev), Math.round(A365.rev), 'currency') },
   ];
 
-  const tabs: DashboardTab[] = [];  // property nav handled by parent TopDeptStrip
+  const tabs: DashboardTab[] = [];
 
   const severityTone: Record<string, string> = {
     high:   '#B03826',
@@ -200,7 +198,6 @@ export default async function CeoEntry({
       subtitle={cfg.ceoTagline}
       tabs={tabs}
     >
-      {/* CEO greeting strip */}
       <div style={{
         gridColumn: '1 / -1',
         display: 'flex', alignItems: 'center', gap: 14,
@@ -221,7 +218,6 @@ export default async function CeoEntry({
         </span>
       </div>
 
-      {/* Ask-me chat entry */}
       <div style={{ gridColumn: '1 / -1' }}>
         <Container title={`Ask ${cfg.ceoName}`} subtitle="Cross-department questions · P&L · guest experience · operations">
           <form
@@ -262,12 +258,10 @@ export default async function CeoEntry({
         </Container>
       </div>
 
-      {/* KPI tiles */}
       <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10, marginTop: 6 }}>
         {tiles.map((t, i) => <KpiTile key={i} {...t} />)}
       </div>
 
-      {/* 3-container row: Attention · Docs · Tasks */}
       <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gridAutoRows: '1fr', gap: 12, alignItems: 'stretch' }}>
         <Container title={`Attention · ${attnRes.length}`} subtitle="leakage · opportunities · watchlist">
           {attnRes.length === 0 ? (
@@ -304,7 +298,6 @@ export default async function CeoEntry({
         </Container>
       </div>
 
-      {/* Bug tracker */}
       <div style={{ gridColumn: '1 / -1' }}>
         <Container title={`Bugs & fixes · ${bugsRes.length}`} subtitle={`reported by ${cfg.ceoName} / by chat · click a done bug to see the fix`}>
           {bugsRes.length === 0 ? (
@@ -331,7 +324,6 @@ export default async function CeoEntry({
         </Container>
       </div>
 
-      {/* Booking activity -- new bookings + cancellations · 1-7d window */}
       <div style={{ gridColumn: '1 / -1' }}>
         <BookingActivity propertyId={cfg.propertyId} searchParams={searchParams} />
       </div>
