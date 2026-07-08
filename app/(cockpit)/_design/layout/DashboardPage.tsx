@@ -57,14 +57,27 @@ export default function DashboardPage(props: DashboardPageProps) {
         <div style={S.pillsRow}>
           <HeaderPills kpiTiles={kpiTiles} hideWeather={hideWeather} />
         </div>
+        {/* PBS 2026-07-08: action bar moved out of the title header row.
+            It now renders on the sub-strip row (or the main tab strip if there's
+            no subgroup) so it sits at the same vertical level as the tabs and
+            never separates from them when the sticky header collapses. */}
         <header style={S.topBar}>
           <div style={S.titleStack}>
             <h1 style={S.title}>{title}</h1>
           </div>
-          {action && <div style={S.action}>{action}</div>}
         </header>
-        {smartTabs && smartTabs.length > 0 && <TabStrip pathname={pathname} tabs={smartTabs} />}
-        {subGroup && <SubTabStrip pathname={pathname} tabs={subGroup.tabs} />}
+        {smartTabs && smartTabs.length > 0 && (
+          <TabStrip
+            pathname={pathname}
+            tabs={smartTabs}
+            action={!subGroup ? action : undefined}
+          />
+        )}
+        {subGroup && <SubTabStrip pathname={pathname} tabs={subGroup.tabs} action={action} />}
+        {/* Fallback: no tabs and no subGroup → keep action visible under the title. */}
+        {!smartTabs?.length && !subGroup && action && (
+          <div style={{ ...S.action, alignSelf: 'flex-start' }}>{action}</div>
+        )}
       </div>
       <main style={S.body}>{children}</main>
     </div>
@@ -75,7 +88,7 @@ export default function DashboardPage(props: DashboardPageProps) {
 // the current pathname. Industry-standard tabs — all shown, active one underlined.
 // (Reverted the sibling-filter from 2026-07-07 night which hid the active tab —
 //  operators lost track of "which is the current page inside the group".)
-function SubTabStrip({ pathname, tabs }: { pathname: string; tabs: { label: string; href: string }[] }) {
+function SubTabStrip({ pathname, tabs, action }: { pathname: string; tabs: { label: string; href: string }[]; action?: React.ReactNode }) {
   return (
     <nav style={S.subTabStrip} role="tablist" aria-label="Sub-section">
       {tabs.map((t) => {
@@ -92,11 +105,12 @@ function SubTabStrip({ pathname, tabs }: { pathname: string; tabs: { label: stri
           </a>
         );
       })}
+      {action && <div style={S.actionInline}>{action}</div>}
     </nav>
   );
 }
 
-function TabStrip({ pathname, tabs }: { pathname: string; tabs: DashboardTab[] }) {
+function TabStrip({ pathname, tabs, action }: { pathname: string; tabs: DashboardTab[]; action?: React.ReactNode }) {
   // Split "HoD" entries off the regular tab list — they render as a
   // left-aligned breadcrumb so the rest of the strip becomes a secondary
   // sub-nav under the HoD landing.
@@ -114,6 +128,7 @@ function TabStrip({ pathname, tabs }: { pathname: string; tabs: DashboardTab[] }
           {others.map((t) => <TabButton key={t.key} pathname={pathname} tab={t} />)}
         </div>
       )}
+      {action && <div style={S.actionInline}>{action}</div>}
     </nav>
   );
 }
@@ -178,6 +193,11 @@ const S: Record<string, CSSProperties> = {
   title: { margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--ink, #1B1B1B)' },
   subtitle: { margin: 0, fontSize: 12, color: 'var(--ink-soft, #5A5A5A)' },
   action: { display: 'flex', alignItems: 'center', gap: 8 },
+  // PBS 2026-07-08: action bar rendered INSIDE the tab / sub-tab row via
+  // marginLeft:auto so it right-aligns at the same vertical level as the tabs
+  // — that's what "on the same level as the sub-menu" means. It scrolls with
+  // the sub-strip and never drifts off screen.
+  actionInline: { marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 },
   tabStrip: { display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid var(--hairline, #E6DFCC)', flexWrap: 'wrap' },
   parentGroup: { display: 'flex', gap: 4, paddingRight: 12, borderRight: '1px solid var(--hairline, #E6DFCC)' },
   tabGroup: { display: 'flex', gap: 4, flexWrap: 'wrap', flex: 1 },
