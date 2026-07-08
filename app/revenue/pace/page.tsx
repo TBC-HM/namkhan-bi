@@ -23,7 +23,7 @@ import {
   type DashboardTab,
   type KpiTileProps,
 } from '@/app/(cockpit)/_design';
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { supabase, PROPERTY_ID } from '@/lib/supabase';
 import { resolvePeriod, type WindowKey } from '@/lib/period';
 import { capacityFor, capacityRnRange } from '@/lib/capacity';
@@ -548,7 +548,7 @@ function ControlGroup({ label, children }: { label: string; children: React.Reac
 
 function PillLink({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
   return (
-    <Link
+    <TenantLink
       href={href}
       style={{
         fontFamily: 'inherit',
@@ -565,6 +565,6 @@ function PillLink({ href, active, children }: { href: string; active: boolean; c
       }}
     >
       {children}
-    </Link>
+    </TenantLink>
   );
 }
