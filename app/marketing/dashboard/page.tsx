@@ -2,7 +2,7 @@
 // PBS 2026-07-05: replaced legacy EngineDashboard shell with a marketing-manager landing
 // that just links to the sub-tools (this old page duplicated /marketing HoD landing).
 // Keeping URL alive so existing bookmarks don't 404, but pointing users to the right tools.
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, type DashboardTab } from '@/app/(cockpit)/_design';
 import { MARKETING_SUBPAGES } from '../_subpages';
 
@@ -33,14 +33,14 @@ export default function DashboardPage_() {
     <div style={{ background:'#FFFFFF', minHeight:'100vh' }}>
       <DashboardPage title="Marketing · Dashboard" subtitle="Every marketing tool in one place · use HoD for daily attention" tabs={tabs}>
         <div style={{ gridColumn:'1 / -1', padding:'10px 14px', background:'#FFF4D6', border:'1px solid '+AMBER, borderRadius:4, fontSize:12, color:INK }}>
-          <strong>Note.</strong> This page used to host the old EngineDashboard (6 legacy views). It duplicated <Link href="/marketing" style={{ color:GREEN }}>Marketing HoD</Link>. Kept alive as a directory to the current tools. Delete when nothing links here.
+          <strong>Note.</strong> This page used to host the old EngineDashboard (6 legacy views). It duplicated <TenantLink href="/marketing" style={{ color:GREEN }}>Marketing HoD</TenantLink>. Kept alive as a directory to the current tools. Delete when nothing links here.
         </div>
         <div style={{ gridColumn:'1 / -1', display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(240px, 1fr))', gap:10 }}>
           {LINKS.map(l => (
-            <Link key={l.href} href={l.href} style={{ background:'#FFFFFF', border:'1px solid '+HAIR, borderRadius:6, padding:'14px 16px', textDecoration:'none', color:INK, display:'flex', flexDirection:'column', gap:4 }}>
+            <TenantLink key={l.href} href={l.href} style={{ background:'#FFFFFF', border:'1px solid '+HAIR, borderRadius:6, padding:'14px 16px', textDecoration:'none', color:INK, display:'flex', flexDirection:'column', gap:4 }}>
               <div style={{ fontSize:13, fontWeight:600, color:GREEN }}>{l.label} →</div>
               <div style={{ fontSize:12, color:INK_M, lineHeight:1.5 }}>{l.desc}</div>
-            </Link>
+            </TenantLink>
           ))}
         </div>
       </DashboardPage>
