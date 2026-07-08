@@ -57,6 +57,8 @@ export interface ChartSeries {
   type?: 'bar' | 'line';
   /** Recharts dual-axis support (left/right Y axis). Used by demand page. */
   yAxisId?: string;
+  /** Recharts stack grouping — bars with the same stackId stack together. PBS 2026-07-08. */
+  stackId?: string;
 }
 
 export interface ChartDimension {
