@@ -77,7 +77,7 @@ export async function GET(req: Request) {
   lines.push(q(`Demand column source: Lighthouse snapshot ${snapshotDate ?? 'n/a'}`));
   lines.push('');
   lines.push([
-    'DoW','Date','Demand %','OTB %','OCC (rooms sold)','OOO','Available',
+    'DoW','Date','Demand %','OCC %','OTB (rooms sold)','OoO','Avail',
     `ADR (${sym})`, `Room Rev (${sym})`,
     'Pickup -1d RN', `Pickup -1d Rev (${sym})`, `Pickup -1d ADR (${sym})`,
     'Pickup -7d RN', `Pickup -7d Rev (${sym})`, `Pickup -7d ADR (${sym})`,
