@@ -7,7 +7,7 @@
 // Reads existing TacticalAlertRow[] from getTacticalAlertsTop() — no schema
 // change. Severity ordering already done server-side; we slice 3.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import type { TacticalAlertRow } from '@/lib/pulseData';
 
 interface Props {
@@ -87,7 +87,7 @@ export default function PulseHeroOpen({ alerts }: Props) {
               {a.description}
             </div>
             <div style={{ marginTop: 2 }}>
-              <Link href={vectorHref(a)} style={askBtn}>Ask Vector</Link>
+              <TenantLink href={vectorHref(a)} style={askBtn}>Ask Vector</TenantLink>
             </div>
           </div>
         );
