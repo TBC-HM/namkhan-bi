@@ -3,7 +3,7 @@
 
 'use client';
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import { fmtTableUsd, fmtIsoDate, EMPTY } from '@/lib/format';
 import RunNowButtons from './RunNowButtons';
@@ -117,7 +117,7 @@ export default function CompactAgentHeader({
           <span style={metaDim}>{events.length} upcoming events</span>
         )}
         {settingsLinks.map((l) => (
-          <Link key={l.href} href={l.href} style={linkBtn}>{l.label}</Link>
+          <TenantLink key={l.href} href={l.href} style={linkBtn}>{l.label}</TenantLink>
         ))}
       </div>
     </div>
