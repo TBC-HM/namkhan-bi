@@ -1,9 +1,10 @@
 'use client';
 
 // app/operations/sops/_components/SopBrowser.tsx
-// PBS 2026-07-08 · 2026-07-07 (Generate): Client-side search + grouped SOP list.
-// Now surfaces AI-generated SOPs with a small "AI" chip on the code cell, and
-// renders a "+ Generate SOP" button when `generateHref` prop is passed.
+// PBS 2026-07-08 · 2026-07-07 (Generate) · 2026-07-08 (Proposals):
+// Client-side search + grouped SOP list. Surfaces AI-generated SOPs with a
+// small "AI" chip on the code cell. Renders "+ Generate SOP" and
+// "+ Propose SOPs" buttons when their respective href props are passed.
 // SOPs are property-scoped (see /operations/sops page.tsx filter).
 
 import { useMemo, useState } from 'react';
@@ -51,7 +52,7 @@ function normDept(code: string): string {
   return map[cu] ?? code;
 }
 
-export default function SopBrowser({ sops, generateHref }: { sops: SopRow[]; generateHref?: string }) {
+export default function SopBrowser({ sops, generateHref, proposalsHref }: { sops: SopRow[]; generateHref?: string; proposalsHref?: string }) {
   const [query, setQuery] = useState('');
   const [deptFilter, setDeptFilter] = useState<string>('all');
 
@@ -118,11 +119,24 @@ export default function SopBrowser({ sops, generateHref }: { sops: SopRow[]; gen
         <span style={{ fontSize: 11, color: INK_M }}>
           {filtered.length} of {sops.length} SOP{sops.length === 1 ? '' : 's'}
         </span>
+        {proposalsHref && (
+          <a
+            href={proposalsHref}
+            style={{
+              marginLeft: 'auto', padding: '6px 12px',
+              background: WHITE, color: '#0F5B4A', border: '1px solid #0F5B4A',
+              borderRadius: 4, fontSize: 11, fontWeight: 600,
+              textDecoration: 'none', letterSpacing: '0.02em',
+            }}
+          >
+            + Propose SOPs
+          </a>
+        )}
         {generateHref && (
           <a
             href={generateHref}
             style={{
-              marginLeft: 'auto', padding: '6px 12px',
+              marginLeft: proposalsHref ? 0 : 'auto', padding: '6px 12px',
               background: '#0F5B4A', color: WHITE, border: '1px solid #0F5B4A',
               borderRadius: 4, fontSize: 11, fontWeight: 600,
               textDecoration: 'none', letterSpacing: '0.02em',
