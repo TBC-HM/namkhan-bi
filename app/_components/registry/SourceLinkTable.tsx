@@ -12,8 +12,7 @@
 // Style: hover underlines + brass accent + right-arrow chevron so PBS
 // can see at a glance that names are clickable.
 
-import Link from 'next/link';
-
+import TenantLink from '@/components/nav/TenantLink';
 export interface SourceColumn {
   key: string;
   label: string;
@@ -117,14 +116,14 @@ export default function SourceLinkTable({
                   if (ci === 0 && source) {
                     return (
                       <td key={c.key} style={linkCell}>
-                        <Link
+                        <TenantLink
                           href={`/revenue/channels/${encodeURIComponent(source)}`}
                           style={linkStyle}
                           title={`Open landing page for ${source}`}
                         >
                           {String(val ?? source)}
                           <span style={{ color: '#C79A6B', fontSize: 11 }}>→</span>
-                        </Link>
+                        </TenantLink>
                       </td>
                     );
                   }
