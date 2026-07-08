@@ -1,7 +1,7 @@
 // app/operations/sustainability/page.tsx
 // PBS 2026-07-06: dedicated sustainability page — Travelife + SLH Considerate
 // + greenhouse goals + toolkits. Reuses DocContainer + DocPreviewModal primitives.
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { PROPERTY_ID } from '@/lib/supabase';
 import { DashboardPage, KpiTile, type DashboardTab, type KpiTileProps } from '@/app/(cockpit)/_design';
