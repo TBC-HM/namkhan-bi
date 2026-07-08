@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import DataTable from '@/components/ui/DataTable';
 import StatusPill, { type StatusTone } from '@/components/ui/StatusPill';
 import { fmtTableUsd, fmtIsoDate, EMPTY } from '@/lib/format';
@@ -119,7 +119,7 @@ export default function AgentsTable({ rows }: { rows: AgentRow[] }) {
           align: 'center',
           render: (r) =>
             r.settings_href ? (
-              <Link
+              <TenantLink
                 href={r.settings_href}
                 style={{
                   fontFamily: 'var(--mono)',
@@ -132,7 +132,7 @@ export default function AgentsTable({ rows }: { rows: AgentRow[] }) {
                 }}
               >
                 Open
-              </Link>
+              </TenantLink>
             ) : (
               EMPTY
             ),
