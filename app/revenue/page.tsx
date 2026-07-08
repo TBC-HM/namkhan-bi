@@ -72,9 +72,9 @@ export default async function RevenueHoDPage({ propertyId, searchParams }: Props
     next30ArrivalsRes,
     attnRes,
     scheduledRes,
-    shortcutsRes,
     sendsRes,
     myReportsRes,
+    shortcutsRes,
   ] = await Promise.all([
     getPulseTodayPickup(pid, todayIso).catch(() => [] as Array<unknown>),
     getPulseTodayCancellations(pid, todayIso).catch(() => [] as Array<unknown>),
