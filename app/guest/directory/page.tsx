@@ -58,7 +58,10 @@ export interface DirectoryRow {
   last_sent_at: string | null;
 }
 
-export default async function GuestDirectoryPage() {
+interface PageProps { propertyId?: number }
+
+export default async function GuestDirectoryPage({ propertyId }: PageProps = {}) {
+  const pid = propertyId ?? PROPERTY_ID;
   const sb = getSupabaseAdmin();
 
   // Supabase PostgREST caps a single call at max_rows=1000. Chunk-paginate to
@@ -72,7 +75,7 @@ export default async function GuestDirectoryPage() {
     const { data } = await sb
       .from('v_guest_directory_with_newsletters')
       .select(projection)
-      .eq('property_id', PROPERTY_ID)
+      .eq('property_id', pid)
       .or('last_stay_date.not.is.null,upcoming_stay_date.not.is.null')
       .order('upcoming_stay_date', { ascending: true,  nullsFirst: false })
       .order('last_stay_date',     { ascending: false, nullsFirst: false })
