@@ -10,7 +10,7 @@
 //   - Added a back button to /revenue/channels.
 //   - Chrome is DashboardPage + Container (v6/v7).
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import { DashboardPage, Container, type DashboardTab } from '@/app/(cockpit)/_design';
 import { supabase } from '@/lib/supabase';
 import ContactsForm, { type ContactRow } from './ContactsForm';
@@ -139,12 +139,12 @@ export default async function ChannelContactsPage() {
         title={`DMC partners · ${dmcSorted.length} contracts`}
         subtitle="Read-only roster from governance.dmc_contracts · click any partner for full B2B detail surface"
         action={
-          <Link
+          <TenantLink
             href="/sales/b2b"
             style={ctaStyle}
           >
             Open B2B / DMC →
-          </Link>
+          </TenantLink>
         }
       >
         {dmcSorted.length === 0 ? (
@@ -181,9 +181,9 @@ export default async function ChannelContactsPage() {
                   return (
                     <tr key={c.contract_id} style={{ borderBottom: '1px solid var(--hairline-soft, #F0EDE3)' }}>
                       <td style={td}>
-                        <Link href={`/sales/b2b/partner/${encodeURIComponent(c.contract_id)}`} style={{ color: 'var(--ink, #1B1B1B)', fontWeight: 600, textDecoration: 'none' }}>
+                        <TenantLink href={`/sales/b2b/partner/${encodeURIComponent(c.contract_id)}`} style={{ color: 'var(--ink, #1B1B1B)', fontWeight: 600, textDecoration: 'none' }}>
                           {c.partner_short_name}
-                        </Link>
+                        </TenantLink>
                       </td>
                       <td style={td}>{c.partner_type}</td>
                       <td style={td}>{c.country_flag ?? ''} {c.country ?? '—'}</td>
@@ -210,7 +210,7 @@ export default async function ChannelContactsPage() {
                         )}
                       </td>
                       <td style={td}>
-                        <Link href={`/sales/b2b/partner/${encodeURIComponent(c.contract_id)}`} style={{ fontSize: 11, color: 'var(--primary, #1F3A2E)', textDecoration: 'underline' }}>Open →</Link>
+                        <TenantLink href={`/sales/b2b/partner/${encodeURIComponent(c.contract_id)}`} style={{ fontSize: 11, color: 'var(--primary, #1F3A2E)', textDecoration: 'underline' }}>Open →</TenantLink>
                       </td>
                     </tr>
                   );
