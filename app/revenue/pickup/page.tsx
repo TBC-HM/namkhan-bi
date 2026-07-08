@@ -173,7 +173,7 @@ export default async function PickupPage({ propertyId }: Props = {}) {
       tabs={tabs}
       action={
         // Day report → link removed 2026-07-07: superseded by Month/Day sub-strip in nav-subgroups.
-        matrix ? <PickupActions property={matrix.property} asOfDate={matrix.asOfDate} data={matrix} /> : null
+        matrix ? <PickupActions property={matrix.property} asOfDate={matrix.asOfDate} data={matrix} propertyId={pid} /> : null
       }
     >
       <style>{`
