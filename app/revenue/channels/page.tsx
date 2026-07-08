@@ -22,7 +22,7 @@
 //   · DMC:    contract status + production-vs-target. cockpit.dmc_contracts
 //             table not yet created.
 
-import Link from 'next/link';
+import TenantLink from '@/components/nav/TenantLink';
 import {
   DashboardPage, Container, KpiTile, Chart,
   type ChartSeries, type DashboardTab, type KpiTileProps,
@@ -405,7 +405,7 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
         <Container
           title="DMC Performance"
           subtitle="12 months · top 8 by gross · date basis: booking_date"
-          action={<Link href="/sales/b2b" style={perfActionStyle}>B2B / DMC →</Link>}
+          action={<TenantLink href="/sales/b2b" style={perfActionStyle}>B2B / DMC →</TenantLink>}
         >
           <SourceLinkTable
             rows={dmcPerfTop.map((r) => ({ ...r, source: (r as Record<string, unknown>).partner_short_name })) as unknown as Array<Record<string, string | number | null | undefined>>}
@@ -490,14 +490,14 @@ export default async function ChannelsPage({ searchParams, propertyId }: Props) 
                 if (c.k !== 'all') params.set('ch', c.k);
                 const qs = params.toString();
                 return (
-                  <Link key={c.k} href={qs ? `?${qs}` : '?'} style={{
+                  <TenantLink key={c.k} href={qs ? `?${qs}` : '?'} style={{
                     fontSize: 11, padding: '4px 10px', borderRadius: 4,
                     border: `1px solid ${isActive ? 'var(--primary, #1F3A2E)' : 'var(--hairline, #E6DFCC)'}`,
                     background: isActive ? 'var(--primary, #1F3A2E)' : 'var(--paper, #FFFFFF)',
                     color: isActive ? 'var(--paper, #FFFFFF)' : 'var(--ink, #1B1B1B)',
                     textDecoration: 'none', fontWeight: isActive ? 600 : 500,
                     letterSpacing: '0.04em', textTransform: 'uppercase',
-                  }}>{c.label}</Link>
+                  }}>{c.label}</TenantLink>
                 );
               })}
             </div>
