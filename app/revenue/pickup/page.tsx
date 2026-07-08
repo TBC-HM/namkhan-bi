@@ -184,6 +184,13 @@ export default async function PickupPage({ propertyId }: Props = {}) {
         }
       `}</style>
 
+      {/* PBS 2026-07-08: Month ↔ Day inline switch — was a nav-subgroup that
+          hijacked the Demand & Pace sub-strip. Now lives on the page body so
+          the outer Revenue sub-strip stays intact. */}
+      <div style={{ gridColumn: '1 / -1', marginBottom: 12 }}>
+        <PickupViewSwitch propertyId={pid} active="month" />
+      </div>
+
       {/* KPI strip — 7 tiles in one row */}
       <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: `repeat(${strip.length}, minmax(0, 1fr))`, gap: 8, marginBottom: 12 }}>
         {strip.map((t, i) => <KpiTile key={i} {...t} />)}
@@ -261,5 +268,40 @@ export default async function PickupPage({ propertyId }: Props = {}) {
         </Container>
       </div>
     </DashboardPage>
+  );
+}
+
+// PBS 2026-07-08 — small inline switch between Month view (/revenue/pickup)
+// and Day view (/revenue/pickup-day). Underline pattern to match Lighthouse.
+function PickupViewSwitch({ propertyId, active }: { propertyId: number; active: 'month' | 'day' }) {
+  const tenantPrefix = propertyId !== PROPERTY_ID ? `/h/${propertyId}` : '';
+  const items: Array<{ key: 'month' | 'day'; href: string; label: string }> = [
+    { key: 'month', href: `${tenantPrefix}/revenue/pickup`,     label: 'Month' },
+    { key: 'day',   href: `${tenantPrefix}/revenue/pickup-day`, label: 'Day'   },
+  ];
+  return (
+    <nav role="tablist" aria-label="Pickup view" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '6px 0', borderBottom: '1px solid #E6DFCC' }}>
+      <span style={{ fontSize: 11, fontWeight: 600, color: '#5A5A5A', letterSpacing: '0.04em', textTransform: 'uppercase', marginRight: 4 }}>View</span>
+      {items.map((i) => {
+        const isActive = i.key === active;
+        return (
+          <a
+            key={i.key}
+            href={i.href}
+            role="tab"
+            aria-selected={isActive}
+            style={{
+              padding: '6px 10px', fontSize: 12,
+              fontWeight: isActive ? 700 : 500,
+              color: isActive ? '#1B1B1B' : '#5A5A5A',
+              textDecoration: 'none',
+              borderBottom: `2px solid ${isActive ? '#084838' : 'transparent'}`,
+            }}
+          >
+            {i.label}
+          </a>
+        );
+      })}
+    </nav>
   );
 }
